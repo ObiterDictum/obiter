@@ -3,16 +3,10 @@
   "private": true,
   "type": "module",
   "main": "./out/main/index.js",
-  "scripts": {
-    "build": "electron-vite build",
-    "dev": "electron-vite dev",
-    "preview": "electron-vite preview",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
-  },
   "dependencies": {
     "@ormont/app-shell": "workspace:*",
-    "@tanstack/react-query": "latest",
-    "@tanstack/react-router": "latest",
+    "@tanstack/react-query": "^5.100.1",
+    "@tanstack/react-router": "^1.168.23",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

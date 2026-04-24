@@ -4,10 +4,10 @@
   "packageManager": "pnpm@10.14.0",
   "scripts": {
     "build": "pnpm -r --if-present build",
-    "dev:api": "pnpm --filter @ormont/api dev",
-    "dev:desktop": "pnpm --filter @ormont/desktop dev",
-    "dev:desktop:api": "pnpm --parallel --stream --filter @ormont/api --filter @ormont/desktop dev",
-    "dev:web": "pnpm --filter @ormont/web dev",
+    "dev:api": "pnpm --filter @ormont/api --if-present dev",
+    "dev:desktop": "pnpm --filter @ormont/desktop --if-present dev",
+    "dev:desktop:api": "pnpm --parallel --stream --filter @ormont/api --filter @ormont/desktop --if-present dev",
+    "dev:web": "pnpm --filter @ormont/web --if-present dev",
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck"
   },
