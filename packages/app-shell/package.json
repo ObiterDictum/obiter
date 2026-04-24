@@ -11,12 +11,8 @@
     "@heroicons/react": "^2.2.0",
     "@ormont/contracts": "workspace:*",
     "@ormont/ui": "workspace:*",
-    "@tanstack/react-query": "latest",
-    "@tanstack/react-router": "latest",
+    "@tanstack/react-query": "^5.100.1",
+    "@tanstack/react-router": "^1.168.23",
     "react": "^19.2.0"
-  },
-  "scripts": {
-    "test": "vitest run src/demo-shell.test.ts",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
   }
 }
