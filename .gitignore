@@ -45,4 +45,3 @@ Thumbs.db
 .cache/
 tmp/
 temp/
-apps/web/src/routeTree.gen.ts

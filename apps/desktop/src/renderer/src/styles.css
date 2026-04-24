@@ -1,0 +1,17 @@
+@import "../../../../../packages/ui/src/styles.css";
+@import "../../../../../packages/app-shell/src/styles.css";
+
+:root {
+  background: #000000;
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  background: #000000;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  width: 100%;
+}
