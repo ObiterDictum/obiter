@@ -1,0 +1,18 @@
+{
+  "name": "@ormont/app-shell",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.tsx",
+    "./styles.css": "./src/styles.css"
+  },
+  "dependencies": {
+    "@heroicons/react": "^2.2.0",
+    "@ormont/contracts": "workspace:*",
+    "@ormont/ui": "workspace:*",
+    "@tanstack/react-query": "^5.100.1",
+    "@tanstack/react-router": "^1.168.23",
+    "react": "^19.2.0"
+  }
+}

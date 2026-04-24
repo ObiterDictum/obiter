@@ -1,0 +1,21 @@
+{
+  "name": "ormont",
+  "private": true,
+  "packageManager": "pnpm@10.14.0",
+  "scripts": {
+    "build": "pnpm -r --if-present build",
+    "dev:api": "pnpm --filter @ormont/api --if-present dev",
+    "dev:desktop": "pnpm --filter @ormont/desktop --if-present dev",
+    "dev:desktop:api": "pnpm --parallel --stream --filter @ormont/api --filter @ormont/desktop --if-present dev",
+    "dev:web": "pnpm --filter @ormont/web --if-present dev",
+    "test": "pnpm -r --if-present test",
+    "typecheck": "pnpm -r --if-present typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.18",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.4"
+  }
+}

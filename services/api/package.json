@@ -1,0 +1,17 @@
+{
+  "name": "@ormont/api",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "@hono/node-server": "^2.0.0",
+    "@ormont/contracts": "workspace:*",
+    "better-auth": "^1.6.8",
+    "hono": "^4.12.14",
+    "pg": "^8.20.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.20.0",
+    "tsx": "^4.21.0"
+  }
+}
