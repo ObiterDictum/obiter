@@ -7,6 +7,8 @@ build/
 coverage/
 .next/
 .turbo/
+out/
+release/
 
 # Environment files
 .env
@@ -43,3 +45,4 @@ Thumbs.db
 .cache/
 tmp/
 temp/
+apps/web/src/routeTree.gen.ts
