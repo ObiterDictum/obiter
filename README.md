@@ -20,7 +20,7 @@ Phase 0 builds the application foundation. Phase 1 focuses on `Atlas + Redact + 
 
 ## Documentation
 
-The source planning document remains [guide.md](C:\Users\karl-\Documents\source\Ormont\guide.md). The working product docs are split into focused documents under [docs](C:\Users\karl-\Documents\source\Ormont\docs):
+The original planning document remains [guide.md](C:\Users\karl-\Documents\source\Ormont\guide.md) for background context. The focused documents under [docs](C:\Users\karl-\Documents\source\Ormont\docs) are authoritative for implementation when they differ from the original plan:
 
 - [Product Thesis](C:\Users\karl-\Documents\source\Ormont\docs\product-thesis.md)
 - [Rules](C:\Users\karl-\Documents\source\Ormont\RULES.md)
@@ -45,6 +45,25 @@ This repository is a monorepo for the Ormont platform:
 
 - `apps/`: web, desktop, docs, and marketing surfaces
 - `services/`: API, ingestion, workers, verification, and benchmarking jobs
-- `packages/`: shared UI, schema, parsing, config, and verification logic
+- `packages/`: shared app shell, contracts, UI, schema, config, parsing, and verification logic
 - `infra/`: deployment, networking, and monitoring
 - `data/`: seed data, fixtures, and evaluation assets
+
+## Phase 0.1 Bootstrap
+
+The Phase 0.1 foundation now starts from a `pnpm` workspace with three shared frontend packages:
+
+- `packages/contracts`: shared product and shell types
+- `packages/ui`: shared presentation primitives and tokens
+- `packages/app-shell`: shared shell data, layout, and route views used by both web and desktop
+
+Useful commands:
+
+- `pnpm install`
+- `pnpm dev:desktop:api`
+- `pnpm dev:web`
+- `pnpm dev:desktop`
+- `pnpm dev:api`
+- `pnpm build`
+- `pnpm typecheck`
+- `pnpm test`
