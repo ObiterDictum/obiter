@@ -135,7 +135,7 @@ body {
   min-height: 28px;
 }
 
-.auth-tab[aria-selected='true'] {
+.auth-tab[aria-pressed='true'] {
   background: #d48a2c;
   color: #0e1116;
 }
