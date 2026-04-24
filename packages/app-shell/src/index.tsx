@@ -212,9 +212,9 @@ export function SignInRouteView({
             </button>
           </form>
 
-          <div className="auth-tabs" role="tablist" aria-label="Sign-in method">
+          <div className="auth-tabs" aria-label="Sign-in method">
             <button
-              aria-selected={mode === 'password'}
+              aria-pressed={mode === 'password'}
               className="auth-tab"
               type="button"
               onClick={() => setMode('password')}
@@ -222,7 +222,7 @@ export function SignInRouteView({
               Password
             </button>
             <button
-              aria-selected={mode === 'magic-link'}
+              aria-pressed={mode === 'magic-link'}
               className="auth-tab"
               type="button"
               onClick={() => setMode('magic-link')}
