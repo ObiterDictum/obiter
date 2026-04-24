@@ -1,0 +1,22 @@
+{
+  "name": "@ormont/app-shell",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.tsx",
+    "./styles.css": "./src/styles.css"
+  },
+  "dependencies": {
+    "@heroicons/react": "^2.2.0",
+    "@ormont/contracts": "workspace:*",
+    "@ormont/ui": "workspace:*",
+    "@tanstack/react-query": "latest",
+    "@tanstack/react-router": "latest",
+    "react": "^19.2.0"
+  },
+  "scripts": {
+    "test": "vitest run src/demo-shell.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}
