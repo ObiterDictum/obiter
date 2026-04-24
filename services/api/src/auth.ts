@@ -5,6 +5,48 @@ import type { Pool } from 'pg'
 import { appendAuditLog } from './database'
 import type { ApiEnv } from './env'
 
+function maskEmail(email: string) {
+  const [localPart, domain] = email.split('@')
+
+  if (!localPart || !domain) {
+    return 'invalid-email'
+  }
+
+  return `${localPart.slice(0, 2)}***@${domain}`
+}
+
+async function sendMagicLink(env: ApiEnv, email: string, url: string) {
+  if (env.nodeEnv === 'development') {
+    const parsedUrl = new URL(url)
+
+    console.info('Development magic link requested', {
+      email: maskEmail(email),
+      callback: `${parsedUrl.origin}${parsedUrl.pathname}`,
+    })
+    return
+  }
+
+  if (!env.magicLinkWebhookUrl || !env.magicLinkWebhookSecret) {
+    throw new Error('Magic-link email transport is not configured.')
+  }
+
+  const response = await fetch(env.magicLinkWebhookUrl, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${env.magicLinkWebhookSecret}`,
+    },
+    body: JSON.stringify({
+      email,
+      url,
+    }),
+  })
+
+  if (!response.ok) {
+    throw new Error(`Magic-link email transport failed with status ${response.status}.`)
+  }
+}
+
 export function createAuth(env: ApiEnv, pool: Pool) {
   return betterAuth({
     appName: 'Ormont',
@@ -82,16 +124,7 @@ export function createAuth(env: ApiEnv, pool: Pool) {
         disableSignUp: true,
         expiresIn: 60 * 10,
         storeToken: 'hashed',
-        sendMagicLink: async ({ email, url }) => {
-          if (env.nodeEnv !== 'development') {
-            throw new Error('Magic-link email transport is not configured.')
-          }
-
-          console.info('Development magic link requested', {
-            email,
-            url,
-          })
-        },
+        sendMagicLink: ({ email, url }) => sendMagicLink(env, email, url),
       }),
     ],
   })

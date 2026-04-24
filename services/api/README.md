@@ -8,7 +8,7 @@ Phase 0.2 uses Hono for the API service and `better-auth` for identity.
 - enables email/password sign-in for provisioned users
 - enables magic-link sign-in with hashed verification tokens
 - exposes `GET /api/me` as the organisation-aware current-user contract
-- records sign-out audit intent through `/api/session/sign-out-audit`
+- records sign-out audit entries through the server-side `/api/auth/sign-out` flow
 
 ## Environment
 
@@ -18,5 +18,7 @@ Production must provide:
 - `BETTER_AUTH_SECRET`
 - `BETTER_AUTH_URL`
 - `ORMONT_WEB_ORIGIN`
+- `ORMONT_MAGIC_LINK_WEBHOOK_URL`
+- `ORMONT_MAGIC_LINK_WEBHOOK_SECRET`
 
 Development falls back to local defaults so the service can typecheck and boot before hosted infrastructure is provisioned.

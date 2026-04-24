@@ -11,10 +11,74 @@ create table if not exists organisations (
   constraint organisations_data_region_check check (data_region in ('eu'))
 );
 
+create table if not exists users (
+  id text primary key default ('usr_' || gen_random_uuid()::text),
+  name text not null,
+  email text not null unique,
+  "emailVerified" boolean not null default false,
+  image text,
+  "createdAt" timestamptz not null default now(),
+  "updatedAt" timestamptz not null default now(),
+  "organisationId" text references organisations(id),
+  role text,
+  constraint users_role_check check (role is null or role in ('owner', 'admin', 'member'))
+);
+
+create index if not exists users_organisation_id_idx
+  on users ("organisationId");
+
+create table if not exists sessions (
+  id text primary key default ('ses_' || gen_random_uuid()::text),
+  "expiresAt" timestamptz not null,
+  token text not null unique,
+  "createdAt" timestamptz not null default now(),
+  "updatedAt" timestamptz not null default now(),
+  "ipAddress" text,
+  "userAgent" text,
+  "userId" text not null references users(id) on delete cascade
+);
+
+create index if not exists sessions_user_id_idx
+  on sessions ("userId");
+
+create table if not exists accounts (
+  id text primary key default ('acc_' || gen_random_uuid()::text),
+  "accountId" text not null,
+  "providerId" text not null,
+  "userId" text not null references users(id) on delete cascade,
+  "accessToken" text,
+  "refreshToken" text,
+  "idToken" text,
+  "accessTokenExpiresAt" timestamptz,
+  "refreshTokenExpiresAt" timestamptz,
+  scope text,
+  password text,
+  "createdAt" timestamptz not null default now(),
+  "updatedAt" timestamptz not null default now()
+);
+
+create index if not exists accounts_user_id_idx
+  on accounts ("userId");
+
+create unique index if not exists accounts_provider_account_idx
+  on accounts ("providerId", "accountId");
+
+create table if not exists verifications (
+  id text primary key default ('ver_' || gen_random_uuid()::text),
+  identifier text not null,
+  value text not null,
+  "expiresAt" timestamptz not null,
+  "createdAt" timestamptz not null default now(),
+  "updatedAt" timestamptz not null default now()
+);
+
+create index if not exists verifications_identifier_idx
+  on verifications (identifier);
+
 create table if not exists audit_logs (
   id text primary key default ('aud_' || gen_random_uuid()::text),
   organisation_id text not null references organisations(id),
-  user_id text,
+  user_id text references users(id),
   entity_type text not null,
   entity_id text not null,
   action text not null,
@@ -44,7 +108,3 @@ create table if not exists beta_access_grants (
 
 create index if not exists beta_access_grants_organisation_idx
   on beta_access_grants (organisation_id);
-
--- Better Auth owns users, sessions, accounts, and verifications. Its CLI should
--- generate those tables from services/api/src/auth.ts so session truth is not
--- duplicated in Ormont application tables.
