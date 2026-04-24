@@ -1,24 +1,24 @@
-# Phase 0 App Shell Review Stack
+# App Shell Review Stack
 
 This branch is prepared for review as a stacked change set. Review commits in order, or open stacked PRs using the branch map below.
 
 ## Branch Map
 
-1. `review/01-workspace-foundation`
+1. `review/workspace-foundation`
    - Base: `main`
    - Scope: pnpm workspace, package manifests, TypeScript config, lockfile, ignore rules.
 
-2. `review/02-api-contracts`
-   - Base: `review/01-workspace-foundation`
+2. `review/api-contracts`
+   - Base: `review/workspace-foundation`
    - Scope: shared contracts, initial database migration, API service implementation and README update.
 
-3. `review/03-app-shell-sidebar`
-   - Base: `review/02-api-contracts`
+3. `review/app-shell-sidebar`
+   - Base: `review/api-contracts`
    - Scope: shared UI package, app shell package, finished sidebar, web routes, desktop renderer/main process, assets.
 
-4. `review/04-docs-guidance`
-   - Base: `review/03-app-shell-sidebar`
-   - Scope: documentation, phase 0 specs, repo rules, local design-agent guidance.
+4. `review/docs-guidance`
+   - Base: `review/app-shell-sidebar`
+   - Scope: documentation, implementation specs, repo rules, local design-agent guidance.
 
 ## Review Prompt
 
@@ -37,7 +37,7 @@ Review this PR as a production engineering review. Prioritize bugs, behavioral r
 
 ### Why
 
-- Phase 0 needs a consistent monorepo layout before feature packages can be reviewed or built reliably.
+- The product foundation needs a consistent monorepo layout before feature packages can be reviewed or built reliably.
 
 ### Implementation Notes
 
@@ -57,7 +57,7 @@ Review this PR as a production engineering review. Prioritize bugs, behavioral r
 ### What Changed
 
 - Added shared contract types for auth, matters, documents, redaction, verification, research, audit, and shell snapshot data.
-- Added the first phase 0 database migration.
+- Added the first application database migration.
 - Added the Hono API service, environment parsing, database helper, auth integration point, and API tests.
 
 ### Why
@@ -67,7 +67,7 @@ Review this PR as a production engineering review. Prioritize bugs, behavioral r
 ### Implementation Notes
 
 - Contracts are centralized in `packages/contracts`.
-- The API service is still phase 0 infrastructure and should be reviewed for boundaries, validation, and future migration risk.
+- The API service is still early infrastructure and should be reviewed for boundaries, validation, and future migration risk.
 
 ### Testing
 
@@ -117,7 +117,7 @@ Review this PR as a production engineering review. Prioritize bugs, behavioral r
 
 ### What Changed
 
-- Updated project README, architecture notes, implementation rules, and phase 0 specs.
+- Updated project README, architecture notes, implementation rules, and implementation specs.
 - Added local design/frontend agent guidance under `.agents`.
 
 ### Why
@@ -126,7 +126,7 @@ Review this PR as a production engineering review. Prioritize bugs, behavioral r
 
 ### Implementation Notes
 
-- Specs were expanded around auth, API behavior, schema shape, and phase 0 milestones.
+- Specs were expanded around auth, API behavior, schema shape, and milestone tracking.
 - Local agent skills are committed so future Codex sessions have the same design guidance available in-repo.
 
 ### Testing
