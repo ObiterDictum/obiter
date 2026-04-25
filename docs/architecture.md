@@ -43,6 +43,8 @@ ormont/
     verify-worker/
     bench-runner/
   packages/
+    app-shell/
+    contracts/
     ui/
     database/
     legal-schema/
@@ -114,6 +116,12 @@ The architecture should optimise for speed of delivery first, then targeted perf
 - keep long-running redaction, ingestion, and verification work out of the Electron renderer
 - use BullMQ jobs for background work instead of synchronous request chains
 - profile hot paths before introducing native complexity
+
+The initial shared shell foundation for Phase 0.1 should live in:
+
+- `packages/contracts` for shared product and route-facing types
+- `packages/ui` for shared UI primitives and design tokens
+- `packages/app-shell` for shared layout, query-backed shell state, and reusable route views
 
 ## Desktop And Sync Rules
 

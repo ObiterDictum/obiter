@@ -51,6 +51,7 @@ Use this structure unless the change is trivial:
 - Mention actual files, behaviors, and constraints.
 - Explain tradeoffs where they matter.
 - If something is incomplete, say so plainly.
+- Do not use "phase" in PR titles, branch names, or PR summaries. Prefer concrete product or implementation names such as "workspace foundation", "API contracts", or "app shell sidebar".
 
 ## Do Not
 
