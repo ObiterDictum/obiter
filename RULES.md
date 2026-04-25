@@ -47,6 +47,7 @@ Use this file for implementation behavior. Use [PR.md](C:\Users\karl-\Documents\
 - Do not add decorative comments or comments that restate the code.
 - Do not introduce hidden magic, implicit globals, or clever metaprogramming.
 - Do not add production mocks, fake data paths, or hardcoded demo behavior outside clearly named demo or test modules.
+- Temporary exception: the current app shell demo sign-in and shell data may remain in `packages/app-shell/src/index.tsx` until real auth and API-backed shell data replace it. Do not expand that path; new demo behavior must live in clearly named demo or test modules.
 - Fail loudly in legal-critical flows. Do not add silent fallbacks that hide uncertainty or data loss.
 
 ## Architecture Rules

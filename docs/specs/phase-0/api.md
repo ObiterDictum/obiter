@@ -35,6 +35,8 @@ Minimum Phase 0 codes:
 - `unauthenticated`
 - `forbidden`
 - `validation_failed`
+- `organisation_not_found`
+- `closed_beta_required`
 - `matter_not_found`
 - `document_not_found`
 - `document_version_not_found`
