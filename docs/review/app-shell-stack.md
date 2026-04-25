@@ -1,31 +1,27 @@
-# App Shell Review Stack
+# App Shell Review Notes
 
-This branch is prepared for review as a stacked change set. Review commits in order, or open stacked PRs using the branch map below.
+This document is the review handoff for PR #4.
 
-## Branch Map
+## Current Review Shape
 
-1. `review/workspace-foundation`
-   - Base: `main`
-   - Scope: pnpm workspace, package manifests, TypeScript config, lockfile, ignore rules.
+- Repository: `OrmontLex/ormont`
+- PR: `#4`
+- Base: `main`
+- Compare: `review/docs-guidance`
+- Scope: documentation, implementation specs, repo rules, review handoff notes, and local design-agent guidance.
 
-2. `review/api-contracts`
-   - Base: `review/workspace-foundation`
-   - Scope: shared contracts, initial database migration, API service implementation and README update.
-
-3. `review/app-shell-sidebar`
-   - Base: `review/api-contracts`
-   - Scope: shared UI package, app shell package, finished sidebar, web routes, desktop renderer/main process, assets.
-
-4. `review/docs-guidance`
-   - Base: `review/app-shell-sidebar`
-   - Scope: documentation, implementation specs, repo rules, local design-agent guidance.
+Earlier branch summaries below are historical context for how the app shell work was prepared. Do not review PR #4 as a stacked diff against `review/app-shell-sidebar`.
 
 ## Review Prompt
 
-Use this prompt for an automated Codex review:
+Use this prompt for an automated Codex review of PR #4:
 
 ```text
-Review this PR as a production engineering review. Prioritize bugs, behavioral regressions, unsafe assumptions, missing tests, accessibility issues, responsive layout problems, and maintainability risks. Do not suggest broad refactors unless they address a concrete risk. Assume a follow-up refactor PR will happen after bug fixes are reviewed.
+Review this PR as a documentation and project-guidance review. This PR updates README, architecture notes, implementation rules, specs, review handoff notes, and local design-agent guidance.
+
+Prioritize incorrect statements, contradictions with the implemented code, unclear review instructions, missing risk notes, and guidance that could cause future agents or engineers to make poor implementation choices.
+
+Do not review implementation code unless the docs make a claim that conflicts with it.
 ```
 
 ## PR 1 Summary: Workspace Foundation
