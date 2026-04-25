@@ -11,6 +11,7 @@ The refactor should:
 - use Base UI for accessible headless behavior where it fits
 - keep Heroicons as the icon system
 - reduce render/layout work during hover, collapse, resize, and menu interactions
+- make the sidebar code easier for a human engineer to read, debug, and safely change
 
 ## Non-Goals
 
@@ -56,6 +57,39 @@ Suggested components:
 - `SidebarSearchField`
 
 These are Ormont components. Base UI should stay behind these wrappers where possible so the product code does not become coupled to third-party markup details.
+
+## Code Quality Bar
+
+The refactor should make the code feel deliberately written, not generated.
+
+Prefer:
+
+- small components with one clear responsibility
+- boring, precise names that match the product language
+- explicit props over loosely shaped config objects when the call site is clearer
+- typed navigation data that is easy to scan and change
+- local helpers only when they remove real repetition
+- straightforward JSX over clever render factories
+- CSS class names that describe the product surface, not implementation tricks
+- comments only where they explain a non-obvious constraint or design decision
+
+Avoid:
+
+- generic component names such as `Item`, `Block`, `Panel`, or `Widget` where product names exist
+- abstraction layers that hide simple markup
+- large mixed-purpose components that own data, rendering, animation, and state at once
+- deeply nested object configs that are harder to read than JSX
+- utility functions that exist only to make the code look DRY
+- broad `Record<string, unknown>` style types
+- visual constants scattered across components instead of CSS/tokens
+- comments that narrate the code
+
+Target shape:
+
+- `OrmontSidebar` should read as composition, not implementation detail.
+- `SidebarNavigation` should own navigation structure and grouping, but not low-level row markup.
+- `SidebarUserCard`, `SidebarWorkspaceCard`, `SidebarMatterPanel`, and `SidebarRecentResearch` should delegate repeated row/menu/disclosure behavior to shared sidebar primitives.
+- Any Base UI integration should be isolated enough that replacing it later would not require rewriting product components.
 
 ## Styling Strategy
 
