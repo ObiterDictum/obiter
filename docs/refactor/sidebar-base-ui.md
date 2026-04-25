@@ -58,6 +58,45 @@ Suggested components:
 
 These are Ormont components. Base UI should stay behind these wrappers where possible so the product code does not become coupled to third-party markup details.
 
+Use this target structure:
+
+```text
+packages/app-shell/src/sidebar/
+  OrmontSidebar.tsx
+  types.ts
+
+  components/
+    SidebarBadge.tsx
+    SidebarDisclosure.tsx
+    SidebarIcon.tsx
+    SidebarIconButton.tsx
+    SidebarMenu.tsx
+    SidebarRow.tsx
+    SidebarSearchField.tsx
+    SidebarSection.tsx
+    SidebarStatusDot.tsx
+
+  sections/
+    SidebarNavigation.tsx
+    SidebarWorkspaceCard.tsx
+    SidebarMatterPanel.tsx
+    SidebarRecentResearch.tsx
+    SidebarUserCard.tsx
+
+  data/
+    navigationItems.ts
+```
+
+Ownership rules:
+
+- `OrmontSidebar.tsx` should compose the sidebar, not implement row-level markup.
+- `components/` holds reusable sidebar primitives and Base UI wrappers.
+- `sections/` holds product-specific sidebar areas.
+- `data/` holds stable labels, routes, icon mappings, groups, and status-dot metadata.
+- Give a component its own file when it has state, behavior, repeated markup, or wraps Base UI.
+- Keep one-off two-line JSX local unless extracting it makes the parent easier to read.
+- Avoid one giant barrel file during the refactor; explicit imports are easier to review while files are moving.
+
 ## Code Quality Bar
 
 The refactor should make the code feel deliberately written, not generated.
