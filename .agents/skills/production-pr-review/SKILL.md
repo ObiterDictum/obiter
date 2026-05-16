@@ -191,13 +191,13 @@ If any answer is uncertain for sensitive code, the verdict cannot be `Approve`.
 
 ## Knowledge Graph / Review Repo
 
-When a local review knowledge repo exists, usually under one of:
+The canonical local review knowledge repo for OrmontLex is:
 
-- `../review`
-- `../ormont-review`
 - `C:/Users/karl-/Documents/source/OrmontLex/review`
 
-record durable context, not transient PR notes.
+Use that path for durable review knowledge. Do not create parallel knowledge bases under `../review`, `../ormont-review`, or inside the product repo unless explicitly instructed.
+
+Record durable context, not transient PR notes.
 
 Suggested structure:
 
