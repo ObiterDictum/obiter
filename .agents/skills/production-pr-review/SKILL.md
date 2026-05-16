@@ -20,8 +20,10 @@ Do not rubber-stamp. Do not say a PR is ready unless the evidence supports it. S
 5. Build or update a mental architecture map before judging code.
 6. Inspect changed files and all directly coupled files.
 7. Review tests and run appropriate verification where possible.
-8. Report only actionable findings, ranked by severity.
-9. Record durable knowledge in the review knowledge repo if configured and safe to store.
+8. Prepare inline review comments for every actionable bug/security issue that has a stable diff location.
+9. Prepare a final review summary that groups all findings by severity and category.
+10. Publish review comments to GitHub when explicitly asked or when operating on a real PR with `gh` available.
+11. Record durable knowledge in the review knowledge repo if configured and safe to store.
 
 ## Required Setup Commands
 
@@ -118,12 +120,13 @@ Use this scale:
 Every finding must include:
 
 - file path and line or smallest relevant location
+- severity and category: bug, security, privacy, data isolation, architecture, maintainability, test gap, docs, nit
 - what is wrong
 - why it matters
 - concrete fix direction
 - confidence level when useful
 
-Do not include a finding unless it is actionable.
+Do not include a finding unless it is actionable. Prefer no comment over a vague comment.
 
 ## Verification
 
@@ -189,6 +192,57 @@ Before giving a positive verdict, explicitly ask:
 
 If any answer is uncertain for sensitive code, the verdict cannot be `Approve`.
 
+## GitHub Inline Review Comments
+
+When reviewing an actual GitHub PR, produce inline comments for findings that map to changed lines. Inline comments should be concise, specific, and fix-oriented.
+
+Inline comment rules:
+
+- Comment on the smallest changed line that demonstrates the issue.
+- One issue per inline comment.
+- Include severity/category at the start, for example: `High/security:` or `Medium/architecture:`.
+- Explain the bug or risk, not just the preferred style.
+- Include a concrete fix direction.
+- Do not post nit comments unless the nit prevents misunderstanding or future defects.
+- Do not post comments containing secrets, private matter data, raw legal text, raw prompts, embeddings, sensitive stack traces, or screenshots.
+- If a finding affects unchanged coupled code, mention it in the final summary and only inline-comment if there is a changed line that introduced or exposes the issue.
+
+Before publishing, verify each inline comment is on a line present in the PR diff. If unsure, keep it in the summary instead of forcing an inline comment.
+
+Preferred GitHub review workflow:
+
+1. Inspect PR metadata and diff:
+   ```bash
+   gh pr view --json number,title,baseRefName,headRefName,url,body,headRefOid
+   gh pr diff --name-only
+   gh pr diff
+   ```
+2. Draft all findings locally first.
+3. Publish inline comments for actionable findings with valid diff positions.
+4. Submit one final review summary with the verdict and full severity-grouped list.
+
+If the tooling makes inline publication unsafe or ambiguous, output an `Inline comments to add` section with exact `path:line` targets and bodies, then state that comments were not posted.
+
+## Final PR Review Summary
+
+The final summary must include all important findings discovered during review, including findings already posted inline. Group by severity and category so the author can fix them systematically.
+
+Required summary sections:
+
+- Verdict: approve, request changes, not ready, or needs more context
+- Scope reviewed: files/areas and coupled code inspected
+- Blockers
+- High findings
+- Medium findings
+- Low/nits, only when useful
+- Security/data/isolation assessment
+- Verification commands and results
+- Test gaps and manual QA gaps
+- Architecture/maintainability notes
+- Knowledge repo updates made or needed
+
+If requesting changes, make clear which issues must be fixed before approval.
+
 ## Knowledge Graph / Review Repo
 
 The canonical local review knowledge repo for OrmontLex is:
@@ -245,10 +299,15 @@ Use this structure:
 
 ## Findings
 
-- **Severity — title** (`path:line`)
+- **Severity/category — title** (`path:line`)
   - Problem:
   - Why it matters:
   - Fix:
+  - Inline comment: posted / draft only / summary only
+
+## Inline Comments
+
+- `path:line` — exact comment body, or `None posted` with reason
 
 ## Verification
 
