@@ -1,17 +1,46 @@
 # Sidebar Base UI Refactor Plan
 
-## Goal
+## Branch Goal
 
-Refactor the finished sidebar without changing how it looks or behaves.
+Use this branch to make the finished sidebar easier to maintain by moving behavior onto Base UI primitives and moving repeated sidebar structure into Ormont-owned components, without intentionally changing the visual design.
 
-The refactor should:
+This branch is successful when:
 
-- keep the current visual result pixel-stable
-- move repeated sidebar primitives into Ormont-owned components
-- use Base UI for accessible headless behavior where it fits
-- keep Heroicons as the icon system
-- reduce render/layout work during hover, collapse, resize, and menu interactions
-- make the sidebar code easier for a human engineer to read, debug, and safely change
+- the sidebar still looks and behaves like the current production sidebar
+- Base UI owns menu/disclosure behavior where it improves accessibility
+- Ormont-owned wrappers keep Base UI details out of product sections where practical
+- repeated sidebar row, icon, menu, and disclosure markup is reduced
+- the file layout makes ownership obvious to a human reviewer
+- the branch passes app-shell, desktop, and web verification
+- remaining visual/manual QA gaps are explicit before merge
+
+## Current Refactor Goals
+
+1. **Add Base UI deliberately**
+   - Add `@base-ui-components/react` only to `@ormont/app-shell`.
+   - Use it for behavior primitives, not styling.
+   - Do not introduce another visual system or replace Heroicons.
+
+2. **Preserve visual parity**
+   - Keep existing CSS class hooks during the behavior refactor.
+   - Do not change spacing, typography, colors, hover states, or animation timing unless a bug requires it.
+   - Defer CSS splitting until behavior parity has been manually checked.
+
+3. **Clarify sidebar ownership**
+   - Keep `OrmontSidebar.tsx` as composition only.
+   - Put reusable sidebar primitives and Base UI wrappers in `components/`.
+   - Put product-specific sidebar areas in `sections/`.
+   - Put stable nav labels, routes, badges, and icon mappings in `data/`.
+
+4. **Improve accessible behavior**
+   - Use Base UI `Collapsible` for workspace details, navigation groups, current matter, and recent research.
+   - Use Base UI `Menu` for the user profile menu.
+   - Keep plain links/buttons where a Base UI primitive adds no value.
+
+5. **Keep the review surface small**
+   - Avoid CSS rewrites in this branch unless required for parity.
+   - Avoid generic component abstractions that hide simple product markup.
+   - Capture follow-ups rather than expanding the refactor scope.
 
 ## Non-Goals
 
@@ -23,7 +52,7 @@ The refactor should:
 
 ## Base UI Scope
 
-Use `@base-ui/react` for behavior primitives, not styling.
+Use `@base-ui-components/react` for behavior primitives, not styling.
 
 Recommended mappings:
 
@@ -171,17 +200,28 @@ Before editing, capture the current sidebar in these states:
 
 The refactor is acceptable only if these states look the same after the change.
 
-## Suggested PR Split
+## Branch Checklist
 
-1. Add Base UI dependency and Ormont sidebar primitive wrappers.
-2. Convert user menu and collapsible sections to Base UI behind the wrappers.
-3. Extract repeated row/icon/badge primitives without visual changes.
-4. Split sidebar CSS after parity is confirmed.
-5. Apply targeted performance cleanup and add focused tests.
+Complete these in order:
 
-Each PR should pass:
+1. Add Base UI dependency to `@ormont/app-shell`.
+2. Convert collapsible sidebar areas to Base UI `Collapsible` while preserving class hooks.
+3. Convert the user menu to Base UI `Menu` while preserving the existing menu shell styling.
+4. Extract repeated icon/disclosure/navigation data into Ormont-owned sidebar files.
+5. Run automated verification.
+6. Perform manual visual and keyboard QA.
+7. Record any follow-up work instead of widening this branch.
+
+Required automated verification:
 
 - `pnpm --filter @ormont/app-shell typecheck`
 - `pnpm --filter @ormont/app-shell test`
 - `pnpm --filter @ormont/desktop typecheck`
 - `pnpm --filter @ormont/web build`
+- `git diff --check`
+
+## Follow-Ups After This Branch
+
+- Split sidebar CSS only after visual parity is confirmed.
+- Add focused interaction tests if Base UI behavior exposes stable testing hooks.
+- Revisit `@base-ui-components/react` versioning before building more UI primitives on top of the release-candidate package.
