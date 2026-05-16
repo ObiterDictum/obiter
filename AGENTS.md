@@ -8,15 +8,16 @@ Use this file as the lightweight entry point for work in this repo.
 
 Only load the docs needed for the task.
 
-- Product and execution baseline: [README.md](C:\Users\karl-\Documents\source\Ormont\README.md)
-- Start order and milestones: [docs/roadmap.md](C:\Users\karl-\Documents\source\Ormont\docs\roadmap.md)
-- Foundation rules: [docs/phase-0.md](C:\Users\karl-\Documents\source\Ormont\docs\phase-0.md)
-- Architecture and stack: [docs/architecture.md](C:\Users\karl-\Documents\source\Ormont\docs\architecture.md)
-- Security and data rules: [docs/data-and-compliance.md](C:\Users\karl-\Documents\source\Ormont\docs\data-and-compliance.md)
-- Detailed specs: [docs/specs/README.md](C:\Users\karl-\Documents\source\Ormont\docs\specs\README.md)
-- Implementation rules: [RULES.md](C:\Users\karl-\Documents\source\Ormont\RULES.md)
-- PR writing rules: [PR.md](C:\Users\karl-\Documents\source\Ormont\PR.md)
-- Testing rules: [TESTING.md](C:\Users\karl-\Documents\source\Ormont\TESTING.md)
+- **Operating model & sync:** [github.com/OrmontLex/ormont-ops](https://github.com/OrmontLex/ormont-ops) (separate ops repo)
+- Product and execution baseline: [README.md](README.md)
+- Start order and milestones: [docs/roadmap.md](docs/roadmap.md)
+- Foundation rules: [docs/phase-0.md](docs/phase-0.md)
+- Architecture and stack: [docs/architecture.md](docs/architecture.md)
+- Security and data rules: [docs/data-and-compliance.md](docs/data-and-compliance.md)
+- Detailed specs: [docs/specs/README.md](docs/specs/README.md)
+- Implementation rules: [RULES.md](RULES.md)
+- PR writing rules: [PR.md](PR.md)
+- Testing rules: [TESTING.md](TESTING.md)
 
 ## Build Order
 
