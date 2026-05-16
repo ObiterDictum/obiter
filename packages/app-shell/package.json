@@ -8,6 +8,7 @@
     "./styles.css": "./src/styles.css"
   },
   "dependencies": {
+    "@base-ui-components/react": "1.0.0-rc.0",
     "@heroicons/react": "^2.2.0",
     "@ormont/contracts": "workspace:*",
     "@ormont/ui": "workspace:*",

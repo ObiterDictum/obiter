@@ -8,12 +8,12 @@ import {
   ChevronDoubleRightIcon as ChevronDoubleRightIconSolid,
 } from '@heroicons/react/24/solid'
 import { useState } from 'react'
-import { SidebarMatterPanel } from './SidebarMatterPanel'
-import { SidebarNavigation } from './SidebarNavigation'
-import { SidebarRecentResearch } from './SidebarRecentResearch'
-import { SidebarSearch } from './SidebarSearch'
-import { SidebarUserCard } from './SidebarUserCard'
-import { SidebarWorkspaceCard } from './SidebarWorkspaceCard'
+import { SidebarSearchField } from './components/SidebarSearchField'
+import { SidebarMatterPanel } from './sections/SidebarMatterPanel'
+import { SidebarNavigation } from './sections/SidebarNavigation'
+import { SidebarRecentResearch } from './sections/SidebarRecentResearch'
+import { SidebarUserCard } from './sections/SidebarUserCard'
+import { SidebarWorkspaceCard } from './sections/SidebarWorkspaceCard'
 
 interface OrmontSidebarProps {
   currentPath: string
@@ -74,7 +74,7 @@ export function OrmontSidebar({ currentPath, onSignOut, snapshot }: OrmontSideba
 
         <div className="ormont-app-sidebar__main">
           <h1 className="ormont-app-sidebar__title">Ormont</h1>
-          <SidebarSearch />
+          <SidebarSearchField />
           <SidebarWorkspaceCard mode={currentPath === '/workspace' ? 'last-active' : 'active'} />
           <SidebarNavigation currentPath={currentPath} />
         </div>
