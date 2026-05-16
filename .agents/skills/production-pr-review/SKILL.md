@@ -149,6 +149,29 @@ For security, privacy, or isolation-sensitive changes, require targeted evidence
 
 If checks cannot be run, state exactly why and do not imply they passed.
 
+## Vulnerability Review
+
+Treat every PR as a potential attack-surface change. Look for code-level vulnerabilities, not only product-level privacy issues.
+
+Check for:
+
+- broken access control: IDOR, missing organisation/matter filters, confused-deputy flows, privilege escalation, insecure direct object references
+- authentication/session flaws: weak token handling, session fixation, missing expiry, CSRF exposure, insecure cookies, magic-link leakage
+- injection risks: SQL/NoSQL/search-query injection, command injection, path traversal, template injection, prompt injection where model/tool output can influence actions
+- unsafe file handling: unrestricted upload types, unsafe archive extraction, symlink traversal, filename trust, MIME spoofing, executable content, PDF/script hazards
+- XSS and UI injection: unsafe HTML rendering, markdown sanitisation gaps, URL/script injection, unsafe iframe or opener behavior
+- SSRF and network egress: user-controlled URLs reaching internal services, metadata endpoints, storage APIs, webhooks, or model/tool fetchers
+- secrets exposure: env vars in client bundles, logs, errors, build output, source maps, CI output, screenshots, or telemetry
+- cryptography mistakes: custom crypto, weak randomness, wrong key scope, nonce reuse, plaintext local storage of sensitive material, missing key rotation path
+- dependency and supply-chain risk: new packages, install scripts, transitive risk, compromised actions, overbroad CI permissions, unpinned external actions
+- unsafe deserialization/parsing: JSON/schema bypasses, YAML/entity expansion, XML XXE, zip bombs, malformed PDFs/docs, large payload DoS
+- denial of service: unbounded loops, unbounded query result sets, regex backtracking, large uploads, missing rate limits, expensive sync work in request paths
+- insecure Electron/native boundaries: Node integration, context isolation disabled, broad IPC, unsanitised preload bridges, filesystem access from renderer
+- insecure caching: private responses cached globally, cache-key collisions, stale permission state, browser storage of sensitive matter data
+- audit/log tampering: user-controlled audit fields, missing immutable event attributes, overwritable logs, sensitive audit payloads
+
+For every security-sensitive finding, identify the attacker capability required and the data or privilege at risk.
+
 ## Security And Data Protection Gate
 
 Before giving a positive verdict, explicitly ask:
@@ -161,6 +184,8 @@ Before giving a positive verdict, explicitly ask:
 6. Can retry, concurrent execution, offline sync, or conflict resolution duplicate, lose, or silently overwrite data?
 7. Is external AI/model processing visible in product state and audit logs when it touches matter data?
 8. Are new dependencies, scripts, or GitHub Actions allowed the minimum access needed?
+9. Did the review consider common vulnerability classes relevant to the changed code path?
+10. Is there a realistic abuse case where malformed input, a malicious user, a compromised dependency, or a hostile document can cross a trust boundary?
 
 If any answer is uncertain for sensitive code, the verdict cannot be `Approve`.
 
