@@ -7,20 +7,21 @@ description: Production-grade pull request review for Ormont. Use whenever asked
 
 ## Mission
 
-Review as a staff+ engineer protecting production correctness, user trust, legal-data safety, and long-term architecture. The goal is to find important bugs and logic issues, not to approve style preferences.
+Review as a staff+ engineer protecting production correctness, user trust, legal-data safety, data isolation, privacy, and long-term architecture. The goal is to find important bugs and logic issues, not to approve style preferences.
 
-Do not rubber-stamp. Do not say a PR is ready unless the evidence supports it.
+Do not rubber-stamp. Do not say a PR is ready unless the evidence supports it. Security, data protection, tenant isolation, auditability, and legal-data correctness are first-order review criteria, not optional hardening.
 
 ## Review Order
 
 1. Establish repository and branch state.
-2. Load the minimum authoritative context for the touched area.
-3. Build a change map from the base branch to the review branch.
-4. Build or update a mental architecture map before judging code.
-5. Inspect changed files and all directly coupled files.
-6. Run appropriate verification where possible.
-7. Report only actionable findings, ranked by severity.
-8. Record durable knowledge in the review knowledge repo if configured.
+2. Identify the PR's trust boundaries, data classes, and tenant/organisation isolation impact.
+3. Load the minimum authoritative context for the touched area.
+4. Build a change map from the base branch to the review branch.
+5. Build or update a mental architecture map before judging code.
+6. Inspect changed files and all directly coupled files.
+7. Review tests and run appropriate verification where possible.
+8. Report only actionable findings, ranked by severity.
+9. Record durable knowledge in the review knowledge repo if configured and safe to store.
 
 ## Required Setup Commands
 
@@ -70,41 +71,46 @@ Create a concise map before detailed review:
 - changed packages/apps/services
 - public API or contract changes
 - data model, migration, or schema changes
-- auth, permissions, audit, storage, sync, legal verification, or redaction impact
+- data classification changes: public legal corpus, private matter data, auth/session data, audit metadata, generated artifacts, telemetry/logs
+- trust boundary changes: browser, Electron renderer, preload/main, API, workers, database, object storage, external AI/model providers, search/vector indexes, queues, email/auth providers
+- auth, permissions, tenant isolation, audit, storage, sync, legal verification, or redaction impact
 - UI behavior and accessibility impact
 - tests added/changed/missing
 - docs updated/missing
 
-Use search to find direct dependents of changed exports, types, routes, schemas, and database fields.
+Use search to find direct dependents of changed exports, types, routes, schemas, database fields, permissions, queue payloads, storage keys, and audit event names.
 
 ## Review Mindset
 
 Look specifically for:
 
 - incorrect domain modeling or flattened legal concepts
-- schema drift between contracts, services, docs, database, and UI
-- missing boundary validation for untrusted input
+- schema drift between contracts, services, docs, database, migrations, queues, storage, and UI
+- missing boundary validation for untrusted input and deserialized data
 - client-side authorization masquerading as security
+- cross-organisation or cross-matter reads/writes caused by missing scoped queries, weak joins, cache-key collisions, shared object keys, or broad search filters
 - data loss, silent overwrite, or weak conflict handling
 - missing audit trail for sensitive actions
-- raw sensitive data in logs, object keys, fixtures, tests, or telemetry
-- hidden hosted processing of sensitive matter data
+- raw sensitive data in logs, object keys, fixtures, tests, analytics, exceptions, traces, prompts, model calls, embeddings, queues, or telemetry
+- hidden hosted processing of sensitive matter data, including indirect disclosure through summaries, embeddings, redaction spans, prompts, screenshots, or generated artifacts
+- object storage, database, queue, cache, and search-index paths that fail to include organisation/matter boundaries where required
 - non-idempotent background jobs or unsafe retry behavior
-- race conditions around versions, sync, artifacts, audit logs, or jobs
+- race conditions around versions, sync, artifacts, audit logs, permissions, or jobs
 - swallowed errors, broad catches, silent fallbacks, or optimistic names
 - duplicated state machines across packages
 - React lifecycle misuse, especially `useEffect` for derived state or data fetching
-- desktop renderer access to privileged APIs
+- desktop renderer access to privileged APIs, secrets, local files, or unrestricted IPC channels
+- dependency/supply-chain changes without a concrete need, lockfile review, or safe transitive footprint
 - accessibility regressions in focus, keyboard flow, labels, contrast, or hover-only state
 - tests that assert implementation trivia instead of behavior
-- missing failure-path tests in safety-critical flows
+- missing failure-path, permission-boundary, tenant-isolation, and data-leakage tests in safety-critical flows
 
 ## Severity
 
 Use this scale:
 
-- **Blocker**: data loss, security/privacy breach, legal-critical incorrectness, broken build, impossible migration, or architecture violation that will be expensive to unwind.
-- **High**: likely production bug, permission flaw, schema drift, race, bad state transition, missing validation, or missing test for high-risk behavior.
+- **Blocker**: data loss, security/privacy breach, tenant isolation break, secret exposure, legal-critical incorrectness, broken build, impossible migration, or architecture violation that will be expensive to unwind.
+- **High**: likely production bug, permission flaw, schema drift, race, bad state transition, missing validation, unsafe dependency, or missing test for high-risk behavior.
 - **Medium**: maintainability or correctness risk that should be fixed before merge unless explicitly accepted.
 - **Low**: minor issue, naming clarity, localized cleanup.
 - **Nit**: optional style preference. Avoid nits unless they prevent misunderstanding.
@@ -131,7 +137,32 @@ pnpm build
 
 Use package-specific scripts when available. For UI work, perform or request a manual pass for the changed flow. For legal-critical behavior, require happy path and failure path verification.
 
+For security, privacy, or isolation-sensitive changes, require targeted evidence for:
+
+- organisation/matter scoping on reads and writes
+- negative permission tests where applicable
+- validation failures at API/worker/storage boundaries
+- audit events without sensitive payload leakage
+- logs/errors/telemetry redaction
+- local-vs-hosted data path clarity
+- retry/idempotency behavior for jobs and mutations
+
 If checks cannot be run, state exactly why and do not imply they passed.
+
+## Security And Data Protection Gate
+
+Before giving a positive verdict, explicitly ask:
+
+1. Can this change expose one organisation's data to another organisation?
+2. Can this change expose one matter's data in another matter, cache entry, search result, artifact, or audit view?
+3. Can private matter data, filenames, legal text, secrets, tokens, embeddings, or prompts leave the intended local/hosted boundary?
+4. Can logs, exceptions, analytics, traces, queue payloads, object keys, generated fixtures, screenshots, or test snapshots persist sensitive data?
+5. Can a user perform the action by bypassing the UI and calling the API, worker, IPC bridge, or storage layer directly?
+6. Can retry, concurrent execution, offline sync, or conflict resolution duplicate, lose, or silently overwrite data?
+7. Is external AI/model processing visible in product state and audit logs when it touches matter data?
+8. Are new dependencies, scripts, or GitHub Actions allowed the minimum access needed?
+
+If any answer is uncertain for sensitive code, the verdict cannot be `Approve`.
 
 ## Knowledge Graph / Review Repo
 
@@ -166,11 +197,15 @@ Record:
 
 - package ownership and dependency boundaries
 - important domain invariants
+- data classification and trust-boundary rules
+- tenant, organisation, and matter isolation rules
 - recurring bug patterns
 - review heuristics that caught real issues
 - ADR-like decisions that affect future reviews
 
-Do not record secrets, private matter data, tokens, customer data, or raw legal document content.
+Do not record secrets, private matter data, tokens, customer data, raw legal document content, raw prompts, embeddings, full stack traces with sensitive values, screenshots of private material, or object keys containing sensitive names.
+
+Prefer abstract patterns over copied code or copied data. If a note needs an example, use synthetic names and minimal invented snippets.
 
 If the review repo does not exist, mention that durable review memory is unavailable and propose creating/syncing it.
 
@@ -199,7 +234,8 @@ Use this structure:
 ## Architecture / Knowledge Notes
 
 - Durable context learned or updated:
+- Data/security/isolation implications:
 - Follow-up knowledge repo updates needed:
 ```
 
-If there are no findings, say what was inspected and what verification supports that conclusion.
+If there are no findings, say what was inspected and what verification supports that conclusion, including the security/data/isolation checks considered.
