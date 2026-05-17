@@ -89,6 +89,120 @@ describe('createApiApp', () => {
     )
   })
 
+  it('creates matters for the signed-in organisation', async () => {
+    const queries: unknown[] = []
+    const auth = {
+      api: {
+        getSession: async () => ({
+          user: {
+            id: 'usr_1',
+            organisationId: 'org_1',
+          },
+          session: {
+            id: 'ses_1',
+          },
+        }),
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+
+    const app = createApiApp(
+      testEnv,
+      createPool(async (...args) => {
+        queries.push(args)
+        return {
+          rows: [
+            {
+              id: 'mtr_1',
+              organisation_id: 'org_1',
+              name: 'Share purchase',
+              description: null,
+              primary_jurisdiction: 'england_and_wales',
+              secondary_jurisdictions: [],
+              legal_domains: ['corporate'],
+              client_reference: '',
+              status: 'active',
+              created_by: 'usr_1',
+              deleted_at: null,
+              created_at: '2026-01-01T00:00:00.000Z',
+              updated_at: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+        }
+      }),
+      { auth },
+    )
+
+    const response = await app.request('/api/matters', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'Share purchase',
+        primaryJurisdiction: 'england_and_wales',
+        legalDomains: ['corporate'],
+      }),
+      headers: {
+        'content-type': 'application/json',
+      },
+    })
+
+    expect(response.status).toBe(201)
+    expect(await response.json()).toMatchObject({
+      matter: {
+        id: 'mtr_1',
+        organisationId: 'org_1',
+        name: 'Share purchase',
+      },
+    })
+    expect(queries[0]).toEqual([
+      expect.stringContaining('insert into matters'),
+      [
+        'org_1',
+        'Share purchase',
+        null,
+        'england_and_wales',
+        '[]',
+        '["corporate"]',
+        '',
+        'usr_1',
+      ],
+    ])
+  })
+
+  it('lists matters from the signed-in organisation', async () => {
+    const auth = {
+      api: {
+        getSession: async () => ({
+          user: {
+            id: 'usr_1',
+            organisationId: 'org_1',
+          },
+          session: {
+            id: 'ses_1',
+          },
+        }),
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+
+    const queries: unknown[] = []
+    const app = createApiApp(
+      testEnv,
+      createPool(async (...args) => {
+        queries.push(args)
+        return { rows: [] }
+      }),
+      { auth },
+    )
+
+    const response = await app.request('/api/matters')
+
+    expect(response.status).toBe(200)
+    expect(queries[0]).toEqual([
+      expect.stringContaining('from matters'),
+      ['org_1', false],
+    ])
+  })
+
   it('audits successful Better Auth sign-out on the server route', async () => {
     const queries: unknown[] = []
     const auth = {
