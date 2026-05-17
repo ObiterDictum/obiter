@@ -110,7 +110,6 @@ export interface CreateDocumentInput {
   filename: string
   fileType: string
   sizeBytes: number
-  objectKey: string
   contentSha256: string
   syncState?: SyncState
 }
@@ -480,6 +479,19 @@ export async function restoreMatter(
   return firstOrNull(result, mapMatter)
 }
 
+function createDocumentVersionId() {
+  return `ver_${crypto.randomUUID()}`
+}
+
+function createDocumentObjectKey(input: {
+  organisationId: string
+  matterId: string
+  documentId: string
+  versionId: string
+}) {
+  return `org/${input.organisationId}/matters/${input.matterId}/documents/${input.documentId}/versions/${input.versionId}/source`
+}
+
 async function getDocumentVersion(
   client: Queryable,
   organisationId: string,
@@ -519,24 +531,33 @@ export async function createDocument(
     )
     const document = mapDocument(documentResult.rows[0])
 
+    const versionId = createDocumentVersionId()
+    const objectKey = createDocumentObjectKey({
+      organisationId: input.organisationId,
+      matterId: input.matterId,
+      documentId: document.id,
+      versionId,
+    })
+
     const versionResult = await client.query<DocumentVersionRow>(
       `
         insert into document_versions (
-          organisation_id, matter_id, matter_document_id, filename, file_type,
+          id, organisation_id, matter_id, matter_document_id, filename, file_type,
           size_bytes, object_key, document_status, version_number,
           content_sha256, sync_state, created_by, created_at, updated_at
         )
-        values ($1, $2, $3, $4, $5, $6, $7, 'queued', 1, $8, $9, $10, now(), now())
+        values ($1, $2, $3, $4, $5, $6, $7, $8, 'queued', 1, $9, $10, $11, now(), now())
         returning ${versionColumns}
       `,
       [
+        versionId,
         input.organisationId,
         input.matterId,
         document.id,
         input.filename,
         input.fileType,
         input.sizeBytes,
-        input.objectKey,
+        objectKey,
         input.contentSha256,
         input.syncState ?? 'synced',
         input.userId,

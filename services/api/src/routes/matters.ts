@@ -237,6 +237,15 @@ export function createMattersRoutes(pool: Pool) {
     if (!matter) {
       return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
     }
+    await appendAuditLog(pool, {
+      organisationId: user.organisationId,
+      userId: user.id,
+      entityType: 'matter',
+      entityId: matter.id,
+      action: 'matter.update',
+      metadata: { restored: true },
+      requestId: c.get('requestId'),
+    })
     return c.json({ matter })
   })
 

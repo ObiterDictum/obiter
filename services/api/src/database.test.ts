@@ -19,7 +19,7 @@ function documentRow(overrides: Record<string, unknown> = {}) {
   }
 }
 
-function versionRow() {
+function versionRow(overrides: Record<string, unknown> = {}) {
   return {
     id: 'ver_1',
     organisation_id: 'org_1',
@@ -38,6 +38,7 @@ function versionRow() {
     created_by: 'usr_1',
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
+    ...overrides,
   }
 }
 
@@ -68,10 +69,20 @@ describe('matter workspace database operations', () => {
         return { rows: [documentRow()] }
       }
       if (sql.includes('insert into document_versions')) {
-        return { rows: [versionRow()] }
+        const params = calls.at(-1)?.[1] ?? []
+        const versionId = String(params[0])
+        return {
+          rows: [
+            versionRow({
+              id: versionId,
+              object_key: `org/org_1/matters/mtr_1/documents/doc_1/versions/${versionId}/source`,
+            }),
+          ],
+        }
       }
       if (sql.includes('update matter_documents')) {
-        return { rows: [documentRow({ current_version_id: 'ver_1' })] }
+        const params = calls.at(-1)?.[1] ?? []
+        return { rows: [documentRow({ current_version_id: params[2] })] }
       }
       throw new Error(`Unexpected SQL: ${sql}`)
     })
@@ -83,7 +94,6 @@ describe('matter workspace database operations', () => {
       filename: 'skeleton.pdf',
       fileType: 'application/pdf',
       sizeBytes: 1234,
-      objectKey: 'org/org_1/matters/mtr_1/documents/doc_1/versions/ver_1/source',
       contentSha256: 'a'.repeat(64),
     })
 
@@ -96,27 +106,31 @@ describe('matter workspace database operations', () => {
     ])
     expect(result.document).toMatchObject({
       id: 'doc_1',
-      currentVersionId: 'ver_1',
+      currentVersionId: result.version.id,
     })
     expect(result.version).toMatchObject({
-      id: 'ver_1',
       matterDocumentId: 'doc_1',
       versionNumber: 1,
       documentStatus: 'queued',
       syncState: 'synced',
     })
-    expect(calls[2][1]).toEqual([
+    const versionParams = calls[2][1]
+    expect(versionParams).toEqual([
+      expect.stringMatching(/^ver_/),
       'org_1',
       'mtr_1',
       'doc_1',
       'skeleton.pdf',
       'application/pdf',
       1234,
-      'org/org_1/matters/mtr_1/documents/doc_1/versions/ver_1/source',
+      expect.stringMatching(/^org\/org_1\/matters\/mtr_1\/documents\/doc_1\/versions\/ver_.+\/source$/),
       'a'.repeat(64),
       'synced',
       'usr_1',
     ])
+    expect(versionParams?.[7]).toBe(
+      `org/org_1/matters/mtr_1/documents/doc_1/versions/${String(versionParams?.[0])}/source`,
+    )
   })
 
   it('rolls back document creation when version creation fails', async () => {
@@ -141,7 +155,6 @@ describe('matter workspace database operations', () => {
         filename: 'skeleton.pdf',
         fileType: 'application/pdf',
         sizeBytes: 1234,
-        objectKey: 'org/org_1/matters/mtr_1/documents/doc_1/versions/ver_1/source',
         contentSha256: 'a'.repeat(64),
       }),
     ).rejects.toThrow('version insert failed')

@@ -203,6 +203,72 @@ describe('createApiApp', () => {
     ])
   })
 
+  it('audits matter restore actions', async () => {
+    const auth = {
+      api: {
+        getSession: async () => ({
+          user: {
+            id: 'usr_1',
+            organisationId: 'org_1',
+          },
+          session: {
+            id: 'ses_1',
+          },
+        }),
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+
+    const queries: unknown[] = []
+    const app = createApiApp(
+      testEnv,
+      createPool(async (...args) => {
+        queries.push(args)
+        const sql = String(args[0])
+
+        if (sql.includes('update matters')) {
+          return {
+            rows: [
+              {
+                id: 'mtr_1',
+                organisation_id: 'org_1',
+                name: 'Share purchase',
+                description: null,
+                primary_jurisdiction: 'england_and_wales',
+                secondary_jurisdictions: [],
+                legal_domains: ['corporate'],
+                client_reference: '',
+                status: 'active',
+                created_by: 'usr_1',
+                deleted_at: null,
+                created_at: '2026-01-01T00:00:00.000Z',
+                updated_at: '2026-01-01T00:00:00.000Z',
+              },
+            ],
+          }
+        }
+
+        return { rows: [] }
+      }),
+      { auth },
+    )
+
+    const response = await app.request('/api/matters/mtr_1/restore', {
+      method: 'PATCH',
+    })
+
+    expect(response.status).toBe(200)
+    expect(queries).toHaveLength(2)
+    expect(queries[1]).toEqual([
+      expect.stringContaining('insert into audit_logs'),
+      expect.arrayContaining(['org_1', 'usr_1', 'matter', 'mtr_1', 'matter.update']),
+    ])
+    expect(queries[1]).toEqual([
+      expect.any(String),
+      expect.arrayContaining([expect.stringContaining('"restored":true')]),
+    ])
+  })
+
   it('audits successful Better Auth sign-out on the server route', async () => {
     const queries: unknown[] = []
     const auth = {

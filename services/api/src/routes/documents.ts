@@ -77,9 +77,8 @@ export function createDocumentsRoutes(pool: Pool) {
     const fileType = requiredString(body?.fileType)
     const contentSha256 = requiredString(body?.contentSha256)
     const sizeBytes = requiredInteger(body?.sizeBytes)
-    const objectKey = requiredString(body?.objectKey)
 
-    if (!body || !filename || !fileType || !contentSha256 || sizeBytes === null || !objectKey) {
+    if (!body || !filename || !fileType || !contentSha256 || sizeBytes === null) {
       return errorResponse(c, 'validation_failed', 'Document upload metadata is required.', 400)
     }
 
@@ -90,7 +89,6 @@ export function createDocumentsRoutes(pool: Pool) {
       filename,
       fileType,
       sizeBytes,
-      objectKey,
       contentSha256,
     })
     await appendAuditLog(pool, {
