@@ -20,6 +20,31 @@ describe('readApiEnv', () => {
     expect(env.nodeEnv).toBe('development')
   })
 
+  it('uses TEST_DATABASE_URL as the only database URL in test mode', () => {
+    process.env.NODE_ENV = 'test'
+    process.env.DATABASE_URL = 'postgres://ormont:ormont@db.example.com:5432/prod'
+    process.env.TEST_DATABASE_URL = 'postgres://ormont:ormont@db.example.com:5432/ormont_test'
+
+    const env = readApiEnv()
+
+    expect(env.databaseUrl).toBe(
+      'postgres://ormont:ormont@db.example.com:5432/ormont_test',
+    )
+    expect(env.nodeEnv).toBe('test')
+  })
+
+  it('fails loudly when test mode does not have a separate test database', () => {
+    process.env.NODE_ENV = 'test'
+    process.env.DATABASE_URL = 'postgres://ormont:ormont@db.example.com:5432/prod'
+    delete process.env.TEST_DATABASE_URL
+
+    expect(() => readApiEnv()).toThrow('Missing required test environment values')
+
+    process.env.TEST_DATABASE_URL = process.env.DATABASE_URL
+
+    expect(() => readApiEnv()).toThrow('TEST_DATABASE_URL must not match DATABASE_URL.')
+  })
+
   it('fails loudly when production auth and database values are missing', () => {
     process.env.NODE_ENV = 'production'
     delete process.env.DATABASE_URL

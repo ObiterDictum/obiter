@@ -7,6 +7,8 @@ const requiredProductionKeys = [
   'ORMONT_MAGIC_LINK_WEBHOOK_SECRET',
 ] as const
 
+const requiredTestKeys = ['TEST_DATABASE_URL'] as const
+
 export interface ApiEnv {
   databaseUrl: string
   authSecret: string
@@ -39,14 +41,48 @@ function requireProductionEnv(nodeEnv: ApiEnv['nodeEnv']) {
   }
 }
 
-function readRequiredUrl(key: string, fallback: string): string {
-  const value = process.env[key] ?? fallback
+function requireTestEnv(nodeEnv: ApiEnv['nodeEnv']) {
+  if (nodeEnv !== 'test') {
+    return
+  }
 
+  const missing = requiredTestKeys.filter((key) => !process.env[key])
+
+  if (missing.length > 0) {
+    throw new Error(`Missing required test environment values: ${missing.join(', ')}`)
+  }
+}
+
+function parseUrl(key: string, value: string): string {
   try {
     return new URL(value).toString().replace(/\/$/, '')
   } catch {
     throw new Error(`${key} must be a valid URL.`)
   }
+}
+
+function readRequiredUrl(key: string, fallback: string): string {
+  return parseUrl(key, process.env[key] ?? fallback)
+}
+
+function readDatabaseUrl(nodeEnv: ApiEnv['nodeEnv']) {
+  if (nodeEnv !== 'test') {
+    return readRequiredUrl(
+      'DATABASE_URL',
+      'postgres://ormont:ormont@localhost:5432/ormont',
+    )
+  }
+
+  const testDatabaseUrl = parseUrl('TEST_DATABASE_URL', process.env.TEST_DATABASE_URL ?? '')
+  const productionDatabaseUrl = process.env.DATABASE_URL
+    ? parseUrl('DATABASE_URL', process.env.DATABASE_URL)
+    : null
+
+  if (productionDatabaseUrl === testDatabaseUrl) {
+    throw new Error('TEST_DATABASE_URL must not match DATABASE_URL.')
+  }
+
+  return testDatabaseUrl
 }
 
 function readOptionalUrl(key: string): string | null {
@@ -102,6 +138,7 @@ function readPort() {
 export function readApiEnv(): ApiEnv {
   const nodeEnv = readNodeEnv()
   requireProductionEnv(nodeEnv)
+  requireTestEnv(nodeEnv)
   const magicLinkWebhookUrl = readOptionalUrl('ORMONT_MAGIC_LINK_WEBHOOK_URL')
   const magicLinkWebhookSecret = readOptionalSecret(
     'ORMONT_MAGIC_LINK_WEBHOOK_SECRET',
@@ -113,10 +150,7 @@ export function readApiEnv(): ApiEnv {
   }
 
   return {
-    databaseUrl: readRequiredUrl(
-      'DATABASE_URL',
-      'postgres://ormont:ormont@localhost:5432/ormont',
-    ),
+    databaseUrl: readDatabaseUrl(nodeEnv),
     authSecret: readSecret(
       'BETTER_AUTH_SECRET',
       'dev-only-better-auth-secret',
