@@ -76,7 +76,13 @@ export function OrmontSidebar({ currentPath, onSignOut, snapshot }: OrmontSideba
           <h1 className="ormont-app-sidebar__title">Ormont</h1>
           <SidebarSearch />
           <SidebarWorkspaceCard mode={currentPath === '/workspace' ? 'last-active' : 'active'} />
-          <SidebarNavigation currentPath={currentPath} />
+          <SidebarNavigation
+            currentPath={currentPath}
+            showStaffNavigation={
+              snapshot.organisation.id === 'org-ormont-demo' &&
+              snapshot.currentUser.role === 'owner'
+            }
+          />
         </div>
 
         <div className="ormont-app-sidebar__bottom">

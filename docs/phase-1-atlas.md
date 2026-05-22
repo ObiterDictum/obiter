@@ -169,7 +169,7 @@ This is a legal retrieval system, not a generic semantic search app.
 
 ## API Surface
 
-`GET /api/atlas/search`
+`GET /api/search`
 
 - query
 - source type
@@ -181,7 +181,7 @@ This is a legal retrieval system, not a generic semantic search app.
 
 - raw citation or identifier
 
-`GET /api/atlas/documents/:documentId`
+`GET /api/search/documents/:documentId`
 
 - canonical document record
 

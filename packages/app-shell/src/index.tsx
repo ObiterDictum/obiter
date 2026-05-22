@@ -1,13 +1,34 @@
 import { queryOptions, useSuspenseQuery } from '@tanstack/react-query'
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router'
+import { ClockIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { useState, type FormEvent, type ReactNode } from 'react'
 import type { AppPlatform, MeResponse, ShellSnapshot } from '@ormont/contracts'
 import { Card, EmptyState } from '@ormont/ui'
-import ladyJusticeUrl from './assets/login-lady-justice.png'
 import wordmarkUrl from './assets/ormont-wordmark.svg'
 import { OrmontSidebar } from './sidebar/OrmontSidebar'
+export {
+  AtlasCaseView,
+  atlasDocumentQueryOptions,
+} from './views/AtlasCaseView'
+export {
+  AtlasSearchView,
+  getAtlasSearchStateLabel,
+  selectJudgmentParagraphs,
+  selectParagraphExcerpts,
+} from './views/AtlasSearchView'
 
 const demoAuthStorageKey = 'ormont.phase0.authenticated'
+
+interface ChangelogEntry {
+  date: string | null
+  title: string
+  url: string
+}
+
+interface ChangelogResponse {
+  entries: ChangelogEntry[]
+  source: string
+}
 
 function isDemoAuthenticated() {
   if (typeof window === 'undefined') {
@@ -69,6 +90,14 @@ function createPhaseZeroShellSnapshot(platform: AppPlatform): ShellSnapshot {
   }
 }
 
+function canSeeDevelopmentStatus(me: MeResponse) {
+  return me.organisation.id === 'org-ormont-demo' && me.user.role === 'owner'
+}
+
+function canSeeStaffNavigation(me: MeResponse) {
+  return canSeeDevelopmentStatus(me)
+}
+
 function findMatterRecord(snapshot: ShellSnapshot, matterId: string) {
   return snapshot.matters.find((matter) => matter.id === matterId)
 }
@@ -113,12 +142,6 @@ function AuthScreen({
 }) {
   return (
     <div className="auth-page">
-      <img
-        alt=""
-        aria-hidden="true"
-        className="auth-hero-art"
-        src={ladyJusticeUrl}
-      />
       <SignInRouteView onAuthenticated={onAuthenticated} platform={platform} />
     </div>
   )
@@ -131,12 +154,17 @@ export function AppShellLayout({
   children: ReactNode
   platform: AppPlatform
 }) {
-  const [authenticated, setAuthenticated] = useState(isDemoAuthenticated)
   const navigate = useNavigate()
   const currentPath = useRouterState({
     select: (state) => state.location.pathname,
   })
-  if (!authenticated || currentPath === '/' || currentPath === '/sign-in') {
+  const [authenticated, setAuthenticated] = useState(() =>
+    currentPath === '/' || currentPath === '/sign-in'
+      ? isDemoAuthenticated()
+      : true,
+  )
+
+  if ((currentPath === '/' || currentPath === '/sign-in') && !authenticated) {
     return <AuthScreen onAuthenticated={() => setAuthenticated(true)} platform={platform} />
   }
 
@@ -243,45 +271,234 @@ export function SignInRouteView({
 }
 
 export function HomeRouteView({ platform }: { platform: AppPlatform }) {
+  const navigate = useNavigate()
+  const [homeSearch, setHomeSearch] = useState('')
+  const [changelogOpen, setChangelogOpen] = useState(false)
   const { data } = useSuspenseQuery(shellSnapshotQueryOptions(platform))
+  const { data: me } = useSuspenseQuery(currentUserQueryOptions())
+  const { data: changelog } = useSuspenseQuery(changelogQueryOptions())
   const activeMilestone = data.milestones.find((milestone) => milestone.status === 'active')
+  const matterCount = data.matters.length
+  const attentionItems = [
+    {
+      label: 'Review queue',
+      status: 'Planned',
+      detail: 'Document review, redaction checks, and verification tasks will surface here.',
+    },
+    {
+      label: 'Deadlines',
+      status: 'Planned',
+      detail: 'Upcoming filing, hearing, and client response dates are not connected yet.',
+    },
+    {
+      label: 'Matter activity',
+      status: matterCount > 0 ? `${matterCount} active` : 'No live data',
+      detail: matterCount > 0 ? 'Open matter workspaces are available.' : 'Matter records are not populated in this workspace yet.',
+    },
+  ]
+  const sourceItems = [
+    { label: 'Legal source search', status: 'Live', detail: 'Search public sources and open stored judgments.' },
+    { label: 'Case pages', status: 'Live', detail: 'Fetched judgments have stable internal pages.' },
+    { label: 'Statutes and timelines', status: 'Planned', detail: 'Legislation and relationship timelines belong in this search surface next.' },
+  ]
+
+  function handleHomeSearch(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const query = homeSearch.trim()
+    if (!query) {
+      void navigate({ to: '/search' })
+      return
+    }
+
+    window.sessionStorage.setItem('ormont.search.initialQuery', query)
+    void navigate({ to: '/search' })
+  }
 
   return (
-    <div className="shell-stack">
+    <div className="shell-stack workspace-page">
       <section className="shell-page-heading">
         <div>
-          <p className="shell-page-heading__eyebrow">Workspace</p>
-          <h1 className="shell-header__title">Workspace reset</h1>
+          <p className="shell-page-heading__eyebrow">Home</p>
+          <h1 className="shell-header__title">Home</h1>
         </div>
+        <button
+          aria-label="Open product updates"
+          className="workspace-changelog-button"
+          type="button"
+          onClick={() => setChangelogOpen(true)}
+        >
+          <ClockIcon aria-hidden="true" />
+        </button>
       </section>
 
-      <Card title="Ready for a new workspace direction">
-        <p className="shell-copy">
-          The previous workspace mock has been removed. The next pass should start from the product
-          spec and the active milestone instead of inherited placeholder content.
-        </p>
-      </Card>
+      <form className="workspace-source-search" onSubmit={handleHomeSearch}>
+        <label>
+          <span>Search cases, statutes, issues</span>
+          <input
+            value={homeSearch}
+            onChange={(event) => setHomeSearch(event.target.value)}
+            placeholder="Potanina, limitation, Human Rights Act..."
+            type="search"
+          />
+        </label>
+        <button type="submit">Search</button>
+      </form>
 
-      {activeMilestone ? (
-        <Card eyebrow="Active milestone" title={activeMilestone.label}>
-          <p className="shell-copy">{activeMilestone.detail}</p>
-        </Card>
+      <section className="workspace-dashboard" aria-label="Workspace dashboard">
+        <article className="workspace-panel workspace-panel--attention">
+          <div className="workspace-panel__header">
+            <div>
+          <p className="workspace-panel__eyebrow">Current status</p>
+          <h2>Workspace signals</h2>
+            </div>
+            <span>{matterCount} matters</span>
+          </div>
+          <div className="workspace-list">
+            {attentionItems.map((item) => (
+              <div className="workspace-list__row" key={item.label}>
+                <div>
+                  <strong>{item.label}</strong>
+                  <p>{item.detail}</p>
+                </div>
+                <span>{item.status}</span>
+              </div>
+            ))}
+          </div>
+        </article>
+
+        <article className="workspace-panel workspace-panel--sources">
+          <div className="workspace-panel__header">
+            <div>
+              <p className="workspace-panel__eyebrow">Legal sources</p>
+              <h2>Search is live</h2>
+            </div>
+            <Link className="workspace-panel__link" to="/search">Open</Link>
+          </div>
+          <div className="workspace-list">
+            {sourceItems.map((item) => (
+              <div className="workspace-list__row" key={item.label}>
+                <div>
+                  <strong>{item.label}</strong>
+                  <p>{item.detail}</p>
+                </div>
+                <span>{item.status}</span>
+              </div>
+            ))}
+          </div>
+        </article>
+      </section>
+
+      {changelogOpen ? (
+        <div className="workspace-updates-popover" role="dialog" aria-modal="false" aria-labelledby="workspace-changelog-title">
+          <button
+            aria-label="Close product updates"
+            className="workspace-updates-popover__backdrop"
+            type="button"
+            onClick={() => setChangelogOpen(false)}
+          />
+          <section className="workspace-updates-popover__panel">
+            <header className="workspace-updates-popover__header">
+              <div>
+                <p className="workspace-panel__eyebrow">Product updates</p>
+                <h2 id="workspace-changelog-title">What changed recently</h2>
+              </div>
+              <button type="button" aria-label="Close product updates" onClick={() => setChangelogOpen(false)}>
+                <XMarkIcon aria-hidden="true" />
+              </button>
+            </header>
+            {changelog.entries.length > 0 ? (
+              <div className="workspace-list">
+                {changelog.entries.slice(0, 8).map((entry) => (
+                  <a className="workspace-list__row" href={entry.url} key={entry.url} rel="noreferrer" target="_blank">
+                    <div>
+                      <strong>{entry.title}</strong>
+                      <p>{entry.date ?? 'Date unavailable'}</p>
+                    </div>
+                    <span>GitHub</span>
+                  </a>
+                ))}
+              </div>
+            ) : (
+              <p className="workspace-panel__empty">GitHub updates are unavailable right now.</p>
+            )}
+            {activeMilestone && canSeeDevelopmentStatus(me) ? (
+              <section className="workspace-dev-status">
+                <p className="workspace-panel__eyebrow">Development status</p>
+                <h3>{activeMilestone.label}</h3>
+                <p>{activeMilestone.detail}</p>
+              </section>
+            ) : null}
+          </section>
+        </div>
       ) : null}
     </div>
   )
 }
 
+export function changelogQueryOptions() {
+  return queryOptions({
+    queryKey: ['github-changelog'],
+    queryFn: async () => {
+      const response = await fetch(apiUrl('/api/changelog'))
+      if (!response.ok) {
+        return { entries: [], source: 'github_unavailable' } satisfies ChangelogResponse
+      }
+
+      return (await response.json()) as ChangelogResponse
+    },
+    staleTime: 1000 * 60 * 10,
+  })
+}
+
+function apiUrl(path: string) {
+  if (typeof window !== 'undefined') {
+    return path
+  }
+
+  return new URL(
+    path,
+    process.env.ORMONT_API_ORIGIN ?? process.env.BETTER_AUTH_URL ?? 'http://localhost:8787',
+  ).toString()
+}
+
 export function MattersRouteView({ platform }: { platform: AppPlatform }) {
-  useSuspenseQuery(shellSnapshotQueryOptions(platform))
+  const { data } = useSuspenseQuery(shellSnapshotQueryOptions(platform))
 
   return (
-    <div className="shell-stack">
-      <Card>
-        <EmptyState
-          title="Matter workspace reset"
-          body="The previous matter mock has been removed so the real matter workflow can be designed from scratch."
-        />
-      </Card>
+    <div className="shell-stack matters-page">
+      <section className="shell-page-heading">
+        <div>
+          <p className="shell-page-heading__eyebrow">Matters</p>
+          <h1 className="shell-header__title">Matters</h1>
+        </div>
+      </section>
+
+      {data.matters.length > 0 ? (
+        <section className="matter-list" aria-label="Matters">
+          {data.matters.map((matter) => (
+            <Link className="matter-row" key={matter.id} to="/matters/$matterId" params={{ matterId: matter.id }}>
+              <span>
+                <strong>{matter.name}</strong>
+                <small>{matter.clientReference}</small>
+              </span>
+              <span>{matter.status}</span>
+            </Link>
+          ))}
+        </section>
+      ) : (
+        <section className="matters-empty">
+          <p className="matters-empty__kicker">No matters yet</p>
+          <h2>Start from a real matter workspace</h2>
+          <p>
+            Matter storage, uploads, redaction, drafting, and verification are planned surfaces.
+            This page is ready for the first real matter workflow rather than placeholder records.
+          </p>
+          <div className="matters-empty__actions">
+            <Link className="workspace-hero__action" to="/search">Search sources</Link>
+            <span>Create matter planned</span>
+          </div>
+        </section>
+      )}
     </div>
   )
 }
@@ -317,4 +534,9 @@ export function MatterRouteView({
   )
 }
 
-export { createPhaseZeroShellSnapshot, findMatterRecord }
+export {
+  canSeeDevelopmentStatus as canSeeDevelopmentStatusForTest,
+  canSeeStaffNavigation as canSeeStaffNavigationForTest,
+  createPhaseZeroShellSnapshot,
+  findMatterRecord,
+}

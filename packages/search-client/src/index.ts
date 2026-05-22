@@ -1,5 +1,6 @@
 import { MeiliSearch } from 'meilisearch'
 import {
+  atlasAuthoritySchema,
   atlasAuthoritiesSchema,
   atlasAuthoritySummarySchema,
   type AtlasAuthority,
@@ -8,7 +9,9 @@ import {
 } from '@ormont/legal-schema'
 
 export type AtlasSearchDocument = AtlasAuthority
-export type AtlasSearchHit = AtlasAuthoritySummary
+export type AtlasSearchHit = AtlasAuthoritySummary & {
+  paragraphs?: AtlasAuthority['paragraphs']
+}
 export type AtlasSearchFilters = Partial<{
   court: string
   jurisdiction: string
@@ -36,6 +39,10 @@ export interface AtlasSearchResult {
   query: string
   estimatedTotalHits: number
   processingTimeMs: number
+}
+
+export interface AtlasSearchOptions {
+  includeParagraphs?: boolean
 }
 
 interface AtlasIndexingTask {
@@ -92,6 +99,12 @@ type IndexSetupClient = {
 
 type DocumentIndexClient = {
   index(indexName: string): Pick<IndexLike, 'addDocuments'>
+}
+
+type DocumentReadClient = {
+  index(indexName: string): {
+    getDocument(documentId: string): Promise<unknown>
+  }
 }
 
 type SearchClient = {
@@ -207,14 +220,21 @@ export async function search(
   indexName: string,
   query: string,
   filters: AtlasSearchFilters = {},
+  options: AtlasSearchOptions = {},
 ): Promise<AtlasSearchResult> {
   try {
     const result = await client.index(indexName).search(query, {
       filter: toMeiliFilters(filters),
       sort: ['dateDecided:desc'],
-      attributesToRetrieve: searchSummaryAttributes,
+      attributesToRetrieve: options.includeParagraphs
+        ? [...searchSummaryAttributes, 'paragraphs']
+        : searchSummaryAttributes,
     })
-    const hits = result.hits.map((hit) => atlasAuthoritySummarySchema.parse(hit))
+    const hits = result.hits.map((hit) =>
+      options.includeParagraphs
+        ? atlasAuthoritySchema.parse(hit)
+        : atlasAuthoritySummarySchema.parse(hit),
+    )
 
     return {
       hits,
@@ -239,6 +259,19 @@ function validationFailure(documents: unknown[], messages: string[]): AtlasIndex
         message: messages.join('; '),
       },
     ],
+  }
+}
+
+export async function getDocument(
+  client: DocumentReadClient,
+  indexName: string,
+  documentId: string,
+): Promise<AtlasAuthority> {
+  try {
+    const document = await client.index(indexName).getDocument(documentId)
+    return atlasAuthoritySchema.parse(document)
+  } catch (error) {
+    throw wrapSearchError('Atlas document lookup failed.', error)
   }
 }
 
