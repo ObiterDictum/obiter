@@ -32,7 +32,8 @@ Use this skill when the user asks to:
 - Do not resolve a review thread until the fix is pushed and verification has passed, or until you have explicitly explained why no code change is needed.
 - Do not dismiss a finding just because tests pass. Validate it against code, schema, docs, and runtime behavior.
 - Do not post comments containing secrets, private matter data, raw legal text, raw prompts, embeddings, sensitive object keys, stack traces with sensitive values, or screenshots of private material.
-- If GitHub CLI cannot post or resolve threads, provide exact manual actions with links/thread ids.
+- Use direct GitHub API calls for inline review comments, replies, and thread resolution. If high-level `gh` commands are blocked because the authenticated identity is the PR author, keep using `gh api` or the GitHub app API instead of dropping inline replies.
+- If GitHub API writes cannot post or resolve threads, provide exact manual actions with links/thread ids.
 
 ## Workflow
 
@@ -61,14 +62,14 @@ If unrelated files are modified, stop and protect them before editing. Options:
 
 ### 2. Load Review Comments And Threads
 
-`gh pr view` shows top-level comments and reviews, but not all unresolved inline threads. Query review threads explicitly:
+`gh pr view` shows top-level comments and reviews, but not all unresolved inline threads. Query review threads explicitly through the GitHub API and include each comment `databaseId`; REST inline reply endpoints require that numeric id:
 
 ```bash
 gh api graphql \
   -F owner='<owner>' \
   -F repo='<repo>' \
   -F number=<pr-number> \
-  -f query='query($owner:String!,$repo:String!,$number:Int!){ repository(owner:$owner,name:$repo){ pullRequest(number:$number){ reviewThreads(first:100){ nodes { id isResolved path line startLine comments(first:20){ nodes { id url body author { login } createdAt } } } } } } }'
+  -f query='query($owner:String!,$repo:String!,$number:Int!){ repository(owner:$owner,name:$repo){ pullRequest(number:$number){ reviewThreads(first:100){ nodes { id isResolved isOutdated path line startLine comments(first:20){ nodes { id databaseId url body author { login } createdAt } } } } } } }'
 ```
 
 Build a checklist with:
@@ -176,7 +177,26 @@ gh pr comment <number-or-url> --body "Addressed the review findings in <commit>.
 
 Keep the comment factual. Do not use filler or imply unrun verification.
 
-### 9. Resolve Inline Review Threads
+### 9. Reply To Inline Review Comments Through The API
+
+When the user asked to reply to inline comments, or when the review response fixes a specific inline thread, reply directly on the inline review comment using the Pull Request Review Comments API. Do not substitute only a top-level PR comment for a thread-specific reply.
+
+Use the numeric `databaseId` from the GraphQL thread query:
+
+```bash
+gh api repos/<owner>/<repo>/pulls/<number>/comments/<comment-database-id>/replies \
+  --method POST \
+  -f body='Addressed. <what changed>. Verified with `<command>`.'
+```
+
+Inline replies should be thorough enough to close the loop:
+
+- state whether the finding was accepted, partially accepted, or not accepted
+- name the code path changed or explain why no code change was needed
+- mention the exact tests/checks run
+- identify any remaining limitation or follow-up
+
+### 10. Resolve Inline Review Threads
 
 Resolve only threads that are genuinely addressed and pushed. Query unresolved threads again after pushing:
 
@@ -206,7 +226,7 @@ Do not resolve a thread if:
 
 If the review was a top-level comment, not an inline thread, reply with the PR comment instead of trying to resolve a nonexistent thread.
 
-### 10. Verify Thread And PR State
+### 11. Verify Thread And PR State
 
 After posting and resolving:
 
@@ -238,7 +258,8 @@ When done, respond with:
 - Findings addressed:
   - ...
 - Comments posted:
-  - <url or summary>
+  - Inline replies: <urls or summary>
+  - PR summary comment: <url or summary>
 - Threads resolved:
   - <thread/path/line or none>
 - Verification:
