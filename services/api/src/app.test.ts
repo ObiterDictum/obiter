@@ -42,6 +42,72 @@ function createConnectedPool(query: QueryMock): Pool {
   } as unknown as Pool
 }
 
+function createPoolWithClient(input: { query: QueryMock; clientQuery: QueryMock }): Pool {
+  return {
+    query: input.query,
+    connect: async () => ({
+      query: input.clientQuery,
+      release: () => undefined,
+    }),
+  } as unknown as Pool
+}
+
+function matterRow() {
+  return {
+    id: 'mtr_1',
+    organisation_id: 'org_1',
+    name: 'Share purchase',
+    description: null,
+    primary_jurisdiction: 'england_and_wales',
+    secondary_jurisdictions: [],
+    legal_domains: ['corporate'],
+    client_reference: '',
+    status: 'active',
+    created_by: 'usr_1',
+    deleted_at: null,
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z',
+  }
+}
+
+function documentRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'doc_1',
+    organisation_id: 'org_1',
+    matter_id: 'mtr_1',
+    current_version_id: null,
+    logical_key: 'doc_1',
+    created_by: 'usr_1',
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z',
+    deleted_at: null,
+    ...overrides,
+  }
+}
+
+function versionRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'ver_1',
+    organisation_id: 'org_1',
+    matter_id: 'mtr_1',
+    matter_document_id: 'doc_1',
+    filename: 'skeleton.pdf',
+    file_type: 'application/pdf',
+    size_bytes: 1234,
+    object_key: 'org/org_1/matters/mtr_1/documents/doc_1/versions/ver_1/source',
+    text_object_key: null,
+    document_status: 'queued',
+    failure_reason: null,
+    version_number: 1,
+    content_sha256: 'a'.repeat(64),
+    sync_state: 'synced',
+    created_by: 'usr_1',
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
 describe('createApiApp', () => {
   it('returns the shared error shape when session loading throws', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -372,6 +438,147 @@ describe('createApiApp', () => {
         'ses_1',
         'auth.sign_out',
       ]),
+    ])
+  })
+
+  it('audits document metadata creation and initial version creation', async () => {
+    const routeQueries: unknown[] = []
+    const transactionQueries: unknown[] = []
+    const auth = {
+      api: {
+        getSession: async () => ({
+          user: {
+            id: 'usr_1',
+            organisationId: 'org_1',
+          },
+          session: {
+            id: 'ses_1',
+          },
+        }),
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+
+    const app = createApiApp(
+      testEnv,
+      createPoolWithClient({
+        query: async (...args) => {
+          routeQueries.push(args)
+          const sql = String(args[0])
+
+          if (sql.includes('from matters')) {
+            return { rows: [matterRow()] }
+          }
+          if (sql.includes('insert into audit_logs')) {
+            return { rows: [] }
+          }
+          throw new Error(`Unexpected route SQL: ${sql}`)
+        },
+        clientQuery: async (...args) => {
+          transactionQueries.push(args)
+          const sql = String(args[0])
+
+          if (sql === 'begin' || sql === 'commit' || sql === 'rollback') {
+            return { rows: [] }
+          }
+          if (sql.includes('insert into matter_documents')) {
+            return { rows: [documentRow()] }
+          }
+          if (sql.includes('insert into document_versions')) {
+            const params = args[1] as unknown[]
+            return { rows: [versionRow({ id: params[0] })] }
+          }
+          if (sql.includes('update matter_documents')) {
+            const params = args[1] as unknown[]
+            return { rows: [documentRow({ current_version_id: params[2] })] }
+          }
+          throw new Error(`Unexpected transaction SQL: ${sql}`)
+        },
+      }),
+      { auth },
+    )
+
+    const response = await app.request('/api/matters/mtr_1/documents', {
+      method: 'POST',
+      body: JSON.stringify({
+        filename: 'skeleton.pdf',
+        fileType: 'application/pdf',
+        sizeBytes: 1234,
+        contentSha256: 'a'.repeat(64),
+      }),
+      headers: {
+        'content-type': 'application/json',
+      },
+    })
+
+    expect(response.status).toBe(201)
+    expect(transactionQueries.map((args) => String((args as unknown[])[0]).trim().split(/\s+/).slice(0, 3).join(' '))).toEqual([
+      'begin',
+      'insert into matter_documents',
+      'insert into document_versions',
+      'update matter_documents set',
+      'commit',
+    ])
+    expect(routeQueries.filter((args) => String((args as unknown[])[0]).includes('insert into audit_logs'))).toEqual([
+      [
+        expect.stringContaining('insert into audit_logs'),
+        expect.arrayContaining(['org_1', 'usr_1', 'document', 'doc_1', 'document.upload']),
+      ],
+      [
+        expect.stringContaining('insert into audit_logs'),
+        expect.arrayContaining(['org_1', 'usr_1', 'document_version', expect.stringMatching(/^ver_/), 'document.version_create']),
+      ],
+    ])
+  })
+
+  it('audits document soft-delete actions', async () => {
+    const queries: unknown[] = []
+    const auth = {
+      api: {
+        getSession: async () => ({
+          user: {
+            id: 'usr_1',
+            organisationId: 'org_1',
+          },
+          session: {
+            id: 'ses_1',
+          },
+        }),
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+
+    const app = createApiApp(
+      testEnv,
+      createPool(async (...args) => {
+        queries.push(args)
+        const sql = String(args[0])
+
+        if (sql.includes('update matter_documents')) {
+          return { rows: [documentRow({ deleted_at: '2026-01-01T00:01:00.000Z' })] }
+        }
+        if (sql.includes('insert into audit_logs')) {
+          return { rows: [] }
+        }
+        throw new Error(`Unexpected SQL: ${sql}`)
+      }),
+      { auth },
+    )
+
+    const response = await app.request('/api/documents/doc_1', {
+      method: 'DELETE',
+    })
+
+    expect(response.status).toBe(200)
+    expect(queries).toEqual([
+      [
+        expect.stringContaining('update matter_documents'),
+        ['doc_1', 'org_1'],
+      ],
+      [
+        expect.stringContaining('insert into audit_logs'),
+        expect.arrayContaining(['org_1', 'usr_1', 'document', 'doc_1', 'document.delete']),
+      ],
     ])
   })
 })

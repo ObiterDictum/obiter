@@ -5,6 +5,8 @@ import type { AppPlatform, MeResponse, ShellSnapshot } from '@ormont/contracts'
 import { Card, EmptyState } from '@ormont/ui'
 import ladyJusticeUrl from './assets/login-lady-justice.png'
 import wordmarkUrl from './assets/ormont-wordmark.svg'
+import { ApiMatterRouteView } from './matter-documents'
+import { ApiMattersRouteView } from './matter-list'
 import { OrmontSidebar } from './sidebar/OrmontSidebar'
 
 const demoAuthStorageKey = 'ormont.phase0.authenticated'
@@ -274,16 +276,7 @@ export function HomeRouteView({ platform }: { platform: AppPlatform }) {
 export function MattersRouteView({ platform }: { platform: AppPlatform }) {
   useSuspenseQuery(shellSnapshotQueryOptions(platform))
 
-  return (
-    <div className="shell-stack">
-      <Card>
-        <EmptyState
-          title="Matter workspace reset"
-          body="The previous matter mock has been removed so the real matter workflow can be designed from scratch."
-        />
-      </Card>
-    </div>
-  )
+  return <ApiMattersRouteView />
 }
 
 export function MatterRouteView({
@@ -293,28 +286,23 @@ export function MatterRouteView({
   matterId: string
   platform: AppPlatform
 }) {
-  const { data } = useSuspenseQuery(shellSnapshotQueryOptions(platform))
-  const matter = findMatterRecord(data, matterId)
+  useSuspenseQuery(shellSnapshotQueryOptions(platform))
 
-  if (!matter) {
-    return (
-      <Card>
-        <EmptyState
-          title="Matter not found"
-          body="This matter does not exist in the current organisation workspace."
-          action={<Link className="shell-inline-link" to="/matters">Return to matters</Link>}
-        />
-      </Card>
-    )
-  }
-
-  return (
-    <div className="shell-stack">
-      <Card eyebrow={matter.clientReference} title={matter.name}>
-        <p className="shell-copy">{matter.summary}</p>
-      </Card>
-    </div>
-  )
+  return <ApiMatterRouteView matterId={matterId} />
 }
 
 export { createPhaseZeroShellSnapshot, findMatterRecord }
+export {
+  createDocumentMetadataMutationOptions,
+  createMatterQueryOptions,
+  createDocumentMetadata,
+  deleteDocument,
+  deleteDocumentMutationOptions,
+  invalidateMatterDocuments,
+  listMatterDocumentsQueryOptions,
+} from './api'
+export {
+  describeMatterDocument,
+  getMatterDocumentLabel,
+  getMatterDocumentListState,
+} from './matter-documents'

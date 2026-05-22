@@ -16,7 +16,7 @@
     "react": "^19.2.0"
   },
   "scripts": {
-    "test": "vitest run src/demo-shell.test.ts",
+    "test": "vitest run src/demo-shell.test.ts src/matter-documents.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   }
 }

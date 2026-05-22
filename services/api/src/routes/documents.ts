@@ -1,7 +1,11 @@
 import { Hono } from 'hono'
 import type { Context } from 'hono'
 import type { Pool } from 'pg'
-import type { ApiErrorCode, ApiErrorResponse } from '@ormont/contracts'
+import {
+  createDocumentMetadataRequestSchema,
+  type ApiErrorCode,
+  type ApiErrorResponse,
+} from '@ormont/contracts'
 import {
   appendAuditLog,
   createDocument,
@@ -52,14 +56,6 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null
 }
 
-function requiredString(value: unknown): string | null {
-  return typeof value === 'string' && value.length > 0 ? value : null
-}
-
-function requiredInteger(value: unknown): number | null {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null
-}
-
 export function createDocumentsRoutes(pool: Pool) {
   const routes = new Hono<{ Variables: RouteVariables }>()
 
@@ -73,12 +69,9 @@ export function createDocumentsRoutes(pool: Pool) {
     }
 
     const body = asRecord(await c.req.json().catch(() => null))
-    const filename = requiredString(body?.filename)
-    const fileType = requiredString(body?.fileType)
-    const contentSha256 = requiredString(body?.contentSha256)
-    const sizeBytes = requiredInteger(body?.sizeBytes)
+    const payload = createDocumentMetadataRequestSchema.safeParse(body)
 
-    if (!body || !filename || !fileType || !contentSha256 || sizeBytes === null) {
+    if (!payload.success) {
       return errorResponse(c, 'validation_failed', 'Document upload metadata is required.', 400)
     }
 
@@ -86,10 +79,10 @@ export function createDocumentsRoutes(pool: Pool) {
       organisationId: user.organisationId,
       matterId: matter.id,
       userId: user.id,
-      filename,
-      fileType,
-      sizeBytes,
-      contentSha256,
+      filename: payload.data.filename,
+      fileType: payload.data.fileType,
+      sizeBytes: payload.data.sizeBytes,
+      contentSha256: payload.data.contentSha256,
     })
     await appendAuditLog(pool, {
       organisationId: user.organisationId,

@@ -95,6 +95,114 @@ export const apiErrorResponseSchema = z.object({
 })
 export type ApiErrorResponse = z.infer<typeof apiErrorResponseSchema>
 
+export const matterSchema = z.object({
+  id: z.string().min(1),
+  organisationId: z.string().min(1),
+  name: z.string().min(1),
+  description: z.string().nullable(),
+  primaryJurisdiction: z.string().min(1),
+  secondaryJurisdictions: z.array(z.string()),
+  legalDomains: z.array(z.string()),
+  clientReference: z.string(),
+  status: matterStatusSchema,
+  createdBy: z.string().min(1),
+  createdAt: z.string().min(1),
+  updatedAt: z.string().min(1),
+  deletedAt: z.string().nullable(),
+})
+export type Matter = z.infer<typeof matterSchema>
+
+export const createMatterRequestSchema = z.object({
+  name: z.string().trim().min(1),
+  description: z.string().trim().min(1).nullable().optional(),
+  primaryJurisdiction: z.string().trim().min(1),
+  secondaryJurisdictions: z.array(z.string().trim().min(1)).optional(),
+  legalDomains: z.array(z.string().trim().min(1)).optional(),
+  clientReference: z.string().trim().optional(),
+})
+export type CreateMatterRequest = z.infer<typeof createMatterRequestSchema>
+
+export const matterResponseSchema = z.object({
+  matter: matterSchema,
+})
+export type MatterResponse = z.infer<typeof matterResponseSchema>
+
+export const listMattersResponseSchema = z.object({
+  matters: z.array(matterSchema),
+})
+export type ListMattersResponse = z.infer<typeof listMattersResponseSchema>
+
+export const documentVersionSchema = z.object({
+  id: z.string().min(1),
+  organisationId: z.string().min(1),
+  matterId: z.string().min(1),
+  matterDocumentId: z.string().min(1),
+  filename: z.string().min(1),
+  fileType: z.string().min(1),
+  sizeBytes: z.number().int().nonnegative(),
+  objectKey: z.string().min(1),
+  textObjectKey: z.string().nullable(),
+  documentStatus: documentStatusSchema,
+  failureReason: z.string().nullable(),
+  versionNumber: z.number().int().positive(),
+  contentSha256: z.string().min(1),
+  syncState: syncStateSchema,
+  createdBy: z.string().min(1),
+  createdAt: z.string().min(1),
+  updatedAt: z.string().min(1),
+})
+export type DocumentVersion = z.infer<typeof documentVersionSchema>
+
+export const matterDocumentSchema = z.object({
+  id: z.string().min(1),
+  organisationId: z.string().min(1),
+  matterId: z.string().min(1),
+  currentVersionId: z.string().nullable(),
+  logicalKey: z.string().min(1),
+  createdBy: z.string().min(1),
+  createdAt: z.string().min(1),
+  updatedAt: z.string().min(1),
+  deletedAt: z.string().nullable(),
+  currentVersion: documentVersionSchema.nullable().optional(),
+})
+export type MatterDocument = z.infer<typeof matterDocumentSchema>
+
+export const createDocumentMetadataRequestSchema = z.object({
+  filename: z.string().trim().min(1),
+  fileType: z.string().trim().min(1),
+  contentSha256: z.string().trim().min(1),
+  sizeBytes: z.number().int().nonnegative(),
+})
+export type CreateDocumentMetadataRequest = z.infer<
+  typeof createDocumentMetadataRequestSchema
+>
+
+export const createDocumentMetadataResponseSchema = z.object({
+  document: matterDocumentSchema,
+  version: documentVersionSchema,
+})
+export type CreateDocumentMetadataResponse = z.infer<
+  typeof createDocumentMetadataResponseSchema
+>
+
+export const listMatterDocumentsResponseSchema = z.object({
+  documents: z.array(matterDocumentSchema),
+})
+export type ListMatterDocumentsResponse = z.infer<
+  typeof listMatterDocumentsResponseSchema
+>
+
+export const documentDetailResponseSchema = z.object({
+  document: matterDocumentSchema,
+  versions: z.array(documentVersionSchema),
+})
+export type DocumentDetailResponse = z.infer<typeof documentDetailResponseSchema>
+
+export const deleteDocumentResponseSchema = z.object({
+  document: matterDocumentSchema,
+})
+export type DeleteDocumentResponse = z.infer<typeof deleteDocumentResponseSchema>
+
 export type AuthViewState =
   | { status: 'authenticated'; me: MeResponse }
   | { status: 'unauthenticated' }
@@ -117,10 +225,18 @@ export interface UserSummary {
 
 export interface MatterDocumentSummary {
   id: string
+  matterId: string
+  currentVersionId: string | null
+  logicalKey: string
   filename: string
-  kind: string
+  fileType: string
+  sizeBytes: number
+  contentSha256: string
+  versionNumber: number | null
   updatedAt: string
   status: DocumentStatus
+  syncState: SyncState
+  deletedAt: string | null
 }
 
 export interface ArtifactSummary {
