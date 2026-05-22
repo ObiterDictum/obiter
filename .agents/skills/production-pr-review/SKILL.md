@@ -21,8 +21,8 @@ Do not rubber-stamp. Do not say a PR is ready unless the evidence supports it. S
 6. Inspect changed files and all directly coupled files.
 7. Review tests and run appropriate verification where possible.
 8. Prepare inline review comments for every actionable bug/security issue that has a stable diff location.
-9. Prepare a final review summary that groups all findings by severity and category.
-10. Publish review comments to GitHub when explicitly asked or when operating on a real PR with `gh` available.
+9. Prepare a final review summary that groups all findings by severity and category and includes a numeric review score.
+10. Publish review comments to GitHub through the API when explicitly asked or when operating on a real PR with GitHub access.
 11. Record durable knowledge in the review knowledge repo if configured and safe to store.
 
 ## Required Setup Commands
@@ -38,13 +38,21 @@ git diff --stat origin/main...HEAD
 git diff --name-status origin/main...HEAD
 ```
 
-If the PR targets another base, replace `origin/main` with the actual base.
+If the PR targets another base, replace `origin/main` with the actual base. For actual GitHub PRs, inspect PR metadata first and use `baseRefName`; do not assume `main`.
 
 If GitHub CLI is available and a PR exists:
 
 ```bash
-gh pr view --json number,title,baseRefName,headRefName,url,body,reviewDecision,mergeable,statusCheckRollup
+gh pr view <number-or-url> --json number,title,baseRefName,headRefName,url,body,reviewDecision,mergeable,statusCheckRollup,headRefOid
+git fetch origin <baseRefName>
+git fetch origin pull/<number>/head:pr-<number> --update-head-ok
+git checkout pr-<number>
+git merge-base HEAD origin/<baseRefName>
+git diff --stat origin/<baseRefName>...HEAD
+git diff --name-status origin/<baseRefName>...HEAD
 ```
+
+When a PR number is supplied, prefer reviewing the local PR ref (`pr-<number>`) against `origin/<baseRefName>` so the diff, line numbers, and verification match GitHub.
 
 ## Context Loading
 
@@ -194,7 +202,7 @@ If any answer is uncertain for sensitive code, the verdict cannot be `Approve`.
 
 ## GitHub Inline Review Comments
 
-When reviewing an actual GitHub PR, produce inline comments for findings that map to changed lines. Inline comments should be concise, specific, and fix-oriented.
+When reviewing an actual GitHub PR, produce inline comments for findings that map to changed lines. Inline comments should be thorough enough for the author to fix without guessing, but still focused on one issue.
 
 Inline comment rules:
 
@@ -202,7 +210,7 @@ Inline comment rules:
 - One issue per inline comment.
 - Include severity/category at the start, for example: `High/security:` or `Medium/architecture:`.
 - Explain the bug or risk, not just the preferred style.
-- Include a concrete fix direction.
+- Include the impact, concrete fix direction, and the verification that would prove the fix when the issue is non-trivial.
 - Do not post nit comments unless the nit prevents misunderstanding or future defects.
 - Do not post comments containing secrets, private matter data, raw legal text, raw prompts, embeddings, sensitive stack traces, or screenshots.
 - If a finding affects unchanged coupled code, mention it in the final summary and only inline-comment if there is a changed line that introduced or exposes the issue.
@@ -213,15 +221,56 @@ Preferred GitHub review workflow:
 
 1. Inspect PR metadata and diff:
    ```bash
-   gh pr view --json number,title,baseRefName,headRefName,url,body,headRefOid
-   gh pr diff --name-only
-   gh pr diff
+   gh pr view <number-or-url> --json number,title,baseRefName,headRefName,url,body,headRefOid
+   gh pr diff <number-or-url> --name-only
+   gh pr diff <number-or-url>
    ```
 2. Draft all findings locally first.
-3. Publish inline comments for actionable findings with valid diff positions.
-4. Submit one final review summary with the verdict and full severity-grouped list.
+3. Validate every inline target is in the PR diff. Use changed-line line numbers from `nl -ba <file>` plus the PR diff. If unsure, keep the issue in the summary only.
+4. Publish inline comments for actionable findings with valid diff positions through the GitHub API, not high-level `gh pr review` output.
+5. Submit one final review summary with the verdict, numeric score, and full severity-grouped list.
+6. Confirm publication by listing PR review comments or the posted review.
 
-If the tooling makes inline publication unsafe or ambiguous, output an `Inline comments to add` section with exact `path:line` targets and bodies, then state that comments were not posted.
+### GitHub API publication rules
+
+When asked to post inline comments or when operating on a real PR with GitHub access, use the GitHub Pull Request Reviews API so inline comments and the final summary are submitted together. Do not rely on `gh pr review` for publication; use `gh api repos/<owner>/<repo>/pulls/<number>/reviews` or the GitHub app review endpoint directly.
+
+Prepare a UTF-8 JSON payload with ASCII-safe punctuation to avoid mojibake on Windows terminals:
+
+```json
+{
+  "event": "REQUEST_CHANGES",
+  "body": "## Review Verdict\n\nRequest changes\n\nScore: 62/100\n\n...",
+  "comments": [
+    {
+      "path": "services/api/src/database.ts",
+      "line": 123,
+      "side": "RIGHT",
+      "body": "High/security: ..."
+    }
+  ]
+}
+```
+
+Then publish and verify:
+
+```bash
+gh api repos/<owner>/<repo>/pulls/<number>/reviews --method POST --input review-payload.json
+gh api repos/<owner>/<repo>/pulls/<number>/comments --jq '.[] | {path,line,body}'
+rm -f review-payload.json
+```
+
+Use `event` according to the evidence:
+
+- `APPROVE` only when the security/data gate and verification support approval.
+- `REQUEST_CHANGES` when blockers/high findings or must-fix issues exist.
+- `COMMENT` when findings are informational, when more context is needed, or when GitHub rejects a formal review decision.
+
+If GitHub rejects `REQUEST_CHANGES` or `APPROVE` because the authenticated identity is the PR author, retry with `event: "COMMENT"`, keep all inline comments, and state in the final summary that GitHub would not allow a formal decision from this identity. The local verdict should still be `Request changes` or `Approve` as appropriate.
+
+Do not drop inline comments when the formal review event is blocked by author permissions. The fallback is an API-submitted `COMMENT` review with the same inline comments, the local verdict, and the score in the review body.
+
+If the tooling makes inline publication unsafe or ambiguous, output an `Inline comments to add` section with exact `path:line` targets and bodies, then state that comments were not posted and why.
 
 ## Final PR Review Summary
 
@@ -230,6 +279,7 @@ The final summary must include all important findings discovered during review, 
 Required summary sections:
 
 - Verdict: approve, request changes, not ready, or needs more context
+- Score: `N/100` with a short rationale. Use the score to communicate readiness; it does not replace the verdict.
 - Scope reviewed: files/areas and coupled code inspected
 - Blockers
 - High findings

@@ -7,10 +7,10 @@ import {
   createMatter,
   getMatter,
   listMatters,
-  restoreMatter,
+  restoreMatterWithAudit,
   softDeleteMatter,
   updateMatter,
-  type MatterStatus,
+  type UpdatableMatterStatus,
 } from '../database'
 
 interface RouteUser {
@@ -30,7 +30,7 @@ interface RouteVariables {
 
 type RouteContext = Context<{ Variables: RouteVariables }>
 
-const matterStatuses = new Set<MatterStatus>(['active', 'archived', 'deleted'])
+const updatableMatterStatuses = new Set<UpdatableMatterStatus>(['active', 'archived'])
 
 function errorResponse(c: RouteContext, code: ApiErrorCode, message: string, status: 400 | 401 | 403 | 404) {
   const body: ApiErrorResponse = {
@@ -70,9 +70,9 @@ function stringArray(value: unknown): string[] | undefined {
     : undefined
 }
 
-function matterStatus(value: unknown): MatterStatus | undefined {
-  return typeof value === 'string' && matterStatuses.has(value as MatterStatus)
-    ? (value as MatterStatus)
+function updatableMatterStatus(value: unknown): UpdatableMatterStatus | undefined {
+  return typeof value === 'string' && updatableMatterStatuses.has(value as UpdatableMatterStatus)
+    ? (value as UpdatableMatterStatus)
     : undefined
 }
 
@@ -161,7 +161,7 @@ export function createMattersRoutes(pool: Pool) {
     const secondaryJurisdictions = stringArray(body?.secondaryJurisdictions)
     const legalDomains = stringArray(body?.legalDomains)
     const clientReference = stringValue(body?.clientReference)
-    const status = matterStatus(body?.status)
+    const status = updatableMatterStatus(body?.status)
 
     if (!body) {
       return errorResponse(c, 'validation_failed', 'Invalid matter update payload.', 400)
@@ -180,6 +180,9 @@ export function createMattersRoutes(pool: Pool) {
     }
     if (body.legalDomains !== undefined && !legalDomains) {
       return errorResponse(c, 'validation_failed', 'Invalid legalDomains.', 400)
+    }
+    if (body.status === 'deleted') {
+      return errorResponse(c, 'validation_failed', 'Use DELETE /api/matters/:id to delete matters.', 400)
     }
     if (body.status !== undefined && !status) {
       return errorResponse(c, 'validation_failed', 'Invalid matter status.', 400)
@@ -233,19 +236,15 @@ export function createMattersRoutes(pool: Pool) {
     const user = requireUser(c)
     if (user instanceof Response) return user
 
-    const matter = await restoreMatter(pool, user.organisationId, c.req.param('id'))
+    const matter = await restoreMatterWithAudit(pool, {
+      organisationId: user.organisationId,
+      userId: user.id,
+      id: c.req.param('id'),
+      requestId: c.get('requestId'),
+    })
     if (!matter) {
       return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
     }
-    await appendAuditLog(pool, {
-      organisationId: user.organisationId,
-      userId: user.id,
-      entityType: 'matter',
-      entityId: matter.id,
-      action: 'matter.update',
-      metadata: { restored: true },
-      requestId: c.get('requestId'),
-    })
     return c.json({ matter })
   })
 

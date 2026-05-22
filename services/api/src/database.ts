@@ -22,6 +22,7 @@ export interface AuditRecordInput {
     | 'matter.create'
     | 'matter.update'
     | 'matter.delete'
+    | 'matter.restore'
     | 'document.upload'
     | 'document.version_create'
     | 'document.delete'
@@ -30,6 +31,7 @@ export interface AuditRecordInput {
 }
 
 export type MatterStatus = 'active' | 'archived' | 'deleted'
+export type UpdatableMatterStatus = Exclude<MatterStatus, 'deleted'>
 export type DocumentStatus = 'queued' | 'processing' | 'ready' | 'failed' | 'needs_review'
 export type SyncState = 'local_only' | 'queued' | 'syncing' | 'synced' | 'conflict' | 'failed'
 
@@ -100,7 +102,14 @@ export interface UpdateMatterInput {
   secondaryJurisdictions?: string[]
   legalDomains?: string[]
   clientReference?: string
-  status?: MatterStatus
+  status?: UpdatableMatterStatus
+}
+
+export interface RestoreMatterInput {
+  organisationId: string
+  userId: string
+  id: string
+  requestId: string
 }
 
 export interface CreateDocumentInput {
@@ -119,6 +128,8 @@ export function createPool(env: ApiEnv) {
     connectionString: env.databaseUrl,
   })
 }
+
+type Queryable = Pick<Pool | PoolClient, 'query'>
 
 export async function findOrganisation(
   pool: Pool,
@@ -153,8 +164,8 @@ export function toCurrentUser(user: SessionUserRecord): CurrentUser | null {
   }
 }
 
-export async function appendAuditLog(pool: Pool, input: AuditRecordInput) {
-  await pool.query(
+export async function appendAuditLog(client: Queryable, input: AuditRecordInput) {
+  await client.query(
     `
       insert into audit_logs (
         id,
@@ -238,8 +249,6 @@ type MatterDocumentRow = {
   updated_at: Date | string
   deleted_at: Date | string | null
 }
-
-type Queryable = Pick<Pool | PoolClient, 'query'>
 
 function timestamp(value: Date | string) {
   return value instanceof Date ? value.toISOString() : value
@@ -413,7 +422,6 @@ export async function updateMatter(
         legal_domains = case when $9::boolean then $10::jsonb else legal_domains end,
         client_reference = coalesce($11, client_reference),
         status = coalesce($12, status),
-        deleted_at = case when $12 = 'deleted' then coalesce(deleted_at, now()) else deleted_at end,
         updated_at = now()
       where id = $1
         and organisation_id = $2
@@ -460,11 +468,11 @@ export async function softDeleteMatter(
 }
 
 export async function restoreMatter(
-  pool: Pool,
+  client: Queryable,
   organisationId: string,
   id: string,
 ): Promise<MatterRecord | null> {
-  const result = await pool.query<MatterRow>(
+  const result = await client.query<MatterRow>(
     `
       update matters
       set status = 'active', deleted_at = null, updated_at = now()
@@ -477,6 +485,41 @@ export async function restoreMatter(
   )
 
   return firstOrNull(result, mapMatter)
+}
+
+export async function restoreMatterWithAudit(
+  pool: Pool,
+  input: RestoreMatterInput,
+): Promise<MatterRecord | null> {
+  const client = await pool.connect()
+
+  try {
+    await client.query('begin')
+
+    const matter = await restoreMatter(client, input.organisationId, input.id)
+    if (!matter) {
+      await client.query('rollback')
+      return null
+    }
+
+    await appendAuditLog(client, {
+      organisationId: input.organisationId,
+      userId: input.userId,
+      entityType: 'matter',
+      entityId: matter.id,
+      action: 'matter.restore',
+      metadata: {},
+      requestId: input.requestId,
+    })
+
+    await client.query('commit')
+    return matter
+  } catch (error) {
+    await client.query('rollback')
+    throw error
+  } finally {
+    client.release()
+  }
 }
 
 function createDocumentVersionId() {

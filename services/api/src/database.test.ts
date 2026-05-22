@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Pool, PoolClient } from 'pg'
-import { createDocument, softDeleteMatter } from './database'
+import { createDocument, restoreMatterWithAudit, softDeleteMatter } from './database'
 
 type QueryCall = [string, unknown[] | undefined]
 
@@ -38,6 +38,25 @@ function versionRow(overrides: Record<string, unknown> = {}) {
     created_by: 'usr_1',
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
+function matterRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'mtr_1',
+    organisation_id: 'org_1',
+    name: 'Share purchase',
+    description: null,
+    primary_jurisdiction: 'england_and_wales',
+    secondary_jurisdictions: [],
+    legal_domains: ['corporate'],
+    client_reference: '',
+    status: 'active',
+    created_by: 'usr_1',
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z',
+    deleted_at: null,
     ...overrides,
   }
 }
@@ -202,5 +221,71 @@ describe('matter workspace database operations', () => {
       expect.stringContaining("set status = 'deleted', deleted_at = now()"),
       ['mtr_1', 'org_1'],
     ])
+  })
+
+  it('restores matters and writes the audit event in one transaction', async () => {
+    const { pool, calls } = createTransactionalPool(async (sql) => {
+      if (sql === 'begin' || sql === 'commit' || sql === 'rollback') {
+        return { rows: [] }
+      }
+      if (sql.includes('update matters')) {
+        return { rows: [matterRow()] }
+      }
+      if (sql.includes('insert into audit_logs')) {
+        return { rows: [] }
+      }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    const matter = await restoreMatterWithAudit(pool, {
+      organisationId: 'org_1',
+      userId: 'usr_1',
+      id: 'mtr_1',
+      requestId: 'req_1',
+    })
+
+    expect(calls.map(([sql]) => sql.trim().split(/\s+/).slice(0, 3).join(' '))).toEqual([
+      'begin',
+      'update matters set',
+      'insert into audit_logs',
+      'commit',
+    ])
+    expect(matter).toMatchObject({
+      id: 'mtr_1',
+      organisationId: 'org_1',
+      status: 'active',
+      deletedAt: null,
+    })
+    expect(calls[2]).toEqual([
+      expect.stringContaining('insert into audit_logs'),
+      ['org_1', 'usr_1', 'matter', 'mtr_1', 'matter.restore', '{}', 'req_1'],
+    ])
+  })
+
+  it('rolls back restore when the audit insert fails', async () => {
+    const { pool, calls } = createTransactionalPool(async (sql) => {
+      if (sql === 'begin' || sql === 'rollback') {
+        return { rows: [] }
+      }
+      if (sql.includes('update matters')) {
+        return { rows: [matterRow()] }
+      }
+      if (sql.includes('insert into audit_logs')) {
+        throw new Error('audit insert failed')
+      }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    await expect(
+      restoreMatterWithAudit(pool, {
+        organisationId: 'org_1',
+        userId: 'usr_1',
+        id: 'mtr_1',
+        requestId: 'req_1',
+      }),
+    ).rejects.toThrow('audit insert failed')
+
+    expect(calls.map(([sql]) => sql)).toContain('rollback')
+    expect(calls.map(([sql]) => sql)).not.toContain('commit')
   })
 })

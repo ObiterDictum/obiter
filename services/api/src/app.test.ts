@@ -33,6 +33,15 @@ function createPool(query: QueryMock): Pool {
   } as unknown as Pool
 }
 
+function createConnectedPool(query: QueryMock): Pool {
+  return {
+    connect: async () => ({
+      query,
+      release: () => undefined,
+    }),
+  } as unknown as Pool
+}
+
 describe('createApiApp', () => {
   it('returns the shared error shape when session loading throws', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -203,7 +212,7 @@ describe('createApiApp', () => {
     ])
   })
 
-  it('audits matter restore actions', async () => {
+  it('rejects generic matter updates that try to delete matters', async () => {
     const auth = {
       api: {
         getSession: async () => ({
@@ -224,8 +233,54 @@ describe('createApiApp', () => {
       testEnv,
       createPool(async (...args) => {
         queries.push(args)
+        return { rows: [] }
+      }),
+      { auth },
+    )
+
+    const response = await app.request('/api/matters/mtr_1', {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'deleted' }),
+      headers: {
+        'content-type': 'application/json',
+      },
+    })
+    const body = (await response.json()) as ErrorBody
+
+    expect(response.status).toBe(400)
+    expect(body.error).toMatchObject({
+      code: 'validation_failed',
+      message: 'Use DELETE /api/matters/:id to delete matters.',
+    })
+    expect(queries).toHaveLength(0)
+  })
+
+  it('audits matter restore actions transactionally', async () => {
+    const auth = {
+      api: {
+        getSession: async () => ({
+          user: {
+            id: 'usr_1',
+            organisationId: 'org_1',
+          },
+          session: {
+            id: 'ses_1',
+          },
+        }),
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+
+    const queries: unknown[] = []
+    const app = createApiApp(
+      testEnv,
+      createConnectedPool(async (...args) => {
+        queries.push(args)
         const sql = String(args[0])
 
+        if (sql === 'begin' || sql === 'commit' || sql === 'rollback') {
+          return { rows: [] }
+        }
         if (sql.includes('update matters')) {
           return {
             rows: [
@@ -258,14 +313,15 @@ describe('createApiApp', () => {
     })
 
     expect(response.status).toBe(200)
-    expect(queries).toHaveLength(2)
-    expect(queries[1]).toEqual([
-      expect.stringContaining('insert into audit_logs'),
-      expect.arrayContaining(['org_1', 'usr_1', 'matter', 'mtr_1', 'matter.update']),
+    expect(queries.map((args) => String((args as unknown[])[0]).trim().split(/\s+/).slice(0, 3).join(' '))).toEqual([
+      'begin',
+      'update matters set',
+      'insert into audit_logs',
+      'commit',
     ])
-    expect(queries[1]).toEqual([
-      expect.any(String),
-      expect.arrayContaining([expect.stringContaining('"restored":true')]),
+    expect(queries[2]).toEqual([
+      expect.stringContaining('insert into audit_logs'),
+      expect.arrayContaining(['org_1', 'usr_1', 'matter', 'mtr_1', 'matter.restore', '{}']),
     ])
   })
 
