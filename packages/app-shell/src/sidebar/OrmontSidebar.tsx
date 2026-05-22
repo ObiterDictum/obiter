@@ -23,29 +23,17 @@ interface OrmontSidebarProps {
 
 export function OrmontSidebar({ currentPath, onSignOut, snapshot }: OrmontSidebarProps) {
   const [contentCollapsed, setContentCollapsed] = useState(false)
-  const [contentClosing, setContentClosing] = useState(false)
-  const [contentOpening, setContentOpening] = useState(false)
   const sidebarClassName = [
     'ormont-app-sidebar',
     contentCollapsed ? 'ormont-app-sidebar--content-collapsed' : null,
-    contentClosing ? 'ormont-app-sidebar--content-closing' : null,
-    contentOpening ? 'ormont-app-sidebar--content-opening' : null,
   ].filter(Boolean).join(' ')
 
   function collapseContent() {
-    setContentOpening(false)
-    setContentClosing(true)
-    window.setTimeout(() => {
-      setContentCollapsed(true)
-      setContentClosing(false)
-    }, 160)
+    setContentCollapsed(true)
   }
 
   function expandContent() {
-    setContentClosing(false)
     setContentCollapsed(false)
-    setContentOpening(true)
-    window.setTimeout(() => setContentOpening(false), 470)
   }
 
   return (
@@ -76,7 +64,13 @@ export function OrmontSidebar({ currentPath, onSignOut, snapshot }: OrmontSideba
           <h1 className="ormont-app-sidebar__title">Ormont</h1>
           <SidebarSearch />
           <SidebarWorkspaceCard mode={currentPath === '/workspace' ? 'last-active' : 'active'} />
-          <SidebarNavigation currentPath={currentPath} />
+          <SidebarNavigation
+            currentPath={currentPath}
+            showStaffNavigation={
+              snapshot.organisation.id === 'org-ormont-demo' &&
+              snapshot.currentUser.role === 'owner'
+            }
+          />
         </div>
 
         <div className="ormont-app-sidebar__bottom">

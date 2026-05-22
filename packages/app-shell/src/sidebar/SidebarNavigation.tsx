@@ -34,37 +34,39 @@ import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import type { SidebarNavItem } from './types'
 
+const collapsedSectionsStorageKey = 'ormont.sidebar.collapsedSections'
+
 const navSections: Array<{ label?: string, items: SidebarNavItem[] }> = [
   {
     items: [
-      { icon: { outline: Squares2X2IconOutline, solid: Squares2X2IconSolid }, label: 'Dashboard', to: '/workspace' },
-      { icon: { outline: DocumentTextIconOutline, solid: DocumentTextIconSolid }, label: 'Draft' },
-      { badgeTone: 'blue', icon: { outline: BeakerIconOutline, solid: BeakerIconSolid }, label: 'Research' },
-      { icon: { outline: FolderIconOutline, solid: FolderIconSolid }, label: 'Matters', to: '/matters' },
+      { icon: { outline: Squares2X2IconOutline, solid: Squares2X2IconSolid }, label: 'Home', status: 'live', to: '/workspace' },
+      { icon: { outline: FolderIconOutline, solid: FolderIconSolid }, label: 'Matters', status: 'live', to: '/matters' },
+      { icon: { outline: GlobeAltIconOutline, solid: GlobeAltIconSolid }, label: 'Search', status: 'live', to: '/search' },
+      { icon: { outline: DocumentTextIconOutline, solid: DocumentTextIconSolid }, label: 'Drafting', status: 'planned' },
+      { icon: { outline: BeakerIconOutline, solid: BeakerIconSolid }, label: 'Research', status: 'planned' },
     ],
   },
   {
     label: 'Evidence & Review',
     items: [
-      { icon: { outline: CircleStackIconOutline, solid: CircleStackIconSolid }, label: 'Documents' },
-      { icon: { outline: GlobeAltIconOutline, solid: GlobeAltIconSolid }, label: 'Authorities' },
-      { badgeTone: 'purple', icon: { outline: EyeSlashIconOutline, solid: EyeSlashIconSolid }, label: 'Redact' },
-      { badgeTone: 'amber', icon: { outline: ShieldCheckIconOutline, solid: ShieldCheckIconSolid }, label: 'Verify' },
+      { icon: { outline: CircleStackIconOutline, solid: CircleStackIconSolid }, label: 'Documents', status: 'planned' },
+      { icon: { outline: EyeSlashIconOutline, solid: EyeSlashIconSolid }, label: 'Redaction', status: 'planned' },
+      { icon: { outline: ShieldCheckIconOutline, solid: ShieldCheckIconSolid }, label: 'Verification', status: 'planned' },
     ],
   },
   {
     label: 'Operations',
     items: [
-      { icon: { outline: BellAlertIconOutline, solid: BellAlertIconSolid }, label: 'Review Queue' },
-      { icon: { outline: ClockIconOutline, solid: ClockIconSolid }, label: 'Deadlines' },
-      { icon: { outline: DocumentArrowUpIconOutline, solid: DocumentArrowUpIconSolid }, label: 'Upload' },
+      { icon: { outline: BellAlertIconOutline, solid: BellAlertIconSolid }, label: 'Review Queue', status: 'planned' },
+      { icon: { outline: ClockIconOutline, solid: ClockIconSolid }, label: 'Deadlines', status: 'planned' },
+      { icon: { outline: DocumentArrowUpIconOutline, solid: DocumentArrowUpIconSolid }, label: 'Uploads', status: 'planned' },
     ],
   },
   {
     label: 'Advanced',
     items: [
-      { icon: { outline: BuildingLibraryIconOutline, solid: BuildingLibraryIconSolid }, label: 'Bench' },
-      { icon: { outline: CodeBracketIconOutline, solid: CodeBracketIconSolid }, label: 'API' },
+      { icon: { outline: BuildingLibraryIconOutline, solid: BuildingLibraryIconSolid }, label: 'Evaluation', status: 'planned' },
+      { icon: { outline: CodeBracketIconOutline, solid: CodeBracketIconSolid }, label: 'Developer API', status: 'planned' },
     ],
   },
 ]
@@ -80,7 +82,9 @@ function SidebarNavigationItem({
   const SolidIcon = item.icon.solid
   const className = active
     ? 'ormont-sidebar-nav__item ormont-sidebar-nav__item--active'
-    : 'ormont-sidebar-nav__item'
+    : item.status === 'planned'
+      ? 'ormont-sidebar-nav__item ormont-sidebar-nav__item--planned'
+      : 'ormont-sidebar-nav__item'
   const children = (
     <>
       <span className="ormont-sidebar-nav__icon-wrap" aria-hidden="true">
@@ -88,37 +92,39 @@ function SidebarNavigationItem({
         <SolidIcon className="ormont-sidebar-nav__icon ormont-sidebar-nav__icon--solid" />
       </span>
       <span>{item.label}</span>
-      {item.badgeTone ? (
+      {item.status === 'planned' ? (
+        <span className="ormont-sidebar-nav__status">Planned</span>
+      ) : item.badgeTone ? (
         <span className="ormont-sidebar-nav__dot" data-tone={item.badgeTone} aria-hidden="true" />
       ) : null}
     </>
   )
 
-  if (item.to === '/workspace') {
+  if (item.to) {
     return (
-      <Link className={className} to="/workspace">
-        {children}
-      </Link>
-    )
-  }
-
-  if (item.to === '/matters') {
-    return (
-      <Link className={className} to="/matters">
+      <Link className={className} to={item.to}>
         {children}
       </Link>
     )
   }
 
   return (
-    <button className={className} type="button">
+    <button aria-disabled="true" className={className} type="button">
       {children}
     </button>
   )
 }
 
-export function SidebarNavigation({ currentPath }: { currentPath: string }) {
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() => new Set())
+export function SidebarNavigation({
+  currentPath,
+  showStaffNavigation = false,
+}: {
+  currentPath: string
+  showStaffNavigation?: boolean
+}) {
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
+    () => readCollapsedSections(),
+  )
 
   function toggleSection(label: string) {
     setCollapsedSections((current) => {
@@ -128,13 +134,14 @@ export function SidebarNavigation({ currentPath }: { currentPath: string }) {
       } else {
         next.add(label)
       }
+      writeCollapsedSections(next)
       return next
     })
   }
 
   return (
     <nav className="ormont-sidebar-nav" aria-label="Primary">
-      {navSections.map((section, sectionIndex) => (
+      {navSections.filter((section) => showStaffNavigation || section.label !== 'Advanced').map((section, sectionIndex) => (
         <div
           className={sectionIndex === 0 ? 'ormont-sidebar-nav__group' : 'ormont-sidebar-nav__group ormont-sidebar-nav__group--divided'}
           key={section.label ?? 'primary'}
@@ -156,7 +163,13 @@ export function SidebarNavigation({ currentPath }: { currentPath: string }) {
           <div className="ormont-sidebar-nav__items" hidden={section.label ? collapsedSections.has(section.label) : false}>
             {section.items.map((item) => (
               <SidebarNavigationItem
-                active={item.to === '/workspace' ? currentPath === '/workspace' : currentPath.startsWith(item.to ?? '\u0000')}
+                active={
+                  item.to === '/workspace'
+                    ? currentPath === '/workspace'
+                    : item.to === '/search'
+                      ? currentPath === '/search' || currentPath.startsWith('/cases/')
+                      : currentPath.startsWith(item.to ?? '\u0000')
+                }
                 item={item}
                 key={item.label}
               />
@@ -165,5 +178,46 @@ export function SidebarNavigation({ currentPath }: { currentPath: string }) {
         </div>
       ))}
     </nav>
+  )
+}
+
+export function readCollapsedSections() {
+  if (typeof window === 'undefined') {
+    return new Set<string>()
+  }
+
+  const raw = window.localStorage.getItem(collapsedSectionsStorageKey)
+  if (!raw) {
+    return new Set<string>()
+  }
+
+  try {
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) {
+      return new Set<string>()
+    }
+
+    const validLabels = new Set(
+      navSections.flatMap((section) => section.label ? [section.label] : []),
+    )
+
+    return new Set(
+      parsed.filter((label): label is string =>
+        typeof label === 'string' && validLabels.has(label),
+      ),
+    )
+  } catch {
+    return new Set<string>()
+  }
+}
+
+export function writeCollapsedSections(sections: Set<string>) {
+  if (typeof window === 'undefined') {
+    return
+  }
+
+  window.localStorage.setItem(
+    collapsedSectionsStorageKey,
+    JSON.stringify([...sections]),
   )
 }
