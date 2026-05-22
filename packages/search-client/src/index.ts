@@ -297,10 +297,19 @@ function wrapSearchError(message: string, error: unknown): Error {
 }
 
 function isIndexAlreadyExistsError(error: unknown): boolean {
+  if (typeof error !== 'object' || error === null) {
+    return false
+  }
+
+  if ('code' in error && (error as { code?: unknown }).code === 'index_already_exists') {
+    return true
+  }
+
+  const cause = (error as { cause?: unknown }).cause
   return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { code?: unknown }).code === 'index_already_exists'
+    typeof cause === 'object' &&
+    cause !== null &&
+    'code' in cause &&
+    (cause as { code?: unknown }).code === 'index_already_exists'
   )
 }

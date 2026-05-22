@@ -94,6 +94,37 @@ describe('Atlas search client', () => {
     expect(index.updateRankingRules).toHaveBeenCalled()
   })
 
+  it('updates index settings for the real Meilisearch existing-index error shape', async () => {
+    const index = {
+      updateSearchableAttributes: vi.fn(() => completedTask({ uid: 8 })),
+      updateFilterableAttributes: vi.fn(() => completedTask({ uid: 9 })),
+      updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
+      updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
+      addDocuments: vi.fn(),
+      search: vi.fn(),
+    }
+    const client = {
+      createIndex: vi.fn((): never => {
+        throw Object.assign(new Error('already exists'), {
+          name: 'MeiliSearchApiError',
+          cause: {
+            code: 'index_already_exists',
+            message: 'Index already exists.',
+          },
+        })
+      }),
+      index: vi.fn(() => index),
+    }
+
+    const result = await createIndex(client, 'atlas_authorities')
+
+    expect(result.taskUid).toBeUndefined()
+    expect(index.updateSearchableAttributes).toHaveBeenCalled()
+    expect(index.updateFilterableAttributes).toHaveBeenCalled()
+    expect(index.updateSortableAttributes).toHaveBeenCalled()
+    expect(index.updateRankingRules).toHaveBeenCalled()
+  })
+
   it('fails index setup when a settings task fails after enqueue', async () => {
     const index = {
       updateSearchableAttributes: vi.fn(() => completedTask({ uid: 8 })),

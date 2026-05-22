@@ -12,10 +12,12 @@ interface AtlasRouteVariables {
   requestId: string
 }
 
+const atlasSlugSchema = z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+
 const atlasSearchQuerySchema = z.object({
   q: z.string().trim().min(1),
-  court: z.string().trim().min(1).optional(),
-  jurisdiction: z.string().trim().min(1).optional(),
+  court: atlasSlugSchema.optional(),
+  jurisdiction: atlasSlugSchema.optional(),
   dateFrom: z.string().date().optional(),
   dateTo: z.string().date().optional(),
   sourceType: z.literal('judgment').optional(),

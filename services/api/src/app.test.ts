@@ -475,4 +475,38 @@ describe('createApiApp', () => {
       expect.anything(),
     )
   })
+
+  it('rejects malformed Atlas metadata filter values before search', async () => {
+    const auth = {
+      api: {
+        getSession: async () => null,
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const app = createApiApp(testEnv, createPool(async () => ({ rows: [] })), {
+      auth,
+    })
+    searchClientMock.search.mockClear()
+
+    const invalidFilterValues = [
+      ['court', 'uksc" OR court = "bad'],
+      ['court', 'uksc\\'],
+      ['court', 'uksc OR court'],
+      ['jurisdiction', 'england-and-wales"'],
+      ['jurisdiction', 'england-and-wales\\'],
+      ['jurisdiction', 'england-and-wales AND judgment'],
+    ]
+
+    for (const [param, value] of invalidFilterValues) {
+      const response = await app.request(
+        `/api/atlas/search?q=Potanina&${param}=${encodeURIComponent(value)}`,
+      )
+      const body = (await response.json()) as ErrorBody
+
+      expect(response.status).toBe(400)
+      expect(body.error.code).toBe('validation_failed')
+    }
+
+    expect(searchClientMock.search).not.toHaveBeenCalled()
+  })
 })
