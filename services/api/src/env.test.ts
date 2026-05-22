@@ -17,6 +17,9 @@ describe('readApiEnv', () => {
 
     expect(env.databaseUrl).toContain('localhost')
     expect(env.authSecret).toBe('dev-only-better-auth-secret')
+    expect(env.meilisearchHost).toBe('http://localhost:7700')
+    expect(env.meilisearchSearchApiKey).toBe('dev-key')
+    expect(env.atlasAuthoritiesIndex).toBe('atlas_authorities')
     expect(env.nodeEnv).toBe('development')
   })
 
@@ -51,6 +54,9 @@ describe('readApiEnv', () => {
     delete process.env.BETTER_AUTH_SECRET
     delete process.env.BETTER_AUTH_URL
     delete process.env.ORMONT_WEB_ORIGIN
+    delete process.env.MEILISEARCH_HOST
+    delete process.env.MEILISEARCH_SEARCH_API_KEY
+    delete process.env.ATLAS_AUTHORITIES_INDEX
 
     expect(() => readApiEnv()).toThrow('Missing required production environment values')
   })
@@ -65,6 +71,9 @@ describe('readApiEnv', () => {
       'https://mail.ormont.example/magic-link'
     process.env.ORMONT_MAGIC_LINK_WEBHOOK_SECRET =
       '0123456789abcdef0123456789abcdef'
+    process.env.MEILISEARCH_HOST = 'https://search.ormont.example'
+    process.env.MEILISEARCH_SEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
+    process.env.ATLAS_AUTHORITIES_INDEX = 'atlas_authorities'
 
     expect(() => readApiEnv()).toThrow(
       'BETTER_AUTH_SECRET must be at least 32 characters in production.',
@@ -81,6 +90,9 @@ describe('readApiEnv', () => {
       'https://mail.ormont.example/magic-link'
     process.env.ORMONT_MAGIC_LINK_WEBHOOK_SECRET =
       '0123456789abcdef0123456789abcdef'
+    process.env.MEILISEARCH_HOST = 'https://search.ormont.example'
+    process.env.MEILISEARCH_SEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
+    process.env.ATLAS_AUTHORITIES_INDEX = 'atlas_authorities'
 
     expect(() => readApiEnv()).toThrow('DATABASE_URL must be a valid URL.')
 
@@ -89,6 +101,18 @@ describe('readApiEnv', () => {
 
     expect(() => readApiEnv()).toThrow(
       'PORT must be an integer between 1 and 65535.',
+    )
+
+    process.env.PORT = '8787'
+    process.env.MEILISEARCH_HOST = 'not a url'
+
+    expect(() => readApiEnv()).toThrow('MEILISEARCH_HOST must be a valid URL.')
+
+    process.env.MEILISEARCH_HOST = 'https://search.ormont.example'
+    process.env.ATLAS_AUTHORITIES_INDEX = 'atlas authorities'
+
+    expect(() => readApiEnv()).toThrow(
+      'ATLAS_AUTHORITIES_INDEX may only contain letters, numbers, underscores, and hyphens.',
     )
   })
 
@@ -103,6 +127,9 @@ describe('readApiEnv', () => {
       'https://mail.ormont.example/magic-link'
     process.env.ORMONT_MAGIC_LINK_WEBHOOK_SECRET =
       '0123456789abcdef0123456789abcdef'
+    process.env.MEILISEARCH_HOST = 'https://search.ormont.example/'
+    process.env.MEILISEARCH_SEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
+    process.env.ATLAS_AUTHORITIES_INDEX = 'atlas_authorities'
     process.env.PORT = '8788'
 
     const env = readApiEnv()
@@ -113,6 +140,39 @@ describe('readApiEnv', () => {
     expect(env.magicLinkWebhookUrl).toBe(
       'https://mail.ormont.example/magic-link',
     )
+    expect(env.meilisearchHost).toBe('https://search.ormont.example')
+    expect(env.meilisearchSearchApiKey).toBe('0123456789abcdef0123456789abcdef')
+    expect(env.atlasAuthoritiesIndex).toBe('atlas_authorities')
     expect(env.port).toBe(8788)
+  })
+
+  it('does not allow the legacy Meilisearch API key in production', () => {
+    process.env.NODE_ENV = 'production'
+    process.env.DATABASE_URL = 'postgres://ormont:ormont@db.example.com:5432/ormont'
+    process.env.BETTER_AUTH_SECRET = '0123456789abcdef0123456789abcdef'
+    process.env.BETTER_AUTH_URL = 'https://api.ormont.example'
+    process.env.ORMONT_WEB_ORIGIN = 'https://app.ormont.example'
+    process.env.ORMONT_MAGIC_LINK_WEBHOOK_URL =
+      'https://mail.ormont.example/magic-link'
+    process.env.ORMONT_MAGIC_LINK_WEBHOOK_SECRET =
+      '0123456789abcdef0123456789abcdef'
+    process.env.MEILISEARCH_HOST = 'https://search.ormont.example'
+    process.env.MEILISEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
+    delete process.env.MEILISEARCH_SEARCH_API_KEY
+    process.env.ATLAS_AUTHORITIES_INDEX = 'atlas_authorities'
+
+    expect(() => readApiEnv()).toThrow(
+      'Missing required production environment values: MEILISEARCH_SEARCH_API_KEY',
+    )
+  })
+
+  it('uses the legacy Meilisearch API key only outside production', () => {
+    process.env.NODE_ENV = 'development'
+    process.env.MEILISEARCH_API_KEY = 'legacy-dev-key'
+    delete process.env.MEILISEARCH_SEARCH_API_KEY
+
+    const env = readApiEnv()
+
+    expect(env.meilisearchSearchApiKey).toBe('legacy-dev-key')
   })
 })

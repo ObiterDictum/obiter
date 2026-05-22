@@ -1,0 +1,19 @@
+{
+  "name": "@ormont/atlas-ingestor",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ormont/legal-schema": "workspace:*",
+    "@ormont/search-client": "workspace:*",
+    "meilisearch": "^0.51.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.21.0"
+  }
+}
