@@ -52,15 +52,27 @@ interface AtlasIndexingTask {
   } | null
 }
 
+class AtlasSearchTaskError extends Error {
+  constructor(task: AtlasIndexingTask) {
+    const taskId = task.uid ?? task.taskUid
+    const taskLabel = typeof taskId === 'number' ? ` ${taskId}` : ''
+    const errorCode = task.error?.code ?? task.error?.type
+    const errorLabel = errorCode ? ` (${errorCode})` : ''
+
+    super(`Meilisearch task${taskLabel} ${task.status ?? 'failed'}${errorLabel}.`)
+    this.name = 'AtlasSearchTaskError'
+  }
+}
+
 type AtlasEnqueuedTaskPromise = Promise<{ taskUid: number }> & {
   waitTask(options?: { timeout?: number; interval?: number }): Promise<AtlasIndexingTask>
 }
 
 type IndexLike = {
-  updateSearchableAttributes(attributes: string[]): Promise<unknown>
-  updateFilterableAttributes(attributes: string[]): Promise<unknown>
-  updateSortableAttributes(attributes: string[]): Promise<unknown>
-  updateRankingRules(rules: string[]): Promise<unknown>
+  updateSearchableAttributes(attributes: string[]): AtlasEnqueuedTaskPromise
+  updateFilterableAttributes(attributes: string[]): AtlasEnqueuedTaskPromise
+  updateSortableAttributes(attributes: string[]): AtlasEnqueuedTaskPromise
+  updateRankingRules(rules: string[]): AtlasEnqueuedTaskPromise
   addDocuments(documents: AtlasSearchDocument[], options: { primaryKey: 'id' }): AtlasEnqueuedTaskPromise
   search(
     query: string,
@@ -74,7 +86,7 @@ type IndexLike = {
 }
 
 type IndexSetupClient = {
-  createIndex(indexName: string, options: { primaryKey: 'id' }): Promise<unknown>
+  createIndex(indexName: string, options: { primaryKey: 'id' }): AtlasEnqueuedTaskPromise
   index(indexName: string): IndexLike
 }
 
@@ -128,8 +140,10 @@ export async function createIndex(
 
   try {
     const primaryKey = options.primaryKey ?? 'id'
-    const task = (await client.createIndex(indexName, { primaryKey })) as { taskUid?: number }
+    const createTask = client.createIndex(indexName, { primaryKey })
+    const task = await createTask
     taskUid = task.taskUid
+    await waitForSucceededTask(createTask)
   } catch (error) {
     if (!isIndexAlreadyExistsError(error)) {
       throw wrapSearchError('Atlas search index setup failed.', error)
@@ -138,10 +152,10 @@ export async function createIndex(
 
   try {
     const index = client.index(indexName)
-    await index.updateSearchableAttributes(searchableAttributes)
-    await index.updateFilterableAttributes(filterableAttributes)
-    await index.updateSortableAttributes(sortableAttributes)
-    await index.updateRankingRules(rankingRules)
+    await waitForSucceededTask(index.updateSearchableAttributes(searchableAttributes))
+    await waitForSucceededTask(index.updateFilterableAttributes(filterableAttributes))
+    await waitForSucceededTask(index.updateSortableAttributes(sortableAttributes))
+    await waitForSucceededTask(index.updateRankingRules(rankingRules))
 
     return { taskUid }
   } catch (error) {
@@ -228,6 +242,14 @@ function validationFailure(documents: unknown[], messages: string[]): AtlasIndex
   }
 }
 
+async function waitForSucceededTask(task: AtlasEnqueuedTaskPromise): Promise<AtlasIndexingTask> {
+  const completed = await task.waitTask({ timeout: 30_000, interval: 100 })
+  if (completed.status !== 'succeeded') {
+    throw new AtlasSearchTaskError(completed)
+  }
+  return completed
+}
+
 function indexingTaskFailure(
   documents: AtlasSearchDocument[],
   task: AtlasIndexingTask,
@@ -262,10 +284,14 @@ function toMeiliFilters(filters: AtlasSearchFilters): string[] | undefined {
 }
 
 function quoteFilter(value: string) {
-  return `"${value.replaceAll('"', '\\"')}"`
+  return `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
 }
 
 function wrapSearchError(message: string, error: unknown): Error {
+  if (error instanceof AtlasSearchTaskError) {
+    return new Error(`${message} ${error.message}`)
+  }
+
   const detail = error instanceof Error ? error.name : typeof error
   return new Error(`${message} Search provider error: ${detail}.`)
 }

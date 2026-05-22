@@ -44,15 +44,15 @@ function completedTask(overrides: Record<string, unknown> = {}) {
 describe('Atlas search client', () => {
   it('sets up the Atlas index shape', async () => {
     const index = {
-      updateSearchableAttributes: vi.fn(async () => ({})),
-      updateFilterableAttributes: vi.fn(async () => ({})),
-      updateSortableAttributes: vi.fn(async () => ({})),
-      updateRankingRules: vi.fn(async () => ({})),
+      updateSearchableAttributes: vi.fn(() => completedTask({ uid: 8 })),
+      updateFilterableAttributes: vi.fn(() => completedTask({ uid: 9 })),
+      updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
+      updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
       addDocuments: vi.fn(),
       search: vi.fn(),
     }
     const client = {
-      createIndex: vi.fn(async () => ({ taskUid: 7 })),
+      createIndex: vi.fn(() => completedTask({ uid: 7 })),
       index: vi.fn(() => index),
     }
 
@@ -72,15 +72,15 @@ describe('Atlas search client', () => {
 
   it('updates index settings when the index already exists', async () => {
     const index = {
-      updateSearchableAttributes: vi.fn(async () => ({})),
-      updateFilterableAttributes: vi.fn(async () => ({})),
-      updateSortableAttributes: vi.fn(async () => ({})),
-      updateRankingRules: vi.fn(async () => ({})),
+      updateSearchableAttributes: vi.fn(() => completedTask({ uid: 8 })),
+      updateFilterableAttributes: vi.fn(() => completedTask({ uid: 9 })),
+      updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
+      updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
       addDocuments: vi.fn(),
       search: vi.fn(),
     }
     const client = {
-      createIndex: vi.fn(async () => {
+      createIndex: vi.fn((): never => {
         throw Object.assign(new Error('already exists'), {
           code: 'index_already_exists',
         })
@@ -92,6 +92,38 @@ describe('Atlas search client', () => {
 
     expect(result.taskUid).toBeUndefined()
     expect(index.updateRankingRules).toHaveBeenCalled()
+  })
+
+  it('fails index setup when a settings task fails after enqueue', async () => {
+    const index = {
+      updateSearchableAttributes: vi.fn(() => completedTask({ uid: 8 })),
+      updateFilterableAttributes: vi.fn(() =>
+        completedTask({
+          uid: 9,
+          status: 'failed',
+          error: {
+            code: 'invalid_settings_filterable_attributes',
+            message: 'failed with sensitive detail',
+          },
+        }),
+      ),
+      updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
+      updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
+      addDocuments: vi.fn(),
+      search: vi.fn(),
+    }
+    const client = {
+      createIndex: vi.fn(() => completedTask({ uid: 7 })),
+      index: vi.fn(() => index),
+    }
+
+    await expect(createIndex(client, 'atlas_authorities')).rejects.toThrow(
+      'Atlas search index setup failed. Meilisearch task 9 failed (invalid_settings_filterable_attributes).',
+    )
+    await expect(createIndex(client, 'atlas_authorities')).rejects.not.toThrow(
+      'sensitive detail',
+    )
+    expect(index.updateSortableAttributes).not.toHaveBeenCalled()
   })
 
   it('validates documents before indexing', async () => {
@@ -197,6 +229,33 @@ describe('Atlas search client', () => {
     })
   })
 
+  it('escapes filter values as string literals', async () => {
+    const searchMock = vi.fn(async () => ({
+      hits: [authority()],
+      query: 'test',
+      estimatedTotalHits: 1,
+      processingTimeMs: 2,
+    }))
+    const client = {
+      index: () => ({ search: searchMock }),
+    }
+
+    await search(client, 'atlas_authorities', 'test', {
+      court: String.raw`uksc\" OR court = "bad`,
+      jurisdiction: 'england-and-wales AND sourceType = "legislation"',
+    })
+
+    expect(searchMock).toHaveBeenCalledWith(
+      'test',
+      expect.objectContaining({
+        filter: [
+          String.raw`court = "uksc\\\" OR court = \"bad"`,
+          'jurisdiction = "england-and-wales AND sourceType = \\"legislation\\""',
+        ],
+      }),
+    )
+  })
+
   it('wraps provider errors without leaking keys', async () => {
     const client = {
       index: () => ({
@@ -211,4 +270,3 @@ describe('Atlas search client', () => {
     )
   })
 })
-
