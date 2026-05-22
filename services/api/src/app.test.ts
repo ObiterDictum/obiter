@@ -33,6 +33,15 @@ function createPool(query: QueryMock): Pool {
   } as unknown as Pool
 }
 
+function createConnectedPool(query: QueryMock): Pool {
+  return {
+    connect: async () => ({
+      query,
+      release: () => undefined,
+    }),
+  } as unknown as Pool
+}
+
 describe('createApiApp', () => {
   it('returns the shared error shape when session loading throws', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -87,6 +96,233 @@ describe('createApiApp', () => {
     expect(response.headers.get('access-control-allow-origin')).toBe(
       'ormont://desktop-auth',
     )
+  })
+
+  it('creates matters for the signed-in organisation', async () => {
+    const queries: unknown[] = []
+    const auth = {
+      api: {
+        getSession: async () => ({
+          user: {
+            id: 'usr_1',
+            organisationId: 'org_1',
+          },
+          session: {
+            id: 'ses_1',
+          },
+        }),
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+
+    const app = createApiApp(
+      testEnv,
+      createPool(async (...args) => {
+        queries.push(args)
+        return {
+          rows: [
+            {
+              id: 'mtr_1',
+              organisation_id: 'org_1',
+              name: 'Share purchase',
+              description: null,
+              primary_jurisdiction: 'england_and_wales',
+              secondary_jurisdictions: [],
+              legal_domains: ['corporate'],
+              client_reference: '',
+              status: 'active',
+              created_by: 'usr_1',
+              deleted_at: null,
+              created_at: '2026-01-01T00:00:00.000Z',
+              updated_at: '2026-01-01T00:00:00.000Z',
+            },
+          ],
+        }
+      }),
+      { auth },
+    )
+
+    const response = await app.request('/api/matters', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'Share purchase',
+        primaryJurisdiction: 'england_and_wales',
+        legalDomains: ['corporate'],
+      }),
+      headers: {
+        'content-type': 'application/json',
+      },
+    })
+
+    expect(response.status).toBe(201)
+    expect(await response.json()).toMatchObject({
+      matter: {
+        id: 'mtr_1',
+        organisationId: 'org_1',
+        name: 'Share purchase',
+      },
+    })
+    expect(queries[0]).toEqual([
+      expect.stringContaining('insert into matters'),
+      [
+        'org_1',
+        'Share purchase',
+        null,
+        'england_and_wales',
+        '[]',
+        '["corporate"]',
+        '',
+        'usr_1',
+      ],
+    ])
+  })
+
+  it('lists matters from the signed-in organisation', async () => {
+    const auth = {
+      api: {
+        getSession: async () => ({
+          user: {
+            id: 'usr_1',
+            organisationId: 'org_1',
+          },
+          session: {
+            id: 'ses_1',
+          },
+        }),
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+
+    const queries: unknown[] = []
+    const app = createApiApp(
+      testEnv,
+      createPool(async (...args) => {
+        queries.push(args)
+        return { rows: [] }
+      }),
+      { auth },
+    )
+
+    const response = await app.request('/api/matters')
+
+    expect(response.status).toBe(200)
+    expect(queries[0]).toEqual([
+      expect.stringContaining('from matters'),
+      ['org_1', false],
+    ])
+  })
+
+  it('rejects generic matter updates that try to delete matters', async () => {
+    const auth = {
+      api: {
+        getSession: async () => ({
+          user: {
+            id: 'usr_1',
+            organisationId: 'org_1',
+          },
+          session: {
+            id: 'ses_1',
+          },
+        }),
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+
+    const queries: unknown[] = []
+    const app = createApiApp(
+      testEnv,
+      createPool(async (...args) => {
+        queries.push(args)
+        return { rows: [] }
+      }),
+      { auth },
+    )
+
+    const response = await app.request('/api/matters/mtr_1', {
+      method: 'PATCH',
+      body: JSON.stringify({ status: 'deleted' }),
+      headers: {
+        'content-type': 'application/json',
+      },
+    })
+    const body = (await response.json()) as ErrorBody
+
+    expect(response.status).toBe(400)
+    expect(body.error).toMatchObject({
+      code: 'validation_failed',
+      message: 'Use DELETE /api/matters/:id to delete matters.',
+    })
+    expect(queries).toHaveLength(0)
+  })
+
+  it('audits matter restore actions transactionally', async () => {
+    const auth = {
+      api: {
+        getSession: async () => ({
+          user: {
+            id: 'usr_1',
+            organisationId: 'org_1',
+          },
+          session: {
+            id: 'ses_1',
+          },
+        }),
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+
+    const queries: unknown[] = []
+    const app = createApiApp(
+      testEnv,
+      createConnectedPool(async (...args) => {
+        queries.push(args)
+        const sql = String(args[0])
+
+        if (sql === 'begin' || sql === 'commit' || sql === 'rollback') {
+          return { rows: [] }
+        }
+        if (sql.includes('update matters')) {
+          return {
+            rows: [
+              {
+                id: 'mtr_1',
+                organisation_id: 'org_1',
+                name: 'Share purchase',
+                description: null,
+                primary_jurisdiction: 'england_and_wales',
+                secondary_jurisdictions: [],
+                legal_domains: ['corporate'],
+                client_reference: '',
+                status: 'active',
+                created_by: 'usr_1',
+                deleted_at: null,
+                created_at: '2026-01-01T00:00:00.000Z',
+                updated_at: '2026-01-01T00:00:00.000Z',
+              },
+            ],
+          }
+        }
+
+        return { rows: [] }
+      }),
+      { auth },
+    )
+
+    const response = await app.request('/api/matters/mtr_1/restore', {
+      method: 'PATCH',
+    })
+
+    expect(response.status).toBe(200)
+    expect(queries.map((args) => String((args as unknown[])[0]).trim().split(/\s+/).slice(0, 3).join(' '))).toEqual([
+      'begin',
+      'update matters set',
+      'insert into audit_logs',
+      'commit',
+    ])
+    expect(queries[2]).toEqual([
+      expect.stringContaining('insert into audit_logs'),
+      expect.arrayContaining(['org_1', 'usr_1', 'matter', 'mtr_1', 'matter.restore', '{}']),
+    ])
   })
 
   it('audits successful Better Auth sign-out on the server route', async () => {

@@ -5,6 +5,8 @@ import type { ApiErrorCode, ApiErrorResponse, MeResponse } from '@ormont/contrac
 import { appendAuditLog, findOrganisation, toCurrentUser } from './database'
 import type { ApiEnv } from './env'
 import { createAuth } from './auth'
+import { createDocumentsRoutes } from './routes/documents'
+import { createMattersRoutes } from './routes/matters'
 
 type Auth = ReturnType<typeof createAuth>
 type SessionUser = Auth['$Infer']['Session']['user']
@@ -125,6 +127,9 @@ export function createApiApp(env: ApiEnv, pool: Pool, options: ApiAppOptions = {
       service: 'ormont-api',
     }),
   )
+
+  app.route('/', createMattersRoutes(pool))
+  app.route('/', createDocumentsRoutes(pool))
 
   app.get('/api/me', async (c) => {
     const requestId = c.get('requestId')
