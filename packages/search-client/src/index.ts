@@ -1,15 +1,18 @@
 import { MeiliSearch } from 'meilisearch'
 import {
   atlasAuthoritiesSchema,
-  atlasAuthoritySchema,
+  atlasAuthoritySummarySchema,
   type AtlasAuthority,
+  type AtlasAuthoritySummary,
+  type AtlasSourceType,
 } from '@ormont/legal-schema'
 
 export type AtlasSearchDocument = AtlasAuthority
+export type AtlasSearchHit = AtlasAuthoritySummary
 export type AtlasSearchFilters = Partial<{
   court: string
   jurisdiction: string
-  sourceType: string
+  sourceType: AtlasSourceType
   dateFrom: string
   dateTo: string
 }>
@@ -29,10 +32,28 @@ export interface AtlasIndexDocumentsResult {
 }
 
 export interface AtlasSearchResult {
-  hits: AtlasSearchDocument[]
+  hits: AtlasSearchHit[]
   query: string
   estimatedTotalHits: number
   processingTimeMs: number
+}
+
+interface AtlasIndexingTask {
+  uid?: number
+  taskUid?: number
+  status?: string
+  details?: {
+    receivedDocuments?: number
+    indexedDocuments?: number
+  }
+  error?: {
+    code?: string
+    type?: string
+  } | null
+}
+
+type AtlasEnqueuedTaskPromise = Promise<{ taskUid: number }> & {
+  waitTask(options?: { timeout?: number; interval?: number }): Promise<AtlasIndexingTask>
 }
 
 type IndexLike = {
@@ -40,10 +61,10 @@ type IndexLike = {
   updateFilterableAttributes(attributes: string[]): Promise<unknown>
   updateSortableAttributes(attributes: string[]): Promise<unknown>
   updateRankingRules(rules: string[]): Promise<unknown>
-  addDocuments(documents: AtlasSearchDocument[], options: { primaryKey: 'id' }): Promise<unknown>
+  addDocuments(documents: AtlasSearchDocument[], options: { primaryKey: 'id' }): AtlasEnqueuedTaskPromise
   search(
     query: string,
-    options: { filter?: string[]; sort?: string[] },
+    options: { filter?: string[]; sort?: string[]; attributesToRetrieve?: string[] },
   ): Promise<{
     hits: unknown[]
     query?: string
@@ -75,6 +96,16 @@ const searchableAttributes = [
 
 const filterableAttributes = ['court', 'jurisdiction', 'sourceType', 'dateDecided']
 const sortableAttributes = ['dateDecided']
+const searchSummaryAttributes = [
+  'id',
+  'title',
+  'neutralCitation',
+  'court',
+  'jurisdiction',
+  'dateDecided',
+  'sourceType',
+  'sourceUrl',
+]
 const rankingRules = [
   'words',
   'typo',
@@ -130,11 +161,27 @@ export async function indexDocuments(
   }
 
   try {
-    await client.index(indexName).addDocuments(parsed.data, { primaryKey: 'id' })
+    const task = await client.index(indexName).addDocuments(parsed.data, {
+      primaryKey: 'id',
+    }).waitTask({ timeout: 30_000, interval: 100 })
+
+    if (task.status !== 'succeeded') {
+      return indexingTaskFailure(parsed.data, task)
+    }
+
+    const indexedCount =
+      typeof task.details?.indexedDocuments === 'number'
+        ? task.details.indexedDocuments
+        : parsed.data.length
+    const failedCount = Math.max(parsed.data.length - indexedCount, 0)
+
     return {
-      indexedCount: parsed.data.length,
-      failedCount: 0,
-      errors: [],
+      indexedCount,
+      failedCount,
+      errors:
+        failedCount > 0
+          ? [{ recordId: null, message: 'Atlas indexing task completed without indexing every document.' }]
+          : [],
     }
   } catch (error) {
     throw wrapSearchError('Atlas document indexing failed.', error)
@@ -151,8 +198,9 @@ export async function search(
     const result = await client.index(indexName).search(query, {
       filter: toMeiliFilters(filters),
       sort: ['dateDecided:desc'],
+      attributesToRetrieve: searchSummaryAttributes,
     })
-    const hits = result.hits.map((hit) => atlasAuthoritySchema.parse(hit))
+    const hits = result.hits.map((hit) => atlasAuthoritySummarySchema.parse(hit))
 
     return {
       hits,
@@ -175,6 +223,27 @@ function validationFailure(documents: unknown[], messages: string[]): AtlasIndex
       {
         recordId: typeof recordId === 'string' ? recordId : null,
         message: messages.join('; '),
+      },
+    ],
+  }
+}
+
+function indexingTaskFailure(
+  documents: AtlasSearchDocument[],
+  task: AtlasIndexingTask,
+): AtlasIndexDocumentsResult {
+  const taskId = task.uid ?? task.taskUid
+  const taskLabel = typeof taskId === 'number' ? ` ${taskId}` : ''
+  const errorCode = task.error?.code ?? task.error?.type
+  const errorLabel = errorCode ? ` (${errorCode})` : ''
+
+  return {
+    indexedCount: 0,
+    failedCount: documents.length,
+    errors: [
+      {
+        recordId: null,
+        message: `Atlas indexing task${taskLabel} ${task.status ?? 'failed'}${errorLabel}.`,
       },
     ],
   }

@@ -1,6 +1,6 @@
 import { z } from 'zod'
 
-export const atlasSourceTypeSchema = z.enum(['judgment', 'legislation'])
+export const atlasSourceTypeSchema = z.enum(['judgment'])
 export type AtlasSourceType = z.infer<typeof atlasSourceTypeSchema>
 
 export const atlasParagraphSchema = z.object({
@@ -23,5 +23,10 @@ export const atlasAuthoritySchema = z.object({
   paragraphs: z.array(atlasParagraphSchema).optional(),
 })
 export type AtlasAuthority = z.infer<typeof atlasAuthoritySchema>
+
+export const atlasAuthoritySummarySchema = atlasAuthoritySchema.omit({
+  paragraphs: true,
+})
+export type AtlasAuthoritySummary = z.infer<typeof atlasAuthoritySummarySchema>
 
 export const atlasAuthoritiesSchema = z.array(atlasAuthoritySchema)

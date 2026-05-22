@@ -18,7 +18,7 @@ const atlasSearchQuerySchema = z.object({
   jurisdiction: z.string().trim().min(1).optional(),
   dateFrom: z.string().date().optional(),
   dateTo: z.string().date().optional(),
-  sourceType: z.string().trim().min(1).optional(),
+  sourceType: z.literal('judgment').optional(),
 })
 
 function apiError(
@@ -66,7 +66,16 @@ export function createAtlasRoutes(env: ApiEnv) {
     )
 
     return c.json({
-      hits: result.hits,
+      hits: result.hits.map((hit) => ({
+        id: hit.id,
+        title: hit.title,
+        neutralCitation: hit.neutralCitation,
+        court: hit.court,
+        jurisdiction: hit.jurisdiction,
+        dateDecided: hit.dateDecided,
+        sourceType: hit.sourceType,
+        sourceUrl: hit.sourceUrl,
+      })),
       query: result.query,
       estimatedTotalHits: result.estimatedTotalHits,
       processingTimeMs: result.processingTimeMs,

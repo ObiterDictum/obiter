@@ -397,6 +397,14 @@ describe('createApiApp', () => {
           dateDecided: '2024-01-31',
           sourceType: 'judgment',
           sourceUrl: 'https://www.supremecourt.uk/cases/uksc-2024-001.html',
+          paragraphs: [
+            {
+              id: 'uksc-2024-1-p1',
+              documentId: 'uksc-2024-1',
+              paragraphNumber: 1,
+              text: 'This paragraph should be fetched through the paragraph endpoint.',
+            },
+          ],
         },
       ],
       query: 'Potanina',
@@ -419,10 +427,15 @@ describe('createApiApp', () => {
     )
 
     expect(response.status).toBe(200)
-    expect(await response.json()).toMatchObject({
+    const body = (await response.json()) as {
+      hits: Array<Record<string, unknown>>
+      estimatedTotalHits: number
+    }
+    expect(body).toMatchObject({
       hits: [{ neutralCitation: '[2024] UKSC 1' }],
       estimatedTotalHits: 1,
     })
+    expect(body.hits[0]).not.toHaveProperty('paragraphs')
     expect(searchClientMock.search).toHaveBeenCalledWith(
       { id: 'meili-client' },
       'atlas_authorities',
@@ -448,7 +461,9 @@ describe('createApiApp', () => {
       auth,
     })
 
-    const response = await app.request('/api/atlas/search?q=&dateFrom=not-a-date')
+    const response = await app.request(
+      '/api/atlas/search?q=&dateFrom=not-a-date&sourceType=legislation',
+    )
     const body = (await response.json()) as ErrorBody
 
     expect(response.status).toBe(400)

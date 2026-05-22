@@ -23,6 +23,24 @@ function authority(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function completedTask(overrides: Record<string, unknown> = {}) {
+  const task = {
+    uid: 1,
+    status: 'succeeded',
+    details: {
+      receivedDocuments: 1,
+      indexedDocuments: 1,
+    },
+    error: null,
+    ...overrides,
+  }
+  const promise = Promise.resolve({ taskUid: task.uid }) as Promise<{ taskUid: number }> & {
+    waitTask(options?: { timeout?: number; interval?: number }): Promise<typeof task>
+  }
+  promise.waitTask = vi.fn(async () => task)
+  return promise
+}
+
 describe('Atlas search client', () => {
   it('sets up the Atlas index shape', async () => {
     const index = {
@@ -77,7 +95,7 @@ describe('Atlas search client', () => {
   })
 
   it('validates documents before indexing', async () => {
-    const addDocuments = vi.fn(async () => ({}))
+    const addDocuments = vi.fn(() => completedTask())
     const client = {
       index: () => ({ addDocuments }),
     }
@@ -88,8 +106,42 @@ describe('Atlas search client', () => {
     expect(addDocuments).toHaveBeenCalledWith([authority()], { primaryKey: 'id' })
   })
 
+  it('reports failed indexing tasks after enqueue', async () => {
+    const addDocuments = vi.fn(() =>
+      completedTask({
+        uid: 9,
+        status: 'failed',
+        details: {
+          receivedDocuments: 1,
+          indexedDocuments: 0,
+        },
+        error: {
+          code: 'invalid_document_id',
+          message: 'failed with sensitive detail',
+        },
+      }),
+    )
+    const client = {
+      index: () => ({ addDocuments }),
+    }
+
+    const result = await indexDocuments(client, 'atlas_authorities', [authority()])
+
+    expect(result).toEqual({
+      indexedCount: 0,
+      failedCount: 1,
+      errors: [
+        {
+          recordId: null,
+          message: 'Atlas indexing task 9 failed (invalid_document_id).',
+        },
+      ],
+    })
+    expect(result.errors[0]?.message).not.toContain('sensitive detail')
+  })
+
   it('reports validation failures without touching Meilisearch', async () => {
-    const addDocuments = vi.fn(async () => ({}))
+    const addDocuments = vi.fn(() => completedTask())
     const client = {
       index: () => ({ addDocuments }),
     }
@@ -123,6 +175,7 @@ describe('Atlas search client', () => {
     })
 
     expect(result.hits[0]?.neutralCitation).toBe('[2024] UKSC 1')
+    expect(result.hits[0]).not.toHaveProperty('paragraphs')
     expect(searchMock).toHaveBeenCalledWith('test', {
       filter: [
         'court = "uksc"',
@@ -131,6 +184,16 @@ describe('Atlas search client', () => {
         'dateDecided <= "2024-12-31"',
       ],
       sort: ['dateDecided:desc'],
+      attributesToRetrieve: [
+        'id',
+        'title',
+        'neutralCitation',
+        'court',
+        'jurisdiction',
+        'dateDecided',
+        'sourceType',
+        'sourceUrl',
+      ],
     })
   })
 
