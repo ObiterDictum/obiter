@@ -147,6 +147,9 @@ importers:
       '@ormont/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@ormont/legal-schema':
+        specifier: workspace:*
+        version: link:../../packages/legal-schema
       '@ormont/search-client':
         specifier: workspace:*
         version: link:../../packages/search-client

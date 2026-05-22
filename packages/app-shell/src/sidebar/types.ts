@@ -11,6 +11,7 @@ export interface SidebarNavItem {
     solid: SidebarIcon
   }
   label: string
+  status?: 'live' | 'planned'
   to?: string
 }
 

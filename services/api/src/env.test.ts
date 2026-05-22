@@ -19,7 +19,10 @@ describe('readApiEnv', () => {
     expect(env.authSecret).toBe('dev-only-better-auth-secret')
     expect(env.meilisearchHost).toBe('http://localhost:7700')
     expect(env.meilisearchSearchApiKey).toBe('dev-key')
+    expect(env.meilisearchAdminApiKey).toBe('dev-key')
     expect(env.atlasAuthoritiesIndex).toBe('atlas_authorities')
+    expect(env.mojFindCaseLawBaseUrl).toBe('https://caselaw.nationalarchives.gov.uk')
+    expect(env.mojFindCaseLawRateLimit).toBe(1000)
     expect(env.nodeEnv).toBe('development')
   })
 
@@ -56,6 +59,7 @@ describe('readApiEnv', () => {
     delete process.env.ORMONT_WEB_ORIGIN
     delete process.env.MEILISEARCH_HOST
     delete process.env.MEILISEARCH_SEARCH_API_KEY
+    delete process.env.MEILISEARCH_ADMIN_API_KEY
     delete process.env.ATLAS_AUTHORITIES_INDEX
 
     expect(() => readApiEnv()).toThrow('Missing required production environment values')
@@ -73,7 +77,9 @@ describe('readApiEnv', () => {
       '0123456789abcdef0123456789abcdef'
     process.env.MEILISEARCH_HOST = 'https://search.ormont.example'
     process.env.MEILISEARCH_SEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
+    process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'
     process.env.ATLAS_AUTHORITIES_INDEX = 'atlas_authorities'
+    process.env.MOJ_FIND_CASE_LAW_BASE_URL = 'https://caselaw.nationalarchives.gov.uk'
 
     expect(() => readApiEnv()).toThrow(
       'BETTER_AUTH_SECRET must be at least 32 characters in production.',
@@ -92,7 +98,9 @@ describe('readApiEnv', () => {
       '0123456789abcdef0123456789abcdef'
     process.env.MEILISEARCH_HOST = 'https://search.ormont.example'
     process.env.MEILISEARCH_SEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
+    process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'
     process.env.ATLAS_AUTHORITIES_INDEX = 'atlas_authorities'
+    process.env.MOJ_FIND_CASE_LAW_BASE_URL = 'https://caselaw.nationalarchives.gov.uk'
 
     expect(() => readApiEnv()).toThrow('DATABASE_URL must be a valid URL.')
 
@@ -114,6 +122,18 @@ describe('readApiEnv', () => {
     expect(() => readApiEnv()).toThrow(
       'ATLAS_AUTHORITIES_INDEX may only contain letters, numbers, underscores, and hyphens.',
     )
+
+    process.env.ATLAS_AUTHORITIES_INDEX = 'atlas_authorities'
+    process.env.MOJ_FIND_CASE_LAW_BASE_URL = 'not a url'
+
+    expect(() => readApiEnv()).toThrow('MOJ_FIND_CASE_LAW_BASE_URL must be a valid URL.')
+
+    process.env.MOJ_FIND_CASE_LAW_BASE_URL = 'https://caselaw.nationalarchives.gov.uk'
+    process.env.MOJ_FIND_CASE_LAW_RATE_LIMIT = '0'
+
+    expect(() => readApiEnv()).toThrow(
+      'MOJ_FIND_CASE_LAW_RATE_LIMIT must be a positive integer.',
+    )
   })
 
   it('parses valid production configuration', () => {
@@ -129,7 +149,10 @@ describe('readApiEnv', () => {
       '0123456789abcdef0123456789abcdef'
     process.env.MEILISEARCH_HOST = 'https://search.ormont.example/'
     process.env.MEILISEARCH_SEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
+    process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'
     process.env.ATLAS_AUTHORITIES_INDEX = 'atlas_authorities'
+    process.env.MOJ_FIND_CASE_LAW_BASE_URL = 'https://caselaw.nationalarchives.gov.uk/'
+    process.env.MOJ_FIND_CASE_LAW_RATE_LIMIT = '250'
     process.env.PORT = '8788'
 
     const env = readApiEnv()
@@ -142,7 +165,10 @@ describe('readApiEnv', () => {
     )
     expect(env.meilisearchHost).toBe('https://search.ormont.example')
     expect(env.meilisearchSearchApiKey).toBe('0123456789abcdef0123456789abcdef')
+    expect(env.meilisearchAdminApiKey).toBe('0123456789abcdef0123456789abcdef')
     expect(env.atlasAuthoritiesIndex).toBe('atlas_authorities')
+    expect(env.mojFindCaseLawBaseUrl).toBe('https://caselaw.nationalarchives.gov.uk')
+    expect(env.mojFindCaseLawRateLimit).toBe(250)
     expect(env.port).toBe(8788)
   })
 
@@ -159,7 +185,9 @@ describe('readApiEnv', () => {
     process.env.MEILISEARCH_HOST = 'https://search.ormont.example'
     process.env.MEILISEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
     delete process.env.MEILISEARCH_SEARCH_API_KEY
+    process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'
     process.env.ATLAS_AUTHORITIES_INDEX = 'atlas_authorities'
+    process.env.MOJ_FIND_CASE_LAW_BASE_URL = 'https://caselaw.nationalarchives.gov.uk'
 
     expect(() => readApiEnv()).toThrow(
       'Missing required production environment values: MEILISEARCH_SEARCH_API_KEY',
@@ -170,9 +198,11 @@ describe('readApiEnv', () => {
     process.env.NODE_ENV = 'development'
     process.env.MEILISEARCH_API_KEY = 'legacy-dev-key'
     delete process.env.MEILISEARCH_SEARCH_API_KEY
+    delete process.env.MEILISEARCH_ADMIN_API_KEY
 
     const env = readApiEnv()
 
     expect(env.meilisearchSearchApiKey).toBe('legacy-dev-key')
+    expect(env.meilisearchAdminApiKey).toBe('legacy-dev-key')
   })
 })

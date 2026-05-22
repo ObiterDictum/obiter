@@ -11,9 +11,11 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WorkspaceRouteImport } from './routes/workspace'
 import { Route as SignInRouteImport } from './routes/sign-in'
+import { Route as SearchRouteImport } from './routes/search'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as MattersIndexRouteImport } from './routes/matters/index'
 import { Route as MattersMatterIdRouteImport } from './routes/matters/$matterId'
+import { Route as CasesCaseIdRouteImport } from './routes/cases/$caseId'
 
 const WorkspaceRoute = WorkspaceRouteImport.update({
   id: '/workspace',
@@ -23,6 +25,11 @@ const WorkspaceRoute = WorkspaceRouteImport.update({
 const SignInRoute = SignInRouteImport.update({
   id: '/sign-in',
   path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SearchRoute = SearchRouteImport.update({
+  id: '/search',
+  path: '/search',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -40,26 +47,37 @@ const MattersMatterIdRoute = MattersMatterIdRouteImport.update({
   path: '/matters/$matterId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CasesCaseIdRoute = CasesCaseIdRouteImport.update({
+  id: '/cases/$caseId',
+  path: '/cases/$caseId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/search': typeof SearchRoute
   '/sign-in': typeof SignInRoute
   '/workspace': typeof WorkspaceRoute
+  '/cases/$caseId': typeof CasesCaseIdRoute
   '/matters/$matterId': typeof MattersMatterIdRoute
   '/matters/': typeof MattersIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/search': typeof SearchRoute
   '/sign-in': typeof SignInRoute
   '/workspace': typeof WorkspaceRoute
+  '/cases/$caseId': typeof CasesCaseIdRoute
   '/matters/$matterId': typeof MattersMatterIdRoute
   '/matters': typeof MattersIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/search': typeof SearchRoute
   '/sign-in': typeof SignInRoute
   '/workspace': typeof WorkspaceRoute
+  '/cases/$caseId': typeof CasesCaseIdRoute
   '/matters/$matterId': typeof MattersMatterIdRoute
   '/matters/': typeof MattersIndexRoute
 }
@@ -67,25 +85,38 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/search'
     | '/sign-in'
     | '/workspace'
+    | '/cases/$caseId'
     | '/matters/$matterId'
     | '/matters/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/sign-in' | '/workspace' | '/matters/$matterId' | '/matters'
+  to:
+    | '/'
+    | '/search'
+    | '/sign-in'
+    | '/workspace'
+    | '/cases/$caseId'
+    | '/matters/$matterId'
+    | '/matters'
   id:
     | '__root__'
     | '/'
+    | '/search'
     | '/sign-in'
     | '/workspace'
+    | '/cases/$caseId'
     | '/matters/$matterId'
     | '/matters/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SearchRoute: typeof SearchRoute
   SignInRoute: typeof SignInRoute
   WorkspaceRoute: typeof WorkspaceRoute
+  CasesCaseIdRoute: typeof CasesCaseIdRoute
   MattersMatterIdRoute: typeof MattersMatterIdRoute
   MattersIndexRoute: typeof MattersIndexRoute
 }
@@ -104,6 +135,13 @@ declare module '@tanstack/react-router' {
       path: '/sign-in'
       fullPath: '/sign-in'
       preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/search': {
+      id: '/search'
+      path: '/search'
+      fullPath: '/search'
+      preLoaderRoute: typeof SearchRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -127,13 +165,22 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MattersMatterIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/cases/$caseId': {
+      id: '/cases/$caseId'
+      path: '/cases/$caseId'
+      fullPath: '/cases/$caseId'
+      preLoaderRoute: typeof CasesCaseIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SearchRoute: SearchRoute,
   SignInRoute: SignInRoute,
   WorkspaceRoute: WorkspaceRoute,
+  CasesCaseIdRoute: CasesCaseIdRoute,
   MattersMatterIdRoute: MattersMatterIdRoute,
   MattersIndexRoute: MattersIndexRoute,
 }

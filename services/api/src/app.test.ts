@@ -32,7 +32,10 @@ const testEnv: ApiEnv = {
   magicLinkWebhookSecret: null,
   meilisearchHost: 'http://localhost:7700',
   meilisearchSearchApiKey: 'dev-key',
+  meilisearchAdminApiKey: 'dev-key',
   atlasAuthoritiesIndex: 'atlas_authorities',
+  mojFindCaseLawBaseUrl: 'https://caselaw.nationalarchives.gov.uk',
+  mojFindCaseLawRateLimit: 1000,
   port: 8787,
   nodeEnv: 'test',
 }
@@ -53,6 +56,54 @@ function createConnectedPool(query: QueryMock): Pool {
 }
 
 describe('createApiApp', () => {
+  it('returns changelog entries from GitHub releases', async () => {
+    const auth = {
+      api: {
+        getSession: async () => null,
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const fetchMock = vi.fn(async () =>
+      new Response(
+        JSON.stringify([
+          {
+            html_url: 'https://github.com/OrmontLex/ormont/releases/tag/v1',
+            name: 'Initial search release',
+            published_at: '2026-05-22T10:00:00Z',
+            tag_name: 'v1',
+          },
+        ]),
+        { status: 200 },
+      ),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const app = createApiApp(testEnv, createPool(async () => ({ rows: [] })), {
+      auth,
+    })
+
+    try {
+      const response = await app.request('/api/changelog')
+      const body = await response.json() as {
+        entries: Array<{ date: string; title: string; url: string }>
+        source: string
+      }
+
+      expect(response.status).toBe(200)
+      expect(body).toEqual({
+        entries: [
+          {
+            date: '2026-05-22',
+            title: 'Initial search release',
+            url: 'https://github.com/OrmontLex/ormont/releases/tag/v1',
+          },
+        ],
+        source: 'github_releases',
+      })
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
+
   it('returns the shared error shape when session loading throws', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     const auth = {
@@ -423,7 +474,7 @@ describe('createApiApp', () => {
     })
 
     const response = await app.request(
-      '/api/atlas/search?q=Potanina&court=uksc&jurisdiction=england-and-wales&dateFrom=2024-01-01&dateTo=2024-12-31&sourceType=judgment',
+      '/api/search?q=Potanina&court=uksc&jurisdiction=england-and-wales&dateFrom=2024-01-01&dateTo=2024-12-31&sourceType=judgment',
     )
 
     expect(response.status).toBe(200)
@@ -462,7 +513,7 @@ describe('createApiApp', () => {
     })
 
     const response = await app.request(
-      '/api/atlas/search?q=&dateFrom=not-a-date&sourceType=legislation',
+      '/api/search?q=&dateFrom=not-a-date&sourceType=legislation',
     )
     const body = (await response.json()) as ErrorBody
 
@@ -499,7 +550,7 @@ describe('createApiApp', () => {
 
     for (const [param, value] of invalidFilterValues) {
       const response = await app.request(
-        `/api/atlas/search?q=Potanina&${param}=${encodeURIComponent(value)}`,
+        `/api/search?q=Potanina&${param}=${encodeURIComponent(value)}`,
       )
       const body = (await response.json()) as ErrorBody
 
