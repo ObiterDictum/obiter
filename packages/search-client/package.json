@@ -1,0 +1,17 @@
+{
+  "name": "@ormont/search-client",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run src/search-client.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@ormont/legal-schema": "workspace:*",
+    "meilisearch": "^0.51.0"
+  }
+}

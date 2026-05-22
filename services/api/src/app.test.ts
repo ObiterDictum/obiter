@@ -4,6 +4,13 @@ import { createApiApp } from './app'
 import { createAuth } from './auth'
 import type { ApiEnv } from './env'
 
+const searchClientMock = vi.hoisted(() => ({
+  createClient: vi.fn(() => ({ id: 'meili-client' })),
+  search: vi.fn(),
+}))
+
+vi.mock('@ormont/search-client', () => searchClientMock)
+
 type Auth = ReturnType<typeof createAuth>
 type QueryMock = (...args: unknown[]) => Promise<unknown>
 
@@ -23,6 +30,9 @@ const testEnv: ApiEnv = {
   desktopOrigin: 'ormont://desktop-auth',
   magicLinkWebhookUrl: null,
   magicLinkWebhookSecret: null,
+  meilisearchHost: 'http://localhost:7700',
+  meilisearchSearchApiKey: 'dev-key',
+  atlasAuthoritiesIndex: 'atlas_authorities',
   port: 8787,
   nodeEnv: 'test',
 }
@@ -373,5 +383,130 @@ describe('createApiApp', () => {
         'auth.sign_out',
       ]),
     ])
+  })
+
+  it('searches Atlas with validated query filters', async () => {
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [
+        {
+          id: 'uksc-2024-1',
+          title: 'Potanina v Potanin',
+          neutralCitation: '[2024] UKSC 1',
+          court: 'uksc',
+          jurisdiction: 'england-and-wales',
+          dateDecided: '2024-01-31',
+          sourceType: 'judgment',
+          sourceUrl: 'https://www.supremecourt.uk/cases/uksc-2024-001.html',
+          paragraphs: [
+            {
+              id: 'uksc-2024-1-p1',
+              documentId: 'uksc-2024-1',
+              paragraphNumber: 1,
+              text: 'This paragraph should be fetched through the paragraph endpoint.',
+            },
+          ],
+        },
+      ],
+      query: 'Potanina',
+      estimatedTotalHits: 1,
+      processingTimeMs: 1,
+    })
+    const auth = {
+      api: {
+        getSession: async () => null,
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+
+    const app = createApiApp(testEnv, createPool(async () => ({ rows: [] })), {
+      auth,
+    })
+
+    const response = await app.request(
+      '/api/atlas/search?q=Potanina&court=uksc&jurisdiction=england-and-wales&dateFrom=2024-01-01&dateTo=2024-12-31&sourceType=judgment',
+    )
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as {
+      hits: Array<Record<string, unknown>>
+      estimatedTotalHits: number
+    }
+    expect(body).toMatchObject({
+      hits: [{ neutralCitation: '[2024] UKSC 1' }],
+      estimatedTotalHits: 1,
+    })
+    expect(body.hits[0]).not.toHaveProperty('paragraphs')
+    expect(searchClientMock.search).toHaveBeenCalledWith(
+      { id: 'meili-client' },
+      'atlas_authorities',
+      'Potanina',
+      {
+        court: 'uksc',
+        jurisdiction: 'england-and-wales',
+        dateFrom: '2024-01-01',
+        dateTo: '2024-12-31',
+        sourceType: 'judgment',
+      },
+    )
+  })
+
+  it('rejects invalid Atlas search query params', async () => {
+    const auth = {
+      api: {
+        getSession: async () => null,
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const app = createApiApp(testEnv, createPool(async () => ({ rows: [] })), {
+      auth,
+    })
+
+    const response = await app.request(
+      '/api/atlas/search?q=&dateFrom=not-a-date&sourceType=legislation',
+    )
+    const body = (await response.json()) as ErrorBody
+
+    expect(response.status).toBe(400)
+    expect(body.error.code).toBe('validation_failed')
+    expect(searchClientMock.search).not.toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      '',
+      expect.anything(),
+    )
+  })
+
+  it('rejects malformed Atlas metadata filter values before search', async () => {
+    const auth = {
+      api: {
+        getSession: async () => null,
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const app = createApiApp(testEnv, createPool(async () => ({ rows: [] })), {
+      auth,
+    })
+    searchClientMock.search.mockClear()
+
+    const invalidFilterValues = [
+      ['court', 'uksc" OR court = "bad'],
+      ['court', 'uksc\\'],
+      ['court', 'uksc OR court'],
+      ['jurisdiction', 'england-and-wales"'],
+      ['jurisdiction', 'england-and-wales\\'],
+      ['jurisdiction', 'england-and-wales AND judgment'],
+    ]
+
+    for (const [param, value] of invalidFilterValues) {
+      const response = await app.request(
+        `/api/atlas/search?q=Potanina&${param}=${encodeURIComponent(value)}`,
+      )
+      const body = (await response.json()) as ErrorBody
+
+      expect(response.status).toBe(400)
+      expect(body.error.code).toBe('validation_failed')
+    }
+
+    expect(searchClientMock.search).not.toHaveBeenCalled()
   })
 })

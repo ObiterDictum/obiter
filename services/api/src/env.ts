@@ -5,6 +5,9 @@ const requiredProductionKeys = [
   'ORMONT_WEB_ORIGIN',
   'ORMONT_MAGIC_LINK_WEBHOOK_URL',
   'ORMONT_MAGIC_LINK_WEBHOOK_SECRET',
+  'MEILISEARCH_HOST',
+  'MEILISEARCH_SEARCH_API_KEY',
+  'ATLAS_AUTHORITIES_INDEX',
 ] as const
 
 const requiredTestKeys = ['TEST_DATABASE_URL'] as const
@@ -17,6 +20,9 @@ export interface ApiEnv {
   desktopOrigin: string
   magicLinkWebhookUrl: string | null
   magicLinkWebhookSecret: string | null
+  meilisearchHost: string
+  meilisearchSearchApiKey: string
+  atlasAuthoritiesIndex: string
   port: number
   nodeEnv: 'development' | 'test' | 'production'
 }
@@ -114,6 +120,28 @@ function readSecret(key: string, fallback: string, nodeEnv: ApiEnv['nodeEnv']) {
   return trimmed
 }
 
+function readSearchApiKey(nodeEnv: ApiEnv['nodeEnv']) {
+  const fallback =
+    nodeEnv === 'production' ? '' : (process.env.MEILISEARCH_API_KEY ?? 'dev-key')
+
+  return readSecret('MEILISEARCH_SEARCH_API_KEY', fallback, nodeEnv)
+}
+
+function readIndexName(key: string, fallback: string) {
+  const value = process.env[key] ?? fallback
+  const trimmed = value.trim()
+
+  if (trimmed.length !== value.length || trimmed.length === 0) {
+    throw new Error(`${key} must not be blank or padded with whitespace.`)
+  }
+
+  if (!/^[a-zA-Z0-9_-]+$/.test(trimmed)) {
+    throw new Error(`${key} may only contain letters, numbers, underscores, and hyphens.`)
+  }
+
+  return trimmed
+}
+
 function readOptionalSecret(key: string, nodeEnv: ApiEnv['nodeEnv']) {
   const value = process.env[key]
 
@@ -164,6 +192,12 @@ export function readApiEnv(): ApiEnv {
     ),
     magicLinkWebhookUrl,
     magicLinkWebhookSecret,
+    meilisearchHost: readRequiredUrl('MEILISEARCH_HOST', 'http://localhost:7700'),
+    meilisearchSearchApiKey: readSearchApiKey(nodeEnv),
+    atlasAuthoritiesIndex: readIndexName(
+      'ATLAS_AUTHORITIES_INDEX',
+      'atlas_authorities',
+    ),
     port: readPort(),
     nodeEnv,
   }
