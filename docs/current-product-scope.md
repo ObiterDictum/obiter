@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document records the product surface that should be visible in the app shell right now. Internal module names such as Atlas, Redact, Verify, Research, Vault, and Bench remain useful for architecture, but the user interface should use plain workflow names.
+This document records the product surface that should be visible in the app shell right now. Search is the canonical product and domain label for public legal-source discovery, retrieval, and stored case pages. Legacy `atlas` package, service, index, and route names are temporary implementation identifiers until a separate cleanup renames them safely.
 
 ## Implemented Navigation
 
@@ -50,11 +50,11 @@ The current implementation is the first slice of that surface: case law search a
 ## Naming Rules
 
 - Use "Home" in navigation for the top-level information hub. The implementation may keep `/workspace` until route cleanup is handled separately.
-- Do not expose "Atlas" as the primary user-facing label for search.
+- Do not use "Atlas" as the product or architecture label for the Search surface.
 - Use "Search" for the implemented legal source search surface.
 - Use "Redaction" and "Verification" in navigation, not internal shorthand.
 - Use "Evaluation" for Bench unless an engineering-only admin screen is being built.
-- Keep internal package and service names stable unless there is a separate refactor for code ownership.
+- Keep legacy internal package, service, index, and route names stable only as temporary implementation identifiers unless there is a separate refactor for code ownership.
 
 ## Implementation Boundary
 

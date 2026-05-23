@@ -16,8 +16,8 @@ These documents break the original [guide.md](C:\Users\karl-\Documents\source\Or
 - [Architecture](C:\Users\karl-\Documents\source\Ormont\docs\architecture.md): the recommended system structure and technical stack
 - [Data and Compliance](C:\Users\karl-\Documents\source\Ormont\docs\data-and-compliance.md): legal data model, source handling, and external constraints
 - [Roadmap](C:\Users\karl-\Documents\source\Ormont\docs\roadmap.md): milestone-by-milestone build order for a solo-founder implementation
-- [Phase 1 Atlas](C:\Users\karl-\Documents\source\Ormont\docs\phase-1-atlas.md): legal corpus ingestion, indexing, and authority retrieval
+- [Phase 1 Search](C:\Users\karl-\Documents\source\Ormont\docs\phase-1-atlas.md): legal corpus ingestion, indexing, search, and authority retrieval. The file path still uses the legacy `atlas` name until route/package cleanup is handled separately.
 - [Phase 1 Redact](C:\Users\karl-\Documents\source\Ormont\docs\phase-1-redact.md): PII handling, redaction policy, review workflow, and export rules
 - [Phase 1 Verify](C:\Users\karl-\Documents\source\Ormont\docs\phase-1-verify.md): citation resolution, quote checks, proposition checks, and reporting
-- [Phase 1 Research](C:\Users\karl-\Documents\source\Ormont\docs\phase-1-research.md): source-bound legal research flow over Atlas and Verify
+- [Phase 1 Research](C:\Users\karl-\Documents\source\Ormont\docs\phase-1-research.md): source-bound legal research flow over Search and Verify
 - [Specs](C:\Users\karl-\Documents\source\Ormont\docs\specs\README.md): module spec folders with implementation, API, schema, and milestone documents
