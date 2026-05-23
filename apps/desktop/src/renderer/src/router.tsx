@@ -1,4 +1,4 @@
-import { AppShellLayout, HomeRouteView, MatterRouteView, MattersRouteView, SignInRouteView, shellSnapshotQueryOptions } from '@ormont/app-shell'
+import { AppShellLayout, HomeRouteView, MatterRouteView, MattersRouteView, SignInRouteView, atlasDocumentQueryOptions, shellSnapshotQueryOptions } from '@ormont/app-shell'
 import type { QueryClient } from '@tanstack/react-query'
 import {
   Outlet,
@@ -7,6 +7,8 @@ import {
   createRoute,
   createRouter,
 } from '@tanstack/react-router'
+import { DesktopCasePage } from '../../pages/case'
+import { DesktopSearchPage } from '../../pages/search'
 
 interface RouterContext {
   queryClient: QueryClient
@@ -62,10 +64,30 @@ const matterDetailRoute = createRoute({
   component: DesktopMatterDetailRoute,
 })
 
+const searchRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'search',
+  component: DesktopSearchPage,
+})
+
+const caseRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'cases/$caseId',
+  loader: ({ context, params }) =>
+    context.queryClient.ensureQueryData(atlasDocumentQueryOptions(params.caseId)),
+  component: DesktopCaseRoute,
+})
+
 function DesktopMatterDetailRoute() {
   const { matterId } = matterDetailRoute.useParams()
 
   return <MatterRouteView matterId={matterId} platform="desktop" />
+}
+
+function DesktopCaseRoute() {
+  const { caseId } = caseRoute.useParams()
+
+  return <DesktopCasePage caseId={caseId} />
 }
 
 const signInRoute = createRoute({
@@ -83,6 +105,8 @@ const routeTree = rootRoute.addChildren([
   workspaceRoute,
   mattersRoute,
   matterDetailRoute,
+  searchRoute,
+  caseRoute,
   signInRoute,
 ])
 
