@@ -206,6 +206,70 @@ describe('createAtlasProxyRoutes', () => {
     expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
   })
 
+  it('returns and indexes Court of Appeal and High Court cache-miss entries', async () => {
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [],
+      query: 'Example',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    searchClientMock.indexDocuments.mockResolvedValueOnce({
+      indexedCount: 2,
+      failedCount: 0,
+      errors: [],
+    })
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          `<feed><entry><title>Example v Test</title><link href="https://caselaw.nationalarchives.gov.uk/ewca/civ/2024/7" rel="alternate"/><published>2024-01-31T00:00:00Z</published><tna:identifier slug="ewca/civ/2024/7" type="ukncn">[2024] EWCA Civ 7</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry><entry><title>Admin Example v Test</title><link href="https://caselaw.nationalarchives.gov.uk/ewhc/admin/2026/1157" rel="alternate"/><published>2026-05-20T00:00:00Z</published><tna:identifier slug="ewhc/admin/2026/1157" type="ukncn">[2026] EWHC 1157 (Admin)</tna:identifier><tna:contenthash>def456</tna:contenthash></entry></feed>`,
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          '<html><body><p>This Court of Appeal judgment paragraph is long enough for indexing.</p></body></html>',
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          '<html><body><p>This High Court administrative judgment paragraph is long enough for indexing.</p></body></html>',
+        ),
+      )
+    const app = createAtlasProxyRoutes(env)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'Example' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      cached: false,
+      indexedCount: 2,
+      skippedCount: 0,
+      hits: [
+        { neutralCitation: '[2024] EWCA Civ 7', court: 'ewca-civ' },
+        { neutralCitation: '[2026] EWHC 1157 (Admin)', court: 'ewhc-admin' },
+      ],
+    })
+    expect(searchClientMock.indexDocuments).toHaveBeenCalledWith(
+      { id: 'meili-client' },
+      'atlas_authorities',
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'ewca-civ-2024-7',
+          neutralCitation: '[2024] EWCA Civ 7',
+          court: 'ewca-civ',
+        }),
+        expect.objectContaining({
+          id: 'ewhc-admin-2026-1157',
+          neutralCitation: '[2026] EWHC 1157 (Admin)',
+          court: 'ewhc-admin',
+        }),
+      ]),
+    )
+  })
+
   it('returns a retry hint when Find Case Law is rate limited', async () => {
     searchClientMock.search.mockResolvedValueOnce({
       hits: [],
@@ -306,6 +370,31 @@ describe('Find Case Law parsing', () => {
         documentId: 'uksc-2024-3',
         paragraphNumber: 1,
         text: 'First paragraph with enough text to become a search excerpt.',
+      },
+    ])
+  })
+
+  it('extracts mixed-case Court of Appeal tokens and High Court divisions', () => {
+    expect(
+      parseFindCaseLawAtom(
+        '<feed><entry><title>Example v Test</title><link href="https://caselaw.nationalarchives.gov.uk/ewca/civ/2024/7" rel="alternate"/><published>2024-01-31</published><tna:identifier slug="ewca/civ/2024/7" type="ukncn">[2024] EWCA Civ 7</tna:identifier></entry><entry><title>Criminal Example v Test</title><link href="https://caselaw.nationalarchives.gov.uk/ewca/crim/2025/12" rel="alternate"/><published>2025-02-14</published><tna:identifier slug="ewca/crim/2025/12" type="ukncn">[2025] EWCA Crim 12</tna:identifier></entry><entry><title>Admin Example v Test</title><link href="https://caselaw.nationalarchives.gov.uk/ewhc/admin/2026/1157" rel="alternate"/><published>2026-05-20</published><tna:identifier slug="ewhc/admin/2026/1157" type="ukncn">[2026] EWHC 1157 (Admin)</tna:identifier></entry></feed>',
+        { query: 'Example' },
+      ),
+    ).toMatchObject([
+      {
+        neutralCitation: '[2024] EWCA Civ 7',
+        court: 'ewca-civ',
+        uri: '/ewca/civ/2024/7',
+      },
+      {
+        neutralCitation: '[2025] EWCA Crim 12',
+        court: 'ewca-crim',
+        uri: '/ewca/crim/2025/12',
+      },
+      {
+        neutralCitation: '[2026] EWHC 1157 (Admin)',
+        court: 'ewhc-admin',
+        uri: '/ewhc/admin/2026/1157',
       },
     ])
   })

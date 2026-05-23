@@ -439,14 +439,33 @@ function documentIdFromUri(uri: string) {
   return uri.replace(/^\/+/, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase()
 }
 
+const neutralCitationPattern =
+  /\[\d{4}\]\s+[A-Za-z][A-Za-z0-9 ]*?\s+\d+(?:\s+\([A-Za-z][A-Za-z0-9 ]*\))?/
+
 function extractNeutralCitation(value: string) {
-  return value.match(/\[\d{4}\]\s+[A-Z][A-Z0-9() ]+\s+\d+/)?.[0].replace(/\s+/g, ' ')
+  return value.match(neutralCitationPattern)?.[0].replace(/\s+/g, ' ').trim()
 }
 
 function courtFromCitation(citation: string) {
-  const token = citation.match(/\]\s+([A-Z][A-Z0-9() ]+)\s+\d+$/)?.[1]?.trim().toLowerCase()
-  const court = token ? token.replace(/[^a-z0-9]+/g, '-') : null
+  const match = citation.match(
+    /^\[\d{4}\]\s+([A-Za-z][A-Za-z0-9 ]*?)\s+\d+(?:\s+\(([A-Za-z][A-Za-z0-9 ]*)\))?$/,
+  )
+  const token = match?.[1]
+  const division = match?.[2]
+
+  if (!token) return null
+
+  if (slugifyCourtToken(token) === 'ewhc' && division) {
+    const highCourtDivision = `ewhc-${slugifyCourtToken(division)}`
+    return supportedFindCaseLawCourts.has(highCourtDivision) ? highCourtDivision : null
+  }
+
+  const court = slugifyCourtToken(token)
   return court && supportedFindCaseLawCourts.has(court) ? court : null
+}
+
+function slugifyCourtToken(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
 }
 
 function extractDate(value: string) {
