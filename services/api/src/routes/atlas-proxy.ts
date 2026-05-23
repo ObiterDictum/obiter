@@ -30,6 +30,23 @@ export interface AtlasFetchSearchHit extends AtlasSearchHit {
 }
 
 const atlasSlugSchema = z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+const findCaseLawJurisdiction = 'england-and-wales'
+const supportedFindCaseLawCourts = new Set([
+  'uksc',
+  'ukpc',
+  'ewca-civ',
+  'ewca-crim',
+  'ewhc-admin',
+  'ewhc-ch',
+  'ewhc-comm',
+  'ewhc-fam',
+  'ewhc-kb',
+  'ewfc',
+  'ewcop',
+  'ewcc',
+  'ukut',
+  'ukftt',
+])
 
 const atlasFetchRequestSchema = z.object({
   query: z.string().trim().min(1),
@@ -65,7 +82,7 @@ export function createAtlasProxyRoutes(env: ApiEnv) {
     const requestId = c.get('requestId')
     const parsed = atlasFetchRequestSchema.safeParse(await c.req.json().catch(() => null))
 
-    if (!parsed.success) {
+    if (!parsed.success || !isSupportedFindCaseLawRequest(parsed.data)) {
       return c.json(
         apiError('validation_failed', 'Atlas fetch search request is invalid.', requestId),
         400,
@@ -210,7 +227,7 @@ async function fetchMojAuthorities(
       title: entry.title,
       neutralCitation: entry.neutralCitation,
       court: entry.court,
-      jurisdiction: request.jurisdiction ?? 'england-and-wales',
+      jurisdiction: findCaseLawJurisdiction,
       dateDecided: entry.dateDecided,
       sourceType: 'judgment',
       sourceUrl: detailUrl.toString(),
@@ -254,33 +271,50 @@ export function parseFindCaseLawAtom(
   request: z.infer<typeof atlasFetchRequestSchema>,
 ): AtomEntry[] {
   return Array.from(xml.matchAll(/<entry\b[\s\S]*?<\/entry>/gi))
-    .map((match) => parseAtomEntry(match[0], request))
+    .map((match) => parseAtomEntry(match[0]))
     .filter((entry): entry is AtomEntry => entry !== null)
+    .filter((entry) => entryMatchesFetchRequest(entry, request))
 }
 
-function parseAtomEntry(
-  xml: string,
-  request: z.infer<typeof atlasFetchRequestSchema>,
-): AtomEntry | null {
+function parseAtomEntry(xml: string): AtomEntry | null {
   const title = decodeXml(readTag(xml, 'title') ?? '')
   const id = readAlternateLink(xml) ?? decodeXml(readTag(xml, 'id') ?? '')
   const updated = decodeXml(readTag(xml, 'published') ?? readTag(xml, 'updated') ?? '')
   const uri = toDocumentUri(id)
   const neutralCitation = extractNeutralCitation(readIdentifier(xml) ?? title)
   const dateDecided = extractDate(updated) ?? extractDate(title)
+  const court = neutralCitation ? courtFromCitation(neutralCitation) : null
 
-  if (!title || !uri || !neutralCitation || !dateDecided) {
+  if (!title || !uri || !neutralCitation || !court || !dateDecided) {
     return null
   }
 
   return {
     title: title.replace(/\s+/g, ' ').trim(),
     neutralCitation,
-    court: request.court ?? courtFromCitation(neutralCitation),
+    court,
     dateDecided,
     uri,
     contentHash: decodeXml(readTag(xml, 'tna:contenthash') ?? '') || hashText(xml),
   }
+}
+
+function isSupportedFindCaseLawRequest(request: z.infer<typeof atlasFetchRequestSchema>) {
+  return (
+    (!request.court || supportedFindCaseLawCourts.has(request.court)) &&
+    (!request.jurisdiction || request.jurisdiction === findCaseLawJurisdiction)
+  )
+}
+
+function entryMatchesFetchRequest(
+  entry: AtomEntry,
+  request: z.infer<typeof atlasFetchRequestSchema>,
+) {
+  if (request.court && entry.court !== request.court) return false
+  if (request.jurisdiction && request.jurisdiction !== findCaseLawJurisdiction) return false
+  if (request.dateFrom && entry.dateDecided < request.dateFrom) return false
+  if (request.dateTo && entry.dateDecided > request.dateTo) return false
+  return true
 }
 
 export function parseJudgmentParagraphs(html: string, documentId: string) {
@@ -411,7 +445,8 @@ function extractNeutralCitation(value: string) {
 
 function courtFromCitation(citation: string) {
   const token = citation.match(/\]\s+([A-Z][A-Z0-9() ]+)\s+\d+$/)?.[1]?.trim().toLowerCase()
-  return token ? token.replace(/[^a-z0-9]+/g, '-') : 'unknown'
+  const court = token ? token.replace(/[^a-z0-9]+/g, '-') : null
+  return court && supportedFindCaseLawCourts.has(court) ? court : null
 }
 
 function extractDate(value: string) {

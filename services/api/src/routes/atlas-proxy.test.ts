@@ -114,8 +114,96 @@ describe('createAtlasProxyRoutes', () => {
     expect(searchClientMock.indexDocuments).toHaveBeenCalledWith(
       { id: 'meili-client' },
       'atlas_authorities',
-      [expect.objectContaining({ id: 'uksc-2024-3' })],
+      [
+        expect.objectContaining({
+          id: 'uksc-2024-3',
+          court: 'uksc',
+          jurisdiction: 'england-and-wales',
+        }),
+      ],
     )
+  })
+
+  it('rejects unsupported Find Case Law metadata filters before cache or fetch', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    const app = createAtlasProxyRoutes(env)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'Potanina',
+        court: 'made-up-court',
+        jurisdiction: 'united-kingdom',
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'validation_failed' },
+    })
+    expect(searchClientMock.search).not.toHaveBeenCalled()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('does not let request court filters override source-derived metadata', async () => {
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [],
+      query: 'Potanina',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        `<feed><entry><title>Example v Test</title><link href="https://caselaw.nationalarchives.gov.uk/ewca/civ/2024/7" rel="alternate"/><published>2024-01-31T00:00:00Z</published><tna:identifier slug="ewca/civ/2024/7" type="ukncn">[2024] EWCA Civ 7</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry></feed>`,
+      ),
+    )
+    const app = createAtlasProxyRoutes(env)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'Example', court: 'uksc' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      cached: false,
+      indexedCount: 0,
+      hits: [],
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
+  })
+
+  it('does not return or index fetched entries outside date filters', async () => {
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [],
+      query: 'Potanina',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        `<feed><entry><title>Potanina v Potanin</title><link href="https://caselaw.nationalarchives.gov.uk/uksc/2024/3" rel="alternate"/><published>2024-01-31T00:00:00Z</published><tna:identifier slug="uksc/2024/3" type="ukncn">[2024] UKSC 3</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry></feed>`,
+      ),
+    )
+    const app = createAtlasProxyRoutes(env)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'Potanina', dateFrom: '2025-01-01' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      cached: false,
+      indexedCount: 0,
+      hits: [],
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
   })
 
   it('returns a retry hint when Find Case Law is rate limited', async () => {
