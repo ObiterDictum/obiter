@@ -1,12 +1,14 @@
-# Phase 1 Atlas
+# Phase 1 Search
 
 ## Purpose
 
-Atlas is the public legal source layer. In Phase 1 it must do one job very well: resolve and retrieve authoritative legal sources fast enough to support research and verification.
+Search is the public legal source layer. In Phase 1 it must do one job very well: resolve and retrieve authoritative legal sources fast enough to support research and verification.
+
+The historical `atlas` file path, service names, index names, and some API paths are legacy implementation identifiers. New product, architecture, and review language should use Search unless it is referring to one of those existing identifiers directly.
 
 ## Phase 1 Outcome
 
-By the end of Phase 1, Atlas should support:
+By the end of Phase 1, Search should support:
 
 - citation lookup
 - keyword and metadata search
@@ -48,7 +50,7 @@ Use official APIs and official-access pathways wherever possible.
 
 - Node.js
 - TypeScript
-- `services/atlas-ingestor` for ingestion jobs
+- `services/atlas-ingestor` for ingestion jobs while that legacy service name remains in place
 - `services/api` for retrieval APIs
 - BullMQ for ingestion queues
 
@@ -157,7 +159,7 @@ Use official APIs and official-access pathways wherever possible.
 
 ### Ranking Rules
 
-Atlas should bias ranking toward:
+Search should bias ranking toward:
 
 1. exact identifier match
 2. exact citation match
@@ -169,7 +171,7 @@ This is a legal retrieval system, not a generic semantic search app.
 
 ## API Surface
 
-`GET /api/atlas/search`
+`GET /api/search`
 
 - query
 - source type
@@ -177,19 +179,19 @@ This is a legal retrieval system, not a generic semantic search app.
 - date range
 - page
 
-`GET /api/atlas/authorities/resolve`
+Temporary legacy endpoint: `GET /api/atlas/authorities/resolve`
 
 - raw citation or identifier
 
-`GET /api/atlas/documents/:documentId`
+`GET /api/search/documents/:documentId`
 
 - canonical document record
 
-`GET /api/atlas/documents/:documentId/paragraphs`
+Temporary legacy endpoint: `GET /api/atlas/documents/:documentId/paragraphs`
 
 - paragraph slice for evidence display
 
-`GET /api/atlas/legislation/:documentId/provisions/:provisionId`
+Temporary legacy endpoint: `GET /api/atlas/legislation/:documentId/provisions/:provisionId`
 
 - exact provision detail
 
@@ -223,4 +225,4 @@ This is a legal retrieval system, not a generic semantic search app.
 - a known authority can be resolved by citation
 - users can search case law and legislation with filters
 - search results can open exact supporting paragraphs or provisions
-- Verify can consume Atlas authority resolution and evidence lookup reliably
+- Verify can consume Search authority resolution and evidence lookup reliably

@@ -5,7 +5,9 @@ import type { ApiErrorCode, ApiErrorResponse, MeResponse } from '@ormont/contrac
 import { appendAuditLog, findOrganisation, toCurrentUser } from './database'
 import type { ApiEnv } from './env'
 import { createAuth } from './auth'
+import { createAtlasProxyRoutes } from './routes/atlas-proxy'
 import { createAtlasRoutes } from './routes/atlas'
+import { createChangelogRoutes } from './routes/changelog'
 import { createDocumentsRoutes } from './routes/documents'
 import { createMattersRoutes } from './routes/matters'
 
@@ -132,6 +134,8 @@ export function createApiApp(env: ApiEnv, pool: Pool, options: ApiAppOptions = {
   app.route('/', createMattersRoutes(pool))
   app.route('/', createDocumentsRoutes(pool))
   app.route('/', createAtlasRoutes(env))
+  app.route('/', createAtlasProxyRoutes(env))
+  app.route('/', createChangelogRoutes())
 
   app.get('/api/me', async (c) => {
     const requestId = c.get('requestId')

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createIndex, indexDocuments, search } from './index'
+import { createIndex, getDocument, indexDocuments, search } from './index'
 
 function authority(overrides: Record<string, unknown> = {}) {
   return {
@@ -260,6 +260,30 @@ describe('Atlas search client', () => {
     })
   })
 
+  it('can retrieve paragraphs for fetch-on-miss cached results', async () => {
+    const searchMock = vi.fn(async () => ({
+      hits: [authority()],
+      query: 'test',
+      estimatedTotalHits: 1,
+      processingTimeMs: 2,
+    }))
+    const client = {
+      index: () => ({ search: searchMock }),
+    }
+
+    const result = await search(client, 'atlas_authorities', 'test', {}, {
+      includeParagraphs: true,
+    })
+
+    expect(result.hits[0]?.paragraphs).toEqual(authority().paragraphs)
+    expect(searchMock).toHaveBeenCalledWith(
+      'test',
+      expect.objectContaining({
+        attributesToRetrieve: expect.arrayContaining(['paragraphs']),
+      }),
+    )
+  })
+
   it('escapes filter values as string literals', async () => {
     const searchMock = vi.fn(async () => ({
       hits: [authority()],
@@ -299,5 +323,17 @@ describe('Atlas search client', () => {
     await expect(search(client, 'atlas_authorities', 'test')).rejects.toThrow(
       'Atlas search failed. Search provider error: Error.',
     )
+  })
+
+  it('retrieves a stored Atlas document by id', async () => {
+    const getDocumentMock = vi.fn(async () => authority())
+    const client = {
+      index: () => ({ getDocument: getDocumentMock }),
+    }
+
+    const result = await getDocument(client, 'atlas_authorities', 'uksc-2024-1')
+
+    expect(result.paragraphs).toEqual(authority().paragraphs)
+    expect(getDocumentMock).toHaveBeenCalledWith('uksc-2024-1')
   })
 })

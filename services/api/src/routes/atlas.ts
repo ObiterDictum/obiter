@@ -41,7 +41,7 @@ export function createAtlasRoutes(env: ApiEnv) {
   const app = new Hono<{ Variables: AtlasRouteVariables }>()
   const client = createClient(env.meilisearchHost, env.meilisearchSearchApiKey)
 
-  app.get('/api/atlas/search', async (c) => {
+  app.get('/api/search', async (c) => {
     const requestId = c.get('requestId')
     const parsed = atlasSearchQuerySchema.safeParse(c.req.query())
 
