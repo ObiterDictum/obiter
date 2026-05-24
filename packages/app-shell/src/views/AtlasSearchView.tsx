@@ -1,116 +1,19 @@
 import { useState, type FormEvent } from 'react'
-import { Link } from '@tanstack/react-router'
 import { Card, EmptyState } from '@ormont/ui'
+import {
+  AtlasSearchCommandBar,
+  AtlasSearchFiltersDialog,
+  AtlasSearchResults,
+  atlasCourtOptionGroups,
+  getAtlasCourtLabel,
+  type AtlasFetchRequestFilters,
+  type AtlasFetchResponse,
+  type AtlasParagraph,
+  type AtlasSearchResult,
+  type AtlasSearchState,
+} from '../components/search'
 
-interface AtlasParagraph {
-  id: string
-  paragraphNumber: number
-  text: string
-}
-
-interface AtlasSearchResult {
-  id: string
-  title: string
-  neutralCitation: string
-  court: string
-  dateDecided: string
-  sourceUrl: string
-  paragraphs?: AtlasParagraph[]
-}
-
-interface AtlasFetchResponse {
-  hits: AtlasSearchResult[]
-  cached: boolean
-  indexedCount: number
-  skippedCount: number
-}
-
-interface AtlasFetchRequestFilters {
-  court: string
-  dateFrom: string
-  dateTo: string
-}
-
-interface AtlasCourtOption {
-  code: string
-  label: string
-}
-
-interface AtlasCourtOptionGroup {
-  label: string
-  options: AtlasCourtOption[]
-}
-
-export const atlasCourtOptionGroups: AtlasCourtOptionGroup[] = [
-  {
-    label: 'Supreme courts',
-    options: [
-      { code: 'uksc', label: 'UK Supreme Court' },
-      { code: 'ukpc', label: 'Privy Council' },
-    ],
-  },
-  {
-    label: 'Court of Appeal',
-    options: [
-      { code: 'ewca/civ', label: 'Court of Appeal Civil Division' },
-      { code: 'ewca/crim', label: 'Court of Appeal Criminal Division' },
-    ],
-  },
-  {
-    label: 'High Court',
-    options: [
-      { code: 'ewhc/admin', label: 'Administrative Court' },
-      { code: 'ewhc/admlty', label: 'Admiralty Court' },
-      { code: 'ewhc/ch', label: 'Chancery Division' },
-      { code: 'ewhc/comm', label: 'Commercial Court' },
-      { code: 'ewhc/fam', label: 'Family Division' },
-      { code: 'ewhc/ipec', label: 'Intellectual Property Enterprise Court' },
-      { code: 'ewhc/kb', label: "King's Bench Division" },
-      { code: 'ewhc/mercantile', label: 'Mercantile Court' },
-      { code: 'ewhc/pat', label: 'Patents Court' },
-      { code: 'ewhc/scco', label: 'Senior Courts Costs Office' },
-      { code: 'ewhc/tcc', label: 'Technology and Construction Court' },
-    ],
-  },
-  {
-    label: 'England and Wales courts',
-    options: [
-      { code: 'ewcr', label: 'Crown Court' },
-      { code: 'ewcc', label: 'County Court' },
-      { code: 'ewfc', label: 'Family Court' },
-      { code: 'ewcop', label: 'Court of Protection' },
-    ],
-  },
-  {
-    label: 'Tribunals and commissions',
-    options: [
-      { code: 'eat', label: 'Employment Appeal Tribunal' },
-      { code: 'ukiptrib', label: 'Investigatory Powers Tribunal' },
-      { code: 'siac', label: 'Special Immigration Appeals Commission' },
-      { code: 'ukist', label: 'Immigration Services Tribunal' },
-      { code: 'ukut/aac', label: 'Upper Tribunal Administrative Appeals Chamber' },
-      { code: 'ukut/iac', label: 'Upper Tribunal Immigration and Asylum Chamber' },
-      { code: 'ukut/lc', label: 'Upper Tribunal Lands Chamber' },
-      { code: 'ukut/tcc', label: 'Upper Tribunal Tax and Chancery Chamber' },
-      { code: 'ukftt/credit', label: 'First-tier Tribunal Consumer Credit' },
-      { code: 'ukftt/estate', label: 'First-tier Tribunal Estate Agents' },
-      { code: 'ukftt/grc', label: 'First-tier Tribunal General Regulatory Chamber' },
-      { code: 'ukftt/hesc', label: 'First-tier Tribunal Health, Education and Social Care' },
-      { code: 'ukftt/tc', label: 'First-tier Tribunal Tax Chamber' },
-      { code: 'ftt/claims', label: 'First-tier Tribunal Claims Management' },
-      { code: 'ftt/pc', label: 'First-tier Tribunal Primary Care' },
-      { code: 'ftt/phl', label: 'First-tier Tribunal Public Health List' },
-      { code: 'ftt/transport', label: 'First-tier Tribunal Transport' },
-    ],
-  },
-]
-
-type AtlasSearchState =
-  | { status: 'idle' }
-  | { status: 'loading'; query: string }
-  | { status: 'results'; query: string; response: AtlasFetchResponse }
-  | { status: 'empty'; query: string }
-  | { status: 'error'; query: string; message: string }
+export { atlasCourtOptionGroups, getAtlasCourtLabel }
 
 export function getAtlasSearchStateLabel(state: AtlasSearchState) {
   switch (state.status) {
@@ -165,17 +68,6 @@ export function createAtlasFetchRequest(query: string, filters: AtlasFetchReques
   return request
 }
 
-export function getAtlasCourtLabel(code: string) {
-  if (!code) return 'All courts and tribunals'
-
-  for (const group of atlasCourtOptionGroups) {
-    const option = group.options.find((courtOption) => courtOption.code === code)
-    if (option) return option.label
-  }
-
-  return code
-}
-
 export function countAtlasActiveFilters(filters: AtlasFetchRequestFilters) {
   return [filters.court, filters.dateFrom, filters.dateTo].filter((value) => value.trim()).length
 }
@@ -185,11 +77,7 @@ export function AtlasSearchView() {
   const [court, setCourt] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
-  const [draftCourt, setDraftCourt] = useState('')
-  const [draftDateFrom, setDraftDateFrom] = useState('')
-  const [draftDateTo, setDraftDateTo] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const [courtMenuOpen, setCourtMenuOpen] = useState(false)
   const [state, setState] = useState<AtlasSearchState>({ status: 'idle' })
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -233,41 +121,18 @@ export function AtlasSearchView() {
     }
   }
 
-  function openFilters() {
-    setDraftCourt(court)
-    setDraftDateFrom(dateFrom)
-    setDraftDateTo(dateTo)
-    setCourtMenuOpen(false)
-    setFiltersOpen(true)
-  }
-
-  function applyFilters() {
-    setCourt(draftCourt)
-    setDateFrom(draftDateFrom)
-    setDateTo(draftDateTo)
-    setCourtMenuOpen(false)
+  function applyFilters(filters: AtlasFetchRequestFilters) {
+    setCourt(filters.court)
+    setDateFrom(filters.dateFrom)
+    setDateTo(filters.dateTo)
     setFiltersOpen(false)
   }
 
   function clearFilters() {
-    setDraftCourt('')
     setCourt('')
-    setDraftDateFrom('')
     setDateFrom('')
-    setDraftDateTo('')
     setDateTo('')
-    setCourtMenuOpen(false)
     setFiltersOpen(false)
-  }
-
-  function closeFilters() {
-    setCourtMenuOpen(false)
-    setFiltersOpen(false)
-  }
-
-  function selectDraftCourt(nextCourt: string) {
-    setDraftCourt(nextCourt)
-    setCourtMenuOpen(false)
   }
 
   const courtLabel = getAtlasCourtLabel(court)
@@ -283,144 +148,27 @@ export function AtlasSearchView() {
       </section>
 
       <Card className="atlas-search__panel">
-        <form className="atlas-search__form" onSubmit={handleSubmit}>
-          <div className="atlas-search__form-header">
-            <span>Search legal sources</span>
-            <button className="atlas-search__filters-button" type="button" onClick={openFilters}>
-              <span>Filters</span>
-              {activeFilterCount > 0 ? <strong>{activeFilterCount}</strong> : null}
-            </button>
-          </div>
-          <div className="atlas-search__primary atlas-search__primary--input-only">
-            <label className="atlas-search__field">
-              <span className="atlas-search__visually-hidden">Search legal sources</span>
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="Potanina"
-                name="query"
-                type="search"
-              />
-            </label>
-          </div>
-          {activeFilterCount > 0 ? (
-            <div className="atlas-search__active-filters" aria-label="Active filters">
-              {court ? <span>{courtLabel}</span> : null}
-              {dateFrom ? <span>From {dateFrom}</span> : null}
-              {dateTo ? <span>To {dateTo}</span> : null}
-            </div>
-          ) : null}
-        </form>
+        <AtlasSearchCommandBar
+          activeFilterCount={activeFilterCount}
+          courtLabel={courtLabel}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onFilterClick={() => setFiltersOpen(true)}
+          onQueryChange={setQuery}
+          onSubmit={handleSubmit}
+          query={query}
+        />
       </Card>
 
       {filtersOpen ? (
-        <div className="atlas-filter-modal" role="dialog" aria-modal="true" aria-labelledby="atlas-filter-title">
-          <button
-            aria-label="Close search filters"
-            className="atlas-filter-modal__backdrop"
-            type="button"
-            onClick={closeFilters}
-          />
-          <section className="atlas-filter-modal__panel">
-            <button
-              aria-label="Close search filters"
-              className="atlas-filter-modal__close"
-              type="button"
-              onClick={closeFilters}
-            >
-              <span aria-hidden="true">×</span>
-            </button>
-            <header className="atlas-filter-modal__header">
-              <div>
-                <p>Search filters</p>
-                <h2 id="atlas-filter-title">Refine results</h2>
-              </div>
-            </header>
-
-            <div className="atlas-filter-modal__groups">
-              <fieldset>
-                <legend>Source</legend>
-                <div className="atlas-filter-modal__field atlas-filter-modal__field--court">
-                  <span>Court or tribunal</span>
-                  <button
-                    aria-expanded={courtMenuOpen}
-                    aria-haspopup="listbox"
-                    className="atlas-filter-modal__select-trigger"
-                    type="button"
-                    onClick={() => setCourtMenuOpen((open) => !open)}
-                  >
-                    <span>{getAtlasCourtLabel(draftCourt)}</span>
-                    <span aria-hidden="true" className="atlas-filter-modal__select-chevron" />
-                  </button>
-                  {courtMenuOpen ? (
-                    <div className="atlas-filter-modal__court-menu" role="listbox" aria-label="Court or tribunal">
-                      <button
-                        aria-selected={draftCourt === ''}
-                        className="atlas-filter-modal__court-option atlas-filter-modal__court-option--all"
-                        role="option"
-                        type="button"
-                        onClick={() => selectDraftCourt('')}
-                      >
-                        All courts and tribunals
-                      </button>
-                      {atlasCourtOptionGroups.map((group) => (
-                        <div className="atlas-filter-modal__court-group" key={group.label}>
-                          <p>{group.label}</p>
-                          {group.options.map((option) => (
-                            <button
-                              aria-selected={draftCourt === option.code}
-                              className="atlas-filter-modal__court-option"
-                              key={option.code}
-                              role="option"
-                              type="button"
-                              onClick={() => selectDraftCourt(option.code)}
-                            >
-                              {option.label}
-                            </button>
-                          ))}
-                        </div>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-              </fieldset>
-
-              <fieldset>
-                <legend>Date decided</legend>
-                <div className="atlas-filter-modal__date-grid">
-                  <label className="atlas-filter-modal__field">
-                    <span>From</span>
-                    <input
-                      value={draftDateFrom}
-                      onChange={(event) => setDraftDateFrom(event.target.value)}
-                      name="date-from-filter"
-                      type="date"
-                    />
-                  </label>
-
-                  <label className="atlas-filter-modal__field">
-                    <span>To</span>
-                    <input
-                      value={draftDateTo}
-                      onChange={(event) => setDraftDateTo(event.target.value)}
-                      name="date-to-filter"
-                      type="date"
-                    />
-                  </label>
-                </div>
-              </fieldset>
-            </div>
-
-            <footer className="atlas-filter-modal__actions">
-              <button type="button" onClick={clearFilters}>
-                Clear
-              </button>
-              <button type="button" onClick={applyFilters}>
-                Apply filters
-              </button>
-            </footer>
-          </section>
-        </div>
+        <AtlasSearchFiltersDialog
+          court={court}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          onApply={applyFilters}
+          onClear={clearFilters}
+          onClose={() => setFiltersOpen(false)}
+        />
       ) : null}
 
       {state.status === 'loading' ? (
@@ -442,33 +190,7 @@ export function AtlasSearchView() {
       ) : null}
 
       {state.status === 'results' ? (
-        <section className="atlas-search__results" aria-live="polite">
-          <p className="atlas-search__meta">
-            {state.response.cached ? 'Cached result' : 'Fetched and cached'} - {state.response.indexedCount} indexed - {state.response.skippedCount} skipped
-          </p>
-          {state.response.hits.map((result) => {
-            return (
-              <article className="atlas-result" key={result.id}>
-                <Link
-                  to="/cases/$caseId"
-                  params={{ caseId: result.id }}
-                  className="atlas-result__summary"
-                >
-                  <span>
-                    <strong>{result.title}</strong>
-                    <small>
-                      {result.neutralCitation} - {result.court} - {result.dateDecided}
-                    </small>
-                  </span>
-                  <span className="atlas-result__actions">
-                    <span className="atlas-result__toggle">Open case</span>
-                    <span className="atlas-result__source">Stored source</span>
-                  </span>
-                </Link>
-              </article>
-            )
-          })}
-        </section>
+        <AtlasSearchResults response={state.response} />
       ) : null}
     </div>
   )
@@ -482,20 +204,4 @@ function readInitialSearchQuery() {
   const query = window.sessionStorage.getItem('ormont.search.initialQuery') ?? ''
   window.sessionStorage.removeItem('ormont.search.initialQuery')
   return query
-}
-
-function HighlightedText({ text, query }: { text: string; query: string }) {
-  const normalizedQuery = query.trim()
-  if (!normalizedQuery) return text
-
-  const index = text.toLowerCase().indexOf(normalizedQuery.toLowerCase())
-  if (index < 0) return text
-
-  return (
-    <>
-      {text.slice(0, index)}
-      <mark>{text.slice(index, index + normalizedQuery.length)}</mark>
-      {text.slice(index + normalizedQuery.length)}
-    </>
-  )
 }
