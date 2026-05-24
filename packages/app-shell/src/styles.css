@@ -1856,14 +1856,14 @@ body {
 }
 
 .atlas-filter-modal__panel {
-  background: #080909;
-  border: 1px solid rgba(245, 242, 235, 0.14);
+  background: #090a0a;
+  border: 1px solid rgba(245, 242, 235, 0.11);
   border-radius: 8px;
   box-shadow: 0 28px 70px rgba(0, 0, 0, 0.48);
   display: grid;
-  gap: 18px;
+  gap: 16px;
   max-width: 560px;
-  padding: 20px;
+  padding: 22px;
   position: relative;
   width: min(100%, 560px);
 }
@@ -1877,7 +1877,7 @@ body {
 
 .atlas-filter-modal__header p {
   color: #d48a2c;
-  font-size: 0.7rem;
+  font-size: 0.66rem;
   font-weight: 800;
   letter-spacing: 0.1em;
   margin: 0;
@@ -1887,13 +1887,39 @@ body {
 .atlas-filter-modal__header h2 {
   color: #f5f2eb;
   font-family: var(--ormont-font-display);
-  font-size: 1.45rem;
+  font-size: 1.34rem;
   letter-spacing: 0;
   line-height: 1.08;
   margin: 6px 0 0;
 }
 
-.atlas-filter-modal__header button,
+.atlas-filter-modal__header button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid rgba(245, 242, 235, 0.11);
+  border-radius: 6px;
+  color: #aeb2b8;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  height: 32px;
+  justify-content: center;
+  padding: 0;
+  width: 32px;
+}
+
+.atlas-filter-modal__header button:hover {
+  background: #111315;
+  border-color: rgba(245, 242, 235, 0.18);
+  color: #f5f2eb;
+}
+
+.atlas-filter-modal__header button span {
+  font-size: 1.18rem;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+
 .atlas-filter-modal__actions button {
   border-radius: 6px;
   cursor: pointer;
@@ -1904,7 +1930,6 @@ body {
   padding: 0 12px;
 }
 
-.atlas-filter-modal__header button,
 .atlas-filter-modal__actions button:first-child {
   background: transparent;
   border: 1px solid rgba(245, 242, 235, 0.14);
@@ -1913,23 +1938,24 @@ body {
 
 .atlas-filter-modal__groups {
   display: grid;
-  gap: 14px;
+  gap: 18px;
 }
 
 .atlas-filter-modal__groups fieldset {
-  border: 1px solid rgba(245, 242, 235, 0.1);
-  border-radius: 7px;
+  border: 0;
+  border-top: 1px solid rgba(245, 242, 235, 0.08);
   display: grid;
-  gap: 10px;
+  gap: 11px;
   margin: 0;
-  padding: 14px;
+  padding: 14px 0 0;
 }
 
 .atlas-filter-modal__groups legend {
   color: #d9a25b;
-  font-size: 0.72rem;
+  font-size: 0.68rem;
   font-weight: 800;
-  padding: 0 5px;
+  padding: 0;
+  text-transform: uppercase;
 }
 
 .atlas-filter-modal__date-grid {
@@ -1941,7 +1967,7 @@ body {
 .atlas-filter-modal__field {
   color: #f5f2eb;
   display: grid;
-  font-size: 0.9rem;
+  font-size: 0.82rem;
   font-weight: 650;
   gap: 8px;
 }
@@ -1952,13 +1978,13 @@ body {
 
 .atlas-filter-modal__field input,
 .atlas-filter-modal__field select {
-  background: #111315;
-  border: 1px solid #272a2d;
-  border-radius: var(--ormont-radius-sm);
+  background: #101213;
+  border: 1px solid #25282b;
+  border-radius: 6px;
   color: #ffffff;
   cursor: pointer;
   font: inherit;
-  min-height: 40px;
+  min-height: 38px;
   min-width: 0;
   padding: 0 12px;
 }
@@ -1980,7 +2006,8 @@ body {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
-  padding-top: 16px;
+  margin-top: 2px;
+  padding-top: 14px;
 }
 
 .atlas-filter-modal__actions button:last-child {
