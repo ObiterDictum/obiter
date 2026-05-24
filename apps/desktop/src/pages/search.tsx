@@ -1,5 +1,5 @@
-import { AtlasSearchView } from '@ormont/app-shell'
+import { LegalSearchView } from '@ormont/app-shell'
 
 export function DesktopSearchPage() {
-  return <AtlasSearchView />
+  return <LegalSearchView />
 }

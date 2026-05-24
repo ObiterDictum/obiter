@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  atlasCourtOptionGroups,
+  courtOptionGroups,
   createPhaseZeroShellSnapshot,
-  createAtlasFetchRequest,
+  createLegalSearchFetchRequest,
   findMatterRecord,
-  countAtlasActiveFilters,
-  getAtlasCourtLabel,
-  getAtlasSearchStateLabel,
+  countActiveLegalSearchFilters,
+  getCourtLabel,
+  getLegalSearchStateLabel,
   selectJudgmentParagraphs,
   selectParagraphExcerpts,
 } from './index'
@@ -79,13 +79,13 @@ describe('Home role gates', () => {
   })
 })
 
-describe('AtlasSearchView helpers', () => {
+describe('LegalSearchView helpers', () => {
   it('builds fetch requests with an optional court filter', () => {
-    expect(createAtlasFetchRequest(' Potanina ', { court: '', dateFrom: '', dateTo: '' })).toEqual({
+    expect(createLegalSearchFetchRequest(' Potanina ', { court: '', dateFrom: '', dateTo: '' })).toEqual({
       query: 'Potanina',
     })
     expect(
-      createAtlasFetchRequest('  tax appeal  ', {
+      createLegalSearchFetchRequest('  tax appeal  ', {
         court: 'ukut/iac',
         dateFrom: '2024-01-01',
         dateTo: '2024-12-31',
@@ -99,19 +99,19 @@ describe('AtlasSearchView helpers', () => {
   })
 
   it('counts active search filters', () => {
-    expect(countAtlasActiveFilters({ court: '', dateFrom: '', dateTo: '' })).toBe(0)
-    expect(countAtlasActiveFilters({ court: 'uksc', dateFrom: '', dateTo: '' })).toBe(1)
-    expect(countAtlasActiveFilters({ court: 'uksc', dateFrom: '2024-01-01', dateTo: '' })).toBe(2)
+    expect(countActiveLegalSearchFilters({ court: '', dateFrom: '', dateTo: '' })).toBe(0)
+    expect(countActiveLegalSearchFilters({ court: 'uksc', dateFrom: '', dateTo: '' })).toBe(1)
+    expect(countActiveLegalSearchFilters({ court: 'uksc', dateFrom: '2024-01-01', dateTo: '' })).toBe(2)
   })
 
   it('labels selected court filters for the collapsed search filter control', () => {
-    expect(getAtlasCourtLabel('')).toBe('All courts and tribunals')
-    expect(getAtlasCourtLabel('ewhc/admin')).toBe('Administrative Court')
-    expect(getAtlasCourtLabel('unknown-court')).toBe('unknown-court')
+    expect(getCourtLabel('')).toBe('All courts and tribunals')
+    expect(getCourtLabel('ewhc/admin')).toBe('Administrative Court')
+    expect(getCourtLabel('unknown-court')).toBe('unknown-court')
   })
 
   it('exposes the current Find Case Law court filters for the search UI', () => {
-    const optionCodes = atlasCourtOptionGroups.flatMap((group) =>
+    const optionCodes = courtOptionGroups.flatMap((group) =>
       group.options.map((option) => option.code),
     )
 
@@ -142,18 +142,18 @@ describe('AtlasSearchView helpers', () => {
   })
 
   it('labels the component states used by the search UI', () => {
-    expect(getAtlasSearchStateLabel({ status: 'idle' })).toBe('idle')
-    expect(getAtlasSearchStateLabel({ status: 'loading', query: 'Potanina' })).toBe('loading')
-    expect(getAtlasSearchStateLabel({ status: 'empty', query: 'Potanina' })).toBe('empty')
+    expect(getLegalSearchStateLabel({ status: 'idle' })).toBe('idle')
+    expect(getLegalSearchStateLabel({ status: 'loading', query: 'Potanina' })).toBe('loading')
+    expect(getLegalSearchStateLabel({ status: 'empty', query: 'Potanina' })).toBe('empty')
     expect(
-      getAtlasSearchStateLabel({
+      getLegalSearchStateLabel({
         status: 'error',
         query: 'Potanina',
         message: 'Search could not reach the API.',
       }),
     ).toBe('error')
     expect(
-      getAtlasSearchStateLabel({
+      getLegalSearchStateLabel({
         status: 'results',
         query: 'Potanina',
         response: {

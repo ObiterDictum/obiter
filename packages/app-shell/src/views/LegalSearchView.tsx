@@ -1,21 +1,21 @@
 import { useState, type FormEvent } from 'react'
 import { Card, EmptyState } from '@ormont/ui'
 import {
-  AtlasSearchCommandBar,
-  AtlasSearchFiltersDialog,
-  AtlasSearchResults,
-  atlasCourtOptionGroups,
-  getAtlasCourtLabel,
-  type AtlasFetchRequestFilters,
-  type AtlasFetchResponse,
-  type AtlasParagraph,
-  type AtlasSearchResult,
-  type AtlasSearchState,
+  SearchCommandBar,
+  SearchFiltersDialog,
+  SearchResults,
+  courtOptionGroups,
+  getCourtLabel,
+  type LegalSearchRequestFilters,
+  type LegalSearchFetchResponse,
+  type CaseLawParagraph,
+  type LegalSearchResult,
+  type LegalSearchState,
 } from '../components/search'
 
-export { atlasCourtOptionGroups, getAtlasCourtLabel }
+export { courtOptionGroups, getCourtLabel }
 
-export function getAtlasSearchStateLabel(state: AtlasSearchState) {
+export function getLegalSearchStateLabel(state: LegalSearchState) {
   switch (state.status) {
     case 'idle':
       return 'idle'
@@ -31,9 +31,9 @@ export function getAtlasSearchStateLabel(state: AtlasSearchState) {
 }
 
 export function selectParagraphExcerpts(
-  result: AtlasSearchResult,
+  result: LegalSearchResult,
   query: string,
-): AtlasParagraph[] {
+): CaseLawParagraph[] {
   const normalizedQuery = query.trim().toLowerCase()
   const paragraphs = result.paragraphs ?? []
 
@@ -48,11 +48,11 @@ export function selectParagraphExcerpts(
   return (matches.length > 0 ? matches : paragraphs).slice(0, 3)
 }
 
-export function selectJudgmentParagraphs(result: AtlasSearchResult): AtlasParagraph[] {
+export function selectJudgmentParagraphs(result: LegalSearchResult): CaseLawParagraph[] {
   return result.paragraphs ?? []
 }
 
-export function createAtlasFetchRequest(query: string, filters: AtlasFetchRequestFilters) {
+export function createLegalSearchFetchRequest(query: string, filters: LegalSearchRequestFilters) {
   const trimmedQuery = query.trim()
   const request: { query: string; court?: string; dateFrom?: string; dateTo?: string } = {
     query: trimmedQuery,
@@ -68,17 +68,17 @@ export function createAtlasFetchRequest(query: string, filters: AtlasFetchReques
   return request
 }
 
-export function countAtlasActiveFilters(filters: AtlasFetchRequestFilters) {
+export function countActiveLegalSearchFilters(filters: LegalSearchRequestFilters) {
   return [filters.court, filters.dateFrom, filters.dateTo].filter((value) => value.trim()).length
 }
 
-export function AtlasSearchView() {
+export function LegalSearchView() {
   const [query, setQuery] = useState(() => readInitialSearchQuery())
   const [court, setCourt] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const [state, setState] = useState<AtlasSearchState>({ status: 'idle' })
+  const [state, setState] = useState<LegalSearchState>({ status: 'idle' })
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -91,7 +91,7 @@ export function AtlasSearchView() {
       const response = await fetch('/api/search/fetch', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(createAtlasFetchRequest(trimmedQuery, { court, dateFrom, dateTo })),
+        body: JSON.stringify(createLegalSearchFetchRequest(trimmedQuery, { court, dateFrom, dateTo })),
       })
 
       if (!response.ok) {
@@ -106,7 +106,7 @@ export function AtlasSearchView() {
         return
       }
 
-      const body = (await response.json()) as AtlasFetchResponse
+      const body = (await response.json()) as LegalSearchFetchResponse
       setState(
         body.hits.length > 0
           ? { status: 'results', query: trimmedQuery, response: body }
@@ -121,7 +121,7 @@ export function AtlasSearchView() {
     }
   }
 
-  function applyFilters(filters: AtlasFetchRequestFilters) {
+  function applyFilters(filters: LegalSearchRequestFilters) {
     setCourt(filters.court)
     setDateFrom(filters.dateFrom)
     setDateTo(filters.dateTo)
@@ -135,11 +135,11 @@ export function AtlasSearchView() {
     setFiltersOpen(false)
   }
 
-  const courtLabel = getAtlasCourtLabel(court)
-  const activeFilterCount = countAtlasActiveFilters({ court, dateFrom, dateTo })
+  const courtLabel = getCourtLabel(court)
+  const activeFilterCount = countActiveLegalSearchFilters({ court, dateFrom, dateTo })
 
   return (
-    <div className="shell-stack atlas-search">
+    <div className="shell-stack legal-search">
       <section className="shell-page-heading">
         <div>
           <p className="shell-page-heading__eyebrow">Legal sources</p>
@@ -147,8 +147,8 @@ export function AtlasSearchView() {
         </div>
       </section>
 
-      <Card className="atlas-search__panel">
-        <AtlasSearchCommandBar
+      <Card className="legal-search__panel">
+        <SearchCommandBar
           activeFilterCount={activeFilterCount}
           courtLabel={courtLabel}
           dateFrom={dateFrom}
@@ -161,7 +161,7 @@ export function AtlasSearchView() {
       </Card>
 
       {filtersOpen ? (
-        <AtlasSearchFiltersDialog
+        <SearchFiltersDialog
           court={court}
           dateFrom={dateFrom}
           dateTo={dateTo}
@@ -172,25 +172,25 @@ export function AtlasSearchView() {
       ) : null}
 
       {state.status === 'loading' ? (
-        <Card className="atlas-search__panel">
+        <Card className="legal-search__panel">
           <p className="shell-copy">Checking stored sources, then Find Case Law if needed.</p>
         </Card>
       ) : null}
 
       {state.status === 'empty' ? (
-        <Card className="atlas-search__panel">
+        <Card className="legal-search__panel">
           <EmptyState title="No sources found" body={`No stored or Find Case Law results matched "${state.query}".`} />
         </Card>
       ) : null}
 
       {state.status === 'error' ? (
-        <Card className="atlas-search__panel">
+        <Card className="legal-search__panel">
           <EmptyState title="Search unavailable" body={state.message} />
         </Card>
       ) : null}
 
       {state.status === 'results' ? (
-        <AtlasSearchResults response={state.response} />
+        <SearchResults response={state.response} />
       ) : null}
     </div>
   )

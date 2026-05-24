@@ -1,4 +1,4 @@
-import { AtlasSearchView } from '@ormont/app-shell'
+import { LegalSearchView } from '@ormont/app-shell'
 import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/search')({
@@ -6,5 +6,5 @@ export const Route = createFileRoute('/search')({
 })
 
 function SearchRouteComponent() {
-  return <AtlasSearchView />
+  return <LegalSearchView />
 }

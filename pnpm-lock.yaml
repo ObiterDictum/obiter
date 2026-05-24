@@ -173,7 +173,7 @@ importers:
         specifier: ^4.21.0
         version: 4.21.0
 
-  services/atlas-ingestor:
+  services/legal-ingestor:
     dependencies:
       '@ormont/legal-schema':
         specifier: workspace:*

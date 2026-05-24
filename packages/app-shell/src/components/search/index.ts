@@ -1,15 +1,15 @@
-export { AtlasCourtSelect } from './AtlasCourtSelect'
-export { AtlasSearchCommandBar } from './AtlasSearchCommandBar'
-export { AtlasSearchFiltersDialog } from './AtlasSearchFiltersDialog'
-export { AtlasSearchResults } from './AtlasSearchResults'
+export { CourtSelect } from './CourtSelect'
+export { SearchCommandBar } from './SearchCommandBar'
+export { SearchFiltersDialog } from './SearchFiltersDialog'
+export { SearchResults } from './SearchResults'
 export {
-  atlasCourtOptionGroups,
-  getAtlasCourtLabel,
-  type AtlasCourtOption,
-  type AtlasCourtOptionGroup,
-  type AtlasFetchRequestFilters,
-  type AtlasFetchResponse,
-  type AtlasParagraph,
-  type AtlasSearchResult,
-  type AtlasSearchState,
-} from './atlasSearchTypes'
+  courtOptionGroups,
+  getCourtLabel,
+  type CourtOption,
+  type CourtOptionGroup,
+  type LegalSearchRequestFilters,
+  type LegalSearchFetchResponse,
+  type CaseLawParagraph,
+  type LegalSearchResult,
+  type LegalSearchState,
+} from './searchTypes'

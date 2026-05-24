@@ -1,23 +1,23 @@
 import { Link } from '@tanstack/react-router'
-import type { AtlasFetchResponse } from './atlasSearchTypes'
+import type { LegalSearchFetchResponse } from './searchTypes'
 
-interface AtlasSearchResultsProps {
-  response: AtlasFetchResponse
+interface SearchResultsProps {
+  response: LegalSearchFetchResponse
 }
 
-export function AtlasSearchResults({ response }: AtlasSearchResultsProps) {
+export function SearchResults({ response }: SearchResultsProps) {
   return (
-    <section className="atlas-search__results" aria-live="polite">
-      <p className="atlas-search__meta">
+    <section className="legal-search__results" aria-live="polite">
+      <p className="legal-search__meta">
         {response.cached ? 'Cached result' : 'Fetched and cached'} - {response.indexedCount} indexed - {response.skippedCount} skipped
       </p>
       {response.hits.map((result) => {
         return (
-          <article className="atlas-result" key={result.id}>
+          <article className="case-law-result" key={result.id}>
             <Link
               to="/cases/$caseId"
               params={{ caseId: result.id }}
-              className="atlas-result__summary"
+              className="case-law-result__summary"
             >
               <span>
                 <strong>{result.title}</strong>
@@ -25,9 +25,9 @@ export function AtlasSearchResults({ response }: AtlasSearchResultsProps) {
                   {result.neutralCitation} - {result.court} - {result.dateDecided}
                 </small>
               </span>
-              <span className="atlas-result__actions">
-                <span className="atlas-result__toggle">Open case</span>
-                <span className="atlas-result__source">Stored source</span>
+              <span className="case-law-result__actions">
+                <span className="case-law-result__toggle">Open case</span>
+                <span className="case-law-result__source">Stored source</span>
               </span>
             </Link>
           </article>

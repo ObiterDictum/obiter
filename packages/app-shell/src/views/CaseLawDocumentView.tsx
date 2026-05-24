@@ -2,39 +2,39 @@ import { queryOptions, useSuspenseQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { EmptyState } from '@ormont/ui'
-import { selectJudgmentParagraphs } from './AtlasSearchView'
+import { selectJudgmentParagraphs } from './LegalSearchView'
 
-interface AtlasParagraph {
+interface CaseLawParagraph {
   id: string
   paragraphNumber: number
   text: string
 }
 
-interface AtlasDocument {
+interface CaseLawDocument {
   id: string
   title: string
   neutralCitation: string
   court: string
   dateDecided: string
   sourceUrl: string
-  paragraphs?: AtlasParagraph[]
+  paragraphs?: CaseLawParagraph[]
 }
 
-interface AtlasDocumentResponse {
-  document: AtlasDocument
+interface CaseLawDocumentResponse {
+  document: CaseLawDocument
 }
 
-export function atlasDocumentQueryOptions(caseId: string) {
+export function caseLawDocumentQueryOptions(caseId: string) {
   return queryOptions({
-    queryKey: ['atlas-document', caseId],
+    queryKey: ['case-law-document', caseId],
     queryFn: async () => {
       const response = await fetch(apiUrl(`/api/search/documents/${encodeURIComponent(caseId)}`))
 
       if (!response.ok) {
-        throw new Error('Atlas document was not found.')
+        throw new Error('Case law document was not found.')
       }
 
-      return ((await response.json()) as AtlasDocumentResponse).document
+      return ((await response.json()) as CaseLawDocumentResponse).document
     },
   })
 }
@@ -50,9 +50,9 @@ function apiUrl(path: string) {
   ).toString()
 }
 
-export function AtlasCaseView({ caseId }: { caseId: string }) {
+export function CaseLawDocumentView({ caseId }: { caseId: string }) {
   const [caseQuery, setCaseQuery] = useState('')
-  const { data } = useSuspenseQuery(atlasDocumentQueryOptions(caseId))
+  const { data } = useSuspenseQuery(caseLawDocumentQueryOptions(caseId))
   const paragraphs = selectJudgmentParagraphs(data).filter((paragraph) =>
     isDisplayJudgmentParagraph(paragraph, data),
   )
@@ -64,9 +64,9 @@ export function AtlasCaseView({ caseId }: { caseId: string }) {
     : paragraphs
 
   return (
-    <div className="shell-stack atlas-case">
-      <section className="atlas-case__topbar">
-        <div className="atlas-case__identity">
+    <div className="shell-stack case-law-document">
+      <section className="case-law-document__topbar">
+        <div className="case-law-document__identity">
           <p>Case law</p>
           <h1>{data.title}</h1>
           <dl>
@@ -83,7 +83,7 @@ export function AtlasCaseView({ caseId }: { caseId: string }) {
               <dd>{data.dateDecided}</dd>
             </div>
           </dl>
-          <label className="atlas-case__search">
+          <label className="case-law-document__search">
             <span>Search within case</span>
             <input
               value={caseQuery}
@@ -94,15 +94,15 @@ export function AtlasCaseView({ caseId }: { caseId: string }) {
             {trimmedCaseQuery ? <em>{visibleParagraphs.length} matches</em> : null}
           </label>
         </div>
-        <Link className="atlas-case__back" to="/search">
+        <Link className="case-law-document__back" to="/search">
           Back to search
         </Link>
       </section>
 
-      <section className="atlas-case__viewer">
+      <section className="case-law-document__viewer">
         {visibleParagraphs.length > 0 ? (
-          <div className="atlas-result__page" role="document" aria-label={data.title}>
-            <header className="atlas-result__page-header">
+          <div className="case-law-result__page" role="document" aria-label={data.title}>
+            <header className="case-law-result__page-header">
               <p>{data.court}</p>
               <h2>{data.title}</h2>
               <dl>
@@ -117,13 +117,13 @@ export function AtlasCaseView({ caseId }: { caseId: string }) {
               </dl>
             </header>
 
-            <div className="atlas-result__page-body">
+            <div className="case-law-result__page-body">
               {visibleParagraphs.map((paragraph) => {
                 const label = paragraphLabel(paragraph)
                 const text = paragraphTextWithoutLabel(paragraph)
 
                 return (
-                  <p className="atlas-result__paragraph" key={paragraph.id}>
+                  <p className="case-law-result__paragraph" key={paragraph.id}>
                     <span aria-label={label ? `Paragraph ${label}` : undefined}>
                       {label}
                     </span>
@@ -138,7 +138,7 @@ export function AtlasCaseView({ caseId }: { caseId: string }) {
         ) : (
           <EmptyState
             title="Stored text unavailable"
-            body="Atlas has cached the authority metadata, but no paragraph text is stored for this case yet."
+            body="The authority metadata is cached, but no paragraph text is stored for this case yet."
           />
         )}
       </section>
@@ -146,7 +146,7 @@ export function AtlasCaseView({ caseId }: { caseId: string }) {
   )
 }
 
-function isDisplayJudgmentParagraph(paragraph: AtlasParagraph, document: AtlasDocument) {
+function isDisplayJudgmentParagraph(paragraph: CaseLawParagraph, document: CaseLawDocument) {
   const text = paragraph.text.replace(/\s+/g, ' ').trim()
   const lower = text.toLowerCase()
   const title = document.title.toLowerCase()
@@ -168,11 +168,11 @@ function isDisplayJudgmentParagraph(paragraph: AtlasParagraph, document: AtlasDo
   return true
 }
 
-function paragraphLabel(paragraph: AtlasParagraph) {
+function paragraphLabel(paragraph: CaseLawParagraph) {
   return paragraph.text.trim().match(/^(\d+)\.\s+/)?.[1] ?? ''
 }
 
-function paragraphTextWithoutLabel(paragraph: AtlasParagraph) {
+function paragraphTextWithoutLabel(paragraph: CaseLawParagraph) {
   return paragraph.text.trim().replace(/^\d+\.\s+/, '')
 }
 
