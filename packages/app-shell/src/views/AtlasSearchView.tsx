@@ -189,6 +189,7 @@ export function AtlasSearchView() {
   const [draftDateFrom, setDraftDateFrom] = useState('')
   const [draftDateTo, setDraftDateTo] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [courtMenuOpen, setCourtMenuOpen] = useState(false)
   const [state, setState] = useState<AtlasSearchState>({ status: 'idle' })
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -236,6 +237,7 @@ export function AtlasSearchView() {
     setDraftCourt(court)
     setDraftDateFrom(dateFrom)
     setDraftDateTo(dateTo)
+    setCourtMenuOpen(false)
     setFiltersOpen(true)
   }
 
@@ -243,6 +245,7 @@ export function AtlasSearchView() {
     setCourt(draftCourt)
     setDateFrom(draftDateFrom)
     setDateTo(draftDateTo)
+    setCourtMenuOpen(false)
     setFiltersOpen(false)
   }
 
@@ -253,7 +256,18 @@ export function AtlasSearchView() {
     setDateFrom('')
     setDraftDateTo('')
     setDateTo('')
+    setCourtMenuOpen(false)
     setFiltersOpen(false)
+  }
+
+  function closeFilters() {
+    setCourtMenuOpen(false)
+    setFiltersOpen(false)
+  }
+
+  function selectDraftCourt(nextCourt: string) {
+    setDraftCourt(nextCourt)
+    setCourtMenuOpen(false)
   }
 
   const courtLabel = getAtlasCourtLabel(court)
@@ -305,14 +319,14 @@ export function AtlasSearchView() {
             aria-label="Close search filters"
             className="atlas-filter-modal__backdrop"
             type="button"
-            onClick={() => setFiltersOpen(false)}
+            onClick={closeFilters}
           />
           <section className="atlas-filter-modal__panel">
             <button
               aria-label="Close search filters"
               className="atlas-filter-modal__close"
               type="button"
-              onClick={() => setFiltersOpen(false)}
+              onClick={closeFilters}
             >
               <span aria-hidden="true">×</span>
             </button>
@@ -326,25 +340,49 @@ export function AtlasSearchView() {
             <div className="atlas-filter-modal__groups">
               <fieldset>
                 <legend>Source</legend>
-                <label className="atlas-filter-modal__field">
+                <div className="atlas-filter-modal__field atlas-filter-modal__field--court">
                   <span>Court or tribunal</span>
-                  <select
-                    value={draftCourt}
-                    onChange={(event) => setDraftCourt(event.target.value)}
-                    name="court-filter"
+                  <button
+                    aria-expanded={courtMenuOpen}
+                    aria-haspopup="listbox"
+                    className="atlas-filter-modal__select-trigger"
+                    type="button"
+                    onClick={() => setCourtMenuOpen((open) => !open)}
                   >
-                    <option value="">All courts and tribunals</option>
-                    {atlasCourtOptionGroups.map((group) => (
-                      <optgroup label={group.label} key={group.label}>
-                        {group.options.map((option) => (
-                          <option key={option.code} value={option.code}>
-                            {option.label}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
-                </label>
+                    <span>{getAtlasCourtLabel(draftCourt)}</span>
+                    <span aria-hidden="true" className="atlas-filter-modal__select-chevron" />
+                  </button>
+                  {courtMenuOpen ? (
+                    <div className="atlas-filter-modal__court-menu" role="listbox" aria-label="Court or tribunal">
+                      <button
+                        aria-selected={draftCourt === ''}
+                        className="atlas-filter-modal__court-option atlas-filter-modal__court-option--all"
+                        role="option"
+                        type="button"
+                        onClick={() => selectDraftCourt('')}
+                      >
+                        All courts and tribunals
+                      </button>
+                      {atlasCourtOptionGroups.map((group) => (
+                        <div className="atlas-filter-modal__court-group" key={group.label}>
+                          <p>{group.label}</p>
+                          {group.options.map((option) => (
+                            <button
+                              aria-selected={draftCourt === option.code}
+                              className="atlas-filter-modal__court-option"
+                              key={option.code}
+                              role="option"
+                              type="button"
+                              onClick={() => selectDraftCourt(option.code)}
+                            >
+                              {option.label}
+                            </button>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
               </fieldset>
 
               <fieldset>
