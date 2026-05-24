@@ -11,11 +11,8 @@ export function SearchResults({ response }: SearchResultsProps) {
   return (
     <section className="legal-search__results" aria-live="polite">
       <p className="legal-search__meta">
-        {response.cached
-          ? 'Stored result'
-          : storedResultsAvailable
-            ? 'Fetched and stored'
-            : 'Fetched from Find Case Law'} - {response.indexedCount} indexed - {response.skippedCount} skipped
+        {response.hits.length} {response.hits.length === 1 ? 'result' : 'results'} from{' '}
+        {response.cached || storedResultsAvailable ? 'stored legal sources' : 'Find Case Law'}
       </p>
       {response.hits.map((result) => {
         const summary = (
