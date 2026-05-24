@@ -1,18 +1,18 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { atlasAuthoritySchema, type AtlasAuthority } from '@ormont/legal-schema'
+import { LegalAuthoritySchema, type LegalAuthority } from '@ormont/legal-schema'
 import {
   createClient,
   getDocument,
   indexDocuments,
   search,
-  type AtlasSearchFilters,
-  type AtlasSearchHit,
+  type LegalSearchFilters,
+  type LegalSearchHit,
 } from '@ormont/search-client'
 import type { ApiErrorResponse } from '@ormont/contracts'
 import type { ApiEnv } from '../env'
 
-interface AtlasProxyRouteVariables {
+interface LegalSearchProxyRouteVariables {
   requestId: string
 }
 
@@ -25,11 +25,11 @@ interface AtomEntry {
   contentHash: string
 }
 
-export interface AtlasFetchSearchHit extends AtlasSearchHit {
-  paragraphs?: AtlasAuthority['paragraphs']
+export interface LegalFetchSearchHit extends LegalSearchHit {
+  paragraphs?: LegalAuthority['paragraphs']
 }
 
-const atlasSlugSchema = z
+const legalSlugSchema = z
   .string()
   .trim()
   .toLowerCase()
@@ -126,15 +126,15 @@ const citationDivisionCourtByBaseCourt = new Map<string, Map<string, string>>([
   ],
 ])
 
-const atlasFetchRequestSchema = z.object({
+const legalFetchRequestSchema = z.object({
   query: z.string().trim().min(1),
-  court: atlasSlugSchema.optional(),
-  jurisdiction: atlasSlugSchema.optional(),
+  court: legalSlugSchema.optional(),
+  jurisdiction: legalSlugSchema.optional(),
   dateFrom: z.string().date().optional(),
   dateTo: z.string().date().optional(),
 })
 
-const atlasDocumentIdSchema = z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+const legalDocumentIdSchema = z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
 
 function apiError(
   code: ApiErrorResponse['error']['code'],
@@ -150,19 +150,19 @@ function apiError(
   }
 }
 
-export function createAtlasProxyRoutes(env: ApiEnv) {
-  const app = new Hono<{ Variables: AtlasProxyRouteVariables }>()
+export function createLegalSearchProxyRoutes(env: ApiEnv) {
+  const app = new Hono<{ Variables: LegalSearchProxyRouteVariables }>()
   const searchClient = createClient(env.meilisearchHost, env.meilisearchSearchApiKey)
   const indexClient = createClient(env.meilisearchHost, env.meilisearchAdminApiKey)
   const mojRateLimiter = createMojRateLimiter(env.mojFindCaseLawRateLimit)
 
   app.post('/api/search/fetch', async (c) => {
     const requestId = c.get('requestId')
-    const parsed = atlasFetchRequestSchema.safeParse(await c.req.json().catch(() => null))
+    const parsed = legalFetchRequestSchema.safeParse(await c.req.json().catch(() => null))
 
     if (!parsed.success || !isSupportedFindCaseLawRequest(parsed.data)) {
       return c.json(
-        apiError('validation_failed', 'Atlas fetch search request is invalid.', requestId),
+        apiError('validation_failed', 'Fetch search request is invalid.', requestId),
         400,
       )
     }
@@ -170,7 +170,7 @@ export function createAtlasProxyRoutes(env: ApiEnv) {
     const filters = toSearchFilters(parsed.data)
     const cached = await search(
       searchClient,
-      env.atlasAuthoritiesIndex,
+      env.legalAuthoritiesIndex,
       parsed.data.query,
       filters,
       { includeParagraphs: true },
@@ -206,12 +206,12 @@ export function createAtlasProxyRoutes(env: ApiEnv) {
     const documents = mojResult.documents.filter(
       (document) =>
         !cached.hits.some((hit) => hit.id === document.id) &&
-        atlasAuthoritySchema.safeParse(document).success,
+        LegalAuthoritySchema.safeParse(document).success,
     )
 
     const indexResult =
       documents.length > 0
-        ? await indexDocuments(indexClient, env.atlasAuthoritiesIndex, documents)
+        ? await indexDocuments(indexClient, env.legalAuthoritiesIndex, documents)
         : { indexedCount: 0, failedCount: 0, errors: [] }
 
     return c.json(
@@ -227,21 +227,21 @@ export function createAtlasProxyRoutes(env: ApiEnv) {
 
   app.get('/api/search/documents/:documentId', async (c) => {
     const requestId = c.get('requestId')
-    const parsed = atlasDocumentIdSchema.safeParse(c.req.param('documentId'))
+    const parsed = legalDocumentIdSchema.safeParse(c.req.param('documentId'))
 
     if (!parsed.success) {
       return c.json(
-        apiError('validation_failed', 'Atlas document id is invalid.', requestId),
+        apiError('validation_failed', 'Document id is invalid.', requestId),
         400,
       )
     }
 
     try {
-      const document = await getDocument(indexClient, env.atlasAuthoritiesIndex, parsed.data)
+      const document = await getDocument(indexClient, env.legalAuthoritiesIndex, parsed.data)
       return c.json({ document })
     } catch {
       return c.json(
-        apiError('document_not_found', 'Atlas document was not found in the stored index.', requestId),
+        apiError('document_not_found', 'Document was not found in the stored index.', requestId),
         404,
       )
     }
@@ -252,10 +252,10 @@ export function createAtlasProxyRoutes(env: ApiEnv) {
 
 async function fetchMojAuthorities(
   env: ApiEnv,
-  request: z.infer<typeof atlasFetchRequestSchema>,
+  request: z.infer<typeof legalFetchRequestSchema>,
   rateLimiter: ReturnType<typeof createMojRateLimiter>,
 ): Promise<
-  | { status: 'ok'; documents: AtlasAuthority[]; skippedCount: number }
+  | { status: 'ok'; documents: LegalAuthority[]; skippedCount: number }
   | { status: 'rate_limited'; retryAfter: string | null }
   | { status: 'unavailable' }
 > {
@@ -280,7 +280,7 @@ async function fetchMojAuthorities(
   }
 
   const entries = parseFindCaseLawAtom(await atomResponse.text(), request)
-  const documents: AtlasAuthority[] = []
+  const documents: LegalAuthority[] = []
   let skippedCount = 0
 
   for (const entry of entries.slice(0, 5)) {
@@ -300,7 +300,7 @@ async function fetchMojAuthorities(
       await detailResponse.text(),
       documentIdFromUri(entry.uri),
     )
-    const document = atlasAuthoritySchema.safeParse({
+    const document = LegalAuthoritySchema.safeParse({
       id: documentIdFromUri(entry.uri),
       title: entry.title,
       neutralCitation: entry.neutralCitation,
@@ -346,7 +346,7 @@ function createMojRateLimiter(limit: number) {
 
 export function parseFindCaseLawAtom(
   xml: string,
-  request: z.infer<typeof atlasFetchRequestSchema>,
+  request: z.infer<typeof legalFetchRequestSchema>,
 ): AtomEntry[] {
   return Array.from(xml.matchAll(/<entry\b[\s\S]*?<\/entry>/gi))
     .map((match) => parseAtomEntry(match[0]))
@@ -377,7 +377,7 @@ function parseAtomEntry(xml: string): AtomEntry | null {
   }
 }
 
-function isSupportedFindCaseLawRequest(request: z.infer<typeof atlasFetchRequestSchema>) {
+function isSupportedFindCaseLawRequest(request: z.infer<typeof legalFetchRequestSchema>) {
   return (
     (!request.court || supportedFindCaseLawCourts.has(request.court)) &&
     (!request.jurisdiction || request.jurisdiction === findCaseLawJurisdiction)
@@ -386,7 +386,7 @@ function isSupportedFindCaseLawRequest(request: z.infer<typeof atlasFetchRequest
 
 function entryMatchesFetchRequest(
   entry: AtomEntry,
-  request: z.infer<typeof atlasFetchRequestSchema>,
+  request: z.infer<typeof legalFetchRequestSchema>,
 ) {
   if (request.court && entry.court !== request.court) return false
   if (request.jurisdiction && request.jurisdiction !== findCaseLawJurisdiction) return false
@@ -446,7 +446,7 @@ function isJudgmentLine(line: string) {
   return !excluded.some((phrase) => lower.includes(phrase))
 }
 
-function toSearchFilters(request: z.infer<typeof atlasFetchRequestSchema>): AtlasSearchFilters {
+function toSearchFilters(request: z.infer<typeof legalFetchRequestSchema>): LegalSearchFilters {
   return {
     court: request.court,
     jurisdiction: request.jurisdiction,
@@ -457,7 +457,7 @@ function toSearchFilters(request: z.infer<typeof atlasFetchRequestSchema>): Atla
 }
 
 function toFetchResponse(
-  hits: AtlasFetchSearchHit[],
+  hits: LegalFetchSearchHit[],
   query: string,
   cached: boolean,
   indexedCount: number,
@@ -474,7 +474,7 @@ function toFetchResponse(
   }
 }
 
-function toHit(document: AtlasAuthority): AtlasFetchSearchHit {
+function toHit(document: LegalAuthority): LegalFetchSearchHit {
   return {
     id: document.id,
     title: document.title,

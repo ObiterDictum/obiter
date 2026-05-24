@@ -4,21 +4,21 @@ import { dirname, join } from 'node:path'
 const requiredProductionKeys = [
   'MEILISEARCH_HOST',
   'MEILISEARCH_ADMIN_API_KEY',
-  'ATLAS_AUTHORITIES_INDEX',
+  'LEGAL_AUTHORITIES_INDEX',
 ] as const
 
 let localEnvLoaded = false
 
-export interface AtlasIngestorEnv {
+export interface LegalIngestorEnv {
   meilisearchHost: string
   meilisearchAdminApiKey: string
-  atlasAuthoritiesIndex: string
+  legalAuthoritiesIndex: string
   mojFindCaseLawBaseUrl: string
   mojFindCaseLawRateLimit: number
   nodeEnv: 'development' | 'test' | 'production'
 }
 
-function readNodeEnv(): AtlasIngestorEnv['nodeEnv'] {
+function readNodeEnv(): LegalIngestorEnv['nodeEnv'] {
   if (process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'test') {
     return process.env.NODE_ENV
   }
@@ -26,7 +26,7 @@ function readNodeEnv(): AtlasIngestorEnv['nodeEnv'] {
   return 'development'
 }
 
-function requireProductionEnv(nodeEnv: AtlasIngestorEnv['nodeEnv']) {
+function requireProductionEnv(nodeEnv: LegalIngestorEnv['nodeEnv']) {
   if (nodeEnv !== 'production') {
     return
   }
@@ -50,7 +50,7 @@ function readRequiredUrl(key: string, fallback: string): string {
   return parseUrl(key, process.env[key] ?? fallback)
 }
 
-function readSecret(key: string, fallback: string, nodeEnv: AtlasIngestorEnv['nodeEnv']) {
+function readSecret(key: string, fallback: string, nodeEnv: LegalIngestorEnv['nodeEnv']) {
   const value = process.env[key] ?? fallback
   const trimmed = value.trim()
 
@@ -65,7 +65,7 @@ function readSecret(key: string, fallback: string, nodeEnv: AtlasIngestorEnv['no
   return trimmed
 }
 
-function readAdminApiKey(nodeEnv: AtlasIngestorEnv['nodeEnv']) {
+function readAdminApiKey(nodeEnv: LegalIngestorEnv['nodeEnv']) {
   const fallback =
     nodeEnv === 'production' ? '' : (process.env.MEILISEARCH_API_KEY ?? 'dev-key')
 
@@ -132,7 +132,7 @@ function readPositiveInteger(key: string, fallback: string) {
   return parsed
 }
 
-export function readAtlasIngestorEnv(): AtlasIngestorEnv {
+export function readLegalIngestorEnv(): LegalIngestorEnv {
   loadLocalDotEnv()
   const nodeEnv = readNodeEnv()
   requireProductionEnv(nodeEnv)
@@ -140,9 +140,9 @@ export function readAtlasIngestorEnv(): AtlasIngestorEnv {
   return {
     meilisearchHost: readRequiredUrl('MEILISEARCH_HOST', 'http://localhost:7700'),
     meilisearchAdminApiKey: readAdminApiKey(nodeEnv),
-    atlasAuthoritiesIndex: readIndexName(
-      'ATLAS_AUTHORITIES_INDEX',
-      'atlas_authorities',
+    legalAuthoritiesIndex: readIndexName(
+      'LEGAL_AUTHORITIES_INDEX',
+      'legal_authorities',
     ),
     mojFindCaseLawBaseUrl: readRequiredUrl(
       'MOJ_FIND_CASE_LAW_BASE_URL',

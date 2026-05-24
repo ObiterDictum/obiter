@@ -1,51 +1,51 @@
 import { MeiliSearch } from 'meilisearch'
 import {
-  atlasAuthoritySchema,
-  atlasAuthoritiesSchema,
-  atlasAuthoritySummarySchema,
-  type AtlasAuthority,
-  type AtlasAuthoritySummary,
-  type AtlasSourceType,
+  LegalAuthoritySchema,
+  legalAuthoritiesSchema,
+  LegalAuthoritySummarySchema,
+  type LegalAuthority,
+  type LegalAuthoritySummary,
+  type LegalSourceType,
 } from '@ormont/legal-schema'
 
-export type AtlasSearchDocument = AtlasAuthority
-export type AtlasSearchHit = AtlasAuthoritySummary & {
-  paragraphs?: AtlasAuthority['paragraphs']
+export type LegalSearchDocument = LegalAuthority
+export type LegalSearchHit = LegalAuthoritySummary & {
+  paragraphs?: LegalAuthority['paragraphs']
 }
-export type AtlasSearchFilters = Partial<{
+export type LegalSearchFilters = Partial<{
   court: string
   jurisdiction: string
-  sourceType: AtlasSourceType
+  sourceType: LegalSourceType
   dateFrom: string
   dateTo: string
 }>
 
-export interface AtlasIndexOptions {
+export interface SearchIndexOptions {
   primaryKey?: 'id'
 }
 
-export interface AtlasIndexResult {
+export interface SearchIndexResult {
   taskUid?: number
 }
 
-export interface AtlasIndexDocumentsResult {
+export interface SearchIndexDocumentsResult {
   indexedCount: number
   failedCount: number
   errors: Array<{ recordId: string | null; message: string }>
 }
 
-export interface AtlasSearchResult {
-  hits: AtlasSearchHit[]
+export interface LegalSearchResult {
+  hits: LegalSearchHit[]
   query: string
   estimatedTotalHits: number
   processingTimeMs: number
 }
 
-export interface AtlasSearchOptions {
+export interface LegalSearchOptions {
   includeParagraphs?: boolean
 }
 
-interface AtlasIndexingTask {
+interface SearchIndexingTask {
   uid?: number
   taskUid?: number
   status?: string
@@ -59,28 +59,28 @@ interface AtlasIndexingTask {
   } | null
 }
 
-class AtlasSearchTaskError extends Error {
-  constructor(task: AtlasIndexingTask) {
+class SearchTaskError extends Error {
+  constructor(task: SearchIndexingTask) {
     const taskId = task.uid ?? task.taskUid
     const taskLabel = typeof taskId === 'number' ? ` ${taskId}` : ''
     const errorCode = task.error?.code ?? task.error?.type
     const errorLabel = errorCode ? ` (${errorCode})` : ''
 
     super(`Meilisearch task${taskLabel} ${task.status ?? 'failed'}${errorLabel}.`)
-    this.name = 'AtlasSearchTaskError'
+    this.name = 'SearchTaskError'
   }
 }
 
-type AtlasEnqueuedTaskPromise = Promise<{ taskUid: number }> & {
-  waitTask(options?: { timeout?: number; interval?: number }): Promise<AtlasIndexingTask>
+type SearchEnqueuedTaskPromise = Promise<{ taskUid: number }> & {
+  waitTask(options?: { timeout?: number; interval?: number }): Promise<SearchIndexingTask>
 }
 
 type IndexLike = {
-  updateSearchableAttributes(attributes: string[]): AtlasEnqueuedTaskPromise
-  updateFilterableAttributes(attributes: string[]): AtlasEnqueuedTaskPromise
-  updateSortableAttributes(attributes: string[]): AtlasEnqueuedTaskPromise
-  updateRankingRules(rules: string[]): AtlasEnqueuedTaskPromise
-  addDocuments(documents: AtlasSearchDocument[], options: { primaryKey: 'id' }): AtlasEnqueuedTaskPromise
+  updateSearchableAttributes(attributes: string[]): SearchEnqueuedTaskPromise
+  updateFilterableAttributes(attributes: string[]): SearchEnqueuedTaskPromise
+  updateSortableAttributes(attributes: string[]): SearchEnqueuedTaskPromise
+  updateRankingRules(rules: string[]): SearchEnqueuedTaskPromise
+  addDocuments(documents: LegalSearchDocument[], options: { primaryKey: 'id' }): SearchEnqueuedTaskPromise
   search(
     query: string,
     options: { filter?: string[]; sort?: string[]; attributesToRetrieve?: string[] },
@@ -93,7 +93,7 @@ type IndexLike = {
 }
 
 type IndexSetupClient = {
-  createIndex(indexName: string, options: { primaryKey: 'id' }): AtlasEnqueuedTaskPromise
+  createIndex(indexName: string, options: { primaryKey: 'id' }): SearchEnqueuedTaskPromise
   index(indexName: string): IndexLike
 }
 
@@ -147,8 +147,8 @@ export function createClient(host: string, apiKey: string): MeiliSearch {
 export async function createIndex(
   client: IndexSetupClient,
   indexName: string,
-  options: AtlasIndexOptions = {},
-): Promise<AtlasIndexResult> {
+  options: SearchIndexOptions = {},
+): Promise<SearchIndexResult> {
   let taskUid: number | undefined
 
   try {
@@ -159,7 +159,7 @@ export async function createIndex(
     await waitForSucceededTask(createTask)
   } catch (error) {
     if (!isIndexAlreadyExistsError(error)) {
-      throw wrapSearchError('Atlas search index setup failed.', error)
+      throw wrapSearchError('Search index setup failed.', error)
     }
   }
 
@@ -172,7 +172,7 @@ export async function createIndex(
 
     return { taskUid }
   } catch (error) {
-    throw wrapSearchError('Atlas search index setup failed.', error)
+    throw wrapSearchError('Search index setup failed.', error)
   }
 }
 
@@ -180,8 +180,8 @@ export async function indexDocuments(
   client: DocumentIndexClient,
   indexName: string,
   documents: unknown[],
-): Promise<AtlasIndexDocumentsResult> {
-  const parsed = atlasAuthoritiesSchema.safeParse(documents)
+): Promise<SearchIndexDocumentsResult> {
+  const parsed = legalAuthoritiesSchema.safeParse(documents)
 
   if (!parsed.success) {
     return validationFailure(documents, parsed.error.issues.map((issue) => issue.message))
@@ -207,11 +207,11 @@ export async function indexDocuments(
       failedCount,
       errors:
         failedCount > 0
-          ? [{ recordId: null, message: 'Atlas indexing task completed without indexing every document.' }]
+          ? [{ recordId: null, message: 'Indexing task completed without indexing every document.' }]
           : [],
     }
   } catch (error) {
-    throw wrapSearchError('Atlas document indexing failed.', error)
+    throw wrapSearchError('Document indexing failed.', error)
   }
 }
 
@@ -219,9 +219,9 @@ export async function search(
   client: SearchClient,
   indexName: string,
   query: string,
-  filters: AtlasSearchFilters = {},
-  options: AtlasSearchOptions = {},
-): Promise<AtlasSearchResult> {
+  filters: LegalSearchFilters = {},
+  options: LegalSearchOptions = {},
+): Promise<LegalSearchResult> {
   try {
     const result = await client.index(indexName).search(query, {
       filter: toMeiliFilters(filters),
@@ -232,8 +232,8 @@ export async function search(
     })
     const hits = result.hits.map((hit) =>
       options.includeParagraphs
-        ? atlasAuthoritySchema.parse(hit)
-        : atlasAuthoritySummarySchema.parse(hit),
+        ? LegalAuthoritySchema.parse(hit)
+        : LegalAuthoritySummarySchema.parse(hit),
     )
 
     return {
@@ -243,11 +243,11 @@ export async function search(
       processingTimeMs: result.processingTimeMs ?? 0,
     }
   } catch (error) {
-    throw wrapSearchError('Atlas search failed.', error)
+    throw wrapSearchError('Search failed.', error)
   }
 }
 
-function validationFailure(documents: unknown[], messages: string[]): AtlasIndexDocumentsResult {
+function validationFailure(documents: unknown[], messages: string[]): SearchIndexDocumentsResult {
   const recordId = (documents[0] as { id?: unknown } | undefined)?.id
 
   return {
@@ -266,27 +266,27 @@ export async function getDocument(
   client: DocumentReadClient,
   indexName: string,
   documentId: string,
-): Promise<AtlasAuthority> {
+): Promise<LegalAuthority> {
   try {
     const document = await client.index(indexName).getDocument(documentId)
-    return atlasAuthoritySchema.parse(document)
+    return LegalAuthoritySchema.parse(document)
   } catch (error) {
-    throw wrapSearchError('Atlas document lookup failed.', error)
+    throw wrapSearchError('Document lookup failed.', error)
   }
 }
 
-async function waitForSucceededTask(task: AtlasEnqueuedTaskPromise): Promise<AtlasIndexingTask> {
+async function waitForSucceededTask(task: SearchEnqueuedTaskPromise): Promise<SearchIndexingTask> {
   const completed = await task.waitTask({ timeout: 30_000, interval: 100 })
   if (completed.status !== 'succeeded') {
-    throw new AtlasSearchTaskError(completed)
+    throw new SearchTaskError(completed)
   }
   return completed
 }
 
 function indexingTaskFailure(
-  documents: AtlasSearchDocument[],
-  task: AtlasIndexingTask,
-): AtlasIndexDocumentsResult {
+  documents: LegalSearchDocument[],
+  task: SearchIndexingTask,
+): SearchIndexDocumentsResult {
   const taskId = task.uid ?? task.taskUid
   const taskLabel = typeof taskId === 'number' ? ` ${taskId}` : ''
   const errorCode = task.error?.code ?? task.error?.type
@@ -298,13 +298,13 @@ function indexingTaskFailure(
     errors: [
       {
         recordId: null,
-        message: `Atlas indexing task${taskLabel} ${task.status ?? 'failed'}${errorLabel}.`,
+        message: `Indexing task${taskLabel} ${task.status ?? 'failed'}${errorLabel}.`,
       },
     ],
   }
 }
 
-function toMeiliFilters(filters: AtlasSearchFilters): string[] | undefined {
+function toMeiliFilters(filters: LegalSearchFilters): string[] | undefined {
   const clauses: string[] = []
 
   if (filters.court) clauses.push(`court = ${quoteFilter(filters.court)}`)
@@ -321,7 +321,7 @@ function quoteFilter(value: string) {
 }
 
 function wrapSearchError(message: string, error: unknown): Error {
-  if (error instanceof AtlasSearchTaskError) {
+  if (error instanceof SearchTaskError) {
     return new Error(`${message} ${error.message}`)
   }
 

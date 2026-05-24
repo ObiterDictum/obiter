@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createAtlasProxyRoutes, parseFindCaseLawAtom, parseJudgmentParagraphs } from './atlas-proxy'
+import { createLegalSearchProxyRoutes, parseFindCaseLawAtom, parseJudgmentParagraphs } from './legal-search-proxy'
 import type { ApiEnv } from '../env'
 
 const searchClientMock = vi.hoisted(() => ({
@@ -22,7 +22,7 @@ const env: ApiEnv = {
   meilisearchHost: 'http://localhost:7700',
   meilisearchSearchApiKey: 'dev-key',
   meilisearchAdminApiKey: 'dev-key',
-  atlasAuthoritiesIndex: 'atlas_authorities',
+  legalAuthoritiesIndex: 'legal_authorities',
   mojFindCaseLawBaseUrl: 'https://caselaw.nationalarchives.gov.uk',
   mojFindCaseLawRateLimit: 1000,
   port: 8787,
@@ -103,7 +103,7 @@ beforeEach(() => {
   searchClientMock.getDocument.mockReset()
 })
 
-describe('createAtlasProxyRoutes', () => {
+describe('createLegalSearchProxyRoutes', () => {
   it('returns cached results without calling Find Case Law', async () => {
     searchClientMock.search.mockResolvedValueOnce({
       hits: [hit],
@@ -112,7 +112,7 @@ describe('createAtlasProxyRoutes', () => {
       processingTimeMs: 1,
     })
     const fetchMock = vi.spyOn(globalThis, 'fetch')
-    const app = createAtlasProxyRoutes(env)
+    const app = createLegalSearchProxyRoutes(env)
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -152,7 +152,7 @@ describe('createAtlasProxyRoutes', () => {
           '<html><body><p>This is a long enough judgment paragraph mentioning Potanina and the appeal.</p></body></html>',
         ),
       )
-    const app = createAtlasProxyRoutes(env)
+    const app = createLegalSearchProxyRoutes(env)
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -169,7 +169,7 @@ describe('createAtlasProxyRoutes', () => {
     })
     expect(searchClientMock.indexDocuments).toHaveBeenCalledWith(
       { id: 'meili-client' },
-      'atlas_authorities',
+      'legal_authorities',
       [
         expect.objectContaining({
           id: 'uksc-2024-3',
@@ -182,7 +182,7 @@ describe('createAtlasProxyRoutes', () => {
 
   it('rejects unsupported Find Case Law metadata filters before cache or fetch', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
-    const app = createAtlasProxyRoutes(env)
+    const app = createLegalSearchProxyRoutes(env)
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -204,7 +204,7 @@ describe('createAtlasProxyRoutes', () => {
 
   it('rejects malformed JSON and empty fetch queries before cache or fetch', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
-    const app = createAtlasProxyRoutes(env)
+    const app = createLegalSearchProxyRoutes(env)
 
     const malformedResponse = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -231,7 +231,7 @@ describe('createAtlasProxyRoutes', () => {
       processingTimeMs: 1,
     })
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('<feed />'))
-    const app = createAtlasProxyRoutes(env)
+    const app = createLegalSearchProxyRoutes(env)
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -242,7 +242,7 @@ describe('createAtlasProxyRoutes', () => {
     expect(response.status).toBe(200)
     expect(searchClientMock.search).toHaveBeenCalledWith(
       { id: 'meili-client' },
-      'atlas_authorities',
+      'legal_authorities',
       'Example',
       expect.objectContaining({ court: 'ewhc-admin' }),
       { includeParagraphs: true },
@@ -266,7 +266,7 @@ describe('createAtlasProxyRoutes', () => {
         `<feed><entry><title>Example v Test</title><link href="https://caselaw.nationalarchives.gov.uk/ewca/civ/2024/7" rel="alternate"/><published>2024-01-31T00:00:00Z</published><tna:identifier slug="ewca/civ/2024/7" type="ukncn">[2024] EWCA Civ 7</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry></feed>`,
       ),
     )
-    const app = createAtlasProxyRoutes(env)
+    const app = createLegalSearchProxyRoutes(env)
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -308,7 +308,7 @@ describe('createAtlasProxyRoutes', () => {
           '<html><body><p>This High Court administrative judgment paragraph is long enough for indexing.</p></body></html>',
         ),
       )
-    const app = createAtlasProxyRoutes(env)
+    const app = createLegalSearchProxyRoutes(env)
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -319,7 +319,7 @@ describe('createAtlasProxyRoutes', () => {
     expect(response.status).toBe(200)
     expect(searchClientMock.search).toHaveBeenCalledWith(
       { id: 'meili-client' },
-      'atlas_authorities',
+      'legal_authorities',
       'Example',
       expect.objectContaining({ court: 'ewhc-admin' }),
       { includeParagraphs: true },
@@ -331,7 +331,7 @@ describe('createAtlasProxyRoutes', () => {
     )
     expect(searchClientMock.indexDocuments).toHaveBeenCalledWith(
       { id: 'meili-client' },
-      'atlas_authorities',
+      'legal_authorities',
       [expect.objectContaining({ court: 'ewhc-admin' })],
     )
   })
@@ -363,7 +363,7 @@ describe('createAtlasProxyRoutes', () => {
             '<html><body><p>This official court judgment paragraph is long enough for indexing.</p></body></html>',
           ),
         )
-      const app = createAtlasProxyRoutes(env)
+      const app = createLegalSearchProxyRoutes(env)
 
       const response = await app.request('/api/search/fetch', {
         method: 'POST',
@@ -386,7 +386,7 @@ describe('createAtlasProxyRoutes', () => {
       )
       expect(searchClientMock.indexDocuments).toHaveBeenCalledWith(
         { id: 'meili-client' },
-        'atlas_authorities',
+        'legal_authorities',
         [expect.objectContaining({ neutralCitation: citation, court: storedCourt })],
       )
     },
@@ -404,7 +404,7 @@ describe('createAtlasProxyRoutes', () => {
         `<feed><entry><title>Potanina v Potanin</title><link href="https://caselaw.nationalarchives.gov.uk/uksc/2024/3" rel="alternate"/><published>2024-01-31T00:00:00Z</published><tna:identifier slug="uksc/2024/3" type="ukncn">[2024] UKSC 3</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry></feed>`,
       ),
     )
-    const app = createAtlasProxyRoutes(env)
+    const app = createLegalSearchProxyRoutes(env)
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -430,7 +430,7 @@ describe('createAtlasProxyRoutes', () => {
       processingTimeMs: 1,
     })
     const fetchMock = vi.spyOn(globalThis, 'fetch')
-    const app = createAtlasProxyRoutes(env)
+    const app = createLegalSearchProxyRoutes(env)
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -458,7 +458,7 @@ describe('createAtlasProxyRoutes', () => {
         ),
       )
       .mockResolvedValueOnce(new Response('', { status: 503 }))
-    const app = createAtlasProxyRoutes(env)
+    const app = createLegalSearchProxyRoutes(env)
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -487,7 +487,7 @@ describe('createAtlasProxyRoutes', () => {
         `<feed><entry><title>Potanina v Potanin</title><link href="https://caselaw.nationalarchives.gov.uk/uksc/2024/3" rel="alternate"/><published>2024-01-31T00:00:00Z</published><tna:identifier slug="uksc/2024/3" type="ukncn">[2024] UKSC 3</tna:identifier></entry></feed>`,
       ),
     )
-    const app = createAtlasProxyRoutes({ ...env, mojFindCaseLawRateLimit: 1 })
+    const app = createLegalSearchProxyRoutes({ ...env, mojFindCaseLawRateLimit: 1 })
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -531,7 +531,7 @@ describe('createAtlasProxyRoutes', () => {
           '<html><body><p>This High Court administrative judgment paragraph is long enough for indexing.</p></body></html>',
         ),
       )
-    const app = createAtlasProxyRoutes(env)
+    const app = createLegalSearchProxyRoutes(env)
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -551,7 +551,7 @@ describe('createAtlasProxyRoutes', () => {
     })
     expect(searchClientMock.indexDocuments).toHaveBeenCalledWith(
       { id: 'meili-client' },
-      'atlas_authorities',
+      'legal_authorities',
       expect.arrayContaining([
         expect.objectContaining({
           id: 'ewca-civ-2024-7',
@@ -577,7 +577,7 @@ describe('createAtlasProxyRoutes', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response('', { status: 429, headers: { 'retry-after': '120' } }),
     )
-    const app = createAtlasProxyRoutes(env)
+    const app = createLegalSearchProxyRoutes(env)
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -601,7 +601,7 @@ describe('createAtlasProxyRoutes', () => {
       processingTimeMs: 1,
     })
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('', { status: 503 }))
-    const app = createAtlasProxyRoutes(env)
+    const app = createLegalSearchProxyRoutes(env)
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -618,7 +618,7 @@ describe('createAtlasProxyRoutes', () => {
     })
   })
 
-  it('returns a stored Atlas document by id', async () => {
+  it('returns a stored legal document by id', async () => {
     searchClientMock.getDocument.mockResolvedValueOnce({
       ...hit,
       paragraphs: [
@@ -630,7 +630,7 @@ describe('createAtlasProxyRoutes', () => {
         },
       ],
     })
-    const app = createAtlasProxyRoutes(env)
+    const app = createLegalSearchProxyRoutes(env)
 
     const response = await app.request('/api/search/documents/uksc-2024-1')
 
@@ -641,7 +641,7 @@ describe('createAtlasProxyRoutes', () => {
   })
 
   it('rejects invalid stored document ids before storage lookup', async () => {
-    const app = createAtlasProxyRoutes(env)
+    const app = createLegalSearchProxyRoutes(env)
 
     const response = await app.request('/api/search/documents/uksc_2024_1')
 
@@ -652,9 +652,9 @@ describe('createAtlasProxyRoutes', () => {
     expect(searchClientMock.getDocument).not.toHaveBeenCalled()
   })
 
-  it('returns not found when a stored Atlas document lookup misses', async () => {
+  it('returns not found when a stored legal document lookup misses', async () => {
     searchClientMock.getDocument.mockRejectedValueOnce(new Error('not found'))
-    const app = createAtlasProxyRoutes(env)
+    const app = createLegalSearchProxyRoutes(env)
 
     const response = await app.request('/api/search/documents/uksc-2024-missing')
 
@@ -808,7 +808,7 @@ describeLiveFindCaseLaw('Find Case Law live retrieval', () => {
         failedCount: 0,
         errors: [],
       })
-      const app = createAtlasProxyRoutes({
+      const app = createLegalSearchProxyRoutes({
         ...env,
         mojFindCaseLawRateLimit: 100,
       })
@@ -827,7 +827,7 @@ describeLiveFindCaseLaw('Find Case Law live retrieval', () => {
       })
       expect(searchClientMock.indexDocuments).toHaveBeenCalledWith(
         { id: 'meili-client' },
-        'atlas_authorities',
+        'legal_authorities',
         [
           expect.objectContaining({
             neutralCitation: citation,

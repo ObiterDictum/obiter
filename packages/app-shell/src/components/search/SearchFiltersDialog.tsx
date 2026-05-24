@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { AtlasCourtSelect } from './AtlasCourtSelect'
+import { CourtSelect } from './CourtSelect'
 
-interface AtlasSearchFiltersDialogProps {
+interface SearchFiltersDialogProps {
   court: string
   dateFrom: string
   dateTo: string
@@ -10,14 +10,14 @@ interface AtlasSearchFiltersDialogProps {
   onClose: () => void
 }
 
-export function AtlasSearchFiltersDialog({
+export function SearchFiltersDialog({
   court,
   dateFrom,
   dateTo,
   onApply,
   onClear,
   onClose,
-}: AtlasSearchFiltersDialogProps) {
+}: SearchFiltersDialogProps) {
   const [draftCourt, setDraftCourt] = useState(court)
   const [draftDateFrom, setDraftDateFrom] = useState(dateFrom)
   const [draftDateTo, setDraftDateTo] = useState(dateTo)
@@ -29,33 +29,33 @@ export function AtlasSearchFiltersDialog({
   }
 
   return (
-    <div className="atlas-filter-modal" role="dialog" aria-modal="true" aria-labelledby="atlas-filter-title">
+    <div className="search-filter-dialog" role="dialog" aria-modal="true" aria-labelledby="search-filter-title">
       <button
         aria-label="Close search filters"
-        className="atlas-filter-modal__backdrop"
+        className="search-filter-dialog__backdrop"
         type="button"
         onClick={closeDialog}
       />
-      <section className="atlas-filter-modal__panel">
+      <section className="search-filter-dialog__panel">
         <button
           aria-label="Close search filters"
-          className="atlas-filter-modal__close"
+          className="search-filter-dialog__close"
           type="button"
           onClick={closeDialog}
         >
           <span aria-hidden="true">×</span>
         </button>
-        <header className="atlas-filter-modal__header">
+        <header className="search-filter-dialog__header">
           <div>
             <p>Search filters</p>
-            <h2 id="atlas-filter-title">Refine results</h2>
+            <h2 id="search-filter-title">Refine results</h2>
           </div>
         </header>
 
-        <div className="atlas-filter-modal__groups">
+        <div className="search-filter-dialog__groups">
           <fieldset>
             <legend>Source</legend>
-            <AtlasCourtSelect
+            <CourtSelect
               menuOpen={courtMenuOpen}
               onMenuOpenChange={setCourtMenuOpen}
               onValueChange={setDraftCourt}
@@ -65,8 +65,8 @@ export function AtlasSearchFiltersDialog({
 
           <fieldset>
             <legend>Date decided</legend>
-            <div className="atlas-filter-modal__date-grid">
-              <label className="atlas-filter-modal__field">
+            <div className="search-filter-dialog__date-grid">
+              <label className="search-filter-dialog__field">
                 <span>From</span>
                 <input
                   value={draftDateFrom}
@@ -76,7 +76,7 @@ export function AtlasSearchFiltersDialog({
                 />
               </label>
 
-              <label className="atlas-filter-modal__field">
+              <label className="search-filter-dialog__field">
                 <span>To</span>
                 <input
                   value={draftDateTo}
@@ -89,7 +89,7 @@ export function AtlasSearchFiltersDialog({
           </fieldset>
         </div>
 
-        <footer className="atlas-filter-modal__actions">
+        <footer className="search-filter-dialog__actions">
           <button type="button" onClick={onClear}>
             Clear
           </button>

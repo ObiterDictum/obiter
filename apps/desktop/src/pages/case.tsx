@@ -1,5 +1,5 @@
-import { AtlasCaseView } from '@ormont/app-shell'
+import { CaseLawDocumentView } from '@ormont/app-shell'
 
 export function DesktopCasePage({ caseId }: { caseId: string }) {
-  return <AtlasCaseView caseId={caseId} />
+  return <CaseLawDocumentView caseId={caseId} />
 }

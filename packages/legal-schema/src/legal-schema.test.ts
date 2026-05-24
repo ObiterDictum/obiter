@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
-  atlasAuthoritySchema,
-  atlasAuthoritySummarySchema,
-  atlasParagraphSchema,
+  LegalAuthoritySchema,
+  LegalAuthoritySummarySchema,
+  LegalParagraphSchema,
 } from './index'
 
-describe('Atlas legal schemas', () => {
+describe('Legal authority schemas', () => {
   it('validates authority records with paragraphs', () => {
-    const authority = atlasAuthoritySchema.parse({
+    const authority = LegalAuthoritySchema.parse({
       id: 'uksc-2024-1',
       title: 'Test Authority',
       neutralCitation: '[2024] UKSC 1',
@@ -31,7 +31,7 @@ describe('Atlas legal schemas', () => {
   })
 
   it('validates summary records without paragraph text', () => {
-    const summary = atlasAuthoritySummarySchema.parse({
+    const summary = LegalAuthoritySummarySchema.parse({
       id: 'uksc-2024-1',
       title: 'Test Authority',
       neutralCitation: '[2024] UKSC 1',
@@ -55,7 +55,7 @@ describe('Atlas legal schemas', () => {
 
   it('rejects malformed authority and paragraph records', () => {
     expect(() =>
-      atlasAuthoritySchema.parse({
+      LegalAuthoritySchema.parse({
         id: '',
         title: 'Broken Authority',
         neutralCitation: '[2024] UKSC 1',
@@ -68,7 +68,7 @@ describe('Atlas legal schemas', () => {
     ).toThrow()
 
     expect(() =>
-      atlasParagraphSchema.parse({
+      LegalParagraphSchema.parse({
         id: 'p1',
         documentId: 'doc1',
         paragraphNumber: 0,
@@ -79,7 +79,7 @@ describe('Atlas legal schemas', () => {
 
   it('rejects legislation records until a legislation-specific schema exists', () => {
     expect(() =>
-      atlasAuthoritySchema.parse({
+      LegalAuthoritySchema.parse({
         id: 'ukpga-1977-37',
         title: 'Patents Act 1977',
         neutralCitation: '1977 c. 37',

@@ -7,19 +7,19 @@ import { Card, EmptyState } from '@ormont/ui'
 import wordmarkUrl from './assets/ormont-wordmark.svg'
 import { OrmontSidebar } from './sidebar/OrmontSidebar'
 export {
-  AtlasCaseView,
-  atlasDocumentQueryOptions,
-} from './views/AtlasCaseView'
+  CaseLawDocumentView,
+  caseLawDocumentQueryOptions,
+} from './views/CaseLawDocumentView'
 export {
-  AtlasSearchView,
-  atlasCourtOptionGroups,
-  countAtlasActiveFilters,
-  createAtlasFetchRequest,
-  getAtlasCourtLabel,
-  getAtlasSearchStateLabel,
+  LegalSearchView,
+  courtOptionGroups,
+  countActiveLegalSearchFilters,
+  createLegalSearchFetchRequest,
+  getCourtLabel,
+  getLegalSearchStateLabel,
   selectJudgmentParagraphs,
   selectParagraphExcerpts,
-} from './views/AtlasSearchView'
+} from './views/LegalSearchView'
 
 const demoAuthStorageKey = 'ormont.phase0.authenticated'
 

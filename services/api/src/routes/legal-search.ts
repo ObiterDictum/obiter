@@ -3,21 +3,21 @@ import { Hono } from 'hono'
 import {
   createClient,
   search,
-  type AtlasSearchFilters,
+  type LegalSearchFilters,
 } from '@ormont/search-client'
 import type { ApiErrorResponse } from '@ormont/contracts'
 import type { ApiEnv } from '../env'
 
-interface AtlasRouteVariables {
+interface LegalSearchRouteVariables {
   requestId: string
 }
 
-const atlasSlugSchema = z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+const legalSlugSchema = z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
 
-const atlasSearchQuerySchema = z.object({
+const legalSearchQuerySchema = z.object({
   q: z.string().trim().min(1),
-  court: atlasSlugSchema.optional(),
-  jurisdiction: atlasSlugSchema.optional(),
+  court: legalSlugSchema.optional(),
+  jurisdiction: legalSlugSchema.optional(),
   dateFrom: z.string().date().optional(),
   dateTo: z.string().date().optional(),
   sourceType: z.literal('judgment').optional(),
@@ -37,22 +37,22 @@ function apiError(
   }
 }
 
-export function createAtlasRoutes(env: ApiEnv) {
-  const app = new Hono<{ Variables: AtlasRouteVariables }>()
+export function createLegalSearchRoutes(env: ApiEnv) {
+  const app = new Hono<{ Variables: LegalSearchRouteVariables }>()
   const client = createClient(env.meilisearchHost, env.meilisearchSearchApiKey)
 
   app.get('/api/search', async (c) => {
     const requestId = c.get('requestId')
-    const parsed = atlasSearchQuerySchema.safeParse(c.req.query())
+    const parsed = legalSearchQuerySchema.safeParse(c.req.query())
 
     if (!parsed.success) {
       return c.json(
-        apiError('validation_failed', 'Atlas search query is invalid.', requestId),
+        apiError('validation_failed', 'Search query is invalid.', requestId),
         400,
       )
     }
 
-    const filters: AtlasSearchFilters = {
+    const filters: LegalSearchFilters = {
       court: parsed.data.court,
       jurisdiction: parsed.data.jurisdiction,
       dateFrom: parsed.data.dateFrom,
@@ -62,7 +62,7 @@ export function createAtlasRoutes(env: ApiEnv) {
 
     const result = await search(
       client,
-      env.atlasAuthoritiesIndex,
+      env.legalAuthoritiesIndex,
       parsed.data.q,
       filters,
     )

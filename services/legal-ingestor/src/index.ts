@@ -1,7 +1,7 @@
-import { atlasAuthoritiesSchema } from '@ormont/legal-schema'
+import { legalAuthoritiesSchema } from '@ormont/legal-schema'
 import { createClient, createIndex, indexDocuments } from '@ormont/search-client'
 import { pathToFileURL } from 'node:url'
-import { readAtlasIngestorEnv, type AtlasIngestorEnv } from './env'
+import { readLegalIngestorEnv, type LegalIngestorEnv } from './env'
 import { sampleJudgments } from './fixtures/sample-judgments'
 
 export interface BoundedIndexingReport {
@@ -11,9 +11,9 @@ export interface BoundedIndexingReport {
 }
 
 export async function runBoundedSampleIndexing(
-  env: AtlasIngestorEnv,
+  env: LegalIngestorEnv,
 ): Promise<BoundedIndexingReport> {
-  const parsed = atlasAuthoritiesSchema.safeParse(sampleJudgments)
+  const parsed = legalAuthoritiesSchema.safeParse(sampleJudgments)
 
   if (!parsed.success) {
     return {
@@ -28,13 +28,13 @@ export async function runBoundedSampleIndexing(
 
   const client = createClient(env.meilisearchHost, env.meilisearchAdminApiKey)
 
-  await createIndex(client, env.atlasAuthoritiesIndex)
+  await createIndex(client, env.legalAuthoritiesIndex)
 
-  return indexDocuments(client, env.atlasAuthoritiesIndex, parsed.data)
+  return indexDocuments(client, env.legalAuthoritiesIndex, parsed.data)
 }
 
 async function main() {
-  const report = await runBoundedSampleIndexing(readAtlasIngestorEnv())
+  const report = await runBoundedSampleIndexing(readLegalIngestorEnv())
 
   console.log(
     JSON.stringify(

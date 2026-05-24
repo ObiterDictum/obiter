@@ -41,8 +41,8 @@ function completedTask(overrides: Record<string, unknown> = {}) {
   return promise
 }
 
-describe('Atlas search client', () => {
-  it('sets up the Atlas index shape', async () => {
+describe('Legal search client', () => {
+  it('sets up the search index shape', async () => {
     const index = {
       updateSearchableAttributes: vi.fn(() => completedTask({ uid: 8 })),
       updateFilterableAttributes: vi.fn(() => completedTask({ uid: 9 })),
@@ -56,10 +56,10 @@ describe('Atlas search client', () => {
       index: vi.fn(() => index),
     }
 
-    const result = await createIndex(client, 'atlas_authorities')
+    const result = await createIndex(client, 'legal_authorities')
 
     expect(result.taskUid).toBe(7)
-    expect(client.createIndex).toHaveBeenCalledWith('atlas_authorities', {
+    expect(client.createIndex).toHaveBeenCalledWith('legal_authorities', {
       primaryKey: 'id',
     })
     expect(index.updateSearchableAttributes).toHaveBeenCalledWith(
@@ -88,7 +88,7 @@ describe('Atlas search client', () => {
       index: vi.fn(() => index),
     }
 
-    const result = await createIndex(client, 'atlas_authorities')
+    const result = await createIndex(client, 'legal_authorities')
 
     expect(result.taskUid).toBeUndefined()
     expect(index.updateRankingRules).toHaveBeenCalled()
@@ -116,7 +116,7 @@ describe('Atlas search client', () => {
       index: vi.fn(() => index),
     }
 
-    const result = await createIndex(client, 'atlas_authorities')
+    const result = await createIndex(client, 'legal_authorities')
 
     expect(result.taskUid).toBeUndefined()
     expect(index.updateSearchableAttributes).toHaveBeenCalled()
@@ -148,10 +148,10 @@ describe('Atlas search client', () => {
       index: vi.fn(() => index),
     }
 
-    await expect(createIndex(client, 'atlas_authorities')).rejects.toThrow(
-      'Atlas search index setup failed. Meilisearch task 9 failed (invalid_settings_filterable_attributes).',
+    await expect(createIndex(client, 'legal_authorities')).rejects.toThrow(
+      'Search index setup failed. Meilisearch task 9 failed (invalid_settings_filterable_attributes).',
     )
-    await expect(createIndex(client, 'atlas_authorities')).rejects.not.toThrow(
+    await expect(createIndex(client, 'legal_authorities')).rejects.not.toThrow(
       'sensitive detail',
     )
     expect(index.updateSortableAttributes).not.toHaveBeenCalled()
@@ -163,7 +163,7 @@ describe('Atlas search client', () => {
       index: () => ({ addDocuments }),
     }
 
-    const result = await indexDocuments(client, 'atlas_authorities', [authority()])
+    const result = await indexDocuments(client, 'legal_authorities', [authority()])
 
     expect(result).toEqual({ indexedCount: 1, failedCount: 0, errors: [] })
     expect(addDocuments).toHaveBeenCalledWith([authority()], { primaryKey: 'id' })
@@ -188,7 +188,7 @@ describe('Atlas search client', () => {
       index: () => ({ addDocuments }),
     }
 
-    const result = await indexDocuments(client, 'atlas_authorities', [authority()])
+    const result = await indexDocuments(client, 'legal_authorities', [authority()])
 
     expect(result).toEqual({
       indexedCount: 0,
@@ -196,7 +196,7 @@ describe('Atlas search client', () => {
       errors: [
         {
           recordId: null,
-          message: 'Atlas indexing task 9 failed (invalid_document_id).',
+          message: 'Indexing task 9 failed (invalid_document_id).',
         },
       ],
     })
@@ -209,7 +209,7 @@ describe('Atlas search client', () => {
       index: () => ({ addDocuments }),
     }
 
-    const result = await indexDocuments(client, 'atlas_authorities', [
+    const result = await indexDocuments(client, 'legal_authorities', [
       authority({ sourceUrl: 'not a url' }),
     ])
 
@@ -230,7 +230,7 @@ describe('Atlas search client', () => {
       index: () => ({ search: searchMock }),
     }
 
-    const result = await search(client, 'atlas_authorities', 'test', {
+    const result = await search(client, 'legal_authorities', 'test', {
       court: 'uksc',
       jurisdiction: 'england-and-wales',
       dateFrom: '2024-01-01',
@@ -271,7 +271,7 @@ describe('Atlas search client', () => {
       index: () => ({ search: searchMock }),
     }
 
-    const result = await search(client, 'atlas_authorities', 'test', {}, {
+    const result = await search(client, 'legal_authorities', 'test', {}, {
       includeParagraphs: true,
     })
 
@@ -295,7 +295,7 @@ describe('Atlas search client', () => {
       index: () => ({ search: searchMock }),
     }
 
-    await search(client, 'atlas_authorities', 'test', {
+    await search(client, 'legal_authorities', 'test', {
       court: String.raw`uksc\" OR court = "bad`,
       jurisdiction: 'england-and-wales AND sourceType = "legislation"',
     })
@@ -320,18 +320,18 @@ describe('Atlas search client', () => {
       }),
     }
 
-    await expect(search(client, 'atlas_authorities', 'test')).rejects.toThrow(
-      'Atlas search failed. Search provider error: Error.',
+    await expect(search(client, 'legal_authorities', 'test')).rejects.toThrow(
+      'Search failed. Search provider error: Error.',
     )
   })
 
-  it('retrieves a stored Atlas document by id', async () => {
+  it('retrieves a stored legal document by id', async () => {
     const getDocumentMock = vi.fn(async () => authority())
     const client = {
       index: () => ({ getDocument: getDocumentMock }),
     }
 
-    const result = await getDocument(client, 'atlas_authorities', 'uksc-2024-1')
+    const result = await getDocument(client, 'legal_authorities', 'uksc-2024-1')
 
     expect(result.paragraphs).toEqual(authority().paragraphs)
     expect(getDocumentMock).toHaveBeenCalledWith('uksc-2024-1')

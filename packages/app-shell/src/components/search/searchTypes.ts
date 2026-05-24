@@ -1,50 +1,50 @@
-export interface AtlasParagraph {
+export interface CaseLawParagraph {
   id: string
   paragraphNumber: number
   text: string
 }
 
-export interface AtlasSearchResult {
+export interface LegalSearchResult {
   id: string
   title: string
   neutralCitation: string
   court: string
   dateDecided: string
   sourceUrl: string
-  paragraphs?: AtlasParagraph[]
+  paragraphs?: CaseLawParagraph[]
 }
 
-export interface AtlasFetchResponse {
-  hits: AtlasSearchResult[]
+export interface LegalSearchFetchResponse {
+  hits: LegalSearchResult[]
   cached: boolean
   indexedCount: number
   skippedCount: number
 }
 
-export interface AtlasFetchRequestFilters {
+export interface LegalSearchRequestFilters {
   court: string
   dateFrom: string
   dateTo: string
 }
 
-export interface AtlasCourtOption {
+export interface CourtOption {
   code: string
   label: string
 }
 
-export interface AtlasCourtOptionGroup {
+export interface CourtOptionGroup {
   label: string
-  options: AtlasCourtOption[]
+  options: CourtOption[]
 }
 
-export type AtlasSearchState =
+export type LegalSearchState =
   | { status: 'idle' }
   | { status: 'loading'; query: string }
-  | { status: 'results'; query: string; response: AtlasFetchResponse }
+  | { status: 'results'; query: string; response: LegalSearchFetchResponse }
   | { status: 'empty'; query: string }
   | { status: 'error'; query: string; message: string }
 
-export const atlasCourtOptionGroups: AtlasCourtOptionGroup[] = [
+export const courtOptionGroups: CourtOptionGroup[] = [
   {
     label: 'Supreme courts',
     options: [
@@ -108,10 +108,10 @@ export const atlasCourtOptionGroups: AtlasCourtOptionGroup[] = [
   },
 ]
 
-export function getAtlasCourtLabel(code: string) {
+export function getCourtLabel(code: string) {
   if (!code) return 'All courts and tribunals'
 
-  for (const group of atlasCourtOptionGroups) {
+  for (const group of courtOptionGroups) {
     const option = group.options.find((courtOption) => courtOption.code === code)
     if (option) return option.label
   }

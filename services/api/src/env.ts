@@ -11,7 +11,7 @@ const requiredProductionKeys = [
   'MEILISEARCH_HOST',
   'MEILISEARCH_SEARCH_API_KEY',
   'MEILISEARCH_ADMIN_API_KEY',
-  'ATLAS_AUTHORITIES_INDEX',
+  'LEGAL_AUTHORITIES_INDEX',
 ] as const
 
 let localEnvLoaded = false
@@ -29,7 +29,7 @@ export interface ApiEnv {
   meilisearchHost: string
   meilisearchSearchApiKey: string
   meilisearchAdminApiKey: string
-  atlasAuthoritiesIndex: string
+  legalAuthoritiesIndex: string
   mojFindCaseLawBaseUrl: string
   mojFindCaseLawRateLimit: number
   port: number
@@ -257,9 +257,9 @@ export function readApiEnv(): ApiEnv {
     meilisearchHost: readRequiredUrl('MEILISEARCH_HOST', 'http://localhost:7700'),
     meilisearchSearchApiKey: readSearchApiKey(nodeEnv),
     meilisearchAdminApiKey: readAdminApiKey(nodeEnv),
-    atlasAuthoritiesIndex: readIndexName(
-      'ATLAS_AUTHORITIES_INDEX',
-      'atlas_authorities',
+    legalAuthoritiesIndex: readIndexName(
+      'LEGAL_AUTHORITIES_INDEX',
+      'legal_authorities',
     ),
     mojFindCaseLawBaseUrl: readRequiredUrl(
       'MOJ_FIND_CASE_LAW_BASE_URL',
