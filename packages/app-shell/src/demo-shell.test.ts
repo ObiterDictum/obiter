@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  atlasCourtOptionGroups,
   createPhaseZeroShellSnapshot,
+  createAtlasFetchRequest,
   findMatterRecord,
   getAtlasSearchStateLabel,
   selectJudgmentParagraphs,
@@ -76,6 +78,45 @@ describe('Home role gates', () => {
 })
 
 describe('AtlasSearchView helpers', () => {
+  it('builds fetch requests with an optional court filter', () => {
+    expect(createAtlasFetchRequest(' Potanina ', '')).toEqual({ query: 'Potanina' })
+    expect(createAtlasFetchRequest('  tax appeal  ', 'ukut/iac')).toEqual({
+      query: 'tax appeal',
+      court: 'ukut/iac',
+    })
+  })
+
+  it('exposes the current Find Case Law court filters for the search UI', () => {
+    const optionCodes = atlasCourtOptionGroups.flatMap((group) =>
+      group.options.map((option) => option.code),
+    )
+
+    expect(optionCodes).toEqual(
+      expect.arrayContaining([
+        'uksc',
+        'ukpc',
+        'ewca/civ',
+        'ewca/crim',
+        'ewhc/admin',
+        'ewhc/admlty',
+        'ewhc/ipec',
+        'ewhc/tcc',
+        'ewcr',
+        'ewfc',
+        'ewcop',
+        'ewcc',
+        'eat',
+        'siac',
+        'ukiptrib',
+        'ukut/iac',
+        'ukftt/tc',
+        'ftt/transport',
+      ]),
+    )
+    expect(optionCodes).not.toContain('ukut')
+    expect(optionCodes).not.toContain('ukftt')
+  })
+
   it('labels the component states used by the search UI', () => {
     expect(getAtlasSearchStateLabel({ status: 'idle' })).toBe('idle')
     expect(getAtlasSearchStateLabel({ status: 'loading', query: 'Potanina' })).toBe('loading')

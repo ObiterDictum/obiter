@@ -12,6 +12,8 @@ export {
 } from './views/AtlasCaseView'
 export {
   AtlasSearchView,
+  atlasCourtOptionGroups,
+  createAtlasFetchRequest,
   getAtlasSearchStateLabel,
   selectJudgmentParagraphs,
   selectParagraphExcerpts,
