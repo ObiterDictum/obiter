@@ -1757,6 +1757,10 @@ body {
   overflow: hidden;
 }
 
+.atlas-search__primary--input-only {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .atlas-search__field {
   color: #f5f2eb;
   display: grid;
@@ -1971,39 +1975,6 @@ body {
   background: #d48a2c;
   border: 1px solid #d48a2c;
   color: #0e1116;
-}
-
-.atlas-search__button {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  border-left: 1px solid #272a2d;
-  border-radius: 0;
-  color: #d9a25b;
-  cursor: pointer;
-  display: inline-flex;
-  font: inherit;
-  font-size: 1.08rem;
-  font-weight: 800;
-  justify-content: center;
-  min-height: 42px;
-  padding: 0;
-  width: 48px;
-}
-
-.atlas-search__button:hover,
-.atlas-search__button:focus-visible {
-  background: #17191b;
-  color: #efb56f;
-}
-
-.atlas-search__button:focus-visible {
-  outline: 0;
-}
-
-.atlas-search__button:disabled {
-  cursor: progress;
-  opacity: 0.58;
 }
 
 .atlas-search__results {

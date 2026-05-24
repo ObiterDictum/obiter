@@ -277,7 +277,7 @@ export function AtlasSearchView() {
               {activeFilterCount > 0 ? <strong>{activeFilterCount}</strong> : null}
             </button>
           </div>
-          <div className="atlas-search__primary">
+          <div className="atlas-search__primary atlas-search__primary--input-only">
             <label className="atlas-search__field">
               <span className="atlas-search__visually-hidden">Search legal sources</span>
               <input
@@ -288,15 +288,6 @@ export function AtlasSearchView() {
                 type="search"
               />
             </label>
-            <button
-              aria-label="Search legal sources"
-              className="atlas-search__button"
-              disabled={state.status === 'loading'}
-              title="Search"
-              type="submit"
-            >
-              <span aria-hidden="true">↵</span>
-            </button>
           </div>
           {activeFilterCount > 0 ? (
             <div className="atlas-search__active-filters" aria-label="Active filters">
