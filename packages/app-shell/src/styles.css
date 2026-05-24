@@ -1862,10 +1862,10 @@ body {
   box-shadow: 0 28px 70px rgba(0, 0, 0, 0.48);
   display: grid;
   gap: 18px;
-  max-width: 520px;
-  padding: 20px 22px 18px;
+  max-width: 500px;
+  padding: 20px 22px 17px;
   position: relative;
-  width: min(100%, 520px);
+  width: min(100%, 500px);
 }
 
 .atlas-filter-modal__header {
@@ -1884,7 +1884,7 @@ body {
 .atlas-filter-modal__header h2 {
   color: #f5f2eb;
   font-family: var(--ormont-font-display);
-  font-size: 1.26rem;
+  font-size: 1.2rem;
   letter-spacing: 0;
   line-height: 1.08;
   margin: 5px 0 0;
@@ -1937,7 +1937,7 @@ body {
 
 .atlas-filter-modal__groups {
   display: grid;
-  gap: 16px;
+  gap: 15px;
 }
 
 .atlas-filter-modal__groups fieldset {
@@ -1966,9 +1966,10 @@ body {
 .atlas-filter-modal__field {
   color: #f5f2eb;
   display: grid;
-  font-size: 0.78rem;
+  font-size: 0.73rem;
   font-weight: 650;
-  gap: 7px;
+  gap: 6px;
+  position: relative;
 }
 
 .atlas-filter-modal__field span {
@@ -1977,19 +1978,39 @@ body {
 
 .atlas-filter-modal__field input,
 .atlas-filter-modal__field select {
+  appearance: none;
   background: #0f1112;
   border: 1px solid rgba(245, 242, 235, 0.1);
   border-radius: 6px;
   color: #ffffff;
   cursor: pointer;
   font: inherit;
-  min-height: 36px;
+  font-size: 0.8rem;
+  font-weight: 650;
+  min-height: 34px;
   min-width: 0;
-  padding: 0 12px;
+  padding: 0 32px 0 10px;
+}
+
+.atlas-filter-modal__field select {
+  background-image:
+    linear-gradient(45deg, transparent 50%, #9ca0a6 50%),
+    linear-gradient(135deg, #9ca0a6 50%, transparent 50%);
+  background-position:
+    calc(100% - 15px) 50%,
+    calc(100% - 10px) 50%;
+  background-repeat: no-repeat;
+  background-size:
+    5px 5px,
+    5px 5px;
 }
 
 .atlas-filter-modal__field input::-webkit-calendar-picker-indicator {
+  cursor: pointer;
   filter: invert(0.8);
+  height: 14px;
+  opacity: 0.55;
+  width: 14px;
 }
 
 .atlas-filter-modal__field input:focus,
