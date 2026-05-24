@@ -11,6 +11,16 @@ Write PR titles and descriptions that let another engineer review the change saf
 
 Do not write marketing copy, vague confidence language, or AI-flavored filler. Be precise, honest, and maintainable.
 
+## Subagent Model Policy
+
+Use the primary Codex model for the substantive engineering work: inspecting the diff, reading relevant rules and docs, deciding what changed, assessing security/data/privacy impact, identifying testing gaps, and choosing the final title/body claims.
+
+After those facts are locked, any delegated PR-title or PR-body drafting subagent must be spawned with `model: "gpt-5.4-mini"`. Do not inherit the primary model for post-analysis prose drafting unless the user explicitly overrides this policy.
+
+Give the mini-model subagent only the minimum sanitized packet: branch/base, changed-file summary, locked implementation notes, locked security/data/privacy assessment, exact tests run, known gaps, and wording constraints. Do not give it secrets, private matter data, raw legal text, raw prompts, embeddings, sensitive logs, private screenshots, or authority to inspect unrelated code.
+
+The mini-model subagent must return draft text only. The primary model must validate the final PR text before posting: every claim must match the diff and verification evidence, no sensitive data may be disclosed, and no unrun test may be implied.
+
 ## Required Context
 
 Before writing a non-trivial PR summary, inspect:
@@ -140,7 +150,7 @@ Explain notable design choices and tradeoffs:
 
 ### Security / Data / Privacy
 
-Always include this section for Ormont, even if the answer is “no sensitive data path changed.” Cover:
+Always include this section for Ormont, even if the answer is "no sensitive data path changed." Cover:
 
 - whether private matter data is touched
 - whether auth/session/permissions are touched
@@ -170,8 +180,8 @@ Good:
 
 ```markdown
 - Commands run:
-  - `pnpm typecheck` — passed
-  - `pnpm test` — passed
+  - `pnpm typecheck` - passed
+  - `pnpm test` - passed
 - Manual checks:
   - Opened the desktop shell and verified sidebar keyboard focus/order.
 - Not tested:
