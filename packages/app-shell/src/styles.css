@@ -1678,19 +1678,19 @@ body {
 }
 
 .atlas-search__panel.ormont-card {
-  background: #080909;
+  background: #070808;
   border: 1px solid rgba(245, 242, 235, 0.12);
   border-radius: 8px;
   box-shadow: none;
 }
 
 .atlas-search__panel .ormont-card__body {
-  padding: 16px;
+  padding: 14px;
 }
 
 .atlas-search__form {
   display: grid;
-  gap: 10px;
+  gap: 9px;
 }
 
 .atlas-search__form-header {
@@ -1702,37 +1702,38 @@ body {
 
 .atlas-search__form-header > span {
   color: #f5f2eb;
-  font-size: 0.9rem;
-  font-weight: 650;
+  font-size: 0.82rem;
+  font-weight: 760;
 }
 
-.atlas-search__form-header button {
+.atlas-search__filters-button {
   align-items: center;
-  background: transparent;
-  border: 1px solid rgba(245, 242, 235, 0.14);
-  border-radius: 6px;
-  color: #d9a25b;
+  background: #0e1011;
+  border: 1px solid #25282b;
+  border-radius: 5px;
+  color: #d7d8db;
   cursor: pointer;
   display: inline-flex;
   font: inherit;
-  font-size: 0.78rem;
+  font-size: 0.74rem;
   font-weight: 760;
-  gap: 7px;
-  min-height: 30px;
-  padding: 0 10px;
+  gap: 6px;
+  min-height: 28px;
+  padding: 0 9px;
 }
 
-.atlas-search__form-header button:hover,
-.atlas-search__form-header button:focus-visible {
-  background: #101112;
+.atlas-search__filters-button:hover,
+.atlas-search__filters-button:focus-visible {
+  background: #141617;
   border-color: rgba(212, 138, 44, 0.38);
+  color: #f0b46c;
 }
 
-.atlas-search__form-header button:focus-visible {
+.atlas-search__filters-button:focus-visible {
   outline: 3px solid rgba(212, 138, 44, 0.18);
 }
 
-.atlas-search__form-header strong {
+.atlas-search__filters-button strong {
   align-items: center;
   background: rgba(212, 138, 44, 0.2);
   border-radius: 999px;
@@ -1745,10 +1746,15 @@ body {
 }
 
 .atlas-search__primary {
-  align-items: end;
+  align-items: stretch;
+  background: #111315;
+  border: 1px solid #272a2d;
+  border-radius: var(--ormont-radius-sm);
   display: grid;
-  gap: 12px;
+  gap: 0;
   grid-template-columns: minmax(0, 1fr) auto;
+  min-height: 42px;
+  overflow: hidden;
 }
 
 .atlas-search__field {
@@ -1770,14 +1776,14 @@ body {
 
 .atlas-search__field input,
 .atlas-search__field select {
-  background: #111315;
-  border: 1px solid #272a2d;
-  border-radius: var(--ormont-radius-sm);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   color: #ffffff;
   font: inherit;
-  min-height: 40px;
+  min-height: 42px;
   min-width: 0;
-  padding: 0 12px;
+  padding: 0 14px;
 }
 
 .atlas-search__field select {
@@ -1790,8 +1796,12 @@ body {
 
 .atlas-search__field input:focus,
 .atlas-search__field select:focus {
-  border-color: #d48a2c;
-  outline: 3px solid rgba(212, 138, 44, 0.18);
+  outline: 0;
+}
+
+.atlas-search__primary:focus-within {
+  border-color: rgba(212, 138, 44, 0.72);
+  outline: 3px solid rgba(212, 138, 44, 0.16);
 }
 
 .atlas-search__active-filters {
@@ -1965,15 +1975,16 @@ body {
 
 .atlas-search__button {
   background: #d48a2c;
-  border: 1px solid #d48a2c;
-  border-radius: var(--ormont-radius-sm);
+  border: 0;
+  border-left: 1px solid rgba(14, 17, 22, 0.28);
+  border-radius: 0;
   color: #0e1116;
   cursor: pointer;
   font: inherit;
-  font-size: 0.92rem;
+  font-size: 0.86rem;
   font-weight: 750;
-  min-height: 40px;
-  padding: 0 18px;
+  min-height: 42px;
+  padding: 0 20px;
 }
 
 .atlas-search__button:disabled {
