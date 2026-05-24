@@ -273,7 +273,7 @@ export function AtlasSearchView() {
           <div className="atlas-search__form-header">
             <span>Search legal sources</span>
             <button className="atlas-search__filters-button" type="button" onClick={openFilters}>
-              Filters
+              <span>Filters</span>
               {activeFilterCount > 0 ? <strong>{activeFilterCount}</strong> : null}
             </button>
           </div>
