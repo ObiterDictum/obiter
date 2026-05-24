@@ -2343,21 +2343,21 @@ body {
 .case-law-document__topbar {
   align-items: start;
   display: grid;
-  gap: 18px;
+  gap: 10px 18px;
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
 .case-law-document__identity {
   display: grid;
-  gap: 10px;
+  gap: 7px;
   min-width: 0;
 }
 
 .case-law-document__identity p {
   color: #d48a2c;
-  font-size: 0.78rem;
+  font-size: 0.68rem;
   font-weight: 760;
-  letter-spacing: 0.12em;
+  letter-spacing: 0.1em;
   margin: 0;
   text-transform: uppercase;
 }
@@ -2365,36 +2365,36 @@ body {
 .case-law-document__identity h1 {
   color: #f5f2eb;
   font-family: var(--ormont-font-display);
-  font-size: clamp(1.85rem, 2.8vw, 3.1rem);
+  font-size: clamp(1.45rem, 2.15vw, 2.35rem);
   letter-spacing: 0;
-  line-height: 1.04;
+  line-height: 1.08;
   margin: 0;
-  max-width: 1180px;
+  max-width: 980px;
 }
 
 .case-law-document__identity dl {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 8px 18px;
   margin: 0;
 }
 
 .case-law-document__search {
   align-items: center;
-  background: #080909;
-  border: 1px solid rgba(245, 242, 235, 0.12);
-  border-radius: 6px;
+  background: transparent;
+  border: 0;
   display: grid;
-  gap: 8px;
-  grid-template-columns: auto minmax(220px, 420px) auto;
+  gap: 7px;
+  grid-column: 1 / 2;
+  grid-template-columns: auto minmax(180px, 320px) auto;
   justify-self: start;
-  min-height: 38px;
-  padding: 0 10px;
+  min-height: 30px;
+  padding: 0;
 }
 
 .case-law-document__search span {
-  color: #7f8187;
-  font-size: 0.66rem;
+  color: #8f939a;
+  font-size: 0.62rem;
   font-weight: 760;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2402,15 +2402,15 @@ body {
 }
 
 .case-law-document__search input {
-  background: #111315;
+  background: #0d0f10;
   border: 1px solid #272a2d;
   border-radius: 5px;
   color: #ffffff;
   font: inherit;
-  font-size: 0.82rem;
-  min-height: 26px;
+  font-size: 0.78rem;
+  min-height: 28px;
   min-width: 0;
-  padding: 0 9px;
+  padding: 0 10px;
 }
 
 .case-law-document__search input:focus {
@@ -2420,7 +2420,7 @@ body {
 
 .case-law-document__search em {
   color: #d9a25b;
-  font-size: 0.74rem;
+  font-size: 0.7rem;
   font-style: normal;
   font-weight: 700;
   white-space: nowrap;
@@ -2428,18 +2428,18 @@ body {
 
 .case-law-document__identity div {
   align-items: baseline;
-  background: #080909;
-  border: 1px solid rgba(245, 242, 235, 0.12);
-  border-radius: 6px;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
   display: inline-flex;
-  gap: 8px;
-  min-height: 36px;
-  padding: 0 12px;
+  gap: 7px;
+  min-height: 0;
+  padding: 0;
 }
 
 .case-law-document__identity dt {
-  color: #7f8187;
-  font-size: 0.66rem;
+  color: #8f939a;
+  font-size: 0.62rem;
   font-weight: 760;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2447,29 +2447,31 @@ body {
 
 .case-law-document__identity dd {
   color: #d9d9dc;
-  font-size: 0.82rem;
+  font-size: 0.78rem;
   font-weight: 650;
   margin: 0;
 }
 
 .case-law-document__back {
   align-items: center;
-  background: #080909;
-  border: 1px solid rgba(245, 242, 235, 0.12);
-  border-radius: 6px;
-  color: #d9a25b;
+  background: transparent;
+  border: 1px solid rgba(245, 242, 235, 0.1);
+  border-radius: 5px;
+  color: #b8bdc5;
   display: inline-flex;
-  font-size: 0.82rem;
-  font-weight: 750;
-  min-height: 34px;
-  padding: 0 12px;
+  font-size: 0.76rem;
+  font-weight: 720;
+  gap: 7px;
+  min-height: 30px;
+  padding: 0 10px;
   text-decoration: none;
   white-space: nowrap;
 }
 
 .case-law-document__back:hover {
-  background: #101112;
+  background: rgba(245, 242, 235, 0.04);
   border-color: rgba(212, 138, 44, 0.34);
+  color: #efb56f;
 }
 
 .case-law-result__viewer-bar {
@@ -2505,7 +2507,7 @@ body {
 .case-law-document .case-law-result__page {
   flex: 1 1 auto;
   height: 100%;
-  margin: 8px auto 12px;
+  margin: 4px auto 12px;
   max-height: none;
   min-height: 0;
 }
