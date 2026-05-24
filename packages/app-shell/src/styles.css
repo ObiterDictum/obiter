@@ -2006,6 +2006,7 @@ body {
   align-items: center;
   display: flex;
   justify-content: space-between;
+  position: relative;
   text-align: left;
   width: 100%;
 }
@@ -2022,8 +2023,10 @@ body {
   border-right: 1.5px solid #aeb2b8;
   display: block;
   height: 6px;
-  margin-left: 12px;
-  transform: translateY(-2px) rotate(45deg);
+  position: absolute;
+  right: 13px;
+  top: 50%;
+  transform: translateY(-62%) rotate(45deg);
   width: 6px;
 }
 
