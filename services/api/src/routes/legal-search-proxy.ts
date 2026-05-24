@@ -78,6 +78,7 @@ const supportedFindCaseLawCourts = new Set([
 const findCaseLawCourtParamByCourt = new Map(
   Array.from(supportedFindCaseLawCourts, (court) => [court, court.replace(/-/g, '/')]),
 )
+const storedSearchTimeoutMs = 350
 
 const citationDivisionCourtByBaseCourt = new Map<string, Map<string, string>>([
   [
@@ -179,7 +180,7 @@ export function createLegalSearchProxyRoutes(env: ApiEnv) {
       return c.json(toFetchResponse(cached.hits, parsed.data.query, true, 0, 0))
     }
 
-    const mojResult = await fetchMojAuthorities(env, parsed.data, mojRateLimiter)
+    const mojResult = await fetchMojAuthoritySummaries(env, parsed.data, mojRateLimiter)
 
     if (mojResult.status === 'rate_limited') {
       return c.json(
@@ -202,16 +203,16 @@ export function createLegalSearchProxyRoutes(env: ApiEnv) {
       )
     }
 
-    const documents = mojResult.documents.filter(
-      (document) =>
-        !cached.hits.some((hit) => hit.id === document.id) &&
-        LegalAuthoritySchema.safeParse(document).success,
+    const documents = mojResult.documents.filter((document) =>
+      !cached.hits.some((hit) => hit.id === document.id),
     )
 
-    const indexResult = await indexFetchedAuthorities(
+    void hydrateAndIndexMojAuthorities(
+      env,
       indexClient,
       env.legalAuthoritiesIndex,
-      documents,
+      mojResult.entries,
+      mojRateLimiter,
     )
 
     return c.json(
@@ -219,8 +220,8 @@ export function createLegalSearchProxyRoutes(env: ApiEnv) {
         documents.map(toHit),
         parsed.data.query,
         false,
-        indexResult.indexedCount,
-        mojResult.skippedCount + indexResult.failedCount,
+        0,
+        mojResult.skippedCount,
       ),
     )
   })
@@ -257,15 +258,32 @@ async function searchStoredAuthorities(
   filters: LegalSearchFilters,
 ) {
   try {
-    return await search(searchClient, indexName, query, filters, { includeParagraphs: true })
+    const result = await withTimeout(
+      search(searchClient, indexName, query, filters, { includeParagraphs: true }),
+      storedSearchTimeoutMs,
+    )
+
+    if (result) return result
   } catch {
-    return {
-      hits: [],
-      query,
-      estimatedTotalHits: 0,
-      processingTimeMs: 0,
-    }
   }
+
+  return {
+    hits: [],
+    query,
+    estimatedTotalHits: 0,
+    processingTimeMs: 0,
+  }
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
+  let timeout: ReturnType<typeof setTimeout>
+
+  return Promise.race([
+    promise.finally(() => clearTimeout(timeout)),
+    new Promise<null>((resolve) => {
+      timeout = setTimeout(() => resolve(null), timeoutMs)
+    }),
+  ])
 }
 
 async function indexFetchedAuthorities(
@@ -288,12 +306,12 @@ async function indexFetchedAuthorities(
   }
 }
 
-async function fetchMojAuthorities(
+async function fetchMojAuthoritySummaries(
   env: ApiEnv,
   request: z.infer<typeof legalFetchRequestSchema>,
   rateLimiter: ReturnType<typeof createMojRateLimiter>,
 ): Promise<
-  | { status: 'ok'; documents: LegalAuthority[]; skippedCount: number }
+  | { status: 'ok'; entries: AtomEntry[]; documents: LegalAuthority[]; skippedCount: number }
   | { status: 'rate_limited'; retryAfter: string | null }
   | { status: 'unavailable' }
 > {
@@ -318,21 +336,50 @@ async function fetchMojAuthorities(
   }
 
   const entries = parseFindCaseLawAtom(await atomResponse.text(), request)
-  const detailTasks = entries.slice(0, 5).map(async (entry) => fetchMojAuthorityDetail(env, entry, rateLimiter))
-  const detailResults = await Promise.all(detailTasks)
-  const documents = detailResults
-    .filter((result): result is { status: 'ok'; document: LegalAuthority } => result.status === 'ok')
-    .map((result) => result.document)
-  const rateLimited = detailResults.find((result) => result.status === 'rate_limited')
-
-  if (rateLimited) {
-    return { status: 'rate_limited', retryAfter: rateLimited.retryAfter }
-  }
+  const documents = entries.slice(0, 10).map((entry) => atomEntryToAuthoritySummary(env, entry))
 
   return {
     status: 'ok',
+    entries: entries.slice(0, 10),
     documents,
-    skippedCount: detailResults.filter((result) => result.status === 'skipped').length,
+    skippedCount: Math.max(entries.length - documents.length, 0),
+  }
+}
+
+async function hydrateAndIndexMojAuthorities(
+  env: ApiEnv,
+  indexClient: Parameters<typeof indexDocuments>[0],
+  indexName: string,
+  entries: AtomEntry[],
+  rateLimiter: ReturnType<typeof createMojRateLimiter>,
+) {
+  if (entries.length === 0) return
+
+  try {
+    const detailTasks = entries
+      .slice(0, 5)
+      .map(async (entry) => fetchMojAuthorityDetail(env, entry, rateLimiter))
+    const detailResults = await Promise.all(detailTasks)
+    const documents = detailResults
+      .filter((result): result is { status: 'ok'; document: LegalAuthority } => result.status === 'ok')
+      .map((result) => result.document)
+
+    await indexFetchedAuthorities(indexClient, indexName, documents)
+  } catch {
+    // Live result summaries have already been returned; indexing is best-effort cache hydration.
+  }
+}
+
+function atomEntryToAuthoritySummary(env: ApiEnv, entry: AtomEntry): LegalAuthority {
+  return {
+    id: documentIdFromUri(entry.uri),
+    title: entry.title,
+    neutralCitation: entry.neutralCitation,
+    court: entry.court,
+    jurisdiction: findCaseLawJurisdiction,
+    dateDecided: entry.dateDecided,
+    sourceType: 'judgment',
+    sourceUrl: new URL(entry.uri, env.mojFindCaseLawBaseUrl).toString(),
   }
 }
 
