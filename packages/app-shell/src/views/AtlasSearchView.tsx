@@ -293,11 +293,11 @@ export function AtlasSearchView() {
             </button>
           </div>
           {activeFilterCount > 0 ? (
-            <p className="atlas-search__active-filters">
-              {courtLabel}
-              {dateFrom ? ` - From ${dateFrom}` : ''}
-              {dateTo ? ` - To ${dateTo}` : ''}
-            </p>
+            <div className="atlas-search__active-filters" aria-label="Active filters">
+              {court ? <span>{courtLabel}</span> : null}
+              {dateFrom ? <span>From {dateFrom}</span> : null}
+              {dateTo ? <span>To {dateTo}</span> : null}
+            </div>
           ) : null}
         </form>
       </Card>
@@ -314,53 +314,61 @@ export function AtlasSearchView() {
             <header className="atlas-filter-modal__header">
               <div>
                 <p>Search filters</p>
-                <h2 id="atlas-filter-title">Filters</h2>
+                <h2 id="atlas-filter-title">Refine results</h2>
               </div>
               <button type="button" onClick={() => setFiltersOpen(false)}>
                 Close
               </button>
             </header>
 
-            <div className="atlas-filter-modal__fields">
-              <label className="atlas-filter-modal__field atlas-filter-modal__field--wide">
-                <span>Court or tribunal</span>
-                <select
-                  value={draftCourt}
-                  onChange={(event) => setDraftCourt(event.target.value)}
-                  name="court-filter"
-                >
-                  <option value="">All courts and tribunals</option>
-                  {atlasCourtOptionGroups.map((group) => (
-                    <optgroup label={group.label} key={group.label}>
-                      {group.options.map((option) => (
-                        <option key={option.code} value={option.code}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
-              </label>
+            <div className="atlas-filter-modal__groups">
+              <fieldset>
+                <legend>Source</legend>
+                <label className="atlas-filter-modal__field">
+                  <span>Court or tribunal</span>
+                  <select
+                    value={draftCourt}
+                    onChange={(event) => setDraftCourt(event.target.value)}
+                    name="court-filter"
+                  >
+                    <option value="">All courts and tribunals</option>
+                    {atlasCourtOptionGroups.map((group) => (
+                      <optgroup label={group.label} key={group.label}>
+                        {group.options.map((option) => (
+                          <option key={option.code} value={option.code}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </label>
+              </fieldset>
 
-              <label className="atlas-filter-modal__field">
-                <span>Date from</span>
-                <input
-                  value={draftDateFrom}
-                  onChange={(event) => setDraftDateFrom(event.target.value)}
-                  name="date-from-filter"
-                  type="date"
-                />
-              </label>
+              <fieldset>
+                <legend>Date decided</legend>
+                <div className="atlas-filter-modal__date-grid">
+                  <label className="atlas-filter-modal__field">
+                    <span>From</span>
+                    <input
+                      value={draftDateFrom}
+                      onChange={(event) => setDraftDateFrom(event.target.value)}
+                      name="date-from-filter"
+                      type="date"
+                    />
+                  </label>
 
-              <label className="atlas-filter-modal__field">
-                <span>Date to</span>
-                <input
-                  value={draftDateTo}
-                  onChange={(event) => setDraftDateTo(event.target.value)}
-                  name="date-to-filter"
-                  type="date"
-                />
-              </label>
+                  <label className="atlas-filter-modal__field">
+                    <span>To</span>
+                    <input
+                      value={draftDateTo}
+                      onChange={(event) => setDraftDateTo(event.target.value)}
+                      name="date-to-filter"
+                      type="date"
+                    />
+                  </label>
+                </div>
+              </fieldset>
             </div>
 
             <footer className="atlas-filter-modal__actions">

@@ -1795,10 +1795,20 @@ body {
 }
 
 .atlas-search__active-filters {
-  color: #8e939a;
-  font-size: 0.74rem;
-  font-weight: 650;
-  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 1px 0 0;
+}
+
+.atlas-search__active-filters span {
+  background: rgba(245, 242, 235, 0.04);
+  border: 1px solid rgba(245, 242, 235, 0.1);
+  border-radius: 999px;
+  color: #a8adb4;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 4px 8px;
 }
 
 .atlas-filter-modal {
@@ -1875,9 +1885,30 @@ body {
   color: #d9d9dc;
 }
 
-.atlas-filter-modal__fields {
+.atlas-filter-modal__groups {
   display: grid;
-  gap: 12px;
+  gap: 14px;
+}
+
+.atlas-filter-modal__groups fieldset {
+  border: 1px solid rgba(245, 242, 235, 0.1);
+  border-radius: 7px;
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 14px;
+}
+
+.atlas-filter-modal__groups legend {
+  color: #d9a25b;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 0 5px;
+}
+
+.atlas-filter-modal__date-grid {
+  display: grid;
+  gap: 10px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
@@ -1889,8 +1920,8 @@ body {
   gap: 8px;
 }
 
-.atlas-filter-modal__field--wide {
-  grid-column: 1 / -1;
+.atlas-filter-modal__field span {
+  color: #d9d9dc;
 }
 
 .atlas-filter-modal__field input,
