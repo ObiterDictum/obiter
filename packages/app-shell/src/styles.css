@@ -1820,6 +1820,25 @@ body {
   outline: 3px solid rgba(212, 138, 44, 0.16);
 }
 
+.legal-search__inline-status {
+  align-items: center;
+  color: #a8adb4;
+  display: inline-flex;
+  font-size: 0.72rem;
+  font-weight: 650;
+  gap: 7px;
+  line-height: 1.2;
+  margin: 2px 0 0;
+}
+
+.legal-search__inline-status span {
+  background: #d9a25b;
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px rgba(217, 162, 91, 0.12);
+  height: 6px;
+  width: 6px;
+}
+
 .legal-search__active-filters {
   display: flex;
   flex-wrap: wrap;
@@ -2148,6 +2167,73 @@ body {
   background: rgba(212, 138, 44, 0.1);
   border-color: rgba(212, 138, 44, 0.72);
   color: #efb56f;
+}
+
+.legal-search-feedback {
+  align-items: start;
+  background: rgba(10, 11, 12, 0.94);
+  border: 1px solid rgba(245, 242, 235, 0.1);
+  border-radius: 8px;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+  padding: 18px 20px;
+}
+
+.legal-search-feedback[data-tone='warning'] {
+  border-color: rgba(217, 162, 91, 0.28);
+}
+
+.legal-search-feedback[data-tone='error'] {
+  border-color: rgba(184, 86, 70, 0.38);
+}
+
+.legal-search-feedback__eyebrow {
+  color: #d9a25b;
+  font-size: 0.64rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  margin: 0 0 6px;
+  text-transform: uppercase;
+}
+
+.legal-search-feedback h2 {
+  color: #f5f2eb;
+  font-family: var(--ormont-font-display);
+  font-size: 1.05rem;
+  letter-spacing: 0;
+  line-height: 1.16;
+  margin: 0;
+}
+
+.legal-search-feedback p:last-child {
+  color: #aeb2b8;
+  font-size: 0.82rem;
+  line-height: 1.55;
+  margin: 8px 0 0;
+  max-width: 58rem;
+}
+
+.legal-search-feedback button {
+  background: transparent;
+  border: 1px solid rgba(245, 242, 235, 0.14);
+  border-radius: 5px;
+  color: #d9a25b;
+  cursor: pointer;
+  flex: 0 0 auto;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 760;
+  min-height: 32px;
+  padding: 0 12px;
+}
+
+.legal-search-feedback button:hover,
+.legal-search-feedback button:focus-visible {
+  background: rgba(212, 138, 44, 0.1);
+  border-color: rgba(212, 138, 44, 0.58);
+  color: #efb56f;
+  outline: 3px solid rgba(212, 138, 44, 0.16);
 }
 
 .legal-search__results {

@@ -1,7 +1,8 @@
-import { useState, type FormEvent } from 'react'
-import { Card, EmptyState } from '@ormont/ui'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { Card } from '@ormont/ui'
 import {
   SearchCommandBar,
+  SearchFeedbackPanel,
   SearchFiltersDialog,
   SearchResults,
   courtOptionGroups,
@@ -79,20 +80,27 @@ export function LegalSearchView() {
   const [dateTo, setDateTo] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [state, setState] = useState<LegalSearchState>({ status: 'idle' })
+  const searchRequestId = useRef(0)
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    const trimmedQuery = query.trim()
+  async function runSearch(
+    searchQuery = query,
+    searchFilters: LegalSearchRequestFilters = { court, dateFrom, dateTo },
+  ) {
+    const trimmedQuery = searchQuery.trim()
     if (!trimmedQuery) return
 
+    const requestId = searchRequestId.current + 1
+    searchRequestId.current = requestId
     setState({ status: 'loading', query: trimmedQuery })
 
     try {
       const response = await fetch('/api/search/fetch', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(createLegalSearchFetchRequest(trimmedQuery, { court, dateFrom, dateTo })),
+        body: JSON.stringify(createLegalSearchFetchRequest(trimmedQuery, searchFilters)),
       })
+
+      if (searchRequestId.current !== requestId) return
 
       if (!response.ok) {
         setState({
@@ -107,18 +115,25 @@ export function LegalSearchView() {
       }
 
       const body = (await response.json()) as LegalSearchFetchResponse
+      if (searchRequestId.current !== requestId) return
       setState(
         body.hits.length > 0
           ? { status: 'results', query: trimmedQuery, response: body }
           : { status: 'empty', query: trimmedQuery },
       )
     } catch {
+      if (searchRequestId.current !== requestId) return
       setState({
         status: 'error',
         query: trimmedQuery,
         message: 'Search could not reach the API.',
       })
     }
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    await runSearch()
   }
 
   function applyFilters(filters: LegalSearchRequestFilters) {
@@ -138,6 +153,24 @@ export function LegalSearchView() {
   const courtLabel = getCourtLabel(court)
   const activeFilterCount = countActiveLegalSearchFilters({ court, dateFrom, dateTo })
 
+  useEffect(() => {
+    const trimmedQuery = query.trim()
+    const searchFilters = { court, dateFrom, dateTo }
+
+    if (!trimmedQuery) {
+      searchRequestId.current += 1
+      setState({ status: 'idle' })
+      return
+    }
+
+    setState({ status: 'loading', query: trimmedQuery })
+    const timeout = window.setTimeout(() => {
+      void runSearch(trimmedQuery, searchFilters)
+    }, 250)
+
+    return () => window.clearTimeout(timeout)
+  }, [court, dateFrom, dateTo, query])
+
   return (
     <div className="shell-stack legal-search">
       <section className="shell-page-heading">
@@ -153,6 +186,7 @@ export function LegalSearchView() {
           courtLabel={courtLabel}
           dateFrom={dateFrom}
           dateTo={dateTo}
+          isSearching={state.status === 'loading'}
           onFilterClick={() => setFiltersOpen(true)}
           onQueryChange={setQuery}
           onSubmit={handleSubmit}
@@ -171,22 +205,23 @@ export function LegalSearchView() {
         />
       ) : null}
 
-      {state.status === 'loading' ? (
-        <Card className="legal-search__panel">
-          <p className="shell-copy">Checking stored sources, then Find Case Law if needed.</p>
-        </Card>
-      ) : null}
-
       {state.status === 'empty' ? (
-        <Card className="legal-search__panel">
-          <EmptyState title="No sources found" body={`No stored or Find Case Law results matched "${state.query}".`} />
-        </Card>
+        <SearchFeedbackPanel
+          eyebrow="No results"
+          title="No sources found"
+          body={`No stored or Find Case Law results matched "${state.query}" with the selected filters.`}
+          tone="warning"
+        />
       ) : null}
 
       {state.status === 'error' ? (
-        <Card className="legal-search__panel">
-          <EmptyState title="Search unavailable" body={state.message} />
-        </Card>
+        <SearchFeedbackPanel
+          action={{ label: 'Retry search', onClick: () => void runSearch(state.query) }}
+          eyebrow="Search error"
+          title="Search could not complete"
+          body={state.message}
+          tone="error"
+        />
       ) : null}
 
       {state.status === 'results' ? (

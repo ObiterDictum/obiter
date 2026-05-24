@@ -5,6 +5,7 @@ interface SearchCommandBarProps {
   courtLabel: string
   dateFrom: string
   dateTo: string
+  isSearching: boolean
   onFilterClick: () => void
   onQueryChange: (query: string) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
@@ -16,6 +17,7 @@ export function SearchCommandBar({
   courtLabel,
   dateFrom,
   dateTo,
+  isSearching,
   onFilterClick,
   onQueryChange,
   onSubmit,
@@ -42,6 +44,12 @@ export function SearchCommandBar({
           />
         </label>
       </div>
+      {isSearching ? (
+        <div className="legal-search__inline-status" role="status">
+          <span aria-hidden="true" />
+          Searching legal sources
+        </div>
+      ) : null}
       {activeFilterCount > 0 ? (
         <div className="legal-search__active-filters" aria-label="Active filters">
           {courtLabel !== 'All courts and tribunals' ? <span>{courtLabel}</span> : null}
