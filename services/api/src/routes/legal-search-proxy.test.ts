@@ -445,7 +445,7 @@ describe('createLegalSearchProxyRoutes', () => {
   })
 
   it.each(findCaseLawCourtCases)(
-    'retrieves and indexes cache-miss entries for $requestCourt',
+    'returns a summary and hydrates the index for $requestCourt',
     async ({ requestCourt, apiCourt, storedCourt, citation }) => {
       searchClientMock.search.mockResolvedValueOnce({
         hits: [],
@@ -613,7 +613,7 @@ describe('createLegalSearchProxyRoutes', () => {
     })
   })
 
-  it('returns and indexes Court of Appeal and High Court cache-miss entries', async () => {
+  it('returns Court of Appeal and High Court summaries and hydrates the index', async () => {
     searchClientMock.search.mockResolvedValueOnce({
       hits: [],
       query: 'Example',
