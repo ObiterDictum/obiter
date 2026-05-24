@@ -4,6 +4,7 @@ import {
   createPhaseZeroShellSnapshot,
   createAtlasFetchRequest,
   findMatterRecord,
+  countAtlasActiveFilters,
   getAtlasCourtLabel,
   getAtlasSearchStateLabel,
   selectJudgmentParagraphs,
@@ -80,11 +81,27 @@ describe('Home role gates', () => {
 
 describe('AtlasSearchView helpers', () => {
   it('builds fetch requests with an optional court filter', () => {
-    expect(createAtlasFetchRequest(' Potanina ', '')).toEqual({ query: 'Potanina' })
-    expect(createAtlasFetchRequest('  tax appeal  ', 'ukut/iac')).toEqual({
+    expect(createAtlasFetchRequest(' Potanina ', { court: '', dateFrom: '', dateTo: '' })).toEqual({
+      query: 'Potanina',
+    })
+    expect(
+      createAtlasFetchRequest('  tax appeal  ', {
+        court: 'ukut/iac',
+        dateFrom: '2024-01-01',
+        dateTo: '2024-12-31',
+      }),
+    ).toEqual({
       query: 'tax appeal',
       court: 'ukut/iac',
+      dateFrom: '2024-01-01',
+      dateTo: '2024-12-31',
     })
+  })
+
+  it('counts active search filters', () => {
+    expect(countAtlasActiveFilters({ court: '', dateFrom: '', dateTo: '' })).toBe(0)
+    expect(countAtlasActiveFilters({ court: 'uksc', dateFrom: '', dateTo: '' })).toBe(1)
+    expect(countAtlasActiveFilters({ court: 'uksc', dateFrom: '2024-01-01', dateTo: '' })).toBe(2)
   })
 
   it('labels selected court filters for the collapsed search filter control', () => {

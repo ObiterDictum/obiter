@@ -25,6 +25,12 @@ interface AtlasFetchResponse {
   skippedCount: number
 }
 
+interface AtlasFetchRequestFilters {
+  court: string
+  dateFrom: string
+  dateTo: string
+}
+
 interface AtlasCourtOption {
   code: string
   label: string
@@ -143,10 +149,20 @@ export function selectJudgmentParagraphs(result: AtlasSearchResult): AtlasParagr
   return result.paragraphs ?? []
 }
 
-export function createAtlasFetchRequest(query: string, court: string) {
+export function createAtlasFetchRequest(query: string, filters: AtlasFetchRequestFilters) {
   const trimmedQuery = query.trim()
-  const trimmedCourt = court.trim()
-  return trimmedCourt ? { query: trimmedQuery, court: trimmedCourt } : { query: trimmedQuery }
+  const request: { query: string; court?: string; dateFrom?: string; dateTo?: string } = {
+    query: trimmedQuery,
+  }
+  const court = filters.court.trim()
+  const dateFrom = filters.dateFrom.trim()
+  const dateTo = filters.dateTo.trim()
+
+  if (court) request.court = court
+  if (dateFrom) request.dateFrom = dateFrom
+  if (dateTo) request.dateTo = dateTo
+
+  return request
 }
 
 export function getAtlasCourtLabel(code: string) {
@@ -160,9 +176,19 @@ export function getAtlasCourtLabel(code: string) {
   return code
 }
 
+export function countAtlasActiveFilters(filters: AtlasFetchRequestFilters) {
+  return [filters.court, filters.dateFrom, filters.dateTo].filter((value) => value.trim()).length
+}
+
 export function AtlasSearchView() {
   const [query, setQuery] = useState(() => readInitialSearchQuery())
   const [court, setCourt] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
+  const [draftCourt, setDraftCourt] = useState('')
+  const [draftDateFrom, setDraftDateFrom] = useState('')
+  const [draftDateTo, setDraftDateTo] = useState('')
+  const [filtersOpen, setFiltersOpen] = useState(false)
   const [state, setState] = useState<AtlasSearchState>({ status: 'idle' })
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -176,7 +202,7 @@ export function AtlasSearchView() {
       const response = await fetch('/api/search/fetch', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(createAtlasFetchRequest(trimmedQuery, court)),
+        body: JSON.stringify(createAtlasFetchRequest(trimmedQuery, { court, dateFrom, dateTo })),
       })
 
       if (!response.ok) {
@@ -206,6 +232,33 @@ export function AtlasSearchView() {
     }
   }
 
+  function openFilters() {
+    setDraftCourt(court)
+    setDraftDateFrom(dateFrom)
+    setDraftDateTo(dateTo)
+    setFiltersOpen(true)
+  }
+
+  function applyFilters() {
+    setCourt(draftCourt)
+    setDateFrom(draftDateFrom)
+    setDateTo(draftDateTo)
+    setFiltersOpen(false)
+  }
+
+  function clearFilters() {
+    setDraftCourt('')
+    setCourt('')
+    setDraftDateFrom('')
+    setDateFrom('')
+    setDraftDateTo('')
+    setDateTo('')
+    setFiltersOpen(false)
+  }
+
+  const courtLabel = getAtlasCourtLabel(court)
+  const activeFilterCount = countAtlasActiveFilters({ court, dateFrom, dateTo })
+
   return (
     <div className="shell-stack atlas-search">
       <section className="shell-page-heading">
@@ -217,9 +270,16 @@ export function AtlasSearchView() {
 
       <Card className="atlas-search__panel">
         <form className="atlas-search__form" onSubmit={handleSubmit}>
+          <div className="atlas-search__form-header">
+            <span>Search legal sources</span>
+            <button type="button" onClick={openFilters}>
+              Filters
+              {activeFilterCount > 0 ? <strong>{activeFilterCount}</strong> : null}
+            </button>
+          </div>
           <div className="atlas-search__primary">
             <label className="atlas-search__field">
-              <span>Search legal sources</span>
+              <span className="atlas-search__visually-hidden">Search legal sources</span>
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
@@ -232,33 +292,88 @@ export function AtlasSearchView() {
               Search
             </button>
           </div>
-          <details className="atlas-search__filters">
-            <summary>
-              <span>Filters</span>
-              <small>{getAtlasCourtLabel(court)}</small>
-            </summary>
-            <label className="atlas-search__filter-control">
-              <span>Court or tribunal</span>
-              <select
-                value={court}
-                onChange={(event) => setCourt(event.target.value)}
-                name="court"
-              >
-                <option value="">All courts and tribunals</option>
-                {atlasCourtOptionGroups.map((group) => (
-                  <optgroup label={group.label} key={group.label}>
-                    {group.options.map((option) => (
-                      <option key={option.code} value={option.code}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </optgroup>
-                ))}
-              </select>
-            </label>
-          </details>
+          {activeFilterCount > 0 ? (
+            <p className="atlas-search__active-filters">
+              {courtLabel}
+              {dateFrom ? ` - From ${dateFrom}` : ''}
+              {dateTo ? ` - To ${dateTo}` : ''}
+            </p>
+          ) : null}
         </form>
       </Card>
+
+      {filtersOpen ? (
+        <div className="atlas-filter-modal" role="dialog" aria-modal="true" aria-labelledby="atlas-filter-title">
+          <button
+            aria-label="Close search filters"
+            className="atlas-filter-modal__backdrop"
+            type="button"
+            onClick={() => setFiltersOpen(false)}
+          />
+          <section className="atlas-filter-modal__panel">
+            <header className="atlas-filter-modal__header">
+              <div>
+                <p>Search filters</p>
+                <h2 id="atlas-filter-title">Filters</h2>
+              </div>
+              <button type="button" onClick={() => setFiltersOpen(false)}>
+                Close
+              </button>
+            </header>
+
+            <div className="atlas-filter-modal__fields">
+              <label className="atlas-filter-modal__field atlas-filter-modal__field--wide">
+                <span>Court or tribunal</span>
+                <select
+                  value={draftCourt}
+                  onChange={(event) => setDraftCourt(event.target.value)}
+                  name="court-filter"
+                >
+                  <option value="">All courts and tribunals</option>
+                  {atlasCourtOptionGroups.map((group) => (
+                    <optgroup label={group.label} key={group.label}>
+                      {group.options.map((option) => (
+                        <option key={option.code} value={option.code}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </label>
+
+              <label className="atlas-filter-modal__field">
+                <span>Date from</span>
+                <input
+                  value={draftDateFrom}
+                  onChange={(event) => setDraftDateFrom(event.target.value)}
+                  name="date-from-filter"
+                  type="date"
+                />
+              </label>
+
+              <label className="atlas-filter-modal__field">
+                <span>Date to</span>
+                <input
+                  value={draftDateTo}
+                  onChange={(event) => setDraftDateTo(event.target.value)}
+                  name="date-to-filter"
+                  type="date"
+                />
+              </label>
+            </div>
+
+            <footer className="atlas-filter-modal__actions">
+              <button type="button" onClick={clearFilters}>
+                Clear
+              </button>
+              <button type="button" onClick={applyFilters}>
+                Apply filters
+              </button>
+            </footer>
+          </section>
+        </div>
+      ) : null}
 
       {state.status === 'loading' ? (
         <Card className="atlas-search__panel">

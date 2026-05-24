@@ -13,6 +13,7 @@ export {
 export {
   AtlasSearchView,
   atlasCourtOptionGroups,
+  countAtlasActiveFilters,
   createAtlasFetchRequest,
   getAtlasCourtLabel,
   getAtlasSearchStateLabel,
