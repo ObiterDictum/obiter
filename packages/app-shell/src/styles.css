@@ -1692,7 +1692,7 @@ body {
   align-items: end;
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(220px, 1fr) minmax(220px, 360px) auto;
 }
 
 .atlas-search__field {
@@ -1703,7 +1703,8 @@ body {
   gap: 7px;
 }
 
-.atlas-search__field input {
+.atlas-search__field input,
+.atlas-search__field select {
   background: #111315;
   border: 1px solid #272a2d;
   border-radius: var(--ormont-radius-sm);
@@ -1714,7 +1715,12 @@ body {
   padding: 0 12px;
 }
 
-.atlas-search__field input:focus {
+.atlas-search__field select {
+  cursor: pointer;
+}
+
+.atlas-search__field input:focus,
+.atlas-search__field select:focus {
   border-color: #d48a2c;
   outline: 3px solid rgba(212, 138, 44, 0.18);
 }
