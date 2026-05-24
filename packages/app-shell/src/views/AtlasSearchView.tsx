@@ -288,8 +288,14 @@ export function AtlasSearchView() {
                 type="search"
               />
             </label>
-            <button className="atlas-search__button" disabled={state.status === 'loading'} type="submit">
-              Search
+            <button
+              aria-label="Search legal sources"
+              className="atlas-search__button"
+              disabled={state.status === 'loading'}
+              title="Search"
+              type="submit"
+            >
+              <span aria-hidden="true">↵</span>
             </button>
           </div>
           {activeFilterCount > 0 ? (
