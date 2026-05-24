@@ -14,6 +14,7 @@ export {
   AtlasSearchView,
   atlasCourtOptionGroups,
   createAtlasFetchRequest,
+  getAtlasCourtLabel,
   getAtlasSearchStateLabel,
   selectJudgmentParagraphs,
   selectParagraphExcerpts,

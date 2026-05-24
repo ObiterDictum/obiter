@@ -4,6 +4,7 @@ import {
   createPhaseZeroShellSnapshot,
   createAtlasFetchRequest,
   findMatterRecord,
+  getAtlasCourtLabel,
   getAtlasSearchStateLabel,
   selectJudgmentParagraphs,
   selectParagraphExcerpts,
@@ -84,6 +85,12 @@ describe('AtlasSearchView helpers', () => {
       query: 'tax appeal',
       court: 'ukut/iac',
     })
+  })
+
+  it('labels selected court filters for the collapsed search filter control', () => {
+    expect(getAtlasCourtLabel('')).toBe('All courts and tribunals')
+    expect(getAtlasCourtLabel('ewhc/admin')).toBe('Administrative Court')
+    expect(getAtlasCourtLabel('unknown-court')).toBe('unknown-court')
   })
 
   it('exposes the current Find Case Law court filters for the search UI', () => {

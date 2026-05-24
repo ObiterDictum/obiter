@@ -149,6 +149,17 @@ export function createAtlasFetchRequest(query: string, court: string) {
   return trimmedCourt ? { query: trimmedQuery, court: trimmedCourt } : { query: trimmedQuery }
 }
 
+export function getAtlasCourtLabel(code: string) {
+  if (!code) return 'All courts and tribunals'
+
+  for (const group of atlasCourtOptionGroups) {
+    const option = group.options.find((courtOption) => courtOption.code === code)
+    if (option) return option.label
+  }
+
+  return code
+}
+
 export function AtlasSearchView() {
   const [query, setQuery] = useState(() => readInitialSearchQuery())
   const [court, setCourt] = useState('')
@@ -206,38 +217,46 @@ export function AtlasSearchView() {
 
       <Card className="atlas-search__panel">
         <form className="atlas-search__form" onSubmit={handleSubmit}>
-          <label className="atlas-search__field">
-            <span>Search legal sources</span>
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Potanina"
-              name="query"
-              type="search"
-            />
-          </label>
-          <label className="atlas-search__field atlas-search__field--court">
-            <span>Court or tribunal</span>
-            <select
-              value={court}
-              onChange={(event) => setCourt(event.target.value)}
-              name="court"
-            >
-              <option value="">All courts and tribunals</option>
-              {atlasCourtOptionGroups.map((group) => (
-                <optgroup label={group.label} key={group.label}>
-                  {group.options.map((option) => (
-                    <option key={option.code} value={option.code}>
-                      {option.label}
-                    </option>
-                  ))}
-                </optgroup>
-              ))}
-            </select>
-          </label>
-          <button className="atlas-search__button" disabled={state.status === 'loading'} type="submit">
-            Search
-          </button>
+          <div className="atlas-search__primary">
+            <label className="atlas-search__field">
+              <span>Search legal sources</span>
+              <input
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Potanina"
+                name="query"
+                type="search"
+              />
+            </label>
+            <button className="atlas-search__button" disabled={state.status === 'loading'} type="submit">
+              Search
+            </button>
+          </div>
+          <details className="atlas-search__filters">
+            <summary>
+              <span>Filters</span>
+              <small>{getAtlasCourtLabel(court)}</small>
+            </summary>
+            <label className="atlas-search__filter-control">
+              <span>Court or tribunal</span>
+              <select
+                value={court}
+                onChange={(event) => setCourt(event.target.value)}
+                name="court"
+              >
+                <option value="">All courts and tribunals</option>
+                {atlasCourtOptionGroups.map((group) => (
+                  <optgroup label={group.label} key={group.label}>
+                    {group.options.map((option) => (
+                      <option key={option.code} value={option.code}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </label>
+          </details>
         </form>
       </Card>
 
