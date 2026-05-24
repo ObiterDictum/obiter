@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { EmptyState } from '@ormont/ui'
 import { selectJudgmentParagraphs } from './LegalSearchView'
+import { getCourtLabel } from '../components/search'
 
 interface CaseLawParagraph {
   id: string
@@ -62,41 +63,39 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
         paragraph.text.toLowerCase().includes(trimmedCaseQuery.toLowerCase()),
       )
     : paragraphs
+  const courtLabel = getReadableCourtLabel(data.court)
+  const dateLabel = formatCaseDate(data.dateDecided)
 
   return (
     <div className="shell-stack case-law-document">
       <section className="case-law-document__topbar">
         <div className="case-law-document__identity">
-          <p>Case law</p>
+          <p>{data.neutralCitation}</p>
           <h1>{data.title}</h1>
           <dl>
             <div>
-              <dt>Citation</dt>
-              <dd>{data.neutralCitation}</dd>
-            </div>
-            <div>
               <dt>Court</dt>
-              <dd>{data.court}</dd>
+              <dd>{courtLabel}</dd>
             </div>
             <div>
               <dt>Date</dt>
-              <dd>{data.dateDecided}</dd>
+              <dd>{dateLabel}</dd>
             </div>
           </dl>
-          <label className="case-law-document__search">
-            <span>Search within case</span>
-            <input
-              value={caseQuery}
-              onChange={(event) => setCaseQuery(event.target.value)}
-              placeholder="jurisdiction, evidence, order..."
-              type="search"
-            />
-            {trimmedCaseQuery ? <em>{visibleParagraphs.length} matches</em> : null}
-          </label>
         </div>
         <Link className="case-law-document__back" to="/search">
-          Back to search
+          Back
         </Link>
+        <label className="case-law-document__search">
+          <span>Search within case</span>
+          <input
+            value={caseQuery}
+            onChange={(event) => setCaseQuery(event.target.value)}
+            placeholder="Find text..."
+            type="search"
+          />
+          {trimmedCaseQuery ? <em>{visibleParagraphs.length} matches</em> : null}
+        </label>
       </section>
 
       <section className="case-law-document__viewer">
@@ -137,13 +136,42 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
           </div>
         ) : (
           <EmptyState
-            title="Stored text unavailable"
-            body="The authority metadata is cached, but no paragraph text is stored for this case yet."
+            title={trimmedCaseQuery ? 'No matches found' : 'Full text unavailable'}
+            body={
+              trimmedCaseQuery
+                ? `No paragraphs match "${trimmedCaseQuery}".`
+                : 'The authority metadata is cached, but no paragraph text is stored for this case yet.'
+            }
           />
         )}
       </section>
     </div>
   )
+}
+
+function getReadableCourtLabel(court: string) {
+  const normalized = court.replace(/-/g, '/')
+  const direct = getCourtLabel(normalized)
+
+  if (direct !== normalized) return direct
+
+  return court
+    .split(/[-/]/)
+    .filter(Boolean)
+    .map((part) => part.toUpperCase())
+    .join(' ')
+}
+
+function formatCaseDate(value: string) {
+  const date = new Date(`${value}T00:00:00Z`)
+  if (Number.isNaN(date.getTime())) return value
+
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(date)
 }
 
 function isDisplayJudgmentParagraph(paragraph: CaseLawParagraph, document: CaseLawDocument) {
