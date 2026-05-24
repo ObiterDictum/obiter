@@ -21,9 +21,11 @@ Do not rubber-stamp. Do not say a PR is ready unless the evidence supports it. S
 6. Inspect changed files and all directly coupled files.
 7. Review tests and run appropriate verification where possible.
 8. Prepare inline review comments for every actionable bug/security issue that has a stable diff location.
-9. Prepare a final review summary that groups all findings by severity and category and includes a numeric review score.
-10. Publish review comments to GitHub through the API when explicitly asked or when operating on a real PR with GitHub access.
-11. Record durable knowledge in the review knowledge repo if configured and safe to store.
+9. Finalize the verdict, score, findings, inline targets, and verification evidence before any comment-drafting delegation.
+10. Prepare a standalone overall review comment that explains the verdict, score, findings, impact, fix direction, verification, and remaining risk clearly enough to understand without opening inline threads.
+11. Prepare a final review summary that groups all findings by severity and category and includes a numeric review score.
+12. Publish review comments to GitHub through the API when explicitly asked or when operating on a real PR with GitHub access.
+13. Record durable knowledge in the review knowledge repo if configured and safe to store.
 
 ## Required Setup Commands
 
@@ -200,6 +202,114 @@ Before giving a positive verdict, explicitly ask:
 
 If any answer is uncertain for sensitive code, the verdict cannot be `Approve`.
 
+## Post-Review Comment Drafting Subagents
+
+Use the primary reviewer model for the actual review: code inspection, security analysis, correctness judgment, severity assignment, verdict, score, and verification decisions. Do not delegate finding discovery, score selection, or approval/request-changes judgment to a cheaper subagent.
+
+After the review is complete and the findings are locked, any delegated comment-drafting subagent must be spawned with `model: "gpt-5.4-mini"`. Do not inherit the primary review model for this post-review prose work unless the user explicitly overrides this policy. Use the mini-model subagent only for drafting or polishing:
+
+- GitHub inline comment bodies for already validated findings.
+- The overall review body using the locked verdict and `N/100` score.
+- A concise local final summary for the user.
+
+Give the subagent only the minimum sanitized review packet:
+
+- verdict, score, merge readiness, and confidence
+- validated findings with severity/category, exact `path:line`, problem, impact, fix direction, and verification
+- exact commands and pass/fail verification evidence
+- API publication constraints, including direct GitHub API inline comments and author-permission fallback
+- any explicit wording constraints from the user
+
+Do not provide secrets, private matter data, raw legal text, raw prompts, embeddings, sensitive logs, private screenshots, or unrelated repository context. The subagent must not inspect more code unless explicitly asked by the primary reviewer for prose context.
+
+Require the subagent to return only draft text, not publication commands. The primary reviewer must validate every inline body and the overall body before posting: confirm that no severity changed, no new unverified claim was introduced, no finding was softened or exaggerated, the score stayed unchanged, and every inline target still maps to the PR diff. If the draft fails any check, edit it directly or rerun the subagent with a tighter sanitized packet.
+
+Example subagent prompt:
+
+```text
+Use `model: "gpt-5.4-mini"` for comment drafting only. Do not perform a new PR review and do not change the verdict, score, severity, finding set, file targets, or verification claims.
+
+Draft GitHub-ready inline comment bodies and one overall review body from this locked review packet:
+[verdict, score, findings, path:line targets, verification results, publication constraints]
+
+Return only:
+1. Inline comment drafts keyed by path:line.
+2. Overall review body.
+```
+
+## Overall Review Comment
+
+Before publishing any GitHub review, write the top-level review body first. The body must stand alone: a maintainer should be able to understand why the review was approved, blocked, or commented without expanding inline comments.
+
+The overall comment must include:
+
+- a `Review Verdict` section that is not just a label and score. It must include:
+  - `Decision`: approve, request changes, not ready, or needs more context
+  - `Score`: `N/100`
+  - `Merge readiness`: whether this can merge now, and if not, the exact condition blocking merge
+  - `Why`: two to five concrete sentences naming the highest-impact issue(s), affected area(s), and production risk
+  - `What would change the verdict`: the smallest set of fixes or evidence needed for approval
+  - `Confidence`: high/medium/low, with a short reason when confidence is not high
+- a `Must Fix` section for blockers/high findings, or `None` when there are no must-fix issues
+- a `Findings` section for all remaining medium/low/nit findings, grouped by severity, or `None` when every finding is already covered in `Must Fix`; each finding has:
+  - title and changed file path/line
+  - problem: what is wrong
+  - impact: what can break, leak, regress, or become hard to unwind
+  - fix direction: the concrete correction expected
+  - verification: the test, check, or manual proof that would demonstrate the fix
+- a `Security / Data / Isolation` section that explicitly states the reviewed trust boundaries and any residual uncertainty
+- a `Verification` section with exact commands and pass/fail results
+- a `Gaps / Follow-Ups` section for unrun checks, manual QA gaps, or non-blocking cleanup
+
+Do not make the verdict generic, diplomatic, or a teaser such as "there are two bugs below." The verdict must name the blocking bugs or the decisive reason for approval. Avoid empty phrases such as "directionally sound", "looks good overall", "solid foundation", or "needs a few fixes" unless the following sentence names the concrete risk. Do not rely on inline comments as the only explanation; GitHub UIs often collapse or reorder them.
+
+Use this compact body shape for request-changes or comment reviews:
+
+```markdown
+## Review Verdict
+
+Decision: Request changes
+
+Score: 68/100
+
+Merge readiness: Not mergeable until indexing only reports success after Meilisearch confirms the write task succeeded.
+
+Why: The ingestor currently treats an accepted Meilisearch task as completed indexing, so deployment logs and exit codes can claim Atlas data is searchable while the provider later fails the task. That is a correctness bug in the foundation layer because later Atlas, Verify, and Research workflows will trust these indexed-count reports. I also found a response-shape issue where search can return full paragraph payloads instead of summary results, which should be corrected before real corpus records are indexed.
+
+What would change the verdict: wait for Meilisearch write tasks to reach `succeeded`, convert failed/canceled tasks into the sanitized report shape, restrict search results to summary fields, and add tests for both behaviors.
+
+Confidence: High. The Meilisearch client API documents document writes as enqueued tasks, and the changed code does not wait for task completion.
+
+## Must Fix
+
+- **High/bug - Indexing reports success before Meilisearch finishes** (`packages/search-client/src/index.ts:133`)
+  - Problem: `addDocuments` only enqueues a task, but the code reports `indexedCount` immediately.
+  - Impact: the ingestor can exit 0 even if the indexing task later fails, leaving Atlas search incomplete while deployment logs claim success.
+  - Fix direction: wait for the task to reach `succeeded`; map failed/canceled tasks into the sanitized report shape.
+  - Verification: add a test where the task is accepted and later fails, then confirm the ingestor exits/report fails.
+
+## Findings
+
+- **Medium/architecture - Search returns full paragraph payloads** (`packages/search-client/src/index.ts:151`)
+  - Problem: search hits return the full authority schema, including paragraph arrays.
+  - Impact: search responses can become oversized and blur the intended boundary between summary search and evidence retrieval.
+  - Fix direction: restrict retrieved attributes to summary fields and keep paragraph text behind the paragraph retrieval endpoint.
+  - Verification: add a search test proving paragraph text is not returned from `GET /api/atlas/search`.
+
+## Security / Data / Isolation
+
+Reviewed the API-to-Meilisearch boundary, key separation, fixture contents, provider error wrapping, and response payload shape. No key leakage found. Residual risk remains around result payload size until search responses are limited to summary fields.
+
+## Verification
+
+- `pnpm --filter @ormont/search-client test` - passed
+- `pnpm --filter @ormont/api test` - passed
+
+## Gaps / Follow-Ups
+
+- Hosted Meilisearch task-failure behavior was not exercised against a live service in this review.
+```
+
 ## GitHub Inline Review Comments
 
 When reviewing an actual GitHub PR, produce inline comments for findings that map to changed lines. Inline comments should be thorough enough for the author to fix without guessing, but still focused on one issue.
@@ -227,9 +337,10 @@ Preferred GitHub review workflow:
    ```
 2. Draft all findings locally first.
 3. Validate every inline target is in the PR diff. Use changed-line line numbers from `nl -ba <file>` plus the PR diff. If unsure, keep the issue in the summary only.
-4. Publish inline comments for actionable findings with valid diff positions through the GitHub API, not high-level `gh pr review` output.
-5. Submit one final review summary with the verdict, numeric score, and full severity-grouped list.
-6. Confirm publication by listing PR review comments or the posted review.
+4. Draft the overall review comment using the `Overall Review Comment` rules. It must explain the findings directly and include enough detail to be useful if inline comments are not visible.
+5. Publish inline comments for actionable findings with valid diff positions through the GitHub API, not high-level `gh pr review` output.
+6. Submit the overall review comment as the GitHub review `body` with the verdict, numeric score, and full severity-grouped list.
+7. Confirm publication by listing PR review comments or the posted review.
 
 ### GitHub API publication rules
 
@@ -240,7 +351,7 @@ Prepare a UTF-8 JSON payload with ASCII-safe punctuation to avoid mojibake on Wi
 ```json
 {
   "event": "REQUEST_CHANGES",
-  "body": "## Review Verdict\n\nRequest changes\n\nScore: 62/100\n\n...",
+  "body": "## Review Verdict\n\nDecision: Request changes\n\nScore: 62/100\n\nMerge readiness: Not mergeable until [specific condition].\n\nWhy: [Name the concrete blocking issue, affected area, and production/user/security risk in two to five sentences.]\n\nWhat would change the verdict: [Smallest fix/evidence set needed for approval.]\n\nConfidence: High/Medium/Low. [Reason if not high.]\n\n## Must Fix\n\n- **High/security - Title** (`path:line`)\n  - Problem: ...\n  - Impact: ...\n  - Fix direction: ...\n  - Verification: ...\n\n## Findings\n\n- **Medium/architecture - Title** (`path:line`)\n  - Problem: ...\n  - Impact: ...\n  - Fix direction: ...\n  - Verification: ...\n\n## Security / Data / Isolation\n\n...\n\n## Verification\n\n...\n\n## Gaps / Follow-Ups\n\n...",
   "comments": [
     {
       "path": "services/api/src/database.ts",
@@ -268,7 +379,7 @@ Use `event` according to the evidence:
 
 If GitHub rejects `REQUEST_CHANGES` or `APPROVE` because the authenticated identity is the PR author, retry with `event: "COMMENT"`, keep all inline comments, and state in the final summary that GitHub would not allow a formal decision from this identity. The local verdict should still be `Request changes` or `Approve` as appropriate.
 
-Do not drop inline comments when the formal review event is blocked by author permissions. The fallback is an API-submitted `COMMENT` review with the same inline comments, the local verdict, and the score in the review body.
+Do not drop inline comments or shorten the overall body when the formal review event is blocked by author permissions. The fallback is an API-submitted `COMMENT` review with the same inline comments, the local verdict, the score, and the same standalone explanation in the review body.
 
 If the tooling makes inline publication unsafe or ambiguous, output an `Inline comments to add` section with exact `path:line` targets and bodies, then state that comments were not posted and why.
 
@@ -349,7 +460,7 @@ Use this structure:
 
 ## Findings
 
-- **Severity/category — title** (`path:line`)
+- **Severity/category - title** (`path:line`)
   - Problem:
   - Why it matters:
   - Fix:
@@ -357,7 +468,7 @@ Use this structure:
 
 ## Inline Comments
 
-- `path:line` — exact comment body, or `None posted` with reason
+- `path:line` - exact comment body, or `None posted` with reason
 
 ## Verification
 

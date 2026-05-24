@@ -35,6 +35,23 @@ Use this skill when the user asks to:
 - Use direct GitHub API calls for inline review comments, replies, and thread resolution. If high-level `gh` commands are blocked because the authenticated identity is the PR author, keep using `gh api` or the GitHub app API instead of dropping inline replies.
 - If GitHub API writes cannot post or resolve threads, provide exact manual actions with links/thread ids.
 
+## Subagent Model Policy
+
+Use the primary Codex model for validation and engineering decisions: determining whether each reviewer finding is correct, choosing the fix, editing code, deciding tests, running verification, selecting commits, and deciding whether a thread is genuinely resolved.
+
+After fixes are implemented, pushed, and verified, any delegated response-drafting subagent must be spawned with `model: "gpt-5.4-mini"`. Do not inherit the primary model for post-fix prose drafting unless the user explicitly overrides this policy.
+
+Use the mini-model subagent only to draft or polish:
+
+- inline review replies for already validated and fixed findings
+- the top-level "Review fixes applied" comment
+- PR-body wording updates after the primary model has locked the changed facts
+- the final local status summary
+
+Give the mini-model subagent only the minimum sanitized packet: accepted/not-accepted status for each finding, exact changed paths, commit hash, exact verification commands and results, remaining limitations, and wording constraints. Do not give it secrets, private matter data, raw legal text, raw prompts, embeddings, sensitive logs, private screenshots, or permission to inspect unrelated code.
+
+The mini-model subagent must return draft text only. The primary model must validate every reply and summary before posting: no finding status may change, no unverified claim may be added, no sensitive data may be disclosed, and the response must still use direct GitHub API surfaces for inline replies when required.
+
 ## Workflow
 
 ### 1. Establish PR And Working Tree State
@@ -263,7 +280,7 @@ When done, respond with:
 - Threads resolved:
   - <thread/path/line or none>
 - Verification:
-  - `<command>` — passed/failed
+  - `<command>` - passed/failed
 - Remaining open items:
   - ...
 ```
