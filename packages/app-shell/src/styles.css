@@ -1869,10 +1869,7 @@ body {
 }
 
 .atlas-filter-modal__header {
-  align-items: center;
-  display: flex;
-  gap: 18px;
-  justify-content: space-between;
+  padding-right: 38px;
 }
 
 .atlas-filter-modal__header p {
@@ -1893,7 +1890,7 @@ body {
   margin: 5px 0 0;
 }
 
-.atlas-filter-modal__header button {
+.atlas-filter-modal__close {
   align-items: center;
   background: transparent;
   border: 0;
@@ -1905,15 +1902,18 @@ body {
   height: 28px;
   justify-content: center;
   padding: 0;
+  position: absolute;
+  right: 18px;
+  top: 18px;
   width: 28px;
 }
 
-.atlas-filter-modal__header button:hover {
+.atlas-filter-modal__close:hover {
   background: rgba(245, 242, 235, 0.06);
   color: #f5f2eb;
 }
 
-.atlas-filter-modal__header button span {
+.atlas-filter-modal__close span {
   font-size: 1.1rem;
   line-height: 1;
   transform: translateY(-1px);
@@ -1994,7 +1994,7 @@ body {
 
 .atlas-filter-modal__field input:focus,
 .atlas-filter-modal__field select:focus,
-.atlas-filter-modal__header button:focus-visible,
+.atlas-filter-modal__close:focus-visible,
 .atlas-filter-modal__actions button:focus-visible {
   border-color: #d48a2c;
   outline: 3px solid rgba(212, 138, 44, 0.18);
