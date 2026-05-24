@@ -29,23 +29,101 @@ export interface AtlasFetchSearchHit extends AtlasSearchHit {
   paragraphs?: AtlasAuthority['paragraphs']
 }
 
-const atlasSlugSchema = z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+const atlasSlugSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^[a-z0-9]+(?:[-/][a-z0-9]+)*$/)
+  .transform(normalizeCourtCode)
 const findCaseLawJurisdiction = 'england-and-wales'
 const supportedFindCaseLawCourts = new Set([
+  'eat',
   'uksc',
   'ukpc',
   'ewca-civ',
   'ewca-crim',
+  'ewcr',
   'ewhc-admin',
+  'ewhc-admlty',
   'ewhc-ch',
   'ewhc-comm',
   'ewhc-fam',
+  'ewhc-ipec',
   'ewhc-kb',
+  'ewhc-mercantile',
+  'ewhc-pat',
+  'ewhc-scco',
+  'ewhc-tcc',
   'ewfc',
   'ewcop',
   'ewcc',
-  'ukut',
-  'ukftt',
+  'ukiptrib',
+  'siac',
+  'ukist',
+  'ukut-aac',
+  'ukut-iac',
+  'ukut-lc',
+  'ukut-tcc',
+  'ukftt-credit',
+  'ukftt-estate',
+  'ukftt-grc',
+  'ukftt-hesc',
+  'ukftt-tc',
+  'ftt-claims',
+  'ftt-pc',
+  'ftt-phl',
+  'ftt-transport',
+])
+
+const findCaseLawCourtParamByCourt = new Map(
+  Array.from(supportedFindCaseLawCourts, (court) => [court, court.replace(/-/g, '/')]),
+)
+
+const citationDivisionCourtByBaseCourt = new Map<string, Map<string, string>>([
+  [
+    'ewhc',
+    new Map([
+      ['admin', 'ewhc-admin'],
+      ['admlty', 'ewhc-admlty'],
+      ['ch', 'ewhc-ch'],
+      ['comm', 'ewhc-comm'],
+      ['fam', 'ewhc-fam'],
+      ['ipec', 'ewhc-ipec'],
+      ['kb', 'ewhc-kb'],
+      ['mercantile', 'ewhc-mercantile'],
+      ['pat', 'ewhc-pat'],
+      ['scco', 'ewhc-scco'],
+      ['tcc', 'ewhc-tcc'],
+    ]),
+  ],
+  [
+    'ukut',
+    new Map([
+      ['aac', 'ukut-aac'],
+      ['iac', 'ukut-iac'],
+      ['lc', 'ukut-lc'],
+      ['tcc', 'ukut-tcc'],
+    ]),
+  ],
+  [
+    'ukftt',
+    new Map([
+      ['credit', 'ukftt-credit'],
+      ['estate', 'ukftt-estate'],
+      ['grc', 'ukftt-grc'],
+      ['hesc', 'ukftt-hesc'],
+      ['tc', 'ukftt-tc'],
+    ]),
+  ],
+  [
+    'ftt',
+    new Map([
+      ['claims', 'ftt-claims'],
+      ['pc', 'ftt-pc'],
+      ['phl', 'ftt-phl'],
+      ['transport', 'ftt-transport'],
+    ]),
+  ],
 ])
 
 const atlasFetchRequestSchema = z.object({
@@ -183,7 +261,7 @@ async function fetchMojAuthorities(
 > {
   const atomUrl = new URL('/atom.xml', env.mojFindCaseLawBaseUrl)
   atomUrl.searchParams.set('query', request.query)
-  if (request.court) atomUrl.searchParams.set('court', request.court)
+  if (request.court) atomUrl.searchParams.set('court', toFindCaseLawCourtParam(request.court))
 
   const atomLimit = rateLimiter.take()
   if (!atomLimit.allowed) {
@@ -455,17 +533,26 @@ function courtFromCitation(citation: string) {
 
   if (!token) return null
 
-  if (slugifyCourtToken(token) === 'ewhc' && division) {
-    const highCourtDivision = `ewhc-${slugifyCourtToken(division)}`
-    return supportedFindCaseLawCourts.has(highCourtDivision) ? highCourtDivision : null
+  const court = slugifyCourtToken(token)
+
+  if (division) {
+    const divisionCourt = citationDivisionCourtByBaseCourt.get(court)?.get(slugifyCourtToken(division))
+    if (divisionCourt) return divisionCourt
   }
 
-  const court = slugifyCourtToken(token)
   return court && supportedFindCaseLawCourts.has(court) ? court : null
 }
 
 function slugifyCourtToken(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+}
+
+function normalizeCourtCode(value: string) {
+  return value.toLowerCase().replace(/\//g, '-')
+}
+
+function toFindCaseLawCourtParam(court: string) {
+  return findCaseLawCourtParamByCourt.get(court) ?? court
 }
 
 function extractDate(value: string) {
