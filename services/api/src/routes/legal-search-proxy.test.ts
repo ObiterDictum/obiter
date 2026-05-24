@@ -752,6 +752,42 @@ describe('createLegalSearchProxyRoutes', () => {
     })
   })
 
+  it('fetches, returns, and caches a live document when stored lookup misses', async () => {
+    searchClientMock.getDocument.mockRejectedValueOnce(new Error('not found'))
+    searchClientMock.indexDocuments.mockResolvedValueOnce({
+      indexedCount: 1,
+      failedCount: 0,
+      errors: [],
+    })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        `<html><body><h1>Example v Test</h1><h2><span>Neutral Citation Number</span>[2026] EWHC 1246 (Admin)</h2><article><div class="judgment-header__date">Date: 22/05/2026</div><p>This live judgment paragraph is long enough to render in the case reader.</p></article></body></html>`,
+      ),
+    )
+    const app = createLegalSearchProxyRoutes(env)
+
+    const response = await app.request('/api/search/documents/ewhc-admin-2026-1246')
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      document: {
+        id: 'ewhc-admin-2026-1246',
+        title: 'Example v Test',
+        neutralCitation: '[2026] EWHC 1246 (Admin)',
+        court: 'ewhc-admin',
+        dateDecided: '2026-05-22',
+        paragraphs: [expect.objectContaining({ paragraphNumber: 1 })],
+      },
+    })
+    await vi.waitFor(() =>
+      expect(searchClientMock.indexDocuments).toHaveBeenCalledWith(
+        { id: 'meili-client' },
+        'legal_authorities',
+        [expect.objectContaining({ id: 'ewhc-admin-2026-1246' })],
+      ),
+    )
+  })
+
   it('rejects invalid stored document ids before storage lookup', async () => {
     const app = createLegalSearchProxyRoutes(env)
 

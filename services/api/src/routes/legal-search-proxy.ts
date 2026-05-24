@@ -237,15 +237,41 @@ export function createLegalSearchProxyRoutes(env: ApiEnv) {
       )
     }
 
-    try {
-      const document = await getDocument(indexClient, env.legalAuthoritiesIndex, parsed.data)
+    const document = await getStoredAuthorityDocument(
+      indexClient,
+      env.legalAuthoritiesIndex,
+      parsed.data,
+    )
+
+    if (document) {
       return c.json({ document })
-    } catch {
+    }
+
+      const liveDocument = await fetchMojAuthorityDocumentById(
+        env,
+        parsed.data,
+        mojRateLimiter,
+      )
+
+      if (liveDocument.status === 'ok') {
+        void indexFetchedAuthorities(indexClient, env.legalAuthoritiesIndex, [liveDocument.document])
+        return c.json({ document: liveDocument.document })
+      }
+
+      if (liveDocument.status === 'rate_limited') {
+        return c.json(
+          {
+            ...apiError('storage_unavailable', 'Find Case Law is rate limited.', requestId),
+            retryAfter: liveDocument.retryAfter,
+          },
+          503,
+        )
+      }
+
       return c.json(
-        apiError('document_not_found', 'Document was not found in the stored index.', requestId),
+        apiError('document_not_found', 'Document was not found in stored or live sources.', requestId),
         404,
       )
-    }
   })
 
   return app
@@ -284,6 +310,21 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | nul
       timeout = setTimeout(() => resolve(null), timeoutMs)
     }),
   ])
+}
+
+async function getStoredAuthorityDocument(
+  indexClient: Parameters<typeof getDocument>[0],
+  indexName: string,
+  documentId: string,
+) {
+  try {
+    return await withTimeout(
+      getDocument(indexClient, indexName, documentId),
+      storedSearchTimeoutMs,
+    )
+  } catch {
+    return null
+  }
 }
 
 async function indexFetchedAuthorities(
@@ -424,6 +465,54 @@ async function fetchMojAuthorityDetail(
   if (!document.success) {
     return { status: 'skipped' }
   }
+
+  return { status: 'ok', document: document.data }
+}
+
+async function fetchMojAuthorityDocumentById(
+  env: ApiEnv,
+  documentId: string,
+  rateLimiter: ReturnType<typeof createMojRateLimiter>,
+): Promise<
+  | { status: 'ok'; document: LegalAuthority }
+  | { status: 'skipped' }
+  | { status: 'rate_limited'; retryAfter: string | null }
+> {
+  const uri = documentUriFromId(documentId)
+  if (!uri) return { status: 'skipped' }
+
+  const limit = rateLimiter.take()
+  if (!limit.allowed) {
+    return { status: 'rate_limited', retryAfter: limit.retryAfterSeconds.toString() }
+  }
+
+  const detailUrl = new URL(uri, env.mojFindCaseLawBaseUrl)
+  const detailResponse = await fetch(detailUrl)
+  if (!detailResponse.ok) return { status: 'skipped' }
+
+  const html = await detailResponse.text()
+  const neutralCitation = extractNeutralCitationFromHtml(html)
+  const court = neutralCitation ? courtFromCitation(neutralCitation) : courtFromDocumentId(documentId)
+  const dateDecided = extractJudgmentDateFromHtml(html) ?? dateFromDocumentId(documentId)
+  const title = extractJudgmentTitleFromHtml(html) ?? neutralCitation ?? documentId
+
+  if (!neutralCitation || !court || !dateDecided) {
+    return { status: 'skipped' }
+  }
+
+  const document = LegalAuthoritySchema.safeParse({
+    id: documentId,
+    title,
+    neutralCitation,
+    court,
+    jurisdiction: findCaseLawJurisdiction,
+    dateDecided,
+    sourceType: 'judgment',
+    sourceUrl: detailUrl.toString(),
+    paragraphs: parseJudgmentParagraphs(html, documentId),
+  })
+
+  if (!document.success) return { status: 'skipped' }
 
   return { status: 'ok', document: document.data }
 }
@@ -622,6 +711,31 @@ function documentIdFromUri(uri: string) {
   return uri.replace(/^\/+/, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase()
 }
 
+function documentUriFromId(documentId: string) {
+  const court = Array.from(supportedFindCaseLawCourts)
+    .sort((left, right) => right.length - left.length)
+    .find((supportedCourt) => documentId.startsWith(`${supportedCourt}-`))
+
+  if (!court) return null
+
+  const suffix = documentId.slice(court.length + 1)
+  const match = suffix.match(/^(\d{4})-(\d+)$/)
+  if (!match) return null
+
+  return `/${toFindCaseLawCourtParam(court)}/${match[1]}/${match[2]}`
+}
+
+function courtFromDocumentId(documentId: string) {
+  return Array.from(supportedFindCaseLawCourts)
+    .sort((left, right) => right.length - left.length)
+    .find((court) => documentId.startsWith(`${court}-`)) ?? null
+}
+
+function dateFromDocumentId(documentId: string) {
+  const year = documentId.match(/-(\d{4})-\d+$/)?.[1]
+  return year ? `${year}-01-01` : null
+}
+
 const neutralCitationPattern =
   /\[\d{4}\]\s+[A-Za-z][A-Za-z0-9 ]*?\s+\d+(?:\s+\([A-Za-z][A-Za-z0-9 ]*\))?/
 
@@ -662,6 +776,40 @@ function toFindCaseLawCourtParam(court: string) {
 
 function extractDate(value: string) {
   return value.match(/\d{4}-\d{2}-\d{2}/)?.[0]
+}
+
+function extractJudgmentTitleFromHtml(html: string) {
+  const title =
+    readTag(html, 'h1') ??
+    html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] ??
+    ''
+
+  return decodeHtml(
+    title
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+-\s+Find Case Law[\s\S]*$/i, '')
+      .replace(/\s+/g, ' ')
+      .trim(),
+  ) || null
+}
+
+function extractNeutralCitationFromHtml(html: string) {
+  const citationSource =
+    html.match(/Neutral Citation Number[\s\S]{0,300}/i)?.[0] ??
+    html.match(/judgment-header__neutral-citation[\s\S]{0,300}/i)?.[0] ??
+    html
+
+  return extractNeutralCitation(decodeHtml(citationSource.replace(/<[^>]+>/g, ' ')))
+}
+
+function extractJudgmentDateFromHtml(html: string) {
+  const isoDate = extractDate(html)
+  if (isoDate) return isoDate
+
+  const slashDate = html.match(/\bDate:\s*(\d{1,2})\/(\d{1,2})\/(\d{4})\b/i)
+  if (!slashDate) return null
+
+  return `${slashDate[3]}-${slashDate[2].padStart(2, '0')}-${slashDate[1].padStart(2, '0')}`
 }
 
 function decodeXml(value: string) {

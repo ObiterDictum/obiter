@@ -25,7 +25,7 @@ export function SearchResults({ response }: SearchResultsProps) {
             </span>
             <span className="case-law-result__actions">
               <span className="case-law-result__toggle">
-                {storedResultsAvailable ? 'Open case' : 'Open source'}
+                Open case
               </span>
               <span className="case-law-result__source">
                 {storedResultsAvailable ? 'Stored source' : 'Find Case Law'}
@@ -34,7 +34,7 @@ export function SearchResults({ response }: SearchResultsProps) {
           </>
         )
 
-        return storedResultsAvailable ? (
+        return (
           <article className="case-law-result" key={result.id}>
             <Link
               to="/cases/$caseId"
@@ -43,17 +43,6 @@ export function SearchResults({ response }: SearchResultsProps) {
             >
               {summary}
             </Link>
-          </article>
-        ) : (
-          <article className="case-law-result" key={result.id}>
-            <a
-              className="case-law-result__summary"
-              href={result.sourceUrl}
-              rel="noreferrer"
-              target="_blank"
-            >
-              {summary}
-            </a>
           </article>
         )
       })}
