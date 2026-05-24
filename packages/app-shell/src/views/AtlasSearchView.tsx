@@ -308,14 +308,19 @@ export function AtlasSearchView() {
             onClick={() => setFiltersOpen(false)}
           />
           <section className="atlas-filter-modal__panel">
+            <button
+              aria-label="Close search filters"
+              className="atlas-filter-modal__close"
+              type="button"
+              onClick={() => setFiltersOpen(false)}
+            >
+              <span aria-hidden="true">×</span>
+            </button>
             <header className="atlas-filter-modal__header">
               <div>
                 <p>Search filters</p>
                 <h2 id="atlas-filter-title">Refine results</h2>
               </div>
-              <button aria-label="Close search filters" type="button" onClick={() => setFiltersOpen(false)}>
-                <span aria-hidden="true">×</span>
-              </button>
             </header>
 
             <div className="atlas-filter-modal__groups">
