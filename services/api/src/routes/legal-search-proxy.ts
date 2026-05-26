@@ -108,6 +108,7 @@ const findCaseLawCourtParamByCourt = new Map(
   Array.from(supportedFindCaseLawCourts, (court) => [court, court.replace(/-/g, '/')]),
 )
 const storedSearchTimeoutMs = 350
+const sourceStoreStatementTimeout = `${storedSearchTimeoutMs}ms`
 
 const citationDivisionCourtByBaseCourt = new Map<string, Map<string, string>>([
   [
@@ -318,63 +319,83 @@ export function createPostgresLegalAuthoritySourceStore(pool: Pool): LegalAuthor
     },
     async search(query, filters) {
       const normalizedQuery = normalizeSearchText(query)
-      const result = await pool.query<LegalAuthoritySourceRow>(
-        `
-          select summary_json, document_json, provider_json
-          from legal_source_documents
-          where ($1::text is null or summary_json->>'court' = $1)
-            and ($2::text is null or summary_json->>'jurisdiction' = $2)
-            and ($3::text is null or summary_json->>'sourceType' = $3)
-            and ($4::text is null or summary_json->>'dateDecided' >= $4)
-            and ($5::text is null or summary_json->>'dateDecided' <= $5)
-            and (
-              $6::text = ''
-              or lower(summary_json::text || ' ' || coalesce(document_json::text, '')) like '%' || $6 || '%'
-            )
-          order by
-            case
-              when regexp_replace(
-                lower(trim(coalesce(summary_json->>'id', ''))),
-                '\\s+',
-                ' ',
-                'g'
-              ) = $7 then 3
-              when regexp_replace(
-                lower(trim(coalesce(summary_json->>'neutralCitation', ''))),
-                '\\s+',
-                ' ',
-                'g'
-              ) = $7 then 2
-              when regexp_replace(
-                lower(trim(coalesce(summary_json->>'title', ''))),
-                '\\s+',
-                ' ',
-                'g'
-              ) = $7 then 1
-              else 0
-            end desc,
-            summary_json->>'dateDecided' desc
-          limit 10
-        `,
-        [
-          filters.court ?? null,
-          filters.jurisdiction ?? null,
-          filters.sourceType ?? null,
-          filters.dateFrom ?? null,
-          filters.dateTo ?? null,
-          normalizedQuery,
-          normalizedQuery,
-        ],
-      )
+      const client = await pool.connect()
 
-      const documents = result.rows
-        .map((row) => {
-          const record = toStoredLegalAuthorityRecord(row)
-          return record?.document ?? record?.summary
-        })
-        .filter((document): document is LegalAuthority => Boolean(document))
+      try {
+        await client.query('begin')
+        await client.query('select set_config($1, $2, true)', [
+          'statement_timeout',
+          sourceStoreStatementTimeout,
+        ])
 
-      return rankLegalSearchHitsByExactMatch(documents, query)
+        const result = await client.query<LegalAuthoritySourceRow>(
+          `
+            select summary_json, document_json, provider_json
+            from legal_source_documents
+            where ($1::text is null or summary_json->>'court' = $1)
+              and ($2::text is null or summary_json->>'jurisdiction' = $2)
+              and ($3::text is null or summary_json->>'sourceType' = $3)
+              and ($4::text is null or summary_json->>'dateDecided' >= $4)
+              and ($5::text is null or summary_json->>'dateDecided' <= $5)
+              and (
+                $6::text = ''
+                or search_vector @@ websearch_to_tsquery('english', $6)
+                or regexp_replace(lower(trim(coalesce(summary_json->>'id', ''))), '\\s+', ' ', 'g') = $7
+                or regexp_replace(lower(trim(coalesce(summary_json->>'neutralCitation', ''))), '\\s+', ' ', 'g') = $7
+                or regexp_replace(lower(trim(coalesce(summary_json->>'title', ''))), '\\s+', ' ', 'g') = $7
+              )
+            order by
+              case
+                when regexp_replace(
+                  lower(trim(coalesce(summary_json->>'id', ''))),
+                  '\\s+',
+                  ' ',
+                  'g'
+                ) = $7 then 3
+                when regexp_replace(
+                  lower(trim(coalesce(summary_json->>'neutralCitation', ''))),
+                  '\\s+',
+                  ' ',
+                  'g'
+                ) = $7 then 2
+                when regexp_replace(
+                  lower(trim(coalesce(summary_json->>'title', ''))),
+                  '\\s+',
+                  ' ',
+                  'g'
+                ) = $7 then 1
+                else 0
+              end desc,
+              ts_rank_cd(search_vector, websearch_to_tsquery('english', $6)) desc,
+              summary_json->>'dateDecided' desc
+            limit 10
+          `,
+          [
+            filters.court ?? null,
+            filters.jurisdiction ?? null,
+            filters.sourceType ?? null,
+            filters.dateFrom ?? null,
+            filters.dateTo ?? null,
+            normalizedQuery,
+            normalizedQuery,
+          ],
+        )
+        await client.query('commit')
+
+        const documents = result.rows
+          .map((row) => {
+            const record = toStoredLegalAuthorityRecord(row)
+            return record?.document ?? record?.summary
+          })
+          .filter((document): document is LegalAuthority => Boolean(document))
+
+        return rankLegalSearchHitsByExactMatch(documents, query)
+      } catch (error) {
+        await client.query('rollback').catch(() => undefined)
+        throw error
+      } finally {
+        client.release()
+      }
     },
   }
 }
@@ -425,7 +446,6 @@ function documentMatchesSearch(
       document.id,
       document.title,
       document.neutralCitation,
-      ...(document.paragraphs ?? []).map((paragraph) => paragraph.text),
     ].join(' '),
   )
   const tokens = normalizedQuery.split(' ').filter(Boolean)
@@ -1094,29 +1114,36 @@ function entryMatchesFetchRequest(
 
 export function parseJudgmentParagraphs(html: string, documentId: string) {
   const judgmentHtml = extractJudgmentHtml(html)
-  const bodyText = decodeHtml(
-    judgmentHtml
-      .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
-      .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
-      .replace(/<nav\b[\s\S]*?<\/nav>/gi, ' ')
-      .replace(/<header\b[\s\S]*?<\/header>/gi, ' ')
-      .replace(/<footer\b[\s\S]*?<\/footer>/gi, ' ')
-      .replace(/<aside\b[\s\S]*?<\/aside>/gi, ' ')
-      .replace(/<\/(p|div|li|h[1-6])>/gi, '\n')
-      .replace(/<[^>]+>/g, ' '),
-  )
+  const structuredBlocks = Array.from(judgmentHtml.matchAll(/<(p|li)\b[^>]*>([\s\S]*?)<\/\1>/gi))
+    .map((match) => htmlFragmentToText(match[2]))
+  const fallbackBlocks = htmlFragmentToText(
+    judgmentHtml.replace(/<\/(p|div|li|h[1-6])>/gi, '\n'),
+  ).split(/\n+/)
+  const bodyBlocks = structuredBlocks.length > 0 ? structuredBlocks : fallbackBlocks
 
-  return bodyText
-    .split(/\n+/)
+  return bodyBlocks
     .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
     .filter(isJudgmentLine)
-    .filter((line) => line.length >= 30)
     .map((text, index) => ({
       id: `${documentId}-p${index + 1}`,
       documentId,
       paragraphNumber: index + 1,
       text,
     }))
+}
+
+function htmlFragmentToText(html: string) {
+  return decodeHtml(
+    html
+      .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<nav\b[\s\S]*?<\/nav>/gi, ' ')
+      .replace(/<header\b[\s\S]*?<\/header>/gi, ' ')
+      .replace(/<footer\b[\s\S]*?<\/footer>/gi, ' ')
+      .replace(/<aside\b[\s\S]*?<\/aside>/gi, ' ')
+      .replace(/<[^>]+>/g, ' '),
+  )
 }
 
 function extractJudgmentHtml(html: string) {

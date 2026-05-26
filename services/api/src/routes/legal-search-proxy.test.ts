@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { createLegalSearchProxyRoutes, parseFindCaseLawAtom, parseJudgmentParagraphs } from './legal-search-proxy'
+import {
+  createLegalSearchProxyRoutes,
+  createPostgresLegalAuthoritySourceStore,
+  parseFindCaseLawAtom,
+  parseJudgmentParagraphs,
+} from './legal-search-proxy'
 import type { ApiEnv } from '../env'
 
 const searchClientMock = vi.hoisted(() => ({
@@ -298,6 +303,67 @@ describe('createLegalSearchProxyRoutes', () => {
       'uksc-2026-10',
     ])
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('uses indexed metadata search and a database statement timeout for Postgres source fallback', async () => {
+    const queries: Array<{ text: string; values?: unknown[] }> = []
+    const client = {
+      query: vi.fn(async (text: string, values?: unknown[]) => {
+        queries.push({ text, values })
+        if (text.includes('from legal_source_documents')) {
+          return {
+            rows: [
+              {
+                summary_json: hit,
+                document_json: {
+                  ...hit,
+                  paragraphs: [
+                    {
+                      id: 'uksc-2024-1-p1',
+                      documentId: 'uksc-2024-1',
+                      paragraphNumber: 1,
+                      text: 'Stored paragraph text should not be scanned by fallback search.',
+                    },
+                  ],
+                },
+                provider_json: {
+                  documentUri: '/uksc/2024/3',
+                  sourceUri: '/uksc/2024/3',
+                  xmlUri: null,
+                  pdfUri: null,
+                  contentHash: 'abc123',
+                  rawAtomEntry: '<entry />',
+                },
+              },
+            ],
+          }
+        }
+
+        return { rows: [] }
+      }),
+      release: vi.fn(),
+    }
+    const pool = {
+      connect: vi.fn(async () => client),
+    }
+    const store = createPostgresLegalAuthoritySourceStore(pool as never)
+
+    const results = await store.search('Potanina', { court: 'uksc' })
+
+    expect(results).toMatchObject([{ id: 'uksc-2024-1' }])
+    expect(client.query).toHaveBeenCalledWith('begin')
+    expect(client.query).toHaveBeenCalledWith('select set_config($1, $2, true)', [
+      'statement_timeout',
+      '350ms',
+    ])
+    expect(client.query).toHaveBeenCalledWith('commit')
+    expect(client.release).toHaveBeenCalled()
+    const searchSql = queries.find((query) =>
+      query.text.includes('from legal_source_documents'),
+    )?.text
+    expect(searchSql).toContain('search_vector @@ websearch_to_tsquery')
+    expect(searchSql).not.toContain('document_json::text')
+    expect(searchSql).not.toContain("summary_json::text || ' '")
   })
 
   it('queues Find Case Law hydration when stored search is unavailable', async () => {
@@ -1364,6 +1430,34 @@ describe('Find Case Law parsing', () => {
     expect(result.at(-1)).toMatchObject({ paragraphNumber: 90 })
   })
 
+  it('preserves short legal paragraphs in parsed case documents', () => {
+    expect(
+      parseJudgmentParagraphs(
+        '<article><p>I agree.</p><p>Appeal dismissed.</p><p>This longer paragraph confirms the judgment parser keeps ordinary judgment text.</p></article>',
+        'uksc-2024-3',
+      ),
+    ).toEqual([
+      {
+        id: 'uksc-2024-3-p1',
+        documentId: 'uksc-2024-3',
+        paragraphNumber: 1,
+        text: 'I agree.',
+      },
+      {
+        id: 'uksc-2024-3-p2',
+        documentId: 'uksc-2024-3',
+        paragraphNumber: 2,
+        text: 'Appeal dismissed.',
+      },
+      {
+        id: 'uksc-2024-3-p3',
+        documentId: 'uksc-2024-3',
+        paragraphNumber: 3,
+        text: 'This longer paragraph confirms the judgment parser keeps ordinary judgment text.',
+      },
+    ])
+  })
+
   it('uses stable tna document URIs while preserving the human source URL', () => {
     expect(
       parseFindCaseLawAtom(
@@ -1431,7 +1525,8 @@ describeLiveFindCaseLaw('Find Case Law live retrieval', () => {
       expect(await response.json()).toMatchObject({
         cached: false,
         indexedCount: 0,
-        hits: [expect.objectContaining({ neutralCitation: citation, court: storedCourt })],
+        hydrationQueued: true,
+        hits: [],
       })
       await vi.waitFor(() =>
         expect(searchClientMock.indexDocuments).toHaveBeenCalledWith(

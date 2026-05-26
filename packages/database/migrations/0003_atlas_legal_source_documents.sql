@@ -7,6 +7,11 @@ create table if not exists legal_source_documents (
   source_uri text not null,
   xml_uri text,
   pdf_uri text,
+  search_vector tsvector generated always as (
+    setweight(to_tsvector('english', coalesce(summary_json->>'id', '')), 'A') ||
+    setweight(to_tsvector('english', coalesce(summary_json->>'neutralCitation', '')), 'A') ||
+    setweight(to_tsvector('english', coalesce(summary_json->>'title', '')), 'B')
+  ) stored,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   constraint legal_source_documents_document_id_not_blank_check check (length(btrim(document_id)) > 0),
@@ -44,3 +49,6 @@ create index if not exists legal_source_documents_summary_gin_idx
 
 create index if not exists legal_source_documents_provider_gin_idx
   on legal_source_documents using gin (provider_json);
+
+create index if not exists legal_source_documents_search_vector_idx
+  on legal_source_documents using gin (search_vector);

@@ -4,7 +4,6 @@ import { dirname, join } from 'node:path'
 const requiredProductionKeys = [
   'MEILISEARCH_HOST',
   'MEILISEARCH_ADMIN_API_KEY',
-  'LEGAL_AUTHORITIES_INDEX',
 ] as const
 
 let localEnvLoaded = false
@@ -31,7 +30,10 @@ function requireProductionEnv(nodeEnv: LegalIngestorEnv['nodeEnv']) {
     return
   }
 
-  const missing = requiredProductionKeys.filter((key) => !process.env[key])
+  const missing: string[] = requiredProductionKeys.filter((key) => !process.env[key])
+  if (!process.env.LEGAL_AUTHORITIES_INDEX && !process.env.ATLAS_AUTHORITIES_INDEX) {
+    missing.push('LEGAL_AUTHORITIES_INDEX or ATLAS_AUTHORITIES_INDEX')
+  }
 
   if (missing.length > 0) {
     throw new Error(`Missing required production environment values: ${missing.join(', ')}`)
@@ -87,6 +89,18 @@ function readIndexName(key: string, fallback: string) {
   return trimmed
 }
 
+function readLegalAuthoritiesIndexName() {
+  if (process.env.LEGAL_AUTHORITIES_INDEX) {
+    return readIndexName('LEGAL_AUTHORITIES_INDEX', 'legal_authorities')
+  }
+
+  if (process.env.ATLAS_AUTHORITIES_INDEX) {
+    return readIndexName('ATLAS_AUTHORITIES_INDEX', 'legal_authorities')
+  }
+
+  return readIndexName('LEGAL_AUTHORITIES_INDEX', 'legal_authorities')
+}
+
 function loadLocalDotEnv() {
   if (localEnvLoaded || process.env.NODE_ENV === 'test' || process.env.VITEST) {
     return
@@ -140,10 +154,7 @@ export function readLegalIngestorEnv(): LegalIngestorEnv {
   return {
     meilisearchHost: readRequiredUrl('MEILISEARCH_HOST', 'http://localhost:7700'),
     meilisearchAdminApiKey: readAdminApiKey(nodeEnv),
-    legalAuthoritiesIndex: readIndexName(
-      'LEGAL_AUTHORITIES_INDEX',
-      'legal_authorities',
-    ),
+    legalAuthoritiesIndex: readLegalAuthoritiesIndexName(),
     mojFindCaseLawBaseUrl: readRequiredUrl(
       'MOJ_FIND_CASE_LAW_BASE_URL',
       'https://caselaw.nationalarchives.gov.uk',

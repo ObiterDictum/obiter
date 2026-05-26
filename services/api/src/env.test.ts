@@ -61,6 +61,7 @@ describe('readApiEnv', () => {
     delete process.env.MEILISEARCH_SEARCH_API_KEY
     delete process.env.MEILISEARCH_ADMIN_API_KEY
     delete process.env.LEGAL_AUTHORITIES_INDEX
+    delete process.env.ATLAS_AUTHORITIES_INDEX
 
     expect(() => readApiEnv()).toThrow('Missing required production environment values')
   })
@@ -134,6 +135,29 @@ describe('readApiEnv', () => {
     expect(() => readApiEnv()).toThrow(
       'MOJ_FIND_CASE_LAW_RATE_LIMIT must be a positive integer.',
     )
+  })
+
+  it('supports the legacy Atlas index key during the legal index migration', () => {
+    process.env.NODE_ENV = 'production'
+    process.env.DATABASE_URL = 'postgres://ormont:ormont@db.example.com:5432/ormont'
+    process.env.BETTER_AUTH_SECRET = '0123456789abcdef0123456789abcdef'
+    process.env.BETTER_AUTH_URL = 'https://api.ormont.example'
+    process.env.ORMONT_WEB_ORIGIN = 'https://app.ormont.example'
+    process.env.ORMONT_MAGIC_LINK_WEBHOOK_URL =
+      'https://mail.ormont.example/magic-link'
+    process.env.ORMONT_MAGIC_LINK_WEBHOOK_SECRET =
+      '0123456789abcdef0123456789abcdef'
+    process.env.MEILISEARCH_HOST = 'https://search.ormont.example'
+    process.env.MEILISEARCH_SEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
+    process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'
+    delete process.env.LEGAL_AUTHORITIES_INDEX
+    process.env.ATLAS_AUTHORITIES_INDEX = 'atlas_authorities'
+
+    expect(readApiEnv().legalAuthoritiesIndex).toBe('atlas_authorities')
+
+    process.env.LEGAL_AUTHORITIES_INDEX = 'legal_authorities'
+
+    expect(readApiEnv().legalAuthoritiesIndex).toBe('legal_authorities')
   })
 
   it('parses valid production configuration', () => {
