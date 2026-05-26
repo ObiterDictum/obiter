@@ -5,7 +5,10 @@ import type { ApiErrorCode, ApiErrorResponse, MeResponse } from '@ormont/contrac
 import { appendAuditLog, findOrganisation, toCurrentUser } from './database'
 import type { ApiEnv } from './env'
 import { createAuth } from './auth'
-import { createLegalSearchProxyRoutes } from './routes/legal-search-proxy'
+import {
+  createLegalSearchProxyRoutes,
+  createPostgresLegalAuthoritySourceStore,
+} from './routes/legal-search-proxy'
 import { createLegalSearchRoutes } from './routes/legal-search'
 import { createChangelogRoutes } from './routes/changelog'
 import { createDocumentsRoutes } from './routes/documents'
@@ -134,7 +137,7 @@ export function createApiApp(env: ApiEnv, pool: Pool, options: ApiAppOptions = {
   app.route('/', createMattersRoutes(pool))
   app.route('/', createDocumentsRoutes(pool))
   app.route('/', createLegalSearchRoutes(env))
-  app.route('/', createLegalSearchProxyRoutes(env))
+  app.route('/', createLegalSearchProxyRoutes(env, createPostgresLegalAuthoritySourceStore(pool)))
   app.route('/', createChangelogRoutes())
 
   app.get('/api/me', async (c) => {

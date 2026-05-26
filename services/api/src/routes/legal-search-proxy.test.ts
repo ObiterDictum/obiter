@@ -143,7 +143,7 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('returns Find Case Law summaries immediately and hydrates the index after a cache miss', async () => {
+  it('queues Find Case Law hydration after a cache miss without returning provider results in the foreground', async () => {
     searchClientMock.search.mockResolvedValueOnce({
       hits: [],
       query: 'Potanina',
@@ -179,7 +179,8 @@ describe('createLegalSearchProxyRoutes', () => {
       cached: false,
       indexedCount: 0,
       skippedCount: 0,
-      hits: [{ neutralCitation: '[2024] UKSC 3' }],
+      hydrationQueued: true,
+      hits: [],
     })
     await vi.waitFor(() =>
       expect(searchClientMock.indexDocuments).toHaveBeenCalledWith(
@@ -196,7 +197,57 @@ describe('createLegalSearchProxyRoutes', () => {
     )
   })
 
-  it('continues to Find Case Law when stored search is unavailable', async () => {
+  it('serves later search misses from Ormont-owned source storage without calling Find Case Law again', async () => {
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: 'Potanina',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    searchClientMock.indexDocuments.mockResolvedValue({
+      indexedCount: 1,
+      failedCount: 0,
+      errors: [],
+    })
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          `<feed><entry><title>Potanina v Potanin</title><link href="https://caselaw.nationalarchives.gov.uk/uksc/2024/3" rel="alternate"/><published>2024-01-31T00:00:00Z</published><tna:identifier slug="uksc/2024/3" type="ukncn">[2024] UKSC 3</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry></feed>`,
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          '<html><body><p>This is a long enough judgment paragraph mentioning Potanina and the appeal.</p></body></html>',
+        ),
+      )
+    const app = createLegalSearchProxyRoutes(env)
+
+    const firstResponse = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'Potanina', court: 'uksc' }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(firstResponse.status).toBe(200)
+    expect(await firstResponse.json()).toMatchObject({ hydrationQueued: true, hits: [] })
+    await vi.waitFor(() => expect(searchClientMock.indexDocuments).toHaveBeenCalled())
+
+    fetchMock.mockClear()
+    const secondResponse = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'Potanina', court: 'uksc' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(secondResponse.status).toBe(200)
+    expect(await secondResponse.json()).toMatchObject({
+      cached: true,
+      hits: [{ id: 'uksc-2024-3', neutralCitation: '[2024] UKSC 3' }],
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('queues Find Case Law hydration when stored search is unavailable', async () => {
     searchClientMock.search.mockRejectedValueOnce(new Error('index missing'))
     searchClientMock.indexDocuments.mockResolvedValueOnce({
       indexedCount: 1,
@@ -226,11 +277,19 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(await response.json()).toMatchObject({
       cached: false,
       indexedCount: 0,
-      hits: [{ id: 'uksc-2024-3' }],
+      hydrationQueued: true,
+      hits: [],
     })
+    await vi.waitFor(() =>
+      expect(searchClientMock.indexDocuments).toHaveBeenCalledWith(
+        { id: 'meili-client' },
+        'legal_authorities',
+        [expect.objectContaining({ id: 'uksc-2024-3' })],
+      ),
+    )
   })
 
-  it('continues to Find Case Law when stored search is slow', async () => {
+  it('queues Find Case Law hydration when stored search is slow', async () => {
     searchClientMock.search.mockImplementationOnce(() => new Promise(() => undefined))
     searchClientMock.indexDocuments.mockResolvedValueOnce({
       indexedCount: 1,
@@ -260,11 +319,19 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(await response.json()).toMatchObject({
       cached: false,
       indexedCount: 0,
-      hits: [{ id: 'uksc-2024-3' }],
+      hydrationQueued: true,
+      hits: [],
     })
+    await vi.waitFor(() =>
+      expect(searchClientMock.indexDocuments).toHaveBeenCalledWith(
+        { id: 'meili-client' },
+        'legal_authorities',
+        [expect.objectContaining({ id: 'uksc-2024-3' })],
+      ),
+    )
   })
 
-  it('returns fetched results even when indexing is unavailable', async () => {
+  it('keeps foreground search available when background indexing is unavailable', async () => {
     searchClientMock.search.mockResolvedValueOnce({
       hits: [],
       query: 'Potanina',
@@ -296,8 +363,10 @@ describe('createLegalSearchProxyRoutes', () => {
       cached: false,
       indexedCount: 0,
       skippedCount: 0,
-      hits: [{ id: 'uksc-2024-3' }],
+      hydrationQueued: true,
+      hits: [],
     })
+    await vi.waitFor(() => expect(searchClientMock.indexDocuments).toHaveBeenCalled())
   })
 
   it('rejects unsupported Find Case Law metadata filters before cache or fetch', async () => {
@@ -457,7 +526,7 @@ describe('createLegalSearchProxyRoutes', () => {
   })
 
   it.each(findCaseLawCourtCases)(
-    'returns a summary and hydrates the index for $requestCourt',
+    'queues hydration and indexes $requestCourt results from Find Case Law',
     async ({ requestCourt, apiCourt, storedCourt, citation }) => {
       searchClientMock.search.mockResolvedValueOnce({
         hits: [],
@@ -496,7 +565,8 @@ describe('createLegalSearchProxyRoutes', () => {
         cached: false,
         indexedCount: 0,
         skippedCount: 0,
-        hits: [{ neutralCitation: citation, court: storedCourt }],
+        hydrationQueued: true,
+        hits: [],
       })
       expect(fetchMock).toHaveBeenNthCalledWith(
         1,
@@ -574,6 +644,58 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(url.searchParams.get('to_date_2')).toBe('2025')
   })
 
+  it('follows Find Case Law Atom next pages before concluding date-filtered misses are empty', async () => {
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [],
+      query: 'Potanina',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    searchClientMock.indexDocuments.mockResolvedValueOnce({
+      indexedCount: 1,
+      failedCount: 0,
+      errors: [],
+    })
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          `<feed><link rel="next" href="https://caselaw.nationalarchives.gov.uk/atom.xml?page=2"/><entry><title>Old Potanina v Potanin</title><link href="https://caselaw.nationalarchives.gov.uk/uksc/2023/1" rel="alternate"/><published>2023-01-31T00:00:00Z</published><tna:identifier slug="uksc/2023/1" type="ukncn">[2023] UKSC 1</tna:identifier><tna:contenthash>old123</tna:contenthash></entry></feed>`,
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          `<feed><entry><title>Potanina v Potanin</title><link href="https://caselaw.nationalarchives.gov.uk/uksc/2024/3" rel="alternate"/><published>2024-01-31T00:00:00Z</published><tna:identifier slug="uksc/2024/3" type="ukncn">[2024] UKSC 3</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry></feed>`,
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          '<html><body><p>This is a long enough judgment paragraph mentioning Potanina and pagination.</p></body></html>',
+        ),
+      )
+    const app = createLegalSearchProxyRoutes(env)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'Potanina', dateFrom: '2024-01-01' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ hydrationQueued: true, hits: [] })
+    await vi.waitFor(() =>
+      expect(searchClientMock.indexDocuments).toHaveBeenCalledWith(
+        { id: 'meili-client' },
+        'legal_authorities',
+        [expect.objectContaining({ id: 'uksc-2024-3' })],
+      ),
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ search: expect.stringContaining('page=2') }),
+    )
+  })
+
   it('does not re-index documents already returned from cache during fetch', async () => {
     searchClientMock.search.mockResolvedValueOnce({
       hits: [hit],
@@ -596,7 +718,7 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
   })
 
-  it('returns a summary when background detail hydration fails', async () => {
+  it('keeps the foreground response queued when background detail hydration fails', async () => {
     searchClientMock.search.mockResolvedValueOnce({
       hits: [],
       query: 'Potanina',
@@ -622,12 +744,14 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(await response.json()).toMatchObject({
       indexedCount: 0,
       skippedCount: 0,
-      hits: [{ id: 'uksc-2024-3' }],
+      hydrationQueued: true,
+      hits: [],
     })
+    await vi.waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(2))
     expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
   })
 
-  it('returns summaries when the local rate limit is exhausted during background hydration', async () => {
+  it('keeps the foreground response queued when the local rate limit is exhausted during background hydration', async () => {
     searchClientMock.search.mockResolvedValueOnce({
       hits: [],
       query: 'Potanina',
@@ -651,11 +775,13 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(await response.json()).toMatchObject({
       cached: false,
       indexedCount: 0,
-      hits: [{ id: 'uksc-2024-3' }],
+      hydrationQueued: true,
+      hits: [],
     })
+    expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
   })
 
-  it('returns Court of Appeal and High Court summaries and hydrates the index', async () => {
+  it('queues Court of Appeal and High Court hydration and indexes provider documents', async () => {
     searchClientMock.search.mockResolvedValueOnce({
       hits: [],
       query: 'Example',
@@ -696,10 +822,8 @@ describe('createLegalSearchProxyRoutes', () => {
       cached: false,
       indexedCount: 0,
       skippedCount: 0,
-      hits: [
-        { neutralCitation: '[2024] EWCA Civ 7', court: 'ewca-civ' },
-        { neutralCitation: '[2026] EWHC 1157 (Admin)', court: 'ewhc-admin' },
-      ],
+      hydrationQueued: true,
+      hits: [],
     })
     await vi.waitFor(() =>
       expect(searchClientMock.indexDocuments).toHaveBeenCalledWith(
@@ -721,7 +845,7 @@ describe('createLegalSearchProxyRoutes', () => {
     )
   })
 
-  it('returns a retry hint when Find Case Law is rate limited', async () => {
+  it('does not expose Find Case Law rate limits on foreground search misses', async () => {
     searchClientMock.search.mockResolvedValueOnce({
       hits: [],
       query: 'Potanina',
@@ -739,15 +863,15 @@ describe('createLegalSearchProxyRoutes', () => {
       headers: { 'content-type': 'application/json' },
     })
 
-    expect(response.status).toBe(503)
+    expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({
-      error: { code: 'storage_unavailable' },
-      retryAfter: '120',
-      cachedHits: [],
+      cached: false,
+      hydrationQueued: true,
+      hits: [],
     })
   })
 
-  it('returns a clear error when Find Case Law is unavailable', async () => {
+  it('does not expose Find Case Law outages on foreground search misses', async () => {
     searchClientMock.search.mockResolvedValueOnce({
       hits: [],
       query: 'Potanina',
@@ -763,12 +887,11 @@ describe('createLegalSearchProxyRoutes', () => {
       headers: { 'content-type': 'application/json' },
     })
 
-    expect(response.status).toBe(503)
+    expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({
-      error: {
-        code: 'storage_unavailable',
-        message: 'Find Case Law is unavailable.',
-      },
+      cached: false,
+      hydrationQueued: true,
+      hits: [],
     })
   })
 
@@ -859,32 +982,58 @@ describe('createLegalSearchProxyRoutes', () => {
     })
   })
 
-  it('fetches stable d-style Find Case Law document URIs when stored lookup misses', async () => {
+  it('opens stable d-style documents through saved Atom alternate metadata instead of /d-id paths', async () => {
     const documentId = 'd-f11e093f-8a53-4e43-8dd8-1531b5d8f018'
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [],
+      query: 'Craig Alfred',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
     searchClientMock.getDocument.mockRejectedValueOnce(new Error('not found'))
-    searchClientMock.indexDocuments.mockResolvedValueOnce({
+    searchClientMock.indexDocuments.mockResolvedValue({
       indexedCount: 1,
       failedCount: 0,
       errors: [],
     })
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
-      new Response(
-        `<html><body><h1>Jarndyce v Jarndyce</h1><h2><span>Neutral Citation Number</span>[2024] UKSC 123</h2><article><div class="judgment-header__date">Date: 30/04/2025</div><p>This stable URI judgment paragraph is long enough to render.</p></article></body></html>`,
-      ),
-    )
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          `<feed><entry><title>Craig Alfred v Information Commissioner</title><id>https://caselaw.nationalarchives.gov.uk/id/${documentId}</id><link href="https://caselaw.nationalarchives.gov.uk/ukftt/grc/2026/754" rel="alternate"/><link href="https://caselaw.nationalarchives.gov.uk/ukftt/grc/2026/754/data.xml" rel="alternate" type="application/xml"/><published>2026-05-21T00:00:00Z</published><tna:uri>${documentId}</tna:uri><tna:identifier slug="ukftt/grc/2026/754" type="ukncn">[2026] UKFTT 754 (GRC)</tna:identifier><tna:contenthash>stable-abc</tna:contenthash></entry></feed>`,
+        ),
+      )
+      .mockImplementationOnce(() => new Promise<Response>(() => undefined))
+      .mockResolvedValueOnce(
+        new Response(
+          `<html><body><h1>Craig Alfred v Information Commissioner</h1><h2><span>Neutral Citation Number</span>[2026] UKFTT 754 (GRC)</h2><article><div class="judgment-header__date">Date: 21/05/2026</div><p>This tribunal judgment paragraph is long enough to render from the alternate URL.</p></article></body></html>`,
+        ),
+      )
     const app = createLegalSearchProxyRoutes(env)
+
+    const searchResponse = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'Craig Alfred', court: 'ukftt/grc' }),
+      headers: { 'content-type': 'application/json' },
+    })
+    expect(searchResponse.status).toBe(200)
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
 
     const response = await app.request(`/api/search/documents/${documentId}`)
 
     expect(response.status).toBe(200)
-    expect(fetchMock).toHaveBeenCalledWith(
-      expect.objectContaining({ pathname: `/${documentId}` }),
+    expect(fetchMock.mock.calls.map((call) => (call[0] as URL).pathname)).not.toContain(
+      `/${documentId}`,
+    )
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({ pathname: '/ukftt/grc/2026/754' }),
     )
     expect(await response.json()).toMatchObject({
       document: {
         id: documentId,
-        neutralCitation: '[2024] UKSC 123',
-        court: 'uksc',
+        neutralCitation: '[2026] UKFTT 754 (GRC)',
+        court: 'ukftt-grc',
       },
     })
   })
@@ -1032,6 +1181,7 @@ describe('Find Case Law parsing', () => {
         neutralCitation: '[2024] UKSC 123',
         uri: '/d-f11e093f-8a53-4e43-8dd8-1531b5d8f018',
         sourceUri: '/uksc/2024/123',
+        xmlUri: '/uksc/2024/123/data.xml',
       },
     ])
   })

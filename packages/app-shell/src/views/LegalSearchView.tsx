@@ -119,7 +119,7 @@ export function LegalSearchView() {
       setState(
         body.hits.length > 0
           ? { status: 'results', query: trimmedQuery, response: body }
-          : { status: 'empty', query: trimmedQuery },
+          : { status: 'empty', query: trimmedQuery, hydrationQueued: body.hydrationQueued },
       )
     } catch {
       if (searchRequestId.current !== requestId) return
@@ -207,9 +207,13 @@ export function LegalSearchView() {
 
       {state.status === 'empty' ? (
         <SearchFeedbackPanel
-          eyebrow="No results"
-          title="No sources found"
-          body={`No stored or Find Case Law results matched "${state.query}" with the selected filters.`}
+          eyebrow={state.hydrationQueued ? 'Search queued' : 'No results'}
+          title={state.hydrationQueued ? 'Checking legal sources' : 'No sources found'}
+          body={
+            state.hydrationQueued
+              ? `Stored sources did not yet have "${state.query}". Public legal source hydration is queued; retry shortly for newly indexed results.`
+              : `No stored legal sources matched "${state.query}" with the selected filters.`
+          }
           tone="warning"
         />
       ) : null}

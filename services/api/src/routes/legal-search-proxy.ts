@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
+import type { Pool, QueryResultRow } from 'pg'
 import { LegalAuthoritySchema, type LegalAuthority } from '@ormont/legal-schema'
 import {
   createClient,
@@ -23,7 +24,33 @@ interface AtomEntry {
   dateDecided: string
   uri: string
   sourceUri: string
+  xmlUri: string | null
+  pdfUri: string | null
   contentHash: string
+  rawXml: string
+}
+
+interface ProviderSourceMetadata {
+  documentUri: string
+  sourceUri: string
+  xmlUri: string | null
+  pdfUri: string | null
+  contentHash: string
+  rawAtomEntry: string
+  rawDocumentHtml?: string
+}
+
+interface StoredLegalAuthorityRecord {
+  summary: LegalAuthority
+  document?: LegalAuthority
+  provider: ProviderSourceMetadata
+}
+
+interface LegalAuthoritySourceStore {
+  upsertSummary(summary: LegalAuthority, provider: ProviderSourceMetadata): Promise<void>
+  upsertDocument(document: LegalAuthority, provider: ProviderSourceMetadata): Promise<void>
+  get(documentId: string): Promise<StoredLegalAuthorityRecord | null>
+  search(query: string, filters: LegalSearchFilters): Promise<LegalAuthority[]>
 }
 
 export interface LegalFetchSearchHit extends LegalSearchHit {
@@ -136,6 +163,8 @@ const legalFetchRequestSchema = z.object({
   dateTo: z.string().date().optional(),
 })
 
+type LegalFetchRequest = z.infer<typeof legalFetchRequestSchema>
+
 const legalDocumentIdSchema = z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
 
 function apiError(
@@ -152,7 +181,233 @@ function apiError(
   }
 }
 
-export function createLegalSearchProxyRoutes(env: ApiEnv) {
+function createInMemoryLegalAuthoritySourceStore(): LegalAuthoritySourceStore {
+  const records = new Map<string, StoredLegalAuthorityRecord>()
+
+  return {
+    async upsertSummary(summary: LegalAuthority, provider: ProviderSourceMetadata) {
+      const existing = records.get(summary.id)
+      records.set(summary.id, {
+        summary,
+        document: existing?.document,
+        provider: {
+          ...existing?.provider,
+          ...provider,
+        },
+      })
+    },
+    async upsertDocument(document: LegalAuthority, provider: ProviderSourceMetadata) {
+      const existing = records.get(document.id)
+      records.set(document.id, {
+        summary: existing?.summary ?? toAuthoritySummary(document),
+        document,
+        provider: {
+          ...existing?.provider,
+          ...provider,
+        },
+      })
+    },
+    async get(documentId: string) {
+      return records.get(documentId) ?? null
+    },
+    async search(query: string, filters: LegalSearchFilters) {
+      const normalizedQuery = normalizeSearchText(query)
+      return Array.from(records.values())
+        .map((record) => record.document ?? record.summary)
+        .filter((document) => documentMatchesSearch(document, normalizedQuery, filters))
+        .sort((left, right) => right.dateDecided.localeCompare(left.dateDecided))
+        .slice(0, 10)
+    },
+  }
+}
+
+interface LegalAuthoritySourceRow extends QueryResultRow {
+  summary_json: unknown
+  document_json: unknown | null
+  provider_json: ProviderSourceMetadata
+}
+
+export function createPostgresLegalAuthoritySourceStore(pool: Pool): LegalAuthoritySourceStore {
+  return {
+    async upsertSummary(summary, provider) {
+      await pool.query(
+        `
+          insert into legal_source_documents (
+            document_id,
+            summary_json,
+            provider_json,
+            content_hash,
+            source_uri,
+            xml_uri,
+            pdf_uri,
+            updated_at
+          )
+          values ($1, $2::jsonb, $3::jsonb, $4, $5, $6, $7, now())
+          on conflict (document_id) do update set
+            summary_json = excluded.summary_json,
+            provider_json = legal_source_documents.provider_json || excluded.provider_json,
+            content_hash = excluded.content_hash,
+            source_uri = excluded.source_uri,
+            xml_uri = excluded.xml_uri,
+            pdf_uri = excluded.pdf_uri,
+            updated_at = now()
+        `,
+        [
+          summary.id,
+          JSON.stringify(summary),
+          JSON.stringify(provider),
+          provider.contentHash,
+          provider.sourceUri,
+          provider.xmlUri,
+          provider.pdfUri,
+        ],
+      )
+    },
+    async upsertDocument(document, provider) {
+      const summary = toAuthoritySummary(document)
+      await pool.query(
+        `
+          insert into legal_source_documents (
+            document_id,
+            summary_json,
+            document_json,
+            provider_json,
+            content_hash,
+            source_uri,
+            xml_uri,
+            pdf_uri,
+            updated_at
+          )
+          values ($1, $2::jsonb, $3::jsonb, $4::jsonb, $5, $6, $7, $8, now())
+          on conflict (document_id) do update set
+            summary_json = excluded.summary_json,
+            document_json = excluded.document_json,
+            provider_json = legal_source_documents.provider_json || excluded.provider_json,
+            content_hash = excluded.content_hash,
+            source_uri = excluded.source_uri,
+            xml_uri = excluded.xml_uri,
+            pdf_uri = excluded.pdf_uri,
+            updated_at = now()
+        `,
+        [
+          document.id,
+          JSON.stringify(summary),
+          JSON.stringify(document),
+          JSON.stringify(provider),
+          provider.contentHash,
+          provider.sourceUri,
+          provider.xmlUri,
+          provider.pdfUri,
+        ],
+      )
+    },
+    async get(documentId) {
+      const result = await pool.query<LegalAuthoritySourceRow>(
+        `
+          select summary_json, document_json, provider_json
+          from legal_source_documents
+          where document_id = $1
+        `,
+        [documentId],
+      )
+
+      return toStoredLegalAuthorityRecord(result.rows[0])
+    },
+    async search(query, filters) {
+      const result = await pool.query<LegalAuthoritySourceRow>(
+        `
+          select summary_json, document_json, provider_json
+          from legal_source_documents
+          where ($1::text is null or summary_json->>'court' = $1)
+            and ($2::text is null or summary_json->>'jurisdiction' = $2)
+            and ($3::text is null or summary_json->>'sourceType' = $3)
+            and ($4::text is null or summary_json->>'dateDecided' >= $4)
+            and ($5::text is null or summary_json->>'dateDecided' <= $5)
+            and (
+              $6::text = ''
+              or lower(summary_json::text || ' ' || coalesce(document_json::text, '')) like '%' || $6 || '%'
+            )
+          order by summary_json->>'dateDecided' desc
+          limit 10
+        `,
+        [
+          filters.court ?? null,
+          filters.jurisdiction ?? null,
+          filters.sourceType ?? null,
+          filters.dateFrom ?? null,
+          filters.dateTo ?? null,
+          normalizeSearchText(query),
+        ],
+      )
+
+      return result.rows
+        .map((row) => {
+          const record = toStoredLegalAuthorityRecord(row)
+          return record?.document ?? record?.summary
+        })
+        .filter((document): document is LegalAuthority => Boolean(document))
+    },
+  }
+}
+
+function toStoredLegalAuthorityRecord(row?: LegalAuthoritySourceRow): StoredLegalAuthorityRecord | null {
+  if (!row) return null
+
+  const summary = LegalAuthoritySchema.parse(row.summary_json)
+  const document = row.document_json ? LegalAuthoritySchema.parse(row.document_json) : undefined
+
+  return {
+    summary,
+    document,
+    provider: row.provider_json,
+  }
+}
+
+function toAuthoritySummary(document: LegalAuthority): LegalAuthority {
+  return {
+    id: document.id,
+    title: document.title,
+    neutralCitation: document.neutralCitation,
+    court: document.court,
+    jurisdiction: document.jurisdiction,
+    dateDecided: document.dateDecided,
+    sourceType: document.sourceType,
+    sourceUrl: document.sourceUrl,
+  }
+}
+
+function normalizeSearchText(value: string) {
+  return value.toLowerCase().replace(/\s+/g, ' ').trim()
+}
+
+function documentMatchesSearch(
+  document: LegalAuthority,
+  normalizedQuery: string,
+  filters: LegalSearchFilters,
+) {
+  if (filters.court && document.court !== filters.court) return false
+  if (filters.jurisdiction && document.jurisdiction !== filters.jurisdiction) return false
+  if (filters.sourceType && document.sourceType !== filters.sourceType) return false
+  if (filters.dateFrom && document.dateDecided < filters.dateFrom) return false
+  if (filters.dateTo && document.dateDecided > filters.dateTo) return false
+
+  const haystack = normalizeSearchText(
+    [
+      document.id,
+      document.title,
+      document.neutralCitation,
+      ...(document.paragraphs ?? []).map((paragraph) => paragraph.text),
+    ].join(' '),
+  )
+  const tokens = normalizedQuery.split(' ').filter(Boolean)
+
+  return tokens.length === 0 || tokens.every((token) => haystack.includes(token))
+}
+
+export function createLegalSearchProxyRoutes(
+  env: ApiEnv,
+  legalAuthorityStore: LegalAuthoritySourceStore = createInMemoryLegalAuthoritySourceStore(),
+) {
   const app = new Hono<{ Variables: LegalSearchProxyRouteVariables }>()
   const searchClient = createClient(env.meilisearchHost, env.meilisearchSearchApiKey)
   const indexClient = createClient(env.meilisearchHost, env.meilisearchAdminApiKey)
@@ -183,48 +438,34 @@ export function createLegalSearchProxyRoutes(env: ApiEnv) {
       )
     }
 
-    const mojResult = await fetchMojAuthoritySummaries(env, parsed.data, mojRateLimiter)
-
-    if (mojResult.status === 'rate_limited') {
-      return c.json(
-        {
-          ...apiError('storage_unavailable', 'Find Case Law is rate limited.', requestId),
-          retryAfter: mojResult.retryAfter,
-          cachedHits: cached.hits,
-        },
-        503,
-      )
-    }
-
-    if (mojResult.status === 'unavailable') {
-      return c.json(
-        {
-          ...apiError('storage_unavailable', 'Find Case Law is unavailable.', requestId),
-          cachedHits: cached.hits,
-        },
-        503,
-      )
-    }
-
-    const documents = mojResult.documents.filter((document) =>
-      !cached.hits.some((hit) => hit.id === document.id),
+    const storedDocuments = await searchLegalAuthoritySourceStore(
+      legalAuthorityStore,
+      parsed.data.query,
+      filters,
     )
+    if (storedDocuments.length > 0) {
+      return c.json(
+        toFetchResponse(storedDocuments.map(toHit), parsed.data.query, true, 0, 0),
+      )
+    }
 
-    void hydrateAndIndexMojAuthorities(
+    void hydrateMojAuthoritiesFromSearch(
       env,
+      legalAuthorityStore,
       indexClient,
       env.legalAuthoritiesIndex,
-      mojResult.entries,
+      parsed.data,
       mojRateLimiter,
     )
 
     return c.json(
       toFetchResponse(
-        documents.map(toHit),
+        [],
         parsed.data.query,
         false,
         0,
-        mojResult.skippedCount,
+        0,
+        true,
       ),
     )
   })
@@ -250,31 +491,41 @@ export function createLegalSearchProxyRoutes(env: ApiEnv) {
       return c.json({ document })
     }
 
-      const liveDocument = await fetchMojAuthorityDocumentById(
-        env,
-        parsed.data,
-        mojRateLimiter,
-      )
+    const sourceRecord = await getLegalAuthoritySourceRecord(legalAuthorityStore, parsed.data)
+    if (sourceRecord?.document) {
+      return c.json({ document: sourceRecord.document })
+    }
 
-      if (liveDocument.status === 'ok') {
-        void indexFetchedAuthorities(indexClient, env.legalAuthoritiesIndex, [liveDocument.document])
-        return c.json({ document: liveDocument.document })
-      }
+    const liveDocument = sourceRecord
+      ? await fetchMojAuthorityDocumentFromRecord(env, sourceRecord, mojRateLimiter)
+      : await fetchMojAuthorityDocumentById(env, parsed.data, mojRateLimiter)
 
-      if (liveDocument.status === 'rate_limited') {
-        return c.json(
-          {
-            ...apiError('storage_unavailable', 'Find Case Law is rate limited.', requestId),
-            retryAfter: liveDocument.retryAfter,
-          },
-          503,
+    if (liveDocument.status === 'ok') {
+      if (sourceRecord) {
+        await upsertLegalAuthorityDocument(
+          legalAuthorityStore,
+          liveDocument.document,
+          liveDocument.provider,
         )
       }
+      void indexFetchedAuthorities(indexClient, env.legalAuthoritiesIndex, [liveDocument.document])
+      return c.json({ document: liveDocument.document })
+    }
 
+    if (liveDocument.status === 'rate_limited') {
       return c.json(
-        apiError('document_not_found', 'Document was not found in stored or live sources.', requestId),
-        404,
+        {
+          ...apiError('storage_unavailable', 'Find Case Law is rate limited.', requestId),
+          retryAfter: liveDocument.retryAfter,
+        },
+        503,
       )
+    }
+
+    return c.json(
+      apiError('document_not_found', 'Document was not found in stored or live sources.', requestId),
+      404,
+    )
   })
 
   return app
@@ -301,6 +552,54 @@ async function searchStoredAuthorities(
     query,
     estimatedTotalHits: 0,
     processingTimeMs: 0,
+  }
+}
+
+async function searchLegalAuthoritySourceStore(
+  legalAuthorityStore: LegalAuthoritySourceStore,
+  query: string,
+  filters: LegalSearchFilters,
+) {
+  try {
+    return (await withTimeout(
+      legalAuthorityStore.search(query, filters),
+      storedSearchTimeoutMs,
+    )) ?? []
+  } catch {
+    return []
+  }
+}
+
+async function getLegalAuthoritySourceRecord(
+  legalAuthorityStore: LegalAuthoritySourceStore,
+  documentId: string,
+) {
+  try {
+    return await withTimeout(legalAuthorityStore.get(documentId), storedSearchTimeoutMs)
+  } catch {
+    return null
+  }
+}
+
+async function upsertLegalAuthoritySummary(
+  legalAuthorityStore: LegalAuthoritySourceStore,
+  summary: LegalAuthority,
+  provider: ProviderSourceMetadata,
+) {
+  try {
+    await legalAuthorityStore.upsertSummary(summary, provider)
+  } catch {
+  }
+}
+
+async function upsertLegalAuthorityDocument(
+  legalAuthorityStore: LegalAuthoritySourceStore,
+  document: LegalAuthority,
+  provider: ProviderSourceMetadata,
+) {
+  try {
+    await legalAuthorityStore.upsertDocument(document, provider)
+  } catch {
   }
 }
 
@@ -352,7 +651,7 @@ async function indexFetchedAuthorities(
 
 async function fetchMojAuthoritySummaries(
   env: ApiEnv,
-  request: z.infer<typeof legalFetchRequestSchema>,
+  request: LegalFetchRequest,
   rateLimiter: ReturnType<typeof createMojRateLimiter>,
 ): Promise<
   | { status: 'ok'; entries: AtomEntry[]; documents: LegalAuthority[]; skippedCount: number }
@@ -364,23 +663,39 @@ async function fetchMojAuthoritySummaries(
   if (request.court) atomUrl.searchParams.set('court', toFindCaseLawCourtParam(request.court))
   addFindCaseLawDateParams(atomUrl, request)
 
-  const atomLimit = rateLimiter.take()
-  if (!atomLimit.allowed) {
-    return { status: 'rate_limited', retryAfter: atomLimit.retryAfterSeconds.toString() }
-  }
+  const entries: AtomEntry[] = []
+  const visitedUrls = new Set<string>()
+  let nextUrl: URL | null = atomUrl
+  let pageCount = 0
 
-  const atomResponse = await fetch(atomUrl)
-  if (atomResponse.status === 429) {
-    return {
-      status: 'rate_limited',
-      retryAfter: atomResponse.headers.get('retry-after'),
+  while (nextUrl && entries.length < 10 && pageCount < 10) {
+    const pageUrl = nextUrl.toString()
+    if (visitedUrls.has(pageUrl)) break
+    visitedUrls.add(pageUrl)
+    pageCount += 1
+
+    const atomLimit = rateLimiter.take()
+    if (!atomLimit.allowed) {
+      return { status: 'rate_limited', retryAfter: atomLimit.retryAfterSeconds.toString() }
     }
-  }
-  if (!atomResponse.ok) {
-    return { status: 'unavailable' }
+
+    const atomResponse = await fetch(nextUrl)
+    if (atomResponse.status === 429) {
+      return {
+        status: 'rate_limited',
+        retryAfter: atomResponse.headers.get('retry-after'),
+      }
+    }
+    if (!atomResponse.ok) {
+      return { status: 'unavailable' }
+    }
+
+    const xml = await atomResponse.text()
+    entries.push(...parseFindCaseLawAtom(xml, request))
+    const nextHref = entries.length < 10 ? readRelLink(xml, 'next') : null
+    nextUrl = nextHref ? new URL(nextHref, nextUrl) : null
   }
 
-  const entries = parseFindCaseLawAtom(await atomResponse.text(), request)
   const documents = entries.slice(0, 10).map((entry) => atomEntryToAuthoritySummary(env, entry))
 
   return {
@@ -391,8 +706,42 @@ async function fetchMojAuthoritySummaries(
   }
 }
 
+async function hydrateMojAuthoritiesFromSearch(
+  env: ApiEnv,
+  legalAuthorityStore: LegalAuthoritySourceStore,
+  indexClient: Parameters<typeof indexDocuments>[0],
+  indexName: string,
+  request: LegalFetchRequest,
+  rateLimiter: ReturnType<typeof createMojRateLimiter>,
+) {
+  try {
+    const mojResult = await fetchMojAuthoritySummaries(env, request, rateLimiter)
+    if (mojResult.status !== 'ok') return
+
+    for (const entry of mojResult.entries) {
+      await upsertLegalAuthoritySummary(
+        legalAuthorityStore,
+        atomEntryToAuthoritySummary(env, entry),
+        providerMetadataFromAtomEntry(entry),
+      )
+    }
+
+    await hydrateAndIndexMojAuthorities(
+      env,
+      legalAuthorityStore,
+      indexClient,
+      indexName,
+      mojResult.entries,
+      rateLimiter,
+    )
+  } catch {
+    // Search has already returned from Ormont-owned sources; provider hydration is best effort.
+  }
+}
+
 async function hydrateAndIndexMojAuthorities(
   env: ApiEnv,
+  legalAuthorityStore: LegalAuthoritySourceStore,
   indexClient: Parameters<typeof indexDocuments>[0],
   indexName: string,
   entries: AtomEntry[],
@@ -405,13 +754,16 @@ async function hydrateAndIndexMojAuthorities(
       .slice(0, 5)
       .map(async (entry) => fetchMojAuthorityDetail(env, entry, rateLimiter))
     const detailResults = await Promise.all(detailTasks)
-    const documents = detailResults
-      .filter((result): result is { status: 'ok'; document: LegalAuthority } => result.status === 'ok')
-      .map((result) => result.document)
+    const documents: LegalAuthority[] = []
+    for (const result of detailResults) {
+      if (result.status !== 'ok') continue
+      await upsertLegalAuthorityDocument(legalAuthorityStore, result.document, result.provider)
+      documents.push(result.document)
+    }
 
     await indexFetchedAuthorities(indexClient, indexName, documents)
   } catch {
-    // Live result summaries have already been returned; indexing is best-effort cache hydration.
+    // Provider data has already been captured when possible; indexing is best-effort cache hydration.
   }
 }
 
@@ -428,12 +780,23 @@ function atomEntryToAuthoritySummary(env: ApiEnv, entry: AtomEntry): LegalAuthor
   }
 }
 
+function providerMetadataFromAtomEntry(entry: AtomEntry): ProviderSourceMetadata {
+  return {
+    documentUri: entry.uri,
+    sourceUri: entry.sourceUri,
+    xmlUri: entry.xmlUri,
+    pdfUri: entry.pdfUri,
+    contentHash: entry.contentHash,
+    rawAtomEntry: entry.rawXml,
+  }
+}
+
 async function fetchMojAuthorityDetail(
   env: ApiEnv,
   entry: AtomEntry,
   rateLimiter: ReturnType<typeof createMojRateLimiter>,
 ): Promise<
-  | { status: 'ok'; document: LegalAuthority }
+  | { status: 'ok'; document: LegalAuthority; provider: ProviderSourceMetadata }
   | { status: 'skipped' }
   | { status: 'rate_limited'; retryAfter: string | null }
 > {
@@ -450,10 +813,8 @@ async function fetchMojAuthorityDetail(
     return { status: 'skipped' }
   }
 
-  const paragraphs = parseJudgmentParagraphs(
-    await detailResponse.text(),
-    documentIdFromUri(entry.uri),
-  )
+  const html = await detailResponse.text()
+  const paragraphs = parseJudgmentParagraphs(html, documentIdFromUri(entry.uri))
   const document = LegalAuthoritySchema.safeParse({
     id: documentIdFromUri(entry.uri),
     title: entry.title,
@@ -470,7 +831,60 @@ async function fetchMojAuthorityDetail(
     return { status: 'skipped' }
   }
 
-  return { status: 'ok', document: document.data }
+  return {
+    status: 'ok',
+    document: document.data,
+    provider: {
+      ...providerMetadataFromAtomEntry(entry),
+      rawDocumentHtml: html,
+    },
+  }
+}
+
+async function fetchMojAuthorityDocumentFromRecord(
+  env: ApiEnv,
+  record: StoredLegalAuthorityRecord,
+  rateLimiter: ReturnType<typeof createMojRateLimiter>,
+): Promise<
+  | { status: 'ok'; document: LegalAuthority; provider: ProviderSourceMetadata }
+  | { status: 'skipped' }
+  | { status: 'rate_limited'; retryAfter: string | null }
+> {
+  const sourceUris = [record.provider.sourceUri, record.provider.xmlUri].filter(
+    (uri): uri is string => Boolean(uri),
+  )
+
+  for (const sourceUri of sourceUris) {
+    const limit = rateLimiter.take()
+    if (!limit.allowed) {
+      return { status: 'rate_limited', retryAfter: limit.retryAfterSeconds.toString() }
+    }
+
+    const detailUrl = new URL(sourceUri, env.mojFindCaseLawBaseUrl)
+    const detailResponse = await fetch(detailUrl)
+    if (!detailResponse.ok) continue
+
+    const html = await detailResponse.text()
+    const document = parseMojAuthorityDocument(
+      record.summary.id,
+      html,
+      detailUrl.toString(),
+      record.summary,
+    )
+
+    if (!document) continue
+
+    return {
+      status: 'ok',
+      document,
+      provider: {
+        ...record.provider,
+        rawDocumentHtml: html,
+      },
+    }
+  }
+
+  return { status: 'skipped' }
 }
 
 async function fetchMojAuthorityDocumentById(
@@ -478,7 +892,7 @@ async function fetchMojAuthorityDocumentById(
   documentId: string,
   rateLimiter: ReturnType<typeof createMojRateLimiter>,
 ): Promise<
-  | { status: 'ok'; document: LegalAuthority }
+  | { status: 'ok'; document: LegalAuthority; provider: ProviderSourceMetadata }
   | { status: 'skipped' }
   | { status: 'rate_limited'; retryAfter: string | null }
 > {
@@ -495,13 +909,47 @@ async function fetchMojAuthorityDocumentById(
   if (!detailResponse.ok) return { status: 'skipped' }
 
   const html = await detailResponse.text()
-  const neutralCitation = extractNeutralCitationFromHtml(html)
-  const court = neutralCitation ? courtFromCitation(neutralCitation) : courtFromDocumentId(documentId)
-  const dateDecided = extractJudgmentDateFromHtml(html) ?? dateFromDocumentId(documentId)
-  const title = extractJudgmentTitleFromHtml(html) ?? neutralCitation ?? documentId
+  const document = parseMojAuthorityDocument(documentId, html, detailUrl.toString(), {
+    id: documentId,
+    title: documentId,
+    neutralCitation: extractNeutralCitationFromHtml(html) ?? '',
+    court: courtFromDocumentId(documentId) ?? '',
+    jurisdiction: findCaseLawJurisdiction,
+    dateDecided: dateFromDocumentId(documentId) ?? '',
+    sourceType: 'judgment',
+    sourceUrl: detailUrl.toString(),
+  })
+
+  if (!document) return { status: 'skipped' }
+
+  return {
+    status: 'ok',
+    document,
+    provider: {
+      documentUri: uri,
+      sourceUri: uri,
+      xmlUri: null,
+      pdfUri: null,
+      contentHash: hashText(html),
+      rawAtomEntry: '',
+      rawDocumentHtml: html,
+    },
+  }
+}
+
+function parseMojAuthorityDocument(
+  documentId: string,
+  html: string,
+  sourceUrl: string,
+  fallback: LegalAuthority,
+) {
+  const neutralCitation = extractNeutralCitationFromHtml(html) ?? fallback.neutralCitation
+  const court = neutralCitation ? courtFromCitation(neutralCitation) : fallback.court
+  const dateDecided = extractJudgmentDateFromHtml(html) ?? fallback.dateDecided
+  const title = extractJudgmentTitleFromHtml(html) ?? fallback.title ?? neutralCitation ?? documentId
 
   if (!neutralCitation || !court || !dateDecided) {
-    return { status: 'skipped' }
+    return null
   }
 
   const document = LegalAuthoritySchema.safeParse({
@@ -512,13 +960,11 @@ async function fetchMojAuthorityDocumentById(
     jurisdiction: findCaseLawJurisdiction,
     dateDecided,
     sourceType: 'judgment',
-    sourceUrl: detailUrl.toString(),
+    sourceUrl,
     paragraphs: parseJudgmentParagraphs(html, documentId),
   })
 
-  if (!document.success) return { status: 'skipped' }
-
-  return { status: 'ok', document: document.data }
+  return document.success ? document.data : null
 }
 
 function createMojRateLimiter(limit: number) {
@@ -557,6 +1003,10 @@ function parseAtomEntry(xml: string): AtomEntry | null {
   const source = readAlternateLink(xml) ?? decodeXml(readTag(xml, 'id') ?? '')
   const sourceUri = toDocumentUri(source)
   const documentUri = toDocumentUri(decodeXml(readTag(xml, 'tna:uri') ?? '')) ?? sourceUri
+  const xmlUri =
+    readTypedLink(xml, 'application/xml') ??
+    (sourceUri ? `${sourceUri.replace(/\/$/, '')}/data.xml` : null)
+  const pdfUri = readTypedLink(xml, 'application/pdf') ?? null
   const updated = decodeXml(readTag(xml, 'published') ?? readTag(xml, 'updated') ?? '')
   const neutralCitation = extractNeutralCitation(readIdentifier(xml) ?? title)
   const dateDecided = extractDate(updated) ?? extractDate(title)
@@ -573,7 +1023,10 @@ function parseAtomEntry(xml: string): AtomEntry | null {
     dateDecided,
     uri: documentUri,
     sourceUri,
+    xmlUri,
+    pdfUri,
     contentHash: decodeXml(readTag(xml, 'tna:contenthash') ?? '') || hashText(xml),
+    rawXml: xml,
   }
 }
 
@@ -661,6 +1114,7 @@ function toFetchResponse(
   cached: boolean,
   indexedCount: number,
   skippedCount: number,
+  hydrationQueued = false,
 ) {
   return {
     hits,
@@ -670,6 +1124,7 @@ function toFetchResponse(
     cached,
     indexedCount,
     skippedCount,
+    hydrationQueued,
   }
 }
 
@@ -705,10 +1160,38 @@ function readTag(xml: string, tag: string) {
 }
 
 function readAlternateLink(xml: string) {
-  return Array.from(xml.matchAll(/<link\b([^>]*?)\/?>/gi))
+  return readLink(xml, (attributes) =>
+    hasLinkRel(attributes, 'alternate') && !readLinkAttribute(attributes, 'type'),
+  )
+}
+
+function readTypedLink(xml: string, type: string) {
+  return readLink(xml, (attributes) =>
+    hasLinkRel(attributes, 'alternate') &&
+    readLinkAttribute(attributes, 'type')?.toLowerCase() === type,
+  )
+}
+
+function readRelLink(xml: string, rel: string) {
+  return readLink(xml, (attributes) => hasLinkRel(attributes, rel))
+}
+
+function readLink(xml: string, predicate: (attributes: string) => boolean) {
+  const attributes = Array.from(xml.matchAll(/<link\b([^>]*?)\/?>/gi))
     .map((match) => match[1])
-    .find((attributes) => /\brel=["']alternate["']/i.test(attributes) && !/\btype=/i.test(attributes))
-    ?.match(/\bhref=["']([^"']+)["']/i)?.[1]
+    .find(predicate)
+
+  return attributes ? readLinkAttribute(attributes, 'href') : undefined
+}
+
+function hasLinkRel(attributes: string, rel: string) {
+  return readLinkAttribute(attributes, 'rel')
+    ?.split(/\s+/)
+    .some((value) => value.toLowerCase() === rel.toLowerCase()) ?? false
+}
+
+function readLinkAttribute(attributes: string, name: string) {
+  return attributes.match(new RegExp(`\\b${name}=["']([^"']+)["']`, 'i'))?.[1]
 }
 
 function readIdentifier(xml: string) {
@@ -731,7 +1214,7 @@ function documentIdFromUri(uri: string) {
 
 function documentUriFromId(documentId: string) {
   if (documentId.startsWith('d-')) {
-    return `/${documentId}`
+    return null
   }
 
   const court = Array.from(supportedFindCaseLawCourts)
