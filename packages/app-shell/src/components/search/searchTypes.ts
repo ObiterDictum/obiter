@@ -19,6 +19,7 @@ export interface LegalSearchFetchResponse {
   cached: boolean
   indexedCount: number
   skippedCount: number
+  hydrationQueued?: boolean
 }
 
 export interface LegalSearchRequestFilters {
@@ -41,7 +42,7 @@ export type LegalSearchState =
   | { status: 'idle' }
   | { status: 'loading'; query: string }
   | { status: 'results'; query: string; response: LegalSearchFetchResponse }
-  | { status: 'empty'; query: string }
+  | { status: 'empty'; query: string; hydrationQueued?: boolean }
   | { status: 'error'; query: string; message: string }
 
 export const courtOptionGroups: CourtOptionGroup[] = [
