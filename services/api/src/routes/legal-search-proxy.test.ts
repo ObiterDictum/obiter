@@ -9,7 +9,10 @@ const searchClientMock = vi.hoisted(() => ({
   search: vi.fn(),
 }))
 
-vi.mock('@ormont/search-client', () => searchClientMock)
+vi.mock('@ormont/search-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@ormont/search-client')>()),
+  ...searchClientMock,
+}))
 
 const env: ApiEnv = {
   databaseUrl: 'postgres://ormont:ormont@localhost:5432/ormont',
@@ -240,10 +243,60 @@ describe('createLegalSearchProxyRoutes', () => {
     })
 
     expect(secondResponse.status).toBe(200)
-    expect(await secondResponse.json()).toMatchObject({
+    const secondBody = (await secondResponse.json()) as { hits: Array<Record<string, unknown>> }
+    expect(secondBody).toMatchObject({
       cached: true,
       hits: [{ id: 'uksc-2024-3', neutralCitation: '[2024] UKSC 3' }],
     })
+    expect(secondBody.hits[0]).not.toHaveProperty('paragraphs')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('prioritizes exact source-store matches ahead of newer partial matches', async () => {
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [],
+      query: '[2024] UKSC 3',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const newerPartial = {
+      ...hit,
+      id: 'uksc-2026-10',
+      title: 'Later judgment discussing [2024] UKSC 3',
+      neutralCitation: '[2026] UKSC 10',
+      dateDecided: '2026-01-01',
+    }
+    const exactCitation = {
+      ...hit,
+      id: 'uksc-2024-3',
+      neutralCitation: '[2024] UKSC 3',
+      dateDecided: '2024-01-31',
+    }
+    const sourceStore = {
+      async upsertSummary() {},
+      async upsertDocument() {},
+      async get() {
+        return null
+      },
+      async search() {
+        return [newerPartial, exactCitation]
+      },
+    }
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    const app = createLegalSearchProxyRoutes(env, sourceStore)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: '[2024] UKSC 3', court: 'uksc' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { hits: Array<{ id: string }> }
+    expect(body.hits.map((storedHit) => storedHit.id)).toEqual([
+      'uksc-2024-3',
+      'uksc-2026-10',
+    ])
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -951,6 +1004,64 @@ describe('createLegalSearchProxyRoutes', () => {
         [expect.objectContaining({ id: 'ewhc-admin-2026-1246' })],
       ),
     )
+  })
+
+  it('stores direct live document fallback in Ormont source storage', async () => {
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: 'Example',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    searchClientMock.getDocument.mockRejectedValue(new Error('not found'))
+    searchClientMock.indexDocuments.mockResolvedValue({
+      indexedCount: 1,
+      failedCount: 0,
+      errors: [],
+    })
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      new Response(
+        `<html><body><h1>Example v Test</h1><h2><span>Neutral Citation Number</span>[2026] EWHC 1246 (Admin)</h2><article><div class="judgment-header__date">Date: 22/05/2026</div><p>This live judgment paragraph is long enough to render in the case reader.</p></article></body></html>`,
+      ),
+    )
+    const app = createLegalSearchProxyRoutes(env)
+
+    const firstResponse = await app.request('/api/search/documents/ewhc-admin-2026-1246')
+
+    expect(firstResponse.status).toBe(200)
+    expect(await firstResponse.json()).toMatchObject({
+      document: {
+        id: 'ewhc-admin-2026-1246',
+        neutralCitation: '[2026] EWHC 1246 (Admin)',
+      },
+    })
+
+    fetchMock.mockClear()
+    const secondResponse = await app.request('/api/search/documents/ewhc-admin-2026-1246')
+
+    expect(secondResponse.status).toBe(200)
+    expect(await secondResponse.json()).toMatchObject({
+      document: {
+        id: 'ewhc-admin-2026-1246',
+        neutralCitation: '[2026] EWHC 1246 (Admin)',
+      },
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    const searchResponse = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'Example', court: 'ewhc/admin' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(searchResponse.status).toBe(200)
+    const searchBody = (await searchResponse.json()) as { hits: Array<Record<string, unknown>> }
+    expect(searchBody).toMatchObject({
+      cached: true,
+      hits: [{ id: 'ewhc-admin-2026-1246' }],
+    })
+    expect(searchBody.hits[0]).not.toHaveProperty('paragraphs')
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('fetches nested Find Case Law document paths when stored lookup misses', async () => {

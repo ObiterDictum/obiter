@@ -6,6 +6,7 @@ import {
   createClient,
   getDocument,
   indexDocuments,
+  rankLegalSearchHitsByExactMatch,
   search,
   type LegalSearchFilters,
   type LegalSearchHit,
@@ -212,10 +213,12 @@ function createInMemoryLegalAuthoritySourceStore(): LegalAuthoritySourceStore {
     },
     async search(query: string, filters: LegalSearchFilters) {
       const normalizedQuery = normalizeSearchText(query)
-      return Array.from(records.values())
+      const dateOrderedMatches = Array.from(records.values())
         .map((record) => record.document ?? record.summary)
         .filter((document) => documentMatchesSearch(document, normalizedQuery, filters))
         .sort((left, right) => right.dateDecided.localeCompare(left.dateDecided))
+
+      return rankLegalSearchHitsByExactMatch(dateOrderedMatches, query)
         .slice(0, 10)
     },
   }
@@ -314,6 +317,7 @@ export function createPostgresLegalAuthoritySourceStore(pool: Pool): LegalAuthor
       return toStoredLegalAuthorityRecord(result.rows[0])
     },
     async search(query, filters) {
+      const normalizedQuery = normalizeSearchText(query)
       const result = await pool.query<LegalAuthoritySourceRow>(
         `
           select summary_json, document_json, provider_json
@@ -327,7 +331,29 @@ export function createPostgresLegalAuthoritySourceStore(pool: Pool): LegalAuthor
               $6::text = ''
               or lower(summary_json::text || ' ' || coalesce(document_json::text, '')) like '%' || $6 || '%'
             )
-          order by summary_json->>'dateDecided' desc
+          order by
+            case
+              when regexp_replace(
+                lower(trim(coalesce(summary_json->>'id', ''))),
+                '\\s+',
+                ' ',
+                'g'
+              ) = $7 then 3
+              when regexp_replace(
+                lower(trim(coalesce(summary_json->>'neutralCitation', ''))),
+                '\\s+',
+                ' ',
+                'g'
+              ) = $7 then 2
+              when regexp_replace(
+                lower(trim(coalesce(summary_json->>'title', ''))),
+                '\\s+',
+                ' ',
+                'g'
+              ) = $7 then 1
+              else 0
+            end desc,
+            summary_json->>'dateDecided' desc
           limit 10
         `,
         [
@@ -336,16 +362,19 @@ export function createPostgresLegalAuthoritySourceStore(pool: Pool): LegalAuthor
           filters.sourceType ?? null,
           filters.dateFrom ?? null,
           filters.dateTo ?? null,
-          normalizeSearchText(query),
+          normalizedQuery,
+          normalizedQuery,
         ],
       )
 
-      return result.rows
+      const documents = result.rows
         .map((row) => {
           const record = toStoredLegalAuthorityRecord(row)
           return record?.document ?? record?.summary
         })
         .filter((document): document is LegalAuthority => Boolean(document))
+
+      return rankLegalSearchHitsByExactMatch(documents, query)
     },
   }
 }
@@ -444,8 +473,13 @@ export function createLegalSearchProxyRoutes(
       filters,
     )
     if (storedDocuments.length > 0) {
+      const rankedStoredDocuments = rankLegalSearchHitsByExactMatch(
+        storedDocuments,
+        parsed.data.query,
+      )
+
       return c.json(
-        toFetchResponse(storedDocuments.map(toHit), parsed.data.query, true, 0, 0),
+        toFetchResponse(rankedStoredDocuments.map(toSummaryHit), parsed.data.query, true, 0, 0),
       )
     }
 
@@ -501,13 +535,11 @@ export function createLegalSearchProxyRoutes(
       : await fetchMojAuthorityDocumentById(env, parsed.data, mojRateLimiter)
 
     if (liveDocument.status === 'ok') {
-      if (sourceRecord) {
-        await upsertLegalAuthorityDocument(
-          legalAuthorityStore,
-          liveDocument.document,
-          liveDocument.provider,
-        )
-      }
+      await upsertLegalAuthorityDocument(
+        legalAuthorityStore,
+        liveDocument.document,
+        liveDocument.provider,
+      )
       void indexFetchedAuthorities(indexClient, env.legalAuthoritiesIndex, [liveDocument.document])
       return c.json({ document: liveDocument.document })
     }
@@ -1125,20 +1157,6 @@ function toFetchResponse(
     indexedCount,
     skippedCount,
     hydrationQueued,
-  }
-}
-
-function toHit(document: LegalAuthority): LegalFetchSearchHit {
-  return {
-    id: document.id,
-    title: document.title,
-    neutralCitation: document.neutralCitation,
-    court: document.court,
-    jurisdiction: document.jurisdiction,
-    dateDecided: document.dateDecided,
-    sourceType: document.sourceType,
-    sourceUrl: document.sourceUrl,
-    paragraphs: document.paragraphs,
   }
 }
 

@@ -236,7 +236,7 @@ export async function search(
         ? LegalAuthoritySchema.parse(hit)
         : LegalAuthoritySummarySchema.parse(hit),
     )
-    const rankedHits = prioritizeExactMatches(hits, query)
+    const rankedHits = rankLegalSearchHitsByExactMatch(hits, query)
 
     return {
       hits: rankedHits,
@@ -249,7 +249,10 @@ export async function search(
   }
 }
 
-function prioritizeExactMatches<T extends LegalSearchHit>(hits: T[], query: string): T[] {
+export function rankLegalSearchHitsByExactMatch<T extends LegalSearchHit>(
+  hits: T[],
+  query: string,
+): T[] {
   const normalizedQuery = normalizeExactMatchValue(query)
   if (!normalizedQuery) return hits
 
