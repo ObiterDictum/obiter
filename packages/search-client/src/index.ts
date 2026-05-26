@@ -112,6 +112,7 @@ type SearchClient = {
 }
 
 const searchableAttributes = [
+  'id',
   'title',
   'neutralCitation',
   'court',
@@ -136,8 +137,8 @@ const rankingRules = [
   'typo',
   'proximity',
   'attribute',
-  'sort',
   'exactness',
+  'sort',
 ]
 
 export function createClient(host: string, apiKey: string): MeiliSearch {
@@ -235,16 +236,38 @@ export async function search(
         ? LegalAuthoritySchema.parse(hit)
         : LegalAuthoritySummarySchema.parse(hit),
     )
+    const rankedHits = prioritizeExactMatches(hits, query)
 
     return {
-      hits,
+      hits: rankedHits,
       query: result.query ?? query,
-      estimatedTotalHits: result.estimatedTotalHits ?? hits.length,
+      estimatedTotalHits: result.estimatedTotalHits ?? rankedHits.length,
       processingTimeMs: result.processingTimeMs ?? 0,
     }
   } catch (error) {
     throw wrapSearchError('Search failed.', error)
   }
+}
+
+function prioritizeExactMatches<T extends LegalSearchHit>(hits: T[], query: string): T[] {
+  const normalizedQuery = normalizeExactMatchValue(query)
+  if (!normalizedQuery) return hits
+
+  return hits
+    .map((hit, index) => ({ hit, index, score: exactMatchScore(hit, normalizedQuery) }))
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .map(({ hit }) => hit)
+}
+
+function exactMatchScore(hit: LegalSearchHit, normalizedQuery: string) {
+  if (normalizeExactMatchValue(hit.id) === normalizedQuery) return 3
+  if (normalizeExactMatchValue(hit.neutralCitation) === normalizedQuery) return 2
+  if (normalizeExactMatchValue(hit.title) === normalizedQuery) return 1
+  return 0
+}
+
+function normalizeExactMatchValue(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, ' ')
 }
 
 function validationFailure(documents: unknown[], messages: string[]): SearchIndexDocumentsResult {

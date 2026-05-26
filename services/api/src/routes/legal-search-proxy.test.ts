@@ -106,7 +106,19 @@ beforeEach(() => {
 describe('createLegalSearchProxyRoutes', () => {
   it('returns cached results without calling Find Case Law', async () => {
     searchClientMock.search.mockResolvedValueOnce({
-      hits: [hit],
+      hits: [
+        {
+          ...hit,
+          paragraphs: [
+            {
+              id: 'uksc-2024-1-p1',
+              documentId: 'uksc-2024-1',
+              paragraphNumber: 1,
+              text: 'Cached search responses should stay summary-only.',
+            },
+          ],
+        },
+      ],
       query: 'Potanina',
       estimatedTotalHits: 1,
       processingTimeMs: 1,
@@ -121,11 +133,13 @@ describe('createLegalSearchProxyRoutes', () => {
     })
 
     expect(response.status).toBe(200)
-    expect(await response.json()).toMatchObject({
+    const body = (await response.json()) as { hits: Array<Record<string, unknown>> }
+    expect(body).toMatchObject({
       cached: true,
       hits: [hit],
       indexedCount: 0,
     })
+    expect(body.hits[0]).not.toHaveProperty('paragraphs')
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -351,7 +365,6 @@ describe('createLegalSearchProxyRoutes', () => {
       'legal_authorities',
       'Example',
       expect.objectContaining({ court: 'ewhc-admin' }),
-      { includeParagraphs: true },
     )
     expect(fetchMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -428,7 +441,6 @@ describe('createLegalSearchProxyRoutes', () => {
       'legal_authorities',
       'Example',
       expect.objectContaining({ court: 'ewhc-admin' }),
-      { includeParagraphs: true },
     )
     expect(fetchMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -530,6 +542,36 @@ describe('createLegalSearchProxyRoutes', () => {
     })
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
+  })
+
+  it('forwards date filters to Find Case Law before local entry filtering', async () => {
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [],
+      query: 'Potanina',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('<feed />'))
+    const app = createLegalSearchProxyRoutes(env)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'Potanina',
+        dateFrom: '2024-02-03',
+        dateTo: '2025-04-05',
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    const url = fetchMock.mock.calls[0]?.[0] as URL
+    expect(url.searchParams.get('from_date_0')).toBe('03')
+    expect(url.searchParams.get('from_date_1')).toBe('02')
+    expect(url.searchParams.get('from_date_2')).toBe('2024')
+    expect(url.searchParams.get('to_date_0')).toBe('05')
+    expect(url.searchParams.get('to_date_1')).toBe('04')
+    expect(url.searchParams.get('to_date_2')).toBe('2025')
   })
 
   it('does not re-index documents already returned from cache during fetch', async () => {
@@ -788,6 +830,65 @@ describe('createLegalSearchProxyRoutes', () => {
     )
   })
 
+  it('fetches nested Find Case Law document paths when stored lookup misses', async () => {
+    searchClientMock.getDocument.mockRejectedValueOnce(new Error('not found'))
+    searchClientMock.indexDocuments.mockResolvedValueOnce({
+      indexedCount: 1,
+      failedCount: 0,
+      errors: [],
+    })
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        `<html><body><h1>NHS Kent v OQD</h1><h2><span>Neutral Citation Number</span>[2026] EWCOP 23 (T3)</h2><article><div class="judgment-header__date">Date: 22/05/2026</div><p>This nested Court of Protection judgment paragraph is long enough to render.</p></article></body></html>`,
+      ),
+    )
+    const app = createLegalSearchProxyRoutes(env)
+
+    const response = await app.request('/api/search/documents/ewcop-t3-2026-23')
+
+    expect(response.status).toBe(200)
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.objectContaining({ pathname: '/ewcop/t3/2026/23' }),
+    )
+    expect(await response.json()).toMatchObject({
+      document: {
+        id: 'ewcop-t3-2026-23',
+        neutralCitation: '[2026] EWCOP 23 (T3)',
+        court: 'ewcop',
+      },
+    })
+  })
+
+  it('fetches stable d-style Find Case Law document URIs when stored lookup misses', async () => {
+    const documentId = 'd-f11e093f-8a53-4e43-8dd8-1531b5d8f018'
+    searchClientMock.getDocument.mockRejectedValueOnce(new Error('not found'))
+    searchClientMock.indexDocuments.mockResolvedValueOnce({
+      indexedCount: 1,
+      failedCount: 0,
+      errors: [],
+    })
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        `<html><body><h1>Jarndyce v Jarndyce</h1><h2><span>Neutral Citation Number</span>[2024] UKSC 123</h2><article><div class="judgment-header__date">Date: 30/04/2025</div><p>This stable URI judgment paragraph is long enough to render.</p></article></body></html>`,
+      ),
+    )
+    const app = createLegalSearchProxyRoutes(env)
+
+    const response = await app.request(`/api/search/documents/${documentId}`)
+
+    expect(response.status).toBe(200)
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.objectContaining({ pathname: `/${documentId}` }),
+    )
+    expect(await response.json()).toMatchObject({
+      document: {
+        id: documentId,
+        neutralCitation: '[2024] UKSC 123',
+        court: 'uksc',
+      },
+    })
+  })
+
   it('rejects invalid stored document ids before storage lookup', async () => {
     const app = createLegalSearchProxyRoutes(env)
 
@@ -900,7 +1001,7 @@ describe('Find Case Law parsing', () => {
     expect(parseFindCaseLawAtom(xml, { query: 'Test', jurisdiction: 'scotland' })).toEqual([])
   })
 
-  it('extracts and limits clean judgment paragraphs from noisy HTML', () => {
+  it('extracts all clean judgment paragraphs from noisy HTML', () => {
     const paragraphs = Array.from(
       { length: 90 },
       (_, index) => `<p>Indexed paragraph ${index + 1} has enough judgment text to be retained.</p>`,
@@ -911,13 +1012,28 @@ describe('Find Case Law parsing', () => {
       'uksc-2024-3',
     )
 
-    expect(result).toHaveLength(80)
+    expect(result).toHaveLength(90)
     expect(result[0]).toMatchObject({
       id: 'uksc-2024-3-p1',
       paragraphNumber: 1,
       text: 'Indexed paragraph 1 has enough judgment text to be retained.',
     })
-    expect(result.at(-1)).toMatchObject({ paragraphNumber: 80 })
+    expect(result.at(-1)).toMatchObject({ paragraphNumber: 90 })
+  })
+
+  it('uses stable tna document URIs while preserving the human source URL', () => {
+    expect(
+      parseFindCaseLawAtom(
+        '<feed><entry><title>Jarndyce v Jarndyce</title><id>https://caselaw.nationalarchives.gov.uk/id/d-f11e093f-8a53-4e43-8dd8-1531b5d8f018</id><link href="https://caselaw.nationalarchives.gov.uk/uksc/2024/123" rel="alternate"/><published>2025-04-30</published><tna:uri>d-f11e093f-8a53-4e43-8dd8-1531b5d8f018</tna:uri><tna:identifier slug="uksc/2024/123" type="ukncn">[2024] UKSC 123</tna:identifier></entry></feed>',
+        { query: 'Jarndyce' },
+      ),
+    ).toMatchObject([
+      {
+        neutralCitation: '[2024] UKSC 123',
+        uri: '/d-f11e093f-8a53-4e43-8dd8-1531b5d8f018',
+        sourceUri: '/uksc/2024/123',
+      },
+    ])
   })
 
   it('extracts all current Find Case Law court and tribunal citation forms', () => {

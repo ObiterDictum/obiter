@@ -63,11 +63,19 @@ describe('Legal search client', () => {
       primaryKey: 'id',
     })
     expect(index.updateSearchableAttributes).toHaveBeenCalledWith(
-      expect.arrayContaining(['title', 'neutralCitation', 'paragraphs.text']),
+      expect.arrayContaining(['id', 'title', 'neutralCitation', 'paragraphs.text']),
     )
     expect(index.updateFilterableAttributes).toHaveBeenCalledWith(
       expect.arrayContaining(['court', 'jurisdiction', 'sourceType', 'dateDecided']),
     )
+    expect(index.updateRankingRules).toHaveBeenCalledWith([
+      'words',
+      'typo',
+      'proximity',
+      'attribute',
+      'exactness',
+      'sort',
+    ])
   })
 
   it('updates index settings when the index already exists', async () => {
@@ -258,6 +266,56 @@ describe('Legal search client', () => {
         'sourceUrl',
       ],
     })
+  })
+
+  it('promotes exact citation and identifier matches before newer partial hits', async () => {
+    const newerPartial = authority({
+      id: 'uksc-2026-99',
+      title: 'Potanina update',
+      neutralCitation: '[2026] UKSC 99',
+      dateDecided: '2026-01-01',
+    })
+    const exactCitation = authority({
+      id: 'uksc-2024-3',
+      title: 'Potanina v Potanin',
+      neutralCitation: '[2024] UKSC 3',
+      dateDecided: '2024-01-31',
+    })
+    const exactIdentifier = authority({
+      id: 'ewca-civ-2025-7',
+      title: 'Example v Test',
+      neutralCitation: '[2025] EWCA Civ 7',
+      dateDecided: '2025-02-01',
+    })
+    const searchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        hits: [newerPartial, exactCitation],
+        query: '[2024] UKSC 3',
+        estimatedTotalHits: 2,
+        processingTimeMs: 2,
+      })
+      .mockResolvedValueOnce({
+        hits: [newerPartial, exactIdentifier],
+        query: 'ewca-civ-2025-7',
+        estimatedTotalHits: 2,
+        processingTimeMs: 2,
+      })
+    const client = {
+      index: () => ({ search: searchMock }),
+    }
+
+    const citationResult = await search(client, 'legal_authorities', '[2024] UKSC 3')
+    const idResult = await search(client, 'legal_authorities', 'ewca-civ-2025-7')
+
+    expect(citationResult.hits.map((hit) => hit.id)).toEqual([
+      'uksc-2024-3',
+      'uksc-2026-99',
+    ])
+    expect(idResult.hits.map((hit) => hit.id)).toEqual([
+      'ewca-civ-2025-7',
+      'uksc-2026-99',
+    ])
   })
 
   it('can retrieve paragraphs for fetch-on-miss cached results', async () => {

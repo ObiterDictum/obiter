@@ -22,6 +22,7 @@ interface AtomEntry {
   court: string
   dateDecided: string
   uri: string
+  sourceUri: string
   contentHash: string
 }
 
@@ -177,7 +178,9 @@ export function createLegalSearchProxyRoutes(env: ApiEnv) {
     )
 
     if (cached.hits.length > 0) {
-      return c.json(toFetchResponse(cached.hits, parsed.data.query, true, 0, 0))
+      return c.json(
+        toFetchResponse(cached.hits.map(toSummaryHit), parsed.data.query, true, 0, 0),
+      )
     }
 
     const mojResult = await fetchMojAuthoritySummaries(env, parsed.data, mojRateLimiter)
@@ -285,7 +288,7 @@ async function searchStoredAuthorities(
 ) {
   try {
     const result = await withTimeout(
-      search(searchClient, indexName, query, filters, { includeParagraphs: true }),
+      search(searchClient, indexName, query, filters),
       storedSearchTimeoutMs,
     )
 
@@ -359,6 +362,7 @@ async function fetchMojAuthoritySummaries(
   const atomUrl = new URL('/atom.xml', env.mojFindCaseLawBaseUrl)
   atomUrl.searchParams.set('query', request.query)
   if (request.court) atomUrl.searchParams.set('court', toFindCaseLawCourtParam(request.court))
+  addFindCaseLawDateParams(atomUrl, request)
 
   const atomLimit = rateLimiter.take()
   if (!atomLimit.allowed) {
@@ -420,7 +424,7 @@ function atomEntryToAuthoritySummary(env: ApiEnv, entry: AtomEntry): LegalAuthor
     jurisdiction: findCaseLawJurisdiction,
     dateDecided: entry.dateDecided,
     sourceType: 'judgment',
-    sourceUrl: new URL(entry.uri, env.mojFindCaseLawBaseUrl).toString(),
+    sourceUrl: new URL(entry.sourceUri, env.mojFindCaseLawBaseUrl).toString(),
   }
 }
 
@@ -433,7 +437,7 @@ async function fetchMojAuthorityDetail(
   | { status: 'skipped' }
   | { status: 'rate_limited'; retryAfter: string | null }
 > {
-  const detailUrl = new URL(entry.uri, env.mojFindCaseLawBaseUrl)
+  const detailUrl = new URL(entry.sourceUri, env.mojFindCaseLawBaseUrl)
   const detailLimit = rateLimiter.take()
 
   if (!detailLimit.allowed) {
@@ -550,14 +554,15 @@ export function parseFindCaseLawAtom(
 
 function parseAtomEntry(xml: string): AtomEntry | null {
   const title = decodeXml(readTag(xml, 'title') ?? '')
-  const id = readAlternateLink(xml) ?? decodeXml(readTag(xml, 'id') ?? '')
+  const source = readAlternateLink(xml) ?? decodeXml(readTag(xml, 'id') ?? '')
+  const sourceUri = toDocumentUri(source)
+  const documentUri = toDocumentUri(decodeXml(readTag(xml, 'tna:uri') ?? '')) ?? sourceUri
   const updated = decodeXml(readTag(xml, 'published') ?? readTag(xml, 'updated') ?? '')
-  const uri = toDocumentUri(id)
   const neutralCitation = extractNeutralCitation(readIdentifier(xml) ?? title)
   const dateDecided = extractDate(updated) ?? extractDate(title)
   const court = neutralCitation ? courtFromCitation(neutralCitation) : null
 
-  if (!title || !uri || !neutralCitation || !court || !dateDecided) {
+  if (!title || !documentUri || !sourceUri || !neutralCitation || !court || !dateDecided) {
     return null
   }
 
@@ -566,7 +571,8 @@ function parseAtomEntry(xml: string): AtomEntry | null {
     neutralCitation,
     court,
     dateDecided,
-    uri,
+    uri: documentUri,
+    sourceUri,
     contentHash: decodeXml(readTag(xml, 'tna:contenthash') ?? '') || hashText(xml),
   }
 }
@@ -608,7 +614,6 @@ export function parseJudgmentParagraphs(html: string, documentId: string) {
     .map((line) => line.replace(/\s+/g, ' ').trim())
     .filter(isJudgmentLine)
     .filter((line) => line.length >= 30)
-    .slice(0, 80)
     .map((text, index) => ({
       id: `${documentId}-p${index + 1}`,
       documentId,
@@ -682,6 +687,19 @@ function toHit(document: LegalAuthority): LegalFetchSearchHit {
   }
 }
 
+function toSummaryHit(hit: LegalSearchHit): LegalFetchSearchHit {
+  return {
+    id: hit.id,
+    title: hit.title,
+    neutralCitation: hit.neutralCitation,
+    court: hit.court,
+    jurisdiction: hit.jurisdiction,
+    dateDecided: hit.dateDecided,
+    sourceType: hit.sourceType,
+    sourceUrl: hit.sourceUrl,
+  }
+}
+
 function readTag(xml: string, tag: string) {
   return xml.match(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'))?.[1]
 }
@@ -712,6 +730,10 @@ function documentIdFromUri(uri: string) {
 }
 
 function documentUriFromId(documentId: string) {
+  if (documentId.startsWith('d-')) {
+    return `/${documentId}`
+  }
+
   const court = Array.from(supportedFindCaseLawCourts)
     .sort((left, right) => right.length - left.length)
     .find((supportedCourt) => documentId.startsWith(`${supportedCourt}-`))
@@ -719,10 +741,20 @@ function documentUriFromId(documentId: string) {
   if (!court) return null
 
   const suffix = documentId.slice(court.length + 1)
-  const match = suffix.match(/^(\d{4})-(\d+)$/)
-  if (!match) return null
+  const segments = suffix.split('-').filter(Boolean)
+  const yearIndex = segments.findIndex(
+    (segment, index) => /^\d{4}$/.test(segment) && /^\d+$/.test(segments[index + 1] ?? ''),
+  )
 
-  return `/${toFindCaseLawCourtParam(court)}/${match[1]}/${match[2]}`
+  if (yearIndex === -1) return null
+
+  const nestedPath = segments.slice(0, yearIndex).join('/')
+  const year = segments[yearIndex]
+  const sequence = segments[yearIndex + 1]
+  const courtPath = toFindCaseLawCourtParam(court)
+  const prefix = nestedPath ? `${courtPath}/${nestedPath}` : courtPath
+
+  return `/${prefix}/${year}/${sequence}`
 }
 
 function courtFromDocumentId(documentId: string) {
@@ -772,6 +804,23 @@ function normalizeCourtCode(value: string) {
 
 function toFindCaseLawCourtParam(court: string) {
   return findCaseLawCourtParamByCourt.get(court) ?? court
+}
+
+function addFindCaseLawDateParams(
+  url: URL,
+  request: Pick<z.infer<typeof legalFetchRequestSchema>, 'dateFrom' | 'dateTo'>,
+) {
+  addFindCaseLawDateParam(url, 'from_date', request.dateFrom)
+  addFindCaseLawDateParam(url, 'to_date', request.dateTo)
+}
+
+function addFindCaseLawDateParam(url: URL, prefix: 'from_date' | 'to_date', value?: string) {
+  if (!value) return
+
+  const [year, month, day] = value.split('-')
+  url.searchParams.set(`${prefix}_0`, day)
+  url.searchParams.set(`${prefix}_1`, month)
+  url.searchParams.set(`${prefix}_2`, year)
 }
 
 function extractDate(value: string) {
