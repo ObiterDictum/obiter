@@ -6,6 +6,7 @@ import {
   findMatterRecord,
   countActiveLegalSearchFilters,
   getCourtLabel,
+  getLegalSearchStateAfterInputChange,
   getLegalSearchStateLabel,
   selectJudgmentParagraphs,
   selectParagraphExcerpts,
@@ -164,6 +165,10 @@ describe('LegalSearchView helpers', () => {
         },
       }),
     ).toBe('results')
+  })
+
+  it('keeps typing side-effect free until explicit search submission', () => {
+    expect(getLegalSearchStateAfterInputChange()).toEqual({ status: 'idle' })
   })
 
   it('selects matching paragraph excerpts for expanded search results', () => {

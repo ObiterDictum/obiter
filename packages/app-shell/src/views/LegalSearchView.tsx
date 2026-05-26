@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { Card } from '@ormont/ui'
 import {
   SearchCommandBar,
@@ -73,6 +73,10 @@ export function countActiveLegalSearchFilters(filters: LegalSearchRequestFilters
   return [filters.court, filters.dateFrom, filters.dateTo].filter((value) => value.trim()).length
 }
 
+export function getLegalSearchStateAfterInputChange(): LegalSearchState {
+  return { status: 'idle' }
+}
+
 export function LegalSearchView() {
   const [query, setQuery] = useState(() => readInitialSearchQuery())
   const [court, setCourt] = useState('')
@@ -141,6 +145,8 @@ export function LegalSearchView() {
     setDateFrom(filters.dateFrom)
     setDateTo(filters.dateTo)
     setFiltersOpen(false)
+    searchRequestId.current += 1
+    setState({ status: 'idle' })
   }
 
   function clearFilters() {
@@ -148,28 +154,18 @@ export function LegalSearchView() {
     setDateFrom('')
     setDateTo('')
     setFiltersOpen(false)
+    searchRequestId.current += 1
+    setState({ status: 'idle' })
+  }
+
+  function handleQueryChange(nextQuery: string) {
+    setQuery(nextQuery)
+    searchRequestId.current += 1
+    setState(getLegalSearchStateAfterInputChange())
   }
 
   const courtLabel = getCourtLabel(court)
   const activeFilterCount = countActiveLegalSearchFilters({ court, dateFrom, dateTo })
-
-  useEffect(() => {
-    const trimmedQuery = query.trim()
-    const searchFilters = { court, dateFrom, dateTo }
-
-    if (!trimmedQuery) {
-      searchRequestId.current += 1
-      setState({ status: 'idle' })
-      return
-    }
-
-    setState({ status: 'loading', query: trimmedQuery })
-    const timeout = window.setTimeout(() => {
-      void runSearch(trimmedQuery, searchFilters)
-    }, 250)
-
-    return () => window.clearTimeout(timeout)
-  }, [court, dateFrom, dateTo, query])
 
   return (
     <div className="shell-stack legal-search">
@@ -188,7 +184,7 @@ export function LegalSearchView() {
           dateTo={dateTo}
           isSearching={state.status === 'loading'}
           onFilterClick={() => setFiltersOpen(true)}
-          onQueryChange={setQuery}
+          onQueryChange={handleQueryChange}
           onSubmit={handleSubmit}
           query={query}
         />

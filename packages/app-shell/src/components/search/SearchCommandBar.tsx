@@ -1,4 +1,5 @@
 import { type FormEvent } from 'react'
+import { MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 
 interface SearchCommandBarProps {
   activeFilterCount: number
@@ -32,7 +33,7 @@ export function SearchCommandBar({
           {activeFilterCount > 0 ? <strong>{activeFilterCount}</strong> : null}
         </button>
       </div>
-      <div className="legal-search__primary legal-search__primary--input-only">
+      <div className="legal-search__primary">
         <label className="legal-search__field">
           <span className="legal-search__visually-hidden">Search legal sources</span>
           <input
@@ -43,6 +44,10 @@ export function SearchCommandBar({
             type="search"
           />
         </label>
+        <button className="legal-search__submit" type="submit" disabled={isSearching}>
+          <MagnifyingGlassIcon aria-hidden="true" />
+          <span>Search</span>
+        </button>
       </div>
       {isSearching ? (
         <div className="legal-search__inline-status" role="status">

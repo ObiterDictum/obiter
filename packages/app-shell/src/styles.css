@@ -1773,6 +1773,38 @@ body {
   grid-template-columns: minmax(0, 1fr);
 }
 
+.legal-search__submit {
+  align-items: center;
+  background: #d9a25b;
+  border: 0;
+  color: #0e1116;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 820;
+  gap: 7px;
+  justify-content: center;
+  min-height: 42px;
+  min-width: 104px;
+  padding: 0 14px;
+}
+
+.legal-search__submit svg {
+  height: 16px;
+  width: 16px;
+}
+
+.legal-search__submit:hover,
+.legal-search__submit:focus-visible {
+  background: #f1c079;
+}
+
+.legal-search__submit:disabled {
+  cursor: progress;
+  opacity: 0.72;
+}
+
 .legal-search__field {
   color: #f5f2eb;
   display: grid;
