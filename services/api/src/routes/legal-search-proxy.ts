@@ -535,11 +535,22 @@ export function createLegalSearchProxyRoutes(
       : await fetchMojAuthorityDocumentById(env, parsed.data, mojRateLimiter)
 
     if (liveDocument.status === 'ok') {
-      await upsertLegalAuthorityDocument(
-        legalAuthorityStore,
-        liveDocument.document,
-        liveDocument.provider,
-      )
+      try {
+        await upsertLegalAuthorityDocument(
+          legalAuthorityStore,
+          liveDocument.document,
+          liveDocument.provider,
+        )
+      } catch {
+        return c.json(
+          apiError(
+            'storage_unavailable',
+            'Legal source storage is unavailable.',
+            requestId,
+          ),
+          503,
+        )
+      }
       void indexFetchedAuthorities(indexClient, env.legalAuthoritiesIndex, [liveDocument.document])
       return c.json({ document: liveDocument.document })
     }
@@ -629,10 +640,7 @@ async function upsertLegalAuthorityDocument(
   document: LegalAuthority,
   provider: ProviderSourceMetadata,
 ) {
-  try {
-    await legalAuthorityStore.upsertDocument(document, provider)
-  } catch {
-  }
+  await legalAuthorityStore.upsertDocument(document, provider)
 }
 
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
@@ -789,7 +797,11 @@ async function hydrateAndIndexMojAuthorities(
     const documents: LegalAuthority[] = []
     for (const result of detailResults) {
       if (result.status !== 'ok') continue
-      await upsertLegalAuthorityDocument(legalAuthorityStore, result.document, result.provider)
+      try {
+        await upsertLegalAuthorityDocument(legalAuthorityStore, result.document, result.provider)
+      } catch {
+        continue
+      }
       documents.push(result.document)
     }
 

@@ -804,6 +804,55 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
   })
 
+  it('does not index background-hydrated documents when source storage fails', async () => {
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [],
+      query: 'Potanina',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const sourceStore = {
+      upsertSummary: vi.fn(async () => undefined),
+      upsertDocument: vi.fn(async () => {
+        throw new Error('source write failed')
+      }),
+      async get() {
+        return null
+      },
+      async search() {
+        return []
+      },
+    }
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          `<feed><entry><title>Potanina v Potanin</title><link href="https://caselaw.nationalarchives.gov.uk/uksc/2024/3" rel="alternate"/><published>2024-01-31T00:00:00Z</published><tna:identifier slug="uksc/2024/3" type="ukncn">[2024] UKSC 3</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry></feed>`,
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          '<html><body><p>This is a long enough judgment paragraph mentioning Potanina and the appeal.</p></body></html>',
+        ),
+      )
+    const app = createLegalSearchProxyRoutes(env, sourceStore)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'Potanina', court: 'uksc' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      cached: false,
+      indexedCount: 0,
+      hydrationQueued: true,
+      hits: [],
+    })
+    await vi.waitFor(() => expect(sourceStore.upsertDocument).toHaveBeenCalled())
+    expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
+  })
+
   it('keeps the foreground response queued when the local rate limit is exhausted during background hydration', async () => {
     searchClientMock.search.mockResolvedValueOnce({
       hits: [],
@@ -1062,6 +1111,40 @@ describe('createLegalSearchProxyRoutes', () => {
     })
     expect(searchBody.hits[0]).not.toHaveProperty('paragraphs')
     expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('returns a storage error and skips indexing when direct live document storage fails', async () => {
+    searchClientMock.getDocument.mockRejectedValueOnce(new Error('not found'))
+    const sourceStore = {
+      async upsertSummary() {},
+      upsertDocument: vi.fn(async () => {
+        throw new Error('source write failed')
+      }),
+      async get() {
+        return null
+      },
+      async search() {
+        return []
+      },
+    }
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response(
+        `<html><body><h1>Example v Test</h1><h2><span>Neutral Citation Number</span>[2026] EWHC 1246 (Admin)</h2><article><div class="judgment-header__date">Date: 22/05/2026</div><p>This live judgment paragraph is long enough to render in the case reader.</p></article></body></html>`,
+      ),
+    )
+    const app = createLegalSearchProxyRoutes(env, sourceStore)
+
+    const response = await app.request('/api/search/documents/ewhc-admin-2026-1246')
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'storage_unavailable' },
+    })
+    expect(sourceStore.upsertDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'ewhc-admin-2026-1246' }),
+      expect.objectContaining({ documentUri: '/ewhc/admin/2026/1246' }),
+    )
+    expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
   })
 
   it('fetches nested Find Case Law document paths when stored lookup misses', async () => {
