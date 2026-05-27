@@ -20,7 +20,7 @@ export function SearchResults({ response }: SearchResultsProps) {
             <span>
               <strong>{result.title}</strong>
               <small>
-                {result.neutralCitation} - {result.court} - {result.dateDecided}
+                {formatNeutralCitation(result.neutralCitation)} - {result.court} - {result.dateDecided}
               </small>
             </span>
             <span className="case-law-result__actions">
@@ -48,4 +48,8 @@ export function SearchResults({ response }: SearchResultsProps) {
       })}
     </section>
   )
+}
+
+function formatNeutralCitation(neutralCitation: string | null) {
+  return neutralCitation ?? 'No neutral citation'
 }

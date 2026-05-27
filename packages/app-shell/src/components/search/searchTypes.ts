@@ -7,7 +7,7 @@ export interface CaseLawParagraph {
 export interface LegalSearchResult {
   id: string
   title: string
-  neutralCitation: string
+  neutralCitation: string | null
   court: string
   dateDecided: string
   sourceUrl: string
@@ -102,8 +102,8 @@ export const courtOptionGroups: CourtOptionGroup[] = [
       { code: 'ukftt/hesc', label: 'First-tier Tribunal Health, Education and Social Care' },
       { code: 'ukftt/tc', label: 'First-tier Tribunal Tax Chamber' },
       { code: 'ftt/claims', label: 'First-tier Tribunal Claims Management' },
-      { code: 'ftt/pc', label: 'First-tier Tribunal Primary Care' },
-      { code: 'ftt/phl', label: 'First-tier Tribunal Public Health List' },
+      { code: 'ftt/pc', label: 'First-tier Tribunal Land Registration Division (Property Chamber)' },
+      { code: 'ftt/phl', label: 'First-tier Tribunal Primary Health Lists' },
       { code: 'ftt/transport', label: 'First-tier Tribunal Transport' },
     ],
   },
