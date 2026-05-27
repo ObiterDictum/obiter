@@ -17,15 +17,16 @@ Do not rubber-stamp. Do not say a PR is ready unless the evidence supports it. S
 2. Identify the PR's trust boundaries, data classes, and tenant/organisation isolation impact.
 3. Load the minimum authoritative context for the touched area.
 4. Build a change map from the base branch to the review branch.
-5. Build or update a mental architecture map before judging code.
-6. Inspect changed files and all directly coupled files.
-7. Review tests and run appropriate verification where possible.
-8. Prepare inline review comments for every actionable bug/security issue that has a stable diff location.
-9. Finalize the verdict, score, findings, inline targets, and verification evidence before any comment-drafting delegation.
-10. Prepare a standalone overall review comment that explains the verdict, score, findings, impact, fix direction, verification, and remaining risk clearly enough to understand without opening inline threads.
-11. Prepare a final review summary that groups all findings by severity and category and includes a numeric review score.
-12. Publish review comments to GitHub through the API when explicitly asked or when operating on a real PR with GitHub access.
-13. Record durable knowledge in the review knowledge repo if configured and safe to store.
+5. Load the relevant durable System Map from the review knowledge repo and validate the touched portions against current code.
+6. Build a written PR Coverage Map that overlays the diff onto the System Map before judging code.
+7. Inspect changed files and all directly coupled files.
+8. Review tests and run appropriate verification where possible.
+9. Prepare inline review comments for every actionable bug/security issue that has a stable diff location.
+10. Finalize the verdict, score, findings, inline targets, and verification evidence before any comment-drafting delegation.
+11. Prepare a standalone overall review comment that explains the verdict, score, findings, impact, fix direction, verification, system coverage, and remaining risk clearly enough to understand without opening inline threads.
+12. Prepare a final review summary that groups all findings by severity and category and includes a numeric review score.
+13. Publish review comments to GitHub through the API when explicitly asked or when operating on a real PR with GitHub access.
+14. Record durable internal workings, invariants, and recurring review knowledge in the review knowledge repo if safe to store.
 
 ## Required Setup Commands
 
@@ -69,6 +70,14 @@ Always read, as applicable:
 
 For Ormont, prioritize:
 
+- Skill-local references:
+  - `references/scoring.md` for the numeric score rubric and caps
+  - `references/system-map.md` for the durable mapping workflow
+  - `references/coverage-map-template.md` for the per-review coverage map shape
+  - `references/maps/` for agent-readable maps and human visual HTML maps
+- `C:/Users/karl-/Documents/source/OrmontLex/review/ormont/architecture/` for the durable System Map and package/data-boundary notes
+- `C:/Users/karl-/Documents/source/OrmontLex/review/ormont/review-playbooks/` for area-specific review heuristics
+- `C:/Users/karl-/Documents/source/OrmontLex/review/ormont/findings-patterns/` for recurring Ormont bug patterns
 - `docs/architecture.md` for package boundaries and system shape
 - `docs/data-and-compliance.md` for privacy, audit, and legal data constraints
 - `docs/roadmap.md` / active milestone docs for sequencing
@@ -76,21 +85,17 @@ For Ormont, prioritize:
 
 Load only what is needed, but do not review without enough architecture context to understand the blast radius.
 
-## Change Map
+## System Map
 
-Create a concise map before detailed review:
+Load `references/system-map.md` and the relevant files under `references/maps/` before judging a PR. Use Markdown maps as the agent-readable source and HTML maps as human visual companions.
 
-- changed packages/apps/services
-- public API or contract changes
-- data model, migration, or schema changes
-- data classification changes: public legal corpus, private matter data, auth/session data, audit metadata, generated artifacts, telemetry/logs
-- trust boundary changes: browser, Electron renderer, preload/main, API, workers, database, object storage, external AI/model providers, search/vector indexes, queues, email/auth providers
-- auth, permissions, tenant isolation, audit, storage, sync, legal verification, or redaction impact
-- UI behavior and accessibility impact
-- tests added/changed/missing
-- docs updated/missing
+Validate every touched map entry against current code. Treat stale or missing map entries as review uncertainty until resolved. If the reviewer cannot explain a sensitive flow from entrypoint to persistence or external boundary, confidence cannot be high and the verdict cannot be `Approve`.
 
-Use search to find direct dependents of changed exports, types, routes, schemas, database fields, permissions, queue payloads, storage keys, and audit event names.
+## PR Coverage Map
+
+Create a written coverage map before detailed review using `references/coverage-map-template.md`. The map must list changed packages, loaded System Map entries, touched contracts, data classes, trust boundaries, isolation impacts, direct dependents, tests, docs, and unmapped uncertainty.
+
+Use search to find direct dependents of changed exports, types, routes, schemas, database fields, permissions, queue payloads, storage keys, audit event names, and other cross-boundary contracts.
 
 ## Review Mindset
 
@@ -137,6 +142,10 @@ Every finding must include:
 - confidence level when useful
 
 Do not include a finding unless it is actionable. Prefer no comment over a vague comment.
+
+## Score Calibration
+
+Apply `references/scoring.md`. The score communicates merge readiness and residual risk; it does not replace the verdict. Do not invent a score outside the rubric or ignore the caps.
 
 ## Verification
 
@@ -258,57 +267,13 @@ The overall comment must include:
   - fix direction: the concrete correction expected
   - verification: the test, check, or manual proof that would demonstrate the fix
 - a `Security / Data / Isolation` section that explicitly states the reviewed trust boundaries and any residual uncertainty
+- a `System / Coverage Map` section that names the System Map entries loaded, internal flows traced, direct dependents inspected, and unmapped uncertainty
 - a `Verification` section with exact commands and pass/fail results
 - a `Gaps / Follow-Ups` section for unrun checks, manual QA gaps, or non-blocking cleanup
 
 Do not make the verdict generic, diplomatic, or a teaser such as "there are two bugs below." The verdict must name the blocking bugs or the decisive reason for approval. Avoid empty phrases such as "directionally sound", "looks good overall", "solid foundation", or "needs a few fixes" unless the following sentence names the concrete risk. Do not rely on inline comments as the only explanation; GitHub UIs often collapse or reorder them.
 
-Use this compact body shape for request-changes or comment reviews:
-
-```markdown
-## Review Verdict
-
-Decision: Request changes
-
-Score: 68/100
-
-Merge readiness: Not mergeable until indexing only reports success after Meilisearch confirms the write task succeeded.
-
-Why: The ingestor currently treats an accepted Meilisearch task as completed indexing, so deployment logs and exit codes can claim Atlas data is searchable while the provider later fails the task. That is a correctness bug in the foundation layer because later Atlas, Verify, and Research workflows will trust these indexed-count reports. I also found a response-shape issue where search can return full paragraph payloads instead of summary results, which should be corrected before real corpus records are indexed.
-
-What would change the verdict: wait for Meilisearch write tasks to reach `succeeded`, convert failed/canceled tasks into the sanitized report shape, restrict search results to summary fields, and add tests for both behaviors.
-
-Confidence: High. The Meilisearch client API documents document writes as enqueued tasks, and the changed code does not wait for task completion.
-
-## Must Fix
-
-- **High/bug - Indexing reports success before Meilisearch finishes** (`packages/search-client/src/index.ts:133`)
-  - Problem: `addDocuments` only enqueues a task, but the code reports `indexedCount` immediately.
-  - Impact: the ingestor can exit 0 even if the indexing task later fails, leaving Atlas search incomplete while deployment logs claim success.
-  - Fix direction: wait for the task to reach `succeeded`; map failed/canceled tasks into the sanitized report shape.
-  - Verification: add a test where the task is accepted and later fails, then confirm the ingestor exits/report fails.
-
-## Findings
-
-- **Medium/architecture - Search returns full paragraph payloads** (`packages/search-client/src/index.ts:151`)
-  - Problem: search hits return the full authority schema, including paragraph arrays.
-  - Impact: search responses can become oversized and blur the intended boundary between summary search and evidence retrieval.
-  - Fix direction: restrict retrieved attributes to summary fields and keep paragraph text behind the paragraph retrieval endpoint.
-  - Verification: add a search test proving paragraph text is not returned from `GET /api/atlas/search`.
-
-## Security / Data / Isolation
-
-Reviewed the API-to-Meilisearch boundary, key separation, fixture contents, provider error wrapping, and response payload shape. No key leakage found. Residual risk remains around result payload size until search responses are limited to summary fields.
-
-## Verification
-
-- `pnpm --filter @ormont/search-client test` - passed
-- `pnpm --filter @ormont/api test` - passed
-
-## Gaps / Follow-Ups
-
-- Hosted Meilisearch task-failure behavior was not exercised against a live service in this review.
-```
+For a full request-changes body example, see `references/review-comment-example.md`.
 
 ## GitHub Inline Review Comments
 
@@ -391,6 +356,8 @@ Required summary sections:
 
 - Verdict: approve, request changes, not ready, or needs more context
 - Score: `N/100` with a short rationale. Use the score to communicate readiness; it does not replace the verdict.
+- System map validated: durable map entries loaded, touched internal flows traced, and stale/missing map areas
+- PR coverage map: changed packages, contracts, data classes, trust boundaries, direct dependents, tests, and docs
 - Scope reviewed: files/areas and coupled code inspected
 - Blockers
 - High findings
@@ -412,6 +379,8 @@ The canonical local review knowledge repo for OrmontLex is:
 
 Use that path for durable review knowledge. Do not create parallel knowledge bases under `../review`, `../ormont-review`, or inside the product repo unless explicitly instructed.
 
+Skill-local maps and rubric references live under `references/`. Keep reusable review process there. Keep validated Ormont project facts, internal flows, invariants, and recurring findings in the review repo, using skill-local maps as the operating structure.
+
 Record durable context, not transient PR notes.
 
 Suggested structure:
@@ -420,6 +389,7 @@ Suggested structure:
 review/
   ormont/
     architecture/
+      system-map.md
       packages.md
       data-boundaries.md
       route-map.md
@@ -436,9 +406,12 @@ review/
 Record:
 
 - package ownership and dependency boundaries
+- internal workings from entrypoint to persistence, search, queue, audit, external provider, or UI state
 - important domain invariants
 - data classification and trust-boundary rules
 - tenant, organisation, and matter isolation rules
+- source-of-truth versus derived-state boundaries
+- direct dependents of important contracts, routes, schemas, audit events, queue payloads, and storage keys
 - recurring bug patterns
 - review heuristics that caught real issues
 - ADR-like decisions that affect future reviews
@@ -457,6 +430,13 @@ Use this structure:
 ## Review Verdict
 
 [Approve / Request changes / Not ready / Needs more context]
+
+## System / Coverage Map
+
+- System map entries loaded:
+- Internal flows traced:
+- Direct dependents inspected:
+- Stale/missing map areas:
 
 ## Findings
 
