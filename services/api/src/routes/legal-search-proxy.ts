@@ -599,6 +599,13 @@ export function createLegalSearchProxyRoutes(
       )
     }
 
+    if (liveDocument.status === 'unavailable') {
+      return c.json(
+        apiError('storage_unavailable', 'Find Case Law is unavailable.', requestId),
+        503,
+      )
+    }
+
     return c.json(
       apiError('document_not_found', 'Document was not found in stored or live sources.', requestId),
       404,
@@ -877,6 +884,7 @@ async function fetchMojAuthorityDetail(
   | { status: 'ok'; document: LegalAuthority; provider: ProviderSourceMetadata }
   | { status: 'skipped' }
   | { status: 'rate_limited'; retryAfter: string | null }
+  | { status: 'unavailable' }
 > {
   const detailUrl = new URL(entry.sourceUri, env.mojFindCaseLawBaseUrl)
   const detailLimit = rateLimiter.take()
@@ -886,6 +894,9 @@ async function fetchMojAuthorityDetail(
   }
 
   const detailResponse = await fetch(detailUrl)
+
+  const detailFailure = detailFailureFromResponse(detailResponse)
+  if (detailFailure) return detailFailure
 
   if (!detailResponse.ok) {
     return { status: 'skipped' }
@@ -927,6 +938,7 @@ async function fetchMojAuthorityDocumentFromRecord(
   | { status: 'ok'; document: LegalAuthority; provider: ProviderSourceMetadata }
   | { status: 'skipped' }
   | { status: 'rate_limited'; retryAfter: string | null }
+  | { status: 'unavailable' }
 > {
   const sourceUris = [record.provider.sourceUri, record.provider.xmlUri].filter(
     (uri): uri is string => Boolean(uri),
@@ -940,6 +952,9 @@ async function fetchMojAuthorityDocumentFromRecord(
 
     const detailUrl = new URL(sourceUri, env.mojFindCaseLawBaseUrl)
     const detailResponse = await fetch(detailUrl)
+    const detailFailure = detailFailureFromResponse(detailResponse)
+    if (detailFailure) return detailFailure
+
     if (!detailResponse.ok) continue
 
     const html = await detailResponse.text()
@@ -973,6 +988,7 @@ async function fetchMojAuthorityDocumentById(
   | { status: 'ok'; document: LegalAuthority; provider: ProviderSourceMetadata }
   | { status: 'skipped' }
   | { status: 'rate_limited'; retryAfter: string | null }
+  | { status: 'unavailable' }
 > {
   const uri = documentUriFromId(documentId)
   if (!uri) return { status: 'skipped' }
@@ -984,6 +1000,9 @@ async function fetchMojAuthorityDocumentById(
 
   const detailUrl = new URL(uri, env.mojFindCaseLawBaseUrl)
   const detailResponse = await fetch(detailUrl)
+  const detailFailure = detailFailureFromResponse(detailResponse)
+  if (detailFailure) return detailFailure
+
   if (!detailResponse.ok) return { status: 'skipped' }
 
   const html = await detailResponse.text()
@@ -1013,6 +1032,21 @@ async function fetchMojAuthorityDocumentById(
       rawDocumentHtml: html,
     },
   }
+}
+
+function detailFailureFromResponse(response: Response) {
+  if (response.status === 429) {
+    return {
+      status: 'rate_limited' as const,
+      retryAfter: response.headers.get('retry-after'),
+    }
+  }
+
+  if (response.status >= 500) {
+    return { status: 'unavailable' as const }
+  }
+
+  return null
 }
 
 function parseMojAuthorityDocument(

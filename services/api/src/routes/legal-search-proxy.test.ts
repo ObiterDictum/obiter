@@ -1261,6 +1261,75 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
   })
 
+  it('returns rate-limit metadata when direct live document fetch is provider limited', async () => {
+    searchClientMock.getDocument.mockRejectedValueOnce(new Error('not found'))
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response('', { status: 429, headers: { 'retry-after': '120' } }),
+    )
+    const app = createLegalSearchProxyRoutes(env)
+
+    const response = await app.request('/api/search/documents/ewhc-admin-2026-1246')
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'storage_unavailable' },
+      retryAfter: '120',
+    })
+    expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
+  })
+
+  it('returns storage unavailable when direct live document fetch has a provider outage', async () => {
+    searchClientMock.getDocument.mockRejectedValueOnce(new Error('not found'))
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('', { status: 503 }))
+    const app = createLegalSearchProxyRoutes(env)
+
+    const response = await app.request('/api/search/documents/ewhc-admin-2026-1246')
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'storage_unavailable' },
+    })
+    expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
+  })
+
+  it('returns rate-limit metadata when source-record live document fetch is provider limited', async () => {
+    searchClientMock.getDocument.mockRejectedValueOnce(new Error('not found'))
+    const sourceStore = {
+      async upsertSummary() {},
+      upsertDocument: vi.fn(),
+      async get() {
+        return {
+          summary: hit,
+          provider: {
+            documentUri: '/d-source-record',
+            sourceUri: '/uksc/2024/1',
+            xmlUri: '/uksc/2024/1/data.xml',
+            pdfUri: null,
+            contentHash: 'source-record-hash',
+            rawAtomEntry: '<entry />',
+          },
+        }
+      },
+      async search() {
+        return []
+      },
+    }
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response('', { status: 429, headers: { 'retry-after': '60' } }),
+    )
+    const app = createLegalSearchProxyRoutes(env, sourceStore)
+
+    const response = await app.request('/api/search/documents/uksc-2024-1')
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'storage_unavailable' },
+      retryAfter: '60',
+    })
+    expect(sourceStore.upsertDocument).not.toHaveBeenCalled()
+    expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
+  })
+
   it('fetches nested Find Case Law document paths when stored lookup misses', async () => {
     searchClientMock.getDocument.mockRejectedValueOnce(new Error('not found'))
     searchClientMock.indexDocuments.mockResolvedValueOnce({
