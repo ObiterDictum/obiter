@@ -14,7 +14,7 @@ export type LegalParagraph = z.infer<typeof LegalParagraphSchema>
 export const LegalAuthoritySchema = z.object({
   id: z.string().trim().min(1),
   title: z.string().trim().min(1),
-  neutralCitation: z.string().trim().min(1),
+  neutralCitation: z.string().trim().min(1).nullable(),
   court: z.string().trim().min(1),
   jurisdiction: z.string().trim().min(1),
   dateDecided: z.string().date(),

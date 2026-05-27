@@ -205,6 +205,54 @@ describe('createLegalSearchProxyRoutes', () => {
     )
   })
 
+  it('hydrates Find Case Law entries that only expose provider identifiers', async () => {
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [],
+      query: 'NHS England',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    searchClientMock.indexDocuments.mockResolvedValueOnce({
+      indexedCount: 1,
+      failedCount: 0,
+      errors: [],
+    })
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          `<feed><entry><title>NHS England v Justin Yung Hui Chin</title><link href="https://caselaw.nationalarchives.gov.uk/tna.74vv2rbp" rel="alternate"/><published>2026-02-26T00:00:00+00:00</published><author><name>Primary Health Lists</name></author><id>https://caselaw.nationalarchives.gov.uk/id/d-dd848612-73c3-4719-b18f-5643e51dcb17</id><tna:contenthash>18a9eec9aeb47b13f17991e632219989146c180732500bed2258f91a0e880311</tna:contenthash><link href="https://caselaw.nationalarchives.gov.uk/tna.74vv2rbp/data.xml" rel="alternate" type="application/akn+xml"/><tna:identifier slug="tna.74vv2rbp" type="fclid">74vv2rbp</tna:identifier><tna:uri>d-dd848612-73c3-4719-b18f-5643e51dcb17</tna:uri></entry></feed>`,
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          '<html><body><h1>NHS England v Justin Yung Hui Chin</h1><article><div class="judgment-header__date">Date: 26/02/2026</div><p>This Primary Health Lists decision paragraph is long enough to index without a neutral citation.</p></article></body></html>',
+        ),
+      )
+    const app = createLegalSearchProxyRoutes(env)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'NHS England', court: 'ftt/phl' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    await vi.waitFor(() =>
+      expect(searchClientMock.indexDocuments).toHaveBeenCalledWith(
+        { id: 'meili-client' },
+        'legal_authorities',
+        [
+          expect.objectContaining({
+            id: 'd-dd848612-73c3-4719-b18f-5643e51dcb17',
+            neutralCitation: null,
+            court: 'ftt-phl',
+            title: 'NHS England v Justin Yung Hui Chin',
+          }),
+        ],
+      ),
+    )
+  })
+
   it('serves later search misses from Ormont-owned source storage without calling Find Case Law again', async () => {
     searchClientMock.search.mockResolvedValue({
       hits: [],
@@ -1378,10 +1426,43 @@ describe('Find Case Law parsing', () => {
     ])
   })
 
+  it('derives court from Find Case Law path aliases when citations use provider-specific tribunal tokens', () => {
+    expect(
+      parseFindCaseLawAtom(
+        '<feed><entry><title>Deborah Fleet v Bloomsbury Law Solicitors</title><link href="https://caselaw.nationalarchives.gov.uk/ukftt/pc/2026/472" rel="alternate"/><published>2026-03-25T00:00:00+00:00</published><author><name>Land Registration Division (Property Chamber)</name></author><id>https://caselaw.nationalarchives.gov.uk/id/d-d6a1c934-558f-493b-9413-3967c037f380</id><tna:identifier slug="ukftt/pc/2026/472" type="ukncn">[2026] UKFTT 472 (PC)</tna:identifier><tna:uri>d-d6a1c934-558f-493b-9413-3967c037f380</tna:uri></entry></feed>',
+        { query: 'Deborah Fleet', court: 'ftt-pc' },
+      ),
+    ).toMatchObject([
+      {
+        neutralCitation: '[2026] UKFTT 472 (PC)',
+        court: 'ftt-pc',
+        uri: '/d-d6a1c934-558f-493b-9413-3967c037f380',
+        sourceUri: '/ukftt/pc/2026/472',
+      },
+    ])
+  })
+
+  it('keeps provider-identified tribunal entries when the court filter supplies the trusted court', () => {
+    expect(
+      parseFindCaseLawAtom(
+        '<feed><entry><title>NHS England v Justin Yung Hui Chin</title><link href="https://caselaw.nationalarchives.gov.uk/tna.74vv2rbp" rel="alternate"/><published>2026-02-26T00:00:00+00:00</published><author><name>Primary Health Lists</name></author><id>https://caselaw.nationalarchives.gov.uk/id/d-dd848612-73c3-4719-b18f-5643e51dcb17</id><tna:identifier slug="tna.74vv2rbp" type="fclid">74vv2rbp</tna:identifier><tna:uri>d-dd848612-73c3-4719-b18f-5643e51dcb17</tna:uri></entry></feed>',
+        { query: 'NHS England', court: 'ftt-phl' },
+      ),
+    ).toMatchObject([
+      {
+        title: 'NHS England v Justin Yung Hui Chin',
+        neutralCitation: null,
+        court: 'ftt-phl',
+        uri: '/d-dd848612-73c3-4719-b18f-5643e51dcb17',
+        sourceUri: '/tna.74vv2rbp',
+      },
+    ])
+  })
+
   it('parses Atom fallbacks, encoded content, and malformed-entry skips conservatively', () => {
     expect(
       parseFindCaseLawAtom(
-        '<feed><entry><title><![CDATA[Example &amp; Test [2024] UKSC 3]]></title><id>uksc/2024/3</id><updated>2024-01-31T00:00:00Z</updated></entry><entry><title>Missing Citation</title><id>/uksc/2024/4</id><updated>2024-01-31T00:00:00Z</updated></entry></feed>',
+        '<feed><entry><title><![CDATA[Example &amp; Test [2024] UKSC 3]]></title><id>uksc/2024/3</id><updated>2024-01-31T00:00:00Z</updated></entry><entry><title>Missing Citation</title><id>/unknown/2024/4</id><updated>2024-01-31T00:00:00Z</updated></entry></feed>',
         { query: 'Example' },
       ),
     ).toMatchObject([

@@ -12,7 +12,12 @@ interface LegalSearchRouteVariables {
   requestId: string
 }
 
-const legalSlugSchema = z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+const legalSlugSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .regex(/^[a-z0-9]+(?:[-/][a-z0-9]+)*$/)
+  .transform((value) => value.replace(/\//g, '-'))
 
 const legalSearchQuerySchema = z.object({
   q: z.string().trim().min(1),

@@ -20,7 +20,7 @@ interface LegalSearchProxyRouteVariables {
 
 interface AtomEntry {
   title: string
-  neutralCitation: string
+  neutralCitation: string | null
   court: string
   dateDecided: string
   uri: string
@@ -104,9 +104,19 @@ const supportedFindCaseLawCourts = new Set([
   'ftt-transport',
 ])
 
-const findCaseLawCourtParamByCourt = new Map(
-  Array.from(supportedFindCaseLawCourts, (court) => [court, court.replace(/-/g, '/')]),
+const findCaseLawCourtParamByCourt = new Map<string, string>(
+  Array.from(supportedFindCaseLawCourts, (court) => [court, court.replace(/-/g, '/')] as const),
 )
+const findCaseLawCourtPathAliases = new Map<string, string>([
+  ['ukftt/claims', 'ftt-claims'],
+  ['ukftt/pc', 'ftt-pc'],
+  ['ukftt/phl', 'ftt-phl'],
+  ['ukftt/transport', 'ftt-transport'],
+])
+const findCaseLawCourtByPath = new Map<string, string>([
+  ...Array.from(findCaseLawCourtParamByCourt, ([court, path]) => [path, court] as const),
+  ...findCaseLawCourtPathAliases,
+])
 const storedSearchTimeoutMs = 350
 const sourceStoreStatementTimeout = `${storedSearchTimeoutMs}ms`
 
@@ -143,7 +153,11 @@ const citationDivisionCourtByBaseCourt = new Map<string, Map<string, string>>([
       ['estate', 'ukftt-estate'],
       ['grc', 'ukftt-grc'],
       ['hesc', 'ukftt-hesc'],
+      ['claims', 'ftt-claims'],
+      ['pc', 'ftt-pc'],
+      ['phl', 'ftt-phl'],
       ['tc', 'ukftt-tc'],
+      ['transport', 'ftt-transport'],
     ]),
   ],
   [
@@ -976,7 +990,7 @@ async function fetchMojAuthorityDocumentById(
   const document = parseMojAuthorityDocument(documentId, html, detailUrl.toString(), {
     id: documentId,
     title: documentId,
-    neutralCitation: extractNeutralCitationFromHtml(html) ?? '',
+    neutralCitation: extractNeutralCitationFromHtml(html) ?? null,
     court: courtFromDocumentId(documentId) ?? '',
     jurisdiction: findCaseLawJurisdiction,
     dateDecided: dateFromDocumentId(documentId) ?? '',
@@ -1007,12 +1021,12 @@ function parseMojAuthorityDocument(
   sourceUrl: string,
   fallback: LegalAuthority,
 ) {
-  const neutralCitation = extractNeutralCitationFromHtml(html) ?? fallback.neutralCitation
-  const court = neutralCitation ? courtFromCitation(neutralCitation) : fallback.court
+  const neutralCitation = extractNeutralCitationFromHtml(html) ?? fallback.neutralCitation ?? null
+  const court = (neutralCitation ? courtFromCitation(neutralCitation) : null) ?? fallback.court
   const dateDecided = extractJudgmentDateFromHtml(html) ?? fallback.dateDecided
   const title = extractJudgmentTitleFromHtml(html) ?? fallback.title ?? neutralCitation ?? documentId
 
-  if (!neutralCitation || !court || !dateDecided) {
+  if (!court || !dateDecided) {
     return null
   }
 
@@ -1056,13 +1070,21 @@ export function parseFindCaseLawAtom(
   xml: string,
   request: z.infer<typeof legalFetchRequestSchema>,
 ): AtomEntry[] {
+  const normalizedRequest: z.infer<typeof legalFetchRequestSchema> = {
+    ...request,
+    court: request.court ? normalizeCourtCode(request.court) : undefined,
+  }
+
   return Array.from(xml.matchAll(/<entry\b[\s\S]*?<\/entry>/gi))
-    .map((match) => parseAtomEntry(match[0]))
+    .map((match) => parseAtomEntry(match[0], normalizedRequest))
     .filter((entry): entry is AtomEntry => entry !== null)
-    .filter((entry) => entryMatchesFetchRequest(entry, request))
+    .filter((entry) => entryMatchesFetchRequest(entry, normalizedRequest))
 }
 
-function parseAtomEntry(xml: string): AtomEntry | null {
+function parseAtomEntry(
+  xml: string,
+  request: z.infer<typeof legalFetchRequestSchema>,
+): AtomEntry | null {
   const title = decodeXml(readTag(xml, 'title') ?? '')
   const source = readAlternateLink(xml) ?? decodeXml(readTag(xml, 'id') ?? '')
   const sourceUri = toDocumentUri(source)
@@ -1072,11 +1094,16 @@ function parseAtomEntry(xml: string): AtomEntry | null {
     (sourceUri ? `${sourceUri.replace(/\/$/, '')}/data.xml` : null)
   const pdfUri = readTypedLink(xml, 'application/pdf') ?? null
   const updated = decodeXml(readTag(xml, 'published') ?? readTag(xml, 'updated') ?? '')
-  const neutralCitation = extractNeutralCitation(readIdentifier(xml) ?? title)
+  const neutralCitation = extractNeutralCitation(readIdentifier(xml) ?? title) ?? null
   const dateDecided = extractDate(updated) ?? extractDate(title)
-  const court = neutralCitation ? courtFromCitation(neutralCitation) : null
+  const court =
+    (neutralCitation ? courtFromCitation(neutralCitation) : null) ??
+    courtFromFindCaseLawPath(sourceUri) ??
+    courtFromFindCaseLawPath(documentUri) ??
+    request.court ??
+    null
 
-  if (!title || !documentUri || !sourceUri || !neutralCitation || !court || !dateDecided) {
+  if (!title || !documentUri || !sourceUri || !court || !dateDecided) {
     return null
   }
 
@@ -1301,6 +1328,17 @@ function courtFromDocumentId(documentId: string) {
   return Array.from(supportedFindCaseLawCourts)
     .sort((left, right) => right.length - left.length)
     .find((court) => documentId.startsWith(`${court}-`)) ?? null
+}
+
+function courtFromFindCaseLawPath(uri: string | null) {
+  if (!uri) return null
+
+  const path = uri.replace(/^\/+/, '').toLowerCase()
+  const match = Array.from(findCaseLawCourtByPath)
+    .sort((left, right) => right[0].length - left[0].length)
+    .find(([courtPath]) => path === courtPath || path.startsWith(`${courtPath}/`))
+
+  return match?.[1] ?? null
 }
 
 function dateFromDocumentId(documentId: string) {

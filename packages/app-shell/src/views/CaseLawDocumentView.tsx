@@ -14,7 +14,7 @@ interface CaseLawParagraph {
 interface CaseLawDocument {
   id: string
   title: string
-  neutralCitation: string
+  neutralCitation: string | null
   court: string
   dateDecided: string
   sourceUrl: string
@@ -70,7 +70,7 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
     <div className="shell-stack case-law-document">
       <section className="case-law-document__topbar">
         <div className="case-law-document__identity">
-          <p>{data.neutralCitation}</p>
+          <p>{formatNeutralCitation(data.neutralCitation)}</p>
           <h1>{data.title}</h1>
           <dl>
             <div>
@@ -107,7 +107,7 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
               <dl>
                 <div>
                   <dt>Citation</dt>
-                  <dd>{data.neutralCitation}</dd>
+                  <dd>{formatNeutralCitation(data.neutralCitation)}</dd>
                 </div>
                 <div>
                   <dt>Date</dt>
@@ -174,11 +174,15 @@ function formatCaseDate(value: string) {
   }).format(date)
 }
 
+function formatNeutralCitation(neutralCitation: string | null) {
+  return neutralCitation ?? 'No neutral citation'
+}
+
 function isDisplayJudgmentParagraph(paragraph: CaseLawParagraph, document: CaseLawDocument) {
   const text = paragraph.text.replace(/\s+/g, ' ').trim()
   const lower = text.toLowerCase()
   const title = document.title.toLowerCase()
-  const citation = document.neutralCitation.toLowerCase()
+  const citation = document.neutralCitation?.toLowerCase() ?? ''
   const excluded = [
     'we place some essential cookies',
     'additional cookies',
@@ -190,7 +194,7 @@ function isDisplayJudgmentParagraph(paragraph: CaseLawParagraph, document: CaseL
 
   if (excluded.some((phrase) => lower.includes(phrase))) return false
   if (lower === title || lower === `${title} -`) return false
-  if (lower === citation || lower.startsWith('neutral citation number')) return false
+  if ((citation && lower === citation) || lower.startsWith('neutral citation number')) return false
   if (lower.length < 8) return false
 
   return true

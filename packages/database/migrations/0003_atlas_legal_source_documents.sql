@@ -47,8 +47,5 @@ create index if not exists legal_source_documents_summary_metadata_idx
 create index if not exists legal_source_documents_summary_gin_idx
   on legal_source_documents using gin (summary_json);
 
-create index if not exists legal_source_documents_provider_gin_idx
-  on legal_source_documents using gin (provider_json);
-
 create index if not exists legal_source_documents_search_vector_idx
   on legal_source_documents using gin (search_vector);

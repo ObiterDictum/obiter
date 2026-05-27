@@ -474,7 +474,7 @@ describe('createApiApp', () => {
     })
 
     const response = await app.request(
-      '/api/search?q=Potanina&court=uksc&jurisdiction=england-and-wales&dateFrom=2024-01-01&dateTo=2024-12-31&sourceType=judgment',
+      '/api/search?q=Potanina&court=ewhc/admin&jurisdiction=england-and-wales&dateFrom=2024-01-01&dateTo=2024-12-31&sourceType=judgment',
     )
 
     expect(response.status).toBe(200)
@@ -492,7 +492,7 @@ describe('createApiApp', () => {
       'legal_authorities',
       'Potanina',
       {
-        court: 'uksc',
+        court: 'ewhc-admin',
         jurisdiction: 'england-and-wales',
         dateFrom: '2024-01-01',
         dateTo: '2024-12-31',

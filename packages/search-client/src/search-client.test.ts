@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createIndex, getDocument, indexDocuments, search } from './index'
+import { createIndex, getDocument, indexDocuments, rankLegalSearchHitsByExactMatch, search } from './index'
+import type { LegalSearchHit } from './index'
 
 function authority(overrides: Record<string, unknown> = {}) {
   return {
@@ -315,6 +316,32 @@ describe('Legal search client', () => {
     expect(idResult.hits.map((hit) => hit.id)).toEqual([
       'ewca-civ-2025-7',
       'uksc-2026-99',
+    ])
+  })
+
+  it('ranks hits without neutral citations without throwing', () => {
+    const withoutCitation = authority({
+      id: 'd-dd848612-73c3-4719-b18f-5643e51dcb17',
+      title: 'NHS England v Justin Yung Hui Chin',
+      neutralCitation: null,
+      court: 'ftt-phl',
+      dateDecided: '2026-02-26',
+    })
+    const withCitation = authority({
+      id: 'uksc-2024-3',
+      title: 'Potanina v Potanin',
+      neutralCitation: '[2024] UKSC 3',
+      dateDecided: '2024-01-31',
+    })
+
+    expect(
+      rankLegalSearchHitsByExactMatch(
+        [withoutCitation, withCitation] as LegalSearchHit[],
+        '[2024] UKSC 3',
+      ),
+    ).toEqual([
+      withCitation,
+      withoutCitation,
     ])
   })
 

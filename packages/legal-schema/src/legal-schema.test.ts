@@ -53,6 +53,21 @@ describe('Legal authority schemas', () => {
     expect(summary).not.toHaveProperty('paragraphs')
   })
 
+  it('allows provider-identified judgments without a neutral citation', () => {
+    const summary = LegalAuthoritySummarySchema.parse({
+      id: 'd-dd848612-73c3-4719-b18f-5643e51dcb17',
+      title: 'NHS England v Justin Yung Hui Chin',
+      neutralCitation: null,
+      court: 'ftt-phl',
+      jurisdiction: 'england-and-wales',
+      dateDecided: '2026-02-26',
+      sourceType: 'judgment',
+      sourceUrl: 'https://caselaw.nationalarchives.gov.uk/tna.74vv2rbp',
+    })
+
+    expect(summary.neutralCitation).toBeNull()
+  })
+
   it('rejects malformed authority and paragraph records', () => {
     expect(() =>
       LegalAuthoritySchema.parse({

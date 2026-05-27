@@ -194,6 +194,11 @@ describe('LegalSearchView helpers', () => {
     ])
     expect(selectJudgmentParagraphs(result)).toHaveLength(2)
   })
+
+  it('uses the official Find Case Law labels for new First-tier Tribunal options', () => {
+    expect(getCourtLabel('ftt/pc')).toBe('First-tier Tribunal Land Registration Division (Property Chamber)')
+    expect(getCourtLabel('ftt/phl')).toBe('First-tier Tribunal Primary Health Lists')
+  })
 })
 
 describe('SidebarNavigation helpers', () => {

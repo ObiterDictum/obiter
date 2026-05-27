@@ -269,8 +269,8 @@ function exactMatchScore(hit: LegalSearchHit, normalizedQuery: string) {
   return 0
 }
 
-function normalizeExactMatchValue(value: string) {
-  return value.trim().toLowerCase().replace(/\s+/g, ' ')
+function normalizeExactMatchValue(value: string | null | undefined) {
+  return value?.trim().toLowerCase().replace(/\s+/g, ' ') ?? ''
 }
 
 function validationFailure(documents: unknown[], messages: string[]): SearchIndexDocumentsResult {
