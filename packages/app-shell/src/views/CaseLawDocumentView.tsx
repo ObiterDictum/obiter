@@ -2,39 +2,40 @@ import { queryOptions, useSuspenseQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { EmptyState } from '@ormont/ui'
-import { selectJudgmentParagraphs } from './AtlasSearchView'
+import { selectJudgmentParagraphs } from './LegalSearchView'
+import { getCourtLabel } from '../components/search'
 
-interface AtlasParagraph {
+interface CaseLawParagraph {
   id: string
   paragraphNumber: number
   text: string
 }
 
-interface AtlasDocument {
+interface CaseLawDocument {
   id: string
   title: string
-  neutralCitation: string
+  neutralCitation: string | null
   court: string
   dateDecided: string
   sourceUrl: string
-  paragraphs?: AtlasParagraph[]
+  paragraphs?: CaseLawParagraph[]
 }
 
-interface AtlasDocumentResponse {
-  document: AtlasDocument
+interface CaseLawDocumentResponse {
+  document: CaseLawDocument
 }
 
-export function atlasDocumentQueryOptions(caseId: string) {
+export function caseLawDocumentQueryOptions(caseId: string) {
   return queryOptions({
-    queryKey: ['atlas-document', caseId],
+    queryKey: ['case-law-document', caseId],
     queryFn: async () => {
       const response = await fetch(apiUrl(`/api/search/documents/${encodeURIComponent(caseId)}`))
 
       if (!response.ok) {
-        throw new Error('Atlas document was not found.')
+        throw new Error('Case law document was not found.')
       }
 
-      return ((await response.json()) as AtlasDocumentResponse).document
+      return ((await response.json()) as CaseLawDocumentResponse).document
     },
   })
 }
@@ -50,9 +51,9 @@ function apiUrl(path: string) {
   ).toString()
 }
 
-export function AtlasCaseView({ caseId }: { caseId: string }) {
+export function CaseLawDocumentView({ caseId }: { caseId: string }) {
   const [caseQuery, setCaseQuery] = useState('')
-  const { data } = useSuspenseQuery(atlasDocumentQueryOptions(caseId))
+  const { data } = useSuspenseQuery(caseLawDocumentQueryOptions(caseId))
   const paragraphs = selectJudgmentParagraphs(data).filter((paragraph) =>
     isDisplayJudgmentParagraph(paragraph, data),
   )
@@ -62,53 +63,51 @@ export function AtlasCaseView({ caseId }: { caseId: string }) {
         paragraph.text.toLowerCase().includes(trimmedCaseQuery.toLowerCase()),
       )
     : paragraphs
+  const courtLabel = getReadableCourtLabel(data.court)
+  const dateLabel = formatCaseDate(data.dateDecided)
 
   return (
-    <div className="shell-stack atlas-case">
-      <section className="atlas-case__topbar">
-        <div className="atlas-case__identity">
-          <p>Case law</p>
+    <div className="shell-stack case-law-document">
+      <section className="case-law-document__topbar">
+        <div className="case-law-document__identity">
+          <p>{formatNeutralCitation(data.neutralCitation)}</p>
           <h1>{data.title}</h1>
           <dl>
             <div>
-              <dt>Citation</dt>
-              <dd>{data.neutralCitation}</dd>
-            </div>
-            <div>
               <dt>Court</dt>
-              <dd>{data.court}</dd>
+              <dd>{courtLabel}</dd>
             </div>
             <div>
               <dt>Date</dt>
-              <dd>{data.dateDecided}</dd>
+              <dd>{dateLabel}</dd>
             </div>
           </dl>
-          <label className="atlas-case__search">
-            <span>Search within case</span>
-            <input
-              value={caseQuery}
-              onChange={(event) => setCaseQuery(event.target.value)}
-              placeholder="jurisdiction, evidence, order..."
-              type="search"
-            />
-            {trimmedCaseQuery ? <em>{visibleParagraphs.length} matches</em> : null}
-          </label>
         </div>
-        <Link className="atlas-case__back" to="/search">
-          Back to search
+        <Link className="case-law-document__back" to="/search">
+          Back
         </Link>
+        <label className="case-law-document__search">
+          <span>Search within case</span>
+          <input
+            value={caseQuery}
+            onChange={(event) => setCaseQuery(event.target.value)}
+            placeholder="Find text..."
+            type="search"
+          />
+          {trimmedCaseQuery ? <em>{visibleParagraphs.length} matches</em> : null}
+        </label>
       </section>
 
-      <section className="atlas-case__viewer">
+      <section className="case-law-document__viewer">
         {visibleParagraphs.length > 0 ? (
-          <div className="atlas-result__page" role="document" aria-label={data.title}>
-            <header className="atlas-result__page-header">
+          <div className="case-law-result__page" role="document" aria-label={data.title}>
+            <header className="case-law-result__page-header">
               <p>{data.court}</p>
               <h2>{data.title}</h2>
               <dl>
                 <div>
                   <dt>Citation</dt>
-                  <dd>{data.neutralCitation}</dd>
+                  <dd>{formatNeutralCitation(data.neutralCitation)}</dd>
                 </div>
                 <div>
                   <dt>Date</dt>
@@ -117,13 +116,13 @@ export function AtlasCaseView({ caseId }: { caseId: string }) {
               </dl>
             </header>
 
-            <div className="atlas-result__page-body">
+            <div className="case-law-result__page-body">
               {visibleParagraphs.map((paragraph) => {
                 const label = paragraphLabel(paragraph)
                 const text = paragraphTextWithoutLabel(paragraph)
 
                 return (
-                  <p className="atlas-result__paragraph" key={paragraph.id}>
+                  <p className="case-law-result__paragraph" key={paragraph.id}>
                     <span aria-label={label ? `Paragraph ${label}` : undefined}>
                       {label}
                     </span>
@@ -137,8 +136,12 @@ export function AtlasCaseView({ caseId }: { caseId: string }) {
           </div>
         ) : (
           <EmptyState
-            title="Stored text unavailable"
-            body="Atlas has cached the authority metadata, but no paragraph text is stored for this case yet."
+            title={trimmedCaseQuery ? 'No matches found' : 'Full text unavailable'}
+            body={
+              trimmedCaseQuery
+                ? `No paragraphs match "${trimmedCaseQuery}".`
+                : 'The authority metadata is cached, but no paragraph text is stored for this case yet.'
+            }
           />
         )}
       </section>
@@ -146,11 +149,40 @@ export function AtlasCaseView({ caseId }: { caseId: string }) {
   )
 }
 
-function isDisplayJudgmentParagraph(paragraph: AtlasParagraph, document: AtlasDocument) {
+function getReadableCourtLabel(court: string) {
+  const normalized = court.replace(/-/g, '/')
+  const direct = getCourtLabel(normalized)
+
+  if (direct !== normalized) return direct
+
+  return court
+    .split(/[-/]/)
+    .filter(Boolean)
+    .map((part) => part.toUpperCase())
+    .join(' ')
+}
+
+function formatCaseDate(value: string) {
+  const date = new Date(`${value}T00:00:00Z`)
+  if (Number.isNaN(date.getTime())) return value
+
+  return new Intl.DateTimeFormat('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(date)
+}
+
+function formatNeutralCitation(neutralCitation: string | null) {
+  return neutralCitation ?? 'No neutral citation'
+}
+
+function isDisplayJudgmentParagraph(paragraph: CaseLawParagraph, document: CaseLawDocument) {
   const text = paragraph.text.replace(/\s+/g, ' ').trim()
   const lower = text.toLowerCase()
   const title = document.title.toLowerCase()
-  const citation = document.neutralCitation.toLowerCase()
+  const citation = document.neutralCitation?.toLowerCase() ?? ''
   const excluded = [
     'we place some essential cookies',
     'additional cookies',
@@ -162,17 +194,17 @@ function isDisplayJudgmentParagraph(paragraph: AtlasParagraph, document: AtlasDo
 
   if (excluded.some((phrase) => lower.includes(phrase))) return false
   if (lower === title || lower === `${title} -`) return false
-  if (lower === citation || lower.startsWith('neutral citation number')) return false
+  if ((citation && lower === citation) || lower.startsWith('neutral citation number')) return false
   if (lower.length < 8) return false
 
   return true
 }
 
-function paragraphLabel(paragraph: AtlasParagraph) {
+function paragraphLabel(paragraph: CaseLawParagraph) {
   return paragraph.text.trim().match(/^(\d+)\.\s+/)?.[1] ?? ''
 }
 
-function paragraphTextWithoutLabel(paragraph: AtlasParagraph) {
+function paragraphTextWithoutLabel(paragraph: CaseLawParagraph) {
   return paragraph.text.trim().replace(/^\d+\.\s+/, '')
 }
 

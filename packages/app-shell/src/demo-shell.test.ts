@@ -1,8 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
+  courtOptionGroups,
   createPhaseZeroShellSnapshot,
+  createLegalSearchFetchRequest,
   findMatterRecord,
-  getAtlasSearchStateLabel,
+  countActiveLegalSearchFilters,
+  getCourtLabel,
+  getLegalSearchStateAfterInputChange,
+  getLegalSearchStateLabel,
   selectJudgmentParagraphs,
   selectParagraphExcerpts,
 } from './index'
@@ -75,20 +80,81 @@ describe('Home role gates', () => {
   })
 })
 
-describe('AtlasSearchView helpers', () => {
-  it('labels the component states used by the search UI', () => {
-    expect(getAtlasSearchStateLabel({ status: 'idle' })).toBe('idle')
-    expect(getAtlasSearchStateLabel({ status: 'loading', query: 'Potanina' })).toBe('loading')
-    expect(getAtlasSearchStateLabel({ status: 'empty', query: 'Potanina' })).toBe('empty')
+describe('LegalSearchView helpers', () => {
+  it('builds fetch requests with an optional court filter', () => {
+    expect(createLegalSearchFetchRequest(' Potanina ', { court: '', dateFrom: '', dateTo: '' })).toEqual({
+      query: 'Potanina',
+    })
     expect(
-      getAtlasSearchStateLabel({
+      createLegalSearchFetchRequest('  tax appeal  ', {
+        court: 'ukut/iac',
+        dateFrom: '2024-01-01',
+        dateTo: '2024-12-31',
+      }),
+    ).toEqual({
+      query: 'tax appeal',
+      court: 'ukut/iac',
+      dateFrom: '2024-01-01',
+      dateTo: '2024-12-31',
+    })
+  })
+
+  it('counts active search filters', () => {
+    expect(countActiveLegalSearchFilters({ court: '', dateFrom: '', dateTo: '' })).toBe(0)
+    expect(countActiveLegalSearchFilters({ court: 'uksc', dateFrom: '', dateTo: '' })).toBe(1)
+    expect(countActiveLegalSearchFilters({ court: 'uksc', dateFrom: '2024-01-01', dateTo: '' })).toBe(2)
+  })
+
+  it('labels selected court filters for the collapsed search filter control', () => {
+    expect(getCourtLabel('')).toBe('All courts and tribunals')
+    expect(getCourtLabel('ewhc/admin')).toBe('Administrative Court')
+    expect(getCourtLabel('unknown-court')).toBe('unknown-court')
+  })
+
+  it('exposes the current Find Case Law court filters for the search UI', () => {
+    const optionCodes = courtOptionGroups.flatMap((group) =>
+      group.options.map((option) => option.code),
+    )
+
+    expect(optionCodes).toEqual(
+      expect.arrayContaining([
+        'uksc',
+        'ukpc',
+        'ewca/civ',
+        'ewca/crim',
+        'ewhc/admin',
+        'ewhc/admlty',
+        'ewhc/ipec',
+        'ewhc/tcc',
+        'ewcr',
+        'ewfc',
+        'ewcop',
+        'ewcc',
+        'eat',
+        'siac',
+        'ukiptrib',
+        'ukut/iac',
+        'ukftt/tc',
+        'ftt/transport',
+      ]),
+    )
+    expect(optionCodes).not.toContain('ukut')
+    expect(optionCodes).not.toContain('ukftt')
+  })
+
+  it('labels the component states used by the search UI', () => {
+    expect(getLegalSearchStateLabel({ status: 'idle' })).toBe('idle')
+    expect(getLegalSearchStateLabel({ status: 'loading', query: 'Potanina' })).toBe('loading')
+    expect(getLegalSearchStateLabel({ status: 'empty', query: 'Potanina' })).toBe('empty')
+    expect(
+      getLegalSearchStateLabel({
         status: 'error',
         query: 'Potanina',
         message: 'Search could not reach the API.',
       }),
     ).toBe('error')
     expect(
-      getAtlasSearchStateLabel({
+      getLegalSearchStateLabel({
         status: 'results',
         query: 'Potanina',
         response: {
@@ -99,6 +165,10 @@ describe('AtlasSearchView helpers', () => {
         },
       }),
     ).toBe('results')
+  })
+
+  it('keeps typing side-effect free until explicit search submission', () => {
+    expect(getLegalSearchStateAfterInputChange()).toEqual({ status: 'idle' })
   })
 
   it('selects matching paragraph excerpts for expanded search results', () => {
@@ -123,6 +193,11 @@ describe('AtlasSearchView helpers', () => {
       { id: 'p2', paragraphNumber: 2, text: 'Potanina appears in this paragraph.' },
     ])
     expect(selectJudgmentParagraphs(result)).toHaveLength(2)
+  })
+
+  it('uses the official Find Case Law labels for new First-tier Tribunal options', () => {
+    expect(getCourtLabel('ftt/pc')).toBe('First-tier Tribunal Land Registration Division (Property Chamber)')
+    expect(getCourtLabel('ftt/phl')).toBe('First-tier Tribunal Primary Health Lists')
   })
 })
 
