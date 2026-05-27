@@ -16,7 +16,9 @@ describe('runBoundedSampleIndexing', () => {
     const report = await runBoundedSampleIndexing({
       meilisearchHost: 'http://localhost:7700',
       meilisearchAdminApiKey: 'dev-key',
-      atlasAuthoritiesIndex: 'atlas_authorities',
+      legalAuthoritiesIndex: 'legal_authorities',
+      mojFindCaseLawBaseUrl: 'https://caselaw.nationalarchives.gov.uk',
+      mojFindCaseLawRateLimit: 1000,
       nodeEnv: 'test',
     })
 

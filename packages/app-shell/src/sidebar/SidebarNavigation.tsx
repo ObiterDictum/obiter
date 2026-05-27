@@ -122,9 +122,7 @@ export function SidebarNavigation({
   currentPath: string
   showStaffNavigation?: boolean
 }) {
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(
-    () => readCollapsedSections(),
-  )
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(() => new Set())
 
   function toggleSection(label: string) {
     setCollapsedSections((current) => {

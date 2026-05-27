@@ -33,7 +33,7 @@ const testEnv: ApiEnv = {
   meilisearchHost: 'http://localhost:7700',
   meilisearchSearchApiKey: 'dev-key',
   meilisearchAdminApiKey: 'dev-key',
-  atlasAuthoritiesIndex: 'atlas_authorities',
+  legalAuthoritiesIndex: 'legal_authorities',
   mojFindCaseLawBaseUrl: 'https://caselaw.nationalarchives.gov.uk',
   mojFindCaseLawRateLimit: 1000,
   port: 8787,
@@ -436,7 +436,7 @@ describe('createApiApp', () => {
     ])
   })
 
-  it('searches Atlas with validated query filters', async () => {
+  it('searches legal authorities with validated query filters', async () => {
     searchClientMock.search.mockResolvedValueOnce({
       hits: [
         {
@@ -474,7 +474,7 @@ describe('createApiApp', () => {
     })
 
     const response = await app.request(
-      '/api/search?q=Potanina&court=uksc&jurisdiction=england-and-wales&dateFrom=2024-01-01&dateTo=2024-12-31&sourceType=judgment',
+      '/api/search?q=Potanina&court=ewhc/admin&jurisdiction=england-and-wales&dateFrom=2024-01-01&dateTo=2024-12-31&sourceType=judgment',
     )
 
     expect(response.status).toBe(200)
@@ -489,10 +489,10 @@ describe('createApiApp', () => {
     expect(body.hits[0]).not.toHaveProperty('paragraphs')
     expect(searchClientMock.search).toHaveBeenCalledWith(
       { id: 'meili-client' },
-      'atlas_authorities',
+      'legal_authorities',
       'Potanina',
       {
-        court: 'uksc',
+        court: 'ewhc-admin',
         jurisdiction: 'england-and-wales',
         dateFrom: '2024-01-01',
         dateTo: '2024-12-31',
@@ -501,7 +501,7 @@ describe('createApiApp', () => {
     )
   })
 
-  it('rejects invalid Atlas search query params', async () => {
+  it('rejects invalid legal authority search query params', async () => {
     const auth = {
       api: {
         getSession: async () => null,
@@ -527,7 +527,7 @@ describe('createApiApp', () => {
     )
   })
 
-  it('rejects malformed Atlas metadata filter values before search', async () => {
+  it('rejects malformed legal authority metadata filter values before search', async () => {
     const auth = {
       api: {
         getSession: async () => null,

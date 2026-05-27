@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { readAtlasIngestorEnv } from './env'
+import { readLegalIngestorEnv } from './env'
 
 const originalEnv = { ...process.env }
 
@@ -7,27 +7,28 @@ afterEach(() => {
   process.env = { ...originalEnv }
 })
 
-describe('readAtlasIngestorEnv', () => {
+describe('readLegalIngestorEnv', () => {
   it('uses local development defaults', () => {
     process.env.NODE_ENV = 'development'
     delete process.env.MEILISEARCH_HOST
     delete process.env.MEILISEARCH_ADMIN_API_KEY
-    delete process.env.ATLAS_AUTHORITIES_INDEX
+    delete process.env.LEGAL_AUTHORITIES_INDEX
 
-    const env = readAtlasIngestorEnv()
+    const env = readLegalIngestorEnv()
 
     expect(env.meilisearchHost).toBe('http://localhost:7700')
     expect(env.meilisearchAdminApiKey).toBe('dev-key')
-    expect(env.atlasAuthoritiesIndex).toBe('atlas_authorities')
+    expect(env.legalAuthoritiesIndex).toBe('legal_authorities')
   })
 
   it('requires hosted search values in production', () => {
     process.env.NODE_ENV = 'production'
     delete process.env.MEILISEARCH_HOST
     delete process.env.MEILISEARCH_ADMIN_API_KEY
+    delete process.env.LEGAL_AUTHORITIES_INDEX
     delete process.env.ATLAS_AUTHORITIES_INDEX
 
-    expect(() => readAtlasIngestorEnv()).toThrow(
+    expect(() => readLegalIngestorEnv()).toThrow(
       'Missing required production environment values',
     )
   })
@@ -37,9 +38,9 @@ describe('readAtlasIngestorEnv', () => {
     process.env.MEILISEARCH_HOST = 'https://search.ormont.example'
     process.env.MEILISEARCH_API_KEY = '0123456789abcdef'
     delete process.env.MEILISEARCH_ADMIN_API_KEY
-    process.env.ATLAS_AUTHORITIES_INDEX = 'atlas_authorities'
+    process.env.LEGAL_AUTHORITIES_INDEX = 'legal_authorities'
 
-    expect(() => readAtlasIngestorEnv()).toThrow(
+    expect(() => readLegalIngestorEnv()).toThrow(
       'Missing required production environment values: MEILISEARCH_ADMIN_API_KEY',
     )
   })
@@ -49,7 +50,7 @@ describe('readAtlasIngestorEnv', () => {
     process.env.MEILISEARCH_API_KEY = 'legacy-dev-key'
     delete process.env.MEILISEARCH_ADMIN_API_KEY
 
-    const env = readAtlasIngestorEnv()
+    const env = readLegalIngestorEnv()
 
     expect(env.meilisearchAdminApiKey).toBe('legacy-dev-key')
   })
@@ -58,22 +59,36 @@ describe('readAtlasIngestorEnv', () => {
     process.env.NODE_ENV = 'production'
     process.env.MEILISEARCH_HOST = 'not a url'
     process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef'
-    process.env.ATLAS_AUTHORITIES_INDEX = 'atlas_authorities'
+    process.env.LEGAL_AUTHORITIES_INDEX = 'legal_authorities'
 
-    expect(() => readAtlasIngestorEnv()).toThrow('MEILISEARCH_HOST must be a valid URL.')
+    expect(() => readLegalIngestorEnv()).toThrow('MEILISEARCH_HOST must be a valid URL.')
 
     process.env.MEILISEARCH_HOST = 'https://search.ormont.example/'
     process.env.MEILISEARCH_ADMIN_API_KEY = ' short '
 
-    expect(() => readAtlasIngestorEnv()).toThrow(
+    expect(() => readLegalIngestorEnv()).toThrow(
       'MEILISEARCH_ADMIN_API_KEY must not be blank or padded with whitespace.',
     )
 
     process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef'
-    process.env.ATLAS_AUTHORITIES_INDEX = 'atlas authorities'
+    process.env.LEGAL_AUTHORITIES_INDEX = 'legal authorities'
 
-    expect(() => readAtlasIngestorEnv()).toThrow(
-      'ATLAS_AUTHORITIES_INDEX may only contain letters, numbers, underscores, and hyphens.',
+    expect(() => readLegalIngestorEnv()).toThrow(
+      'LEGAL_AUTHORITIES_INDEX may only contain letters, numbers, underscores, and hyphens.',
     )
+  })
+
+  it('supports the legacy Atlas index key during the legal index migration', () => {
+    process.env.NODE_ENV = 'production'
+    process.env.MEILISEARCH_HOST = 'https://search.ormont.example'
+    process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef'
+    delete process.env.LEGAL_AUTHORITIES_INDEX
+    process.env.ATLAS_AUTHORITIES_INDEX = 'atlas_authorities'
+
+    expect(readLegalIngestorEnv().legalAuthoritiesIndex).toBe('atlas_authorities')
+
+    process.env.LEGAL_AUTHORITIES_INDEX = 'legal_authorities'
+
+    expect(readLegalIngestorEnv().legalAuthoritiesIndex).toBe('legal_authorities')
   })
 })

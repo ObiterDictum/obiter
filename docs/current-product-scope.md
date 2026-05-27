@@ -10,7 +10,7 @@ These sidebar entries should be active links:
 
 - Home: the authenticated, role-aware information hub. This currently lives at `/workspace`.
 - Matters: the matter list and matter detail shell.
-- Search: the legal source search surface. It currently searches public UK case law through the Ormont API, Meilisearch, and Find Case Law fetch-on-cache-miss.
+- Search: the legal source search surface. It searches Ormont-owned stored legal sources first and queues Find Case Law hydration in the background on misses.
 
 Search owns:
 
@@ -58,4 +58,4 @@ The current implementation is the first slice of that surface: case law search a
 
 ## Implementation Boundary
 
-The current case law implementation stores indexed judgment records in Meilisearch. That is enough for the present search and case viewer workflow, but it is not the final durable source-of-record design. Canonical PostgreSQL/object-storage persistence remains follow-up work.
+The current case law implementation keeps a PostgreSQL source record for fetched judgments, including provider metadata, content hash, source/XML/PDF URIs, raw Atom entry metadata, and hydrated document payloads when available. Meilisearch is a derived index for fast lexical retrieval, not the source of record. Find Case Law calls are queued as background hydration after Ormont-owned storage misses so the user-visible search path is not blocked on the external provider.

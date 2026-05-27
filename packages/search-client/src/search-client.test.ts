@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createIndex, getDocument, indexDocuments, search } from './index'
+import { createIndex, getDocument, indexDocuments, rankLegalSearchHitsByExactMatch, search } from './index'
+import type { LegalSearchHit } from './index'
 
 function authority(overrides: Record<string, unknown> = {}) {
   return {
@@ -41,8 +42,8 @@ function completedTask(overrides: Record<string, unknown> = {}) {
   return promise
 }
 
-describe('Atlas search client', () => {
-  it('sets up the Atlas index shape', async () => {
+describe('Legal search client', () => {
+  it('sets up the search index shape', async () => {
     const index = {
       updateSearchableAttributes: vi.fn(() => completedTask({ uid: 8 })),
       updateFilterableAttributes: vi.fn(() => completedTask({ uid: 9 })),
@@ -56,18 +57,26 @@ describe('Atlas search client', () => {
       index: vi.fn(() => index),
     }
 
-    const result = await createIndex(client, 'atlas_authorities')
+    const result = await createIndex(client, 'legal_authorities')
 
     expect(result.taskUid).toBe(7)
-    expect(client.createIndex).toHaveBeenCalledWith('atlas_authorities', {
+    expect(client.createIndex).toHaveBeenCalledWith('legal_authorities', {
       primaryKey: 'id',
     })
     expect(index.updateSearchableAttributes).toHaveBeenCalledWith(
-      expect.arrayContaining(['title', 'neutralCitation', 'paragraphs.text']),
+      expect.arrayContaining(['id', 'title', 'neutralCitation', 'paragraphs.text']),
     )
     expect(index.updateFilterableAttributes).toHaveBeenCalledWith(
       expect.arrayContaining(['court', 'jurisdiction', 'sourceType', 'dateDecided']),
     )
+    expect(index.updateRankingRules).toHaveBeenCalledWith([
+      'words',
+      'typo',
+      'proximity',
+      'attribute',
+      'exactness',
+      'sort',
+    ])
   })
 
   it('updates index settings when the index already exists', async () => {
@@ -88,7 +97,7 @@ describe('Atlas search client', () => {
       index: vi.fn(() => index),
     }
 
-    const result = await createIndex(client, 'atlas_authorities')
+    const result = await createIndex(client, 'legal_authorities')
 
     expect(result.taskUid).toBeUndefined()
     expect(index.updateRankingRules).toHaveBeenCalled()
@@ -116,7 +125,7 @@ describe('Atlas search client', () => {
       index: vi.fn(() => index),
     }
 
-    const result = await createIndex(client, 'atlas_authorities')
+    const result = await createIndex(client, 'legal_authorities')
 
     expect(result.taskUid).toBeUndefined()
     expect(index.updateSearchableAttributes).toHaveBeenCalled()
@@ -148,10 +157,10 @@ describe('Atlas search client', () => {
       index: vi.fn(() => index),
     }
 
-    await expect(createIndex(client, 'atlas_authorities')).rejects.toThrow(
-      'Atlas search index setup failed. Meilisearch task 9 failed (invalid_settings_filterable_attributes).',
+    await expect(createIndex(client, 'legal_authorities')).rejects.toThrow(
+      'Search index setup failed. Meilisearch task 9 failed (invalid_settings_filterable_attributes).',
     )
-    await expect(createIndex(client, 'atlas_authorities')).rejects.not.toThrow(
+    await expect(createIndex(client, 'legal_authorities')).rejects.not.toThrow(
       'sensitive detail',
     )
     expect(index.updateSortableAttributes).not.toHaveBeenCalled()
@@ -163,7 +172,7 @@ describe('Atlas search client', () => {
       index: () => ({ addDocuments }),
     }
 
-    const result = await indexDocuments(client, 'atlas_authorities', [authority()])
+    const result = await indexDocuments(client, 'legal_authorities', [authority()])
 
     expect(result).toEqual({ indexedCount: 1, failedCount: 0, errors: [] })
     expect(addDocuments).toHaveBeenCalledWith([authority()], { primaryKey: 'id' })
@@ -188,7 +197,7 @@ describe('Atlas search client', () => {
       index: () => ({ addDocuments }),
     }
 
-    const result = await indexDocuments(client, 'atlas_authorities', [authority()])
+    const result = await indexDocuments(client, 'legal_authorities', [authority()])
 
     expect(result).toEqual({
       indexedCount: 0,
@@ -196,7 +205,7 @@ describe('Atlas search client', () => {
       errors: [
         {
           recordId: null,
-          message: 'Atlas indexing task 9 failed (invalid_document_id).',
+          message: 'Indexing task 9 failed (invalid_document_id).',
         },
       ],
     })
@@ -209,7 +218,7 @@ describe('Atlas search client', () => {
       index: () => ({ addDocuments }),
     }
 
-    const result = await indexDocuments(client, 'atlas_authorities', [
+    const result = await indexDocuments(client, 'legal_authorities', [
       authority({ sourceUrl: 'not a url' }),
     ])
 
@@ -230,7 +239,7 @@ describe('Atlas search client', () => {
       index: () => ({ search: searchMock }),
     }
 
-    const result = await search(client, 'atlas_authorities', 'test', {
+    const result = await search(client, 'legal_authorities', 'test', {
       court: 'uksc',
       jurisdiction: 'england-and-wales',
       dateFrom: '2024-01-01',
@@ -260,6 +269,82 @@ describe('Atlas search client', () => {
     })
   })
 
+  it('promotes exact citation and identifier matches before newer partial hits', async () => {
+    const newerPartial = authority({
+      id: 'uksc-2026-99',
+      title: 'Potanina update',
+      neutralCitation: '[2026] UKSC 99',
+      dateDecided: '2026-01-01',
+    })
+    const exactCitation = authority({
+      id: 'uksc-2024-3',
+      title: 'Potanina v Potanin',
+      neutralCitation: '[2024] UKSC 3',
+      dateDecided: '2024-01-31',
+    })
+    const exactIdentifier = authority({
+      id: 'ewca-civ-2025-7',
+      title: 'Example v Test',
+      neutralCitation: '[2025] EWCA Civ 7',
+      dateDecided: '2025-02-01',
+    })
+    const searchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        hits: [newerPartial, exactCitation],
+        query: '[2024] UKSC 3',
+        estimatedTotalHits: 2,
+        processingTimeMs: 2,
+      })
+      .mockResolvedValueOnce({
+        hits: [newerPartial, exactIdentifier],
+        query: 'ewca-civ-2025-7',
+        estimatedTotalHits: 2,
+        processingTimeMs: 2,
+      })
+    const client = {
+      index: () => ({ search: searchMock }),
+    }
+
+    const citationResult = await search(client, 'legal_authorities', '[2024] UKSC 3')
+    const idResult = await search(client, 'legal_authorities', 'ewca-civ-2025-7')
+
+    expect(citationResult.hits.map((hit) => hit.id)).toEqual([
+      'uksc-2024-3',
+      'uksc-2026-99',
+    ])
+    expect(idResult.hits.map((hit) => hit.id)).toEqual([
+      'ewca-civ-2025-7',
+      'uksc-2026-99',
+    ])
+  })
+
+  it('ranks hits without neutral citations without throwing', () => {
+    const withoutCitation = authority({
+      id: 'd-dd848612-73c3-4719-b18f-5643e51dcb17',
+      title: 'NHS England v Justin Yung Hui Chin',
+      neutralCitation: null,
+      court: 'ftt-phl',
+      dateDecided: '2026-02-26',
+    })
+    const withCitation = authority({
+      id: 'uksc-2024-3',
+      title: 'Potanina v Potanin',
+      neutralCitation: '[2024] UKSC 3',
+      dateDecided: '2024-01-31',
+    })
+
+    expect(
+      rankLegalSearchHitsByExactMatch(
+        [withoutCitation, withCitation] as LegalSearchHit[],
+        '[2024] UKSC 3',
+      ),
+    ).toEqual([
+      withCitation,
+      withoutCitation,
+    ])
+  })
+
   it('can retrieve paragraphs for fetch-on-miss cached results', async () => {
     const searchMock = vi.fn(async () => ({
       hits: [authority()],
@@ -271,7 +356,7 @@ describe('Atlas search client', () => {
       index: () => ({ search: searchMock }),
     }
 
-    const result = await search(client, 'atlas_authorities', 'test', {}, {
+    const result = await search(client, 'legal_authorities', 'test', {}, {
       includeParagraphs: true,
     })
 
@@ -295,7 +380,7 @@ describe('Atlas search client', () => {
       index: () => ({ search: searchMock }),
     }
 
-    await search(client, 'atlas_authorities', 'test', {
+    await search(client, 'legal_authorities', 'test', {
       court: String.raw`uksc\" OR court = "bad`,
       jurisdiction: 'england-and-wales AND sourceType = "legislation"',
     })
@@ -320,18 +405,18 @@ describe('Atlas search client', () => {
       }),
     }
 
-    await expect(search(client, 'atlas_authorities', 'test')).rejects.toThrow(
-      'Atlas search failed. Search provider error: Error.',
+    await expect(search(client, 'legal_authorities', 'test')).rejects.toThrow(
+      'Search failed. Search provider error: Error.',
     )
   })
 
-  it('retrieves a stored Atlas document by id', async () => {
+  it('retrieves a stored legal document by id', async () => {
     const getDocumentMock = vi.fn(async () => authority())
     const client = {
       index: () => ({ getDocument: getDocumentMock }),
     }
 
-    const result = await getDocument(client, 'atlas_authorities', 'uksc-2024-1')
+    const result = await getDocument(client, 'legal_authorities', 'uksc-2024-1')
 
     expect(result.paragraphs).toEqual(authority().paragraphs)
     expect(getDocumentMock).toHaveBeenCalledWith('uksc-2024-1')

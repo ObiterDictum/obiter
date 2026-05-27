@@ -1,4 +1,4 @@
-import { AppShellLayout, HomeRouteView, MatterRouteView, MattersRouteView, SignInRouteView, atlasDocumentQueryOptions, shellSnapshotQueryOptions } from '@ormont/app-shell'
+import { AppShellLayout, HomeRouteView, MatterRouteView, MattersRouteView, SignInRouteView, caseLawDocumentQueryOptions, shellSnapshotQueryOptions } from '@ormont/app-shell'
 import type { QueryClient } from '@tanstack/react-query'
 import {
   Outlet,
@@ -74,7 +74,7 @@ const caseRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'cases/$caseId',
   loader: ({ context, params }) =>
-    context.queryClient.ensureQueryData(atlasDocumentQueryOptions(params.caseId)),
+    context.queryClient.ensureQueryData(caseLawDocumentQueryOptions(params.caseId)),
   component: DesktopCaseRoute,
 })
 

@@ -1,6 +1,6 @@
-import type { AtlasAuthority } from '@ormont/legal-schema'
+import type { LegalAuthority } from '@ormont/legal-schema'
 
-export const sampleJudgments: AtlasAuthority[] = [
+export const sampleJudgments: LegalAuthority[] = [
   {
     id: 'uksc-2024-1',
     title: 'Potanina v Potanin',

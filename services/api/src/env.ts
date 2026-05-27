@@ -11,7 +11,6 @@ const requiredProductionKeys = [
   'MEILISEARCH_HOST',
   'MEILISEARCH_SEARCH_API_KEY',
   'MEILISEARCH_ADMIN_API_KEY',
-  'ATLAS_AUTHORITIES_INDEX',
 ] as const
 
 let localEnvLoaded = false
@@ -29,7 +28,7 @@ export interface ApiEnv {
   meilisearchHost: string
   meilisearchSearchApiKey: string
   meilisearchAdminApiKey: string
-  atlasAuthoritiesIndex: string
+  legalAuthoritiesIndex: string
   mojFindCaseLawBaseUrl: string
   mojFindCaseLawRateLimit: number
   port: number
@@ -49,7 +48,10 @@ function requireProductionEnv(nodeEnv: ApiEnv['nodeEnv']) {
     return
   }
 
-  const missing = requiredProductionKeys.filter((key) => !process.env[key])
+  const missing: string[] = requiredProductionKeys.filter((key) => !process.env[key])
+  if (!process.env.LEGAL_AUTHORITIES_INDEX && !process.env.ATLAS_AUTHORITIES_INDEX) {
+    missing.push('LEGAL_AUTHORITIES_INDEX or ATLAS_AUTHORITIES_INDEX')
+  }
 
   if (missing.length > 0) {
     throw new Error(`Missing required production environment values: ${missing.join(', ')}`)
@@ -149,6 +151,18 @@ function readIndexName(key: string, fallback: string) {
   }
 
   return trimmed
+}
+
+function readLegalAuthoritiesIndexName() {
+  if (process.env.LEGAL_AUTHORITIES_INDEX) {
+    return readIndexName('LEGAL_AUTHORITIES_INDEX', 'legal_authorities')
+  }
+
+  if (process.env.ATLAS_AUTHORITIES_INDEX) {
+    return readIndexName('ATLAS_AUTHORITIES_INDEX', 'legal_authorities')
+  }
+
+  return readIndexName('LEGAL_AUTHORITIES_INDEX', 'legal_authorities')
 }
 
 function readOptionalSecret(key: string, nodeEnv: ApiEnv['nodeEnv']) {
@@ -257,10 +271,7 @@ export function readApiEnv(): ApiEnv {
     meilisearchHost: readRequiredUrl('MEILISEARCH_HOST', 'http://localhost:7700'),
     meilisearchSearchApiKey: readSearchApiKey(nodeEnv),
     meilisearchAdminApiKey: readAdminApiKey(nodeEnv),
-    atlasAuthoritiesIndex: readIndexName(
-      'ATLAS_AUTHORITIES_INDEX',
-      'atlas_authorities',
-    ),
+    legalAuthoritiesIndex: readLegalAuthoritiesIndexName(),
     mojFindCaseLawBaseUrl: readRequiredUrl(
       'MOJ_FIND_CASE_LAW_BASE_URL',
       'https://caselaw.nationalarchives.gov.uk',
