@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Ormont System Map</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #18212f;
+      --muted: #647084;
+      --line: #c9d1dd;
+      --api: #d9edf7;
+      --contract: #e7e4fb;
+      --data: #e3f4df;
+      --risk: #f9e1dc;
+      --surface: #f8fafc;
+    }
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      color: var(--ink);
+      background: #ffffff;
+    }
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 32px;
+    }
+    h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+    }
+    p {
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(180px, 1fr));
+      gap: 14px;
+      margin-top: 24px;
+    }
+    .lane {
+      border: 1px solid var(--line);
+      background: var(--surface);
+      padding: 14px;
+      min-height: 260px;
+    }
+    .lane h2 {
+      margin: 0 0 12px;
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+      color: var(--muted);
+    }
+    .box {
+      border: 1px solid var(--line);
+      background: #ffffff;
+      padding: 12px;
+      margin: 10px 0;
+      font-size: 14px;
+      line-height: 1.35;
+    }
+    .api { background: var(--api); }
+    .contract { background: var(--contract); }
+    .data { background: var(--data); }
+    .risk { background: var(--risk); }
+    .arrow {
+      text-align: center;
+      color: var(--muted);
+      font-size: 18px;
+      line-height: 1;
+    }
+    .notes {
+      margin-top: 28px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .note {
+      border: 1px solid var(--line);
+      padding: 16px;
+      background: #ffffff;
+    }
+    ul {
+      margin: 10px 0 0 20px;
+      padding: 0;
+      color: var(--muted);
+      line-height: 1.45;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Ormont System Map</h1>
+    <p>Visual companion for PR reviews. Use <code>ormont-system-map.md</code> as the agent-readable source and validate touched flows against current code before relying on this view.</p>
+
+    <section class="grid" aria-label="System layers">
+      <div class="lane">
+        <h2>Surfaces</h2>
+        <div class="box api">apps/web<br>TanStack web surface</div>
+        <div class="box api">apps/desktop<br>Electron surface</div>
+        <div class="box risk">Renderer boundary<br>No direct privileged access</div>
+      </div>
+      <div class="lane">
+        <h2>Shared Product</h2>
+        <div class="box">packages/app-shell<br>Shared shell and route views</div>
+        <div class="box">packages/ui<br>Presentation primitives only</div>
+        <div class="box contract">packages/contracts<br>Route-facing schemas and states</div>
+      </div>
+      <div class="lane">
+        <h2>Hosted Boundary</h2>
+        <div class="box api">services/api<br>Validation and server auth</div>
+        <div class="arrow">down</div>
+        <div class="box data">Database / object storage<br>Source of truth</div>
+        <div class="box data">Search indexes / artifacts<br>Derived state</div>
+      </div>
+      <div class="lane">
+        <h2>External / Durable Knowledge</h2>
+        <div class="box risk">Queues / workers<br>Retry and idempotency</div>
+        <div class="box risk">External providers / models<br>Boundary and audit visibility</div>
+        <div class="box">review repo<br>Validated maps and patterns</div>
+      </div>
+    </section>
+
+    <section class="notes">
+      <div class="note">
+        <strong>Review invariant</strong>
+        <ul>
+          <li>Trace entrypoint to source of truth and derived state.</li>
+          <li>Check organisation, matter, user, cache, object-key, index, artifact, and audit isolation.</li>
+          <li>Search direct dependents of changed contracts and boundaries.</li>
+        </ul>
+      </div>
+      <div class="note">
+        <strong>Approval guardrail</strong>
+        <ul>
+          <li>Do not approve sensitive code if the touched internal flow is unmapped.</li>
+          <li>Do not treat stale map entries as facts without validating current code.</li>
+          <li>Record durable new knowledge in the review repo with synthetic examples only.</li>
+        </ul>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
