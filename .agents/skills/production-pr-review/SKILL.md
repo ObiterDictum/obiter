@@ -226,7 +226,7 @@ Give the subagent only the minimum sanitized review packet:
 - verdict, score, merge readiness, and confidence
 - validated findings with severity/category, exact `path:line`, problem, impact, fix direction, and verification
 - exact commands and pass/fail verification evidence
-- API publication constraints, including direct GitHub API inline comments and author-permission fallback
+- API publication constraints, including direct GitHub API inline comments and the selected review event
 - any explicit wording constraints from the user
 
 Do not provide secrets, private matter data, raw legal text, raw prompts, embeddings, sensitive logs, private screenshots, or unrelated repository context. The subagent must not inspect more code unless explicitly asked by the primary reviewer for prose context.
@@ -340,11 +340,11 @@ Use `event` according to the evidence:
 
 - `APPROVE` only when the security/data gate and verification support approval.
 - `REQUEST_CHANGES` when blockers/high findings or must-fix issues exist.
-- `COMMENT` when findings are informational, when more context is needed, or when GitHub rejects a formal review decision.
+- `COMMENT` when findings are informational, when more context is needed, or when the authenticated GitHub identity is the PR author.
 
-If GitHub rejects `REQUEST_CHANGES` or `APPROVE` because the authenticated identity is the PR author, retry with `event: "COMMENT"`, keep all inline comments, and state in the final summary that GitHub would not allow a formal decision from this identity. The local verdict should still be `Request changes` or `Approve` as appropriate.
+If the authenticated GitHub identity is the PR author, use `event: "COMMENT"` directly as the default publication event. Keep the evidence-based `Decision` text as `Request changes`, `Approve`, `Not ready`, or `Needs more context` according to the review outcome.
 
-Do not drop inline comments or shorten the overall body when the formal review event is blocked by author permissions. The fallback is an API-submitted `COMMENT` review with the same inline comments, the local verdict, the score, and the same standalone explanation in the review body.
+Do not mention GitHub author-permission limitations, fallback mechanics, or "local verdict" caveats in the GitHub review body, inline comments, or local final summary. This is known operational behavior and should stay out of PR reviews. Do not drop inline comments or shorten the overall body when using `COMMENT`; submit the same findings, score, and standalone explanation under the comment review event.
 
 If the tooling makes inline publication unsafe or ambiguous, output an `Inline comments to add` section with exact `path:line` targets and bodies, then state that comments were not posted and why.
 
