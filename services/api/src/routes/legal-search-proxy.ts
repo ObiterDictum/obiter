@@ -119,6 +119,7 @@ const findCaseLawCourtByPath = new Map<string, string>([
 ])
 const storedSearchTimeoutMs = 350
 const sourceStoreStatementTimeout = `${storedSearchTimeoutMs}ms`
+const foregroundSourceRecordLimit = 100
 
 const citationDivisionCourtByBaseCourt = new Map<string, Map<string, string>>([
   [
@@ -177,6 +178,7 @@ const legalFetchRequestSchema = z.object({
   jurisdiction: legalSlugSchema.optional(),
   dateFrom: z.string().date().optional(),
   dateTo: z.string().date().optional(),
+  foregroundLiveResults: z.boolean().optional(),
 })
 
 type LegalFetchRequest = z.infer<typeof legalFetchRequestSchema>
@@ -440,6 +442,29 @@ function toAuthoritySummary(document: LegalAuthority): LegalAuthority {
   }
 }
 
+function rememberForegroundSourceRecord(
+  records: Map<string, StoredLegalAuthorityRecord>,
+  summary: LegalAuthority,
+  provider: ProviderSourceMetadata,
+  document?: LegalAuthority,
+) {
+  const existing = records.get(summary.id)
+  records.delete(summary.id)
+  records.set(summary.id, {
+    summary,
+    document: document ?? existing?.document,
+    provider: {
+      ...existing?.provider,
+      ...provider,
+    },
+  })
+
+  const oldestRecordId = records.keys().next().value
+  if (records.size > foregroundSourceRecordLimit && oldestRecordId) {
+    records.delete(oldestRecordId)
+  }
+}
+
 function normalizeSearchText(value: string) {
   return value.toLowerCase().replace(/\s+/g, ' ').trim()
 }
@@ -475,6 +500,7 @@ export function createLegalSearchProxyRoutes(
   const searchClient = createClient(env.meilisearchHost, env.meilisearchSearchApiKey)
   const indexClient = createClient(env.meilisearchHost, env.meilisearchAdminApiKey)
   const mojRateLimiter = createMojRateLimiter(env.mojFindCaseLawRateLimit)
+  const foregroundSourceRecords = new Map<string, StoredLegalAuthorityRecord>()
 
   app.post('/api/search/fetch', async (c) => {
     const requestId = c.get('requestId')
@@ -517,22 +543,85 @@ export function createLegalSearchProxyRoutes(
       )
     }
 
-    void hydrateMojAuthoritiesFromSearch(
+    if (!parsed.data.foregroundLiveResults) {
+      void hydrateMojAuthoritiesFromSearch(
+        env,
+        legalAuthorityStore,
+        indexClient,
+        env.legalAuthoritiesIndex,
+        parsed.data,
+        mojRateLimiter,
+      )
+
+      return c.json(
+        toFetchResponse(
+          [],
+          parsed.data.query,
+          false,
+          0,
+          0,
+          true,
+        ),
+      )
+    }
+
+    const liveResult = await fetchMojAuthoritySummaries(
       env,
-      legalAuthorityStore,
-      indexClient,
-      env.legalAuthoritiesIndex,
       parsed.data,
       mojRateLimiter,
     )
 
+    if (liveResult.status === 'rate_limited') {
+      return c.json(
+        {
+          ...apiError('storage_unavailable', 'Find Case Law is rate limited.', requestId),
+          retryAfter: liveResult.retryAfter,
+        },
+        503,
+      )
+    }
+
+    if (liveResult.status === 'unavailable') {
+      return c.json(
+        apiError('storage_unavailable', 'Find Case Law is unavailable.', requestId),
+        503,
+      )
+    }
+
+    for (const entry of liveResult.entries) {
+      rememberForegroundSourceRecord(
+        foregroundSourceRecords,
+        atomEntryToAuthoritySummary(env, entry),
+        providerMetadataFromAtomEntry(entry),
+      )
+      await upsertLegalAuthoritySummary(
+        legalAuthorityStore,
+        atomEntryToAuthoritySummary(env, entry),
+        providerMetadataFromAtomEntry(entry),
+      )
+    }
+
+    void hydrateAndIndexMojAuthorities(
+      env,
+      legalAuthorityStore,
+      indexClient,
+      env.legalAuthoritiesIndex,
+      liveResult.entries,
+      mojRateLimiter,
+    )
+
+    const rankedLiveDocuments = rankLegalSearchHitsByExactMatch(
+      liveResult.documents,
+      parsed.data.query,
+    )
+
     return c.json(
       toFetchResponse(
-        [],
+        rankedLiveDocuments.map(toSummaryHit),
         parsed.data.query,
         false,
         0,
-        0,
+        liveResult.skippedCount,
         true,
       ),
     )
@@ -559,7 +648,10 @@ export function createLegalSearchProxyRoutes(
       return c.json({ document })
     }
 
-    const sourceRecord = await getLegalAuthoritySourceRecord(legalAuthorityStore, parsed.data)
+    const storedSourceRecord = await getLegalAuthoritySourceRecord(legalAuthorityStore, parsed.data)
+    const foregroundSourceRecord = foregroundSourceRecords.get(parsed.data)
+    const sourceRecord = storedSourceRecord ?? foregroundSourceRecord ?? null
+    const sourceRecordIsForegroundOnly = !storedSourceRecord && Boolean(foregroundSourceRecord)
     if (sourceRecord?.document) {
       return c.json({ document: sourceRecord.document })
     }
@@ -575,7 +667,24 @@ export function createLegalSearchProxyRoutes(
           liveDocument.document,
           liveDocument.provider,
         )
+        rememberForegroundSourceRecord(
+          foregroundSourceRecords,
+          toAuthoritySummary(liveDocument.document),
+          liveDocument.provider,
+          liveDocument.document,
+        )
       } catch {
+        if (sourceRecordIsForegroundOnly) {
+          rememberForegroundSourceRecord(
+            foregroundSourceRecords,
+            toAuthoritySummary(liveDocument.document),
+            liveDocument.provider,
+            liveDocument.document,
+          )
+          void indexFetchedAuthorities(indexClient, env.legalAuthoritiesIndex, [liveDocument.document])
+          return c.json({ document: liveDocument.document })
+        }
+
         return c.json(
           apiError(
             'storage_unavailable',
@@ -760,7 +869,12 @@ async function fetchMojAuthoritySummaries(
       return { status: 'rate_limited', retryAfter: atomLimit.retryAfterSeconds.toString() }
     }
 
-    const atomResponse = await fetch(nextUrl)
+    let atomResponse: Response
+    try {
+      atomResponse = await fetch(nextUrl)
+    } catch {
+      return { status: 'unavailable' }
+    }
     if (atomResponse.status === 429) {
       return {
         status: 'rate_limited',
