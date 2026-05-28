@@ -84,6 +84,7 @@ describe('LegalSearchView helpers', () => {
   it('builds fetch requests with an optional court filter', () => {
     expect(createLegalSearchFetchRequest(' Potanina ', { court: '', dateFrom: '', dateTo: '' })).toEqual({
       query: 'Potanina',
+      foregroundLiveResults: true,
     })
     expect(
       createLegalSearchFetchRequest('  tax appeal  ', {
@@ -96,6 +97,7 @@ describe('LegalSearchView helpers', () => {
       court: 'ukut/iac',
       dateFrom: '2024-01-01',
       dateTo: '2024-12-31',
+      foregroundLiveResults: true,
     })
   })
 
