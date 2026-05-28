@@ -610,9 +610,14 @@ export function createLegalSearchProxyRoutes(
       mojRateLimiter,
     )
 
+    const rankedLiveDocuments = rankLegalSearchHitsByExactMatch(
+      liveResult.documents,
+      parsed.data.query,
+    )
+
     return c.json(
       toFetchResponse(
-        liveResult.documents.map(toSummaryHit),
+        rankedLiveDocuments.map(toSummaryHit),
         parsed.data.query,
         false,
         0,
@@ -864,7 +869,12 @@ async function fetchMojAuthoritySummaries(
       return { status: 'rate_limited', retryAfter: atomLimit.retryAfterSeconds.toString() }
     }
 
-    const atomResponse = await fetch(nextUrl)
+    let atomResponse: Response
+    try {
+      atomResponse = await fetch(nextUrl)
+    } catch {
+      return { status: 'unavailable' }
+    }
     if (atomResponse.status === 429) {
       return {
         status: 'rate_limited',

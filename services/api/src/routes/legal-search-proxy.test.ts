@@ -263,6 +263,75 @@ describe('createLegalSearchProxyRoutes', () => {
     )
   })
 
+  it('ranks foreground live exact matches ahead of newer partial matches', async () => {
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [],
+      query: '[2024] UKSC 3',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    searchClientMock.indexDocuments.mockResolvedValue({
+      indexedCount: 2,
+      failedCount: 0,
+      errors: [],
+    })
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          `<feed><entry><title>Later judgment discussing [2024] UKSC 3</title><link href="https://caselaw.nationalarchives.gov.uk/uksc/2026/99" rel="alternate"/><published>2026-01-01T00:00:00Z</published><tna:identifier slug="uksc/2026/99" type="ukncn">[2026] UKSC 99</tna:identifier><tna:contenthash>partial123</tna:contenthash></entry><entry><title>Potanina v Potanin</title><link href="https://caselaw.nationalarchives.gov.uk/uksc/2024/3" rel="alternate"/><published>2024-01-31T00:00:00Z</published><tna:identifier slug="uksc/2024/3" type="ukncn">[2024] UKSC 3</tna:identifier><tna:contenthash>exact123</tna:contenthash></entry></feed>`,
+        ),
+      )
+      .mockResolvedValue(
+        new Response(
+          '<html><body><p>This judgment paragraph is long enough for background hydration.</p></body></html>',
+        ),
+      )
+    const app = createLegalSearchProxyRoutes(env)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: '[2024] UKSC 3',
+        court: 'uksc',
+        foregroundLiveResults: true,
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { hits: Array<{ id: string }> }
+    expect(body.hits.map((foregroundHit) => foregroundHit.id)).toEqual([
+      'uksc-2024-3',
+      'uksc-2026-99',
+    ])
+  })
+
+  it('returns storage unavailable when foreground Find Case Law summary fetch rejects', async () => {
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [],
+      query: 'Potanina',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('network unavailable'))
+    const app = createLegalSearchProxyRoutes(env)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'Potanina',
+        foregroundLiveResults: true,
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'storage_unavailable' },
+    })
+    expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
+  })
+
   it('opens foreground d-style search results when durable source storage misses', async () => {
     searchClientMock.search.mockResolvedValueOnce({
       hits: [],
