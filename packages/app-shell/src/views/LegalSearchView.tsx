@@ -55,8 +55,15 @@ export function selectJudgmentParagraphs(result: LegalSearchResult): CaseLawPara
 
 export function createLegalSearchFetchRequest(query: string, filters: LegalSearchRequestFilters) {
   const trimmedQuery = query.trim()
-  const request: { query: string; court?: string; dateFrom?: string; dateTo?: string } = {
+  const request: {
+    query: string
+    court?: string
+    dateFrom?: string
+    dateTo?: string
+    foregroundLiveResults: true
+  } = {
     query: trimmedQuery,
+    foregroundLiveResults: true,
   }
   const court = filters.court.trim()
   const dateFrom = filters.dateFrom.trim()
