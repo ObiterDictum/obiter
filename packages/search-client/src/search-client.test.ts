@@ -345,6 +345,32 @@ describe('Legal search client', () => {
     ])
   })
 
+  it('ranks title matches ahead of provider hits that only match body text', () => {
+    const bodyReferenceOnly = authority({
+      id: 'd-33d1f5cf-b1d8-4437-8602-a9ae61baf7e5',
+      title: 'Ferrucio Ferrara v Caroline Frances Ferrara',
+      neutralCitation: '[2026] EWCA Civ 512',
+      dateDecided: '2026-04-29',
+    })
+    const titleMatch = authority({
+      id: 'd-f9e1d9a7-b267-4a57-9a63-bf9d6c955de3',
+      title: 'Natalia Nikolaevna Potanina v Vladimir Olegovich Potanin',
+      neutralCitation: '[2026] EWFC 80',
+      court: 'ewfc',
+      dateDecided: '2026-04-20',
+    })
+
+    expect(
+      rankLegalSearchHitsByExactMatch(
+        [bodyReferenceOnly, titleMatch] as LegalSearchHit[],
+        'Potanina',
+      ),
+    ).toEqual([
+      titleMatch,
+      bodyReferenceOnly,
+    ])
+  })
+
   it('can retrieve paragraphs for fetch-on-miss cached results', async () => {
     const searchMock = vi.fn(async () => ({
       hits: [authority()],
