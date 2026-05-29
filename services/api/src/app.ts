@@ -6,10 +6,10 @@ import { appendAuditLog, findOrganisation, toCurrentUser } from './database'
 import type { ApiEnv } from './env'
 import { createAuth } from './auth'
 import {
+  createLegalSearchRoutes,
   createLegalSearchProxyRoutes,
   createPostgresLegalAuthoritySourceStore,
-} from './routes/legal-search-proxy'
-import { createLegalSearchRoutes } from './routes/legal-search'
+} from './routes/legal-search'
 import { createChangelogRoutes } from './routes/changelog'
 import { createDocumentsRoutes } from './routes/documents'
 import { createMattersRoutes } from './routes/matters'

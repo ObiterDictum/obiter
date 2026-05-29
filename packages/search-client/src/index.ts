@@ -263,14 +263,23 @@ export function rankLegalSearchHitsByExactMatch<T extends LegalSearchHit>(
 }
 
 function exactMatchScore(hit: LegalSearchHit, normalizedQuery: string) {
-  if (normalizeExactMatchValue(hit.id) === normalizedQuery) return 3
-  if (normalizeExactMatchValue(hit.neutralCitation) === normalizedQuery) return 2
-  if (normalizeExactMatchValue(hit.title) === normalizedQuery) return 1
+  const normalizedTitle = normalizeExactMatchValue(hit.title)
+
+  if (normalizeExactMatchValue(hit.id) === normalizedQuery) return 5
+  if (normalizeExactMatchValue(hit.neutralCitation) === normalizedQuery) return 4
+  if (normalizedTitle === normalizedQuery) return 3
+  if (normalizedTitle.includes(normalizedQuery)) return 2
+  if (containsEveryQueryTerm(normalizedTitle, normalizedQuery)) return 1
   return 0
 }
 
 function normalizeExactMatchValue(value: string | null | undefined) {
   return value?.trim().toLowerCase().replace(/\s+/g, ' ') ?? ''
+}
+
+function containsEveryQueryTerm(value: string, normalizedQuery: string) {
+  const terms = normalizedQuery.split(' ').filter(Boolean)
+  return terms.length > 0 && terms.every((term) => value.includes(term))
 }
 
 function validationFailure(documents: unknown[], messages: string[]): SearchIndexDocumentsResult {

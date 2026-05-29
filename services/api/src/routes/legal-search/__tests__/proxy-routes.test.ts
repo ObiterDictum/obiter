@@ -4,8 +4,8 @@ import {
   createPostgresLegalAuthoritySourceStore,
   parseFindCaseLawAtom,
   parseJudgmentParagraphs,
-} from './legal-search-proxy'
-import type { ApiEnv } from '../env'
+} from '../proxy-routes'
+import type { ApiEnv } from '../../../env'
 
 const searchClientMock = vi.hoisted(() => ({
   createClient: vi.fn(() => ({ id: 'meili-client' })),
@@ -303,6 +303,48 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(body.hits.map((foregroundHit) => foregroundHit.id)).toEqual([
       'uksc-2024-3',
       'uksc-2026-99',
+    ])
+  })
+
+  it('ranks foreground live title matches ahead of provider hits that only mention the query', async () => {
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [],
+      query: 'Potanina',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    searchClientMock.indexDocuments.mockResolvedValue({
+      indexedCount: 2,
+      failedCount: 0,
+      errors: [],
+    })
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          `<feed><entry><title>Ferrucio Ferrara v Caroline Frances Ferrara</title><link href="https://caselaw.nationalarchives.gov.uk/ewca/civ/2026/512" rel="alternate"/><published>2026-04-29T00:00:00Z</published><tna:identifier slug="ewca/civ/2026/512" type="ukncn">[2026] EWCA Civ 512</tna:identifier><tna:contenthash>body-match</tna:contenthash></entry><entry><title>Natalia Nikolaevna Potanina v Vladimir Olegovich Potanin</title><link href="https://caselaw.nationalarchives.gov.uk/ewfc/2026/80" rel="alternate"/><published>2026-04-20T00:00:00Z</published><tna:identifier slug="ewfc/2026/80" type="ukncn">[2026] EWFC 80</tna:identifier><tna:contenthash>title-match</tna:contenthash></entry></feed>`,
+        ),
+      )
+      .mockResolvedValue(
+        new Response(
+          '<html><body><p>This judgment paragraph is long enough for background hydration.</p></body></html>',
+        ),
+      )
+    const app = createLegalSearchProxyRoutes(env)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'Potanina',
+        foregroundLiveResults: true,
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { hits: Array<{ title: string }> }
+    expect(body.hits.map((foregroundHit) => foregroundHit.title)).toEqual([
+      'Natalia Nikolaevna Potanina v Vladimir Olegovich Potanin',
+      'Ferrucio Ferrara v Caroline Frances Ferrara',
     ])
   })
 
