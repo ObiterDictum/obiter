@@ -4,8 +4,8 @@ import {
   createPostgresLegalAuthoritySourceStore,
   parseFindCaseLawAtom,
   parseJudgmentParagraphs,
-} from './legal-search-proxy'
-import type { ApiEnv } from '../env'
+} from '../proxy-routes'
+import type { ApiEnv } from '../../../env'
 
 const searchClientMock = vi.hoisted(() => ({
   createClient: vi.fn(() => ({ id: 'meili-client' })),

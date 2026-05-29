@@ -6,7 +6,7 @@ import {
   type LegalSearchFilters,
 } from '@ormont/search-client'
 import type { ApiErrorResponse } from '@ormont/contracts'
-import type { ApiEnv } from '../env'
+import type { ApiEnv } from '../../env'
 
 interface LegalSearchRouteVariables {
   requestId: string
