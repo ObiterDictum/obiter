@@ -10,12 +10,17 @@ This spec is separate from the legacy `atlas` spec because user-facing product l
 
 Phase 0.3 matter workflow and Phase 0.4 storage/jobs/offline work are paused for the DMU demo.
 
+Completed foundation:
+
+- preserve the current Find Case Law integration through the route split
+- split the oversized legal search route module into `services/api/src/routes/legal-search/`
+- rank strong title and party-name matches ahead of body/reference-only matches
+
 The next work is:
 
 - make Search easier to use live
-- keep Find Case Law integration reliable
-- refactor the oversized legal search route module before adding more behavior
 - return lean snippets in result cards instead of full paragraph payloads
+- add debounced auto-search, keyboard navigation, idle state, and filter removal
 - remove stale Search/Atlas compatibility scaffolding after tests pass
 
 ## Documents

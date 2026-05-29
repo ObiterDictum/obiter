@@ -9,8 +9,9 @@ The immediate goal is not to build Matter Workspace, hosted storage, offline syn
 ## Decisions
 
 - Phase 0.3 and Phase 0.4 are paused for this demo slice.
-- Refactor `services/api/src/routes/legal-search-proxy.ts` before adding user-facing behavior.
-- The refactor must be behavior-neutral and verified before UX work begins.
+- The initial route refactor has shipped: `services/api/src/routes/legal-search-proxy.ts` is now a compatibility re-export over `services/api/src/routes/legal-search/`.
+- The route split itself was behavior-neutral and verified before UX work began.
+- A deliberate follow-up ranking fix has shipped so strong title/party-name matches rank ahead of provider/body-reference-only hits.
 - Search result cards should show 1-2 matched snippets, not full paragraph payloads.
 - Full judgment paragraphs belong on the case detail page.
 - `POST /api/search/fetch` should expose `snippets?: LegalSearchSnippet[]` on hits and should not expose `paragraphs?: CaseLawParagraph[]` in search result payloads.
@@ -26,31 +27,58 @@ The immediate goal is not to build Matter Workspace, hosted storage, offline syn
 - Do not perform a broad rename of every legacy `atlas` identifier.
 - Do not return raw HTML snippets from the API.
 
+## Implementation Status
+
+Implemented on `search-experience-spec`:
+
+- `services/api/src/routes/legal-search-proxy.ts` is a thin compatibility re-export.
+- `services/api/src/routes/legal-search/index.ts` is the public Search route export.
+- `services/api/src/routes/legal-search/proxy-routes.ts` owns `POST /api/search/fetch` and `GET /api/search/documents/:documentId`.
+- `services/api/src/routes/legal-search/search-routes.ts` owns the existing non-proxy search route.
+- `services/api/src/routes/legal-search/rate-limiter.ts` owns `createMojRateLimiter`.
+- Proxy route tests now live under `services/api/src/routes/legal-search/__tests__/proxy-routes.test.ts` and are discovered by the API package test script.
+- `packages/search-client` now ranks exact document id, exact neutral citation, exact title, title substring, and all-query-terms-in-title matches ahead of body/reference-only matches while preserving provider/search order within a match class.
+- API and search-client regression tests cover the Potanina-style case where a provider result only mentioning the query should rank behind a title match.
+
+Not implemented yet:
+
+- Further extraction of the proxy route into `moj-client`, parser, source-store, schema, response utility, court utility, and document utility modules.
+- Search result snippets.
+- Debounced auto-search.
+- Keyboard navigation.
+- Idle state and court shortcuts.
+- Individual filter removal.
+- Search/Atlas compatibility cleanup.
+
 ## API Refactor
 
-Split `services/api/src/routes/legal-search-proxy.ts` into `services/api/src/routes/legal-search/`.
+The first split of `services/api/src/routes/legal-search-proxy.ts` into `services/api/src/routes/legal-search/` is complete.
 
-Target module layout:
+Implemented module layout:
 
 - `index.ts`: public route exports
 - `proxy-routes.ts`: `POST /api/search/fetch` and `GET /api/search/documents/:documentId`
+- `search-routes.ts`: existing search routes moved from `services/api/src/routes/legal-search.ts`
+- `rate-limiter.ts`: `createMojRateLimiter`
+
+Remaining extraction targets:
+
 - `moj-client.ts`: Find Case Law fetch, detail retrieval, hydration, and indexing orchestration
 - `atom-parser.ts`: Atom entry parsing and Atom helper functions
 - `html-parser.ts`: judgment HTML parsing, paragraph extraction, document parsing, text decoding, and hashing
 - `source-store.ts`: source store interface, in-memory store, PostgreSQL store, stored record transforms, foreground record cache helper
 - `court-utils.ts`: court mappings, court normalization, citation/path court derivation, search text normalization, document matching
-- `rate-limiter.ts`: `createMojRateLimiter`
 - `fetch-schema.ts`: fetch request schema, document id schema, route-facing types
 - `response-utils.ts`: API error helper, fetch response helper, summary hit transform, search filter transform
 - `document-utils.ts`: document id/URI transforms, date extraction, neutral citation extraction
 
-Tests should mirror the structure under `services/api/src/routes/legal-search/__tests__/`.
+Tests mirror the structure under `services/api/src/routes/legal-search/__tests__/`.
 
-The current API package runs tests with plain `vitest run`, so nested `__tests__` files should be discovered by default. If the refactor changes test placement, verify discovery by running `pnpm --filter @ormont/api test`. If discovery fails, either keep the tests co-located with the module files or update the package test script in the same refactor.
+The current API package runs tests with plain `vitest run`, and nested `__tests__` files are discovered by `pnpm --filter @ormont/api test`.
 
-`legal-search-proxy.ts` may remain as a thin re-export during the transition, or be deleted if imports are updated in the same change.
+`legal-search-proxy.ts` remains as a thin re-export during the transition.
 
-The first refactor commit must not change response shapes, ranking behavior, provider calls, indexing behavior, storage behavior, or error handling.
+The route split did not intentionally change response shapes, provider calls, indexing behavior, storage behavior, or error handling. The subsequent ranking fix is an intentional behavior change and is documented under Search Semantics.
 
 ## Search Semantics
 
@@ -95,6 +123,12 @@ Ranking rules:
 - strong title/party-name keyword matches next
 - body-text paragraph matches after stronger metadata matches
 - date ordering may break ties within the same match class
+
+Current implementation:
+
+- `rankLegalSearchHitsByExactMatch` enforces exact document id, exact neutral citation, exact title, title substring, and all-query-terms-in-title priority.
+- The ranking helper is applied to Meilisearch hits, source-store fallback hits, and foreground live Find Case Law hits.
+- Hits with the same ranking class preserve the existing provider/search order, so date or provider relevance can continue to break ties where the upstream path already ordered them.
 
 Body-text matches should still return the case, not the paragraph as a separate result. The result card should show body snippets so the user can see why the case matched.
 
@@ -219,9 +253,9 @@ After refactor and UX tests pass:
 
 ## Build Order
 
-1. Refactor `legal-search-proxy.ts` into `routes/legal-search/` with no behavior change.
-2. Run targeted API tests and fix extraction regressions.
-3. Add debounced auto-search using refs/timers.
+1. Done: refactor `legal-search-proxy.ts` into `routes/legal-search/` with compatibility re-exports.
+2. Done: run targeted API/search-client tests and fix the title-match ranking regression found during browser validation.
+3. Next: add debounced auto-search using refs/timers.
 4. Add API and UI result snippets.
 5. Add or update tests for citation-first search, body-text search, snippet extraction, and stored-source fallback behavior.
 6. Add keyboard navigation, idle state, and individual filter removal.
@@ -242,7 +276,8 @@ pnpm --filter @ormont/web build
 
 Required focused coverage:
 
-- exact citation queries rank the matching case first
+- done: exact citation queries rank the matching case first
+- done: title/party-name matches rank ahead of body/reference-only matches
 - body-text queries can return cases through `paragraphs.text`
 - result-list payloads expose snippets, not full paragraph arrays
 - PostgreSQL source-store fallback searches hydrated body text when paragraph text is available
@@ -259,4 +294,4 @@ Also manually exercise:
 - keyboard result navigation and opening
 - `/cases/:caseId` detail page after opening a result
 
-Do not mark this slice done if the refactor changes existing Search behavior without a deliberate follow-up note.
+The first route split is done. Do not mark the broader Search experience slice done until the remaining UX, snippets, fallback, cleanup, and manual verification items above have shipped.
