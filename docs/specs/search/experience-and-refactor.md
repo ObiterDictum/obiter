@@ -11,6 +11,7 @@ The immediate goal is not to build Matter Workspace, hosted storage, offline syn
 - Phase 0.3 and Phase 0.4 are paused for this demo slice.
 - Refactor `services/api/src/routes/legal-search-proxy.ts` before adding user-facing behavior.
 - The refactor must be behavior-neutral and verified before UX work begins.
+- This refactor must not make the app-facing Search endpoint the permanent public API contract by accident. Keep app orchestration, stable legal-source retrieval, and future developer API concerns separated.
 - Search result cards should show 1-2 matched snippets, not full paragraph payloads.
 - Full judgment paragraphs belong on the case detail page.
 - `POST /api/search/fetch` should expose `snippets?: LegalSearchSnippet[]` on hits and should not expose `paragraphs?: CaseLawParagraph[]` in search result payloads.
@@ -25,6 +26,8 @@ The immediate goal is not to build Matter Workspace, hosted storage, offline syn
 - Do not implement legal verification, redaction, or research workflows.
 - Do not perform a broad rename of every legacy `atlas` identifier.
 - Do not return raw HTML snippets from the API.
+- Do not ship the public Developer API, SDK, MCP server, or API-key management UI in this slice unless a separate task explicitly expands the scope.
+- Do not expose live provider fallback as a default third-party API behavior. Public/API-key consumers should default to stored Ormont legal sources so latency, provider quotas, licensing constraints, and abuse controls remain predictable.
 
 ## API Refactor
 
@@ -52,9 +55,69 @@ The current API package runs tests with plain `vitest run`, so nested `__tests__
 
 The first refactor commit must not change response shapes, ranking behavior, provider calls, indexing behavior, storage behavior, or error handling.
 
+## Public API, SDK, And MCP Readiness
+
+Search should be prepared to become an API-key-protected public legal-source API, but this demo refactor should only create the right seams and contracts. It should not make the app-facing `/api/search/fetch` orchestration route the external developer contract.
+
+Separate these surfaces:
+
+- App Search endpoint: product UX orchestration for `/search`, including stored search, optional foreground Find Case Law behavior, background hydration, demo status flags, and UI-oriented response shaping.
+- Stable legal-source API: versioned, stored-source-first retrieval surface intended for SDKs, MCP servers, integrations, and third-party app search.
+- Provider ingestion/hydration: internal source acquisition and indexing workflows. External callers must not depend on provider-specific behavior such as Find Case Law Atom shapes, provider rate limits, or background indexing details.
+
+Future public routes should be versioned and contract-first. Candidate routes:
+
+- `GET /api/v1/legal/search`
+- `GET /api/v1/legal/documents/:documentId`
+- `GET /api/v1/legal/documents/:documentId/paragraphs`
+- `GET /api/v1/legal/citations/resolve`
+
+Those route names are design targets, not required build output for this slice.
+
+Public API contracts should live in `packages/contracts` so the web app, desktop app, SDK, and MCP server consume the same request and response schemas. The SDK and MCP server should call the public API; they should not query PostgreSQL, Meilisearch, or provider services directly.
+
+API-key auth requirements for the future Developer API:
+
+- Store only hashed API keys. Never persist raw keys after creation.
+- Use scoped keys, starting with read-only scopes such as `legal.search:read`, `legal.documents:read`, and `legal.citations:resolve`.
+- Bind keys to an organisation and optionally to a user/service account.
+- Track key prefix, name, scopes, created time, last-used time, revoked time, and rate-limit class.
+- Audit key creation, revocation, and API use without logging raw keys, query-sensitive private matter data, or full legal payloads.
+- Support server-side rate limits per key and per route family.
+- Return stable error shapes for invalid keys, revoked keys, missing scopes, rate limits, validation failures, and storage/provider unavailability.
+
+Public legal-source API behavior:
+
+- Default to stored Ormont-owned legal sources only.
+- Do not trigger live provider fetches by default.
+- If a future route supports hydration requests, make that behavior explicit, asynchronous, rate-limited, and auditable.
+- Keep result payloads lean: summary metadata plus snippets or exact paragraph/provision references, not whole documents.
+- Support pagination before result sets can grow without bounds.
+- Keep response ordering and ranking deterministic enough for SDK/MCP callers to cache and test.
+- Include source provenance, licence metadata, and computational-analysis permission metadata once those fields exist in storage.
+- Support future model/tool callers by returning stable source ids, evidence ids, match reasons, snippets, and ambiguity flags rather than prose-only results.
+
+AI integration readiness:
+
+- Search may provide model-facing retrieval and evidence-pack APIs in future work, but answer generation belongs to Research and trust checking belongs to Verify.
+- Model query planning must produce a validated structured search plan before Search executes provider or index queries.
+- Models, SDKs, and MCP tools may use Meilisearch-backed retrieval. The preferred route is the Search API, but direct Meilisearch access is acceptable for deliberately public legal-source indexes when using scoped search-only keys.
+- Models, SDKs, and MCP tools must not receive Meilisearch admin keys, private matter indexes, direct database access, raw provider access, or access to indexes containing private client material.
+- Search logs must not store raw prompts or private matter text. Matter-aware AI orchestration belongs in Research or Verify, where redaction, audit, and permission controls can be applied.
+- Generated answers must cite exact paragraphs or provisions and should be checked by Verify before being presented as reliable analysis.
+
+MCP readiness:
+
+- MCP tools should wrap the same stable public API contracts.
+- Search tools should expose narrow operations such as search legal sources, resolve citation, fetch document metadata, and fetch paragraph/provision text.
+- MCP responses should include source identifiers and URLs so host apps can display citations and let users inspect the original source.
+- MCP tools must not expose provider internals, admin search keys, raw provider payloads, or app-session-only endpoints.
+
 ## Search Semantics
 
 Search should keep the way cases are currently found and add body-text visibility.
+
+The broader case-law and legislation search quality target is defined in `docs/phase-1-atlas.md`. This DMU slice should not implement full statute/provision search, but it must avoid choices that block that model later.
 
 One Search surface must support:
 
@@ -99,6 +162,40 @@ Ranking rules:
 Body-text matches should still return the case, not the paragraph as a separate result. The result card should show body snippets so the user can see why the case matched.
 
 Provider fallback is not a substitute for stored body search. Find Case Law can be used for live title, citation, and provider keyword discovery, but full body-text search is only reliable for stored or hydrated cases whose paragraphs have been indexed or persisted.
+
+## Source Extensibility
+
+The current implementation is a judgment-only slice. Adding countries, statutes, guidance, treaties, secondary materials, or other legal sources must be treated as source onboarding work, not a small enum change.
+
+Do not force all legal sources through the current case-law `LegalAuthority` shape. Future source types need source-specific schemas:
+
+- Judgments: neutral citations, court, date decided, judgment paragraphs, source document URI, provider metadata.
+- Legislation: title, legislation type, year/number, jurisdiction, issuing body, provisions, amendment history, commencement state, version ranges, and "as at" date behavior.
+- Other sources: provider, issuing body, document structure, citation/identifier rules, licence metadata, and retrieval granularity defined per source type.
+
+Adding a new source family should require:
+
+- a provider adapter with explicit fetch, parse, normalize, hydrate, and provenance behavior
+- source-specific schema and validation tests
+- citation or identifier normalization tests
+- storage mapping and index mapping
+- source licence and computational-analysis permission metadata
+- search ranking and filter behavior
+- fixture coverage for malformed payloads, duplicate identifiers, withdrawn/replaced documents, and provider outages
+
+The system should distinguish:
+
+- country or sovereign source origin
+- jurisdiction
+- court or issuing body
+- legal domain
+- source type
+- provider
+- licence and usage permissions
+
+Identifiers must be provider-aware and stable enough to avoid collisions across jurisdictions and providers.
+
+Raw provider payloads should not be stored indefinitely in database JSON once the corpus grows. Keep hashes and metadata in PostgreSQL, and move large raw source artifacts to object storage with stable pointers and retention rules.
 
 ## Search UX
 
