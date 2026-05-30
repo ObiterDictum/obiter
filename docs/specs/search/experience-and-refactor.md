@@ -165,7 +165,7 @@ Provider fallback is not a substitute for stored body search. Find Case Law can 
 
 ## Source Extensibility
 
-The current implementation is a judgment-only slice. Adding countries, statutes, guidance, treaties, secondary materials, or other legal sources must be treated as source onboarding work, not a small enum change.
+The current implementation is a judgment-only slice, but the Search product model should aim for the broadest legally usable public legal-source coverage Ormont can support. Adding countries, statutes, guidance, treaties, secondary materials, or other legal sources must be treated as source onboarding work, not a small enum change.
 
 Do not force all legal sources through the current case-law `LegalAuthority` shape. Future source types need source-specific schemas:
 
@@ -204,6 +204,8 @@ Raw provider payloads should not be stored indefinitely in database JSON once th
 ### Legislation And International Law Readiness
 
 This slice does not implement statute, provision, treaty, or international-law search. It must still avoid hard-coding assumptions that make those integrations expensive later.
+
+This is an implementation sequencing constraint, not a product coverage limit. Search should be able to expand toward as much case law, legislation, and international legal material as licensing, provider access, parser reliability, and provenance allow.
 
 Search contracts and result types should be able to grow toward:
 

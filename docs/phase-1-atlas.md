@@ -28,24 +28,28 @@ By the end of Phase 1, Search should support:
 
 ### Phase 1 Source Scope
 
-Start with a narrow but reliable corpus:
+Search should aim for the broadest useful coverage of public legal sources that Ormont can lawfully ingest, index, retrieve, and expose with reliable provenance. The product goal is not a hand-picked database; it is progressively expanding access to case law, legislation, and other primary legal materials while preserving correctness, licensing constraints, and source trust.
+
+Phase 1 should start with reliable source slices that prove the model and ingestion pipeline, then keep expanding coverage source-by-source. Initial implementation candidates include:
 
 - UK Supreme Court judgments
 - Court of Appeal judgments
-- selected legislation needed for early workflows and the first demo
-- enough metadata to support identifier resolution, source linking, and evidence display
+- other Find Case Law courts and tribunals as provider support and parser confidence allow
+- legislation sources available through official APIs or approved access pathways
+- high-value statutes, instruments, provisions, and schedules needed for early workflows
+- enough metadata to support identifier resolution, source linking, evidence display, and later source expansion
 
 Use official APIs and official-access pathways wherever possible.
 
-The first corpus can be domestic and UK-heavy, but the model must not assume that every source belongs to one domestic jurisdiction or court hierarchy. Search needs to remain compatible with future international and transnational legal sources, including treaties, conventions, protocols, international court or tribunal decisions, UN or treaty-body materials, and selected international humanitarian law sources.
+The first corpus can be domestic and UK-heavy, but the model must not assume that every source belongs to one domestic jurisdiction or court hierarchy. Search needs to remain compatible with future international and transnational legal sources, including treaties, conventions, protocols, international court or tribunal decisions, UN or treaty-body materials, and international humanitarian law sources.
 
 International law should usually be represented as a legal domain and source family, not as a fake jurisdiction bucket. For example, International Humanitarian Law may apply across jurisdictions, conflicts, parties, treaties, customary rules, and international bodies; Search should be able to filter and retrieve it without pretending it is equivalent to `england-and-wales`.
 
 ### Non-Goals
 
-- all common law jurisdictions
-- full international law coverage
-- complete treaty status and state-party analytics
+- instant exhaustive coverage in the first implementation cut
+- ingesting sources where licence, access, provenance, or parser reliability is not understood
+- presenting incomplete treaty status, commencement, or applicability metadata as settled law
 - automated conflict-of-laws analysis
 - editorial headnotes
 - broad treatment classification
@@ -443,11 +447,12 @@ Temporary legacy endpoint: `GET /api/atlas/legislation/:documentId/provisions/:p
 
 1. define canonical schema
 2. implement citation normalization
-3. ingest a small approved case law corpus
-4. ingest a small legislation corpus
+3. ingest the first approved case law corpus and validate parser/index quality
+4. ingest the first approved legislation corpus and validate provision/version quality
 5. build authority resolution endpoint
 6. build keyword and citation search endpoint
 7. build paragraph and provision retrieval endpoints
+8. keep expanding source coverage behind the same schema, provider adapter, and search contract rules
 
 ## Acceptance Criteria
 
@@ -458,5 +463,6 @@ Temporary legacy endpoint: `GET /api/atlas/legislation/:documentId/provisions/:p
 - statute and provision searches return version-aware legislation results with provision evidence
 - international-law and international-legislation sources can be represented without flattening them into domestic statute or judgment records
 - legal-domain, issuing-body, country/region, and source-family filters can be added without changing the public result envelope
+- new case law, legislation, and international-law providers can be onboarded as provider/source adapters without redefining the Search product model
 - ambiguous citations and provision references return candidates or visible uncertainty
 - Verify can consume Search authority resolution and evidence lookup reliably
