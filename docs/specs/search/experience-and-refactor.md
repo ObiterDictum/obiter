@@ -171,6 +171,7 @@ Do not force all legal sources through the current case-law `LegalAuthority` sha
 
 - Judgments: neutral citations, court, date decided, judgment paragraphs, source document URI, provider metadata.
 - Legislation: title, legislation type, year/number, jurisdiction, issuing body, provisions, amendment history, commencement state, version ranges, and "as at" date behavior.
+- International law and international legislation: treaties, conventions, protocols, articles, rules, annexes, international court or tribunal decisions, UN or treaty-body materials, issuing body, legal domain, source origin, party/applicability metadata where sourced, and source-specific citation rules.
 - Other sources: provider, issuing body, document structure, citation/identifier rules, licence metadata, and retrieval granularity defined per source type.
 
 Adding a new source family should require:
@@ -188,14 +189,35 @@ The system should distinguish:
 - country or sovereign source origin
 - jurisdiction
 - court or issuing body
+- source family
+- instrument type
 - legal domain
 - source type
 - provider
 - licence and usage permissions
+- applicability metadata where available, such as treaty-party status, entry-into-force date, reservations, declarations, forum, territory, or implementation context
 
 Identifiers must be provider-aware and stable enough to avoid collisions across jurisdictions and providers.
 
 Raw provider payloads should not be stored indefinitely in database JSON once the corpus grows. Keep hashes and metadata in PostgreSQL, and move large raw source artifacts to object storage with stable pointers and retention rules.
+
+### Legislation And International Law Readiness
+
+This slice does not implement statute, provision, treaty, or international-law search. It must still avoid hard-coding assumptions that make those integrations expensive later.
+
+Search contracts and result types should be able to grow toward:
+
+- domestic legislation documents and provisions
+- statutory instruments and regulations
+- schedules, articles, rules, paragraphs, and sub-provisions
+- treaties, conventions, protocols, annexes, and international instruments
+- international court, tribunal, commission, and committee decisions
+- UN, treaty-body, regional, or other international issuing-body materials
+- legal-domain filters such as international-humanitarian-law and human-rights
+
+Future legislation and international-law search must expose version, commencement, entry-into-force, and applicability uncertainty instead of presenting every source as current settled law. If those facts are not available from the source, responses should mark the gap rather than hide it.
+
+Do not model International Humanitarian Law as a jurisdiction. Use legal domain, source family, issuing body, country or region, treaty/applicability metadata, and evidence references as separate concepts.
 
 ## Search UX
 
