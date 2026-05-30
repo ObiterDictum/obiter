@@ -117,7 +117,9 @@ MCP readiness:
 
 Search should keep the way cases are currently found and add body-text visibility.
 
-The broader case-law and legislation search quality target is defined in `docs/phase-1-atlas.md`. This DMU slice should not implement full statute/provision search, but it must avoid choices that block that model later.
+This refactor is actively working on the judgment slice, but it must preserve the broader Search product model directly in this spec. Search should aim for the broadest legally usable public legal-source coverage Ormont can lawfully ingest, index, retrieve, and expose with reliable provenance. Phasing is an implementation and quality-control strategy, not a product coverage limit.
+
+The active refactor must avoid choices that make later case law, legislation, international-law, SDK, MCP, and AI integrations expensive. The current Find Case Law path is one provider adapter and one source family, not the final shape of Search.
 
 One Search surface must support:
 
@@ -129,6 +131,42 @@ One Search surface must support:
 - court, jurisdiction, source type, and date filters
 - stored-source-first behavior before live provider calls
 - Find Case Law fallback on stored misses where the request is safe and supported
+
+Future-compatible Search requests should be able to grow toward:
+
+- `query`: required for normal search; optional only for explicit bounded browse endpoints
+- `sourceType`: judgment, legislation document, legislation provision, international instrument, decision, guidance, or other source types as they are added
+- `jurisdiction`: controlled jurisdiction filter where the concept applies
+- `courtOrBody`: court, tribunal, parliament, government department, international court, UN body, treaty body, or other issuing body
+- `dateFrom` / `dateTo`: decision, publication, adoption, commencement, entry-into-force, or version date depending on source type
+- `asAtDate`: required for version-sensitive legislation lookup once legislation is in scope
+- `legalDomain`: controlled domain filter such as international-humanitarian-law, human-rights, criminal, commercial, or public-law
+- `countryOrRegion`: domestic, regional, supranational, or international source-origin filter
+- `instrumentType`: act, statutory instrument, treaty, convention, protocol, rule, resolution, guidance, decision, or other instrument types
+- `issuingBody`: parliament, department, court, tribunal, UN body, treaty body, commission, or other authority
+- `applicabilityContext`: future structured context for state, territory, conflict, treaty-party status, forum-specific applicability, or domestic implementation
+- `provider`: optional source-provider filter for diagnostics and controlled corpus views
+- `page` or `cursor` plus `limit`: required before result sets can grow without bounds
+
+Search results should be discriminated by source type and share a stable envelope:
+
+- canonical document id
+- source type and source family
+- title or canonical title
+- jurisdiction when applicable
+- legal domain
+- country or region
+- court, issuing body, or forum
+- instrument type where applicable
+- primary citation or preferred identifier
+- relevant date and, for legislation or international instruments, applicable version or effective date range
+- source URL and provider
+- licence and computational-analysis permission metadata where available
+- match reason such as exact citation, title match, paragraph match, provision match, or body-text match
+- snippets or exact evidence references, not full document payloads
+- ambiguity or applicability uncertainty flags where relevant
+
+Judgment results should point to judgment paragraphs. Legislation results should point to provisions, headings, schedules, or versioned document records. International-law results should point to articles, rules, annexes, paragraphs, decisions, or other source-specific evidence units. Search should return the legal source as the primary result, not detached evidence fragments with no parent document context.
 
 The current layered behavior must be preserved:
 
@@ -158,10 +196,107 @@ Ranking rules:
 - strong title/party-name keyword matches next
 - body-text paragraph matches after stronger metadata matches
 - date ordering may break ties within the same match class
+- semantic or vector retrieval may help discovery later, but it must not outrank exact identifiers, exact citations, known title aliases, exact provision references, or explicit evidence matches
 
 Body-text matches should still return the case, not the paragraph as a separate result. The result card should show body snippets so the user can see why the case matched.
 
 Provider fallback is not a substitute for stored body search. Find Case Law can be used for live title, citation, and provider keyword discovery, but full body-text search is only reliable for stored or hydrated cases whose paragraphs have been indexed or persisted.
+
+### Case Law Rules
+
+Case law search must support:
+
+- exact neutral citation lookup with formatting normalization
+- provider document id or slug lookup
+- case title and party-name lookup
+- keyword lookup over judgment metadata
+- keyword lookup over stored or hydrated judgment paragraph text
+- court, jurisdiction, source type, and decision-date filters
+- paragraph snippets that explain body-text matches
+
+Case law ranking should prefer:
+
+1. exact provider or canonical document id
+2. exact normalized neutral citation
+3. exact case title or strongest party-name match
+4. strong metadata keyword match
+5. judgment paragraph body-text match
+6. date ordering only as a tie-breaker within the same match class
+
+If a citation is ambiguous or maps to multiple records, Search should return disambiguation candidates with enough metadata to choose safely. It must not silently pick a result without exposing ambiguity.
+
+### Legislation Rules
+
+Legislation search is part of the Search product target, even though this slice does not implement it. It must not be modeled as judgment search with different labels.
+
+Domestic legislation search must support:
+
+- statute or instrument title lookup
+- short title and common abbreviation lookup where aliases are explicitly stored
+- year and number lookup, such as Act chapter or statutory instrument number
+- provision lookup, including section, article, regulation, rule, schedule, paragraph, and sub-provision references
+- keyword lookup over provision text, headings, and document metadata
+- jurisdiction, issuing body, source type, date, and `asAtDate` filters
+- in-force, repealed, prospective, and partially commenced states where available from the source
+- amendment history and version ranges before presenting date-sensitive text as current law
+
+Provision queries should normalize common legal forms, for example:
+
+- `s 6 Human Rights Act 1998`
+- `section 6 HRA 1998`
+- `Human Rights Act 1998 section 6`
+- `regulation 3 of the ... Regulations`
+- `Schedule 2 paragraph 4`
+
+Legislation ranking should prefer:
+
+1. exact canonical legislation identifier
+2. exact provision identifier within the requested or inferred legislation document
+3. exact title, short title, or stored alias match
+4. strong heading or provision-number match
+5. provision text keyword match
+6. document-level keyword match
+
+Legislation results must make version context visible. If an `asAtDate` is supplied, results should resolve against the version effective on that date. If no `asAtDate` is supplied, current in-force text may be shown only when the source supports that claim; otherwise the response should expose uncertainty or require date context.
+
+### International Law And Legislation Rules
+
+International and transnational sources need their own search semantics. Search contracts and result types should be able to grow toward:
+
+- treaties, conventions, protocols, optional protocols, annexes, and international instruments
+- international court and tribunal judgments, decisions, advisory opinions, orders, and awards
+- UN Security Council, General Assembly, Human Rights Council, treaty-body, and committee materials
+- international humanitarian law instruments and customary-law references
+- regional instruments such as Council of Europe, EU, African Union, Inter-American, or other regional materials when added deliberately
+
+International-law search must support:
+
+- title and short-title lookup, such as `Geneva Convention IV` or `ECHR`
+- article, rule, protocol, annex, schedule, and paragraph references
+- party or state-context filters when source data supports them
+- adoption date, signature date, entry-into-force date, and version/effective date filters where applicable
+- issuing body or forum filters, such as ICJ, ICC, ECtHR, UN Security Council, or treaty body
+- legal-domain filters, especially for International Humanitarian Law and human rights
+- source-family filters so users and model callers can distinguish treaty text from cases, soft law, guidance, and commentary-like materials
+
+International-law results must expose applicability limits instead of overclaiming. Search should distinguish "text exists", "state-party/applicability unknown", "entered into force on this date", and "source supports this applicability claim" when the data allows it. If applicability metadata is missing, return the source with visible uncertainty rather than presenting it as settled law.
+
+Do not collapse international law into a single jurisdiction value. Use separate fields for legal domain, source origin, issuing body, country or region, treaty parties, forum, and applicability metadata where available.
+
+### Identifier Normalization
+
+Search should use normalized lookup tables before broad keyword search for:
+
+- neutral citations
+- provider document ids and source URIs
+- statute year/number identifiers
+- provision identifiers
+- treaty, convention, protocol, article, rule, and annex identifiers
+- international court or tribunal case numbers and application numbers where available
+- title aliases and short titles
+- citation graph references once available
+
+Normalization must preserve the original user query for display and audit, but ranking and equality checks should use canonical forms. Ambiguous, malformed, or unsupported citations should fail visibly or return candidates; they must not degrade into misleading keyword-only success.
 
 ## Source Extensibility
 
