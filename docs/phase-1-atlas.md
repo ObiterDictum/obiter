@@ -37,9 +37,16 @@ Start with a narrow but reliable corpus:
 
 Use official APIs and official-access pathways wherever possible.
 
+The first corpus can be domestic and UK-heavy, but the model must not assume that every source belongs to one domestic jurisdiction or court hierarchy. Search needs to remain compatible with future international and transnational legal sources, including treaties, conventions, protocols, international court or tribunal decisions, UN or treaty-body materials, and selected international humanitarian law sources.
+
+International law should usually be represented as a legal domain and source family, not as a fake jurisdiction bucket. For example, International Humanitarian Law may apply across jurisdictions, conflicts, parties, treaties, customary rules, and international bodies; Search should be able to filter and retrieve it without pretending it is equivalent to `england-and-wales`.
+
 ### Non-Goals
 
 - all common law jurisdictions
+- full international law coverage
+- complete treaty status and state-party analytics
+- automated conflict-of-laws analysis
 - editorial headnotes
 - broad treatment classification
 - encyclopedic secondary sources
@@ -82,6 +89,10 @@ Use official APIs and official-access pathways wherever possible.
 
 - provider
 - source_type
+- source_family
+- source_origin
+- country_or_region
+- legal_domain
 - licence_type
 - source_url
 - computational_analysis_allowed
@@ -92,12 +103,20 @@ Use official APIs and official-access pathways wherever possible.
 - canonical_title
 - document_type
 - jurisdiction
+- legal_domain
+- country_or_region
 - court_or_body
+- issuing_body
 - date_published
 - date_decided
+- date_made
+- date_commenced
+- effective_date
 - preferred_identifier
 - source_document_uri
 - neutral_citation
+- citation_aliases
+- applicability_notes
 
 `judgment_paragraphs`
 
@@ -125,6 +144,13 @@ Use official APIs and official-access pathways wherever possible.
 - text
 - version_start_date
 - version_end_date
+
+Future international-law source families may need additional tables or typed document payloads. Do not force these into domestic legislation tables if the source structure differs materially:
+
+- `treaty_documents`: title, parties or signatories where available, adoption date, entry-into-force date, protocols, reservations/declarations metadata when sourced
+- `international_instruments`: conventions, protocols, rules, declarations, resolutions, model laws, guidance, and treaty-body materials
+- `international_decisions`: international court, tribunal, commission, or committee decisions with paragraph-level evidence
+- `legal_references`: relationships between cases, provisions, treaties, protocols, resolutions, and issues
 
 ## Ingestion Pipeline
 
@@ -167,6 +193,11 @@ Search requests should support the following inputs before broad corpus expansio
 - `courtOrBody`: court, tribunal, parliament, government department, or other issuing body
 - `dateFrom` / `dateTo`: decision, publication, or version date filters depending on source type
 - `asAtDate`: required for legislation version-sensitive lookup once legislation is in scope
+- `legalDomain`: optional controlled domain filter, such as international-humanitarian-law, human-rights, criminal, commercial, or public-law
+- `countryOrRegion`: optional source-origin filter for domestic, regional, supranational, or international sources
+- `instrumentType`: optional filter for acts, statutory instruments, treaties, conventions, protocols, rules, resolutions, guidance, and decisions
+- `issuingBody`: optional filter for parliament, government department, international court, tribunal, UN body, treaty body, or other authority
+- `applicabilityContext`: optional future structured context for state, territory, conflict, treaty-party status, or forum-specific applicability
 - `provider`: optional source-provider filter for diagnostics and controlled corpus views
 - `page` or `cursor` plus `limit`: required before any result set can grow without bounds
 
@@ -178,9 +209,13 @@ Search results should be discriminated by source type and should share a stable 
 
 - canonical document id
 - source type
+- source family
 - title or canonical title
 - jurisdiction
+- legal domain
+- country or region
 - court or issuing body
+- instrument type where applicable
 - primary citation or preferred identifier
 - relevant date and, for legislation, applicable version date range
 - source URL and provider
@@ -215,7 +250,7 @@ If a citation is ambiguous or maps to multiple records, Search should return dis
 
 ### Legislation Search Rules
 
-Legislation search must not be modeled as judgment search with different labels. It must support:
+Legislation search must not be modeled as judgment search with different labels. Domestic legislation search must support:
 
 - statute or instrument title lookup
 - short title and common abbreviation lookup where those aliases are explicitly stored
@@ -245,6 +280,30 @@ Legislation ranking should prefer:
 
 Legislation results must make version context visible. If an `asAtDate` is supplied, results should resolve against the version effective on that date. If no `asAtDate` is supplied, current in-force text may be shown only when the source supports that claim; otherwise the response should expose uncertainty or require date context.
 
+### International Law And Legislation Rules
+
+International and transnational sources need their own search semantics. The model should support future source families such as:
+
+- treaties, conventions, protocols, and optional protocols
+- international court and tribunal judgments, decisions, advisory opinions, orders, and awards
+- UN Security Council, General Assembly, Human Rights Council, treaty-body, and committee materials
+- international humanitarian law instruments and customary-law references
+- regional instruments such as Council of Europe, EU, African Union, Inter-American, or other regional materials when added deliberately
+
+International-law search must support:
+
+- title and short-title lookup, such as `Geneva Convention IV` or `ECHR`
+- article, rule, protocol, annex, schedule, and paragraph references
+- party or state-context filters when the source data supports them
+- adoption date, signature date, entry-into-force date, and version/effective date filters where applicable
+- issuing body or forum filters, such as ICJ, ICC, ECtHR, UN Security Council, or treaty body
+- legal-domain filters, especially for International Humanitarian Law and human rights
+- source-family filters so users and model callers can distinguish treaty text from cases, soft law, guidance, and commentary-like materials
+
+International-law results must expose applicability limits instead of overclaiming. For example, Search should distinguish "text exists", "state-party/applicability unknown", "entered into force on this date", and "source supports this applicability claim" when the data allows it. If applicability metadata is missing, return the source with visible uncertainty rather than presenting it as settled law.
+
+Do not collapse international law into a single jurisdiction value. Use separate fields for legal domain, source origin, issuing body, country or region, treaty parties, forum, and applicability metadata where available.
+
 ### Citation And Identifier Normalization
 
 Search should use normalized lookup tables before broad keyword search for:
@@ -253,6 +312,8 @@ Search should use normalized lookup tables before broad keyword search for:
 - provider document ids and source URIs
 - statute year/number identifiers
 - provision identifiers
+- treaty, convention, protocol, article, rule, and annex identifiers
+- international court or tribunal case numbers and application numbers where available
 - title aliases and short titles
 - citation graph references once available
 
@@ -360,6 +421,7 @@ Temporary legacy endpoint: `GET /api/atlas/legislation/:documentId/provisions/:p
 - provision viewers should page or window large schedules and instruments
 - snippets should be bounded and generated from indexed/stored text, not by moving full documents through result-list APIs
 - public/API-key search should default to stored Ormont legal sources and must not trigger live provider fetches by default
+- international-law corpus ingestion should be source-by-source and licence-aware; do not treat web availability as permission for bulk computational analysis
 - ingestion should be resumable and restart-safe
 
 ## Failure Modes To Design For
@@ -370,6 +432,9 @@ Temporary legacy endpoint: `GET /api/atlas/legislation/:documentId/provisions/:p
 - legislation version conflicts
 - missing or uncertain commencement data
 - provision references that match multiple instruments or versions
+- treaty or international instrument references that match multiple protocols, annexes, or language/version variants
+- missing or uncertain state-party, reservation, declaration, or entry-into-force metadata
+- international sources whose applicability depends on forum, date, territory, party status, conflict status, or domestic implementation
 - source-provider outages and rate limits
 - restricted or delayed source access
 - licence restrictions on computational analysis or redistribution
@@ -391,5 +456,7 @@ Temporary legacy endpoint: `GET /api/atlas/legislation/:documentId/provisions/:p
 - search results can open exact supporting paragraphs or provisions
 - case law body-text search returns judgment results with paragraph evidence
 - statute and provision searches return version-aware legislation results with provision evidence
+- international-law and international-legislation sources can be represented without flattening them into domestic statute or judgment records
+- legal-domain, issuing-body, country/region, and source-family filters can be added without changing the public result envelope
 - ambiguous citations and provision references return candidates or visible uncertainty
 - Verify can consume Search authority resolution and evidence lookup reliably
