@@ -121,6 +121,11 @@ export function LegalSearchView() {
     setState({ status: 'idle' })
   }
 
+  function supersedeActiveSearch() {
+    cancelInFlightSearch()
+    searchRequestId.current += 1
+  }
+
   function keepSearchInputFocused() {
     searchInputRef.current?.focus()
   }
@@ -201,6 +206,7 @@ export function LegalSearchView() {
       return
     }
 
+    supersedeActiveSearch()
     autoSearchTimer.current = setTimeout(() => {
       autoSearchTimer.current = null
       void runSearch(searchQuery, searchFilters, { clearDebounce: false })
@@ -217,6 +223,7 @@ export function LegalSearchView() {
     setDateFrom(filters.dateFrom)
     setDateTo(filters.dateTo)
     setFiltersOpen(false)
+    setState(getLegalSearchStateAfterInputChange())
     scheduleAutoSearch(query, filters)
   }
 
@@ -225,6 +232,7 @@ export function LegalSearchView() {
     setDateFrom('')
     setDateTo('')
     setFiltersOpen(false)
+    setState(getLegalSearchStateAfterInputChange())
     scheduleAutoSearch(query, { court: '', dateFrom: '', dateTo: '' })
   }
 
