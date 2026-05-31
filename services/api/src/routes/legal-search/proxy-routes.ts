@@ -69,7 +69,13 @@ export function createLegalSearchProxyRoutes(
 
     if (cached.hits.length > 0) {
       return c.json(
-        toFetchResponse(cached.hits.map(toSummaryHit), parsed.data.query, true, 0, 0),
+        toFetchResponse(
+          cached.hits.map((hit) => toSummaryHit(hit, parsed.data.query)),
+          parsed.data.query,
+          true,
+          0,
+          0,
+        ),
       )
     }
 
@@ -85,7 +91,13 @@ export function createLegalSearchProxyRoutes(
       )
 
       return c.json(
-        toFetchResponse(rankedStoredDocuments.map(toSummaryHit), parsed.data.query, true, 0, 0),
+        toFetchResponse(
+          rankedStoredDocuments.map((hit) => toSummaryHit(hit, parsed.data.query)),
+          parsed.data.query,
+          true,
+          0,
+          0,
+        ),
       )
     }
 
@@ -163,7 +175,7 @@ export function createLegalSearchProxyRoutes(
 
     return c.json(
       toFetchResponse(
-        rankedLiveDocuments.map(toSummaryHit),
+        rankedLiveDocuments.map((hit) => toSummaryHit(hit, parsed.data.query)),
         parsed.data.query,
         false,
         0,
@@ -278,7 +290,7 @@ async function searchStoredAuthorities(
 ) {
   try {
     const result = await withTimeout(
-      search(searchClient, indexName, query, filters),
+      search(searchClient, indexName, query, filters, { includeSnippets: true }),
       storedSearchTimeoutMs,
     )
 

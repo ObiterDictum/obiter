@@ -1,5 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
-import { createIndex, getDocument, indexDocuments, rankLegalSearchHitsByExactMatch, search } from './index'
+import {
+  createIndex,
+  extractLegalSearchSnippets,
+  getDocument,
+  indexDocuments,
+  rankLegalSearchHitsByExactMatch,
+  search,
+} from './index'
 import type { LegalSearchHit } from './index'
 
 function authority(overrides: Record<string, unknown> = {}) {
@@ -389,6 +396,74 @@ describe('Legal search client', () => {
     expect(result.hits[0]?.paragraphs).toEqual(authority().paragraphs)
     expect(searchMock).toHaveBeenCalledWith(
       'test',
+      expect.objectContaining({
+        attributesToRetrieve: expect.arrayContaining(['paragraphs']),
+      }),
+    )
+  })
+
+  it('extracts focused snippets from matching paragraphs', () => {
+    const snippets = extractLegalSearchSnippets(
+      authority({
+        paragraphs: [
+          {
+            id: 'uksc-2024-1-p1',
+            documentId: 'uksc-2024-1',
+            paragraphNumber: 1,
+            text: 'This opening paragraph does not contain the party name.',
+          },
+          {
+            id: 'uksc-2024-1-p2',
+            documentId: 'uksc-2024-1',
+            paragraphNumber: 2,
+            text: 'The court considered Potanina and the effect of prior financial remedy proceedings.',
+          },
+        ],
+      }),
+      'Potanina financial',
+    )
+
+    expect(snippets).toEqual([
+      {
+        paragraphNumber: 2,
+        text: 'The court considered Potanina and the effect of prior financial remedy proceedings.',
+      },
+    ])
+  })
+
+  it('returns snippets without paragraph arrays for result-list searches', async () => {
+    const searchMock = vi.fn(async () => ({
+      hits: [
+        authority({
+          paragraphs: [
+            {
+              id: 'uksc-2024-1-p7',
+              documentId: 'uksc-2024-1',
+              paragraphNumber: 7,
+              text: 'Potanina appears in this indexed paragraph.',
+            },
+          ],
+        }),
+      ],
+      query: 'Potanina',
+      estimatedTotalHits: 1,
+      processingTimeMs: 2,
+    }))
+    const client = {
+      index: () => ({ search: searchMock }),
+    }
+
+    const result = await search(client, 'legal_authorities', 'Potanina', {}, {
+      includeSnippets: true,
+    })
+
+    expect(result.hits[0]).toMatchObject({
+      id: 'uksc-2024-1',
+      snippets: [{ paragraphNumber: 7, text: 'Potanina appears in this indexed paragraph.' }],
+    })
+    expect(result.hits[0]).not.toHaveProperty('paragraphs')
+    expect(searchMock).toHaveBeenCalledWith(
+      'Potanina',
       expect.objectContaining({
         attributesToRetrieve: expect.arrayContaining(['paragraphs']),
       }),

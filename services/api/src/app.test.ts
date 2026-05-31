@@ -498,6 +498,7 @@ describe('createApiApp', () => {
         dateTo: '2024-12-31',
         sourceType: 'judgment',
       },
+      { includeSnippets: true },
     )
   })
 

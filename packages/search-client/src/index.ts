@@ -9,8 +9,13 @@ import {
 } from '@ormont/legal-schema'
 
 export type LegalSearchDocument = LegalAuthority
+export interface LegalSearchSnippet {
+  paragraphNumber: number
+  text: string
+}
 export type LegalSearchHit = LegalAuthoritySummary & {
   paragraphs?: LegalAuthority['paragraphs']
+  snippets?: LegalSearchSnippet[]
 }
 export type LegalSearchFilters = Partial<{
   court: string
@@ -43,6 +48,7 @@ export interface LegalSearchResult {
 
 export interface LegalSearchOptions {
   includeParagraphs?: boolean
+  includeSnippets?: boolean
 }
 
 interface SearchIndexingTask {
@@ -227,16 +233,33 @@ export async function search(
     const result = await client.index(indexName).search(query, {
       filter: toMeiliFilters(filters),
       sort: ['dateDecided:desc'],
-      attributesToRetrieve: options.includeParagraphs
+      attributesToRetrieve: options.includeParagraphs || options.includeSnippets
         ? [...searchSummaryAttributes, 'paragraphs']
         : searchSummaryAttributes,
     })
     const hits = result.hits.map((hit) =>
-      options.includeParagraphs
+      options.includeParagraphs || options.includeSnippets
         ? LegalAuthoritySchema.parse(hit)
         : LegalAuthoritySummarySchema.parse(hit),
     )
-    const rankedHits = rankLegalSearchHitsByExactMatch(hits, query)
+    const rankedHits = rankLegalSearchHitsByExactMatch(hits.map((hit) =>
+      options.includeParagraphs
+        ? {
+            ...hit,
+            snippets: options.includeSnippets ? extractLegalSearchSnippets(hit, query) : undefined,
+          }
+        : {
+            id: hit.id,
+            title: hit.title,
+            neutralCitation: hit.neutralCitation,
+            court: hit.court,
+            jurisdiction: hit.jurisdiction,
+            dateDecided: hit.dateDecided,
+            sourceType: hit.sourceType,
+            sourceUrl: hit.sourceUrl,
+            snippets: options.includeSnippets ? extractLegalSearchSnippets(hit, query) : undefined,
+          },
+    ), query)
 
     return {
       hits: rankedHits,
@@ -247,6 +270,27 @@ export async function search(
   } catch (error) {
     throw wrapSearchError('Search failed.', error)
   }
+}
+
+export function extractLegalSearchSnippets(
+  hit: Pick<LegalAuthority, 'paragraphs'>,
+  query: string,
+): LegalSearchSnippet[] {
+  const paragraphs = hit.paragraphs ?? []
+  const normalizedQuery = normalizeExactMatchValue(query)
+  const tokens = normalizedQuery.split(' ').filter((token) => token.length > 1)
+  const matchingParagraphs = tokens.length > 0
+    ? paragraphs.filter((paragraph) => {
+        const text = normalizeExactMatchValue(paragraph.text)
+        return tokens.every((token) => text.includes(token))
+      })
+    : []
+  const selectedParagraphs = (matchingParagraphs.length > 0 ? matchingParagraphs : paragraphs).slice(0, 3)
+
+  return selectedParagraphs.map((paragraph) => ({
+    paragraphNumber: paragraph.paragraphNumber,
+    text: trimSnippetText(paragraph.text, tokens),
+  }))
 }
 
 export function rankLegalSearchHitsByExactMatch<T extends LegalSearchHit>(
@@ -280,6 +324,23 @@ function normalizeExactMatchValue(value: string | null | undefined) {
 function containsEveryQueryTerm(value: string, normalizedQuery: string) {
   const terms = normalizedQuery.split(' ').filter(Boolean)
   return terms.length > 0 && terms.every((term) => value.includes(term))
+}
+
+function trimSnippetText(text: string, tokens: string[]) {
+  const normalizedText = text.replace(/\s+/g, ' ').trim()
+  const maxLength = 240
+  if (normalizedText.length <= maxLength) return normalizedText
+
+  const lowerText = normalizedText.toLowerCase()
+  const matchIndex = tokens
+    .map((token) => lowerText.indexOf(token))
+    .filter((index) => index >= 0)
+    .sort((left, right) => left - right)[0] ?? 0
+  const start = Math.max(matchIndex - 80, 0)
+  const end = Math.min(start + maxLength, normalizedText.length)
+  const excerpt = normalizedText.slice(start, end).trim()
+
+  return `${start > 0 ? '...' : ''}${excerpt}${end < normalizedText.length ? '...' : ''}`
 }
 
 function validationFailure(documents: unknown[], messages: string[]): SearchIndexDocumentsResult {

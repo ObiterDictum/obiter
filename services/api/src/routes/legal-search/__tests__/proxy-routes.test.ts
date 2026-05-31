@@ -144,7 +144,17 @@ describe('createLegalSearchProxyRoutes', () => {
     const body = (await response.json()) as { hits: Array<Record<string, unknown>> }
     expect(body).toMatchObject({
       cached: true,
-      hits: [hit],
+      hits: [
+        {
+          ...hit,
+          snippets: [
+            {
+              paragraphNumber: 1,
+              text: 'Cached search responses should stay summary-only.',
+            },
+          ],
+        },
+      ],
       indexedCount: 0,
     })
     expect(body.hits[0]).not.toHaveProperty('paragraphs')
@@ -842,6 +852,7 @@ describe('createLegalSearchProxyRoutes', () => {
       'legal_authorities',
       'Example',
       expect.objectContaining({ court: 'ewhc-admin' }),
+      { includeSnippets: true },
     )
     expect(fetchMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -918,6 +929,7 @@ describe('createLegalSearchProxyRoutes', () => {
       'legal_authorities',
       'Example',
       expect.objectContaining({ court: 'ewhc-admin' }),
+      { includeSnippets: true },
     )
     expect(fetchMock).toHaveBeenCalledWith(
       expect.objectContaining({

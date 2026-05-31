@@ -1,6 +1,6 @@
 import type { ApiErrorResponse } from '@ormont/contracts'
 import type { LegalAuthority } from '@ormont/legal-schema'
-import type { LegalSearchHit } from '@ormont/search-client'
+import { extractLegalSearchSnippets, type LegalSearchHit } from '@ormont/search-client'
 
 export interface LegalFetchSearchHit extends LegalSearchHit {
   paragraphs?: LegalAuthority['paragraphs']
@@ -38,7 +38,7 @@ export function toFetchResponse(
   }
 }
 
-export function toSummaryHit(hit: LegalSearchHit): LegalFetchSearchHit {
+export function toSummaryHit(hit: LegalSearchHit, query = ''): LegalFetchSearchHit {
   return {
     id: hit.id,
     title: hit.title,
@@ -48,5 +48,6 @@ export function toSummaryHit(hit: LegalSearchHit): LegalFetchSearchHit {
     dateDecided: hit.dateDecided,
     sourceType: hit.sourceType,
     sourceUrl: hit.sourceUrl,
+    snippets: hit.snippets ?? extractLegalSearchSnippets(hit, query),
   }
 }
