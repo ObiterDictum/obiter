@@ -11,6 +11,7 @@ export {
   type LegalSearchRequestFilters,
   type LegalSearchFetchResponse,
   type CaseLawParagraph,
+  type CaseLawSnippet,
   type LegalSearchResult,
   type LegalSearchState,
 } from './searchTypes'
