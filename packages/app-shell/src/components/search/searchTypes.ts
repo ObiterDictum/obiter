@@ -4,6 +4,11 @@ export interface CaseLawParagraph {
   text: string
 }
 
+export interface CaseLawSnippet {
+  paragraphNumber: number
+  text: string
+}
+
 export interface LegalSearchResult {
   id: string
   title: string
@@ -11,6 +16,7 @@ export interface LegalSearchResult {
   court: string
   dateDecided: string
   sourceUrl: string
+  snippets?: CaseLawSnippet[]
   paragraphs?: CaseLawParagraph[]
 }
 

@@ -43,6 +43,16 @@ export function SearchResults({ response }: SearchResultsProps) {
             >
               {summary}
             </Link>
+            {result.snippets && result.snippets.length > 0 ? (
+              <div className="case-law-result__snippets" aria-label="Matching judgment snippets">
+                {result.snippets.map((snippet) => (
+                  <p className="case-law-result__snippet" key={`${result.id}-${snippet.paragraphNumber}`}>
+                    <span className="case-law-result__snippet-label">[{snippet.paragraphNumber}]</span>
+                    {snippet.text}
+                  </p>
+                ))}
+              </div>
+            ) : null}
           </article>
         )
       })}
