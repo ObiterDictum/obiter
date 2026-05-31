@@ -147,12 +147,7 @@ describe('createLegalSearchProxyRoutes', () => {
       hits: [
         {
           ...hit,
-          snippets: [
-            {
-              paragraphNumber: 1,
-              text: 'Cached search responses should stay summary-only.',
-            },
-          ],
+          snippets: [],
         },
       ],
       indexedCount: 0,

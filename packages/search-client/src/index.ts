@@ -273,24 +273,37 @@ export async function search(
 }
 
 export function extractLegalSearchSnippets(
-  hit: Pick<LegalAuthority, 'paragraphs'>,
+  hit: LegalSearchHit,
   query: string,
 ): LegalSearchSnippet[] {
   const paragraphs = hit.paragraphs ?? []
   const normalizedQuery = normalizeExactMatchValue(query)
   const tokens = normalizedQuery.split(' ').filter((token) => token.length > 1)
-  const matchingParagraphs = tokens.length > 0
-    ? paragraphs.filter((paragraph) => {
-        const text = normalizeExactMatchValue(paragraph.text)
-        return tokens.every((token) => text.includes(token))
-      })
+  const selectedParagraphs = tokens.length > 0
+    ? paragraphs
+        .map((paragraph, index) => ({
+          paragraph,
+          index,
+          score: snippetMatchScore(paragraph.text, normalizedQuery, tokens),
+        }))
+        .filter(({ score }) => score > 0)
+        .sort((left, right) => right.score - left.score || left.index - right.index)
+        .slice(0, 2)
+        .map(({ paragraph }) => paragraph)
     : []
-  const selectedParagraphs = (matchingParagraphs.length > 0 ? matchingParagraphs : paragraphs).slice(0, 3)
 
   return selectedParagraphs.map((paragraph) => ({
     paragraphNumber: paragraph.paragraphNumber,
     text: trimSnippetText(paragraph.text, tokens),
   }))
+}
+
+function snippetMatchScore(text: string, normalizedQuery: string, tokens: string[]) {
+  const normalizedText = normalizeExactMatchValue(text)
+  if (normalizedText.includes(normalizedQuery)) return 3
+  if (tokens.every((token) => normalizedText.includes(token))) return 2
+  if (tokens.some((token) => normalizedText.includes(token))) return 1
+  return 0
 }
 
 export function rankLegalSearchHitsByExactMatch<T extends LegalSearchHit>(

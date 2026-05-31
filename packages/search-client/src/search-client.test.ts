@@ -17,7 +17,7 @@ function authority(overrides: Record<string, unknown> = {}) {
     court: 'uksc',
     jurisdiction: 'england-and-wales',
     dateDecided: '2024-01-17',
-    sourceType: 'judgment',
+    sourceType: 'judgment' as const,
     sourceUrl: 'https://www.supremecourt.uk/cases/uksc-2024-001.html',
     paragraphs: [
       {
@@ -427,6 +427,64 @@ describe('Legal search client', () => {
       {
         paragraphNumber: 2,
         text: 'The court considered Potanina and the effect of prior financial remedy proceedings.',
+      },
+    ])
+  })
+
+  it('omits snippets when paragraph text does not match the query', () => {
+    const snippets = extractLegalSearchSnippets(
+      authority({
+        title: 'Potanina v Potanin',
+        paragraphs: [
+          {
+            id: 'uksc-2024-1-p1',
+            documentId: 'uksc-2024-1',
+            paragraphNumber: 1,
+            text: 'This paragraph explains a procedural point without the searched terms.',
+          },
+        ],
+      }),
+      'Potanina financial',
+    )
+
+    expect(snippets).toEqual([])
+  })
+
+  it('falls back to paragraphs with any matching query term and caps snippets at two', () => {
+    const snippets = extractLegalSearchSnippets(
+      authority({
+        paragraphs: [
+          {
+            id: 'uksc-2024-1-p1',
+            documentId: 'uksc-2024-1',
+            paragraphNumber: 1,
+            text: 'Potanina appears in the first paragraph.',
+          },
+          {
+            id: 'uksc-2024-1-p2',
+            documentId: 'uksc-2024-1',
+            paragraphNumber: 2,
+            text: 'Financial remedy proceedings are discussed in the second paragraph.',
+          },
+          {
+            id: 'uksc-2024-1-p3',
+            documentId: 'uksc-2024-1',
+            paragraphNumber: 3,
+            text: 'A third Potanina reference should not exceed the result-card cap.',
+          },
+        ],
+      }),
+      'Potanina financial remedy',
+    )
+
+    expect(snippets).toEqual([
+      {
+        paragraphNumber: 1,
+        text: 'Potanina appears in the first paragraph.',
+      },
+      {
+        paragraphNumber: 2,
+        text: 'Financial remedy proceedings are discussed in the second paragraph.',
       },
     ])
   })
