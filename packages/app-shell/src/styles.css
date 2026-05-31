@@ -2351,6 +2351,26 @@ body {
   white-space: nowrap;
 }
 
+.case-law-result__snippets {
+  border-top: 1px solid rgba(245, 242, 235, 0.08);
+  display: grid;
+  gap: 8px;
+  padding: 0 16px 14px;
+}
+
+.case-law-result__snippet {
+  color: #d9d6cf;
+  font-size: 0.86rem;
+  line-height: 1.55;
+  margin: 0;
+}
+
+.case-law-result__snippet-label {
+  color: #d9a25b;
+  font-weight: 650;
+  margin-right: 8px;
+}
+
 .case-law-result__viewer,
 .case-law-document__viewer {
   align-content: start;

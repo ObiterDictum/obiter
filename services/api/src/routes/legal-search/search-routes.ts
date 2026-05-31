@@ -70,6 +70,7 @@ export function createLegalSearchRoutes(env: ApiEnv) {
       env.legalAuthoritiesIndex,
       parsed.data.q,
       filters,
+      { includeSnippets: true },
     )
 
     return c.json({
@@ -82,6 +83,7 @@ export function createLegalSearchRoutes(env: ApiEnv) {
         dateDecided: hit.dateDecided,
         sourceType: hit.sourceType,
         sourceUrl: hit.sourceUrl,
+        snippets: hit.snippets ?? [],
       })),
       query: result.query,
       estimatedTotalHits: result.estimatedTotalHits,
