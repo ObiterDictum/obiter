@@ -1,4 +1,4 @@
-import { type FormEvent } from 'react'
+import { type FormEvent, type RefObject } from 'react'
 import { MagnifyingGlassIcon } from '@heroicons/react/24/outline'
 
 interface SearchCommandBarProps {
@@ -7,6 +7,7 @@ interface SearchCommandBarProps {
   dateFrom: string
   dateTo: string
   isSearching: boolean
+  inputRef?: RefObject<HTMLInputElement | null>
   onFilterClick: () => void
   onQueryChange: (query: string) => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
@@ -19,6 +20,7 @@ export function SearchCommandBar({
   dateFrom,
   dateTo,
   isSearching,
+  inputRef,
   onFilterClick,
   onQueryChange,
   onSubmit,
@@ -37,6 +39,7 @@ export function SearchCommandBar({
         <label className="legal-search__field">
           <span className="legal-search__visually-hidden">Search legal sources</span>
           <input
+            ref={inputRef}
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
             placeholder="Potanina"

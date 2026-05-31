@@ -16,6 +16,8 @@ import {
 
 export { courtOptionGroups, getCourtLabel }
 
+export const LEGAL_SEARCH_DEBOUNCE_MS = 300
+
 export function getLegalSearchStateLabel(state: LegalSearchState) {
   switch (state.status) {
     case 'idle':
@@ -84,6 +86,10 @@ export function getLegalSearchStateAfterInputChange(): LegalSearchState {
   return { status: 'idle' }
 }
 
+export function shouldRunLegalSearch(query: string) {
+  return query.trim().length > 0
+}
+
 export function LegalSearchView() {
   const [query, setQuery] = useState(() => readInitialSearchQuery())
   const [court, setCourt] = useState('')
@@ -91,29 +97,66 @@ export function LegalSearchView() {
   const [dateTo, setDateTo] = useState('')
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [state, setState] = useState<LegalSearchState>({ status: 'idle' })
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
   const searchRequestId = useRef(0)
+  const autoSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const abortController = useRef<AbortController | null>(null)
+
+  function clearAutoSearchTimer() {
+    if (autoSearchTimer.current) {
+      clearTimeout(autoSearchTimer.current)
+      autoSearchTimer.current = null
+    }
+  }
+
+  function cancelInFlightSearch() {
+    abortController.current?.abort()
+    abortController.current = null
+  }
+
+  function resetSearchToIdle() {
+    clearAutoSearchTimer()
+    cancelInFlightSearch()
+    searchRequestId.current += 1
+    setState({ status: 'idle' })
+  }
+
+  function keepSearchInputFocused() {
+    searchInputRef.current?.focus()
+  }
 
   async function runSearch(
     searchQuery = query,
     searchFilters: LegalSearchRequestFilters = { court, dateFrom, dateTo },
+    options: { clearDebounce?: boolean } = {},
   ) {
+    if (options.clearDebounce ?? true) clearAutoSearchTimer()
+
     const trimmedQuery = searchQuery.trim()
-    if (!trimmedQuery) return
+    if (!trimmedQuery) {
+      resetSearchToIdle()
+      return
+    }
 
     const requestId = searchRequestId.current + 1
     searchRequestId.current = requestId
+    cancelInFlightSearch()
+    const requestAbortController = new AbortController()
+    abortController.current = requestAbortController
     setState({ status: 'loading', query: trimmedQuery })
 
     try {
       const response = await fetch('/api/search/fetch', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
+        signal: requestAbortController.signal,
         body: JSON.stringify(createLegalSearchFetchRequest(trimmedQuery, searchFilters)),
       })
 
       if (searchRequestId.current !== requestId) return
 
       if (!response.ok) {
+        if (abortController.current === requestAbortController) abortController.current = null
         setState({
           status: 'error',
           query: trimmedQuery,
@@ -122,24 +165,46 @@ export function LegalSearchView() {
               ? 'Find Case Law is currently unreachable. Cached results may still be available through standard search.'
               : 'Search could not complete the request.',
         })
+        keepSearchInputFocused()
         return
       }
 
       const body = (await response.json()) as LegalSearchFetchResponse
       if (searchRequestId.current !== requestId) return
+      if (abortController.current === requestAbortController) abortController.current = null
       setState(
         body.hits.length > 0
           ? { status: 'results', query: trimmedQuery, response: body }
           : { status: 'empty', query: trimmedQuery, hydrationQueued: body.hydrationQueued },
       )
+      keepSearchInputFocused()
     } catch {
       if (searchRequestId.current !== requestId) return
+      if (requestAbortController.signal.aborted) return
+      if (abortController.current === requestAbortController) abortController.current = null
       setState({
         status: 'error',
         query: trimmedQuery,
         message: 'Search could not reach the API.',
       })
+      keepSearchInputFocused()
     }
+  }
+
+  function scheduleAutoSearch(
+    searchQuery: string,
+    searchFilters: LegalSearchRequestFilters = { court, dateFrom, dateTo },
+  ) {
+    clearAutoSearchTimer()
+    if (!shouldRunLegalSearch(searchQuery)) {
+      resetSearchToIdle()
+      return
+    }
+
+    autoSearchTimer.current = setTimeout(() => {
+      autoSearchTimer.current = null
+      void runSearch(searchQuery, searchFilters, { clearDebounce: false })
+    }, LEGAL_SEARCH_DEBOUNCE_MS)
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -152,8 +217,7 @@ export function LegalSearchView() {
     setDateFrom(filters.dateFrom)
     setDateTo(filters.dateTo)
     setFiltersOpen(false)
-    searchRequestId.current += 1
-    setState({ status: 'idle' })
+    scheduleAutoSearch(query, filters)
   }
 
   function clearFilters() {
@@ -161,14 +225,13 @@ export function LegalSearchView() {
     setDateFrom('')
     setDateTo('')
     setFiltersOpen(false)
-    searchRequestId.current += 1
-    setState({ status: 'idle' })
+    scheduleAutoSearch(query, { court: '', dateFrom: '', dateTo: '' })
   }
 
   function handleQueryChange(nextQuery: string) {
     setQuery(nextQuery)
-    searchRequestId.current += 1
     setState(getLegalSearchStateAfterInputChange())
+    scheduleAutoSearch(nextQuery)
   }
 
   const courtLabel = getCourtLabel(court)
@@ -189,6 +252,7 @@ export function LegalSearchView() {
           courtLabel={courtLabel}
           dateFrom={dateFrom}
           dateTo={dateTo}
+          inputRef={searchInputRef}
           isSearching={state.status === 'loading'}
           onFilterClick={() => setFiltersOpen(true)}
           onQueryChange={handleQueryChange}
