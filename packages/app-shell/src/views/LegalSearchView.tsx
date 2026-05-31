@@ -1,4 +1,4 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Card } from '@ormont/ui'
 import {
   SearchCommandBar,
@@ -129,6 +129,14 @@ export function LegalSearchView() {
   function keepSearchInputFocused() {
     searchInputRef.current?.focus()
   }
+
+  useEffect(() => {
+    return () => {
+      clearAutoSearchTimer()
+      cancelInFlightSearch()
+      searchRequestId.current += 1
+    }
+  }, [])
 
   async function runSearch(
     searchQuery = query,
