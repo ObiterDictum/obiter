@@ -121,6 +121,13 @@ This refactor is actively working on the judgment slice, but it must preserve th
 
 The active refactor must avoid choices that make later case law, legislation, international-law, SDK, MCP, and AI integrations expensive. The current Find Case Law path is one provider adapter and one source family, not the final shape of Search.
 
+Current provider scope:
+
+- Implemented case-law ingestion and hydration uses Find Case Law at `caselaw.nationalarchives.gov.uk`. The route module is still named `moj-client.ts` and the environment variables are still named `MOJ_FIND_CASE_LAW_*`, but the configured endpoint is The National Archives Find Case Law service.
+- This gives Search broad coverage across the supported Find Case Law court and tribunal collections, subject to provider availability, parser support, and licensing constraints.
+- `legislation.gov.uk` is not implemented yet. Legislation requires a separate provider adapter, schema, storage model, version/provision handling, and search semantics; do not treat the current judgment path as legislation ingestion.
+- The current product behavior is stored Ormont legal sources first, then safe Find Case Law fallback/hydration for case-law misses. Future legislation search should be added source-by-source without weakening this case-law path.
+
 One Search surface must support:
 
 - neutral citation lookup
