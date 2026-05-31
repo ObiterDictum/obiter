@@ -8,8 +8,10 @@ import {
   getCourtLabel,
   getLegalSearchStateAfterInputChange,
   getLegalSearchStateLabel,
+  LEGAL_SEARCH_DEBOUNCE_MS,
   selectJudgmentParagraphs,
   selectParagraphExcerpts,
+  shouldRunLegalSearch,
 } from './index'
 import {
   readCollapsedSections,
@@ -169,8 +171,18 @@ describe('LegalSearchView helpers', () => {
     ).toBe('results')
   })
 
-  it('keeps typing side-effect free until explicit search submission', () => {
+  it('uses a 300ms auto-search debounce window', () => {
+    expect(LEGAL_SEARCH_DEBOUNCE_MS).toBe(300)
+  })
+
+  it('returns idle state while debounced input is waiting', () => {
     expect(getLegalSearchStateAfterInputChange()).toEqual({ status: 'idle' })
+  })
+
+  it('only schedules searches for non-empty queries', () => {
+    expect(shouldRunLegalSearch('')).toBe(false)
+    expect(shouldRunLegalSearch('   ')).toBe(false)
+    expect(shouldRunLegalSearch(' Potanina ')).toBe(true)
   })
 
   it('selects matching paragraph excerpts for expanded search results', () => {

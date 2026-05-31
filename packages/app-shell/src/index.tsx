@@ -12,6 +12,7 @@ export {
 } from './views/CaseLawDocumentView'
 export {
   LegalSearchView,
+  LEGAL_SEARCH_DEBOUNCE_MS,
   courtOptionGroups,
   countActiveLegalSearchFilters,
   createLegalSearchFetchRequest,
@@ -20,6 +21,7 @@ export {
   getLegalSearchStateLabel,
   selectJudgmentParagraphs,
   selectParagraphExcerpts,
+  shouldRunLegalSearch,
 } from './views/LegalSearchView'
 
 const demoAuthStorageKey = 'ormont.phase0.authenticated'
