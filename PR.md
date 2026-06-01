@@ -56,6 +56,7 @@ Use this structure unless the change is trivial:
 ## Do Not
 
 - do not write hypey or promotional summaries
+- do not add agent, tool, or automation prefixes such as `[codex]` to PR titles
 - do not write generic "improved performance" claims without saying how
 - do not write "this should" or "hopefully" when you mean unverified
 - do not bury risk or missing tests
