@@ -276,6 +276,29 @@ describe('Legal search client', () => {
     })
   })
 
+  it('passes explicit result limits to the search provider', async () => {
+    const searchMock = vi.fn(async () => ({
+      hits: [authority()],
+      query: '',
+      estimatedTotalHits: 1,
+      processingTimeMs: 1,
+    }))
+    const client = {
+      index: () => ({ search: searchMock }),
+    }
+
+    await search(client, 'legal_authorities', '', { court: 'uksc' }, { limit: 10 })
+
+    expect(searchMock).toHaveBeenCalledWith(
+      '',
+      expect.objectContaining({
+        filter: ['court = "uksc"'],
+        limit: 10,
+        sort: ['dateDecided:desc'],
+      }),
+    )
+  })
+
   it('promotes exact citation and identifier matches before newer partial hits', async () => {
     const newerPartial = authority({
       id: 'uksc-2026-99',

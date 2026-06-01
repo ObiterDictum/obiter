@@ -50,6 +50,7 @@ export interface LegalSearchResult {
 export interface LegalSearchOptions {
   includeParagraphs?: boolean
   includeSnippets?: boolean
+  limit?: number
 }
 
 interface SearchIndexingTask {
@@ -90,7 +91,12 @@ type IndexLike = {
   addDocuments(documents: LegalSearchDocument[], options: { primaryKey: 'id' }): SearchEnqueuedTaskPromise
   search(
     query: string,
-    options: { filter?: string[]; sort?: string[]; attributesToRetrieve?: string[] },
+    options: {
+      filter?: string[]
+      sort?: string[]
+      attributesToRetrieve?: string[]
+      limit?: number
+    },
   ): Promise<{
     hits: unknown[]
     query?: string
@@ -231,13 +237,21 @@ export async function search(
   options: LegalSearchOptions = {},
 ): Promise<LegalSearchResult> {
   try {
-    const result = await client.index(indexName).search(query, {
+    const searchOptions: {
+      filter?: string[]
+      sort?: string[]
+      attributesToRetrieve?: string[]
+      limit?: number
+    } = {
       filter: toMeiliFilters(filters),
       sort: ['dateDecided:desc'],
       attributesToRetrieve: options.includeParagraphs || options.includeSnippets
         ? [...searchSummaryAttributes, 'paragraphs']
         : searchSummaryAttributes,
-    })
+    }
+    if (typeof options.limit === 'number') searchOptions.limit = options.limit
+
+    const result = await client.index(indexName).search(query, searchOptions)
     const hits = result.hits.map((hit) =>
       options.includeParagraphs || options.includeSnippets
         ? LegalAuthoritySchema.parse(hit)

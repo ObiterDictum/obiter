@@ -212,6 +212,9 @@ export function LegalSearchView() {
 
     const trimmedQuery = searchQuery.trim()
     const storedOnlyBrowse = !trimmedQuery && Boolean(searchFilters.court.trim())
+    const browse = storedOnlyBrowse
+      ? { courtLabel: getCourtLabel(searchFilters.court) }
+      : undefined
     if (!trimmedQuery && !storedOnlyBrowse) {
       resetSearchToIdle()
       return
@@ -260,8 +263,8 @@ export function LegalSearchView() {
       if (abortController.current === requestAbortController) abortController.current = null
       setState(
         body.hits.length > 0
-          ? { status: 'results', query: trimmedQuery, response: body }
-          : { status: 'empty', query: trimmedQuery, hydrationQueued: body.hydrationQueued },
+          ? { status: 'results', query: trimmedQuery, response: body, browse }
+          : { status: 'empty', query: trimmedQuery, hydrationQueued: body.hydrationQueued, browse },
       )
       keepSearchInputFocused()
     } catch {
@@ -398,11 +401,19 @@ export function LegalSearchView() {
       {state.status === 'empty' ? (
         <SearchFeedbackPanel
           eyebrow={state.hydrationQueued ? 'Search queued' : 'No results'}
-          title={state.hydrationQueued ? 'Checking legal sources' : 'No sources found'}
+          title={
+            state.hydrationQueued
+              ? 'Checking legal sources'
+              : state.browse
+                ? 'No recent cases found'
+                : 'No sources found'
+          }
           body={
             state.hydrationQueued
               ? `Stored sources did not yet have "${state.query}". Public legal source hydration is queued; retry shortly for newly indexed results.`
-              : `No stored legal sources matched "${state.query}" with the selected filters.`
+              : state.browse
+                ? `No recent stored cases found for ${state.browse.courtLabel}.`
+                : `No stored legal sources matched "${state.query}" with the selected filters.`
           }
           tone="warning"
         />
@@ -419,7 +430,7 @@ export function LegalSearchView() {
       ) : null}
 
       {state.status === 'results' ? (
-        <SearchResults response={state.response} />
+        <SearchResults response={state.response} browse={state.browse} />
       ) : null}
     </div>
   )

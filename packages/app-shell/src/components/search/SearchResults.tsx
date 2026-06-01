@@ -1,18 +1,18 @@
 import { Link } from '@tanstack/react-router'
-import type { LegalSearchFetchResponse } from './searchTypes'
+import type { LegalSearchBrowseContext, LegalSearchFetchResponse } from './searchTypes'
 
 interface SearchResultsProps {
   response: LegalSearchFetchResponse
+  browse?: LegalSearchBrowseContext
 }
 
-export function SearchResults({ response }: SearchResultsProps) {
+export function SearchResults({ response, browse }: SearchResultsProps) {
   const storedResultsAvailable = response.cached || response.indexedCount > 0
 
   return (
     <section className="legal-search__results" aria-live="polite">
       <p className="legal-search__meta">
-        {response.hits.length} {response.hits.length === 1 ? 'result' : 'results'} from{' '}
-        {response.cached || storedResultsAvailable ? 'stored legal sources' : 'Find Case Law'}
+        {formatResultMeta(response, storedResultsAvailable, browse)}
       </p>
       {response.hits.map((result) => {
         const summary = (
@@ -62,6 +62,22 @@ export function SearchResults({ response }: SearchResultsProps) {
 
 function formatNeutralCitation(neutralCitation: string | null) {
   return neutralCitation ?? 'No neutral citation'
+}
+
+function formatResultMeta(
+  response: LegalSearchFetchResponse,
+  storedResultsAvailable: boolean,
+  browse?: LegalSearchBrowseContext,
+) {
+  if (browse) {
+    const caseLabel = response.hits.length === 1 ? 'case' : 'cases'
+    return `${response.hits.length} recent ${caseLabel} for ${browse.courtLabel} from stored legal sources`
+  }
+
+  const resultLabel = response.hits.length === 1 ? 'result' : 'results'
+  return `${response.hits.length} ${resultLabel} from ${
+    response.cached || storedResultsAvailable ? 'stored legal sources' : 'Find Case Law'
+  }`
 }
 
 function renderSnippetText(text: string, matchedTerms: string[]) {

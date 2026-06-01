@@ -156,11 +156,17 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('runs filter-only stored court browse without calling Find Case Law', async () => {
+  it('runs bounded filter-only stored court browse without calling Find Case Law', async () => {
+    const browseHits = Array.from({ length: 12 }, (_, index) => ({
+      ...hit,
+      id: `uksc-2024-${index + 1}`,
+      title: `Stored UKSC case ${index + 1}`,
+      dateDecided: `2024-01-${String(31 - index).padStart(2, '0')}`,
+    }))
     searchClientMock.search.mockResolvedValueOnce({
-      hits: [hit],
+      hits: browseHits,
       query: '',
-      estimatedTotalHits: 1,
+      estimatedTotalHits: browseHits.length,
       processingTimeMs: 1,
     })
     const fetchMock = vi.spyOn(globalThis, 'fetch')
@@ -173,16 +179,19 @@ describe('createLegalSearchProxyRoutes', () => {
     })
 
     expect(response.status).toBe(200)
-    expect(await response.json()).toMatchObject({
+    const body = (await response.json()) as { hits: Array<{ id: string }> }
+    expect(body).toMatchObject({
       cached: true,
-      hits: [hit],
     })
+    expect(body.hits.map((browseHit) => browseHit.id)).toEqual(
+      browseHits.slice(0, 10).map((browseHit) => browseHit.id),
+    )
     expect(searchClientMock.search).toHaveBeenCalledWith(
       { id: 'meili-client' },
       'legal_authorities',
       '',
       { court: 'uksc', sourceType: 'judgment' },
-      { includeSnippets: true },
+      { includeSnippets: true, limit: 10 },
     )
     expect(fetchMock).not.toHaveBeenCalled()
   })
