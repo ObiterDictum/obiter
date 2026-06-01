@@ -2,6 +2,7 @@ export { CourtSelect } from './CourtSelect'
 export { SearchCommandBar } from './SearchCommandBar'
 export { SearchFeedbackPanel } from './SearchFeedbackPanel'
 export { SearchFiltersDialog } from './SearchFiltersDialog'
+export { SearchIdleState, type SearchCourtShortcut } from './SearchIdleState'
 export { SearchResults } from './SearchResults'
 export {
   courtOptionGroups,
@@ -11,6 +12,7 @@ export {
   type LegalSearchRequestFilters,
   type LegalSearchFetchResponse,
   type CaseLawParagraph,
+  type CaseLawSnippet,
   type LegalSearchResult,
   type LegalSearchState,
 } from './searchTypes'

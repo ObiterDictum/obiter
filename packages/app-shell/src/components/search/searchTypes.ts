@@ -4,6 +4,11 @@ export interface CaseLawParagraph {
   text: string
 }
 
+export interface CaseLawSnippet {
+  paragraphNumber: number
+  text: string
+}
+
 export interface LegalSearchResult {
   id: string
   title: string
@@ -11,6 +16,7 @@ export interface LegalSearchResult {
   court: string
   dateDecided: string
   sourceUrl: string
+  snippets?: CaseLawSnippet[]
   paragraphs?: CaseLawParagraph[]
 }
 
@@ -111,6 +117,7 @@ export const courtOptionGroups: CourtOptionGroup[] = [
 
 export function getCourtLabel(code: string) {
   if (!code) return 'All courts and tribunals'
+  if (code === 'ewhc') return 'High Court'
 
   for (const group of courtOptionGroups) {
     const option = group.options.find((courtOption) => courtOption.code === code)

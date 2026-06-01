@@ -1,9 +1,10 @@
-import { useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Card } from '@ormont/ui'
 import {
   SearchCommandBar,
   SearchFeedbackPanel,
   SearchFiltersDialog,
+  SearchIdleState,
   SearchResults,
   courtOptionGroups,
   getCourtLabel,
@@ -15,6 +16,15 @@ import {
 } from '../components/search'
 
 export { courtOptionGroups, getCourtLabel }
+
+export const LEGAL_SEARCH_DEBOUNCE_MS = 300
+export const LEGAL_SEARCH_RECENT_SEARCHES_LIMIT = 5
+const legalSearchRecentSearchesKey = 'ormont.search.recentSearches'
+const courtShortcuts = [
+  { code: 'uksc', label: 'UKSC' },
+  { code: 'ewca/civ', label: 'EWCA Civ' },
+  { code: 'ewhc/admin', label: 'EWHC Admin' },
+]
 
 export function getLegalSearchStateLabel(state: LegalSearchState) {
   switch (state.status) {
@@ -84,36 +94,142 @@ export function getLegalSearchStateAfterInputChange(): LegalSearchState {
   return { status: 'idle' }
 }
 
+export function shouldRunLegalSearch(query: string) {
+  return query.trim().length > 0
+}
+
+export function getRecentLegalSearches(storage: Pick<Storage, 'getItem'> | undefined) {
+  if (!storage) return []
+
+  const storedSearches = storage.getItem(legalSearchRecentSearchesKey)
+  if (!storedSearches) return []
+
+  try {
+    const parsedSearches = JSON.parse(storedSearches) as unknown
+    if (!Array.isArray(parsedSearches)) return []
+
+    return dedupeRecentLegalSearches(
+      parsedSearches.filter((search): search is string => typeof search === 'string'),
+    )
+  } catch {
+    return []
+  }
+}
+
+export function writeRecentLegalSearch(
+  storage: Pick<Storage, 'getItem' | 'setItem'> | undefined,
+  query: string,
+) {
+  if (!storage) return []
+
+  const recentSearches = dedupeRecentLegalSearches([query, ...getRecentLegalSearches(storage)])
+  storage.setItem(legalSearchRecentSearchesKey, JSON.stringify(recentSearches))
+  return recentSearches
+}
+
+function dedupeRecentLegalSearches(searches: string[]) {
+  const seen = new Set<string>()
+  const recentSearches: string[] = []
+
+  for (const search of searches) {
+    const trimmedSearch = search.trim()
+    const normalizedSearch = trimmedSearch.toLowerCase()
+    if (!trimmedSearch || seen.has(normalizedSearch)) continue
+
+    seen.add(normalizedSearch)
+    recentSearches.push(trimmedSearch)
+    if (recentSearches.length >= LEGAL_SEARCH_RECENT_SEARCHES_LIMIT) break
+  }
+
+  return recentSearches
+}
+
 export function LegalSearchView() {
   const [query, setQuery] = useState(() => readInitialSearchQuery())
   const [court, setCourt] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [recentSearches, setRecentSearches] = useState(() =>
+    typeof window === 'undefined' ? [] : getRecentLegalSearches(window.sessionStorage),
+  )
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [state, setState] = useState<LegalSearchState>({ status: 'idle' })
+  const searchInputRef = useRef<HTMLInputElement | null>(null)
   const searchRequestId = useRef(0)
+  const autoSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const abortController = useRef<AbortController | null>(null)
+
+  function clearAutoSearchTimer() {
+    if (autoSearchTimer.current) {
+      clearTimeout(autoSearchTimer.current)
+      autoSearchTimer.current = null
+    }
+  }
+
+  function cancelInFlightSearch() {
+    abortController.current?.abort()
+    abortController.current = null
+  }
+
+  function resetSearchToIdle() {
+    clearAutoSearchTimer()
+    cancelInFlightSearch()
+    searchRequestId.current += 1
+    setState({ status: 'idle' })
+  }
+
+  function supersedeActiveSearch() {
+    cancelInFlightSearch()
+    searchRequestId.current += 1
+  }
+
+  function keepSearchInputFocused() {
+    searchInputRef.current?.focus()
+  }
+
+  useEffect(() => {
+    return () => {
+      clearAutoSearchTimer()
+      cancelInFlightSearch()
+      searchRequestId.current += 1
+    }
+  }, [])
 
   async function runSearch(
     searchQuery = query,
     searchFilters: LegalSearchRequestFilters = { court, dateFrom, dateTo },
+    options: { clearDebounce?: boolean } = {},
   ) {
+    if (options.clearDebounce ?? true) clearAutoSearchTimer()
+
     const trimmedQuery = searchQuery.trim()
-    if (!trimmedQuery) return
+    if (!trimmedQuery) {
+      resetSearchToIdle()
+      return
+    }
+    if (typeof window !== 'undefined') {
+      setRecentSearches(writeRecentLegalSearch(window.sessionStorage, trimmedQuery))
+    }
 
     const requestId = searchRequestId.current + 1
     searchRequestId.current = requestId
+    cancelInFlightSearch()
+    const requestAbortController = new AbortController()
+    abortController.current = requestAbortController
     setState({ status: 'loading', query: trimmedQuery })
 
     try {
       const response = await fetch('/api/search/fetch', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
+        signal: requestAbortController.signal,
         body: JSON.stringify(createLegalSearchFetchRequest(trimmedQuery, searchFilters)),
       })
 
       if (searchRequestId.current !== requestId) return
 
       if (!response.ok) {
+        if (abortController.current === requestAbortController) abortController.current = null
         setState({
           status: 'error',
           query: trimmedQuery,
@@ -122,24 +238,47 @@ export function LegalSearchView() {
               ? 'Find Case Law is currently unreachable. Cached results may still be available through standard search.'
               : 'Search could not complete the request.',
         })
+        keepSearchInputFocused()
         return
       }
 
       const body = (await response.json()) as LegalSearchFetchResponse
       if (searchRequestId.current !== requestId) return
+      if (abortController.current === requestAbortController) abortController.current = null
       setState(
         body.hits.length > 0
           ? { status: 'results', query: trimmedQuery, response: body }
           : { status: 'empty', query: trimmedQuery, hydrationQueued: body.hydrationQueued },
       )
+      keepSearchInputFocused()
     } catch {
       if (searchRequestId.current !== requestId) return
+      if (requestAbortController.signal.aborted) return
+      if (abortController.current === requestAbortController) abortController.current = null
       setState({
         status: 'error',
         query: trimmedQuery,
         message: 'Search could not reach the API.',
       })
+      keepSearchInputFocused()
     }
+  }
+
+  function scheduleAutoSearch(
+    searchQuery: string,
+    searchFilters: LegalSearchRequestFilters = { court, dateFrom, dateTo },
+  ) {
+    clearAutoSearchTimer()
+    if (!shouldRunLegalSearch(searchQuery)) {
+      resetSearchToIdle()
+      return
+    }
+
+    supersedeActiveSearch()
+    autoSearchTimer.current = setTimeout(() => {
+      autoSearchTimer.current = null
+      void runSearch(searchQuery, searchFilters, { clearDebounce: false })
+    }, LEGAL_SEARCH_DEBOUNCE_MS)
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -152,8 +291,17 @@ export function LegalSearchView() {
     setDateFrom(filters.dateFrom)
     setDateTo(filters.dateTo)
     setFiltersOpen(false)
-    searchRequestId.current += 1
-    setState({ status: 'idle' })
+    setState(getLegalSearchStateAfterInputChange())
+    scheduleAutoSearch(query, filters)
+  }
+
+  function removeFilter(filter: 'court' | 'dateFrom' | 'dateTo') {
+    const nextFilters = {
+      court: filter === 'court' ? '' : court,
+      dateFrom: filter === 'dateFrom' ? '' : dateFrom,
+      dateTo: filter === 'dateTo' ? '' : dateTo,
+    }
+    applyFilters(nextFilters)
   }
 
   function clearFilters() {
@@ -161,18 +309,32 @@ export function LegalSearchView() {
     setDateFrom('')
     setDateTo('')
     setFiltersOpen(false)
-    searchRequestId.current += 1
-    setState({ status: 'idle' })
+    setState(getLegalSearchStateAfterInputChange())
+    scheduleAutoSearch(query, { court: '', dateFrom: '', dateTo: '' })
   }
 
   function handleQueryChange(nextQuery: string) {
     setQuery(nextQuery)
-    searchRequestId.current += 1
     setState(getLegalSearchStateAfterInputChange())
+    scheduleAutoSearch(nextQuery)
+  }
+
+  function handleRecentSearch(nextQuery: string) {
+    setQuery(nextQuery)
+    setState(getLegalSearchStateAfterInputChange())
+    scheduleAutoSearch(nextQuery)
+  }
+
+  function handleCourtShortcut(nextCourt: string) {
+    const nextFilters = { court: nextCourt, dateFrom, dateTo }
+    setCourt(nextCourt)
+    setState(getLegalSearchStateAfterInputChange())
+    scheduleAutoSearch(query, nextFilters)
   }
 
   const courtLabel = getCourtLabel(court)
   const activeFilterCount = countActiveLegalSearchFilters({ court, dateFrom, dateTo })
+  const shouldShowIdleState = state.status === 'idle' && !shouldRunLegalSearch(query)
 
   return (
     <div className="shell-stack legal-search">
@@ -189,9 +351,11 @@ export function LegalSearchView() {
           courtLabel={courtLabel}
           dateFrom={dateFrom}
           dateTo={dateTo}
+          inputRef={searchInputRef}
           isSearching={state.status === 'loading'}
           onFilterClick={() => setFiltersOpen(true)}
           onQueryChange={handleQueryChange}
+          onRemoveFilter={removeFilter}
           onSubmit={handleSubmit}
           query={query}
         />
@@ -205,6 +369,16 @@ export function LegalSearchView() {
           onApply={applyFilters}
           onClear={clearFilters}
           onClose={() => setFiltersOpen(false)}
+        />
+      ) : null}
+
+      {shouldShowIdleState ? (
+        <SearchIdleState
+          courtLabel={courtLabel}
+          courtShortcuts={courtShortcuts}
+          recentSearches={recentSearches}
+          onCourtShortcut={handleCourtShortcut}
+          onRecentSearch={handleRecentSearch}
         />
       ) : null}
 
