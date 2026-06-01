@@ -32,12 +32,12 @@ function createDeferredResponse(): DeferredResponse {
   return { promise, resolve }
 }
 
-function createSearchResponse(hits: unknown[] = []) {
+function createSearchResponse(hits: unknown[] = [], options: { cached?: boolean } = {}) {
   return {
     ok: true,
     json: async () => ({
       hits,
-      cached: false,
+      cached: options.cached ?? false,
       indexedCount: 0,
       skippedCount: 0,
     }),
@@ -182,7 +182,7 @@ describe('LegalSearchView debounce lifecycle', () => {
           dateDecided: '2024-01-31',
           sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
         },
-      ]),
+      ], { cached: true }),
     )
     vi.stubGlobal('fetch', fetchMock)
     const rendered = renderLegalSearchView()
@@ -207,7 +207,29 @@ describe('LegalSearchView debounce lifecycle', () => {
       foregroundLiveResults: false,
       court: 'uksc',
     })
+    expect(container.textContent).toContain('1 recent case for UK Supreme Court')
     expect(container.textContent).toContain('Potanina v Potanin')
+  })
+
+  it('labels empty stored-only court browse without blank-query copy', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(createSearchResponse([], { cached: true }))
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await clickButton(container, 'UKSC')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(container.textContent).toContain('No recent cases found')
+    expect(container.textContent).toContain('No recent stored cases found for UK Supreme Court.')
+    expect(container.textContent).not.toContain('matched ""')
   })
 
   it('runs shortcut searches with a supported court filter', async () => {
