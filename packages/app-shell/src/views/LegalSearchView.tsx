@@ -63,17 +63,21 @@ export function selectJudgmentParagraphs(result: LegalSearchResult): CaseLawPara
   return result.paragraphs ?? []
 }
 
-export function createLegalSearchFetchRequest(query: string, filters: LegalSearchRequestFilters) {
+export function createLegalSearchFetchRequest(
+  query: string,
+  filters: LegalSearchRequestFilters,
+  options: { foregroundLiveResults?: boolean } = {},
+) {
   const trimmedQuery = query.trim()
   const request: {
     query: string
     court?: string
     dateFrom?: string
     dateTo?: string
-    foregroundLiveResults: true
+    foregroundLiveResults: boolean
   } = {
     query: trimmedQuery,
-    foregroundLiveResults: true,
+    foregroundLiveResults: options.foregroundLiveResults ?? true,
   }
   const court = filters.court.trim()
   const dateFrom = filters.dateFrom.trim()
@@ -96,6 +100,10 @@ export function getLegalSearchStateAfterInputChange(): LegalSearchState {
 
 export function shouldRunLegalSearch(query: string) {
   return query.trim().length > 0
+}
+
+export function shouldRunLegalSearchRequest(query: string, filters: LegalSearchRequestFilters) {
+  return shouldRunLegalSearch(query) || Boolean(filters.court.trim())
 }
 
 export function getRecentLegalSearches(storage: Pick<Storage, 'getItem'> | undefined) {
@@ -203,11 +211,15 @@ export function LegalSearchView() {
     if (options.clearDebounce ?? true) clearAutoSearchTimer()
 
     const trimmedQuery = searchQuery.trim()
-    if (!trimmedQuery) {
+    const storedOnlyBrowse = !trimmedQuery && Boolean(searchFilters.court.trim())
+    const browse = storedOnlyBrowse
+      ? { courtLabel: getCourtLabel(searchFilters.court) }
+      : undefined
+    if (!trimmedQuery && !storedOnlyBrowse) {
       resetSearchToIdle()
       return
     }
-    if (typeof window !== 'undefined') {
+    if (trimmedQuery && typeof window !== 'undefined') {
       setRecentSearches(writeRecentLegalSearch(window.sessionStorage, trimmedQuery))
     }
 
@@ -223,7 +235,11 @@ export function LegalSearchView() {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         signal: requestAbortController.signal,
-        body: JSON.stringify(createLegalSearchFetchRequest(trimmedQuery, searchFilters)),
+        body: JSON.stringify(
+          createLegalSearchFetchRequest(trimmedQuery, searchFilters, {
+            foregroundLiveResults: !storedOnlyBrowse,
+          }),
+        ),
       })
 
       if (searchRequestId.current !== requestId) return
@@ -247,8 +263,8 @@ export function LegalSearchView() {
       if (abortController.current === requestAbortController) abortController.current = null
       setState(
         body.hits.length > 0
-          ? { status: 'results', query: trimmedQuery, response: body }
-          : { status: 'empty', query: trimmedQuery, hydrationQueued: body.hydrationQueued },
+          ? { status: 'results', query: trimmedQuery, response: body, browse }
+          : { status: 'empty', query: trimmedQuery, hydrationQueued: body.hydrationQueued, browse },
       )
       keepSearchInputFocused()
     } catch {
@@ -269,7 +285,7 @@ export function LegalSearchView() {
     searchFilters: LegalSearchRequestFilters = { court, dateFrom, dateTo },
   ) {
     clearAutoSearchTimer()
-    if (!shouldRunLegalSearch(searchQuery)) {
+    if (!shouldRunLegalSearchRequest(searchQuery, searchFilters)) {
       resetSearchToIdle()
       return
     }
@@ -385,11 +401,19 @@ export function LegalSearchView() {
       {state.status === 'empty' ? (
         <SearchFeedbackPanel
           eyebrow={state.hydrationQueued ? 'Search queued' : 'No results'}
-          title={state.hydrationQueued ? 'Checking legal sources' : 'No sources found'}
+          title={
+            state.hydrationQueued
+              ? 'Checking legal sources'
+              : state.browse
+                ? 'No recent cases found'
+                : 'No sources found'
+          }
           body={
             state.hydrationQueued
               ? `Stored sources did not yet have "${state.query}". Public legal source hydration is queued; retry shortly for newly indexed results.`
-              : `No stored legal sources matched "${state.query}" with the selected filters.`
+              : state.browse
+                ? `No recent stored cases found for ${state.browse.courtLabel}.`
+                : `No stored legal sources matched "${state.query}" with the selected filters.`
           }
           tone="warning"
         />
@@ -406,7 +430,7 @@ export function LegalSearchView() {
       ) : null}
 
       {state.status === 'results' ? (
-        <SearchResults response={state.response} />
+        <SearchResults response={state.response} browse={state.browse} />
       ) : null}
     </div>
   )

@@ -156,6 +156,46 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('runs bounded filter-only stored court browse without calling Find Case Law', async () => {
+    const browseHits = Array.from({ length: 12 }, (_, index) => ({
+      ...hit,
+      id: `uksc-2024-${index + 1}`,
+      title: `Stored UKSC case ${index + 1}`,
+      dateDecided: `2024-01-${String(31 - index).padStart(2, '0')}`,
+    }))
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: browseHits,
+      query: '',
+      estimatedTotalHits: browseHits.length,
+      processingTimeMs: 1,
+    })
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    const app = createLegalSearchProxyRoutes(env)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: '', court: 'uksc', foregroundLiveResults: false }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { hits: Array<{ id: string }> }
+    expect(body).toMatchObject({
+      cached: true,
+    })
+    expect(body.hits.map((browseHit) => browseHit.id)).toEqual(
+      browseHits.slice(0, 10).map((browseHit) => browseHit.id),
+    )
+    expect(searchClientMock.search).toHaveBeenCalledWith(
+      { id: 'meili-client' },
+      'legal_authorities',
+      '',
+      { court: 'uksc', sourceType: 'judgment' },
+      { includeSnippets: true, limit: 10 },
+    )
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('queues Find Case Law hydration after a cache miss without returning provider results in the foreground', async () => {
     searchClientMock.search.mockResolvedValueOnce({
       hits: [],
@@ -815,7 +855,7 @@ describe('createLegalSearchProxyRoutes', () => {
     })
     const emptyQueryResponse = await app.request('/api/search/fetch', {
       method: 'POST',
-      body: JSON.stringify({ query: '   ', court: 'uksc' }),
+      body: JSON.stringify({ query: '   ' }),
       headers: { 'content-type': 'application/json' },
     })
 

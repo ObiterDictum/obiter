@@ -276,6 +276,29 @@ describe('Legal search client', () => {
     })
   })
 
+  it('passes explicit result limits to the search provider', async () => {
+    const searchMock = vi.fn(async () => ({
+      hits: [authority()],
+      query: '',
+      estimatedTotalHits: 1,
+      processingTimeMs: 1,
+    }))
+    const client = {
+      index: () => ({ search: searchMock }),
+    }
+
+    await search(client, 'legal_authorities', '', { court: 'uksc' }, { limit: 10 })
+
+    expect(searchMock).toHaveBeenCalledWith(
+      '',
+      expect.objectContaining({
+        filter: ['court = "uksc"'],
+        limit: 10,
+        sort: ['dateDecided:desc'],
+      }),
+    )
+  })
+
   it('promotes exact citation and identifier matches before newer partial hits', async () => {
     const newerPartial = authority({
       id: 'uksc-2026-99',
@@ -427,6 +450,7 @@ describe('Legal search client', () => {
 
     expect(snippets).toEqual([
       {
+        matchedTerms: ['potanina', 'financial'],
         paragraphNumber: 2,
         text: 'The court considered Potanina and the effect of prior financial remedy proceedings.',
       },
@@ -481,10 +505,12 @@ describe('Legal search client', () => {
 
     expect(snippets).toEqual([
       {
+        matchedTerms: ['potanina'],
         paragraphNumber: 1,
         text: 'Potanina appears in the first paragraph.',
       },
       {
+        matchedTerms: ['financial', 'remedy'],
         paragraphNumber: 2,
         text: 'Financial remedy proceedings are discussed in the second paragraph.',
       },

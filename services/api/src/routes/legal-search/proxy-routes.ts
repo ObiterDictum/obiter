@@ -37,6 +37,7 @@ interface LegalSearchProxyRouteVariables {
 }
 
 const storedSearchTimeoutMs = 350
+const storedCourtBrowseLimit = 10
 
 export function createLegalSearchProxyRoutes(
   env: ApiEnv,
@@ -52,7 +53,11 @@ export function createLegalSearchProxyRoutes(
     const requestId = c.get('requestId')
     const parsed = legalFetchRequestSchema.safeParse(await c.req.json().catch(() => null))
 
-    if (!parsed.success || !isSupportedFindCaseLawRequest(parsed.data)) {
+    if (
+      !parsed.success ||
+      !isSupportedFindCaseLawRequest(parsed.data) ||
+      !isSupportedFetchSearchMode(parsed.data)
+    ) {
       return c.json(
         apiError('validation_failed', 'Fetch search request is invalid.', requestId),
         400,
@@ -60,11 +65,13 @@ export function createLegalSearchProxyRoutes(
     }
 
     const filters = toSearchFilters(parsed.data)
+    const storedOnlyBrowse = isStoredOnlyBrowse(parsed.data)
     const cached = await searchStoredAuthorities(
       searchClient,
       env.legalAuthoritiesIndex,
       parsed.data.query,
       filters,
+      storedOnlyBrowse ? storedCourtBrowseLimit : undefined,
     )
 
     if (cached.hits.length > 0) {
@@ -86,7 +93,7 @@ export function createLegalSearchProxyRoutes(
     )
     if (storedDocuments.length > 0) {
       const rankedStoredDocuments = rankLegalSearchHitsByExactMatch(
-        storedDocuments,
+        limitStoredBrowseHits(storedDocuments, storedOnlyBrowse),
         parsed.data.query,
       )
 
@@ -99,6 +106,10 @@ export function createLegalSearchProxyRoutes(
           0,
         ),
       )
+    }
+
+    if (!parsed.data.query.trim()) {
+      return c.json(toFetchResponse([], parsed.data.query, true, 0, 0))
     }
 
     if (!parsed.data.foregroundLiveResults) {
@@ -282,19 +293,40 @@ export function createLegalSearchProxyRoutes(
   return app
 }
 
+function isSupportedFetchSearchMode(request: LegalFetchRequest) {
+  return Boolean(request.query.trim()) || Boolean(request.court)
+}
+
+function isStoredOnlyBrowse(request: LegalFetchRequest) {
+  return !request.query.trim() && Boolean(request.court)
+}
+
+function limitStoredBrowseHits<T>(hits: T[], storedOnlyBrowse: boolean) {
+  return storedOnlyBrowse ? hits.slice(0, storedCourtBrowseLimit) : hits
+}
+
 async function searchStoredAuthorities(
   searchClient: Parameters<typeof search>[0],
   indexName: string,
   query: string,
   filters: LegalSearchFilters,
+  limit?: number,
 ) {
   try {
+    const searchOptions = typeof limit === 'number'
+      ? { includeSnippets: true, limit }
+      : { includeSnippets: true }
     const result = await withTimeout(
-      search(searchClient, indexName, query, filters, { includeSnippets: true }),
+      search(searchClient, indexName, query, filters, searchOptions),
       storedSearchTimeoutMs,
     )
 
-    if (result) return result
+    if (result) {
+      return {
+        ...result,
+        hits: typeof limit === 'number' ? result.hits.slice(0, limit) : result.hits,
+      }
+    }
   } catch {
   }
 

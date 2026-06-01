@@ -7,6 +7,7 @@ export interface CaseLawParagraph {
 export interface CaseLawSnippet {
   paragraphNumber: number
   text: string
+  matchedTerms: string[]
 }
 
 export interface LegalSearchResult {
@@ -28,6 +29,10 @@ export interface LegalSearchFetchResponse {
   hydrationQueued?: boolean
 }
 
+export interface LegalSearchBrowseContext {
+  courtLabel: string
+}
+
 export interface LegalSearchRequestFilters {
   court: string
   dateFrom: string
@@ -47,8 +52,18 @@ export interface CourtOptionGroup {
 export type LegalSearchState =
   | { status: 'idle' }
   | { status: 'loading'; query: string }
-  | { status: 'results'; query: string; response: LegalSearchFetchResponse }
-  | { status: 'empty'; query: string; hydrationQueued?: boolean }
+  | {
+      status: 'results'
+      query: string
+      response: LegalSearchFetchResponse
+      browse?: LegalSearchBrowseContext
+    }
+  | {
+      status: 'empty'
+      query: string
+      hydrationQueued?: boolean
+      browse?: LegalSearchBrowseContext
+    }
   | { status: 'error'; query: string; message: string }
 
 export const courtOptionGroups: CourtOptionGroup[] = [
