@@ -11,20 +11,20 @@ import type { LegalSearchHit } from './index'
 
 function authority(overrides: Record<string, unknown> = {}) {
   return {
-    id: 'uksc-2024-1',
-    title: 'R v Test',
-    neutralCitation: '[2024] UKSC 1',
+    id: 'uksc-2024-3',
+    title: 'Potanina v Potanin',
+    neutralCitation: '[2024] UKSC 3',
     court: 'uksc',
     jurisdiction: 'england-and-wales',
-    dateDecided: '2024-01-17',
+    dateDecided: '2024-01-31',
     sourceType: 'judgment' as const,
-    sourceUrl: 'https://www.supremecourt.uk/cases/uksc-2024-001.html',
+    sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
     paragraphs: [
       {
-        id: 'uksc-2024-1-p1',
-        documentId: 'uksc-2024-1',
+        id: 'uksc-2024-3-p1',
+        documentId: 'uksc-2024-3',
         paragraphNumber: 1,
-        text: 'The appeal is dismissed.',
+        text: 'The application for permission to bring proceedings under Part III is allowed.',
       },
     ],
     ...overrides,
@@ -231,7 +231,7 @@ describe('Legal search client', () => {
 
     expect(result.indexedCount).toBe(0)
     expect(result.failedCount).toBe(1)
-    expect(result.errors[0]?.recordId).toBe('uksc-2024-1')
+    expect(result.errors[0]?.recordId).toBe('uksc-2024-3')
     expect(addDocuments).not.toHaveBeenCalled()
   })
 
@@ -253,7 +253,7 @@ describe('Legal search client', () => {
       dateTo: '2024-12-31',
     })
 
-    expect(result.hits[0]?.neutralCitation).toBe('[2024] UKSC 1')
+    expect(result.hits[0]?.neutralCitation).toBe('[2024] UKSC 3')
     expect(result.hits[0]).not.toHaveProperty('paragraphs')
     expect(searchMock).toHaveBeenCalledWith('test', {
       filter: [
@@ -290,10 +290,12 @@ describe('Legal search client', () => {
       dateDecided: '2024-01-31',
     })
     const exactIdentifier = authority({
-      id: 'ewca-civ-2025-7',
-      title: 'Example v Test',
-      neutralCitation: '[2025] EWCA Civ 7',
-      dateDecided: '2025-02-01',
+      id: 'ewca-civ-2026-659',
+      title: 'Tinkler v Esken Ltd',
+      neutralCitation: '[2026] EWCA Civ 659',
+      court: 'ewca-civ',
+      dateDecided: '2026-05-22',
+      sourceUrl: 'https://caselaw.nationalarchives.gov.uk/ewca/civ/2026/659',
     })
     const searchMock = vi
       .fn()
@@ -314,14 +316,14 @@ describe('Legal search client', () => {
     }
 
     const citationResult = await search(client, 'legal_authorities', '[2024] UKSC 3')
-    const idResult = await search(client, 'legal_authorities', 'ewca-civ-2025-7')
+    const idResult = await search(client, 'legal_authorities', 'ewca-civ-2026-659')
 
     expect(citationResult.hits.map((hit) => hit.id)).toEqual([
       'uksc-2024-3',
       'uksc-2026-99',
     ])
     expect(idResult.hits.map((hit) => hit.id)).toEqual([
-      'ewca-civ-2025-7',
+      'ewca-civ-2026-659',
       'uksc-2026-99',
     ])
   })
@@ -407,14 +409,14 @@ describe('Legal search client', () => {
       authority({
         paragraphs: [
           {
-            id: 'uksc-2024-1-p1',
-            documentId: 'uksc-2024-1',
+            id: 'uksc-2024-3-p1',
+            documentId: 'uksc-2024-3',
             paragraphNumber: 1,
             text: 'This opening paragraph does not contain the party name.',
           },
           {
-            id: 'uksc-2024-1-p2',
-            documentId: 'uksc-2024-1',
+            id: 'uksc-2024-3-p2',
+            documentId: 'uksc-2024-3',
             paragraphNumber: 2,
             text: 'The court considered Potanina and the effect of prior financial remedy proceedings.',
           },
@@ -437,8 +439,8 @@ describe('Legal search client', () => {
         title: 'Potanina v Potanin',
         paragraphs: [
           {
-            id: 'uksc-2024-1-p1',
-            documentId: 'uksc-2024-1',
+            id: 'uksc-2024-3-p1',
+            documentId: 'uksc-2024-3',
             paragraphNumber: 1,
             text: 'This paragraph explains a procedural point without the searched terms.',
           },
@@ -455,20 +457,20 @@ describe('Legal search client', () => {
       authority({
         paragraphs: [
           {
-            id: 'uksc-2024-1-p1',
-            documentId: 'uksc-2024-1',
+            id: 'uksc-2024-3-p1',
+            documentId: 'uksc-2024-3',
             paragraphNumber: 1,
             text: 'Potanina appears in the first paragraph.',
           },
           {
-            id: 'uksc-2024-1-p2',
-            documentId: 'uksc-2024-1',
+            id: 'uksc-2024-3-p2',
+            documentId: 'uksc-2024-3',
             paragraphNumber: 2,
             text: 'Financial remedy proceedings are discussed in the second paragraph.',
           },
           {
-            id: 'uksc-2024-1-p3',
-            documentId: 'uksc-2024-1',
+            id: 'uksc-2024-3-p3',
+            documentId: 'uksc-2024-3',
             paragraphNumber: 3,
             text: 'A third Potanina reference should not exceed the result-card cap.',
           },
@@ -495,8 +497,8 @@ describe('Legal search client', () => {
         authority({
           paragraphs: [
             {
-              id: 'uksc-2024-1-p7',
-              documentId: 'uksc-2024-1',
+              id: 'uksc-2024-3-p7',
+              documentId: 'uksc-2024-3',
               paragraphNumber: 7,
               text: 'Potanina appears in this indexed paragraph.',
             },
@@ -516,7 +518,7 @@ describe('Legal search client', () => {
     })
 
     expect(result.hits[0]).toMatchObject({
-      id: 'uksc-2024-1',
+      id: 'uksc-2024-3',
       snippets: [{ paragraphNumber: 7, text: 'Potanina appears in this indexed paragraph.' }],
     })
     expect(result.hits[0]).not.toHaveProperty('paragraphs')
@@ -575,9 +577,9 @@ describe('Legal search client', () => {
       index: () => ({ getDocument: getDocumentMock }),
     }
 
-    const result = await getDocument(client, 'legal_authorities', 'uksc-2024-1')
+    const result = await getDocument(client, 'legal_authorities', 'uksc-2024-3')
 
     expect(result.paragraphs).toEqual(authority().paragraphs)
-    expect(getDocumentMock).toHaveBeenCalledWith('uksc-2024-1')
+    expect(getDocumentMock).toHaveBeenCalledWith('uksc-2024-3')
   })
 })

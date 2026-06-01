@@ -8,44 +8,44 @@ import {
 describe('Legal authority schemas', () => {
   it('validates authority records with paragraphs', () => {
     const authority = LegalAuthoritySchema.parse({
-      id: 'uksc-2024-1',
-      title: 'Test Authority',
-      neutralCitation: '[2024] UKSC 1',
+      id: 'uksc-2024-3',
+      title: 'Potanina v Potanin',
+      neutralCitation: '[2024] UKSC 3',
       court: 'uksc',
       jurisdiction: 'england-and-wales',
-      dateDecided: '2024-01-17',
+      dateDecided: '2024-01-31',
       sourceType: 'judgment',
-      sourceUrl: 'https://www.supremecourt.uk/cases/uksc-2024-001.html',
+      sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
       paragraphs: [
         {
-          id: 'uksc-2024-1-p1',
-          documentId: 'uksc-2024-1',
+          id: 'uksc-2024-3-p1',
+          documentId: 'uksc-2024-3',
           paragraphNumber: 1,
-          text: 'The appeal concerns a public law issue.',
+          text: 'The application for permission to bring proceedings under Part III is allowed.',
         },
       ],
     })
 
-    expect(authority.neutralCitation).toBe('[2024] UKSC 1')
+    expect(authority.neutralCitation).toBe('[2024] UKSC 3')
     expect(authority.paragraphs).toHaveLength(1)
   })
 
   it('validates summary records without paragraph text', () => {
     const summary = LegalAuthoritySummarySchema.parse({
-      id: 'uksc-2024-1',
-      title: 'Test Authority',
-      neutralCitation: '[2024] UKSC 1',
+      id: 'uksc-2024-3',
+      title: 'Potanina v Potanin',
+      neutralCitation: '[2024] UKSC 3',
       court: 'uksc',
       jurisdiction: 'england-and-wales',
-      dateDecided: '2024-01-17',
+      dateDecided: '2024-01-31',
       sourceType: 'judgment',
-      sourceUrl: 'https://www.supremecourt.uk/cases/uksc-2024-001.html',
+      sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
       paragraphs: [
         {
-          id: 'uksc-2024-1-p1',
-          documentId: 'uksc-2024-1',
+          id: 'uksc-2024-3-p1',
+          documentId: 'uksc-2024-3',
           paragraphNumber: 1,
-          text: 'This text must not be returned in search summaries.',
+          text: 'The application for permission to bring proceedings under Part III is allowed.',
         },
       ],
     })
@@ -73,7 +73,7 @@ describe('Legal authority schemas', () => {
       LegalAuthoritySchema.parse({
         id: '',
         title: 'Broken Authority',
-        neutralCitation: '[2024] UKSC 1',
+        neutralCitation: '[2024] UKSC 3',
         court: 'uksc',
         jurisdiction: 'england-and-wales',
         dateDecided: '17 January 2024',

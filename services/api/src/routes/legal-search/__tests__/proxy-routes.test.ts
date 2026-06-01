@@ -38,7 +38,7 @@ const env: ApiEnv = {
 }
 
 const hit = {
-  id: 'uksc-2024-1',
+  id: 'uksc-2024-3',
   title: 'Potanina v Potanin',
   neutralCitation: '[2024] UKSC 3',
   court: 'uksc',
@@ -119,10 +119,10 @@ describe('createLegalSearchProxyRoutes', () => {
           ...hit,
           paragraphs: [
             {
-              id: 'uksc-2024-1-p1',
-              documentId: 'uksc-2024-1',
+              id: 'uksc-2024-3-p1',
+              documentId: 'uksc-2024-3',
               paragraphNumber: 1,
-              text: 'Cached search responses should stay summary-only.',
+              text: 'The application for permission to bring proceedings under Part III is allowed.',
             },
           ],
         },
@@ -613,8 +613,8 @@ describe('createLegalSearchProxyRoutes', () => {
                   ...hit,
                   paragraphs: [
                     {
-                      id: 'uksc-2024-1-p1',
-                      documentId: 'uksc-2024-1',
+                      id: 'uksc-2024-3-p1',
+                      documentId: 'uksc-2024-3',
                       paragraphNumber: 1,
                       text: 'Stored paragraph text should not be scanned by fallback search.',
                     },
@@ -644,7 +644,7 @@ describe('createLegalSearchProxyRoutes', () => {
 
     const results = await store.search('Potanina', { court: 'uksc' })
 
-    expect(results).toMatchObject([{ id: 'uksc-2024-1' }])
+    expect(results).toMatchObject([{ id: 'uksc-2024-3' }])
     expect(client.query).toHaveBeenCalledWith('begin')
     expect(client.query).toHaveBeenCalledWith('select set_config($1, $2, true)', [
       'statement_timeout',
@@ -865,14 +865,14 @@ describe('createLegalSearchProxyRoutes', () => {
     })
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(
-        `<feed><entry><title>Example v Test</title><link href="https://caselaw.nationalarchives.gov.uk/ewca/civ/2024/7" rel="alternate"/><published>2024-01-31T00:00:00Z</published><tna:identifier slug="ewca/civ/2024/7" type="ukncn">[2024] EWCA Civ 7</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry></feed>`,
+        `<feed><entry><title>Tinkler v Esken Ltd</title><link href="https://caselaw.nationalarchives.gov.uk/ewca/civ/2026/659" rel="alternate"/><published>2026-05-22T00:00:00Z</published><tna:identifier slug="ewca/civ/2026/659" type="ukncn">[2026] EWCA Civ 659</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry></feed>`,
       ),
     )
     const app = createLegalSearchProxyRoutes(env)
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
-      body: JSON.stringify({ query: 'Example', court: 'uksc' }),
+      body: JSON.stringify({ query: 'Tinkler', court: 'uksc' }),
       headers: { 'content-type': 'application/json' },
     })
 
@@ -902,7 +902,7 @@ describe('createLegalSearchProxyRoutes', () => {
       .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(
         new Response(
-          `<feed><entry><title>Admin Example v Test</title><link href="https://caselaw.nationalarchives.gov.uk/ewhc/admin/2026/1157" rel="alternate"/><published>2026-05-20T00:00:00Z</published><tna:identifier slug="ewhc/admin/2026/1157" type="ukncn">[2026] EWHC 1157 (Admin)</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry></feed>`,
+          `<feed><entry><title>R (Isherwood) v Welsh Ministers</title><link href="https://caselaw.nationalarchives.gov.uk/ewhc/admin/2026/1157" rel="alternate"/><published>2026-05-20T00:00:00Z</published><tna:identifier slug="ewhc/admin/2026/1157" type="ukncn">[2026] EWHC 1157 (Admin)</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry></feed>`,
         ),
       )
       .mockResolvedValueOnce(
@@ -959,7 +959,7 @@ describe('createLegalSearchProxyRoutes', () => {
         .spyOn(globalThis, 'fetch')
         .mockResolvedValueOnce(
           new Response(
-            `<feed><entry><title>Example v Test</title><link href="https://caselaw.nationalarchives.gov.uk${documentUri}" rel="alternate"/><published>2024-02-01T00:00:00Z</published><tna:identifier slug="${apiCourt}/2024/1" type="ukncn">${citation}</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry></feed>`,
+          `<feed><entry><title>Find Case Law ${storedCourt} retrieval fixture</title><link href="https://caselaw.nationalarchives.gov.uk${documentUri}" rel="alternate"/><published>2024-02-01T00:00:00Z</published><tna:identifier slug="${apiCourt}/2024/1" type="ukncn">${citation}</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry></feed>`,
           ),
         )
         .mockResolvedValueOnce(
@@ -1260,7 +1260,7 @@ describe('createLegalSearchProxyRoutes', () => {
     vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(
         new Response(
-          `<feed><entry><title>Example v Test</title><link href="https://caselaw.nationalarchives.gov.uk/ewca/civ/2024/7" rel="alternate"/><published>2024-01-31T00:00:00Z</published><tna:identifier slug="ewca/civ/2024/7" type="ukncn">[2024] EWCA Civ 7</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry><entry><title>Admin Example v Test</title><link href="https://caselaw.nationalarchives.gov.uk/ewhc/admin/2026/1157" rel="alternate"/><published>2026-05-20T00:00:00Z</published><tna:identifier slug="ewhc/admin/2026/1157" type="ukncn">[2026] EWHC 1157 (Admin)</tna:identifier><tna:contenthash>def456</tna:contenthash></entry></feed>`,
+          `<feed><entry><title>Tinkler v Esken Ltd</title><link href="https://caselaw.nationalarchives.gov.uk/ewca/civ/2026/659" rel="alternate"/><published>2026-05-22T00:00:00Z</published><tna:identifier slug="ewca/civ/2026/659" type="ukncn">[2026] EWCA Civ 659</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry><entry><title>R (Isherwood) v Welsh Ministers</title><link href="https://caselaw.nationalarchives.gov.uk/ewhc/admin/2026/1157" rel="alternate"/><published>2026-05-20T00:00:00Z</published><tna:identifier slug="ewhc/admin/2026/1157" type="ukncn">[2026] EWHC 1157 (Admin)</tna:identifier><tna:contenthash>def456</tna:contenthash></entry></feed>`,
         ),
       )
       .mockResolvedValueOnce(
@@ -1295,8 +1295,8 @@ describe('createLegalSearchProxyRoutes', () => {
         'legal_authorities',
         expect.arrayContaining([
           expect.objectContaining({
-            id: 'ewca-civ-2024-7',
-            neutralCitation: '[2024] EWCA Civ 7',
+            id: 'ewca-civ-2026-659',
+            neutralCitation: '[2026] EWCA Civ 659',
             court: 'ewca-civ',
           }),
           expect.objectContaining({
@@ -1364,20 +1364,20 @@ describe('createLegalSearchProxyRoutes', () => {
       ...hit,
       paragraphs: [
         {
-          id: 'uksc-2024-1-p1',
-          documentId: 'uksc-2024-1',
+          id: 'uksc-2024-3-p1',
+          documentId: 'uksc-2024-3',
           paragraphNumber: 1,
-          text: 'Stored judgment paragraph text.',
+          text: 'The application for permission to bring proceedings under Part III is allowed.',
         },
       ],
     })
     const app = createLegalSearchProxyRoutes(env)
 
-    const response = await app.request('/api/search/documents/uksc-2024-1')
+    const response = await app.request('/api/search/documents/uksc-2024-3')
 
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({
-      document: { id: 'uksc-2024-1', paragraphs: [{ paragraphNumber: 1 }] },
+      document: { id: 'uksc-2024-3', paragraphs: [{ paragraphNumber: 1 }] },
     })
   })
 
@@ -1390,7 +1390,7 @@ describe('createLegalSearchProxyRoutes', () => {
     })
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(
-        `<html><body><h1>Example v Test</h1><h2><span>Neutral Citation Number</span>[2026] EWHC 1246 (Admin)</h2><article><div class="judgment-header__date">Date: 22/05/2026</div><p>This live judgment paragraph is long enough to render in the case reader.</p></article></body></html>`,
+        `<html><body><h1>Secretary of State for the Home Department v Miah</h1><h2><span>Neutral Citation Number</span>[2026] EWHC 1246 (Admin)</h2><article><div class="judgment-header__date">Date: 22/05/2026</div><p>The court considered the administrative law challenge and the evidence before the Secretary of State.</p></article></body></html>`,
       ),
     )
     const app = createLegalSearchProxyRoutes(env)
@@ -1401,7 +1401,7 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(await response.json()).toMatchObject({
       document: {
         id: 'ewhc-admin-2026-1246',
-        title: 'Example v Test',
+        title: 'Secretary of State for the Home Department v Miah',
         neutralCitation: '[2026] EWHC 1246 (Admin)',
         court: 'ewhc-admin',
         dateDecided: '2026-05-22',
@@ -1420,7 +1420,7 @@ describe('createLegalSearchProxyRoutes', () => {
   it('stores direct live document fallback in Ormont source storage', async () => {
     searchClientMock.search.mockResolvedValue({
       hits: [],
-      query: 'Example',
+      query: 'Miah',
       estimatedTotalHits: 0,
       processingTimeMs: 1,
     })
@@ -1432,7 +1432,7 @@ describe('createLegalSearchProxyRoutes', () => {
     })
     const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
       new Response(
-        `<html><body><h1>Example v Test</h1><h2><span>Neutral Citation Number</span>[2026] EWHC 1246 (Admin)</h2><article><div class="judgment-header__date">Date: 22/05/2026</div><p>This live judgment paragraph is long enough to render in the case reader.</p></article></body></html>`,
+        `<html><body><h1>Secretary of State for the Home Department v Miah</h1><h2><span>Neutral Citation Number</span>[2026] EWHC 1246 (Admin)</h2><article><div class="judgment-header__date">Date: 22/05/2026</div><p>The court considered the administrative law challenge and the evidence before the Secretary of State.</p></article></body></html>`,
       ),
     )
     const app = createLegalSearchProxyRoutes(env)
@@ -1461,7 +1461,7 @@ describe('createLegalSearchProxyRoutes', () => {
 
     const searchResponse = await app.request('/api/search/fetch', {
       method: 'POST',
-      body: JSON.stringify({ query: 'Example', court: 'ewhc/admin' }),
+      body: JSON.stringify({ query: 'Miah', court: 'ewhc/admin' }),
       headers: { 'content-type': 'application/json' },
     })
 
@@ -1491,7 +1491,7 @@ describe('createLegalSearchProxyRoutes', () => {
     }
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response(
-        `<html><body><h1>Example v Test</h1><h2><span>Neutral Citation Number</span>[2026] EWHC 1246 (Admin)</h2><article><div class="judgment-header__date">Date: 22/05/2026</div><p>This live judgment paragraph is long enough to render in the case reader.</p></article></body></html>`,
+        `<html><body><h1>Secretary of State for the Home Department v Miah</h1><h2><span>Neutral Citation Number</span>[2026] EWHC 1246 (Admin)</h2><article><div class="judgment-header__date">Date: 22/05/2026</div><p>The court considered the administrative law challenge and the evidence before the Secretary of State.</p></article></body></html>`,
       ),
     )
     const app = createLegalSearchProxyRoutes(env, sourceStore)
@@ -1550,8 +1550,8 @@ describe('createLegalSearchProxyRoutes', () => {
           summary: hit,
           provider: {
             documentUri: '/d-source-record',
-            sourceUri: '/uksc/2024/1',
-            xmlUri: '/uksc/2024/1/data.xml',
+            sourceUri: '/uksc/2024/3',
+            xmlUri: '/uksc/2024/3/data.xml',
             pdfUri: null,
             contentHash: 'source-record-hash',
             rawAtomEntry: '<entry />',
@@ -1567,7 +1567,7 @@ describe('createLegalSearchProxyRoutes', () => {
     )
     const app = createLegalSearchProxyRoutes(env, sourceStore)
 
-    const response = await app.request('/api/search/documents/uksc-2024-1')
+    const response = await app.request('/api/search/documents/uksc-2024-3')
 
     expect(response.status).toBe(503)
     expect(await response.json()).toMatchObject({
@@ -1721,14 +1721,14 @@ describe('Find Case Law parsing', () => {
   it('extracts mixed-case Court of Appeal tokens and High Court divisions', () => {
     expect(
       parseFindCaseLawAtom(
-        '<feed><entry><title>Example v Test</title><link href="https://caselaw.nationalarchives.gov.uk/ewca/civ/2024/7" rel="alternate"/><published>2024-01-31</published><tna:identifier slug="ewca/civ/2024/7" type="ukncn">[2024] EWCA Civ 7</tna:identifier></entry><entry><title>Criminal Example v Test</title><link href="https://caselaw.nationalarchives.gov.uk/ewca/crim/2025/12" rel="alternate"/><published>2025-02-14</published><tna:identifier slug="ewca/crim/2025/12" type="ukncn">[2025] EWCA Crim 12</tna:identifier></entry><entry><title>Admin Example v Test</title><link href="https://caselaw.nationalarchives.gov.uk/ewhc/admin/2026/1157" rel="alternate"/><published>2026-05-20</published><tna:identifier slug="ewhc/admin/2026/1157" type="ukncn">[2026] EWHC 1157 (Admin)</tna:identifier></entry></feed>',
+        '<feed><entry><title>Tinkler v Esken Ltd</title><link href="https://caselaw.nationalarchives.gov.uk/ewca/civ/2026/659" rel="alternate"/><published>2026-05-22</published><tna:identifier slug="ewca/civ/2026/659" type="ukncn">[2026] EWCA Civ 659</tna:identifier></entry><entry><title>R v Brough</title><link href="https://caselaw.nationalarchives.gov.uk/ewca/crim/2025/12" rel="alternate"/><published>2025-02-14</published><tna:identifier slug="ewca/crim/2025/12" type="ukncn">[2025] EWCA Crim 12</tna:identifier></entry><entry><title>R (Isherwood) v Welsh Ministers</title><link href="https://caselaw.nationalarchives.gov.uk/ewhc/admin/2026/1157" rel="alternate"/><published>2026-05-20</published><tna:identifier slug="ewhc/admin/2026/1157" type="ukncn">[2026] EWHC 1157 (Admin)</tna:identifier></entry></feed>',
         { query: 'Example' },
       ),
     ).toMatchObject([
       {
-        neutralCitation: '[2024] EWCA Civ 7',
+        neutralCitation: '[2026] EWCA Civ 659',
         court: 'ewca-civ',
-        uri: '/ewca/civ/2024/7',
+        uri: '/ewca/civ/2026/659',
       },
       {
         neutralCitation: '[2025] EWCA Crim 12',
@@ -1779,12 +1779,12 @@ describe('Find Case Law parsing', () => {
   it('parses Atom fallbacks, encoded content, and malformed-entry skips conservatively', () => {
     expect(
       parseFindCaseLawAtom(
-        '<feed><entry><title><![CDATA[Example &amp; Test [2024] UKSC 3]]></title><id>uksc/2024/3</id><updated>2024-01-31T00:00:00Z</updated></entry><entry><title>Missing Citation</title><id>/unknown/2024/4</id><updated>2024-01-31T00:00:00Z</updated></entry></feed>',
-        { query: 'Example' },
+        '<feed><entry><title><![CDATA[Potanina &amp; Potanin [2024] UKSC 3]]></title><id>uksc/2024/3</id><updated>2024-01-31T00:00:00Z</updated></entry><entry><title>Missing Citation</title><id>/unknown/2024/4</id><updated>2024-01-31T00:00:00Z</updated></entry></feed>',
+        { query: 'Potanina' },
       ),
     ).toMatchObject([
       {
-        title: 'Example & Test [2024] UKSC 3',
+        title: 'Potanina & Potanin [2024] UKSC 3',
         neutralCitation: '[2024] UKSC 3',
         court: 'uksc',
         uri: '/uksc/2024/3',
@@ -1795,17 +1795,17 @@ describe('Find Case Law parsing', () => {
 
   it('applies jurisdiction and date boundaries when parsing Atom entries', () => {
     const xml =
-      '<feed><entry><title>First v Test</title><id>/uksc/2024/1</id><published>2024-01-01</published><tna:identifier slug="uksc/2024/1" type="ukncn">[2024] UKSC 1</tna:identifier></entry><entry><title>Second v Test</title><id>/uksc/2024/2</id><published>2024-02-01</published><tna:identifier slug="uksc/2024/2" type="ukncn">[2024] UKSC 2</tna:identifier></entry></feed>'
+      '<feed><entry><title>R (Finch) v Surrey County Council</title><id>/uksc/2024/20</id><published>2024-06-20</published><tna:identifier slug="uksc/2024/20" type="ukncn">[2024] UKSC 20</tna:identifier></entry><entry><title>Potanina v Potanin</title><id>/uksc/2024/3</id><published>2024-01-31</published><tna:identifier slug="uksc/2024/3" type="ukncn">[2024] UKSC 3</tna:identifier></entry></feed>'
 
     expect(
       parseFindCaseLawAtom(xml, {
-        query: 'Test',
+        query: 'Potanina',
         jurisdiction: 'england-and-wales',
-        dateFrom: '2024-02-01',
-        dateTo: '2024-02-01',
+        dateFrom: '2024-01-31',
+        dateTo: '2024-01-31',
       }),
-    ).toMatchObject([{ neutralCitation: '[2024] UKSC 2' }])
-    expect(parseFindCaseLawAtom(xml, { query: 'Test', jurisdiction: 'scotland' })).toEqual([])
+    ).toMatchObject([{ neutralCitation: '[2024] UKSC 3' }])
+    expect(parseFindCaseLawAtom(xml, { query: 'Potanina', jurisdiction: 'scotland' })).toEqual([])
   })
 
   it('extracts all clean judgment paragraphs from noisy HTML', () => {
@@ -1859,15 +1859,15 @@ describe('Find Case Law parsing', () => {
   it('uses stable tna document URIs while preserving the human source URL', () => {
     expect(
       parseFindCaseLawAtom(
-        '<feed><entry><title>Jarndyce v Jarndyce</title><id>https://caselaw.nationalarchives.gov.uk/id/d-f11e093f-8a53-4e43-8dd8-1531b5d8f018</id><link href="https://caselaw.nationalarchives.gov.uk/uksc/2024/123" rel="alternate"/><published>2025-04-30</published><tna:uri>d-f11e093f-8a53-4e43-8dd8-1531b5d8f018</tna:uri><tna:identifier slug="uksc/2024/123" type="ukncn">[2024] UKSC 123</tna:identifier></entry></feed>',
-        { query: 'Jarndyce' },
+        '<feed><entry><title>Potanina v Potanin</title><id>https://caselaw.nationalarchives.gov.uk/id/d-f11e093f-8a53-4e43-8dd8-1531b5d8f018</id><link href="https://caselaw.nationalarchives.gov.uk/uksc/2024/3" rel="alternate"/><published>2024-01-31</published><tna:uri>d-f11e093f-8a53-4e43-8dd8-1531b5d8f018</tna:uri><tna:identifier slug="uksc/2024/3" type="ukncn">[2024] UKSC 3</tna:identifier></entry></feed>',
+        { query: 'Potanina' },
       ),
     ).toMatchObject([
       {
-        neutralCitation: '[2024] UKSC 123',
+        neutralCitation: '[2024] UKSC 3',
         uri: '/d-f11e093f-8a53-4e43-8dd8-1531b5d8f018',
-        sourceUri: '/uksc/2024/123',
-        xmlUri: '/uksc/2024/123/data.xml',
+        sourceUri: '/uksc/2024/3',
+        xmlUri: '/uksc/2024/3/data.xml',
       },
     ])
   })

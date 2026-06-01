@@ -26,14 +26,13 @@ describe('readLegalIngestorEnv', () => {
     delete process.env.MEILISEARCH_HOST
     delete process.env.MEILISEARCH_ADMIN_API_KEY
     delete process.env.LEGAL_AUTHORITIES_INDEX
-    delete process.env.ATLAS_AUTHORITIES_INDEX
 
     expect(() => readLegalIngestorEnv()).toThrow(
       'Missing required production environment values',
     )
   })
 
-  it('does not allow the legacy Meilisearch API key in production', () => {
+  it('does not allow the legacy Meilisearch API key', () => {
     process.env.NODE_ENV = 'production'
     process.env.MEILISEARCH_HOST = 'https://search.ormont.example'
     process.env.MEILISEARCH_API_KEY = '0123456789abcdef'
@@ -43,16 +42,14 @@ describe('readLegalIngestorEnv', () => {
     expect(() => readLegalIngestorEnv()).toThrow(
       'Missing required production environment values: MEILISEARCH_ADMIN_API_KEY',
     )
-  })
 
-  it('uses the legacy Meilisearch API key only outside production', () => {
     process.env.NODE_ENV = 'development'
     process.env.MEILISEARCH_API_KEY = 'legacy-dev-key'
     delete process.env.MEILISEARCH_ADMIN_API_KEY
 
     const env = readLegalIngestorEnv()
 
-    expect(env.meilisearchAdminApiKey).toBe('legacy-dev-key')
+    expect(env.meilisearchAdminApiKey).toBe('dev-key')
   })
 
   it('rejects invalid URLs, secrets, and index names', () => {
@@ -78,17 +75,4 @@ describe('readLegalIngestorEnv', () => {
     )
   })
 
-  it('supports the legacy Atlas index key during the legal index migration', () => {
-    process.env.NODE_ENV = 'production'
-    process.env.MEILISEARCH_HOST = 'https://search.ormont.example'
-    process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef'
-    delete process.env.LEGAL_AUTHORITIES_INDEX
-    process.env.ATLAS_AUTHORITIES_INDEX = 'atlas_authorities'
-
-    expect(readLegalIngestorEnv().legalAuthoritiesIndex).toBe('atlas_authorities')
-
-    process.env.LEGAL_AUTHORITIES_INDEX = 'legal_authorities'
-
-    expect(readLegalIngestorEnv().legalAuthoritiesIndex).toBe('legal_authorities')
-  })
 })

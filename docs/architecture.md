@@ -38,10 +38,7 @@ ormont/
   services/
     api/
     worker/
-    redact-worker/
-    atlas-ingestor/
-    verify-worker/
-    bench-runner/
+    legal-ingestor/
   packages/
     app-shell/
     contracts/

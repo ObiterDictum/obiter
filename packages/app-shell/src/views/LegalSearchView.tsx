@@ -4,6 +4,7 @@ import {
   SearchCommandBar,
   SearchFeedbackPanel,
   SearchFiltersDialog,
+  SearchIdleState,
   SearchResults,
   courtOptionGroups,
   getCourtLabel,
@@ -17,6 +18,13 @@ import {
 export { courtOptionGroups, getCourtLabel }
 
 export const LEGAL_SEARCH_DEBOUNCE_MS = 300
+export const LEGAL_SEARCH_RECENT_SEARCHES_LIMIT = 5
+const legalSearchRecentSearchesKey = 'ormont.search.recentSearches'
+const courtShortcuts = [
+  { code: 'uksc', label: 'UKSC' },
+  { code: 'ewca/civ', label: 'EWCA Civ' },
+  { code: 'ewhc', label: 'EWHC' },
+]
 
 export function getLegalSearchStateLabel(state: LegalSearchState) {
   switch (state.status) {
@@ -90,11 +98,60 @@ export function shouldRunLegalSearch(query: string) {
   return query.trim().length > 0
 }
 
+export function getRecentLegalSearches(storage: Pick<Storage, 'getItem'> | undefined) {
+  if (!storage) return []
+
+  const storedSearches = storage.getItem(legalSearchRecentSearchesKey)
+  if (!storedSearches) return []
+
+  try {
+    const parsedSearches = JSON.parse(storedSearches) as unknown
+    if (!Array.isArray(parsedSearches)) return []
+
+    return dedupeRecentLegalSearches(
+      parsedSearches.filter((search): search is string => typeof search === 'string'),
+    )
+  } catch {
+    return []
+  }
+}
+
+export function writeRecentLegalSearch(
+  storage: Pick<Storage, 'getItem' | 'setItem'> | undefined,
+  query: string,
+) {
+  if (!storage) return []
+
+  const recentSearches = dedupeRecentLegalSearches([query, ...getRecentLegalSearches(storage)])
+  storage.setItem(legalSearchRecentSearchesKey, JSON.stringify(recentSearches))
+  return recentSearches
+}
+
+function dedupeRecentLegalSearches(searches: string[]) {
+  const seen = new Set<string>()
+  const recentSearches: string[] = []
+
+  for (const search of searches) {
+    const trimmedSearch = search.trim()
+    const normalizedSearch = trimmedSearch.toLowerCase()
+    if (!trimmedSearch || seen.has(normalizedSearch)) continue
+
+    seen.add(normalizedSearch)
+    recentSearches.push(trimmedSearch)
+    if (recentSearches.length >= LEGAL_SEARCH_RECENT_SEARCHES_LIMIT) break
+  }
+
+  return recentSearches
+}
+
 export function LegalSearchView() {
   const [query, setQuery] = useState(() => readInitialSearchQuery())
   const [court, setCourt] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
+  const [recentSearches, setRecentSearches] = useState(() =>
+    typeof window === 'undefined' ? [] : getRecentLegalSearches(window.sessionStorage),
+  )
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [state, setState] = useState<LegalSearchState>({ status: 'idle' })
   const searchInputRef = useRef<HTMLInputElement | null>(null)
@@ -149,6 +206,9 @@ export function LegalSearchView() {
     if (!trimmedQuery) {
       resetSearchToIdle()
       return
+    }
+    if (typeof window !== 'undefined') {
+      setRecentSearches(writeRecentLegalSearch(window.sessionStorage, trimmedQuery))
     }
 
     const requestId = searchRequestId.current + 1
@@ -235,6 +295,15 @@ export function LegalSearchView() {
     scheduleAutoSearch(query, filters)
   }
 
+  function removeFilter(filter: 'court' | 'dateFrom' | 'dateTo') {
+    const nextFilters = {
+      court: filter === 'court' ? '' : court,
+      dateFrom: filter === 'dateFrom' ? '' : dateFrom,
+      dateTo: filter === 'dateTo' ? '' : dateTo,
+    }
+    applyFilters(nextFilters)
+  }
+
   function clearFilters() {
     setCourt('')
     setDateFrom('')
@@ -250,8 +319,22 @@ export function LegalSearchView() {
     scheduleAutoSearch(nextQuery)
   }
 
+  function handleRecentSearch(nextQuery: string) {
+    setQuery(nextQuery)
+    setState(getLegalSearchStateAfterInputChange())
+    scheduleAutoSearch(nextQuery)
+  }
+
+  function handleCourtShortcut(nextCourt: string) {
+    const nextFilters = { court: nextCourt, dateFrom, dateTo }
+    setCourt(nextCourt)
+    setState(getLegalSearchStateAfterInputChange())
+    scheduleAutoSearch(query, nextFilters)
+  }
+
   const courtLabel = getCourtLabel(court)
   const activeFilterCount = countActiveLegalSearchFilters({ court, dateFrom, dateTo })
+  const shouldShowIdleState = state.status === 'idle' && !shouldRunLegalSearch(query)
 
   return (
     <div className="shell-stack legal-search">
@@ -272,6 +355,7 @@ export function LegalSearchView() {
           isSearching={state.status === 'loading'}
           onFilterClick={() => setFiltersOpen(true)}
           onQueryChange={handleQueryChange}
+          onRemoveFilter={removeFilter}
           onSubmit={handleSubmit}
           query={query}
         />
@@ -285,6 +369,16 @@ export function LegalSearchView() {
           onApply={applyFilters}
           onClear={clearFilters}
           onClose={() => setFiltersOpen(false)}
+        />
+      ) : null}
+
+      {shouldShowIdleState ? (
+        <SearchIdleState
+          courtLabel={courtLabel}
+          courtShortcuts={courtShortcuts}
+          recentSearches={recentSearches}
+          onCourtShortcut={handleCourtShortcut}
+          onRecentSearch={handleRecentSearch}
         />
       ) : null}
 

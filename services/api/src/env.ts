@@ -49,8 +49,8 @@ function requireProductionEnv(nodeEnv: ApiEnv['nodeEnv']) {
   }
 
   const missing: string[] = requiredProductionKeys.filter((key) => !process.env[key])
-  if (!process.env.LEGAL_AUTHORITIES_INDEX && !process.env.ATLAS_AUTHORITIES_INDEX) {
-    missing.push('LEGAL_AUTHORITIES_INDEX or ATLAS_AUTHORITIES_INDEX')
+  if (!process.env.LEGAL_AUTHORITIES_INDEX) {
+    missing.push('LEGAL_AUTHORITIES_INDEX')
   }
 
   if (missing.length > 0) {
@@ -132,8 +132,7 @@ function readSecret(key: string, fallback: string, nodeEnv: ApiEnv['nodeEnv']) {
 }
 
 function readSearchApiKey(nodeEnv: ApiEnv['nodeEnv']) {
-  const fallback =
-    nodeEnv === 'production' ? '' : (process.env.MEILISEARCH_API_KEY ?? 'dev-key')
+  const fallback = nodeEnv === 'production' ? '' : 'dev-key'
 
   return readSecret('MEILISEARCH_SEARCH_API_KEY', fallback, nodeEnv)
 }
@@ -154,14 +153,6 @@ function readIndexName(key: string, fallback: string) {
 }
 
 function readLegalAuthoritiesIndexName() {
-  if (process.env.LEGAL_AUTHORITIES_INDEX) {
-    return readIndexName('LEGAL_AUTHORITIES_INDEX', 'legal_authorities')
-  }
-
-  if (process.env.ATLAS_AUTHORITIES_INDEX) {
-    return readIndexName('ATLAS_AUTHORITIES_INDEX', 'legal_authorities')
-  }
-
   return readIndexName('LEGAL_AUTHORITIES_INDEX', 'legal_authorities')
 }
 
@@ -221,8 +212,7 @@ function loadLocalDotEnv() {
 }
 
 function readAdminApiKey(nodeEnv: ApiEnv['nodeEnv']) {
-  const fallback =
-    nodeEnv === 'production' ? '' : (process.env.MEILISEARCH_API_KEY ?? 'dev-key')
+  const fallback = nodeEnv === 'production' ? '' : 'dev-key'
 
   return readSecret('MEILISEARCH_ADMIN_API_KEY', fallback, nodeEnv)
 }

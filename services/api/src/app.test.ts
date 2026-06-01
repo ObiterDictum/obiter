@@ -440,20 +440,20 @@ describe('createApiApp', () => {
     searchClientMock.search.mockResolvedValueOnce({
       hits: [
         {
-          id: 'uksc-2024-1',
+          id: 'uksc-2024-3',
           title: 'Potanina v Potanin',
-          neutralCitation: '[2024] UKSC 1',
+          neutralCitation: '[2024] UKSC 3',
           court: 'uksc',
           jurisdiction: 'england-and-wales',
           dateDecided: '2024-01-31',
           sourceType: 'judgment',
-          sourceUrl: 'https://www.supremecourt.uk/cases/uksc-2024-001.html',
+          sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
           paragraphs: [
             {
-              id: 'uksc-2024-1-p1',
-              documentId: 'uksc-2024-1',
+              id: 'uksc-2024-3-p1',
+              documentId: 'uksc-2024-3',
               paragraphNumber: 1,
-              text: 'This paragraph should be fetched through the paragraph endpoint.',
+              text: 'The application for permission to bring proceedings under Part III is allowed.',
             },
           ],
         },
@@ -483,7 +483,7 @@ describe('createApiApp', () => {
       estimatedTotalHits: number
     }
     expect(body).toMatchObject({
-      hits: [{ neutralCitation: '[2024] UKSC 1' }],
+      hits: [{ neutralCitation: '[2024] UKSC 3' }],
       estimatedTotalHits: 1,
     })
     expect(body.hits[0]).not.toHaveProperty('paragraphs')
