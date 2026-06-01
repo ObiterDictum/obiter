@@ -64,6 +64,7 @@ Avoid:
 - `Updates`
 - `Fix stuff`
 - `Improve app`
+- agent, tool, or automation prefixes such as `[codex]`
 - hype words such as robust, seamless, comprehensive, enhanced unless technically justified
 - `phase` in Ormont PR titles
 

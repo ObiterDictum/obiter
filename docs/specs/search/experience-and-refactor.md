@@ -9,9 +9,9 @@ The immediate goal is not to build Matter Workspace, hosted storage, offline syn
 ## Decisions
 
 - Phase 0.3 and Phase 0.4 are paused for this demo slice.
-- The initial route refactor has shipped: `services/api/src/routes/legal-search-proxy.ts` is now a compatibility re-export over `services/api/src/routes/legal-search/`.
-- The route split itself was behavior-neutral and verified before UX work began.
-- A deliberate follow-up ranking fix has shipped so strong title/party-name matches rank ahead of provider/body-reference-only hits.
+- Refactor `services/api/src/routes/legal-search-proxy.ts` before adding user-facing behavior.
+- The refactor must be behavior-neutral and verified before UX work begins.
+- This refactor must not make the app-facing Search endpoint the permanent public API contract by accident. Keep app orchestration, stable legal-source retrieval, and future developer API concerns separated.
 - Search result cards should show 1-2 matched snippets, not full paragraph payloads.
 - Full judgment paragraphs belong on the case detail page.
 - `POST /api/search/fetch` should expose `snippets?: LegalSearchSnippet[]` on hits and should not expose `paragraphs?: CaseLawParagraph[]` in search result payloads.
@@ -26,63 +26,107 @@ The immediate goal is not to build Matter Workspace, hosted storage, offline syn
 - Do not implement legal verification, redaction, or research workflows.
 - Do not perform a broad rename of every legacy `atlas` identifier.
 - Do not return raw HTML snippets from the API.
-
-## Implementation Status
-
-Implemented on `search-experience-spec`:
-
-- `services/api/src/routes/legal-search-proxy.ts` is a thin compatibility re-export.
-- `services/api/src/routes/legal-search/index.ts` is the public Search route export.
-- `services/api/src/routes/legal-search/proxy-routes.ts` owns `POST /api/search/fetch` and `GET /api/search/documents/:documentId`.
-- `services/api/src/routes/legal-search/search-routes.ts` owns the existing non-proxy search route.
-- `services/api/src/routes/legal-search/rate-limiter.ts` owns `createMojRateLimiter`.
-- Proxy route tests now live under `services/api/src/routes/legal-search/__tests__/proxy-routes.test.ts` and are discovered by the API package test script.
-- `packages/search-client` now ranks exact document id, exact neutral citation, exact title, title substring, and all-query-terms-in-title matches ahead of body/reference-only matches while preserving provider/search order within a match class.
-- API and search-client regression tests cover the Potanina-style case where a provider result only mentioning the query should rank behind a title match.
-
-Not implemented yet:
-
-- Further extraction of the proxy route into `moj-client`, parser, source-store, schema, response utility, court utility, and document utility modules.
-- Search result snippets.
-- Debounced auto-search.
-- Keyboard navigation.
-- Idle state and court shortcuts.
-- Individual filter removal.
-- Search/Atlas compatibility cleanup.
+- Do not ship the public Developer API, SDK, MCP server, or API-key management UI in this slice unless a separate task explicitly expands the scope.
+- Do not expose live provider fallback as a default third-party API behavior. Public/API-key consumers should default to stored Ormont legal sources so latency, provider quotas, licensing constraints, and abuse controls remain predictable.
 
 ## API Refactor
 
-The first split of `services/api/src/routes/legal-search-proxy.ts` into `services/api/src/routes/legal-search/` is complete.
+Split `services/api/src/routes/legal-search-proxy.ts` into `services/api/src/routes/legal-search/`.
 
-Implemented module layout:
+Target module layout:
 
 - `index.ts`: public route exports
 - `proxy-routes.ts`: `POST /api/search/fetch` and `GET /api/search/documents/:documentId`
-- `search-routes.ts`: existing search routes moved from `services/api/src/routes/legal-search.ts`
-- `rate-limiter.ts`: `createMojRateLimiter`
-
-Remaining extraction targets:
-
 - `moj-client.ts`: Find Case Law fetch, detail retrieval, hydration, and indexing orchestration
 - `atom-parser.ts`: Atom entry parsing and Atom helper functions
 - `html-parser.ts`: judgment HTML parsing, paragraph extraction, document parsing, text decoding, and hashing
 - `source-store.ts`: source store interface, in-memory store, PostgreSQL store, stored record transforms, foreground record cache helper
 - `court-utils.ts`: court mappings, court normalization, citation/path court derivation, search text normalization, document matching
+- `rate-limiter.ts`: `createMojRateLimiter`
 - `fetch-schema.ts`: fetch request schema, document id schema, route-facing types
 - `response-utils.ts`: API error helper, fetch response helper, summary hit transform, search filter transform
 - `document-utils.ts`: document id/URI transforms, date extraction, neutral citation extraction
 
-Tests mirror the structure under `services/api/src/routes/legal-search/__tests__/`.
+Tests should mirror the structure under `services/api/src/routes/legal-search/__tests__/`.
 
-The current API package runs tests with plain `vitest run`, and nested `__tests__` files are discovered by `pnpm --filter @ormont/api test`.
+The current API package runs tests with plain `vitest run`, so nested `__tests__` files should be discovered by default. If the refactor changes test placement, verify discovery by running `pnpm --filter @ormont/api test`. If discovery fails, either keep the tests co-located with the module files or update the package test script in the same refactor.
 
-`legal-search-proxy.ts` remains as a thin re-export during the transition.
+`legal-search-proxy.ts` may remain as a thin re-export during the transition, or be deleted if imports are updated in the same change.
 
-The route split did not intentionally change response shapes, provider calls, indexing behavior, storage behavior, or error handling. The subsequent ranking fix is an intentional behavior change and is documented under Search Semantics.
+The first refactor commit must not change response shapes, ranking behavior, provider calls, indexing behavior, storage behavior, or error handling.
+
+## Public API, SDK, And MCP Readiness
+
+Search should be prepared to become an API-key-protected public legal-source API, but this demo refactor should only create the right seams and contracts. It should not make the app-facing `/api/search/fetch` orchestration route the external developer contract.
+
+Separate these surfaces:
+
+- App Search endpoint: product UX orchestration for `/search`, including stored search, optional foreground Find Case Law behavior, background hydration, demo status flags, and UI-oriented response shaping.
+- Stable legal-source API: versioned, stored-source-first retrieval surface intended for SDKs, MCP servers, integrations, and third-party app search.
+- Provider ingestion/hydration: internal source acquisition and indexing workflows. External callers must not depend on provider-specific behavior such as Find Case Law Atom shapes, provider rate limits, or background indexing details.
+
+Future public routes should be versioned and contract-first. Candidate routes:
+
+- `GET /api/v1/legal/search`
+- `GET /api/v1/legal/documents/:documentId`
+- `GET /api/v1/legal/documents/:documentId/paragraphs`
+- `GET /api/v1/legal/citations/resolve`
+
+Those route names are design targets, not required build output for this slice.
+
+Public API contracts should live in `packages/contracts` so the web app, desktop app, SDK, and MCP server consume the same request and response schemas. The SDK and MCP server should call the public API; they should not query PostgreSQL, Meilisearch, or provider services directly.
+
+API-key auth requirements for the future Developer API:
+
+- Store only hashed API keys. Never persist raw keys after creation.
+- Use scoped keys, starting with read-only scopes such as `legal.search:read`, `legal.documents:read`, and `legal.citations:resolve`.
+- Bind keys to an organisation and optionally to a user/service account.
+- Track key prefix, name, scopes, created time, last-used time, revoked time, and rate-limit class.
+- Audit key creation, revocation, and API use without logging raw keys, query-sensitive private matter data, or full legal payloads.
+- Support server-side rate limits per key and per route family.
+- Return stable error shapes for invalid keys, revoked keys, missing scopes, rate limits, validation failures, and storage/provider unavailability.
+
+Public legal-source API behavior:
+
+- Default to stored Ormont-owned legal sources only.
+- Do not trigger live provider fetches by default.
+- If a future route supports hydration requests, make that behavior explicit, asynchronous, rate-limited, and auditable.
+- Keep result payloads lean: summary metadata plus snippets or exact paragraph/provision references, not whole documents.
+- Support pagination before result sets can grow without bounds.
+- Keep response ordering and ranking deterministic enough for SDK/MCP callers to cache and test.
+- Include source provenance, licence metadata, and computational-analysis permission metadata once those fields exist in storage.
+- Support future model/tool callers by returning stable source ids, evidence ids, match reasons, snippets, and ambiguity flags rather than prose-only results.
+
+AI integration readiness:
+
+- Search may provide model-facing retrieval and evidence-pack APIs in future work, but answer generation belongs to Research and trust checking belongs to Verify.
+- Model query planning must produce a validated structured search plan before Search executes provider or index queries.
+- Models, SDKs, and MCP tools may use Meilisearch-backed retrieval. The preferred route is the Search API, but direct Meilisearch access is acceptable for deliberately public legal-source indexes when using scoped search-only keys.
+- Models, SDKs, and MCP tools must not receive Meilisearch admin keys, private matter indexes, direct database access, raw provider access, or access to indexes containing private client material.
+- Search logs must not store raw prompts or private matter text. Matter-aware AI orchestration belongs in Research or Verify, where redaction, audit, and permission controls can be applied.
+- Generated answers must cite exact paragraphs or provisions and should be checked by Verify before being presented as reliable analysis.
+
+MCP readiness:
+
+- MCP tools should wrap the same stable public API contracts.
+- Search tools should expose narrow operations such as search legal sources, resolve citation, fetch document metadata, and fetch paragraph/provision text.
+- MCP responses should include source identifiers and URLs so host apps can display citations and let users inspect the original source.
+- MCP tools must not expose provider internals, admin search keys, raw provider payloads, or app-session-only endpoints.
 
 ## Search Semantics
 
 Search should keep the way cases are currently found and add body-text visibility.
+
+This refactor is actively working on the judgment slice, but it must preserve the broader Search product model directly in this spec. Search should aim for the broadest legally usable public legal-source coverage Ormont can lawfully ingest, index, retrieve, and expose with reliable provenance. Phasing is an implementation and quality-control strategy, not a product coverage limit.
+
+The active refactor must avoid choices that make later case law, legislation, international-law, SDK, MCP, and AI integrations expensive. The current Find Case Law path is one provider adapter and one source family, not the final shape of Search.
+
+Current provider scope:
+
+- Implemented case-law ingestion and hydration uses Find Case Law at `caselaw.nationalarchives.gov.uk`. The route module is still named `moj-client.ts` and the environment variables are still named `MOJ_FIND_CASE_LAW_*`, but the configured endpoint is The National Archives Find Case Law service.
+- This gives Search broad coverage across the supported Find Case Law court and tribunal collections, subject to provider availability, parser support, and licensing constraints.
+- `legislation.gov.uk` is not implemented yet. Legislation requires a separate provider adapter, schema, storage model, version/provision handling, and search semantics; do not treat the current judgment path as legislation ingestion.
+- The current product behavior is stored Ormont legal sources first, then safe Find Case Law fallback/hydration for case-law misses. Future legislation search should be added source-by-source without weakening this case-law path.
 
 One Search surface must support:
 
@@ -94,6 +138,42 @@ One Search surface must support:
 - court, jurisdiction, source type, and date filters
 - stored-source-first behavior before live provider calls
 - Find Case Law fallback on stored misses where the request is safe and supported
+
+Future-compatible Search requests should be able to grow toward:
+
+- `query`: required for normal search; optional only for explicit bounded browse endpoints
+- `sourceType`: judgment, legislation document, legislation provision, international instrument, decision, guidance, or other source types as they are added
+- `jurisdiction`: controlled jurisdiction filter where the concept applies
+- `courtOrBody`: court, tribunal, parliament, government department, international court, UN body, treaty body, or other issuing body
+- `dateFrom` / `dateTo`: decision, publication, adoption, commencement, entry-into-force, or version date depending on source type
+- `asAtDate`: required for version-sensitive legislation lookup once legislation is in scope
+- `legalDomain`: controlled domain filter such as international-humanitarian-law, human-rights, criminal, commercial, or public-law
+- `countryOrRegion`: domestic, regional, supranational, or international source-origin filter
+- `instrumentType`: act, statutory instrument, treaty, convention, protocol, rule, resolution, guidance, decision, or other instrument types
+- `issuingBody`: parliament, department, court, tribunal, UN body, treaty body, commission, or other authority
+- `applicabilityContext`: future structured context for state, territory, conflict, treaty-party status, forum-specific applicability, or domestic implementation
+- `provider`: optional source-provider filter for diagnostics and controlled corpus views
+- `page` or `cursor` plus `limit`: required before result sets can grow without bounds
+
+Search results should be discriminated by source type and share a stable envelope:
+
+- canonical document id
+- source type and source family
+- title or canonical title
+- jurisdiction when applicable
+- legal domain
+- country or region
+- court, issuing body, or forum
+- instrument type where applicable
+- primary citation or preferred identifier
+- relevant date and, for legislation or international instruments, applicable version or effective date range
+- source URL and provider
+- licence and computational-analysis permission metadata where available
+- match reason such as exact citation, title match, paragraph match, provision match, or body-text match
+- snippets or exact evidence references, not full document payloads
+- ambiguity or applicability uncertainty flags where relevant
+
+Judgment results should point to judgment paragraphs. Legislation results should point to provisions, headings, schedules, or versioned document records. International-law results should point to articles, rules, annexes, paragraphs, decisions, or other source-specific evidence units. Search should return the legal source as the primary result, not detached evidence fragments with no parent document context.
 
 The current layered behavior must be preserved:
 
@@ -123,16 +203,165 @@ Ranking rules:
 - strong title/party-name keyword matches next
 - body-text paragraph matches after stronger metadata matches
 - date ordering may break ties within the same match class
-
-Current implementation:
-
-- `rankLegalSearchHitsByExactMatch` enforces exact document id, exact neutral citation, exact title, title substring, and all-query-terms-in-title priority.
-- The ranking helper is applied to Meilisearch hits, source-store fallback hits, and foreground live Find Case Law hits.
-- Hits with the same ranking class preserve the existing provider/search order, so date or provider relevance can continue to break ties where the upstream path already ordered them.
+- semantic or vector retrieval may help discovery later, but it must not outrank exact identifiers, exact citations, known title aliases, exact provision references, or explicit evidence matches
 
 Body-text matches should still return the case, not the paragraph as a separate result. The result card should show body snippets so the user can see why the case matched.
 
 Provider fallback is not a substitute for stored body search. Find Case Law can be used for live title, citation, and provider keyword discovery, but full body-text search is only reliable for stored or hydrated cases whose paragraphs have been indexed or persisted.
+
+### Case Law Rules
+
+Case law search must support:
+
+- exact neutral citation lookup with formatting normalization
+- provider document id or slug lookup
+- case title and party-name lookup
+- keyword lookup over judgment metadata
+- keyword lookup over stored or hydrated judgment paragraph text
+- court, jurisdiction, source type, and decision-date filters
+- paragraph snippets that explain body-text matches
+
+Case law ranking should prefer:
+
+1. exact provider or canonical document id
+2. exact normalized neutral citation
+3. exact case title or strongest party-name match
+4. strong metadata keyword match
+5. judgment paragraph body-text match
+6. date ordering only as a tie-breaker within the same match class
+
+If a citation is ambiguous or maps to multiple records, Search should return disambiguation candidates with enough metadata to choose safely. It must not silently pick a result without exposing ambiguity.
+
+### Legislation Rules
+
+Legislation search is part of the Search product target, even though this slice does not implement it. It must not be modeled as judgment search with different labels.
+
+Domestic legislation search must support:
+
+- statute or instrument title lookup
+- short title and common abbreviation lookup where aliases are explicitly stored
+- year and number lookup, such as Act chapter or statutory instrument number
+- provision lookup, including section, article, regulation, rule, schedule, paragraph, and sub-provision references
+- keyword lookup over provision text, headings, and document metadata
+- jurisdiction, issuing body, source type, date, and `asAtDate` filters
+- in-force, repealed, prospective, and partially commenced states where available from the source
+- amendment history and version ranges before presenting date-sensitive text as current law
+
+Provision queries should normalize common legal forms, for example:
+
+- `s 6 Human Rights Act 1998`
+- `section 6 HRA 1998`
+- `Human Rights Act 1998 section 6`
+- `regulation 3 of the ... Regulations`
+- `Schedule 2 paragraph 4`
+
+Legislation ranking should prefer:
+
+1. exact canonical legislation identifier
+2. exact provision identifier within the requested or inferred legislation document
+3. exact title, short title, or stored alias match
+4. strong heading or provision-number match
+5. provision text keyword match
+6. document-level keyword match
+
+Legislation results must make version context visible. If an `asAtDate` is supplied, results should resolve against the version effective on that date. If no `asAtDate` is supplied, current in-force text may be shown only when the source supports that claim; otherwise the response should expose uncertainty or require date context.
+
+### International Law And Legislation Rules
+
+International and transnational sources need their own search semantics. Search contracts and result types should be able to grow toward:
+
+- treaties, conventions, protocols, optional protocols, annexes, and international instruments
+- international court and tribunal judgments, decisions, advisory opinions, orders, and awards
+- UN Security Council, General Assembly, Human Rights Council, treaty-body, and committee materials
+- international humanitarian law instruments and customary-law references
+- regional instruments such as Council of Europe, EU, African Union, Inter-American, or other regional materials when added deliberately
+
+International-law search must support:
+
+- title and short-title lookup, such as `Geneva Convention IV` or `ECHR`
+- article, rule, protocol, annex, schedule, and paragraph references
+- party or state-context filters when source data supports them
+- adoption date, signature date, entry-into-force date, and version/effective date filters where applicable
+- issuing body or forum filters, such as ICJ, ICC, ECtHR, UN Security Council, or treaty body
+- legal-domain filters, especially for International Humanitarian Law and human rights
+- source-family filters so users and model callers can distinguish treaty text from cases, soft law, guidance, and commentary-like materials
+
+International-law results must expose applicability limits instead of overclaiming. Search should distinguish "text exists", "state-party/applicability unknown", "entered into force on this date", and "source supports this applicability claim" when the data allows it. If applicability metadata is missing, return the source with visible uncertainty rather than presenting it as settled law.
+
+Do not collapse international law into a single jurisdiction value. Use separate fields for legal domain, source origin, issuing body, country or region, treaty parties, forum, and applicability metadata where available.
+
+### Identifier Normalization
+
+Search should use normalized lookup tables before broad keyword search for:
+
+- neutral citations
+- provider document ids and source URIs
+- statute year/number identifiers
+- provision identifiers
+- treaty, convention, protocol, article, rule, and annex identifiers
+- international court or tribunal case numbers and application numbers where available
+- title aliases and short titles
+- citation graph references once available
+
+Normalization must preserve the original user query for display and audit, but ranking and equality checks should use canonical forms. Ambiguous, malformed, or unsupported citations should fail visibly or return candidates; they must not degrade into misleading keyword-only success.
+
+## Source Extensibility
+
+The current implementation is a judgment-only slice, but the Search product model should aim for the broadest legally usable public legal-source coverage Ormont can support. Adding countries, statutes, guidance, treaties, secondary materials, or other legal sources must be treated as source onboarding work, not a small enum change.
+
+Do not force all legal sources through the current case-law `LegalAuthority` shape. Future source types need source-specific schemas:
+
+- Judgments: neutral citations, court, date decided, judgment paragraphs, source document URI, provider metadata.
+- Legislation: title, legislation type, year/number, jurisdiction, issuing body, provisions, amendment history, commencement state, version ranges, and "as at" date behavior.
+- International law and international legislation: treaties, conventions, protocols, articles, rules, annexes, international court or tribunal decisions, UN or treaty-body materials, issuing body, legal domain, source origin, party/applicability metadata where sourced, and source-specific citation rules.
+- Other sources: provider, issuing body, document structure, citation/identifier rules, licence metadata, and retrieval granularity defined per source type.
+
+Adding a new source family should require:
+
+- a provider adapter with explicit fetch, parse, normalize, hydrate, and provenance behavior
+- source-specific schema and validation tests
+- citation or identifier normalization tests
+- storage mapping and index mapping
+- source licence and computational-analysis permission metadata
+- search ranking and filter behavior
+- fixture coverage for malformed payloads, duplicate identifiers, withdrawn/replaced documents, and provider outages
+
+The system should distinguish:
+
+- country or sovereign source origin
+- jurisdiction
+- court or issuing body
+- source family
+- instrument type
+- legal domain
+- source type
+- provider
+- licence and usage permissions
+- applicability metadata where available, such as treaty-party status, entry-into-force date, reservations, declarations, forum, territory, or implementation context
+
+Identifiers must be provider-aware and stable enough to avoid collisions across jurisdictions and providers.
+
+Raw provider payloads should not be stored indefinitely in database JSON once the corpus grows. Keep hashes and metadata in PostgreSQL, and move large raw source artifacts to object storage with stable pointers and retention rules.
+
+### Legislation And International Law Readiness
+
+This slice does not implement statute, provision, treaty, or international-law search. It must still avoid hard-coding assumptions that make those integrations expensive later.
+
+This is an implementation sequencing constraint, not a product coverage limit. Search should be able to expand toward as much case law, legislation, and international legal material as licensing, provider access, parser reliability, and provenance allow.
+
+Search contracts and result types should be able to grow toward:
+
+- domestic legislation documents and provisions
+- statutory instruments and regulations
+- schedules, articles, rules, paragraphs, and sub-provisions
+- treaties, conventions, protocols, annexes, and international instruments
+- international court, tribunal, commission, and committee decisions
+- UN, treaty-body, regional, or other international issuing-body materials
+- legal-domain filters such as international-humanitarian-law and human-rights
+
+Future legislation and international-law search must expose version, commencement, entry-into-force, and applicability uncertainty instead of presenting every source as current settled law. If those facts are not available from the source, responses should mark the gap rather than hide it.
+
+Do not model International Humanitarian Law as a jurisdiction. Use legal domain, source family, issuing body, country or region, treaty/applicability metadata, and evidence references as separate concepts.
 
 ## Search UX
 
@@ -253,14 +482,30 @@ After refactor and UX tests pass:
 
 ## Build Order
 
-1. Done: refactor `legal-search-proxy.ts` into `routes/legal-search/` with compatibility re-exports.
-2. Done: run targeted API/search-client tests and fix the title-match ranking regression found during browser validation.
-3. Next: add debounced auto-search using refs/timers.
-4. Add API and UI result snippets.
-5. Add or update tests for citation-first search, body-text search, snippet extraction, and stored-source fallback behavior.
-6. Add keyboard navigation, idle state, and individual filter removal.
-7. Run cleanup for deprecated fallbacks and empty scaffolds.
-8. Run the verification commands below.
+Current implementation status:
+
+- [x] Refactor `legal-search-proxy.ts` into `routes/legal-search/` with no behavior change.
+- [x] Run targeted API tests and fix extraction regressions.
+- [x] Add debounced auto-search using refs/timers.
+- [x] Add API and UI result snippets.
+- [x] Add or update tests for citation-first search, body-text search, snippet extraction, and stored-source fallback behavior.
+- [ ] Add keyboard navigation, idle state, and individual filter removal.
+- [ ] Run cleanup for deprecated fallbacks and empty scaffolds.
+- [ ] Run the verification commands below after the remaining Search UX work.
+
+Completed through PR 19:
+
+- `POST /api/search/fetch` and `GET /api/search` include bounded `snippets` on result-list hits.
+- Result-list responses continue to omit full `paragraphs` arrays.
+- Snippet extraction lives in `@ormont/search-client`, ranks exact-query paragraph matches before all-term and any-term matches, returns at most two snippets, and omits snippets when no paragraph text matches safely.
+- App-shell search result cards render snippet text below the result summary.
+- Focused automated coverage exists for snippet extraction, result-list payload shape, citation-first ranking, body-text indexed search attributes, and stored-source fallback behavior.
+
+Remaining next slice:
+
+- Implement keyboard navigation, idle state, and individual filter removal.
+- Manually exercise `/search` against a running API, Meilisearch, and Postgres stack.
+- Then run dead-code cleanup and the full verification list.
 
 ## Verification
 
@@ -276,8 +521,7 @@ pnpm --filter @ormont/web build
 
 Required focused coverage:
 
-- done: exact citation queries rank the matching case first
-- done: title/party-name matches rank ahead of body/reference-only matches
+- exact citation queries rank the matching case first
 - body-text queries can return cases through `paragraphs.text`
 - result-list payloads expose snippets, not full paragraph arrays
 - PostgreSQL source-store fallback searches hydrated body text when paragraph text is available
@@ -294,4 +538,4 @@ Also manually exercise:
 - keyboard result navigation and opening
 - `/cases/:caseId` detail page after opening a result
 
-The first route split is done. Do not mark the broader Search experience slice done until the remaining UX, snippets, fallback, cleanup, and manual verification items above have shipped.
+Do not mark this slice done if the refactor changes existing Search behavior without a deliberate follow-up note.

@@ -61,7 +61,6 @@ describe('readApiEnv', () => {
     delete process.env.MEILISEARCH_SEARCH_API_KEY
     delete process.env.MEILISEARCH_ADMIN_API_KEY
     delete process.env.LEGAL_AUTHORITIES_INDEX
-    delete process.env.ATLAS_AUTHORITIES_INDEX
 
     expect(() => readApiEnv()).toThrow('Missing required production environment values')
   })
@@ -137,29 +136,6 @@ describe('readApiEnv', () => {
     )
   })
 
-  it('supports the legacy Atlas index key during the legal index migration', () => {
-    process.env.NODE_ENV = 'production'
-    process.env.DATABASE_URL = 'postgres://ormont:ormont@db.example.com:5432/ormont'
-    process.env.BETTER_AUTH_SECRET = '0123456789abcdef0123456789abcdef'
-    process.env.BETTER_AUTH_URL = 'https://api.ormont.example'
-    process.env.ORMONT_WEB_ORIGIN = 'https://app.ormont.example'
-    process.env.ORMONT_MAGIC_LINK_WEBHOOK_URL =
-      'https://mail.ormont.example/magic-link'
-    process.env.ORMONT_MAGIC_LINK_WEBHOOK_SECRET =
-      '0123456789abcdef0123456789abcdef'
-    process.env.MEILISEARCH_HOST = 'https://search.ormont.example'
-    process.env.MEILISEARCH_SEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
-    process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'
-    delete process.env.LEGAL_AUTHORITIES_INDEX
-    process.env.ATLAS_AUTHORITIES_INDEX = 'atlas_authorities'
-
-    expect(readApiEnv().legalAuthoritiesIndex).toBe('atlas_authorities')
-
-    process.env.LEGAL_AUTHORITIES_INDEX = 'legal_authorities'
-
-    expect(readApiEnv().legalAuthoritiesIndex).toBe('legal_authorities')
-  })
-
   it('parses valid production configuration', () => {
     process.env.NODE_ENV = 'production'
     process.env.DATABASE_URL = 'postgres://ormont:ormont@db.example.com:5432/ormont'
@@ -196,7 +172,7 @@ describe('readApiEnv', () => {
     expect(env.port).toBe(8788)
   })
 
-  it('does not allow the legacy Meilisearch API key in production', () => {
+  it('does not allow the legacy Meilisearch API key', () => {
     process.env.NODE_ENV = 'production'
     process.env.DATABASE_URL = 'postgres://ormont:ormont@db.example.com:5432/ormont'
     process.env.BETTER_AUTH_SECRET = '0123456789abcdef0123456789abcdef'
@@ -216,9 +192,7 @@ describe('readApiEnv', () => {
     expect(() => readApiEnv()).toThrow(
       'Missing required production environment values: MEILISEARCH_SEARCH_API_KEY',
     )
-  })
 
-  it('uses the legacy Meilisearch API key only outside production', () => {
     process.env.NODE_ENV = 'development'
     process.env.MEILISEARCH_API_KEY = 'legacy-dev-key'
     delete process.env.MEILISEARCH_SEARCH_API_KEY
@@ -226,7 +200,7 @@ describe('readApiEnv', () => {
 
     const env = readApiEnv()
 
-    expect(env.meilisearchSearchApiKey).toBe('legacy-dev-key')
-    expect(env.meilisearchAdminApiKey).toBe('legacy-dev-key')
+    expect(env.meilisearchSearchApiKey).toBe('dev-key')
+    expect(env.meilisearchAdminApiKey).toBe('dev-key')
   })
 })

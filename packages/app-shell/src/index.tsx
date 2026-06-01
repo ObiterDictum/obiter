@@ -12,14 +12,19 @@ export {
 } from './views/CaseLawDocumentView'
 export {
   LegalSearchView,
+  LEGAL_SEARCH_DEBOUNCE_MS,
+  LEGAL_SEARCH_RECENT_SEARCHES_LIMIT,
   courtOptionGroups,
   countActiveLegalSearchFilters,
   createLegalSearchFetchRequest,
   getCourtLabel,
+  getRecentLegalSearches,
   getLegalSearchStateAfterInputChange,
   getLegalSearchStateLabel,
   selectJudgmentParagraphs,
   selectParagraphExcerpts,
+  shouldRunLegalSearch,
+  writeRecentLegalSearch,
 } from './views/LegalSearchView'
 
 const demoAuthStorageKey = 'ormont.phase0.authenticated'

@@ -16,7 +16,11 @@
     "react": "^19.2.0"
   },
   "scripts": {
-    "test": "vitest run src/demo-shell.test.ts",
+    "test": "vitest run src/demo-shell.test.ts src/views/LegalSearchView.test.tsx",
     "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1",
+    "react-dom": "^19.2.5"
   }
 }
