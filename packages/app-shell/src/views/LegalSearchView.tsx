@@ -23,7 +23,7 @@ const legalSearchRecentSearchesKey = 'ormont.search.recentSearches'
 const courtShortcuts = [
   { code: 'uksc', label: 'UKSC' },
   { code: 'ewca/civ', label: 'EWCA Civ' },
-  { code: 'ewhc', label: 'EWHC' },
+  { code: 'ewhc/admin', label: 'EWHC Admin' },
 ]
 
 export function getLegalSearchStateLabel(state: LegalSearchState) {

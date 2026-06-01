@@ -183,6 +183,30 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(container.textContent).toContain('Enter a search term to search within that court.')
   })
 
+  it('runs shortcut searches with a supported court filter', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(createSearchResponse())
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+    const input = getSearchInput(container)
+
+    await clickButton(container, 'EWHC Admin')
+    await changeSearchInput(input, 'Miah')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined
+    expect(JSON.parse(String(request?.body))).toMatchObject({
+      query: 'Miah',
+      court: 'ewhc/admin',
+      foregroundLiveResults: true,
+    })
+  })
+
   it('stores successful non-empty searches as recent idle shortcuts', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(createSearchResponse())
     vi.stubGlobal('fetch', fetchMock)
