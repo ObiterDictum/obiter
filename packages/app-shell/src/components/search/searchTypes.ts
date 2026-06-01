@@ -117,6 +117,7 @@ export const courtOptionGroups: CourtOptionGroup[] = [
 
 export function getCourtLabel(code: string) {
   if (!code) return 'All courts and tribunals'
+  if (code === 'ewhc') return 'High Court'
 
   for (const group of courtOptionGroups) {
     const option = group.options.find((courtOption) => courtOption.code === code)

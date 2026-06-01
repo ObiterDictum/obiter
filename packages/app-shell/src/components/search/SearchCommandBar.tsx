@@ -1,5 +1,5 @@
 import { type FormEvent, type RefObject } from 'react'
-import { MagnifyingGlassIcon } from '@heroicons/react/24/outline'
+import { MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline'
 
 interface SearchCommandBarProps {
   activeFilterCount: number
@@ -10,6 +10,7 @@ interface SearchCommandBarProps {
   inputRef?: RefObject<HTMLInputElement | null>
   onFilterClick: () => void
   onQueryChange: (query: string) => void
+  onRemoveFilter: (filter: 'court' | 'dateFrom' | 'dateTo') => void
   onSubmit: (event: FormEvent<HTMLFormElement>) => void
   query: string
 }
@@ -23,6 +24,7 @@ export function SearchCommandBar({
   inputRef,
   onFilterClick,
   onQueryChange,
+  onRemoveFilter,
   onSubmit,
   query,
 }: SearchCommandBarProps) {
@@ -60,9 +62,42 @@ export function SearchCommandBar({
       ) : null}
       {activeFilterCount > 0 ? (
         <div className="legal-search__active-filters" aria-label="Active filters">
-          {courtLabel !== 'All courts and tribunals' ? <span>{courtLabel}</span> : null}
-          {dateFrom ? <span>From {dateFrom}</span> : null}
-          {dateTo ? <span>To {dateTo}</span> : null}
+          {courtLabel !== 'All courts and tribunals' ? (
+            <span>
+              {courtLabel}
+              <button
+                aria-label={`Remove ${courtLabel} filter`}
+                type="button"
+                onClick={() => onRemoveFilter('court')}
+              >
+                <XMarkIcon aria-hidden="true" />
+              </button>
+            </span>
+          ) : null}
+          {dateFrom ? (
+            <span>
+              From {dateFrom}
+              <button
+                aria-label={`Remove from ${dateFrom} filter`}
+                type="button"
+                onClick={() => onRemoveFilter('dateFrom')}
+              >
+                <XMarkIcon aria-hidden="true" />
+              </button>
+            </span>
+          ) : null}
+          {dateTo ? (
+            <span>
+              To {dateTo}
+              <button
+                aria-label={`Remove to ${dateTo} filter`}
+                type="button"
+                onClick={() => onRemoveFilter('dateTo')}
+              >
+                <XMarkIcon aria-hidden="true" />
+              </button>
+            </span>
+          ) : null}
         </div>
       ) : null}
     </form>

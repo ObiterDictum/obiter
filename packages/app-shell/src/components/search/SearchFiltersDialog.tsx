@@ -71,6 +71,7 @@ export function SearchFiltersDialog({
                 <input
                   value={draftDateFrom}
                   onChange={(event) => setDraftDateFrom(event.target.value)}
+                  onInput={(event) => setDraftDateFrom(event.currentTarget.value)}
                   name="date-from-filter"
                   type="date"
                 />
@@ -81,6 +82,7 @@ export function SearchFiltersDialog({
                 <input
                   value={draftDateTo}
                   onChange={(event) => setDraftDateTo(event.target.value)}
+                  onInput={(event) => setDraftDateTo(event.currentTarget.value)}
                   name="date-to-filter"
                   type="date"
                 />

@@ -60,6 +60,25 @@ async function changeSearchInput(input: HTMLInputElement, value: string) {
   })
 }
 
+async function changeInput(input: HTMLInputElement, value: string) {
+  await act(async () => {
+    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    setValue?.call(input, value)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+}
+
+async function clickButton(container: HTMLElement, name: string) {
+  const button = [...container.querySelectorAll('button')].find((candidate) =>
+    candidate.textContent?.includes(name) || candidate.getAttribute('aria-label')?.includes(name),
+  )
+  if (!button) throw new Error(`Button not found: ${name}`)
+
+  await act(async () => {
+    button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  })
+}
+
 async function flushMicrotasks() {
   await act(async () => {
     await Promise.resolve()
@@ -140,5 +159,79 @@ describe('LegalSearchView debounce lifecycle', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(container.textContent).toContain('No stored legal sources matched "Potanin"')
+  })
+
+  it('shows idle search tips and does not fetch when a court shortcut has no query', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    expect(container.textContent).toContain('Recent searches')
+    expect(container.textContent).toContain('Case name')
+    expect(container.textContent).toContain('Neutral citation')
+    expect(container.textContent).toContain('Keyword')
+
+    await clickButton(container, 'UKSC')
+    act(() => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('Supreme Court')
+    expect(container.textContent).toContain('Enter a search term to search within that court.')
+  })
+
+  it('stores successful non-empty searches as recent idle shortcuts', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(createSearchResponse())
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+    const input = getSearchInput(container)
+
+    await changeSearchInput(input, 'Potanina')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    await changeSearchInput(input, '')
+
+    expect(container.textContent).toContain('Potanina')
+  })
+
+  it('removes one active filter while preserving the others without an empty-query fetch', async () => {
+    const fetchMock = vi.fn()
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await clickButton(container, 'UKSC')
+    await clickButton(container, 'Filters')
+
+    const dateFromInput = container.querySelector<HTMLInputElement>('input[name="date-from-filter"]')
+    const dateToInput = container.querySelector<HTMLInputElement>('input[name="date-to-filter"]')
+    if (!dateFromInput || !dateToInput) throw new Error('Date filters were not rendered')
+
+    await changeInput(dateFromInput, '2024-01-01')
+    await changeInput(dateToInput, '2024-12-31')
+    await clickButton(container, 'Apply filters')
+
+    expect(container.textContent).toContain('Supreme Court')
+    expect(container.textContent).toContain('From 2024-01-01')
+    expect(container.textContent).toContain('To 2024-12-31')
+
+    await clickButton(container, 'Remove from 2024-01-01 filter')
+    act(() => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(container.textContent).toContain('Supreme Court')
+    expect(container.textContent).not.toContain('From 2024-01-01')
+    expect(container.textContent).toContain('To 2024-12-31')
   })
 })

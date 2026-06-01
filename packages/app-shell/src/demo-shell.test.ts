@@ -6,12 +6,15 @@ import {
   findMatterRecord,
   countActiveLegalSearchFilters,
   getCourtLabel,
+  getRecentLegalSearches,
   getLegalSearchStateAfterInputChange,
   getLegalSearchStateLabel,
   LEGAL_SEARCH_DEBOUNCE_MS,
+  LEGAL_SEARCH_RECENT_SEARCHES_LIMIT,
   selectJudgmentParagraphs,
   selectParagraphExcerpts,
   shouldRunLegalSearch,
+  writeRecentLegalSearch,
 } from './index'
 import {
   readCollapsedSections,
@@ -111,6 +114,7 @@ describe('LegalSearchView helpers', () => {
 
   it('labels selected court filters for the collapsed search filter control', () => {
     expect(getCourtLabel('')).toBe('All courts and tribunals')
+    expect(getCourtLabel('ewhc')).toBe('High Court')
     expect(getCourtLabel('ewhc/admin')).toBe('Administrative Court')
     expect(getCourtLabel('unknown-court')).toBe('unknown-court')
   })
@@ -185,6 +189,31 @@ describe('LegalSearchView helpers', () => {
     expect(shouldRunLegalSearch(' Potanina ')).toBe(true)
   })
 
+  it('deduplicates recent searches and keeps a small session list', () => {
+    const storage = new Map<string, string>()
+    const sessionStorage = {
+      getItem: (key: string) => storage.get(key) ?? null,
+      setItem: (key: string, value: string) => storage.set(key, value),
+    }
+
+    writeRecentLegalSearch(sessionStorage, ' Potanina ')
+    writeRecentLegalSearch(sessionStorage, 'beneficial ownership')
+    writeRecentLegalSearch(sessionStorage, 'POTANINA')
+    writeRecentLegalSearch(sessionStorage, '[2024] UKSC 3')
+    writeRecentLegalSearch(sessionStorage, 'public law')
+    writeRecentLegalSearch(sessionStorage, 'tax appeal')
+    writeRecentLegalSearch(sessionStorage, 'late evidence')
+
+    expect(getRecentLegalSearches(sessionStorage)).toEqual([
+      'late evidence',
+      'tax appeal',
+      'public law',
+      '[2024] UKSC 3',
+      'POTANINA',
+    ])
+    expect(getRecentLegalSearches(sessionStorage)).toHaveLength(LEGAL_SEARCH_RECENT_SEARCHES_LIMIT)
+  })
+
   it('selects matching paragraph excerpts for expanded search results', () => {
     const result = {
       id: 'uksc-2024-3',
@@ -194,8 +223,16 @@ describe('LegalSearchView helpers', () => {
       dateDecided: '2024-01-31',
       sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
       paragraphs: [
-        { id: 'p1', paragraphNumber: 1, text: 'Unrelated paragraph text.' },
-        { id: 'p2', paragraphNumber: 2, text: 'Potanina appears in this paragraph.' },
+        {
+          id: 'p1',
+          paragraphNumber: 1,
+          text: 'The application arises from financial remedy proceedings after an overseas divorce.',
+        },
+        {
+          id: 'p2',
+          paragraphNumber: 2,
+          text: 'Potanina appears in the judgment when the court considers permission under Part III.',
+        },
       ],
     }
     const excerpts = selectParagraphExcerpts(
@@ -204,7 +241,11 @@ describe('LegalSearchView helpers', () => {
     )
 
     expect(excerpts).toEqual([
-      { id: 'p2', paragraphNumber: 2, text: 'Potanina appears in this paragraph.' },
+      {
+        id: 'p2',
+        paragraphNumber: 2,
+        text: 'Potanina appears in the judgment when the court considers permission under Part III.',
+      },
     ])
     expect(selectJudgmentParagraphs(result)).toHaveLength(2)
   })
