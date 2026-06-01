@@ -427,6 +427,7 @@ describe('Legal search client', () => {
 
     expect(snippets).toEqual([
       {
+        matchedTerms: ['potanina', 'financial'],
         paragraphNumber: 2,
         text: 'The court considered Potanina and the effect of prior financial remedy proceedings.',
       },
@@ -481,10 +482,12 @@ describe('Legal search client', () => {
 
     expect(snippets).toEqual([
       {
+        matchedTerms: ['potanina'],
         paragraphNumber: 1,
         text: 'Potanina appears in the first paragraph.',
       },
       {
+        matchedTerms: ['financial', 'remedy'],
         paragraphNumber: 2,
         text: 'Financial remedy proceedings are discussed in the second paragraph.',
       },

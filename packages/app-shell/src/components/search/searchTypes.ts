@@ -7,6 +7,7 @@ export interface CaseLawParagraph {
 export interface CaseLawSnippet {
   paragraphNumber: number
   text: string
+  matchedTerms: string[]
 }
 
 export interface LegalSearchResult {

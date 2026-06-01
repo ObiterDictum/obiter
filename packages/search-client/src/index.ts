@@ -12,6 +12,7 @@ export type LegalSearchDocument = LegalAuthority
 export interface LegalSearchSnippet {
   paragraphNumber: number
   text: string
+  matchedTerms: string[]
 }
 export type LegalSearchHit = LegalAuthoritySummary & {
   paragraphs?: LegalAuthority['paragraphs']
@@ -295,7 +296,15 @@ export function extractLegalSearchSnippets(
   return selectedParagraphs.map((paragraph) => ({
     paragraphNumber: paragraph.paragraphNumber,
     text: trimSnippetText(paragraph.text, tokens),
+    matchedTerms: matchedSnippetTerms(paragraph.text, normalizedQuery, tokens),
   }))
+}
+
+function matchedSnippetTerms(text: string, normalizedQuery: string, tokens: string[]) {
+  const normalizedText = normalizeExactMatchValue(text)
+  if (normalizedQuery && normalizedText.includes(normalizedQuery)) return [normalizedQuery]
+
+  return tokens.filter((token) => normalizedText.includes(token))
 }
 
 function snippetMatchScore(text: string, normalizedQuery: string, tokens: string[]) {

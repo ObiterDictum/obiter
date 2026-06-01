@@ -156,6 +156,37 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('runs filter-only stored court browse without calling Find Case Law', async () => {
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [hit],
+      query: '',
+      estimatedTotalHits: 1,
+      processingTimeMs: 1,
+    })
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    const app = createLegalSearchProxyRoutes(env)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: '', court: 'uksc', foregroundLiveResults: false }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      cached: true,
+      hits: [hit],
+    })
+    expect(searchClientMock.search).toHaveBeenCalledWith(
+      { id: 'meili-client' },
+      'legal_authorities',
+      '',
+      { court: 'uksc', sourceType: 'judgment' },
+      { includeSnippets: true },
+    )
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('queues Find Case Law hydration after a cache miss without returning provider results in the foreground', async () => {
     searchClientMock.search.mockResolvedValueOnce({
       hits: [],
@@ -815,7 +846,7 @@ describe('createLegalSearchProxyRoutes', () => {
     })
     const emptyQueryResponse = await app.request('/api/search/fetch', {
       method: 'POST',
-      body: JSON.stringify({ query: '   ', court: 'uksc' }),
+      body: JSON.stringify({ query: '   ' }),
       headers: { 'content-type': 'application/json' },
     })
 

@@ -9,7 +9,7 @@ const legalSlugSchema = z
   .transform(normalizeCourtCode)
 
 export const legalFetchRequestSchema = z.object({
-  query: z.string().trim().min(1),
+  query: z.string().trim(),
   court: legalSlugSchema.optional(),
   jurisdiction: legalSlugSchema.optional(),
   dateFrom: z.string().date().optional(),

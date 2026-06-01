@@ -24,6 +24,7 @@ export {
   selectJudgmentParagraphs,
   selectParagraphExcerpts,
   shouldRunLegalSearch,
+  shouldRunLegalSearchRequest,
   writeRecentLegalSearch,
 } from './views/LegalSearchView'
 

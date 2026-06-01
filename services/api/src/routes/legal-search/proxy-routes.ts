@@ -52,7 +52,11 @@ export function createLegalSearchProxyRoutes(
     const requestId = c.get('requestId')
     const parsed = legalFetchRequestSchema.safeParse(await c.req.json().catch(() => null))
 
-    if (!parsed.success || !isSupportedFindCaseLawRequest(parsed.data)) {
+    if (
+      !parsed.success ||
+      !isSupportedFindCaseLawRequest(parsed.data) ||
+      !isSupportedFetchSearchMode(parsed.data)
+    ) {
       return c.json(
         apiError('validation_failed', 'Fetch search request is invalid.', requestId),
         400,
@@ -99,6 +103,10 @@ export function createLegalSearchProxyRoutes(
           0,
         ),
       )
+    }
+
+    if (!parsed.data.query.trim()) {
+      return c.json(toFetchResponse([], parsed.data.query, true, 0, 0))
     }
 
     if (!parsed.data.foregroundLiveResults) {
@@ -280,6 +288,10 @@ export function createLegalSearchProxyRoutes(
   })
 
   return app
+}
+
+function isSupportedFetchSearchMode(request: LegalFetchRequest) {
+  return Boolean(request.query.trim()) || Boolean(request.court)
 }
 
 async function searchStoredAuthorities(

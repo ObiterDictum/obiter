@@ -48,7 +48,7 @@ export function SearchResults({ response }: SearchResultsProps) {
                 {result.snippets.map((snippet) => (
                   <p className="case-law-result__snippet" key={`${result.id}-${snippet.paragraphNumber}`}>
                     <span className="case-law-result__snippet-label">[{snippet.paragraphNumber}]</span>
-                    {snippet.text}
+                    {renderSnippetText(snippet.text, snippet.matchedTerms)}
                   </p>
                 ))}
               </div>
@@ -62,4 +62,23 @@ export function SearchResults({ response }: SearchResultsProps) {
 
 function formatNeutralCitation(neutralCitation: string | null) {
   return neutralCitation ?? 'No neutral citation'
+}
+
+function renderSnippetText(text: string, matchedTerms: string[]) {
+  const terms = Array.from(new Set(matchedTerms.filter(Boolean)))
+  if (terms.length === 0) return text
+
+  const matcher = new RegExp(`(${terms.map(escapeRegExp).join('|')})`, 'gi')
+
+  return text.split(matcher).map((part, index) =>
+    terms.some((term) => part.toLowerCase() === term.toLowerCase()) ? (
+      <mark key={`${part}-${index}`}>{part}</mark>
+    ) : (
+      part
+    ),
+  )
+}
+
+function escapeRegExp(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
