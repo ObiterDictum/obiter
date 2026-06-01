@@ -599,7 +599,7 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('uses indexed metadata search and a database statement timeout for Postgres source fallback', async () => {
+  it('uses indexed search and a database statement timeout for Postgres source fallback', async () => {
     const queries: Array<{ text: string; values?: unknown[] }> = []
     const client = {
       query: vi.fn(async (text: string, values?: unknown[]) => {
@@ -616,7 +616,7 @@ describe('createLegalSearchProxyRoutes', () => {
                       id: 'uksc-2024-3-p1',
                       documentId: 'uksc-2024-3',
                       paragraphNumber: 1,
-                      text: 'Stored paragraph text should not be scanned by fallback search.',
+                      text: 'Stored paragraph text is searched through the indexed fallback vector.',
                     },
                   ],
                 },

@@ -315,6 +315,7 @@ function documentMatchesSearch(
       document.id,
       document.title,
       document.neutralCitation,
+      ...(document.paragraphs?.map((paragraph) => paragraph.text) ?? []),
     ].join(' '),
   )
   const tokens = normalizedQuery.split(' ').filter(Boolean)
