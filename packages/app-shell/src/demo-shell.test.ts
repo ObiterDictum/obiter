@@ -14,6 +14,7 @@ import {
   selectJudgmentParagraphs,
   selectParagraphExcerpts,
   shouldRunLegalSearch,
+  shouldRunLegalSearchRequest,
   writeRecentLegalSearch,
 } from './index'
 import {
@@ -187,6 +188,7 @@ describe('LegalSearchView helpers', () => {
     expect(shouldRunLegalSearch('')).toBe(false)
     expect(shouldRunLegalSearch('   ')).toBe(false)
     expect(shouldRunLegalSearch(' Potanina ')).toBe(true)
+    expect(shouldRunLegalSearchRequest('', { court: 'uksc', dateFrom: '', dateTo: '' })).toBe(true)
   })
 
   it('deduplicates recent searches and keeps a small session list', () => {

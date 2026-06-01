@@ -1,8 +1,18 @@
 // @vitest-environment jsdom
-import { act } from 'react'
+import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LEGAL_SEARCH_DEBOUNCE_MS, LegalSearchView } from './LegalSearchView'
+
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({
+    children,
+    className,
+  }: {
+    children: ReactNode
+    className?: string
+  }) => <a className={className}>{children}</a>,
+}))
 
 interface DeferredResponse {
   promise: Promise<Response>
@@ -161,8 +171,19 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(container.textContent).toContain('No stored legal sources matched "Potanin"')
   })
 
-  it('shows idle search tips and does not fetch when a court shortcut has no query', async () => {
-    const fetchMock = vi.fn()
+  it('runs a stored-only court browse when a court shortcut has no query', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      createSearchResponse([
+        {
+          id: 'uksc-2024-3',
+          title: 'Potanina v Potanin',
+          neutralCitation: '[2024] UKSC 3',
+          court: 'uksc',
+          dateDecided: '2024-01-31',
+          sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
+        },
+      ]),
+    )
     vi.stubGlobal('fetch', fetchMock)
     const rendered = renderLegalSearchView()
     root = rendered.root
@@ -174,13 +195,19 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(container.textContent).toContain('Keyword')
 
     await clickButton(container, 'UKSC')
-    act(() => {
+    await act(async () => {
       vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
     })
+    await flushMicrotasks()
 
-    expect(fetchMock).not.toHaveBeenCalled()
-    expect(container.textContent).toContain('Supreme Court')
-    expect(container.textContent).toContain('Enter a search term to search within that court.')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined
+    expect(JSON.parse(String(request?.body))).toEqual({
+      query: '',
+      foregroundLiveResults: false,
+      court: 'uksc',
+    })
+    expect(container.textContent).toContain('Potanina v Potanin')
   })
 
   it('runs shortcut searches with a supported court filter', async () => {
@@ -226,8 +253,8 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(container.textContent).toContain('Potanina')
   })
 
-  it('removes one active filter while preserving the others without an empty-query fetch', async () => {
-    const fetchMock = vi.fn()
+  it('removes one active filter while preserving the others through stored-only browse', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(createSearchResponse())
     vi.stubGlobal('fetch', fetchMock)
     const rendered = renderLegalSearchView()
     root = rendered.root
@@ -249,11 +276,19 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(container.textContent).toContain('To 2024-12-31')
 
     await clickButton(container, 'Remove from 2024-01-01 filter')
-    act(() => {
+    await act(async () => {
       vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
     })
+    await flushMicrotasks()
 
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const request = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined
+    expect(JSON.parse(String(request?.body))).toEqual({
+      query: '',
+      foregroundLiveResults: false,
+      court: 'uksc',
+      dateTo: '2024-12-31',
+    })
     expect(container.textContent).toContain('Supreme Court')
     expect(container.textContent).not.toContain('From 2024-01-01')
     expect(container.textContent).toContain('To 2024-12-31')
