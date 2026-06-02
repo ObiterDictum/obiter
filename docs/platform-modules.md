@@ -38,6 +38,10 @@ Vault is the matter workspace. It stores uploaded documents, redaction maps, res
 
 Bench is the evaluation system. It measures retrieval quality, citation resolution, quote checking, proposition verification, redaction quality, and end-to-end research answer quality across models and system versions.
 
+### Pi
+
+Pi is the agent framework layer. It coordinates bounded multi-step workflows over Search, Verify, Redact, Research, and product APIs while preserving tool boundaries, execution traces, evidence links, and explicit human handoff states.
+
 ### API
 
 The API exposes the platform as legal infrastructure for internal applications and third-party developer use.
@@ -51,7 +55,8 @@ The platform flow is:
 3. Verify checks that legal statements are real, accurate, and supported.
 4. Research uses Atlas and Verify to generate source-bound analysis.
 5. Vault stores the private matter context and outputs.
-6. Bench measures system quality over time.
+6. Pi coordinates bounded agentic workflows when a task needs planning or tool use.
+7. Bench measures system quality over time.
 
 ## Product Direction
 

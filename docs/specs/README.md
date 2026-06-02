@@ -10,3 +10,6 @@ These folders hold the executable planning layer for Phase 0, Search, and Phase 
 - [Verify](verify/README.md)
 - [Redact](redact/README.md)
 - [Research](research/README.md)
+- [Bench](bench/README.md)
+- [Verification Evidence](verification-evidence.md)
+- [Pi Agent Framework](pi-agent-framework.md)
