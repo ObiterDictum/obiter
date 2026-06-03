@@ -4,9 +4,7 @@
 
 Verification Evidence is Ormont's shared trace and artifact model for inspectable legal outputs. It records how a query, draft, research answer, benchmark case, or Pi agent run moved from input to evidence to output.
 
-[Bench](bench.md) measures quality across many cases. Verification Evidence explains a single result. Together they make Ormont reviewable by lawyers, builders, and university partners.
-
-See the detailed implementation spec at [docs/specs/verification-evidence.md](../specs/verification-evidence.md).
+Bench measures quality across many cases. Verification Evidence explains a single result. Together they make Ormont reviewable by lawyers, builders, and university partners.
 
 ## Problem
 
@@ -39,7 +37,7 @@ Without a shared evidence package, each module will invent a different trace for
 - A full audit log replacement.
 - Raw prompt or raw document archival.
 - Exposing all internal logs to reviewers.
-- Full Research or Pi dependency for the first Search and Verify evidence packages (neither Research nor Pi is required for the first evidence package release).
+- Full Research or Pi dependency for the first Search and Verify evidence packages.
 
 ## Users
 
@@ -358,12 +356,12 @@ Exports must support sampled university review bundles. Human-readable exports c
 
 ## Dependencies
 
-- [Search](search-quality.md) source ids and evidence ids.
-- [Verify](verify.md) finding ids.
-- [Bench](bench.md) run records.
-- [Pi](pi-agent-framework.md) step and tool-call records for agent evidence packages.
-- Shared contracts package (`packages/contracts`).
+- Search source ids and evidence ids.
+- Verify finding ids.
+- Shared contracts package.
 - Artifact storage for exported packages.
+- Bench run records.
+- Pi step and tool-call records for agent evidence packages.
 
 ## Rollout
 

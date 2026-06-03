@@ -2,11 +2,9 @@
 
 ## Summary
 
-Bench is Ormont's evaluation product. It records repeatable tests for [Search](search-quality.md), [Verify](verify.md), [Research](research.md), [Redact](redact.md), and [Pi](pi-agent-framework.md)-backed agent workflows so quality claims can be inspected by Ormont, legal reviewers, and university partners.
+Bench is Ormont's evaluation product. It records repeatable tests for Search, Verify, Research, Redact, and Pi-backed agent workflows so quality claims can be inspected by Ormont, legal reviewers, and university partners.
 
 The first release is a university verification bundle, not a public leaderboard. It must prove that Ormont can run fixed tasks, preserve the evidence path, classify failures, compare system versions, and expose enough artifacts for independent review without leaking private matter data.
-
-See the detailed implementation spec at [docs/specs/bench/](../specs/bench/).
 
 ## Problem
 
@@ -381,13 +379,12 @@ The bundle should be inspectable without access to private matters, secrets, int
 
 ## Dependencies
 
-- [Search](search-quality.md) evidence refs for retrieval benchmarks.
-- [Verify](verify.md) findings for verification benchmarks.
-- [Verification Evidence](verification-evidence.md) package schema.
-- [Pi](pi-agent-framework.md) traces before agent benchmarks can be meaningful.
-- Shared contracts package (`packages/contracts`) for run-record and case-result schemas.
+- Search evidence refs for retrieval benchmarks.
+- Verify findings for verification benchmarks.
+- Verification Evidence package schema.
 - Artifact storage once hosted export exists.
 - Worker jobs for long-running hosted benchmarks.
+- Pi traces before agent benchmarks can be meaningful.
 
 ## Rollout
 
