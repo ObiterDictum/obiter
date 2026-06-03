@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  annotateLegalSearchHits,
   createIndex,
   extractLegalSearchSnippets,
   getDocument,
@@ -345,10 +346,22 @@ describe('Legal search client', () => {
       'uksc-2024-3',
       'uksc-2026-99',
     ])
+    expect(citationResult.hits[0]).toMatchObject({
+      matchReason: 'exact_neutral_citation',
+      retrievalPath: 'stored_lexical',
+      rank: 1,
+      score: 4,
+    })
     expect(idResult.hits.map((hit) => hit.id)).toEqual([
       'ewca-civ-2026-659',
       'uksc-2026-99',
     ])
+    expect(idResult.hits[0]).toMatchObject({
+      matchReason: 'exact_document_id',
+      retrievalPath: 'stored_lexical',
+      rank: 1,
+      score: 5,
+    })
   })
 
   it('ranks hits without neutral citations without throwing', () => {
@@ -450,6 +463,7 @@ describe('Legal search client', () => {
 
     expect(snippets).toEqual([
       {
+        evidenceId: 'uksc-2024-3-p2',
         matchedTerms: ['potanina', 'financial'],
         paragraphNumber: 2,
         text: 'The court considered Potanina and the effect of prior financial remedy proceedings.',
@@ -505,11 +519,13 @@ describe('Legal search client', () => {
 
     expect(snippets).toEqual([
       {
+        evidenceId: 'uksc-2024-3-p1',
         matchedTerms: ['potanina'],
         paragraphNumber: 1,
         text: 'Potanina appears in the first paragraph.',
       },
       {
+        evidenceId: 'uksc-2024-3-p2',
         matchedTerms: ['financial', 'remedy'],
         paragraphNumber: 2,
         text: 'Financial remedy proceedings are discussed in the second paragraph.',
@@ -545,7 +561,17 @@ describe('Legal search client', () => {
 
     expect(result.hits[0]).toMatchObject({
       id: 'uksc-2024-3',
-      snippets: [{ paragraphNumber: 7, text: 'Potanina appears in this indexed paragraph.' }],
+      evidenceIds: ['uksc-2024-3-p7'],
+      matchReason: 'title_contains_query',
+      rank: 1,
+      retrievalPath: 'stored_lexical',
+      snippets: [
+        {
+          evidenceId: 'uksc-2024-3-p7',
+          paragraphNumber: 7,
+          text: 'Potanina appears in this indexed paragraph.',
+        },
+      ],
     })
     expect(result.hits[0]).not.toHaveProperty('paragraphs')
     expect(searchMock).toHaveBeenCalledWith(
@@ -554,6 +580,36 @@ describe('Legal search client', () => {
         attributesToRetrieve: expect.arrayContaining(['paragraphs']),
       }),
     )
+  })
+
+  it('annotates body-text matches with paragraph evidence metadata', () => {
+    const [result] = annotateLegalSearchHits(
+      [
+        {
+          ...authority({
+            title: 'Unrelated title',
+            paragraphs: undefined,
+          }),
+          snippets: [
+            {
+              evidenceId: 'uksc-2024-3-p7',
+              paragraphNumber: 7,
+              text: 'The court addressed financial remedy proceedings.',
+              matchedTerms: ['financial', 'remedy'],
+            },
+          ],
+        },
+      ],
+      'financial remedy',
+    )
+
+    expect(result).toMatchObject({
+      evidenceIds: ['uksc-2024-3-p7'],
+      matchReason: 'paragraph_terms_match',
+      retrievalPath: 'stored_lexical',
+      rank: 1,
+      score: 0.5,
+    })
   })
 
   it('escapes filter values as string literals', async () => {

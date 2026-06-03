@@ -9,7 +9,21 @@ import {
 } from '@ormont/legal-schema'
 
 export type LegalSearchDocument = LegalAuthority
+export type LegalSearchMatchReason =
+  | 'exact_document_id'
+  | 'exact_neutral_citation'
+  | 'exact_title'
+  | 'title_contains_query'
+  | 'title_terms_match'
+  | 'paragraph_phrase_match'
+  | 'paragraph_terms_match'
+  | 'paragraph_term_match'
+  | 'keyword_match'
+
+export type LegalSearchRetrievalPath = 'stored_lexical'
+
 export interface LegalSearchSnippet {
+  evidenceId: string
   paragraphNumber: number
   text: string
   matchedTerms: string[]
@@ -17,6 +31,11 @@ export interface LegalSearchSnippet {
 export type LegalSearchHit = LegalAuthoritySummary & {
   paragraphs?: LegalAuthority['paragraphs']
   snippets?: LegalSearchSnippet[]
+  evidenceIds?: string[]
+  matchReason?: LegalSearchMatchReason
+  retrievalPath?: LegalSearchRetrievalPath
+  rank?: number
+  score?: number
 }
 export type LegalSearchFilters = Partial<{
   court: string
@@ -257,7 +276,7 @@ export async function search(
         ? LegalAuthoritySchema.parse(hit)
         : LegalAuthoritySummarySchema.parse(hit),
     )
-    const rankedHits = rankLegalSearchHitsByExactMatch(hits.map((hit) =>
+    const rankedHits = annotateLegalSearchHits(rankLegalSearchHitsByExactMatch(hits.map((hit) =>
       options.includeParagraphs
         ? {
             ...hit,
@@ -274,7 +293,7 @@ export async function search(
             sourceUrl: hit.sourceUrl,
             snippets: options.includeSnippets ? extractLegalSearchSnippets(hit, query) : undefined,
           },
-    ), query)
+    ), query), query)
 
     return {
       hits: rankedHits,
@@ -308,6 +327,7 @@ export function extractLegalSearchSnippets(
     : []
 
   return selectedParagraphs.map((paragraph) => ({
+    evidenceId: paragraph.id,
     paragraphNumber: paragraph.paragraphNumber,
     text: trimSnippetText(paragraph.text, tokens),
     matchedTerms: matchedSnippetTerms(paragraph.text, normalizedQuery, tokens),
@@ -340,6 +360,53 @@ export function rankLegalSearchHitsByExactMatch<T extends LegalSearchHit>(
     .map((hit, index) => ({ hit, index, score: exactMatchScore(hit, normalizedQuery) }))
     .sort((left, right) => right.score - left.score || left.index - right.index)
     .map(({ hit }) => hit)
+}
+
+export function annotateLegalSearchHits<T extends LegalSearchHit>(
+  hits: T[],
+  query: string,
+): T[] {
+  const normalizedQuery = normalizeExactMatchValue(query)
+
+  return hits.map((hit, index) => {
+    const match = legalSearchHitMatch(hit, normalizedQuery)
+    const evidenceIds = hit.snippets?.map((snippet) => snippet.evidenceId) ?? []
+
+    return {
+      ...hit,
+      evidenceIds,
+      matchReason: match.reason,
+      retrievalPath: 'stored_lexical',
+      rank: index + 1,
+      score: match.score,
+    }
+  })
+}
+
+function legalSearchHitMatch(
+  hit: LegalSearchHit,
+  normalizedQuery: string,
+): { reason: LegalSearchMatchReason; score: number } {
+  const exactScore = exactMatchScore(hit, normalizedQuery)
+  if (exactScore === 5) return { reason: 'exact_document_id', score: exactScore }
+  if (exactScore === 4) return { reason: 'exact_neutral_citation', score: exactScore }
+  if (exactScore === 3) return { reason: 'exact_title', score: exactScore }
+  if (exactScore === 2) return { reason: 'title_contains_query', score: exactScore }
+  if (exactScore === 1) return { reason: 'title_terms_match', score: exactScore }
+
+  const snippetReason = hit.snippets?.map((snippet) => snippetMatchReason(snippet)).find(Boolean)
+  if (snippetReason) return { reason: snippetReason, score: 0.5 }
+
+  return { reason: 'keyword_match', score: 0 }
+}
+
+function snippetMatchReason(snippet: LegalSearchSnippet): LegalSearchMatchReason | undefined {
+  if (snippet.matchedTerms.length === 0) return undefined
+  if (snippet.matchedTerms.length === 1 && snippet.matchedTerms[0]?.includes(' ')) {
+    return 'paragraph_phrase_match'
+  }
+  if (snippet.matchedTerms.length > 1) return 'paragraph_terms_match'
+  return 'paragraph_term_match'
 }
 
 function exactMatchScore(hit: LegalSearchHit, normalizedQuery: string) {

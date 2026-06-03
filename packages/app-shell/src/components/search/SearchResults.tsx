@@ -22,6 +22,9 @@ export function SearchResults({ response, browse }: SearchResultsProps) {
               <small>
                 {formatNeutralCitation(result.neutralCitation)} - {result.court} - {result.dateDecided}
               </small>
+              <small>
+                {formatMatchReason(result.matchReason)} - {formatEvidenceCount(result.evidenceIds)}
+              </small>
             </span>
             <span className="case-law-result__actions">
               <span className="case-law-result__toggle">
@@ -62,6 +65,35 @@ export function SearchResults({ response, browse }: SearchResultsProps) {
 
 function formatNeutralCitation(neutralCitation: string | null) {
   return neutralCitation ?? 'No neutral citation'
+}
+
+function formatMatchReason(matchReason: string | undefined) {
+  switch (matchReason) {
+    case 'exact_document_id':
+      return 'Exact document id'
+    case 'exact_neutral_citation':
+      return 'Exact citation'
+    case 'exact_title':
+      return 'Exact title'
+    case 'title_contains_query':
+      return 'Title match'
+    case 'title_terms_match':
+      return 'Title terms match'
+    case 'paragraph_phrase_match':
+      return 'Paragraph phrase match'
+    case 'paragraph_terms_match':
+      return 'Paragraph terms match'
+    case 'paragraph_term_match':
+      return 'Paragraph term match'
+    default:
+      return 'Keyword match'
+  }
+}
+
+function formatEvidenceCount(evidenceIds: string[] | undefined) {
+  const count = evidenceIds?.length ?? 0
+  if (count === 0) return 'No snippet evidence'
+  return `${count} evidence ${count === 1 ? 'ref' : 'refs'}`
 }
 
 function formatResultMeta(

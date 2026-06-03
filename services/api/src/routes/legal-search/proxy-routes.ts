@@ -77,7 +77,7 @@ export function createLegalSearchProxyRoutes(
     if (cached.hits.length > 0) {
       return c.json(
         toFetchResponse(
-          cached.hits.map((hit) => toSummaryHit(hit, parsed.data.query)),
+          cached.hits.map((hit, index) => toSummaryHit(hit, parsed.data.query, index + 1)),
           parsed.data.query,
           true,
           0,
@@ -99,7 +99,7 @@ export function createLegalSearchProxyRoutes(
 
       return c.json(
         toFetchResponse(
-          rankedStoredDocuments.map((hit) => toSummaryHit(hit, parsed.data.query)),
+          rankedStoredDocuments.map((hit, index) => toSummaryHit(hit, parsed.data.query, index + 1)),
           parsed.data.query,
           true,
           0,
@@ -186,7 +186,7 @@ export function createLegalSearchProxyRoutes(
 
     return c.json(
       toFetchResponse(
-        rankedLiveDocuments.map((hit) => toSummaryHit(hit, parsed.data.query)),
+        rankedLiveDocuments.map((hit, index) => toSummaryHit(hit, parsed.data.query, index + 1)),
         parsed.data.query,
         false,
         0,

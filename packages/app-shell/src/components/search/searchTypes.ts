@@ -5,6 +5,7 @@ export interface CaseLawParagraph {
 }
 
 export interface CaseLawSnippet {
+  evidenceId?: string
   paragraphNumber: number
   text: string
   matchedTerms: string[]
@@ -19,6 +20,11 @@ export interface LegalSearchResult {
   sourceUrl: string
   snippets?: CaseLawSnippet[]
   paragraphs?: CaseLawParagraph[]
+  evidenceIds?: string[]
+  matchReason?: string
+  retrievalPath?: string
+  rank?: number
+  score?: number
 }
 
 export interface LegalSearchFetchResponse {

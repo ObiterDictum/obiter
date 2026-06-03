@@ -1,6 +1,10 @@
 import type { ApiErrorResponse } from '@ormont/contracts'
 import type { LegalAuthority } from '@ormont/legal-schema'
-import { extractLegalSearchSnippets, type LegalSearchHit } from '@ormont/search-client'
+import {
+  annotateLegalSearchHits,
+  extractLegalSearchSnippets,
+  type LegalSearchHit,
+} from '@ormont/search-client'
 
 export interface LegalFetchSearchHit extends LegalSearchHit {
   paragraphs?: LegalAuthority['paragraphs']
@@ -38,8 +42,8 @@ export function toFetchResponse(
   }
 }
 
-export function toSummaryHit(hit: LegalSearchHit, query = ''): LegalFetchSearchHit {
-  return {
+export function toSummaryHit(hit: LegalSearchHit, query = '', rank?: number): LegalFetchSearchHit {
+  const summaryHit = {
     id: hit.id,
     title: hit.title,
     neutralCitation: hit.neutralCitation,
@@ -49,5 +53,16 @@ export function toSummaryHit(hit: LegalSearchHit, query = ''): LegalFetchSearchH
     sourceType: hit.sourceType,
     sourceUrl: hit.sourceUrl,
     snippets: hit.snippets ?? extractLegalSearchSnippets(hit, query),
+    evidenceIds: hit.evidenceIds,
+    matchReason: hit.matchReason,
+    retrievalPath: hit.retrievalPath,
+    rank: hit.rank,
+    score: hit.score,
+  }
+
+  const annotatedHit = annotateLegalSearchHits([summaryHit], query)[0] ?? summaryHit
+  return {
+    ...annotatedHit,
+    rank: hit.rank ?? rank ?? annotatedHit.rank,
   }
 }
