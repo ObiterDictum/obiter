@@ -6,6 +6,8 @@ Pi is Ormont's bounded agent framework for multi-step legal workflows. It coordi
 
 The first release is not broad autonomy. It is an inspectable framework that can show what an agent was asked to do, what it was allowed to do, what it actually did, what evidence it used, what it generated, and why it stopped.
 
+See the detailed implementation spec at [docs/specs/pi-agent-framework.md](../specs/pi-agent-framework.md).
+
 ## Problem
 
 Legal agents are risky when their reasoning path and tool use are hidden. A lawyer cannot rely on a generated output without evidence. A university reviewer cannot evaluate an agent from final prose alone. A builder cannot improve the system without knowing whether the failure came from planning, retrieval, tool use, verification, or policy handling.
@@ -380,13 +382,13 @@ Shows:
 
 ## Dependencies
 
-- Search evidence package.
-- Verify API and findings.
-- Verification Evidence claim map.
+- [Search](search-quality.md) evidence package.
+- [Verify](verify.md) API and findings.
+- [Verification Evidence](verification-evidence.md) claim map.
+- [Bench](bench.md) support for agent trace scoring.
 - Audit logging.
 - Worker/job infrastructure for long-running runs.
-- Shared contracts for agent, step, and tool schemas.
-- Bench support for agent trace scoring.
+- Shared contracts for agent, step, and tool schemas (`packages/contracts`).
 
 ## Rollout
 
