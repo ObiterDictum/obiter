@@ -2,11 +2,9 @@
 
 ## Summary
 
-Search is Ormont's first trust substrate. Before [Verify](verify.md), [Research](research.md), [Bench](bench.md), or [Pi](pi-agent-framework.md) can be credible, Search must retrieve legal sources accurately, explain why results appeared, and cover the source families needed for serious legal work.
+Search is Ormont's first trust substrate. Before Verify, Research, Bench, or Pi can be credible, Search must retrieve legal sources accurately, explain why results appeared, and cover the source families needed for serious legal work.
 
 The current implementation is a good demo foundation, but it is still judgment-first and Find Case Law-shaped. It supports stored Meilisearch retrieval, PostgreSQL fallback, bounded snippets, Find Case Law live fallback and hydration, court/date filters, and a case detail view. It does not yet provide a full legal retrieval product, legislation search, stable evidence ids, source-family expansion, search quality benchmarks, or a UI that explains retrieval confidence and coverage.
-
-See the detailed implementation spec at [docs/specs/search/](../specs/search/).
 
 ## Current Implementation Review
 
@@ -400,7 +398,7 @@ Internal or reviewer mode should show:
 
 ## Benchmark Requirements
 
-Search quality must be benchmarked before major ranking or corpus changes are treated as complete. The canonical benchmark framework is defined in the [Bench PRD](bench.md); the sections below define the Search-specific cases and metrics that feed into it.
+Search quality must be benchmarked before major ranking or corpus changes are treated as complete.
 
 Initial benchmark cases:
 
@@ -466,14 +464,6 @@ Metrics:
 - Keep hosted data in the EU.
 - Object keys must not contain client names, matter names, original filenames, or raw legal text.
 
-## Dependencies
-
-- [Bench](bench.md) — Search benchmark fixtures and quality gates for ranking and corpus changes.
-- [Verification Evidence](verification-evidence.md) — Evidence id schema, evidence unit model, and evidence package export for Search result payloads.
-- Shared contracts package (`packages/contracts`) — Type definitions for stable API routes and legal-source schemas.
-- Provider licence assessments — Required before corpus expansion to new source families or jurisdictions.
-- Infrastructure — Ingestion jobs, corpus refresh workers, and coverage reporting for stored-source reliability.
-
 ## Rollout
 
 ### Gate 1: Judgment Search Quality
@@ -537,20 +527,6 @@ Deliver:
 Exit criteria:
 
 - tool callers can retrieve legal sources without provider internals or admin credentials
-
-## Metrics
-
-- Exact citation lookup success rate (top-1 and top-3).
-- Body-text search recall at top-3 for phrase and keyword queries.
-- Evidence-id coverage rate on result and snippet payloads.
-- Stored search vs. provider-fallback ratio (target: >90% from stored).
-- Corpus coverage by source family and jurisdiction.
-- Citation parse success rate.
-- No-answer precision (queries that should return nothing vs. false hits).
-- Ambiguity surfaced rate (ambiguous queries where the UI explicitly shows the ambiguity).
-- Legislation search success for title, reference, and provision queries (when legislation scope ships).
-- Search result-list latency (p50, p95).
-- Ingestion coverage report completeness (documents ingested vs. available per court).
 
 ## Risks
 
