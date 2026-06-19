@@ -2386,6 +2386,89 @@ body {
   margin: 0;
 }
 
+.legal-search-shortcuts {
+  align-items: center;
+  background: rgba(6, 7, 8, 0.72);
+  display: flex;
+  inset: 0;
+  justify-content: center;
+  padding: 20px;
+  position: fixed;
+  z-index: 60;
+}
+
+.legal-search-shortcuts__panel {
+  background: #0b0c0d;
+  border: 1px solid rgba(245, 242, 235, 0.14);
+  border-radius: 8px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+  display: grid;
+  gap: 16px;
+  max-width: 420px;
+  padding: 18px;
+  width: min(100%, 420px);
+}
+
+.legal-search-shortcuts__header {
+  align-items: center;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+}
+
+.legal-search-shortcuts h2 {
+  color: #f5f2eb;
+  font-family: var(--ormont-font-display);
+  font-size: 1rem;
+  margin: 0;
+}
+
+.legal-search-shortcuts button {
+  background: transparent;
+  border: 1px solid rgba(245, 242, 235, 0.14);
+  border-radius: 6px;
+  color: #f5f2eb;
+  cursor: pointer;
+  font: inherit;
+  padding: 7px 10px;
+}
+
+.legal-search-shortcuts button:hover,
+.legal-search-shortcuts button:focus-visible {
+  background: rgba(212, 138, 44, 0.1);
+  border-color: rgba(212, 138, 44, 0.58);
+  outline: 0;
+}
+
+.legal-search-shortcuts dl {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.legal-search-shortcuts dl div {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.legal-search-shortcuts dt {
+  background: rgba(245, 242, 235, 0.05);
+  border: 1px solid rgba(245, 242, 235, 0.12);
+  border-radius: 6px;
+  color: #f5f2eb;
+  font-size: 0.78rem;
+  padding: 5px 7px;
+  white-space: nowrap;
+}
+
+.legal-search-shortcuts dd {
+  color: #aeb2b8;
+  font-size: 0.82rem;
+  margin: 0;
+  text-align: right;
+}
 .legal-search__results {
   display: grid;
   gap: 10px;
@@ -2404,6 +2487,11 @@ body {
   overflow: hidden;
 }
 
+.case-law-result[data-selected='true'] {
+  border-color: rgba(212, 138, 44, 0.72);
+  box-shadow: 0 0 0 1px rgba(212, 138, 44, 0.16);
+}
+
 .case-law-result__summary {
   align-items: center;
   background: transparent;
@@ -2420,7 +2508,8 @@ body {
 }
 
 .case-law-result__summary:hover,
-.case-law-result__summary[aria-expanded='true'] {
+.case-law-result__summary[aria-expanded='true'],
+.case-law-result__summary[aria-current='true'] {
   background: #101112;
 }
 

@@ -4,9 +4,10 @@ import type { LegalSearchBrowseContext, LegalSearchFetchResponse } from './searc
 interface SearchResultsProps {
   response: LegalSearchFetchResponse
   browse?: LegalSearchBrowseContext
+  selectedIndex: number
 }
 
-export function SearchResults({ response, browse }: SearchResultsProps) {
+export function SearchResults({ response, browse, selectedIndex }: SearchResultsProps) {
   const storedResultsAvailable = response.cached || response.indexedCount > 0
 
   return (
@@ -14,7 +15,7 @@ export function SearchResults({ response, browse }: SearchResultsProps) {
       <p className="legal-search__meta">
         {formatResultMeta(response, storedResultsAvailable, browse)}
       </p>
-      {response.hits.map((result) => {
+      {response.hits.map((result, index) => {
         const summary = (
           <>
             <span>
@@ -24,9 +25,7 @@ export function SearchResults({ response, browse }: SearchResultsProps) {
               </small>
             </span>
             <span className="case-law-result__actions">
-              <span className="case-law-result__toggle">
-                Open case
-              </span>
+              <span className="case-law-result__toggle">Open case</span>
               <span className="case-law-result__source">
                 {storedResultsAvailable ? 'Stored source' : 'Find Case Law'}
               </span>
@@ -35,11 +34,16 @@ export function SearchResults({ response, browse }: SearchResultsProps) {
         )
 
         return (
-          <article className="case-law-result" key={result.id}>
+          <article
+            className="case-law-result"
+            data-selected={selectedIndex === index ? 'true' : undefined}
+            key={result.id}
+          >
             <Link
               to="/cases/$caseId"
               params={{ caseId: result.id }}
               className="case-law-result__summary"
+              aria-current={selectedIndex === index ? 'true' : undefined}
             >
               {summary}
             </Link>

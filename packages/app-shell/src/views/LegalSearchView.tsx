@@ -1,3 +1,4 @@
+import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Card } from '@ormont/ui'
 import {
@@ -5,6 +6,7 @@ import {
   SearchFeedbackPanel,
   SearchFiltersDialog,
   SearchIdleState,
+  SearchKeyboardShortcuts,
   SearchResults,
   courtOptionGroups,
   getCourtLabel,
@@ -153,6 +155,7 @@ function dedupeRecentLegalSearches(searches: string[]) {
 }
 
 export function LegalSearchView() {
+  const navigate = useNavigate()
   const [query, setQuery] = useState(() => readInitialSearchQuery())
   const [court, setCourt] = useState('')
   const [dateFrom, setDateFrom] = useState('')
@@ -161,6 +164,8 @@ export function LegalSearchView() {
     typeof window === 'undefined' ? [] : getRecentLegalSearches(window.sessionStorage),
   )
   const [filtersOpen, setFiltersOpen] = useState(false)
+  const [shortcutsOpen, setShortcutsOpen] = useState(false)
+  const [selectedResultIndex, setSelectedResultIndex] = useState(-1)
   const [state, setState] = useState<LegalSearchState>({ status: 'idle' })
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const searchRequestId = useRef(0)
@@ -184,6 +189,7 @@ export function LegalSearchView() {
     cancelInFlightSearch()
     searchRequestId.current += 1
     setState({ status: 'idle' })
+    setSelectedResultIndex(-1)
   }
 
   function supersedeActiveSearch() {
@@ -196,13 +202,61 @@ export function LegalSearchView() {
   }
 
   useEffect(() => {
+    function handleSearchKeyDown(event: KeyboardEvent) {
+      if (event.defaultPrevented) return
+
+      if (event.key === 'Escape' && shortcutsOpen) {
+        event.preventDefault()
+        setShortcutsOpen(false)
+        return
+      }
+
+      if (event.key === '?' && !isTextEntryTarget(event.target)) {
+        event.preventDefault()
+        setShortcutsOpen(true)
+        return
+      }
+
+      if (shortcutsOpen || state.status !== 'results') return
+
+      const resultCount = state.response.hits.length
+      if (resultCount === 0) return
+
+      if (event.key === 'ArrowDown' || (!isTextEntryTarget(event.target) && event.key.toLowerCase() === 'j')) {
+        event.preventDefault()
+        setSelectedResultIndex((currentIndex) => Math.min(currentIndex + 1, resultCount - 1))
+        return
+      }
+
+      if (event.key === 'ArrowUp' || (!isTextEntryTarget(event.target) && event.key.toLowerCase() === 'k')) {
+        event.preventDefault()
+        setSelectedResultIndex((currentIndex) => (currentIndex <= 0 ? 0 : currentIndex - 1))
+        return
+      }
+
+      if (event.key === 'Enter' && selectedResultIndex >= 0) {
+        const selectedResult = state.response.hits[selectedResultIndex]
+        if (!selectedResult) return
+
+        event.preventDefault()
+        void navigate({ to: '/cases/$caseId', params: { caseId: selectedResult.id } })
+      }
+    }
+
+    window.addEventListener('keydown', handleSearchKeyDown)
+
+    return () => {
+      window.removeEventListener('keydown', handleSearchKeyDown)
+    }
+  }, [navigate, selectedResultIndex, shortcutsOpen, state])
+
+  useEffect(() => {
     return () => {
       clearAutoSearchTimer()
       cancelInFlightSearch()
       searchRequestId.current += 1
     }
   }, [])
-
   async function runSearch(
     searchQuery = query,
     searchFilters: LegalSearchRequestFilters = { court, dateFrom, dateTo },
@@ -229,6 +283,7 @@ export function LegalSearchView() {
     const requestAbortController = new AbortController()
     abortController.current = requestAbortController
     setState({ status: 'loading', query: trimmedQuery })
+    setSelectedResultIndex(-1)
 
     try {
       const response = await fetch('/api/search/fetch', {
@@ -266,6 +321,7 @@ export function LegalSearchView() {
           ? { status: 'results', query: trimmedQuery, response: body, browse }
           : { status: 'empty', query: trimmedQuery, hydrationQueued: body.hydrationQueued, browse },
       )
+      setSelectedResultIndex(body.hits.length > 0 ? 0 : -1)
       keepSearchInputFocused()
     } catch {
       if (searchRequestId.current !== requestId) return
@@ -308,6 +364,7 @@ export function LegalSearchView() {
     setDateTo(filters.dateTo)
     setFiltersOpen(false)
     setState(getLegalSearchStateAfterInputChange())
+    setSelectedResultIndex(-1)
     scheduleAutoSearch(query, filters)
   }
 
@@ -326,18 +383,21 @@ export function LegalSearchView() {
     setDateTo('')
     setFiltersOpen(false)
     setState(getLegalSearchStateAfterInputChange())
+    setSelectedResultIndex(-1)
     scheduleAutoSearch(query, { court: '', dateFrom: '', dateTo: '' })
   }
 
   function handleQueryChange(nextQuery: string) {
     setQuery(nextQuery)
     setState(getLegalSearchStateAfterInputChange())
+    setSelectedResultIndex(-1)
     scheduleAutoSearch(nextQuery)
   }
 
   function handleRecentSearch(nextQuery: string) {
     setQuery(nextQuery)
     setState(getLegalSearchStateAfterInputChange())
+    setSelectedResultIndex(-1)
     scheduleAutoSearch(nextQuery)
   }
 
@@ -345,6 +405,7 @@ export function LegalSearchView() {
     const nextFilters = { court: nextCourt, dateFrom, dateTo }
     setCourt(nextCourt)
     setState(getLegalSearchStateAfterInputChange())
+    setSelectedResultIndex(-1)
     scheduleAutoSearch(query, nextFilters)
   }
 
@@ -386,6 +447,10 @@ export function LegalSearchView() {
           onClear={clearFilters}
           onClose={() => setFiltersOpen(false)}
         />
+      ) : null}
+
+      {shortcutsOpen ? (
+        <SearchKeyboardShortcuts onClose={() => setShortcutsOpen(false)} />
       ) : null}
 
       {shouldShowIdleState ? (
@@ -430,9 +495,24 @@ export function LegalSearchView() {
       ) : null}
 
       {state.status === 'results' ? (
-        <SearchResults response={state.response} browse={state.browse} />
+        <SearchResults
+          response={state.response}
+          browse={state.browse}
+          selectedIndex={selectedResultIndex}
+        />
       ) : null}
     </div>
+  )
+}
+
+function isTextEntryTarget(target: EventTarget | null) {
+  if (!(target instanceof HTMLElement)) return false
+
+  return (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    target.isContentEditable
   )
 }
 
