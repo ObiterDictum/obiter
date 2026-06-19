@@ -5,13 +5,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LEGAL_SEARCH_DEBOUNCE_MS, LegalSearchView } from './LegalSearchView'
 
 vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => vi.fn(),
   Link: ({
     children,
     className,
+    ...props
   }: {
     children: ReactNode
     className?: string
-  }) => <a className={className}>{children}</a>,
+    [key: string]: unknown
+  }) => <a className={className} {...props}>{children}</a>,
 }))
 
 interface DeferredResponse {
@@ -92,6 +95,12 @@ async function clickButton(container: HTMLElement, name: string) {
 async function flushMicrotasks() {
   await act(async () => {
     await Promise.resolve()
+  })
+}
+
+async function pressKey(key: string, target: EventTarget = window) {
+  await act(async () => {
+    target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
   })
 }
 
@@ -314,5 +323,107 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(container.textContent).toContain('Supreme Court')
     expect(container.textContent).not.toContain('From 2024-01-01')
     expect(container.textContent).toContain('To 2024-12-31')
+  })
+  it('selects search results with keyboard navigation', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      createSearchResponse([
+        {
+          id: 'uksc-2024-3',
+          title: 'Potanina v Potanin',
+          neutralCitation: '[2024] UKSC 3',
+          court: 'uksc',
+          dateDecided: '2024-01-31',
+          sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
+        },
+        {
+          id: 'ewca-2023-1',
+          title: 'Example v Respondent',
+          neutralCitation: '[2023] EWCA Civ 1',
+          court: 'ewca/civ',
+          dateDecided: '2023-01-01',
+          sourceUrl: 'https://caselaw.nationalarchives.gov.uk/ewca/civ/2023/1',
+        },
+      ], { cached: true }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(getSearchInput(container), 'Potanina')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    const resultLinks = () => [...rendered.container.querySelectorAll<HTMLAnchorElement>('.case-law-result__summary')]
+    expect(resultLinks()[0]?.getAttribute('aria-current')).toBe('true')
+    expect(resultLinks()[1]?.getAttribute('aria-current')).toBeNull()
+
+    await pressKey('ArrowDown')
+
+    expect(resultLinks()[0]?.getAttribute('aria-current')).toBeNull()
+    expect(resultLinks()[1]?.getAttribute('aria-current')).toBe('true')
+
+    await pressKey('ArrowUp')
+
+    expect(resultLinks()[0]?.getAttribute('aria-current')).toBe('true')
+    expect(resultLinks()[1]?.getAttribute('aria-current')).toBeNull()
+  })
+
+  it('does not treat j and k as result navigation while typing', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      createSearchResponse([
+        {
+          id: 'uksc-2024-3',
+          title: 'Potanina v Potanin',
+          neutralCitation: '[2024] UKSC 3',
+          court: 'uksc',
+          dateDecided: '2024-01-31',
+          sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
+        },
+        {
+          id: 'ewca-2023-1',
+          title: 'Example v Respondent',
+          neutralCitation: '[2023] EWCA Civ 1',
+          court: 'ewca/civ',
+          dateDecided: '2023-01-01',
+          sourceUrl: 'https://caselaw.nationalarchives.gov.uk/ewca/civ/2023/1',
+        },
+      ], { cached: true }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+    const input = getSearchInput(container)
+
+    await changeSearchInput(input, 'Potanina')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+    await pressKey('j', input)
+
+    const resultLinks = [...container.querySelectorAll<HTMLAnchorElement>('.case-law-result__summary')]
+    expect(resultLinks[0]?.getAttribute('aria-current')).toBe('true')
+    expect(resultLinks[1]?.getAttribute('aria-current')).toBeNull()
+  })
+
+  it('opens and closes the keyboard shortcuts overlay', async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await pressKey('?')
+
+    expect(container.textContent).toContain('Keyboard Shortcuts')
+    expect(container.textContent).toContain('ArrowDown / j')
+
+    await pressKey('Escape')
+
+    expect(container.textContent).not.toContain('Keyboard Shortcuts')
   })
 })

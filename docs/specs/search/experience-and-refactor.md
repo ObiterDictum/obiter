@@ -489,7 +489,7 @@ Current implementation status:
 - [x] Add debounced auto-search using refs/timers.
 - [x] Add API and UI result snippets.
 - [x] Add or update tests for citation-first search, body-text search, snippet extraction, and stored-source fallback behavior.
-- [ ] Add keyboard navigation, idle state, and individual filter removal.
+- [x] Add keyboard navigation, idle state, and individual filter removal.
 - [ ] Run cleanup for deprecated fallbacks and empty scaffolds.
 - [ ] Run the verification commands below after the remaining Search UX work.
 
@@ -503,9 +503,8 @@ Completed through PR 19:
 
 Remaining next slice:
 
-- Implement keyboard navigation, idle state, and individual filter removal.
 - Manually exercise `/search` against a running API, Meilisearch, and Postgres stack.
-- Then run dead-code cleanup and the full verification list.
+- Run dead-code cleanup and the full verification list.
 
 ## Verification
 
