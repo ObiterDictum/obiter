@@ -222,19 +222,21 @@ export function LegalSearchView() {
       const resultCount = state.response.hits.length
       if (resultCount === 0) return
 
-      if (event.key === 'ArrowDown' || (!isTextEntryTarget(event.target) && event.key.toLowerCase() === 'j')) {
+      const textEntryTarget = isTextEntryTarget(event.target)
+
+      if (!textEntryTarget && (event.key === 'ArrowDown' || event.key.toLowerCase() === 'j')) {
         event.preventDefault()
         setSelectedResultIndex((currentIndex) => Math.min(currentIndex + 1, resultCount - 1))
         return
       }
 
-      if (event.key === 'ArrowUp' || (!isTextEntryTarget(event.target) && event.key.toLowerCase() === 'k')) {
+      if (!textEntryTarget && (event.key === 'ArrowUp' || event.key.toLowerCase() === 'k')) {
         event.preventDefault()
         setSelectedResultIndex((currentIndex) => (currentIndex <= 0 ? 0 : currentIndex - 1))
         return
       }
 
-      if (event.key === 'Enter' && selectedResultIndex >= 0) {
+      if (!textEntryTarget && event.key === 'Enter' && selectedResultIndex >= 0) {
         const selectedResult = state.response.hits[selectedResultIndex]
         if (!selectedResult) return
 

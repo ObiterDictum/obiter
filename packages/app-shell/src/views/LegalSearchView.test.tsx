@@ -4,8 +4,12 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LEGAL_SEARCH_DEBOUNCE_MS, LegalSearchView } from './LegalSearchView'
 
+const routerMocks = vi.hoisted(() => ({
+  navigate: vi.fn(),
+}))
+
 vi.mock('@tanstack/react-router', () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => routerMocks.navigate,
   Link: ({
     children,
     className,
@@ -45,6 +49,27 @@ function createSearchResponse(hits: unknown[] = [], options: { cached?: boolean 
       skippedCount: 0,
     }),
   } as Response
+}
+
+function createTwoResultHits() {
+  return [
+    {
+      id: 'uksc-2024-3',
+      title: 'Potanina v Potanin',
+      neutralCitation: '[2024] UKSC 3',
+      court: 'uksc',
+      dateDecided: '2024-01-31',
+      sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
+    },
+    {
+      id: 'ewca-2023-1',
+      title: 'Example v Respondent',
+      neutralCitation: '[2023] EWCA Civ 1',
+      court: 'ewca/civ',
+      dateDecided: '2023-01-01',
+      sourceUrl: 'https://caselaw.nationalarchives.gov.uk/ewca/civ/2023/1',
+    },
+  ]
 }
 
 function renderLegalSearchView() {
@@ -111,6 +136,7 @@ describe('LegalSearchView debounce lifecycle', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     vi.useFakeTimers()
+    routerMocks.navigate.mockReset()
     window.sessionStorage.clear()
     root = null
     container = null
@@ -326,24 +352,7 @@ describe('LegalSearchView debounce lifecycle', () => {
   })
   it('selects search results with keyboard navigation', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      createSearchResponse([
-        {
-          id: 'uksc-2024-3',
-          title: 'Potanina v Potanin',
-          neutralCitation: '[2024] UKSC 3',
-          court: 'uksc',
-          dateDecided: '2024-01-31',
-          sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
-        },
-        {
-          id: 'ewca-2023-1',
-          title: 'Example v Respondent',
-          neutralCitation: '[2023] EWCA Civ 1',
-          court: 'ewca/civ',
-          dateDecided: '2023-01-01',
-          sourceUrl: 'https://caselaw.nationalarchives.gov.uk/ewca/civ/2023/1',
-        },
-      ], { cached: true }),
+      createSearchResponse(createTwoResultHits(), { cached: true }),
     )
     vi.stubGlobal('fetch', fetchMock)
     const rendered = renderLegalSearchView()
@@ -373,24 +382,7 @@ describe('LegalSearchView debounce lifecycle', () => {
 
   it('does not treat j and k as result navigation while typing', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      createSearchResponse([
-        {
-          id: 'uksc-2024-3',
-          title: 'Potanina v Potanin',
-          neutralCitation: '[2024] UKSC 3',
-          court: 'uksc',
-          dateDecided: '2024-01-31',
-          sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
-        },
-        {
-          id: 'ewca-2023-1',
-          title: 'Example v Respondent',
-          neutralCitation: '[2023] EWCA Civ 1',
-          court: 'ewca/civ',
-          dateDecided: '2023-01-01',
-          sourceUrl: 'https://caselaw.nationalarchives.gov.uk/ewca/civ/2023/1',
-        },
-      ], { cached: true }),
+      createSearchResponse(createTwoResultHits(), { cached: true }),
     )
     vi.stubGlobal('fetch', fetchMock)
     const rendered = renderLegalSearchView()
@@ -410,6 +402,48 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(resultLinks[1]?.getAttribute('aria-current')).toBeNull()
   })
 
+  it('does not treat arrow keys as result navigation while typing', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      createSearchResponse(createTwoResultHits(), { cached: true }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+    const input = getSearchInput(container)
+
+    await changeSearchInput(input, 'Potanina')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+    await pressKey('ArrowDown', input)
+
+    const resultLinks = [...container.querySelectorAll<HTMLAnchorElement>('.case-law-result__summary')]
+    expect(resultLinks[0]?.getAttribute('aria-current')).toBe('true')
+    expect(resultLinks[1]?.getAttribute('aria-current')).toBeNull()
+  })
+
+  it('does not open the selected result when Enter is pressed in the search input', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      createSearchResponse(createTwoResultHits(), { cached: true }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+    const input = getSearchInput(container)
+
+    await changeSearchInput(input, 'Potanina')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+    await pressKey('Enter', input)
+
+    expect(routerMocks.navigate).not.toHaveBeenCalled()
+  })
+
   it('opens and closes the keyboard shortcuts overlay', async () => {
     const fetchMock = vi.fn<typeof fetch>()
     vi.stubGlobal('fetch', fetchMock)
@@ -421,6 +455,7 @@ describe('LegalSearchView debounce lifecycle', () => {
 
     expect(container.textContent).toContain('Keyboard Shortcuts')
     expect(container.textContent).toContain('ArrowDown / j')
+    expect(document.activeElement).toBe(container.querySelector('.legal-search-shortcuts__panel'))
 
     await pressKey('Escape')
 
