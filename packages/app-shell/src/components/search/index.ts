@@ -3,6 +3,7 @@ export { SearchCommandBar } from './SearchCommandBar'
 export { SearchFeedbackPanel } from './SearchFeedbackPanel'
 export { SearchFiltersDialog } from './SearchFiltersDialog'
 export { SearchIdleState, type SearchCourtShortcut } from './SearchIdleState'
+export { SearchKeyboardShortcuts } from './SearchKeyboardShortcuts'
 export { SearchResults } from './SearchResults'
 export {
   courtOptionGroups,
@@ -11,6 +12,8 @@ export {
   type CourtOptionGroup,
   type LegalSearchRequestFilters,
   type LegalSearchFetchResponse,
+  type LegalSearchOutcome,
+  type LegalSearchRetrievalPath,
   type CaseLawParagraph,
   type CaseLawSnippet,
   type LegalSearchResult,
