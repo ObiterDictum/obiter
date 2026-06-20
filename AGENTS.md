@@ -8,6 +8,7 @@ Use this file as the lightweight entry point for work in this repo.
 
 Only load the docs needed for the task.
 
+- **Operating model & sync:** [github.com/OrmontLex/ormont-ops](https://github.com/OrmontLex/ormont-ops) (separate ops repo)
 - Product and execution baseline: [README.md](README.md)
 - Start order and milestones: [docs/roadmap.md](docs/roadmap.md)
 - Foundation rules: [docs/phase-0.md](docs/phase-0.md)
