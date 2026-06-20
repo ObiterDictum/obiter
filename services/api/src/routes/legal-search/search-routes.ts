@@ -5,6 +5,7 @@ import {
   search,
   type LegalSearchFilters,
 } from '@ormont/search-client'
+import { LegalSourceFamilySchema, LegalSourceTypeSchema } from '@ormont/legal-schema'
 import type { ApiErrorResponse } from '@ormont/contracts'
 import type { ApiEnv } from '../../env'
 
@@ -23,9 +24,15 @@ const legalSearchQuerySchema = z.object({
   q: z.string().trim().min(1),
   court: legalSlugSchema.optional(),
   jurisdiction: legalSlugSchema.optional(),
+  legalDomain: legalSlugSchema.optional(),
+  provider: legalSlugSchema.optional(),
+  topic: z.string().trim().min(1).max(120).optional(),
   dateFrom: z.string().date().optional(),
   dateTo: z.string().date().optional(),
-  sourceType: z.literal('judgment').optional(),
+  asAtDate: z.string().date().optional(),
+  legislationVersion: z.string().trim().min(1).max(80).optional(),
+  sourceType: LegalSourceTypeSchema.optional(),
+  sourceFamily: LegalSourceFamilySchema.optional(),
 })
 
 function apiError(
@@ -57,12 +64,22 @@ export function createLegalSearchRoutes(env: ApiEnv) {
       )
     }
 
+    if (parsed.data.sourceType && parsed.data.sourceType !== 'judgment') {
+      return c.json({
+        hits: [],
+        query: parsed.data.q,
+        estimatedTotalHits: 0,
+        processingTimeMs: 0,
+        outcome: 'unsupported_source_type',
+      })
+    }
+
     const filters: LegalSearchFilters = {
       court: parsed.data.court,
       jurisdiction: parsed.data.jurisdiction,
       dateFrom: parsed.data.dateFrom,
       dateTo: parsed.data.dateTo,
-      sourceType: parsed.data.sourceType,
+      sourceType: parsed.data.sourceType ?? 'judgment',
     }
 
     const result = await search(

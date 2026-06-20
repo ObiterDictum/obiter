@@ -10,10 +10,18 @@ import {
 
 export type LegalSearchDocument = LegalAuthority
 export interface LegalSearchSnippet {
+  evidenceId: string
   paragraphNumber: number
   text: string
   matchedTerms: string[]
+  matchReason: LegalSearchMatchReason
 }
+export type LegalSearchMatchReason =
+  | 'exact_document_id'
+  | 'exact_neutral_citation'
+  | 'title_match'
+  | 'body_text_match'
+  | 'keyword_match'
 export type LegalSearchHit = LegalAuthoritySummary & {
   paragraphs?: LegalAuthority['paragraphs']
   snippets?: LegalSearchSnippet[]
@@ -308,10 +316,16 @@ export function extractLegalSearchSnippets(
     : []
 
   return selectedParagraphs.map((paragraph) => ({
+    evidenceId: createJudgmentParagraphEvidenceId(hit.id, paragraph.paragraphNumber),
     paragraphNumber: paragraph.paragraphNumber,
     text: trimSnippetText(paragraph.text, tokens),
     matchedTerms: matchedSnippetTerms(paragraph.text, normalizedQuery, tokens),
+    matchReason: 'body_text_match',
   }))
+}
+
+export function createJudgmentParagraphEvidenceId(documentId: string, paragraphNumber: number) {
+  return `${documentId}:judgment_paragraph:${paragraphNumber}`
 }
 
 function matchedSnippetTerms(text: string, normalizedQuery: string, tokens: string[]) {

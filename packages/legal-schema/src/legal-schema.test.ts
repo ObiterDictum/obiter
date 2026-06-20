@@ -3,6 +3,7 @@ import {
   LegalAuthoritySchema,
   LegalAuthoritySummarySchema,
   LegalParagraphSchema,
+  LegalSourceTypeSchema,
 } from './index'
 
 describe('Legal authority schemas', () => {
@@ -92,18 +93,10 @@ describe('Legal authority schemas', () => {
     ).toThrow()
   })
 
-  it('rejects legislation records until a legislation-specific schema exists', () => {
-    expect(() =>
-      LegalAuthoritySchema.parse({
-        id: 'ukpga-1977-37',
-        title: 'Patents Act 1977',
-        neutralCitation: '1977 c. 37',
-        court: 'uk-parliament',
-        jurisdiction: 'united-kingdom',
-        dateDecided: '1977-07-29',
-        sourceType: 'legislation',
-        sourceUrl: 'https://www.legislation.gov.uk/ukpga/1977/37/contents',
-      }),
-    ).toThrow()
+  it('defines future source types without treating them as implemented judgment records', () => {
+    expect(LegalSourceTypeSchema.parse('legislation_document')).toBe('legislation_document')
+    expect(LegalSourceTypeSchema.parse('legislation_provision')).toBe('legislation_provision')
+    expect(LegalSourceTypeSchema.parse('international_instrument')).toBe('international_instrument')
+    expect(() => LegalSourceTypeSchema.parse('legislation')).toThrow()
   })
 })

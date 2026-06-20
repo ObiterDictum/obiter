@@ -4,14 +4,21 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { LEGAL_SEARCH_DEBOUNCE_MS, LegalSearchView } from './LegalSearchView'
 
+const routerMocks = vi.hoisted(() => ({
+  navigate: vi.fn(),
+}))
+
 vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => routerMocks.navigate,
   Link: ({
     children,
     className,
+    ...props
   }: {
     children: ReactNode
     className?: string
-  }) => <a className={className}>{children}</a>,
+    [key: string]: unknown
+  }) => <a className={className} {...props}>{children}</a>,
 }))
 
 interface DeferredResponse {
@@ -42,6 +49,37 @@ function createSearchResponse(hits: unknown[] = [], options: { cached?: boolean 
       skippedCount: 0,
     }),
   } as Response
+}
+
+function createTwoResultHits() {
+  return [
+    {
+      id: 'uksc-2024-3',
+      title: 'Potanina v Potanin',
+      neutralCitation: '[2024] UKSC 3',
+      court: 'uksc',
+      dateDecided: '2024-01-31',
+      sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
+      canonicalUrl: '/case/potanina-v-potanin-2024-uksc-3',
+      matchReason: 'exact_neutral_citation',
+      retrievalPath: 'stored_index',
+      retrievalRank: 1,
+      retrievalScore: 0.95,
+    },
+    {
+      id: 'ewca-2023-1',
+      title: 'Example v Respondent',
+      neutralCitation: '[2023] EWCA Civ 1',
+      court: 'ewca/civ',
+      dateDecided: '2023-01-01',
+      sourceUrl: 'https://caselaw.nationalarchives.gov.uk/ewca/civ/2023/1',
+      canonicalUrl: '/case/example-v-respondent-2023-ewca-civ-1',
+      matchReason: 'title_match',
+      retrievalPath: 'stored_source',
+      retrievalRank: 2,
+      retrievalScore: 0.8,
+    },
+  ]
 }
 
 function renderLegalSearchView() {
@@ -95,6 +133,12 @@ async function flushMicrotasks() {
   })
 }
 
+async function pressKey(key: string, target: EventTarget = window) {
+  await act(async () => {
+    target.dispatchEvent(new KeyboardEvent('keydown', { key, bubbles: true }))
+  })
+}
+
 describe('LegalSearchView debounce lifecycle', () => {
   let root: Root | null
   let container: HTMLElement | null
@@ -102,6 +146,7 @@ describe('LegalSearchView debounce lifecycle', () => {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     vi.useFakeTimers()
+    routerMocks.navigate.mockReset()
     window.sessionStorage.clear()
     root = null
     container = null
@@ -168,7 +213,9 @@ describe('LegalSearchView debounce lifecycle', () => {
     await flushMicrotasks()
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(container.textContent).toContain('No stored legal sources matched "Potanin"')
+    expect(container.textContent).toContain(
+      'Stored legal sources and available provider results did not match "Potanin" with the selected filters.',
+    )
   })
 
   it('runs a stored-only court browse when a court shortcut has no query', async () => {
@@ -314,5 +361,142 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(container.textContent).toContain('Supreme Court')
     expect(container.textContent).not.toContain('From 2024-01-01')
     expect(container.textContent).toContain('To 2024-12-31')
+  })
+  it('selects search results with keyboard navigation', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      createSearchResponse(createTwoResultHits(), { cached: true }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(getSearchInput(container), 'Potanina')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    const resultLinks = () => [...rendered.container.querySelectorAll<HTMLAnchorElement>('.case-law-result__summary')]
+    expect(resultLinks()[0]?.getAttribute('aria-current')).toBe('true')
+    expect(resultLinks()[1]?.getAttribute('aria-current')).toBeNull()
+
+    await pressKey('ArrowDown')
+
+    expect(resultLinks()[0]?.getAttribute('aria-current')).toBeNull()
+    expect(resultLinks()[1]?.getAttribute('aria-current')).toBe('true')
+
+    await pressKey('ArrowUp')
+
+    expect(resultLinks()[0]?.getAttribute('aria-current')).toBe('true')
+    expect(resultLinks()[1]?.getAttribute('aria-current')).toBeNull()
+  })
+
+  it('does not treat j and k as result navigation while typing', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      createSearchResponse(createTwoResultHits(), { cached: true }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+    const input = getSearchInput(container)
+
+    await changeSearchInput(input, 'Potanina')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+    await pressKey('j', input)
+
+    const resultLinks = [...container.querySelectorAll<HTMLAnchorElement>('.case-law-result__summary')]
+    expect(resultLinks[0]?.getAttribute('aria-current')).toBe('true')
+    expect(resultLinks[1]?.getAttribute('aria-current')).toBeNull()
+  })
+
+  it('does not treat arrow keys as result navigation while typing', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      createSearchResponse(createTwoResultHits(), { cached: true }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+    const input = getSearchInput(container)
+
+    await changeSearchInput(input, 'Potanina')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+    await pressKey('ArrowDown', input)
+
+    const resultLinks = [...container.querySelectorAll<HTMLAnchorElement>('.case-law-result__summary')]
+    expect(resultLinks[0]?.getAttribute('aria-current')).toBe('true')
+    expect(resultLinks[1]?.getAttribute('aria-current')).toBeNull()
+  })
+
+  it('does not open the selected result when Enter is pressed in the search input', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      createSearchResponse(createTwoResultHits(), { cached: true }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+    const input = getSearchInput(container)
+
+    await changeSearchInput(input, 'Potanina')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+    await pressKey('Enter', input)
+
+    expect(routerMocks.navigate).not.toHaveBeenCalled()
+  })
+
+  it('uses canonical case URLs for result links and keyboard opening', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      createSearchResponse(createTwoResultHits(), { cached: true }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(getSearchInput(container), 'Potanina')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    const firstResultLink = container.querySelector<HTMLAnchorElement>('.case-law-result__summary')
+    expect(firstResultLink?.getAttribute('href')).toBe('/case/potanina-v-potanin-2024-uksc-3')
+    expect(container.textContent).toContain('Exact citation - stored index')
+
+    await pressKey('Enter')
+
+    expect(routerMocks.navigate).toHaveBeenCalledWith({
+      href: '/case/potanina-v-potanin-2024-uksc-3',
+    })
+  })
+
+  it('opens and closes the keyboard shortcuts overlay', async () => {
+    const fetchMock = vi.fn<typeof fetch>()
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await pressKey('?')
+
+    expect(container.textContent).toContain('Keyboard Shortcuts')
+    expect(container.textContent).toContain('ArrowDown / j')
+    expect(document.activeElement).toBe(container.querySelector('.legal-search-shortcuts__panel'))
+
+    await pressKey('Escape')
+
+    expect(container.textContent).not.toContain('Keyboard Shortcuts')
   })
 })

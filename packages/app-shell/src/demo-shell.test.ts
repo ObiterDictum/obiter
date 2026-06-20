@@ -6,6 +6,7 @@ import {
   findMatterRecord,
   countActiveLegalSearchFilters,
   getCourtLabel,
+  getLegalSearchEmptyFeedback,
   getRecentLegalSearches,
   getLegalSearchStateAfterInputChange,
   getLegalSearchStateLabel,
@@ -105,12 +106,45 @@ describe('LegalSearchView helpers', () => {
       dateTo: '2024-12-31',
       foregroundLiveResults: true,
     })
+    expect(
+      createLegalSearchFetchRequest('  section 6  ', {
+        court: '',
+        dateFrom: '',
+        dateTo: '',
+        sourceType: 'legislation_provision',
+        sourceFamily: 'legislation',
+        legalDomain: 'human-rights',
+        provider: 'legislation-gov-uk',
+        topic: 'Human Rights Act',
+        asAtDate: '2024-01-01',
+        legislationVersion: 'current',
+      }),
+    ).toEqual({
+      query: 'section 6',
+      sourceType: 'legislation_provision',
+      sourceFamily: 'legislation',
+      legalDomain: 'human-rights',
+      provider: 'legislation-gov-uk',
+      topic: 'Human Rights Act',
+      asAtDate: '2024-01-01',
+      legislationVersion: 'current',
+      foregroundLiveResults: true,
+    })
   })
 
   it('counts active search filters', () => {
     expect(countActiveLegalSearchFilters({ court: '', dateFrom: '', dateTo: '' })).toBe(0)
     expect(countActiveLegalSearchFilters({ court: 'uksc', dateFrom: '', dateTo: '' })).toBe(1)
     expect(countActiveLegalSearchFilters({ court: 'uksc', dateFrom: '2024-01-01', dateTo: '' })).toBe(2)
+    expect(
+      countActiveLegalSearchFilters({
+        court: '',
+        dateFrom: '',
+        dateTo: '',
+        sourceType: 'legislation_document',
+        asAtDate: '2024-01-01',
+      }),
+    ).toBe(2)
   })
 
   it('labels selected court filters for the collapsed search filter control', () => {
@@ -182,6 +216,29 @@ describe('LegalSearchView helpers', () => {
 
   it('returns idle state while debounced input is waiting', () => {
     expect(getLegalSearchStateAfterInputChange()).toEqual({ status: 'idle' })
+  })
+
+  it('labels explicit empty search outcomes', () => {
+    expect(getLegalSearchEmptyFeedback({ query: 'Potanina', outcome: 'no_match' })).toEqual({
+      eyebrow: 'No indexed match',
+      title: 'No sources found',
+      body: 'Stored legal sources and available provider results did not match "Potanina" with the selected filters.',
+    })
+    expect(getLegalSearchEmptyFeedback({ query: 'Potanina', outcome: 'hydration_queued' })).toMatchObject({
+      eyebrow: 'Search queued',
+      title: 'Checking legal sources',
+    })
+    expect(
+      getLegalSearchEmptyFeedback({
+        query: '',
+        outcome: 'stored_browse_empty',
+        browse: { courtLabel: 'UK Supreme Court' },
+      }),
+    ).toEqual({
+      eyebrow: 'No stored cases',
+      title: 'No recent cases found',
+      body: 'No recent stored cases found for UK Supreme Court.',
+    })
   })
 
   it('only schedules searches for non-empty queries', () => {

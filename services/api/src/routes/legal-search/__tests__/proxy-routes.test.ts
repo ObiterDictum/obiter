@@ -144,9 +144,21 @@ describe('createLegalSearchProxyRoutes', () => {
     const body = (await response.json()) as { hits: Array<Record<string, unknown>> }
     expect(body).toMatchObject({
       cached: true,
+      outcome: 'results',
+      diagnostics: {
+        storedIndexSearched: true,
+        storedSourceSearched: false,
+        liveProviderSearched: false,
+      },
       hits: [
         {
           ...hit,
+          canonicalUrl: '/case/potanina-v-potanin-2024-uksc-3',
+          evidenceIds: ['uksc-2024-3:judgment_paragraph:1'],
+          matchReason: 'title_match',
+          retrievalPath: 'stored_index',
+          retrievalRank: 1,
+          retrievalScore: 0.8,
           snippets: [],
         },
       ],
@@ -182,6 +194,7 @@ describe('createLegalSearchProxyRoutes', () => {
     const body = (await response.json()) as { hits: Array<{ id: string }> }
     expect(body).toMatchObject({
       cached: true,
+      outcome: 'results',
     })
     expect(body.hits.map((browseHit) => browseHit.id)).toEqual(
       browseHits.slice(0, 10).map((browseHit) => browseHit.id),
@@ -193,6 +206,131 @@ describe('createLegalSearchProxyRoutes', () => {
       { court: 'uksc', sourceType: 'judgment' },
       { includeSnippets: true, limit: 10 },
     )
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('returns an exact neutral-citation hit from stored index before broad keyword matches', async () => {
+    const newerPartial = {
+      ...hit,
+      id: 'uksc-2026-10',
+      title: 'Later judgment discussing [2024] UKSC 3',
+      neutralCitation: '[2026] UKSC 10',
+      dateDecided: '2026-01-01',
+    }
+    const exactCitation = {
+      ...hit,
+      id: 'uksc-2024-3',
+      neutralCitation: '[2024] UKSC 3',
+      dateDecided: '2024-01-31',
+    }
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [newerPartial, exactCitation],
+      query: '[2024] UKSC 3',
+      estimatedTotalHits: 2,
+      processingTimeMs: 1,
+    })
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    const app = createLegalSearchProxyRoutes(env)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: '[2024] UKSC 3', court: 'uksc' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      cached: true,
+      diagnostics: {
+        exactLookupSearched: true,
+        storedIndexSearched: true,
+        storedSourceSearched: false,
+        liveProviderSearched: false,
+      },
+      hits: [
+        {
+          id: 'uksc-2024-3',
+          matchReason: 'exact_neutral_citation',
+          retrievalPath: 'stored_exact_lookup',
+          retrievalRank: 1,
+        },
+      ],
+    })
+    expect(searchClientMock.search).toHaveBeenCalledWith(
+      { id: 'meili-client' },
+      'legal_authorities',
+      '[2024] UKSC 3',
+      { court: 'uksc', sourceType: 'judgment' },
+      { includeSnippets: true, limit: 5 },
+    )
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('preserves d-style document ids in canonical case URLs', async () => {
+    const stableIdHit = {
+      ...hit,
+      id: 'd-f11e093f-8a53-4e43-8dd8-1531b5d8f018',
+      title: 'Craig Alfred v Information Commissioner',
+      neutralCitation: '[2026] UKFTT 754 (GRC)',
+      court: 'ftt-grc',
+      sourceUrl: 'https://caselaw.nationalarchives.gov.uk/ukftt/grc/2026/754',
+    }
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [stableIdHit],
+      query: 'Craig Alfred',
+      estimatedTotalHits: 1,
+      processingTimeMs: 1,
+    })
+    const app = createLegalSearchProxyRoutes(env)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'Craig Alfred' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [
+        {
+          id: stableIdHit.id,
+          canonicalUrl:
+            '/case/d-f11e093f-8a53-4e43-8dd8-1531b5d8f018-craig-alfred-v-information-commissioner-2026-ukftt-754-grc',
+        },
+      ],
+    })
+  })
+
+  it('accepts future source request fields but returns unsupported outcome for non-judgment source types', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    const app = createLegalSearchProxyRoutes(env)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'section 6',
+        sourceType: 'legislation_provision',
+        sourceFamily: 'legislation',
+        legalDomain: 'human-rights',
+        provider: 'legislation-gov-uk',
+        topic: 'Human Rights Act',
+        asAtDate: '2024-01-01',
+        legislationVersion: 'current',
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [],
+      outcome: 'unsupported_source_type',
+      diagnostics: {
+        storedIndexSearched: false,
+        storedSourceSearched: false,
+        liveProviderSearched: false,
+      },
+    })
+    expect(searchClientMock.search).not.toHaveBeenCalled()
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -571,7 +709,11 @@ describe('createLegalSearchProxyRoutes', () => {
       headers: { 'content-type': 'application/json' },
     })
     expect(firstResponse.status).toBe(200)
-    expect(await firstResponse.json()).toMatchObject({ hydrationQueued: true, hits: [] })
+    expect(await firstResponse.json()).toMatchObject({
+      hydrationQueued: true,
+      outcome: 'hydration_queued',
+      hits: [],
+    })
     await vi.waitFor(() => expect(searchClientMock.indexDocuments).toHaveBeenCalled())
 
     fetchMock.mockClear()
@@ -591,51 +733,59 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('prioritizes exact source-store matches ahead of newer partial matches', async () => {
+  it('returns an exact document-id hit from source storage before broad source search', async () => {
     searchClientMock.search.mockResolvedValueOnce({
       hits: [],
-      query: '[2024] UKSC 3',
+      query: 'uksc-2024-3',
       estimatedTotalHits: 0,
       processingTimeMs: 1,
     })
-    const newerPartial = {
-      ...hit,
-      id: 'uksc-2026-10',
-      title: 'Later judgment discussing [2024] UKSC 3',
-      neutralCitation: '[2026] UKSC 10',
-      dateDecided: '2026-01-01',
-    }
-    const exactCitation = {
-      ...hit,
-      id: 'uksc-2024-3',
-      neutralCitation: '[2024] UKSC 3',
-      dateDecided: '2024-01-31',
-    }
     const sourceStore = {
       async upsertSummary() {},
       async upsertDocument() {},
       async get() {
-        return null
+        return {
+          summary: hit,
+          provider: {
+            documentUri: '/uksc/2024/3',
+            sourceUri: '/uksc/2024/3',
+            xmlUri: '/uksc/2024/3/data.xml',
+            pdfUri: null,
+            contentHash: 'stored-exact',
+            rawAtomEntry: '<entry />',
+          },
+        }
       },
-      async search() {
-        return [newerPartial, exactCitation]
-      },
+      search: vi.fn(async () => []),
     }
     const fetchMock = vi.spyOn(globalThis, 'fetch')
     const app = createLegalSearchProxyRoutes(env, sourceStore)
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
-      body: JSON.stringify({ query: '[2024] UKSC 3', court: 'uksc' }),
+      body: JSON.stringify({ query: 'uksc-2024-3', court: 'uksc' }),
       headers: { 'content-type': 'application/json' },
     })
 
     expect(response.status).toBe(200)
-    const body = (await response.json()) as { hits: Array<{ id: string }> }
-    expect(body.hits.map((storedHit) => storedHit.id)).toEqual([
-      'uksc-2024-3',
-      'uksc-2026-10',
-    ])
+    expect(await response.json()).toMatchObject({
+      cached: true,
+      diagnostics: {
+        exactLookupSearched: true,
+        storedIndexSearched: true,
+        storedSourceSearched: true,
+        liveProviderSearched: false,
+      },
+      hits: [
+        {
+          id: 'uksc-2024-3',
+          matchReason: 'exact_document_id',
+          retrievalPath: 'stored_exact_lookup',
+          retrievalRank: 1,
+        },
+      ],
+    })
+    expect(sourceStore.search).not.toHaveBeenCalled()
     expect(fetchMock).not.toHaveBeenCalled()
   })
 

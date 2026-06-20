@@ -1,0 +1,243 @@
+{
+  "dataset_id": "search.judgment.gate1",
+  "dataset_version": "0.1.0",
+  "cases": [
+    {
+      "case_id": "search-g1-exact-citation-potanin",
+      "task_type": "exact_citation_lookup",
+      "input": {
+        "query": "[2024] UKSC 3"
+      },
+      "normalized_expected": {
+        "top_1_source_id": "uksc-2024-3",
+        "required_match_reason": "exact_neutral_citation",
+        "required_outcome": "results"
+      },
+      "rubric_refs": [
+        "exact citations rank before title, body, and partial keyword matches"
+      ],
+      "source_refs": [
+        "https://caselaw.nationalarchives.gov.uk/uksc/2024/3"
+      ],
+      "negative_case": false,
+      "tags": [
+        "citation",
+        "top-1"
+      ]
+    },
+    {
+      "case_id": "search-g1-provider-document-id-potanin",
+      "task_type": "provider_document_id",
+      "input": {
+        "query": "uksc-2024-3"
+      },
+      "normalized_expected": {
+        "top_1_source_id": "uksc-2024-3",
+        "required_match_reason": "exact_document_id",
+        "required_outcome": "results"
+      },
+      "rubric_refs": [
+        "provider-derived document ids resolve before broad keyword search"
+      ],
+      "source_refs": [
+        "https://caselaw.nationalarchives.gov.uk/uksc/2024/3"
+      ],
+      "negative_case": false,
+      "tags": [
+        "document-id",
+        "top-1"
+      ]
+    },
+    {
+      "case_id": "search-g1-title-potanin",
+      "task_type": "case_title",
+      "input": {
+        "query": "Potanina v Potanin"
+      },
+      "normalized_expected": {
+        "top_3_source_ids": [
+          "uksc-2024-3"
+        ],
+        "allowed_match_reasons": [
+          "title_match",
+          "exact_neutral_citation"
+        ],
+        "required_outcome": "results"
+      },
+      "rubric_refs": [
+        "case title and party-name lookup returns the source, not detached text"
+      ],
+      "source_refs": [
+        "https://caselaw.nationalarchives.gov.uk/uksc/2024/3"
+      ],
+      "negative_case": false,
+      "tags": [
+        "title",
+        "party-name"
+      ]
+    },
+    {
+      "case_id": "search-g1-body-text-financial-remedy",
+      "task_type": "body_text_phrase",
+      "input": {
+        "query": "financial remedy proceedings"
+      },
+      "normalized_expected": {
+        "required_outcome": "results",
+        "requires_snippet": true,
+        "required_match_reason": "body_text_match",
+        "required_evidence_location_type": "judgment_paragraph"
+      },
+      "rubric_refs": [
+        "body-text matches return the judgment with bounded paragraph snippets"
+      ],
+      "source_refs": [],
+      "negative_case": false,
+      "tags": [
+        "body-text",
+        "evidence"
+      ]
+    },
+    {
+      "case_id": "search-g1-no-answer-synthetic",
+      "task_type": "no_answer",
+      "input": {
+        "query": "zzzz non-existent ormont legal source fixture"
+      },
+      "normalized_expected": {
+        "required_outcome": "no_match",
+        "max_hits": 0
+      },
+      "rubric_refs": [
+        "queries with no indexed or provider match do not produce false positives"
+      ],
+      "source_refs": [],
+      "negative_case": true,
+      "tags": [
+        "no-answer",
+        "false-positive"
+      ]
+    },
+    {
+      "case_id": "search-g1-malformed-citation",
+      "task_type": "malformed_citation",
+      "input": {
+        "query": "[2024 UKSC"
+      },
+      "normalized_expected": {
+        "allowed_outcomes": [
+          "no_match",
+          "hydration_queued"
+        ],
+        "must_not_report_match_reason": "exact_neutral_citation"
+      },
+      "rubric_refs": [
+        "malformed citations must not be reported as exact citation success"
+      ],
+      "source_refs": [],
+      "negative_case": true,
+      "tags": [
+        "citation",
+        "malformed"
+      ]
+    },
+    {
+      "case_id": "search-g1-ambiguous-citation-year-court",
+      "task_type": "ambiguous_citation",
+      "input": {
+        "query": "[2024] UKSC"
+      },
+      "normalized_expected": {
+        "required_ambiguity_surface": true,
+        "must_not_silently_pick_source": true
+      },
+      "rubric_refs": [
+        "ambiguous citations return candidates or explicit ambiguity, not silent success"
+      ],
+      "source_refs": [],
+      "negative_case": true,
+      "tags": [
+        "citation",
+        "ambiguous",
+        "gap"
+      ]
+    },
+    {
+      "case_id": "search-g1-court-filter-browse-uksc",
+      "task_type": "court_filter_browse",
+      "input": {
+        "query": "",
+        "court": "uksc",
+        "foregroundLiveResults": false
+      },
+      "normalized_expected": {
+        "required_outcome": "results",
+        "max_hits": 10,
+        "required_court": "uksc",
+        "must_not_call_live_provider": true
+      },
+      "rubric_refs": [
+        "filter-only browse is bounded and stored-source only"
+      ],
+      "source_refs": [],
+      "negative_case": false,
+      "tags": [
+        "browse",
+        "court-filter"
+      ]
+    },
+    {
+      "case_id": "search-g1-date-filtered-query",
+      "task_type": "date_filtered_query",
+      "input": {
+        "query": "Potanina",
+        "dateFrom": "2024-01-01",
+        "dateTo": "2024-12-31"
+      },
+      "normalized_expected": {
+        "top_3_source_ids": [
+          "uksc-2024-3"
+        ],
+        "required_outcome": "results"
+      },
+      "rubric_refs": [
+        "date filters preserve exact and title search behavior"
+      ],
+      "source_refs": [
+        "https://caselaw.nationalarchives.gov.uk/uksc/2024/3"
+      ],
+      "negative_case": false,
+      "tags": [
+        "date-filter",
+        "title"
+      ]
+    },
+    {
+      "case_id": "search-g1-empty-court-browse",
+      "task_type": "court_filter_browse",
+      "input": {
+        "query": "",
+        "court": "ukpc",
+        "foregroundLiveResults": false
+      },
+      "normalized_expected": {
+        "allowed_outcomes": [
+          "results",
+          "stored_browse_empty"
+        ],
+        "max_hits": 10,
+        "required_court": "ukpc",
+        "must_not_call_live_provider": true
+      },
+      "rubric_refs": [
+        "empty court browse has explicit stored-browse outcome instead of blank-query copy"
+      ],
+      "source_refs": [],
+      "negative_case": false,
+      "tags": [
+        "browse",
+        "empty-state"
+      ]
+    }
+  ]
+}
