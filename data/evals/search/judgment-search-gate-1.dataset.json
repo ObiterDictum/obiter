@@ -1,0 +1,31 @@
+{
+  "dataset_id": "search.judgment.gate1",
+  "version": "0.1.0",
+  "name": "Judgment Search Gate 1",
+  "family": "search",
+  "source": "Synthetic public-source search tasks derived from Ormont's judgment Search requirements.",
+  "licence": "internal-fixture-metadata-only",
+  "jurisdiction": "england-and-wales",
+  "legal_domain": "general",
+  "task_types": [
+    "exact_citation_lookup",
+    "malformed_citation",
+    "ambiguous_citation",
+    "case_title",
+    "party_names",
+    "provider_document_id",
+    "body_text_phrase",
+    "no_answer",
+    "court_filter_browse",
+    "date_filtered_query"
+  ],
+  "case_count": 10,
+  "expected_output_type": "ranked_legal_search_results",
+  "sensitivity": "public_metadata_only",
+  "external_model_allowed": false,
+  "known_limitations": [
+    "This seed dataset validates Search contract behavior and ranking shape; it is not yet a statistically meaningful corpus benchmark.",
+    "Expected source ids assume current judgment document id normalization.",
+    "Body-text cases require hydrated paragraph text in the test corpus."
+  ]
+}

@@ -2,48 +2,45 @@
 
 ## Summary
 
-Search is Ormont's first trust substrate. Before [Verify](verify.md), [Research](research.md), [Bench](bench.md), or [Pi](pi-agent-framework.md) can be credible, Search must retrieve legal sources accurately, explain why results appeared, and cover the source families needed for serious legal work.
+Search is Ormont's first trust substrate. Before [Verify](verify.md), [Research](research.md), [Bench](bench.md), or [Pi](pi-agent-framework.md) can be credible, Search must retrieve legal sources accurately, expose why results appeared, and cover the source families needed for serious legal work.
 
-The current implementation is a good demo foundation, but it is still judgment-first and Find Case Law-shaped. It supports stored Meilisearch retrieval, PostgreSQL fallback, bounded snippets, Find Case Law live fallback and hydration, court/date filters, and a case detail view. It does not yet provide a full legal retrieval product, legislation search, stable evidence ids, source-family expansion, search quality benchmarks, or a UI that explains retrieval confidence and coverage.
+The current implementation is a useful judgment-search foundation. It supports stored Meilisearch retrieval, PostgreSQL fallback, bounded snippets, Find Case Law live fallback and hydration, court/date filters, result keyboard flows, and case detail pages. It does not yet provide a full legal retrieval product, legislation search, stable evidence ids, measured ranking quality, corpus coverage reporting, or a UI that clearly distinguishes stored, live, ambiguous, and unavailable source states.
 
-See the detailed implementation spec at [docs/specs/search/](../specs/search/).
+Detailed implementation guidance lives in [docs/specs/search/](../specs/search/). This PRD defines the product target and rollout gates.
 
-## Current Implementation Review
+## Current State
 
-### What Exists
+What exists:
 
-- `POST /api/search/fetch` searches stored legal authorities first, then PostgreSQL source storage, then optionally Find Case Law foreground results.
+- `POST /api/search/fetch` searches stored legal authorities first, then PostgreSQL source storage, then optional Find Case Law foreground results.
 - `GET /api/search/documents/:documentId` returns stored or live-hydrated judgment documents.
 - Meilisearch indexes `id`, `title`, `neutralCitation`, `court`, `jurisdiction`, and `paragraphs.text`.
 - PostgreSQL `legal_source_documents` stores summary JSON, document JSON, provider metadata, and a generated full-text search vector that includes paragraph text.
-- Search result payloads now return bounded `snippets` instead of full paragraph arrays.
-- The UI supports debounced search, recent searches, court/date filters, stored-only court browse, result snippets, and a case detail page with search within case.
+- Search result payloads return bounded `snippets` instead of full paragraph arrays.
+- Judgment result payloads expose evidence ids, match reason, retrieval path, retrieval rank, and retrieval score metadata.
+- Search responses expose explicit outcome states for results, no match, queued hydration, and empty stored-source browse.
+- Exact document-id and neutral-citation queries use a stored exact-lookup path before broad keyword search.
+- Judgment Search hits include canonical Ormont URLs such as `/case/potanina-v-potanin-2024-uksc-3`, result opening uses them, and `/cases/:caseId` redirects to the canonical route when the document is known.
+- Gate 1 judgment Search benchmark seed artifacts exist under `data/evals/search/`.
+- Shared schemas now define future source types and source families, and Search requests model source type, source family, legal domain, provider, topic, `asAtDate`, and legislation version fields.
+- The UI supports debounced search, recent searches, court/date filters, stored-only court browse, result snippets, keyboard navigation, and search within case detail pages.
 - Find Case Law integration can fetch Atom results, hydrate judgment HTML, parse paragraphs, store provider metadata, and index hydrated cases.
 
-### Main Gaps
+Main gaps:
 
-- Search schema only supports `sourceType: judgment`.
-- API request shape has no source type, legal domain, source family, provider, topic, legislation version, or `asAtDate`.
-- Ranking is Meilisearch default ranking plus a simple exact-match boost for id, neutral citation, and title.
-- Exact legal lookup is not separated from broad keyword search.
-- Snippets do not expose evidence ids, match reasons, source confidence, or rejected/ambiguous source state.
-- Live provider behavior is useful for demos but not a stable external API model.
-- Stored search failures and timeouts are intentionally swallowed, which preserves UX but hides diagnostics.
-- The UI is case-law-specific and does not yet support legislation, provisions, instruments, multiple source families, or query diagnostics.
-- Public URLs are not yet human-readable, source-type-specific, or citation-first.
-- The ingestor is still sample-oriented; there is no full corpus ingestion, refresh, or source coverage dashboard.
-- There is no Search benchmark harness yet.
+- Non-judgment source types are modeled but return explicit unsupported-source outcomes until source-specific retrieval exists.
+- Ranking is still mostly Meilisearch default ranking plus simple exact-match boosts for id, neutral citation, and title.
+- Exact lookup is separated for judgment document ids and neutral citations, but provision, title-alias, malformed-citation, and ambiguity-specific lookup paths are not complete.
+- Search does not yet expose ambiguity or rejected-source state.
+- Live provider behavior is useful for demos but is not a stable public API model.
+- Stored search failures and timeouts are intentionally swallowed, which protects UX but hides diagnostics.
+- The corpus path is still sample-oriented; there is no full ingestion, refresh, source coverage dashboard, or executable Search benchmark runner.
 
 ## Problem
 
-Legal search quality depends on exactness, provenance, and source coverage. Generic keyword search is not enough. Users must be able to find a known authority, inspect source evidence, search across legal text, filter by legally meaningful dimensions, and understand whether results came from stored Ormont sources or live provider fallback.
+Legal search quality depends on exactness, provenance, and source coverage. Generic keyword search is not enough. Users must be able to find a known authority, inspect exact evidence, search legal text, filter by legally meaningful dimensions, and understand whether results came from stored Ormont sources or live provider acquisition.
 
-If Search remains weak, downstream systems will amplify the weakness:
-
-- Verify will miss real authorities or resolve ambiguous citations poorly.
-- Research will produce answers from incomplete evidence.
-- Bench will measure retrieval noise rather than legal capability.
-- Pi agents will automate unreliable source discovery.
+If Search remains weak, downstream systems amplify the weakness: Verify misses real authorities, Research answers from incomplete evidence, Bench measures retrieval noise, and Pi agents automate unreliable source discovery.
 
 ## Product Principles
 
@@ -53,79 +50,69 @@ If Search remains weak, downstream systems will amplify the weakness:
 - Provider behavior must not leak into stable public API contracts.
 - Unsupported, ambiguous, unavailable, and unindexed states must be visible.
 - Legislation needs version and provision logic; it cannot be treated as case-law text.
-- UI should help users understand coverage, filters, and why a result matched.
+- UI should help users understand coverage, filters, provenance, and why a result matched.
 
 ## Goals
 
 - Make judgment search accurate for citation, title, party-name, body-text, and paragraph queries.
-- Add Search evidence metadata: source ids, evidence ids, match reasons, ranks, scores, and retrieval path.
-- Build a benchmark-backed quality loop for Search changes.
-- Expand Search beyond judgments, starting with UK legislation.
-- Prepare stable legal-source API contracts for SDK, MCP, Research, Verify, Bench, and Pi.
-- Improve UI and UX for source inspection, filtering, result confidence, and multi-source search.
+- Add Search evidence metadata aligned with [Verification Evidence](verification-evidence.md): `evidence_id`, `source_id`, `source_type`, `location_type`, `location_ref`, `excerpt_ref`, `match_reason`, `retrieval_rank`, and `retrieval_score`.
+- Build a benchmark-backed quality loop for Search changes, aligned with [Bench](bench.md).
+- Expand Search beyond judgments, starting with UK legislation once judgment quality and corpus reliability are stable.
+- Prepare contract-first legal-source APIs for SDK, MCP, Research, Verify, Bench, and Pi without turning the app Search endpoint into the public API.
+- Improve UI and UX for source inspection, filtering, result confidence, ambiguity, and multi-source search.
 
 ## Non-Goals
 
 - Do not build Research answer generation in this work.
 - Do not implement Verify proposition support as part of Search.
-- Do not expose live provider fallback as a default public API behavior.
+- Do not expose live provider fallback as default public API behavior.
 - Do not bulk-ingest sources where licence or computational-analysis rights are unclear.
 - Do not add vector search before exact and lexical retrieval are measured and stable.
 - Do not silently train on private matter data.
 
-## Users
+## Users And Use Cases
 
-### Lawyer Or Researcher
+Primary users:
 
-Needs to find known authorities quickly, search legal text, inspect exact paragraphs or provisions, and trust source provenance.
+- Lawyer or researcher: finds known authorities, searches legal text, inspects paragraphs or provisions, and checks provenance.
+- Academic reviewer: inspects methodology, source coverage, ranking rules, benchmark results, and evidence packages.
+- Builder: diagnoses parsing, indexing, ranking, provider fallback, and UI state.
+- API or tool consumer: needs stable source ids, evidence ids, predictable errors, rate limits, and contract-first responses.
 
-### Academic Reviewer
+Core use cases:
 
-Needs to inspect retrieval methodology, source coverage, ranking rules, and benchmark results.
-
-### Builder
-
-Needs diagnostics that explain whether failures came from parsing, indexing, ranking, provider fallback, or UI state.
-
-### API Or Tool Consumer
-
-Needs stable source and evidence ids, predictable errors, rate limits, and contract-first retrieval responses.
-
-## Core Use Cases
-
-1. Find a known case by neutral citation.
-2. Find a case by party names or title alias.
-3. Search body text across hydrated judgments.
-4. Open exact matching paragraphs from a result card.
-5. Open a case through a canonical URL such as `/case/2024-uksc-3` or `/case/potanina-v-potanin-2024-uksc-3`.
-6. Search legislation by title, year, chapter, section, schedule, or provision text.
-7. Open legislation through a canonical URL such as `/legislation/unfair-contract-terms-act-1977` or `/legislation/ukpga-1977-50`.
-8. Search by source family, jurisdiction, court/body, date, legal domain, and version context.
-9. Identify when a query is ambiguous or no authoritative source is indexed.
-10. Export or inspect retrieval evidence for a benchmark or university review.
+1. Find a known case by neutral citation, party name, title alias, provider id, or body-text phrase.
+2. Open exact matching paragraphs from a result card.
+3. Open a case through a canonical Ormont URL such as `/case/potanina-v-potanin-2024-uksc-3`.
+4. Search legislation by title, year, chapter, section, schedule, provision reference, or provision text.
+5. Open legislation through a canonical Ormont URL such as `/legislation/unfair-contract-terms-act-1977` or `/legislation/ukpga-1977-50`.
+6. Filter by source family, jurisdiction, court/body, date, legal domain, and version context.
+7. Identify ambiguous, malformed, unsupported, unavailable, or unindexed queries.
+8. Export or inspect retrieval evidence for a benchmark or university review.
 
 ## Scope
 
-### First Release Scope
+Gate 1 is judgment Search quality. It should build only the foundation needed to make the existing Search product trustworthy:
 
-- judgment search quality improvements
-- exact citation and document-id resolution path
-- richer ranking and match reasons
-- evidence ids for snippets and paragraphs
-- Search benchmark gate
-- UI result diagnostics and better filter states
+- exact citation and document-id resolution
+- judgment ranking improvements and match reasons
+- canonical case URLs
+- evidence ids for judgment snippets and result payloads
+- explicit unsupported-source responses for non-judgment source types
+- clear ambiguity states
+- result-card metadata and limited reviewer diagnostics
+- executable Search benchmark runner and run records
 
-### Expansion Scope
+Expansion begins after Gate 1 ranking and evidence behavior are benchmarked:
 
-- legislation source model
-- legislation.gov.uk provider adapter
+- broader Find Case Law ingestion and coverage reporting
+- legislation source model and legislation.gov.uk adapter
 - provision-level indexing and retrieval
-- source family filters
-- coverage dashboard
+- source-family filters
 - stable `/api/v1/legal/*` routes
-- MCP and SDK readiness
+- SDK and MCP readiness
 
-### Later Scope
+Later scope:
 
 - semantic retrieval as a supplemental signal
 - international-law source families
@@ -133,135 +120,53 @@ Needs stable source and evidence ids, predictable errors, rate limits, and contr
 - matter-aware search through approved privacy boundaries
 - public developer portal
 
-## Search Architecture Requirements
+## Search Architecture
 
 ### Source Model
 
-Search must support a discriminated legal source model:
+Search must grow toward a discriminated legal source model: `judgment`, `legislation_document`, `legislation_provision`, `international_instrument`, `international_decision`, `guidance`, and `other`.
 
-- `judgment`
-- `legislation_document`
-- `legislation_provision`
-- `international_instrument`
-- `international_decision`
-- `guidance`
-- `other`
-
-Judgments should expose paragraph evidence. Legislation should expose document, provision, schedule, version, and commencement evidence. International sources should expose articles, rules, annexes, paragraphs, decisions, or source-specific evidence units.
+Judgments expose paragraph evidence. Legislation exposes document, provision, schedule, version, and commencement evidence. International sources expose articles, rules, annexes, paragraphs, decisions, or source-specific evidence units. New source families require source-specific schemas, indexing, licence assessment, parser confidence, and benchmark fixtures; they must not be forced through the current judgment shape.
 
 ### Query Classification
 
-Before retrieval, Search should classify the query as one or more:
+Before retrieval, Search should classify the query as one or more: exact neutral citation, provider document id, case title or party names, statute title, legislation citation, provision reference, general keyword query, phrase query, filter-only browse, and ambiguous or malformed query.
 
-- exact neutral citation
-- provider document id
-- case title or party names
-- statute title
-- legislation citation
-- provision reference
-- general keyword query
-- phrase query
-- filter-only browse
-- ambiguous or malformed query
+Classification must preserve the original query for display and audit while producing normalized lookup forms.
 
-Classification must preserve the original query and produce normalized forms for lookup.
+### Retrieval And Ranking
 
-### Retrieval Path
-
-The preferred retrieval order:
+The preferred retrieval order is:
 
 1. exact id and citation lookup
 2. title, alias, party-name, and legislation title lookup
 3. structured provision or paragraph lookup
 4. lexical keyword search over stored source metadata and text
-5. supplemental semantic search after exact/lexical baselines are stable
+5. supplemental semantic search after exact and lexical baselines are stable
 6. live provider acquisition only when explicitly allowed
 
-Each result should record retrieval path and match reason.
+Ranking must prioritize exact document ids, exact citations, exact provision references, exact titles or stored aliases, party-name/title aliases, paragraph or provision phrase matches, all-term body matches, any-term body matches, semantic similarity once available, and recency only as a legally appropriate tie-breaker. Search must not let semantic similarity, recency, or broad keyword matches outrank exact identifiers.
 
-### Ranking
+Each result records retrieval path and match reason. Provider fallback is not a substitute for stored body search.
 
-Ranking must prioritize:
+## Source Families
 
-1. exact document id
-2. exact neutral citation or legislation citation
-3. exact provision reference
-4. exact title or short title
-5. party-name/title alias match
-6. paragraph or provision phrase match
-7. all-term body match
-8. any-term body match
-9. semantic similarity
-10. recency as a tie-breaker only where legally appropriate
+Judgments currently come from Find Case Law through The National Archives. Needed improvements are full supported corpus ingestion rather than search-triggered hydration only, ingestion status by court and date range, refresh by provider content hash, parser confidence metrics, source coverage reporting, skipped-document reporting, and provider outage/rate-limit diagnostics.
 
-Search must not let semantic similarity outrank exact identifiers.
+Legislation starts with `legislation.gov.uk`. It must support Acts, statutory instruments, schedules, provisions, title lookup, short-title lookup, year/chapter lookup, SI number lookup, provision text indexing, `asAtDate`, commencement/amendment metadata where available, current/historical version distinction, official source URL, and licence metadata. Legislation must be modeled separately from judgments; a section, schedule, regulation, or sub-provision can be an evidence unit, but the parent legal source and version context must remain visible.
 
-## Corpus And Provider Expansion
-
-### Judgments
-
-Current source:
-
-- Find Case Law through The National Archives.
-
-Needed improvements:
-
-- full supported corpus ingestion rather than search-triggered hydration only
-- ingestion status by court and date range
-- refresh by provider content hash
-- parser confidence metrics
-- source coverage and skipped-document reporting
-- provider outage and rate-limit diagnostics
-
-### Legislation
-
-Initial source:
-
-- `legislation.gov.uk`.
-
-Required capabilities:
-
-- Acts, statutory instruments, schedules, and provisions
-- title, short title, year, chapter, SI number, and provision lookup
-- provision text indexing
-- version and `asAtDate` support
-- commencement and amendment metadata where available
-- current and historical version distinction
-- source URL and licence metadata
-
-Legislation must be modeled separately from judgments. A section, schedule, or regulation can be an evidence unit, but the parent legal source must remain visible.
-
-### International And Specialist Sources
-
-Candidate later sources:
-
-- UK treaties and command papers where licence permits
-- BAILII collections where terms permit
-- EUR-Lex for retained or comparative EU materials where relevant
-- HUDOC for ECHR materials
-- UN treaty bodies and international court decisions
-- ICRC IHL materials where licence permits
-
-Every source family needs a provider assessment before ingestion:
-
-- licence
-- computational-analysis permission
-- source structure
-- update cadence
-- citation format
-- evidence granularity
-- parser risk
+Later international and specialist sources may include UK treaties and command papers, BAILII collections, EUR-Lex, HUDOC, UN treaty bodies, international court decisions, and ICRC IHL materials where terms permit. Every source family needs a provider assessment for licence, computational-analysis permission, source structure, update cadence, citation format, identifier stability, evidence granularity, parser risk, and applicability/version metadata. Do not model International Humanitarian Law as a jurisdiction; use legal domain, source family, issuing body, country or region, treaty/applicability metadata, and evidence refs separately.
 
 ## API Requirements
 
-### Current App API Improvements
+### App Search Endpoint
 
-`POST /api/search/fetch` should evolve to include:
+`POST /api/search/fetch` remains the app orchestration route for product UX. It can include stored search, optional foreground Find Case Law behavior, background hydration, demo status flags, and UI-oriented response shaping.
 
-- source type filter
-- source family filter
-- jurisdiction
-- court or issuing body
+It should evolve to include:
+
+- source type and source family filters
+- jurisdiction and court or issuing body filters
 - legal domain
 - date range
 - `asAtDate` for legislation
@@ -271,7 +176,7 @@ Every source family needs a provider assessment before ingestion:
 
 ### Stable Legal Source API
 
-Future routes:
+Future public routes should be versioned, stored-source-first, and contract-first:
 
 - `GET /api/v1/legal/search`
 - `GET /api/v1/legal/documents/:documentId`
@@ -281,128 +186,92 @@ Future routes:
 
 Stable API behavior:
 
-- stored Ormont sources by default
-- no live provider fallback unless explicit
-- contract-first schemas in `packages/contracts`
+- default to stored Ormont legal sources
+- no live provider fallback unless explicit, asynchronous, rate-limited, and auditable
+- shared schemas in `packages/contracts`
 - stable errors for validation, unavailable storage, rate limits, not found, and ambiguous queries
-- source provenance and licence metadata on results
+- lean result payloads with source provenance, licence metadata, evidence ids, match reasons, snippets, and ambiguity flags
+- no provider internals, admin search keys, raw provider payloads, direct database access, or private matter indexes
 
-## Public URL Requirements
+## URL Requirements
 
-Public source URLs should be readable, stable, and source-type-specific.
+Canonical Ormont URLs and official/provider source URLs are different fields and must not be collapsed into one `source_url` concept.
 
-Target routes:
+Target canonical Ormont routes:
 
 - `/case/:caseSlug`
 - `/case/:caseSlug/paragraph/:paragraphNumber`
 - `/legislation/:lawSlug`
 - `/legislation/:lawSlug/:provisionSlug`
 
-Case slugs should be derived from canonical citation and title data:
-
-- neutral citation
-- title or party names
-- decision year
-
-Legislation slugs should be derived from canonical title and official identifiers:
-
-- short title
-- chapter or SI number
-- official legislation.gov.uk identifier
-
 Rules:
 
-- Internal document ids remain valid storage keys, but public links should use canonical slugs.
-- Slugs must resolve to a stable source id server-side.
-- Old `/cases/:caseId` routes should redirect to canonical `/case/:caseSlug` when the source is known.
-- Ambiguous slugs must return candidates rather than silently choosing the wrong source.
-- Canonical URLs should be included in Search result payloads so the UI does not reconstruct them ad hoc.
-- Official source URLs must remain visible on detail pages.
+- Internal document ids remain valid storage keys, but public links use canonical slugs.
+- Slugs resolve to stable source ids server-side.
+- Old `/cases/:caseId` routes redirect to canonical `/case/:caseSlug` when the source is known.
+- Ambiguous slugs return candidates rather than silently choosing a source.
+- Search result payloads include a canonical Ormont URL so the UI does not reconstruct it ad hoc.
+- Detail pages keep the official/provider source URL visible for provenance and licence inspection.
 
 ## Evidence Requirements
 
-Each result should include:
+Search evidence must align with the canonical Evidence Unit model in [Verification Evidence](verification-evidence.md). Search result and snippet payloads should include or reference:
 
-- source id
-- source type
-- display citation
-- source URL
-- provider
-- licence status
-- evidence ids
-- evidence type
-- paragraph or provision refs
-- match reason
-- retrieval path
-- rank
-- score
+- `evidence_id`
+- `source_id`
+- `source_type`
+- `source_title`
+- `display_citation`
+- canonical Ormont URL
+- official/provider source URL
+- `provider`
+- `licence`
+- `location_type`
+- `location_ref`
+- `version_ref`
+- `excerpt_ref`
+- `match_reason`
+- `retrieval_rank`
+- `retrieval_score`
 - ambiguity flags
 
-Snippets should be bounded and tied to evidence ids. Result payloads must not return full documents.
+Snippets must be bounded and tied to evidence ids. Result-list payloads must not return full documents.
 
 ## UI And UX Requirements
 
-### Search Screen
-
-Improve the current screen with:
+Search screen:
 
 - source-type tabs or segmented control
-- source family and jurisdiction filters
-- court/body filter
-- date and `asAtDate` controls
+- source family, jurisdiction, court/body, date, and `asAtDate` controls
 - active filter chips
 - result count and source coverage state
 - stored/live/acquisition state labels
 - keyboard navigation across results
 - clear empty states for not indexed, no match, provider unavailable, and ambiguous query
 
-### Result Cards
+Result cards:
 
-Result cards should show:
+- title, citation or identifier, source type, court/body, date or version
+- match reason and snippets with paragraph/provision labels
+- provenance, licence status, evidence count, and warning flags for ambiguity, missing full text, or provider-only result
 
-- title
-- citation or identifier
-- source type
-- court/body
-- date or version
-- match reason
-- snippets with paragraph/provision labels
-- source provenance
-- evidence count
-- warning flags for ambiguity, missing full text, or provider-only result
+Source detail:
 
-### Source Detail
-
-The current case page should become a generic legal source detail view:
-
-- judgment paragraph viewer
-- legislation provision viewer
-- source metadata panel
-- search within source
+- judgment paragraph viewer and legislation provision viewer
+- source metadata panel and search within source
 - jump to paragraph/provision
-- copy citation and source link
+- copy citation and canonical Ormont link
 - open official source
 - show indexed/hydrated status
-- show canonical Ormont URL
 - redirect internal-id URLs to canonical citation or legislation URLs
 
-### Diagnostics For Review
-
-Internal or reviewer mode should show:
-
-- normalized query
-- query class
-- retrieval path
-- filters applied
-- rank and score
-- provider calls made
-- stored-search timeout or fallback state
+Internal or reviewer mode should show normalized query, query class, retrieval path, filters applied, rank, score, provider calls, and stored-search timeout or fallback state. Diagnostics must stay limited to authenticated internal users or explicit reviewer workflows.
 
 ## Benchmark Requirements
 
-Search quality must be benchmarked before major ranking or corpus changes are treated as complete. The canonical benchmark framework is defined in the [Bench PRD](bench.md); the sections below define the Search-specific cases and metrics that feed into it.
+Search quality must be benchmarked before major ranking or corpus changes are treated as complete. The canonical benchmark framework is defined in [Bench](bench.md); Search contributes fixtures, expected outputs, and failure labels.
 
-Initial benchmark cases:
+Initial judgment cases:
 
 - exact citation lookup
 - malformed citation
@@ -415,7 +284,7 @@ Initial benchmark cases:
 - court-filter browse
 - date-filtered query
 
-Legislation benchmark cases:
+Initial legislation cases, once legislation ships:
 
 - Act title
 - short title
@@ -426,16 +295,7 @@ Legislation benchmark cases:
 - `asAtDate` version query
 - provision text phrase
 
-Metrics:
-
-- top-1 exact source success
-- top-3 exact source success
-- evidence unit recall
-- no-answer precision
-- ambiguity surfaced
-- provider fallback rate
-- stored search latency
-- snippet usefulness reviewer score
+Search metrics are top-1 and top-3 exact source success, evidence unit recall, no-answer precision, ambiguity surfaced, provider fallback rate, stored search latency, and snippet usefulness reviewer score.
 
 ## Functional Requirements
 
@@ -445,7 +305,7 @@ Metrics:
 - Search must support judgment and legislation source models.
 - Search must support cursor or bounded pagination before corpus expansion.
 - Search must track provider ingestion and hydration status.
-- Search must expose stable source provenance and licence metadata.
+- Search must expose source provenance and licence metadata.
 - Search must provide benchmark fixtures for every major search mode.
 
 ## Non-Functional Requirements
@@ -468,89 +328,56 @@ Metrics:
 
 ## Dependencies
 
-- [Bench](bench.md) — Search benchmark fixtures and quality gates for ranking and corpus changes.
-- [Verification Evidence](verification-evidence.md) — Evidence id schema, evidence unit model, and evidence package export for Search result payloads.
-- Shared contracts package (`packages/contracts`) — Type definitions for stable API routes and legal-source schemas.
-- Provider licence assessments — Required before corpus expansion to new source families or jurisdictions.
-- Infrastructure — Ingestion jobs, corpus refresh workers, and coverage reporting for stored-source reliability.
+- [Bench](bench.md): Search benchmark fixtures and quality gates for ranking and corpus changes.
+- [Verification Evidence](verification-evidence.md): evidence id schema, evidence unit model, and evidence package export for Search result payloads.
+- Shared contracts package (`packages/contracts`): type definitions for stable API routes and legal-source schemas.
+- Provider licence assessments: required before corpus expansion to new source families or jurisdictions.
+- Infrastructure: ingestion jobs, corpus refresh workers, and coverage reporting for stored-source reliability.
 
 ## Rollout
 
 ### Gate 1: Judgment Search Quality
 
-Deliver:
-
-- exact lookup path
-- canonical `/case/:caseSlug` route and redirects from `/cases/:caseId`
-- improved ranking labels
-- evidence ids for snippets
-- better result-card metadata
-- Search benchmark fixtures
+Deliver exact lookup, richer result-card metadata, ambiguity state, non-judgment retrieval implementations, and executable Search benchmark run records. Canonical `/case/:caseSlug` result links, `/cases/:caseId` redirects, ranking labels, match reasons, retrieval path, rank, score, judgment evidence ids, explicit no-match/hydration outcomes, expanded source-type/request schemas, unsupported-source outcomes, and Gate 1 benchmark seed artifacts are already available.
 
 Exit criteria:
 
 - exact citations and document ids rank first
 - search results link to canonical case URLs
 - body-text matches show evidence snippets
-- no-answer and ambiguous states are explicit
+- result payloads use canonical evidence field names where implemented
+- no-answer and queued-hydration states are explicit
+- ambiguous states are explicit
+- benchmark runs record top-k results and failure labels
 
 ### Gate 2: Corpus Reliability
 
-Deliver:
-
-- broader Find Case Law ingestion
-- ingestion coverage report
-- parser confidence and skipped-document reporting
-- stored-source diagnostics
+Deliver broader Find Case Law ingestion, ingestion coverage reporting, parser confidence, skipped-document reporting, and stored-source diagnostics.
 
 Exit criteria:
 
 - Search no longer depends mainly on user-triggered hydration
 - stored corpus coverage is visible
+- provider outage or rate-limit states are visible internally
 
 ### Gate 3: Legislation Search
 
-Deliver:
-
-- legislation source schema
-- legislation.gov.uk adapter
-- canonical `/legislation/:lawSlug` route
-- provision indexing
-- `asAtDate` support
-- legislation UI filters and detail view
+Deliver legislation source schema, legislation.gov.uk adapter, canonical `/legislation/:lawSlug` routing, provision indexing, `asAtDate`, legislation UI filters, and legislation detail views.
 
 Exit criteria:
 
-- user can find an Act, SI, section, schedule, and provision text
+- users can find an Act, SI, section, schedule, and provision text
 - version-sensitive results expose date context
+- official legislation URLs remain visible alongside canonical Ormont URLs
 
 ### Gate 4: Stable API And Tool Readiness
 
-Deliver:
-
-- `/api/v1/legal/*` routes
-- shared contracts
-- evidence metadata
-- API-key scoped readiness
-- MCP-safe retrieval operations
+Deliver `/api/v1/legal/*` routes, shared contracts, evidence metadata, API-key scoped readiness, and MCP-safe retrieval operations.
 
 Exit criteria:
 
 - tool callers can retrieve legal sources without provider internals or admin credentials
-
-## Metrics
-
-- Exact citation lookup success rate (top-1 and top-3).
-- Body-text search recall at top-3 for phrase and keyword queries.
-- Evidence-id coverage rate on result and snippet payloads.
-- Stored search vs. provider-fallback ratio (target: >90% from stored).
-- Corpus coverage by source family and jurisdiction.
-- Citation parse success rate.
-- No-answer precision (queries that should return nothing vs. false hits).
-- Ambiguity surfaced rate (ambiguous queries where the UI explicitly shows the ambiguity).
-- Legislation search success for title, reference, and provision queries (when legislation scope ships).
-- Search result-list latency (p50, p95).
-- Ingestion coverage report completeness (documents ingested vs. available per court).
+- stable API responses default to stored sources and expose predictable error shapes
 
 ## Risks
 

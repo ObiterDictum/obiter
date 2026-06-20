@@ -12,6 +12,8 @@ export {
   type CourtOptionGroup,
   type LegalSearchRequestFilters,
   type LegalSearchFetchResponse,
+  type LegalSearchOutcome,
+  type LegalSearchRetrievalPath,
   type CaseLawParagraph,
   type CaseLawSnippet,
   type LegalSearchResult,

@@ -1,4 +1,3 @@
-import { Link } from '@tanstack/react-router'
 import type { LegalSearchBrowseContext, LegalSearchFetchResponse } from './searchTypes'
 
 interface SearchResultsProps {
@@ -23,6 +22,10 @@ export function SearchResults({ response, browse, selectedIndex }: SearchResults
               <small>
                 {formatNeutralCitation(result.neutralCitation)} - {result.court} - {result.dateDecided}
               </small>
+              <small>
+                {formatMatchReason(result.matchReason)}
+                {result.retrievalPath ? ` - ${formatRetrievalPath(result.retrievalPath)}` : ''}
+              </small>
             </span>
             <span className="case-law-result__actions">
               <span className="case-law-result__toggle">Open case</span>
@@ -39,14 +42,13 @@ export function SearchResults({ response, browse, selectedIndex }: SearchResults
             data-selected={selectedIndex === index ? 'true' : undefined}
             key={result.id}
           >
-            <Link
-              to="/cases/$caseId"
-              params={{ caseId: result.id }}
+            <a
+              href={result.canonicalUrl ?? `/cases/${encodeURIComponent(result.id)}`}
               className="case-law-result__summary"
               aria-current={selectedIndex === index ? 'true' : undefined}
             >
               {summary}
-            </Link>
+            </a>
             {result.snippets && result.snippets.length > 0 ? (
               <div className="case-law-result__snippets" aria-label="Matching judgment snippets">
                 {result.snippets.map((snippet) => (
@@ -66,6 +68,38 @@ export function SearchResults({ response, browse, selectedIndex }: SearchResults
 
 function formatNeutralCitation(neutralCitation: string | null) {
   return neutralCitation ?? 'No neutral citation'
+}
+
+function formatMatchReason(matchReason: string | undefined) {
+  switch (matchReason) {
+    case 'exact_document_id':
+      return 'Exact document id'
+    case 'exact_neutral_citation':
+      return 'Exact citation'
+    case 'title_match':
+      return 'Title match'
+    case 'body_text_match':
+      return 'Body text match'
+    case 'keyword_match':
+      return 'Keyword match'
+    default:
+      return 'Match reason pending'
+  }
+}
+
+function formatRetrievalPath(retrievalPath: string) {
+  switch (retrievalPath) {
+    case 'stored_exact_lookup':
+      return 'exact lookup'
+    case 'stored_index':
+      return 'stored index'
+    case 'stored_source':
+      return 'stored source'
+    case 'live_provider':
+      return 'Find Case Law'
+    default:
+      return retrievalPath
+  }
 }
 
 function formatResultMeta(

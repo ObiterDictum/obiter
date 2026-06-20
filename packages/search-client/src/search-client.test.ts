@@ -450,7 +450,9 @@ describe('Legal search client', () => {
 
     expect(snippets).toEqual([
       {
+        evidenceId: 'uksc-2024-3:judgment_paragraph:2',
         matchedTerms: ['potanina', 'financial'],
+        matchReason: 'body_text_match',
         paragraphNumber: 2,
         text: 'The court considered Potanina and the effect of prior financial remedy proceedings.',
       },
@@ -505,12 +507,16 @@ describe('Legal search client', () => {
 
     expect(snippets).toEqual([
       {
+        evidenceId: 'uksc-2024-3:judgment_paragraph:1',
         matchedTerms: ['potanina'],
+        matchReason: 'body_text_match',
         paragraphNumber: 1,
         text: 'Potanina appears in the first paragraph.',
       },
       {
+        evidenceId: 'uksc-2024-3:judgment_paragraph:2',
         matchedTerms: ['financial', 'remedy'],
+        matchReason: 'body_text_match',
         paragraphNumber: 2,
         text: 'Financial remedy proceedings are discussed in the second paragraph.',
       },
@@ -545,7 +551,14 @@ describe('Legal search client', () => {
 
     expect(result.hits[0]).toMatchObject({
       id: 'uksc-2024-3',
-      snippets: [{ paragraphNumber: 7, text: 'Potanina appears in this indexed paragraph.' }],
+      snippets: [
+        {
+          evidenceId: 'uksc-2024-3:judgment_paragraph:7',
+          matchReason: 'body_text_match',
+          paragraphNumber: 7,
+          text: 'Potanina appears in this indexed paragraph.',
+        },
+      ],
     })
     expect(result.hits[0]).not.toHaveProperty('paragraphs')
     expect(searchMock).toHaveBeenCalledWith(

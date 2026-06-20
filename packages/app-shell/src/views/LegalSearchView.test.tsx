@@ -60,6 +60,11 @@ function createTwoResultHits() {
       court: 'uksc',
       dateDecided: '2024-01-31',
       sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
+      canonicalUrl: '/case/potanina-v-potanin-2024-uksc-3',
+      matchReason: 'exact_neutral_citation',
+      retrievalPath: 'stored_index',
+      retrievalRank: 1,
+      retrievalScore: 0.95,
     },
     {
       id: 'ewca-2023-1',
@@ -68,6 +73,11 @@ function createTwoResultHits() {
       court: 'ewca/civ',
       dateDecided: '2023-01-01',
       sourceUrl: 'https://caselaw.nationalarchives.gov.uk/ewca/civ/2023/1',
+      canonicalUrl: '/case/example-v-respondent-2023-ewca-civ-1',
+      matchReason: 'title_match',
+      retrievalPath: 'stored_source',
+      retrievalRank: 2,
+      retrievalScore: 0.8,
     },
   ]
 }
@@ -203,7 +213,9 @@ describe('LegalSearchView debounce lifecycle', () => {
     await flushMicrotasks()
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(container.textContent).toContain('No stored legal sources matched "Potanin"')
+    expect(container.textContent).toContain(
+      'Stored legal sources and available provider results did not match "Potanin" with the selected filters.',
+    )
   })
 
   it('runs a stored-only court browse when a court shortcut has no query', async () => {
@@ -442,6 +454,32 @@ describe('LegalSearchView debounce lifecycle', () => {
     await pressKey('Enter', input)
 
     expect(routerMocks.navigate).not.toHaveBeenCalled()
+  })
+
+  it('uses canonical case URLs for result links and keyboard opening', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
+      createSearchResponse(createTwoResultHits(), { cached: true }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(getSearchInput(container), 'Potanina')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    const firstResultLink = container.querySelector<HTMLAnchorElement>('.case-law-result__summary')
+    expect(firstResultLink?.getAttribute('href')).toBe('/case/potanina-v-potanin-2024-uksc-3')
+    expect(container.textContent).toContain('Exact citation - stored index')
+
+    await pressKey('Enter')
+
+    expect(routerMocks.navigate).toHaveBeenCalledWith({
+      href: '/case/potanina-v-potanin-2024-uksc-3',
+    })
   })
 
   it('opens and closes the keyboard shortcuts overlay', async () => {

@@ -1,8 +1,30 @@
-import type { ApiErrorResponse } from '@ormont/contracts'
+import { createCanonicalCasePath, type ApiErrorResponse } from '@ormont/contracts'
 import type { LegalAuthority } from '@ormont/legal-schema'
-import { extractLegalSearchSnippets, type LegalSearchHit } from '@ormont/search-client'
+import {
+  createJudgmentParagraphEvidenceId,
+  extractLegalSearchSnippets,
+  type LegalSearchHit,
+  type LegalSearchMatchReason,
+} from '@ormont/search-client'
 
+export type LegalFetchRetrievalPath =
+  | 'stored_exact_lookup'
+  | 'stored_index'
+  | 'stored_source'
+  | 'live_provider'
+export type LegalFetchOutcome =
+  | 'results'
+  | 'no_match'
+  | 'hydration_queued'
+  | 'stored_browse_empty'
+  | 'unsupported_source_type'
 export interface LegalFetchSearchHit extends LegalSearchHit {
+  canonicalUrl?: string
+  evidenceIds?: string[]
+  matchReason?: LegalSearchMatchReason
+  retrievalPath?: LegalFetchRetrievalPath
+  retrievalRank?: number
+  retrievalScore?: number
   paragraphs?: LegalAuthority['paragraphs']
 }
 export function apiError(
@@ -25,7 +47,19 @@ export function toFetchResponse(
   indexedCount: number,
   skippedCount: number,
   hydrationQueued = false,
+  options: {
+    outcome?: LegalFetchOutcome
+    diagnostics?: {
+      exactLookupSearched?: boolean
+      storedIndexSearched?: boolean
+      storedSourceSearched?: boolean
+      liveProviderSearched?: boolean
+      storedOnlyBrowse?: boolean
+    }
+  } = {},
 ) {
+  const outcome = options.outcome ?? inferFetchOutcome(hits, hydrationQueued)
+
   return {
     hits,
     query,
@@ -35,10 +69,22 @@ export function toFetchResponse(
     indexedCount,
     skippedCount,
     hydrationQueued,
+    outcome,
+    diagnostics: options.diagnostics,
   }
 }
 
-export function toSummaryHit(hit: LegalSearchHit, query = ''): LegalFetchSearchHit {
+export function toSummaryHit(
+  hit: LegalSearchHit,
+  query = '',
+  options: { retrievalPath?: LegalFetchRetrievalPath; retrievalRank?: number } = {},
+): LegalFetchSearchHit {
+  const snippets = hit.snippets ?? extractLegalSearchSnippets(hit, query)
+  const matchReason = getLegalSearchMatchReason(hit, query, snippets.length > 0)
+  const evidenceIds = snippets.length > 0
+    ? snippets.map((snippet) => snippet.evidenceId)
+    : [createJudgmentParagraphEvidenceId(hit.id, 1)]
+
   return {
     id: hit.id,
     title: hit.title,
@@ -48,6 +94,57 @@ export function toSummaryHit(hit: LegalSearchHit, query = ''): LegalFetchSearchH
     dateDecided: hit.dateDecided,
     sourceType: hit.sourceType,
     sourceUrl: hit.sourceUrl,
-    snippets: hit.snippets ?? extractLegalSearchSnippets(hit, query),
+    canonicalUrl: createCanonicalCasePath(hit),
+    evidenceIds,
+    matchReason,
+    retrievalPath: options.retrievalPath,
+    retrievalRank: options.retrievalRank,
+    retrievalScore: scoreLegalSearchMatch(matchReason),
+    snippets,
   }
+}
+
+function getLegalSearchMatchReason(
+  hit: LegalSearchHit,
+  query: string,
+  hasSnippetMatch: boolean,
+): LegalSearchMatchReason {
+  const normalizedQuery = normalizeSearchValue(query)
+  if (!normalizedQuery) return 'keyword_match'
+  if (normalizeSearchValue(hit.id) === normalizedQuery) return 'exact_document_id'
+  if (normalizeSearchValue(hit.neutralCitation) === normalizedQuery) return 'exact_neutral_citation'
+
+  const normalizedTitle = normalizeSearchValue(hit.title)
+  if (normalizedTitle === normalizedQuery || normalizedTitle.includes(normalizedQuery)) {
+    return 'title_match'
+  }
+
+  if (hasSnippetMatch) return 'body_text_match'
+
+  return 'keyword_match'
+}
+
+function scoreLegalSearchMatch(matchReason: LegalSearchMatchReason) {
+  switch (matchReason) {
+    case 'exact_document_id':
+      return 1
+    case 'exact_neutral_citation':
+      return 0.95
+    case 'title_match':
+      return 0.8
+    case 'body_text_match':
+      return 0.65
+    case 'keyword_match':
+      return 0.5
+  }
+}
+
+function normalizeSearchValue(value: string | null | undefined) {
+  return value?.trim().toLowerCase().replace(/\s+/g, ' ') ?? ''
+}
+
+function inferFetchOutcome(hits: LegalFetchSearchHit[], hydrationQueued: boolean): LegalFetchOutcome {
+  if (hits.length > 0) return 'results'
+  if (hydrationQueued) return 'hydration_queued'
+  return 'no_match'
 }

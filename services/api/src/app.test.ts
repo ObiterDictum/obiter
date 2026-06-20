@@ -561,4 +561,31 @@ describe('createApiApp', () => {
 
     expect(searchClientMock.search).not.toHaveBeenCalled()
   })
+
+  it('models future legal source query params without running judgment search', async () => {
+    const auth = {
+      api: {
+        getSession: async () => null,
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const app = createApiApp(testEnv, createPool(async () => ({ rows: [] })), {
+      auth,
+    })
+
+    const response = await app.request(
+      '/api/search?q=section%206&sourceType=legislation_provision&sourceFamily=legislation&legalDomain=human-rights&provider=legislation-gov-uk&topic=Human%20Rights%20Act&asAtDate=2024-01-01&legislationVersion=current',
+    )
+    const body = (await response.json()) as {
+      hits: unknown[]
+      outcome: string
+    }
+
+    expect(response.status).toBe(200)
+    expect(body).toMatchObject({
+      hits: [],
+      outcome: 'unsupported_source_type',
+    })
+    expect(searchClientMock.search).not.toHaveBeenCalled()
+  })
 })

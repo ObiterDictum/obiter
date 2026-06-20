@@ -1,7 +1,24 @@
 import { z } from 'zod'
 
-export const LegalSourceTypeSchema = z.enum(['judgment'])
+export const LegalSourceTypeSchema = z.enum([
+  'judgment',
+  'legislation_document',
+  'legislation_provision',
+  'international_instrument',
+  'international_decision',
+  'guidance',
+  'other',
+])
 export type LegalSourceType = z.infer<typeof LegalSourceTypeSchema>
+
+export const LegalSourceFamilySchema = z.enum([
+  'case_law',
+  'legislation',
+  'international_law',
+  'guidance',
+  'other',
+])
+export type LegalSourceFamily = z.infer<typeof LegalSourceFamilySchema>
 
 export const LegalParagraphSchema = z.object({
   id: z.string().trim().min(1),

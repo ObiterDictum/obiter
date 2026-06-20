@@ -9,6 +9,7 @@ import type { ApiEnv } from '../../env'
 import { isSupportedFindCaseLawRequest } from './atom-parser'
 import { createMojRateLimiter } from './rate-limiter'
 import { legalDocumentIdSchema, legalFetchRequestSchema, type LegalFetchRequest } from './fetch-schema'
+import { extractNeutralCitation } from './document-utils'
 import { apiError, toFetchResponse, toSummaryHit, type LegalFetchSearchHit } from './response-utils'
 import {
   createInMemoryLegalAuthoritySourceStore,
@@ -64,8 +65,59 @@ export function createLegalSearchProxyRoutes(
       )
     }
 
+    if (!isImplementedFetchSourceType(parsed.data)) {
+      return c.json(toFetchResponse([], parsed.data.query, true, 0, 0, false, {
+        outcome: 'unsupported_source_type',
+        diagnostics: {
+          storedIndexSearched: false,
+          storedSourceSearched: false,
+          liveProviderSearched: false,
+          storedOnlyBrowse: false,
+        },
+      }))
+    }
+
     const filters = toSearchFilters(parsed.data)
     const storedOnlyBrowse = isStoredOnlyBrowse(parsed.data)
+    const exactLookup = classifyExactLookup(parsed.data.query)
+    const exactStoredAuthority = !storedOnlyBrowse && exactLookup
+      ? await findExactStoredAuthority(
+        searchClient,
+        legalAuthorityStore,
+        env.legalAuthoritiesIndex,
+        parsed.data.query,
+        filters,
+        exactLookup,
+      )
+      : null
+
+    if (exactStoredAuthority) {
+      return c.json(
+        toFetchResponse(
+          [
+            toSummaryHit(exactStoredAuthority.hit, parsed.data.query, {
+              retrievalPath: 'stored_exact_lookup',
+              retrievalRank: 1,
+            }),
+          ],
+          parsed.data.query,
+          true,
+          0,
+          0,
+          false,
+          {
+            diagnostics: {
+              exactLookupSearched: true,
+              storedIndexSearched: true,
+              storedSourceSearched: exactStoredAuthority.storedSourceSearched,
+              liveProviderSearched: false,
+              storedOnlyBrowse,
+            },
+          },
+        ),
+      )
+    }
+
     const cached = await searchStoredAuthorities(
       searchClient,
       env.legalAuthoritiesIndex,
@@ -77,11 +129,25 @@ export function createLegalSearchProxyRoutes(
     if (cached.hits.length > 0) {
       return c.json(
         toFetchResponse(
-          cached.hits.map((hit) => toSummaryHit(hit, parsed.data.query)),
+          cached.hits.map((hit, index) =>
+            toSummaryHit(hit, parsed.data.query, {
+              retrievalPath: 'stored_index',
+              retrievalRank: index + 1,
+            })),
           parsed.data.query,
           true,
           0,
           0,
+          false,
+          {
+            diagnostics: {
+              exactLookupSearched: Boolean(exactLookup),
+              storedIndexSearched: true,
+              storedSourceSearched: false,
+              liveProviderSearched: false,
+              storedOnlyBrowse,
+            },
+          },
         ),
       )
     }
@@ -99,17 +165,40 @@ export function createLegalSearchProxyRoutes(
 
       return c.json(
         toFetchResponse(
-          rankedStoredDocuments.map((hit) => toSummaryHit(hit, parsed.data.query)),
+          rankedStoredDocuments.map((hit, index) =>
+            toSummaryHit(hit, parsed.data.query, {
+              retrievalPath: 'stored_source',
+              retrievalRank: index + 1,
+            })),
           parsed.data.query,
           true,
           0,
           0,
+          false,
+          {
+            diagnostics: {
+              exactLookupSearched: Boolean(exactLookup),
+              storedIndexSearched: true,
+              storedSourceSearched: true,
+              liveProviderSearched: false,
+              storedOnlyBrowse,
+            },
+          },
         ),
       )
     }
 
     if (!parsed.data.query.trim()) {
-      return c.json(toFetchResponse([], parsed.data.query, true, 0, 0))
+      return c.json(toFetchResponse([], parsed.data.query, true, 0, 0, false, {
+        outcome: 'stored_browse_empty',
+        diagnostics: {
+          exactLookupSearched: Boolean(exactLookup),
+          storedIndexSearched: true,
+          storedSourceSearched: true,
+          liveProviderSearched: false,
+          storedOnlyBrowse,
+        },
+      }))
     }
 
     if (!parsed.data.foregroundLiveResults) {
@@ -130,6 +219,16 @@ export function createLegalSearchProxyRoutes(
           0,
           0,
           true,
+          {
+            outcome: 'hydration_queued',
+            diagnostics: {
+              exactLookupSearched: Boolean(exactLookup),
+              storedIndexSearched: true,
+              storedSourceSearched: true,
+              liveProviderSearched: false,
+              storedOnlyBrowse,
+            },
+          },
         ),
       )
     }
@@ -186,12 +285,25 @@ export function createLegalSearchProxyRoutes(
 
     return c.json(
       toFetchResponse(
-        rankedLiveDocuments.map((hit) => toSummaryHit(hit, parsed.data.query)),
+        rankedLiveDocuments.map((hit, index) =>
+          toSummaryHit(hit, parsed.data.query, {
+            retrievalPath: 'live_provider',
+            retrievalRank: index + 1,
+          })),
         parsed.data.query,
         false,
         0,
         liveResult.skippedCount,
         true,
+        {
+          diagnostics: {
+            exactLookupSearched: Boolean(exactLookup),
+            storedIndexSearched: true,
+            storedSourceSearched: true,
+            liveProviderSearched: true,
+            storedOnlyBrowse,
+          },
+        },
       ),
     )
   })
@@ -301,8 +413,82 @@ function isStoredOnlyBrowse(request: LegalFetchRequest) {
   return !request.query.trim() && Boolean(request.court)
 }
 
+function isImplementedFetchSourceType(request: LegalFetchRequest) {
+  return !request.sourceType || request.sourceType === 'judgment'
+}
+
 function limitStoredBrowseHits<T>(hits: T[], storedOnlyBrowse: boolean) {
   return storedOnlyBrowse ? hits.slice(0, storedCourtBrowseLimit) : hits
+}
+
+type ExactLookup =
+  | { kind: 'document_id'; normalizedQuery: string }
+  | { kind: 'neutral_citation'; normalizedQuery: string }
+
+function classifyExactLookup(query: string): ExactLookup | null {
+  const normalizedQuery = normalizeSearchValue(query)
+  if (!normalizedQuery) return null
+
+  if (isExactDocumentId(normalizedQuery)) {
+    return { kind: 'document_id', normalizedQuery }
+  }
+
+  const extractedCitation = extractNeutralCitation(query)
+  if (extractedCitation && normalizeSearchValue(extractedCitation) === normalizedQuery) {
+    return { kind: 'neutral_citation', normalizedQuery }
+  }
+
+  return null
+}
+
+async function findExactStoredAuthority(
+  searchClient: Parameters<typeof search>[0],
+  legalAuthorityStore: LegalAuthoritySourceStore,
+  indexName: string,
+  query: string,
+  filters: LegalSearchFilters,
+  lookup: ExactLookup,
+) {
+  const storedIndexResult = await searchStoredAuthorities(searchClient, indexName, query, filters, 5)
+  const storedIndexHit = storedIndexResult.hits.find((hit) => isExactLookupHit(hit, lookup))
+  if (storedIndexHit) return { hit: storedIndexHit, storedSourceSearched: false }
+
+  if (lookup.kind === 'document_id') {
+    const storedRecord = await getLegalAuthoritySourceRecord(legalAuthorityStore, lookup.normalizedQuery)
+    const storedDocument = storedRecord?.document ?? storedRecord?.summary
+    if (storedDocument && sourceMatchesFilters(storedDocument, filters)) {
+      return { hit: storedDocument, storedSourceSearched: true }
+    }
+  }
+
+  const storedSourceHits = await searchLegalAuthoritySourceStore(legalAuthorityStore, query, filters)
+  const storedSourceHit = storedSourceHits.find((hit) => isExactLookupHit(hit, lookup))
+  return storedSourceHit ? { hit: storedSourceHit, storedSourceSearched: true } : null
+}
+
+function isExactDocumentId(normalizedQuery: string) {
+  return (
+    /^d-[a-z0-9-]+$/.test(normalizedQuery) ||
+    /^[a-z][a-z0-9-]*(?:-[a-z0-9]+)*-\d{4}-\d+$/.test(normalizedQuery)
+  )
+}
+
+function isExactLookupHit(hit: LegalFetchSearchHit, lookup: ExactLookup) {
+  switch (lookup.kind) {
+    case 'document_id':
+      return normalizeSearchValue(hit.id) === lookup.normalizedQuery
+    case 'neutral_citation':
+      return normalizeSearchValue(hit.neutralCitation) === lookup.normalizedQuery
+  }
+}
+
+function sourceMatchesFilters(hit: LegalFetchSearchHit, filters: LegalSearchFilters) {
+  if (filters.court && hit.court !== filters.court) return false
+  if (filters.jurisdiction && hit.jurisdiction !== filters.jurisdiction) return false
+  if (filters.sourceType && hit.sourceType !== filters.sourceType) return false
+  if (filters.dateFrom && hit.dateDecided < filters.dateFrom) return false
+  if (filters.dateTo && hit.dateDecided > filters.dateTo) return false
+  return true
 }
 
 async function searchStoredAuthorities(
@@ -380,13 +566,17 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | nul
   })
 }
 
+function normalizeSearchValue(value: string | null | undefined) {
+  return value?.trim().toLowerCase().replace(/\s+/g, ' ') ?? ''
+}
+
 function toSearchFilters(request: LegalFetchRequest): LegalSearchFilters {
   return {
     court: request.court,
     jurisdiction: request.jurisdiction,
     dateFrom: request.dateFrom,
     dateTo: request.dateTo,
-    sourceType: 'judgment',
+    sourceType: request.sourceType ?? 'judgment',
   }
 }
 

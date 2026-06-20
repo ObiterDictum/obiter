@@ -416,7 +416,7 @@ Rules:
 - If an exact citation exists in stored sources, return it directly as the first result.
 - If stored sources miss and foreground live lookup is enabled, Find Case Law results should still return the matching case directly when the provider exposes it.
 - A citation search should not leave the user with only a queued hydration state when the matching live case can be returned safely in the foreground.
-- Opening the result should go straight to `/cases/:caseId`.
+- Opening the result should go straight to the canonical `/case/:caseSlug` URL when the result payload includes one. `/cases/:caseId` remains as an internal-id compatibility route and redirects to the canonical route when the document is known.
 
 Example:
 
@@ -490,6 +490,12 @@ Current implementation status:
 - [x] Add API and UI result snippets.
 - [x] Add or update tests for citation-first search, body-text search, snippet extraction, and stored-source fallback behavior.
 - [x] Add keyboard navigation, idle state, and individual filter removal.
+- [x] Add canonical case URLs to Search result payloads and route result opening through `/case/:caseSlug`.
+- [x] Add judgment result metadata for evidence ids, match reasons, retrieval path, retrieval rank, and retrieval score.
+- [x] Redirect `/cases/:caseId` compatibility URLs to canonical `/case/:caseSlug` URLs when the document is known.
+- [x] Add explicit Search response outcomes for results, no match, queued hydration, and empty stored-source browse.
+- [x] Add Gate 1 judgment Search benchmark seed artifacts under `data/evals/search/`.
+- [x] Expand source-type/source-family schemas and model future Search request fields with explicit unsupported-source outcomes.
 - [ ] Run cleanup for deprecated fallbacks and empty scaffolds.
 - [ ] Run the verification commands below after the remaining Search UX work.
 
@@ -501,8 +507,26 @@ Completed through PR 19:
 - App-shell search result cards render snippet text below the result summary.
 - Focused automated coverage exists for snippet extraction, result-list payload shape, citation-first ranking, body-text indexed search attributes, and stored-source fallback behavior.
 
+Completed after PR 19:
+
+- `POST /api/search/fetch` Search hits include `canonicalUrl` for judgment results, generated from shared helpers in `@ormont/contracts`.
+- App-shell result links and keyboard result opening prefer canonical `/case/:caseSlug` URLs while preserving `/cases/:caseId` fallback behavior for old payloads.
+- The web app has a `/case/$caseSlug` route that resolves current judgment citation slugs back to the existing document detail endpoint.
+- The web app redirects `/cases/$caseId` compatibility routes to canonical case URLs after resolving the document.
+- Focused automated coverage exists for canonical URL payloads, result links, and keyboard opening.
+- Judgment Search payloads expose deterministic paragraph evidence ids, hit-level `evidenceIds`, `matchReason`, `retrievalPath`, `retrievalRank`, and `retrievalScore`.
+- App-shell result cards show the match reason and retrieval path so result confidence is visible in the Search UI.
+- Search fetch responses expose `outcome` and diagnostics fields so empty Search states no longer rely only on `hits.length` or `hydrationQueued`.
+- App-shell empty states distinguish no indexed match, queued hydration, and empty stored-source browse.
+- `data/evals/search/judgment-search-gate-1.*.json` defines the first Search benchmark dataset card, benchmark metadata, and 10 cases covering exact citation, document id, title, body text, no-answer, malformed citation, ambiguity, court browse, and date filters.
+- `LegalSourceTypeSchema` now models judgment, legislation, international, guidance, and other source types; Search request schemas accept source family, legal domain, provider, topic, `asAtDate`, and legislation version fields.
+- Non-judgment Search requests return an explicit `unsupported_source_type` outcome instead of being coerced into judgment Search.
+- Exact judgment document-id and neutral-citation queries run through a stored exact-lookup path before broad keyword search and report `stored_exact_lookup` in result metadata.
+
 Remaining next slice:
 
+- Extend exact lookup to provision references, title aliases, malformed citations, and ambiguity/rejected-source states.
+- Build the local Search benchmark runner that consumes the `data/evals/search/` seed artifacts and records top-k results plus failure labels.
 - Manually exercise `/search` against a running API, Meilisearch, and Postgres stack.
 - Run dead-code cleanup and the full verification list.
 
@@ -523,6 +547,8 @@ Required focused coverage:
 - exact citation queries rank the matching case first
 - body-text queries can return cases through `paragraphs.text`
 - result-list payloads expose snippets, not full paragraph arrays
+- result-list payloads expose evidence ids, match reasons, retrieval path, rank, and score
+- result-list responses expose explicit outcome states for results and no-result cases
 - PostgreSQL source-store fallback searches hydrated body text when paragraph text is available
 - live Find Case Law fallback still works for stored misses without weakening stored search behavior
 
@@ -535,6 +561,7 @@ Also manually exercise:
 - filter apply and single-filter removal
 - snippets on result cards
 - keyboard result navigation and opening
-- `/cases/:caseId` detail page after opening a result
+- `/case/:caseSlug` detail page after opening a result
+- `/cases/:caseId` compatibility redirect
 
 Do not mark this slice done if the refactor changes existing Search behavior without a deliberate follow-up note.

@@ -1,9 +1,14 @@
 import { CaseLawDocumentView, caseLawDocumentQueryOptions } from '@ormont/app-shell'
-import { createFileRoute } from '@tanstack/react-router'
+import { createCanonicalCasePath } from '@ormont/contracts'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/cases/$caseId')({
-  loader: ({ context, params }) =>
-    context.queryClient.ensureQueryData(caseLawDocumentQueryOptions(params.caseId)),
+  loader: async ({ context, params }) => {
+    const document = await context.queryClient.ensureQueryData(caseLawDocumentQueryOptions(params.caseId))
+    const canonicalPath = createCanonicalCasePath(document)
+
+    throw redirect({ href: canonicalPath })
+  },
   component: CaseRouteComponent,
 })
 
