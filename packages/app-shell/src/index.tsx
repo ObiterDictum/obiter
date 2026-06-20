@@ -18,6 +18,7 @@ export {
   countActiveLegalSearchFilters,
   createLegalSearchFetchRequest,
   getCourtLabel,
+  getLegalSearchEmptyFeedback,
   getRecentLegalSearches,
   getLegalSearchStateAfterInputChange,
   getLegalSearchStateLabel,

@@ -5,10 +5,31 @@ export interface CaseLawParagraph {
 }
 
 export interface CaseLawSnippet {
+  evidenceId?: string
   paragraphNumber: number
   text: string
   matchedTerms: string[]
+  matchReason?: LegalSearchMatchReason
 }
+
+export type LegalSearchMatchReason =
+  | 'exact_document_id'
+  | 'exact_neutral_citation'
+  | 'title_match'
+  | 'body_text_match'
+  | 'keyword_match'
+
+export type LegalSearchRetrievalPath =
+  | 'stored_exact_lookup'
+  | 'stored_index'
+  | 'stored_source'
+  | 'live_provider'
+export type LegalSearchOutcome =
+  | 'results'
+  | 'no_match'
+  | 'hydration_queued'
+  | 'stored_browse_empty'
+  | 'unsupported_source_type'
 
 export interface LegalSearchResult {
   id: string
@@ -17,6 +38,12 @@ export interface LegalSearchResult {
   court: string
   dateDecided: string
   sourceUrl: string
+  canonicalUrl?: string
+  evidenceIds?: string[]
+  matchReason?: LegalSearchMatchReason
+  retrievalPath?: LegalSearchRetrievalPath
+  retrievalRank?: number
+  retrievalScore?: number
   snippets?: CaseLawSnippet[]
   paragraphs?: CaseLawParagraph[]
 }
@@ -27,6 +54,14 @@ export interface LegalSearchFetchResponse {
   indexedCount: number
   skippedCount: number
   hydrationQueued?: boolean
+  outcome?: LegalSearchOutcome
+  diagnostics?: {
+    exactLookupSearched?: boolean
+    storedIndexSearched?: boolean
+    storedSourceSearched?: boolean
+    liveProviderSearched?: boolean
+    storedOnlyBrowse?: boolean
+  }
 }
 
 export interface LegalSearchBrowseContext {
@@ -37,6 +72,13 @@ export interface LegalSearchRequestFilters {
   court: string
   dateFrom: string
   dateTo: string
+  sourceType?: string
+  sourceFamily?: string
+  legalDomain?: string
+  provider?: string
+  topic?: string
+  asAtDate?: string
+  legislationVersion?: string
 }
 
 export interface CourtOption {
@@ -61,6 +103,7 @@ export type LegalSearchState =
   | {
       status: 'empty'
       query: string
+      outcome?: LegalSearchOutcome
       hydrationQueued?: boolean
       browse?: LegalSearchBrowseContext
     }
