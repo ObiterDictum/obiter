@@ -188,15 +188,25 @@ export function createCanonicalCasePath(input: {
   title: string
   neutralCitation: string | null
 }) {
+  const documentIdSlug = slugifyCaseText(input.id)
   const citationSlug = input.neutralCitation ? slugifyCaseCitation(input.neutralCitation) : ''
   const titleSlug = slugifyCaseText(input.title)
-  const slug = citationSlug ? [titleSlug, citationSlug].filter(Boolean).join('-') : slugifyCaseText(input.id)
+  const slug = input.id.startsWith('d-')
+    ? [documentIdSlug, titleSlug, citationSlug].filter(Boolean).join('-')
+    : citationSlug
+      ? [titleSlug, citationSlug].filter(Boolean).join('-')
+      : documentIdSlug
 
   return `/case/${slug}`
 }
 
 export function resolveCaseDocumentIdFromSlug(caseSlug: string) {
   const normalizedSlug = slugifyCaseText(caseSlug)
+  const stableDocumentId = normalizedSlug.match(
+    /^d-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:-|$)/,
+  )?.[0]?.replace(/-$/, '')
+  if (stableDocumentId) return stableDocumentId
+
   const parts = normalizedSlug.split('-').filter(Boolean)
   const citationStart = findCitationSlugStart(parts)
 

@@ -266,6 +266,41 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('preserves d-style document ids in canonical case URLs', async () => {
+    const stableIdHit = {
+      ...hit,
+      id: 'd-f11e093f-8a53-4e43-8dd8-1531b5d8f018',
+      title: 'Craig Alfred v Information Commissioner',
+      neutralCitation: '[2026] UKFTT 754 (GRC)',
+      court: 'ftt-grc',
+      sourceUrl: 'https://caselaw.nationalarchives.gov.uk/ukftt/grc/2026/754',
+    }
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [stableIdHit],
+      query: 'Craig Alfred',
+      estimatedTotalHits: 1,
+      processingTimeMs: 1,
+    })
+    const app = createLegalSearchProxyRoutes(env)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'Craig Alfred' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [
+        {
+          id: stableIdHit.id,
+          canonicalUrl:
+            '/case/d-f11e093f-8a53-4e43-8dd8-1531b5d8f018-craig-alfred-v-information-commissioner-2026-ukftt-754-grc',
+        },
+      ],
+    })
+  })
+
   it('accepts future source request fields but returns unsupported outcome for non-judgment source types', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
     const app = createLegalSearchProxyRoutes(env)
