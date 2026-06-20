@@ -24,6 +24,7 @@ const env: ApiEnv = {
   authSecret: 'dev-only-better-auth-secret',
   authBaseUrl: 'http://localhost:8787',
   webOrigin: 'http://localhost:3000',
+  marketingOrigin: null,
   desktopOrigin: 'ormont://desktop-auth',
   magicLinkWebhookUrl: null,
   magicLinkWebhookSecret: null,

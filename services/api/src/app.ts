@@ -79,7 +79,9 @@ export function createApiApp(env: ApiEnv, pool: Pool, options: ApiAppOptions = {
   app.use(
     '*',
     cors({
-      origin: [env.webOrigin, env.authBaseUrl, env.desktopOrigin],
+      origin: [env.webOrigin, env.authBaseUrl, env.desktopOrigin, env.marketingOrigin].filter(
+        (origin): origin is string => Boolean(origin),
+      ),
       allowHeaders: ['Content-Type', 'Authorization'],
       allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
       credentials: true,

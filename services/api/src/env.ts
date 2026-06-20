@@ -22,6 +22,7 @@ export interface ApiEnv {
   authSecret: string
   authBaseUrl: string
   webOrigin: string
+  marketingOrigin: string | null
   desktopOrigin: string
   magicLinkWebhookUrl: string | null
   magicLinkWebhookSecret: string | null
@@ -252,6 +253,7 @@ export function readApiEnv(): ApiEnv {
     ),
     authBaseUrl: readRequiredUrl('BETTER_AUTH_URL', 'http://localhost:8787'),
     webOrigin: readRequiredUrl('ORMONT_WEB_ORIGIN', 'http://localhost:3000'),
+    marketingOrigin: readOptionalUrl('ORMONT_MARKETING_ORIGIN'),
     desktopOrigin: readRequiredUrl(
       'ORMONT_DESKTOP_ORIGIN',
       'ormont://desktop-auth',
