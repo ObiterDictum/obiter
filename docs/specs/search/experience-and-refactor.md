@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This slice improves the existing Search experience for the DMU demo and reduces the risk of changing the current Find Case Law integration.
+This slice improves the existing Search experience for the current demo priority and reduces the risk of changing the current Find Case Law integration.
 
 The immediate goal is not to build Matter Workspace, hosted storage, offline sync, Redaction, Verification, or Research. Those remain product goals, but they are not the next build step.
 
@@ -403,7 +403,7 @@ Rules:
 
 The API can use `includeParagraphs` internally when reading from Meilisearch, but it should transform paragraphs into snippets before sending the response.
 
-For the DMU demo corpus size, fetching paragraphs internally from Meilisearch to derive snippets is acceptable. If the corpus grows materially, replace this with a dedicated indexed snippet field or search-engine-native highlighting rather than moving full paragraph arrays through the result-list API.
+For the current demo corpus size, fetching paragraphs internally from Meilisearch to derive snippets is acceptable. If the corpus grows materially, replace this with a dedicated indexed snippet field or search-engine-native highlighting rather than moving full paragraph arrays through the result-list API.
 
 ### Citation Search
 

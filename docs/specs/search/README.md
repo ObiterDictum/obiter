@@ -8,7 +8,7 @@ This spec is separate from the legacy `atlas` spec because user-facing product l
 
 ## Current Demo Decision
 
-Phase 0.3 matter workflow and Phase 0.4 storage/jobs/offline work are paused for the DMU demo.
+Phase 0.3 matter workflow and Phase 0.4 storage/jobs/offline work are paused for the current demo priority.
 
 Completed foundation:
 
