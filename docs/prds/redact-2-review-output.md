@@ -1,11 +1,11 @@
-# Redact Month 2: Review, Decisions, and Output Generation
+# Redact PRD 2: Review, Decisions, and Output
 
 ## Summary
 
-Month 2 builds the human review layer on top of Month 1's detection pipeline. After detection runs and spans are stored, reviewers need to examine every detected span, make a decision (accept, reject, override, or pseudonymise), and produce a final output artifact. This month delivers the span decisions API, the output generation engine (redacted and pseudonymised modes), the finalize flow, a complete review UI, artifact storage integration, and audit logging for all redaction actions.
+This phase builds the human review layer on top of Phase 1's detection pipeline. After detection runs and spans are stored, reviewers need to examine every detected span, make a decision (accept, reject, override, or pseudonymise), and produce a final output artifact. This phase delivers the span decisions API, the output generation engine (redacted and pseudonymised modes), the finalize flow, a complete review UI, artifact storage integration, and audit logging for all redaction actions.
 
-By the end of Month 2, a user can:
-1. Create a redaction run and see its detected spans (built in [Month 1](redact-month1.md))
+After Phase 2 is complete, a user can:
+1. Create a redaction run and see its detected spans (built in [Phase 1](redact-1-detection.md))
 2. Review each span in the UI, sorted and filtered by category or source
 3. Submit accept/reject/override/pseudonymise decisions on individual spans
 4. Finalize the run, producing either a redacted document (`[REDACTED]` replacements) or a pseudonymised document (consistent `[CATEGORY_N]` tokens)
@@ -23,7 +23,7 @@ A redaction pipeline that only detects spans is not a product. Detection is the 
 - **Maintain audit trail**: every decision must be traceable to a reviewer, at a specific time, for compliance and client protection.
 - **Handle edge cases**: overlapping spans, spans from different detection sources, un-reviewed spans, and re-running redaction on the same document.
 
-Without Month 2, the product has detection but no delivery — spans exist but cannot be acted on, and no useful output is produced.
+Without Phase 2, the product has detection but no delivery — spans exist but cannot be acted on, and no useful output is produced.
 
 ## Product Principles
 
@@ -46,11 +46,11 @@ Without Month 2, the product has detection but no delivery — spans exist but c
 
 ## Non-Goals
 
-- No automated/ML-assisted decision suggestions (Month 3 or later).
+- No automated/ML-assisted decision suggestions (Phase 3 or later).
 - No batch decision-making for categories or sources (future).
-- No DOCX extraction or non-text document handling (Month 3).
-- No desktop-local redaction (Month 3+).
-- No redaction report export as PDF/HTML audit artifact (Month 3).
+- No DOCX extraction or non-text document handling (Phase 3).
+- No desktop-local redaction (Phase 3+).
+- No redaction report export as PDF/HTML audit artifact (Phase 3).
 - No re-detection or edit detection parameters after run creation (future).
 
 ## Users
@@ -83,7 +83,7 @@ Needs the audit trail for regulatory review. Inspects decision records, timestam
 
 ## Scope
 
-Month 2 covers four areas:
+Phase 2 covers four areas:
 
 ### 1. Span Decisions API
 
@@ -127,7 +127,7 @@ Month 2 covers four areas:
 - Click span -> highlight in document view, show decision buttons
 - Decision action buttons: accept, reject, override redact, override keep, pseudonymise
 - Summary bar: X spans total, Y reviewed, Z unreviewed, breakdown by source (Privacy Filter vs regex supplement)
-- Policy mode selector on run creation (already in Month 1 API; UI shows current mode and its meaning)
+- Policy mode selector on run creation (already in Phase 1 API; UI shows current mode and its meaning)
 - Finalize button with output mode selector (redacted vs pseudonymised)
 - TanStack Query hooks: `useRedactionRun`, `useSpanDecision`, `useFinalizeRun`
 - Route: `/matters/:matterId/documents/:documentId/redact/:runId`
@@ -152,11 +152,11 @@ The artifact references `document_version_id` to trace back to the source docume
 
 The existing codebase stores document content via object upload in document version creation (`object_key`). The text extraction path (`text_object_key`) stores extracted text in object storage. The artifacts table already has `object_key` with a constraint ensuring the path pattern.
 
-For Month 2, the finalize API needs to:
+For this phase, the finalize API needs to:
 1. Read extracted text from object storage at `document_versions.text_object_key`
 2. Write the output text to object storage at the artifact's `object_key` path
 
-If object storage upload is not yet wired as a reusable service, the fallback is to store output as a local file and write the path into `object_key`. This is documented as tech debt to be resolved in Month 3.
+If object storage upload is not yet wired as a reusable service, the fallback is to store output as a local file and write the path into `object_key`. This is documented as tech debt to be resolved in Phase 3.
 
 ### Pseudonymisation Token Map
 
@@ -436,7 +436,7 @@ Extend the `AuditRecordInput` action union in `services/api/src/database.ts` wit
 
 | Action | Description | Entity Type | Metadata |
 |---|---|---|---|
-| `redaction.run_create` | Run created (Month 1) | `redaction_run` | `{ policyMode, documentVersionId, spanCount }` |
+| `redaction.run_create` | Run created (Phase 1) | `redaction_run` | `{ policyMode, documentVersionId, spanCount }` |
 | `redaction.span_decision` | Decision on a span | `redaction_run` | `{ spanId, decision, category }` |
 | `redaction.finalize` | Run finalized | `redaction_run` | `{ outputMode, artifactId, spanCount, reviewedCount, unreviewedCount }` |
 
@@ -466,7 +466,7 @@ Update `GET /api/redaction-runs/:runId` to include:
 }
 ```
 
-This already exists from Month 1; Month 2 adds the `summary` field if not already present and ensures it's computed on every read if the stored value is stale.
+This already exists from Phase 1; Phase 2 adds the `summary` field if not already present and ensures it's computed on every read if the stored value is stale.
 
 ## Non-Functional Requirements
 
@@ -490,8 +490,8 @@ This already exists from Month 1; Month 2 adds the `summary` field if not alread
 
 ## Dependencies
 
-- [Redact Month 1: Detection Pipeline](redact-month1.md): Provides the detection pipeline, redaction_runs table with spans, and the `packages/redaction-policy` package with `supplement.ts`, `merge.ts`, `types.ts`.
-- [Redact Month 3: Polish and Demo](redact-month3.md): Will add audit report export (PDF/HTML), DOCX extraction, and the demo fixture. Month 2 builds the audit trail storage that Month 3 exports.
+- [Redact PRD 1: Detection Pipeline](redact-1-detection.md): Provides the detection pipeline, redaction_runs table with spans, and the `packages/redaction-policy` package with `supplement.ts`, `merge.ts`, `types.ts`.
+- [Redact PRD 3: Production Readiness](redact-3-production.md): Will add audit report export (PDF/HTML), DOCX extraction, and the demo fixture. This phase builds the audit trail storage that Phase 3 exports.
 - Shared contracts package (`packages/contracts`): Provides `spanDecisionSchema`, `outputModeSchema`, `redactionRunStatusSchema`, and error codes.
 - Object storage: Required for reading extracted text (`text_object_key`) and writing output artifacts. Needs verification of existing wiring at the start of the sprint.
 - Infrastructure (4vCPU/8GB/160GB VPS, PostgreSQL, Dokploy): Must support the additional API endpoints and UI build.
@@ -547,14 +547,14 @@ This already exists from Month 1; Month 2 adds the `summary` field if not alread
 
 - **Object storage not yet wired**: If the `text_object_key` read path or artifact write path is not implemented as a reusable service, the finalize API will need a local-filesystem fallback. Mitigation: verify object storage integration at sprint start; if missing, implement a simple abstraction (`StorageService` interface) with local filesystem as the first adapter.
 - **Large document performance**: Documents over 100K characters with 500+ spans may cause UI lag. Mitigation: virtualize the document text view, limit visible spans to viewport area, use windowing for the span list.
-- **Overlapping span edge cases**: Privacy Filter and regex supplement may produce overlapping spans. The merge logic from Month 1 should handle this, but `apply.ts` needs to handle remaining overlaps gracefully. Mitigation: extensive test fixtures with overlapping spans; highest-confidence source wins.
-- **Pseudonymisation across runs**: Month 2 scopes consistency to within a single run. Cross-run consistency is a future concern. Mitigation: document this limitation clearly in the UI and API docs.
+- **Overlapping span edge cases**: Privacy Filter and regex supplement may produce overlapping spans. The merge logic from Phase 1 should handle this, but `apply.ts` needs to handle remaining overlaps gracefully. Mitigation: extensive test fixtures with overlapping spans; highest-confidence source wins.
+- **Pseudonymisation across runs**: Phase 2 scopes consistency to within a single run. Cross-run consistency is a future concern. Mitigation: document this limitation clearly in the UI and API docs.
 - **Finalize without reviewing all spans**: The system warns but does not block. A firm may have compliance requirements that mandate 100% review. Mitigation: the warning is prominent in the finalize dialog; future iteration may add a setting to require full review.
 
 ## Open Questions
 
 1. **Object storage wiring**: Does the current codebase have a reusable service for reading/writing object storage, or does it use inline S3/client calls per route? Needs investigation at sprint start.
-2. **Document text storage**: Is extracted text always available at `document_versions.text_object_key` by Month 2, or does text extraction need to be completed first? Month 1 assumes text input directly; DOCX extraction is Month 3.
+2. **Document text storage**: Is extracted text always available at `document_versions.text_object_key` by Phase 2, or does text extraction need to be completed first? Phase 1 assumes text input directly; DOCX extraction is Phase 3.
 3. **Token map disclosure**: Who should have access to the token map for re-identification? The map is stored in `summary_json` (database), which means users with database access or API access to the run can see it. Is this acceptable, or should it be encrypted/stored separately?
 4. **Redacted mode with pseudonymise decisions**: For a run finalized in `redacted` mode, should spans with `pseudonymise` decision be replaced with `[REDACTED]` (current design) or with the pseudonym token? Current design says `[REDACTED]` since the user chose redacted mode.
 5. **Multiple runs on the same document**: Should the UI allow creating multiple redaction runs on the same document? If so, how does a user decide which finalized artifact to use?

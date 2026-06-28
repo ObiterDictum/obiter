@@ -1,16 +1,16 @@
-# Redact Month 3: Production Readiness, Audit, and Synthetic Data
+# Redact PRD 3: Production Readiness, Audit, and Synthetic Data
 
 ## Summary
 
-Month 3 completes the Ormont Redact module. It turns the Month 1–2 detection and review pipeline into a production-ready capability by adding real document format support (DOCX text extraction via `mammoth`), formal audit report export, synthetic training data generation for Privacy Filter fine-tuning, a dataset export tool for the human-in-the-loop improvement loop, a prepared demo for firm evaluations, and full end-to-end testing.
+This phase completes the Ormont Redact module. It turns the Phase 1-2 detection and review pipeline into a production-ready capability by adding real document format support (DOCX text extraction via `mammoth`), formal audit report export, synthetic training data generation for Privacy Filter fine-tuning, a dataset export tool for the human-in-the-loop improvement loop, a prepared demo for firm evaluations, and full end-to-end testing.
 
-Redact Month 1 established the detection pipeline powered by OpenAI Privacy Filter and a regex supplement for UK legal-specific PII patterns. Month 2 added the review UI, span decision persistence, and redacted/pseudonymised output generation. Month 3 makes the product demonstrable to firms, producible for audit, and extensible through fine-tuning.
+Redact Phase 1 established the detection pipeline powered by OpenAI Privacy Filter and a regex supplement for UK legal-specific PII patterns. Phase 2 added the review UI, span decision persistence, and redacted/pseudonymised output generation. This phase makes the product demonstrable to firms, producible for audit, and extensible through fine-tuning.
 
-See the detailed implementation at [docs/specs/redact/build-plan.md](../specs/redact/build-plan.md). Cross-reference siblings: [Redact Month 1: Detection Pipeline](redact-month1.md), [Redact Month 2: Review and Output](redact-month2.md).
+See the detailed implementation at [docs/specs/redact/build-plan.md](../specs/redact/build-plan.md). Cross-reference siblings: [Redact PRD 1: Detection Pipeline](redact-1-detection.md), [Redact PRD 2: Review and Output](redact-2-review-output.md).
 
 ## Problem
 
-Month 1 and Month 2 deliver a working redaction pipeline, but three gaps prevent it from being a credible product:
+Phases 1 and 2 deliver a working redaction pipeline, but three gaps prevent it from being a credible product:
 
 1. **Only `.txt` files are supported.** Legal documents are almost exclusively DOCX. Without DOCX extraction, no real document can pass through the pipeline. Firms cannot test the product on their own files.
 
@@ -20,7 +20,7 @@ Month 1 and Month 2 deliver a working redaction pipeline, but three gaps prevent
 
 4. **No demo exists.** Firms evaluating Ormont need to see a complete run — upload a real DOCX, see detection, review spans, finalize, download output — in a single session. Without a prepared demo fixture and a known end-to-end flow, evaluation conversations stall on "show me."
 
-Month 3 closes all four gaps.
+This phase closes all four gaps.
 
 ## Product Principles
 
@@ -44,9 +44,9 @@ Month 3 closes all four gaps.
 ## Non-Goals
 
 - **PDF text extraction** — PDF redaction requires a Python worker with PDF manipulation libraries (pdfplumber, PyMuPDF) and position-aware redaction boxes. This is deferred to Phase 2.
-- **Privacy Filter fine-tuning execution** — Month 3 generates the synthetic data, the export pipeline, and the documentation, but fine-tuning itself requires a rented GPU and is a Phase 2 activity after data quality has been reviewed.
+- **Privacy Filter fine-tuning execution** — This phase generates the synthetic data, the export pipeline, and the documentation, but fine-tuning itself requires a rented GPU and is a Phase 2 activity after data quality has been reviewed.
 - **Desktop-local redaction** — Electron offline processing is still Phase 2+.
-- **Batch redaction** — Multiple documents in a single redaction run is not in Month 3.
+- **Batch redaction** — Multiple documents in a single redaction run is not in Phase 3.
 - **Redaction policy customization** — Firm-specific rules or policy presets are not in scope.
 - **BullMQ job queue** — Detection calls remain synchronous. A job queue comes with batch processing.
 - **Image content redaction** — Detecting PII in embedded images within DOCX files is deferred indefinitely.
@@ -85,13 +85,13 @@ Inspects synthetic data quality, label correctness, and the fine-tuning dataset 
 
 ## Scope
 
-### First Release (Month 3) Scope
+### Release Scope
 
 - DOCX text extraction via mammoth integrated into document upload flow
 - Extracted text stored at `document_versions.text_object_key` in object storage
 - Document status management: `pending` → `ready` after extraction, `failed` on failure
 - DOCX with tables, headers, footers all supported (mammoth handles these)
-- `.txt` support already works from Month 1, remains unchanged
+- `.txt` support already works from Phase 1, remains unchanged
 - `GET /api/redaction-runs/:runId/audit` endpoint
 - Audit report artifact stored alongside redacted output
 - Report formats: JSON (primary), HTML (secondary), Markdown (tertiary)
@@ -119,12 +119,12 @@ Inspects synthetic data quality, label correctness, and the fine-tuning dataset 
 
 ### 1. DOCX Text Extraction
 
-**Rationale:** UK legal documents are authored in Microsoft Word and distributed as DOCX. The entire Ormont product upload flow is built around `matter_documents` and `document_versions`, which already support any file type. The gap is that Month 1 only extracts text from plain `.txt` files. For DOCX, an extraction step is needed between upload and redaction-readiness.
+**Rationale:** UK legal documents are authored in Microsoft Word and distributed as DOCX. The entire Ormont product upload flow is built around `matter_documents` and `document_versions`, which already support any file type. The gap is that Phase 1 only extracts text from plain `.txt` files. For DOCX, an extraction step is needed between upload and redaction-readiness.
 
 **Approach:**
 
 - Add `mammoth` as a dependency in the API service (`services/api/package.json`). Mammoth is a mature DOCX-to-HTML/text library that handles paragraphs, tables, headers, footers, embedded images (skipped for text extraction), and common formatting. It is available as an npm package (`mammoth`) and runs in Node.js without external binaries.
-- On document upload, inspect the `fileType` field of `matter_documents`. If `fileType` is `.docx`, run mammoth extraction. If `.txt`, read the file content directly (existing Month 1 path).
+- On document upload, inspect the `fileType` field of `matter_documents`. If `fileType` is `.docx`, run mammoth extraction. If `.txt`, read the file content directly (existing Phase 1 path).
 - Store the extracted text at the `text_object_key` path in object storage. The `document_versions` table already has this column.
 - After extraction, update `document_versions.document_status` to `ready`.
 - On redaction run creation (`POST /api/documents/:documentId/redaction-runs`), check `document_status`. If not yet `ready`, trigger extraction synchronously before creating the run. If extraction fails, the run goes to `failed` with a `failure_reason` field.
@@ -160,7 +160,7 @@ async function extractDocxText(buffer: Buffer): Promise<string> {
 
 ### 2. Audit Report Export
 
-**Rationale:** Law firms need a downloadable audit record for compliance. The internal audit log (Month 1 pattern: `appendAuditLog` with action types `redaction.run_create`, `redaction.span_decision`, `redaction.finalize`) is machine-readable but not suitable for direct consumption. The audit report wraps it into a structured document.
+**Rationale:** Law firms need a downloadable audit record for compliance. The internal audit log (Phase 1 pattern: `appendAuditLog` with action types `redaction.run_create`, `redaction.span_decision`, `redaction.finalize`) is machine-readable but not suitable for direct consumption. The audit report wraps it into a structured document.
 
 **API Endpoint:**
 
@@ -659,7 +659,7 @@ In `packages/app-shell/src/navigation.ts` (or equivalent), change the Redaction 
 | ID | Requirement |
 |----|-------------|
 | FR1.1 | On document upload with `fileType == 'docx'`, extract text using `mammoth.extractRawText` and store at `document_versions.text_object_key` |
-| FR1.2 | On document upload with `fileType == 'txt'`, store file content directly (existing Month 1 behaviour) |
+| FR1.2 | On document upload with `fileType == 'txt'`, store file content directly (existing Phase 1 behaviour) |
 | FR1.3 | On document upload with `fileType == 'pdf'`, reject with clear error: "PDF files are not yet supported for redaction. Please upload DOCX or TXT files." |
 | FR1.4 | After successful extraction, set `document_versions.document_status` to `ready` |
 | FR1.5 | On extraction failure (mammoth throws), set `document_versions.document_status` to `failed` and record `document_versions.failure_reason` |
@@ -759,12 +759,12 @@ In `packages/app-shell/src/navigation.ts` (or equivalent), change the Redaction 
 | Audit log function (`appendAuditLog`) | Done (`database.ts`) | Supports action types `redaction.run_create`, `redaction.span_decision`, `redaction.finalize` |
 | Object storage for text and output | Needs verification | `object_key` pattern defined; actual upload code may need wiring |
 | Privacy Filter custom label space | New | Defined in this PRD as `ormont_legal_v1` |
-| Redact Month 1: Detection Pipeline | Assumed complete | Worker, supplement, merge, database queries |
-| Redact Month 2: Review and Output | Assumed complete | Review UI, decisions, finalize, pseudonymisation |
+| Redact PRD 1: Detection Pipeline | Assumed complete | Worker, supplement, merge, database queries |
+| Redact PRD 2: Review and Output | Assumed complete | Review UI, decisions, finalize, pseudonymisation |
 | Synthetic data generation scripts | New | Node.js/TypeScript scripts under `scripts/` |
 | Dataset export tool | New | Node.js/TypeScript script under `scripts/` |
 
-See sibling PRDs: [Redact Month 1: Detection Pipeline](redact-month1.md), [Redact Month 2: Review and Output](redact-month2.md).
+See sibling PRDs: [Redact PRD 1: Detection Pipeline](redact-1-detection.md), [Redact PRD 2: Review and Output](redact-2-review-output.md).
 
 ## Rollout
 
@@ -792,7 +792,7 @@ See sibling PRDs: [Redact Month 1: Detection Pipeline](redact-month1.md), [Redac
 - Type-checking and tests passing on CI
 - Documentation updated
 - Sidebar activated
-- Final review: is Month 3 acceptance criteria met?
+- Final review: are the acceptance criteria met?
 
 ### Acceptance Criteria
 
@@ -841,14 +841,14 @@ The following must be true for M3 sign-off:
 
 ## Open Questions
 
-1. **Should mammoth be replaced with a Python-based DOCX extractor** (python-docx) running inside the redact-worker? This would keep text extraction closer to the detection logic and avoid adding a Node.js native dependency. *Decision: stay with mammoth for Month 3. The Node.js API already handles uploads. Moving extraction to the worker adds a network hop for text that needs extraction before detection anyway.*
+1. **Should mammoth be replaced with a Python-based DOCX extractor** (python-docx) running inside the redact-worker? This would keep text extraction closer to the detection logic and avoid adding a Node.js native dependency. *Decision: stay with mammoth for Phase 3. The Node.js API already handles uploads. Moving extraction to the worker adds a network hop for text that needs extraction before detection anyway.*
 
 2. **How should the synthetic data generator be validated by a legal professional?** We need a process for at least one qualified reviewer to spot-check synthetic documents. *Approach: generate 300, randomly sample 30 across all document types, send as PDF for review. Iterate on templates.*
 
-3. **Should the synthetic data include organisation names as PII?** Privacy Filter does not label `organisation_name` natively. If firms want to redact organisation names (e.g., competitor names in a commercial dispute), this needs a custom label and fine-tuning. *Deferred: for Month 3, organisation names are marked but not included in the custom label space. Add `organisation_name` as a custom label in Phase 2 if firms require it.*
+3. **Should the synthetic data include organisation names as PII?** Privacy Filter does not label `organisation_name` natively. If firms want to redact organisation names (e.g., competitor names in a commercial dispute), this needs a custom label and fine-tuning. *Deferred: for Phase 3, organisation names are marked but not included in the custom label space. Add `organisation_name` as a custom label in Phase 2 if firms require it.*
 
-4. **What is the checkpoint versioning strategy for fine-tuned models?** Simple: store checkpoints in `op_artifacts/redact-checkpoints/ormont_legal_v1/YYYY-MM-DD/` with a metadata JSON. For Month 3, a `checkpoint_versions` table is optional — document the path first, implement the table when the first fine-tune happens.
+4. **What is the checkpoint versioning strategy for fine-tuned models?** Simple: store checkpoints in `op_artifacts/redact-checkpoints/ormont_legal_v1/YYYY-MM-DD/` with a metadata JSON. For Phase 3, a `checkpoint_versions` table is optional — document the path first, implement the table when the first fine-tune happens.
 
 5. **Should the audit report include the full extracted text?** No — the report includes span excerpts but not the full text. Full text is accessible via the original document reference. Including it would make the audit artifact very large and duplicate storage.
 
-6. **How do we handle redaction of text inside DOCX tables specifically?** Mammoth extracts table cells as text separated by newlines, preserving row and cell order. Privacy Filter detects PII across all text regardless of original layout. *Acceptable for Month 3 — detecting PII in table text at the right granularity. Position-aware redaction (e.g., overlay redaction boxes over original content) is deferred to Phase 2 (PDF handling).*
+6. **How do we handle redaction of text inside DOCX tables specifically?** Mammoth extracts table cells as text separated by newlines, preserving row and cell order. Privacy Filter detects PII across all text regardless of original layout. *Acceptable for Phase 3 — detecting PII in table text at the right granularity. Position-aware redaction (e.g., overlay redaction boxes over original content) is deferred to Phase 2 (PDF handling).*
