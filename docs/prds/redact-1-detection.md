@@ -1,14 +1,14 @@
-# Redact Month 1: Foundation And Detection Pipeline PRD
+# Redact PRD 1: Detection Pipeline Foundation
 
 ## Summary
 
 Redact is Ormont's confidentiality and privacy layer. It detects personally identifiable information (PII) and secrets in matter documents, applies legal-specific redaction policy, supports pseudonymisation, and produces audited outputs with human review checkpoints.
 
-Month 1 builds the detection pipeline end-to-end: a Python worker running OpenAI Privacy Filter (1.5B param, CPU-optimised, Apache 2.0), the database schema for redaction runs, a TypeScript regex supplement for UK legal-specific patterns, a span merging engine, and the API skeleton for run creation and lifecycle. After Month 1, a user can upload a document, trigger a redaction run, and see detected spans ready for review.
+This phase builds the detection pipeline end-to-end: a Python worker running OpenAI Privacy Filter (1.5B param, CPU-optimised, Apache 2.0), the database schema for redaction runs, a TypeScript regex supplement for UK legal-specific patterns, a span merging engine, and the API skeleton for run creation and lifecycle. After Phase 1, a user can upload a document, trigger a redaction run, and see detected spans ready for review.
 
 Follow-on work is defined in sibling PRDs:
-- [Redact Month 2: Review And Output](redact-month2.md): span review UI, decision submission, pseudonymisation, output generation, finalization.
-- [Redact Month 3: Polish And Demo](redact-month3.md): DOCX extraction, audit report export, demo fixture, end-to-end testing, edge case handling.
+- [Redact PRD 2: Review and Output](redact-2-review-output.md): span review UI, decision submission, pseudonymisation, output generation, finalization.
+- [Redact PRD 3: Production Readiness](redact-3-production.md): DOCX extraction, audit report export, demo fixture, end-to-end testing, edge case handling.
 
 See the detailed implementation at [docs/specs/redact/build-plan.md](../specs/redact/build-plan.md).
 
@@ -27,7 +27,7 @@ Current approaches are inadequate:
 
 OpenAI Privacy Filter solves the detection problem: it is open-weight (Apache 2.0), runs fully locally (no data leaves the server), understands context (it is a bidirectional token classifier, not a regex engine), and achieves 97.43% F1 on the PII-Masking-300k benchmark. But it has gaps for UK legal text — national insurance numbers, passport numbers, case references — and its 8 built-in categories must be mapped to Ormont's 12-category span model.
 
-Month 1 exists to close the gap between "a model that detects PII" and "a production redaction service that firms can verify."
+This PRD exists to close the gap between "a model that detects PII" and "a production redaction service that firms can verify."
 
 ## Product Principles
 
@@ -38,7 +38,7 @@ Month 1 exists to close the gap between "a model that detects PII" and "a produc
 - **Model wins on overlap.** When both the Privacy Filter and the regex supplement detect the same span, the model's confidence and category assignment take precedence.
 - **Spans are suggestions with confidence scores, not immutable judgments.** Every span carries a category, confidence level, and suggested action. Reviewers can accept, reject, override, or pseudonymise each one.
 - **The run lifecycle is explicit and auditable.** Every status transition and decision is recorded in the audit log.
-- **Spans are stored as a JSONB array within the run.** A separate spans table is unnecessary for Month 1; the run record contains everything needed for review.
+- **Spans are stored as a JSONB array within the run.** A separate spans table is unnecessary for Phase 1; the run record contains everything needed for review.
 - **The Python worker does one thing and does it well.** It runs model inference. No business logic, no database access, no external network calls.
 
 ## Goals
@@ -57,29 +57,29 @@ Month 1 exists to close the gap between "a model that detects PII" and "a produc
 
 ## Non-Goals
 
-- No span review UI in Month 1. Review is Month 2.
-- No span decision submission in Month 1. Decisions are Month 2.
-- No pseudonymisation or output generation in Month 1. Output generation is Month 2.
-- No DOCX or PDF text extraction in Month 1. Month 1 works with plain text only. DOCX extraction is Month 3.
+- No span review UI in Phase 1. Review is Phase 2.
+- No span decision submission in Phase 1. Decisions are Phase 2.
+- No pseudonymisation or output generation in Phase 1. Output generation is Phase 2.
+- No DOCX or PDF text extraction in Phase 1. Phase 1 works with plain text only. DOCX extraction is Phase 3.
 - No desktop-local redaction path. Desktop-only mode is post-MVP.
-- No PDF-safe redaction in Month 1. PDF handling is a separate workstream.
-- No fine-tuning of the Privacy Filter model in Month 1. Fine-tuning is post-MVP when sufficient legal-domain training data exists.
-- No batch processing or queue-based architecture. Month 1 is synchronous request-response for simplicity.
+- No PDF-safe redaction in Phase 1. PDF handling is a separate workstream.
+- No fine-tuning of the Privacy Filter model in Phase 1. Fine-tuning is post-MVP when sufficient legal-domain training data exists.
+- No batch processing or queue-based architecture. Phase 1 is synchronous request-response for simplicity.
 - No vector search or semantic retrieval for span detection. The Privacy Filter is a bidirectional token classifier, not a retrieval system.
 
 ## Users
 
 ### Legal Professional (Reviewer)
 
-A solicitor, paralegal, or compliance officer who needs to review detected PII spans in a matter document, accept or reject each span, and produce a clean output for sharing or AI processing. In Month 1, this user can create a redaction run and see detected spans. Review actions arrive in Month 2.
+A solicitor, paralegal, or compliance officer who needs to review detected PII spans in a matter document, accept or reject each span, and produce a clean output for sharing or AI processing. In Phase 1, this user can create a redaction run and see detected spans. Review actions arrive in Phase 2.
 
 ### Firm Administrator
 
-Responsible for policy configuration: which categories are redacted, pseudonymised, or kept for internal AI minimisation versus external sharing. Policy modes are stored in Month 1; policy customisation is post-MVP.
+Responsible for policy configuration: which categories are redacted, pseudonymised, or kept for internal AI minimisation versus external sharing. Policy modes are stored in Phase 1; policy customisation is post-MVP.
 
 ### Builder Or Integrator
 
-A developer integrating Ormont Redact into a firm's document workflow. Needs stable API contracts, predictable error codes, and the ability to automate redaction run creation. Month 1 provides the create-run and get-run endpoints.
+A developer integrating Ormont Redact into a firm's document workflow. Needs stable API contracts, predictable error codes, and the ability to automate redaction run creation. Phase 1 provides the create-run and get-run endpoints.
 
 ## Core Use Cases
 
@@ -93,7 +93,7 @@ A developer integrating Ormont Redact into a firm's document workflow. Needs sta
 
 ## Scope
 
-Month 1 delivers the detection pipeline and API skeleton. Everything needed to go from "document has text" to "spans detected and stored, ready for human review."
+Phase 1 delivers the detection pipeline and API skeleton. Everything needed to go from "document has text" to "spans detected and stored, ready for human review."
 
 ### In Scope
 
@@ -109,11 +109,11 @@ Month 1 delivers the detection pipeline and API skeleton. Everything needed to g
 - Worker failure handling and run status transitions (`pending -> detecting -> ready_for_review | failed`).
 - The run summary computation (span counts by category and source).
 
-### Out Of Scope (Month 1)
+### Out Of Scope (Phase 1)
 
-- Span review UI and decision submission (Month 2).
-- Output generation (redacted or pseudonymised text) (Month 2).
-- DOCX or PDF extraction (Month 3).
+- Span review UI and decision submission (Phase 2).
+- Output generation (redacted or pseudonymised text) (Phase 2).
+- DOCX or PDF extraction (Phase 3).
 - PDF-safe redaction (separate workstream).
 - Fine-tuning the Privacy Filter model.
 - Batch processing queue.
@@ -290,7 +290,7 @@ Status transitions:
 - **NFR1. Inference latency:** The Python worker MUST return span results within 60 seconds for a 100-page legal document (~200K characters). If the document exceeds 128K tokens, the API service truncates or rejects before sending.
 - **NFR2. Worker startup time:** Model loading (10–30 seconds) happens once at container start. The health endpoint MUST NOT return OK until the model is loaded and inference-ready.
 - **NFR3. Worker memory:** The worker process MUST stay under 4 GB RSS at steady state. The 4vCPU/8GB Hetzner server runs PostgreSQL, the Hono API, and this worker concurrently.
-- **NFR4. API response time for create-run:** The create-run endpoint is synchronous and includes model inference. If the worker is slow, the API request may take 30–60 seconds. The API timeout and reverse proxy (nginx/Caddy) MUST allow for this. Month 2 introduces async queue-based processing if synchronous proves problematic.
+- **NFR4. API response time for create-run:** The create-run endpoint is synchronous and includes model inference. If the worker is slow, the API request may take 30–60 seconds. The API timeout and reverse proxy (nginx/Caddy) MUST allow for this. Phase 2 introduces async queue-based processing if synchronous proves problematic.
 - **NFR5. Data isolation:** Redaction runs are scoped to organisations. All queries filter by `organisation_id`. No cross-org data leakage is possible through the API.
 - **NFR6. Audit completeness:** Every state change in a redaction run is recorded in the `audit_logs` table with `entity_type: 'redaction_run'` and the relevant `action`.
 - **NFR7. Test coverage:** The `packages/redaction-policy` supplement and merge functions MUST have unit tests covering overlapping spans, non-overlapping spans, empty input, and all regex patterns. The worker client MUST have unit tests with mocked fetch responses. Route handlers MUST have integration tests with a test database.
@@ -313,17 +313,17 @@ Status transitions:
 - **PyTorch (CPU):** Required by the Privacy Filter model. CPU-only install (`pip install torch --index-url https://download.pytorch.org/whl/cpu`). Approximately 800 MB.
 - **FastAPI + Uvicorn:** Python web framework for the worker's internal HTTP API.
 - **Existing database tables:** `matters`, `matter_documents`, `document_versions`, `artifacts`, `audit_logs` (all from migration `0002_phase_0_3_matters.sql`). The `text_object_key` column on `document_versions` already exists and is populated when text extraction runs.
-- **`packages/contracts`:** Shared Zod schemas and TypeScript types. Month 1 adds redaction-specific schemas to the existing `src/index.ts`.
+- **`packages/contracts`:** Shared Zod schemas and TypeScript types. Phase 1 adds redaction-specific schemas to the existing `src/index.ts`.
 - **`packages/redaction-policy`:** New package listed in `architecture.md` but not yet created. Pure TypeScript, no framework dependencies. This PRD creates it.
 - **Infrastructure:** Docker and Dokploy for the worker container. PostgreSQL 16 at `localhost:5432`. 4vCPU/8GB Hetzner VPS with Tailscale networking. No GPU.
-- **[Redact Month 2: Review And Output](redact-month2.md):** Consumes the spans and run lifecycle built in Month 1.
-- **[Redact Month 3: Polish And Demo](redact-month3.md):** Adds DOCX extraction, audit report export, and end-to-end demo.
+- **[Redact PRD 2: Review and Output](redact-2-review-output.md):** Consumes the spans and run lifecycle built in Phase 1.
+- **[Redact PRD 3: Production Readiness](redact-3-production.md):** Adds DOCX extraction, audit report export, and end-to-end demo.
 
 ## Rollout
 
 ### Definition Of Done
 
-Month 1 is complete when all of the following are true:
+Phase 1 is complete when all of the following are true:
 
 1. The Python worker Docker image builds and runs. `GET /health` returns OK. `POST /detect` with sample legal text returns correctly formatted spans.
 2. Migration `0005_redaction.sql` runs successfully against the development and staging databases. Rollback is verified.
@@ -357,8 +357,8 @@ Month 1 is complete when all of the following are true:
 ### Rollback
 
 - Migration `0005_redaction.sql` is reversible: `DROP TABLE IF EXISTS redaction_runs;` removes the table. The corresponding indexes and foreign keys are dropped with the table.
-- The Python worker is a new Docker service. It has no production traffic in Month 1. Rollback means stopping the container and removing its `app.route()` line in `app.ts`.
-- `packages/redaction-policy` is a new package with no consumers in Month 1. Rollback means removing the package directory and reverting `packages/contracts` additions.
+- The Python worker is a new Docker service. It has no production traffic in Phase 1. Rollback means stopping the container and removing its `app.route()` line in `app.ts`.
+- `packages/redaction-policy` is a new package with no consumers in Phase 1. Rollback means removing the package directory and reverting `packages/contracts` additions.
 
 ## Metrics
 
@@ -379,7 +379,7 @@ Month 1 is complete when all of the following are true:
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
 | Privacy Filter model produces high false-positive rate on legal text (e.g. flags "Smith" as person when it is part of a case citation) | Medium | Low–Medium | Token-level context window and bidirectional understanding are designed to reduce this. Regex supplement is Gated Field-only (does not attempt person detection). False positives are visible as spans that reviewers can reject. Fine-tuning (post-MVP) will improve accuracy for legal text. |
-| Worker CPU inference is too slow for long documents (>128K tokens) | Medium | Medium | The model's 128K context is the hard limit. For documents approaching this limit, the API truncates before sending. Month 1 targets synchronous request-response; if latency is unacceptable, Month 2 switches to async queue-based processing with BullMQ. |
+| Worker CPU inference is too slow for long documents (>128K tokens) | Medium | Medium | The model's 128K context is the hard limit. For documents approaching this limit, the API truncates before sending. Phase 1 targets synchronous request-response; if latency is unacceptable, Phase 2 switches to async queue-based processing with BullMQ. |
 | Model weights download fails or checkpoint is corrupted on first deploy | Low | High | Dockerfile includes a health check that verifies model loading. If the checkpoint is missing or corrupt, the container restarts and retries. Dokploy restart policy handles this. |
 | Worker runs out of memory alongside PostgreSQL and the Hono API on 8 GB server | Medium | Medium | Monitor with `docker stats`. If memory pressure is high, move worker to a separate 4 GB VPS (Tailscale-connected). The server has 160 GB disk for swap as emergency fallback. |
 | Regex patterns match false positives in document text (e.g. a 9-digit number that is not a passport) | Medium | Low | Regex patterns are deliberately conservative. The NI pattern requires the two-letter prefix (which has check constraints by HMRC). The passport pattern is 9-digit with optional leading `P` prefix. Matches appear as `low` confidence suggestions. Reviewers can reject false positives. |
@@ -387,14 +387,14 @@ Month 1 is complete when all of the following are true:
 
 ## Open Questions
 
-1. **Should the regex supplement include `organisation_name` as a category, or should it remain solely a model-detected concept?** Organisation names in legal text are tricky: "Smith & Jones LLP" should be kept (it is a law firm), but "Mr Smith" should be redacted. The Privacy Filter model already handles this distinction with its context window. The regex supplement can optionally add organisation detection via known suffixes (LLP, Ltd, plc, Solicitors, Chambers), but this is deferred until Month 3.
+1. **Should the regex supplement include `organisation_name` as a category, or should it remain solely a model-detected concept?** Organisation names in legal text are tricky: "Smith & Jones LLP" should be kept (it is a law firm), but "Mr Smith" should be redacted. The Privacy Filter model already handles this distinction with its context window. The regex supplement can optionally add organisation detection via known suffixes (LLP, Ltd, plc, Solicitors, Chambers), but this is deferred until Phase 2...3.
 
-2. **Should the worker client retry on transient failures?** Month 1 fails fast and sets status to `failed`. For documents under 10K characters where inference takes < 1 second, one retry with a 5-second timeout might improve reliability. Decision deferred until Month 2 metrics.
+2. **Should the worker client retry on transient failures?** Phase 1 fails fast and sets status to `failed`. For documents under 10K characters where inference takes < 1 second, one retry with a 5-second timeout might improve reliability. Decision deferred until Phase 2 metrics.
 
 3. **Should the `organisation_name` category be surfaced as a span at all, or should it be silently kept?** Some firms may want to redact organisation names for external sharing. The category exists in the schema with suggestion `keep` by default. This can be configuration-driven in a post-MVP policy engine.
 
-4. **What is the maximum text length for Month 1 synchronous processing?** The 128K token limit of the Privacy Filter model translates to roughly 180K–200K characters of English text. The API should reject or truncate text exceeding this before sending to the worker. The exact truncation strategy (head-only, tail-only, or middle-drop) depends on document type and is deferred to Month 2 usage analysis.
+4. **What is the maximum text length for Phase 1 synchronous processing?** The 128K token limit of the Privacy Filter model translates to roughly 180K–200K characters of English text. The API should reject or truncate text exceeding this before sending to the worker. The exact truncation strategy (head-only, tail-only, or middle-drop) depends on document type and is deferred to Phase 2 usage analysis.
 
-5. **Should `detector_version` capture the Privacy Filter release version, git commit of the weights, or both?** Month 1 stores the `opf` package version string (e.g. `opf==0.1.0`) as the detector version. If fine-tuning is introduced post-MVP, the version field may need to expand to include checkpoint hash and fine-tuning dataset identifier.
+5. **Should `detector_version` capture the Privacy Filter release version, git commit of the weights, or both?** Phase 1 stores the `opf` package version string (e.g. `opf==0.1.0`) as the detector version. If fine-tuning is introduced post-MVP, the version field may need to expand to include checkpoint hash and fine-tuning dataset identifier.
 
-6. **How should the `text_object_key` path be populated for Month 1?** The column exists but text extraction (reading the uploaded file and writing extracted text to object storage) is not yet implemented. Month 1 may require manual seeding of the text object key for test documents, or a simplified in-memory text pass during document upload. This is noted as a dependency for the demo flow and may be temporarily worked around by allowing direct text submission. Decision: Month 1 route accepts a `text` fallback in the request body for testing. Production text extraction arrives in Month 3.
+6. **How should the `text_object_key` path be populated for Phase 1?** The column exists but text extraction (reading the uploaded file and writing extracted text to object storage) is not yet implemented. Phase 1 may require manual seeding of the text object key for test documents, or a simplified in-memory text pass during document upload. This is noted as a dependency for the demo flow and may be temporarily worked around by allowing direct text submission. Decision: Phase 1 route accepts a `text` fallback in the request body for testing. Production text extraction arrives in Phase 3.

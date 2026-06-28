@@ -318,7 +318,7 @@ scripts/
 
 ## What This Does NOT Include
 
-- Running the fine-tuning itself (that happens on a rented GPU, documented in the Month 3 PRD)
+- Running the fine-tuning itself (that happens on a rented GPU, documented in the Redact PRD 3)
 - Non-legal sectors (healthcare, finance, police). Legal first, then expand the same approach to other verticals using the same pipeline.
 - Real client documents. All data is synthetic.
 - Automated quality scoring of the generated text (manual spot-check is sufficient for 200-500 docs)
