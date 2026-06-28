@@ -38,28 +38,68 @@ The target is a working product within 3 months that firms can verify, then a fu
 - Any text extraction pipeline
 - Any detection logic
 
-## Architecture Decisions
+## Detection: OpenAI Privacy Filter
+
+OpenAI Privacy Filter is the detection engine. Released April 2026, Apache 2.0 license (compatible with AGPL).
+
+**Why Privacy Filter:**
+- Context-aware detection, not regex pattern matching. Understands "Mr Smith" is a name, "Smith v Jones" is a case citation, not a person to redact
+- 1.5B total params, 50M active, runs on CPU (`--device cpu`)
+- 128k token context window, processes entire legal documents in one pass
+- State-of-the-art on PII-Masking-300k benchmark (97.43% F1)
+- Fine-tuning support built in. F1 jumped 54% to 96% with small amounts of domain data. Legal text is exactly the use case for fine-tuning
+- Runs locally, no data leaves the server. This matters for client documents
+
+**Built-in PII categories (8):**
+| Label | Description |
+|---|---|
+| `private_person` | Names of private individuals |
+| `private_address` | Physical addresses |
+| `private_email` | Email addresses |
+| `private_phone` | Phone numbers |
+| `private_url` | URLs containing PII |
+| `private_date` | Dates tied to private individuals |
+| `account_number` | Credit cards, bank accounts |
+| `secret` | Passwords, API keys |
+
+**Gaps for UK legal text (need supplement):**
+- National Insurance numbers (fixed format: 2 letters, 6 digits, 1 letter)
+- Passport numbers
+- Internal case/matter references
+- Organisation names (the model flags `organisation_name` but firms may want to treat these differently)
+- Court reference numbers (distinct from `private_url` or `account_number`)
+
+**Two-layer detection strategy:**
+1. OpenAI Privacy Filter runs first (context-aware, catches names, addresses, emails, phones, dates, account numbers, secrets)
+2. TypeScript regex supplement runs second, catching UK legal-specific patterns the model doesn't cover (NI numbers, passport numbers, case references)
+
+Both layers return spans. The TypeScript supplement merges with model output, deduplicates overlaps (model wins on confidence), and produces the final span list.
+
+**`services/redact-worker/` is a real Python service:**
+- Runs OpenAI Privacy Filter (`opf` package from `openai/privacy-filter` GitHub repo)
+- Accepts text via internal API call from the Hono API
+- Returns spans as JSON
+- CPU mode for the 4vCPU/8GB server (no GPU available)
+- Model weights auto-downloaded on first run (~1.5GB, cached at `~/.opf/privacy_filter`)
+
+## Architecture
 
 ### Text Extraction
-Start with plain text and `.txt` files for M1, then `.docx` in M2. PDF extraction is M3 (hardest, needs Python worker). The `text_object_key` column on `document_versions` already exists for storing extracted text.
+Start with plain text and `.txt` files for M1, then `.docx` in M2. The `text_object_key` column on `document_versions` already exists for storing extracted text.
 
-**M1 approach:** Accept text input directly. Upload a document, extract text (for M1: just read the `.txt` file content), store in object storage at the `text_object_key` path. This gets the pipeline working end-to-end without a Python worker.
+**M1 approach:** Accept text input directly. Upload a document, extract text (for M1: just read the `.txt` file content), store in object storage at the `text_object_key` path. This gets the pipeline working end-to-end before DOCX.
 
-### Detection
-Start with regex-based PII detection in TypeScript, not Python. Patterns for:
-- Names (needs context, start with known legal entity patterns: "Mr/Mrs/Ms X")
-- Email addresses
-- Phone numbers (UK formats)
-- National Insurance numbers
-- Dates of birth (contextual)
-- Bank account numbers
-- Passport numbers
-- Case reference numbers (internal firm references)
-- Addresses (postcode + preceding lines)
+### Detection Pipeline
+1. Document text extracted and stored at `text_object_key`
+2. API receives redaction run request, calls the Python redact-worker
+3. Redact-worker runs Privacy Filter on the text, returns spans
+4. API runs TypeScript regex supplement for UK legal-specific patterns (NI numbers, passport, case references)
+5. API merges both span sets, deduplicates, stores in `redaction_runs.spans_json`
+6. Run transitions to `ready_for_review`
 
-This runs in the API worker, not a separate Python service. The Python worker is a later addition for PDF-safe redaction and OpenAI Privacy Filter integration.
-
-**Why TypeScript first:** No Python dependency, no Docker worker setup, runs in the existing Hono process, faster iteration loop. The architecture doc allows Python later for PDF-safe redaction specifically.
+### TypeScript vs Python Split
+- **Python (redact-worker):** Privacy Filter model inference only. Takes text, returns spans. No business logic, no database access, no API exposure to the outside world
+- **TypeScript (API):** Run lifecycle, span decisions, pseudonymisation, output generation, audit logging, regex supplement, span merging. All the product logic stays in TypeScript
 
 ### Storage
 Redaction runs stored in PostgreSQL. Spans stored as JSONB array within the run (simpler than a separate spans table for Phase 1). Output artifacts go to the existing `artifacts` table with type `redaction_report`.
@@ -84,6 +124,7 @@ create table if not exists redaction_runs (
   decisions_json jsonb not null default '{}'::jsonb,
   output_artifact_id text,
   summary_json jsonb not null default '{}'::jsonb,
+  detector_version text,
   created_by text not null references users(id),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -123,21 +164,24 @@ interface RedactionSpan {
   end: number                   // char offset (exclusive)
   text: string                  // the matched text
   category: SpanCategory        // what type of PII
+  source: 'privacy_filter' | 'regex_supplement'  // which layer detected it
   confidence: 'high' | 'medium' | 'low'
   suggestion: 'redact' | 'pseudonymise' | 'keep'
 }
 
 type SpanCategory =
-  | 'person_name'
-  | 'email'
-  | 'phone'
-  | 'national_insurance'
-  | 'date_of_birth'
-  | 'bank_account'
-  | 'passport'
-  | 'address'
-  | 'case_reference'
-  | 'organisation_name'
+  | 'person_name'           // privacy_filter: private_person
+  | 'email'                 // privacy_filter: private_email
+  | 'phone'                 // privacy_filter: private_phone
+  | 'address'               // privacy_filter: private_address
+  | 'date'                  // privacy_filter: private_date
+  | 'account_number'        // privacy_filter: account_number
+  | 'secret'                // privacy_filter: secret
+  | 'url'                   // privacy_filter: private_url
+  | 'national_insurance'    // regex_supplement: UK NI number
+  | 'passport'              // regex_supplement: UK passport number
+  | 'case_reference'        // regex_supplement: internal firm/matter ref
+  | 'organisation_name'     // regex_supplement or privacy_filter
 ```
 
 **Decisions format** (stored in `decisions_json`):
@@ -168,7 +212,7 @@ Response 201: {
   }
 }
 ```
-Creates the run, queues detection. For M1 (TS detection), detection runs synchronously or via BullMQ job. If BullMQ isn't wired yet, run synchronously with a status transition: pending -> detecting -> ready_for_review.
+Creates the run, triggers detection. The API calls the Python redact-worker with the extracted text. Status transitions: pending -> detecting -> ready_for_review. If the worker is unavailable, status goes to `failed` with a reason.
 
 ### Get run status + spans
 ```
@@ -184,6 +228,7 @@ Response 200: {
     summary: {
       totalSpans: number
       byCategory: Record<SpanCategory, number>
+      bySource: { privacyFilter: number, regexSupplement: number }
       reviewedCount: number
       unreviewedCount: number
     }
@@ -234,10 +279,12 @@ Add to `packages/contracts/src/index.ts`:
 
 ```typescript
 export const spanCategorySchema = z.enum([
-  'person_name', 'email', 'phone', 'national_insurance',
-  'date_of_birth', 'bank_account', 'passport',
-  'address', 'case_reference', 'organisation_name',
+  'person_name', 'email', 'phone', 'address', 'date',
+  'account_number', 'secret', 'url',
+  'national_insurance', 'passport', 'case_reference', 'organisation_name',
 ])
+
+export const spanSourceSchema = z.enum(['privacy_filter', 'regex_supplement'])
 
 export const redactionRunStatusSchema = z.enum([
   'pending', 'detecting', 'ready_for_review',
@@ -260,22 +307,52 @@ export const outputModeSchema = z.enum(['redacted', 'pseudonymised'])
 
 // Error codes to add to apiErrorCodeSchema:
 // 'redaction_run_not_found', 'span_not_found', 'redaction_run_not_reviewable'
-// 'redaction_already_finalized'
+// 'redaction_already_finalized', 'redaction_worker_unavailable'
 ```
 
 ## Package Structure
 
-### `packages/redaction-policy/`
-Pure TypeScript detection logic. No framework dependencies. Testable in isolation.
+### `services/redact-worker/` (Python)
+Runs OpenAI Privacy Filter. Internal service, not exposed to the outside world.
+
+```
+services/redact-worker/
+  pyproject.toml              - opf dependency, torch, fastapi/uvicorn
+  src/
+    server.py                 - FastAPI app: POST /detect, takes text, returns spans
+    detector.py               - loads Privacy Filter model, runs inference
+    spans.py                  - maps model output (BIOES tags) to Ormont span format
+  Dockerfile                  - Python 3.11-slim, model weights cached
+```
+
+**Internal API:**
+```
+POST http://localhost:8788/detect
+Body: { text: string }
+Response 200: {
+  spans: [{
+    start: number
+    end: number
+    text: string
+    category: string   // privacy_filter label
+    confidence: 'high' | 'medium' | 'low'
+  }]
+}
+```
+
+The Hono API calls this internally. No auth needed (localhost only, not exposed). If the worker is down, the API returns `redaction_worker_unavailable` and the run goes to `failed`.
+
+### `packages/redaction-policy/` (TypeScript)
+Pure TypeScript logic for: regex supplement, span merging, pseudonymisation, output generation. No framework dependencies. Testable in isolation.
 
 ```
 packages/redaction-policy/
   src/
     index.ts           - public API
-    patterns.ts         - regex/NER patterns by category
-    detector.ts         - runs all patterns, returns spans
+    supplement.ts       - regex patterns for UK legal-specific PII (NI, passport, case refs)
+    merge.ts            - merge Privacy Filter spans + regex supplement spans, deduplicate overlaps
     pseudonym.ts        - consistent token assignment
-    apply.ts            - apply decisions to text, produce output
+    apply.ts            - apply decisions to text, produce redacted/pseudonymised output
     types.ts            - RedactionSpan, SpanCategory, etc.
     index.test.ts       - test fixtures with real legal text
 ```
@@ -286,44 +363,54 @@ API route handlers. Follows the existing pattern in `routes/matters.ts` and `rou
 ### `services/api/src/redaction-database.ts`
 Database functions for redaction runs. Follows the pattern of `database.ts`: typed query helpers, not inline SQL in routes.
 
+### `services/api/src/redaction-worker-client.ts`
+HTTP client to call the Python redact-worker. Simple fetch to `localhost:8788/detect`. Handles timeouts and failures.
+
 ### `packages/app-shell/src/redact/`
 Review UI components (M2). Follows existing app-shell patterns: shared between web and desktop, TanStack Query for server state, Zustand for local UI state.
 
 ## Weekly Plan (12 Weeks / 3 Months)
 
-### Week 1-2: Foundation
+### Week 1-2: Python Worker + Foundation
 
-**Goal:** Schema, contracts, API skeleton, detection package scaffold.
+**Goal:** Privacy Filter running in a Python service, schema, contracts, API skeleton, regex supplement.
 
+- [ ] Create `services/redact-worker/` with `pyproject.toml` (deps: `opf`, `torch`, `fastapi`, `uvicorn`)
+- [ ] Implement `detector.py`: load Privacy Filter model, run inference on text, return spans
+- [ ] Implement `spans.py`: map model BIOES output to Ormont span format (start, end, text, category, confidence)
+- [ ] Implement `server.py`: FastAPI app with `POST /detect` endpoint
+- [ ] Write `Dockerfile` for the worker (Python 3.11-slim, CPU-only torch, model weights cached)
+- [ ] Test: run worker locally, send sample text, verify spans returned
 - [ ] Write migration `0005_redaction.sql` (DDL above)
 - [ ] Add redaction contracts to `packages/contracts/src/index.ts`
-- [ ] Add new error codes to `apiErrorCodeSchema`
+- [ ] Add new error codes to `apiErrorCodeSchema` (including `redaction_worker_unavailable`)
 - [ ] Create `packages/redaction-policy/` with `package.json`, `tsconfig.json`
 - [ ] Implement `types.ts` with all interfaces
-- [ ] Implement `patterns.ts` with regex patterns for: email, phone (UK), national insurance, dates, bank accounts, addresses (postcode)
-- [ ] Implement `detector.ts`: takes text, returns `RedactionSpan[]`
-- [ ] Write detection tests with realistic legal text fixtures (case judgment excerpts, skeleton arguments, client letters)
+- [ ] Implement `supplement.ts` with regex patterns for: NI numbers, passport numbers, case references
+- [ ] Implement `merge.ts`: merge Privacy Filter spans + regex supplement spans, deduplicate overlaps (Privacy Filter wins on confidence)
+- [ ] Write supplement + merge tests with realistic legal text fixtures
 - [ ] Scaffold `services/api/src/routes/redact.ts` with `createRedactRoutes(pool)`
 - [ ] Create `services/api/src/redaction-database.ts` with query helpers
+- [ ] Create `services/api/src/redaction-worker-client.ts` (fetch to localhost:8788)
 - [ ] Mount redact routes in `app.ts`
-- [ ] Implement `POST /api/documents/:documentId/redaction-runs` (create run, run detection synchronously, store spans, return run)
-- [ ] Test: create a run against a `.txt` fixture, verify spans returned
+- [ ] Implement `POST /api/documents/:documentId/redaction-runs` (create run, call worker, merge spans, store, return run)
 
-**Milestone M1 (partial): text extraction + first detection run works.**
+**Milestone M1 (partial): Python worker running, text extraction + first detection run works.**
 
 ### Week 3-4: Run Lifecycle + Decisions
 
-**Goal:** Full run lifecycle API, span decisions, audit logging.
+**Goal:** Full run lifecycle API, span decisions, audit logging, worker failure handling.
 
 - [ ] Implement `GET /api/redaction-runs/:runId` (return run with spans, decisions, summary)
 - [ ] Implement `POST /api/redaction-runs/:runId/spans/:spanId/decision` (update decisions_json, audit log)
 - [ ] Implement `GET /api/documents/:documentId/redaction-runs` (list runs)
 - [ ] Add status transitions: `pending -> detecting -> ready_for_review -> reviewing -> finalized`
 - [ ] Auto-transition to `reviewing` when first decision is submitted
+- [ ] Handle worker failures: if worker unavailable, set status to `failed`, record `failure_reason`
 - [ ] Audit log entries: `redaction.run_create`, `redaction.span_decision`, `redaction.finalize`
 - [ ] Add `redaction.run_create`, `redaction.span_decision`, `redaction.finalize` to the `AuditRecordInput` action union in `database.ts`
 - [ ] API tests: create run, get run, submit decisions, verify state changes
-- [ ] Error handling: run not found, span not found, run already finalized, run not in reviewable state
+- [ ] Error handling: run not found, span not found, run already finalized, run not in reviewable state, worker unavailable
 
 **Milestone M1 (complete): detection works, spans stored, decisions persist.**
 
@@ -352,18 +439,18 @@ Review UI components (M2). Follows existing app-shell patterns: shared between w
 **Goal:** Redaction review screen in the app shell.
 
 - [ ] Create `packages/app-shell/src/redact/` directory
-- [ ] Document text view with highlighted spans (color by category)
-- [ ] Span list panel: sortable by category, confidence, review status
+- [ ] Document text view with highlighted spans (color by category, distinguish Privacy Filter vs supplement by border style)
+- [ ] Span list panel: sortable by category, confidence, source, review status
 - [ ] Click span -> highlight in document view, show decision buttons
 - [ ] Decision actions: accept, reject, override to redact, override to keep, pseudonymise
-- [ ] Summary bar: X spans, Y reviewed, Z unreviewed
+- [ ] Summary bar: X spans, Y reviewed, Z unreviewed, breakdown by source (model vs supplement)
 - [ ] Policy mode selector (internal AI minimisation vs external sharing) on run creation
 - [ ] Finalize button with output mode selector (redacted vs pseudonymised)
 - [ ] TanStack Query: `useRedactionRun`, `useSpanDecision`, `useFinalizeRun`
 - [ ] Route: `/matters/:matterId/documents/:documentId/redact/:runId` (or `/redaction-runs/:runId`)
 - [ ] Sidebar: change "Redaction" entry from `status: 'planned'` to active link
 - [ ] Empty states: no runs yet, no spans detected, all spans reviewed
-- [ ] Loading states: detection in progress, finalizing
+- [ ] Loading states: detection in progress (worker running), finalizing
 
 **Milestone M2 (complete): review UI works, span decisions persist.**
 
@@ -383,14 +470,15 @@ Review UI components (M2). Follows existing app-shell patterns: shared between w
 
 ### Week 11-12: Audit Report + Polish + Demo
 
-**Goal:** Audit log export, the killer demo, internal testing.
+**Goal:** Audit log export, the demo, internal testing.
 
 - [ ] Implement audit log export for redaction runs:
   - `GET /api/redaction-runs/:runId/audit` -> structured audit record of all decisions, timestamps, users
   - Format as JSON for M3, HTML/Markdown export as artifact
 - [ ] Redaction report artifact: contains
   - original document reference
-  - redaction run summary (spans by category, decisions)
+  - redaction run summary (spans by category, by source, decisions)
+  - detector version (Privacy Filter checkpoint version)
   - redacted/pseudonymised text output
   - audit log
   - reviewer, timestamp, policy mode
@@ -404,12 +492,13 @@ Review UI components (M2). Follows existing app-shell patterns: shared between w
   - phone numbers
 - [ ] End-to-end manual test with the demo fixture: upload -> extract -> detect -> review -> finalize -> download output + audit report
 - [ ] Edge cases to test and handle:
-  - Overlapping spans (prioritize by confidence)
+  - Overlapping spans (Privacy Filter wins over regex supplement on confidence)
   - Empty text
   - Text with no detectable PII (0 spans, valid run)
   - All spans rejected (finalized with no changes)
   - Finalize without reviewing all spans (allowed but warn)
   - Re-run redaction on same document (new run, new spans)
+  - Worker timeout or unavailable (run goes to `failed`)
 - [ ] Type-check everything: `pnpm --filter @ormont/redaction-policy typecheck`, `pnpm --filter @ormont/api typecheck`, `pnpm --filter @ormont/app-shell typecheck`
 - [ ] Run all tests: `pnpm --filter @ormont/redaction-policy test`, `pnpm --filter @ormont/api test`
 - [ ] Update `docs/current-product-scope.md`: move Redaction from "Visible But Not Implemented" to implemented navigation
@@ -419,12 +508,12 @@ Review UI components (M2). Follows existing app-shell patterns: shared between w
 
 ## What's NOT In Scope (First 3 Months)
 
-- PDF-safe redaction (needs Python worker with PDF manipulation, not just text replacement)
-- OpenAI Privacy Filter integration (TypeScript regex first, AI detection later)
+- PDF-safe redaction (needs Python worker with PDF manipulation beyond text replacement)
+- Privacy Filter fine-tuning on legal text (the pipeline is built, fine-tuning is Phase 2 when we have evaluation fixtures)
 - Desktop-local redaction (Electron offline path)
 - Batch redaction (multiple documents at once)
 - Redaction policy customization (firm-specific rules)
-- BullMQ job queue (synchronous detection is fine for M1-M3 text files; queue comes when Python worker does)
+- BullMQ job queue (synchronous detection call to worker is fine for single documents; queue comes for batch processing)
 - Legislation/case law redaction (public source redaction is different from matter document redaction)
 
 ## Dependencies On Existing Code
@@ -441,15 +530,19 @@ Review UI components (M2). Follows existing app-shell patterns: shared between w
 
 **Risk:** Object storage upload (writing to `text_object_key` path) may not be implemented yet. Document upload currently creates the DB record but may not store the actual file. Verify before Week 5. If not wired, use local filesystem as interim.
 
+**Risk:** Python worker on the 4vCPU/8GB server. Privacy Filter runs on CPU but the model is 1.5B params. First inference loads the model into memory (~3GB). Need to verify the worker stays resident or implement a warm-up step. If memory is tight, the worker may need to be a long-running process, not spawned per request.
+
 ## Verification
 
 Per TESTING.md, redaction is a high-risk area. Required testing:
 
 - **Detection tests:** fixture-based, covering each span category with real legal text, edge cases (UK NI number format, name prefixes, international phone numbers)
+- **Worker integration tests:** verify Privacy Filter returns correct spans for known PII patterns, verify API handles worker timeout/unavailable gracefully
+- **Span merge tests:** verify Privacy Filter + regex supplement spans merge correctly, overlaps resolved by confidence
 - **Decision persistence tests:** create run, submit decisions, reload run, verify decisions intact
 - **Output safety tests:** assert no PII strings appear in redacted output, assert pseudonymised tokens are consistent
 - **Audit log tests:** verify every action (run create, span decision, finalize) produces an audit record
-- **API error tests:** run not found, span not found, already finalized, not reviewable, wrong org
+- **API error tests:** run not found, span not found, already finalized, not reviewable, wrong org, worker unavailable
 - **Status transition tests:** verify legal transitions only (can't finalize a pending run, can't add decisions to a finalized run)
 
 ## Months 4-6 (Follow-Up: Verify Core)
@@ -469,13 +562,14 @@ This layers on top of the existing Search infrastructure and the artifact/audit 
 At 3 months, the demo is:
 1. Open a matter
 2. Upload a `.docx` legal document (skeleton argument, witness statement, or case excerpt)
-3. System detects PII: names, addresses, NI numbers, emails, phone numbers, dates
-4. Review each detection: accept, reject, override, or pseudonymise
+3. System detects PII using OpenAI Privacy Filter (context-aware, not regex): names, addresses, emails, phone numbers, dates, account numbers, secrets. Plus UK legal-specific patterns from the supplement: NI numbers, passport numbers, case references
+4. Review each detection: accept, reject, override, or pseudonymise. Spans are tagged by source so the reviewer can see which came from the model vs the supplement
 5. Finalize: produce a redacted version and a pseudonymised version
-6. Download the redacted document and an audit report showing every decision, who made it, when, and the policy mode used
+6. Download the redacted document and an audit report showing every decision, who made it, when, the policy mode, and the detector version used
 
 This is something a firm can:
 - Inspect the audit trail
 - Verify no PII leaks in the redacted output
 - Pseudonymise for internal AI use
 - Trust the process is conservative (human review required, no auto-signoff)
+- Verify the detection engine is a real model (OpenAI Privacy Filter), not pattern matching
