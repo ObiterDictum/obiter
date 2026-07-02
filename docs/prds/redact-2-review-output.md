@@ -31,7 +31,7 @@ Without Phase 2, the product has detection but no delivery — spans exist but c
 - **Every decision is auditable**: accept, reject, override, and pseudonymise decisions are recorded with reviewer identity and timestamp.
 - **Output is irreversible**: redacted output replaces spans with `[REDACTED]` — original text is not recoverable from the output artifact. Pseudonymised output preserves readability but requires the token map for re-identification.
 - **Consistency matters**: pseudonymisation must use the same token for the same entity across the entire document.
-- **Detection source transparency**: the UI must distinguish Privacy Filter spans from regex supplement spans so reviewers can calibrate trust by source.
+- **Detection source transparency**: the UI must distinguish Rampart model spans, Rampart deterministic spans, and UK supplement spans so reviewers can calibrate trust by source.
 - **Warn, don't block**: reviewers may finalize a run with un-reviewed spans, but the system warns that un-reviewed spans exist.
 
 ## Goals
@@ -69,7 +69,7 @@ Needs the audit trail for regulatory review. Inspects decision records, timestam
 
 ## Core Use Cases
 
-1. **Review detected spans**: Open a redaction run ready for review. See all detected spans highlighted in the document text. Distinguish between Privacy Filter (AI model) and regex supplement (UK legal patterns) detections.
+1. **Review detected spans**: Open a redaction run ready for review. See all detected spans highlighted in the document text. Distinguish between Rampart model (AI), Rampart deterministic (regex + checksum), and UK supplement (legal-specific patterns) detections.
 
 2. **Make a decision on a span**: Click a span in the document or select it from the list. Choose accept (use the suggested redaction), reject (keep the original text), override to redact (force redact even if model suggested keep), override to keep (force keep even if model suggested redact), or pseudonymise (replace with a category token).
 
@@ -122,18 +122,18 @@ Phase 2 covers four areas:
 ### 4. Review UI (`packages/app-shell/src/redact/`)
 
 - Document text view with highlighted spans (color by category)
-- Visual distinction between Privacy Filter spans and regex supplement spans (border style or icon)
+- Visual distinction between Rampart model spans, Rampart deterministic spans, and UK supplement spans (border style or icon)
 - Span list panel: sortable by category, confidence, source, review status
 - Click span -> highlight in document view, show decision buttons
 - Decision action buttons: accept, reject, override redact, override keep, pseudonymise
-- Summary bar: X spans total, Y reviewed, Z unreviewed, breakdown by source (Privacy Filter vs regex supplement)
+- Summary bar: X spans total, Y reviewed, Z unreviewed, breakdown by source (Rampart model vs deterministic vs UK supplement)
 - Policy mode selector on run creation (already in Phase 1 API; UI shows current mode and its meaning)
 - Finalize button with output mode selector (redacted vs pseudonymised)
 - TanStack Query hooks: `useRedactionRun`, `useSpanDecision`, `useFinalizeRun`
 - Route: `/matters/:matterId/documents/:documentId/redact/:runId`
 - Sidebar: change "Redaction" entry from `status: 'planned'` to active link with `to` attribute
 - Empty states: no runs yet for this document, no spans detected (run completed with zero spans), all spans reviewed
-- Loading states: detection in progress (polling worker), finalizing
+- Loading states: detection in progress (Rampart scanning text), finalizing
 - No `useEffect` for data fetching (repo convention — use TanStack Query)
 
 ## Data Model Decisions
@@ -219,7 +219,7 @@ applyPseudonymised(text: string, spans: RedactionSpan[], decisions: Decisions): 
 
 - `applyPseudonymised`: For each span with decision `accept`, `override_redact`, or `pseudonymise`, replace with `[CATEGORY_N]` where `CATEGORY` is the uppercase category label and `N` is a sequential integer unique to that category in the document. The same entity text within the same category always gets the same `N`. Pass `applyRedacted`'s decision for consistency (accept/override_redact/pseudonymise all result in token replacement in pseudonymised mode; reject/override_keep leave text as-is).
 
-- Handle overlapping spans: if a higher-confidence span (Privacy Filter) overlaps a lower-confidence span (regex supplement), and both have decisions that affect output, the higher-confidence span's replacement takes priority.
+- Handle overlapping spans: if a higher-confidence span (Rampart) overlaps a lower-confidence span (UK supplement), and both have decisions that affect output, the higher-confidence span's replacement takes priority.
 
 - Edge cases:
   - Empty text: return empty string
@@ -327,8 +327,9 @@ The run summary (re-computed on every mutation) includes:
   - `passport`: indigo
   - `case_reference`: blue
   - `organisation_name`: purple
-- Privacy Filter spans: solid underline or continuous highlight
-- Regex supplement spans: dashed border or hashed highlight pattern
+- Rampart model spans: solid underline or continuous highlight
+- Rampart deterministic spans: dotted underline
+- UK supplement spans: dashed border or hashed highlight pattern
 - Clicking a span in the text view selects it and shows the decision action bar
 - Selected span scrolls into view, highlighted with a focused ring
 
@@ -367,7 +368,7 @@ The run summary (re-computed on every mutation) includes:
   - Total spans count
   - Reviewed count with progress bar (reviewed/total)
   - Unreviewed count
-  - Source breakdown: X from Privacy Filter, Y from regex supplement
+  - Source breakdown: X from Rampart model, Y from Rampart deterministic, Z from UK supplement
   - If all spans reviewed: "✓ All spans reviewed" badge with green styling
   - If no spans: "No sensitive data detected in this document"
 - Summary bar is read from the run's `summary_json` field
@@ -422,12 +423,12 @@ useFinalizeRun(runId: string): UseMutationResult<
 ### FR12: Review UI — Empty States
 
 - **No runs yet**: shown on document detail page when no redaction runs exist. Message: "No redaction runs for this document. Create a run to detect sensitive information." CTA button: "Create Redaction Run"
-- **No spans detected**: shown inside the review UI when a run completed with zero spans. Message: "No sensitive data was detected in this document. The Privacy Filter and regex supplement did not find any matching patterns. You can still finalize this run without changes."
+- **No spans detected**: shown inside the review UI when a run completed with zero spans. Message: "No sensitive data was detected in this document. Rampart and the UK supplement did not find any matching patterns. You can still finalize this run without changes."
 - **All spans reviewed**: shown in the summary bar when `reviewedCount === totalSpans`. Message: "✓ All spans reviewed — ready to finalize."
 
 ### FR13: Review UI — Loading States
 
-- **Detection in progress**: shown while run status is `detecting`. Takeover/overlay with spinner and message: "Detection in progress — the Privacy Filter is scanning the document text. This may take a moment for large documents." Polls run status via `useRedactionRun` with refetch interval.
+- **Detection in progress**: shown while run status is `detecting`. Takeover/overlay with spinner and message: "Detection in progress — Rampart is scanning the document text. This may take a moment for large documents." Polls run status via `useRedactionRun` with refetch interval.
 - **Finalizing**: shown while mutation is pending. Inline spinner on the finalize button with message: "Generating output..."
 
 ### FR14: Audit Logging
@@ -458,7 +459,7 @@ Update `GET /api/redaction-runs/:runId` to include:
     "decisions": { ... Record<string, Decision> },
     "summary": { ... summary object from FR4 },
     "outputArtifactId": "art_..." | null,
-    "detectorVersion": "opf-1.5" | null,
+    "detectorVersion": "rampart-0.1.3" | null,
     "createdBy": "...",
     "createdAt": "...",
     "updatedAt": "..."
@@ -547,7 +548,7 @@ This already exists from Phase 1; Phase 2 adds the `summary` field if not alread
 
 - **Object storage not yet wired**: If the `text_object_key` read path or artifact write path is not implemented as a reusable service, the finalize API will need a local-filesystem fallback. Mitigation: verify object storage integration at sprint start; if missing, implement a simple abstraction (`StorageService` interface) with local filesystem as the first adapter.
 - **Large document performance**: Documents over 100K characters with 500+ spans may cause UI lag. Mitigation: virtualize the document text view, limit visible spans to viewport area, use windowing for the span list.
-- **Overlapping span edge cases**: Privacy Filter and regex supplement may produce overlapping spans. The merge logic from Phase 1 should handle this, but `apply.ts` needs to handle remaining overlaps gracefully. Mitigation: extensive test fixtures with overlapping spans; highest-confidence source wins.
+- **Overlapping span edge cases**: Rampart and the UK supplement may produce overlapping spans. The merge logic from Phase 1 should handle this, but `apply.ts` needs to handle remaining overlaps gracefully. Mitigation: extensive test fixtures with overlapping spans; highest-confidence source wins.
 - **Pseudonymisation across runs**: Phase 2 scopes consistency to within a single run. Cross-run consistency is a future concern. Mitigation: document this limitation clearly in the UI and API docs.
 - **Finalize without reviewing all spans**: The system warns but does not block. A firm may have compliance requirements that mandate 100% review. Mitigation: the warning is prominent in the finalize dialog; future iteration may add a setting to require full review.
 
