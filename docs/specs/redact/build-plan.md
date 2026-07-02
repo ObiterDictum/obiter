@@ -31,56 +31,78 @@ The target is a working product within 3 months that firms can verify, then a fu
 - `docs/specs/redact/milestones.md` has M1-M3, no week-by-week
 
 **What doesn't exist:**
-- `packages/redaction-policy/` (listed in architecture.md, not created)
-- `services/redact-worker/` (listed as dead code to clean, empty)
+- `packages/redaction-policy/` (listed in architecture.md, stub README only)
 - Any redaction API routes
 - Any redaction UI components
 - Any text extraction pipeline
 - Any detection logic
 
-## Detection: OpenAI Privacy Filter
+## Detection: Rampart
 
-OpenAI Privacy Filter is the detection engine. Released April 2026, Apache 2.0 license (compatible with AGPL).
+Rampart is the detection engine. National Design Studio, released June 2026, CC BY 4.0 license (compatible with AGPL).
 
-**Why Privacy Filter:**
+**Why Rampart:**
 - Context-aware detection, not regex pattern matching. Understands "Mr Smith" is a name, "Smith v Jones" is a case citation, not a person to redact
-- 1.5B total params, 50M active, runs on CPU (`--device cpu`)
-- 128k token context window, processes entire legal documents in one pass
-- State-of-the-art on PII-Masking-300k benchmark (97.43% F1)
-- Fine-tuning support built in. F1 jumped 54% to 96% with small amounts of domain data. Legal text is exactly the use case for fine-tuning
-- Runs locally, no data leaves the server. This matters for client documents
+- 14.7 MB ONNX model, ~18.5M params, MiniLM-L6-H384 base with 35-label BIO head (17 entity types)
+- Runs via Transformers.js (@huggingface/transformers) in Node.js. TypeScript-native, no Python dependency
+- 98.42% private-term recall on OpenPII 30k held-out test set (7 Latin-script languages)
+- 6.6 ms p50 latency on CPU (Node ONNX). 100x faster than a 1.5B param model
+- Ships with a built-in deterministic recognizer layer (regex + checksum for SSN, credit card, email, URL, IP)
+- Runs in-process. No separate worker service, no Docker container, no model download step
+- Client-side capable. Can run in the browser or Electron desktop app, matching the "desktop-local redaction preferred" policy
 
-**Built-in PII categories (8):**
+**Built-in PII categories (17 entity types + 5 deterministic):**
+
+Model labels:
 | Label | Description |
 |---|---|
-| `private_person` | Names of private individuals |
-| `private_address` | Physical addresses |
-| `private_email` | Email addresses |
-| `private_phone` | Phone numbers |
-| `private_url` | URLs containing PII |
-| `private_date` | Dates tied to private individuals |
-| `account_number` | Credit cards, bank accounts |
-| `secret` | Passwords, API keys |
+| `GIVEN_NAME` | Given / first names |
+| `SURNAME` | Family / last names |
+| `PHONE` | Phone numbers |
+| `TAX_ID` | Tax identifiers |
+| `BANK_ACCOUNT` | Bank account / IBAN numbers |
+| `ROUTING_NUMBER` | Bank routing numbers |
+| `GOVERNMENT_ID` | Government-issued ID / case numbers |
+| `PASSPORT` | Passport numbers |
+| `DRIVERS_LICENSE` | Driver's license numbers |
+| `BUILDING_NUMBER` | Street-line building number |
+| `STREET_NAME` | Street name |
+| `SECONDARY_ADDRESS` | Secondary-address line (apt/unit/suite) |
 
-**Gaps for UK legal text (need supplement):**
+Deterministic recognizer labels (regex + checksum, run before model):
+| Label | Description |
+|---|---|
+| `SSN` | Social Security Numbers (structural validation) |
+| `CREDIT_CARD` | Payment card numbers (Luhn-validated) |
+| `EMAIL` | Email addresses |
+| `URL` | URLs |
+| `IP_ADDRESS` | IPv4 / IPv6 / MAC addresses |
+
+Kept by default (not redacted):
+| Label | Description |
+|---|---|
+| `CITY` | City |
+| `STATE` | State / region |
+| `ZIP_CODE` | Postal code |
+
+**Gaps for UK legal text (need Ormont supplement):**
 - National Insurance numbers (fixed format: 2 letters, 6 digits, 1 letter)
-- Passport numbers
-- Internal case/matter references
-- Organisation names (the model flags `organisation_name` but firms may want to treat these differently)
-- Court reference numbers (distinct from `private_url` or `account_number`)
+- Internal case/matter references (firm-specific formats)
+- Organisation names (optional, suffix-based: LLP, Ltd, plc, Solicitors)
+- Court reference numbers (distinct from `GOVERNMENT_ID` or `URL`)
 
-**Two-layer detection strategy:**
-1. OpenAI Privacy Filter runs first (context-aware, catches names, addresses, emails, phones, dates, account numbers, secrets)
-2. TypeScript regex supplement runs second, catching UK legal-specific patterns the model doesn't cover (NI numbers, passport numbers, case references)
+**Three-layer detection strategy:**
+1. Rampart deterministic recognizer runs first (regex + checksum for SSN, credit card, email, URL, IP). Masks structured identifiers to sentinel tokens before the model runs.
+2. Rampart token-classification model runs second (context-aware, catches names, phones, accounts, government IDs, passports, addresses, driver's licenses).
+3. Ormont UK supplement runs third (TypeScript regex for UK-specific patterns: NI numbers, case references, organisation names).
 
-Both layers return spans. The TypeScript supplement merges with model output, deduplicates overlaps (model wins on confidence), and produces the final span list.
+All three layers return spans. The Ormont supplement merges with Rampart output, deduplicates overlaps (Rampart wins on confidence), and produces the final span list.
 
-**`services/redact-worker/` is a real Python service:**
-- Runs OpenAI Privacy Filter (`opf` package from `openai/privacy-filter` GitHub repo)
-- Accepts text via internal API call from the Hono API
-- Returns spans as JSON
-- CPU mode for the 4vCPU/8GB server (no GPU available)
-- Model weights auto-downloaded on first run (~1.5GB, cached at `~/.opf/privacy_filter`)
+**`@nationaldesignstudio/rampart` is an npm package:**
+- Runs in-process in the Hono API via Transformers.js. No separate service.
+- Model weights (14.7 MB) load from HuggingFace on first use, cached on disk automatically.
+- `createGuard({ device: 'cpu' })` returns a `ChatGuard` instance. `guard.protect(text)` returns `{ text, spans }`.
+- No Docker container, no Python, no PyTorch, no FastAPI.
 
 ## Architecture
 
@@ -91,21 +113,29 @@ Start with plain text and `.txt` files for M1, then `.docx` in M2. The `text_obj
 
 ### Detection Pipeline
 1. Document text extracted and stored at `text_object_key`
-2. API receives redaction run request, calls the Python redact-worker
-3. Redact-worker runs Privacy Filter on the text, returns spans
-4. API runs TypeScript regex supplement for UK legal-specific patterns (NI numbers, passport, case references)
-5. API merges both span sets, deduplicates, stores in `redaction_runs.spans_json`
-6. Run transitions to `ready_for_review`
+2. API receives redaction run request, loads the Rampart guard (cached after first load)
+3. API calls `guard.protect(text)` which runs the deterministic recognizer + token-classification model
+4. API maps Rampart span output to Ormont span categories
+5. API runs UK supplement (TypeScript regex) for patterns Rampart doesn't cover (NI numbers, case references, organisation names)
+6. API merges Rampart spans + UK supplement spans, deduplicates overlaps (Rampart wins), stores in `redaction_runs.spans_json`
+7. Run transitions to `ready_for_review`
 
-### TypeScript vs Python Split
-- **Python (redact-worker):** Privacy Filter model inference only. Takes text, returns spans. No business logic, no database access, no API exposure to the outside world
-- **TypeScript (API):** Run lifecycle, span decisions, pseudonymisation, output generation, audit logging, regex supplement, span merging. All the product logic stays in TypeScript
+### Chunking for Long Documents
+Rampart has a 512-token max sequence length. Documents longer than 512 tokens must be chunked. The API service handles this:
+- Split text into chunks of approximately 400 tokens (leaving room for special tokens)
+- Run detection on each chunk
+- Adjust span offsets back to document-level coordinates
+- Merge spans across chunk boundaries (adjacent spans at chunk edges may need joining)
+
+### TypeScript-Only Architecture
+- **All detection in the API process:** Rampart runs via `@nationaldesignstudio/rampart` npm package, in-process. No HTTP call to a separate worker.
+- **All product logic in TypeScript:** Run lifecycle, span decisions, pseudonymisation, output generation, audit logging, UK supplement, span merging. No Python anywhere in the redaction stack.
 
 ### Storage
 Redaction runs stored in PostgreSQL. Spans stored as JSONB array within the run (simpler than a separate spans table for Phase 1). Output artifacts go to the existing `artifacts` table with type `redaction_report`.
 
 ### Desktop-Local
-M1 is hosted-only (API). Desktop-local redaction is M3+ scope. The `syncState: 'local_only'` enum exists, but the Electron local processing path is not in the first 3 months. Firms can use the hosted version first.
+M1 is hosted-only (API). Desktop-local redaction is M3+ scope. The `syncState: 'local_only'` enum exists, but the Electron local processing path is not in the first 3 months. Firms can use the hosted version first. Rampart's client-side capability makes this a natural future extension since the same npm package runs in the browser.
 
 ## Schema
 
@@ -164,24 +194,30 @@ interface RedactionSpan {
   end: number                   // char offset (exclusive)
   text: string                  // the matched text
   category: SpanCategory        // what type of PII
-  source: 'privacy_filter' | 'regex_supplement'  // which layer detected it
+  source: SpanSource             // which layer detected it
   confidence: 'high' | 'medium' | 'low'
   suggestion: 'redact' | 'pseudonymise' | 'keep'
 }
 
+type SpanSource =
+  | 'rampart_model'          // Rampart token-classification model
+  | 'rampart_deterministic'  // Rampart regex + checksum recognizer
+  | 'uk_supplement'           // Ormont UK legal-specific regex
+
 type SpanCategory =
-  | 'person_name'           // privacy_filter: private_person
-  | 'email'                 // privacy_filter: private_email
-  | 'phone'                 // privacy_filter: private_phone
-  | 'address'               // privacy_filter: private_address
-  | 'date'                  // privacy_filter: private_date
-  | 'account_number'        // privacy_filter: account_number
-  | 'secret'                // privacy_filter: secret
-  | 'url'                   // privacy_filter: private_url
-  | 'national_insurance'    // regex_supplement: UK NI number
-  | 'passport'              // regex_supplement: UK passport number
-  | 'case_reference'        // regex_supplement: internal firm/matter ref
-  | 'organisation_name'     // regex_supplement or privacy_filter
+  | 'person_name'           // rampart_model: GIVEN_NAME + SURNAME
+  | 'email'                 // rampart_deterministic: EMAIL
+  | 'phone'                 // rampart_model: PHONE
+  | 'address'               // rampart_model: BUILDING_NUMBER + STREET_NAME + SECONDARY_ADDRESS
+  | 'government_id'         // rampart_mix: SSN, GOVERNMENT_ID, TAX_ID
+  | 'account_number'        // rampart_mix: CREDIT_CARD, BANK_ACCOUNT, ROUTING_NUMBER
+  | 'passport'              // rampart_model: PASSPORT
+  | 'drivers_license'        // rampart_model: DRIVERS_LICENSE
+  | 'url'                   // rampart_deterministic: URL
+  | 'ip_address'            // rampart_deterministic: IP_ADDRESS
+  | 'national_insurance'    // uk_supplement: UK NI number
+  | 'case_reference'        // uk_supplement: internal firm/matter ref
+  | 'organisation_name'     // uk_supplement: firm/company name
 ```
 
 **Decisions format** (stored in `decisions_json`):
@@ -212,7 +248,7 @@ Response 201: {
   }
 }
 ```
-Creates the run, triggers detection. The API calls the Python redact-worker with the extracted text. Status transitions: pending -> detecting -> ready_for_review. If the worker is unavailable, status goes to `failed` with a reason.
+Creates the run, triggers detection. The API calls `guard.protect(text)` in-process. Status transitions: pending -> detecting -> ready_for_review. If detection fails, status goes to `failed` with a reason.
 
 ### Get run status + spans
 ```
@@ -228,7 +264,7 @@ Response 200: {
     summary: {
       totalSpans: number
       byCategory: Record<SpanCategory, number>
-      bySource: { privacyFilter: number, regexSupplement: number }
+      bySource: { rampartModel: number, rampartDeterministic: number, ukSupplement: number }
       reviewedCount: number
       unreviewedCount: number
     }
@@ -279,12 +315,12 @@ Add to `packages/contracts/src/index.ts`:
 
 ```typescript
 export const spanCategorySchema = z.enum([
-  'person_name', 'email', 'phone', 'address', 'date',
-  'account_number', 'secret', 'url',
-  'national_insurance', 'passport', 'case_reference', 'organisation_name',
+  'person_name', 'email', 'phone', 'address', 'government_id',
+  'account_number', 'passport', 'drivers_license', 'url', 'ip_address',
+  'national_insurance', 'case_reference', 'organisation_name',
 ])
 
-export const spanSourceSchema = z.enum(['privacy_filter', 'regex_supplement'])
+export const spanSourceSchema = z.enum(['rampart_model', 'rampart_deterministic', 'uk_supplement'])
 
 export const redactionRunStatusSchema = z.enum([
   'pending', 'detecting', 'ready_for_review',
@@ -307,50 +343,22 @@ export const outputModeSchema = z.enum(['redacted', 'pseudonymised'])
 
 // Error codes to add to apiErrorCodeSchema:
 // 'redaction_run_not_found', 'span_not_found', 'redaction_run_not_reviewable'
-// 'redaction_already_finalized', 'redaction_worker_unavailable'
+// 'redaction_already_finalized', 'redaction_detection_failed'
 ```
 
 ## Package Structure
 
-### `services/redact-worker/` (Python)
-Runs OpenAI Privacy Filter. Internal service, not exposed to the outside world.
-
-```
-services/redact-worker/
-  pyproject.toml              - opf dependency, torch, fastapi/uvicorn
-  src/
-    server.py                 - FastAPI app: POST /detect, takes text, returns spans
-    detector.py               - loads Privacy Filter model, runs inference
-    spans.py                  - maps model output (BIOES tags) to Ormont span format
-  Dockerfile                  - Python 3.11-slim, model weights cached
-```
-
-**Internal API:**
-```
-POST http://localhost:8788/detect
-Body: { text: string }
-Response 200: {
-  spans: [{
-    start: number
-    end: number
-    text: string
-    category: string   // privacy_filter label
-    confidence: 'high' | 'medium' | 'low'
-  }]
-}
-```
-
-The Hono API calls this internally. No auth needed (localhost only, not exposed). If the worker is down, the API returns `redaction_worker_unavailable` and the run goes to `failed`.
-
 ### `packages/redaction-policy/` (TypeScript)
-Pure TypeScript logic for: regex supplement, span merging, pseudonymisation, output generation. No framework dependencies. Testable in isolation.
+Pure TypeScript logic for: UK supplement regex, span merging, Rampart label mapping, pseudonymisation, output generation. No framework dependencies. Testable in isolation.
 
 ```
 packages/redaction-policy/
   src/
     index.ts           - public API
-    supplement.ts       - regex patterns for UK legal-specific PII (NI, passport, case refs)
-    merge.ts            - merge Privacy Filter spans + regex supplement spans, deduplicate overlaps
+    rampart-map.ts      - maps Rampart span output to Ormont span categories
+    supplement.ts       - regex patterns for UK legal-specific PII (NI, case refs, organisation names)
+    merge.ts            - merge Rampart spans + UK supplement spans, deduplicate overlaps
+    chunk.ts             - split long text into 512-token chunks, reassemble span offsets
     pseudonym.ts        - consistent token assignment
     apply.ts            - apply decisions to text, produce redacted/pseudonymised output
     types.ts            - RedactionSpan, SpanCategory, etc.
@@ -363,54 +371,59 @@ API route handlers. Follows the existing pattern in `routes/matters.ts` and `rou
 ### `services/api/src/redaction-database.ts`
 Database functions for redaction runs. Follows the pattern of `database.ts`: typed query helpers, not inline SQL in routes.
 
-### `services/api/src/redaction-worker-client.ts`
-HTTP client to call the Python redact-worker. Simple fetch to `localhost:8788/detect`. Handles timeouts and failures.
+### `services/api/src/redaction-detection.ts`
+Rampart integration module. Loads the `@nationaldesignstudio/rampart` guard, calls `guard.protect(text)`, maps Rampart spans to Ormont categories, runs UK supplement, merges. Handles chunking for long documents.
+
+**Rampart guard lifecycle:**
+- The guard is loaded once and cached as a module-level singleton. First request loads the model (14.7 MB, downloads from HuggingFace if not cached, ~1-2 seconds). Subsequent requests reuse the cached guard.
+- No health check endpoint needed (in-process, no separate service).
 
 ### `packages/app-shell/src/redact/`
 Review UI components (M2). Follows existing app-shell patterns: shared between web and desktop, TanStack Query for server state, Zustand for local UI state.
 
 ## Weekly Plan (12 Weeks / 3 Months)
 
-### Week 1-2: Python Worker + Foundation
+### Week 1-2: Rampart Integration + Foundation
 
-**Goal:** Privacy Filter running in a Python service, schema, contracts, API skeleton, regex supplement.
+**Goal:** Rampart running in the API process, schema, contracts, API skeleton, UK supplement.
 
-- [ ] Create `services/redact-worker/` with `pyproject.toml` (deps: `opf`, `torch`, `fastapi`, `uvicorn`)
-- [ ] Implement `detector.py`: load Privacy Filter model, run inference on text, return spans
-- [ ] Implement `spans.py`: map model BIOES output to Ormont span format (start, end, text, category, confidence)
-- [ ] Implement `server.py`: FastAPI app with `POST /detect` endpoint
-- [ ] Write `Dockerfile` for the worker (Python 3.11-slim, CPU-only torch, model weights cached)
-- [ ] Test: run worker locally, send sample text, verify spans returned
+- [ ] Add `@nationaldesignstudio/rampart` and `@huggingface/transformers` to `services/api/package.json`
+- [ ] Create `services/api/src/redaction-detection.ts`:
+  - Load Rampart guard via `createGuard({ device: 'cpu' })`
+  - Implement `detectPII(text)` that calls `guard.protect(text)`, maps Rampart labels to Ormont categories
+  - Handle 512-token chunking for long documents (split, detect per chunk, adjust offsets, merge)
+  - Cache the guard instance at module level (singleton, loaded once)
 - [ ] Write migration `0005_redaction.sql` (DDL above)
 - [ ] Add redaction contracts to `packages/contracts/src/index.ts`
-- [ ] Add new error codes to `apiErrorCodeSchema` (including `redaction_worker_unavailable`)
+- [ ] Add new error codes to `apiErrorCodeSchema` (including `redaction_detection_failed`)
 - [ ] Create `packages/redaction-policy/` with `package.json`, `tsconfig.json`
-- [ ] Implement `types.ts` with all interfaces
-- [ ] Implement `supplement.ts` with regex patterns for: NI numbers, passport numbers, case references
-- [ ] Implement `merge.ts`: merge Privacy Filter spans + regex supplement spans, deduplicate overlaps (Privacy Filter wins on confidence)
-- [ ] Write supplement + merge tests with realistic legal text fixtures
+- [ ] Implement `types.ts` with all interfaces (RedactionSpan, SpanCategory, SpanSource, etc.)
+- [ ] Implement `rampart-map.ts`: map Rampart labels (GIVEN_NAME, SURNAME, PHONE, EMAIL, URL, etc.) to Ormont categories
+- [ ] Implement `supplement.ts` with regex patterns for: NI numbers, case references, organisation names
+- [ ] Implement `merge.ts`: merge Rampart spans + UK supplement spans, deduplicate overlaps (Rampart wins on confidence)
+- [ ] Implement `chunk.ts`: split text into 400-token chunks, run detection per chunk, adjust offsets to document level, handle spans at chunk boundaries
+- [ ] Write rampart-map, supplement, merge, and chunk tests with realistic legal text fixtures
 - [ ] Scaffold `services/api/src/routes/redact.ts` with `createRedactRoutes(pool)`
 - [ ] Create `services/api/src/redaction-database.ts` with query helpers
-- [ ] Create `services/api/src/redaction-worker-client.ts` (fetch to localhost:8788)
 - [ ] Mount redact routes in `app.ts`
-- [ ] Implement `POST /api/documents/:documentId/redaction-runs` (create run, call worker, merge spans, store, return run)
+- [ ] Implement `POST /api/documents/:documentId/redaction-runs` (create run, call detection, merge spans, store, return run)
 
-**Milestone M1 (partial): Python worker running, text extraction + first detection run works.**
+**Milestone M1 (partial): Rampart running in-process, text extraction + first detection run works.**
 
 ### Week 3-4: Run Lifecycle + Decisions
 
-**Goal:** Full run lifecycle API, span decisions, audit logging, worker failure handling.
+**Goal:** Full run lifecycle API, span decisions, audit logging, detection failure handling.
 
 - [ ] Implement `GET /api/redaction-runs/:runId` (return run with spans, decisions, summary)
 - [ ] Implement `POST /api/redaction-runs/:runId/spans/:spanId/decision` (update decisions_json, audit log)
 - [ ] Implement `GET /api/documents/:documentId/redaction-runs` (list runs)
 - [ ] Add status transitions: `pending -> detecting -> ready_for_review -> reviewing -> finalized`
 - [ ] Auto-transition to `reviewing` when first decision is submitted
-- [ ] Handle worker failures: if worker unavailable, set status to `failed`, record `failure_reason`
+- [ ] Handle detection failures: if Rampart throws or model load fails, set status to `failed`, record `failure_reason`
 - [ ] Audit log entries: `redaction.run_create`, `redaction.span_decision`, `redaction.finalize`
 - [ ] Add `redaction.run_create`, `redaction.span_decision`, `redaction.finalize` to the `AuditRecordInput` action union in `database.ts`
 - [ ] API tests: create run, get run, submit decisions, verify state changes
-- [ ] Error handling: run not found, span not found, run already finalized, run not in reviewable state, worker unavailable
+- [ ] Error handling: run not found, span not found, run already finalized, run not in reviewable state, detection failed
 
 **Milestone M1 (complete): detection works, spans stored, decisions persist.**
 
@@ -439,18 +452,18 @@ Review UI components (M2). Follows existing app-shell patterns: shared between w
 **Goal:** Redaction review screen in the app shell.
 
 - [ ] Create `packages/app-shell/src/redact/` directory
-- [ ] Document text view with highlighted spans (color by category, distinguish Privacy Filter vs supplement by border style)
+- [ ] Document text view with highlighted spans (color by category, distinguish Rampart model vs deterministic vs UK supplement by border style)
 - [ ] Span list panel: sortable by category, confidence, source, review status
 - [ ] Click span -> highlight in document view, show decision buttons
 - [ ] Decision actions: accept, reject, override to redact, override to keep, pseudonymise
-- [ ] Summary bar: X spans, Y reviewed, Z unreviewed, breakdown by source (model vs supplement)
+- [ ] Summary bar: X spans, Y reviewed, Z unreviewed, breakdown by source (Rampart model vs deterministic vs UK supplement)
 - [ ] Policy mode selector (internal AI minimisation vs external sharing) on run creation
 - [ ] Finalize button with output mode selector (redacted vs pseudonymised)
 - [ ] TanStack Query: `useRedactionRun`, `useSpanDecision`, `useFinalizeRun`
 - [ ] Route: `/matters/:matterId/documents/:documentId/redact/:runId` (or `/redaction-runs/:runId`)
 - [ ] Sidebar: change "Redaction" entry from `status: 'planned'` to active link
 - [ ] Empty states: no runs yet, no spans detected, all spans reviewed
-- [ ] Loading states: detection in progress (worker running), finalizing
+- [ ] Loading states: detection in progress (Rampart scanning), finalizing
 
 **Milestone M2 (complete): review UI works, span decisions persist.**
 
@@ -478,7 +491,7 @@ Review UI components (M2). Follows existing app-shell patterns: shared between w
 - [ ] Redaction report artifact: contains
   - original document reference
   - redaction run summary (spans by category, by source, decisions)
-  - detector version (Privacy Filter checkpoint version)
+  - detector version (Rampart model version + npm package version)
   - redacted/pseudonymised text output
   - audit log
   - reviewer, timestamp, policy mode
@@ -492,13 +505,14 @@ Review UI components (M2). Follows existing app-shell patterns: shared between w
   - phone numbers
 - [ ] End-to-end manual test with the demo fixture: upload -> extract -> detect -> review -> finalize -> download output + audit report
 - [ ] Edge cases to test and handle:
-  - Overlapping spans (Privacy Filter wins over regex supplement on confidence)
+  - Overlapping spans (Rampart wins over UK supplement on confidence)
   - Empty text
   - Text with no detectable PII (0 spans, valid run)
   - All spans rejected (finalized with no changes)
   - Finalize without reviewing all spans (allowed but warn)
   - Re-run redaction on same document (new run, new spans)
-  - Worker timeout or unavailable (run goes to `failed`)
+  - Detection failure (Rampart model load error, run goes to `failed`)
+  - Very long document (chunking, > 512 tokens)
 - [ ] Type-check everything: `pnpm --filter @ormont/redaction-policy typecheck`, `pnpm --filter @ormont/api typecheck`, `pnpm --filter @ormont/app-shell typecheck`
 - [ ] Run all tests: `pnpm --filter @ormont/redaction-policy test`, `pnpm --filter @ormont/api test`
 - [ ] Update `docs/current-product-scope.md`: move Redaction from "Visible But Not Implemented" to implemented navigation
@@ -508,12 +522,12 @@ Review UI components (M2). Follows existing app-shell patterns: shared between w
 
 ## What's NOT In Scope (First 3 Months)
 
-- PDF-safe redaction (needs Python worker with PDF manipulation beyond text replacement)
-- Privacy Filter fine-tuning on legal text (the pipeline is built, fine-tuning is Phase 2 when we have evaluation fixtures)
+- PDF-safe redaction (needs PDF manipulation beyond text replacement)
+- Rampart fine-tuning on legal text (the pipeline is built, fine-tuning is post-MVP when we have evaluation fixtures)
 - Desktop-local redaction (Electron offline path)
 - Batch redaction (multiple documents at once)
 - Redaction policy customization (firm-specific rules)
-- BullMQ job queue (synchronous detection call to worker is fine for single documents; queue comes for batch processing)
+- BullMQ job queue (synchronous detection in-process is fine for single documents; queue comes for batch processing)
 - Legislation/case law redaction (public source redaction is different from matter document redaction)
 
 ## Dependencies On Existing Code
@@ -527,22 +541,25 @@ Review UI components (M2). Follows existing app-shell patterns: shared between w
 | `text_object_key` on document versions | Done (migration 0002) |
 | Auth middleware, org-scoping, request IDs | Done (`app.ts`) |
 | Object storage for text/output | Needs verification: is Hetzner Object Storage wired? The `object_key` pattern is defined in migration constraints but actual storage upload code needs checking |
+| `@nationaldesignstudio/rampart` npm package | Not yet installed. Add to `services/api/package.json` |
+| `@huggingface/transformers` npm package | Not yet installed. Add to `services/api/package.json` (peer dep of Rampart) |
 
 **Risk:** Object storage upload (writing to `text_object_key` path) may not be implemented yet. Document upload currently creates the DB record but may not store the actual file. Verify before Week 5. If not wired, use local filesystem as interim.
 
-**Risk:** Python worker on the 4vCPU/8GB server. Privacy Filter runs on CPU but the model is 1.5B params. First inference loads the model into memory (~3GB). Need to verify the worker stays resident or implement a warm-up step. If memory is tight, the worker may need to be a long-running process, not spawned per request.
+**Risk:** First request after API restart loads the Rampart model (14.7 MB download from HuggingFace if not cached, then model initialization). This may add 2-5 seconds to the first detection request. Mitigation: warm the guard on API startup, or accept the delay on first request and document it.
 
 ## Verification
 
 Per TESTING.md, redaction is a high-risk area. Required testing:
 
 - **Detection tests:** fixture-based, covering each span category with real legal text, edge cases (UK NI number format, name prefixes, international phone numbers)
-- **Worker integration tests:** verify Privacy Filter returns correct spans for known PII patterns, verify API handles worker timeout/unavailable gracefully
-- **Span merge tests:** verify Privacy Filter + regex supplement spans merge correctly, overlaps resolved by confidence
+- **Rampart integration tests:** verify Rampart returns correct spans for known PII patterns, verify API handles detection failures gracefully
+- **Chunking tests:** verify long documents (> 512 tokens) are split, detected per chunk, and offsets reassembled correctly
+- **Span merge tests:** verify Rampart + UK supplement spans merge correctly, overlaps resolved by confidence
 - **Decision persistence tests:** create run, submit decisions, reload run, verify decisions intact
 - **Output safety tests:** assert no PII strings appear in redacted output, assert pseudonymised tokens are consistent
 - **Audit log tests:** verify every action (run create, span decision, finalize) produces an audit record
-- **API error tests:** run not found, span not found, already finalized, not reviewable, wrong org, worker unavailable
+- **API error tests:** run not found, span not found, already finalized, not reviewable, wrong org, detection failed
 - **Status transition tests:** verify legal transitions only (can't finalize a pending run, can't add decisions to a finalized run)
 
 ## Months 4-6 (Follow-Up: Verify Core)
@@ -562,8 +579,8 @@ This layers on top of the existing Search infrastructure and the artifact/audit 
 At 3 months, the demo is:
 1. Open a matter
 2. Upload a `.docx` legal document (skeleton argument, witness statement, or case excerpt)
-3. System detects PII using OpenAI Privacy Filter (context-aware, not regex): names, addresses, emails, phone numbers, dates, account numbers, secrets. Plus UK legal-specific patterns from the supplement: NI numbers, passport numbers, case references
-4. Review each detection: accept, reject, override, or pseudonymise. Spans are tagged by source so the reviewer can see which came from the model vs the supplement
+3. System detects PII using Rampart (context-aware, not regex): names, addresses, emails, phone numbers, accounts, government IDs, passports, URLs, IP addresses. Plus UK legal-specific patterns from the supplement: NI numbers, case references, organisation names
+4. Review each detection: accept, reject, override, or pseudonymise. Spans are tagged by source so the reviewer can see which came from the Rampart model vs the deterministic layer vs the UK supplement
 5. Finalize: produce a redacted version and a pseudonymised version
 6. Download the redacted document and an audit report showing every decision, who made it, when, the policy mode, and the detector version used
 
@@ -572,4 +589,4 @@ This is something a firm can:
 - Verify no PII leaks in the redacted output
 - Pseudonymise for internal AI use
 - Trust the process is conservative (human review required, no auto-signoff)
-- Verify the detection engine is a real model (OpenAI Privacy Filter), not pattern matching
+- Verify the detection engine is a real model (Rampart, 18.5M params, 98.42% recall), not pattern matching

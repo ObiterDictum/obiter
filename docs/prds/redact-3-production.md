@@ -2,9 +2,9 @@
 
 ## Summary
 
-This phase completes the Ormont Redact module. It turns the Phase 1-2 detection and review pipeline into a production-ready capability by adding real document format support (DOCX text extraction via `mammoth`), formal audit report export, synthetic training data generation for Privacy Filter fine-tuning, a dataset export tool for the human-in-the-loop improvement loop, a prepared demo for firm evaluations, and full end-to-end testing.
+This phase completes the Ormont Redact module. It turns the Phase 1-2 detection and review pipeline into a production-ready capability by adding real document format support (DOCX text extraction via `mammoth`), formal audit report export, synthetic training data generation for Rampart fine-tuning, a dataset export tool for the human-in-the-loop improvement loop, a prepared demo for firm evaluations, and full end-to-end testing.
 
-Redact Phase 1 established the detection pipeline powered by OpenAI Privacy Filter and a regex supplement for UK legal-specific PII patterns. Phase 2 added the review UI, span decision persistence, and redacted/pseudonymised output generation. This phase makes the product demonstrable to firms, producible for audit, and extensible through fine-tuning.
+Redact Phase 1 established the detection pipeline powered by Rampart (14.7 MB ONNX token-classification model via Transformers.js) and a UK supplement for legal-specific PII patterns. Phase 2 added the review UI, span decision persistence, and redacted/pseudonymised output generation. This phase makes the product demonstrable to firms, producible for audit, and extensible through fine-tuning.
 
 See the detailed implementation at [docs/specs/redact/build-plan.md](../specs/redact/build-plan.md). Cross-reference siblings: [Redact PRD 1: Detection Pipeline](redact-1-detection.md), [Redact PRD 2: Review and Output](redact-2-review-output.md).
 
@@ -16,7 +16,7 @@ Phases 1 and 2 deliver a working redaction pipeline, but three gaps prevent it f
 
 2. **No audit trail is exportable.** The audit log records actions internally, but there is no structured report a firm can download, file, or present to a regulator. A redaction tool without an audit report is not a legal-redaction tool.
 
-3. **There is no path to improvement.** The base Privacy Filter model is strong but not trained on UK legal text. Without synthetic training data and a dataset export tool, fine-tuning cannot happen, and the product cannot get better at the specific PII patterns law firms care about.
+3. **There is no path to improvement.** The base Rampart model is strong but not trained on UK legal text. Without synthetic training data and a dataset export tool, fine-tuning cannot happen, and the product cannot get better at the specific PII patterns law firms care about.
 
 4. **No demo exists.** Firms evaluating Ormont need to see a complete run — upload a real DOCX, see detection, review spans, finalize, download output — in a single session. Without a prepared demo fixture and a known end-to-end flow, evaluation conversations stall on "show me."
 
@@ -26,25 +26,25 @@ This phase closes all four gaps.
 
 - **A redaction tool that cannot export an audit report is not a redaction tool.** Every redaction run must produce a downloadable, inspectable audit artifact that records every decision, timestamp, user, and policy mode.
 - **Real documents are DOCX, not TXT.** The pipeline must work on the file format law firms actually use. PDF is deferred (Phase 2), but DOCX is the minimum viable format.
-- **Fine-tuning requires data first.** The synthetic data generator and dataset export tool create the raw material for Privacy Filter fine-tuning. Without these, the fine-tuning path remains theoretical.
+- **Fine-tuning requires data first.** The synthetic data generator and dataset export tool create the raw material for Rampart fine-tuning. Without these, the fine-tuning path remains theoretical.
 - **Synthetic data must be realistic.** Generated documents must use genuine UK legal language, document structures, and PII placements that reflect real law firm documents. Unrealistic data degrades fine-tuning quality.
 - **The demo must be repeatable and inspectable.** A firm evaluator should be able to follow a script, inspect every artifact, and verify the tool's behaviour without ambiguity.
-- **Every edge case should have a known outcome.** Overlapping spans, empty text, zero-spans-allowed runs, and worker failures all need tested, documented behaviour.
+- **Every edge case should have a known outcome.** Overlapping spans, empty text, zero-spans-allowed runs, and detection failures all need tested, documented behaviour.
 
 ## Goals
 
 1. **DOCX text extraction** — On upload, extract text from `.docx` files using `mammoth`, store the extracted text in object storage at the `text_object_key` path, and update the document status to `ready`.
 2. **Audit report export** — `GET /api/redaction-runs/:runId/audit` returns a structured audit record. The redaction report artifact contains the original document reference, run summary, full audit log, detector version, and output reference.
-3. **Synthetic training data generation** — Generate 200–500 realistic UK legal documents with labelled PII spans, in OpenAI Privacy Filter's training JSONL format, stored under `data/evals/redact/`. Covers 10+ PII types across 7+ UK legal document types.
-4. **Dataset export tool** — Export reviewed redaction runs as training data in `opf train` format, mapping Ormont span categories back to Privacy Filter's label space.
+3. **Synthetic training data generation** — Generate 200–500 realistic UK legal documents with labelled PII spans, in Rampart's training JSONL format, stored under `data/evals/redact/`. Covers 10+ PII types across 7+ UK legal document types.
+4. **Dataset export tool** — Export reviewed redaction runs as training data in Rampart's training JSONL format, mapping Ormont span categories back to Rampart's 17 entity types.
 5. **Demo preparation** — A realistic DOCX skeleton argument fixture and manual end-to-end test script covering all edge cases.
-6. **Fine-tuning preparation documentation** — Document the `opf train` command, infrastructure requirements, and the deployment loop so a Phase 2 contributor can fine-tune without rediscovery.
+6. **Fine-tuning preparation documentation** — Document the Rampart training pipeline command, infrastructure requirements, and the deployment loop so a future contributor can fine-tune without rediscovery.
 7. **Polish** — Type-check all packages, run all tests, update `docs/current-product-scope.md`, update `docs/specs/redact/milestones.md`, and activate the Redaction sidebar link.
 
 ## Non-Goals
 
-- **PDF text extraction** — PDF redaction requires a Python worker with PDF manipulation libraries (pdfplumber, PyMuPDF) and position-aware redaction boxes. This is deferred to Phase 2.
-- **Privacy Filter fine-tuning execution** — This phase generates the synthetic data, the export pipeline, and the documentation, but fine-tuning itself requires a rented GPU and is a Phase 2 activity after data quality has been reviewed.
+- **PDF text extraction** — PDF redaction requires PDF manipulation libraries (pdfplumber, PyMuPDF) and position-aware redaction boxes. This is deferred to a future phase.
+- **Rampart fine-tuning execution** — This phase generates the synthetic data, the export pipeline, and the documentation, but fine-tuning itself requires a rented GPU and is a post-MVP activity after data quality has been reviewed.
 - **Desktop-local redaction** — Electron offline processing is still Phase 2+.
 - **Batch redaction** — Multiple documents in a single redaction run is not in Phase 3.
 - **Redaction policy customization** — Firm-specific rules or policy presets are not in scope.
@@ -63,7 +63,7 @@ Builds and maintains the DOCX extraction pipeline, audit endpoint, and synthetic
 
 ### Data Scientist (preparing fine-tuning)
 
-Uses the synthetic data generator and dataset export tool to prepare training and validation sets for Privacy Filter fine-tuning. Needs realistic documents, correct label spaces, and clean train/validation splits.
+Uses the synthetic data generator and dataset export tool to prepare training and validation sets for Rampart fine-tuning. Needs realistic documents, correct label spaces, and clean train/validation splits.
 
 ### Firm Evaluator
 
@@ -78,10 +78,10 @@ Inspects synthetic data quality, label correctness, and the fine-tuning dataset 
 1. **Upload a DOCX skeleton argument, extract its text, and verify the extracted text is stored correctly.**
 2. **Create a redaction run on a DOCX-based document, detect PII, review spans, and finalize.**
 3. **Export the audit report for a finalized redaction run as JSON, HTML, or Markdown.**
-4. **Generate 500 synthetic UK legal documents with labelled PII for Privacy Filter fine-tuning.**
-5. **Export reviewed redaction run decisions as training data for `opf train`.**
+4. **Generate 500 synthetic UK legal documents with labelled PII for Rampart fine-tuning.**
+5. **Export reviewed redaction run decisions as training data for Rampart fine-tuning.**
 6. **Walk through the demo fixture end-to-end: upload → extract → detect → review → finalize → download output + audit.**
-7. **Verify edge-case behaviour: empty text, zero spans, all spans rejected, overlapping spans, worker failures, re-runs, very long documents.**
+7. **Verify edge-case behaviour: empty text, zero spans, all spans rejected, overlapping spans, detection failures, re-runs, very long documents.**
 
 ## Scope
 
@@ -97,7 +97,7 @@ Inspects synthetic data quality, label correctness, and the fine-tuning dataset 
 - Report formats: JSON (primary), HTML (secondary), Markdown (tertiary)
 - Synthetic data generator script producing 200–500 documents
 - 7+ UK legal document types with 10+ PII types
-- Output in Privacy Filter training JSONL format
+- Output in Rampart training JSONL format
 - Dataset export tool: `data/evals/redact/exported_training_data.jsonl`
 - Demo DOCX fixture (realistic skeleton argument)
 - Edge-case test fixtures and manual test script
@@ -156,7 +156,7 @@ async function extractDocxText(buffer: Buffer): Promise<string> {
 }
 ```
 
-`mammoth.extractRawText` returns the text content of the DOCX without formatting. This is sufficient for Privacy Filter detection, which operates on raw text. The original DOCX is always preserved in object storage for later output regeneration or download.
+`mammoth.extractRawText` returns the text content of the DOCX without formatting. This is sufficient for Rampart detection, which operates on raw text. The original DOCX is always preserved in object storage for later output regeneration or download.
 
 ### 2. Audit Report Export
 
@@ -210,7 +210,7 @@ Response 403: user not in run's organisation
       "pseudonymised": 1
     }
   },
-  "detectorVersion": "opf-1.0.0-checkpoint-20260415",
+  "detectorVersion": "rampart-0.1.3",
   "policyMode": "internal_ai_minimisation",
   "outputArtifact": {
     "redactedObjectKey": "org_abc/matter_001/doc_001/ver_001/redacted.txt",
@@ -258,7 +258,7 @@ The audit report is stored as an `artifact` row with `artifactType: 'redaction_r
 
 ### 3. Synthetic Training Data Generation
 
-**Rationale:** Privacy Filter achieves 97.43% F1 on the PII-Masking-300k benchmark, but legal text has specific PII patterns and document structures that the base model has not been trained on. The Tonic.ai study shows F1 jumps from 0.18 to 0.92 with 500 legal documents of fine-tuning data. The synthetic data generator creates the raw material to make that jump.
+**Rationale:** Rampart achieves 98.42% private-term recall on the OpenPII 30k held-out test set, but legal text has specific PII patterns and document structures that the base model has not been trained on. The synthetic data generator creates the raw material to close this gap through fine-tuning.
 
 **Document types (7+):**
 
@@ -289,7 +289,7 @@ The audit report is stored as an `artifact` row with `artifactType: 'redaction_r
 | URL | Personal or case-related URL | https://solicitors.law/our-team/jcartwright | `url` |
 | Secret | Password or API key | Password: TempPass123! | `secret` |
 
-**Output format (OpenAI Privacy Filter training schema):**
+**Output format (Rampart training schema):**
 
 ```jsonl
 {"text": "IN THE HIGH COURT OF JUSTICE\nQUEEN'S BENCH DIVISION\n\nCLAIM No: REF/2024/0123\n\nBETWEEN:\n\nMr James Cartwright\nand\nMrs Sarah Chen\n\nSKELETON ARGUMENT OF THE CLAIMANT\n\n1. The Claimant, Mr James Cartwright of 42 Belgrave Road, Leicester LE4 5AB, is a retired school teacher born on 10 June 1956. His National Insurance number is JX 12 34 56 D.\n\n2. The Defendant, Mrs Sarah Chen, is a solicitor employed by Smith & Jones Solicitors LLP of 78 High Holborn, London WC1V 6XX. Her email address is s.chen@smithjones.co.uk and her direct telephone number is 020 7946 0958.\n\n3. This claim arises from a road traffic accident on 15 March 2024 at approximately 14:30 hours...", "spans": {"private_person: James Cartwright": [[94, 111], [184, 199]], "private_address: 42 Belgrave Road, Leicester LE4 5AB": [[203, 242]], "private_person: Mr James Cartwright": [[181, 201]], "private_date: 10 June 1956": [[269, 282]], "national_insurance: JX 12 34 56 D": [[314, 327]], "private_person: Mrs Sarah Chen": [[357, 372]], "private_person: Sarah Chen": [[389, 400]], "organisation_name: Smith & Jones Solicitors LLP": [[421, 449]], "private_address: 78 High Holborn, London WC1V 6XX": [[453, 488]], "private_email: s.chen@smithjones.co.uk": [[511, 535]], "private_phone: 020 7946 0958": [[567, 580]], "private_date: 15 March 2024": [[624, 638]]}, "info": {"id": "legal_001", "source": "ormont.synthetic"}}
@@ -316,10 +316,10 @@ The audit report is stored as an `artifact` row with `artifactType: 'redaction_r
 }
 ```
 
-Note: `organisation_name` and `passport` are not in the custom label space because Privacy Filter does not natively support them. In the synthetic data, these are mapped:
+Note: `organisation_name` and `passport` handling differs between Ormont and Rampart's base label set. In the synthetic data, these are mapped:
 - `organisation_name` → `O` (ignored during fine-tuning; the model learns to not flag organisation names as PII unless the firm's policy requires it)
-- `passport` → mapped to `account_number` as a close proxy (both are government-issued identifiers with fixed formats)
-- `case_reference` → the custom label space includes this; it is a new label not present in base Privacy Filter
+- `passport` → mapped to `PASSPORT` which Rampart already supports natively
+- `case_reference` → the custom label space includes this; it is a new label not present in base Rampart
 
 **Generation script requirements:**
 
@@ -349,7 +349,7 @@ The generation script (`scripts/generate-synthetic-data.ts` or equivalent) must:
    - Empty text (trivial: just metadata)
    - Text with no PII (court forms with only case numbers that should be flagged)
    - All PII types present in a single document (stress test)
-   - Documents with only regex-supplement PII (NI numbers, case references — no model-detectable PII)
+   - Documents with only UK supplement PII (NI numbers, case references — no model-detectable PII)
    - Documents at the 128k token boundary (very long witness statements with repeated PII)
    - Documents where names look like case citations ("Mr Smith submits... In Smith v Jones, the court held...")
 
@@ -379,7 +379,7 @@ The generation script (`scripts/generate-synthetic-data.ts` or equivalent) must:
 | Max PII instances per document | 25 |
 | Documents with overlapping spans | ≥ 10 |
 | Documents with zero PII | ≥ 5 |
-| Documents with only regex-supplement PII | ≥ 10 |
+| Documents with only UK supplement PII | ≥ 10 |
 | Document types covered | ≥ 7 |
 | Unique person names | ≥ 80 |
 | Unique addresses | ≥ 50 |
@@ -395,7 +395,7 @@ The generation script (`scripts/generate-synthetic-data.ts` or equivalent) must:
 
 ### 4. Dataset Export Tool
 
-**Rationale:** Every reviewed redaction run represents ground-truth data about what is and is not PII in legal text. The dataset export tool captures that data and converts it into Privacy Filter's training format, creating a feedback loop: real usage → human-reviewed decisions → training data → improved model.
+**Rationale:** Every reviewed redaction run represents ground-truth data about what is and is not PII in legal text. The dataset export tool captures that data and converts it into Rampart's training format, creating a feedback loop: real usage → human-reviewed decisions → training data → improved model.
 
 **Tool:**
 
@@ -403,26 +403,27 @@ Script at `scripts/export-training-data.ts` (or similar) that:
 
 1. Queries all finalized redaction runs marked as human-reviewed (not auto-finalized).
 2. For each run, loads the extracted text and all finalised decisions.
-3. For each span where the human accepted or pseudonymised the detection, creates a training entry using the span's category mapped to the Privacy Filter label space.
+3. For each span where the human accepted or pseudonymised the detection, creates a training entry using the span's category mapped to the Rampart label space.
 4. For each span where the human rejected the detection, the span is **excluded** from the output (the model should not learn to flag that text as PII).
 5. For each span where the human chose `override_keep`, the span is also excluded (the human explicitly said this is not PII).
 6. Outputs a single JSONL file: `data/evals/redact/exported_training_data.jsonl`.
 
-**Category mapping (Ormont → Privacy Filter):**
+**Category mapping (Ormont → Rampart):**
 
-| Ormont label | Privacy Filter label |
-|--------------|---------------------|
-| `person_name` | `private_person` |
-| `email` | `private_email` |
-| `phone` | `private_phone` |
-| `address` | `private_address` |
-| `date` | `private_date` |
-| `account_number` | `account_number` |
-| `secret` | `secret` |
-| `url` | `private_url` |
-| `national_insurance` | `national_insurance` (custom) |
-| `case_reference` | `case_reference` (custom) |
-| `passport` | Mapped to `account_number` (proxy) |
+| Ormont label | Rampart label |
+|--------------|---------------|
+| `person_name` | `GIVEN_NAME` + `SURNAME` |
+| `email` | `EMAIL` |
+| `phone` | `PHONE` |
+| `address` | `BUILDING_NUMBER` + `STREET_NAME` + `SECONDARY_ADDRESS` |
+| `government_id` | `SSN` / `GOVERNMENT_ID` / `TAX_ID` |
+| `account_number` | `CREDIT_CARD` / `BANK_ACCOUNT` / `ROUTING_NUMBER` |
+| `passport` | `PASSPORT` |
+| `drivers_license` | `DRIVERS_LICENSE` |
+| `url` | `URL` |
+| `ip_address` | `IP_ADDRESS` |
+| `national_insurance` | `GOVERNMENT_ID` (custom: `national_insurance`) |
+| `case_reference` | `GOVERNMENT_ID` (custom: `case_reference`) |
 | `organisation_name` | Excluded (not in label space) |
 
 **Quality gates:**
@@ -457,7 +458,7 @@ Store at `data/evals/redact/demo-fixture.docx` with a companion JSON metadata fi
 
 Prerequisites:
 - Redact api running (http://localhost:3000)
-- Redact-worker running (http://localhost:8788)
+- Rampart model loaded (runs in-process, no separate service)
 - Authenticated as a user with access to an org with matters
 
 Step 1: Upload demo fixture
@@ -516,39 +517,47 @@ Step 10: Re-run on same document
 
 | Edge case | Expected behaviour |
 |-----------|-------------------|
-| Overlapping spans (Privacy Filter + regex supplement overlap) | Privacy Filter span kept, regex supplement span dropped. System logs overlap with confidence comparison. |
+| Overlapping spans (Rampart + UK supplement overlap) | Rampart span kept, UK supplement span dropped. System logs overlap with confidence comparison. |
 | Empty text (`document` with 0 bytes) | Run created, status → `ready_for_review` with 0 spans, no error |
 | Text with no detectable PII | Run created, 0 spans, status → `ready_for_review`, reviewer sees empty state |
 | All spans rejected | Finalize with 0 accepted spans. Output is identical to original text. Report shows 0 modifications. |
 | Finalize without reviewing all spans | Allowed but warning shown: "X spans unreviewed — auto-accepting." Audit log records auto-accept. |
 | Re-run on same document | Independent run, new span IDs, new detection results (model inference is deterministic but decisions start fresh) |
-| Worker timeout or unavailable | Post returns `redaction_worker_unavailable` error. Run status → `failed`. `failure_reason` set. |
+| Detection failure (model load error, inference error) | Post returns `redaction_detection_failed` error. Run status → `failed`. `failure_reason` set. |
 | DOCX with tables | Table text extracted row by row, spans detected in table cells. No text lost. |
 | DOCX with headers/footers | Header/footer text extracted and available for detection (names in headers). |
-| Very long documents | Document up to 128k tokens processed. If text exceeds worker's max context, truncation warning logged. |
+| Very long documents | Document chunked at 512-token boundaries. All chunks processed, spans reassembled with correct offsets. |
 
 ### 6. Fine-Tuning Preparation (Documentation Only)
 
-**Purpose:** Document the fine-tuning process so a Phase 2 contributor can run it without rediscovery.
+**Purpose:** Document the fine-tuning process so a future contributor can run it without rediscovery.
 
 **Command reference:**
 
-```bash
-# Install opf CLI
-pip install opf
+Rampart ships as a frozen ONNX artifact. Fine-tuning requires the Python training pipeline from the Rampart GitHub repository (`nationaldesignstudio/rampart`). The model is a MiniLM-L6-H384 encoder fine-tuned with a 35-label BIO head.
 
-# Train a checkpoint from synthetic data
-opf train /path/to/synthetic_train.jsonl \
-  --validation-dataset /path/to/synthetic_validation.jsonl \
-  --label-space-json /path/to/custom_label_space.json \
+```bash
+# Clone the Rampart repo (contains the training pipeline)
+git clone https://github.com/nationaldesignstudio/rampart
+cd rampart
+
+# Install training dependencies
+pip install torch transformers datasets onnx onnxruntime
+
+# Prepare training data in Rampart's JSONL format (text + BIO spans)
+# The synthetic data generator and dataset export tool produce this format
+
+# Fine-tune the model
+python scripts/train.py \
+  --train-data /path/to/synthetic_train.jsonl \
+  --validation-data /path/to/synthetic_validation.jsonl \
+  --label-space /path/to/custom_label_space.json \
   --output-dir /path/to/checkpoint
 
-# Training output:
-#   checkpoint/
-#     config.json          - model configuration
-#     model.safetensors    - fine-tuned weights
-#     finetune_summary.json - training metrics
-#     USAGE.txt            - deployment instructions
+# Export the fine-tuned model to ONNX (Q4 quantized)
+python scripts/export_onnx.py \
+  --checkpoint /path/to/checkpoint \
+  --output /path/to/rampart-ormant-legal-q4.onnx
 ```
 
 **Infrastructure requirements:**
@@ -558,14 +567,14 @@ opf train /path/to/synthetic_train.jsonl \
 | GPU | NVIDIA T4 (16GB VRAM) or better | ~$0.50/hr (rented cloud) |
 | Training time (500 docs) | 1–2 hours | ~$0.50–$1.00 per training run |
 | Storage | 2GB per checkpoint | Negligible |
-| Software | Python 3.10+, `opf`, `torch`, `datasets`, `transformers` | Free/open-source |
+| Software | Python 3.10+, `torch`, `transformers`, `datasets`, `onnx` | Free/open-source |
 
 **The fine-tuning loop:**
 
 ```
 ┌──────────────────────────────────────────────────┐
-│  Ship base Privacy Filter model                  │
-│  (OPF_CHECKPOINT=privacy_filter checkpoint)      │
+│  Ship base Rampart model                         │
+│  (nationaldesignstudio/rampart via npm)          │
 └──────────┬───────────────────────────────────────┘
            │
            ▼
@@ -576,26 +585,27 @@ opf train /path/to/synthetic_train.jsonl \
            │
            ▼
 ┌──────────────────────────────────────────────────┐
-│  Export dataset → JSONL in opf train format      │
+│  Export dataset → JSONL in Rampart BIO format    │
 │  Merge with synthetic data if needed             │
 └──────────┬───────────────────────────────────────┘
            │
            ▼
 ┌──────────────────────────────────────────────────┐
 │  Fine-tune on rented GPU                         │
-│  opf train /path/to/train.jsonl                  │
-│     --validation-dataset ...                     │
-│     --label-space-json ...                       │
+│  python scripts/train.py /path/to/train.jsonl    │
+│     --validation-data ...                        │
+│     --label-space ...                            │
 │     --output-dir ./checkpoint                    │
+│  Export to ONNX Q4                               │
+│  python scripts/export_onnx.py                   │
 └──────────┬───────────────────────────────────────┘
            │
            ▼
 ┌──────────────────────────────────────────────────┐
-│  Deploy new checkpoint                           │
-│  1. Upload checkpoint to object storage          │
-│  2. Update OPF_CHECKPOINT env var in             │
-│     services/redact-worker docker-compose config │
-│  3. Redeploy redact-worker container             │
+│  Deploy fine-tuned ONNX model                    │
+│  1. Upload ONNX to object storage                │
+│  2. Update REDACT_MODEL_ID env var to local path │
+│  3. Restart API (model loads from new path)      │
 │  4. Verify: run demo fixture, compare spans      │
 └──────────┬───────────────────────────────────────┘
            │
@@ -607,14 +617,14 @@ opf train /path/to/synthetic_train.jsonl \
 
 **Checkpoint deployment:**
 
-1. Upload the checkpoint directory (or a tarball) to object storage: `op_artifacts/redact-checkpoints/ormont_legal_v1/`
-2. Update the `OPF_CHECKPOINT` environment variable in the `services/redact-worker` Docker Compose or Dokploy config to point to the new checkpoint path.
-3. Redeploy the redact-worker container. The worker downloads the checkpoint on startup (or loads from a cached path).
+1. Upload the fine-tuned ONNX model to object storage: `op_artifacts/redact-models/ormont_legal_v1/2026-07-01/rampart-legal-q4.onnx`
+2. Update the `REDACT_MODEL_ID` environment variable in the API service configuration to point to the local path where the ONNX model is stored (or a HuggingFace repo id if published).
+3. Restart the API service. The Rampart guard loads the new model on next detection request.
 4. Test by running the demo fixture through the pipeline and comparing the span set against the baseline. Expected: more accurate detection on UK legal patterns, fewer missed NI numbers and case references.
 
 **Versioning:**
 
-- Store checkpoints in object storage with versioned paths: `op_artifacts/redact-checkpoints/ormont_legal_v1/2026-07-01/`
+- Store checkpoints in object storage with versioned paths: `op_artifacts/redact-models/ormont_legal_v1/2026-07-01/`
 - Record checkpoint metadata in a `checkpoint_versions` table (simple: id, version_label, object_key, trained_at, training_data_summary, validation_metrics)
 - The `detector_version` field in `redaction_runs` references the checkpoint version used for that run
 
@@ -685,7 +695,7 @@ In `packages/app-shell/src/navigation.ts` (or equivalent), change the Redaction 
 | FR3.1 | Generate 200–500 synthetic UK legal documents with labelled PII spans |
 | FR3.2 | Cover at least 7 document types: skeleton arguments, witness statements, case reports, client letters, attendance notes, court forms, pleadings |
 | FR3.3 | Cover at least 12 PII types: person names, addresses, emails, phones, dates, NI numbers, passport numbers, case references, bank accounts, organisations, URLs, secrets |
-| FR3.4 | Output in Privacy Filter training JSONL format with `text`, `spans`, and `info` fields |
+| FR3.4 | Output in Rampart training JSONL format with `text`, `spans`, and `info` fields |
 | FR3.5 | Generate a custom label space file (`custom_label_space.json`) defining `ormont_legal_v1` |
 | FR3.6 | Validate all documents: correct offsets, correct text slices, valid labels |
 | FR3.7 | Split into train (80%) and validation (20%) sets |
@@ -699,10 +709,10 @@ In `packages/app-shell/src/navigation.ts` (or equivalent), change the Redaction 
 | ID | Requirement |
 |----|-------------|
 | FR4.1 | Script exports finalized redaction runs with human-reviewed decisions as training data |
-| FR4.2 | Map Ormont span categories to Privacy Filter label space per the mapping table |
+| FR4.2 | Map Ormont span categories to Rampart label space per the mapping table |
 | FR4.3 | Exclude rejected and `override_keep` spans from output |
 | FR4.4 | Skip runs finalized with un-reviewed spans unless `--include-partial` flag passed |
-| FR4.5 | Output: `data/evals/redact/exported_training_data.jsonl` in `opf train` format |
+| FR4.5 | Output: `data/evals/redact/exported_training_data.jsonl` in Rampart BIO format |
 | FR4.6 | Validate output format before writing |
 
 ### FR5: Demo Preparation
@@ -758,7 +768,7 @@ In `packages/app-shell/src/navigation.ts` (or equivalent), change the Redaction 
 | Artifacts table with `redaction_report` type | Done (migration 0002) | Enum includes `redaction_report` |
 | Audit log function (`appendAuditLog`) | Done (`database.ts`) | Supports action types `redaction.run_create`, `redaction.span_decision`, `redaction.finalize` |
 | Object storage for text and output | Needs verification | `object_key` pattern defined; actual upload code may need wiring |
-| Privacy Filter custom label space | New | Defined in this PRD as `ormont_legal_v1` |
+| Rampart custom label space | New | Defined in this PRD as `ormont_legal_v1` |
 | Redact PRD 1: Detection Pipeline | Assumed complete | Worker, supplement, merge, database queries |
 | Redact PRD 2: Review and Output | Assumed complete | Review UI, decisions, finalize, pseudonymisation |
 | Synthetic data generation scripts | New | Node.js/TypeScript scripts under `scripts/` |
@@ -782,7 +792,7 @@ See sibling PRDs: [Redact PRD 1: Detection Pipeline](redact-1-detection.md), [Re
 - Generated 300 documents, validated, reviewed for realism
 - At least one document per PII type verified manually
 - Dataset export tool tested with at least 10 finalized runs
-- Exported JSONL verified with `opf train --dry-run` (validation only, no actual training)
+- Exported JSONL verified by parsing each line and checking BIO label validity against Rampart's label space
 
 ### Phase 3: Demo + Polish (Weeks 11–12)
 
@@ -833,7 +843,7 @@ The following must be true for M3 sign-off:
 | **Mammoth produces poor extraction** from complex legal DOCX (tables, headers, footnotes) | Medium | Medium | Test with 10+ real legal DOCX files before committing. Have fallback (`docx4js`) identified. For tables specifically: verify text reads left-to-right, top-to-bottom per mammoth's documented behaviour. |
 | **Object storage not wired** for text_object_key path | High | High | Verify before Week 9. If not wired, implement upload-to-filesystem with same path structure as interim. |
 | **Synthetic data unrealistic** — fails the "looks like a real legal document" test | Medium | High | Have a legal professional review 10 sample documents before generating the full set. Iterate on templates. |
-| **Privacy Filter worker OOM on 4vCPU/8GB server** with synthetic data generation | Low (generation happens offline) | Low | Generation runs on dev machine, not server. Risk only if run concurrently with production traffic. |
+| **Rampart model memory on 4vCPU/8GB server** during synthetic data generation | Low (generation happens offline) | Low | Generation runs on dev machine, not server. Rampart runs in-process at ~50-100 MB steady state. |
 | **Audit report HTML export** has poor rendering for large span sets | Low | Medium | Test with 200-span run. Limit HTML page size by paginating audit log entries if needed. |
 | **Dataset export tool produces sparse output** — few finalized runs with full review | Medium | Medium | Seed with synthetic data initially (from the generator). Real data grows over time. The tool itself should work correctly even with 1 run. |
 | **Sidebar activation** reveals empty state (no redaction list route) | Low | Medium | Ensure a route exists before activating. Use the matter-level document list as entry point. |
@@ -841,14 +851,14 @@ The following must be true for M3 sign-off:
 
 ## Open Questions
 
-1. **Should mammoth be replaced with a Python-based DOCX extractor** (python-docx) running inside the redact-worker? This would keep text extraction closer to the detection logic and avoid adding a Node.js native dependency. *Decision: stay with mammoth for Phase 3. The Node.js API already handles uploads. Moving extraction to the worker adds a network hop for text that needs extraction before detection anyway.*
+1. **Should mammoth be replaced with a Python-based DOCX extractor** (python-docx)? This would keep text extraction closer to detection logic if Python is needed for fine-tuning anyway. *Decision: stay with mammoth for Phase 3. The Node.js API already handles uploads. No Python service runs in production. Python is only used offline for fine-tuning.*
 
 2. **How should the synthetic data generator be validated by a legal professional?** We need a process for at least one qualified reviewer to spot-check synthetic documents. *Approach: generate 300, randomly sample 30 across all document types, send as PDF for review. Iterate on templates.*
 
-3. **Should the synthetic data include organisation names as PII?** Privacy Filter does not label `organisation_name` natively. If firms want to redact organisation names (e.g., competitor names in a commercial dispute), this needs a custom label and fine-tuning. *Deferred: for Phase 3, organisation names are marked but not included in the custom label space. Add `organisation_name` as a custom label in Phase 2 if firms require it.*
+3. **Should the synthetic data include organisation names as PII?** Rampart does not label `organisation_name` natively. If firms want to redact organisation names (e.g., competitor names in a commercial dispute), this needs a custom label and fine-tuning. *Deferred: for Phase 3, organisation names are marked but not included in the custom label space. Add `organisation_name` as a custom label post-MVP if firms require it.*
 
 4. **What is the checkpoint versioning strategy for fine-tuned models?** Simple: store checkpoints in `op_artifacts/redact-checkpoints/ormont_legal_v1/YYYY-MM-DD/` with a metadata JSON. For Phase 3, a `checkpoint_versions` table is optional — document the path first, implement the table when the first fine-tune happens.
 
 5. **Should the audit report include the full extracted text?** No — the report includes span excerpts but not the full text. Full text is accessible via the original document reference. Including it would make the audit artifact very large and duplicate storage.
 
-6. **How do we handle redaction of text inside DOCX tables specifically?** Mammoth extracts table cells as text separated by newlines, preserving row and cell order. Privacy Filter detects PII across all text regardless of original layout. *Acceptable for Phase 3 — detecting PII in table text at the right granularity. Position-aware redaction (e.g., overlay redaction boxes over original content) is deferred to Phase 2 (PDF handling).*
+6. **How do we handle redaction of text inside DOCX tables specifically?** Mammoth extracts table cells as text separated by newlines, preserving row and cell order. Rampart detects PII across all text regardless of original layout. *Acceptable for Phase 3 — detecting PII in table text at the right granularity. Position-aware redaction (e.g., overlay redaction boxes over original content) is deferred to a future phase (PDF handling).*
