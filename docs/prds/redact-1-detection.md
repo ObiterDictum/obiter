@@ -44,7 +44,7 @@ This PRD exists to close the gap between "a model that detects PII" and "a produ
 ## Goals
 
 - Run Rampart in-process in the Hono API via `@nationaldesignstudio/rampart` and `@huggingface/transformers`, processing text on CPU (no GPU required).
-- Map Rampart's 17 entity types + 5 deterministic labels to Ormont's 13 span categories.
+- Map Rampart's 17 entity types + 5 deterministic labels to Ormont's 15 span categories. (`secret` is schema-only in Phase 1: no detector emits it until fine-tuning adds coverage.)
 - Store redaction runs in PostgreSQL with full foreign-key relationships to matters, documents, and document versions.
 - Implement TypeScript regex patterns for UK National Insurance numbers, case references, and organisation names.
 - Merge Rampart spans with UK supplement spans, deduplicating overlaps with Rampart winning on confidence.
@@ -84,7 +84,7 @@ A developer integrating Ormont Redact into a firm's document workflow. Needs sta
 ## Core Use Cases
 
 1. Legal professional uploads a document, triggers a redaction run, and sees all detected PII spans organised by category, source, and confidence.
-2. System detects person names, phone numbers, email addresses, URLs, IP addresses, credit cards, bank accounts, government IDs, passports, driver's licenses, and address components via Rampart.
+2. System detects person names, dates, phone numbers, email addresses, URLs, IP addresses, credit cards, bank accounts, government IDs, passports, driver's licenses, and address components via Rampart.
 3. System detects UK National Insurance numbers, case references, and organisation names via the UK supplement.
 4. Overlapping spans from Rampart and the supplement are merged; Rampart-assigned categories and confidence take precedence.
 5. System records the detector version (Rampart model version + npm package version) and detection metadata for auditability.
@@ -144,12 +144,15 @@ Rampart outputs BIO token tags for 17 entity types. These are decoded into conti
 | `PHONE` | `phone` | `rampart_model` |
 | `PASSPORT` | `passport` | `rampart_model` |
 | `DRIVERS_LICENSE` | `drivers_license` | `rampart_model` |
+| `DATE` + `DOB` | `date` | `rampart_model` |
 | `BUILDING_NUMBER` + `STREET_NAME` + `SECONDARY_ADDRESS` | `address` | `rampart_model` |
 | `EMAIL` | `email` | `rampart_deterministic` |
 | `URL` | `url` | `rampart_deterministic` |
 | `IP_ADDRESS` | `ip_address` | `rampart_deterministic` |
 | `CREDIT_CARD` + `BANK_ACCOUNT` + `ROUTING_NUMBER` | `account_number` | `rampart_mix` |
 | `SSN` + `GOVERNMENT_ID` + `TAX_ID` | `government_id` | `rampart_mix` |
+
+The label strings in this table are indicative. The exact Rampart label names (including whether dates of birth are emitted as a distinct `DOB` label or folded into `DATE`) MUST be verified against the `@nationaldesignstudio/rampart` package at implementation time, before `rampart-map.ts` is written. The mapping module MUST fail loudly (typed error at load time) on an unrecognised label rather than silently dropping spans.
 
 ### UK Supplement Patterns
 
@@ -222,12 +225,12 @@ Status transitions:
 ### Contracts (F15-F17)
 
 - **F15.** The following Zod schemas MUST be added to `packages/contracts/src/index.ts`:
-  - `spanCategorySchema`: enum of 13 values (`person_name`, `email`, `phone`, `address`, `government_id`, `account_number`, `passport`, `drivers_license`, `url`, `ip_address`, `national_insurance`, `case_reference`, `organisation_name`).
+  - `spanCategorySchema`: enum of 15 values (`person_name`, `email`, `phone`, `address`, `date`, `government_id`, `account_number`, `passport`, `drivers_license`, `url`, `ip_address`, `national_insurance`, `case_reference`, `organisation_name`, `secret`). `secret` is schema-only in Phase 1: no detector emits it, but downstream phases (review UI, synthetic data, fine-tuning) rely on it existing in the contract.
   - `spanSourceSchema`: enum (`rampart_model`, `rampart_deterministic`, `uk_supplement`).
   - `redactionRunStatusSchema`: enum (`pending`, `detecting`, `ready_for_review`, `reviewing`, `finalized`, `failed`).
   - `redactionPolicyModeSchema`: enum (`internal_ai_minimisation`, `external_sharing`).
   - `spanConfidenceSchema`: enum (`high`, `medium`, `low`).
-  - `spanSuggestionSchema`: enum (`redact`, `pseudonymise`, `keep`).
+  - `spanSuggestionSchema`: enum (`redact`, `keep`). (Pseudonymisation is a reviewer decision, not a detector suggestion — see `spanDecisionSchema`.)
   - `spanDecisionSchema`: enum (`accept`, `reject`, `override_redact`, `override_keep`, `pseudonymise`).
   - `outputModeSchema`: enum (`redacted`, `pseudonymised`).
 - **F16.** The following error codes MUST be added to `apiErrorCodeSchema`:
@@ -236,6 +239,7 @@ Status transitions:
   - `redaction_run_not_reviewable`: Run is not in a state that allows review operations (not `ready_for_review` or `reviewing`).
   - `redaction_already_finalized`: Run has already been finalized and cannot be modified.
   - `redaction_detection_failed`: The detection process failed (model load error, inference error, or timeout).
+  - `redaction_span_integrity_error`: Finalize aborted because a span's stored text did not match the document text at its recorded offsets. Finalize is fail-closed: output is never produced with silently skipped redactions (used in Phase 2).
 - **F17.** TypeScript types MUST be exported for each schema (e.g. `SpanCategory`, `RedactionRunStatus`, etc.) using `z.infer`.
 
 ### Redaction Policy Package (F18-F23)
@@ -251,7 +255,8 @@ Status transitions:
   - Sorts both arrays by `start` position.
   - For overlapping spans, keeps the Rampart span and discards the supplement span.
   - For non-overlapping spans, preserves both.
-  - Assigns suggestions based on category: `person_name`, `email`, `phone`, `address`, `government_id`, `account_number`, `passport`, `drivers_license`, `national_insurance`, `ip_address` default to `redact`; `url`, `case_reference`, `organisation_name` default to `keep` (reviewer decides).
+  - Assigns suggestions based on category: `person_name`, `email`, `phone`, `address`, `government_id`, `account_number`, `passport`, `drivers_license`, `national_insurance`, `ip_address`, `secret` default to `redact`; `url`, `case_reference`, `organisation_name` default to `keep` (reviewer decides).
+  - `date` spans default to `keep`, EXCEPT spans originating from a date-of-birth label (`DOB` or equivalent), which default to `redact`. Legal documents are saturated with structural dates (hearing dates, filing deadlines, judgment dates) that are load-bearing and must not be redacted; suggesting `redact` for every date would flood reviewers with false positives — the exact review-trust failure mode this product exists to avoid. Dates of birth are genuine PII and keep the `redact` default.
 - **F22.** `chunk.ts` MUST export `chunkText(text: string, maxTokens?: number): TextChunk[]` and `reassembleSpans(chunkedSpans: ChunkedSpans[], chunkOffsets: number[]): RedactionSpan[]` for handling documents exceeding 512 tokens.
 - **F23.** Tests MUST use realistic UK legal text fixtures containing a mix of names, addresses, NI numbers, case references, organisation names, email addresses, and phone numbers. Tests MUST verify:
   - Rampart label mapping produces correct Ormont categories.
@@ -318,7 +323,7 @@ Status transitions:
 
 ## Dependencies
 
-- **`@nationaldesignstudio/rampart` (npm):** CC BY 4.0 licensed PII detection package. Provides `createGuard()` returning a `ChatGuard` with `protect(text)` method. Includes the deterministic recognizer layer and model loading via Transformers.js.
+- **`@nationaldesignstudio/rampart` (npm):** CC BY 4.0 licensed PII detection package. Provides `createGuard()` returning a `ChatGuard` with `protect(text)` method. Includes the deterministic recognizer layer and model loading via Transformers.js. CC BY 4.0 requires attribution: a `NOTICE` file (or equivalent attribution in the repo and any user-facing about/licences page) crediting Rampart MUST ship with the product (verified in Phase 3 polish).
 - **`@huggingface/transformers` (npm):** Peer dependency of `@nationaldesignstudio/rampart`. Provides ONNX Runtime Web for Node.js (`device: 'cpu'`).
 - **Existing database tables:** `matters`, `matter_documents`, `document_versions`, `artifacts`, `audit_logs` (all from migration `0002_phase_0_3_matters.sql`). The `text_object_key` column on `document_versions` already exists and is populated when text extraction runs.
 - **`packages/contracts`:** Shared Zod schemas and TypeScript types. Phase 1 adds redaction-specific schemas to the existing `src/index.ts`.
@@ -381,10 +386,12 @@ Phase 1 is complete when all of the following are true:
 
 2. **Should the detection module warm the Rampart guard on API startup or lazily on first request?** Warming on startup adds 1-5 seconds to startup time but eliminates the first-request delay. Lazy loading keeps startup fast but adds latency to the first redaction run. Decision: warm on startup in production, lazy in development.
 
-3. **Should the `organisation_name` category be surfaced as a span at all, or should it be silently kept?** Some firms may want to redact organisation names for external sharing. The category exists in the schema with suggestion `keep` by default. This can be configuration-driven in a post-MVP policy engine.
+3. **Should `person_name` eventually split into role-aware subcategories?** Legal redaction is role-dependent: judges, counsel, and solicitors are on the public record (normally kept); claimants, witnesses, and clients are normally redacted; children and anonymity-order subjects MUST be redacted. v1 collapses all of these into `person_name`, so the reviewer carries the distinction manually and the two policy modes barely differ for person spans. The planned evolution is `ormont_legal_v2` (see the Label space roadmap in [Redact PRD 3](redact-3-production.md)): `person_party` / `person_professional` / `person_protected`, at which point policy modes gain real differentiation (e.g. `external_sharing` keeps professionals). Phase 1 only needs to preserve the door: the category schema is versioned via contracts, and the Rampart mapping layer is the single place a category set change lands. No v1 action required.
 
-4. **What is the maximum text length for Phase 1 synchronous processing?** Rampart's 512-token limit means all documents are chunked. The API should handle documents up to 200K characters without timeout. Chunking adds 2-5 seconds for very long documents. Truncation is not needed; chunking handles arbitrary length.
+4. **Should the `organisation_name` category be surfaced as a span at all, or should it be silently kept?** Some firms may want to redact organisation names for external sharing. The category exists in the schema with suggestion `keep` by default. This can be configuration-driven in a post-MVP policy engine.
 
-5. **Should `detector_version` capture the Rampart npm package version, the model checkpoint hash, or both?** Phase 1 stores the `@nationaldesignstudio/rampart` package version string (e.g. `0.1.3`) and the HuggingFace model id. If fine-tuning is introduced post-MVP, the version field may need to expand to include checkpoint hash and fine-tuning dataset identifier.
+5. **What is the maximum text length for Phase 1 synchronous processing?** Rampart's 512-token limit means all documents are chunked. The API should handle documents up to 200K characters without timeout. Chunking adds 2-5 seconds for very long documents. Truncation is not needed; chunking handles arbitrary length.
 
-6. **How should the `text_object_key` path be populated for Phase 1?** The column exists but text extraction (reading the uploaded file and writing extracted text to object storage) is not yet implemented. Phase 1 may require manual seeding of the text object key for test documents, or a simplified in-memory text pass during document upload. This is noted as a dependency for the demo flow and may be temporarily worked around by allowing direct text submission. Decision: Phase 1 route accepts a `text` fallback in the request body for testing. Production text extraction arrives in Phase 3.
+6. **Should `detector_version` capture the Rampart npm package version, the model checkpoint hash, or both?** Phase 1 stores the `@nationaldesignstudio/rampart` package version string (e.g. `0.1.3`) and the HuggingFace model id. If fine-tuning is introduced post-MVP, the version field may need to expand to include checkpoint hash and fine-tuning dataset identifier.
+
+7. **How should the `text_object_key` path be populated for Phase 1?** The column exists but text extraction (reading the uploaded file and writing extracted text to object storage) is not yet implemented. Phase 1 may require manual seeding of the text object key for test documents, or a simplified in-memory text pass during document upload. This is noted as a dependency for the demo flow and may be temporarily worked around by allowing direct text submission. Decision: Phase 1 route accepts a `text` fallback in the request body for testing. Production text extraction arrives in Phase 3, and the `text` fallback MUST be removed at that point (tracked as a requirement in [Redact PRD 3](redact-3-production.md)) — it allows redaction runs against text that differs from the stored document version.

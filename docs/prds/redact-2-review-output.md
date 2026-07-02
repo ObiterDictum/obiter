@@ -111,11 +111,13 @@ Phase 2 covers four areas:
 - Loads extracted text from `document_versions.text_object_key`
 - Applies decisions using `apply.ts` functions
 - Stores output text in object storage
-- Creates `artifacts` row with type `redaction_report`
+- Creates `artifacts` row with type `redaction_output`
 - Updates run status to `finalized`, sets `output_artifact_id`
 - Writes audit log entry `redaction.finalize`
 - Validation: cannot finalize a run in `pending` or `detecting` state (error: `redaction_run_not_reviewable`)
 - Validation: cannot finalize an already-finalized run (error: `redaction_already_finalized`)
+- Integrity check before output generation: every output-affecting span's text must match the document text at its recorded offsets; any mismatch aborts finalize with `redaction_span_integrity_error` (fail-closed — no partial output)
+- `GET /api/redaction-runs/:runId/token-map` — audited re-identification endpoint for pseudonymised runs (token map is excluded from all standard responses)
 - Warning (not block) if any spans remain un-reviewed — returned in response body as `unreviewedSpanIds: string[]`
 - If object storage upload is not yet wired, falls back to local filesystem storage (documented as tech debt)
 
@@ -140,7 +142,7 @@ Phase 2 covers four areas:
 
 ### Decoupled Output Storage
 
-The redacted/pseudonymised output is stored as an `artifacts` row with type `redaction_report`. The `object_key` follows the existing pattern:
+The redacted/pseudonymised output is stored as an `artifacts` row with type `redaction_output`. This is a new artifact type: the migration 0002 artifact type enum must be extended to include it. The existing `redaction_report` type is reserved for the Phase 3 audit report artifact, which is a separate artifact from the output. The `object_key` follows the existing pattern:
 
 ```
 org/{org_id}/matters/{matter_id}/artifacts/{artifact_id}
@@ -158,6 +160,13 @@ For this phase, the finalize API needs to:
 
 If object storage upload is not yet wired as a reusable service, the fallback is to store output as a local file and write the path into `object_key`. This is documented as tech debt to be resolved in Phase 3.
 
+### Concurrency And Atomicity
+
+- **Span decisions**: each decision write MUST be atomic at the database level — a single `UPDATE` using `jsonb_set` on the span's key (or an equivalent transaction with a row lock), never an application-level read-modify-write of the whole `decisions_json` blob. Two reviewers deciding *different* spans concurrently must both persist.
+- **Same-span races**: MVP assumes a single active reviewer per run; concurrent decisions on the *same* span resolve as last-write-wins. Every decision is individually audited (`redaction.span_decision`), so the sequence is reconstructible after the fact.
+- **Finalize**: runs inside one transaction with `SELECT ... FOR UPDATE` on the run row and a status re-check after acquiring the lock (see Finalize flow). Double-finalize is therefore impossible: the second request observes `finalized` and receives `redaction_already_finalized`.
+- **Summary recomputation**: the summary is recomputed from `spans_json` + `decisions_json` inside the same transaction as the mutation that changed them, so it can never be observed out of sync with the decisions it summarises.
+
 ### Pseudonymisation Token Map
 
 The token map is computed during finalization and stored in the run's `summary_json` under a `tokenMap` key:
@@ -173,7 +182,20 @@ The token map is computed during finalization and stored in the run's `summary_j
 }
 ```
 
-This enables verification of pseudonymised output and re-identification if needed (limited to authorised users). The token map follows the pattern `{CATEGORY}_{N}` with uppercase category names.
+This enables verification of pseudonymised output and re-identification if needed. The token map follows the pattern `{CATEGORY}_{N}` with uppercase category names.
+
+**Token map access control:** the token map is the re-identification key for pseudonymised output — the two must not travel together. The `tokenMap` key is stored in `summary_json` but MUST be stripped from the `summary` object in every standard API response (`GET /api/redaction-runs/:runId`, list endpoints, decision/finalize responses). Re-identification access goes through a dedicated endpoint:
+
+```
+GET /api/redaction-runs/:runId/token-map
+Response 200: { "tokenMap": { "PERSON_1": "James Cartwright", ... } }
+Response 400: run not finalized or finalized in redacted mode (no token map)
+Response 404: run not found / not in org scope
+```
+
+Every call writes an audit log entry `redaction.token_map_access` (entity: the run, metadata: `{ tokenCount }`), so re-identification events are individually traceable. For MVP, access requires the same org-scoped authentication as the run itself; restricting it to an elevated role is post-MVP (when roles exist).
+
+**Known limitation — text-keyed consistency:** pseudonym consistency is keyed on the entity *text* within a category, not on entity identity. "Smith" the claimant and "Smith" appearing in a case citation resolve to the same token if both are `person_name` spans. This is acceptable for MVP but MUST be documented in the UI/API docs so evaluators are not surprised; entity-identity resolution is a future concern.
 
 ## Functional Requirements
 
@@ -225,7 +247,7 @@ applyPseudonymised(text: string, spans: RedactionSpan[], decisions: Decisions): 
   - Empty text: return empty string
   - No decisions: return original text
   - All spans rejected: return original text
-  - Span text not found at offset (e.g. text changed): skip the span, log warning, continue
+  - Span text not found at offset (i.e. `text.slice(span.start, span.end) !== span.text`): **fail closed**. Throw a typed integrity error that finalize maps to `redaction_span_integrity_error`. Never skip: a reviewer accepted that span for redaction, and silently skipping it would ship PII in the output. An offset mismatch means the text and spans are out of sync — a state that should be impossible when runs are pinned to a document version, so it must surface as a hard failure, not a warning.
 
 ### FR3: Finalize Run
 
@@ -247,7 +269,7 @@ Response 200:
   "artifact": {
     "id": "art_...",
     "objectKey": "org/{orgId}/matters/{matterId}/artifacts/{artifactId}",
-    "artifactType": "redaction_report"
+    "artifactType": "redaction_output"
   },
   "warnings": {
     "unreviewedSpanIds": ["span_...", "span_..."]
@@ -259,18 +281,22 @@ Errors:
 - 400: run in pending/detecting state (redaction_run_not_reviewable),
        invalid output mode
 - 409: run already finalized (redaction_already_finalized)
+- 409: span text does not match document text at recorded offsets
+       (redaction_span_integrity_error) — response advises creating a
+       new run; no output artifact is produced
 ```
 
-Finalize flow:
-1. Validate run is in `reviewing` or `ready_for_review` status
+Finalize flow (all steps inside a single database transaction; step 1 acquires `SELECT ... FOR UPDATE` on the run row so concurrent finalize attempts serialize — the second sees `finalized` and gets `redaction_already_finalized`):
+1. Lock the run row and validate it is in `reviewing` or `ready_for_review` status
 2. Load document version's extracted text from `text_object_key` via object storage
-3. Compute pseudonymisation token map if needed (for both modes, actually, since pseudonymised mode needs it and redacted mode may want the map stored for reference)
-4. Apply decisions using the appropriate apply function
-5. Write output text to object storage at artifact path
-6. Insert `artifacts` row with type `redaction_report`, status `ready`, object_key, document_version_id
-7. Update run: status = `finalized`, `output_artifact_id` = artifact id, store token map in `summary_json`
-8. Write audit log: `redaction.finalize` with metadata: `{ outputMode, artifactId, spanCount: X, reviewedCount: Y, unreviewedCount: Z }`
-9. Return run with artifact details and any warnings
+3. **Integrity check (fail-closed)**: for every span with an output-affecting decision, assert `text.slice(span.start, span.end) === span.text`. On any mismatch, abort the entire finalize with `redaction_span_integrity_error`. No partial output is ever written.
+4. Compute pseudonymisation token map if needed (for both modes, actually, since pseudonymised mode needs it and redacted mode may want the map stored for reference)
+5. Apply decisions using the appropriate apply function
+6. Write output text to object storage at artifact path
+7. Insert `artifacts` row with type `redaction_output`, status `ready`, object_key, document_version_id
+8. Update run: status = `finalized`, `output_artifact_id` = artifact id, store token map in `summary_json`
+9. Write audit log: `redaction.finalize` with metadata: `{ outputMode, artifactId, spanCount: X, reviewedCount: Y, unreviewedCount: Z }`
+10. Return run with artifact details and any warnings
 
 ### FR4: Summary Computation
 
@@ -285,17 +311,21 @@ The run summary (re-computed on every mutation) includes:
     "phone": 2,
     "address": 5,
     "date": 8,
+    "government_id": 0,
     "account_number": 1,
     "secret": 0,
     "url": 1,
+    "ip_address": 0,
     "national_insurance": 3,
     "passport": 1,
+    "drivers_license": 0,
     "case_reference": 2,
     "organisation_name": 1
   },
   "bySource": {
-    "privacyFilter": 35,
-    "regexSupplement": 7
+    "rampartModel": 30,
+    "rampartDeterministic": 5,
+    "ukSupplement": 7
   },
   "byDecision": {
     "accept": 10,
@@ -320,9 +350,12 @@ The run summary (re-computed on every mutation) includes:
   - `phone`: orange
   - `address`: yellow
   - `date`: violet
+  - `government_id`: green
   - `account_number`: pink
   - `secret`: red
   - `url`: cyan
+  - `ip_address`: fuchsia
+  - `drivers_license`: lime
   - `national_insurance`: teal
   - `passport`: indigo
   - `case_reference`: blue
@@ -376,12 +409,12 @@ The run summary (re-computed on every mutation) includes:
 ### FR9: Review UI — Finalize Button
 
 - "Finalize" button in the top-right of the review screen
-- Disabled until at least one span decision has been made (run must be in `reviewing` state)
+- Enabled whenever the run is in `ready_for_review` or `reviewing` state (a zero-span run has no decisions to make and must still be finalizable)
 - On click: show a dialog/modal with:
   - Output mode selector: radio buttons for "Redacted" or "Pseudonymised"
   - Description of each mode:
     - Redacted: replaces all sensitive text with `[REDACTED]` — irreversible
-    - Pseudonymised: replaces with consistent tokens like `[PERSON_1]` — readable, reversible with token map
+    - Pseudonymised: replaces with consistent tokens like `[PERSON_1]` — readable; re-identifiable only by authorised users with access to the stored token map
   - If there are un-reviewed spans:
     - Warning message: "X spans have not been reviewed. Unreviewed spans will be left as-is in the output."
     - Checkbox: "I understand, proceed anyway" (must be checked to finalize)
@@ -440,6 +473,7 @@ Extend the `AuditRecordInput` action union in `services/api/src/database.ts` wit
 | `redaction.run_create` | Run created (Phase 1) | `redaction_run` | `{ policyMode, documentVersionId, spanCount }` |
 | `redaction.span_decision` | Decision on a span | `redaction_run` | `{ spanId, decision, category }` |
 | `redaction.finalize` | Run finalized | `redaction_run` | `{ outputMode, artifactId, spanCount, reviewedCount, unreviewedCount }` |
+| `redaction.token_map_access` | Token map read (re-identification event) | `redaction_run` | `{ tokenCount }` |
 
 Each audit log entry includes `organisationId`, `userId`, `entityType` (`redaction_run`), `entityId` (run id), `action`, `metadata` (JSON), `requestId`, and `createdAt`.
 
@@ -467,7 +501,7 @@ Update `GET /api/redaction-runs/:runId` to include:
 }
 ```
 
-This already exists from Phase 1; Phase 2 adds the `summary` field if not already present and ensures it's computed on every read if the stored value is stale.
+This already exists from Phase 1; Phase 2 adds the `summary` field if not already present and ensures it's computed on every read if the stored value is stale. The serialised `summary` MUST exclude the `tokenMap` key — the token map is only accessible via the dedicated, audited `GET /api/redaction-runs/:runId/token-map` endpoint (see Pseudonymisation Token Map).
 
 ## Non-Functional Requirements
 
@@ -483,7 +517,8 @@ This already exists from Phase 1; Phase 2 adds the `summary` field if not alread
 
 - No raw document text is stored in audit log metadata.
 - Redacted output artifacts must not contain recoverable original text outside `[REDACTED]` markers.
-- Pseudonymised output artifacts require the token map for re-identification; the token map is stored in the run's `summary_json` (database), not in the output artifact itself.
+- Pseudonymised output artifacts require the token map for re-identification; the token map is stored in the run's `summary_json` (database), not in the output artifact itself. It is stripped from all standard API responses and only served via the dedicated `token-map` endpoint, where every read is audit-logged as a re-identification event.
+- **Data retention and erasure**: `spans_json`, token maps, output artifacts, and extracted text contain client PII and follow the matter lifecycle — deleting a matter or document version MUST delete its redaction runs and output artifacts. Audit logs are retained append-only but contain no raw document text (span ids and categories only), so erasure requests can be honoured without breaking the audit trail. Configurable retention periods per organisation are post-MVP; the lifecycle coupling is the MVP requirement.
 - Access control: all endpoints require authenticated user with access to the run's organisation and matter. Follow the existing `requireUser()` pattern with org-scoping.
 - Object keys must follow the existing pattern and must not contain client names, matter names, or original filenames.
 - Audit logs are append-only. Redaction decisions cannot be deleted.
@@ -503,11 +538,12 @@ This already exists from Phase 1; Phase 2 adds the `summary` field if not alread
 
 - Implement `apply.ts` functions in `packages/redaction-policy/` (redacted and pseudonymised output generation)
 - Implement `POST /api/redaction-runs/:runId/spans/:spanId/decision` endpoint
-- Implement `POST /api/redaction-runs/:runId/finalize` endpoint
+- Implement `POST /api/redaction-runs/:runId/finalize` endpoint (transactional, row-locked, fail-closed integrity check)
+- Implement `GET /api/redaction-runs/:runId/token-map` endpoint with audit logging
 - Add audit log action types to `database.ts`
 - Update `GET /api/redaction-runs/:runId` to include computed summary
-- Add error codes to `apiErrorCodeSchema`: `redaction_run_not_reviewable`, `redaction_already_finalized`
-- Write API tests for decision submission, finalize flow, edge cases (overlapping spans, empty text, finalized run re-finalize)
+- Verify error codes exist in `apiErrorCodeSchema` (defined in PRD 1 contracts): `redaction_run_not_reviewable`, `redaction_already_finalized`, `redaction_span_integrity_error`
+- Write API tests for decision submission, finalize flow, edge cases (overlapping spans, empty text, finalized run re-finalize, span integrity mismatch aborts with no artifact created, concurrent decisions on different spans both persist, concurrent finalize returns `redaction_already_finalized` for the loser, token map absent from standard responses and present via token-map endpoint with audit entry)
 - Write unit tests for `apply.ts` with legal text fixtures
 
 ### Build Phase 2: Review UI (Weeks 7-8 of the 3-month plan)
@@ -550,12 +586,13 @@ This already exists from Phase 1; Phase 2 adds the `summary` field if not alread
 - **Large document performance**: Documents over 100K characters with 500+ spans may cause UI lag. Mitigation: virtualize the document text view, limit visible spans to viewport area, use windowing for the span list.
 - **Overlapping span edge cases**: Rampart and the UK supplement may produce overlapping spans. The merge logic from Phase 1 should handle this, but `apply.ts` needs to handle remaining overlaps gracefully. Mitigation: extensive test fixtures with overlapping spans; highest-confidence source wins.
 - **Pseudonymisation across runs**: Phase 2 scopes consistency to within a single run. Cross-run consistency is a future concern. Mitigation: document this limitation clearly in the UI and API docs.
+- **Pseudonym collisions on identical text**: consistency is keyed on entity text within a category, so two different people who share a surname string resolve to the same token. Mitigation: documented limitation (see Pseudonymisation Token Map); entity-identity resolution deferred.
 - **Finalize without reviewing all spans**: The system warns but does not block. A firm may have compliance requirements that mandate 100% review. Mitigation: the warning is prominent in the finalize dialog; future iteration may add a setting to require full review.
 
 ## Open Questions
 
 1. **Object storage wiring**: Does the current codebase have a reusable service for reading/writing object storage, or does it use inline S3/client calls per route? Needs investigation at sprint start.
 2. **Document text storage**: Is extracted text always available at `document_versions.text_object_key` by Phase 2, or does text extraction need to be completed first? Phase 1 assumes text input directly; DOCX extraction is Phase 3.
-3. **Token map disclosure**: Who should have access to the token map for re-identification? The map is stored in `summary_json` (database), which means users with database access or API access to the run can see it. Is this acceptable, or should it be encrypted/stored separately?
+3. **Token map disclosure** — *Resolved*: the token map is stripped from all standard API responses and served only via the dedicated `GET /api/redaction-runs/:runId/token-map` endpoint, with every read audit-logged as `redaction.token_map_access`. Remaining (post-MVP): should access require an elevated role once role-based access control exists?
 4. **Redacted mode with pseudonymise decisions**: For a run finalized in `redacted` mode, should spans with `pseudonymise` decision be replaced with `[REDACTED]` (current design) or with the pseudonym token? Current design says `[REDACTED]` since the user chose redacted mode.
 5. **Multiple runs on the same document**: Should the UI allow creating multiple redaction runs on the same document? If so, how does a user decide which finalized artifact to use?
