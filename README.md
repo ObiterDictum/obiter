@@ -1,120 +1,69 @@
-# Obiter
+<p align="center">
+  <img src="./docs/brand/obiter-main-lockup.png" alt="Obiter" width="640">
+</p>
 
-Obiter is legal intelligence infrastructure for source-grounded research, verification, redaction, legal source handling, and matter workspaces.
+<p align="center">
+  Legal intelligence infrastructure for source-grounded research, verification, redaction, legal source handling, and matter workspaces.
+</p>
 
-This repository contains the product monorepo: the web app, desktop app, API, shared packages, legal-source search, and the foundations for private matter and verification workflows.
+---
 
-## Current State
+Obiter is a product platform for legal work where evidence, confidentiality, and reviewability matter. It is not a chatbot wrapper; it is a legal infrastructure layer for working with public sources, private matter material, verification evidence, and responsible AI-assisted workflows.
 
-The repo currently contains:
+This repository is the product monorepo for the Obiter web app, desktop app, API, shared packages, legal-source search, and the foundations for private matter and verification workflows.
 
-- a shared React app shell used by the web and Electron apps
-- web routes for sign-in, the workspace home, matters, Search, and stored case pages
-- Electron renderer routes for Search and stored case pages
-- a Hono API service with auth, current-user, matters, documents, changelog, and Search routes
-- `better-auth` wiring for email/password and magic-link flows
-- PostgreSQL migrations for auth, matters, and legal-source document storage
-- legal-source schemas, Search contracts, and Meilisearch client helpers
-- Find Case Law integration for UK judgment discovery and hydration
-- focused tests for the API, app shell, legal schemas, database wiring, and Search helpers
+## Product
 
-Implemented product surfaces:
+Obiter is being built around a small set of durable legal workflows:
 
-- **Home**: authenticated workspace hub, currently routed as `/workspace`.
-- **Matters**: matter list and matter detail shell.
-- **Search**: public UK case law search backed by the Obiter API, PostgreSQL legal-source records, Meilisearch, and Find Case Law hydration.
-- **Case pages**: stored judgment pages at `/cases/:caseId`.
+- **Search**: source-grounded search across stored legal-source records, with Find Case Law discovery and hydration for UK judgments.
+- **Matters**: private workspaces for legal documents, matter context, review state, deadlines, and generated artifacts.
+- **Redaction**: reviewable and auditable protection of sensitive material before documents enter AI-assisted workflows.
+- **Verification**: citation, quotation, and proposition checking against source evidence.
+- **Research**: source-bound legal analysis with visible support and uncertainty.
+- **Evaluation**: repeatable measurement of legal AI behavior, retrieval quality, and verification performance.
 
-Several navigation entries are intentionally visible as planned product direction, not working tools yet: Drafting, Research, Documents, Redaction, Verification, Review Queue, Deadlines, Uploads, Evaluation, and Developer API.
+The current product slice is concentrated on Search, stored case pages, the authenticated workspace shell, matter scaffolding, and the API/storage boundaries that later private workflows will rely on.
 
-## Search
+## Principles
 
-Search is the most developed product slice. It currently supports:
+- Legal work should remain inspectable and attributable.
+- Private matter data is sensitive by default.
+- Search, verification, redaction, and research should be built on explicit source boundaries.
+- Generated artifacts, document versions, audit records, prompts, embeddings, and logs must not blur public-source and private-matter data.
+- Legal-critical failures should be visible rather than hidden behind quiet fallbacks.
 
-- `GET /api/search` for searching Obiter-owned legal-source records
-- `POST /api/search/fetch` for Find Case Law fetch-on-cache-miss
-- `GET /api/search/documents/:documentId` for stored judgment retrieval
-- `/search` for the shared Search UI
-- `/cases/:caseId` for stored judgment viewing
-
-PostgreSQL is the source-of-record direction for fetched legal-source metadata and hydrated document payloads. Meilisearch is a derived index for fast lexical retrieval. Find Case Law calls are queued as background hydration after Obiter-owned storage misses so the visible search path is not blocked on the external provider.
-
-User-facing product language should use **Search**, not the older internal name **Atlas**. Remaining `atlas` references in docs or legacy package names are implementation debt unless a rename is explicitly in scope.
-
-## Product Direction
-
-Obiter is not a chatbot wrapper. The platform is moving toward source-bound legal workflows:
-
-- Search should cover case law, legislation, source timelines, citation relationships, amendment history, and links between cases, statutes, provisions, and issues.
-- Matters should become the private workspace for documents, immutable versions, review state, deadlines, and generated artifacts.
-- Redaction should produce reviewable and auditable protection of sensitive material.
-- Verification should check citations, quotations, and propositions against source evidence.
-- Research should produce source-bound analysis with visible support and uncertainty.
-- Evaluation should make legal AI behavior measurable instead of relying on vague accuracy claims.
-- The API should expose stable legal infrastructure for first-party and future developer workflows.
-
-Private matter data must never become training data or background product learning by accident. Hosted processing, model calls, prompts, embeddings, logs, and audit records all need explicit boundaries.
-
-## Repository Map
+## System
 
 - `apps/web`: browser app.
 - `apps/desktop`: Electron desktop app.
-- `apps/docs`: documentation app placeholder.
-- `apps/marketing`: marketing app placeholder.
 - `services/api`: Hono API for auth, matters, documents, Search, changelog, and future services.
 - `services/legal-ingestor`: legal-source ingestion service.
-- `services/worker`: background worker placeholder.
-- `packages/app-shell`: shared app shell, sidebar, route views, and Search/case UI.
+- `packages/app-shell`: shared app shell, sidebar, route views, Search UI, and case views.
 - `packages/contracts`: shared API and product contracts.
 - `packages/database`: database package and migrations.
 - `packages/legal-schema`: legal-source schemas.
 - `packages/search-client`: Meilisearch helpers for Search.
 - `packages/ui`: shared UI primitives and design tokens.
-- `packages/redaction-policy`: redaction policy package placeholder.
-- `packages/verification-core`: verification package placeholder.
-- `packages/config`: shared configuration placeholder.
 - `docs`: product, architecture, compliance, roadmap, and implementation notes.
 - `infra`: deployment and operations placeholders.
 - `data`: seed, fixtures, and evaluation placeholders.
 
-## Development
+## Current Search Surface
 
-Install dependencies:
+Search is the most developed product slice:
 
-```bash
-pnpm install
-```
+- `GET /api/search` searches Obiter-owned legal-source records.
+- `POST /api/search/fetch` handles Find Case Law fetch-on-cache-miss.
+- `GET /api/search/documents/:documentId` retrieves stored judgments.
+- `/search` provides the shared Search UI.
+- `/cases/:caseId` opens stored judgment pages.
 
-Run the main services:
+PostgreSQL is the source-of-record direction for fetched legal-source metadata and hydrated document payloads. Meilisearch is a derived index for fast lexical retrieval. Find Case Law calls are queued as background hydration after Obiter-owned storage misses so the visible search path is not blocked on the external provider.
 
-```bash
-pnpm dev:web
-pnpm dev:desktop
-pnpm dev:api
-pnpm dev:desktop:api
-```
+## Working In The Repo
 
-Run verification:
-
-```bash
-pnpm typecheck
-pnpm test
-pnpm build
-```
-
-Targeted checks:
-
-```bash
-pnpm --filter @ormont/api test
-pnpm --filter @ormont/app-shell typecheck
-pnpm --filter @ormont/web build
-```
-
-The package scopes still use `@ormont/*` while the product rename is in progress.
-
-## Engineering Standards
-
-Read these before making product changes:
+Engineering workflow, commands, review expectations, and test guidance live in:
 
 - [AGENTS.md](AGENTS.md)
 - [RULES.md](RULES.md)
@@ -129,6 +78,8 @@ Useful product context:
 - [Data and Compliance](docs/data-and-compliance.md)
 - [Roadmap](docs/roadmap.md)
 - [Specs](docs/specs/README.md)
+
+Package scopes still use `@ormont/*` while the product rename is in progress.
 
 ## License
 
