@@ -99,13 +99,15 @@ Phase 1 delivers the detection pipeline and API skeleton. Everything needed to g
 
 - Rampart integration in the API process (`services/api/src/redaction-detection.ts`) via `@nationaldesignstudio/rampart` npm package.
 - Rampart guard lifecycle: model loads on first request, cached at module level for subsequent requests.
+- Effect TS pilot, contained to the detection module behind a promise facade (see Effect TS Pilot section; F31).
 - Rampart label-to-Ormont-category mapping (`packages/redaction-policy/src/rampart-map.ts`).
 - Database migration `0005_redaction.sql` creating the `redaction_runs` table.
 - Redaction contracts in `packages/contracts`: span categories, sources, statuses, policy modes, error codes.
 - Redaction policy package (`packages/redaction-policy/`) with types, UK supplement, span merging, and chunking.
 - API routes: create run, get run, list runs for document.
 - Database helpers for run CRUD (`redaction-database.ts`).
-- Audit log entries for redaction run creation.
+- Minimal `StorageService` abstraction (local filesystem adapter) used to persist fallback text at the `text_object_key` path (see Open Question 7). Phase 2 reuses it for output artifacts; Phase 3 adds the object-storage adapter.
+- Audit log entries for redaction run creation (extends the `AuditRecordInput` action union in `services/api/src/database.ts` with `redaction.run_create`).
 - Detection failure handling and run status transitions (`pending -> detecting -> ready_for_review | failed`).
 - The run summary computation (span counts by category and source).
 - Chunking for documents exceeding Rampart's 512-token max sequence.
@@ -154,6 +156,8 @@ Rampart outputs BIO token tags for 17 entity types. These are decoded into conti
 
 The label strings in this table are indicative. The exact Rampart label names (including whether dates of birth are emitted as a distinct `DOB` label or folded into `DATE`) MUST be verified against the `@nationaldesignstudio/rampart` package at implementation time, before `rampart-map.ts` is written. The mapping module MUST fail loudly (typed error at load time) on an unrecognised label rather than silently dropping spans.
 
+The same pre-implementation spike MUST confirm Node.js server-side compatibility. The package's npm description positions it as running "entirely in the browser"; before any Phase 1 code is written, verify that `createGuard({ device: 'cpu' })` initialises under Node.js, that `guard.protect(text)` returns character offsets against the input string as this PRD assumes, and that no browser-only APIs are required. If the package proves browser-only, the fallback is loading the same ONNX model directly via `@huggingface/transformers` (which runs in Node) and reimplementing the deterministic recognizer layer — a scope change that must be surfaced before the build starts, not discovered mid-sprint.
+
 ### UK Supplement Patterns
 
 The UK supplement catches patterns Rampart does not cover:
@@ -187,6 +191,25 @@ Rampart has a 512-token max sequence length. Documents exceeding this must be ch
 
 The Rampart guard is loaded once and cached as a module-level singleton in `services/api/src/redaction-detection.ts`. First request loads the model (14.7 MB, downloads from HuggingFace if not cached on disk, then initializes the ONNX Runtime). Subsequent requests reuse the cached guard. No health check endpoint is needed since detection runs in-process. No Docker container, no separate service.
 
+### Effect TS Pilot (contained to the detection module)
+
+The detection module is a deliberate, contained pilot of Effect TS (`effect` npm package), decided July 2026. Rationale: the module is greenfield, isolated, and Effect-shaped — a typed failure channel (model load vs inference vs timeout), resource lifecycle around the model guard, and retry/timeout policy — making it the cheapest place to gather real evidence on whether agent-written Effect meets the project's maintainability bar, instead of settling the question by assertion.
+
+**Containment rules:**
+
+- Effect is used inside `services/api/src/redaction-detection.ts` (and its internal helpers) only.
+- The module's public API is promise-based (e.g. `detectSpans(text: string): Promise<DetectionResult>`). Callers never see Effect types; `Effect.runPromise` happens exactly once, at the facade.
+- Typed failures (`model_load_failed`, `inference_failed`, `detection_timeout`) live in the Effect error channel internally and surface through the facade as the typed error F6 requires; the route maps them to `redaction_detection_failed` exactly as specced. Nothing about the API contract changes.
+- `packages/contracts` stays Zod. `packages/redaction-policy` stays plain TypeScript (pure functions gain nothing from Effect). No module outside detection imports `effect`.
+
+**Exit criteria** (assessed at the Phase 1 review by the plan owner):
+
+1. Idiom quality: no `runPromise`/`runSync` inside the pipeline, failures never escape the typed channel, guard acquisition/caching expressed with Effect resource primitives — verified in code review.
+2. Test quality: all failure paths (load failure, inference error, timeout, empty input) tested through the typed channel, at minimum parity with what plain-TS tests would cover.
+3. Delivery drag: the module lands within the Phase 1 window without disproportionate review cycles relative to the rest of the phase.
+
+**Decision gate:** pass → Effect becomes a candidate for Phase 2's finalize transaction flow and the post-MVP worker/ingestor services, each expansion with its own containment plan. Fail → the module is rewritten in plain TypeScript behind the same promise facade (a one-module rewrite by construction), and the outcome is recorded in `docs/architecture.md`. Either way the question gets a documented, evidence-based answer.
+
 ### Run Status Flow
 
 ```
@@ -215,7 +238,7 @@ Status transitions:
 
 ### Database Schema (F9-F14)
 
-- **F9.** The migration `0005_redaction.sql` MUST create the `redaction_runs` table with columns: `id` (text, `red_` prefix), `organisation_id`, `matter_id`, `document_id`, `document_version_id`, `status` (enum via check constraint), `policy_mode` (enum via check constraint), `spans_json` (JSONB, default `[]`), `decisions_json` (JSONB, default `{}`), `output_artifact_id` (text, nullable, references `artifacts(id)`), `summary_json` (JSONB, default `{}`), `detector_version` (text, nullable), `created_by` (references `users(id)`), `created_at`, `updated_at`.
+- **F9.** The migration `0005_redaction.sql` (in `packages/database/migrations/`, following the existing numbering) MUST create the `redaction_runs` table with columns: `id` (text, `red_` prefix), `organisation_id`, `matter_id`, `document_id`, `document_version_id`, `status` (enum via check constraint), `policy_mode` (enum via check constraint), `spans_json` (JSONB, default `[]`), `decisions_json` (JSONB, default `{}`), `output_artifact_id` (text, nullable, references `artifacts(id)`), `summary_json` (JSONB, default `{}`), `detector_version` (text, nullable), `created_by` (references `users(id)`), `created_at`, `updated_at`.
 - **F10.** The status check constraint MUST permit exactly: `'pending'`, `'detecting'`, `'ready_for_review'`, `'reviewing'`, `'finalized'`, `'failed'`.
 - **F11.** The policy mode check constraint MUST permit exactly: `'internal_ai_minimisation'`, `'external_sharing'`.
 - **F12.** Foreign key constraints MUST reference: `matters(id, organisation_id)`, `matter_documents(id, matter_id, organisation_id)`, `document_versions(id, matter_document_id, matter_id, organisation_id)`.
@@ -300,6 +323,10 @@ Status transitions:
 
 - **F30.** The Rampart model id MUST be configurable via an environment variable `REDACT_MODEL_ID` defaulting to `nationaldesignstudio/rampart`. The minimum confidence score MUST be configurable via `REDACT_MIN_SCORE` defaulting to `0.4`. Chunk size MUST be configurable via `REDACT_CHUNK_TOKENS` defaulting to `400`.
 
+### Effect Pilot Containment (F31)
+
+- **F31.** The detection module internals MUST be implemented with Effect per the Effect TS Pilot section: a promise facade at the module boundary, typed failures in the Effect error channel internally, and no `effect` imports anywhere outside the detection module. All other requirements in this PRD (F1–F8 behaviour, F6 error surface, route contracts) are unchanged by the pilot.
+
 ## Non-Functional Requirements
 
 - **NFR1. Inference latency:** Rampart MUST return span results within 5 seconds for a 100-page legal document (~200K characters) including chunking overhead. Single-chunk inference is 6.6 ms p50 on CPU.
@@ -323,9 +350,10 @@ Status transitions:
 
 ## Dependencies
 
-- **`@nationaldesignstudio/rampart` (npm):** CC BY 4.0 licensed PII detection package. Provides `createGuard()` returning a `ChatGuard` with `protect(text)` method. Includes the deterministic recognizer layer and model loading via Transformers.js. CC BY 4.0 requires attribution: a `NOTICE` file (or equivalent attribution in the repo and any user-facing about/licences page) crediting Rampart MUST ship with the product (verified in Phase 3 polish).
+- **`@nationaldesignstudio/rampart` (npm):** CC BY 4.0 licensed PII detection package (verified on npm, v0.1.3). Provides `createGuard()` returning a `ChatGuard` with `protect(text)` method. Includes the deterministic recognizer layer and model loading via Transformers.js. The npm description positions it as client-side/browser; Node.js server-side operation MUST be confirmed in the pre-implementation spike (see Rampart Output Mapping) before Phase 1 code is written. CC BY 4.0 requires attribution: a `NOTICE` file (or equivalent attribution in the repo and any user-facing about/licences page) crediting Rampart MUST ship with the product (verified in Phase 3 polish).
 - **`@huggingface/transformers` (npm):** Peer dependency of `@nationaldesignstudio/rampart`. Provides ONNX Runtime Web for Node.js (`device: 'cpu'`).
-- **Existing database tables:** `matters`, `matter_documents`, `document_versions`, `artifacts`, `audit_logs` (all from migration `0002_phase_0_3_matters.sql`). The `text_object_key` column on `document_versions` already exists and is populated when text extraction runs.
+- **`effect` (npm):** Used by the detection module only, per the contained pilot (Effect TS Pilot section). MUST NOT become a dependency of `packages/contracts`, `packages/redaction-policy`, or any other module.
+- **Existing database tables:** `matters`, `matter_documents`, `document_versions`, `artifacts` (migration `0002_phase_0_3_matters.sql`) and `audit_logs` (migration `0001_phase_0_2_auth.sql`). The `text_object_key` column on `document_versions` exists but is never populated today: document upload stores metadata only, and no text extraction or storage wiring exists in the codebase (verified July 2026). Phase 1 relies on the `text` request-body fallback and persists it via the storage abstraction (Open Question 7); real extraction arrives in Phase 3.
 - **`packages/contracts`:** Shared Zod schemas and TypeScript types. Phase 1 adds redaction-specific schemas to the existing `src/index.ts`.
 - **`packages/redaction-policy`:** New package listed in `architecture.md` but not yet created (stub README only). Pure TypeScript, no framework dependencies. This PRD creates it.
 - **Infrastructure:** 4vCPU/8GB/160GB Hetzner VPS with Tailscale networking, PostgreSQL 16, Dokploy. No GPU, no Python runtime, no Docker container for detection.
@@ -342,7 +370,7 @@ Phase 1 is complete when all of the following are true:
 2. Migration `0005_redaction.sql` runs successfully against the development and staging databases. Rollback is verified.
 3. All Zod schemas and error codes are added to `packages/contracts`. Existing tests pass. No type errors in dependent packages.
 4. `packages/redaction-policy` has unit tests passing for rampart-map label conversion, supplement regex patterns (NI number, case reference, organisation name), merge deduplication, and chunk offset reassembly. Tests use realistic legal text fixtures.
-5. `POST /api/documents/:documentId/redaction-runs` creates a run, calls Rampart in-process, runs UK supplement, merges spans, stores the result, and returns a 201 with the correct status transition (`pending -> detecting -> ready_for_review`).
+5. `POST /api/documents/:documentId/redaction-runs` creates a run, calls Rampart in-process, runs UK supplement, merges spans, stores the result, and returns a 201 with the correct status transition (`pending -> detecting -> ready_for_review`). When the `text` fallback is used, the text is persisted at the `text_object_key` path via the storage abstraction and the column is set on the document version.
 6. `GET /api/redaction-runs/:runId` returns the full run with spans and summary.
 7. `GET /api/documents/:documentId/redaction-runs` returns a list of runs.
 8. Detection failure handling works: when Rampart fails to load or throws, the run transitions to `failed` with a descriptive `failureReason` in the summary.
@@ -379,6 +407,7 @@ Phase 1 is complete when all of the following are true:
 | Rampart 512-token limit truncates long paragraphs | Low | Medium | Chunking handles this. Document the chunking strategy. Test with very long legal documents. |
 | UK supplement regex patterns match false positives (e.g. a random 9-digit number that is not a passport) | Medium | Low | Regex patterns are deliberately conservative. NI pattern requires the two-letter prefix. Case reference patterns match known firm formats. Matches appear as `low` confidence suggestions. Reviewers can reject. |
 | Migration conflicts with future migrations | Low | Low | The migration uses `create table if not exists`. The filename `0005_redaction.sql` follows the existing numbering convention. |
+| Effect pilot underdelivers (idiom violations, review drag) | Medium | Low | Contained behind the promise facade by construction; unwind is a one-module rewrite in plain TS with no API, contract, or schedule contagion. Exit criteria and decision gate defined in the Effect TS Pilot section. |
 
 ## Open Questions
 
@@ -394,4 +423,4 @@ Phase 1 is complete when all of the following are true:
 
 6. **Should `detector_version` capture the Rampart npm package version, the model checkpoint hash, or both?** Phase 1 stores the `@nationaldesignstudio/rampart` package version string (e.g. `0.1.3`) and the HuggingFace model id. If fine-tuning is introduced post-MVP, the version field may need to expand to include checkpoint hash and fine-tuning dataset identifier.
 
-7. **How should the `text_object_key` path be populated for Phase 1?** The column exists but text extraction (reading the uploaded file and writing extracted text to object storage) is not yet implemented. Phase 1 may require manual seeding of the text object key for test documents, or a simplified in-memory text pass during document upload. This is noted as a dependency for the demo flow and may be temporarily worked around by allowing direct text submission. Decision: Phase 1 route accepts a `text` fallback in the request body for testing. Production text extraction arrives in Phase 3, and the `text` fallback MUST be removed at that point (tracked as a requirement in [Redact PRD 3](redact-3-production.md)) — it allows redaction runs against text that differs from the stored document version.
+7. **How should the `text_object_key` path be populated for Phase 1?** The column exists but text extraction (reading the uploaded file and writing extracted text to object storage) is not yet implemented. Phase 1 may require manual seeding of the text object key for test documents, or a simplified in-memory text pass during document upload. This is noted as a dependency for the demo flow and may be temporarily worked around by allowing direct text submission. Decision: Phase 1 route accepts a `text` fallback in the request body for testing. Production text extraction arrives in Phase 3, and the `text` fallback MUST be removed at that point (tracked as a requirement in [Redact PRD 3](redact-3-production.md)) — it allows redaction runs against text that differs from the stored document version. When the fallback is used, the submitted text MUST be persisted through a minimal `StorageService` abstraction (first adapter: local filesystem) at the `text_object_key` path, and the column set on the document version. This is required for Phase 2: finalize re-reads the text to apply decisions and to run its fail-closed span-integrity check, so the exact text the spans were computed against must be reloadable. Phase 1 therefore introduces the `StorageService` interface; Phase 2 reuses it for output artifacts; Phase 3 adds the object-storage adapter and real extraction.

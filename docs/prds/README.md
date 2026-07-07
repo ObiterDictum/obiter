@@ -6,6 +6,7 @@ They complement the shorter implementation specs under `docs/specs/`.
 
 ## PRDs
 
+- [App Shell Rebuild](app-shell-rebuild.md)
 - [Search Quality](search-quality.md)
 - [Bench](bench.md)
 - [Verification Evidence](verification-evidence.md)
