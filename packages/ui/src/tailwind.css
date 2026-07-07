@@ -1,0 +1,113 @@
+/*
+ * Tailwind v4 entry for Obiter. Apps import this once from their root CSS:
+ *   @import "@ormont/ui/tailwind.css";
+ *
+ * - tokens.css holds the --ormont-* custom properties (light default, dark
+ *   under [data-theme="dark"]).
+ * - @theme inline maps those into Tailwind's namespace so utilities reference
+ *   the live custom properties (theme switching works at runtime).
+ *
+ * Generated utility families (examples):
+ *   bg-canvas  bg-surface  bg-raised  text-ink  text-muted  border-line
+ *   bg-brand  text-brand  text-brand-fg  ring-ring  bg-overlay
+ *   bg-info  text-success  text-warning-fg  ...
+ *   bg-span-person-name  text-span-person-name-fg  ...
+ *   rounded-md  shadow-md  font-sans  font-mono
+ */
+@import "tailwindcss";
+@import "./tokens.css";
+
+/* Satoshi + JetBrains Mono are loaded via <link> in the app document head
+   (a CSS @import url() here would violate the "imports precede rules" rule). */
+
+@theme inline {
+  /* Surfaces + text */
+  --color-canvas: var(--ormont-bg);
+  --color-surface: var(--ormont-surface);
+  --color-raised: var(--ormont-surface-raised);
+  --color-line: var(--ormont-border);
+  --color-line-strong: var(--ormont-border-strong);
+  --color-ink: var(--ormont-text);
+  --color-muted: var(--ormont-text-muted);
+  --color-subtle: var(--ormont-text-subtle);
+
+  /* Brand */
+  --color-brand: var(--ormont-brand);
+  --color-brand-fg: var(--ormont-brand-fg);
+  --color-brand-pressed: var(--ormont-brand-pressed);
+  --color-ring: var(--ormont-ring);
+  --color-overlay: var(--ormont-overlay);
+
+  /* Status */
+  --color-info: var(--ormont-status-info);
+  --color-info-fg: var(--ormont-status-info-fg);
+  --color-success: var(--ormont-status-success);
+  --color-success-fg: var(--ormont-status-success-fg);
+  --color-warning: var(--ormont-status-warning);
+  --color-warning-fg: var(--ormont-status-warning-fg);
+  --color-danger: var(--ormont-status-danger);
+  --color-danger-fg: var(--ormont-status-danger-fg);
+
+  /* Redaction span categories — bg + fg per contract §2.3 */
+  --color-span-person-name: var(--ormont-span-person-name-bg);
+  --color-span-person-name-fg: var(--ormont-span-person-name-fg);
+  --color-span-email: var(--ormont-span-email-bg);
+  --color-span-email-fg: var(--ormont-span-email-fg);
+  --color-span-phone: var(--ormont-span-phone-bg);
+  --color-span-phone-fg: var(--ormont-span-phone-fg);
+  --color-span-address: var(--ormont-span-address-bg);
+  --color-span-address-fg: var(--ormont-span-address-fg);
+  --color-span-date: var(--ormont-span-date-bg);
+  --color-span-date-fg: var(--ormont-span-date-fg);
+  --color-span-government-id: var(--ormont-span-government-id-bg);
+  --color-span-government-id-fg: var(--ormont-span-government-id-fg);
+  --color-span-account-number: var(--ormont-span-account-number-bg);
+  --color-span-account-number-fg: var(--ormont-span-account-number-fg);
+  --color-span-secret: var(--ormont-span-secret-bg);
+  --color-span-secret-fg: var(--ormont-span-secret-fg);
+  --color-span-passport: var(--ormont-span-passport-bg);
+  --color-span-passport-fg: var(--ormont-span-passport-fg);
+  --color-span-drivers-license: var(--ormont-span-drivers-license-bg);
+  --color-span-drivers-license-fg: var(--ormont-span-drivers-license-fg);
+  --color-span-url: var(--ormont-span-url-bg);
+  --color-span-url-fg: var(--ormont-span-url-fg);
+  --color-span-ip-address: var(--ormont-span-ip-address-bg);
+  --color-span-ip-address-fg: var(--ormont-span-ip-address-fg);
+  --color-span-national-insurance: var(--ormont-span-national-insurance-bg);
+  --color-span-national-insurance-fg: var(--ormont-span-national-insurance-fg);
+  --color-span-case-reference: var(--ormont-span-case-reference-bg);
+  --color-span-case-reference-fg: var(--ormont-span-case-reference-fg);
+  --color-span-organisation-name: var(--ormont-span-organisation-name-bg);
+  --color-span-organisation-name-fg: var(--ormont-span-organisation-name-fg);
+
+  /* Type */
+  --font-sans: var(--ormont-font-sans);
+  --font-mono: var(--ormont-font-mono);
+
+  /* Radius */
+  --radius-sm: var(--ormont-radius-sm);
+  --radius-md: var(--ormont-radius-md);
+  --radius-lg: var(--ormont-radius-lg);
+  --radius-xl: var(--ormont-radius-xl);
+  --radius-pill: var(--ormont-radius-pill);
+
+  /* Elevation */
+  --shadow-sm: var(--ormont-shadow-sm);
+  --shadow-md: var(--ormont-shadow-md);
+  --shadow-lg: var(--ormont-shadow-lg);
+}
+
+/* Base element defaults so every screen inherits the token system. */
+@layer base {
+  html,
+  body {
+    background-color: var(--ormont-bg);
+    color: var(--ormont-text);
+    font-family: var(--ormont-font-sans);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--ormont-brand);
+    outline-offset: 2px;
+  }
+}

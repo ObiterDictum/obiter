@@ -8,6 +8,7 @@
     "dev:desktop": "pnpm --filter @ormont/desktop --if-present dev",
     "dev:desktop:api": "pnpm --parallel --stream --filter @ormont/api --filter @ormont/desktop --if-present dev",
     "dev:web": "pnpm --filter @ormont/web --if-present dev",
+    "lint": "eslint .",
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck"
   },
@@ -15,6 +16,8 @@
     "@types/node": "^22.15.18",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
+    "@typescript-eslint/parser": "^8.32.0",
+    "eslint": "^9.30.0",
     "typescript": "^5.7.2",
     "vitest": "^3.2.4"
   }

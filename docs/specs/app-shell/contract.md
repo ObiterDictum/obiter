@@ -26,7 +26,7 @@ Headless behaviour and a11y come from Base UI (`@base-ui-components/react`); `@o
 | Tabs | `Tabs`, `TabsList`, `TabsTrigger`, `TabsContent` | Compound over Base UI Tabs. `value`/`defaultValue` controlled. |
 | Badge | `Badge` | `tone: 'neutral' \| 'brand' \| 'info' \| 'success' \| 'warning' \| 'danger'`, children. |
 | Tooltip | `Tooltip`, `TooltipTrigger`, `TooltipContent` | Compound over Base UI Tooltip. |
-| Toast | `Toaster`, `useToast` | `<Toaster />` mounted once in the app frame. `useToast()` returns `toast({ title, description?, tone? })`. `tone: 'info' \| 'success' \| 'warning' \| 'danger'`. |
+| Toast | `Toaster`, `useToast` | `<Toaster />` mounted once in the app frame. `useToast()` returns `toast({ title, description?, tone? })`. `tone: 'info' \| 'success' \| 'warning' \| 'danger'`. Self-contained (aria-live region + per-toast timer), not Base UI's toast manager — Base UI 1.0.0-rc.0 does not export the manager hooks as runtime values. The API is stable; only the internals change if it moves to Base UI later. |
 | EmptyState | `EmptyState` | `title: ReactNode`, `body?: ReactNode`, `icon?: ReactNode`, `action?: ReactNode`. |
 | Skeleton | `Skeleton` | `className?`. Shimmer block; sizing via className. |
 | ProgressBar | `ProgressBar` | `value?: number` (0–100; omit for indeterminate), `label?: ReactNode`, `helperText?: ReactNode`. |

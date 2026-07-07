@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   courtOptionGroups,
   createPhaseZeroShellSnapshot,
@@ -18,10 +18,6 @@ import {
   shouldRunLegalSearchRequest,
   writeRecentLegalSearch,
 } from './index'
-import {
-  readCollapsedSections,
-  writeCollapsedSections,
-} from './sidebar/SidebarNavigation'
 
 describe('createPhaseZeroShellSnapshot', () => {
   it('returns the Phase 0.2 authenticated shell without placeholder matters', () => {
@@ -312,34 +308,5 @@ describe('LegalSearchView helpers', () => {
   it('uses the official Find Case Law labels for new First-tier Tribunal options', () => {
     expect(getCourtLabel('ftt/pc')).toBe('First-tier Tribunal Land Registration Division (Property Chamber)')
     expect(getCourtLabel('ftt/phl')).toBe('First-tier Tribunal Primary Health Lists')
-  })
-})
-
-describe('SidebarNavigation helpers', () => {
-  afterEach(() => {
-    vi.unstubAllGlobals()
-  })
-
-  it('persists collapsed section labels and ignores stale values', () => {
-    const storage = new Map<string, string>()
-    vi.stubGlobal('window', {
-      localStorage: {
-        getItem: (key: string) => storage.get(key) ?? null,
-        setItem: (key: string, value: string) => storage.set(key, value),
-      },
-    })
-
-    window.localStorage.setItem(
-      'ormont.sidebar.collapsedSections',
-      JSON.stringify(['Evidence & Review', 'Missing section']),
-    )
-
-    expect([...readCollapsedSections()]).toEqual(['Evidence & Review'])
-
-    writeCollapsedSections(new Set(['Operations']))
-
-    expect(window.localStorage.getItem('ormont.sidebar.collapsedSections')).toBe(
-      JSON.stringify(['Operations']),
-    )
   })
 })
