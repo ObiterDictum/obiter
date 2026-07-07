@@ -121,7 +121,9 @@ Phase 2 covers four areas:
 - Warning (not block) if any spans remain un-reviewed — returned in response body as `unreviewedSpanIds: string[]`
 - Object storage is not wired (verified July 2026: no storage client exists in the API; document upload stores metadata only). Finalize uses the `StorageService` abstraction introduced in Phase 1, whose first adapter is local filesystem storage (documented as tech debt; the object-storage adapter arrives in Phase 3)
 
-### 4. Review UI (`packages/app-shell/src/redact/`)
+### 4. Review UI (`packages/redact-ui`)
+
+The review UI lives in its own package, `@ormont/redact-ui`, owned entirely by the Redact track (decided July 2026 — package-level separation keeps the parallel shell-rebuild and Redact tracks from editing the same package). It imports `@ormont/ui` components, design tokens, and `@ormont/app-shell` public helpers per the component contract; the web app's route files import the review screens from `@ormont/redact-ui`.
 
 - Document text view with highlighted spans (color by category)
 - Visual distinction between Rampart model spans, Rampart deterministic spans, and UK supplement spans (border style or icon)
@@ -134,7 +136,7 @@ Phase 2 covers four areas:
 - TanStack Query hooks: `useRedactionRun`, `useSpanDecision`, `useFinalizeRun`
 - Route: `/matters/:matterId/documents/:documentId/redact/:runId`
 - Document detail entry point: provided by the app shell rebuild ([App Shell Rebuild PRD](app-shell-rebuild.md), FR4) — a document detail route at `/matters/:matterId/documents/:documentId` with a redaction runs region and "Create Redaction Run" CTA. This phase's review route nests beneath it and populates the runs region
-- Sidebar: change "Redaction" entry from `status: 'planned'` to active link with `to` attribute
+- Sidebar: change "Redaction" entry from `status: 'planned'` to active link with `to` attribute (the sidebar is shell-owned — coordinate this one-line change with the shell track at integration rather than editing `@ormont/app-shell` directly)
 - Empty states: no runs yet for this document, no spans detected (run completed with zero spans), all spans reviewed
 - Loading states: detection in progress (Rampart scanning text), finalizing
 - No `useEffect` for data fetching (repo convention — use TanStack Query)
@@ -551,7 +553,7 @@ This already exists from Phase 1; Phase 2 adds the `summary` field if not alread
 
 ### Build Phase 2: Review UI (Weeks 7-8 of the 3-month plan)
 
-- Create `packages/app-shell/src/redact/` directory (owned by the Redact track; the shell rebuild track does not modify it. Redact code imports `@ormont/ui` components, design tokens, and the shell's public helpers — never sibling shell internals)
+- Create the `packages/redact-ui` package (`@ormont/redact-ui`), owned entirely by the Redact track. It imports `@ormont/ui` components, design tokens, and `@ormont/app-shell` public helpers — never shell internals
 - Implement document text view with highlighted spans (category colors, source distinction)
 - Implement span list panel (sortable, filterable columns)
 - Implement decision action bar with five action buttons
