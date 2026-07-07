@@ -107,6 +107,7 @@ Phase 1 delivers the detection pipeline and API skeleton. Everything needed to g
 - API routes: create run, get run, list runs for document.
 - Database helpers for run CRUD (`redaction-database.ts`).
 - Minimal `StorageService` abstraction (local filesystem adapter) used to persist fallback text at the `text_object_key` path (see Open Question 7). Phase 2 reuses it for output artifacts; Phase 3 adds the object-storage adapter.
+- Migration runner (`scripts/migrate.ts`, `pnpm migrate`): applies `packages/database/migrations/*.sql` in order with a `schema_migrations` tracking table — no runner exists today and `0005_redaction.sql` must be appliable repeatably (locally, in tests, and as the API container pre-start step per [docs/specs/deployment.md](../specs/deployment.md)). The API Dockerfile is also this track's deliverable per that spec.
 - Audit log entries for redaction run creation (extends the `AuditRecordInput` action union in `services/api/src/database.ts` with `redaction.run_create`).
 - Detection failure handling and run status transitions (`pending -> detecting -> ready_for_review | failed`).
 - The run summary computation (span counts by category and source).
