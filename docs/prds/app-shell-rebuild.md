@@ -112,7 +112,7 @@ Design tokens, Tailwind v4 setup, `@ormont/ui` primitive set, app frame, auth wi
 Matters list/create/detail, documents list, document detail content, Home, seed script. Delete the fixture layer. This is the moment the "demo data" tier ceases to exist.
 
 ### Milestone 3 — Migration and polish
-Search restyle, desktop verification, theming pass, lint enforcement, scope-doc update, dead CSS removal.
+Search restyle, desktop verification, theming pass, lint enforcement, scope-doc update, dead CSS removal. Web deployability: `apps/web` Dockerfile + Dokploy same-domain Traefik routing (`/api` → api app) per [docs/specs/deployment.md](../specs/deployment.md).
 
 ### Definition of Done
 All FRs met; both themes verified on every screen; contract exports documented; Redact review UI (built in parallel) renders inside the shell without contract violations; `pnpm typecheck` and all tests pass across `@ormont/ui`, `@ormont/app-shell`, `@ormont/web`.
