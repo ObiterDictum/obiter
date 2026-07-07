@@ -33,7 +33,7 @@ The frozen surface this plan delivers is [contract.md](contract.md).
 
 ### 1. Design tokens + Tailwind v4
 - [ ] `packages/ui`: add `tailwindcss` (v4) + `@tailwindcss/vite` (dev), `@base-ui-components/react`, `@phosphor-icons/react`. Add `clsx` (or a tiny local `cn`) + `tailwind-merge`.
-- [ ] `packages/ui/src/tokens.css`: full `--ormont-*` set per [contract §2](contract.md) — color, status, the 13 span-category `-bg/-fg` pairs (light + dark), spacing, radius, elevation, type. Light default; `[data-theme="dark"]` overrides.
+- [ ] `packages/ui/src/tokens.css`: full `--ormont-*` set per [contract §2](contract.md) — color, status, the 15 span-category `-bg/-fg` pairs (the full `spanCategorySchema` set including `date` and `secret`; light + dark), spacing, radius, elevation, type. Light default; `[data-theme="dark"]` overrides.
 - [ ] Tailwind v4 entry: `packages/ui/src/tailwind.css` with `@import "tailwindcss"; @theme { ... }` mapping tokens to Tailwind's `--color-*`, `--spacing-*`, `--radius-*`, `--font-*`. Verify cross-package content scanning (`@source`) so utility classes authored in `@ormont/ui` compile in the apps.
 - [ ] Export `tokens.css` and `tailwind.css` from `@ormont/ui`.
 
