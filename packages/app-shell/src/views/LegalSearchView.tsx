@@ -22,7 +22,7 @@ export { courtOptionGroups, getCourtLabel }
 
 export const LEGAL_SEARCH_DEBOUNCE_MS = 300
 export const LEGAL_SEARCH_RECENT_SEARCHES_LIMIT = 5
-const legalSearchRecentSearchesKey = 'ormont.search.recentSearches'
+const legalSearchRecentSearchesKey = 'obiter.search.recentSearches'
 const courtShortcuts = [
   { code: 'uksc', label: 'UKSC' },
   { code: 'ewca/civ', label: 'EWCA Civ' },
@@ -585,7 +585,7 @@ function readInitialSearchQuery() {
     return ''
   }
 
-  const query = window.sessionStorage.getItem('ormont.search.initialQuery') ?? ''
-  window.sessionStorage.removeItem('ormont.search.initialQuery')
+  const query = window.sessionStorage.getItem('obiter.search.initialQuery') ?? ''
+  window.sessionStorage.removeItem('obiter.search.initialQuery')
   return query
 }

@@ -12,7 +12,7 @@ function createWindow() {
     minHeight: 780,
     backgroundColor: '#f2ede2',
     autoHideMenuBar: true,
-    title: 'Ormont',
+    title: 'Obiter',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

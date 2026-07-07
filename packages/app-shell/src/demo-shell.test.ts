@@ -41,7 +41,7 @@ describe('createPhaseZeroShellSnapshot', () => {
 })
 
 describe('Home role gates', () => {
-  it('keeps development status limited to Ormont owner context', async () => {
+  it('keeps development status limited to Obiter owner context', async () => {
     const module = await import('./index')
     expect(module.canSeeDevelopmentStatusForTest({
       user: {
@@ -51,8 +51,8 @@ describe('Home role gates', () => {
         role: 'owner',
       },
       organisation: {
-        id: 'org-ormont-demo',
-        name: 'Ormont Legal',
+        id: 'org-obiter-demo',
+        name: 'Obiter Legal',
         plan: 'private_beta',
       },
     })).toBe(true)

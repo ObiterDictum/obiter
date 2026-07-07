@@ -4,7 +4,7 @@ import { ClockIcon, XMarkIcon } from '@heroicons/react/24/outline'
 import { useState, type FormEvent, type ReactNode } from 'react'
 import type { AppPlatform, MeResponse, ShellSnapshot } from '@ormont/contracts'
 import { Card, EmptyState } from '@ormont/ui'
-import wordmarkUrl from './assets/ormont-wordmark.svg'
+import wordmarkUrl from './assets/obiter-wordmark.svg'
 import { OrmontSidebar } from './sidebar/OrmontSidebar'
 export {
   CaseLawDocumentView,
@@ -29,7 +29,7 @@ export {
   writeRecentLegalSearch,
 } from './views/LegalSearchView'
 
-const demoAuthStorageKey = 'ormont.phase0.authenticated'
+const demoAuthStorageKey = 'obiter.phase0.authenticated'
 
 interface ChangelogEntry {
   date: string | null
@@ -67,13 +67,13 @@ export function createDemoMeResponse(): MeResponse {
   return {
     user: {
       id: 'user-amorgan',
-      email: 'amorgan@ormont.local',
+      email: 'amorgan@obiter.local',
       name: 'A. Morgan',
       role: 'owner',
     },
     organisation: {
-      id: 'org-ormont-demo',
-      name: 'Ormont Legal',
+      id: 'org-obiter-demo',
+      name: 'Obiter Legal',
       plan: 'private_beta',
     },
   }
@@ -103,7 +103,7 @@ function createPhaseZeroShellSnapshot(platform: AppPlatform): ShellSnapshot {
 }
 
 function canSeeDevelopmentStatus(me: MeResponse) {
-  return me.organisation.id === 'org-ormont-demo' && me.user.role === 'owner'
+  return me.organisation.id === 'org-obiter-demo' && me.user.role === 'owner'
 }
 
 function canSeeStaffNavigation(me: MeResponse) {
@@ -219,7 +219,7 @@ export function SignInRouteView({
   return (
     <main className="auth-shell">
       <section className="auth-brand">
-        <img className="auth-brand__wordmark" src={wordmarkUrl} alt="Ormont" />
+        <img className="auth-brand__wordmark" src={wordmarkUrl} alt="Obiter" />
         <h1 className="auth-brand__title">Sign in</h1>
       </section>
 
@@ -322,7 +322,7 @@ export function HomeRouteView({ platform }: { platform: AppPlatform }) {
       return
     }
 
-    window.sessionStorage.setItem('ormont.search.initialQuery', query)
+    window.sessionStorage.setItem('obiter.search.initialQuery', query)
     void navigate({ to: '/search' })
   }
 
