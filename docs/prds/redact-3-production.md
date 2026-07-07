@@ -123,6 +123,7 @@ Inspects synthetic data quality, label correctness, and the fine-tuning dataset 
 
 **Approach:**
 
+- **Prerequisite — binary upload does not exist yet.** The current `POST /api/matters/:matterId/documents` accepts JSON metadata only (filename, hash, size); no file bytes are ever received or stored, and no storage client exists in the API (verified July 2026). Before extraction can work, this phase adds multipart content upload with original-file storage (FR1.11) and the object-storage adapter for the `StorageService` abstraction introduced in Phases 1–2 (FR1.12).
 - Add `mammoth` as a dependency in the API service (`services/api/package.json`). Mammoth is a mature DOCX-to-HTML/text library that handles paragraphs, tables, headers, footers, embedded images (skipped for text extraction), and common formatting. It is available as an npm package (`mammoth`) and runs in Node.js without external binaries.
 - On document upload, inspect the `fileType` field of `matter_documents`. If `fileType` is `.docx`, run mammoth extraction. If `.txt`, read the file content directly (existing Phase 1 path).
 - Store the extracted text at the `text_object_key` path in object storage. The `document_versions` table already has this column.
@@ -710,6 +711,8 @@ The Redaction sidebar entry was activated in Phase 2 (Redact PRD 2, FR11). This 
 | FR1.8 | Preserve original DOCX in object storage for later download or reprocessing |
 | FR1.9 | Migration `0006_document_extraction.sql` MUST add `document_status` (check constraint: `'pending'`, `'ready'`, `'failed'`) and `failure_reason` (text, nullable) columns to `document_versions` — these columns do not exist prior to this phase |
 | FR1.10 | Remove the Phase 1 `text` request-body fallback from `POST /api/documents/:documentId/redaction-runs` — runs must read text exclusively from `text_object_key` |
+| FR1.11 | Implement binary content upload: extend `POST /api/matters/:matterId/documents` (or add a companion content-upload step) to accept multipart file content and store the original file via the storage service at the document version's `object_key` path. The current endpoint accepts JSON metadata only — no file bytes ever reach the server (verified July 2026) |
+| FR1.12 | Implement the object-storage adapter for the `StorageService` abstraction (introduced in Phase 1 with a local-filesystem adapter) and switch text, original-file, and artifact reads/writes to it in production configuration |
 
 ### FR2: Audit Report Export
 
@@ -804,12 +807,13 @@ The Redaction sidebar entry was activated in Phase 2 (Redact PRD 2, FR11). This 
 | `mammoth` npm package | Available | Add to `services/api/package.json` |
 | Text extraction slot (`text_object_key` column) | Done (migration 0002) | Already exists on `document_versions` |
 | Artifacts table with `redaction_report` type | Done (migration 0002) | Enum includes `redaction_report` |
-| Audit log function (`appendAuditLog`) | Done (`database.ts`) | Supports action types `redaction.run_create`, `redaction.span_decision`, `redaction.finalize` |
-| Object storage for text and output | Needs verification | `object_key` pattern defined; actual upload code may need wiring |
+| Audit log function (`appendAuditLog`) | Done (`database.ts`) | The `redaction.*` action types do not exist yet — they are added to the `AuditRecordInput` union by PRDs 1–2 |
+| Object storage for text and output | Not wired (verified July 2026) | No storage client exists; document upload is metadata-only. Binary upload + object-storage adapter scoped as FR1.11–FR1.12; Phases 1–2 run on the local-FS `StorageService` adapter |
 | Rampart custom label space | New | Defined in this PRD as `ormont_legal_v1` |
 | Migration `0006_document_extraction.sql` (`document_status`, `failure_reason` on `document_versions`) | New | Defined in this PRD (FR1.9) |
 | Redact PRD 1: Detection Pipeline | Assumed complete | Worker, supplement, merge, database queries |
 | Redact PRD 2: Review and Output | Assumed complete | Review UI, decisions, finalize, pseudonymisation |
+| App shell rebuild (real auth/matters wiring, design system) | Planned — parallel track ([App Shell Rebuild PRD](app-shell-rebuild.md)) | The firm-facing demo navigates real matters in the UI; today's shell renders Phase 0 fixture data and nothing calls `/api/matters`. The rebuild delivers the live matters UI and the component contract PRD 2's review UI builds against |
 | Synthetic data generation scripts | New | Node.js/TypeScript scripts under `scripts/` |
 | Dataset export tool | New | Node.js/TypeScript script under `scripts/` |
 
@@ -819,6 +823,7 @@ See sibling PRDs: [Redact PRD 1: Detection Pipeline](redact-1-detection.md), [Re
 
 ### Phase 1: Internal Verification (Week 9)
 
+- Multipart content upload and object-storage adapter (FR1.11–FR1.12) merged first — extraction has nothing to read until file bytes are stored
 - DOCX extraction merged and tested with 10+ real DOCX files (various complexity)
 - Extraction failure modes verified (corrupt DOCX, empty DOCX, mammoth timeout)
 - Mammoth dependency evaluated: if `mammoth` proves unreliable for complex legal DOCX, fall back to `docx4js` or `textract`
@@ -880,7 +885,7 @@ The following must be true for M3 sign-off:
 | Risk | Likelihood | Impact | Mitigation |
 |------|-----------|--------|------------|
 | **Mammoth produces poor extraction** from complex legal DOCX (tables, headers, footnotes) | Medium | Medium | Test with 10+ real legal DOCX files before committing. Have fallback (`docx4js`) identified. For tables specifically: verify text reads left-to-right, top-to-bottom per mammoth's documented behaviour. |
-| **Object storage not wired** for text_object_key path | High | High | Verify before Week 9. If not wired, implement upload-to-filesystem with same path structure as interim. |
+| **Object storage not wired** for text_object_key path | Certain (verified July 2026) | High | Scoped as FR1.11–FR1.12. Phases 1–2 run on the local-filesystem `StorageService` adapter with the same path structure; budget Week 9 for multipart upload and the object-storage adapter. |
 | **Synthetic data unrealistic** — fails the "looks like a real legal document" test | Medium | High | Have a legal professional review 10 sample documents before generating the full set. Iterate on templates. |
 | **Rampart model memory on 4vCPU/8GB server** during synthetic data generation | Low (generation happens offline) | Low | Generation runs on dev machine, not server. Rampart runs in-process at ~50-100 MB steady state. |
 | **Audit report HTML export** has poor rendering for large span sets | Low | Medium | Test with 200-span run. Limit HTML page size by paginating audit log entries if needed. |

@@ -540,11 +540,11 @@ Review UI components (M2). Follows existing app-shell patterns: shared between w
 | `audit_logs` + `appendAuditLog()` | Done (`database.ts`) |
 | `text_object_key` on document versions | Done (migration 0002) |
 | Auth middleware, org-scoping, request IDs | Done (`app.ts`) |
-| Object storage for text/output | Needs verification: is Hetzner Object Storage wired? The `object_key` pattern is defined in migration constraints but actual storage upload code needs checking |
+| Object storage for text/output | Not wired (verified July 2026): no storage client exists in the API and document upload is metadata-only — no file bytes reach the server. M1–M2 run on a `StorageService` abstraction with a local-filesystem adapter (introduced in Redact PRD 1 for fallback-text persistence); M3 adds multipart content upload and the object-storage adapter (Redact PRD 3, FR1.11–FR1.12) |
 | `@nationaldesignstudio/rampart` npm package | Not yet installed. Add to `services/api/package.json` |
 | `@huggingface/transformers` npm package | Not yet installed. Add to `services/api/package.json` (peer dep of Rampart) |
 
-**Risk:** Object storage upload (writing to `text_object_key` path) may not be implemented yet. Document upload currently creates the DB record but may not store the actual file. Verify before Week 5. If not wired, use local filesystem as interim.
+**Risk (confirmed):** Object storage is not wired — document upload creates the DB record only and no file bytes are stored anywhere (verified July 2026). M1 uses the `StorageService` local-filesystem adapter as interim, persisting fallback text at the `text_object_key` path so M2's finalize can re-read it; the object-storage adapter and multipart upload land in M3.
 
 **Risk:** First request after API restart loads the Rampart model (14.7 MB download from HuggingFace if not cached, then model initialization). This may add 2-5 seconds to the first detection request. Mitigation: warm the guard on API startup, or accept the delay on first request and document it.
 

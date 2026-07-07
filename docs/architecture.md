@@ -142,3 +142,11 @@ The initial shared shell foundation for Phase 0.1 should live in:
 - Hetzner VPS for API, workers, routing, PostgreSQL, Redis, and search in the early stage
 - Hetzner Object Storage for uploads, source files, artifacts, and benchmark outputs
 - future GPU or ML worker for redaction, embeddings, reranking, and model evaluation
+
+## Decision Log
+
+### Effect TS — contained pilot, not a platform commitment (July 2026)
+
+Considered adopting Effect TS as the backend foundation during the app-shell rebuild ("we're restarting anyway"). Findings: the restart is confined to the presentation layer (~7.7k lines of UI/CSS replaced) while the ~9.2k-line backend being kept is disciplined and working — the layer where Effect would pay off is precisely the layer not being restarted. Maintainability was judged relative to the actual maintainers (a solo founder plus coding agents), for whom plain TypeScript with strong contracts and tests is the most fluently read and reviewed dialect, and where non-idiomatic Effect is the hardest failure mode to catch in review.
+
+Decision: settle the question empirically. The Redact detection module (`services/api/src/redaction-detection.ts`) is a contained Effect pilot behind a promise facade — see the Effect TS Pilot section of `docs/prds/redact-1-detection.md` for containment rules, exit criteria, and the decision gate. `effect` is not permitted as a dependency anywhere else (contracts stay Zod; UI packages stay TanStack Query). Pass expands candidacy to the finalize transaction flow and post-MVP worker/ingestor services; fail unwinds one module and closes the question with evidence.

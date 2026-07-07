@@ -119,7 +119,7 @@ Phase 2 covers four areas:
 - Integrity check before output generation: every output-affecting span's text must match the document text at its recorded offsets; any mismatch aborts finalize with `redaction_span_integrity_error` (fail-closed — no partial output)
 - `GET /api/redaction-runs/:runId/token-map` — audited re-identification endpoint for pseudonymised runs (token map is excluded from all standard responses)
 - Warning (not block) if any spans remain un-reviewed — returned in response body as `unreviewedSpanIds: string[]`
-- If object storage upload is not yet wired, falls back to local filesystem storage (documented as tech debt)
+- Object storage is not wired (verified July 2026: no storage client exists in the API; document upload stores metadata only). Finalize uses the `StorageService` abstraction introduced in Phase 1, whose first adapter is local filesystem storage (documented as tech debt; the object-storage adapter arrives in Phase 3)
 
 ### 4. Review UI (`packages/app-shell/src/redact/`)
 
@@ -133,6 +133,7 @@ Phase 2 covers four areas:
 - Finalize button with output mode selector (redacted vs pseudonymised)
 - TanStack Query hooks: `useRedactionRun`, `useSpanDecision`, `useFinalizeRun`
 - Route: `/matters/:matterId/documents/:documentId/redact/:runId`
+- Document detail entry point: provided by the app shell rebuild ([App Shell Rebuild PRD](app-shell-rebuild.md), FR4) — a document detail route at `/matters/:matterId/documents/:documentId` with a redaction runs region and "Create Redaction Run" CTA. This phase's review route nests beneath it and populates the runs region
 - Sidebar: change "Redaction" entry from `status: 'planned'` to active link with `to` attribute
 - Empty states: no runs yet for this document, no spans detected (run completed with zero spans), all spans reviewed
 - Loading states: detection in progress (Rampart scanning text), finalizing
@@ -152,13 +153,13 @@ The artifact references `document_version_id` to trace back to the source docume
 
 ### Object Storage Integration
 
-The existing codebase stores document content via object upload in document version creation (`object_key`). The text extraction path (`text_object_key`) stores extracted text in object storage. The artifacts table already has `object_key` with a constraint ensuring the path pattern.
+The database schema defines the storage paths — `object_key` on document versions and artifacts, `text_object_key` on document versions — with constraints enforcing the path shape, but no storage wiring exists in the codebase (verified July 2026): document upload records metadata only, no file bytes reach the server, and there is no storage client anywhere in the API.
 
 For this phase, the finalize API needs to:
-1. Read extracted text from object storage at `document_versions.text_object_key`
-2. Write the output text to object storage at the artifact's `object_key` path
+1. Read extracted text at `document_versions.text_object_key` (written by Phase 1's fallback-text persistence — see [Redact PRD 1](redact-1-detection.md), Open Question 7)
+2. Write the output text at the artifact's `object_key` path
 
-If object storage upload is not yet wired as a reusable service, the fallback is to store output as a local file and write the path into `object_key`. This is documented as tech debt to be resolved in Phase 3.
+Both go through the `StorageService` abstraction introduced in Phase 1, with local filesystem as the first adapter. This is documented as tech debt to be resolved in Phase 3, which adds binary upload and the object-storage adapter.
 
 ### Concurrency And Atomicity
 
@@ -288,7 +289,7 @@ Errors:
 
 Finalize flow (all steps inside a single database transaction; step 1 acquires `SELECT ... FOR UPDATE` on the run row so concurrent finalize attempts serialize — the second sees `finalized` and gets `redaction_already_finalized`):
 1. Lock the run row and validate it is in `reviewing` or `ready_for_review` status
-2. Load document version's extracted text from `text_object_key` via object storage
+2. Load document version's extracted text from `text_object_key` via the storage service
 3. **Integrity check (fail-closed)**: for every span with an output-affecting decision, assert `text.slice(span.start, span.end) === span.text`. On any mismatch, abort the entire finalize with `redaction_span_integrity_error`. No partial output is ever written.
 4. Compute pseudonymisation token map if needed (for both modes, actually, since pseudonymised mode needs it and redacted mode may want the map stored for reference)
 5. Apply decisions using the appropriate apply function
@@ -344,7 +345,7 @@ The run summary (re-computed on every mutation) includes:
 
 - Display the document's extracted text with spans highlighted
 - Each span displays as an inline highlight with background color by category
-- Category color mapping (Tailwind-based):
+- Category color mapping (driven by the shell's design tokens — one `--ormont-span-*` token per category per the [App Shell Rebuild PRD](app-shell-rebuild.md) component contract; the hues below are indicative, not hardcoded values):
   - `person_name`: red/rose
   - `email`: amber
   - `phone`: orange
@@ -449,6 +450,7 @@ useFinalizeRun(runId: string): UseMutationResult<
 
 - Route: `/matters/:matterId/documents/:documentId/redact/:runId`
 - TanStack Router file route at `apps/web/src/routes/matters/$matterId/documents/$documentId/redact/$runId.tsx`
+- Prerequisite route: `/matters/:matterId/documents/:documentId` (document detail) is delivered by the app shell rebuild ([App Shell Rebuild PRD](app-shell-rebuild.md), FR4; part of its Milestone 1 contract); it hosts the run list, the "Create Redaction Run" CTA, and the FR12 "no runs yet" empty state. This phase builds the `redact/$runId` sub-route beneath it
 - Route loads run data via `useRedactionRun` in the component
 - Sidebar: Change "Redaction" entry in `SidebarNavigation.tsx` from `{ status: 'planned' }` to `{ status: 'live', to: '/matters' }` (the redaction route requires a matter context; the link goes to matters list where users can navigate to a document's redaction)
 - When viewing a redaction run, sidebar highlights the "Redaction" entry as active
@@ -529,7 +531,8 @@ This already exists from Phase 1; Phase 2 adds the `summary` field if not alread
 - [Redact PRD 1: Detection Pipeline](redact-1-detection.md): Provides the detection pipeline, redaction_runs table with spans, and the `packages/redaction-policy` package with `supplement.ts`, `merge.ts`, `types.ts`.
 - [Redact PRD 3: Production Readiness](redact-3-production.md): Will add audit report export (PDF/HTML), DOCX extraction, and the demo fixture. This phase builds the audit trail storage that Phase 3 exports.
 - Shared contracts package (`packages/contracts`): Provides `spanDecisionSchema`, `outputModeSchema`, `redactionRunStatusSchema`, and error codes.
-- Object storage: Required for reading extracted text (`text_object_key`) and writing output artifacts. Needs verification of existing wiring at the start of the sprint.
+- Storage: verified not wired (July 2026). Reads and writes go through the `StorageService` abstraction (local-filesystem adapter) introduced in Phase 1 for fallback-text persistence. The object-storage adapter is Phase 3 scope.
+- App shell rebuild ([App Shell Rebuild PRD](app-shell-rebuild.md)): the current shell renders Phase 0 demo fixture data and nothing in the web app calls `/api/matters` (verified July 2026). The rebuild runs as a parallel track and delivers real auth/matters wiring, the `@ormont/ui` component library, design tokens, the `apiFetch`/`useCurrentUser` helpers, and the document detail route. This phase's review UI is built against the rebuild's component contract, which freezes at its Milestone 1 — the review UI build (Build Phase 2 below) MUST NOT start before that freeze, and imports only contract exports, never shell internals.
 - Infrastructure (4vCPU/8GB/160GB VPS, PostgreSQL, Dokploy): Must support the additional API endpoints and UI build.
 
 ## Rollout
@@ -548,7 +551,7 @@ This already exists from Phase 1; Phase 2 adds the `summary` field if not alread
 
 ### Build Phase 2: Review UI (Weeks 7-8 of the 3-month plan)
 
-- Create `packages/app-shell/src/redact/` directory
+- Create `packages/app-shell/src/redact/` directory (owned by the Redact track; the shell rebuild track does not modify it. Redact code imports `@ormont/ui` components, design tokens, and the shell's public helpers — never sibling shell internals)
 - Implement document text view with highlighted spans (category colors, source distinction)
 - Implement span list panel (sortable, filterable columns)
 - Implement decision action bar with five action buttons
@@ -556,6 +559,7 @@ This already exists from Phase 1; Phase 2 adds the `summary` field if not alread
 - Implement finalize dialog with output mode selector and un-reviewed warning
 - Create TanStack Query hooks: `useRedactionRun`, `useSpanDecision`, `useFinalizeRun`
 - Create TanStack Router route at `/matters/:matterId/documents/:documentId/redact/:runId`
+- Populate the document detail route's redaction runs region (run list + create-run CTA) — the route itself is delivered by the app shell rebuild
 - Update sidebar navigation: Redaction entry live with link
 - Add empty states, loading states
 - Write component tests with vitest
@@ -582,7 +586,8 @@ This already exists from Phase 1; Phase 2 adds the `summary` field if not alread
 
 ## Risks
 
-- **Object storage not yet wired**: If the `text_object_key` read path or artifact write path is not implemented as a reusable service, the finalize API will need a local-filesystem fallback. Mitigation: verify object storage integration at sprint start; if missing, implement a simple abstraction (`StorageService` interface) with local filesystem as the first adapter.
+- **Object storage not wired** (verified July 2026 — no longer a question): the finalize API runs on the `StorageService` local-filesystem adapter introduced in Phase 1. Residual risk is path handling and disk permissions on the server; the object-storage adapter lands in Phase 3.
+- **Parallel-track drift with the app shell rebuild**: the review UI is built by a separate track against the shell rebuild's component contract. If the review UI needs a primitive or token the contract lacks, or the contract shifts after freeze, work stalls or forks. Mitigation: the rebuild's Milestone 1 contract freeze gates the start of Build Phase 2 here; contract changes require updating both PRDs together; the plan owner reviews both tracks at each milestone. Backend (Build Phase 1) has no shell dependency and proceeds immediately.
 - **Large document performance**: Documents over 100K characters with 500+ spans may cause UI lag. Mitigation: virtualize the document text view, limit visible spans to viewport area, use windowing for the span list.
 - **Overlapping span edge cases**: Rampart and the UK supplement may produce overlapping spans. The merge logic from Phase 1 should handle this, but `apply.ts` needs to handle remaining overlaps gracefully. Mitigation: extensive test fixtures with overlapping spans; highest-confidence source wins.
 - **Pseudonymisation across runs**: Phase 2 scopes consistency to within a single run. Cross-run consistency is a future concern. Mitigation: document this limitation clearly in the UI and API docs.
@@ -591,8 +596,8 @@ This already exists from Phase 1; Phase 2 adds the `summary` field if not alread
 
 ## Open Questions
 
-1. **Object storage wiring**: Does the current codebase have a reusable service for reading/writing object storage, or does it use inline S3/client calls per route? Needs investigation at sprint start.
-2. **Document text storage**: Is extracted text always available at `document_versions.text_object_key` by Phase 2, or does text extraction need to be completed first? Phase 1 assumes text input directly; DOCX extraction is Phase 3.
+1. **Object storage wiring** — *Resolved (verified July 2026)*: neither. No storage client exists in the API at all; document upload is metadata-only and no file bytes reach the server. Phases 1–2 use the `StorageService` local-filesystem adapter; Phase 3 adds binary upload and the object-storage adapter.
+2. **Document text storage** — *Resolved*: text extraction does not exist before Phase 3. Text is available at `text_object_key` only because Phase 1's `text` fallback persists the submitted text there ([Redact PRD 1](redact-1-detection.md), Open Question 7). Finalize reads that persisted text.
 3. **Token map disclosure** — *Resolved*: the token map is stripped from all standard API responses and served only via the dedicated `GET /api/redaction-runs/:runId/token-map` endpoint, with every read audit-logged as `redaction.token_map_access`. Remaining (post-MVP): should access require an elevated role once role-based access control exists?
 4. **Redacted mode with pseudonymise decisions**: For a run finalized in `redacted` mode, should spans with `pseudonymise` decision be replaced with `[REDACTED]` (current design) or with the pseudonym token? Current design says `[REDACTED]` since the user chose redacted mode.
 5. **Multiple runs on the same document**: Should the UI allow creating multiple redaction runs on the same document? If so, how does a user decide which finalized artifact to use?
