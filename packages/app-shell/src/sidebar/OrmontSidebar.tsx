@@ -37,7 +37,7 @@ export function OrmontSidebar({ currentPath, onSignOut, snapshot }: OrmontSideba
   }
 
   return (
-    <aside className={sidebarClassName} aria-label="Ormont application sidebar">
+    <aside className={sidebarClassName} aria-label="Obiter application sidebar">
       <button
         aria-label="Expand sidebar"
         aria-pressed={contentCollapsed}
@@ -61,13 +61,13 @@ export function OrmontSidebar({ currentPath, onSignOut, snapshot }: OrmontSideba
         </button>
 
         <div className="ormont-app-sidebar__main">
-          <h1 className="ormont-app-sidebar__title">Ormont</h1>
+          <h1 className="ormont-app-sidebar__title">Obiter</h1>
           <SidebarSearch />
           <SidebarWorkspaceCard mode={currentPath === '/workspace' ? 'last-active' : 'active'} />
           <SidebarNavigation
             currentPath={currentPath}
             showStaffNavigation={
-              snapshot.organisation.id === 'org-ormont-demo' &&
+              snapshot.organisation.id === 'org-obiter-demo' &&
               snapshot.currentUser.role === 'owner'
             }
           />

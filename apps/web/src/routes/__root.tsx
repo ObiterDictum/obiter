@@ -24,7 +24,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
         name: 'viewport',
       },
       {
-        title: 'Ormont',
+        title: 'Obiter',
       },
     ],
     links: [
