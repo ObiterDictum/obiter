@@ -51,7 +51,7 @@ Verified current stack: React 19, TanStack Router + Query + Start, Vite 8, TypeS
 - **Document detail route**: `/matters/:matterId/documents/:documentId` — document metadata, redaction runs list, "Create Redaction Run" CTA. This route is contract surface for Redact PRD 2 (its review route nests beneath it).
 - **Home (`/workspace`)**: a minimal honest version — recent matters and recent activity from real data. No invented dashboard widgets.
 - **Search restyle**: `LegalSearchView` and `CaseLawDocumentView` migrate to the new components/tokens. Logic and API behaviour unchanged.
-- **Desktop compatibility**: `apps/desktop` continues to build and render the rebuilt shell.
+- **Desktop parity, not just compatibility**: `apps/desktop` ships the same rebuilt design — new tokens, components, and typefaces in the Electron renderer, legacy stylesheet deleted. The redesign covers **every user-facing surface**: sign-in, app frame, Home, Matters, document detail, Search, stored case pages, and the desktop renderer. No screen a user can reach keeps the legacy design after M3 (clarified July 2026 — "the whole UI" means the whole UI).
 - **Development seed data**: a `pnpm seed` script creating an org, users, matters, and documents so every screen has real data locally.
 
 ### Out of Scope
@@ -93,7 +93,7 @@ The Redact review UI imports only from `@ormont/ui`, `@ormont/app-shell` public 
 - **FR6a.** All user-facing copy uses the product name Obiter; no user-visible "Ormont" remains in the rebuilt shell.
 - **FR7.** The fixture layer is deleted: `createPhaseZeroShellSnapshot` and the demo me response do not exist in the codebase; `pnpm seed` provides development data.
 - **FR8.** Search surfaces are visually migrated with zero behaviour change (existing tests pass unmodified or with styling-only updates).
-- **FR9.** `apps/desktop` builds and renders the rebuilt shell.
+- **FR9.** `apps/desktop` builds and renders the rebuilt shell with full design parity: the Electron renderer uses the new tokens, components, and self-hosted typefaces; the legacy `styles.css` is deleted from both web and desktop paths. After M3, no user-reachable screen on any platform renders the legacy design.
 - **FR10.** `docs/current-product-scope.md` tiers updated on completion: Auth, Home, Matters, Documents move to "Implemented end-to-end".
 
 ## Non-Functional Requirements
@@ -112,7 +112,7 @@ Design tokens, Tailwind v4 setup, `@ormont/ui` primitive set, app frame, auth wi
 Matters list/create/detail, documents list, document detail content, Home, seed script. Delete the fixture layer. This is the moment the "demo data" tier ceases to exist.
 
 ### Milestone 3 — Migration and polish
-Search restyle, desktop verification, theming pass, lint enforcement, scope-doc update, dead CSS removal. Web deployability: `apps/web` Dockerfile + Dokploy same-domain Traefik routing (`/api` → api app) per [docs/specs/deployment.md](../specs/deployment.md).
+Search and stored-case-page restyle; **desktop parity pass** (Electron renderer on the new tokens/components/typefaces, legacy `styles.css` deleted everywhere — FR9); theming pass, lint enforcement, scope-doc update, dead CSS removal. Web deployability: `apps/web` Dockerfile + Dokploy same-domain Traefik routing (`/api` → api app) per [docs/specs/deployment.md](../specs/deployment.md). Exit check: click through every reachable screen on web and desktop — none may render the legacy design.
 
 ### Definition of Done
 All FRs met; both themes verified on every screen; contract exports documented; Redact review UI (built in parallel) renders inside the shell without contract violations; `pnpm typecheck` and all tests pass across `@ormont/ui`, `@ormont/app-shell`, `@ormont/web`.
