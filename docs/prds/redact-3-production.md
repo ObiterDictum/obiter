@@ -670,7 +670,7 @@ Commands to pass with no errors:
 ```bash
 pnpm --filter @ormont/redaction-policy typecheck
 pnpm --filter @ormont/api typecheck
-pnpm --filter @ormont/app-shell typecheck
+pnpm --filter @ormont/redact-ui typecheck
 ```
 
 **Testing:**
@@ -680,7 +680,7 @@ Commands to pass with no failures:
 ```bash
 pnpm --filter @ormont/redaction-policy test
 pnpm --filter @ormont/api test
-pnpm --filter @ormont/app-shell test
+pnpm --filter @ormont/redact-ui test
 ```
 
 **Documentation updates:**
@@ -768,7 +768,7 @@ The Redaction sidebar entry was activated in Phase 2 (Redact PRD 2, FR11). This 
 |----|-------------|
 | FR6.1 | `pnpm --filter @ormont/redaction-policy typecheck` passes with zero errors |
 | FR6.2 | `pnpm --filter @ormont/api typecheck` passes with zero errors |
-| FR6.3 | `pnpm --filter @ormont/app-shell typecheck` passes with zero errors |
+| FR6.3 | `pnpm --filter @ormont/redact-ui typecheck` passes with zero errors |
 | FR6.4 | `pnpm --filter @ormont/redaction-policy test` passes with zero failures |
 | FR6.5 | `pnpm --filter @ormont/api test` passes with zero failures |
 | FR6.6 | `docs/current-product-scope.md` updated: Redaction moved to Implemented Navigation |
