@@ -1,5 +1,5 @@
 import { type FormEvent, type RefObject } from 'react'
-import { MagnifyingGlassIcon, XMarkIcon } from '@heroicons/react/24/outline'
+import { MagnifyingGlass, X } from '@phosphor-icons/react'
 
 interface SearchCommandBarProps {
   activeFilterCount: number
@@ -50,7 +50,7 @@ export function SearchCommandBar({
           />
         </label>
         <button className="legal-search__submit" type="submit" disabled={isSearching}>
-          <MagnifyingGlassIcon aria-hidden="true" />
+          <MagnifyingGlass aria-hidden="true" />
           <span>Search</span>
         </button>
       </div>
@@ -70,7 +70,7 @@ export function SearchCommandBar({
                 type="button"
                 onClick={() => onRemoveFilter('court')}
               >
-                <XMarkIcon aria-hidden="true" />
+                <X aria-hidden="true" />
               </button>
             </span>
           ) : null}
@@ -82,7 +82,7 @@ export function SearchCommandBar({
                 type="button"
                 onClick={() => onRemoveFilter('dateFrom')}
               >
-                <XMarkIcon aria-hidden="true" />
+                <X aria-hidden="true" />
               </button>
             </span>
           ) : null}
@@ -94,7 +94,7 @@ export function SearchCommandBar({
                 type="button"
                 onClick={() => onRemoveFilter('dateTo')}
               >
-                <XMarkIcon aria-hidden="true" />
+                <X aria-hidden="true" />
               </button>
             </span>
           ) : null}

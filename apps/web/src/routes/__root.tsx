@@ -29,6 +29,14 @@ export const Route = createRootRouteWithContext<RouterContext>()({
     ],
     links: [
       {
+        rel: 'preconnect',
+        href: 'https://api.fontshare.com',
+      },
+      {
+        rel: 'stylesheet',
+        href: 'https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700&f[]=jetbrains-mono@400,500&display=swap',
+      },
+      {
         href: appCss,
         rel: 'stylesheet',
       },
@@ -40,14 +48,12 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 
 function RootDocument({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" style={{ background: '#000000' }}>
+    <html lang="en" data-theme="light">
       <head>
         <HeadContent />
       </head>
-      <body style={{ background: '#000000', margin: 0, overflow: 'hidden' }}>
-        <div style={{ background: '#000000', minHeight: '100dvh', overflow: 'hidden' }}>
-          {children}
-        </div>
+      <body style={{ margin: 0 }}>
+        {children}
         <Scripts />
       </body>
     </html>
