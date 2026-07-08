@@ -157,7 +157,16 @@ Rampart outputs BIO token tags for 17 entity types. These are decoded into conti
 
 The label strings in this table are indicative. The exact Rampart label names (including whether dates of birth are emitted as a distinct `DOB` label or folded into `DATE`) MUST be verified against the `@nationaldesignstudio/rampart` package at implementation time, before `rampart-map.ts` is written. The mapping module MUST fail loudly (typed error at load time) on an unrecognised label rather than silently dropping spans.
 
-The same pre-implementation spike MUST confirm Node.js server-side compatibility. The package's npm description positions it as running "entirely in the browser"; before any Phase 1 code is written, verify that `createGuard({ device: 'cpu' })` initialises under Node.js, that `guard.protect(text)` returns character offsets against the input string as this PRD assumes, and that no browser-only APIs are required. If the package proves browser-only, the fallback is loading the same ONNX model directly via `@huggingface/transformers` (which runs in Node) and reimplementing the deterministic recognizer layer — a scope change that must be surfaced before the build starts, not discovered mid-sprint.
+### Rampart Spike Results (run July 2026 — plan owner)
+
+The mandated pre-implementation spike was executed against `@nationaldesignstudio/rampart` 0.1.3 under Node.js. Findings, which are binding on the detection module:
+
+1. **Node.js works.** `createGuard({ device: 'cpu' })` initialises server-side (guard ready in ~2.8s cold including model load; inference ~16ms per call). No browser-only APIs. The browser-only fallback plan is not needed.
+2. **`guard.protect()` is the wrong API for this product.** It returns `{ text, placeholders }` — masked text with reversible placeholders — not character-offset spans. Span-level detection uses the package's lower-level exports: `detectHeuristics(text)` (deterministic layer) and `detectNer(text, classifier)` with `loadNerClassifier({ device: 'cpu' })`. Both return spans shaped `{ start, end, label, score, source: 'heuristic' | 'ner', text }`, which map directly to Ormont spans (`heuristic` → `rampart_deterministic`, `ner` → `rampart_model`).
+3. **The real model label space (17, from the model config's `id2label`):** `BANK_ACCOUNT`, `BUILDING_NUMBER`, `CITY`, `DRIVERS_LICENSE`, `EMAIL`, `GIVEN_NAME`, `GOVERNMENT_ID`, `PASSPORT`, `PHONE`, `ROUTING_NUMBER`, `SECONDARY_ADDRESS`, `STATE`, `STREET_NAME`, `SURNAME`, `TAX_ID`, `URL`, `ZIP_CODE`. The heuristic layer emits `EMAIL`, `URL`, `IP_ADDRESS`, `CREDIT_CARD`, `SSN`. Consequences:
+   - `CITY`, `STATE`, `ZIP_CODE` exist and fire on virtually every UK address — they map to `address` (added to `rampart-map.ts`).
+   - **`DATE` and `DOB` do not exist.** The base model detects no dates at all. Date and date-of-birth detection therefore falls to the UK supplement in v1 (see F20) and to fine-tuning later; the map retains DATE/DOB entries so a future checkpoint that emits them maps correctly.
+4. **Pipeline ordering matters.** Running NER on raw text produced a bleed artifact (a `PHONE` span swallowing part of an adjacent card number). The detection module MUST mirror the guard's internal order: run `detectHeuristics` first, mask those spans (`premask` / `projectMaskedSpan` are exported), then run NER, then merge — never NER on raw unmasked text.
 
 ### UK Supplement Patterns
 
@@ -228,8 +237,8 @@ Status transitions:
 
 ### Rampart Detection Integration (F1-F8)
 
-- **F1.** The detection module MUST load the Rampart guard via `createGuard({ device: 'cpu' })` from `@nationaldesignstudio/rampart` and cache it at module level as a singleton.
-- **F2.** The detection module MUST call `guard.protect(text)` and receive `{ text, spans }` where each span has a label and character offsets.
+- **F1.** The detection module MUST load the Rampart NER classifier via `loadNerClassifier({ device: 'cpu' })` from `@nationaldesignstudio/rampart` and cache it at module level as a singleton. (Corrected from `createGuard` per the Rampart Spike Results — the guard's `protect()` returns placeholders, not spans.)
+- **F2.** The detection module MUST produce character-offset spans by running `detectHeuristics(text)` first, masking those spans before NER (`premask`/`projectMaskedSpan`), then `detectNer(maskedText, classifier)` with offsets projected back to the original text, then merging — never NER on raw unmasked text (see Rampart Spike Results, finding 4).
 - **F3.** The detection module MUST map Rampart entity labels to Ormont span categories per the mapping table above.
 - **F4.** The detection module MUST handle empty text input: return `{ spans: [] }` without error.
 - **F5.** The detection module MUST chunk documents exceeding 512 tokens, run detection per chunk, adjust offsets, and merge results.
@@ -274,7 +283,7 @@ Status transitions:
   - `Decisions`: `Record<string, { decision: SpanDecision, decidedBy: string, decidedAt: string }>`.
   - `RunSummary`: `{ totalSpans: number, byCategory: Record<SpanCategory, number>, bySource: { rampartModel: number, rampartDeterministic: number, ukSupplement: number }, reviewedCount: number, unreviewedCount: number }`.
 - **F19.** `rampart-map.ts` MUST export `mapRampartSpans(rampartOutput: RampartOutput): RedactionSpan[]` that converts Rampart entity labels and offsets to Ormont span categories.
-- **F20.** `supplement.ts` MUST export `supplementSpans(text: string): RedactionSpan[]` that applies regex patterns for UK National Insurance numbers, case references, and organisation names.
+- **F20.** `supplement.ts` MUST export `supplementSpans(text: string): RedactionSpan[]` that applies regex patterns for UK National Insurance numbers, case references, and organisation names — **plus dates** (added July 2026: the spike proved the base model emits no date labels, so date detection is supplement work in v1): legal-format dates (`15 March 2024`, `the 15th day of March 2024`, `15/03/2024`) as category `date` with suggestion `keep`, and dates in a date-of-birth context (preceded by phrases like `born on`, `date of birth`, `DOB`) as category `date` with suggestion `redact`.
 - **F21.** `merge.ts` MUST export `mergeSpans(rampartSpans: RedactionSpan[], supplementSpans: RedactionSpan[]): RedactionSpan[]` that:
   - Sorts both arrays by `start` position.
   - For overlapping spans, keeps the Rampart span and discards the supplement span.

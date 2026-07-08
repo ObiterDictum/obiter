@@ -46,6 +46,59 @@ export const artifactTypeSchema = z.enum([
 ])
 export type ArtifactType = z.infer<typeof artifactTypeSchema>
 
+export const spanCategorySchema = z.enum([
+  'person_name',
+  'email',
+  'phone',
+  'address',
+  'date',
+  'government_id',
+  'account_number',
+  'passport',
+  'drivers_license',
+  'url',
+  'ip_address',
+  'national_insurance',
+  'case_reference',
+  'organisation_name',
+  'secret',
+])
+export type SpanCategory = z.infer<typeof spanCategorySchema>
+
+export const spanSourceSchema = z.enum(['rampart_model', 'rampart_deterministic', 'uk_supplement'])
+export type SpanSource = z.infer<typeof spanSourceSchema>
+
+export const redactionRunStatusSchema = z.enum([
+  'pending',
+  'detecting',
+  'ready_for_review',
+  'reviewing',
+  'finalized',
+  'failed',
+])
+export type RedactionRunStatus = z.infer<typeof redactionRunStatusSchema>
+
+export const redactionPolicyModeSchema = z.enum(['internal_ai_minimisation', 'external_sharing'])
+export type RedactionPolicyMode = z.infer<typeof redactionPolicyModeSchema>
+
+export const spanConfidenceSchema = z.enum(['high', 'medium', 'low'])
+export type SpanConfidence = z.infer<typeof spanConfidenceSchema>
+
+export const spanSuggestionSchema = z.enum(['redact', 'keep'])
+export type SpanSuggestion = z.infer<typeof spanSuggestionSchema>
+
+export const spanDecisionSchema = z.enum([
+  'accept',
+  'reject',
+  'override_redact',
+  'override_keep',
+  'pseudonymise',
+])
+export type SpanDecision = z.infer<typeof spanDecisionSchema>
+
+export const outputModeSchema = z.enum(['redacted', 'pseudonymised'])
+export type OutputMode = z.infer<typeof outputModeSchema>
+
 export type Tone = 'ink' | 'sage' | 'amber' | 'rust'
 
 export const currentUserSchema = z.object({
@@ -83,6 +136,12 @@ export const apiErrorCodeSchema = z.enum([
   'storage_unavailable',
   'job_unavailable',
   'conflict_detected',
+  'redaction_run_not_found',
+  'span_not_found',
+  'redaction_run_not_reviewable',
+  'redaction_already_finalized',
+  'redaction_detection_failed',
+  'redaction_span_integrity_error',
 ])
 export type ApiErrorCode = z.infer<typeof apiErrorCodeSchema>
 
