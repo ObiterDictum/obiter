@@ -2,7 +2,7 @@
 
 ## External Constraints
 
-Ormont is not being built in a neutral environment. The legal data and privacy constraints shape the product directly.
+Obiter is not being built in a neutral environment. The legal data and privacy constraints shape the product directly.
 
 ## Compliance Direction
 
@@ -28,7 +28,7 @@ That means security and audit controls are a build requirement, not a later clea
 
 OpenAI Privacy Filter provides a strong base layer for PII detection and redaction workflows, especially because it can run locally and process long inputs. It should be used as a component, not treated as a complete legal redaction solution.
 
-Ormont Redact still needs:
+Obiter Redact still needs:
 
 - legal-specific policy rules
 - human review and approval paths
@@ -128,4 +128,4 @@ It should not silently "learn" from client matter data. Retrieval over trusted l
 
 ## Risk Posture
 
-Ormont should make conservative claims. For example, citation treatment detection should be framed as citation context or possible treatment until the system has enough validation to make stronger assertions safely.
+Obiter should make conservative claims. For example, citation treatment detection should be framed as citation context or possible treatment until the system has enough validation to make stronger assertions safely.

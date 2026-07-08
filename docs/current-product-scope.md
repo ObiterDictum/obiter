@@ -10,7 +10,7 @@ Status is tracked in three tiers. "Implemented" means a user action reaches the 
 
 ### Implemented end-to-end (API + UI)
 
-- Search: the legal source search surface. It searches Ormont-owned stored legal sources first and queues Find Case Law hydration in the background on misses. This is currently the only UI surface wired to the real API.
+- Search: the legal source search surface. It searches Obiter-owned stored legal sources first and queues Find Case Law hydration in the background on misses. This is currently the only UI surface wired to the real API.
 
 Search owns:
 
@@ -60,7 +60,7 @@ The current implementation is the first slice of that surface: case law search a
 
 ## Naming Rules
 
-- The user-facing product name is **Obiter** (decided July 2026). "Ormont" remains only as an internal identifier — `@ormont/*` package names, `--ormont-*` token prefixes, and existing planning docs — until a separate rename cleanup.
+- The user-facing product name is **Obiter** (decided July 2026). "Obiter" remains only as an internal identifier — `@obiter/*` package names, `--obiter-*` token prefixes, and existing planning docs — until a separate rename cleanup.
 - Use "Home" in navigation for the top-level information hub. The implementation may keep `/workspace` until route cleanup is handled separately.
 - Do not use "Atlas" as the product or architecture label for the Search surface.
 - Use "Search" for the implemented legal source search surface.
@@ -70,4 +70,4 @@ The current implementation is the first slice of that surface: case law search a
 
 ## Implementation Boundary
 
-The current case law implementation keeps a PostgreSQL source record for fetched judgments, including provider metadata, content hash, source/XML/PDF URIs, raw Atom entry metadata, and hydrated document payloads when available. Meilisearch is a derived index for fast lexical retrieval, not the source of record. Find Case Law calls are queued as background hydration after Ormont-owned storage misses so the user-visible search path is not blocked on the external provider.
+The current case law implementation keeps a PostgreSQL source record for fetched judgments, including provider metadata, content hash, source/XML/PDF URIs, raw Atom entry metadata, and hydrated document payloads when available. Meilisearch is a derived index for fast lexical retrieval, not the source of record. Find Case Law calls are queued as background hydration after Obiter-owned storage misses so the user-visible search path is not blocked on the external provider.

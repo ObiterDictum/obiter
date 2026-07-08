@@ -2,7 +2,7 @@
 
 Priority: `P2 university verification`
 
-This document defines the evidence package Ormont should produce when it needs to make a result verifiable by an external reviewer. It applies to Search, Verify, Research, Bench, and Pi-backed agent runs.
+This document defines the evidence package Obiter should produce when it needs to make a result verifiable by an external reviewer. It applies to Search, Verify, Research, Bench, and Pi-backed agent runs.
 
 ## Purpose
 

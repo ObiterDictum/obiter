@@ -49,7 +49,7 @@ async function sendMagicLink(env: ApiEnv, email: string, url: string) {
 
 export function createAuth(env: ApiEnv, pool: Pool) {
   return betterAuth({
-    appName: 'Ormont',
+    appName: 'Obiter',
     baseURL: env.authBaseUrl,
     secret: env.authSecret,
     database: pool,

@@ -4,7 +4,7 @@ import type {
   SpanDecision,
   SpanSource,
   SpanSuggestion,
-} from '@ormont/contracts'
+} from '@obiter/contracts'
 
 export type { SpanCategory, SpanConfidence, SpanDecision, SpanSource, SpanSuggestion }
 

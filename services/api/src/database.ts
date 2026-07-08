@@ -1,6 +1,6 @@
 import { Pool } from 'pg'
 import type { PoolClient, QueryResult, QueryResultRow } from 'pg'
-import type { CurrentOrganisation, CurrentUser, UserRole } from '@ormont/contracts'
+import type { CurrentOrganisation, CurrentUser, UserRole } from '@obiter/contracts'
 import type { ApiEnv } from './env'
 
 export interface SessionUserRecord {

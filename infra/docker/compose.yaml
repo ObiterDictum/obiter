@@ -1,33 +1,33 @@
 # Local development database for Obiter.
 #
 # Matches the API's defaults in services/api/src/env.ts:
-#   DATABASE_URL        = postgres://ormont:ormont@localhost:5432/ormont
-#   TEST_DATABASE_URL   = postgres://ormont:ormont@localhost:5432/ormont_test
+#   DATABASE_URL        = postgres://obiter:obiter@localhost:5432/obiter
+#   TEST_DATABASE_URL   = postgres://obiter:obiter@localhost:5432/obiter_test
 #
 # Usage:
 #   docker compose up -d
 #   # then run migrations against both databases (see infra/docker/README.md)
 #   pnpm dev:api
 #
-# The init script creates the ormont_test database on first boot (empty volume).
+# The init script creates the obiter_test database on first boot (empty volume).
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: ormont-postgres
+    container_name: obiter-postgres
     environment:
-      POSTGRES_USER: ormont
-      POSTGRES_PASSWORD: ormont
-      POSTGRES_DB: ormont
+      POSTGRES_USER: obiter
+      POSTGRES_PASSWORD: obiter
+      POSTGRES_DB: obiter
     ports:
       - "5432:5432"
     volumes:
-      - ormont_pg_data:/var/lib/postgresql/data
+      - obiter_pg_data:/var/lib/postgresql/data
       - ./init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ormont -d ormont"]
+      test: ["CMD-SHELL", "pg_isready -U obiter -d obiter"]
       interval: 5s
       timeout: 3s
       retries: 10
 
 volumes:
-  ormont_pg_data:
+  obiter_pg_data:

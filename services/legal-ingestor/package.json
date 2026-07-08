@@ -1,5 +1,5 @@
 {
-  "name": "@ormont/legal-ingestor",
+  "name": "@obiter/legal-ingestor",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -9,8 +9,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@ormont/legal-schema": "workspace:*",
-    "@ormont/search-client": "workspace:*",
+    "@obiter/legal-schema": "workspace:*",
+    "@obiter/search-client": "workspace:*",
     "meilisearch": "^0.51.0"
   },
   "devDependencies": {

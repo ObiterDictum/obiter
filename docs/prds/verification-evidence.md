@@ -2,9 +2,9 @@
 
 ## Summary
 
-Verification Evidence is Ormont's shared trace and artifact model for inspectable legal outputs. It records how a query, draft, research answer, benchmark case, or Pi agent run moved from input to evidence to output.
+Verification Evidence is Obiter's shared trace and artifact model for inspectable legal outputs. It records how a query, draft, research answer, benchmark case, or Pi agent run moved from input to evidence to output.
 
-[Bench](bench.md) measures quality across many cases. Verification Evidence explains a single result. Together they make Ormont reviewable by lawyers, builders, and university partners.
+[Bench](bench.md) measures quality across many cases. Verification Evidence explains a single result. Together they make Obiter reviewable by lawyers, builders, and university partners.
 
 See the detailed implementation spec at [docs/specs/verification-evidence.md](../specs/verification-evidence.md).
 
@@ -49,7 +49,7 @@ Needs to inspect the evidence behind a claim before relying on an output.
 
 ### Academic Reviewer
 
-Needs to evaluate whether Ormont's output is grounded in evidence.
+Needs to evaluate whether Obiter's output is grounded in evidence.
 
 ### Internal Builder
 

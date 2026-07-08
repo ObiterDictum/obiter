@@ -1,6 +1,6 @@
 import { Link, useNavigate } from '@tanstack/react-router'
 import { ArrowRight, Clock, Folders, MagnifyingGlass, Sparkle, X } from '@phosphor-icons/react'
-import type { AppPlatform } from '@ormont/contracts'
+import type { AppPlatform } from '@obiter/contracts'
 import { useState, type FormEvent } from 'react'
 import { changelogQueryOptions } from '../changelog'
 import {

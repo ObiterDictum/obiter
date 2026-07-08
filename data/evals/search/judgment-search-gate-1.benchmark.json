@@ -4,7 +4,7 @@
   "family": "search",
   "version": "0.1.0",
   "description": "Checks whether judgment Search preserves exact lookup priority, body-text retrieval, empty states, ambiguity handling, and filter behavior.",
-  "owner": "ormont-search",
+  "owner": "obiter-search",
   "dataset_ids": [
     "search.judgment.gate1"
   ],

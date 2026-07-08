@@ -2,7 +2,7 @@
 
 Priority: `P2 university verification`
 
-Bench is the repeatable evaluation layer for Search, Verify, Research, Redact, and Pi-backed agent workflows. It exists to make quality claims inspectable by Ormont and by external academic reviewers.
+Bench is the repeatable evaluation layer for Search, Verify, Research, Redact, and Pi-backed agent workflows. It exists to make quality claims inspectable by Obiter and by external academic reviewers.
 
 Bench must measure system behavior without storing secrets, private matter data, raw prompts containing matter facts, embeddings, or sensitive stack traces.
 

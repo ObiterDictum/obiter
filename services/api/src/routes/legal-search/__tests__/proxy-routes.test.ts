@@ -14,18 +14,18 @@ const searchClientMock = vi.hoisted(() => ({
   search: vi.fn(),
 }))
 
-vi.mock('@ormont/search-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@ormont/search-client')>()),
+vi.mock('@obiter/search-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@obiter/search-client')>()),
   ...searchClientMock,
 }))
 
 const env: ApiEnv = {
-  databaseUrl: 'postgres://ormont:ormont@localhost:5432/ormont',
+  databaseUrl: 'postgres://obiter:obiter@localhost:5432/obiter',
   authSecret: 'dev-only-better-auth-secret',
   authBaseUrl: 'http://localhost:8787',
   webOrigin: 'http://localhost:3000',
   marketingOrigin: null,
-  desktopOrigin: 'ormont://desktop-auth',
+  desktopOrigin: 'obiter://desktop-auth',
   magicLinkWebhookUrl: null,
   magicLinkWebhookSecret: null,
   meilisearchHost: 'http://localhost:7700',
@@ -678,7 +678,7 @@ describe('createLegalSearchProxyRoutes', () => {
     )
   })
 
-  it('serves later search misses from Ormont-owned source storage without calling Find Case Law again', async () => {
+  it('serves later search misses from Obiter-owned source storage without calling Find Case Law again', async () => {
     searchClientMock.search.mockResolvedValue({
       hits: [],
       query: 'Potanina',
@@ -1608,7 +1608,7 @@ describe('createLegalSearchProxyRoutes', () => {
     )
   })
 
-  it('stores direct live document fallback in Ormont source storage', async () => {
+  it('stores direct live document fallback in Obiter source storage', async () => {
     searchClientMock.search.mockResolvedValue({
       hits: [],
       query: 'Miah',
@@ -2082,7 +2082,7 @@ describe('Find Case Law parsing', () => {
 })
 
 const describeLiveFindCaseLaw =
-  process.env.ORMONT_RUN_LIVE_FIND_CASE_LAW_TESTS === '1' ? describe : describe.skip
+  process.env.OBITER_RUN_LIVE_FIND_CASE_LAW_TESTS === '1' ? describe : describe.skip
 
 describeLiveFindCaseLaw('Find Case Law live retrieval', () => {
   it.each(liveFindCaseLawCourtCases)(

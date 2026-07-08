@@ -1,8 +1,8 @@
-# Ormont System Map
+# Obiter System Map
 
-This is the skill-local source map for Ormont PR reviews. Treat it as the review operating map and validate current project facts against code and the review knowledge repo before relying on them.
+This is the skill-local source map for Obiter PR reviews. Treat it as the review operating map and validate current project facts against code and the review knowledge repo before relying on them.
 
-Human visual companion: `ormont-system-map.html`.
+Human visual companion: `obiter-system-map.html`.
 
 ## Layer Map
 
@@ -46,4 +46,4 @@ review repo
 
 ## Map Update Rule
 
-When a review validates a concrete internal flow, record durable details in `C:/Users/karl-/Documents/source/OrmontLex/review/ormont/architecture/` or the relevant findings-pattern file. Keep examples synthetic and do not store secrets, private matter data, raw legal text, prompts, embeddings, sensitive logs, screenshots, customer data, or object keys containing sensitive names.
+When a review validates a concrete internal flow, record durable details in `C:/Users/karl-/Documents/source/OrmontLex/review/obiter/architecture/` or the relevant findings-pattern file. Keep examples synthetic and do not store secrets, private matter data, raw legal text, prompts, embeddings, sensitive logs, screenshots, customer data, or object keys containing sensitive names.

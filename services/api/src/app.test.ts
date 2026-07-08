@@ -9,7 +9,7 @@ const searchClientMock = vi.hoisted(() => ({
   search: vi.fn(),
 }))
 
-vi.mock('@ormont/search-client', () => searchClientMock)
+vi.mock('@obiter/search-client', () => searchClientMock)
 
 type Auth = ReturnType<typeof createAuth>
 type QueryMock = (...args: unknown[]) => Promise<unknown>
@@ -23,12 +23,12 @@ interface ErrorBody {
 }
 
 const testEnv: ApiEnv = {
-  databaseUrl: 'postgres://ormont:ormont@localhost:5432/ormont',
+  databaseUrl: 'postgres://obiter:obiter@localhost:5432/obiter',
   authSecret: 'dev-only-better-auth-secret',
   authBaseUrl: 'http://localhost:8787',
   webOrigin: 'http://localhost:3000',
   marketingOrigin: null,
-  desktopOrigin: 'ormont://desktop-auth',
+  desktopOrigin: 'obiter://desktop-auth',
   magicLinkWebhookUrl: null,
   magicLinkWebhookSecret: null,
   meilisearchHost: 'http://localhost:7700',
@@ -68,7 +68,7 @@ describe('createApiApp', () => {
       new Response(
         JSON.stringify([
           {
-            html_url: 'https://github.com/OrmontLex/ormont/releases/tag/v1',
+            html_url: 'https://github.com/ObiterDictum/obiter/releases/tag/v1',
             name: 'Initial search release',
             published_at: '2026-05-22T10:00:00Z',
             tag_name: 'v1',
@@ -95,7 +95,7 @@ describe('createApiApp', () => {
           {
             date: '2026-05-22',
             title: 'Initial search release',
-            url: 'https://github.com/OrmontLex/ormont/releases/tag/v1',
+            url: 'https://github.com/ObiterDictum/obiter/releases/tag/v1',
           },
         ],
         source: 'github_releases',
@@ -151,12 +151,12 @@ describe('createApiApp', () => {
 
     const response = await app.request('/api/health', {
       headers: {
-        Origin: 'ormont://desktop-auth',
+        Origin: 'obiter://desktop-auth',
       },
     })
 
     expect(response.headers.get('access-control-allow-origin')).toBe(
-      'ormont://desktop-auth',
+      'obiter://desktop-auth',
     )
   })
 
