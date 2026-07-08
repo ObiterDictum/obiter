@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "name": "Judgment Search Gate 1",
   "family": "search",
-  "source": "Synthetic public-source search tasks derived from Ormont's judgment Search requirements.",
+  "source": "Synthetic public-source search tasks derived from Obiter's judgment Search requirements.",
   "licence": "internal-fixture-metadata-only",
   "jurisdiction": "england-and-wales",
   "legal_domain": "general",

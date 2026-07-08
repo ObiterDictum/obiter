@@ -1,5 +1,5 @@
 import { queryOptions } from '@tanstack/react-query'
-import type { AppPlatform, MeResponse, ShellSnapshot } from '@ormont/contracts'
+import type { AppPlatform, MeResponse, ShellSnapshot } from '@obiter/contracts'
 
 /**
  * Phase 0 fixture layer. Still powers the Home/Matters demo views while M2

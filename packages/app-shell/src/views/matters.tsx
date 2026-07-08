@@ -1,7 +1,7 @@
 import { Link } from '@tanstack/react-router'
 import { ArrowRight, Folders, MagnifyingGlass } from '@phosphor-icons/react'
-import { Card, EmptyState } from '@ormont/ui'
-import type { AppPlatform } from '@ormont/contracts'
+import { Card, EmptyState } from '@obiter/ui'
+import type { AppPlatform } from '@obiter/contracts'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { findMatterRecord, shellSnapshotQueryOptions } from '../fixtures'
 

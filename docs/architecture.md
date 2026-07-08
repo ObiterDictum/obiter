@@ -2,12 +2,12 @@
 
 ## System Shape
 
-Ormont should be modular from the beginning.
+Obiter should be modular from the beginning.
 
 ```text
 vault.legal web app
         |
-Ormont desktop app
+Obiter desktop app
         |
 Matter workspace
         |
@@ -29,7 +29,7 @@ API
 ## Monorepo Layout
 
 ```text
-ormont/
+obiter/
   apps/
     web/
     desktop/
@@ -138,7 +138,7 @@ The initial shared shell foundation for Phase 0.1 should live in:
 
 ## Deployment Direction
 
-- Cloudflare Pages for public web surfaces such as `ormont.tech` and documentation
+- Cloudflare Pages for public web surfaces such as `obiter.tech` and documentation
 - Hetzner VPS for API, workers, routing, PostgreSQL, Redis, and search in the early stage
 - Hetzner Object Storage for uploads, source files, artifacts, and benchmark outputs
 - future GPU or ML worker for redaction, embeddings, reranking, and model evaluation

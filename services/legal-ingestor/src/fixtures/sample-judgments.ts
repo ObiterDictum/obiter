@@ -1,4 +1,4 @@
-import type { LegalAuthority } from '@ormont/legal-schema'
+import type { LegalAuthority } from '@obiter/legal-schema'
 
 export const sampleJudgments: LegalAuthority[] = [
   {

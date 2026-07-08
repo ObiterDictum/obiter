@@ -82,7 +82,7 @@ Useful product context:
 - [Roadmap](docs/roadmap.md)
 - [Specs](docs/specs/README.md)
 
-Package scopes still use `@ormont/*` while the product rename is in progress.
+Package scopes still use `@obiter/*` while the product rename is in progress.
 
 ## License
 

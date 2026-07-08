@@ -4,7 +4,7 @@ import {
   rankLegalSearchHitsByExactMatch,
   search,
   type LegalSearchFilters,
-} from '@ormont/search-client'
+} from '@obiter/search-client'
 import type { ApiEnv } from '../../env'
 import { isSupportedFindCaseLawRequest } from './atom-parser'
 import { createMojRateLimiter } from './rate-limiter'

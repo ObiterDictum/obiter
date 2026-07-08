@@ -28,20 +28,20 @@ describe('readApiEnv', () => {
 
   it('uses TEST_DATABASE_URL as the only database URL in test mode', () => {
     process.env.NODE_ENV = 'test'
-    process.env.DATABASE_URL = 'postgres://ormont:ormont@db.example.com:5432/prod'
-    process.env.TEST_DATABASE_URL = 'postgres://ormont:ormont@db.example.com:5432/ormont_test'
+    process.env.DATABASE_URL = 'postgres://obiter:obiter@db.example.com:5432/prod'
+    process.env.TEST_DATABASE_URL = 'postgres://obiter:obiter@db.example.com:5432/obiter_test'
 
     const env = readApiEnv()
 
     expect(env.databaseUrl).toBe(
-      'postgres://ormont:ormont@db.example.com:5432/ormont_test',
+      'postgres://obiter:obiter@db.example.com:5432/obiter_test',
     )
     expect(env.nodeEnv).toBe('test')
   })
 
   it('fails loudly when test mode does not have a separate test database', () => {
     process.env.NODE_ENV = 'test'
-    process.env.DATABASE_URL = 'postgres://ormont:ormont@db.example.com:5432/prod'
+    process.env.DATABASE_URL = 'postgres://obiter:obiter@db.example.com:5432/prod'
     delete process.env.TEST_DATABASE_URL
 
     expect(() => readApiEnv()).toThrow('Missing required test environment values')
@@ -56,7 +56,7 @@ describe('readApiEnv', () => {
     delete process.env.DATABASE_URL
     delete process.env.BETTER_AUTH_SECRET
     delete process.env.BETTER_AUTH_URL
-    delete process.env.ORMONT_WEB_ORIGIN
+    delete process.env.OBITER_WEB_ORIGIN
     delete process.env.MEILISEARCH_HOST
     delete process.env.MEILISEARCH_SEARCH_API_KEY
     delete process.env.MEILISEARCH_ADMIN_API_KEY
@@ -67,15 +67,15 @@ describe('readApiEnv', () => {
 
   it('rejects weak production secrets', () => {
     process.env.NODE_ENV = 'production'
-    process.env.DATABASE_URL = 'postgres://ormont:ormont@db.example.com:5432/ormont'
+    process.env.DATABASE_URL = 'postgres://obiter:obiter@db.example.com:5432/obiter'
     process.env.BETTER_AUTH_SECRET = 'short-secret'
-    process.env.BETTER_AUTH_URL = 'https://api.ormont.example'
-    process.env.ORMONT_WEB_ORIGIN = 'https://app.ormont.example'
-    process.env.ORMONT_MAGIC_LINK_WEBHOOK_URL =
-      'https://mail.ormont.example/magic-link'
-    process.env.ORMONT_MAGIC_LINK_WEBHOOK_SECRET =
+    process.env.BETTER_AUTH_URL = 'https://api.obiter.example'
+    process.env.OBITER_WEB_ORIGIN = 'https://app.obiter.example'
+    process.env.OBITER_MAGIC_LINK_WEBHOOK_URL =
+      'https://mail.obiter.example/magic-link'
+    process.env.OBITER_MAGIC_LINK_WEBHOOK_SECRET =
       '0123456789abcdef0123456789abcdef'
-    process.env.MEILISEARCH_HOST = 'https://search.ormont.example'
+    process.env.MEILISEARCH_HOST = 'https://search.obiter.example'
     process.env.MEILISEARCH_SEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
     process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'
     process.env.LEGAL_AUTHORITIES_INDEX = 'legal_authorities'
@@ -90,13 +90,13 @@ describe('readApiEnv', () => {
     process.env.NODE_ENV = 'production'
     process.env.DATABASE_URL = 'not a url'
     process.env.BETTER_AUTH_SECRET = '0123456789abcdef0123456789abcdef'
-    process.env.BETTER_AUTH_URL = 'https://api.ormont.example'
-    process.env.ORMONT_WEB_ORIGIN = 'https://app.ormont.example'
-    process.env.ORMONT_MAGIC_LINK_WEBHOOK_URL =
-      'https://mail.ormont.example/magic-link'
-    process.env.ORMONT_MAGIC_LINK_WEBHOOK_SECRET =
+    process.env.BETTER_AUTH_URL = 'https://api.obiter.example'
+    process.env.OBITER_WEB_ORIGIN = 'https://app.obiter.example'
+    process.env.OBITER_MAGIC_LINK_WEBHOOK_URL =
+      'https://mail.obiter.example/magic-link'
+    process.env.OBITER_MAGIC_LINK_WEBHOOK_SECRET =
       '0123456789abcdef0123456789abcdef'
-    process.env.MEILISEARCH_HOST = 'https://search.ormont.example'
+    process.env.MEILISEARCH_HOST = 'https://search.obiter.example'
     process.env.MEILISEARCH_SEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
     process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'
     process.env.LEGAL_AUTHORITIES_INDEX = 'legal_authorities'
@@ -104,7 +104,7 @@ describe('readApiEnv', () => {
 
     expect(() => readApiEnv()).toThrow('DATABASE_URL must be a valid URL.')
 
-    process.env.DATABASE_URL = 'postgres://ormont:ormont@db.example.com:5432/ormont'
+    process.env.DATABASE_URL = 'postgres://obiter:obiter@db.example.com:5432/obiter'
     process.env.PORT = '70000'
 
     expect(() => readApiEnv()).toThrow(
@@ -116,7 +116,7 @@ describe('readApiEnv', () => {
 
     expect(() => readApiEnv()).toThrow('MEILISEARCH_HOST must be a valid URL.')
 
-    process.env.MEILISEARCH_HOST = 'https://search.ormont.example'
+    process.env.MEILISEARCH_HOST = 'https://search.obiter.example'
     process.env.LEGAL_AUTHORITIES_INDEX = 'legal authorities'
 
     expect(() => readApiEnv()).toThrow(
@@ -138,16 +138,16 @@ describe('readApiEnv', () => {
 
   it('parses valid production configuration', () => {
     process.env.NODE_ENV = 'production'
-    process.env.DATABASE_URL = 'postgres://ormont:ormont@db.example.com:5432/ormont'
+    process.env.DATABASE_URL = 'postgres://obiter:obiter@db.example.com:5432/obiter'
     process.env.BETTER_AUTH_SECRET = '0123456789abcdef0123456789abcdef'
-    process.env.BETTER_AUTH_URL = 'https://api.ormont.example/'
-    process.env.ORMONT_WEB_ORIGIN = 'https://app.ormont.example/'
-    process.env.ORMONT_DESKTOP_ORIGIN = 'ormont://desktop-auth'
-    process.env.ORMONT_MAGIC_LINK_WEBHOOK_URL =
-      'https://mail.ormont.example/magic-link'
-    process.env.ORMONT_MAGIC_LINK_WEBHOOK_SECRET =
+    process.env.BETTER_AUTH_URL = 'https://api.obiter.example/'
+    process.env.OBITER_WEB_ORIGIN = 'https://app.obiter.example/'
+    process.env.OBITER_DESKTOP_ORIGIN = 'obiter://desktop-auth'
+    process.env.OBITER_MAGIC_LINK_WEBHOOK_URL =
+      'https://mail.obiter.example/magic-link'
+    process.env.OBITER_MAGIC_LINK_WEBHOOK_SECRET =
       '0123456789abcdef0123456789abcdef'
-    process.env.MEILISEARCH_HOST = 'https://search.ormont.example/'
+    process.env.MEILISEARCH_HOST = 'https://search.obiter.example/'
     process.env.MEILISEARCH_SEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
     process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'
     process.env.LEGAL_AUTHORITIES_INDEX = 'legal_authorities'
@@ -157,13 +157,13 @@ describe('readApiEnv', () => {
 
     const env = readApiEnv()
 
-    expect(env.authBaseUrl).toBe('https://api.ormont.example')
-    expect(env.webOrigin).toBe('https://app.ormont.example')
-    expect(env.desktopOrigin).toBe('ormont://desktop-auth')
+    expect(env.authBaseUrl).toBe('https://api.obiter.example')
+    expect(env.webOrigin).toBe('https://app.obiter.example')
+    expect(env.desktopOrigin).toBe('obiter://desktop-auth')
     expect(env.magicLinkWebhookUrl).toBe(
-      'https://mail.ormont.example/magic-link',
+      'https://mail.obiter.example/magic-link',
     )
-    expect(env.meilisearchHost).toBe('https://search.ormont.example')
+    expect(env.meilisearchHost).toBe('https://search.obiter.example')
     expect(env.meilisearchSearchApiKey).toBe('0123456789abcdef0123456789abcdef')
     expect(env.meilisearchAdminApiKey).toBe('0123456789abcdef0123456789abcdef')
     expect(env.legalAuthoritiesIndex).toBe('legal_authorities')
@@ -174,15 +174,15 @@ describe('readApiEnv', () => {
 
   it('does not allow the legacy Meilisearch API key', () => {
     process.env.NODE_ENV = 'production'
-    process.env.DATABASE_URL = 'postgres://ormont:ormont@db.example.com:5432/ormont'
+    process.env.DATABASE_URL = 'postgres://obiter:obiter@db.example.com:5432/obiter'
     process.env.BETTER_AUTH_SECRET = '0123456789abcdef0123456789abcdef'
-    process.env.BETTER_AUTH_URL = 'https://api.ormont.example'
-    process.env.ORMONT_WEB_ORIGIN = 'https://app.ormont.example'
-    process.env.ORMONT_MAGIC_LINK_WEBHOOK_URL =
-      'https://mail.ormont.example/magic-link'
-    process.env.ORMONT_MAGIC_LINK_WEBHOOK_SECRET =
+    process.env.BETTER_AUTH_URL = 'https://api.obiter.example'
+    process.env.OBITER_WEB_ORIGIN = 'https://app.obiter.example'
+    process.env.OBITER_MAGIC_LINK_WEBHOOK_URL =
+      'https://mail.obiter.example/magic-link'
+    process.env.OBITER_MAGIC_LINK_WEBHOOK_SECRET =
       '0123456789abcdef0123456789abcdef'
-    process.env.MEILISEARCH_HOST = 'https://search.ormont.example'
+    process.env.MEILISEARCH_HOST = 'https://search.obiter.example'
     process.env.MEILISEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
     delete process.env.MEILISEARCH_SEARCH_API_KEY
     process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'

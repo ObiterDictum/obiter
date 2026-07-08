@@ -1,10 +1,10 @@
-# Ormont Rules
+# Obiter Rules
 
 ## Purpose
 
 These rules are mandatory unless a documented architectural decision explicitly overrides them.
 
-Use this file for implementation behavior. Use [PR.md](C:\Users\karl-\Documents\source\Ormont\PR.md) when preparing pull requests and [TESTING.md](C:\Users\karl-\Documents\source\Ormont\TESTING.md) when deciding what to verify.
+Use this file for implementation behavior. Use [PR.md](C:\Users\karl-\Documents\source\Obiter\PR.md) when preparing pull requests and [TESTING.md](C:\Users\karl-\Documents\source\Obiter\TESTING.md) when deciding what to verify.
 
 ## Product Rules
 
@@ -107,14 +107,14 @@ Use this file for implementation behavior. Use [PR.md](C:\Users\karl-\Documents\
 
 ## PR Rules
 
-- Follow [PR.md](C:\Users\karl-\Documents\source\Ormont\PR.md) for every pull request or equivalent change summary.
+- Follow [PR.md](C:\Users\karl-\Documents\source\Obiter\PR.md) for every pull request or equivalent change summary.
 - PR summaries must explain what changed, why it changed, what was tested, what remains risky, and any follow-up work.
 - PR summaries must read like they were written by an engineer for another engineer.
 - Do not write AI-flavored filler, generic confidence language, or empty summaries.
 
 ## Testing Rules
 
-- Follow [TESTING.md](C:\Users\karl-\Documents\source\Ormont\TESTING.md) when deciding what verification is required.
+- Follow [TESTING.md](C:\Users\karl-\Documents\source\Obiter\TESTING.md) when deciding what verification is required.
 - Do not claim something is done if it has not been verified at the appropriate level.
 - Prefer targeted tests close to the changed behavior over broad, unfocused additions.
 - For legal-critical flows, test the failure path as well as the happy path.

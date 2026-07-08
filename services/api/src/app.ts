@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import type { Pool } from 'pg'
-import type { ApiErrorCode, ApiErrorResponse, MeResponse } from '@ormont/contracts'
+import type { ApiErrorCode, ApiErrorResponse, MeResponse } from '@obiter/contracts'
 import { appendAuditLog, findOrganisation, toCurrentUser } from './database'
 import type { ApiEnv } from './env'
 import { createAuth } from './auth'
@@ -132,7 +132,7 @@ export function createApiApp(env: ApiEnv, pool: Pool, options: ApiAppOptions = {
   app.get('/api/health', (c) =>
     c.json({
       status: 'ok',
-      service: 'ormont-api',
+      service: 'obiter-api',
     }),
   )
 

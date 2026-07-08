@@ -6,13 +6,13 @@ Legal research infrastructure is still dominated by expensive, closed systems. T
 
 General-purpose AI also introduces unacceptable legal risk when it hallucinates authorities, misquotes sources, mishandles confidential material, or produces persuasive but unsupported analysis. In legal practice, that risk stays with the lawyer, firm, or institution using the system.
 
-Ormont exists to solve a combined access, trust, and privacy problem:
+Obiter exists to solve a combined access, trust, and privacy problem:
 
 How do we make law searchable, understandable, verifiable, privacy-preserving, benchmarked, and open enough to support justice?
 
 ## Thesis
 
-Ormont is an open legal intelligence platform for research, redaction, verification, benchmarking, and AI-safe legal work.
+Obiter is an open legal intelligence platform for research, redaction, verification, benchmarking, and AI-safe legal work.
 
 The product goal is not to build another generic legal chatbot. The goal is to build legal infrastructure that can support:
 
@@ -23,9 +23,9 @@ The product goal is not to build another generic legal chatbot. The goal is to b
 - open legal data access and reuse
 - measurable legal AI performance
 
-## Problems Ormont Must Solve
+## Problems Obiter Must Solve
 
-| Problem | Why It Matters | What Ormont Builds |
+| Problem | Why It Matters | What Obiter Builds |
 | --- | --- | --- |
 | Law is expensive and closed | Access to justice suffers when legal information is trapped inside proprietary systems | Atlas as an open legal data and search layer |
 | AI hallucinates cases and statutes | Fake authorities can mislead courts and clients | Verify for citation and authority checking |
@@ -38,6 +38,6 @@ The product goal is not to build another generic legal chatbot. The goal is to b
 
 ## Positioning
 
-Ormont should feel like open legal infrastructure with application surfaces built on top, not like a chat wrapper over a model. The long-term ambition is:
+Obiter should feel like open legal infrastructure with application surfaces built on top, not like a chat wrapper over a model. The long-term ambition is:
 
 Westlaw-level legal research, rebuilt for open justice and trustworthy AI.

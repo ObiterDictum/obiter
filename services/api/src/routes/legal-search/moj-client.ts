@@ -1,5 +1,5 @@
-import { LegalAuthoritySchema, type LegalAuthority } from '@ormont/legal-schema'
-import { getDocument, indexDocuments, rankLegalSearchHitsByExactMatch } from '@ormont/search-client'
+import { LegalAuthoritySchema, type LegalAuthority } from '@obiter/legal-schema'
+import { getDocument, indexDocuments, rankLegalSearchHitsByExactMatch } from '@obiter/search-client'
 import type { ApiEnv } from '../../env'
 import { parseFindCaseLawAtom, type AtomEntry } from './atom-parser'
 import { courtFromCitation, findCaseLawJurisdiction, supportedFindCaseLawCourts, toFindCaseLawCourtParam } from './court-utils'
@@ -185,7 +185,7 @@ export async function hydrateMojAuthoritiesFromSearch(
       rateLimiter,
     )
   } catch {
-    // Search has already returned from Ormont-owned sources; provider hydration is best effort.
+    // Search has already returned from Obiter-owned sources; provider hydration is best effort.
   }
 }
 

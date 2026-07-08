@@ -1,6 +1,6 @@
 import type { Pool, QueryResultRow } from 'pg'
-import { LegalAuthoritySchema, type LegalAuthority } from '@ormont/legal-schema'
-import { rankLegalSearchHitsByExactMatch, type LegalSearchFilters } from '@ormont/search-client'
+import { LegalAuthoritySchema, type LegalAuthority } from '@obiter/legal-schema'
+import { rankLegalSearchHitsByExactMatch, type LegalSearchFilters } from '@obiter/search-client'
 
 export interface ProviderSourceMetadata {
   documentUri: string

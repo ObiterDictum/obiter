@@ -32,9 +32,12 @@ importers:
 
   apps/desktop:
     dependencies:
-      '@ormont/app-shell':
+      '@obiter/app-shell':
         specifier: workspace:*
         version: link:../../packages/app-shell
+      '@obiter/ui':
+        specifier: workspace:*
+        version: link:../../packages/ui
       '@tanstack/react-query':
         specifier: ^5.100.1
         version: 5.100.1(react@19.2.5)
@@ -69,13 +72,13 @@ importers:
 
   apps/web:
     dependencies:
-      '@ormont/app-shell':
+      '@obiter/app-shell':
         specifier: workspace:*
         version: link:../../packages/app-shell
-      '@ormont/contracts':
+      '@obiter/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@ormont/ui':
+      '@obiter/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@tanstack/react-query':
@@ -118,10 +121,10 @@ importers:
 
   packages/app-shell:
     dependencies:
-      '@ormont/contracts':
+      '@obiter/contracts':
         specifier: workspace:*
         version: link:../contracts
-      '@ormont/ui':
+      '@obiter/ui':
         specifier: workspace:*
         version: link:../ui
       '@phosphor-icons/react':
@@ -163,13 +166,13 @@ importers:
 
   packages/redaction-policy:
     dependencies:
-      '@ormont/contracts':
+      '@obiter/contracts':
         specifier: workspace:*
         version: link:../contracts
 
   packages/search-client:
     dependencies:
-      '@ormont/legal-schema':
+      '@obiter/legal-schema':
         specifier: workspace:*
         version: link:../legal-schema
       meilisearch:
@@ -227,13 +230,13 @@ importers:
       '@hono/node-server':
         specifier: ^2.0.0
         version: 2.0.0(hono@4.12.14)
-      '@ormont/contracts':
+      '@obiter/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
-      '@ormont/legal-schema':
+      '@obiter/legal-schema':
         specifier: workspace:*
         version: link:../../packages/legal-schema
-      '@ormont/search-client':
+      '@obiter/search-client':
         specifier: workspace:*
         version: link:../../packages/search-client
       better-auth:
@@ -258,10 +261,10 @@ importers:
 
   services/legal-ingestor:
     dependencies:
-      '@ormont/legal-schema':
+      '@obiter/legal-schema':
         specifier: workspace:*
         version: link:../../packages/legal-schema
-      '@ormont/search-client':
+      '@obiter/search-client':
         specifier: workspace:*
         version: link:../../packages/search-client
       meilisearch:

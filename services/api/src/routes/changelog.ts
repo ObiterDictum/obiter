@@ -40,11 +40,11 @@ export function createChangelogRoutes() {
   app.get('/api/changelog', async (c) => {
     const headers = {
       Accept: 'application/vnd.github+json',
-      'User-Agent': 'ormont-api',
+      'User-Agent': 'obiter-api',
     }
 
     const releasesResponse = await fetch(
-      'https://api.github.com/repos/OrmontLex/ormont/releases?per_page=5',
+      'https://api.github.com/repos/ObiterDictum/obiter/releases?per_page=5',
       { headers },
     )
 
@@ -56,7 +56,7 @@ export function createChangelogRoutes() {
     }
 
     const commitsResponse = await fetch(
-      'https://api.github.com/repos/OrmontLex/ormont/commits?sha=dev&per_page=5',
+      'https://api.github.com/repos/ObiterDictum/obiter/commits?sha=dev&per_page=5',
       { headers },
     )
 

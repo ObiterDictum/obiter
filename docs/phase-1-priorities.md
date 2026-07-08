@@ -54,7 +54,7 @@ Primary outcome:
 
 ### Priority 3: Verify
 
-Verify comes before Research because Ormont's core trust claim depends on verification, not just answer generation.
+Verify comes before Research because Obiter's core trust claim depends on verification, not just answer generation.
 
 Without it:
 
@@ -112,7 +112,7 @@ Phase 0 --------------------> Atlas ---------------------> Redact --------------
 
 This order optimises for:
 
-- proving Ormont's thesis early
+- proving Obiter's thesis early
 - reducing rework in downstream modules
 - keeping the first milestone evidence-driven rather than UI-driven
 - avoiding a chat-first product that lacks legal rigor

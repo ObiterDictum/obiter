@@ -34,7 +34,7 @@ describe('readLegalIngestorEnv', () => {
 
   it('does not allow the legacy Meilisearch API key', () => {
     process.env.NODE_ENV = 'production'
-    process.env.MEILISEARCH_HOST = 'https://search.ormont.example'
+    process.env.MEILISEARCH_HOST = 'https://search.obiter.example'
     process.env.MEILISEARCH_API_KEY = '0123456789abcdef'
     delete process.env.MEILISEARCH_ADMIN_API_KEY
     process.env.LEGAL_AUTHORITIES_INDEX = 'legal_authorities'
@@ -60,7 +60,7 @@ describe('readLegalIngestorEnv', () => {
 
     expect(() => readLegalIngestorEnv()).toThrow('MEILISEARCH_HOST must be a valid URL.')
 
-    process.env.MEILISEARCH_HOST = 'https://search.ormont.example/'
+    process.env.MEILISEARCH_HOST = 'https://search.obiter.example/'
     process.env.MEILISEARCH_ADMIN_API_KEY = ' short '
 
     expect(() => readLegalIngestorEnv()).toThrow(

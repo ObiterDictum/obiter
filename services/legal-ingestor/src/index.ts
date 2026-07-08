@@ -1,5 +1,5 @@
-import { legalAuthoritiesSchema } from '@ormont/legal-schema'
-import { createClient, createIndex, indexDocuments } from '@ormont/search-client'
+import { legalAuthoritiesSchema } from '@obiter/legal-schema'
+import { createClient, createIndex, indexDocuments } from '@obiter/search-client'
 import { pathToFileURL } from 'node:url'
 import { readLegalIngestorEnv, type LegalIngestorEnv } from './env'
 import { sampleJudgments } from './fixtures/sample-judgments'

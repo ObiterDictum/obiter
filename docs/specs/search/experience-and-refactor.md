@@ -27,7 +27,7 @@ The immediate goal is not to build Matter Workspace, hosted storage, offline syn
 - Do not perform a broad rename of every legacy `atlas` identifier.
 - Do not return raw HTML snippets from the API.
 - Do not ship the public Developer API, SDK, MCP server, or API-key management UI in this slice unless a separate task explicitly expands the scope.
-- Do not expose live provider fallback as a default third-party API behavior. Public/API-key consumers should default to stored Ormont legal sources so latency, provider quotas, licensing constraints, and abuse controls remain predictable.
+- Do not expose live provider fallback as a default third-party API behavior. Public/API-key consumers should default to stored Obiter legal sources so latency, provider quotas, licensing constraints, and abuse controls remain predictable.
 
 ## API Refactor
 
@@ -49,7 +49,7 @@ Target module layout:
 
 Tests should mirror the structure under `services/api/src/routes/legal-search/__tests__/`.
 
-The current API package runs tests with plain `vitest run`, so nested `__tests__` files should be discovered by default. If the refactor changes test placement, verify discovery by running `pnpm --filter @ormont/api test`. If discovery fails, either keep the tests co-located with the module files or update the package test script in the same refactor.
+The current API package runs tests with plain `vitest run`, so nested `__tests__` files should be discovered by default. If the refactor changes test placement, verify discovery by running `pnpm --filter @obiter/api test`. If discovery fails, either keep the tests co-located with the module files or update the package test script in the same refactor.
 
 `legal-search-proxy.ts` may remain as a thin re-export during the transition, or be deleted if imports are updated in the same change.
 
@@ -88,7 +88,7 @@ API-key auth requirements for the future Developer API:
 
 Public legal-source API behavior:
 
-- Default to stored Ormont-owned legal sources only.
+- Default to stored Obiter-owned legal sources only.
 - Do not trigger live provider fetches by default.
 - If a future route supports hydration requests, make that behavior explicit, asynchronous, rate-limited, and auditable.
 - Keep result payloads lean: summary metadata plus snippets or exact paragraph/provision references, not whole documents.
@@ -117,7 +117,7 @@ MCP readiness:
 
 Search should keep the way cases are currently found and add body-text visibility.
 
-This refactor is actively working on the judgment slice, but it must preserve the broader Search product model directly in this spec. Search should aim for the broadest legally usable public legal-source coverage Ormont can lawfully ingest, index, retrieve, and expose with reliable provenance. Phasing is an implementation and quality-control strategy, not a product coverage limit.
+This refactor is actively working on the judgment slice, but it must preserve the broader Search product model directly in this spec. Search should aim for the broadest legally usable public legal-source coverage Obiter can lawfully ingest, index, retrieve, and expose with reliable provenance. Phasing is an implementation and quality-control strategy, not a product coverage limit.
 
 The active refactor must avoid choices that make later case law, legislation, international-law, SDK, MCP, and AI integrations expensive. The current Find Case Law path is one provider adapter and one source family, not the final shape of Search.
 
@@ -126,7 +126,7 @@ Current provider scope:
 - Implemented case-law ingestion and hydration uses Find Case Law at `caselaw.nationalarchives.gov.uk`. The route module is still named `moj-client.ts` and the environment variables are still named `MOJ_FIND_CASE_LAW_*`, but the configured endpoint is The National Archives Find Case Law service.
 - This gives Search broad coverage across the supported Find Case Law court and tribunal collections, subject to provider availability, parser support, and licensing constraints.
 - `legislation.gov.uk` is not implemented yet. Legislation requires a separate provider adapter, schema, storage model, version/provision handling, and search semantics; do not treat the current judgment path as legislation ingestion.
-- The current product behavior is stored Ormont legal sources first, then safe Find Case Law fallback/hydration for case-law misses. Future legislation search should be added source-by-source without weakening this case-law path.
+- The current product behavior is stored Obiter legal sources first, then safe Find Case Law fallback/hydration for case-law misses. Future legislation search should be added source-by-source without weakening this case-law path.
 
 One Search surface must support:
 
@@ -182,7 +182,7 @@ The current layered behavior must be preserved:
 3. If stored sources miss, either queue Find Case Law hydration or return live foreground results when the request allows it.
 4. Store provider metadata and hydrate/index detail pages in the background where possible.
 
-Stored Meilisearch search must include body text. The current `@ormont/search-client` searchable attributes include:
+Stored Meilisearch search must include body text. The current `@obiter/search-client` searchable attributes include:
 
 - `id`
 - `title`
@@ -307,7 +307,7 @@ Normalization must preserve the original user query for display and audit, but r
 
 ## Source Extensibility
 
-The current implementation is a judgment-only slice, but the Search product model should aim for the broadest legally usable public legal-source coverage Ormont can support. Adding countries, statutes, guidance, treaties, secondary materials, or other legal sources must be treated as source onboarding work, not a small enum change.
+The current implementation is a judgment-only slice, but the Search product model should aim for the broadest legally usable public legal-source coverage Obiter can support. Adding countries, statutes, guidance, treaties, secondary materials, or other legal sources must be treated as source onboarding work, not a small enum change.
 
 Do not force all legal sources through the current case-law `LegalAuthority` shape. Future source types need source-specific schemas:
 
@@ -503,13 +503,13 @@ Completed through PR 19:
 
 - `POST /api/search/fetch` and `GET /api/search` include bounded `snippets` on result-list hits.
 - Result-list responses continue to omit full `paragraphs` arrays.
-- Snippet extraction lives in `@ormont/search-client`, ranks exact-query paragraph matches before all-term and any-term matches, returns at most two snippets, and omits snippets when no paragraph text matches safely.
+- Snippet extraction lives in `@obiter/search-client`, ranks exact-query paragraph matches before all-term and any-term matches, returns at most two snippets, and omits snippets when no paragraph text matches safely.
 - App-shell search result cards render snippet text below the result summary.
 - Focused automated coverage exists for snippet extraction, result-list payload shape, citation-first ranking, body-text indexed search attributes, and stored-source fallback behavior.
 
 Completed after PR 19:
 
-- `POST /api/search/fetch` Search hits include `canonicalUrl` for judgment results, generated from shared helpers in `@ormont/contracts`.
+- `POST /api/search/fetch` Search hits include `canonicalUrl` for judgment results, generated from shared helpers in `@obiter/contracts`.
 - App-shell result links and keyboard result opening prefer canonical `/case/:caseSlug` URLs while preserving `/cases/:caseId` fallback behavior for old payloads.
 - The web app has a `/case/$caseSlug` route that resolves current judgment citation slugs back to the existing document detail endpoint.
 - The web app redirects `/cases/$caseId` compatibility routes to canonical case URLs after resolving the document.
@@ -535,11 +535,11 @@ Remaining next slice:
 Minimum automated checks:
 
 ```bash
-pnpm --filter @ormont/api test
-pnpm --filter @ormont/search-client test
-pnpm --filter @ormont/app-shell test
-pnpm --filter @ormont/app-shell typecheck
-pnpm --filter @ormont/web build
+pnpm --filter @obiter/api test
+pnpm --filter @obiter/search-client test
+pnpm --filter @obiter/app-shell test
+pnpm --filter @obiter/app-shell typecheck
+pnpm --filter @obiter/web build
 ```
 
 Required focused coverage:

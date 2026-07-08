@@ -8,7 +8,7 @@ This is the shared substrate for Atlas, Verify, Redact, and Research. If this la
 
 ## Phase 0 Outcome
 
-By the end of Phase 0, Ormont should have:
+By the end of Phase 0, Obiter should have:
 
 - a web application shell
 - an Electron desktop application shell
@@ -84,7 +84,7 @@ Invitations and broader team-management flows should be easy to add later, but t
 - TypeScript
 - Hono or Fastify
 - `better-auth`
-- PostgreSQL hosted on Ormont infrastructure
+- PostgreSQL hosted on Obiter infrastructure
 - Redis
 - BullMQ
 - Hetzner Object Storage

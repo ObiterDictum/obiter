@@ -2,7 +2,7 @@
 
 ## Summary
 
-This phase completes the Ormont Redact module. It turns the Phase 1-2 detection and review pipeline into a production-ready capability by adding real document format support (DOCX text extraction via `mammoth`), formal audit report export, synthetic training data generation for Rampart fine-tuning, a dataset export tool for the human-in-the-loop improvement loop, a prepared demo for firm evaluations, and full end-to-end testing.
+This phase completes the Obiter Redact module. It turns the Phase 1-2 detection and review pipeline into a production-ready capability by adding real document format support (DOCX text extraction via `mammoth`), formal audit report export, synthetic training data generation for Rampart fine-tuning, a dataset export tool for the human-in-the-loop improvement loop, a prepared demo for firm evaluations, and full end-to-end testing.
 
 Redact Phase 1 established the detection pipeline powered by Rampart (14.7 MB ONNX token-classification model via Transformers.js) and a UK supplement for legal-specific PII patterns. Phase 2 added the review UI, span decision persistence, and redacted/pseudonymised output generation. This phase makes the product demonstrable to firms, producible for audit, and extensible through fine-tuning.
 
@@ -18,7 +18,7 @@ Phases 1 and 2 deliver a working redaction pipeline, but three gaps prevent it f
 
 3. **There is no path to improvement.** The base Rampart model is strong but not trained on UK legal text. Without synthetic training data and a dataset export tool, fine-tuning cannot happen, and the product cannot get better at the specific PII patterns law firms care about.
 
-4. **No demo exists.** Firms evaluating Ormont need to see a complete run — upload a real DOCX, see detection, review spans, finalize, download output — in a single session. Without a prepared demo fixture and a known end-to-end flow, evaluation conversations stall on "show me."
+4. **No demo exists.** Firms evaluating Obiter need to see a complete run — upload a real DOCX, see detection, review spans, finalize, download output — in a single session. Without a prepared demo fixture and a known end-to-end flow, evaluation conversations stall on "show me."
 
 This phase closes all four gaps.
 
@@ -36,7 +36,7 @@ This phase closes all four gaps.
 1. **DOCX text extraction** — On upload, extract text from `.docx` files using `mammoth`, store the extracted text in object storage at the `text_object_key` path, and update the document status to `ready`.
 2. **Audit report export** — `GET /api/redaction-runs/:runId/audit` returns a structured audit record. The redaction report artifact contains the original document reference, run summary, full audit log, detector version, and output reference.
 3. **Synthetic training data generation** — Generate 200–500 realistic UK legal documents with labelled PII spans, in Rampart's training JSONL format, stored under `data/evals/redact/`. Covers 10+ PII types across 7+ UK legal document types.
-4. **Dataset export tool** — Export reviewed redaction runs as training data in Rampart's training JSONL format, mapping Ormont span categories back to Rampart's 17 entity types.
+4. **Dataset export tool** — Export reviewed redaction runs as training data in Rampart's training JSONL format, mapping Obiter span categories back to Rampart's 17 entity types.
 5. **Demo preparation** — A realistic DOCX skeleton argument fixture and manual end-to-end test script covering all edge cases.
 6. **Fine-tuning preparation documentation** — Document the Rampart training pipeline command, infrastructure requirements, and the deployment loop so a future contributor can fine-tune without rediscovery.
 7. **Polish** — Type-check all packages, run all tests, update `docs/current-product-scope.md`, update `docs/specs/redact/milestones.md`, and verify the Redaction sidebar link (activated in Phase 2) resolves to a working route.
@@ -57,7 +57,7 @@ This phase closes all four gaps.
 
 Primary user of the review UI and audit export. Needs to inspect the redaction report, verify every decision, and download the audit trail for compliance records.
 
-### Ormont Builder
+### Obiter Builder
 
 Builds and maintains the DOCX extraction pipeline, audit endpoint, and synthetic data generator. Needs clear interfaces, testable extraction, and deterministic audit output.
 
@@ -67,7 +67,7 @@ Uses the synthetic data generator and dataset export tool to prepare training an
 
 ### Firm Evaluator
 
-Evaluates Ormont Redact for procurement. Runs through the demo fixture end-to-end, inspects the audit report, checks edge-case handling, and decides whether to proceed.
+Evaluates Obiter Redact for procurement. Runs through the demo fixture end-to-end, inspects the audit report, checks edge-case handling, and decides whether to proceed.
 
 ### Academic Reviewer (future)
 
@@ -119,7 +119,7 @@ Inspects synthetic data quality, label correctness, and the fine-tuning dataset 
 
 ### 1. DOCX Text Extraction
 
-**Rationale:** UK legal documents are authored in Microsoft Word and distributed as DOCX. The entire Ormont product upload flow is built around `matter_documents` and `document_versions`, which already support any file type. The gap is that Phase 1 only extracts text from plain `.txt` files. For DOCX, an extraction step is needed between upload and redaction-readiness.
+**Rationale:** UK legal documents are authored in Microsoft Word and distributed as DOCX. The entire Obiter product upload flow is built around `matter_documents` and `document_versions`, which already support any file type. The gap is that Phase 1 only extracts text from plain `.txt` files. For DOCX, an extraction step is needed between upload and redaction-readiness.
 
 **Approach:**
 
@@ -280,7 +280,7 @@ The audit report is stored as an `artifact` row with `artifactType: 'redaction_r
 
 **PII types to include (12):**
 
-| Category | Description | Examples | Ormont label |
+| Category | Description | Examples | Obiter label |
 |----------|-------------|----------|--------------|
 | Person with honorific | Named individual with title | Mr James Cartwright, Dr Sarah Chen, Ms Aisha Patel | `person_name` |
 | UK address | Postal address with postcode | 42 Belgrave Road, Leicester LE4 5AB | `address` |
@@ -298,14 +298,14 @@ The audit report is stored as an `artifact` row with `artifactType: 'redaction_r
 **Output format (Rampart training schema):**
 
 ```jsonl
-{"text": "IN THE HIGH COURT OF JUSTICE\nQUEEN'S BENCH DIVISION\n\nCLAIM No: REF/2024/0123\n\nBETWEEN:\n\nMr James Cartwright\nand\nMrs Sarah Chen\n\nSKELETON ARGUMENT OF THE CLAIMANT\n\n1. The Claimant, Mr James Cartwright of 42 Belgrave Road, Leicester LE4 5AB, is a retired school teacher born on 10 June 1956. His National Insurance number is JX 12 34 56 D.\n\n2. The Defendant, Mrs Sarah Chen, is a solicitor employed by Smith & Jones Solicitors LLP of 78 High Holborn, London WC1V 6XX. Her email address is s.chen@smithjones.co.uk and her direct telephone number is 020 7946 0958.\n\n3. This claim arises from a road traffic accident on 15 March 2024 at approximately 14:30 hours...", "spans": {"private_person: James Cartwright": [[94, 111], [184, 199]], "private_address: 42 Belgrave Road, Leicester LE4 5AB": [[203, 242]], "private_person: Mr James Cartwright": [[181, 201]], "private_date: 10 June 1956": [[269, 282]], "national_insurance: JX 12 34 56 D": [[314, 327]], "private_person: Mrs Sarah Chen": [[357, 372]], "private_person: Sarah Chen": [[389, 400]], "organisation_name: Smith & Jones Solicitors LLP": [[421, 449]], "private_address: 78 High Holborn, London WC1V 6XX": [[453, 488]], "private_email: s.chen@smithjones.co.uk": [[511, 535]], "private_phone: 020 7946 0958": [[567, 580]], "private_date: 15 March 2024": [[624, 638]]}, "info": {"id": "legal_001", "source": "ormont.synthetic"}}
+{"text": "IN THE HIGH COURT OF JUSTICE\nQUEEN'S BENCH DIVISION\n\nCLAIM No: REF/2024/0123\n\nBETWEEN:\n\nMr James Cartwright\nand\nMrs Sarah Chen\n\nSKELETON ARGUMENT OF THE CLAIMANT\n\n1. The Claimant, Mr James Cartwright of 42 Belgrave Road, Leicester LE4 5AB, is a retired school teacher born on 10 June 1956. His National Insurance number is JX 12 34 56 D.\n\n2. The Defendant, Mrs Sarah Chen, is a solicitor employed by Smith & Jones Solicitors LLP of 78 High Holborn, London WC1V 6XX. Her email address is s.chen@smithjones.co.uk and her direct telephone number is 020 7946 0958.\n\n3. This claim arises from a road traffic accident on 15 March 2024 at approximately 14:30 hours...", "spans": {"private_person: James Cartwright": [[94, 111], [184, 199]], "private_address: 42 Belgrave Road, Leicester LE4 5AB": [[203, 242]], "private_person: Mr James Cartwright": [[181, 201]], "private_date: 10 June 1956": [[269, 282]], "national_insurance: JX 12 34 56 D": [[314, 327]], "private_person: Mrs Sarah Chen": [[357, 372]], "private_person: Sarah Chen": [[389, 400]], "organisation_name: Smith & Jones Solicitors LLP": [[421, 449]], "private_address: 78 High Holborn, London WC1V 6XX": [[453, 488]], "private_email: s.chen@smithjones.co.uk": [[511, 535]], "private_phone: 020 7946 0958": [[567, 580]], "private_date: 15 March 2024": [[624, 638]]}, "info": {"id": "legal_001", "source": "obiter.synthetic"}}
 ```
 
 **Custom label space file:**
 
 ```json
 {
-  "category_version": "ormont_legal_v1",
+  "category_version": "obiter_legal_v1",
   "span_class_names": [
     "O",
     "private_person",
@@ -328,18 +328,18 @@ The audit report is stored as an `artifact` row with `artifactType: 'redaction_r
 
 The label space MUST be a superset of every base-model label the product consumes: fine-tuning against a label space that drops a base label removes the model's ability to detect that class. The list above therefore retains passport, drivers license, government id, and IP address alongside the new custom labels.
 
-**Label space roadmap (`ormont_legal_v2`, post-MVP):**
+**Label space roadmap (`obiter_legal_v2`, post-MVP):**
 
 Legal redaction differs from generic PII detection in one structural way: whether a span is redacted depends on the *role* of the entity, not just its type. A judge, counsel, or instructing solicitor is on the public record and is normally kept; a claimant, witness, or client is normally redacted; a child or protected party under an anonymity order MUST be redacted (statutory consequence, not preference). All of these are `person_name` in v1, which means neither the model nor the policy layer can distinguish them — the reviewer carries the full burden.
 
-- `ormont_legal_v1` (this phase) is deliberately scoped to fixed-format identifiers (`national_insurance`, `case_reference`, `secret`) because ~300 synthetic documents cannot train a person-role taxonomy without degrading base-model recall.
-- `ormont_legal_v2` is the named direction: split `person_name` into `person_party`, `person_professional` (on-record: judges, counsel, solicitors), and `person_protected` (children, anonymity-order subjects); consider `medical_info` for PI matters. Role-aware labels give `policy_mode` real differentiation: e.g. `external_sharing` keeps `person_professional`, `internal_ai_minimisation` redacts everything.
+- `obiter_legal_v1` (this phase) is deliberately scoped to fixed-format identifiers (`national_insurance`, `case_reference`, `secret`) because ~300 synthetic documents cannot train a person-role taxonomy without degrading base-model recall.
+- `obiter_legal_v2` is the named direction: split `person_name` into `person_party`, `person_professional` (on-record: judges, counsel, solicitors), and `person_protected` (children, anonymity-order subjects); consider `medical_info` for PI matters. Role-aware labels give `policy_mode` real differentiation: e.g. `external_sharing` keeps `person_professional`, `internal_ai_minimisation` redacts everything.
 - Role subtype detection is context-dependent ("His Honour Judge ___" vs "the Claimant, ___") — exactly what a token classifier can learn and what a downstream policy layer cannot recover once detection has flattened everything to `person_name`. This is why roles belong in the model label space, not only in policy.
 - Legally privileged material detection is explicitly out of scope for the token classifier: privilege is passage-level, not span-level, and requires a different mechanism if ever pursued.
-- v2 requires no schema rewrite: the Ormont category schema and the label space are versioned, and both mapping layers (`rampart-map.ts` inbound, dataset export outbound) are explicit. v2 is a data + fine-tune exercise, provided the role metadata below is captured from v1 onwards.
+- v2 requires no schema rewrite: the Obiter category schema and the label space are versioned, and both mapping layers (`rampart-map.ts` inbound, dataset export outbound) are explicit. v2 is a data + fine-tune exercise, provided the role metadata below is captured from v1 onwards.
 - Reviewer decisions are also v2 signal: a reviewer rejecting a `person_name` span on a judge's name is implicit role labelling. Rejection records persist in `decisions_json` and can be mined when v2 training data is assembled — no additional tooling is required in this phase.
 
-Note: `organisation_name` and `passport` handling differs between Ormont and Rampart's base label set. In the synthetic data, these are mapped:
+Note: `organisation_name` and `passport` handling differs between Obiter and Rampart's base label set. In the synthetic data, these are mapped:
 - `organisation_name` → `O` (ignored during fine-tuning; the model learns to not flag organisation names as PII unless the firm's policy requires it)
 - `passport` → mapped to `PASSPORT` which Rampart already supports natively
 - `case_reference` → the custom label space includes this; it is a new label not present in base Rampart
@@ -363,7 +363,7 @@ The generation script (`scripts/generate-synthetic-data.ts` or equivalent) must:
 
 3. **Span computation**: For each generated document, compute start and end character offsets for every PII instance. Handle multi-occurrence PII (same name appears multiple times).
 
-3a. **Role metadata annotation**: The generator knows the role of every person it inserts (claimant, defendant, witness, expert, judge, counsel, solicitor, child/protected party). Record this in each JSONL entry's `info` field as a `roles` map (e.g. `"roles": {"James Cartwright": "party", "Sarah Chen": "professional", "Mr Justice Holroyd": "professional"}`) even though `ormont_legal_v1` collapses all of them to `private_person`. This is nearly free at generation time and is the prerequisite for training `ormont_legal_v2`'s role-split labels (see Label space roadmap) without regenerating the corpus. Every generated document MUST include judges, counsel, or solicitors alongside party names so the v2 role distinction has both classes represented.
+3a. **Role metadata annotation**: The generator knows the role of every person it inserts (claimant, defendant, witness, expert, judge, counsel, solicitor, child/protected party). Record this in each JSONL entry's `info` field as a `roles` map (e.g. `"roles": {"James Cartwright": "party", "Sarah Chen": "professional", "Mr Justice Holroyd": "professional"}`) even though `obiter_legal_v1` collapses all of them to `private_person`. This is nearly free at generation time and is the prerequisite for training `obiter_legal_v2`'s role-split labels (see Label space roadmap) without regenerating the corpus. Every generated document MUST include judges, counsel, or solicitors alongside party names so the v2 role distinction has both classes represented.
 
 4. **Overlapping span handling**: Include documents with overlapping entities:
    - "Mr David Smith of Smith & Jones" — where "Smith" could be a name or organisation reference
@@ -435,9 +435,9 @@ Script at `scripts/export-training-data.ts` (or similar) that:
 5. For each span where the human chose `override_keep`, the span is also excluded (the human explicitly said this is not PII).
 6. Outputs a single JSONL file: `data/evals/redact/exported_training_data.jsonl`.
 
-**Category mapping (Ormont → Rampart):**
+**Category mapping (Obiter → Rampart):**
 
-| Ormont label | Rampart label |
+| Obiter label | Rampart label |
 |--------------|---------------|
 | `person_name` | `GIVEN_NAME` + `SURNAME` |
 | `email` | `EMAIL` |
@@ -477,7 +477,7 @@ A realistic skeleton argument in DOCX format, approximately 3–5 pages, contain
 - Bank account references: Account number 12345678, sort code 12-34-56 (Claimant's account for costs payments)
 - Organisation names: Smith & Jones Solicitors LLP, HM Courts & Tribunals Service, Leicester Royal Infirmary
 - Edge case: Names that also appear as case citations: "In Smith v Jones [2023] EWHC 1234 (QB), the court held... This is distinguishable from the present case where Mr Smith..."
-- On-record professionals: Mr Justice Holroyd (presiding judge), Ms Priya Sharma of counsel. In v1 these are detected as `person_name` like any other name; the demo script uses them to show the reviewer reject flow ("public-record names are kept") and to explain the planned `ormont_legal_v2` role-aware labels (see Label space roadmap).
+- On-record professionals: Mr Justice Holroyd (presiding judge), Ms Priya Sharma of counsel. In v1 these are detected as `person_name` like any other name; the demo script uses them to show the reviewer reject flow ("public-record names are kept") and to explain the planned `obiter_legal_v2` role-aware labels (see Label space roadmap).
 
 Store at `data/evals/redact/demo-fixture.docx` with a companion JSON metadata file describing the expected spans.
 
@@ -650,14 +650,14 @@ python scripts/export_onnx.py \
 
 **Checkpoint deployment:**
 
-1. Upload the fine-tuned ONNX model to object storage: `op_artifacts/redact-models/ormont_legal_v1/2026-07-01/rampart-legal-q4.onnx`
+1. Upload the fine-tuned ONNX model to object storage: `op_artifacts/redact-models/obiter_legal_v1/2026-07-01/rampart-legal-q4.onnx`
 2. Update the `REDACT_MODEL_ID` environment variable in the API service configuration to point to the local path where the ONNX model is stored (or a HuggingFace repo id if published).
 3. Restart the API service. The Rampart guard loads the new model on next detection request.
 4. Test by running the demo fixture through the pipeline and comparing the span set against the baseline. Expected: more accurate detection on UK legal patterns, fewer missed NI numbers and case references.
 
 **Versioning:**
 
-- Store checkpoints in object storage with versioned paths: `op_artifacts/redact-models/ormont_legal_v1/2026-07-01/`
+- Store checkpoints in object storage with versioned paths: `op_artifacts/redact-models/obiter_legal_v1/2026-07-01/`
 - Record checkpoint metadata in a `checkpoint_versions` table (simple: id, version_label, object_key, trained_at, training_data_summary, validation_metrics)
 - The `detector_version` field in `redaction_runs` references the checkpoint version used for that run
 
@@ -668,9 +668,9 @@ python scripts/export_onnx.py \
 Commands to pass with no errors:
 
 ```bash
-pnpm --filter @ormont/redaction-policy typecheck
-pnpm --filter @ormont/api typecheck
-pnpm --filter @ormont/redact-ui typecheck
+pnpm --filter @obiter/redaction-policy typecheck
+pnpm --filter @obiter/api typecheck
+pnpm --filter @obiter/redact-ui typecheck
 ```
 
 **Testing:**
@@ -678,9 +678,9 @@ pnpm --filter @ormont/redact-ui typecheck
 Commands to pass with no failures:
 
 ```bash
-pnpm --filter @ormont/redaction-policy test
-pnpm --filter @ormont/api test
-pnpm --filter @ormont/redact-ui test
+pnpm --filter @obiter/redaction-policy test
+pnpm --filter @obiter/api test
+pnpm --filter @obiter/redact-ui test
 ```
 
 **Documentation updates:**
@@ -733,21 +733,21 @@ The Redaction sidebar entry was activated in Phase 2 (Redact PRD 2, FR11). This 
 | FR3.2 | Cover at least 7 document types: skeleton arguments, witness statements, case reports, client letters, attendance notes, court forms, pleadings |
 | FR3.3 | Cover at least 12 PII types: person names, addresses, emails, phones, dates, NI numbers, passport numbers, case references, bank accounts, organisations, URLs, secrets |
 | FR3.4 | Output in Rampart training JSONL format with `text`, `spans`, and `info` fields |
-| FR3.5 | Generate a custom label space file (`custom_label_space.json`) defining `ormont_legal_v1` |
+| FR3.5 | Generate a custom label space file (`custom_label_space.json`) defining `obiter_legal_v1` |
 | FR3.6 | Validate all documents: correct offsets, correct text slices, valid labels |
 | FR3.7 | Split into train (80%) and validation (20%) sets |
 | FR3.8 | Include edge-case documents: overlapping spans, zero PII, regex-only PII, names-as-case-citations |
 | FR3.9 | Store outputs in `data/evals/redact/` |
 | FR3.10 | Generate a manifest (`generation_manifest.json`) summarising composition |
 | FR3.11 | Generate a validation report (`validation_report.json`) documenting pass/fail per document |
-| FR3.12 | Annotate every generated person span with role metadata (`party`, `professional`, `witness`, `protected`) in the entry's `info.roles` map, and include on-record professionals (judges, counsel, solicitors) in every document — captured for `ormont_legal_v2` even though v1 collapses all roles to `private_person` |
+| FR3.12 | Annotate every generated person span with role metadata (`party`, `professional`, `witness`, `protected`) in the entry's `info.roles` map, and include on-record professionals (judges, counsel, solicitors) in every document — captured for `obiter_legal_v2` even though v1 collapses all roles to `private_person` |
 
 ### FR4: Dataset Export Tool
 
 | ID | Requirement |
 |----|-------------|
 | FR4.1 | Script exports finalized redaction runs with human-reviewed decisions as training data |
-| FR4.2 | Map Ormont span categories to Rampart label space per the mapping table |
+| FR4.2 | Map Obiter span categories to Rampart label space per the mapping table |
 | FR4.3 | Exclude rejected and `override_keep` spans from output |
 | FR4.4 | Skip runs finalized with un-reviewed spans unless `--include-partial` flag passed |
 | FR4.5 | Output: `data/evals/redact/exported_training_data.jsonl` in Rampart BIO format |
@@ -766,11 +766,11 @@ The Redaction sidebar entry was activated in Phase 2 (Redact PRD 2, FR11). This 
 
 | ID | Requirement |
 |----|-------------|
-| FR6.1 | `pnpm --filter @ormont/redaction-policy typecheck` passes with zero errors |
-| FR6.2 | `pnpm --filter @ormont/api typecheck` passes with zero errors |
-| FR6.3 | `pnpm --filter @ormont/redact-ui typecheck` passes with zero errors |
-| FR6.4 | `pnpm --filter @ormont/redaction-policy test` passes with zero failures |
-| FR6.5 | `pnpm --filter @ormont/api test` passes with zero failures |
+| FR6.1 | `pnpm --filter @obiter/redaction-policy typecheck` passes with zero errors |
+| FR6.2 | `pnpm --filter @obiter/api typecheck` passes with zero errors |
+| FR6.3 | `pnpm --filter @obiter/redact-ui typecheck` passes with zero errors |
+| FR6.4 | `pnpm --filter @obiter/redaction-policy test` passes with zero failures |
+| FR6.5 | `pnpm --filter @obiter/api test` passes with zero failures |
 | FR6.6 | `docs/current-product-scope.md` updated: Redaction moved to Implemented Navigation |
 | FR6.7 | `docs/specs/redact/milestones.md` updated with M3 completion notes |
 | FR6.8 | Redaction sidebar entry (activated in Phase 2, PRD 2 FR11) verified to resolve to a working route; any remaining "(planned)" badge removed |
@@ -784,7 +784,7 @@ The Redaction sidebar entry was activated in Phase 2 (Redact PRD 2, FR11). This 
 | NFR2 | Audit report generation must complete within 2 seconds for a run with up to 200 spans |
 | NFR3 | Synthetic data generation must complete within 5 minutes for 500 documents |
 | NFR4 | Object storage must be available for extraction; if unavailable, extraction fails gracefully with a clear error |
-| NFR5 | All API endpoints must return proper JSON error responses with Ormont error codes |
+| NFR5 | All API endpoints must return proper JSON error responses with Obiter error codes |
 | NFR6 | Audit log entries must be append-only and immutable after creation |
 
 ## Security and Compliance
@@ -809,7 +809,7 @@ The Redaction sidebar entry was activated in Phase 2 (Redact PRD 2, FR11). This 
 | Artifacts table with `redaction_report` type | Done (migration 0002) | Enum includes `redaction_report` |
 | Audit log function (`appendAuditLog`) | Done (`database.ts`) | The `redaction.*` action types do not exist yet — they are added to the `AuditRecordInput` union by PRDs 1–2 |
 | Object storage for text and output | Not wired (verified July 2026) | No storage client exists; document upload is metadata-only. Binary upload + object-storage adapter scoped as FR1.11–FR1.12; Phases 1–2 run on the local-FS `StorageService` adapter |
-| Rampart custom label space | New | Defined in this PRD as `ormont_legal_v1` |
+| Rampart custom label space | New | Defined in this PRD as `obiter_legal_v1` |
 | Migration `0006_document_extraction.sql` (`document_status`, `failure_reason` on `document_versions`) | New | Defined in this PRD (FR1.9) |
 | Redact PRD 1: Detection Pipeline | Assumed complete | Worker, supplement, merge, database queries |
 | Redact PRD 2: Review and Output | Assumed complete | Review UI, decisions, finalize, pseudonymisation |
@@ -901,10 +901,10 @@ The following must be true for M3 sign-off:
 
 3. **Should the synthetic data include organisation names as PII?** Rampart does not label `organisation_name` natively. If firms want to redact organisation names (e.g., competitor names in a commercial dispute), this needs a custom label and fine-tuning. *Deferred: for Phase 3, organisation names are marked but not included in the custom label space. Add `organisation_name` as a custom label post-MVP if firms require it.*
 
-4. **What is the checkpoint versioning strategy for fine-tuned models?** Simple: store checkpoints in `op_artifacts/redact-checkpoints/ormont_legal_v1/YYYY-MM-DD/` with a metadata JSON. For Phase 3, a `checkpoint_versions` table is optional — document the path first, implement the table when the first fine-tune happens.
+4. **What is the checkpoint versioning strategy for fine-tuned models?** Simple: store checkpoints in `op_artifacts/redact-checkpoints/obiter_legal_v1/YYYY-MM-DD/` with a metadata JSON. For Phase 3, a `checkpoint_versions` table is optional — document the path first, implement the table when the first fine-tune happens.
 
 5. **Should the audit report include the full extracted text?** No — the report includes span excerpts but not the full text. Full text is accessible via the original document reference. Including it would make the audit artifact very large and duplicate storage.
 
-6. **What is the right role taxonomy for `ormont_legal_v2`?** The roadmap proposes `person_party` / `person_professional` / `person_protected`, but the boundaries need legal review: is a witness a party or its own class? Do McKenzie friends, litigation friends, and interpreters count as professionals? Does `person_protected` need to distinguish statutory anonymity (contempt risk) from discretionary anonymity orders? *Approach: validate the taxonomy with the same legal professional who reviews the synthetic data samples (Open Question 2), before v2 data generation begins. The v1 role metadata (`info.roles`) should use fine-grained role names (judge, counsel, solicitor, claimant, defendant, witness, expert, child) so the v2 taxonomy can be decided later by grouping, not re-annotation.*
+6. **What is the right role taxonomy for `obiter_legal_v2`?** The roadmap proposes `person_party` / `person_professional` / `person_protected`, but the boundaries need legal review: is a witness a party or its own class? Do McKenzie friends, litigation friends, and interpreters count as professionals? Does `person_protected` need to distinguish statutory anonymity (contempt risk) from discretionary anonymity orders? *Approach: validate the taxonomy with the same legal professional who reviews the synthetic data samples (Open Question 2), before v2 data generation begins. The v1 role metadata (`info.roles`) should use fine-grained role names (judge, counsel, solicitor, claimant, defendant, witness, expert, child) so the v2 taxonomy can be decided later by grouping, not re-annotation.*
 
 7. **How do we handle redaction of text inside DOCX tables specifically?** Mammoth extracts table cells as text separated by newlines, preserving row and cell order. Rampart detects PII across all text regardless of original layout. *Acceptable for Phase 3 — detecting PII in table text at the right granularity. Position-aware redaction (e.g., overlay redaction boxes over original content) is deferred to a future phase (PDF handling).*

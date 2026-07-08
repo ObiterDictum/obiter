@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { cn } from '@ormont/ui'
+import { cn } from '@obiter/ui'
 
 export interface PageScaffoldProps {
   title: ReactNode

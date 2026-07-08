@@ -27,7 +27,7 @@ Before writing any code, read these files in order:
 - pnpm workspace + TypeScript base config
 - `apps/web` — TanStack Start with Router, Query, SSR
 - `apps/desktop` — Electron via electron-vite
-- `packages/app-shell` — OrmontSidebar, shell layout, sign-in view
+- `packages/app-shell` — ObiterSidebar, shell layout, sign-in view
 - `packages/ui` — Card, AppFrame, MetricTile, StatusPill, EmptyState
 - `packages/contracts` — Zod schemas: auth, matters, documents, artifacts
 - Hono API service with CORS, env validation, error handling
@@ -262,7 +262,7 @@ Create a new workspace package at `services/worker/`. Use the existing `services
 **package.json** (add to workspace):
 ```json
 {
-  "name": "@ormont/worker",
+  "name": "@obiter/worker",
   "private": true,
   "type": "module",
   "scripts": {
@@ -270,7 +270,7 @@ Create a new workspace package at `services/worker/`. Use the existing `services
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@ormont/contracts": "workspace:*",
+    "@obiter/contracts": "workspace:*",
     "bullmq": "^5.0.0",
     "ioredis": "^5.0.0",
     "pg": "^8.20.0"
@@ -361,17 +361,17 @@ All tests use `vitest`. Follow existing patterns in `services/api/src/app.test.t
 
 ```powershell
 # Prerequisites: PostgreSQL 16 running, Redis 7 running
-cd \path\to\ormont
+cd \path\to\obiter
 pnpm install
 
 # Create .env:
-# DATABASE_URL=postgres://postgres:***@localhost:5432/ormont
+# DATABASE_URL=postgres://postgres:***@localhost:5432/obiter
 # BETTER_AUTH_SECRET=*** rand -base64 32>
 # NODE_ENV=development
 
 # Run migration
-psql -U postgres -d ormont -f packages/database/migrations/0001_phase_0_2_auth.sql
-psql -U postgres -d ormont -f packages/database/migrations/0002_phase_0_3_matters.sql
+psql -U postgres -d obiter -f packages/database/migrations/0001_phase_0_2_auth.sql
+psql -U postgres -d obiter -f packages/database/migrations/0002_phase_0_3_matters.sql
 
 # Start API
 pnpm dev:api     # http://localhost:8787

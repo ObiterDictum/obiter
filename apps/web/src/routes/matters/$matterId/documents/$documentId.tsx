@@ -1,4 +1,4 @@
-import { DocumentDetailLayoutView } from '@ormont/app-shell'
+import { DocumentDetailLayoutView } from '@obiter/app-shell'
 import { createFileRoute } from '@tanstack/react-router'
 
 /**

@@ -2,7 +2,7 @@
 
 ## Platform Overview
 
-Ormont is being designed as a modular platform. Each module solves a distinct legal workflow problem, but the modules reinforce one another when used together.
+Obiter is being designed as a modular platform. Each module solves a distinct legal workflow problem, but the modules reinforce one another when used together.
 
 ## Core Modules
 
