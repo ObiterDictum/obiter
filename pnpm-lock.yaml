@@ -155,6 +155,12 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
 
+  packages/redaction-policy:
+    dependencies:
+      '@ormont/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+
   packages/search-client:
     dependencies:
       '@ormont/legal-schema':
