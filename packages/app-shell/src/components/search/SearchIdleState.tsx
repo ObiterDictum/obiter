@@ -25,45 +25,55 @@ export function SearchIdleState({
   onRecentSearch,
 }: SearchIdleStateProps) {
   return (
-    <section className="legal-search-idle" aria-label="Search start points">
-      <div className="legal-search-idle__section">
-        <p className="legal-search-idle__eyebrow">Recent searches</p>
+    <section className="grid gap-5 rounded-lg border border-line bg-surface p-5" aria-label="Search start points">
+      <div className="flex flex-col gap-2.5">
+        <p className="text-xs font-semibold uppercase tracking-wider text-subtle">Recent searches</p>
         {recentSearches.length > 0 ? (
-          <div className="legal-search-idle__chips">
+          <div className="flex flex-wrap gap-2">
             {recentSearches.map((recentSearch) => (
-              <button type="button" key={recentSearch} onClick={() => onRecentSearch(recentSearch)}>
+              <button
+                className="rounded-pill border border-line bg-canvas px-3 py-1.5 text-sm font-semibold text-ink transition-colors hover:border-brand hover:text-brand"
+                type="button"
+                key={recentSearch}
+                onClick={() => onRecentSearch(recentSearch)}
+              >
                 {recentSearch}
               </button>
             ))}
           </div>
         ) : (
-          <p className="legal-search-idle__muted">Recent searches appear here for this session.</p>
+          <p className="text-sm leading-relaxed text-muted">Recent searches appear here for this session.</p>
         )}
       </div>
 
-      <div className="legal-search-idle__grid">
-        <div className="legal-search-idle__section">
-          <p className="legal-search-idle__eyebrow">Search tips</p>
-          <ul className="legal-search-idle__tips">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <div className="flex flex-col gap-2.5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-subtle">Search tips</p>
+          <ul className="flex flex-col gap-2">
             {searchTips.map((tip) => (
-              <li key={tip.label}>
-                <span>{tip.label}</span>
-                <strong>{tip.example}</strong>
+              <li className="flex items-baseline gap-2.5" key={tip.label}>
+                <span className="w-[104px] shrink-0 text-sm text-muted">{tip.label}</span>
+                <strong className="text-sm font-semibold text-ink">{tip.example}</strong>
               </li>
             ))}
           </ul>
         </div>
 
-        <div className="legal-search-idle__section">
-          <p className="legal-search-idle__eyebrow">Court shortcuts</p>
-          <div className="legal-search-idle__chips">
+        <div className="flex flex-col gap-2.5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-subtle">Court shortcuts</p>
+          <div className="flex flex-wrap gap-2">
             {courtShortcuts.map((shortcut) => (
-              <button type="button" key={shortcut.code} onClick={() => onCourtShortcut(shortcut.code)}>
+              <button
+                className="rounded-pill border border-line bg-canvas px-3 py-1.5 text-sm font-semibold text-ink transition-colors hover:border-brand hover:text-brand"
+                type="button"
+                key={shortcut.code}
+                onClick={() => onCourtShortcut(shortcut.code)}
+              >
                 {shortcut.label}
               </button>
             ))}
           </div>
-          <p className="legal-search-idle__muted">
+          <p className="text-sm leading-relaxed text-muted">
             {courtLabel === 'All courts and tribunals'
               ? 'Choose a court, then enter a search term.'
               : `Filtering by ${courtLabel}. Enter a search term to search within that court.`}

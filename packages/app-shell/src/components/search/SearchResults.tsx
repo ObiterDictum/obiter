@@ -1,3 +1,4 @@
+import { ArrowRight } from '@phosphor-icons/react'
 import type { LegalSearchBrowseContext, LegalSearchFetchResponse } from './searchTypes'
 
 interface SearchResultsProps {
@@ -10,50 +11,50 @@ export function SearchResults({ response, browse, selectedIndex }: SearchResults
   const storedResultsAvailable = response.cached || response.indexedCount > 0
 
   return (
-    <section className="legal-search__results" aria-live="polite">
-      <p className="legal-search__meta">
+    <section className="flex flex-col gap-2.5" aria-live="polite">
+      <p className="text-sm text-muted">
         {formatResultMeta(response, storedResultsAvailable, browse)}
       </p>
       {response.hits.map((result, index) => {
         const summary = (
           <>
-            <span>
-              <strong>{result.title}</strong>
-              <small>
-                {formatNeutralCitation(result.neutralCitation)} - {result.court} - {result.dateDecided}
+            <span className="min-w-0">
+              <strong className="block text-base font-semibold leading-snug text-ink">{result.title}</strong>
+              <small className="mt-1.5 block text-xs text-muted">
+                {formatNeutralCitation(result.neutralCitation)} · {result.court} · {result.dateDecided}
               </small>
-              <small>
+              <small className="mt-0.5 block text-xs text-subtle">
                 {formatMatchReason(result.matchReason)}
-                {result.retrievalPath ? ` - ${formatRetrievalPath(result.retrievalPath)}` : ''}
+                {result.retrievalPath ? ` · ${formatRetrievalPath(result.retrievalPath)}` : ''}
               </small>
             </span>
-            <span className="case-law-result__actions">
-              <span className="case-law-result__toggle">Open case</span>
-              <span className="case-law-result__source">
-                {storedResultsAvailable ? 'Stored source' : 'Find Case Law'}
+            <span className="flex shrink-0 items-center gap-2 self-center">
+              <span className="hidden rounded-pill border border-line bg-canvas px-2 py-1 text-xs font-semibold text-muted sm:inline">
+                {storedResultsAvailable ? 'Stored' : 'Find Case Law'}
               </span>
+              <ArrowRight aria-hidden="true" size={15} weight="bold" className="text-subtle" />
             </span>
           </>
         )
 
         return (
           <article
-            className="case-law-result"
+            className="overflow-hidden rounded-lg border border-line bg-surface transition-colors data-[selected=true]:border-brand data-[selected=true]:shadow-sm"
             data-selected={selectedIndex === index ? 'true' : undefined}
             key={result.id}
           >
             <a
               href={result.canonicalUrl ?? `/cases/${encodeURIComponent(result.id)}`}
-              className="case-law-result__summary"
+              className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 p-4 text-ink transition-colors hover:bg-canvas"
               aria-current={selectedIndex === index ? 'true' : undefined}
             >
               {summary}
             </a>
             {result.snippets && result.snippets.length > 0 ? (
-              <div className="case-law-result__snippets" aria-label="Matching judgment snippets">
+              <div className="flex flex-col gap-2 border-t border-line bg-canvas/40 px-4 pb-4 pt-3" aria-label="Matching judgment snippets">
                 {result.snippets.map((snippet) => (
-                  <p className="case-law-result__snippet" key={`${result.id}-${snippet.paragraphNumber}`}>
-                    <span className="case-law-result__snippet-label">[{snippet.paragraphNumber}]</span>
+                  <p className="text-sm leading-relaxed text-muted" key={`${result.id}-${snippet.paragraphNumber}`}>
+                    <span className="mr-2 font-semibold text-subtle">[{snippet.paragraphNumber}]</span>
                     {renderSnippetText(snippet.text, snippet.matchedTerms)}
                   </p>
                 ))}
@@ -126,7 +127,7 @@ function renderSnippetText(text: string, matchedTerms: string[]) {
 
   return text.split(matcher).map((part, index) =>
     terms.some((term) => part.toLowerCase() === term.toLowerCase()) ? (
-      <mark key={`${part}-${index}`}>{part}</mark>
+      <mark className="rounded-sm bg-brand/30 px-0.5 text-ink" key={`${part}-${index}`}>{part}</mark>
     ) : (
       part
     ),
