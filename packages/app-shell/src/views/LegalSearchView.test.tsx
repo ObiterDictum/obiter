@@ -377,7 +377,7 @@ describe('LegalSearchView debounce lifecycle', () => {
     })
     await flushMicrotasks()
 
-    const resultLinks = () => [...rendered.container.querySelectorAll<HTMLAnchorElement>('.case-law-result__summary')]
+    const resultLinks = () => [...rendered.container.querySelectorAll<HTMLAnchorElement>('a[href^="/case/"]')]
     expect(resultLinks()[0]?.getAttribute('aria-current')).toBe('true')
     expect(resultLinks()[1]?.getAttribute('aria-current')).toBeNull()
 
@@ -409,7 +409,7 @@ describe('LegalSearchView debounce lifecycle', () => {
     await flushMicrotasks()
     await pressKey('j', input)
 
-    const resultLinks = [...container.querySelectorAll<HTMLAnchorElement>('.case-law-result__summary')]
+    const resultLinks = [...container.querySelectorAll<HTMLAnchorElement>('a[href^="/case/"]')]
     expect(resultLinks[0]?.getAttribute('aria-current')).toBe('true')
     expect(resultLinks[1]?.getAttribute('aria-current')).toBeNull()
   })
@@ -431,7 +431,7 @@ describe('LegalSearchView debounce lifecycle', () => {
     await flushMicrotasks()
     await pressKey('ArrowDown', input)
 
-    const resultLinks = [...container.querySelectorAll<HTMLAnchorElement>('.case-law-result__summary')]
+    const resultLinks = [...container.querySelectorAll<HTMLAnchorElement>('a[href^="/case/"]')]
     expect(resultLinks[0]?.getAttribute('aria-current')).toBe('true')
     expect(resultLinks[1]?.getAttribute('aria-current')).toBeNull()
   })
@@ -471,9 +471,9 @@ describe('LegalSearchView debounce lifecycle', () => {
     })
     await flushMicrotasks()
 
-    const firstResultLink = container.querySelector<HTMLAnchorElement>('.case-law-result__summary')
+    const firstResultLink = container.querySelector<HTMLAnchorElement>('a[href^="/case/"]')
     expect(firstResultLink?.getAttribute('href')).toBe('/case/potanina-v-potanin-2024-uksc-3')
-    expect(container.textContent).toContain('Exact citation - stored index')
+    expect(container.textContent).toContain('Exact citation · stored index')
 
     await pressKey('Enter')
 
@@ -493,7 +493,7 @@ describe('LegalSearchView debounce lifecycle', () => {
 
     expect(container.textContent).toContain('Keyboard Shortcuts')
     expect(container.textContent).toContain('ArrowDown / j')
-    expect(document.activeElement).toBe(container.querySelector('.legal-search-shortcuts__panel'))
+    expect(document.activeElement).toBe(container.querySelector('[tabindex="-1"]'))
 
     await pressKey('Escape')
 

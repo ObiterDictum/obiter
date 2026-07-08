@@ -1,5 +1,5 @@
 import { Link, useNavigate } from '@tanstack/react-router'
-import { Clock, X } from '@phosphor-icons/react'
+import { ArrowRight, Clock, Folders, MagnifyingGlass, Sparkle, X } from '@phosphor-icons/react'
 import type { AppPlatform } from '@ormont/contracts'
 import { useState, type FormEvent } from 'react'
 import { changelogQueryOptions } from '../changelog'
@@ -11,8 +11,9 @@ import {
 import { useSuspenseQuery } from '@tanstack/react-query'
 
 /**
- * Home — still the Phase 0 fixture view (M2 rewires to real data). Kept verbatim
- * apart from the icon pack swap (Phosphor) so it keeps rendering during M1.
+ * Home — landing surface. Greeting + a single hero search entry that routes to
+ * /search, then a tidy "live today" shortcuts list. Still fixture-backed (M2
+ * rewires to real data); structure is the part that matters here.
  */
 export function HomeRouteView({ platform }: { platform: AppPlatform }) {
   const navigate = useNavigate()
@@ -23,161 +24,206 @@ export function HomeRouteView({ platform }: { platform: AppPlatform }) {
   const { data: changelog } = useSuspenseQuery(changelogQueryOptions())
   const activeMilestone = data.milestones.find((milestone) => milestone.status === 'active')
   const matterCount = data.matters.length
-  const attentionItems = [
-    {
-      label: 'Review queue',
-      status: 'Planned',
-      detail: 'Document review, redaction checks, and verification tasks will surface here.',
-    },
-    {
-      label: 'Deadlines',
-      status: 'Planned',
-      detail: 'Upcoming filing, hearing, and client response dates are not connected yet.',
-    },
-    {
-      label: 'Matter activity',
-      status: matterCount > 0 ? `${matterCount} active` : 'No live data',
-      detail:
-        matterCount > 0
-          ? 'Open matter workspaces are available.'
-          : 'Matter records are not populated in this workspace yet.',
-    },
-  ]
-  const sourceItems = [
-    { label: 'Legal source search', status: 'Live', detail: 'Search public sources and open stored judgments.' },
-    { label: 'Case pages', status: 'Live', detail: 'Fetched judgments have stable internal pages.' },
-    { label: 'Statutes and timelines', status: 'Planned', detail: 'Legislation and relationship timelines belong in this search surface next.' },
-  ]
+  const firstName = me.user.name.split(' ')[0]
 
   function handleHomeSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const query = homeSearch.trim()
-    if (!query) {
-      void navigate({ to: '/search' })
-      return
+    if (query) {
+      window.sessionStorage.setItem('obiter.search.initialQuery', query)
     }
-
-    window.sessionStorage.setItem('obiter.search.initialQuery', query)
     void navigate({ to: '/search' })
   }
 
   return (
-    <div className="shell-stack workspace-page">
-      <section className="shell-page-heading">
-        <div>
-          <p className="shell-page-heading__eyebrow">Home</p>
-          <h1 className="shell-header__title">Home</h1>
+    <div className="mx-auto flex w-full max-w-[920px] flex-col gap-10">
+      <header className="flex items-start justify-between gap-4">
+        <div className="flex flex-col gap-1.5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-subtle">
+            {data.organisation.name}
+          </p>
+          <h1 className="text-3xl font-semibold tracking-tight text-ink">
+            Welcome back, {firstName}
+          </h1>
         </div>
         <button
           aria-label="Open product updates"
-          className="workspace-changelog-button"
+          className="inline-flex h-9 items-center gap-1.5 rounded-md border border-line bg-surface px-3 text-sm font-medium text-muted transition-colors hover:border-line-strong hover:text-ink"
           type="button"
           onClick={() => setChangelogOpen(true)}
         >
-          <Clock aria-hidden="true" />
+          <Clock aria-hidden="true" size={16} />
+          Updates
         </button>
-      </section>
+      </header>
 
-      <form className="workspace-source-search" onSubmit={handleHomeSearch}>
-        <label>
-          <span>Search cases, statutes, issues</span>
+      {/* Hero search entry — the single, prominent way into Search. */}
+      <form
+        className="group flex flex-col gap-2"
+        onSubmit={handleHomeSearch}
+      >
+        <label className="text-sm font-medium text-muted" htmlFor="home-search">
+          Search legal sources
+        </label>
+        <div className="flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 transition-colors focus-within:border-brand">
+          <MagnifyingGlass aria-hidden="true" size={18} className="text-subtle" />
           <input
+            id="home-search"
+            className="min-h-[28px] flex-1 bg-transparent text-base text-ink outline-none placeholder:text-subtle"
             value={homeSearch}
             onChange={(event) => setHomeSearch(event.target.value)}
-            placeholder="Potanina, limitation, Human Rights Act..."
+            placeholder="Case name, neutral citation, or keyword — e.g. Potanina"
             type="search"
+            autoFocus
           />
-        </label>
-        <button type="submit">Search</button>
+          <button
+            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md bg-brand px-3 text-sm font-semibold text-brand-fg transition-colors hover:bg-brand-pressed"
+            type="submit"
+          >
+            Search
+            <ArrowRight aria-hidden="true" size={15} weight="bold" />
+          </button>
+        </div>
       </form>
 
-      <section className="workspace-dashboard" aria-label="Workspace dashboard">
-        <article className="workspace-panel workspace-panel--attention">
-          <div className="workspace-panel__header">
-            <div>
-              <p className="workspace-panel__eyebrow">Current status</p>
-              <h2>Workspace signals</h2>
-            </div>
-            <span>{matterCount} matters</span>
-          </div>
-          <div className="workspace-list">
-            {attentionItems.map((item) => (
-              <div className="workspace-list__row" key={item.label}>
-                <div>
-                  <strong>{item.label}</strong>
-                  <p>{item.detail}</p>
-                </div>
-                <span>{item.status}</span>
-              </div>
-            ))}
-          </div>
-        </article>
+      {/* Live surfaces — what you can do today. */}
+      <section className="flex flex-col gap-3">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-subtle">
+          Live today
+        </h2>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <SurfaceCard
+            to="/search"
+            icon={<MagnifyingGlass aria-hidden="true" size={18} />}
+            title="Legal source search"
+            detail="Search stored judgments and Find Case Law across courts."
+          />
+          <SurfaceCard
+            to="/matters"
+            icon={<Folders aria-hidden="true" size={18} />}
+            title="Matters"
+            detail={
+              matterCount > 0
+                ? `${matterCount} open matter ${matterCount === 1 ? 'workspace' : 'workspaces'}.`
+                : 'Matter workspaces land here once created.'
+            }
+          />
+          <SurfaceCard
+            to="/search"
+            icon={<Sparkle aria-hidden="true" size={18} />}
+            title="Case pages"
+            detail="Fetched judgments have stable, citable internal pages."
+          />
+        </div>
+      </section>
 
-        <article className="workspace-panel workspace-panel--sources">
-          <div className="workspace-panel__header">
-            <div>
-              <p className="workspace-panel__eyebrow">Legal sources</p>
-              <h2>Search is live</h2>
-            </div>
-            <Link className="workspace-panel__link" to="/search">Open</Link>
-          </div>
-          <div className="workspace-list">
-            {sourceItems.map((item) => (
-              <div className="workspace-list__row" key={item.label}>
-                <div>
-                  <strong>{item.label}</strong>
-                  <p>{item.detail}</p>
-                </div>
-                <span>{item.status}</span>
-              </div>
-            ))}
-          </div>
-        </article>
+      {/* What's coming — quiet, honest about planned surfaces. */}
+      <section className="flex flex-col gap-2">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-subtle">
+          In progress
+        </h2>
+        <p className="max-w-prose text-sm leading-relaxed text-muted">
+          Redaction, verification, drafting, research, and deadlines are planned surfaces on the
+          roadmap. The shell is ready for each as it lands.
+        </p>
       </section>
 
       {changelogOpen ? (
-        <div className="workspace-updates-popover" role="dialog" aria-modal="false" aria-labelledby="workspace-changelog-title">
+        <div
+          className="fixed inset-0 z-[80] flex items-start justify-end overflow-y-auto bg-overlay p-6"
+          role="dialog"
+          aria-modal="false"
+          aria-labelledby="workspace-changelog-title"
+        >
           <button
             aria-label="Close product updates"
-            className="workspace-updates-popover__backdrop"
             type="button"
+            className="absolute inset-0 cursor-default"
             onClick={() => setChangelogOpen(false)}
           />
-          <section className="workspace-updates-popover__panel">
-            <header className="workspace-updates-popover__header">
-              <div>
-                <p className="workspace-panel__eyebrow">Product updates</p>
-                <h2 id="workspace-changelog-title">What changed recently</h2>
+          <section className="relative mt-16 w-full max-w-[560px] rounded-lg border border-line-strong bg-raised p-5 shadow-lg">
+            <header className="mb-4 flex items-start justify-between gap-4">
+              <div className="flex flex-col gap-1">
+                <p className="text-xs font-semibold uppercase tracking-wider text-subtle">Product updates</p>
+                <h2 className="text-lg font-semibold text-ink" id="workspace-changelog-title">
+                  What changed recently
+                </h2>
               </div>
-              <button type="button" aria-label="Close product updates" onClick={() => setChangelogOpen(false)}>
-                <X aria-hidden="true" />
+              <button
+                type="button"
+                aria-label="Close product updates"
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-line text-muted transition-colors hover:bg-canvas hover:text-ink"
+                onClick={() => setChangelogOpen(false)}
+              >
+                <X aria-hidden="true" size={17} />
               </button>
             </header>
             {changelog.entries.length > 0 ? (
-              <div className="workspace-list">
+              <div className="flex flex-col divide-y divide-line">
                 {changelog.entries.slice(0, 8).map((entry) => (
-                  <a className="workspace-list__row" href={entry.url} key={entry.url} rel="noreferrer" target="_blank">
-                    <div>
-                      <strong>{entry.title}</strong>
-                      <p>{entry.date ?? 'Date unavailable'}</p>
+                  <a
+                    className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0"
+                    href={entry.url}
+                    key={entry.url}
+                    rel="noreferrer"
+                    target="_blank"
+                  >
+                    <div className="min-w-0">
+                      <strong className="block text-sm font-medium text-ink">{entry.title}</strong>
+                      <p className="mt-1 text-sm text-muted">{entry.date ?? 'Date unavailable'}</p>
                     </div>
-                    <span>GitHub</span>
+                    <span className="shrink-0 rounded-pill border border-line bg-canvas px-2 py-1 text-xs font-semibold text-muted">
+                      GitHub
+                    </span>
                   </a>
                 ))}
               </div>
             ) : (
-              <p className="workspace-panel__empty">GitHub updates are unavailable right now.</p>
+              <p className="mt-3 text-sm text-muted">GitHub updates are unavailable right now.</p>
             )}
             {activeMilestone && canSeeDevelopmentStatus(me) ? (
-              <section className="workspace-dev-status">
-                <p className="workspace-panel__eyebrow">Development status</p>
-                <h3>{activeMilestone.label}</h3>
-                <p>{activeMilestone.detail}</p>
+              <section className="mt-4 border-t border-line pt-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-subtle">Development status</p>
+                <h3 className="mt-1 text-base font-semibold text-ink">{activeMilestone.label}</h3>
+                <p className="mt-2 text-sm text-muted">{activeMilestone.detail}</p>
               </section>
             ) : null}
           </section>
         </div>
       ) : null}
     </div>
+  )
+}
+
+function SurfaceCard({
+  to,
+  icon,
+  title,
+  detail,
+}: {
+  to: string
+  icon: React.ReactNode
+  title: string
+  detail: string
+}) {
+  return (
+    <Link
+      to={to}
+      className="group flex flex-col gap-2 rounded-lg border border-line bg-surface p-4 transition-colors hover:border-line-strong"
+    >
+      <span className="flex h-9 w-9 items-center justify-center rounded-md bg-canvas text-ink">
+        {icon}
+      </span>
+      <span className="flex items-center gap-1 text-sm font-semibold text-ink">
+        {title}
+        <ArrowRight
+          aria-hidden="true"
+          size={14}
+          weight="bold"
+          className="text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-ink"
+        />
+      </span>
+      <span className="text-sm leading-relaxed text-muted">{detail}</span>
+    </Link>
   )
 }
