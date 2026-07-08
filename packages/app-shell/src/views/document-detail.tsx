@@ -1,6 +1,6 @@
 import { Link, Outlet } from '@tanstack/react-router'
 import { ArrowLeft, FileText, Plus } from '@phosphor-icons/react'
-import { Badge, Button, EmptyState } from '@ormont/ui'
+import { Badge, Button, EmptyState } from '@obiter/ui'
 
 /**
  * Document detail — the M1 contract route (PRD FR4). Receives route params as

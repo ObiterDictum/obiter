@@ -2,7 +2,7 @@
 
 ## Summary
 
-Search is Ormont's first trust substrate. Before [Verify](verify.md), [Research](research.md), [Bench](bench.md), or [Pi](pi-agent-framework.md) can be credible, Search must retrieve legal sources accurately, expose why results appeared, and cover the source families needed for serious legal work.
+Search is Obiter's first trust substrate. Before [Verify](verify.md), [Research](research.md), [Bench](bench.md), or [Pi](pi-agent-framework.md) can be credible, Search must retrieve legal sources accurately, expose why results appeared, and cover the source families needed for serious legal work.
 
 The current implementation is a useful judgment-search foundation. It supports stored Meilisearch retrieval, PostgreSQL fallback, bounded snippets, Find Case Law live fallback and hydration, court/date filters, result keyboard flows, and case detail pages. It does not yet provide a full legal retrieval product, legislation search, stable evidence ids, measured ranking quality, corpus coverage reporting, or a UI that clearly distinguishes stored, live, ambiguous, and unavailable source states.
 
@@ -20,7 +20,7 @@ What exists:
 - Judgment result payloads expose evidence ids, match reason, retrieval path, retrieval rank, and retrieval score metadata.
 - Search responses expose explicit outcome states for results, no match, queued hydration, and empty stored-source browse.
 - Exact document-id and neutral-citation queries use a stored exact-lookup path before broad keyword search.
-- Judgment Search hits include canonical Ormont URLs such as `/case/potanina-v-potanin-2024-uksc-3`, result opening uses them, and `/cases/:caseId` redirects to the canonical route when the document is known.
+- Judgment Search hits include canonical Obiter URLs such as `/case/potanina-v-potanin-2024-uksc-3`, result opening uses them, and `/cases/:caseId` redirects to the canonical route when the document is known.
 - Gate 1 judgment Search benchmark seed artifacts exist under `data/evals/search/`.
 - Shared schemas now define future source types and source families, and Search requests model source type, source family, legal domain, provider, topic, `asAtDate`, and legislation version fields.
 - The UI supports debounced search, recent searches, court/date filters, stored-only court browse, result snippets, keyboard navigation, and search within case detail pages.
@@ -38,7 +38,7 @@ Main gaps:
 
 ## Problem
 
-Legal search quality depends on exactness, provenance, and source coverage. Generic keyword search is not enough. Users must be able to find a known authority, inspect exact evidence, search legal text, filter by legally meaningful dimensions, and understand whether results came from stored Ormont sources or live provider acquisition.
+Legal search quality depends on exactness, provenance, and source coverage. Generic keyword search is not enough. Users must be able to find a known authority, inspect exact evidence, search legal text, filter by legally meaningful dimensions, and understand whether results came from stored Obiter sources or live provider acquisition.
 
 If Search remains weak, downstream systems amplify the weakness: Verify misses real authorities, Research answers from incomplete evidence, Bench measures retrieval noise, and Pi agents automate unreliable source discovery.
 
@@ -46,7 +46,7 @@ If Search remains weak, downstream systems amplify the weakness: Verify misses r
 
 - Exact legal identifiers outrank semantic or body-text similarity.
 - Search returns legal sources with evidence refs, not detached text fragments.
-- Stored Ormont sources are the reliable substrate; live providers are acquisition paths.
+- Stored Obiter sources are the reliable substrate; live providers are acquisition paths.
 - Provider behavior must not leak into stable public API contracts.
 - Unsupported, ambiguous, unavailable, and unindexed states must be visible.
 - Legislation needs version and provision logic; it cannot be treated as case-law text.
@@ -83,9 +83,9 @@ Core use cases:
 
 1. Find a known case by neutral citation, party name, title alias, provider id, or body-text phrase.
 2. Open exact matching paragraphs from a result card.
-3. Open a case through a canonical Ormont URL such as `/case/potanina-v-potanin-2024-uksc-3`.
+3. Open a case through a canonical Obiter URL such as `/case/potanina-v-potanin-2024-uksc-3`.
 4. Search legislation by title, year, chapter, section, schedule, provision reference, or provision text.
-5. Open legislation through a canonical Ormont URL such as `/legislation/unfair-contract-terms-act-1977` or `/legislation/ukpga-1977-50`.
+5. Open legislation through a canonical Obiter URL such as `/legislation/unfair-contract-terms-act-1977` or `/legislation/ukpga-1977-50`.
 6. Filter by source family, jurisdiction, court/body, date, legal domain, and version context.
 7. Identify ambiguous, malformed, unsupported, unavailable, or unindexed queries.
 8. Export or inspect retrieval evidence for a benchmark or university review.
@@ -186,7 +186,7 @@ Future public routes should be versioned, stored-source-first, and contract-firs
 
 Stable API behavior:
 
-- default to stored Ormont legal sources
+- default to stored Obiter legal sources
 - no live provider fallback unless explicit, asynchronous, rate-limited, and auditable
 - shared schemas in `packages/contracts`
 - stable errors for validation, unavailable storage, rate limits, not found, and ambiguous queries
@@ -195,9 +195,9 @@ Stable API behavior:
 
 ## URL Requirements
 
-Canonical Ormont URLs and official/provider source URLs are different fields and must not be collapsed into one `source_url` concept.
+Canonical Obiter URLs and official/provider source URLs are different fields and must not be collapsed into one `source_url` concept.
 
-Target canonical Ormont routes:
+Target canonical Obiter routes:
 
 - `/case/:caseSlug`
 - `/case/:caseSlug/paragraph/:paragraphNumber`
@@ -210,7 +210,7 @@ Rules:
 - Slugs resolve to stable source ids server-side.
 - Old `/cases/:caseId` routes redirect to canonical `/case/:caseSlug` when the source is known.
 - Ambiguous slugs return candidates rather than silently choosing a source.
-- Search result payloads include a canonical Ormont URL so the UI does not reconstruct it ad hoc.
+- Search result payloads include a canonical Obiter URL so the UI does not reconstruct it ad hoc.
 - Detail pages keep the official/provider source URL visible for provenance and licence inspection.
 
 ## Evidence Requirements
@@ -222,7 +222,7 @@ Search evidence must align with the canonical Evidence Unit model in [Verificati
 - `source_type`
 - `source_title`
 - `display_citation`
-- canonical Ormont URL
+- canonical Obiter URL
 - official/provider source URL
 - `provider`
 - `licence`
@@ -260,7 +260,7 @@ Source detail:
 - judgment paragraph viewer and legislation provision viewer
 - source metadata panel and search within source
 - jump to paragraph/provision
-- copy citation and canonical Ormont link
+- copy citation and canonical Obiter link
 - open official source
 - show indexed/hydrated status
 - redirect internal-id URLs to canonical citation or legislation URLs
@@ -368,7 +368,7 @@ Exit criteria:
 
 - users can find an Act, SI, section, schedule, and provision text
 - version-sensitive results expose date context
-- official legislation URLs remain visible alongside canonical Ormont URLs
+- official legislation URLs remain visible alongside canonical Obiter URLs
 
 ### Gate 4: Stable API And Tool Readiness
 

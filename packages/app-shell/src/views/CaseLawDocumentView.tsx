@@ -1,7 +1,7 @@
 import { queryOptions, useSuspenseQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
-import { EmptyState } from '@ormont/ui'
+import { EmptyState } from '@obiter/ui'
 import { selectJudgmentParagraphs } from './LegalSearchView'
 import { getCourtLabel } from '../components/search'
 
@@ -47,7 +47,7 @@ function apiUrl(path: string) {
 
   return new URL(
     path,
-    process.env.ORMONT_API_ORIGIN ?? process.env.BETTER_AUTH_URL ?? 'http://localhost:8787',
+    process.env.OBITER_API_ORIGIN ?? process.env.BETTER_AUTH_URL ?? 'http://localhost:8787',
   ).toString()
 }
 

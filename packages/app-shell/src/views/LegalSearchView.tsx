@@ -1,6 +1,6 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Card } from '@ormont/ui'
+import { Card } from '@obiter/ui'
 import {
   SearchCommandBar,
   SearchFeedbackPanel,

@@ -39,12 +39,12 @@ Reviewed the API-to-Meilisearch boundary, key separation, fixture contents, prov
 
 ## System / Coverage Map
 
-Loaded `references/maps/ormont-system-map.md`, `review/ormont/architecture/data-boundaries.md`, and the search findings patterns. Traced the API-to-search-client-to-Meilisearch write path and inspected the search response contract. No private matter data boundary was touched, but source-of-truth versus derived-index behavior remained relevant.
+Loaded `references/maps/obiter-system-map.md`, `review/obiter/architecture/data-boundaries.md`, and the search findings patterns. Traced the API-to-search-client-to-Meilisearch write path and inspected the search response contract. No private matter data boundary was touched, but source-of-truth versus derived-index behavior remained relevant.
 
 ## Verification
 
-- `pnpm --filter @ormont/search-client test` - passed
-- `pnpm --filter @ormont/api test` - passed
+- `pnpm --filter @obiter/search-client test` - passed
+- `pnpm --filter @obiter/api test` - passed
 
 ## Gaps / Follow-Ups
 

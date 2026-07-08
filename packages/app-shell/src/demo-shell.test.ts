@@ -42,7 +42,7 @@ describe('Home role gates', () => {
     expect(module.canSeeDevelopmentStatusForTest({
       user: {
         id: 'user-amorgan',
-        email: 'amorgan@ormont.local',
+        email: 'amorgan@obiter.local',
         name: 'A. Morgan',
         role: 'owner',
       },

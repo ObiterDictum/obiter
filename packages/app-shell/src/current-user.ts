@@ -1,5 +1,5 @@
 import { queryOptions, useSuspenseQuery } from '@tanstack/react-query'
-import type { MeResponse } from '@ormont/contracts'
+import type { MeResponse } from '@obiter/contracts'
 import { apiFetch } from './api'
 import { createDemoMeResponse } from './fixtures'
 import { DEV_AUTO_LOGIN } from './dev-session'

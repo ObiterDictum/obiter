@@ -5,7 +5,7 @@ import type { RedactionSpan } from './types'
 const legalText = `Jane Smith of 10 Downing Street emailed jane.smith@example.com about matter CR-2024-00123. Her NI number is QQ 12 34 56 C. Smith & Jones Solicitors LLP act for the claimant.`
 
 describe('redaction policy', () => {
-  it('maps Rampart labels to Ormont categories', () => {
+  it('maps Rampart labels to Obiter categories', () => {
     const start = legalText.indexOf('Jane Smith')
     const spans = mapRampartSpans({
       text: legalText,

@@ -1,4 +1,4 @@
-import { HomeRouteView, shellSnapshotQueryOptions } from '@ormont/app-shell'
+import { HomeRouteView, shellSnapshotQueryOptions } from '@obiter/app-shell'
 import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/workspace')({
