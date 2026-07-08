@@ -16,8 +16,8 @@ import {
   UploadSimple,
   UserCircle,
 } from '@phosphor-icons/react'
-import { Button, Skeleton, ToastProvider, Toaster } from '@ormont/ui'
-import type { AppPlatform } from '@ormont/contracts'
+import { Button, Skeleton, ToastProvider, Toaster } from '@obiter/ui'
+import type { AppPlatform } from '@obiter/contracts'
 import { useEffect, useState, type ReactNode } from 'react'
 import { useAuth } from './auth'
 import { currentUserQueryOptions } from './current-user'

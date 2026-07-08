@@ -1,4 +1,4 @@
-import { AppShellLayout, HomeRouteView, MatterRouteView, MattersRouteView, SignInRouteView, caseLawDocumentQueryOptions, shellSnapshotQueryOptions } from '@ormont/app-shell'
+import { AppShellLayout, HomeRouteView, MatterRouteView, MattersRouteView, SignInRouteView, caseLawDocumentQueryOptions, shellSnapshotQueryOptions } from '@obiter/app-shell'
 import type { QueryClient } from '@tanstack/react-query'
 import {
   Outlet,

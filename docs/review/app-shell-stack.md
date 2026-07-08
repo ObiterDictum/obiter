@@ -4,7 +4,7 @@ This document is the review handoff for PR #4.
 
 ## Current Review Shape
 
-- Repository: `OrmontLex/ormont`
+- Repository: `ObiterDictum/obiter`
 - PR: `#4`
 - Base: `main`
 - Compare: `review/docs-guidance`
@@ -67,8 +67,8 @@ Do not review implementation code unless the docs make a claim that conflicts wi
 
 ### Testing
 
-- `pnpm --filter @ormont/api typecheck`
-- `pnpm --filter @ormont/api test`
+- `pnpm --filter @obiter/api typecheck`
+- `pnpm --filter @obiter/api test`
 
 ### Risks / Follow-Ups
 
@@ -80,13 +80,13 @@ Do not review implementation code unless the docs make a claim that conflicts wi
 ### What Changed
 
 - Added shared UI primitives and global styling.
-- Added the app shell package with the finished Ormont sidebar, search, navigation groups, current matter, recent research, user card, and collapse behavior.
+- Added the app shell package with the finished Obiter sidebar, search, navigation groups, current matter, recent research, user card, and collapse behavior.
 - Added web and desktop app entrypoints that consume the shared app shell.
 - Added visual assets used by the sign-in and shell experience.
 
 ### Why
 
-- This creates the first complete product surface for Ormont and gives the application a real navigation model instead of placeholder workspace screens.
+- This creates the first complete product surface for Obiter and gives the application a real navigation model instead of placeholder workspace screens.
 
 ### Implementation Notes
 
@@ -97,10 +97,10 @@ Do not review implementation code unless the docs make a claim that conflicts wi
 
 ### Testing
 
-- `pnpm --filter @ormont/app-shell typecheck`
-- `pnpm --filter @ormont/app-shell test`
-- `pnpm --filter @ormont/desktop typecheck`
-- `pnpm --filter @ormont/web build`
+- `pnpm --filter @obiter/app-shell typecheck`
+- `pnpm --filter @obiter/app-shell test`
+- `pnpm --filter @obiter/desktop typecheck`
+- `pnpm --filter @obiter/web build`
 - Manual browser/Electron checks were performed during sidebar iteration at `http://localhost:5173/#/workspace`.
 
 ### Risks / Follow-Ups

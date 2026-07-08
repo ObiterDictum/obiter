@@ -1,6 +1,6 @@
 ---
 name: production-pr-review-response
-description: Production-grade workflow for responding to Ormont PR reviews. Use when asked to validate review feedback, implement required fixes, update the PR, post a response comment, and resolve GitHub review threads or inline comments after verification.
+description: Production-grade workflow for responding to Obiter PR reviews. Use when asked to validate review feedback, implement required fixes, update the PR, post a response comment, and resolve GitHub review threads or inline comments after verification.
 ---
 
 # Production PR Review Response

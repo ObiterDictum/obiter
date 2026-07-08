@@ -11,7 +11,7 @@ function authBaseURL(): string {
   if (typeof window !== 'undefined') {
     return window.location.origin
   }
-  return process.env.ORMONT_API_ORIGIN ?? process.env.BETTER_AUTH_URL ?? 'http://localhost:8787'
+  return process.env.OBITER_API_ORIGIN ?? process.env.BETTER_AUTH_URL ?? 'http://localhost:8787'
 }
 
 export const authClient = createAuthClient({

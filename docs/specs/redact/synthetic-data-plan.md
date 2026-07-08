@@ -136,7 +136,7 @@ Formal statements of the case. PII appears in:
 
 ```json
 {
-  "category_version": "ormont_legal_v1",
+  "category_version": "obiter_legal_v1",
   "span_class_names": [
     "O",
     "private_person",

@@ -2,9 +2,9 @@
 
 ## Summary
 
-Bench is Ormont's evaluation product. It records repeatable tests for [Search](search-quality.md), [Verify](verify.md), [Research](research.md), [Redact](redact.md), and [Pi](pi-agent-framework.md)-backed agent workflows so quality claims can be inspected by Ormont, legal reviewers, and university partners.
+Bench is Obiter's evaluation product. It records repeatable tests for [Search](search-quality.md), [Verify](verify.md), [Research](research.md), [Redact](redact.md), and [Pi](pi-agent-framework.md)-backed agent workflows so quality claims can be inspected by Obiter, legal reviewers, and university partners.
 
-The first release is a university verification bundle, not a public leaderboard. It must prove that Ormont can run fixed tasks, preserve the evidence path, classify failures, compare system versions, and expose enough artifacts for independent review without leaking private matter data.
+The first release is a university verification bundle, not a public leaderboard. It must prove that Obiter can run fixed tasks, preserve the evidence path, classify failures, compare system versions, and expose enough artifacts for independent review without leaking private matter data.
 
 See the detailed implementation spec at [docs/specs/bench/](../specs/bench/).
 
@@ -16,7 +16,7 @@ Legal AI evaluation often fails in three ways:
 - aggregate scores hide why the system failed
 - reviewers cannot inspect the evidence used by the system
 
-Ormont needs a benchmark layer because Search upgrades, Verify checks, and Pi agent behavior will otherwise be impossible to compare safely. If a ranking change improves broad keyword search but harms exact citation lookup, Bench must expose that. If a prompt change improves answer fluency but increases unsupported claims, Bench must expose that too.
+Obiter needs a benchmark layer because Search upgrades, Verify checks, and Pi agent behavior will otherwise be impossible to compare safely. If a ranking change improves broad keyword search but harms exact citation lookup, Bench must expose that. If a prompt change improves answer fluency but increases unsupported claims, Bench must expose that too.
 
 ## Product Principles
 
@@ -47,7 +47,7 @@ Ormont needs a benchmark layer because Search upgrades, Verify checks, and Pi ag
 
 ## Users
 
-### Ormont Builder
+### Obiter Builder
 
 Compares system changes and needs failure categories that point to concrete work.
 
@@ -332,7 +332,7 @@ Reports must include:
 - excluded scope
 - reproduction instructions
 
-Reports must not state that Ormont is legally correct. They may state what the benchmark measured and what the observed result was.
+Reports must not state that Obiter is legally correct. They may state what the benchmark measured and what the observed result was.
 
 ## University Review Bundle
 

@@ -1,9 +1,9 @@
 /*
  * Desktop renderer root styles. The design tokens (light default, dark under
- * [data-theme="dark"]) come from @ormont/ui/tailwind.css. The desktop shares the
+ * [data-theme="dark"]) come from @obiter/ui/tailwind.css. The desktop shares the
  * same frame/views as web, so no separate dark sheet is needed.
  */
-@import "@ormont/ui/tailwind.css";
+@import "@obiter/ui/tailwind.css";
 
 @source "../../../../packages/ui/src";
 @source "../../../../packages/app-shell/src";

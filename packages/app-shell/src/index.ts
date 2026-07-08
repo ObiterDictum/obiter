@@ -1,5 +1,5 @@
 /**
- * @ormont/app-shell public surface. See docs/specs/app-shell/contract.md for the
+ * @obiter/app-shell public surface. See docs/specs/app-shell/contract.md for the
  * frozen contract (the parts the Redact track builds against).
  */
 

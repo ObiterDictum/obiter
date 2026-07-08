@@ -1,5 +1,5 @@
 /*
- * Obiter design tokens. Source of truth for the `--ormont-*` custom properties.
+ * Obiter design tokens. Source of truth for the `--obiter-*` custom properties.
  * Consumed by Tailwind v4 via @theme inline in tailwind.css.
  *
  * Light is the default. Dark overrides live under [data-theme="dark"].
@@ -15,189 +15,189 @@
   color-scheme: light;
 
   /* Surface + text */
-  --ormont-bg: #f4efe4;                 /* page */
-  --ormont-surface: #fbf8f1;            /* cards, panels */
-  --ormont-surface-raised: #fffdf8;     /* dialogs, menus, popovers */
-  --ormont-border: rgba(40, 33, 28, 0.12);
-  --ormont-border-strong: rgba(40, 33, 28, 0.22);
-  --ormont-text: #211b16;               /* warm near-black ink */
-  --ormont-text-muted: #6b5f54;
-  --ormont-text-subtle: #948576;
+  --obiter-bg: #f4efe4;                 /* page */
+  --obiter-surface: #fbf8f1;            /* cards, panels */
+  --obiter-surface-raised: #fffdf8;     /* dialogs, menus, popovers */
+  --obiter-border: rgba(40, 33, 28, 0.12);
+  --obiter-border-strong: rgba(40, 33, 28, 0.22);
+  --obiter-text: #211b16;               /* warm near-black ink */
+  --obiter-text-muted: #6b5f54;
+  --obiter-text-subtle: #948576;
 
   /* Brand accent (sage) */
-  --ormont-brand: #2c6a59;
-  --ormont-brand-fg: #fbf8f1;
-  --ormont-brand-pressed: #245547;
-  --ormont-ring: rgba(44, 106, 89, 0.45);
-  --ormont-overlay: rgba(20, 16, 12, 0.5);
+  --obiter-brand: #2c6a59;
+  --obiter-brand-fg: #fbf8f1;
+  --obiter-brand-pressed: #245547;
+  --obiter-ring: rgba(44, 106, 89, 0.45);
+  --obiter-overlay: rgba(20, 16, 12, 0.5);
 
   /* Status (each with a matching -fg for text on fill) */
-  --ormont-status-info: #356a9c;
-  --ormont-status-info-fg: #fbf8f1;
-  --ormont-status-success: #2f6b46;
-  --ormont-status-success-fg: #fbf8f1;
-  --ormont-status-warning: #8a5e16;
-  --ormont-status-warning-fg: #fbf8f1;
-  --ormont-status-danger: #9b4129;
-  --ormont-status-danger-fg: #fbf8f1;
+  --obiter-status-info: #356a9c;
+  --obiter-status-info-fg: #fbf8f1;
+  --obiter-status-success: #2f6b46;
+  --obiter-status-success-fg: #fbf8f1;
+  --obiter-status-warning: #8a5e16;
+  --obiter-status-warning-fg: #fbf8f1;
+  --obiter-status-danger: #9b4129;
+  --obiter-status-danger-fg: #fbf8f1;
 
   /* Type */
-  --ormont-font-sans: "Satoshi", system-ui, -apple-system, "Segoe UI Variable", "Segoe UI", sans-serif;
-  --ormont-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --ormont-font-weight-regular: 400;
-  --ormont-font-weight-medium: 500;
-  --ormont-font-weight-semibold: 600;
+  --obiter-font-sans: "Satoshi", system-ui, -apple-system, "Segoe UI Variable", "Segoe UI", sans-serif;
+  --obiter-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --obiter-font-weight-regular: 400;
+  --obiter-font-weight-medium: 500;
+  --obiter-font-weight-semibold: 600;
 
   /* Radius */
-  --ormont-radius-sm: 6px;
-  --ormont-radius-md: 10px;
-  --ormont-radius-lg: 16px;
-  --ormont-radius-xl: 22px;
-  --ormont-radius-pill: 9999px;
+  --obiter-radius-sm: 6px;
+  --obiter-radius-md: 10px;
+  --obiter-radius-lg: 16px;
+  --obiter-radius-xl: 22px;
+  --obiter-radius-pill: 9999px;
 
   /* Elevation — tinted to the background hue, no harsh black drop-shadows */
-  --ormont-shadow-sm: 0 1px 2px rgba(40, 33, 28, 0.06), 0 1px 1px rgba(40, 33, 28, 0.04);
-  --ormont-shadow-md: 0 4px 12px rgba(40, 33, 28, 0.08), 0 2px 4px rgba(40, 33, 28, 0.05);
-  --ormont-shadow-lg: 0 20px 40px rgba(40, 33, 28, 0.12), 0 6px 12px rgba(40, 33, 28, 0.06);
+  --obiter-shadow-sm: 0 1px 2px rgba(40, 33, 28, 0.06), 0 1px 1px rgba(40, 33, 28, 0.04);
+  --obiter-shadow-md: 0 4px 12px rgba(40, 33, 28, 0.08), 0 2px 4px rgba(40, 33, 28, 0.05);
+  --obiter-shadow-lg: 0 20px 40px rgba(40, 33, 28, 0.12), 0 6px 12px rgba(40, 33, 28, 0.06);
 
   /* Redaction span-category palette (contract §2.3).
      Light theme: soft tinted bg + deep same-hue fg (AA contrast).
-     The bare --ormont-span-<category> alias equals the -bg value. */
-  --ormont-span-person-name-bg: hsl(352 55% 88%);
-  --ormont-span-person-name-fg: hsl(352 45% 30%);
-  --ormont-span-person-name: var(--ormont-span-person-name-bg);
+     The bare --obiter-span-<category> alias equals the -bg value. */
+  --obiter-span-person-name-bg: hsl(352 55% 88%);
+  --obiter-span-person-name-fg: hsl(352 45% 30%);
+  --obiter-span-person-name: var(--obiter-span-person-name-bg);
 
-  --ormont-span-email-bg: hsl(38 60% 88%);
-  --ormont-span-email-fg: hsl(32 55% 30%);
-  --ormont-span-email: var(--ormont-span-email-bg);
+  --obiter-span-email-bg: hsl(38 60% 88%);
+  --obiter-span-email-fg: hsl(32 55% 30%);
+  --obiter-span-email: var(--obiter-span-email-bg);
 
-  --ormont-span-phone-bg: hsl(28 65% 88%);
-  --ormont-span-phone-fg: hsl(24 60% 32%);
-  --ormont-span-phone: var(--ormont-span-phone-bg);
+  --obiter-span-phone-bg: hsl(28 65% 88%);
+  --obiter-span-phone-fg: hsl(24 60% 32%);
+  --obiter-span-phone: var(--obiter-span-phone-bg);
 
-  --ormont-span-address-bg: hsl(48 60% 86%);
-  --ormont-span-address-fg: hsl(44 55% 28%);
-  --ormont-span-address: var(--ormont-span-address-bg);
+  --obiter-span-address-bg: hsl(48 60% 86%);
+  --obiter-span-address-fg: hsl(44 55% 28%);
+  --obiter-span-address: var(--obiter-span-address-bg);
 
-  --ormont-span-date-bg: hsl(265 50% 88%);
-  --ormont-span-date-fg: hsl(265 45% 32%);
-  --ormont-span-date: var(--ormont-span-date-bg);
+  --obiter-span-date-bg: hsl(265 50% 88%);
+  --obiter-span-date-fg: hsl(265 45% 32%);
+  --obiter-span-date: var(--obiter-span-date-bg);
 
-  --ormont-span-government-id-bg: hsl(145 45% 87%);
-  --ormont-span-government-id-fg: hsl(150 45% 26%);
-  --ormont-span-government-id: var(--ormont-span-government-id-bg);
+  --obiter-span-government-id-bg: hsl(145 45% 87%);
+  --obiter-span-government-id-fg: hsl(150 45% 26%);
+  --obiter-span-government-id: var(--obiter-span-government-id-bg);
 
-  --ormont-span-account-number-bg: hsl(330 55% 88%);
-  --ormont-span-account-number-fg: hsl(330 45% 32%);
-  --ormont-span-account-number: var(--ormont-span-account-number-bg);
+  --obiter-span-account-number-bg: hsl(330 55% 88%);
+  --obiter-span-account-number-fg: hsl(330 45% 32%);
+  --obiter-span-account-number: var(--obiter-span-account-number-bg);
 
-  --ormont-span-secret-bg: hsl(0 60% 88%);
-  --ormont-span-secret-fg: hsl(0 60% 30%);
-  --ormont-span-secret: var(--ormont-span-secret-bg);
+  --obiter-span-secret-bg: hsl(0 60% 88%);
+  --obiter-span-secret-fg: hsl(0 60% 30%);
+  --obiter-span-secret: var(--obiter-span-secret-bg);
 
-  --ormont-span-passport-bg: hsl(243 50% 89%);
-  --ormont-span-passport-fg: hsl(243 45% 34%);
-  --ormont-span-passport: var(--ormont-span-passport-bg);
+  --obiter-span-passport-bg: hsl(243 50% 89%);
+  --obiter-span-passport-fg: hsl(243 45% 34%);
+  --obiter-span-passport: var(--obiter-span-passport-bg);
 
-  --ormont-span-drivers-license-bg: hsl(75 50% 86%);
-  --ormont-span-drivers-license-fg: hsl(78 50% 26%);
-  --ormont-span-drivers-license: var(--ormont-span-drivers-license-bg);
+  --obiter-span-drivers-license-bg: hsl(75 50% 86%);
+  --obiter-span-drivers-license-fg: hsl(78 50% 26%);
+  --obiter-span-drivers-license: var(--obiter-span-drivers-license-bg);
 
-  --ormont-span-url-bg: hsl(190 55% 86%);
-  --ormont-span-url-fg: hsl(192 60% 26%);
-  --ormont-span-url: var(--ormont-span-url-bg);
+  --obiter-span-url-bg: hsl(190 55% 86%);
+  --obiter-span-url-fg: hsl(192 60% 26%);
+  --obiter-span-url: var(--obiter-span-url-bg);
 
-  --ormont-span-ip-address-bg: hsl(300 50% 88%);
-  --ormont-span-ip-address-fg: hsl(300 45% 32%);
-  --ormont-span-ip-address: var(--ormont-span-ip-address-bg);
+  --obiter-span-ip-address-bg: hsl(300 50% 88%);
+  --obiter-span-ip-address-fg: hsl(300 45% 32%);
+  --obiter-span-ip-address: var(--obiter-span-ip-address-bg);
 
-  --ormont-span-national-insurance-bg: hsl(175 50% 85%);
-  --ormont-span-national-insurance-fg: hsl(178 55% 24%);
-  --ormont-span-national-insurance: var(--ormont-span-national-insurance-bg);
+  --obiter-span-national-insurance-bg: hsl(175 50% 85%);
+  --obiter-span-national-insurance-fg: hsl(178 55% 24%);
+  --obiter-span-national-insurance: var(--obiter-span-national-insurance-bg);
 
-  --ormont-span-case-reference-bg: hsl(210 60% 88%);
-  --ormont-span-case-reference-fg: hsl(212 55% 30%);
-  --ormont-span-case-reference: var(--ormont-span-case-reference-bg);
+  --obiter-span-case-reference-bg: hsl(210 60% 88%);
+  --obiter-span-case-reference-fg: hsl(212 55% 30%);
+  --obiter-span-case-reference: var(--obiter-span-case-reference-bg);
 
-  --ormont-span-organisation-name-bg: hsl(280 45% 89%);
-  --ormont-span-organisation-name-fg: hsl(282 40% 34%);
-  --ormont-span-organisation-name: var(--ormont-span-organisation-name-bg);
+  --obiter-span-organisation-name-bg: hsl(280 45% 89%);
+  --obiter-span-organisation-name-fg: hsl(282 40% 34%);
+  --obiter-span-organisation-name: var(--obiter-span-organisation-name-bg);
 }
 
 [data-theme="dark"] {
   color-scheme: dark;
 
-  --ormont-bg: #1a1612;
-  --ormont-surface: #221d18;
-  --ormont-surface-raised: #2a241e;
-  --ormont-border: rgba(245, 240, 230, 0.12);
-  --ormont-border-strong: rgba(245, 240, 230, 0.22);
-  --ormont-text: #f1e9da;
-  --ormont-text-muted: #b3a695;
-  --ormont-text-subtle: #8a7d6c;
+  --obiter-bg: #1a1612;
+  --obiter-surface: #221d18;
+  --obiter-surface-raised: #2a241e;
+  --obiter-border: rgba(245, 240, 230, 0.12);
+  --obiter-border-strong: rgba(245, 240, 230, 0.22);
+  --obiter-text: #f1e9da;
+  --obiter-text-muted: #b3a695;
+  --obiter-text-subtle: #8a7d6c;
 
-  --ormont-brand: #5b9d89;
-  --ormont-brand-fg: #1a1612;
-  --ormont-brand-pressed: #7bb09c;
-  --ormont-ring: rgba(91, 157, 137, 0.55);
-  --ormont-overlay: rgba(0, 0, 0, 0.6);
+  --obiter-brand: #5b9d89;
+  --obiter-brand-fg: #1a1612;
+  --obiter-brand-pressed: #7bb09c;
+  --obiter-ring: rgba(91, 157, 137, 0.55);
+  --obiter-overlay: rgba(0, 0, 0, 0.6);
 
-  --ormont-status-info: #6fa3d6;
-  --ormont-status-info-fg: #1a1612;
-  --ormont-status-success: #6fb384;
-  --ormont-status-success-fg: #1a1612;
-  --ormont-status-warning: #d6a85a;
-  --ormont-status-warning-fg: #1a1612;
-  --ormont-status-danger: #d6806a;
-  --ormont-status-danger-fg: #1a1612;
+  --obiter-status-info: #6fa3d6;
+  --obiter-status-info-fg: #1a1612;
+  --obiter-status-success: #6fb384;
+  --obiter-status-success-fg: #1a1612;
+  --obiter-status-warning: #d6a85a;
+  --obiter-status-warning-fg: #1a1612;
+  --obiter-status-danger: #d6806a;
+  --obiter-status-danger-fg: #1a1612;
 
-  --ormont-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.3);
-  --ormont-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.3);
-  --ormont-shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.55), 0 6px 12px rgba(0, 0, 0, 0.35);
+  --obiter-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.3);
+  --obiter-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.3);
+  --obiter-shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.55), 0 6px 12px rgba(0, 0, 0, 0.35);
 
   /* Span palette, dark theme: deep saturated bg + light same-hue fg. */
-  --ormont-span-person-name-bg: hsl(352 40% 28%);
-  --ormont-span-person-name-fg: hsl(352 60% 82%);
+  --obiter-span-person-name-bg: hsl(352 40% 28%);
+  --obiter-span-person-name-fg: hsl(352 60% 82%);
 
-  --ormont-span-email-bg: hsl(38 45% 26%);
-  --ormont-span-email-fg: hsl(38 70% 80%);
+  --obiter-span-email-bg: hsl(38 45% 26%);
+  --obiter-span-email-fg: hsl(38 70% 80%);
 
-  --ormont-span-phone-bg: hsl(28 50% 28%);
-  --ormont-span-phone-fg: hsl(28 70% 80%);
+  --obiter-span-phone-bg: hsl(28 50% 28%);
+  --obiter-span-phone-fg: hsl(28 70% 80%);
 
-  --ormont-span-address-bg: hsl(48 45% 26%);
-  --ormont-span-address-fg: hsl(48 70% 82%);
+  --obiter-span-address-bg: hsl(48 45% 26%);
+  --obiter-span-address-fg: hsl(48 70% 82%);
 
-  --ormont-span-date-bg: hsl(265 40% 30%);
-  --ormont-span-date-fg: hsl(265 55% 82%);
+  --obiter-span-date-bg: hsl(265 40% 30%);
+  --obiter-span-date-fg: hsl(265 55% 82%);
 
-  --ormont-span-government-id-bg: hsl(150 40% 26%);
-  --ormont-span-government-id-fg: hsl(150 50% 80%);
+  --obiter-span-government-id-bg: hsl(150 40% 26%);
+  --obiter-span-government-id-fg: hsl(150 50% 80%);
 
-  --ormont-span-account-number-bg: hsl(330 40% 30%);
-  --ormont-span-account-number-fg: hsl(330 55% 82%);
+  --obiter-span-account-number-bg: hsl(330 40% 30%);
+  --obiter-span-account-number-fg: hsl(330 55% 82%);
 
-  --ormont-span-secret-bg: hsl(0 50% 28%);
-  --ormont-span-secret-fg: hsl(0 65% 82%);
+  --obiter-span-secret-bg: hsl(0 50% 28%);
+  --obiter-span-secret-fg: hsl(0 65% 82%);
 
-  --ormont-span-passport-bg: hsl(243 40% 30%);
-  --ormont-span-passport-fg: hsl(243 55% 82%);
+  --obiter-span-passport-bg: hsl(243 40% 30%);
+  --obiter-span-passport-fg: hsl(243 55% 82%);
 
-  --ormont-span-drivers-license-bg: hsl(78 42% 26%);
-  --ormont-span-drivers-license-fg: hsl(78 55% 80%);
+  --obiter-span-drivers-license-bg: hsl(78 42% 26%);
+  --obiter-span-drivers-license-fg: hsl(78 55% 80%);
 
-  --ormont-span-url-bg: hsl(192 45% 26%);
-  --ormont-span-url-fg: hsl(192 60% 80%);
+  --obiter-span-url-bg: hsl(192 45% 26%);
+  --obiter-span-url-fg: hsl(192 60% 80%);
 
-  --ormont-span-ip-address-bg: hsl(300 40% 30%);
-  --ormont-span-ip-address-fg: hsl(300 55% 82%);
+  --obiter-span-ip-address-bg: hsl(300 40% 30%);
+  --obiter-span-ip-address-fg: hsl(300 55% 82%);
 
-  --ormont-span-national-insurance-bg: hsl(178 42% 24%);
-  --ormont-span-national-insurance-fg: hsl(178 55% 78%);
+  --obiter-span-national-insurance-bg: hsl(178 42% 24%);
+  --obiter-span-national-insurance-fg: hsl(178 55% 78%);
 
-  --ormont-span-case-reference-bg: hsl(212 45% 28%);
-  --ormont-span-case-reference-fg: hsl(212 60% 82%);
+  --obiter-span-case-reference-bg: hsl(212 45% 28%);
+  --obiter-span-case-reference-fg: hsl(212 60% 82%);
 
-  --ormont-span-organisation-name-bg: hsl(282 40% 30%);
-  --ormont-span-organisation-name-fg: hsl(282 55% 82%);
+  --obiter-span-organisation-name-bg: hsl(282 40% 30%);
+  --obiter-span-organisation-name-fg: hsl(282 55% 82%);
 }

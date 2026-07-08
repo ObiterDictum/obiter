@@ -17,7 +17,7 @@ That workflow is:
 
 ## Phase 1 Deliverable
 
-By the end of Phase 1, Ormont should support one coherent user journey:
+By the end of Phase 1, Obiter should support one coherent user journey:
 
 - a lawyer opens a matter
 - uploads a draft document
@@ -53,7 +53,7 @@ Phase 1 does not include:
 
 ### Matter
 
-A matter is a single client workstream, case, dispute, transaction, or instruction. In Ormont, the matter is the private workspace that groups:
+A matter is a single client workstream, case, dispute, transaction, or instruction. In Obiter, the matter is the private workspace that groups:
 
 - uploaded documents
 - redaction runs
@@ -350,12 +350,12 @@ Phase 1 can be planned as five parallel workstreams:
 Phase 1 is complete when all of the following are true:
 
 - Phase 0 matter and document workflows already exist
-- Ormont can search its public legal corpus by citation and keyword
-- Ormont can retrieve source paragraphs and provisions
-- Ormont can detect and review sensitive spans in the uploaded draft
-- Ormont can verify authorities and quotes in the draft
-- Ormont can produce a source-bound research answer
-- Ormont can export a report a lawyer can inspect
+- Obiter can search its public legal corpus by citation and keyword
+- Obiter can retrieve source paragraphs and provisions
+- Obiter can detect and review sensitive spans in the uploaded draft
+- Obiter can verify authorities and quotes in the draft
+- Obiter can produce a source-bound research answer
+- Obiter can export a report a lawyer can inspect
 
 ## Non-Goals
 

@@ -150,7 +150,7 @@ describe('design token contrast (WCAG AA >= 4.5)', () => {
       'organisation-name',
     ]
     for (const category of spanCategories) {
-      const baseKey = `--ormont-span-${category}`
+      const baseKey = `--obiter-span-${category}`
       expect(lightBlock).toContain(`${baseKey}-bg:`)
       expect(lightBlock).toContain(`${baseKey}-fg:`)
       expect(darkBlock).toContain(`${baseKey}-bg:`)

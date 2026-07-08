@@ -1,7 +1,7 @@
 /// <reference types="vite/client" />
 
 interface Window {
-  ormontDesktop: {
+  obiterDesktop: {
     platform: 'desktop'
     shellVersion: string
   }

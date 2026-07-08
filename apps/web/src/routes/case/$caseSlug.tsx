@@ -1,8 +1,8 @@
 import {
   CaseLawDocumentView,
   caseLawDocumentQueryOptions,
-} from '@ormont/app-shell'
-import { resolveCaseDocumentIdFromSlug } from '@ormont/contracts'
+} from '@obiter/app-shell'
+import { resolveCaseDocumentIdFromSlug } from '@obiter/contracts'
 import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/case/$caseSlug')({

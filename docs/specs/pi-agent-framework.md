@@ -2,7 +2,7 @@
 
 Priority: `P2 university verification`
 
-Pi is the agent framework layer planned for Ormont workflows that need multi-step planning, tool use, retrieval, verification, and handoff. This document records the minimum documentation needed before the framework is used as evidence in an academic or external-review context.
+Pi is the agent framework layer planned for Obiter workflows that need multi-step planning, tool use, retrieval, verification, and handoff. This document records the minimum documentation needed before the framework is used as evidence in an academic or external-review context.
 
 ## Purpose
 

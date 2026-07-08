@@ -2,7 +2,7 @@
 
 ## Summary
 
-Pi is Ormont's bounded agent framework for multi-step legal workflows. It coordinates planning, tool use, evidence retrieval, verification, drafting, redaction, and human handoff while preserving inspectable traces and strict tool boundaries.
+Pi is Obiter's bounded agent framework for multi-step legal workflows. It coordinates planning, tool use, evidence retrieval, verification, drafting, redaction, and human handoff while preserving inspectable traces and strict tool boundaries.
 
 The first release is not broad autonomy. It is an inspectable framework that can show what an agent was asked to do, what it was allowed to do, what it actually did, what evidence it used, what it generated, and why it stopped.
 

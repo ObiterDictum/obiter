@@ -123,7 +123,7 @@ Phase 2 covers four areas:
 
 ### 4. Review UI (`packages/redact-ui`)
 
-The review UI lives in its own package, `@ormont/redact-ui`, owned entirely by the Redact track (decided July 2026 — package-level separation keeps the parallel shell-rebuild and Redact tracks from editing the same package). It imports `@ormont/ui` components, design tokens, and `@ormont/app-shell` public helpers per the component contract; the web app's route files import the review screens from `@ormont/redact-ui`.
+The review UI lives in its own package, `@obiter/redact-ui`, owned entirely by the Redact track (decided July 2026 — package-level separation keeps the parallel shell-rebuild and Redact tracks from editing the same package). It imports `@obiter/ui` components, design tokens, and `@obiter/app-shell` public helpers per the component contract; the web app's route files import the review screens from `@obiter/redact-ui`.
 
 - Document text view with highlighted spans (color by category)
 - Visual distinction between Rampart model spans, Rampart deterministic spans, and UK supplement spans (border style or icon)
@@ -136,7 +136,7 @@ The review UI lives in its own package, `@ormont/redact-ui`, owned entirely by t
 - TanStack Query hooks: `useRedactionRun`, `useSpanDecision`, `useFinalizeRun`
 - Route: `/matters/:matterId/documents/:documentId/redact/:runId`
 - Document detail entry point: provided by the app shell rebuild ([App Shell Rebuild PRD](app-shell-rebuild.md), FR4) — a document detail route at `/matters/:matterId/documents/:documentId` with a redaction runs region and "Create Redaction Run" CTA. This phase's review route nests beneath it and populates the runs region
-- Sidebar: change "Redaction" entry from `status: 'planned'` to active link with `to` attribute (the sidebar is shell-owned — coordinate this one-line change with the shell track at integration rather than editing `@ormont/app-shell` directly)
+- Sidebar: change "Redaction" entry from `status: 'planned'` to active link with `to` attribute (the sidebar is shell-owned — coordinate this one-line change with the shell track at integration rather than editing `@obiter/app-shell` directly)
 - Empty states: no runs yet for this document, no spans detected (run completed with zero spans), all spans reviewed
 - Loading states: detection in progress (Rampart scanning text), finalizing
 - No `useEffect` for data fetching (repo convention — use TanStack Query)
@@ -347,7 +347,7 @@ The run summary (re-computed on every mutation) includes:
 
 - Display the document's extracted text with spans highlighted
 - Each span displays as an inline highlight with background color by category
-- Category color mapping (driven by the shell's design tokens — one `--ormont-span-*` token per category per the [App Shell Rebuild PRD](app-shell-rebuild.md) component contract; the hues below are indicative, not hardcoded values):
+- Category color mapping (driven by the shell's design tokens — one `--obiter-span-*` token per category per the [App Shell Rebuild PRD](app-shell-rebuild.md) component contract; the hues below are indicative, not hardcoded values):
   - `person_name`: red/rose
   - `email`: amber
   - `phone`: orange
@@ -534,7 +534,7 @@ This already exists from Phase 1; Phase 2 adds the `summary` field if not alread
 - [Redact PRD 3: Production Readiness](redact-3-production.md): Will add audit report export (PDF/HTML), DOCX extraction, and the demo fixture. This phase builds the audit trail storage that Phase 3 exports.
 - Shared contracts package (`packages/contracts`): Provides `spanDecisionSchema`, `outputModeSchema`, `redactionRunStatusSchema`, and error codes.
 - Storage: verified not wired (July 2026). Reads and writes go through the `StorageService` abstraction (local-filesystem adapter) introduced in Phase 1 for fallback-text persistence. The object-storage adapter is Phase 3 scope.
-- App shell rebuild ([App Shell Rebuild PRD](app-shell-rebuild.md)): the current shell renders Phase 0 demo fixture data and nothing in the web app calls `/api/matters` (verified July 2026). The rebuild runs as a parallel track and delivers real auth/matters wiring, the `@ormont/ui` component library, design tokens, the `apiFetch`/`useCurrentUser` helpers, and the document detail route. This phase's review UI is built against the rebuild's component contract, which freezes at its Milestone 1 — the review UI build (Build Phase 2 below) MUST NOT start before that freeze, and imports only contract exports, never shell internals.
+- App shell rebuild ([App Shell Rebuild PRD](app-shell-rebuild.md)): the current shell renders Phase 0 demo fixture data and nothing in the web app calls `/api/matters` (verified July 2026). The rebuild runs as a parallel track and delivers real auth/matters wiring, the `@obiter/ui` component library, design tokens, the `apiFetch`/`useCurrentUser` helpers, and the document detail route. This phase's review UI is built against the rebuild's component contract, which freezes at its Milestone 1 — the review UI build (Build Phase 2 below) MUST NOT start before that freeze, and imports only contract exports, never shell internals.
 - Infrastructure (4vCPU/8GB/160GB VPS, PostgreSQL, Dokploy): Must support the additional API endpoints and UI build.
 
 ## Rollout
@@ -553,7 +553,7 @@ This already exists from Phase 1; Phase 2 adds the `summary` field if not alread
 
 ### Build Phase 2: Review UI (Weeks 7-8 of the 3-month plan)
 
-- Create the `packages/redact-ui` package (`@ormont/redact-ui`), owned entirely by the Redact track. It imports `@ormont/ui` components, design tokens, and `@ormont/app-shell` public helpers — never shell internals
+- Create the `packages/redact-ui` package (`@obiter/redact-ui`), owned entirely by the Redact track. It imports `@obiter/ui` components, design tokens, and `@obiter/app-shell` public helpers — never shell internals
 - Implement document text view with highlighted spans (category colors, source distinction)
 - Implement span list panel (sortable, filterable columns)
 - Implement decision action bar with five action buttons
