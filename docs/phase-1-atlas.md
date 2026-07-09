@@ -28,7 +28,7 @@ By the end of Phase 1, Search should support:
 
 ### Phase 1 Source Scope
 
-Search should aim for the broadest useful coverage of public legal sources that Ormont can lawfully ingest, index, retrieve, and expose with reliable provenance. The product goal is not a hand-picked database; it is progressively expanding access to case law, legislation, and other primary legal materials while preserving correctness, licensing constraints, and source trust.
+Search should aim for the broadest useful coverage of public legal sources that Obiter can lawfully ingest, index, retrieve, and expose with reliable provenance. The product goal is not a hand-picked database; it is progressively expanding access to case law, legislation, and other primary legal materials while preserving correctness, licensing constraints, and source trust.
 
 Phase 1 should start with reliable source slices that prove the model and ingestion pipeline, then keep expanding coverage source-by-source. Initial implementation candidates include:
 
@@ -424,7 +424,7 @@ Temporary legacy endpoint: `GET /api/atlas/legislation/:documentId/provisions/:p
 - paragraph viewers should page or window large results
 - provision viewers should page or window large schedules and instruments
 - snippets should be bounded and generated from indexed/stored text, not by moving full documents through result-list APIs
-- public/API-key search should default to stored Ormont legal sources and must not trigger live provider fetches by default
+- public/API-key search should default to stored Obiter legal sources and must not trigger live provider fetches by default
 - international-law corpus ingestion should be source-by-source and licence-aware; do not treat web availability as permission for bulk computational analysis
 - ingestion should be resumable and restart-safe
 

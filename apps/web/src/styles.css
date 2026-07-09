@@ -1,14 +1,11 @@
 /*
  * Web app root styles.
- * - @ormont/ui/tailwind.css brings Tailwind v4 + the --ormont-* design tokens
+ * - @obiter/ui/tailwind.css brings Tailwind v4 + the --obiter-* design tokens
  *   and the @theme inline mappings. This is the single Tailwind entry.
- * - The app-shell legacy stylesheet is still imported while the Search/Home/
- *   Matters views ride the old `.ormont-*` classes (M2/M3 migrate them).
  * - @source points Tailwind at the workspace packages so utility classes
- *   authored inside @ormont/ui and @ormont/app-shell are detected.
+ *   authored inside @obiter/ui and @obiter/app-shell are detected.
  */
-@import "@ormont/ui/tailwind.css";
-@import "../../../packages/app-shell/src/styles.css";
+@import "@obiter/ui/tailwind.css";
 
 @source "../../../packages/ui/src";
 @source "../../../packages/app-shell/src";

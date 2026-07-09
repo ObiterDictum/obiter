@@ -1,4 +1,4 @@
-1. The core problem Ormont is solving
+1. The core problem Obiter is solving
 The big problem
 
 Legal research is too important to be trapped behind closed, expensive, opaque systems.
@@ -9,14 +9,14 @@ At the same time, general AI is dangerous in law because it can hallucinate auth
 
 The judiciary’s updated AI guidance for England and Wales also warns about hallucinations, bias, and confidentiality, and says judicial AI use must preserve the integrity of justice and the rule of law.
 
-So Ormont is solving this:
+So Obiter is solving this:
 
 How do we make law searchable, understandable, verifiable, privacy-preserving, benchmarked, and open enough to support justice?
 
 2. What we are building
 Product vision
 
-Ormont is an open legal intelligence platform for research, redaction, verification, benchmarking, and AI-safe legal work.
+Obiter is an open legal intelligence platform for research, redaction, verification, benchmarking, and AI-safe legal work.
 
 It should become:
 
@@ -25,13 +25,13 @@ Westlaw-level legal research, rebuilt for open justice and trustworthy AI.
 Not just a chatbot. Not just document search. Not just a citation checker. The product should become a full legal operating system with the following modules:
 
 Product	Purpose	First user-facing value
-Ormont Atlas	Open legal data engine and knowledge graph	Search cases, legislation, citations, paragraphs, references
-Ormont Redact	Legal redaction and pseudonymisation	Safely process client/matter documents before AI use
-Ormont Verify	Citation, quote, and proposition verification	Catch fake cases, bad quotes, unsupported claims
-Ormont Research	AI-assisted legal research	Ask questions and receive source-bound legal analysis
-Ormont Vault	Secure local/cloud matter workspace	Store, search, redact, and analyse legal documents
-Ormont Bench	Legal AI evaluation framework	Benchmark models, retrieval, verification, and redaction
-Ormont API	Developer/legaltech infrastructure	Expose search, citation parsing, redaction, verification
+Obiter Atlas	Open legal data engine and knowledge graph	Search cases, legislation, citations, paragraphs, references
+Obiter Redact	Legal redaction and pseudonymisation	Safely process client/matter documents before AI use
+Obiter Verify	Citation, quote, and proposition verification	Catch fake cases, bad quotes, unsupported claims
+Obiter Research	AI-assisted legal research	Ask questions and receive source-bound legal analysis
+Obiter Vault	Secure local/cloud matter workspace	Store, search, redact, and analyse legal documents
+Obiter Bench	Legal AI evaluation framework	Benchmark models, retrieval, verification, and redaction
+Obiter API	Developer/legaltech infrastructure	Expose search, citation parsing, redaction, verification
 
 The Phase 1 build should focus on:
 
@@ -50,7 +50,7 @@ But it is not enough on its own. OpenAI explicitly warns that Privacy Filter is 
 
 That means:
 
-Ormont Redact should use Privacy Filter as the base PII layer, then add legal policy, human review, PDF-safe redaction, audit logs, pseudonymisation, and legal-specific fine-tuning.
+Obiter Redact should use Privacy Filter as the base PII layer, then add legal policy, human review, PDF-safe redaction, audit logs, pseudonymisation, and legal-specific fine-tuning.
 
 UK case law data has licensing constraints
 
@@ -72,16 +72,16 @@ The Legislation API is published by The National Archives and gives access to th
 
 So Atlas should ingest legislation differently from case law: legislation needs versioning, commencement, amendment history, provision-level structure, and “as at date” logic.
 
-4. The main legal problems and what Ormont builds to solve each one
-Problem	Why it matters	What Ormont builds
-Law is expensive and closed	Access to justice suffers when legal information is locked behind proprietary systems	Ormont Atlas, an open legal data/search layer
-AI hallucinates cases and statutes	Fake authorities can mislead courts and clients	Ormont Verify, citation and authority checking
+4. The main legal problems and what Obiter builds to solve each one
+Problem	Why it matters	What Obiter builds
+Law is expensive and closed	Access to justice suffers when legal information is locked behind proprietary systems	Obiter Atlas, an open legal data/search layer
+AI hallucinates cases and statutes	Fake authorities can mislead courts and clients	Obiter Verify, citation and authority checking
 AI misquotes real sources	A real case can still be used falsely	Quote fidelity and paragraph-level verification
 AI makes unsupported legal claims	Lawyers need to know whether a proposition is actually supported	Proposition extraction and support classification
-Confidential data blocks safe AI use	Lawyers cannot casually upload client files to AI tools	Ormont Redact, local-first redaction and pseudonymisation
+Confidential data blocks safe AI use	Lawyers cannot casually upload client files to AI tools	Obiter Redact, local-first redaction and pseudonymisation
 Redaction is slow and risky	Bad redaction can expose private data or remove legally important context	Human-review redaction UI with audit logs
 Legal search is fragmented	Cases, legislation, CPR, guidance, and uploaded documents are separate	Unified legal/matter search
-Legal AI is hard to evaluate	Vendors claim accuracy but lawyers need proof	Ormont Bench, E&W legal AI benchmarks
+Legal AI is hard to evaluate	Vendors claim accuracy but lawyers need proof	Obiter Bench, E&W legal AI benchmarks
 Small firms lack AI governance	The SRA expects supervision, testing, confidentiality, and accountability	Matter-level AI audit logs and governance reports
 Public legal data is not enough by itself	Raw law is hard to navigate	Knowledge graph, issue maps, citation graph, search ranking
 5. Phase 1 product definition
@@ -101,7 +101,7 @@ Export a research, redaction, or verification report.
 
 The first killer demo should be:
 
-Upload a draft skeleton argument containing one fake case, one misquoted case, one real case used for the wrong proposition, one outdated statutory reference, and unredacted personal data. Ormont redacts the personal data, flags the fake authority, detects the bad quote, marks the unsupported proposition, and exports a verification report.
+Upload a draft skeleton argument containing one fake case, one misquoted case, one real case used for the wrong proposition, one outdated statutory reference, and unredacted personal data. Obiter redacts the personal data, flags the fake authority, detects the bad quote, marks the unsupported proposition, and exports a verification report.
 
 That demo proves the whole thesis.
 
@@ -111,25 +111,25 @@ The architecture should be modular from day one.
 
                          vault.legal Web App
                                  |
-                         Ormont Desktop App
+                         Obiter Desktop App
                                  |
                           Matter Workspace
                                  |
         -----------------------------------------------------
         |                    |                    |          |
-   Ormont Atlas        Ormont Redact       Ormont Verify   Vault
+   Obiter Atlas        Obiter Redact       Obiter Verify   Vault
         |                    |                    |          |
    Legal Corpus        Privacy Layer        Trust Layer     Docs
         |                    |                    |          |
         -----------------------------------------------------
                                  |
-                         Ormont Research
+                         Obiter Research
                                  |
-                          Ormont Bench
+                          Obiter Bench
                                  |
-                           Ormont API
+                           Obiter API
 Module responsibilities
-Ormont Atlas
+Obiter Atlas
 
 Atlas is the legal source engine.
 
@@ -160,7 +160,7 @@ Which provisions are relevant?
 What is the document structure?
 What is the source licence?
 What source ID should be used internally?
-Ormont Redact
+Obiter Redact
 
 Redact is the privacy and confidentiality layer.
 
@@ -175,7 +175,7 @@ support irreversible redaction for publication/export
 safely redact PDFs, not just visually cover text
 produce redaction audit logs
 allow human approval before final export
-Ormont Verify
+Obiter Verify
 
 Verify is the trust layer.
 
@@ -192,7 +192,7 @@ flag unsupported or contradicted claims
 check jurisdiction mismatch
 check date sensitivity
 generate a verification report
-Ormont Research
+Obiter Research
 
 Research is the AI interface.
 
@@ -207,7 +207,7 @@ run Verify automatically
 show contrary authorities
 show “what was searched”
 export a memo
-Ormont Vault
+Obiter Vault
 
 Vault is the matter workspace.
 
@@ -220,7 +220,7 @@ store verification reports
 maintain local-first encrypted storage in desktop mode
 optionally sync to cloud
 separate public legal sources from private matter documents
-Ormont Bench
+Obiter Bench
 
 Bench is the evaluation system.
 
@@ -242,12 +242,12 @@ Monorepo
 
 Use a single monorepo:
 
-ormont/
+obiter/
   apps/
     web/                 # vault.legal web app
     desktop/             # Tauri desktop app
-    docs/                # ormont.tech docs
-    marketing/           # ormont.tech / vault.legal landing
+    docs/                # obiter.tech docs
+    marketing/           # obiter.tech / vault.legal landing
   services/
     api/                 # main Hono/Fastify API
     worker/              # BullMQ jobs
@@ -291,7 +291,7 @@ Tauri is a strong fit because it lets you use a web frontend while putting syste
 
 Recommendation:
 
-Use Tauri for Ormont Desktop unless you hit a hard integration problem.
+Use Tauri for Obiter Desktop unless you hit a hard integration problem.
 
 Backend
 
@@ -320,11 +320,11 @@ Do not begin with a massive vector database. Legal research needs exact citation
 
 Infrastructure
 
-Use the architecture from your infrastructure guide, renamed for Ormont:
+Use the architecture from your infrastructure guide, renamed for Obiter:
 
 Cloudflare Pages:
-  - ormont.tech
-  - docs.ormont.tech
+  - obiter.tech
+  - docs.obiter.tech
 
 Hetzner app server:
   - API
@@ -625,14 +625,14 @@ bench_results
   score
   error_type
   notes
-9. Ormont Atlas build plan
+9. Obiter Atlas build plan
 Problem
 
-Legal data is fragmented and hard to reason over. Current search tools mostly return documents. Ormont needs a structured legal knowledge engine that can power research, verification, redaction policy, and benchmarks.
+Legal data is fragmented and hard to reason over. Current search tools mostly return documents. Obiter needs a structured legal knowledge engine that can power research, verification, redaction policy, and benchmarks.
 
 What we build
 
-Ormont Atlas v0:
+Obiter Atlas v0:
 
 official case lookup
 legislation lookup
@@ -711,7 +711,7 @@ a statutory reference can resolve to a provision where available
 every source has licence/source metadata
 every search result shows why it was returned
 the system can support Verify and Research without using raw unstructured blobs
-10. Ormont Redact build plan
+10. Obiter Redact build plan
 Problem
 
 Lawyers cannot safely use AI on real client documents unless they can remove or pseudonymise confidential and personal data first.
@@ -720,7 +720,7 @@ Generic PII redaction is not enough because legal documents contain role-sensiti
 
 What we build
 
-Ormont Redact v0:
+Obiter Redact v0:
 
 local-first PII detection
 legal-sensitive span detection
@@ -808,7 +808,7 @@ private_date
 account_number
 secret
 
-Add Ormont legal labels:
+Add Obiter legal labels:
 
 client_name
 party_name
@@ -939,14 +939,14 @@ pseudonymisation is consistent within a matter
 a redaction audit report is generated
 the system supports “redact before AI”
 the system clearly says redaction still needs human review for legal/publication use
-11. Ormont Verify build plan
+11. Obiter Verify build plan
 Problem
 
 AI can invent legal authorities, misstate real authorities, misquote paragraphs, and attach citations to propositions that the source does not actually support. Lawyers need a fast way to verify a draft before it goes to a client, opponent, court, or supervisor.
 
 What we build
 
-Ormont Verify v0:
+Obiter Verify v0:
 
 citation extraction
 citation resolution
@@ -1102,7 +1102,7 @@ legal propositions are extracted
 each proposition has a support status
 report export works
 every generated finding links to evidence
-12. Ormont Research build plan
+12. Obiter Research build plan
 Problem
 
 Legal research is not just “find documents.” A lawyer needs to move from question to authorities to propositions to contrary sources to a defensible answer.
@@ -1111,7 +1111,7 @@ Normal AI chat is unsafe because it hides retrieval, reasoning, uncertainty, and
 
 What we build
 
-Ormont Research v0:
+Obiter Research v0:
 
 structured legal question intake
 hybrid search over Atlas
@@ -1195,14 +1195,14 @@ every claim is passed through Verify
 unsupported claims are marked
 contrary sources are shown where available
 research trail can be exported
-13. Ormont Vault build plan
+13. Obiter Vault build plan
 Problem
 
-Lawyers need a secure workspace for matter documents. Cloud-only legal AI creates confidentiality and privilege concerns. A local-first desktop workspace gives Ormont a major trust advantage.
+Lawyers need a secure workspace for matter documents. Cloud-only legal AI creates confidentiality and privilege concerns. A local-first desktop workspace gives Obiter a major trust advantage.
 
 What we build
 
-Ormont Vault v0:
+Obiter Vault v0:
 
 matter creation
 file upload
@@ -1254,14 +1254,14 @@ documents can be searched
 documents can be redacted before AI use
 verification/research reports attach to a matter
 matter-level audit history exists
-14. Ormont Bench build plan
+14. Obiter Bench build plan
 Problem
 
-Legal AI systems need rigorous evaluation. Without benchmarks, Ormont cannot know whether Atlas, Redact, Verify, or Research is improving.
+Legal AI systems need rigorous evaluation. Without benchmarks, Obiter cannot know whether Atlas, Redact, Verify, or Research is improving.
 
 What we build
 
-Ormont Bench v0:
+Obiter Bench v0:
 
 citation resolution benchmark
 quote checking benchmark
@@ -1431,7 +1431,7 @@ Every user can export or delete matter data.
 Every sensitive workflow has human review.
 Every legal answer is labelled as requiring professional review.
 
-The ICO’s AI data protection guidance is structured around accountability, transparency, lawfulness, accuracy, fairness, security, data minimisation, and individual rights, so Ormont should bake those concepts into product design rather than bolt them on later.
+The ICO’s AI data protection guidance is structured around accountability, transparency, lawfulness, accuracy, fairness, security, data minimisation, and individual rights, so Obiter should bake those concepts into product design rather than bolt them on later.
 
 Audit log events
 
@@ -1475,7 +1475,7 @@ Problem being solved
 The product needs a clear foundation before code starts, otherwise the system will become a chatbot with scattered features.
 
 Build
-rename Aequis references to Ormont
+rename Aequis references to Obiter
 reserve product names
 decide repo structure
 create monorepo
@@ -1485,7 +1485,7 @@ define verification status taxonomy
 define environment strategy
 create initial docs
 Deliverables
-ormont monorepo created
+obiter monorepo created
 apps/web created
 apps/desktop created
 services/api created
@@ -2006,7 +2006,7 @@ build retrieval reranker experiments
 Month 3 model work
 fine-tune or calibrate Privacy Filter for legal redaction
 train small classifier for citation/proposition support if enough labels exist
-publish first Ormont Bench report
+publish first Obiter Bench report
 Long-term model moat
 
 The moat is not “we trained a legal LLM.”
@@ -2022,7 +2022,7 @@ Prepare the Find Case Law computational-analysis licence application.
 
 You will likely need to describe:
 
-who Ormont is
+who Obiter is
 what data you want to process
 what processing you will perform
 why processing supports open justice
@@ -2040,7 +2040,7 @@ Recommended positioning for licence application
 
 Use this framing:
 
-Ormont is building open legal research, verification, redaction, and evaluation infrastructure for England and Wales. The system is not designed to provide fully automated legal advice, predict case outcomes, or decide whether a person should pursue legal action. It is designed to improve access to legal information, verify legal citations and propositions, support responsible legal AI use, and preserve open justice through transparent, auditable source handling.
+Obiter is building open legal research, verification, redaction, and evaluation infrastructure for England and Wales. The system is not designed to provide fully automated legal advice, predict case outcomes, or decide whether a person should pursue legal action. It is designed to improve access to legal information, verify legal citations and propositions, support responsible legal AI use, and preserve open justice through transparent, auditable source handling.
 
 Until licence approval
 
@@ -2200,9 +2200,9 @@ improve statutory provision resolver
 add CPR and practice directions
 improve PDF layout mapping
 launch private pilots
-publish first technical blog on Ormont Redact
+publish first technical blog on Obiter Redact
 Month 5
-build Ormont Bench public dashboard
+build Obiter Bench public dashboard
 fine-tune redaction model on legal eval data
 build better proposition support classifier
 add local semantic search in desktop
@@ -2213,7 +2213,7 @@ API beta
 chambers/small firm pilot
 university/legal clinic pilot
 first public E&W legal AI evaluation report
-launch ormont.tech docs and open-source packages
+launch obiter.tech docs and open-source packages
 27. Build priority ranking
 
 Start in this order:
@@ -2238,7 +2238,7 @@ This order creates useful product value early while building toward the larger p
 
 The first public version should be described as:
 
-Ormont is an open legal intelligence workspace for England and Wales. It helps lawyers and researchers redact sensitive documents, search open legal sources, verify authorities, and produce source-grounded legal research with auditable AI.
+Obiter is an open legal intelligence workspace for England and Wales. It helps lawyers and researchers redact sensitive documents, search open legal sources, verify authorities, and produce source-grounded legal research with auditable AI.
 
 The sharper landing-page version:
 
@@ -2273,7 +2273,7 @@ Create these first:
 [ ] Research query screen
 [ ] Benchmark harness
 [ ] TNA computational-analysis licence application
-[ ] ormont.tech docs skeleton
+[ ] obiter.tech docs skeleton
 [ ] vault.legal app skeleton
 
 The most important first milestone is not “AI research answer.”

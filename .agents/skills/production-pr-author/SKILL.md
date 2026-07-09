@@ -1,6 +1,6 @@
 ---
 name: production-pr-author
-description: Production-grade pull request authoring for Ormont. Use when creating, updating, or preparing PR titles/bodies/summaries. Produces clear engineering PR descriptions covering what changed, why, implementation details, tests, risks, security/data implications, architecture impact, rollout, and follow-ups.
+description: Production-grade pull request authoring for Obiter. Use when creating, updating, or preparing PR titles/bodies/summaries. Produces clear engineering PR descriptions covering what changed, why, implementation details, tests, risks, security/data implications, architecture impact, rollout, and follow-ups.
 ---
 
 # Production PR Author
@@ -39,7 +39,7 @@ If a PR already exists, inspect it:
 gh pr view --json number,title,baseRefName,headRefName,url,body,reviewDecision,mergeable,statusCheckRollup
 ```
 
-Use the actual base branch. For Ormont this is usually `dev` unless explicitly stated.
+Use the actual base branch. For Obiter this is usually `dev` unless explicitly stated.
 
 Also read the relevant project rules:
 
@@ -66,7 +66,7 @@ Avoid:
 - `Improve app`
 - agent, tool, or automation prefixes such as `[codex]`
 - hype words such as robust, seamless, comprehensive, enhanced unless technically justified
-- `phase` in Ormont PR titles
+- `phase` in Obiter PR titles
 
 ## Required PR Body Structure
 
@@ -151,7 +151,7 @@ Explain notable design choices and tradeoffs:
 
 ### Security / Data / Privacy
 
-Always include this section for Ormont, even if the answer is "no sensitive data path changed." Cover:
+Always include this section for Obiter, even if the answer is "no sensitive data path changed." Cover:
 
 - whether private matter data is touched
 - whether auth/session/permissions are touched

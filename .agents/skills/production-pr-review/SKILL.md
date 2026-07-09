@@ -1,6 +1,6 @@
 ---
 name: production-pr-review
-description: Production-grade pull request review for Ormont. Use whenever asked to review a PR, branch, diff, refactor, or change for correctness, security, architecture, data safety, tests, and release readiness. Builds repository context before reviewing and records durable architecture knowledge when a review knowledge repo is available.
+description: Production-grade pull request review for Obiter. Use whenever asked to review a PR, branch, diff, refactor, or change for correctness, security, architecture, data safety, tests, and release readiness. Builds repository context before reviewing and records durable architecture knowledge when a review knowledge repo is available.
 ---
 
 # Production PR Review
@@ -68,16 +68,16 @@ Always read, as applicable:
 - docs linked by `AGENTS.md` for the touched area
 - package-level READMEs or local docs near changed files
 
-For Ormont, prioritize:
+For Obiter, prioritize:
 
 - Skill-local references:
   - `references/scoring.md` for the numeric score rubric and caps
   - `references/system-map.md` for the durable mapping workflow
   - `references/coverage-map-template.md` for the per-review coverage map shape
   - `references/maps/` for agent-readable maps and human visual HTML maps
-- `C:/Users/karl-/Documents/source/OrmontLex/review/ormont/architecture/` for the durable System Map and package/data-boundary notes
-- `C:/Users/karl-/Documents/source/OrmontLex/review/ormont/review-playbooks/` for area-specific review heuristics
-- `C:/Users/karl-/Documents/source/OrmontLex/review/ormont/findings-patterns/` for recurring Ormont bug patterns
+- `C:/Users/karl-/Documents/source/OrmontLex/review/obiter/architecture/` for the durable System Map and package/data-boundary notes
+- `C:/Users/karl-/Documents/source/OrmontLex/review/obiter/review-playbooks/` for area-specific review heuristics
+- `C:/Users/karl-/Documents/source/OrmontLex/review/obiter/findings-patterns/` for recurring Obiter bug patterns
 - `docs/architecture.md` for package boundaries and system shape
 - `docs/data-and-compliance.md` for privacy, audit, and legal data constraints
 - `docs/roadmap.md` / active milestone docs for sequencing
@@ -373,13 +373,13 @@ If requesting changes, make clear which issues must be fixed before approval.
 
 ## Knowledge Graph / Review Repo
 
-The canonical local review knowledge repo for OrmontLex is:
+The canonical local review knowledge repo for Obiter is:
 
 - `C:/Users/karl-/Documents/source/OrmontLex/review`
 
-Use that path for durable review knowledge. Do not create parallel knowledge bases under `../review`, `../ormont-review`, or inside the product repo unless explicitly instructed.
+Use that path for durable review knowledge. Do not create parallel knowledge bases under `../review`, `../obiter-review`, or inside the product repo unless explicitly instructed.
 
-Skill-local maps and rubric references live under `references/`. Keep reusable review process there. Keep validated Ormont project facts, internal flows, invariants, and recurring findings in the review repo, using skill-local maps as the operating structure.
+Skill-local maps and rubric references live under `references/`. Keep reusable review process there. Keep validated Obiter project facts, internal flows, invariants, and recurring findings in the review repo, using skill-local maps as the operating structure.
 
 Record durable context, not transient PR notes.
 
@@ -387,7 +387,7 @@ Suggested structure:
 
 ```text
 review/
-  ormont/
+  obiter/
     architecture/
       system-map.md
       packages.md

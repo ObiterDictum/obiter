@@ -1,4 +1,4 @@
-import { AppShellLayout } from '@ormont/app-shell'
+import { AppShellLayout } from '@obiter/app-shell'
 import type { QueryClient } from '@tanstack/react-query'
 import {
   HeadContent,

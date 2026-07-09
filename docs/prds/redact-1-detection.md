@@ -2,7 +2,7 @@
 
 ## Summary
 
-Redact is Ormont's confidentiality and privacy layer. It detects personally identifiable information (PII) and secrets in matter documents, applies legal-specific redaction policy, supports pseudonymisation, and produces audited outputs with human review checkpoints.
+Redact is Obiter's confidentiality and privacy layer. It detects personally identifiable information (PII) and secrets in matter documents, applies legal-specific redaction policy, supports pseudonymisation, and produces audited outputs with human review checkpoints.
 
 This phase builds the detection pipeline end-to-end: Rampart (14.7 MB ONNX token-classification model, 18.5M params, CC BY 4.0) running in-process in the Hono API via Transformers.js, the database schema for redaction runs, a TypeScript UK supplement for legal-specific patterns, a span merging engine, and the API skeleton for run creation and lifecycle. After Phase 1, a user can upload a document, trigger a redaction run, and see detected spans ready for review.
 
@@ -25,7 +25,7 @@ Current approaches are inadequate:
 - **Rule-based systems** require expensive manual configuration per firm and per document type.
 - **Manual redaction** does not scale. A 200-page disclosure bundle reviewed by associates at £300/hour is neither fast nor consistent.
 
-Rampart solves the detection problem: it is open-weight (CC BY 4.0), runs fully in-process via Transformers.js (no data leaves the server), understands context (it is a MiniLM-L6-H384 token classifier with a 35-label BIO head, not a regex engine), and achieves 98.42% private-term recall on the OpenPII 30k held-out test set. It ships with a built-in deterministic recognizer layer (regex + checksum for SSN, credit cards, email, URL, IP). But it has gaps for UK legal text: national insurance numbers, case references, and organisation names are not in its label set, and its 17 entity types must be mapped to Ormont's span category model.
+Rampart solves the detection problem: it is open-weight (CC BY 4.0), runs fully in-process via Transformers.js (no data leaves the server), understands context (it is a MiniLM-L6-H384 token classifier with a 35-label BIO head, not a regex engine), and achieves 98.42% private-term recall on the OpenPII 30k held-out test set. It ships with a built-in deterministic recognizer layer (regex + checksum for SSN, credit cards, email, URL, IP). But it has gaps for UK legal text: national insurance numbers, case references, and organisation names are not in its label set, and its 17 entity types must be mapped to Obiter's span category model.
 
 This PRD exists to close the gap between "a model that detects PII" and "a production redaction service that firms can verify."
 
@@ -44,7 +44,7 @@ This PRD exists to close the gap between "a model that detects PII" and "a produ
 ## Goals
 
 - Run Rampart in-process in the Hono API via `@nationaldesignstudio/rampart` and `@huggingface/transformers`, processing text on CPU (no GPU required).
-- Map Rampart's 17 entity types + 5 deterministic labels to Ormont's 15 span categories. (`secret` is schema-only in Phase 1: no detector emits it until fine-tuning adds coverage.)
+- Map Rampart's 17 entity types + 5 deterministic labels to Obiter's 15 span categories. (`secret` is schema-only in Phase 1: no detector emits it until fine-tuning adds coverage.)
 - Store redaction runs in PostgreSQL with full foreign-key relationships to matters, documents, and document versions.
 - Implement TypeScript regex patterns for UK National Insurance numbers, case references, and organisation names.
 - Merge Rampart spans with UK supplement spans, deduplicating overlaps with Rampart winning on confidence.
@@ -79,7 +79,7 @@ Responsible for policy configuration: which categories are redacted, pseudonymis
 
 ### Builder Or Integrator
 
-A developer integrating Ormont Redact into a firm's document workflow. Needs stable API contracts, predictable error codes, and the ability to automate redaction run creation. Phase 1 provides the create-run and get-run endpoints.
+A developer integrating Obiter Redact into a firm's document workflow. Needs stable API contracts, predictable error codes, and the ability to automate redaction run creation. Phase 1 provides the create-run and get-run endpoints.
 
 ## Core Use Cases
 
@@ -100,7 +100,7 @@ Phase 1 delivers the detection pipeline and API skeleton. Everything needed to g
 - Rampart integration in the API process (`services/api/src/redaction-detection.ts`) via `@nationaldesignstudio/rampart` npm package.
 - Rampart guard lifecycle: model loads on first request, cached at module level for subsequent requests.
 - Effect TS pilot, contained to the detection module behind a promise facade (see Effect TS Pilot section; F31).
-- Rampart label-to-Ormont-category mapping (`packages/redaction-policy/src/rampart-map.ts`).
+- Rampart label-to-Obiter-category mapping (`packages/redaction-policy/src/rampart-map.ts`).
 - Database migration `0005_redaction.sql` creating the `redaction_runs` table.
 - Redaction contracts in `packages/contracts`: span categories, sources, statuses, policy modes, error codes.
 - Redaction policy package (`packages/redaction-policy/`) with types, UK supplement, span merging, and chunking.
@@ -135,13 +135,13 @@ Redact uses three detection layers in sequence:
 
 2. **Rampart token-classification model (built-in):** MiniLM-L6-H384 encoder fine-tuned with a 35-label BIO head (17 entity types). Context-aware: it understands that "Smith" in "Smith v Jones" is a citation, not a person to redact. Runs on CPU via ONNX Runtime. Returns spans with entity labels. Part of the `@nationaldesignstudio/rampart` package.
 
-3. **Ormont UK supplement (`packages/redaction-policy/src/supplement.ts`):** TypeScript regex patterns for UK legal-specific identifiers that Rampart does not cover. Runs in the API process after Rampart returns.
+3. **Obiter UK supplement (`packages/redaction-policy/src/supplement.ts`):** TypeScript regex patterns for UK legal-specific identifiers that Rampart does not cover. Runs in the API process after Rampart returns.
 
 ### Rampart Output Mapping
 
-Rampart outputs BIO token tags for 17 entity types. These are decoded into contiguous character spans and mapped to Ormont's category set:
+Rampart outputs BIO token tags for 17 entity types. These are decoded into contiguous character spans and mapped to Obiter's category set:
 
-| Rampart Label | Ormont Category | Source |
+| Rampart Label | Obiter Category | Source |
 |---|---|---|
 | `GIVEN_NAME` + `SURNAME` | `person_name` | `rampart_model` |
 | `PHONE` | `phone` | `rampart_model` |
@@ -162,7 +162,7 @@ The label strings in this table are indicative. The exact Rampart label names (i
 The mandated pre-implementation spike was executed against `@nationaldesignstudio/rampart` 0.1.3 under Node.js. Findings, which are binding on the detection module:
 
 1. **Node.js works.** `createGuard({ device: 'cpu' })` initialises server-side (guard ready in ~2.8s cold including model load; inference ~16ms per call). No browser-only APIs. The browser-only fallback plan is not needed.
-2. **`guard.protect()` is the wrong API for this product.** It returns `{ text, placeholders }` — masked text with reversible placeholders — not character-offset spans. Span-level detection uses the package's lower-level exports: `detectHeuristics(text)` (deterministic layer) and `detectNer(text, classifier)` with `loadNerClassifier({ device: 'cpu' })`. Both return spans shaped `{ start, end, label, score, source: 'heuristic' | 'ner', text }`, which map directly to Ormont spans (`heuristic` → `rampart_deterministic`, `ner` → `rampart_model`).
+2. **`guard.protect()` is the wrong API for this product.** It returns `{ text, placeholders }` — masked text with reversible placeholders — not character-offset spans. Span-level detection uses the package's lower-level exports: `detectHeuristics(text)` (deterministic layer) and `detectNer(text, classifier)` with `loadNerClassifier({ device: 'cpu' })`. Both return spans shaped `{ start, end, label, score, source: 'heuristic' | 'ner', text }`, which map directly to Obiter spans (`heuristic` → `rampart_deterministic`, `ner` → `rampart_model`).
 3. **The real model label space (17, from the model config's `id2label`):** `BANK_ACCOUNT`, `BUILDING_NUMBER`, `CITY`, `DRIVERS_LICENSE`, `EMAIL`, `GIVEN_NAME`, `GOVERNMENT_ID`, `PASSPORT`, `PHONE`, `ROUTING_NUMBER`, `SECONDARY_ADDRESS`, `STATE`, `STREET_NAME`, `SURNAME`, `TAX_ID`, `URL`, `ZIP_CODE`. The heuristic layer emits `EMAIL`, `URL`, `IP_ADDRESS`, `CREDIT_CARD`, `SSN`. Consequences:
    - `CITY`, `STATE`, `ZIP_CODE` exist and fire on virtually every UK address — they map to `address` (added to `rampart-map.ts`).
    - **`DATE` and `DOB` do not exist.** The base model detects no dates at all. Date and date-of-birth detection therefore falls to the UK supplement in v1 (see F20) and to fine-tuning later; the map retains DATE/DOB entries so a future checkpoint that emits them maps correctly.
@@ -172,7 +172,7 @@ The mandated pre-implementation spike was executed against `@nationaldesignstudi
 
 The UK supplement catches patterns Rampart does not cover:
 
-| Ormont Category | Pattern | Example |
+| Obiter Category | Pattern | Example |
 |---|---|---|
 | `national_insurance` | `[A-Z]{2}\d{6}[A-Z]` (with/without spaces) | QQ123456C |
 | `case_reference` | Flexible pattern for firm-specific reference formats | `2024/ABC/123`, `CR-2024-00123` |
@@ -239,7 +239,7 @@ Status transitions:
 
 - **F1.** The detection module MUST load the Rampart NER classifier via `loadNerClassifier({ device: 'cpu' })` from `@nationaldesignstudio/rampart` and cache it at module level as a singleton. (Corrected from `createGuard` per the Rampart Spike Results — the guard's `protect()` returns placeholders, not spans.)
 - **F2.** The detection module MUST produce character-offset spans by running `detectHeuristics(text)` first, masking those spans before NER (`premask`/`projectMaskedSpan`), then `detectNer(maskedText, classifier)` with offsets projected back to the original text, then merging — never NER on raw unmasked text (see Rampart Spike Results, finding 4).
-- **F3.** The detection module MUST map Rampart entity labels to Ormont span categories per the mapping table above.
+- **F3.** The detection module MUST map Rampart entity labels to Obiter span categories per the mapping table above.
 - **F4.** The detection module MUST handle empty text input: return `{ spans: [] }` without error.
 - **F5.** The detection module MUST chunk documents exceeding 512 tokens, run detection per chunk, adjust offsets, and merge results.
 - **F6.** The detection module MUST handle model load failures: throw a typed error that the route handler catches and maps to `redaction_detection_failed`.
@@ -282,7 +282,7 @@ Status transitions:
   - `SpanCategory`, `SpanSource`, `SpanConfidence`, `SpanSuggestion`, `SpanDecision` (all `z.infer<>` from contracts or standalone enums).
   - `Decisions`: `Record<string, { decision: SpanDecision, decidedBy: string, decidedAt: string }>`.
   - `RunSummary`: `{ totalSpans: number, byCategory: Record<SpanCategory, number>, bySource: { rampartModel: number, rampartDeterministic: number, ukSupplement: number }, reviewedCount: number, unreviewedCount: number }`.
-- **F19.** `rampart-map.ts` MUST export `mapRampartSpans(rampartOutput: RampartOutput): RedactionSpan[]` that converts Rampart entity labels and offsets to Ormont span categories.
+- **F19.** `rampart-map.ts` MUST export `mapRampartSpans(rampartOutput: RampartOutput): RedactionSpan[]` that converts Rampart entity labels and offsets to Obiter span categories.
 - **F20.** `supplement.ts` MUST export `supplementSpans(text: string): RedactionSpan[]` that applies regex patterns for UK National Insurance numbers, case references, and organisation names — **plus dates** (added July 2026: the spike proved the base model emits no date labels, so date detection is supplement work in v1): legal-format dates (`15 March 2024`, `the 15th day of March 2024`, `15/03/2024`) as category `date` with suggestion `keep`, and dates in a date-of-birth context (preceded by phrases like `born on`, `date of birth`, `DOB`) as category `date` with suggestion `redact`.
 - **F21.** `merge.ts` MUST export `mergeSpans(rampartSpans: RedactionSpan[], supplementSpans: RedactionSpan[]): RedactionSpan[]` that:
   - Sorts both arrays by `start` position.
@@ -292,7 +292,7 @@ Status transitions:
   - `date` spans default to `keep`, EXCEPT spans originating from a date-of-birth label (`DOB` or equivalent), which default to `redact`. Legal documents are saturated with structural dates (hearing dates, filing deadlines, judgment dates) that are load-bearing and must not be redacted; suggesting `redact` for every date would flood reviewers with false positives — the exact review-trust failure mode this product exists to avoid. Dates of birth are genuine PII and keep the `redact` default.
 - **F22.** `chunk.ts` MUST export `chunkText(text: string, maxTokens?: number): TextChunk[]` and `reassembleSpans(chunkedSpans: ChunkedSpans[], chunkOffsets: number[]): RedactionSpan[]` for handling documents exceeding 512 tokens.
 - **F23.** Tests MUST use realistic UK legal text fixtures containing a mix of names, addresses, NI numbers, case references, organisation names, email addresses, and phone numbers. Tests MUST verify:
-  - Rampart label mapping produces correct Ormont categories.
+  - Rampart label mapping produces correct Obiter categories.
   - UK supplement regex patterns match known formats.
   - Merge correctly deduplicates overlapping spans.
   - Merge preserves non-overlapping spans from both sources.
@@ -425,7 +425,7 @@ Phase 1 is complete when all of the following are true:
 
 2. **Should the detection module warm the Rampart guard on API startup or lazily on first request?** Warming on startup adds 1-5 seconds to startup time but eliminates the first-request delay. Lazy loading keeps startup fast but adds latency to the first redaction run. Decision: warm on startup in production, lazy in development.
 
-3. **Should `person_name` eventually split into role-aware subcategories?** Legal redaction is role-dependent: judges, counsel, and solicitors are on the public record (normally kept); claimants, witnesses, and clients are normally redacted; children and anonymity-order subjects MUST be redacted. v1 collapses all of these into `person_name`, so the reviewer carries the distinction manually and the two policy modes barely differ for person spans. The planned evolution is `ormont_legal_v2` (see the Label space roadmap in [Redact PRD 3](redact-3-production.md)): `person_party` / `person_professional` / `person_protected`, at which point policy modes gain real differentiation (e.g. `external_sharing` keeps professionals). Phase 1 only needs to preserve the door: the category schema is versioned via contracts, and the Rampart mapping layer is the single place a category set change lands. No v1 action required.
+3. **Should `person_name` eventually split into role-aware subcategories?** Legal redaction is role-dependent: judges, counsel, and solicitors are on the public record (normally kept); claimants, witnesses, and clients are normally redacted; children and anonymity-order subjects MUST be redacted. v1 collapses all of these into `person_name`, so the reviewer carries the distinction manually and the two policy modes barely differ for person spans. The planned evolution is `obiter_legal_v2` (see the Label space roadmap in [Redact PRD 3](redact-3-production.md)): `person_party` / `person_professional` / `person_protected`, at which point policy modes gain real differentiation (e.g. `external_sharing` keeps professionals). Phase 1 only needs to preserve the door: the category schema is versioned via contracts, and the Rampart mapping layer is the single place a category set change lands. No v1 action required.
 
 4. **Should the `organisation_name` category be surfaced as a span at all, or should it be silently kept?** Some firms may want to redact organisation names for external sharing. The category exists in the schema with suggestion `keep` by default. This can be configuration-driven in a post-MVP policy engine.
 

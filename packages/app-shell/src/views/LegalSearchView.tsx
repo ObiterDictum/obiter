@@ -1,6 +1,6 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Card } from '@ormont/ui'
+import { Card } from '@obiter/ui'
 import {
   SearchCommandBar,
   SearchFeedbackPanel,
@@ -487,15 +487,16 @@ export function LegalSearchView() {
   const shouldShowIdleState = state.status === 'idle' && !shouldRunLegalSearch(query)
 
   return (
-    <div className="shell-stack legal-search">
-      <section className="shell-page-heading">
-        <div>
-          <p className="shell-page-heading__eyebrow">Legal sources</p>
-          <h1 className="shell-header__title">Search</h1>
-        </div>
+    <div className="mx-auto flex w-full max-w-[920px] flex-col gap-6">
+      <section className="flex flex-col gap-1">
+        <p className="text-xs font-semibold uppercase tracking-wider text-subtle">Legal sources</p>
+        <h1 className="text-3xl font-semibold tracking-tight text-ink">Search</h1>
+        <p className="mt-1 text-sm text-muted">
+          Stored judgments and Find Case Law across UK courts and tribunals.
+        </p>
       </section>
 
-      <Card className="legal-search__panel">
+      <Card>
         <SearchCommandBar
           activeFilterCount={activeFilterCount}
           courtLabel={courtLabel}

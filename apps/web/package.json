@@ -1,5 +1,5 @@
 {
-  "name": "@ormont/web",
+  "name": "@obiter/web",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,9 +9,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@ormont/app-shell": "workspace:*",
-    "@ormont/contracts": "workspace:*",
-    "@ormont/ui": "workspace:*",
+    "@obiter/app-shell": "workspace:*",
+    "@obiter/contracts": "workspace:*",
+    "@obiter/ui": "workspace:*",
     "@tanstack/react-query": "^5.100.1",
     "@tanstack/react-router": "^1.168.23",
     "@tanstack/react-router-ssr-query": "^1.166.11",

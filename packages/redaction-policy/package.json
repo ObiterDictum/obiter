@@ -1,5 +1,5 @@
 {
-  "name": "@ormont/redaction-policy",
+  "name": "@obiter/redaction-policy",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -11,6 +11,6 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@ormont/contracts": "workspace:*"
+    "@obiter/contracts": "workspace:*"
   }
 }

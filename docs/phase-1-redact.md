@@ -106,7 +106,7 @@ Use for the preferred sensitive workflow.
 
 Use for web workflows or users who choose hosted processing.
 
-- runs through Ormont infrastructure
+- runs through Obiter infrastructure
 - may be metered commercially
 - must be clearly labeled as hosted processing
 
@@ -151,7 +151,7 @@ Use for web workflows or users who choose hosted processing.
 1. extract document text
 2. split into stable reviewable segments
 3. run Privacy Filter detection
-4. run Ormont legal policy rules over the raw detections
+4. run Obiter legal policy rules over the raw detections
 5. persist suggested spans
 6. show spans in review UI
 7. apply reviewer decisions

@@ -1,4 +1,4 @@
-# Ormont Phase 0 — Implementation Plan
+# Obiter Phase 0 — Implementation Plan
 
 ## Strategy
 
@@ -24,7 +24,7 @@ The licence gates bulk case law ingestion into Meilisearch. Without it, we can't
 
 ### Cloudflare Email Setup
 
-The API sends magic links via a webhook (`ORMONT_MAGIC_LINK_WEBHOOK_URL`). In production, this is a Cloudflare Worker that calls the [Send Email API](https://developers.cloudflare.com/email-routing/email-workers/).
+The API sends magic links via a webhook (`OBITER_MAGIC_LINK_WEBHOOK_URL`). In production, this is a Cloudflare Worker that calls the [Send Email API](https://developers.cloudflare.com/email-routing/email-workers/).
 
 Files to create:
 - `infra/cloudflare/email-worker/` — Cloudflare Worker for transactional email
@@ -42,7 +42,7 @@ Before any new feature code, the existing stack must actually run.
 
 | Day | Task | Files | Deliverable |
 |-----|------|-------|-------------|
-| **0** | **Install PostgreSQL 16 + create `ormont` DB** | — | `psql ormont` works |
+| **0** | **Install PostgreSQL 16 + create `obiter` DB** | — | `psql obiter` works |
 | **0** | **Create `.env`** | `.env` | DATABASE_URL, BETTER_AUTH_SECRET, dev URLs |
 | **0** | **Run migration 0001** | `packages/database/migrations/0001_phase_0_2_auth.sql` | Auth tables exist |
 | **0** | **Start API** | `pnpm dev:api` | `GET /api/health` → `{"status":"ok"}` |

@@ -11,14 +11,14 @@ This PRD is also a coordination document. The shell rebuild runs **in parallel**
 Verified against the codebase (July 2026):
 
 1. **The UI is fixture-driven.** The only real API call in the entire web app is `POST /api/search/fetch`. Sign-in does not authenticate (the current user is a canned demo response), Home renders fixture content, and the matters list/detail screens render fixture matters whose IDs do not exist in the database. No code in `apps/` or `packages/` calls `/api/matters` despite a complete, org-scoped, audited matters API existing in `services/api`.
-2. **The presentation layer is unmaintainable and inconsistent.** Styling is a single 3,219-line `styles.css` of `.ormont-*` classes with hardcoded colors (black background, no theming, no tokens). `packages/ui` is an empty stub. There is no component library: each view hand-rolls its own markup and styles.
+2. **The presentation layer is unmaintainable and inconsistent.** Styling is a single 3,219-line `styles.css` of `.obiter-*` classes with hardcoded colors (black background, no theming, no tokens). `packages/ui` is an empty stub. There is no component library: each view hand-rolls its own markup and styles.
 3. **Docs overstated completion.** `docs/current-product-scope.md` listed Matters and Home as implemented; they were screens over fixtures. The doc now uses three verified tiers; this PRD is the plan that moves the "API implemented, UI is demo fixture" tier to genuinely implemented.
 4. **Feature teams have nothing stable to build on.** The Redact review UI (PRD 2) needs layout primitives, tokens, a query client, an auth hook, and a document detail route. Today none of these exist in a form worth building against.
 
 ## Product Principles
 
 - **Real data or nothing.** No fixture snapshot survives this rebuild. Development uses seeded database data, not in-memory fakes. A screen that cannot show real data does not ship as "implemented".
-- **One component library, one icon pack.** Every interactive element comes from `@ormont/ui`; every icon comes from the single chosen pack. No per-view one-offs.
+- **One component library, one icon pack.** Every interactive element comes from `@obiter/ui`; every icon comes from the single chosen pack. No per-view one-offs.
 - **Tokens, not hex codes.** All color, spacing, radius, and type decisions live in design tokens (CSS variables). Components never hardcode values. Light and dark themes are both first-class.
 - **The shell is a platform, not a feature.** Feature UIs (Redact review, Verification, Research) are consumers. The shell's job is frame, navigation, auth, data access conventions, and primitives — it does not implement feature screens.
 - **No feature invention during the rebuild.** Scope is the existing surfaces (auth, Home, Matters, Search) rebuilt properly, plus the document detail route that Redact needs. New product capability belongs to feature PRDs.
@@ -26,25 +26,25 @@ Verified against the codebase (July 2026):
 
 ## Stack Decisions
 
-Verified current stack: React 19, TanStack Router + Query + Start, Vite 8, TypeScript, pnpm workspace, Vitest. Electron desktop app (`apps/desktop`) consumes `@ormont/app-shell`.
+Verified current stack: React 19, TanStack Router + Query + Start, Vite 8, TypeScript, pnpm workspace, Vitest. Electron desktop app (`apps/desktop`) consumes `@obiter/app-shell`.
 
 | Decision | Choice | Rationale |
 |---|---|---|
 | Framework, routing, data | **Keep**: React 19, TanStack Router/Query/Start, Vite 8 | Modern, working, and the Search surface already proves the pattern. A framework swap would discard working infrastructure for no stated deficiency. |
 | Component primitives | **Add**: Base UI (`@base-ui-components/react`) | Headless, accessible primitives (dialog, menu, popover, select, tabs, tooltip) from the Radix/MUI lineage. We own the visual layer; Base UI owns focus management, ARIA, and interaction correctness. |
-| Styling | **Add**: Tailwind CSS v4, driven by design tokens as CSS variables | Replaces the 3,219-line hand-rolled stylesheet. Tokens (`--ormont-*` CSS variables) are the source of truth; Tailwind consumes them via `@theme`. Note: Redact PRD 2's category color mapping consumes these tokens. |
-| Component library | **Build**: `@ormont/ui` becomes real | The existing stub package becomes the styled component library: Button, Input, Select, Dialog, Table, Tabs, Badge, Toast, EmptyState, Skeleton, etc., built on Base UI + tokens. |
+| Styling | **Add**: Tailwind CSS v4, driven by design tokens as CSS variables | Replaces the 3,219-line hand-rolled stylesheet. Tokens (`--obiter-*` CSS variables) are the source of truth; Tailwind consumes them via `@theme`. Note: Redact PRD 2's category color mapping consumes these tokens. |
+| Component library | **Build**: `@obiter/ui` becomes real | The existing stub package becomes the styled component library: Button, Input, Select, Dialog, Table, Tabs, Badge, Toast, EmptyState, Skeleton, etc., built on Base UI + tokens. |
 | Icons | **One pack**: Phosphor (`@phosphor-icons/react`); remove `@heroicons/react` | Deliberately not Lucide — the founder wants a less generic visual identity than the default stack. Phosphor: 1,200+ icons, first-class React package, multiple weights (regular/bold/duotone/fill) that give the UI distinctive character while staying coherent. Enforced by an ESLint `no-restricted-imports` rule against any other icon package. |
 | Fixture layer | **Delete**: `createPhaseZeroShellSnapshot`, demo `MeResponse`, `demo-shell.test.ts` | Replaced by real endpoints + a `pnpm seed` development dataset. |
-| Effect TS | **Not used in the shell or UI packages** | Effect is running as a contained pilot in the Redact detection module only ([Redact PRD 1](redact-1-detection.md), Effect TS Pilot section). Do not add `effect` as a dependency of `@ormont/ui`, `@ormont/app-shell`, or `@ormont/web`; async/data concerns in the UI belong to TanStack Query. |
+| Effect TS | **Not used in the shell or UI packages** | Effect is running as a contained pilot in the Redact detection module only ([Redact PRD 1](redact-1-detection.md), Effect TS Pilot section). Do not add `effect` as a dependency of `@obiter/ui`, `@obiter/app-shell`, or `@obiter/web`; async/data concerns in the UI belong to TanStack Query. |
 
 ## Scope
 
 ### In Scope
 
-- **Branding**: the user-facing product name is **Obiter** — all screen copy, titles, sidebar headings, and aria-labels use it (decided July 2026; committed rename). `@ormont/*` package names, `--ormont-*` token prefixes, and "Ormont" in internal planning docs remain internal identifiers; renaming them is out of scope and tracked separately.
+- **Branding**: the user-facing product name is **Obiter** — all screen copy, titles, sidebar headings, and aria-labels use it (decided July 2026; committed rename). `@obiter/*` package names, `--obiter-*` token prefixes, and "Obiter" in internal planning docs remain internal identifiers; renaming them is out of scope and tracked separately.
 - **Design tokens**: color (including semantic status colors and the span-category palette Redact consumes), spacing, radius, elevation, type scale. Light and dark themes; **light is the default**.
-- **`@ormont/ui` component library** on Base UI: the primitive set listed above, each with stories/fixtures and component tests.
+- **`@obiter/ui` component library** on Base UI: the primitive set listed above, each with stories/fixtures and component tests.
 - **App frame**: sidebar (preserving the live/planned split from `docs/current-product-scope.md` — planned entries stay visibly planned), top bar, page scaffold, responsive behaviour, toast/error surfaces.
 - **Auth wiring**: real sign-in against the auth API, session handling, `useCurrentUser()` from the real me endpoint, signed-out redirect. The cosmetic sign-in screen becomes functional.
 - **Matters, live**: matters list from `GET /api/matters`, matter creation, matter detail with its documents list from the documents API.
@@ -68,13 +68,13 @@ Two agents build in parallel: one on this rebuild, one on Redact. The contract i
 
 The shell guarantees, as stable exports:
 
-1. **From `@ormont/ui`**: the primitive component set (Button, Input, Select, Dialog, Table, Tabs, Badge, Tooltip, Toast, EmptyState, Skeleton, ProgressBar) with documented props.
-2. **Design tokens**: the `--ormont-*` CSS variable set, including a named color token per redaction span category (`--ormont-span-person-name`, etc.) so PRD 2's category coloring is token-driven, not hardcoded.
-3. **From `@ormont/app-shell`**: `useCurrentUser()`; the shared `QueryClient` provided at the root; an `apiFetch` helper that applies auth headers and normalises the API error envelope (`apiErrorCodeSchema` from `@ormont/contracts`) into typed errors.
+1. **From `@obiter/ui`**: the primitive component set (Button, Input, Select, Dialog, Table, Tabs, Badge, Tooltip, Toast, EmptyState, Skeleton, ProgressBar) with documented props.
+2. **Design tokens**: the `--obiter-*` CSS variable set, including a named color token per redaction span category (`--obiter-span-person-name`, etc.) so PRD 2's category coloring is token-driven, not hardcoded.
+3. **From `@obiter/app-shell`**: `useCurrentUser()`; the shared `QueryClient` provided at the root; an `apiFetch` helper that applies auth headers and normalises the API error envelope (`apiErrorCodeSchema` from `@obiter/contracts`) into typed errors.
 4. **Routes**: the document detail route exists at `/matters/:matterId/documents/:documentId` with a stable outlet/navigation pattern for feature sub-routes such as `redact/$runId`.
 5. **Page scaffold**: a layout component (title, actions slot, content region) that feature screens compose instead of building their own frames.
 
-The Redact review UI imports only from `@ormont/ui`, `@ormont/app-shell` public exports, and `@ormont/contracts`. It never imports shell-internal modules. The Redact track may begin UI work as soon as the contract freeze lands, against the real components.
+The Redact review UI imports only from `@obiter/ui`, `@obiter/app-shell` public exports, and `@obiter/contracts`. It never imports shell-internal modules. The Redact track may begin UI work as soon as the contract freeze lands, against the real components.
 
 ## Users
 
@@ -88,9 +88,9 @@ The Redact review UI imports only from `@ormont/ui`, `@ormont/app-shell` public 
 - **FR2.** Matters list renders `GET /api/matters` data with loading, empty, and error states; matter creation posts to the API and appears in the list without reload.
 - **FR3.** Matter detail renders the real matter and its documents list; each document links to the document detail route.
 - **FR4.** Document detail route (`/matters/:matterId/documents/:documentId`) renders document metadata and a redaction runs region (list + create CTA), and exposes a child outlet for feature sub-routes.
-- **FR5.** All screens use `@ormont/ui` components and tokens exclusively; a lint rule blocks imports from more than one icon package; no `.ormont-*` legacy classes remain.
+- **FR5.** All screens use `@obiter/ui` components and tokens exclusively; a lint rule blocks imports from more than one icon package; no `.obiter-*` legacy classes remain.
 - **FR6.** Light and dark themes both render correctly on every screen; light is the default; theme preference persists.
-- **FR6a.** All user-facing copy uses the product name Obiter; no user-visible "Ormont" remains in the rebuilt shell.
+- **FR6a.** All user-facing copy uses the product name Obiter; no user-visible "Obiter" remains in the rebuilt shell.
 - **FR7.** The fixture layer is deleted: `createPhaseZeroShellSnapshot` and the demo me response do not exist in the codebase; `pnpm seed` provides development data.
 - **FR8.** Search surfaces are visually migrated with zero behaviour change (existing tests pass unmodified or with styling-only updates).
 - **FR9.** `apps/desktop` builds and renders the rebuilt shell with full design parity: the Electron renderer uses the new tokens, components, and self-hosted typefaces; the legacy `styles.css` is deleted from both web and desktop paths. After M3, no user-reachable screen on any platform renders the legacy design.
@@ -100,13 +100,13 @@ The Redact review UI imports only from `@ormont/ui`, `@ormont/app-shell` public 
 
 - **NFR1.** Route-level code splitting; initial JS for the authenticated frame under a defined budget (measure current, set target at M1).
 - **NFR2.** Keyboard navigability and visible focus on all interactive elements (Base UI provides the foundation; the styled layer must not break it).
-- **NFR3.** All `@ormont/ui` components have component tests; shell data wiring has integration tests against a test API.
+- **NFR3.** All `@obiter/ui` components have component tests; shell data wiring has integration tests against a test API.
 - **NFR4.** No console errors or warnings in development on any screen.
 
 ## Rollout
 
 ### Milestone 1 — Foundation and contract freeze
-Design tokens, Tailwind v4 setup, `@ormont/ui` primitive set, app frame, auth wiring, `apiFetch` + `useCurrentUser`, empty document-detail route scaffold. **Contract freeze at the end of M1** — the Redact track starts its UI build here.
+Design tokens, Tailwind v4 setup, `@obiter/ui` primitive set, app frame, auth wiring, `apiFetch` + `useCurrentUser`, empty document-detail route scaffold. **Contract freeze at the end of M1** — the Redact track starts its UI build here.
 
 ### Milestone 2 — Live surfaces
 Matters list/create/detail, documents list, document detail content, Home, seed script. Delete the fixture layer. This is the moment the "demo data" tier ceases to exist.
@@ -115,14 +115,14 @@ Matters list/create/detail, documents list, document detail content, Home, seed 
 Search and stored-case-page restyle; **desktop parity pass** (Electron renderer on the new tokens/components/typefaces, legacy `styles.css` deleted everywhere — FR9); theming pass, lint enforcement, scope-doc update, dead CSS removal. Web deployability: `apps/web` Dockerfile + Dokploy same-domain Traefik routing (`/api` → api app) per [docs/specs/deployment.md](../specs/deployment.md). Exit check: click through every reachable screen on web and desktop — none may render the legacy design.
 
 ### Definition of Done
-All FRs met; both themes verified on every screen; contract exports documented; Redact review UI (built in parallel) renders inside the shell without contract violations; `pnpm typecheck` and all tests pass across `@ormont/ui`, `@ormont/app-shell`, `@ormont/web`.
+All FRs met; both themes verified on every screen; contract exports documented; Redact review UI (built in parallel) renders inside the shell without contract violations; `pnpm typecheck` and all tests pass across `@obiter/ui`, `@obiter/app-shell`, `@obiter/web`.
 
 ## Risks
 
 | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|
 | Parallel-track drift: Redact UI needs a component or token the contract lacks | Medium | Medium | Contract freeze at M1 with an explicit change process (both PRDs updated together); the plan owner reviews both tracks at each milestone. |
-| Base UI gaps (it is a newer library) for a needed primitive | Low-Medium | Medium | The styled layer lives in `@ormont/ui`, so a single primitive can be swapped (e.g. hand-rolled or another headless source) without feature-code changes. |
+| Base UI gaps (it is a newer library) for a needed primitive | Low-Medium | Medium | The styled layer lives in `@obiter/ui`, so a single primitive can be swapped (e.g. hand-rolled or another headless source) without feature-code changes. |
 | Search regression during restyle | Medium | Medium | Search logic untouched; existing tests must pass; restyle is markup/class-level only. |
 | Desktop (Electron) breakage from new CSS pipeline | Medium | Low | M3 includes an explicit desktop build-and-render verification step. |
 | Auth API assumptions (session shape, cookie vs token) don't match the UI plan | Medium | Medium | M1 starts with a half-day spike reading `services/api/src/auth.ts` and the auth spec before component work begins. |
