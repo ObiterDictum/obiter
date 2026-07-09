@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { runBoundedSampleIndexing } from './index'
 
-vi.mock('@ormont/search-client', () => ({
+vi.mock('@obiter/search-client', () => ({
   createClient: vi.fn(() => ({ id: 'client' })),
   createIndex: vi.fn(async () => ({ taskUid: 1 })),
   indexDocuments: vi.fn(async (_client, _indexName, documents: unknown[]) => ({

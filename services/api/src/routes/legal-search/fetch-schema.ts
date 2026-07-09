@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { LegalSourceFamilySchema, LegalSourceTypeSchema } from '@ormont/legal-schema'
+import { LegalSourceFamilySchema, LegalSourceTypeSchema } from '@obiter/legal-schema'
 import { normalizeCourtCode } from './court-utils'
 
 const legalSlugSchema = z

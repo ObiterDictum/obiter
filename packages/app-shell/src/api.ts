@@ -1,5 +1,5 @@
-import type { ApiErrorCode, ApiErrorResponse } from '@ormont/contracts'
-import { apiErrorResponseSchema } from '@ormont/contracts'
+import type { ApiErrorCode, ApiErrorResponse } from '@obiter/contracts'
+import { apiErrorResponseSchema } from '@obiter/contracts'
 import { apiUrl } from './lib/api-url'
 
 /**

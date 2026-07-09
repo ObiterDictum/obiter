@@ -85,7 +85,7 @@ Kept by default (not redacted):
 | `STATE` | State / region |
 | `ZIP_CODE` | Postal code |
 
-**Gaps for UK legal text (need Ormont supplement):**
+**Gaps for UK legal text (need Obiter supplement):**
 - National Insurance numbers (fixed format: 2 letters, 6 digits, 1 letter)
 - Internal case/matter references (firm-specific formats)
 - Organisation names (optional, suffix-based: LLP, Ltd, plc, Solicitors)
@@ -94,9 +94,9 @@ Kept by default (not redacted):
 **Three-layer detection strategy:**
 1. Rampart deterministic recognizer runs first (regex + checksum for SSN, credit card, email, URL, IP). Masks structured identifiers to sentinel tokens before the model runs.
 2. Rampart token-classification model runs second (context-aware, catches names, phones, accounts, government IDs, passports, addresses, driver's licenses).
-3. Ormont UK supplement runs third (TypeScript regex for UK-specific patterns: NI numbers, case references, organisation names).
+3. Obiter UK supplement runs third (TypeScript regex for UK-specific patterns: NI numbers, case references, organisation names).
 
-All three layers return spans. The Ormont supplement merges with Rampart output, deduplicates overlaps (Rampart wins on confidence), and produces the final span list.
+All three layers return spans. The Obiter supplement merges with Rampart output, deduplicates overlaps (Rampart wins on confidence), and produces the final span list.
 
 **`@nationaldesignstudio/rampart` is an npm package:**
 - Runs in-process in the Hono API via Transformers.js. No separate service.
@@ -115,7 +115,7 @@ Start with plain text and `.txt` files for M1, then `.docx` in M2. The `text_obj
 1. Document text extracted and stored at `text_object_key`
 2. API receives redaction run request, loads the Rampart guard (cached after first load)
 3. API calls `guard.protect(text)` which runs the deterministic recognizer + token-classification model
-4. API maps Rampart span output to Ormont span categories
+4. API maps Rampart span output to Obiter span categories
 5. API runs UK supplement (TypeScript regex) for patterns Rampart doesn't cover (NI numbers, case references, organisation names)
 6. API merges Rampart spans + UK supplement spans, deduplicates overlaps (Rampart wins), stores in `redaction_runs.spans_json`
 7. Run transitions to `ready_for_review`
@@ -202,7 +202,7 @@ interface RedactionSpan {
 type SpanSource =
   | 'rampart_model'          // Rampart token-classification model
   | 'rampart_deterministic'  // Rampart regex + checksum recognizer
-  | 'uk_supplement'           // Ormont UK legal-specific regex
+  | 'uk_supplement'           // Obiter UK legal-specific regex
 
 type SpanCategory =
   | 'person_name'           // rampart_model: GIVEN_NAME + SURNAME
@@ -355,7 +355,7 @@ Pure TypeScript logic for: UK supplement regex, span merging, Rampart label mapp
 packages/redaction-policy/
   src/
     index.ts           - public API
-    rampart-map.ts      - maps Rampart span output to Ormont span categories
+    rampart-map.ts      - maps Rampart span output to Obiter span categories
     supplement.ts       - regex patterns for UK legal-specific PII (NI, case refs, organisation names)
     merge.ts            - merge Rampart spans + UK supplement spans, deduplicate overlaps
     chunk.ts             - split long text into 512-token chunks, reassemble span offsets
@@ -372,7 +372,7 @@ API route handlers. Follows the existing pattern in `routes/matters.ts` and `rou
 Database functions for redaction runs. Follows the pattern of `database.ts`: typed query helpers, not inline SQL in routes.
 
 ### `services/api/src/redaction-detection.ts`
-Rampart integration module. Loads the `@nationaldesignstudio/rampart` guard, calls `guard.protect(text)`, maps Rampart spans to Ormont categories, runs UK supplement, merges. Handles chunking for long documents.
+Rampart integration module. Loads the `@nationaldesignstudio/rampart` guard, calls `guard.protect(text)`, maps Rampart spans to Obiter categories, runs UK supplement, merges. Handles chunking for long documents.
 
 **Rampart guard lifecycle:**
 - The guard is loaded once and cached as a module-level singleton. First request loads the model (14.7 MB, downloads from HuggingFace if not cached, ~1-2 seconds). Subsequent requests reuse the cached guard.
@@ -390,7 +390,7 @@ Review UI components (M2). Follows existing app-shell patterns: shared between w
 - [ ] Add `@nationaldesignstudio/rampart` and `@huggingface/transformers` to `services/api/package.json`
 - [ ] Create `services/api/src/redaction-detection.ts`:
   - Load Rampart guard via `createGuard({ device: 'cpu' })`
-  - Implement `detectPII(text)` that calls `guard.protect(text)`, maps Rampart labels to Ormont categories
+  - Implement `detectPII(text)` that calls `guard.protect(text)`, maps Rampart labels to Obiter categories
   - Handle 512-token chunking for long documents (split, detect per chunk, adjust offsets, merge)
   - Cache the guard instance at module level (singleton, loaded once)
 - [ ] Write migration `0005_redaction.sql` (DDL above)
@@ -398,7 +398,7 @@ Review UI components (M2). Follows existing app-shell patterns: shared between w
 - [ ] Add new error codes to `apiErrorCodeSchema` (including `redaction_detection_failed`)
 - [ ] Create `packages/redaction-policy/` with `package.json`, `tsconfig.json`
 - [ ] Implement `types.ts` with all interfaces (RedactionSpan, SpanCategory, SpanSource, etc.)
-- [ ] Implement `rampart-map.ts`: map Rampart labels (GIVEN_NAME, SURNAME, PHONE, EMAIL, URL, etc.) to Ormont categories
+- [ ] Implement `rampart-map.ts`: map Rampart labels (GIVEN_NAME, SURNAME, PHONE, EMAIL, URL, etc.) to Obiter categories
 - [ ] Implement `supplement.ts` with regex patterns for: NI numbers, case references, organisation names
 - [ ] Implement `merge.ts`: merge Rampart spans + UK supplement spans, deduplicate overlaps (Rampart wins on confidence)
 - [ ] Implement `chunk.ts`: split text into 400-token chunks, run detection per chunk, adjust offsets to document level, handle spans at chunk boundaries
@@ -513,8 +513,8 @@ Review UI components (M2). Follows existing app-shell patterns: shared between w
   - Re-run redaction on same document (new run, new spans)
   - Detection failure (Rampart model load error, run goes to `failed`)
   - Very long document (chunking, > 512 tokens)
-- [ ] Type-check everything: `pnpm --filter @ormont/redaction-policy typecheck`, `pnpm --filter @ormont/api typecheck`, `pnpm --filter @ormont/app-shell typecheck`
-- [ ] Run all tests: `pnpm --filter @ormont/redaction-policy test`, `pnpm --filter @ormont/api test`
+- [ ] Type-check everything: `pnpm --filter @obiter/redaction-policy typecheck`, `pnpm --filter @obiter/api typecheck`, `pnpm --filter @obiter/app-shell typecheck`
+- [ ] Run all tests: `pnpm --filter @obiter/redaction-policy test`, `pnpm --filter @obiter/api test`
 - [ ] Update `docs/current-product-scope.md`: move Redaction from "Visible But Not Implemented" to implemented navigation
 - [ ] Update `docs/specs/redact/milestones.md` with completion notes
 

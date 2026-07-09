@@ -102,7 +102,7 @@
       "case_id": "search-g1-no-answer-synthetic",
       "task_type": "no_answer",
       "input": {
-        "query": "zzzz non-existent ormont legal source fixture"
+        "query": "zzzz non-existent obiter legal source fixture"
       },
       "normalized_expected": {
         "required_outcome": "no_match",

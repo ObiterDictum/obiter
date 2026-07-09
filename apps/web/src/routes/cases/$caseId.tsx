@@ -1,5 +1,5 @@
-import { CaseLawDocumentView, caseLawDocumentQueryOptions } from '@ormont/app-shell'
-import { createCanonicalCasePath } from '@ormont/contracts'
+import { CaseLawDocumentView, caseLawDocumentQueryOptions } from '@obiter/app-shell'
+import { createCanonicalCasePath } from '@obiter/contracts'
 import { createFileRoute, redirect } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/cases/$caseId')({

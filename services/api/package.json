@@ -1,5 +1,5 @@
 {
-  "name": "@ormont/api",
+  "name": "@obiter/api",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -12,9 +12,9 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.0.0",
-    "@ormont/contracts": "workspace:*",
-    "@ormont/legal-schema": "workspace:*",
-    "@ormont/search-client": "workspace:*",
+    "@obiter/contracts": "workspace:*",
+    "@obiter/legal-schema": "workspace:*",
+    "@obiter/search-client": "workspace:*",
     "better-auth": "^1.6.8",
     "hono": "^4.12.14",
     "pg": "^8.20.0",

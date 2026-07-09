@@ -2,7 +2,7 @@
 
 > **Freeze artifact.** This document defines the stable surface the Redact review UI ([PRD 2](../../prds/redact-2-review-output.md)) and every future feature UI builds against. It freezes at the end of Milestone 1 of the [App Shell Rebuild PRD](../../prds/app-shell-rebuild.md). After freeze, any change here requires updating **both** this contract and Redact PRD 2, and is owned by the plan owner.
 
-The Redact review UI imports only from `@ormont/ui`, `@ormont/app-shell` public exports, and `@ormont/contracts`. It never imports shell-internal modules.
+The Redact review UI imports only from `@obiter/ui`, `@obiter/app-shell` public exports, and `@obiter/contracts`. It never imports shell-internal modules.
 
 ## Change process
 
@@ -12,9 +12,9 @@ The Redact review UI imports only from `@ormont/ui`, `@ormont/app-shell` public 
 
 ---
 
-## 1. `@ormont/ui` primitive exports
+## 1. `@obiter/ui` primitive exports
 
-Headless behaviour and a11y come from Base UI (`@base-ui-components/react`); `@ormont/ui` owns the visual layer. All components consume the `--ormont-*` tokens (section 2) and never hardcode color/spacing/radius/type values. All accept a `className` override and compose with `cn()`. Icons are Phosphor (`@phosphor-icons/react`) only — enforced by ESLint `no-restricted-imports`.
+Headless behaviour and a11y come from Base UI (`@base-ui-components/react`); `@obiter/ui` owns the visual layer. All components consume the `--obiter-*` tokens (section 2) and never hardcode color/spacing/radius/type values. All accept a `className` override and compose with `cn()`. Icons are Phosphor (`@phosphor-icons/react`) only — enforced by ESLint `no-restricted-imports`.
 
 | Primitive | Export | Stable props |
 |---|---|---|
@@ -31,54 +31,54 @@ Headless behaviour and a11y come from Base UI (`@base-ui-components/react`); `@o
 | Skeleton | `Skeleton` | `className?`. Shimmer block; sizing via className. |
 | ProgressBar | `ProgressBar` | `value?: number` (0–100; omit for indeterminate), `label?: ReactNode`, `helperText?: ReactNode`. |
 
-**Re-exports from `@ormont/ui` index:** the full set above, plus `cn` (the class-merge helper).
+**Re-exports from `@obiter/ui` index:** the full set above, plus `cn` (the class-merge helper).
 
-## 2. Design tokens (`--ormont-*`)
+## 2. Design tokens (`--obiter-*`)
 
 Source of truth is `packages/ui/src/tokens.css`, consumed by Tailwind v4 via `@theme`. **Token names are frozen; values may tune within the same theme.** Light is the default; dark is a persisted preference. Both themes must render every screen correctly (FR6).
 
 ### 2.1 Color (semantic, defined per theme)
 
-`--ormont-bg`, `--ormont-surface`, `--ormont-surface-raised`, `--ormont-border`, `--ormont-border-strong`, `--ormont-text`, `--ormont-text-muted`, `--ormont-text-subtle`, `--ormont-brand`, `--ormont-brand-fg` (text on brand), `--ormont-brand-pressed`, `--ormont-ring` (focus ring), `--ormont-overlay` (scrim).
+`--obiter-bg`, `--obiter-surface`, `--obiter-surface-raised`, `--obiter-border`, `--obiter-border-strong`, `--obiter-text`, `--obiter-text-muted`, `--obiter-text-subtle`, `--obiter-brand`, `--obiter-brand-fg` (text on brand), `--obiter-brand-pressed`, `--obiter-ring` (focus ring), `--obiter-overlay` (scrim).
 
 ### 2.2 Status (defined per theme, each with `-fg` for text-on-fill)
 
-`--ormont-status-info`, `--ormont-status-success`, `--ormont-status-warning`, `--ormont-status-danger` (each with a matching `--ormont-status-*-fg`).
+`--obiter-status-info`, `--obiter-status-success`, `--obiter-status-warning`, `--obiter-status-danger` (each with a matching `--obiter-status-*-fg`).
 
 ### 2.3 Redaction span-category palette — CONTRACT SURFACE
 
-One token per span category from `spanCategorySchema` (snake_case → kebab token). Each category is defined as a **`-bg` / `-fg` pair** so highlighted span text meets WCAG AA contrast in **both** light and dark themes, and categories are distinguishable by hue. A bare `--ormont-span-<category>` alias (= the `-bg` value) is also exported for the PRD's literal naming.
+One token per span category from `spanCategorySchema` (snake_case → kebab token). Each category is defined as a **`-bg` / `-fg` pair** so highlighted span text meets WCAG AA contrast in **both** light and dark themes, and categories are distinguishable by hue. A bare `--obiter-span-<category>` alias (= the `-bg` value) is also exported for the PRD's literal naming.
 
 Categories (15 — the full `spanCategorySchema` set; `date` and `secret` were missing from the first draft and are required by PRD 2's FR5 color mapping):
 
 | Span category | Token prefix |
 |---|---|
-| `person_name` | `--ormont-span-person-name` |
-| `email` | `--ormont-span-email` |
-| `phone` | `--ormont-span-phone` |
-| `address` | `--ormont-span-address` |
-| `date` | `--ormont-span-date` |
-| `government_id` | `--ormont-span-government-id` |
-| `secret` | `--ormont-span-secret` |
-| `account_number` | `--ormont-span-account-number` |
-| `passport` | `--ormont-span-passport` |
-| `drivers_license` | `--ormont-span-drivers-license` |
-| `url` | `--ormont-span-url` |
-| `ip_address` | `--ormont-span-ip-address` |
-| `national_insurance` | `--ormont-span-national-insurance` |
-| `case_reference` | `--ormont-span-case-reference` |
-| `organisation_name` | `--ormont-span-organisation-name` |
+| `person_name` | `--obiter-span-person-name` |
+| `email` | `--obiter-span-email` |
+| `phone` | `--obiter-span-phone` |
+| `address` | `--obiter-span-address` |
+| `date` | `--obiter-span-date` |
+| `government_id` | `--obiter-span-government-id` |
+| `secret` | `--obiter-span-secret` |
+| `account_number` | `--obiter-span-account-number` |
+| `passport` | `--obiter-span-passport` |
+| `drivers_license` | `--obiter-span-drivers-license` |
+| `url` | `--obiter-span-url` |
+| `ip_address` | `--obiter-span-ip-address` |
+| `national_insurance` | `--obiter-span-national-insurance` |
+| `case_reference` | `--obiter-span-case-reference` |
+| `organisation_name` | `--obiter-span-organisation-name` |
 
 **Contract guarantees:** every category renders with AA-contrast text over its fill in both themes; adjacent categories are hue-distinguishable; saturation stays restrained (no neon), per the design skills. Exact hues are implementation; the names, the pair convention, and the accessibility contract are frozen.
 
 ### 2.4 Spacing, radius, elevation, type
 
-- **Spacing:** `--ormont-space-*` numeric scale (exposed to Tailwind as `--spacing-*`).
-- **Radius:** `--ormont-radius-sm | md | lg | xl | pill` (exposed as `--radius-*`).
-- **Elevation:** `--ormont-shadow-sm | md | lg`, tinted to the background hue (no harsh black drop-shadows).
-- **Type:** `--ormont-font-sans`, `--ormont-font-mono`, weight tokens `--ormont-font-weight-*`, and a `--ormont-text-*` size/line-height scale (exposed as Tailwind font-size utilities).
+- **Spacing:** `--obiter-space-*` numeric scale (exposed to Tailwind as `--spacing-*`).
+- **Radius:** `--obiter-radius-sm | md | lg | xl | pill` (exposed as `--radius-*`).
+- **Elevation:** `--obiter-shadow-sm | md | lg`, tinted to the background hue (no harsh black drop-shadows).
+- **Type:** `--obiter-font-sans`, `--obiter-font-mono`, weight tokens `--obiter-font-weight-*`, and a `--obiter-text-*` size/line-height scale (exposed as Tailwind font-size utilities).
 
-## 3. `@ormont/app-shell` public exports
+## 3. `@obiter/app-shell` public exports
 
 ### 3.1 `useCurrentUser()` — real `/api/me`
 
@@ -93,7 +93,7 @@ Backed by the real `GET /api/me`. Unauthenticated → the session/redirect layer
 
 ```ts
 export class ApiError extends Error {
-  readonly code: ApiErrorCode      // from @ormont/contracts apiErrorCodeSchema
+  readonly code: ApiErrorCode      // from @obiter/contracts apiErrorCodeSchema
   readonly status: number
   readonly requestId: string
 }

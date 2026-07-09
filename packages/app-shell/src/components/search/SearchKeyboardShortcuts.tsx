@@ -46,24 +46,38 @@ export function SearchKeyboardShortcuts({ onClose }: SearchKeyboardShortcutsProp
   }
 
   return (
-    <div className="legal-search-shortcuts" role="dialog" aria-modal="true" aria-labelledby="search-shortcuts-title">
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-overlay p-5"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="search-shortcuts-title"
+    >
       <div
-        className="legal-search-shortcuts__panel"
+        className="grid w-full max-w-[420px] gap-4 rounded-lg border border-line-strong bg-raised p-5 shadow-lg"
         onKeyDown={handleKeyDown}
         ref={panelRef}
         tabIndex={-1}
       >
-        <div className="legal-search-shortcuts__header">
-          <h2 id="search-shortcuts-title">Keyboard Shortcuts</h2>
-          <button type="button" onClick={onClose} aria-label="Close keyboard shortcuts">
+        <div className="flex items-center justify-between gap-4">
+          <h2 className="text-base font-semibold text-ink" id="search-shortcuts-title">
+            Keyboard Shortcuts
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close keyboard shortcuts"
+            className="rounded-md border border-line px-2.5 py-1.5 text-sm text-ink transition-colors hover:bg-canvas"
+          >
             Close
           </button>
         </div>
-        <dl>
+        <dl className="flex flex-col gap-2">
           {shortcuts.map((shortcut) => (
-            <div key={shortcut.keys}>
-              <dt>{shortcut.keys}</dt>
-              <dd>{shortcut.action}</dd>
+            <div className="flex items-center justify-between gap-3" key={shortcut.keys}>
+              <dt className="rounded-md border border-line bg-canvas px-2 py-1.5 text-sm text-ink">
+                {shortcut.keys}
+              </dt>
+              <dd className="text-right text-sm text-muted">{shortcut.action}</dd>
             </div>
           ))}
         </dl>

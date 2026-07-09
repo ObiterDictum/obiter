@@ -6,7 +6,7 @@ import {
   type LegalAuthority,
   type LegalAuthoritySummary,
   type LegalSourceType,
-} from '@ormont/legal-schema'
+} from '@obiter/legal-schema'
 
 export type LegalSearchDocument = LegalAuthority
 export interface LegalSearchSnippet {

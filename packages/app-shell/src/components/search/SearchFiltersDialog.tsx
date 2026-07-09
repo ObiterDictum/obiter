@@ -29,32 +29,37 @@ export function SearchFiltersDialog({
   }
 
   return (
-    <div className="search-filter-dialog" role="dialog" aria-modal="true" aria-labelledby="search-filter-title">
+    <div
+      className="fixed inset-0 z-40 flex items-center justify-center p-7"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="search-filter-title"
+    >
       <button
         aria-label="Close search filters"
-        className="search-filter-dialog__backdrop"
         type="button"
+        className="absolute inset-0 cursor-default bg-overlay"
         onClick={closeDialog}
       />
-      <section className="search-filter-dialog__panel">
+      <section className="relative grid w-full max-w-[500px] gap-4 rounded-lg border border-line-strong bg-raised p-5 shadow-lg">
         <button
           aria-label="Close search filters"
-          className="search-filter-dialog__close"
           type="button"
+          className="absolute right-4 top-4 inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-canvas hover:text-ink"
           onClick={closeDialog}
         >
-          <span aria-hidden="true">×</span>
+          <span aria-hidden="true" className="text-lg leading-none">×</span>
         </button>
-        <header className="search-filter-dialog__header">
-          <div>
-            <p>Search filters</p>
-            <h2 id="search-filter-title">Refine results</h2>
-          </div>
+        <header className="pr-9">
+          <p className="text-xs font-semibold uppercase tracking-wider text-subtle">Search filters</p>
+          <h2 className="mt-1 text-lg font-semibold text-ink" id="search-filter-title">
+            Refine results
+          </h2>
         </header>
 
-        <div className="search-filter-dialog__groups">
-          <fieldset>
-            <legend>Source</legend>
+        <div className="grid gap-3.5">
+          <fieldset className="flex flex-col gap-2 border-0 p-0">
+            <legend className="text-xs font-semibold uppercase tracking-wide text-muted">Source</legend>
             <CourtSelect
               menuOpen={courtMenuOpen}
               onMenuOpenChange={setCourtMenuOpen}
@@ -63,12 +68,13 @@ export function SearchFiltersDialog({
             />
           </fieldset>
 
-          <fieldset>
-            <legend>Date decided</legend>
-            <div className="search-filter-dialog__date-grid">
-              <label className="search-filter-dialog__field">
+          <fieldset className="flex flex-col gap-2 border-0 p-0">
+            <legend className="text-xs font-semibold uppercase tracking-wide text-muted">Date decided</legend>
+            <div className="grid grid-cols-2 gap-2.5">
+              <label className="flex flex-col gap-1.5 text-xs font-medium text-ink">
                 <span>From</span>
                 <input
+                  className="min-h-[31px] rounded-md border border-line bg-canvas px-2.5 text-xs font-medium text-ink outline-none focus:border-brand"
                   value={draftDateFrom}
                   onChange={(event) => setDraftDateFrom(event.target.value)}
                   onInput={(event) => setDraftDateFrom(event.currentTarget.value)}
@@ -77,9 +83,10 @@ export function SearchFiltersDialog({
                 />
               </label>
 
-              <label className="search-filter-dialog__field">
+              <label className="flex flex-col gap-1.5 text-xs font-medium text-ink">
                 <span>To</span>
                 <input
+                  className="min-h-[31px] rounded-md border border-line bg-canvas px-2.5 text-xs font-medium text-ink outline-none focus:border-brand"
                   value={draftDateTo}
                   onChange={(event) => setDraftDateTo(event.target.value)}
                   onInput={(event) => setDraftDateTo(event.currentTarget.value)}
@@ -91,11 +98,16 @@ export function SearchFiltersDialog({
           </fieldset>
         </div>
 
-        <footer className="search-filter-dialog__actions">
-          <button type="button" onClick={onClear}>
+        <footer className="flex justify-end gap-2 border-t border-line pt-3">
+          <button
+            className="rounded-md border border-line px-3 py-1.5 text-xs font-semibold text-muted transition-colors hover:bg-canvas hover:text-ink"
+            type="button"
+            onClick={onClear}
+          >
             Clear
           </button>
           <button
+            className="rounded-md border border-brand px-3 py-1.5 text-xs font-semibold text-brand transition-colors hover:bg-brand hover:text-brand-fg"
             type="button"
             onClick={() =>
               onApply({

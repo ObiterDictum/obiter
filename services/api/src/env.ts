@@ -5,9 +5,9 @@ const requiredProductionKeys = [
   'DATABASE_URL',
   'BETTER_AUTH_SECRET',
   'BETTER_AUTH_URL',
-  'ORMONT_WEB_ORIGIN',
-  'ORMONT_MAGIC_LINK_WEBHOOK_URL',
-  'ORMONT_MAGIC_LINK_WEBHOOK_SECRET',
+  'OBITER_WEB_ORIGIN',
+  'OBITER_MAGIC_LINK_WEBHOOK_URL',
+  'OBITER_MAGIC_LINK_WEBHOOK_SECRET',
   'MEILISEARCH_HOST',
   'MEILISEARCH_SEARCH_API_KEY',
   'MEILISEARCH_ADMIN_API_KEY',
@@ -87,7 +87,7 @@ function readDatabaseUrl(nodeEnv: ApiEnv['nodeEnv']) {
   if (nodeEnv !== 'test') {
     return readRequiredUrl(
       'DATABASE_URL',
-      'postgres://ormont:ormont@localhost:5432/ormont',
+      'postgres://obiter:obiter@localhost:5432/obiter',
     )
   }
 
@@ -234,14 +234,14 @@ export function readApiEnv(): ApiEnv {
   const nodeEnv = readNodeEnv()
   requireProductionEnv(nodeEnv)
   requireTestEnv(nodeEnv)
-  const magicLinkWebhookUrl = readOptionalUrl('ORMONT_MAGIC_LINK_WEBHOOK_URL')
+  const magicLinkWebhookUrl = readOptionalUrl('OBITER_MAGIC_LINK_WEBHOOK_URL')
   const magicLinkWebhookSecret = readOptionalSecret(
-    'ORMONT_MAGIC_LINK_WEBHOOK_SECRET',
+    'OBITER_MAGIC_LINK_WEBHOOK_SECRET',
     nodeEnv,
   )
 
   if (nodeEnv === 'production' && !magicLinkWebhookUrl) {
-    throw new Error('ORMONT_MAGIC_LINK_WEBHOOK_URL must be configured in production.')
+    throw new Error('OBITER_MAGIC_LINK_WEBHOOK_URL must be configured in production.')
   }
 
   return {
@@ -252,11 +252,11 @@ export function readApiEnv(): ApiEnv {
       nodeEnv,
     ),
     authBaseUrl: readRequiredUrl('BETTER_AUTH_URL', 'http://localhost:8787'),
-    webOrigin: readRequiredUrl('ORMONT_WEB_ORIGIN', 'http://localhost:3000'),
-    marketingOrigin: readOptionalUrl('ORMONT_MARKETING_ORIGIN'),
+    webOrigin: readRequiredUrl('OBITER_WEB_ORIGIN', 'http://localhost:3000'),
+    marketingOrigin: readOptionalUrl('OBITER_MARKETING_ORIGIN'),
     desktopOrigin: readRequiredUrl(
-      'ORMONT_DESKTOP_ORIGIN',
-      'ormont://desktop-auth',
+      'OBITER_DESKTOP_ORIGIN',
+      'obiter://desktop-auth',
     ),
     magicLinkWebhookUrl,
     magicLinkWebhookSecret,

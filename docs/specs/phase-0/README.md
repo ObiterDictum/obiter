@@ -6,8 +6,8 @@ These documents are the executable Phase 0 implementation layer. If they differ 
 
 ## Documents
 
-- [Implementation](C:\Users\karl-\Documents\source\Ormont\docs\specs\phase-0\implementation.md)
-- [Auth](C:\Users\karl-\Documents\source\Ormont\docs\specs\phase-0\auth.md)
-- [Schema](C:\Users\karl-\Documents\source\Ormont\docs\specs\phase-0\schema.md)
-- [API](C:\Users\karl-\Documents\source\Ormont\docs\specs\phase-0\api.md)
-- [Milestones](C:\Users\karl-\Documents\source\Ormont\docs\specs\phase-0\milestones.md)
+- [Implementation](C:\Users\karl-\Documents\source\Obiter\docs\specs\phase-0\implementation.md)
+- [Auth](C:\Users\karl-\Documents\source\Obiter\docs\specs\phase-0\auth.md)
+- [Schema](C:\Users\karl-\Documents\source\Obiter\docs\specs\phase-0\schema.md)
+- [API](C:\Users\karl-\Documents\source\Obiter\docs\specs\phase-0\api.md)
+- [Milestones](C:\Users\karl-\Documents\source\Obiter\docs\specs\phase-0\milestones.md)

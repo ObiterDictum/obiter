@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import type { Context } from 'hono'
 import type { Pool } from 'pg'
-import type { ApiErrorCode, ApiErrorResponse } from '@ormont/contracts'
+import type { ApiErrorCode, ApiErrorResponse } from '@obiter/contracts'
 import {
   appendAuditLog,
   createMatter,

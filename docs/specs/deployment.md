@@ -4,7 +4,7 @@ Status: planned (July 2026). PostgreSQL 16 already runs on the Hetzner VPS under
 
 ## Verified current state
 
-- **Database**: running on the server (Dokploy). Local dev expects `postgres://ormont:ormont@localhost:5432/ormont` (default in `services/api/src/env.ts`).
+- **Database**: running on the server (Dokploy). Local dev expects `postgres://obiter:obiter@localhost:5432/obiter` (default in `services/api/src/env.ts`).
 - **No Dockerfiles** exist anywhere in the repo.
 - **No migration runner** exists. `packages/database/migrations/*.sql` are raw SQL files with no tracking table and no apply script — the server schema was applied manually. This must be fixed before automated deploys; a deploy that cannot apply `0005_redaction.sql` repeatably will block the Redact track.
 - `apps/web` is a TanStack Start app — it has an SSR server component, so it deploys as a Node service, not a static bundle.
@@ -30,7 +30,7 @@ Three Dokploy applications on the existing VPS, plus the existing database:
 
 ### API Dockerfile — owned by the Redact track
 
-- Node 22 slim base, corepack-enabled pnpm, monorepo build via `pnpm --filter @ormont/api deploy` (or fetch + prune pattern).
+- Node 22 slim base, corepack-enabled pnpm, monorepo build via `pnpm --filter @obiter/api deploy` (or fetch + prune pattern).
 - Entrypoint: run migrations, then start the server.
 - Persistent volume for the HuggingFace model cache (the Rampart ONNX download from Redact PRD 1) so restarts don't re-download.
 - Env (from `services/api/src/env.ts` + better-auth): `DATABASE_URL` (Dokploy internal network), better-auth secret/base-URL, CORS origin, and later `REDACT_MODEL_ID` / `REDACT_MIN_SCORE` / `REDACT_CHUNK_TOKENS`.

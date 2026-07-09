@@ -4,9 +4,9 @@ import {
   createClient,
   search,
   type LegalSearchFilters,
-} from '@ormont/search-client'
-import { LegalSourceFamilySchema, LegalSourceTypeSchema } from '@ormont/legal-schema'
-import type { ApiErrorResponse } from '@ormont/contracts'
+} from '@obiter/search-client'
+import { LegalSourceFamilySchema, LegalSourceTypeSchema } from '@obiter/legal-schema'
+import type { ApiErrorResponse } from '@obiter/contracts'
 import type { ApiEnv } from '../../env'
 
 interface LegalSearchRouteVariables {

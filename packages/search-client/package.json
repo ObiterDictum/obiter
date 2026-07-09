@@ -1,5 +1,5 @@
 {
-  "name": "@ormont/search-client",
+  "name": "@obiter/search-client",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@ormont/legal-schema": "workspace:*",
+    "@obiter/legal-schema": "workspace:*",
     "meilisearch": "^0.51.0"
   }
 }

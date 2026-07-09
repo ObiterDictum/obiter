@@ -1,11 +1,11 @@
-import { createCanonicalCasePath, type ApiErrorResponse } from '@ormont/contracts'
-import type { LegalAuthority } from '@ormont/legal-schema'
+import { createCanonicalCasePath, type ApiErrorResponse } from '@obiter/contracts'
+import type { LegalAuthority } from '@obiter/legal-schema'
 import {
   createJudgmentParagraphEvidenceId,
   extractLegalSearchSnippets,
   type LegalSearchHit,
   type LegalSearchMatchReason,
-} from '@ormont/search-client'
+} from '@obiter/search-client'
 
 export type LegalFetchRetrievalPath =
   | 'stored_exact_lookup'

@@ -1,10 +1,10 @@
 import { useNavigate } from '@tanstack/react-router'
 import { ArrowRight } from '@phosphor-icons/react'
-import { Button, Card, Input } from '@ormont/ui'
-import type { AppPlatform } from '@ormont/contracts'
+import { Button, Card, Input } from '@obiter/ui'
+import type { AppPlatform } from '@obiter/contracts'
 import { useState, type FormEvent } from 'react'
 import { useAuth } from '../auth'
-import wordmarkUrl from '../assets/obiter-wordmark.svg'
+import { Wordmark } from '../wordmark'
 
 type Mode = 'password' | 'magic-link'
 
@@ -55,7 +55,7 @@ export function SignInRouteView({ platform: _platform }: { platform: AppPlatform
     <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 text-ink">
       <div className="flex w-full max-w-sm flex-col gap-6">
         <header className="flex flex-col items-center gap-3 text-center">
-          <img src={wordmarkUrl} alt="Obiter" className="h-12 w-auto text-ink" />
+          <Wordmark className="h-12 w-auto" />
           <h1 className="text-xl font-semibold tracking-tight">Sign in to Obiter</h1>
         </header>
 

@@ -12,4 +12,4 @@ serve({
   port: env.port,
 })
 
-console.info(`Ormont API listening on http://localhost:${env.port}`)
+console.info(`Obiter API listening on http://localhost:${env.port}`)
