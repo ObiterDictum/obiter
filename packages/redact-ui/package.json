@@ -1,0 +1,23 @@
+{
+  "name": "@obiter/redact-ui",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc --noEmit -p tsconfig.json", "test": "vitest run" },
+  "dependencies": {
+    "@obiter/app-shell": "workspace:*",
+    "@obiter/contracts": "workspace:*",
+    "@obiter/redaction-policy": "workspace:*",
+    "@obiter/ui": "workspace:*",
+    "@phosphor-icons/react": "^2.1.10",
+    "@tanstack/react-query": "^5.100.1",
+    "react": "^19.2.0"
+  },
+  "devDependencies": {
+    "@testing-library/react": "^16.3.2",
+    "@types/react": "^19.2.2",
+    "jsdom": "^29.1.1",
+    "react-dom": "^19.2.5"
+  }
+}

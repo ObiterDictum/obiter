@@ -1,4 +1,5 @@
 import { AppShellLayout, DocumentDetailLayoutView, HomeRouteView, MatterRouteView, MattersRouteView, SignInRouteView, caseLawDocumentQueryOptions, shellSnapshotQueryOptions } from '@obiter/app-shell'
+import { RedactionReviewView, RedactionRunsRegion } from '@obiter/redact-ui'
 import type { QueryClient } from '@tanstack/react-query'
 import {
   Outlet,
@@ -6,6 +7,7 @@ import {
   createRootRouteWithContext,
   createRoute,
   createRouter,
+  useNavigate,
 } from '@tanstack/react-router'
 import { DesktopCasePage } from '../../pages/case'
 import { DesktopSearchPage } from '../../pages/search'
@@ -72,6 +74,12 @@ const documentDetailRoute = createRoute({
   component: DesktopDocumentDetailRoute,
 })
 
+const redactReviewRoute = createRoute({
+  getParentRoute: () => documentDetailRoute,
+  path: 'redact/$runId',
+  component: DesktopRedactionReviewRoute,
+})
+
 const searchRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'search',
@@ -94,8 +102,19 @@ function DesktopMatterDetailRoute() {
 
 function DesktopDocumentDetailRoute() {
   const { matterId, documentId } = documentDetailRoute.useParams()
+  const navigate = useNavigate()
 
-  return <DocumentDetailLayoutView matterId={matterId} documentId={documentId} />
+  return <DocumentDetailLayoutView matterId={matterId} documentId={documentId} redactionRunsRegion={
+    <RedactionRunsRegion
+      documentId={documentId}
+      onOpenRun={(runId) => navigate({ to: '/matters/$matterId/documents/$documentId/redact/$runId', params: { matterId, documentId, runId } })}
+    />
+  } />
+}
+
+function DesktopRedactionReviewRoute() {
+  const { matterId, documentId, runId } = redactReviewRoute.useParams()
+  return <RedactionReviewView matterId={matterId} documentId={documentId} runId={runId} />
 }
 
 function DesktopCaseRoute() {
@@ -119,7 +138,7 @@ const routeTree = rootRoute.addChildren([
   workspaceRoute,
   mattersRoute,
   matterDetailRoute,
-  documentDetailRoute,
+  documentDetailRoute.addChildren([redactReviewRoute]),
   searchRoute,
   caseRoute,
   signInRoute,

@@ -32,6 +32,7 @@ export interface RunSummary {
     rampartDeterministic: number
     ukSupplement: number
   }
+  byDecision?: Record<SpanDecision | 'undecided', number>
   reviewedCount: number
   unreviewedCount: number
   failureReason?: string
