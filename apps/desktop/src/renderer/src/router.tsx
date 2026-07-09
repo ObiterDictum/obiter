@@ -1,4 +1,4 @@
-import { AppShellLayout, HomeRouteView, MatterRouteView, MattersRouteView, SignInRouteView, caseLawDocumentQueryOptions, shellSnapshotQueryOptions } from '@obiter/app-shell'
+import { AppShellLayout, DocumentDetailLayoutView, HomeRouteView, MatterRouteView, MattersRouteView, SignInRouteView, caseLawDocumentQueryOptions, shellSnapshotQueryOptions } from '@obiter/app-shell'
 import type { QueryClient } from '@tanstack/react-query'
 import {
   Outlet,
@@ -64,6 +64,14 @@ const matterDetailRoute = createRoute({
   component: DesktopMatterDetailRoute,
 })
 
+const documentDetailRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'matters/$matterId/documents/$documentId',
+  loader: ({ context }) =>
+    context.queryClient.ensureQueryData(shellSnapshotQueryOptions('desktop')),
+  component: DesktopDocumentDetailRoute,
+})
+
 const searchRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'search',
@@ -82,6 +90,12 @@ function DesktopMatterDetailRoute() {
   const { matterId } = matterDetailRoute.useParams()
 
   return <MatterRouteView matterId={matterId} platform="desktop" />
+}
+
+function DesktopDocumentDetailRoute() {
+  const { matterId, documentId } = documentDetailRoute.useParams()
+
+  return <DocumentDetailLayoutView matterId={matterId} documentId={documentId} />
 }
 
 function DesktopCaseRoute() {
@@ -105,6 +119,7 @@ const routeTree = rootRoute.addChildren([
   workspaceRoute,
   mattersRoute,
   matterDetailRoute,
+  documentDetailRoute,
   searchRoute,
   caseRoute,
   signInRoute,

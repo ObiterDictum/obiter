@@ -22,8 +22,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { useAuth } from './auth'
 import { currentUserQueryOptions } from './current-user'
 import { DEV_AUTO_LOGIN } from './dev-session'
-import wordmarkUrl from './assets/obiter-wordmark-clear.png'
-import wordmarkDarkUrl from './assets/obiter-wordmark-clear-dark.png'
+import { THEME_STORAGE_KEY } from './use-app-theme'
+import { Wordmark } from './wordmark'
 
 interface NavItem {
   label: string
@@ -52,8 +52,6 @@ const PLANNED_NAV: NavItem[] = [
   { label: 'Evaluation', icon: UserCircle, status: 'planned' },
   { label: 'Developer API', icon: Code, status: 'planned' },
 ]
-
-const THEME_STORAGE_KEY = 'obiter.theme'
 
 /**
  * App frame. Gates the shell on a real better-auth session: unauthenticated
@@ -113,15 +111,6 @@ function AuthenticatedFrame({
   )
 }
 
-function Wordmark({ className }: { className?: string }) {
-  return (
-    <picture className={className}>
-      <source srcSet={wordmarkDarkUrl} media="(prefers-color-scheme: dark)" />
-      <img src={wordmarkUrl} alt="Obiter" className="h-7 w-auto" />
-    </picture>
-  )
-}
-
 function Sidebar({ platform }: { platform: AppPlatform }) {
   const currentPath = useRouterState({ select: (state) => state.location.pathname })
   const { data, isLoading } = useQuery(currentUserQueryOptions())
@@ -129,7 +118,7 @@ function Sidebar({ platform }: { platform: AppPlatform }) {
   return (
     <aside className="flex min-h-dvh flex-col gap-6 border-r border-line bg-surface px-3 py-5">
       <div className="px-3 pt-1">
-        <Wordmark />
+        <Wordmark className="h-7 w-auto" />
       </div>
 
       <nav className="flex flex-col gap-0.5" aria-label="Primary">
@@ -297,7 +286,7 @@ function LoadingShell() {
   return (
     <div className="flex min-h-dvh items-center justify-center bg-canvas">
       <div className="flex flex-col items-center gap-4">
-        <Wordmark />
+        <Wordmark className="h-7 w-auto" />
         <Skeleton className="h-1 w-24" />
       </div>
     </div>

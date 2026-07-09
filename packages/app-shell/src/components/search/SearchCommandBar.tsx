@@ -32,9 +32,12 @@ export function SearchCommandBar({
     <form className="flex flex-col gap-3" onSubmit={onSubmit}>
       <div className="flex items-center gap-2 rounded-lg border border-line bg-canvas px-3 transition-colors focus-within:border-brand">
         <MagnifyingGlass aria-hidden="true" size={18} className="shrink-0 text-subtle" />
-        <label className="sr-only">Search legal sources</label>
+        <label className="sr-only" htmlFor="legal-sources-search">
+          Search legal sources
+        </label>
         <input
           ref={inputRef}
+          id="legal-sources-search"
           className="min-h-[48px] flex-1 bg-transparent text-base text-ink outline-none placeholder:text-subtle"
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
