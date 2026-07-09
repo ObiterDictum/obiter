@@ -14,6 +14,7 @@
     "@hono/node-server": "^2.0.0",
     "@obiter/contracts": "workspace:*",
     "@obiter/legal-schema": "workspace:*",
+    "@obiter/redaction-policy": "workspace:*",
     "@obiter/search-client": "workspace:*",
     "better-auth": "^1.6.8",
     "hono": "^4.12.14",

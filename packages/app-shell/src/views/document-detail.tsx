@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { Link, Outlet } from '@tanstack/react-router'
 import { ArrowLeft, FileText, Plus } from '@phosphor-icons/react'
 import { Badge, Button, EmptyState } from '@obiter/ui'
@@ -14,9 +15,11 @@ import { Badge, Button, EmptyState } from '@obiter/ui'
 export function DocumentDetailLayoutView({
   matterId,
   documentId,
+  redactionRunsRegion,
 }: {
   matterId: string
   documentId: string
+  redactionRunsRegion?: ReactNode
 }) {
   return (
     <div className="flex flex-col gap-6">
@@ -57,10 +60,10 @@ export function DocumentDetailLayoutView({
             Create redaction run
           </Button>
         </div>
-        <EmptyState
+        {redactionRunsRegion ?? <EmptyState
           title="No redaction runs yet"
           body="When a run is created it appears here for review. This region is the contract surface the Redact review UI fills in."
-        />
+        />}
       </section>
 
       {/* Feature sub-routes (e.g. redact/$runId) render here. */}

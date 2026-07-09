@@ -18,6 +18,7 @@ import { Route as MattersMatterIdRouteImport } from './routes/matters/$matterId'
 import { Route as CasesCaseIdRouteImport } from './routes/cases/$caseId'
 import { Route as CaseCaseSlugRouteImport } from './routes/case/$caseSlug'
 import { Route as MattersMatterIdDocumentsDocumentIdRouteImport } from './routes/matters/$matterId/documents/$documentId'
+import { Route as MattersMatterIdDocumentsDocumentIdRedactRunIdRouteImport } from './routes/matters/$matterId/documents/$documentId/redact/$runId'
 
 const WorkspaceRoute = WorkspaceRouteImport.update({
   id: '/workspace',
@@ -65,6 +66,12 @@ const MattersMatterIdDocumentsDocumentIdRoute =
     path: '/documents/$documentId',
     getParentRoute: () => MattersMatterIdRoute,
   } as any)
+const MattersMatterIdDocumentsDocumentIdRedactRunIdRoute =
+  MattersMatterIdDocumentsDocumentIdRedactRunIdRouteImport.update({
+    id: '/redact/$runId',
+    path: '/redact/$runId',
+    getParentRoute: () => MattersMatterIdDocumentsDocumentIdRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -75,7 +82,8 @@ export interface FileRoutesByFullPath {
   '/cases/$caseId': typeof CasesCaseIdRoute
   '/matters/$matterId': typeof MattersMatterIdRouteWithChildren
   '/matters/': typeof MattersIndexRoute
-  '/matters/$matterId/documents/$documentId': typeof MattersMatterIdDocumentsDocumentIdRoute
+  '/matters/$matterId/documents/$documentId': typeof MattersMatterIdDocumentsDocumentIdRouteWithChildren
+  '/matters/$matterId/documents/$documentId/redact/$runId': typeof MattersMatterIdDocumentsDocumentIdRedactRunIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -86,7 +94,8 @@ export interface FileRoutesByTo {
   '/cases/$caseId': typeof CasesCaseIdRoute
   '/matters/$matterId': typeof MattersMatterIdRouteWithChildren
   '/matters': typeof MattersIndexRoute
-  '/matters/$matterId/documents/$documentId': typeof MattersMatterIdDocumentsDocumentIdRoute
+  '/matters/$matterId/documents/$documentId': typeof MattersMatterIdDocumentsDocumentIdRouteWithChildren
+  '/matters/$matterId/documents/$documentId/redact/$runId': typeof MattersMatterIdDocumentsDocumentIdRedactRunIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -98,7 +107,8 @@ export interface FileRoutesById {
   '/cases/$caseId': typeof CasesCaseIdRoute
   '/matters/$matterId': typeof MattersMatterIdRouteWithChildren
   '/matters/': typeof MattersIndexRoute
-  '/matters/$matterId/documents/$documentId': typeof MattersMatterIdDocumentsDocumentIdRoute
+  '/matters/$matterId/documents/$documentId': typeof MattersMatterIdDocumentsDocumentIdRouteWithChildren
+  '/matters/$matterId/documents/$documentId/redact/$runId': typeof MattersMatterIdDocumentsDocumentIdRedactRunIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -112,6 +122,7 @@ export interface FileRouteTypes {
     | '/matters/$matterId'
     | '/matters/'
     | '/matters/$matterId/documents/$documentId'
+    | '/matters/$matterId/documents/$documentId/redact/$runId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -123,6 +134,7 @@ export interface FileRouteTypes {
     | '/matters/$matterId'
     | '/matters'
     | '/matters/$matterId/documents/$documentId'
+    | '/matters/$matterId/documents/$documentId/redact/$runId'
   id:
     | '__root__'
     | '/'
@@ -134,6 +146,7 @@ export interface FileRouteTypes {
     | '/matters/$matterId'
     | '/matters/'
     | '/matters/$matterId/documents/$documentId'
+    | '/matters/$matterId/documents/$documentId/redact/$runId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -212,16 +225,38 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MattersMatterIdDocumentsDocumentIdRouteImport
       parentRoute: typeof MattersMatterIdRoute
     }
+    '/matters/$matterId/documents/$documentId/redact/$runId': {
+      id: '/matters/$matterId/documents/$documentId/redact/$runId'
+      path: '/redact/$runId'
+      fullPath: '/matters/$matterId/documents/$documentId/redact/$runId'
+      preLoaderRoute: typeof MattersMatterIdDocumentsDocumentIdRedactRunIdRouteImport
+      parentRoute: typeof MattersMatterIdDocumentsDocumentIdRoute
+    }
   }
 }
 
+interface MattersMatterIdDocumentsDocumentIdRouteChildren {
+  MattersMatterIdDocumentsDocumentIdRedactRunIdRoute: typeof MattersMatterIdDocumentsDocumentIdRedactRunIdRoute
+}
+
+const MattersMatterIdDocumentsDocumentIdRouteChildren: MattersMatterIdDocumentsDocumentIdRouteChildren =
+  {
+    MattersMatterIdDocumentsDocumentIdRedactRunIdRoute:
+      MattersMatterIdDocumentsDocumentIdRedactRunIdRoute,
+  }
+
+const MattersMatterIdDocumentsDocumentIdRouteWithChildren =
+  MattersMatterIdDocumentsDocumentIdRoute._addFileChildren(
+    MattersMatterIdDocumentsDocumentIdRouteChildren,
+  )
+
 interface MattersMatterIdRouteChildren {
-  MattersMatterIdDocumentsDocumentIdRoute: typeof MattersMatterIdDocumentsDocumentIdRoute
+  MattersMatterIdDocumentsDocumentIdRoute: typeof MattersMatterIdDocumentsDocumentIdRouteWithChildren
 }
 
 const MattersMatterIdRouteChildren: MattersMatterIdRouteChildren = {
   MattersMatterIdDocumentsDocumentIdRoute:
-    MattersMatterIdDocumentsDocumentIdRoute,
+    MattersMatterIdDocumentsDocumentIdRouteWithChildren,
 }
 
 const MattersMatterIdRouteWithChildren = MattersMatterIdRoute._addFileChildren(
