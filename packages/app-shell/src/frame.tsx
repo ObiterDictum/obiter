@@ -38,11 +38,11 @@ const LIVE_NAV: NavItem[] = [
   { label: 'Home', to: '/workspace', icon: House, status: 'live' },
   { label: 'Search', to: '/search', icon: MagnifyingGlass, status: 'live' },
   { label: 'Matters', to: '/matters', icon: Folders, status: 'live' },
+  { label: 'Redaction', to: '/redact', icon: PencilSimple, status: 'live' },
 ]
 
 const PLANNED_NAV: NavItem[] = [
   { label: 'Documents', icon: Tray, status: 'planned' },
-  { label: 'Redaction', icon: PencilSimple, status: 'planned' },
   { label: 'Verification', icon: ListChecks, status: 'planned' },
   { label: 'Review queue', icon: Bookmark, status: 'planned' },
   { label: 'Drafting', icon: NotePencil, status: 'planned' },

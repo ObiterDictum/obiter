@@ -1,10 +1,11 @@
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { RedactionReviewView } from './review'
 
 const hooks = vi.hoisted(() => ({
   useRedactionRun: vi.fn(),
   useRedactionDocumentText: vi.fn(),
+  useRedactionOutput: vi.fn(),
   useSpanDecision: vi.fn(),
   useFinalizeRun: vi.fn(),
 }))
@@ -24,11 +25,24 @@ describe('RedactionReviewView', () => {
   it('renders highlighted source-aware spans in the shared review screen', () => {
     hooks.useRedactionRun.mockReturnValue({ isPending: false, data: run })
     hooks.useRedactionDocumentText.mockReturnValue({ isPending: false, data: { text: 'Jane filed.' } })
+    hooks.useRedactionOutput.mockReturnValue({ isPending: false, data: { text: '[REDACTED] filed.' } })
     hooks.useSpanDecision.mockReturnValue({})
     hooks.useFinalizeRun.mockReturnValue({})
-    render(<RedactionReviewView matterId="mtr_1" documentId="doc_1" runId="red_1" />)
+    render(<RedactionReviewView runId="red_1" />)
     expect(screen.getByRole('heading', { name: 'Redaction review' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Jane' }).className).toContain('bg-span-person-name')
     expect(screen.getByRole('button', { name: 'Jane' }).title).toContain('Rampart model')
+  })
+
+  it('submits the decision shortcuts when the span list has focus', () => {
+    const mutate = vi.fn()
+    hooks.useRedactionRun.mockReturnValue({ isPending: false, data: { ...run, status: 'ready_for_review' } })
+    hooks.useRedactionDocumentText.mockReturnValue({ isPending: false, data: { text: 'Jane filed.' } })
+    hooks.useRedactionOutput.mockReturnValue({ isPending: false })
+    hooks.useSpanDecision.mockReturnValue({ mutate, isPending: false })
+    hooks.useFinalizeRun.mockReturnValue({})
+    render(<RedactionReviewView runId="red_1" />)
+    fireEvent.keyDown(screen.getByRole('listbox'), { key: 'r' })
+    expect(mutate).toHaveBeenCalledWith({ spanId: 'span_1', decision: 'reject' })
   })
 })

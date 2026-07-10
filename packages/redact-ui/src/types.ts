@@ -3,9 +3,11 @@ import type { Decisions, RedactionSpan, RunSummary } from '@obiter/redaction-pol
 
 export interface RedactionRun {
   id: string
-  matterId: string
-  documentId: string
-  documentVersionId: string
+  matterId: string | null
+  matterName: string | null
+  documentId: string | null
+  documentVersionId: string | null
+  sourceFilename: string
   status: RedactionRunStatus
   policyMode: RedactionPolicyMode
   spans: RedactionSpan[]

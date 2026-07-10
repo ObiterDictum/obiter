@@ -8,7 +8,7 @@ export interface StorageService {
 }
 
 function storagePath(root: string, objectKey: string) {
-  if (!/^org\/[^/]+\/matters\/[^/]+\/(?:documents\/[^/]+\/versions\/[^/]+\/text|artifacts\/[^/]+)$/.test(objectKey)) {
+  if (!/^org\/[^/]+\/(?:matters\/[^/]+\/(?:documents\/[^/]+\/versions\/[^/]+\/text|artifacts\/[^/]+)|redaction-runs\/[^/]+\/source|artifacts\/[^/]+)$/.test(objectKey)) {
     throw new Error('Invalid storage object key.')
   }
 

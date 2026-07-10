@@ -14,6 +14,10 @@ After Phase 2 is complete, a user can:
 
 See the detailed implementation at [docs/specs/redact/build-plan.md](../specs/redact/build-plan.md).
 
+## Shipped Route Design Addendum
+
+Redaction is a first-class, organisation-scoped feature. The canonical list route is `/redact` and review route is `/redact/:runId`; neither is nested below Matters. A run may be linked to a matter document, and that document can link to the canonical review route, but standalone runs persist their own filename and source text. This addendum supersedes all matter-nested routing and sidebar instructions below.
+
 ## Problem
 
 A redaction pipeline that only detects spans is not a product. Detection is the first step; without human review and decision-making, the output cannot be trusted for legal use. Law firms need to:
@@ -134,9 +138,9 @@ The review UI lives in its own package, `@obiter/redact-ui`, owned entirely by t
 - Policy mode selector on run creation (already in Phase 1 API; UI shows current mode and its meaning)
 - Finalize button with output mode selector (redacted vs pseudonymised)
 - TanStack Query hooks: `useRedactionRun`, `useSpanDecision`, `useFinalizeRun`
-- Route: `/matters/:matterId/documents/:documentId/redact/:runId`
-- Document detail entry point: provided by the app shell rebuild ([App Shell Rebuild PRD](app-shell-rebuild.md), FR4) — a document detail route at `/matters/:matterId/documents/:documentId` with a redaction runs region and "Create Redaction Run" CTA. This phase's review route nests beneath it and populates the runs region
-- Sidebar: change "Redaction" entry from `status: 'planned'` to active link with `to` attribute (the sidebar is shell-owned — coordinate this one-line change with the shell track at integration rather than editing `@obiter/app-shell` directly)
+- Routes: `/redact` lists organisation-scoped runs and starts standalone runs; `/redact/:runId` is the canonical review route
+- Matter document detail can retain a run list that links to `/redact/:runId` for matter-linked runs
+- Sidebar: the live "Redaction" entry points to `/redact`
 - Empty states: no runs yet for this document, no spans detected (run completed with zero spans), all spans reviewed
 - Loading states: detection in progress (Rampart scanning text), finalizing
 - No `useEffect` for data fetching (repo convention — use TanStack Query)
@@ -450,12 +454,11 @@ useFinalizeRun(runId: string): UseMutationResult<
 
 ### FR11: Review UI — Route and Navigation
 
-- Route: `/matters/:matterId/documents/:documentId/redact/:runId`
-- TanStack Router file route at `apps/web/src/routes/matters/$matterId/documents/$documentId/redact/$runId.tsx`
-- Prerequisite route: `/matters/:matterId/documents/:documentId` (document detail) is delivered by the app shell rebuild ([App Shell Rebuild PRD](app-shell-rebuild.md), FR4; part of its Milestone 1 contract); it hosts the run list, the "Create Redaction Run" CTA, and the FR12 "no runs yet" empty state. This phase builds the `redact/$runId` sub-route beneath it
+- Routes: `/redact` and `/redact/:runId`
+- TanStack Router files at `apps/web/src/routes/redact/index.tsx` and `apps/web/src/routes/redact/$runId.tsx`, both parented at the route root
+- `/matters/:matterId/documents/:documentId` can list its linked runs, but opens them at `/redact/:runId`
 - Route loads run data via `useRedactionRun` in the component
-- Sidebar: Change "Redaction" entry in `SidebarNavigation.tsx` from `{ status: 'planned' }` to `{ status: 'live', to: '/matters' }` (the redaction route requires a matter context; the link goes to matters list where users can navigate to a document's redaction)
-- When viewing a redaction run, sidebar highlights the "Redaction" entry as active
+- Sidebar: the live Redaction item has `to: '/redact'` and remains active while reviewing a run
 
 ### FR12: Review UI — Empty States
 
@@ -560,8 +563,8 @@ This already exists from Phase 1; Phase 2 adds the `summary` field if not alread
 - Implement summary bar with reviewed/unreviewed counts
 - Implement finalize dialog with output mode selector and un-reviewed warning
 - Create TanStack Query hooks: `useRedactionRun`, `useSpanDecision`, `useFinalizeRun`
-- Create TanStack Router route at `/matters/:matterId/documents/:documentId/redact/:runId`
-- Populate the document detail route's redaction runs region (run list + create-run CTA) — the route itself is delivered by the app shell rebuild
+- Create root-parented TanStack Router routes at `/redact` and `/redact/:runId`
+- Keep the document detail route's redaction runs region as an optional entry point for matter-linked runs; it links to `/redact/:runId`
 - Update sidebar navigation: Redaction entry live with link
 - Add empty states, loading states
 - Write component tests with vitest

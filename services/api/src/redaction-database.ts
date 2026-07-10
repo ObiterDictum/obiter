@@ -1,4 +1,11 @@
 import type { Pool, PoolClient } from 'pg'
+import {
+  spanCategorySchema,
+  spanConfidenceSchema,
+  spanDecisionSchema,
+  spanSourceSchema,
+  spanSuggestionSchema,
+} from '@obiter/contracts'
 import type {
   OutputMode,
   RedactionPolicyMode,
@@ -6,14 +13,16 @@ import type {
   SpanDecision,
 } from '@obiter/contracts'
 import type { Decisions, RedactionSpan, RunSummary, TokenMap } from '@obiter/redaction-policy'
-import { spanCategorySchema, spanConfidenceSchema, spanDecisionSchema, spanSourceSchema, spanSuggestionSchema } from '@obiter/contracts'
 
 export interface RedactionRunRecord {
   id: string
   organisationId: string
-  matterId: string
-  documentId: string
-  documentVersionId: string
+  matterId: string | null
+  matterName: string | null
+  documentId: string | null
+  documentVersionId: string | null
+  sourceFilename: string
+  sourceTextObjectKey: string | null
   status: RedactionRunStatus
   policyMode: RedactionPolicyMode
   spans: RedactionSpan[]
@@ -27,7 +36,8 @@ export interface RedactionRunRecord {
 }
 
 interface RedactionRunRow {
-  id: string; organisation_id: string; matter_id: string; document_id: string; document_version_id: string
+  id: string; organisation_id: string; matter_id: string | null; matter_name: string | null
+  document_id: string | null; document_version_id: string | null; source_filename: string; source_text_object_key: string | null
   status: RedactionRunStatus; policy_mode: RedactionPolicyMode; spans_json: unknown; decisions_json: unknown
   output_artifact_id: string | null; summary_json: unknown; detector_version: string | null; created_by: string
   created_at: Date | string; updated_at: Date | string
@@ -38,6 +48,14 @@ interface ArtifactRecord {
   objectKey: string
   artifactType: 'redaction_output'
 }
+
+type Queryable = Pick<Pool | PoolClient, 'query'>
+
+const columns = `run.id, run.organisation_id, run.matter_id, matter.name as matter_name, run.document_id,
+  run.document_version_id, run.source_filename, run.source_text_object_key, run.status, run.policy_mode,
+  run.spans_json, run.decisions_json, run.output_artifact_id, run.summary_json, run.detector_version,
+  run.created_by, run.created_at, run.updated_at`
+const fromRuns = 'from redaction_runs run left join matters matter on matter.id = run.matter_id and matter.organisation_id = run.organisation_id'
 
 function timestamp(value: Date | string) { return value instanceof Date ? value.toISOString() : value }
 function json(value: unknown): unknown {
@@ -69,35 +87,26 @@ function parseDecisions(value: unknown): Decisions {
   const decisions: Decisions = {}
   for (const [spanId, value] of Object.entries(parsed)) {
     if (typeof value !== 'object' || value === null) throw new Error('Stored redaction decision is invalid.')
-    const decision = spanDecisionSchema.safeParse((value as Record<string, unknown>).decision)
-    const decidedBy = (value as Record<string, unknown>).decidedBy
-    const decidedAt = (value as Record<string, unknown>).decidedAt
-    if (!decision.success || typeof decidedBy !== 'string' || typeof decidedAt !== 'string') throw new Error('Stored redaction decision is invalid.')
-    decisions[spanId] = { decision: decision.data, decidedBy, decidedAt }
+    const item = value as Record<string, unknown>
+    const decision = spanDecisionSchema.safeParse(item.decision)
+    if (!decision.success || typeof item.decidedBy !== 'string' || typeof item.decidedAt !== 'string') throw new Error('Stored redaction decision is invalid.')
+    decisions[spanId] = { decision: decision.data, decidedBy: item.decidedBy, decidedAt: item.decidedAt }
   }
   return decisions
 }
 
-function parseSummary(value: unknown): RedactionRunRecord['summary'] {
-  const summary = json(value)
-  if (typeof summary !== 'object' || summary === null || Array.isArray(summary)) throw new Error('Stored redaction summary is invalid.')
-  return summary as RedactionRunRecord['summary']
-}
-
 function mapRun(row: RedactionRunRow): RedactionRunRecord {
+  const summary = json(row.summary_json)
+  if (typeof summary !== 'object' || summary === null || Array.isArray(summary)) throw new Error('Stored redaction summary is invalid.')
   return {
-    id: row.id, organisationId: row.organisation_id, matterId: row.matter_id, documentId: row.document_id,
-    documentVersionId: row.document_version_id, status: row.status, policyMode: row.policy_mode,
+    id: row.id, organisationId: row.organisation_id, matterId: row.matter_id, matterName: row.matter_name,
+    documentId: row.document_id, documentVersionId: row.document_version_id, sourceFilename: row.source_filename,
+    sourceTextObjectKey: row.source_text_object_key, status: row.status, policyMode: row.policy_mode,
     spans: parseSpans(row.spans_json), decisions: parseDecisions(row.decisions_json), outputArtifactId: row.output_artifact_id,
-    summary: parseSummary(row.summary_json), detectorVersion: row.detector_version, createdBy: row.created_by,
+    summary: summary as RedactionRunRecord['summary'], detectorVersion: row.detector_version, createdBy: row.created_by,
     createdAt: timestamp(row.created_at), updatedAt: timestamp(row.updated_at),
   }
 }
-
-const columns = `id, organisation_id, matter_id, document_id, document_version_id, status, policy_mode,
-  spans_json, decisions_json, output_artifact_id, summary_json, detector_version, created_by, created_at, updated_at`
-
-type Queryable = Pick<Pool | PoolClient, 'query'>
 
 export function computeSummary(spans: RedactionSpan[], decisions: Decisions): RunSummary {
   const byCategory = Object.fromEntries(spanCategorySchema.options.map((category) => [category, 0])) as Record<RedactionSpan['category'], number>
@@ -116,29 +125,68 @@ export function computeSummary(spans: RedactionSpan[], decisions: Decisions): Ru
 
 export function publicRun(run: RedactionRunRecord) {
   const { tokenMap: _tokenMap, ...summary } = run.summary
-  return { ...run, summary }
+  const { sourceTextObjectKey: _sourceTextObjectKey, ...publicRecord } = run
+  return { ...publicRecord, summary }
 }
 
 export async function getRedactionRun(pool: Pool, organisationId: string, runId: string) {
-  const result = await pool.query<RedactionRunRow>(`select ${columns} from redaction_runs where id = $1 and organisation_id = $2`, [runId, organisationId])
+  const result = await pool.query<RedactionRunRow>(`select ${columns} ${fromRuns} where run.id = $1 and run.organisation_id = $2`, [runId, organisationId])
   return result.rows[0] ? mapRun(result.rows[0]) : null
 }
 
-export async function listRedactionRunsForDocument(pool: Pool, organisationId: string, documentId: string) {
-  const result = await pool.query<RedactionRunRow>(`select ${columns} from redaction_runs where document_id = $1 and organisation_id = $2 order by created_at desc`, [documentId, organisationId])
+export async function listRedactionRuns(pool: Pool, organisationId: string) {
+  const result = await pool.query<RedactionRunRow>(`select ${columns} ${fromRuns} where run.organisation_id = $1 order by run.created_at desc`, [organisationId])
   return result.rows.map(mapRun)
 }
 
-export async function getRunDocumentTextKey(pool: Pool, run: RedactionRunRecord) {
-  const result = await pool.query<{ text_object_key: string | null }>(`select text_object_key from document_versions where id = $1 and organisation_id = $2`, [run.documentVersionId, run.organisationId])
+export async function listRedactionRunsForDocument(pool: Pool, organisationId: string, documentId: string) {
+  const result = await pool.query<RedactionRunRow>(`select ${columns} ${fromRuns} where run.document_id = $1 and run.organisation_id = $2 order by run.created_at desc`, [documentId, organisationId])
+  return result.rows.map(mapRun)
+}
+
+export async function getRunTextObjectKey(pool: Pool, run: RedactionRunRecord) {
+  if (run.sourceTextObjectKey) return run.sourceTextObjectKey
+  if (!run.documentVersionId) return null
+  const result = await pool.query<{ text_object_key: string | null }>('select text_object_key from document_versions where id = $1 and organisation_id = $2', [run.documentVersionId, run.organisationId])
   return result.rows[0]?.text_object_key ?? null
+}
+
+export async function getDocumentRedactionSource(pool: Pool, organisationId: string, documentId: string) {
+  const result = await pool.query<{ matter_id: string; version_id: string; filename: string; text_object_key: string | null }>(`
+    select document.matter_id, version.id as version_id, version.filename, version.text_object_key
+    from matter_documents document
+    join document_versions version on version.id = document.current_version_id and version.organisation_id = document.organisation_id
+    where document.id = $1 and document.organisation_id = $2 and document.deleted_at is null
+  `, [documentId, organisationId])
+  return result.rows[0] ?? null
+}
+
+export async function createRedactionRun(input: {
+  pool: Pool; id: string; organisationId: string; userId: string; sourceFilename: string; sourceTextObjectKey: string | null
+  spans: RedactionSpan[]; policyMode: RedactionPolicyMode; matterId?: string; documentId?: string; documentVersionId?: string
+}) {
+  const linked = input.matterId && input.documentId && input.documentVersionId
+  const result = await input.pool.query<RedactionRunRow>(`
+    insert into redaction_runs (
+      id, organisation_id, matter_id, document_id, document_version_id, source_filename, source_text_object_key,
+      status, policy_mode, spans_json, decisions_json, summary_json, created_by, created_at, updated_at
+    ) values ($1, $2, $3, $4, $5, $6, $7, 'ready_for_review', $8, $9::jsonb, '{}'::jsonb, $10::jsonb, $11, now(), now())
+    returning id, organisation_id, matter_id, null::text as matter_name, document_id, document_version_id,
+      source_filename, source_text_object_key, status, policy_mode, spans_json, decisions_json, output_artifact_id,
+      summary_json, detector_version, created_by, created_at, updated_at
+  `, [
+    input.id, input.organisationId, linked ? input.matterId : null, linked ? input.documentId : null,
+    linked ? input.documentVersionId : null, input.sourceFilename, input.sourceTextObjectKey, input.policyMode,
+    JSON.stringify(input.spans), JSON.stringify(computeSummary(input.spans, {})), input.userId,
+  ])
+  return mapRun(result.rows[0])
 }
 
 export async function recordSpanDecision(input: { pool: Pool; organisationId: string; runId: string; spanId: string; decision: SpanDecision; userId: string }) {
   const client = await input.pool.connect()
   try {
     await client.query('begin')
-    const locked = await client.query<RedactionRunRow>(`select ${columns} from redaction_runs where id = $1 and organisation_id = $2 for update`, [input.runId, input.organisationId])
+    const locked = await client.query<RedactionRunRow>(`select ${columns} ${fromRuns} where run.id = $1 and run.organisation_id = $2 for update of run`, [input.runId, input.organisationId])
     if (!locked.rows[0]) { await client.query('rollback'); return { kind: 'not_found' as const } }
     const run = mapRun(locked.rows[0])
     if (run.status === 'finalized') { await client.query('rollback'); return { kind: 'finalized' as const } }
@@ -147,7 +195,7 @@ export async function recordSpanDecision(input: { pool: Pool; organisationId: st
     if (!span) { await client.query('rollback'); return { kind: 'span_not_found' as const } }
     const decisions: Decisions = { ...run.decisions, [span.id]: { decision: input.decision, decidedBy: input.userId, decidedAt: new Date().toISOString() } }
     const summary = computeSummary(run.spans, decisions)
-    const updated = await client.query<RedactionRunRow>(`update redaction_runs set status = case when status = 'ready_for_review' then 'reviewing' else status end, decisions_json = $3::jsonb, summary_json = $4::jsonb, updated_at = now() where id = $1 and organisation_id = $2 returning ${columns}`, [run.id, run.organisationId, JSON.stringify(decisions), JSON.stringify(summary)])
+    const updated = await client.query<RedactionRunRow>(`update redaction_runs set status = case when status = 'ready_for_review' then 'reviewing' else status end, decisions_json = $3::jsonb, summary_json = $4::jsonb, updated_at = now() where id = $1 and organisation_id = $2 returning id, organisation_id, matter_id, null::text as matter_name, document_id, document_version_id, source_filename, source_text_object_key, status, policy_mode, spans_json, decisions_json, output_artifact_id, summary_json, detector_version, created_by, created_at, updated_at`, [run.id, run.organisationId, JSON.stringify(decisions), JSON.stringify(summary)])
     await client.query('commit')
     return { kind: 'updated' as const, run: mapRun(updated.rows[0]), span }
   } catch (error) { await client.query('rollback'); throw error } finally { client.release() }
@@ -157,16 +205,23 @@ export async function finalizeRedactionRun(input: { pool: Pool; organisationId: 
   const client = await input.pool.connect()
   try {
     await client.query('begin')
-    const locked = await client.query<RedactionRunRow>(`select ${columns} from redaction_runs where id = $1 and organisation_id = $2 for update`, [input.runId, input.organisationId])
+    const locked = await client.query<RedactionRunRow>(`select ${columns} ${fromRuns} where run.id = $1 and run.organisation_id = $2 for update of run`, [input.runId, input.organisationId])
     if (!locked.rows[0]) { await client.query('rollback'); return { kind: 'not_found' as const } }
     const run = mapRun(locked.rows[0])
     if (run.status === 'finalized') { await client.query('rollback'); return { kind: 'already_finalized' as const } }
     if (run.status !== 'ready_for_review' && run.status !== 'reviewing') { await client.query('rollback'); return { kind: 'not_reviewable' as const } }
-    const objectKey = `org/${run.organisationId}/matters/${run.matterId}/artifacts/${input.artifactId}`
+    const objectKey = run.matterId
+      ? `org/${run.organisationId}/matters/${run.matterId}/artifacts/${input.artifactId}`
+      : `org/${run.organisationId}/artifacts/${input.artifactId}`
     const artifact = await client.query<{ id: string; object_key: string }>(`insert into artifacts (id, organisation_id, matter_id, document_id, document_version_id, artifact_type, status, object_key, created_by, created_at, updated_at) values ($1, $2, $3, $4, $5, 'redaction_output', 'ready', $6, $7, now(), now()) returning id, object_key`, [input.artifactId, run.organisationId, run.matterId, run.documentId, run.documentVersionId, objectKey, run.createdBy])
     const summary = { ...computeSummary(run.spans, run.decisions), tokenMap: input.tokenMap, outputMode: input.outputMode }
-    const updated = await client.query<RedactionRunRow>(`update redaction_runs set status = 'finalized', output_artifact_id = $3, summary_json = $4::jsonb, updated_at = now() where id = $1 and organisation_id = $2 returning ${columns}`, [run.id, run.organisationId, input.artifactId, JSON.stringify(summary)])
+    const updated = await client.query<RedactionRunRow>(`update redaction_runs set status = 'finalized', output_artifact_id = $3, summary_json = $4::jsonb, updated_at = now() where id = $1 and organisation_id = $2 returning id, organisation_id, matter_id, null::text as matter_name, document_id, document_version_id, source_filename, source_text_object_key, status, policy_mode, spans_json, decisions_json, output_artifact_id, summary_json, detector_version, created_by, created_at, updated_at`, [run.id, run.organisationId, input.artifactId, JSON.stringify(summary)])
     await client.query('commit')
     return { kind: 'finalized' as const, run: mapRun(updated.rows[0]), artifact: { id: artifact.rows[0].id, objectKey: artifact.rows[0].object_key, artifactType: 'redaction_output' as const } satisfies ArtifactRecord }
   } catch (error) { await client.query('rollback'); throw error } finally { client.release() }
+}
+
+export async function getRedactionOutputKey(pool: Pool, organisationId: string, artifactId: string) {
+  const result = await pool.query<{ object_key: string }>('select object_key from artifacts where id = $1 and organisation_id = $2 and artifact_type = \'redaction_output\' and status = \'ready\'', [artifactId, organisationId])
+  return result.rows[0]?.object_key ?? null
 }
