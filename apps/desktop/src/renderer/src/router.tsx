@@ -1,5 +1,5 @@
 import { AppShellLayout, DocumentDetailLayoutView, HomeRouteView, MatterRouteView, MattersRouteView, SignInRouteView, caseLawDocumentQueryOptions, shellSnapshotQueryOptions } from '@obiter/app-shell'
-import { RedactionReviewView, RedactionRunsRegion } from '@obiter/redact-ui'
+import { RedactionReviewView, RedactionRunsRegion, RedactionRunsView } from '@obiter/redact-ui'
 import type { QueryClient } from '@tanstack/react-query'
 import {
   Outlet,
@@ -74,9 +74,15 @@ const documentDetailRoute = createRoute({
   component: DesktopDocumentDetailRoute,
 })
 
+const redactRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'redact',
+  component: DesktopRedactionRunsRoute,
+})
+
 const redactReviewRoute = createRoute({
-  getParentRoute: () => documentDetailRoute,
-  path: 'redact/$runId',
+  getParentRoute: () => redactRoute,
+  path: '$runId',
   component: DesktopRedactionReviewRoute,
 })
 
@@ -107,14 +113,19 @@ function DesktopDocumentDetailRoute() {
   return <DocumentDetailLayoutView matterId={matterId} documentId={documentId} redactionRunsRegion={
     <RedactionRunsRegion
       documentId={documentId}
-      onOpenRun={(runId) => navigate({ to: '/matters/$matterId/documents/$documentId/redact/$runId', params: { matterId, documentId, runId } })}
+      onOpenRun={(runId) => navigate({ to: '/redact/$runId', params: { runId } })}
     />
   } />
 }
 
+function DesktopRedactionRunsRoute() {
+  const navigate = useNavigate()
+  return <RedactionRunsView onOpenRun={(runId) => navigate({ to: '/redact/$runId', params: { runId } })} />
+}
+
 function DesktopRedactionReviewRoute() {
-  const { matterId, documentId, runId } = redactReviewRoute.useParams()
-  return <RedactionReviewView matterId={matterId} documentId={documentId} runId={runId} />
+  const { runId } = redactReviewRoute.useParams()
+  return <RedactionReviewView runId={runId} />
 }
 
 function DesktopCaseRoute() {
@@ -138,7 +149,8 @@ const routeTree = rootRoute.addChildren([
   workspaceRoute,
   mattersRoute,
   matterDetailRoute,
-  documentDetailRoute.addChildren([redactReviewRoute]),
+  documentDetailRoute,
+  redactRoute.addChildren([redactReviewRoute]),
   searchRoute,
   caseRoute,
   signInRoute,

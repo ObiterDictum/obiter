@@ -18,7 +18,7 @@ function DocumentDetailRouteComponent() {
   return <DocumentDetailLayoutView matterId={matterId} documentId={documentId} redactionRunsRegion={
     <RedactionRunsRegion
       documentId={documentId}
-      onOpenRun={(runId) => navigate({ to: '/matters/$matterId/documents/$documentId/redact/$runId', params: { matterId, documentId, runId } })}
+      onOpenRun={(runId) => navigate({ to: '/redact/$runId', params: { runId } })}
     />
   } />
 }
