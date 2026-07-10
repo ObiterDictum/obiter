@@ -21,7 +21,6 @@ import type { AppPlatform } from '@obiter/contracts'
 import { useEffect, useState, type ReactNode } from 'react'
 import { useAuth } from './auth'
 import { currentUserQueryOptions } from './current-user'
-import { DEV_AUTO_LOGIN } from './dev-session'
 import { THEME_STORAGE_KEY } from './use-app-theme'
 import { Wordmark } from './wordmark'
 
@@ -38,11 +37,11 @@ const LIVE_NAV: NavItem[] = [
   { label: 'Home', to: '/workspace', icon: House, status: 'live' },
   { label: 'Search', to: '/search', icon: MagnifyingGlass, status: 'live' },
   { label: 'Matters', to: '/matters', icon: Folders, status: 'live' },
+  { label: 'Redaction', to: '/redact', icon: PencilSimple, status: 'live' },
 ]
 
 const PLANNED_NAV: NavItem[] = [
   { label: 'Documents', icon: Tray, status: 'planned' },
-  { label: 'Redaction', icon: PencilSimple, status: 'planned' },
   { label: 'Verification', icon: ListChecks, status: 'planned' },
   { label: 'Review queue', icon: Bookmark, status: 'planned' },
   { label: 'Drafting', icon: NotePencil, status: 'planned' },
@@ -71,11 +70,7 @@ export function AppShellLayout({
 
   let body: ReactNode
 
-  // Dev auto-login: redirect auth routes straight into the workspace so local
-  // development skips the sign-in screen entirely.
-  if (isAuthRoute && DEV_AUTO_LOGIN) {
-    body = <Navigate to="/workspace" />
-  } else if (isAuthRoute) {
+  if (isAuthRoute) {
     body = children
   } else if (isPending) {
     body = <LoadingShell />

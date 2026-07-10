@@ -29,8 +29,8 @@ const testEnv: ApiEnv = {
   webOrigin: 'http://localhost:3000',
   marketingOrigin: null,
   desktopOrigin: 'obiter://desktop-auth',
-  magicLinkWebhookUrl: null,
-  magicLinkWebhookSecret: null,
+  resendApiKey: null,
+  emailFrom: 'onboarding@resend.dev',
   meilisearchHost: 'http://localhost:7700',
   meilisearchSearchApiKey: 'dev-key',
   meilisearchAdminApiKey: 'dev-key',
@@ -135,6 +135,42 @@ describe('createApiApp', () => {
     } finally {
       consoleError.mockRestore()
     }
+  })
+
+  it('returns 401 from /api/me without a real session', async () => {
+    const auth = {
+      api: { getSession: async () => null },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const app = createApiApp(testEnv, createPool(async () => ({ rows: [] })), { auth })
+
+    const response = await app.request('/api/me')
+
+    expect(response.status).toBe(401)
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'unauthenticated' } })
+  })
+
+  it('returns the active organisation for a real session at /api/me', async () => {
+    const auth = {
+      api: {
+        getSession: async () => ({
+          user: { id: 'usr_1', email: 'user@example.test', name: 'User', organisationId: 'org_1', role: 'owner' },
+          session: { id: 'ses_1' },
+        }),
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const app = createApiApp(testEnv, createPool(async () => ({
+      rows: [{ id: 'org_1', name: 'Organisation', plan: 'private_beta' }],
+    })), { auth })
+
+    const response = await app.request('/api/me')
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      user: { id: 'usr_1', role: 'owner' },
+      organisation: { id: 'org_1' },
+    })
   })
 
   it('allows the configured desktop origin through CORS', async () => {
@@ -561,6 +597,43 @@ describe('createApiApp', () => {
     }
 
     expect(searchClientMock.search).not.toHaveBeenCalled()
+  })
+
+  it('creates an organisation-scoped standalone redaction run and stores its source text', async () => {
+    const stored = new Map<string, string>()
+    const auth = {
+      api: {
+        getSession: async () => ({ user: { id: 'usr_1', organisationId: 'org_1' }, session: { id: 'ses_1' } }),
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const app = createApiApp(testEnv, createPool(async (query) => {
+      if (typeof query === 'string' && query.includes('insert into redaction_runs')) {
+        return { rows: [{
+          id: 'red_1', organisation_id: 'org_1', matter_id: null, matter_name: null, document_id: null, document_version_id: null,
+          source_filename: 'source.txt', source_text_object_key: 'org/org_1/redaction-runs/red_1/source', status: 'ready_for_review',
+          policy_mode: 'internal_ai_minimisation', spans_json: [], decisions_json: {}, output_artifact_id: null, summary_json: { totalSpans: 0, byCategory: {}, bySource: { rampartModel: 0, rampartDeterministic: 0, ukSupplement: 0 }, byDecision: { accept: 0, reject: 0, override_redact: 0, override_keep: 0, pseudonymise: 0, undecided: 0 }, reviewedCount: 0, unreviewedCount: 0 }, detector_version: null, created_by: 'usr_1', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z',
+        }] }
+      }
+      return { rows: [] }
+    }), {
+      auth,
+      storage: {
+        readText: async (key) => stored.get(key) ?? '',
+        writeText: async (key, text) => { stored.set(key, text) },
+        delete: async (key) => { stored.delete(key) },
+      },
+    })
+
+    const response = await app.request('/api/redaction-runs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ filename: 'source.txt', text: 'Synthetic test text.' }),
+    })
+
+    expect(response.status).toBe(201)
+    expect(await response.json()).toMatchObject({ run: { id: 'red_1', sourceFilename: 'source.txt', matterId: null } })
+    expect([...stored.values()]).toEqual(['Synthetic test text.'])
   })
 
   it('models future legal source query params without running judgment search', async () => {

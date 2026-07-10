@@ -11,7 +11,7 @@ export default defineConfig({
     proxy: {
       '/api': {
         target: process.env.OBITER_API_ORIGIN ?? 'http://localhost:8787',
-        changeOrigin: true,
+        changeOrigin: false,
       },
     },
   },

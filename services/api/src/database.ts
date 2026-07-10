@@ -18,6 +18,7 @@ export interface AuditRecordInput {
   entityId: string
   action:
     | 'auth.sign_in'
+    | 'auth.sign_up'
     | 'auth.sign_out'
     | 'matter.create'
     | 'matter.update'
@@ -26,6 +27,10 @@ export interface AuditRecordInput {
     | 'document.upload'
     | 'document.version_create'
     | 'document.delete'
+    | 'redaction.run_create'
+    | 'redaction.span_decision'
+    | 'redaction.finalize'
+    | 'redaction.token_map_access'
   metadata: Record<string, string | number | boolean | null>
   requestId: string
 }

@@ -12,11 +12,14 @@ describe('readApiEnv', () => {
     process.env.NODE_ENV = 'development'
     delete process.env.DATABASE_URL
     delete process.env.BETTER_AUTH_SECRET
+    delete process.env.BETTER_AUTH_URL
+    delete process.env.OBITER_WEB_ORIGIN
 
     const env = readApiEnv()
 
     expect(env.databaseUrl).toContain('localhost')
     expect(env.authSecret).toBe('dev-only-better-auth-secret')
+    expect(env.authBaseUrl).toBe('http://localhost:3000')
     expect(env.meilisearchHost).toBe('http://localhost:7700')
     expect(env.meilisearchSearchApiKey).toBe('dev-key')
     expect(env.meilisearchAdminApiKey).toBe('dev-key')
@@ -71,10 +74,7 @@ describe('readApiEnv', () => {
     process.env.BETTER_AUTH_SECRET = 'short-secret'
     process.env.BETTER_AUTH_URL = 'https://api.obiter.example'
     process.env.OBITER_WEB_ORIGIN = 'https://app.obiter.example'
-    process.env.OBITER_MAGIC_LINK_WEBHOOK_URL =
-      'https://mail.obiter.example/magic-link'
-    process.env.OBITER_MAGIC_LINK_WEBHOOK_SECRET =
-      '0123456789abcdef0123456789abcdef'
+    process.env.OBITER_RESEND_API_KEY = 're_0123456789abcdef0123456789abcdef'
     process.env.MEILISEARCH_HOST = 'https://search.obiter.example'
     process.env.MEILISEARCH_SEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
     process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'
@@ -92,10 +92,7 @@ describe('readApiEnv', () => {
     process.env.BETTER_AUTH_SECRET = '0123456789abcdef0123456789abcdef'
     process.env.BETTER_AUTH_URL = 'https://api.obiter.example'
     process.env.OBITER_WEB_ORIGIN = 'https://app.obiter.example'
-    process.env.OBITER_MAGIC_LINK_WEBHOOK_URL =
-      'https://mail.obiter.example/magic-link'
-    process.env.OBITER_MAGIC_LINK_WEBHOOK_SECRET =
-      '0123456789abcdef0123456789abcdef'
+    process.env.OBITER_RESEND_API_KEY = 're_0123456789abcdef0123456789abcdef'
     process.env.MEILISEARCH_HOST = 'https://search.obiter.example'
     process.env.MEILISEARCH_SEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
     process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'
@@ -143,10 +140,7 @@ describe('readApiEnv', () => {
     process.env.BETTER_AUTH_URL = 'https://api.obiter.example/'
     process.env.OBITER_WEB_ORIGIN = 'https://app.obiter.example/'
     process.env.OBITER_DESKTOP_ORIGIN = 'obiter://desktop-auth'
-    process.env.OBITER_MAGIC_LINK_WEBHOOK_URL =
-      'https://mail.obiter.example/magic-link'
-    process.env.OBITER_MAGIC_LINK_WEBHOOK_SECRET =
-      '0123456789abcdef0123456789abcdef'
+    process.env.OBITER_RESEND_API_KEY = 're_0123456789abcdef0123456789abcdef'
     process.env.MEILISEARCH_HOST = 'https://search.obiter.example/'
     process.env.MEILISEARCH_SEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
     process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'
@@ -160,9 +154,7 @@ describe('readApiEnv', () => {
     expect(env.authBaseUrl).toBe('https://api.obiter.example')
     expect(env.webOrigin).toBe('https://app.obiter.example')
     expect(env.desktopOrigin).toBe('obiter://desktop-auth')
-    expect(env.magicLinkWebhookUrl).toBe(
-      'https://mail.obiter.example/magic-link',
-    )
+    expect(env.resendApiKey).toBe('re_0123456789abcdef0123456789abcdef')
     expect(env.meilisearchHost).toBe('https://search.obiter.example')
     expect(env.meilisearchSearchApiKey).toBe('0123456789abcdef0123456789abcdef')
     expect(env.meilisearchAdminApiKey).toBe('0123456789abcdef0123456789abcdef')
@@ -178,10 +170,7 @@ describe('readApiEnv', () => {
     process.env.BETTER_AUTH_SECRET = '0123456789abcdef0123456789abcdef'
     process.env.BETTER_AUTH_URL = 'https://api.obiter.example'
     process.env.OBITER_WEB_ORIGIN = 'https://app.obiter.example'
-    process.env.OBITER_MAGIC_LINK_WEBHOOK_URL =
-      'https://mail.obiter.example/magic-link'
-    process.env.OBITER_MAGIC_LINK_WEBHOOK_SECRET =
-      '0123456789abcdef0123456789abcdef'
+    process.env.OBITER_RESEND_API_KEY = 're_0123456789abcdef0123456789abcdef'
     process.env.MEILISEARCH_HOST = 'https://search.obiter.example'
     process.env.MEILISEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
     delete process.env.MEILISEARCH_SEARCH_API_KEY

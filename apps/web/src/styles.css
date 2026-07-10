@@ -9,6 +9,7 @@
 
 @source "../../../packages/ui/src";
 @source "../../../packages/app-shell/src";
+@source "../../../packages/redact-ui/src";
 
 html,
 body,

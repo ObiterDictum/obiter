@@ -1,5 +1,6 @@
 interface ImportMetaEnv {
   readonly DEV: boolean
+  readonly [key: string]: string | boolean | undefined
 }
 
 interface ImportMeta {
@@ -7,11 +8,6 @@ interface ImportMeta {
 }
 
 declare module '*.png' {
-  const src: string
-  export default src
-}
-
-declare module '*.svg' {
-  const src: string
-  export default src
+  const source: string
+  export default source
 }

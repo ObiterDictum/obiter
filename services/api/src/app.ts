@@ -13,6 +13,8 @@ import {
 import { createChangelogRoutes } from './routes/changelog'
 import { createDocumentsRoutes } from './routes/documents'
 import { createMattersRoutes } from './routes/matters'
+import { createRedactRoutes } from './routes/redact'
+import { createLocalStorage, type StorageService } from './storage'
 
 type Auth = ReturnType<typeof createAuth>
 type SessionUser = Auth['$Infer']['Session']['user']
@@ -26,6 +28,7 @@ interface AppVariables {
 
 interface ApiAppOptions {
   auth?: Auth
+  storage?: StorageService
 }
 
 function createRequestId() {
@@ -56,6 +59,7 @@ function requestIdFromContext(c: { var: Partial<AppVariables> }) {
 
 export function createApiApp(env: ApiEnv, pool: Pool, options: ApiAppOptions = {}) {
   const auth = options.auth ?? createAuth(env, pool)
+  const storage = options.storage ?? createLocalStorage()
   const app = new Hono<{ Variables: AppVariables }>()
 
   app.onError((error, c) => {
@@ -138,6 +142,7 @@ export function createApiApp(env: ApiEnv, pool: Pool, options: ApiAppOptions = {
 
   app.route('/', createMattersRoutes(pool))
   app.route('/', createDocumentsRoutes(pool))
+  app.route('/', createRedactRoutes(pool, storage))
   app.route('/', createLegalSearchRoutes(env))
   app.route('/', createLegalSearchProxyRoutes(env, createPostgresLegalAuthoritySourceStore(pool)))
   app.route('/', createChangelogRoutes())

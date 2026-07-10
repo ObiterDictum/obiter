@@ -1,4 +1,5 @@
 import { AppShellLayout, DocumentDetailLayoutView, HomeRouteView, MatterRouteView, MattersRouteView, SignInRouteView, caseLawDocumentQueryOptions, shellSnapshotQueryOptions } from '@obiter/app-shell'
+import { RedactionReviewView, RedactionRunsRegion, RedactionRunsView } from '@obiter/redact-ui'
 import type { QueryClient } from '@tanstack/react-query'
 import {
   Outlet,
@@ -6,6 +7,7 @@ import {
   createRootRouteWithContext,
   createRoute,
   createRouter,
+  useNavigate,
 } from '@tanstack/react-router'
 import { DesktopCasePage } from '../../pages/case'
 import { DesktopSearchPage } from '../../pages/search'
@@ -72,6 +74,18 @@ const documentDetailRoute = createRoute({
   component: DesktopDocumentDetailRoute,
 })
 
+const redactRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'redact',
+  component: DesktopRedactionRunsRoute,
+})
+
+const redactReviewRoute = createRoute({
+  getParentRoute: () => redactRoute,
+  path: '$runId',
+  component: DesktopRedactionReviewRoute,
+})
+
 const searchRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'search',
@@ -94,8 +108,24 @@ function DesktopMatterDetailRoute() {
 
 function DesktopDocumentDetailRoute() {
   const { matterId, documentId } = documentDetailRoute.useParams()
+  const navigate = useNavigate()
 
-  return <DocumentDetailLayoutView matterId={matterId} documentId={documentId} />
+  return <DocumentDetailLayoutView matterId={matterId} documentId={documentId} redactionRunsRegion={
+    <RedactionRunsRegion
+      documentId={documentId}
+      onOpenRun={(runId) => navigate({ to: '/redact/$runId', params: { runId } })}
+    />
+  } />
+}
+
+function DesktopRedactionRunsRoute() {
+  const navigate = useNavigate()
+  return <RedactionRunsView onOpenRun={(runId) => navigate({ to: '/redact/$runId', params: { runId } })} />
+}
+
+function DesktopRedactionReviewRoute() {
+  const { runId } = redactReviewRoute.useParams()
+  return <RedactionReviewView runId={runId} />
 }
 
 function DesktopCaseRoute() {
@@ -120,6 +150,7 @@ const routeTree = rootRoute.addChildren([
   mattersRoute,
   matterDetailRoute,
   documentDetailRoute,
+  redactRoute.addChildren([redactReviewRoute]),
   searchRoute,
   caseRoute,
   signInRoute,

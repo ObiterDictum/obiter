@@ -1,6 +1,5 @@
 import { createAuthClient } from 'better-auth/react'
 import { magicLinkClient } from 'better-auth/client/plugins'
-import { createDevSession, DEV_AUTO_LOGIN } from './dev-session'
 
 /**
  * Better-auth client for the browser. The API mounts better-auth at /api/auth/*
@@ -19,33 +18,30 @@ export const authClient = createAuthClient({
   plugins: [magicLinkClient()],
 })
 
-/**
- * When dev auto-login is enabled, the shell presents a synthetic session and
- * never touches better-auth. Vite strips this branch in production builds.
- */
-
 export interface SignInEmailInput {
   email: string
   password: string
 }
 
+export interface SignUpEmailInput {
+  name: string
+  email: string
+  password: string
+}
+
 export interface UseAuthReturn {
-  /**
-   * Present when the user has a real better-auth session, or (in dev only) a
-   * synthetic session. The shell reads presence only; user/org data comes from
-   * `/api/me` via `useCurrentUser`, not this field.
-   */
+  /** Present when better-auth has established a real session. */
   session: AuthSessionPresence | null
   isPending: boolean
   signInWithEmail: (input: SignInEmailInput) => Promise<{ ok: boolean; message?: string }>
+  signUpWithEmail: (
+    input: SignUpEmailInput,
+  ) => Promise<{ ok: boolean; message?: string; verificationRequired?: boolean }>
   requestMagicLink: (email: string) => Promise<{ ok: boolean; message?: string }>
   signOut: () => Promise<void>
 }
 
-/**
- * Structural session type. The real better-auth session and the dev synthetic
- * session both satisfy it; the shell only checks presence.
- */
+/** Structural session type; the shell only checks presence. */
 interface AuthSessionPresence {
   user: { id: string }
   session: { id: string }
@@ -58,15 +54,7 @@ interface AuthSessionPresence {
 export function useAuth(): UseAuthReturn {
   const realSession = authClient.useSession()
 
-  // Dev auto-login: present a synthetic, never-pending session so the frame's
-  // auth gate admits the user without a real better-auth round-trip.
-  const session = DEV_AUTO_LOGIN ? createDevSession() : realSession.data
-  const isPending = DEV_AUTO_LOGIN ? false : realSession.isPending
-
   async function signInWithEmail(input: SignInEmailInput) {
-    if (DEV_AUTO_LOGIN) {
-      return { ok: true }
-    }
     const result = await authClient.signIn.email(input)
     if (result.error) {
       return { ok: false, message: result.error.message ?? 'Sign-in failed.' }
@@ -74,11 +62,29 @@ export function useAuth(): UseAuthReturn {
     return { ok: true }
   }
 
-  async function requestMagicLink(email: string) {
-    if (DEV_AUTO_LOGIN) {
-      return { ok: true, message: 'Dev auto-login is enabled.' }
+  async function signUpWithEmail(input: SignUpEmailInput) {
+    const result = await authClient.signUp.email(input)
+    if (result.error) {
+      return { ok: false, message: result.error.message ?? 'Sign-up failed.' }
     }
-    const result = await authClient.signIn.magicLink({ email })
+    // With requireEmailVerification enabled, sign-up does not establish a
+    // session — better-auth returns { token: null, user } and sends a
+    // verification email instead. No session means no auto sign-in yet.
+    if (!result.data?.token) {
+      return {
+        ok: true,
+        verificationRequired: true,
+        message: 'Check your email to verify your account before signing in.',
+      }
+    }
+    return { ok: true }
+  }
+
+  async function requestMagicLink(email: string) {
+    const callbackURL = typeof window === 'undefined'
+      ? undefined
+      : `${window.location.origin}/workspace`
+    const result = await authClient.signIn.magicLink({ email, callbackURL })
     if (result.error) {
       return { ok: false, message: result.error.message ?? 'Could not send magic link.' }
     }
@@ -86,16 +92,14 @@ export function useAuth(): UseAuthReturn {
   }
 
   async function signOut() {
-    if (DEV_AUTO_LOGIN) {
-      return
-    }
     await authClient.signOut()
   }
 
   return {
-    session,
-    isPending,
+    session: realSession.data,
+    isPending: realSession.isPending,
     signInWithEmail,
+    signUpWithEmail,
     requestMagicLink,
     signOut,
   }

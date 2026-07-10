@@ -1,5 +1,6 @@
 import { DocumentDetailLayoutView } from '@obiter/app-shell'
-import { createFileRoute } from '@tanstack/react-router'
+import { RedactionRunsRegion } from '@obiter/redact-ui'
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
 
 /**
  * Document detail (PRD FR4). A layout route: DocumentDetailLayoutView renders
@@ -13,5 +14,11 @@ export const Route = createFileRoute('/matters/$matterId/documents/$documentId')
 
 function DocumentDetailRouteComponent() {
   const { matterId, documentId } = Route.useParams()
-  return <DocumentDetailLayoutView matterId={matterId} documentId={documentId} />
+  const navigate = useNavigate()
+  return <DocumentDetailLayoutView matterId={matterId} documentId={documentId} redactionRunsRegion={
+    <RedactionRunsRegion
+      documentId={documentId}
+      onOpenRun={(runId) => navigate({ to: '/redact/$runId', params: { runId } })}
+    />
+  } />
 }

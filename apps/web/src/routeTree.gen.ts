@@ -13,7 +13,9 @@ import { Route as WorkspaceRouteImport } from './routes/workspace'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as RedactIndexRouteImport } from './routes/redact/index'
 import { Route as MattersIndexRouteImport } from './routes/matters/index'
+import { Route as RedactRunIdRouteImport } from './routes/redact/$runId'
 import { Route as MattersMatterIdRouteImport } from './routes/matters/$matterId'
 import { Route as CasesCaseIdRouteImport } from './routes/cases/$caseId'
 import { Route as CaseCaseSlugRouteImport } from './routes/case/$caseSlug'
@@ -39,9 +41,19 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RedactIndexRoute = RedactIndexRouteImport.update({
+  id: '/redact/',
+  path: '/redact/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MattersIndexRoute = MattersIndexRouteImport.update({
   id: '/matters/',
   path: '/matters/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RedactRunIdRoute = RedactRunIdRouteImport.update({
+  id: '/redact/$runId',
+  path: '/redact/$runId',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MattersMatterIdRoute = MattersMatterIdRouteImport.update({
@@ -74,7 +86,9 @@ export interface FileRoutesByFullPath {
   '/case/$caseSlug': typeof CaseCaseSlugRoute
   '/cases/$caseId': typeof CasesCaseIdRoute
   '/matters/$matterId': typeof MattersMatterIdRouteWithChildren
+  '/redact/$runId': typeof RedactRunIdRoute
   '/matters/': typeof MattersIndexRoute
+  '/redact/': typeof RedactIndexRoute
   '/matters/$matterId/documents/$documentId': typeof MattersMatterIdDocumentsDocumentIdRoute
 }
 export interface FileRoutesByTo {
@@ -85,7 +99,9 @@ export interface FileRoutesByTo {
   '/case/$caseSlug': typeof CaseCaseSlugRoute
   '/cases/$caseId': typeof CasesCaseIdRoute
   '/matters/$matterId': typeof MattersMatterIdRouteWithChildren
+  '/redact/$runId': typeof RedactRunIdRoute
   '/matters': typeof MattersIndexRoute
+  '/redact': typeof RedactIndexRoute
   '/matters/$matterId/documents/$documentId': typeof MattersMatterIdDocumentsDocumentIdRoute
 }
 export interface FileRoutesById {
@@ -97,7 +113,9 @@ export interface FileRoutesById {
   '/case/$caseSlug': typeof CaseCaseSlugRoute
   '/cases/$caseId': typeof CasesCaseIdRoute
   '/matters/$matterId': typeof MattersMatterIdRouteWithChildren
+  '/redact/$runId': typeof RedactRunIdRoute
   '/matters/': typeof MattersIndexRoute
+  '/redact/': typeof RedactIndexRoute
   '/matters/$matterId/documents/$documentId': typeof MattersMatterIdDocumentsDocumentIdRoute
 }
 export interface FileRouteTypes {
@@ -110,7 +128,9 @@ export interface FileRouteTypes {
     | '/case/$caseSlug'
     | '/cases/$caseId'
     | '/matters/$matterId'
+    | '/redact/$runId'
     | '/matters/'
+    | '/redact/'
     | '/matters/$matterId/documents/$documentId'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -121,7 +141,9 @@ export interface FileRouteTypes {
     | '/case/$caseSlug'
     | '/cases/$caseId'
     | '/matters/$matterId'
+    | '/redact/$runId'
     | '/matters'
+    | '/redact'
     | '/matters/$matterId/documents/$documentId'
   id:
     | '__root__'
@@ -132,7 +154,9 @@ export interface FileRouteTypes {
     | '/case/$caseSlug'
     | '/cases/$caseId'
     | '/matters/$matterId'
+    | '/redact/$runId'
     | '/matters/'
+    | '/redact/'
     | '/matters/$matterId/documents/$documentId'
   fileRoutesById: FileRoutesById
 }
@@ -144,7 +168,9 @@ export interface RootRouteChildren {
   CaseCaseSlugRoute: typeof CaseCaseSlugRoute
   CasesCaseIdRoute: typeof CasesCaseIdRoute
   MattersMatterIdRoute: typeof MattersMatterIdRouteWithChildren
+  RedactRunIdRoute: typeof RedactRunIdRoute
   MattersIndexRoute: typeof MattersIndexRoute
+  RedactIndexRoute: typeof RedactIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -177,11 +203,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/redact/': {
+      id: '/redact/'
+      path: '/redact'
+      fullPath: '/redact/'
+      preLoaderRoute: typeof RedactIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/matters/': {
       id: '/matters/'
       path: '/matters'
       fullPath: '/matters/'
       preLoaderRoute: typeof MattersIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/redact/$runId': {
+      id: '/redact/$runId'
+      path: '/redact/$runId'
+      fullPath: '/redact/$runId'
+      preLoaderRoute: typeof RedactRunIdRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/matters/$matterId': {
@@ -236,7 +276,9 @@ const rootRouteChildren: RootRouteChildren = {
   CaseCaseSlugRoute: CaseCaseSlugRoute,
   CasesCaseIdRoute: CasesCaseIdRoute,
   MattersMatterIdRoute: MattersMatterIdRouteWithChildren,
+  RedactRunIdRoute: RedactRunIdRoute,
   MattersIndexRoute: MattersIndexRoute,
+  RedactIndexRoute: RedactIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
