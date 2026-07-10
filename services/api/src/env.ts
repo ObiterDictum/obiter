@@ -6,8 +6,7 @@ const requiredProductionKeys = [
   'BETTER_AUTH_SECRET',
   'BETTER_AUTH_URL',
   'OBITER_WEB_ORIGIN',
-  'OBITER_MAGIC_LINK_WEBHOOK_URL',
-  'OBITER_MAGIC_LINK_WEBHOOK_SECRET',
+  'OBITER_RESEND_API_KEY',
   'MEILISEARCH_HOST',
   'MEILISEARCH_SEARCH_API_KEY',
   'MEILISEARCH_ADMIN_API_KEY',
@@ -24,8 +23,8 @@ export interface ApiEnv {
   webOrigin: string
   marketingOrigin: string | null
   desktopOrigin: string
-  magicLinkWebhookUrl: string | null
-  magicLinkWebhookSecret: string | null
+  resendApiKey: string | null
+  emailFrom: string
   meilisearchHost: string
   meilisearchSearchApiKey: string
   meilisearchAdminApiKey: string
@@ -234,14 +233,10 @@ export function readApiEnv(): ApiEnv {
   const nodeEnv = readNodeEnv()
   requireProductionEnv(nodeEnv)
   requireTestEnv(nodeEnv)
-  const magicLinkWebhookUrl = readOptionalUrl('OBITER_MAGIC_LINK_WEBHOOK_URL')
-  const magicLinkWebhookSecret = readOptionalSecret(
-    'OBITER_MAGIC_LINK_WEBHOOK_SECRET',
-    nodeEnv,
-  )
+  const resendApiKey = readOptionalSecret('OBITER_RESEND_API_KEY', nodeEnv)
 
-  if (nodeEnv === 'production' && !magicLinkWebhookUrl) {
-    throw new Error('OBITER_MAGIC_LINK_WEBHOOK_URL must be configured in production.')
+  if (nodeEnv === 'production' && !resendApiKey) {
+    throw new Error('OBITER_RESEND_API_KEY must be configured in production.')
   }
 
   const webOrigin = readRequiredUrl('OBITER_WEB_ORIGIN', 'http://localhost:3000')
@@ -263,8 +258,8 @@ export function readApiEnv(): ApiEnv {
       'OBITER_DESKTOP_ORIGIN',
       'obiter://desktop-auth',
     ),
-    magicLinkWebhookUrl,
-    magicLinkWebhookSecret,
+    resendApiKey,
+    emailFrom: (process.env.OBITER_EMAIL_FROM ?? 'onboarding@resend.dev').trim(),
     meilisearchHost: readRequiredUrl('MEILISEARCH_HOST', 'http://localhost:7700'),
     meilisearchSearchApiKey: readSearchApiKey(nodeEnv),
     meilisearchAdminApiKey: readAdminApiKey(nodeEnv),

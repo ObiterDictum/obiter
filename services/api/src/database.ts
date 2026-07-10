@@ -18,6 +18,7 @@ export interface AuditRecordInput {
   entityId: string
   action:
     | 'auth.sign_in'
+    | 'auth.sign_up'
     | 'auth.sign_out'
     | 'matter.create'
     | 'matter.update'
