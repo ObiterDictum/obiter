@@ -6,22 +6,31 @@ import { useState, type FormEvent } from 'react'
 import { useAuth } from '../auth'
 import { Wordmark } from '../wordmark'
 
-type Mode = 'password' | 'magic-link'
+type Mode = 'password' | 'magic-link' | 'register'
 
 /**
- * Real sign-in against the auth API (better-auth email/password + magic link).
- * Replaces the cosmetic Phase 0 sign-in. The frame renders this route bare
- * (no sidebar); on success the user is sent to /workspace.
+ * Real sign-in / self-registration against the auth API (better-auth
+ * email/password + magic link). The frame renders this route bare (no
+ * sidebar); on success the user is sent to /workspace.
  */
-export function SignInRouteView({ platform: _platform }: { platform: AppPlatform }) {
+export function SignInRouteView({ platform }: { platform: AppPlatform }) {
   const navigate = useNavigate()
-  const { signInWithEmail, requestMagicLink } = useAuth()
+  const { signInWithEmail, signUpWithEmail, requestMagicLink } = useAuth()
   const [mode, setMode] = useState<Mode>('password')
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+
+  async function goToWorkspace() {
+    if (platform === 'web') {
+      window.location.assign('/workspace')
+      return
+    }
+    await navigate({ to: '/workspace' })
+  }
 
   async function handlePassword(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -34,7 +43,25 @@ export function SignInRouteView({ platform: _platform }: { platform: AppPlatform
       setError(result.message ?? 'Sign-in failed.')
       return
     }
-    void navigate({ to: '/workspace' })
+    await goToWorkspace()
+  }
+
+  async function handleRegister(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    setError(null)
+    setNotice(null)
+    setSubmitting(true)
+    const result = await signUpWithEmail({ name, email, password })
+    setSubmitting(false)
+    if (!result.ok) {
+      setError(result.message ?? 'Sign-up failed.')
+      return
+    }
+    if (result.verificationRequired) {
+      setNotice(result.message ?? 'Check your email to verify your account before signing in.')
+      return
+    }
+    await goToWorkspace()
   }
 
   async function handleMagicLink(event: FormEvent<HTMLFormElement>) {
@@ -51,21 +78,33 @@ export function SignInRouteView({ platform: _platform }: { platform: AppPlatform
     setNotice(result.message ?? 'Check your email for a sign-in link.')
   }
 
+  const handleSubmit =
+    mode === 'password' ? handlePassword : mode === 'register' ? handleRegister : handleMagicLink
+
   return (
     <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 text-ink">
       <div className="flex w-full max-w-sm flex-col gap-6">
         <header className="flex flex-col items-center gap-3 text-center">
           <Wordmark className="h-12 w-auto" />
-          <h1 className="text-xl font-semibold tracking-tight">Sign in to Obiter</h1>
+          <h1 className="text-xl font-semibold tracking-tight">
+            {mode === 'register' ? 'Create your Obiter account' : 'Sign in to Obiter'}
+          </h1>
         </header>
 
         <Card>
           <div className="flex flex-col gap-4">
-            <form
-              onSubmit={mode === 'password' ? handlePassword : handleMagicLink}
-              className="flex flex-col gap-4"
-              noValidate
-            >
+            <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+              {mode === 'register' ? (
+                <Input
+                  label="Name"
+                  type="text"
+                  autoComplete="name"
+                  required
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+              ) : null}
+
               <Input
                 label="Email"
                 type="email"
@@ -75,12 +114,13 @@ export function SignInRouteView({ platform: _platform }: { platform: AppPlatform
                 onChange={(e) => setEmail(e.target.value)}
               />
 
-              {mode === 'password' ? (
+              {mode === 'password' || mode === 'register' ? (
                 <Input
                   label="Password"
                   type="password"
-                  autoComplete="current-password"
+                  autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
                   required
+                  minLength={mode === 'register' ? 8 : undefined}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   error={error ?? undefined}
@@ -98,7 +138,11 @@ export function SignInRouteView({ platform: _platform }: { platform: AppPlatform
                 iconEnd={<ArrowRight size={16} weight="bold" />}
                 className="w-full"
               >
-                {mode === 'password' ? 'Continue' : 'Send sign-in link'}
+                {mode === 'password'
+                  ? 'Continue'
+                  : mode === 'register'
+                    ? 'Create account'
+                    : 'Send sign-in link'}
               </Button>
             </form>
 
@@ -110,12 +154,18 @@ export function SignInRouteView({ platform: _platform }: { platform: AppPlatform
               <ModeButton active={mode === 'magic-link'} onClick={() => setMode('magic-link')}>
                 Magic link
               </ModeButton>
+              <span aria-hidden="true">·</span>
+              <ModeButton active={mode === 'register'} onClick={() => setMode('register')}>
+                Create account
+              </ModeButton>
             </div>
           </div>
         </Card>
 
         <p className="text-center text-xs text-subtle">
-          Sign-in is disabled for new accounts. Ask your firm administrator for credentials.
+          {mode === 'register'
+            ? 'Creating an account provisions your own organisation.'
+            : 'New here? Choose "Create account" above to self-register.'}
         </p>
       </div>
     </main>

@@ -47,7 +47,6 @@ export {
 export {
   canSeeDevelopmentStatus as canSeeDevelopmentStatusForTest,
   canSeeStaffNavigation as canSeeStaffNavigationForTest,
-  createDemoMeResponse,
   createPhaseZeroShellSnapshot,
   findMatterRecord,
   shellSnapshotQueryOptions,

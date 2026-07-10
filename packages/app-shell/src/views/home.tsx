@@ -5,9 +5,9 @@ import { useState, type FormEvent } from 'react'
 import { changelogQueryOptions } from '../changelog'
 import {
   canSeeDevelopmentStatus,
-  demoCurrentUserQueryOptions,
   shellSnapshotQueryOptions,
 } from '../fixtures'
+import { useCurrentUser } from '../current-user'
 import { useSuspenseQuery } from '@tanstack/react-query'
 
 /**
@@ -20,7 +20,7 @@ export function HomeRouteView({ platform }: { platform: AppPlatform }) {
   const [homeSearch, setHomeSearch] = useState('')
   const [changelogOpen, setChangelogOpen] = useState(false)
   const { data } = useSuspenseQuery(shellSnapshotQueryOptions(platform))
-  const { data: me } = useSuspenseQuery(demoCurrentUserQueryOptions())
+  const { data: me } = useCurrentUser()
   const { data: changelog } = useSuspenseQuery(changelogQueryOptions())
   const activeMilestone = data.milestones.find((milestone) => milestone.status === 'active')
   const matterCount = data.matters.length

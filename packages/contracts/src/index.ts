@@ -41,6 +41,7 @@ export const artifactTypeSchema = z.enum([
   'upload_receipt',
   'processing_log',
   'redaction_report',
+  'redaction_output',
   'verification_report',
   'research_memo',
 ])

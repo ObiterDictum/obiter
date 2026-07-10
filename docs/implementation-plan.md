@@ -22,15 +22,11 @@ The licence gates bulk case law ingestion into Meilisearch. Without it, we can't
 | **Search** | Meilisearch |
 | **Auth** | better-auth (email/password + magic link) |
 
-### Cloudflare Email Setup
+### Email Delivery
 
-The API sends magic links via a webhook (`OBITER_MAGIC_LINK_WEBHOOK_URL`). In production, this is a Cloudflare Worker that calls the [Send Email API](https://developers.cloudflare.com/email-routing/email-workers/).
+The API sends magic-link (and future transactional) email via [Resend](https://resend.com) using the official `resend` Node SDK, configured with `OBITER_RESEND_API_KEY` and `OBITER_EMAIL_FROM`.
 
-Files to create:
-- `infra/cloudflare/email-worker/` — Cloudflare Worker for transactional email
-- `infra/cloudflare/wrangler.toml` — Worker config
-
-In dev mode, magic links just log to console (no email sent).
+In dev mode, if `OBITER_RESEND_API_KEY` is not set, magic links just log to console (no email sent).
 
 ---
 
