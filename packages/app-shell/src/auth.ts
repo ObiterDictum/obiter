@@ -23,11 +23,18 @@ export interface SignInEmailInput {
   password: string
 }
 
+export interface SignUpEmailInput {
+  name: string
+  email: string
+  password: string
+}
+
 export interface UseAuthReturn {
   /** Present when better-auth has established a real session. */
   session: AuthSessionPresence | null
   isPending: boolean
   signInWithEmail: (input: SignInEmailInput) => Promise<{ ok: boolean; message?: string }>
+  signUpWithEmail: (input: SignUpEmailInput) => Promise<{ ok: boolean; message?: string }>
   requestMagicLink: (email: string) => Promise<{ ok: boolean; message?: string }>
   signOut: () => Promise<void>
 }
@@ -53,6 +60,14 @@ export function useAuth(): UseAuthReturn {
     return { ok: true }
   }
 
+  async function signUpWithEmail(input: SignUpEmailInput) {
+    const result = await authClient.signUp.email(input)
+    if (result.error) {
+      return { ok: false, message: result.error.message ?? 'Sign-up failed.' }
+    }
+    return { ok: true }
+  }
+
   async function requestMagicLink(email: string) {
     const callbackURL = typeof window === 'undefined'
       ? undefined
@@ -72,6 +87,7 @@ export function useAuth(): UseAuthReturn {
     session: realSession.data,
     isPending: realSession.isPending,
     signInWithEmail,
+    signUpWithEmail,
     requestMagicLink,
     signOut,
   }
