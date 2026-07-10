@@ -16,13 +16,25 @@ function maskEmail(email: string) {
   return `${localPart.slice(0, 2)}***@${domain}`
 }
 
-export async function sendMagicLink(env: ApiEnv, email: string, url: string) {
+/**
+ * Shared email sender for all auth-flow emails (magic link, verification).
+ * With OBITER_RESEND_API_KEY configured it sends via Resend and logs +
+ * throws on delivery failure (never silently drops an error — better-auth
+ * awaits these calls inline for magic-link, and in the background for
+ * verification email, but either way failures must be visible in server
+ * logs since the client-facing response does not reliably surface them).
+ * Without a key it falls back to a dev-only console log of the one-time URL.
+ */
+async function sendEmail(
+  env: ApiEnv,
+  options: { email: string; subject: string; html: string; logLabel: string; url: string },
+) {
   if (!env.resendApiKey) {
     // Development-only delivery intentionally exposes the one-time URL so a
     // local developer can complete the auth flow without an email provider.
-    console.info('[dev-only] Magic link URL (no OBITER_RESEND_API_KEY configured)', {
-      email: maskEmail(email),
-      url,
+    console.info(`[dev-only] ${options.logLabel} URL (no OBITER_RESEND_API_KEY configured)`, {
+      email: maskEmail(options.email),
+      url: options.url,
     })
     return
   }
@@ -30,14 +42,41 @@ export async function sendMagicLink(env: ApiEnv, email: string, url: string) {
   const resend = new Resend(env.resendApiKey)
   const result = await resend.emails.send({
     from: env.emailFrom,
-    to: email,
-    subject: 'Your Obiter sign-in link',
-    html: `<p>Click the link below to sign in to Obiter:</p><p><a href="${url}">${url}</a></p><p>This link expires in 10 minutes. If you did not request it, you can ignore this email.</p>`,
+    to: options.email,
+    subject: options.subject,
+    html: options.html,
   })
 
   if (result.error) {
-    throw new Error(`Magic-link email delivery failed: ${result.error.message}`)
+    console.error(`[resend] ${options.logLabel} email delivery failed`, {
+      email: maskEmail(options.email),
+      from: env.emailFrom,
+      statusCode: (result.error as { statusCode?: number }).statusCode,
+      message: result.error.message,
+      name: result.error.name,
+    })
+    throw new Error(`${options.logLabel} email delivery failed: ${result.error.message}`)
   }
+}
+
+export async function sendMagicLink(env: ApiEnv, email: string, url: string) {
+  await sendEmail(env, {
+    email,
+    url,
+    subject: 'Your Obiter sign-in link',
+    html: `<p>Click the link below to sign in to Obiter:</p><p><a href="${url}">${url}</a></p><p>This link expires in 10 minutes. If you did not request it, you can ignore this email.</p>`,
+    logLabel: 'Magic-link',
+  })
+}
+
+export async function sendVerificationEmail(env: ApiEnv, email: string, url: string) {
+  await sendEmail(env, {
+    email,
+    url,
+    subject: 'Verify your Obiter email',
+    html: `<p>Click the link below to verify your email and finish creating your Obiter account:</p><p><a href="${url}">${url}</a></p><p>If you did not create this account, you can ignore this email.</p>`,
+    logLabel: 'Verification',
+  })
 }
 
 /**
@@ -83,6 +122,14 @@ export function createAuth(env: ApiEnv, pool: Pool) {
     emailAndPassword: {
       enabled: true,
       disableSignUp: false,
+      requireEmailVerification: true,
+    },
+    emailVerification: {
+      sendOnSignUp: true,
+      autoSignInAfterVerification: true,
+      sendVerificationEmail: async ({ user, url }) => {
+        await sendVerificationEmail(env, user.email, url)
+      },
     },
     user: {
       modelName: 'users',
@@ -140,13 +187,17 @@ export function createAuth(env: ApiEnv, pool: Pool) {
     hooks: {
       after: createAuthMiddleware(async (ctx) => {
         // Allowed unauthenticated paths that this hook acts on: sign-in
-        // (password + magic-link verify) for the sign-in audit log, and
-        // sign-up/email for the self-registration audit log. Extend this
-        // list deliberately when new auth flows are added.
+        // (password + magic-link verify) for the sign-in audit log,
+        // sign-up/email for the self-registration audit log, and
+        // verify-email — since requireEmailVerification means sign-up no
+        // longer establishes a session directly, the session (and thus the
+        // sign-up audit entry) now lands on verify-email instead. Extend
+        // this list deliberately when new auth flows are added.
         const isSignIn = ctx.path === '/sign-in/email' || ctx.path === '/magic-link/verify'
         const isSignUp = ctx.path === '/sign-up/email'
+        const isVerifyEmail = ctx.path === '/verify-email'
 
-        if (!isSignIn && !isSignUp) {
+        if (!isSignIn && !isSignUp && !isVerifyEmail) {
           return
         }
 
@@ -162,13 +213,14 @@ export function createAuth(env: ApiEnv, pool: Pool) {
           userId: newSession.user.id,
           entityType: 'session',
           entityId: newSession.session.id,
-          action: isSignUp ? 'auth.sign_up' : 'auth.sign_in',
+          action: isSignUp || isVerifyEmail ? 'auth.sign_up' : 'auth.sign_in',
           metadata: {
             method: ctx.path === '/sign-in/email'
               ? 'email_password'
-              : ctx.path === '/sign-up/email'
+              : ctx.path === '/sign-up/email' || isVerifyEmail
                 ? 'email_password'
                 : 'magic_link',
+            emailVerified: isVerifyEmail,
           },
           requestId: `req_${crypto.randomUUID()}`,
         })

@@ -57,6 +57,10 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
       setError(result.message ?? 'Sign-up failed.')
       return
     }
+    if (result.verificationRequired) {
+      setNotice(result.message ?? 'Check your email to verify your account before signing in.')
+      return
+    }
     await goToWorkspace()
   }
 
