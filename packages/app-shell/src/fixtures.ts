@@ -3,36 +3,33 @@ import type { AppPlatform, MeResponse, ShellSnapshot } from '@obiter/contracts'
 
 /**
  * Phase 0 fixture layer. Still powers the Home/Matters demo views while M2
- * rewires them to real data. `createPhaseZeroShellSnapshot`, the demo me
- * response, and this module are deleted outright in M2 (PRD FR7).
+ * rewires them to real data. `createPhaseZeroShellSnapshot` and this module
+ * are deleted outright in M2 (PRD FR7).
  *
  * Do not expand this path. New behaviour must not depend on fixtures.
  */
 
-export function createDemoMeResponse(): MeResponse {
-  return {
-    user: {
-      id: 'user-amorgan',
-      email: 'amorgan@obiter.local',
-      name: 'A. Morgan',
-      role: 'owner',
-    },
-    organisation: {
-      id: 'org-obiter-demo',
-      name: 'Obiter Legal',
-      plan: 'private_beta',
-    },
-  }
+const phaseZeroFixtureOrganisation = {
+  id: 'org-obiter-demo',
+  name: 'Obiter Legal',
+  plan: 'private_beta' as const,
+}
+
+const phaseZeroFixtureUser = {
+  id: 'user-amorgan',
+  email: 'amorgan@obiter.local',
+  name: 'A. Morgan',
+  role: 'owner' as const,
 }
 
 export function createPhaseZeroShellSnapshot(platform: AppPlatform): ShellSnapshot {
   return {
     platform,
     organisation: {
-      ...createDemoMeResponse().organisation,
+      ...phaseZeroFixtureOrganisation,
       seatCount: 1,
     },
-    currentUser: createDemoMeResponse().user,
+    currentUser: phaseZeroFixtureUser,
     matters: [],
     featuredMatterId: '',
     metrics: [],
@@ -64,15 +61,6 @@ export function shellSnapshotQueryOptions(platform: AppPlatform) {
   return queryOptions({
     queryKey: ['phase-0-shell', platform],
     queryFn: async () => createPhaseZeroShellSnapshot(platform),
-    staleTime: Infinity,
-  })
-}
-
-/** Demo current-user for the (still-fixture) Home view. M2 deletes this. */
-export function demoCurrentUserQueryOptions() {
-  return queryOptions({
-    queryKey: ['phase-0-current-user'],
-    queryFn: async () => createDemoMeResponse(),
     staleTime: Infinity,
   })
 }
