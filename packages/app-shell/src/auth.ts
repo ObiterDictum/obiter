@@ -34,7 +34,9 @@ export interface UseAuthReturn {
   session: AuthSessionPresence | null
   isPending: boolean
   signInWithEmail: (input: SignInEmailInput) => Promise<{ ok: boolean; message?: string }>
-  signUpWithEmail: (input: SignUpEmailInput) => Promise<{ ok: boolean; message?: string }>
+  signUpWithEmail: (
+    input: SignUpEmailInput,
+  ) => Promise<{ ok: boolean; message?: string; verificationRequired?: boolean }>
   requestMagicLink: (email: string) => Promise<{ ok: boolean; message?: string }>
   signOut: () => Promise<void>
 }
@@ -64,6 +66,16 @@ export function useAuth(): UseAuthReturn {
     const result = await authClient.signUp.email(input)
     if (result.error) {
       return { ok: false, message: result.error.message ?? 'Sign-up failed.' }
+    }
+    // With requireEmailVerification enabled, sign-up does not establish a
+    // session — better-auth returns { token: null, user } and sends a
+    // verification email instead. No session means no auto sign-in yet.
+    if (!result.data?.token) {
+      return {
+        ok: true,
+        verificationRequired: true,
+        message: 'Check your email to verify your account before signing in.',
+      }
     }
     return { ok: true }
   }
