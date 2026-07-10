@@ -20,7 +20,7 @@ The frozen surface this plan delivers is [contract.md](contract.md).
 ## Scope boundary for this pass (M1)
 
 - **In:** tokens + Tailwind v4; `@obiter/ui` primitive set; app frame (sidebar with live/planned split, top bar, `PageScaffold`, `Toaster`); real auth (`createAuthClient` + magic-link client plugin); `apiFetch`; `useCurrentUser` from real `/api/me`; document-detail layout route with `<Outlet/>`; Phosphor + ESLint one-icon-pack rule; `infra/docker/compose.yaml`.
-- **Out (M2):** matters/home/documents wired to real data; fixture layer deletion (`createPhaseZeroShellSnapshot`, demo me, `demo-shell.test.ts`); `pnpm seed`.
+- **Out (M2):** matters/home/documents wired to real data; fixture layer deletion (`createPhaseZeroShellSnapshot`, `demo-shell.test.ts`); `pnpm seed`.
 - **Out (M3):** search restyle, desktop verification pass, final dead-CSS removal.
 - **Boundary note:** the existing Home/Matters views remain fixture-driven until M2. The **demo localStorage auth is removed in M1** because real sign-in is an M1 deliverable and the two cannot coexist honestly. The demo sign-in test is updated accordingly.
 
@@ -48,7 +48,7 @@ The frozen surface this plan delivers is [contract.md](contract.md).
 - [x] `apiFetch<T>()` + `ApiError` (contract §3.2) in `packages/app-shell/src/api.ts`: `credentials: 'include'`, parse errors through `apiErrorResponseSchema`, throw typed `ApiError`.
 - [x] `useCurrentUser()` + `currentUserQueryOptions()` (contract §3.1): real `GET /api/me` via `apiFetch`.
 - [x] `useAuth()` wrapper (`signIn`, `signOut`, session) over the auth client.
-- [x] Remove demo localStorage auth + `createDemoMeResponse`-on-this-path; update `demo-shell.test.ts` to the real auth boundary (M2 deletes it outright).
+- [x] Remove demo localStorage auth; `GET /api/me` is the only runtime current-user path.
 - [x] Tests: `apiFetch` success path, error-envelope parse for each `ApiErrorCode`, 401 handling; `useCurrentUser` against a stubbed `/api/me`.
 
 ### 4. App frame + page scaffold

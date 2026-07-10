@@ -16,13 +16,10 @@ function maskEmail(email: string) {
 }
 
 async function sendMagicLink(env: ApiEnv, email: string, url: string) {
-  if (env.nodeEnv === 'development') {
-    const parsedUrl = new URL(url)
-
-    console.info('Development magic link requested', {
-      email: maskEmail(email),
-      callback: `${parsedUrl.origin}${parsedUrl.pathname}`,
-    })
+  if (!env.magicLinkWebhookUrl && env.nodeEnv === 'development') {
+    // Development-only delivery intentionally exposes the one-time URL so a
+    // local developer can complete the auth flow without an email provider.
+    console.info('Development magic link URL', { email: maskEmail(email), url })
     return
   }
 

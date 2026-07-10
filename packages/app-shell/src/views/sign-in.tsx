@@ -13,7 +13,7 @@ type Mode = 'password' | 'magic-link'
  * Replaces the cosmetic Phase 0 sign-in. The frame renders this route bare
  * (no sidebar); on success the user is sent to /workspace.
  */
-export function SignInRouteView({ platform: _platform }: { platform: AppPlatform }) {
+export function SignInRouteView({ platform }: { platform: AppPlatform }) {
   const navigate = useNavigate()
   const { signInWithEmail, requestMagicLink } = useAuth()
   const [mode, setMode] = useState<Mode>('password')
@@ -34,7 +34,11 @@ export function SignInRouteView({ platform: _platform }: { platform: AppPlatform
       setError(result.message ?? 'Sign-in failed.')
       return
     }
-    void navigate({ to: '/workspace' })
+    if (platform === 'web') {
+      window.location.assign('/workspace')
+      return
+    }
+    await navigate({ to: '/workspace' })
   }
 
   async function handleMagicLink(event: FormEvent<HTMLFormElement>) {

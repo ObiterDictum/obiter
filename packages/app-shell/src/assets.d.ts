@@ -1,6 +1,5 @@
 interface ImportMetaEnv {
   readonly DEV: boolean
-  readonly VITE_DEV_AUTO_LOGIN?: string
 }
 
 interface ImportMeta {

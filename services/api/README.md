@@ -33,7 +33,17 @@ Production may also provide:
 - `MOJ_FIND_CASE_LAW_BASE_URL` to override the public Find Case Law upstream
 - `MOJ_FIND_CASE_LAW_RATE_LIMIT` to tune the public upstream fetch limiter
 
-Development falls back to local defaults so the service can typecheck and boot before hosted infrastructure is provisioned.
+Development falls back to local defaults so the service can typecheck and boot before hosted infrastructure is provisioned. With the web Vite proxy, the development default for `BETTER_AUTH_URL` is `http://localhost:3000`, matching `OBITER_WEB_ORIGIN`; override both deliberately when using another local origin. If no magic-link webhook is configured in development, the API logs the complete one-time URL with the `Development magic link URL` marker. Never enable that fallback in production.
+
+## Provision a Development User
+
+Public sign-up is disabled. Provision the first local account explicitly after applying migrations:
+
+```bash
+OBITER_SEED_PASSWORD='choose-a-unique-password' pnpm --filter @obiter/api seed:user -- developer@example.test "Development organisation"
+```
+
+The password must be at least 12 characters and is only read from the environment; the command does not log it. The command creates a new organisation, owner user, and credential account and refuses to modify an existing email.
 
 ## Deploying Only This API
 

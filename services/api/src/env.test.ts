@@ -12,11 +12,14 @@ describe('readApiEnv', () => {
     process.env.NODE_ENV = 'development'
     delete process.env.DATABASE_URL
     delete process.env.BETTER_AUTH_SECRET
+    delete process.env.BETTER_AUTH_URL
+    delete process.env.OBITER_WEB_ORIGIN
 
     const env = readApiEnv()
 
     expect(env.databaseUrl).toContain('localhost')
     expect(env.authSecret).toBe('dev-only-better-auth-secret')
+    expect(env.authBaseUrl).toBe('http://localhost:3000')
     expect(env.meilisearchHost).toBe('http://localhost:7700')
     expect(env.meilisearchSearchApiKey).toBe('dev-key')
     expect(env.meilisearchAdminApiKey).toBe('dev-key')

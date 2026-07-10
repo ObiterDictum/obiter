@@ -137,6 +137,42 @@ describe('createApiApp', () => {
     }
   })
 
+  it('returns 401 from /api/me without a real session', async () => {
+    const auth = {
+      api: { getSession: async () => null },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const app = createApiApp(testEnv, createPool(async () => ({ rows: [] })), { auth })
+
+    const response = await app.request('/api/me')
+
+    expect(response.status).toBe(401)
+    await expect(response.json()).resolves.toMatchObject({ error: { code: 'unauthenticated' } })
+  })
+
+  it('returns the active organisation for a real session at /api/me', async () => {
+    const auth = {
+      api: {
+        getSession: async () => ({
+          user: { id: 'usr_1', email: 'user@example.test', name: 'User', organisationId: 'org_1', role: 'owner' },
+          session: { id: 'ses_1' },
+        }),
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const app = createApiApp(testEnv, createPool(async () => ({
+      rows: [{ id: 'org_1', name: 'Organisation', plan: 'private_beta' }],
+    })), { auth })
+
+    const response = await app.request('/api/me')
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      user: { id: 'usr_1', role: 'owner' },
+      organisation: { id: 'org_1' },
+    })
+  })
+
   it('allows the configured desktop origin through CORS', async () => {
     const auth = {
       api: {

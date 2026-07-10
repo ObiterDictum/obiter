@@ -244,6 +244,8 @@ export function readApiEnv(): ApiEnv {
     throw new Error('OBITER_MAGIC_LINK_WEBHOOK_URL must be configured in production.')
   }
 
+  const webOrigin = readRequiredUrl('OBITER_WEB_ORIGIN', 'http://localhost:3000')
+
   return {
     databaseUrl: readDatabaseUrl(nodeEnv),
     authSecret: readSecret(
@@ -251,8 +253,11 @@ export function readApiEnv(): ApiEnv {
       'dev-only-better-auth-secret',
       nodeEnv,
     ),
-    authBaseUrl: readRequiredUrl('BETTER_AUTH_URL', 'http://localhost:8787'),
-    webOrigin: readRequiredUrl('OBITER_WEB_ORIGIN', 'http://localhost:3000'),
+    authBaseUrl: readRequiredUrl(
+      'BETTER_AUTH_URL',
+      nodeEnv === 'development' ? webOrigin : 'http://localhost:8787',
+    ),
+    webOrigin,
     marketingOrigin: readOptionalUrl('OBITER_MARKETING_ORIGIN'),
     desktopOrigin: readRequiredUrl(
       'OBITER_DESKTOP_ORIGIN',

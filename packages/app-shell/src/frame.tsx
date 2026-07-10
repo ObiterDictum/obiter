@@ -21,7 +21,6 @@ import type { AppPlatform } from '@obiter/contracts'
 import { useEffect, useState, type ReactNode } from 'react'
 import { useAuth } from './auth'
 import { currentUserQueryOptions } from './current-user'
-import { DEV_AUTO_LOGIN } from './dev-session'
 import { THEME_STORAGE_KEY } from './use-app-theme'
 import { Wordmark } from './wordmark'
 
@@ -71,11 +70,7 @@ export function AppShellLayout({
 
   let body: ReactNode
 
-  // Dev auto-login: redirect auth routes straight into the workspace so local
-  // development skips the sign-in screen entirely.
-  if (isAuthRoute && DEV_AUTO_LOGIN) {
-    body = <Navigate to="/workspace" />
-  } else if (isAuthRoute) {
+  if (isAuthRoute) {
     body = children
   } else if (isPending) {
     body = <LoadingShell />
