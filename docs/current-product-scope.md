@@ -20,15 +20,18 @@ Search owns:
 - `POST /api/search/fetch`
 - `GET /api/search/documents/:documentId`
 
-- Auth: sign-in, sign-out, and self-registration are wired to the real auth API (better-auth email/password + magic link). `useCurrentUser()` is backed by the real `GET /api/me`; signed-out users are redirected to `/sign-in` and session expiry is handled gracefully. Email verification is required on self-registration; that flow is server-side only (no dedicated verification product surface).
+- Auth: sign-in, sign-out, self-registration, and password reset are wired to the real auth API (better-auth email/password + magic link + forgot/reset password). `useCurrentUser()` is backed by the real `GET /api/me`; signed-out users are redirected to `/sign-in` and session expiry is handled gracefully. Email verification is required on self-registration; that flow is server-side only (no dedicated verification product surface). Registration is org-less: a new user has no organisation until they create one explicitly via `POST /api/organisations`; an org-less user lands on Home's create-organisation surface, and org-scoped routes redirect them there. Password reset uses a single-use token; the request endpoint never reveals whether the email exists.
 
 Auth owns:
 
 - `/sign-in`
-- `GET /api/me`
-- `/api/auth/*` (better-auth: sign-up, sign-in, sign-out, verify-email, magic-link)
+- `/forgot-password`
+- `/reset-password`
+- `GET /api/me` (returns `organisation: null` for an org-less user)
+- `POST /api/organisations` (creates the signed-in user's organisation; single-org model)
+- `/api/auth/*` (better-auth: sign-up, sign-in, sign-out, verify-email, magic-link, request-password-reset, reset-password)
 
-- Home (`/`): the landing surface renders the signed-in user's real matters and organisation from `/api/me` and `GET /api/matters`. No invented widgets — every value shown comes from a real endpoint. (The legacy `/workspace` path redirects to `/`.)
+- Home (`/`): for an org-less user, renders a create-organisation surface (matters and documents live inside an organisation). Once an organisation exists, renders the signed-in user's real matters and organisation from `/api/me` and `GET /api/matters`. No invented widgets — every value shown comes from a real endpoint. (The legacy `/workspace` path redirects to `/`.)
 
 - Matters: the matters list, matter creation, and matter detail are wired to `GET /api/matters`, `POST /api/matters`, and `GET /api/matters/:id` via TanStack Query, with loading, empty, and error states.
 
@@ -50,7 +53,7 @@ Documents owns:
 
 ### API implemented, UI is demo fixture
 
-(None. The fixture layer (`createPhaseZeroShellSnapshot`, demo `MeResponse`) was deleted in the app shell rebuild M2; these surfaces are now wired to real data. To populate any environment, including development, register an account through the sign-up screen — self-serve registration provisions the organisation, then matters and documents are created through the UI.)
+(None. The fixture layer (`createPhaseZeroShellSnapshot`, demo `MeResponse`) was deleted in the app shell rebuild M2; these surfaces are now wired to real data. To populate any environment, including development, register an account through the sign-up screen — registration is org-less, so the new user then creates an organisation from Home, after which matters and documents are created through the UI.)
 
 ### Planned (visible but not implemented)
 

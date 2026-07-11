@@ -1,6 +1,8 @@
 import { redirect } from '@tanstack/react-router'
 import type { QueryClient } from '@tanstack/react-query'
+import type { MeResponse } from '@obiter/contracts'
 import { ApiError } from './api'
+import { currentUserQueryOptions } from './current-user'
 
 /**
  * Session-expiry handling for route loaders.
@@ -34,5 +36,25 @@ export async function guardAuth(
       throw redirect({ to: '/sign-in' })
     }
     throw error
+  }
+}
+
+/**
+ * Organisation gate for org-scoped routes (matters, documents, redact).
+ *
+ * An authenticated but org-less user is a first-class state: they have signed
+ * in but not yet created an organisation, so org-scoped surfaces would either
+ * 403 at the API or render broken. Rather than letting them land on a dead
+ * screen, this loader ensures /api/me is loaded and redirects org-less users
+ * to Home, which renders the create-organisation surface. The redirect is
+ * routing-level only — it does not change any Redact internals.
+ *
+ * Usage in a route file:
+ *   loader: ({ context }) => ensureOrganisation(context.queryClient)
+ */
+export async function ensureOrganisation(queryClient: QueryClient): Promise<void> {
+  const me = await queryClient.ensureQueryData(currentUserQueryOptions())
+  if (!(me as MeResponse).organisation) {
+    throw redirect({ to: '/' })
   }
 }

@@ -67,7 +67,11 @@ export function AppShellLayout({
 }) {
   const { session, isPending } = useAuth()
   const currentPath = useRouterState({ select: (state) => state.location.pathname })
-  const isAuthRoute = currentPath === '/sign-in'
+  // These routes render bare (no sidebar) and are reachable while signed out.
+  const isAuthRoute =
+    currentPath === '/sign-in' ||
+    currentPath === '/forgot-password' ||
+    currentPath === '/reset-password'
 
   let body: ReactNode
 
@@ -143,7 +147,7 @@ function Sidebar({ platform }: { platform: AppPlatform }) {
           <UserCard
             name={data.user.name}
             email={data.user.email}
-            orgName={data.organisation.name}
+            orgName={data.organisation?.name ?? null}
             platform={platform}
           />
         )}
@@ -203,7 +207,7 @@ function UserCard({
 }: {
   name: string
   email: string
-  orgName: string
+  orgName: string | null
   platform: AppPlatform
 }) {
   const navigate = useNavigate()
@@ -225,7 +229,7 @@ function UserCard({
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-ink">{name}</p>
-          <p className="truncate text-xs text-muted">{orgName}</p>
+          {orgName ? <p className="truncate text-xs text-muted">{orgName}</p> : null}
         </div>
       </div>
       <div className="flex items-center justify-between gap-2">

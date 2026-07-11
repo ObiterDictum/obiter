@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   useMattersList: vi.fn(),
   useCurrentUser: vi.fn(),
   changelogQueryOptions: vi.fn(),
+  useCreateOrganisation: vi.fn(),
 }))
 
 vi.mock('./matters', async (importOriginal) => {
@@ -26,7 +27,7 @@ vi.mock('./matters', async (importOriginal) => {
 
 vi.mock('./current-user', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./current-user')>()
-  return { ...actual, useCurrentUser: mocks.useCurrentUser }
+  return { ...actual, useCurrentUser: mocks.useCurrentUser, useCreateOrganisation: mocks.useCreateOrganisation }
 })
 
 vi.mock('./changelog', async (importOriginal) => {
@@ -100,6 +101,10 @@ function renderHome() {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.useCurrentUser.mockReturnValue({ data: ME })
+  mocks.useCreateOrganisation.mockReturnValue({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  })
   mocks.changelogQueryOptions.mockReturnValue({
     queryKey: ['github-changelog'],
     queryFn: async () => CHANGELOG,
@@ -153,5 +158,39 @@ describe('HomeRouteView — matters query states', () => {
     await waitFor(() => {
       expect(screen.getByText('Matter mtr_0')).toBeTruthy()
     })
+  })
+})
+
+describe('HomeRouteView — organisation-less state', () => {
+  const ORGLESS_ME = {
+    user: { id: 'usr_2', email: 'new@obiter.dev', name: 'New User', role: null },
+    organisation: null,
+  }
+
+  it('renders the create-organisation surface for an org-less user', async () => {
+    mocks.useCurrentUser.mockReturnValue({ data: ORGLESS_ME })
+    renderHome()
+
+    // RouterProvider commits asynchronously; wait for the create-org surface.
+    await waitFor(() => {
+      expect(screen.getByText('Organisation name')).toBeTruthy()
+    })
+    expect(await screen.findByRole('button', { name: /create organisation/i })).toBeTruthy()
+    // Copy explaining matters/documents live inside an organisation.
+    expect(screen.getByText(/live inside an organisation/i)).toBeTruthy()
+  })
+
+  it('does not call the matters list hook for an org-less user', async () => {
+    mocks.useCurrentUser.mockReturnValue({ data: ORGLESS_ME })
+    mocks.useMattersList.mockReturnValue(mattersLoading())
+    renderHome()
+
+    // Wait for render to commit before asserting on hook calls.
+    await waitFor(() => {
+      expect(screen.getByText('Organisation name')).toBeTruthy()
+    })
+    // The matters hook lives in the org-present subtree; org-less users must
+    // never trigger a GET /api/matters that would 403.
+    expect(mocks.useMattersList).not.toHaveBeenCalled()
   })
 })
