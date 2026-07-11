@@ -9,10 +9,14 @@ import { Wordmark } from '../wordmark'
  * Reset-password screen. The reset email links here with ?token= (the token is
  * derived server-side and always targets the web origin). Better-auth tokens
  * are single-use and expire (default 1h). Because the link points straight at
- * this screen, the token is validated on submit — an expired/already-used
- * token surfaces as a submit failure, which flips the screen to its
- * "request a new link" state rather than a generic inline error. On success
- * the user is sent to /sign-in to sign in with the new password.
+ * this screen, the token is validated on submit.
+ *
+ * Only a true token failure (better-auth INVALID_TOKEN / TOKEN_EXPIRED — the
+ * token is absent, expired, or already consumed) flips to the dedicated
+ * "request a new link" state. Other failures (PASSWORD_TOO_LONG, a 5xx, a
+ * network blip) render an inline error so the user can retry with the same
+ * valid token instead of losing the form. On success the user is sent to
+ * /sign-in to sign in with the new password.
  */
 export function ResetPasswordRouteView() {
   const navigate = useNavigate()
@@ -28,11 +32,24 @@ export function ResetPasswordRouteView() {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
+  // better-auth error codes that mean the token is dead (absent, expired, or
+  // already used) — see @better-auth/core BASE_ERROR_CODES. Anything else is a
+  // retryable failure and stays on the form.
+  const TOKEN_DEAD_CODES = new Set(['INVALID_TOKEN', 'TOKEN_EXPIRED'])
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
+    // In-flight guard: a rapid double-submit (e.g. Enter while pending) would
+    // race the second call against the first and could consume the token then
+    // surface a spurious token failure.
+    if (submitting) return
     setError(null)
     if (password.length < 8) {
       setError('Password must be at least 8 characters.')
+      return
+    }
+    if (password.length > 128) {
+      setError('Password must be at most 128 characters.')
       return
     }
     if (password !== confirm) {
@@ -40,17 +57,28 @@ export function ResetPasswordRouteView() {
       return
     }
     setSubmitting(true)
-    const result = await resetPassword(token, password)
-    setSubmitting(false)
-    if (!result.ok) {
-      // The token may have expired or already been used. Since validation now
-      // happens on submit (the email links straight here), surface the
-      // dedicated "request a new link" state rather than a generic inline
-      // error so the user has a clear next step.
-      setTokenFailed(true)
-      return
+    try {
+      const result = await resetPassword(token, password)
+      if (!result.ok) {
+        if (result.code && TOKEN_DEAD_CODES.has(result.code)) {
+          // The token is genuinely invalid/expired/used — the only recovery
+          // is a new reset link.
+          setTokenFailed(true)
+        } else {
+          // Validation/server/network failure: keep the form so the user can
+          // retry with the same (still-valid) token.
+          setError(result.message ?? 'Could not reset your password.')
+        }
+        return
+      }
+      await navigate({ to: '/sign-in', search: { reset: 'success' } })
+    } catch {
+      // resetPassword is expected to map errors into { ok: false }; a throw
+      // here is a network-level failure — keep the form, surface a message.
+      setError('Could not reset your password. Check your connection and try again.')
+    } finally {
+      setSubmitting(false)
     }
-    await navigate({ to: '/sign-in', search: { reset: 'success' } })
   }
 
   return (
@@ -82,6 +110,7 @@ export function ResetPasswordRouteView() {
                 autoComplete="new-password"
                 required
                 minLength={8}
+                maxLength={128}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 error={error ?? undefined}
@@ -92,6 +121,7 @@ export function ResetPasswordRouteView() {
                 autoComplete="new-password"
                 required
                 minLength={8}
+                maxLength={128}
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
               />

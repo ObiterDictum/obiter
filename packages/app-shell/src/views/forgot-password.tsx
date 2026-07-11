@@ -22,15 +22,20 @@ export function ForgotPasswordRouteView() {
     event.preventDefault()
     setError(null)
     setSubmitting(true)
-    const result = await requestPasswordReset(email.trim())
-    setSubmitting(false)
-    if (!result.ok) {
-      setError(result.message ?? 'Could not send a reset link.')
-      return
+    try {
+      const result = await requestPasswordReset(email.trim())
+      if (!result.ok) {
+        setError(result.message ?? 'Could not send a reset link.')
+        return
+      }
+      // Always reach the confirmation state — the request endpoint deliberately
+      // does not reveal whether the account exists.
+      setSubmitted(true)
+    } catch {
+      setError('Could not send a reset link. Check your connection and try again.')
+    } finally {
+      setSubmitting(false)
     }
-    // Always reach the confirmation state — the request endpoint deliberately
-    // does not reveal whether the account exists.
-    setSubmitted(true)
   }
 
   return (

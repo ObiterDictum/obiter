@@ -57,7 +57,13 @@ function CreateOrganisationState({ name }: { name: string }) {
         // The user already has an organisation, so the cached /api/me is
         // stale. Refresh it and tell them — they do not need to create one.
         setError('You already have an organisation. Refreshing…')
-        void queryClient.invalidateQueries({ queryKey: ['current-user'] })
+        try {
+          await queryClient.refetchQueries({ queryKey: ['current-user'] })
+        } catch {
+          // If the refetch fails, do not leave the user stuck on
+          // "Refreshing…" — fall back to a retryable generic error.
+          setError('Could not refresh your account. Reload the page.')
+        }
       } else {
         setError('Could not create the organisation. Try again.')
       }

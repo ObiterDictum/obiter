@@ -228,8 +228,8 @@ describe('HomeRouteView — create-organisation error handling', () => {
     })
   })
 
-  it('surfaces the distinct conflict message and refreshes /api/me on a 409 (stale cache)', async () => {
-    const invalidateSpy = vi.spyOn(QueryClient.prototype, 'invalidateQueries').mockResolvedValue({
+  it('surfaces the distinct conflict message and refetches /api/me on a 409 (stale cache)', async () => {
+    const refetchSpy = vi.spyOn(QueryClient.prototype, 'refetchQueries').mockResolvedValue({
       refetchPage: undefined as never,
       errors: [],
     } as never)
@@ -243,9 +243,28 @@ describe('HomeRouteView — create-organisation error handling', () => {
     await waitFor(() => {
       expect(screen.getByText('You already have an organisation. Refreshing…')).toBeTruthy()
     })
-    // The 409 means the cache is stale: /api/me is invalidated to reconcile.
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['current-user'] })
-    invalidateSpy.mockRestore()
+    // The 409 means the cache is stale: /api/me is refetched to reconcile.
+    expect(refetchSpy).toHaveBeenCalledWith({ queryKey: ['current-user'] })
+    refetchSpy.mockRestore()
+  })
+
+  it('falls back to a retryable generic error when the conflict refetch fails (no stuck "Refreshing…")', async () => {
+    const refetchSpy = vi
+      .spyOn(QueryClient.prototype, 'refetchQueries')
+      .mockRejectedValue(new Error('refetch failed'))
+    const mutateAsync = vi.fn().mockRejectedValue(
+      new ApiError('conflict_detected', 'You already have an organisation.', 409, 'req_3'),
+    )
+    setupCreateOrg(mutateAsync)
+
+    await submitWithName('Acme Law')
+
+    await waitFor(() => {
+      expect(screen.getByText('Could not refresh your account. Reload the page.')).toBeTruthy()
+    })
+    // The stuck "Refreshing…" message is gone.
+    expect(screen.queryByText('You already have an organisation. Refreshing…')).toBeNull()
+    refetchSpy.mockRestore()
   })
 
   it('surfaces a generic error on a non-ApiError rejection (no unhandled throw)', async () => {
