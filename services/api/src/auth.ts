@@ -5,6 +5,7 @@ import { Resend } from 'resend'
 import type { Pool } from 'pg'
 import { appendAuditLog } from './database'
 import type { ApiEnv } from './env'
+import { magicLinkEmail, resetPasswordEmail, verificationEmail } from './email-templates'
 
 function maskEmail(email: string) {
   const [localPart, domain] = email.split('@')
@@ -17,17 +18,25 @@ function maskEmail(email: string) {
 }
 
 /**
- * Shared email sender for all auth-flow emails (magic link, verification).
- * With OBITER_RESEND_API_KEY configured it sends via Resend and logs +
- * throws on delivery failure (never silently drops an error — better-auth
- * awaits these calls inline for magic-link, and in the background for
+ * Shared email sender for all auth-flow emails (magic link, verification,
+ * password reset). With OBITER_RESEND_API_KEY configured it sends via
+ * Resend (with both html and text parts) and logs + throws on delivery
+ * failure (never silently drops an error — better-auth awaits these calls
+ * inline for magic-link/reset-request, and in the background for
  * verification email, but either way failures must be visible in server
  * logs since the client-facing response does not reliably surface them).
  * Without a key it falls back to a dev-only console log of the one-time URL.
  */
 async function sendEmail(
   env: ApiEnv,
-  options: { email: string; subject: string; html: string; logLabel: string; url: string },
+  options: {
+    email: string
+    subject: string
+    html: string
+    text: string
+    logLabel: string
+    url: string
+  },
 ) {
   if (!env.resendApiKey) {
     // Development-only delivery intentionally exposes the one-time URL so a
@@ -45,6 +54,7 @@ async function sendEmail(
     to: options.email,
     subject: options.subject,
     html: options.html,
+    text: options.text,
   })
 
   if (result.error) {
@@ -60,56 +70,171 @@ async function sendEmail(
 }
 
 export async function sendMagicLink(env: ApiEnv, email: string, url: string) {
+  const emailContent = magicLinkEmail(url)
   await sendEmail(env, {
     email,
     url,
-    subject: 'Your Obiter sign-in link',
-    html: `<p>Click the link below to sign in to Obiter:</p><p><a href="${url}">${url}</a></p><p>This link expires in 10 minutes. If you did not request it, you can ignore this email.</p>`,
+    subject: emailContent.subject,
+    html: emailContent.html,
+    text: emailContent.text,
     logLabel: 'Magic-link',
   })
 }
 
 export async function sendVerificationEmail(env: ApiEnv, email: string, url: string) {
+  const emailContent = verificationEmail(url)
   await sendEmail(env, {
     email,
     url,
-    subject: 'Verify your Obiter email',
-    html: `<p>Click the link below to verify your email and finish creating your Obiter account:</p><p><a href="${url}">${url}</a></p><p>If you did not create this account, you can ignore this email.</p>`,
+    subject: emailContent.subject,
+    html: emailContent.html,
+    text: emailContent.text,
     logLabel: 'Verification',
   })
 }
 
+export async function sendResetPasswordEmail(env: ApiEnv, email: string, url: string) {
+  const emailContent = resetPasswordEmail(url)
+  await sendEmail(env, {
+    email,
+    url,
+    subject: emailContent.subject,
+    html: emailContent.html,
+    text: emailContent.text,
+    logLabel: 'Reset-password',
+  })
+}
+
 /**
- * Provision a personal/default organisation for a newly self-registered
- * user. Mirrors the shape /api/me expects: users.organisationId set, and
- * role 'owner' since the user is the sole member of their own organisation.
+ * Builds the reset link a user follows from the password-reset email. The URL
+ * always targets the configured web origin (OBITER_WEB_ORIGIN) — never the
+ * client that requested the reset — so desktop renderer requests (whose
+ * origin is a custom scheme) still produce a link that opens in a browser at
+ * the web app's /reset-password screen, which reads ?token=.
  */
-async function provisionOrganisationForNewUser(
-  pool: Pool,
-  user: { id: string; email: string; organisationId?: string | null },
-) {
-  if (user.organisationId) {
-    return
+export function resetPasswordUrl(env: ApiEnv, token: string): string {
+  return `${env.webOrigin}/reset-password?token=${encodeURIComponent(token)}`
+}
+
+/**
+ * The subset of a better-auth hook context that drives the auth-audit
+ * decision. Kept structural so the pure helper can be tested without a live
+ * better-auth instance.
+ */
+interface AuthAuditContext {
+  path: string
+  newSession: {
+    user: { id: string; organisationId?: string | null }
+    session: { id: string }
+  } | null
+}
+
+export interface AuthAuditEvent {
+  organisationId: string | null
+  userId: string
+  entityType: 'session'
+  entityId: string
+  action: 'auth.sign_in' | 'auth.sign_up'
+  metadata: { method: 'email_password' | 'magic_link'; emailVerified: boolean }
+}
+
+/**
+ * Pure decision: for a given post-auth path and resulting session, return the
+ * audit event to record (or null when the path is not audited or no session
+ * was established). Org-less users are auditable too — their event carries
+ * `organisationId: null` (audit_logs.organisation_id is nullable since
+ * migration 0009). Kept separate from the better-auth hook so it is testable
+ * without booting the auth instance.
+ */
+export function buildAuthAuditEvent(ctx: AuthAuditContext): AuthAuditEvent | null {
+  const isSignIn = ctx.path === '/sign-in/email' || ctx.path === '/magic-link/verify'
+  const isSignUp = ctx.path === '/sign-up/email'
+  const isVerifyEmail = ctx.path === '/verify-email'
+
+  if (!isSignIn && !isSignUp && !isVerifyEmail) {
+    return null
   }
 
-  const client = await pool.connect()
+  const { newSession } = ctx
+  if (!newSession) {
+    return null
+  }
+
+  return {
+    organisationId: newSession.user.organisationId ?? null,
+    userId: newSession.user.id,
+    entityType: 'session',
+    entityId: newSession.session.id,
+    action: isSignUp || isVerifyEmail ? 'auth.sign_up' : 'auth.sign_in',
+    metadata: {
+      method: ctx.path === '/magic-link/verify' ? 'magic_link' : 'email_password',
+      emailVerified: isVerifyEmail,
+    },
+  }
+}
+
+/**
+ * Sends the password-reset email for a given user+token. better-auth runs the
+ * `sendResetPassword` callback in the background after the reset token is
+ * already stored, so an unhandled throw here is swallowed and the client
+ * always sees "email sent" — correct for account-existence privacy, but it
+ * means a delivery failure would be invisible. This wrapper catches the
+ * failure and logs it at error level (masked email, domain, requestId) so
+ * delivery problems are observable in server logs, without changing the
+ * client-facing response.
+ */
+export async function sendResetPasswordForUser(env: ApiEnv, email: string, token: string) {
   try {
-    await client.query('begin')
-    const organisationName = `${user.email.split('@')[0]}'s organisation`
-    const organisation = await client.query<{ id: string }>(
-      'insert into organisations (name, created_at, updated_at) values ($1, now(), now()) returning id',
-      [organisationName],
-    )
-    await client.query(
-      `update users set "organisationId" = $1, role = 'owner', "updatedAt" = now() where id = $2`,
-      [organisation.rows[0].id, user.id],
-    )
-    await client.query('commit')
+    await sendResetPasswordEmail(env, email, resetPasswordUrl(env, token))
   } catch (error) {
-    await client.query('rollback')
-    throw error
-  } finally {
-    client.release()
+    console.error('Reset-password email delivery failed', {
+      email: maskEmail(email),
+      domain: email.split('@')[1] ?? null,
+      requestId: `req_${crypto.randomUUID()}`,
+      message: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+/**
+ * The emailAndPassword config, exported so its security-relevant options can be
+ * regression-tested without booting a better-auth instance (which would need a
+ * DB). `revokeSessionsOnPasswordReset` must stay true: it is the only thing
+ * that makes better-auth call `deleteSessions(userId)` on reset, closing the
+ * "stolen session cookie survives a password reset" threat.
+ */
+export function emailAndPasswordOptions(env: ApiEnv) {
+  return {
+    enabled: true,
+    disableSignUp: false,
+    requireEmailVerification: true,
+    // Revoke every existing session when a password is reset: an attacker
+    // who holds a stolen session cookie is signed out the moment the victim
+    // resets their password, so the stolen credential stops working.
+    // better-auth's default is falsy (deleteSessions does not run).
+    revokeSessionsOnPasswordReset: true,
+    // Enables the forgot/reset-password flow (better-auth 1.6.x):
+    // POST /request-password-reset stores a single-use token in the
+    // verifications table and calls this callback; POST /reset-password
+    // consumes the token and sets the new password. The request endpoint
+    // never reveals whether the email exists. The default 1h token expiry
+    // (resetPasswordTokenExpiresIn) is used.
+    //
+    // The reset link is built server-side from the raw token to always
+    // point at the configured web origin (resetPasswordUrl), regardless of
+    // which client requested the reset. better-auth's own GET
+    // /reset-password/:token pre-validation redirect is deliberately
+    // bypassed: the email links straight to the web app's /reset-password
+    // screen with ?token=, where the token is validated on submit. An
+    // expired/invalid token therefore surfaces at submit time, not up-front
+    // — the reset screen renders its "request a new link" state on that
+    // failure. This avoids reset links that target the desktop custom
+    // scheme, which would not open in a browser.
+    sendResetPassword: async ({ user, token }: { user: { email: string }; token: string }) => {
+      // Delegates to sendResetPasswordForUser, which logs delivery failures
+      // at error level instead of letting better-auth swallow the throw.
+      await sendResetPasswordForUser(env, user.email, token)
+    },
   }
 }
 
@@ -119,11 +244,7 @@ export function createAuth(env: ApiEnv, pool: Pool) {
     baseURL: env.authBaseUrl,
     secret: env.authSecret,
     database: pool,
-    emailAndPassword: {
-      enabled: true,
-      disableSignUp: false,
-      requireEmailVerification: true,
-    },
+    emailAndPassword: emailAndPasswordOptions(env),
     emailVerification: {
       sendOnSignUp: true,
       autoSignInAfterVerification: true,
@@ -167,61 +288,37 @@ export function createAuth(env: ApiEnv, pool: Pool) {
         secure: env.nodeEnv === 'production',
       },
     },
-    databaseHooks: {
-      user: {
-        create: {
-          // Self-registration provisions a personal organisation for the new
-          // user, matching the shape /api/me expects (users.organisationId
-          // + role). No seed scripts or seeded accounts — every account is
-          // created through this path, including the sign-up form.
-          after: async (user) => {
-            await provisionOrganisationForNewUser(pool, {
-              id: user.id,
-              email: user.email,
-              organisationId: (user as { organisationId?: string | null }).organisationId,
-            })
-          },
-        },
-      },
-    },
     hooks: {
       after: createAuthMiddleware(async (ctx) => {
-        // Allowed unauthenticated paths that this hook acts on: sign-in
-        // (password + magic-link verify) for the sign-in audit log,
-        // sign-up/email for the self-registration audit log, and
-        // verify-email — since requireEmailVerification means sign-up no
-        // longer establishes a session directly, the session (and thus the
-        // sign-up audit entry) now lands on verify-email instead. Extend
-        // this list deliberately when new auth flows are added.
-        const isSignIn = ctx.path === '/sign-in/email' || ctx.path === '/magic-link/verify'
-        const isSignUp = ctx.path === '/sign-up/email'
-        const isVerifyEmail = ctx.path === '/verify-email'
+        // Auth audit covers sign-in, sign-up, and verify-email. The decision
+        // (which paths audit, and the action/method mapping) lives in the pure
+        // buildAuthAuditEvent helper; this hook just applies it. Org-less
+        // users are audited with organisationId null — the primary
+        // registration/sign-in path is no longer invisible to the audit log.
+        const event = buildAuthAuditEvent({
+          path: ctx.path,
+          newSession: ctx.context.newSession
+            ? {
+                user: {
+                  id: ctx.context.newSession.user.id,
+                  organisationId: ctx.context.newSession.user.organisationId ?? null,
+                },
+                session: { id: ctx.context.newSession.session.id },
+              }
+            : null,
+        })
 
-        if (!isSignIn && !isSignUp && !isVerifyEmail) {
-          return
-        }
-
-        const newSession = ctx.context.newSession
-        const organisationId = newSession?.user.organisationId
-
-        if (!newSession || !organisationId) {
+        if (!event) {
           return
         }
 
         await appendAuditLog(pool, {
-          organisationId,
-          userId: newSession.user.id,
-          entityType: 'session',
-          entityId: newSession.session.id,
-          action: isSignUp || isVerifyEmail ? 'auth.sign_up' : 'auth.sign_in',
-          metadata: {
-            method: ctx.path === '/sign-in/email'
-              ? 'email_password'
-              : ctx.path === '/sign-up/email' || isVerifyEmail
-                ? 'email_password'
-                : 'magic_link',
-            emailVerified: isVerifyEmail,
-          },
+          organisationId: event.organisationId,
+          userId: event.userId,
+          entityType: event.entityType,
+          entityId: event.entityId,
+          action: event.action,
+          metadata: event.metadata,
           requestId: `req_${crypto.randomUUID()}`,
         })
       }),

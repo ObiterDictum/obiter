@@ -1,24 +1,123 @@
 import { Link, useNavigate } from '@tanstack/react-router'
 import { ArrowRight, Clock, Folders, MagnifyingGlass, Sparkle, X } from '@phosphor-icons/react'
-import { Skeleton } from '@obiter/ui'
+import { Button, Card, Input, Skeleton } from '@obiter/ui'
 import type { AppPlatform } from '@obiter/contracts'
 import { useState, type FormEvent } from 'react'
+import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
 import { changelogQueryOptions } from '../changelog'
 import { useMattersList } from '../matters'
-import { useCurrentUser } from '../current-user'
-import { useSuspenseQuery } from '@tanstack/react-query'
+import { ApiError } from '../api'
+import { useCreateOrganisation, useCurrentUser } from '../current-user'
 
 /**
- * Home — the authenticated landing surface. Greeting + a single hero search
- * entry, then a "live today" set of surfaces driven by real data (the signed-in
- * user's actual matters). No invented widgets: every value shown comes from a
- * real endpoint. No fixture snapshot remains.
+ * Home — the authenticated landing surface. For an org-less user this renders
+ * the create-organisation state instead of matters/search content, because
+ * matters and documents live inside an organisation. Once an org exists,
+ * greeting + a single hero search entry + a "live today" set of surfaces
+ * driven by real data (the signed-in user's actual matters). No invented
+ * widgets: every value shown comes from a real endpoint. No fixture snapshot.
  */
 export function HomeRouteView({ platform: _platform }: { platform: AppPlatform }) {
+  const { data: me } = useCurrentUser()
+
+  if (!me.organisation) {
+    return <CreateOrganisationState name={me.user.name} />
+  }
+
+  return <OrganisationHome organisationName={me.organisation.name} userName={me.user.name} />
+}
+
+/**
+ * Minimal create-organisation surface for org-less users. One field, one
+ * action, calm copy. This is deliberately not a settings area — when settings
+ * exist later, org creation moves/extends there. On success the current-user
+ * query is invalidated so /api/me refetches and the shell flips to the
+ * matters Home without a full reload.
+ */
+function CreateOrganisationState({ name }: { name: string }) {
+  const navigate = useNavigate()
+  const queryClient = useQueryClient()
+  const createOrganisation = useCreateOrganisation()
+  const [orgName, setOrgName] = useState('')
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleCreate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const trimmed = orgName.trim()
+    if (!trimmed) {
+      setError('Organisation name is required.')
+      return
+    }
+    setError(null)
+    try {
+      await createOrganisation.mutateAsync({ name: trimmed })
+      await navigate({ to: '/' })
+    } catch (cause) {
+      if (cause instanceof ApiError && cause.code === 'conflict_detected') {
+        // The user already has an organisation, so the cached /api/me is
+        // stale. Refresh it and tell them — they do not need to create one.
+        setError('You already have an organisation. Refreshing…')
+        try {
+          await queryClient.refetchQueries({ queryKey: ['current-user'] })
+        } catch {
+          // If the refetch fails, do not leave the user stuck on
+          // "Refreshing…" — fall back to a retryable generic error.
+          setError('Could not refresh your account. Reload the page.')
+        }
+      } else {
+        setError('Could not create the organisation. Try again.')
+      }
+    }
+  }
+
+  return (
+    <div className="mx-auto flex w-full max-w-[520px] flex-col gap-8">
+      <header className="flex flex-col gap-2">
+        <h1 className="text-2xl font-semibold tracking-tight text-ink">
+          Welcome to Obiter, {name.split(' ')[0]}
+        </h1>
+        <p className="text-sm leading-relaxed text-muted">
+          Matters and documents live inside an organisation. Create one to get started.
+          You can rename it later.
+        </p>
+      </header>
+
+      <Card>
+        <form className="flex flex-col gap-4" onSubmit={handleCreate}>
+          <Input
+            label="Organisation name"
+            type="text"
+            autoComplete="organization"
+            required
+            maxLength={120}
+            value={orgName}
+            onChange={(e) => setOrgName(e.target.value)}
+            error={error ?? undefined}
+          />
+          <Button
+            type="submit"
+            loading={createOrganisation.isPending}
+            iconEnd={<ArrowRight size={16} weight="bold" />}
+            className="w-full"
+          >
+            Create organisation
+          </Button>
+        </form>
+      </Card>
+    </div>
+  )
+}
+
+function OrganisationHome({
+  organisationName,
+  userName,
+}: {
+  organisationName: string
+  userName: string
+}) {
   const navigate = useNavigate()
   const [homeSearch, setHomeSearch] = useState('')
   const [changelogOpen, setChangelogOpen] = useState(false)
-  const { data: me } = useCurrentUser()
   const matters = useMattersList()
   const { data: changelog } = useSuspenseQuery(changelogQueryOptions())
 
@@ -33,7 +132,7 @@ export function HomeRouteView({ platform: _platform }: { platform: AppPlatform }
       : matterCount > 0
         ? 'count'
         : 'empty'
-  const firstName = me.user.name.split(' ')[0]
+  const firstName = userName.split(' ')[0]
   const recentMatters = matters.data?.slice(0, 4) ?? []
 
   function handleHomeSearch(event: FormEvent<HTMLFormElement>) {
@@ -50,7 +149,7 @@ export function HomeRouteView({ platform: _platform }: { platform: AppPlatform }
       <header className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1.5">
           <p className="text-xs font-semibold uppercase tracking-wider text-subtle">
-            {me.organisation.name}
+            {organisationName}
           </p>
           <h1 className="text-3xl font-semibold tracking-tight text-ink">
             Welcome back, {firstName}

@@ -1,4 +1,4 @@
-import { useNavigate } from '@tanstack/react-router'
+import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { ArrowRight } from '@phosphor-icons/react'
 import { Button, Card, Input } from '@obiter/ui'
 import type { AppPlatform } from '@obiter/contracts'
@@ -11,17 +11,21 @@ type Mode = 'password' | 'magic-link' | 'register'
 /**
  * Real sign-in / self-registration against the auth API (better-auth
  * email/password + magic link). The frame renders this route bare (no
- * sidebar); on success the user is sent to /workspace.
+ * sidebar); on success the user is sent to Home. A ?reset=success query
+ * param (set after a password reset) surfaces a confirmation notice.
  */
 export function SignInRouteView({ platform }: { platform: AppPlatform }) {
   const navigate = useNavigate()
   const { signInWithEmail, signUpWithEmail, requestMagicLink } = useAuth()
+  const search = useSearch({ strict: false }) as { reset?: string }
   const [mode, setMode] = useState<Mode>('password')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(
+    search.reset === 'success' ? 'Your password has been reset. Sign in with your new password.' : null,
+  )
   const [submitting, setSubmitting] = useState(false)
 
   async function goToHome() {
@@ -127,6 +131,17 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
                 />
               ) : null}
 
+              {mode === 'password' ? (
+                <div className="flex justify-end">
+                  <Link
+                    to="/forgot-password"
+                    className="text-xs font-medium text-brand hover:text-brand-pressed"
+                  >
+                    Forgot password?
+                  </Link>
+                </div>
+              ) : null}
+
               {mode === 'magic-link' && error ? (
                 <p className="text-sm text-danger">{error}</p>
               ) : null}
@@ -164,7 +179,7 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
 
         <p className="text-center text-xs text-subtle">
           {mode === 'register'
-            ? 'Creating an account provisions your own organisation.'
+            ? 'You can create an organisation after verifying your email.'
             : 'New here? Choose "Create account" above to self-register.'}
         </p>
       </div>

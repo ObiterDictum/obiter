@@ -45,7 +45,7 @@ function requireUser(c: RouteContext): AuthenticatedRouteUser | Response {
     return errorResponse(c, 'unauthenticated', 'Sign in is required.', 401)
   }
   if (!user.organisationId) {
-    return errorResponse(c, 'organisation_not_found', 'The signed-in user does not have an active organisation.', 404)
+    return errorResponse(c, 'no_organisation', 'Create an organisation to use this area.', 403)
   }
   return { id: user.id, organisationId: user.organisationId }
 }

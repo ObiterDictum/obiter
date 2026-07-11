@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { Pool, PoolClient } from 'pg'
-import { createDocument, restoreMatterWithAudit, softDeleteMatter } from './database'
+import {
+  createDocument,
+  createOrganisationForUser,
+  restoreMatterWithAudit,
+  softDeleteMatter,
+} from './database'
 
 type QueryCall = [string, unknown[] | undefined]
 
@@ -287,5 +292,63 @@ describe('matter workspace database operations', () => {
 
     expect(calls.map(([sql]) => sql)).toContain('rollback')
     expect(calls.map(([sql]) => sql)).not.toContain('commit')
+  })
+})
+
+describe('createOrganisationForUser', () => {
+  it('fails closed and rolls back when the user row is missing (no orphan org/audit)', async () => {
+    const { pool, calls } = createTransactionalPool(async (sql) => {
+      if (sql === 'begin' || sql === 'rollback') {
+        return { rows: [] }
+      }
+      // SELECT ... FOR UPDATE returns zero rows — the user does not exist.
+      if (sql.includes('select "organisationId" from users')) {
+        return { rows: [] }
+      }
+      if (sql.includes('insert into organisations')) {
+        return { rows: [{ id: 'org_orphan', name: 'Orphan', plan: 'private_beta' }] }
+      }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    await expect(
+      createOrganisationForUser(pool, {
+        userId: 'usr_missing',
+        name: 'Acme',
+        requestId: 'req_1',
+      }),
+    ).rejects.toThrow('User record not found.')
+
+    const sequence = calls.map(([sql]) => sql)
+    expect(sequence).toContain('rollback')
+    expect(sequence).not.toContain('commit')
+    // Must not have created an orphan organisation or audit row.
+    expect(sequence.some((s) => s.includes('insert into organisations'))).toBe(false)
+    expect(sequence.some((s) => s.includes('insert into audit_logs'))).toBe(false)
+  })
+
+  it('returns created:false when the user already has an organisation', async () => {
+    const { pool, calls } = createTransactionalPool(async (sql) => {
+      if (sql === 'begin' || sql === 'rollback') {
+        return { rows: [] }
+      }
+      if (sql.includes('select "organisationId" from users')) {
+        return { rows: [{ organisationId: 'org_existing' }] }
+      }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    await expect(
+      createOrganisationForUser(pool, {
+        userId: 'usr_1',
+        name: 'Acme',
+        requestId: 'req_1',
+      }),
+    ).resolves.toEqual({ created: false })
+
+    const sequence = calls.map(([sql]) => sql)
+    expect(sequence).toContain('rollback')
+    expect(sequence).not.toContain('commit')
+    expect(sequence.some((s) => s.includes('insert into organisations'))).toBe(false)
   })
 })

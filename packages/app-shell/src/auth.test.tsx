@@ -1,6 +1,9 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { act, renderHook, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import type { MeResponse } from '@obiter/contracts'
+import type { ReactNode } from 'react'
 import { useAuth } from './auth'
 
 const mock = vi.hoisted(() => ({
@@ -23,7 +26,13 @@ vi.mock('better-auth/client/plugins', () => ({
   magicLinkClient: () => ({}),
 }))
 
-const { signInEmail, signUpEmail, useSession } = mock
+const { signInEmail, signUpEmail, useSession, signOutFn } = mock
+
+function createWrapper(client: QueryClient) {
+  return function Wrapper({ children }: { children: ReactNode }) {
+    return <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  }
+}
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -34,7 +43,7 @@ describe('useAuth — sign-in success/failure', () => {
   it('returns ok on a successful email/password sign-in', async () => {
     signInEmail.mockResolvedValueOnce({ error: null, data: { token: 'tok', user: { id: 'usr_1' } } })
 
-    const { result } = renderHook(() => useAuth())
+    const { result } = renderHook(() => useAuth(), { wrapper: createWrapper(new QueryClient()) })
 
     let outcome
     await act(async () => {
@@ -51,7 +60,7 @@ describe('useAuth — sign-in success/failure', () => {
       data: null,
     })
 
-    const { result } = renderHook(() => useAuth())
+    const { result } = renderHook(() => useAuth(), { wrapper: createWrapper(new QueryClient()) })
 
     let outcome
     await act(async () => {
@@ -64,7 +73,7 @@ describe('useAuth — sign-in success/failure', () => {
   it('falls back to a generic message when better-auth gives no message', async () => {
     signInEmail.mockResolvedValueOnce({ error: {}, data: null })
 
-    const { result } = renderHook(() => useAuth())
+    const { result } = renderHook(() => useAuth(), { wrapper: createWrapper(new QueryClient()) })
 
     let outcome
     await act(async () => {
@@ -80,7 +89,7 @@ describe('useAuth — registration with email verification', () => {
     // With requireEmailVerification enabled, better-auth returns { token: null, user }.
     signUpEmail.mockResolvedValueOnce({ error: null, data: { token: null, user: { id: 'usr_2' } } })
 
-    const { result } = renderHook(() => useAuth())
+    const { result } = renderHook(() => useAuth(), { wrapper: createWrapper(new QueryClient()) })
 
     let outcome: { ok: boolean; message?: string; verificationRequired?: boolean } | undefined
     await act(async () => {
@@ -94,7 +103,7 @@ describe('useAuth — registration with email verification', () => {
   it('reports a sign-up failure', async () => {
     signUpEmail.mockResolvedValueOnce({ error: { message: 'Email already in use.' }, data: null })
 
-    const { result } = renderHook(() => useAuth())
+    const { result } = renderHook(() => useAuth(), { wrapper: createWrapper(new QueryClient()) })
 
     let outcome
     await act(async () => {
@@ -112,7 +121,7 @@ describe('useAuth — session presence', () => {
       isPending: false,
     })
 
-    const { result } = renderHook(() => useAuth())
+    const { result } = renderHook(() => useAuth(), { wrapper: createWrapper(new QueryClient()) })
 
     await waitFor(() => {
       expect(result.current.session).not.toBeNull()
@@ -123,7 +132,31 @@ describe('useAuth — session presence', () => {
 
   it('reports null session when unauthenticated', () => {
     useSession.mockReturnValue({ data: null, isPending: false })
-    const { result } = renderHook(() => useAuth())
+    const { result } = renderHook(() => useAuth(), { wrapper: createWrapper(new QueryClient()) })
     expect(result.current.session).toBeNull()
+  })
+})
+
+describe('useAuth — signOut clears the current-user cache', () => {
+  it('removes the cached /api/me so account-switching does not gate on the prior user', async () => {
+    const client = new QueryClient()
+    const cachedMe: MeResponse = {
+      user: { id: 'usr_1', email: 'lex@obiter.dev', name: 'Lex', role: 'owner' },
+      organisation: { id: 'org_1', name: 'Obiter', plan: 'private_beta' },
+    }
+    client.setQueryData(['current-user'], cachedMe)
+    expect(client.getQueryData(['current-user'])).toBeTruthy()
+
+    signOutFn.mockResolvedValueOnce({})
+
+    const { result } = renderHook(() => useAuth(), { wrapper: createWrapper(client) })
+
+    await act(async () => {
+      await result.current.signOut()
+    })
+
+    expect(signOutFn).toHaveBeenCalledOnce()
+    // The cache is cleared so a fresh sign-in never reads the previous user.
+    expect(client.getQueryData(['current-user'])).toBeUndefined()
   })
 })
