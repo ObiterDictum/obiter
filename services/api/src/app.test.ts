@@ -173,6 +173,157 @@ describe('createApiApp', () => {
     })
   })
 
+  it('returns the user with organisation null for an org-less session at /api/me', async () => {
+    // A freshly registered user has no organisation until they create one.
+    const auth = {
+      api: {
+        getSession: async () => ({
+          user: { id: 'usr_2', email: 'new@example.test', name: 'New User', organisationId: null, role: null },
+          session: { id: 'ses_2' },
+        }),
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const app = createApiApp(testEnv, createPool(async () => ({ rows: [] })), { auth })
+
+    const response = await app.request('/api/me')
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({
+      user: { id: 'usr_2', role: null },
+      organisation: null,
+    })
+  })
+
+  it('returns 403 no_organisation when an org-less user hits an org-scoped endpoint', async () => {
+    const auth = {
+      api: {
+        getSession: async () => ({
+          user: { id: 'usr_2', organisationId: null },
+          session: { id: 'ses_2' },
+        }),
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const app = createApiApp(testEnv, createPool(async () => ({ rows: [] })), { auth })
+
+    const response = await app.request('/api/matters')
+    const body = (await response.json()) as ErrorBody
+
+    expect(response.status).toBe(403)
+    expect(body.error.code).toBe('no_organisation')
+  })
+
+  it('creates an organisation for an org-less user via POST /api/organisations', async () => {
+    const queries: unknown[] = []
+    const auth = {
+      api: {
+        getSession: async () => ({
+          user: { id: 'usr_2', organisationId: null },
+          session: { id: 'ses_2' },
+        }),
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const app = createApiApp(
+      testEnv,
+      createConnectedPool(async (...args) => {
+        queries.push(args)
+        const sql = String(args[0])
+        if (sql === 'begin' || sql === 'commit' || sql === 'rollback') return { rows: [] }
+        if (sql.includes('select "organisationId" from users')) {
+          return { rows: [{ organisationId: null }] }
+        }
+        if (sql.includes('insert into organisations')) {
+          return { rows: [{ id: 'org_new', name: 'Acme Law', plan: 'private_beta' }] }
+        }
+        return { rows: [] }
+      }),
+      { auth },
+    )
+
+    const response = await app.request('/api/organisations', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: '  Acme Law  ' }),
+    })
+
+    expect(response.status).toBe(201)
+    await expect(response.json()).resolves.toMatchObject({
+      organisation: { id: 'org_new', name: 'Acme Law' },
+    })
+    // The name is trimmed before insert, and an audit row is written in the
+    // same transaction as the org insert + user update.
+    const insertOrg = queries.find((q) =>
+      String((q as unknown[])[0]).includes('insert into organisations'),
+    ) as unknown[] | undefined
+    expect(insertOrg?.[1]).toEqual(['Acme Law'])
+    const auditQuery = queries.find((q) =>
+      String((q as unknown[])[0]).includes('insert into audit_logs'),
+    ) as unknown[] | undefined
+    expect(auditQuery).toBeTruthy()
+    expect(auditQuery?.[1]).toEqual(
+      expect.arrayContaining(['org_new', 'usr_2', 'organisation', 'org_new', 'organisation.create']),
+    )
+  })
+
+  it('rejects organisation creation with 409 when the user already has one', async () => {
+    const auth = {
+      api: {
+        getSession: async () => ({
+          user: { id: 'usr_1', organisationId: 'org_existing' },
+          session: { id: 'ses_1' },
+        }),
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const app = createApiApp(
+      testEnv,
+      createConnectedPool(async (...args) => {
+        const sql = String(args[0])
+        if (sql === 'begin') return { rows: [] }
+        if (sql.includes('select "organisationId" from users')) {
+          return { rows: [{ organisationId: 'org_existing' }] }
+        }
+        return { rows: [] }
+      }),
+      { auth },
+    )
+
+    const response = await app.request('/api/organisations', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Second Org' }),
+    })
+    const body = (await response.json()) as ErrorBody
+
+    expect(response.status).toBe(409)
+    expect(body.error.code).toBe('conflict_detected')
+  })
+
+  it('rejects organisation creation with an empty name', async () => {
+    const auth = {
+      api: {
+        getSession: async () => ({
+          user: { id: 'usr_2', organisationId: null },
+          session: { id: 'ses_2' },
+        }),
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const app = createApiApp(testEnv, createPool(async () => ({ rows: [] })), { auth })
+
+    const response = await app.request('/api/organisations', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: '   ' }),
+    })
+    const body = (await response.json()) as ErrorBody
+
+    expect(response.status).toBe(400)
+    expect(body.error.code).toBe('validation_failed')
+  })
+
   it('allows the configured desktop origin through CORS', async () => {
     const auth = {
       api: {

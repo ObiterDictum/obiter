@@ -5,6 +5,7 @@ import { Resend } from 'resend'
 import type { Pool } from 'pg'
 import { appendAuditLog } from './database'
 import type { ApiEnv } from './env'
+import { magicLinkEmail, resetPasswordEmail, verificationEmail } from './email-templates'
 
 function maskEmail(email: string) {
   const [localPart, domain] = email.split('@')
@@ -17,17 +18,25 @@ function maskEmail(email: string) {
 }
 
 /**
- * Shared email sender for all auth-flow emails (magic link, verification).
- * With OBITER_RESEND_API_KEY configured it sends via Resend and logs +
- * throws on delivery failure (never silently drops an error — better-auth
- * awaits these calls inline for magic-link, and in the background for
+ * Shared email sender for all auth-flow emails (magic link, verification,
+ * password reset). With OBITER_RESEND_API_KEY configured it sends via
+ * Resend (with both html and text parts) and logs + throws on delivery
+ * failure (never silently drops an error — better-auth awaits these calls
+ * inline for magic-link/reset-request, and in the background for
  * verification email, but either way failures must be visible in server
  * logs since the client-facing response does not reliably surface them).
  * Without a key it falls back to a dev-only console log of the one-time URL.
  */
 async function sendEmail(
   env: ApiEnv,
-  options: { email: string; subject: string; html: string; logLabel: string; url: string },
+  options: {
+    email: string
+    subject: string
+    html: string
+    text: string
+    logLabel: string
+    url: string
+  },
 ) {
   if (!env.resendApiKey) {
     // Development-only delivery intentionally exposes the one-time URL so a
@@ -45,6 +54,7 @@ async function sendEmail(
     to: options.email,
     subject: options.subject,
     html: options.html,
+    text: options.text,
   })
 
   if (result.error) {
@@ -60,57 +70,39 @@ async function sendEmail(
 }
 
 export async function sendMagicLink(env: ApiEnv, email: string, url: string) {
+  const emailContent = magicLinkEmail(url)
   await sendEmail(env, {
     email,
     url,
-    subject: 'Your Obiter sign-in link',
-    html: `<p>Click the link below to sign in to Obiter:</p><p><a href="${url}">${url}</a></p><p>This link expires in 10 minutes. If you did not request it, you can ignore this email.</p>`,
+    subject: emailContent.subject,
+    html: emailContent.html,
+    text: emailContent.text,
     logLabel: 'Magic-link',
   })
 }
 
 export async function sendVerificationEmail(env: ApiEnv, email: string, url: string) {
+  const emailContent = verificationEmail(url)
   await sendEmail(env, {
     email,
     url,
-    subject: 'Verify your Obiter email',
-    html: `<p>Click the link below to verify your email and finish creating your Obiter account:</p><p><a href="${url}">${url}</a></p><p>If you did not create this account, you can ignore this email.</p>`,
+    subject: emailContent.subject,
+    html: emailContent.html,
+    text: emailContent.text,
     logLabel: 'Verification',
   })
 }
 
-/**
- * Provision a personal/default organisation for a newly self-registered
- * user. Mirrors the shape /api/me expects: users.organisationId set, and
- * role 'owner' since the user is the sole member of their own organisation.
- */
-async function provisionOrganisationForNewUser(
-  pool: Pool,
-  user: { id: string; email: string; organisationId?: string | null },
-) {
-  if (user.organisationId) {
-    return
-  }
-
-  const client = await pool.connect()
-  try {
-    await client.query('begin')
-    const organisationName = `${user.email.split('@')[0]}'s organisation`
-    const organisation = await client.query<{ id: string }>(
-      'insert into organisations (name, created_at, updated_at) values ($1, now(), now()) returning id',
-      [organisationName],
-    )
-    await client.query(
-      `update users set "organisationId" = $1, role = 'owner', "updatedAt" = now() where id = $2`,
-      [organisation.rows[0].id, user.id],
-    )
-    await client.query('commit')
-  } catch (error) {
-    await client.query('rollback')
-    throw error
-  } finally {
-    client.release()
-  }
+export async function sendResetPasswordEmail(env: ApiEnv, email: string, url: string) {
+  const emailContent = resetPasswordEmail(url)
+  await sendEmail(env, {
+    email,
+    url,
+    subject: emailContent.subject,
+    html: emailContent.html,
+    text: emailContent.text,
+    logLabel: 'Reset-password',
+  })
 }
 
 export function createAuth(env: ApiEnv, pool: Pool) {
@@ -123,6 +115,16 @@ export function createAuth(env: ApiEnv, pool: Pool) {
       enabled: true,
       disableSignUp: false,
       requireEmailVerification: true,
+      // Enables the forgot/reset-password flow (better-auth 1.6.x):
+      // POST /request-password-reset stores a single-use token in the
+      // verifications table and calls sendResetPassword; GET /reset-password/:token
+      // validates it and redirects to the web with ?token= (or ?error=INVALID_TOKEN);
+      // POST /reset-password consumes the token and sets the new password.
+      // The request endpoint never reveals whether the email exists. The
+      // default 1h token expiry (resetPasswordTokenExpiresIn) is used.
+      sendResetPassword: async ({ user, url }) => {
+        await sendResetPasswordEmail(env, user.email, url)
+      },
     },
     emailVerification: {
       sendOnSignUp: true,
@@ -165,23 +167,6 @@ export function createAuth(env: ApiEnv, pool: Pool) {
         httpOnly: true,
         sameSite: 'lax',
         secure: env.nodeEnv === 'production',
-      },
-    },
-    databaseHooks: {
-      user: {
-        create: {
-          // Self-registration provisions a personal organisation for the new
-          // user, matching the shape /api/me expects (users.organisationId
-          // + role). No seed scripts or seeded accounts — every account is
-          // created through this path, including the sign-up form.
-          after: async (user) => {
-            await provisionOrganisationForNewUser(pool, {
-              id: user.id,
-              email: user.email,
-              organisationId: (user as { organisationId?: string | null }).organisationId,
-            })
-          },
-        },
       },
     },
     hooks: {

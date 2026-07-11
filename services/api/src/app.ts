@@ -13,6 +13,7 @@ import {
 import { createChangelogRoutes } from './routes/changelog'
 import { createDocumentsRoutes } from './routes/documents'
 import { createMattersRoutes } from './routes/matters'
+import { createOrganisationsRoutes } from './routes/organisations'
 import { createRedactRoutes } from './routes/redact'
 import { createLocalStorage, type StorageService } from './storage'
 
@@ -141,6 +142,7 @@ export function createApiApp(env: ApiEnv, pool: Pool, options: ApiAppOptions = {
   )
 
   app.route('/', createMattersRoutes(pool))
+  app.route('/', createOrganisationsRoutes(pool))
   app.route('/', createDocumentsRoutes(pool))
   app.route('/', createRedactRoutes(pool, storage))
   app.route('/', createLegalSearchRoutes(env))
@@ -165,18 +167,22 @@ export function createApiApp(env: ApiEnv, pool: Pool, options: ApiAppOptions = {
     const currentUser = toCurrentUser(sessionUser)
     const organisationId = sessionUser.organisationId
 
-    if (!currentUser || !organisationId) {
-      const error = errorResponse(
-        'organisation_not_found',
-        'The signed-in user does not have an active organisation.',
-        requestId,
-        404,
-      )
-      return c.json(error.response, error.status)
+    // Org-less users (organisationId null) are a first-class state: the user
+    // exists and is authenticated but has not yet created an organisation.
+    // Return them with organisation null so the client renders the
+    // create-organisation surface instead of matters.
+    if (!organisationId) {
+      const response: MeResponse = {
+        user: currentUser,
+        organisation: null,
+      }
+      return c.json(response)
     }
 
     const organisation = await findOrganisation(pool, organisationId)
 
+    // The user has an organisationId but the row is missing — a data
+    // integrity problem, not the normal org-less state. Surface it distinctly.
     if (!organisation) {
       const error = errorResponse(
         'organisation_not_found',

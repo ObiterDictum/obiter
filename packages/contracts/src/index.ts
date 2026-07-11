@@ -102,11 +102,13 @@ export type OutputMode = z.infer<typeof outputModeSchema>
 
 export type Tone = 'ink' | 'sage' | 'amber' | 'rust'
 
+// role is nullable: a newly self-registered user has no organisation and no
+// role until they explicitly create one. It is set to 'owner' on org creation.
 export const currentUserSchema = z.object({
   id: z.string().min(1),
   email: z.string().email(),
   name: z.string().min(1),
-  role: userRoleSchema,
+  role: userRoleSchema.nullable(),
 })
 export type CurrentUser = z.infer<typeof currentUserSchema>
 
@@ -117,17 +119,34 @@ export const currentOrganisationSchema = z.object({
 })
 export type CurrentOrganisation = z.infer<typeof currentOrganisationSchema>
 
+// organisation is nullable: self-registration no longer provisions an org.
+// GET /api/me returns { user, organisation: null } for an org-less user, and
+// the client renders the create-organisation surface instead of matters.
 export const meResponseSchema = z.object({
   user: currentUserSchema,
-  organisation: currentOrganisationSchema,
+  organisation: currentOrganisationSchema.nullable(),
 })
 export type MeResponse = z.infer<typeof meResponseSchema>
+
+export const ORGANISATION_NAME_MAX_LENGTH = 120
+
+export const createOrganisationInputSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, 'Organisation name is required.')
+    .max(ORGANISATION_NAME_MAX_LENGTH, 'Organisation name is too long.'),
+})
+export type CreateOrganisationInput = z.infer<typeof createOrganisationInputSchema>
 
 export const apiErrorCodeSchema = z.enum([
   'unauthenticated',
   'forbidden',
   'validation_failed',
   'organisation_not_found',
+  // An authenticated user with no organisation tried an org-scoped endpoint.
+  // Returned as 403 so the client can distinguish "sign in" from "create org".
+  'no_organisation',
   'closed_beta_required',
   'matter_not_found',
   'document_not_found',

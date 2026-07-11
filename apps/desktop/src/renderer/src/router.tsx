@@ -1,14 +1,17 @@
 import {
   AppShellLayout,
   DocumentDetailLayoutView,
+  ForgotPasswordRouteView,
   HomeRouteView,
   MatterRouteView,
   MattersRouteView,
+  ResetPasswordRouteView,
   SignInRouteView,
   caseLawDocumentQueryOptions,
   changelogQueryOptions,
   currentUserQueryOptions,
   documentQueryOptions,
+  ensureOrganisation,
   guardAuth,
   matterDocumentsQueryOptions,
   matterQueryOptions,
@@ -74,10 +77,12 @@ const workspaceRoute = createRoute({
 const mattersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'matters',
-  loader: ({ context }) =>
-    guardAuth(context.queryClient, () =>
+  loader: async ({ context }) => {
+    await ensureOrganisation(context.queryClient)
+    await guardAuth(context.queryClient, () =>
       context.queryClient.ensureQueryData(mattersListQueryOptions()),
-    ),
+    )
+  },
   component: DesktopMattersRoute,
 })
 
@@ -89,6 +94,7 @@ const matterDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'matters/$matterId',
   loader: async ({ context, params }) => {
+    await ensureOrganisation(context.queryClient)
     await guardAuth(context.queryClient, () =>
       context.queryClient.ensureQueryData(matterQueryOptions(params.matterId)),
     )
@@ -100,16 +106,19 @@ const matterDetailRoute = createRoute({
 const documentDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'matters/$matterId/documents/$documentId',
-  loader: ({ context, params }) =>
-    guardAuth(context.queryClient, () =>
+  loader: async ({ context, params }) => {
+    await ensureOrganisation(context.queryClient)
+    await guardAuth(context.queryClient, () =>
       context.queryClient.prefetchQuery(documentQueryOptions(params.documentId)),
-    ),
+    )
+  },
   component: DesktopDocumentDetailRoute,
 })
 
 const redactRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'redact',
+  loader: ({ context }) => ensureOrganisation(context.queryClient),
   component: DesktopRedactionRunsRoute,
 })
 
@@ -177,6 +186,26 @@ function DesktopSignInRoute() {
   return <SignInRouteView platform="desktop" />
 }
 
+const forgotPasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'forgot-password',
+  component: DesktopForgotPasswordRoute,
+})
+
+function DesktopForgotPasswordRoute() {
+  return <ForgotPasswordRouteView />
+}
+
+const resetPasswordRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'reset-password',
+  component: DesktopResetPasswordRoute,
+})
+
+function DesktopResetPasswordRoute() {
+  return <ResetPasswordRouteView />
+}
+
 const routeTree = rootRoute.addChildren([
   indexRoute,
   workspaceRoute,
@@ -187,6 +216,8 @@ const routeTree = rootRoute.addChildren([
   searchRoute,
   caseRoute,
   signInRoute,
+  forgotPasswordRoute,
+  resetPasswordRoute,
 ])
 
 export function createAppRouter(queryClient: QueryClient) {

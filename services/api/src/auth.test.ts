@@ -9,7 +9,7 @@ vi.mock('resend', () => ({
   })),
 }))
 
-const { sendMagicLink, sendVerificationEmail } = await import('./auth')
+const { sendMagicLink, sendVerificationEmail, sendResetPasswordEmail } = await import('./auth')
 
 beforeEach(() => {
   resendSendMock.mockClear()
@@ -125,6 +125,69 @@ describe('sendVerificationEmail', () => {
         { ...baseEnv, resendApiKey: 're_test_key' },
         'user@example.test',
         'https://app.example.test/verify-email?token=abc',
+      ),
+    ).rejects.toThrow('invalid domain')
+
+    expect(consoleError).toHaveBeenCalledWith(
+      expect.stringContaining('[resend]'),
+      expect.objectContaining({ message: 'invalid domain' }),
+    )
+
+    consoleError.mockRestore()
+  })
+})
+
+describe('sendResetPasswordEmail', () => {
+  it('logs the reset URL to the console and never calls Resend when no API key is configured', async () => {
+    const consoleInfo = vi.spyOn(console, 'info').mockImplementation(() => {})
+
+    await sendResetPasswordEmail(
+      baseEnv,
+      'user@example.test',
+      'https://app.example.test/reset-password?token=abc',
+    )
+
+    expect(consoleInfo).toHaveBeenCalledWith(
+      expect.stringContaining('[dev-only]'),
+      expect.objectContaining({ url: 'https://app.example.test/reset-password?token=abc' }),
+    )
+    expect(resendSendMock).not.toHaveBeenCalled()
+
+    consoleInfo.mockRestore()
+  })
+
+  it('sends via Resend with both html and text parts when an API key is configured', async () => {
+    resendSendMock.mockResolvedValueOnce({ data: { id: 'email_3' }, error: null })
+
+    await sendResetPasswordEmail(
+      { ...baseEnv, resendApiKey: 're_test_key' },
+      'user@example.test',
+      'https://app.example.test/reset-password?token=abc',
+    )
+
+    expect(resendSendMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        from: 'onboarding@resend.dev',
+        to: 'user@example.test',
+        subject: 'Reset your Obiter password',
+      }),
+    )
+    const call = resendSendMock.mock.calls[0][0]
+    expect(typeof call.html).toBe('string')
+    expect(call.html).toContain('https://app.example.test/reset-password?token=abc')
+    expect(typeof call.text).toBe('string')
+    expect(call.text).toContain('https://app.example.test/reset-password?token=abc')
+  })
+
+  it('throws and logs when Resend reports a delivery error', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    resendSendMock.mockResolvedValueOnce({ data: null, error: { message: 'invalid domain' } })
+
+    await expect(
+      sendResetPasswordEmail(
+        { ...baseEnv, resendApiKey: 're_test_key' },
+        'user@example.test',
+        'https://app.example.test/reset-password?token=abc',
       ),
     ).rejects.toThrow('invalid domain')
 

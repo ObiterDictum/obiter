@@ -20,6 +20,7 @@ export interface AuditRecordInput {
     | 'auth.sign_in'
     | 'auth.sign_up'
     | 'auth.sign_out'
+    | 'organisation.create'
     | 'matter.create'
     | 'matter.update'
     | 'matter.delete'
@@ -156,16 +157,77 @@ export async function findOrganisation(
   return result.rows[0] ?? null
 }
 
-export function toCurrentUser(user: SessionUserRecord): CurrentUser | null {
-  if (!user.role) {
-    return null
-  }
+/**
+ * Creates an organisation, assigns the creating user to it as owner, and
+ * writes the audit row — all in one transaction. The single-org invariant is
+ * enforced here (reject if the user already has an organisationId) and at the
+ * DB level via a partial unique index (migration 0008).
+ *
+ * Returns null only when the user already has an organisation (409 in the
+ * route). Any other failure throws so the caller surfaces a 500.
+ */
+export async function createOrganisationForUser(
+  pool: Pool,
+  input: { userId: string; name: string; requestId: string },
+): Promise<{ created: false } | { created: true; organisation: CurrentOrganisation }> {
+  const client = await pool.connect()
 
+  try {
+    await client.query('begin')
+
+    const existing = await client.query<{ organisationId: string | null }>(
+      `select "organisationId" from users where id = $1 for update`,
+      [input.userId],
+    )
+    const currentOrgId = existing.rows[0]?.organisationId
+    if (currentOrgId) {
+      await client.query('rollback')
+      return { created: false }
+    }
+
+    const organisation = await client.query<{ id: string; name: string; plan: CurrentOrganisation['plan'] }>(
+      `
+        insert into organisations (name, created_at, updated_at)
+        values ($1, now(), now())
+        returning id, name, plan
+      `,
+      [input.name],
+    )
+    const created = organisation.rows[0]
+
+    await client.query(
+      `update users set "organisationId" = $1, role = 'owner', "updatedAt" = now() where id = $2`,
+      [created.id, input.userId],
+    )
+
+    await appendAuditLog(client, {
+      organisationId: created.id,
+      userId: input.userId,
+      entityType: 'organisation',
+      entityId: created.id,
+      action: 'organisation.create',
+      metadata: { name: input.name },
+      requestId: input.requestId,
+    })
+
+    await client.query('commit')
+    return { created: true, organisation: created }
+  } catch (error) {
+    await client.query('rollback')
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+// An org-less user has role null; /api/me returns them with organisation null
+// so the client can render the create-organisation surface.
+export function toCurrentUser(user: SessionUserRecord): CurrentUser {
   return {
     id: user.id,
     email: user.email,
     name: user.name,
-    role: user.role,
+    role: user.role ?? null,
   }
 }
 

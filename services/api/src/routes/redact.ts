@@ -23,7 +23,7 @@ interface RouteUser { id: string; organisationId?: string | null }
 interface RouteVariables { requestId: string; user: RouteUser | null }
 type RouteContext = Context<{ Variables: RouteVariables }>
 
-function errorResponse(c: RouteContext, code: ApiErrorCode, message: string, status: 400 | 401 | 404 | 409) {
+function errorResponse(c: RouteContext, code: ApiErrorCode, message: string, status: 400 | 401 | 403 | 404 | 409) {
   const body: ApiErrorResponse = { error: { code, message, requestId: c.get('requestId') } }
   return c.json(body, status)
 }
@@ -31,7 +31,7 @@ function errorResponse(c: RouteContext, code: ApiErrorCode, message: string, sta
 function requireUser(c: RouteContext): { id: string; organisationId: string } | Response {
   const user = c.get('user')
   if (!user) return errorResponse(c, 'unauthenticated', 'Sign in is required.', 401)
-  if (!user.organisationId) return errorResponse(c, 'organisation_not_found', 'The signed-in user does not have an active organisation.', 404)
+  if (!user.organisationId) return errorResponse(c, 'no_organisation', 'Create an organisation to use this area.', 403)
   return { id: user.id, organisationId: user.organisationId }
 }
 

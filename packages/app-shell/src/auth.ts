@@ -38,6 +38,13 @@ export interface UseAuthReturn {
     input: SignUpEmailInput,
   ) => Promise<{ ok: boolean; message?: string; verificationRequired?: boolean }>
   requestMagicLink: (email: string) => Promise<{ ok: boolean; message?: string }>
+  requestPasswordReset: (
+    email: string,
+  ) => Promise<{ ok: boolean; message?: string }>
+  resetPassword: (
+    token: string,
+    newPassword: string,
+  ) => Promise<{ ok: boolean; message?: string }>
   signOut: () => Promise<void>
 }
 
@@ -95,12 +102,40 @@ export function useAuth(): UseAuthReturn {
     await authClient.signOut()
   }
 
+  // better-auth 1.6.x password reset: POST /request-password-reset never
+  // reveals whether the email exists (it returns the same message and runs a
+  // timing-attack mitigation). The reset callback redirects to the web with
+  // ?token= on success or ?error=INVALID_TOKEN on an expired/invalid token.
+  async function requestPasswordReset(email: string) {
+    const redirectTo =
+      typeof window === 'undefined' ? undefined : `${window.location.origin}/reset-password`
+    const result = await authClient.requestPasswordReset({ email, redirectTo })
+    if (result.error) {
+      return { ok: false, message: result.error.message ?? 'Could not send a reset link.' }
+    }
+    return {
+      ok: true,
+      message:
+        'If an account exists for that email, we have sent a link to reset your password.',
+    }
+  }
+
+  async function resetPassword(token: string, newPassword: string) {
+    const result = await authClient.resetPassword({ token, newPassword })
+    if (result.error) {
+      return { ok: false, message: result.error.message ?? 'Could not reset your password.' }
+    }
+    return { ok: true }
+  }
+
   return {
     session: realSession.data,
     isPending: realSession.isPending,
     signInWithEmail,
     signUpWithEmail,
     requestMagicLink,
+    requestPasswordReset,
+    resetPassword,
     signOut,
   }
 }

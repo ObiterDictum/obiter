@@ -6,9 +6,15 @@
 // Data + auth helpers (contract §3)
 export { apiFetch, ApiError } from './api'
 export { authClient, useAuth, type UseAuthReturn, type SignInEmailInput } from './auth'
-export { currentUserQueryOptions, useCurrentUser } from './current-user'
+export {
+  currentUserQueryOptions,
+  useCurrentUser,
+  createOrganisationMutationOptions,
+  useCreateOrganisation,
+  type CreateOrganisationResult,
+} from './current-user'
 export { changelogQueryOptions } from './changelog'
-export { guardAuth } from './route-loaders'
+export { guardAuth, ensureOrganisation } from './route-loaders'
 
 // Live-surface data (M2): real matters + documents via TanStack Query.
 export {
@@ -40,6 +46,8 @@ export { PageScaffold, type PageScaffoldProps } from './page-scaffold'
 
 // Route views
 export { SignInRouteView } from './views/sign-in'
+export { ForgotPasswordRouteView } from './views/forgot-password'
+export { ResetPasswordRouteView } from './views/reset-password'
 export { HomeRouteView } from './views/home'
 export { MattersRouteView, MatterRouteView } from './views/matters'
 export { DocumentDetailLayoutView } from './views/document-detail'
