@@ -324,6 +324,32 @@ describe('createApiApp', () => {
     expect(body.error.code).toBe('validation_failed')
   })
 
+  it('rejects a name made only of zero-width / format characters', async () => {
+    // \u200b (zero-width space), \u200d (zero-width joiner), \u202e (RLO
+    // override) are all category Cf: trim() leaves them, so without stripping
+    // they would pass as a non-empty (but invisible) organisation name.
+    const auth = {
+      api: {
+        getSession: async () => ({
+          user: { id: 'usr_2', organisationId: null },
+          session: { id: 'ses_2' },
+        }),
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const app = createApiApp(testEnv, createPool(async () => ({ rows: [] })), { auth })
+
+    const response = await app.request('/api/organisations', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: '\u200b\u200d\u202e' }),
+    })
+    const body = (await response.json()) as ErrorBody
+
+    expect(response.status).toBe(400)
+    expect(body.error.code).toBe('validation_failed')
+  })
+
   it('allows the configured desktop origin through CORS', async () => {
     const auth = {
       api: {
@@ -621,6 +647,49 @@ describe('createApiApp', () => {
         'ses_1',
         'auth.sign_out',
       ]),
+    ])
+  })
+
+  it('audits an org-less sign-out with a null organisation_id', async () => {
+    // Consistent with the nullable audit_logs.organisation_id (migration 0009)
+    // and the org-less auth sign-in/sign-up audit rows: an org-less user who
+    // signs out must still produce an audit row.
+    const queries: unknown[] = []
+    const auth = {
+      api: {
+        getSession: async () => ({
+          user: {
+            id: 'usr_orgless',
+            email: 'orgless@example.com',
+            name: 'Orgless User',
+            organisationId: null,
+            role: null,
+          },
+          session: { id: 'ses_orgless' },
+        }),
+      },
+      handler: async () => Response.json({ success: true }),
+    } as unknown as Auth
+
+    const app = createApiApp(
+      testEnv,
+      createPool(async (...args) => {
+        queries.push(args)
+        return { rows: [] }
+      }),
+      { auth },
+    )
+
+    const response = await app.request('/api/auth/sign-out', {
+      method: 'POST',
+      headers: { 'user-agent': 'vitest' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(queries).toHaveLength(1)
+    expect(queries[0]).toEqual([
+      expect.stringContaining('insert into audit_logs'),
+      expect.arrayContaining([null, 'usr_orgless', 'session', 'ses_orgless', 'auth.sign_out']),
     ])
   })
 

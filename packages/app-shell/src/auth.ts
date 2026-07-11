@@ -1,5 +1,6 @@
 import { createAuthClient } from 'better-auth/react'
 import { magicLinkClient } from 'better-auth/client/plugins'
+import { useQueryClient } from '@tanstack/react-query'
 
 /**
  * Better-auth client for the browser. The API mounts better-auth at /api/auth/*
@@ -44,7 +45,7 @@ export interface UseAuthReturn {
   resetPassword: (
     token: string,
     newPassword: string,
-  ) => Promise<{ ok: boolean; message?: string }>
+  ) => Promise<{ ok: boolean; message?: string; code?: string }>
   signOut: () => Promise<void>
 }
 
@@ -60,6 +61,7 @@ interface AuthSessionPresence {
  */
 export function useAuth(): UseAuthReturn {
   const realSession = authClient.useSession()
+  const queryClient = useQueryClient()
 
   async function signInWithEmail(input: SignInEmailInput) {
     const result = await authClient.signIn.email(input)
@@ -100,6 +102,11 @@ export function useAuth(): UseAuthReturn {
 
   async function signOut() {
     await authClient.signOut()
+    // Drop cached /api/me (and org-scoped data) so a subsequent sign-in as a
+    // different user never gates routes on the previous user's organisation
+    // state. The current-user query has a 60s staleTime, so without this a
+    // fresh sign-in could read a stale org-less/owning entry.
+    queryClient.clear()
   }
 
   // better-auth 1.6.x password reset: POST /request-password-reset never
@@ -124,7 +131,14 @@ export function useAuth(): UseAuthReturn {
   async function resetPassword(token: string, newPassword: string) {
     const result = await authClient.resetPassword({ token, newPassword })
     if (result.error) {
-      return { ok: false, message: result.error.message ?? 'Could not reset your password.' }
+      // Surface better-auth's error code (e.g. INVALID_TOKEN,
+      // PASSWORD_TOO_LONG) so the reset screen can distinguish a dead token
+      // from a retryable validation/server failure.
+      return {
+        ok: false,
+        message: result.error.message ?? 'Could not reset your password.',
+        code: typeof result.error.code === 'string' ? result.error.code : undefined,
+      }
     }
     return { ok: true }
   }

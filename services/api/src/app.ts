@@ -115,11 +115,14 @@ export function createApiApp(env: ApiEnv, pool: Pool, options: ApiAppOptions = {
       c.req.method === 'POST' &&
       new URL(c.req.url).pathname === '/api/auth/sign-out' &&
       response.ok &&
-      sessionUser?.organisationId &&
+      sessionUser &&
       session
     ) {
       await appendAuditLog(pool, {
-        organisationId: sessionUser.organisationId,
+        // Org-less users can sign out too; the audit row carries null org,
+        // consistent with the nullable audit_logs.organisation_id (migration
+        // 0009) and the auth sign-in/sign-up audit rows.
+        organisationId: sessionUser.organisationId ?? null,
         userId: sessionUser.id,
         entityType: 'session',
         entityId: session.id,

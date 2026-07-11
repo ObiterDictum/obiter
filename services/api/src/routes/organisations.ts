@@ -62,7 +62,11 @@ export function createOrganisationsRoutes(pool: Pool) {
       return errorResponse(c, 'validation_failed', 'Organisation name is required.', 400)
     }
 
-    const name = rawName.trim()
+    // Strip Unicode format characters (category Cf — zero-width spaces, joiners,
+    // directional marks) as well as ASCII whitespace before the emptiness check.
+    // A name of only ZWSPs would otherwise pass trim() as non-empty and store
+    // an invisible organisation name.
+    const name = rawName.replace(/\p{Cf}/gu, '').trim()
     if (name.length === 0) {
       return errorResponse(c, 'validation_failed', 'Organisation name is required.', 400)
     }

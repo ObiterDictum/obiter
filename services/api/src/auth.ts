@@ -173,37 +173,78 @@ export function buildAuthAuditEvent(ctx: AuthAuditContext): AuthAuditEvent | nul
   }
 }
 
+/**
+ * Sends the password-reset email for a given user+token. better-auth runs the
+ * `sendResetPassword` callback in the background after the reset token is
+ * already stored, so an unhandled throw here is swallowed and the client
+ * always sees "email sent" — correct for account-existence privacy, but it
+ * means a delivery failure would be invisible. This wrapper catches the
+ * failure and logs it at error level (masked email, domain, requestId) so
+ * delivery problems are observable in server logs, without changing the
+ * client-facing response.
+ */
+export async function sendResetPasswordForUser(env: ApiEnv, email: string, token: string) {
+  try {
+    await sendResetPasswordEmail(env, email, resetPasswordUrl(env, token))
+  } catch (error) {
+    console.error('Reset-password email delivery failed', {
+      email: maskEmail(email),
+      domain: email.split('@')[1] ?? null,
+      requestId: `req_${crypto.randomUUID()}`,
+      message: error instanceof Error ? error.message : String(error),
+    })
+  }
+}
+
+/**
+ * The emailAndPassword config, exported so its security-relevant options can be
+ * regression-tested without booting a better-auth instance (which would need a
+ * DB). `revokeSessionsOnPasswordReset` must stay true: it is the only thing
+ * that makes better-auth call `deleteSessions(userId)` on reset, closing the
+ * "stolen session cookie survives a password reset" threat.
+ */
+export function emailAndPasswordOptions(env: ApiEnv) {
+  return {
+    enabled: true,
+    disableSignUp: false,
+    requireEmailVerification: true,
+    // Revoke every existing session when a password is reset: an attacker
+    // who holds a stolen session cookie is signed out the moment the victim
+    // resets their password, so the stolen credential stops working.
+    // better-auth's default is falsy (deleteSessions does not run).
+    revokeSessionsOnPasswordReset: true,
+    // Enables the forgot/reset-password flow (better-auth 1.6.x):
+    // POST /request-password-reset stores a single-use token in the
+    // verifications table and calls this callback; POST /reset-password
+    // consumes the token and sets the new password. The request endpoint
+    // never reveals whether the email exists. The default 1h token expiry
+    // (resetPasswordTokenExpiresIn) is used.
+    //
+    // The reset link is built server-side from the raw token to always
+    // point at the configured web origin (resetPasswordUrl), regardless of
+    // which client requested the reset. better-auth's own GET
+    // /reset-password/:token pre-validation redirect is deliberately
+    // bypassed: the email links straight to the web app's /reset-password
+    // screen with ?token=, where the token is validated on submit. An
+    // expired/invalid token therefore surfaces at submit time, not up-front
+    // — the reset screen renders its "request a new link" state on that
+    // failure. This avoids reset links that target the desktop custom
+    // scheme, which would not open in a browser.
+    sendResetPassword: async ({ user, token }: { user: { email: string }; token: string }) => {
+      // Delegates to sendResetPasswordForUser, which logs delivery failures
+      // at error level instead of letting better-auth swallow the throw.
+      await sendResetPasswordForUser(env, user.email, token)
+    },
+  }
+}
+
 export function createAuth(env: ApiEnv, pool: Pool) {
   return betterAuth({
     appName: 'Obiter',
     baseURL: env.authBaseUrl,
     secret: env.authSecret,
     database: pool,
-    emailAndPassword: {
-      enabled: true,
-      disableSignUp: false,
-      requireEmailVerification: true,
-      // Enables the forgot/reset-password flow (better-auth 1.6.x):
-      // POST /request-password-reset stores a single-use token in the
-      // verifications table and calls this callback; POST /reset-password
-      // consumes the token and sets the new password. The request endpoint
-      // never reveals whether the email exists. The default 1h token expiry
-      // (resetPasswordTokenExpiresIn) is used.
-      //
-      // The reset link is built server-side from the raw token to always
-      // point at the configured web origin (resetPasswordUrl), regardless of
-      // which client requested the reset. better-auth's own GET
-      // /reset-password/:token pre-validation redirect is deliberately
-      // bypassed: the email links straight to the web app's /reset-password
-      // screen with ?token=, where the token is validated on submit. An
-      // expired/invalid token therefore surfaces at submit time, not up-front
-      // — the reset screen renders its "request a new link" state on that
-      // failure. This avoids reset links that target the desktop custom
-      // scheme, which would not open in a browser.
-      sendResetPassword: async ({ user, token }) => {
-        await sendResetPasswordEmail(env, user.email, resetPasswordUrl(env, token))
-      },
-    },
+    emailAndPassword: emailAndPasswordOptions(env),
     emailVerification: {
       sendOnSignUp: true,
       autoSignInAfterVerification: true,

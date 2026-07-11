@@ -15,6 +15,8 @@ const {
   sendResetPasswordEmail,
   resetPasswordUrl,
   buildAuthAuditEvent,
+  emailAndPasswordOptions,
+  sendResetPasswordForUser,
 } = await import('./auth')
 
 beforeEach(() => {
@@ -336,5 +338,67 @@ describe('buildAuthAuditEvent', () => {
     const event = buildAuthAuditEvent({ path: '/sign-in/email', newSession: null })
 
     expect(event).toBeNull()
+  })
+})
+
+describe('emailAndPasswordOptions — password reset revokes sessions (config regression)', () => {
+  // A full session-lifecycle test needs the DB; instead assert the config is
+  // set truthfully. better-auth's resetPassword route calls
+  // deleteSessions(userId) only when this option is true, so without it a
+  // stolen session cookie survives a password reset.
+  it('enables revokeSessionsOnPasswordReset so a stolen session is invalidated on reset', () => {
+    expect(emailAndPasswordOptions(baseEnv).revokeSessionsOnPasswordReset).toBe(true)
+  })
+})
+
+describe('sendResetPasswordForUser — delivery failure is logged, not silent', () => {
+  // better-auth runs the sendResetPassword callback in the background and
+  // swallows throws after the token is stored, so an unhandled throw would be
+  // invisible. The wrapper catches the failure and logs it at error level. The
+  // client-facing "email sent" message deliberately does not change (no
+  // account-existence leak).
+  it('logs at error level and resolves when Resend rejects the reset email', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    resendSendMock.mockResolvedValueOnce({ data: null, error: { message: 'invalid domain' } })
+
+    await expect(
+      sendResetPasswordForUser(
+        { ...baseEnv, resendApiKey: 're_test_key', webOrigin: 'https://app.obiter.test' },
+        'user@example.test',
+        'tok_1',
+      ),
+    ).resolves.toBeUndefined()
+
+    // The wrapper logs a concise correlation line with the masked email, the
+    // email domain, and a fresh requestId (sendEmail's [resend] log also fires
+    // with the transport detail before throwing).
+    expect(consoleError).toHaveBeenCalledWith(
+      'Reset-password email delivery failed',
+      expect.objectContaining({
+        email: expect.stringContaining('***@example.test'),
+        domain: 'example.test',
+      }),
+    )
+    expect(
+      consoleError.mock.calls.some(
+        ([, ctx]) => typeof (ctx as { requestId?: unknown })?.requestId === 'string',
+      ),
+    ).toBe(true)
+
+    consoleError.mockRestore()
+  })
+
+  it('does not log an error on a successful send', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    resendSendMock.mockResolvedValueOnce({ data: { id: 'email_ok' }, error: null })
+
+    await sendResetPasswordForUser(
+      { ...baseEnv, resendApiKey: 're_test_key', webOrigin: 'https://app.obiter.test' },
+      'user@example.test',
+      'tok_2',
+    )
+
+    expect(consoleError).not.toHaveBeenCalled()
+    consoleError.mockRestore()
   })
 })
