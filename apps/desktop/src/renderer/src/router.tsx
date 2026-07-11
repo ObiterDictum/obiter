@@ -1,4 +1,19 @@
-import { AppShellLayout, DocumentDetailLayoutView, HomeRouteView, MatterRouteView, MattersRouteView, SignInRouteView, caseLawDocumentQueryOptions, shellSnapshotQueryOptions } from '@obiter/app-shell'
+import {
+  AppShellLayout,
+  DocumentDetailLayoutView,
+  HomeRouteView,
+  MatterRouteView,
+  MattersRouteView,
+  SignInRouteView,
+  caseLawDocumentQueryOptions,
+  changelogQueryOptions,
+  currentUserQueryOptions,
+  documentQueryOptions,
+  guardAuth,
+  matterDocumentsQueryOptions,
+  matterQueryOptions,
+  mattersListQueryOptions,
+} from '@obiter/app-shell'
 import { RedactionReviewView, RedactionRunsRegion, RedactionRunsView } from '@obiter/redact-ui'
 import type { QueryClient } from '@tanstack/react-query'
 import {
@@ -7,6 +22,7 @@ import {
   createRootRouteWithContext,
   createRoute,
   createRouter,
+  redirect,
   useNavigate,
 } from '@tanstack/react-router'
 import { DesktopCasePage } from '../../pages/case'
@@ -31,26 +47,37 @@ function RootLayout() {
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: DesktopSignInRoute,
+  loader: async ({ context }) => {
+    await guardAuth(context.queryClient, () =>
+      Promise.all([
+        context.queryClient.ensureQueryData(currentUserQueryOptions()),
+        context.queryClient.ensureQueryData(changelogQueryOptions()),
+      ]),
+    )
+    await context.queryClient.prefetchQuery(mattersListQueryOptions())
+  },
+  component: DesktopHomeRoute,
 })
+
+function DesktopHomeRoute() {
+  return <HomeRouteView platform="desktop" />
+}
 
 const workspaceRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'workspace',
-  loader: ({ context }) =>
-    context.queryClient.ensureQueryData(shellSnapshotQueryOptions('desktop')),
-  component: DesktopWorkspaceRoute,
+  beforeLoad: () => {
+    throw redirect({ to: '/' })
+  },
 })
-
-function DesktopWorkspaceRoute() {
-  return <HomeRouteView platform="desktop" />
-}
 
 const mattersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'matters',
   loader: ({ context }) =>
-    context.queryClient.ensureQueryData(shellSnapshotQueryOptions('desktop')),
+    guardAuth(context.queryClient, () =>
+      context.queryClient.ensureQueryData(mattersListQueryOptions()),
+    ),
   component: DesktopMattersRoute,
 })
 
@@ -61,16 +88,22 @@ function DesktopMattersRoute() {
 const matterDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'matters/$matterId',
-  loader: ({ context }) =>
-    context.queryClient.ensureQueryData(shellSnapshotQueryOptions('desktop')),
+  loader: async ({ context, params }) => {
+    await guardAuth(context.queryClient, () =>
+      context.queryClient.ensureQueryData(matterQueryOptions(params.matterId)),
+    )
+    await context.queryClient.prefetchQuery(matterDocumentsQueryOptions(params.matterId))
+  },
   component: DesktopMatterDetailRoute,
 })
 
 const documentDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'matters/$matterId/documents/$documentId',
-  loader: ({ context }) =>
-    context.queryClient.ensureQueryData(shellSnapshotQueryOptions('desktop')),
+  loader: ({ context, params }) =>
+    guardAuth(context.queryClient, () =>
+      context.queryClient.prefetchQuery(documentQueryOptions(params.documentId)),
+    ),
   component: DesktopDocumentDetailRoute,
 })
 

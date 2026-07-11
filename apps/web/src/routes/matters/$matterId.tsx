@@ -1,9 +1,18 @@
-import { MatterRouteView, shellSnapshotQueryOptions } from '@obiter/app-shell'
+import {
+  MatterRouteView,
+  guardAuth,
+  matterDocumentsQueryOptions,
+  matterQueryOptions,
+} from '@obiter/app-shell'
 import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/matters/$matterId')({
-  loader: ({ context }) =>
-    context.queryClient.ensureQueryData(shellSnapshotQueryOptions('web')),
+  loader: async ({ context, params }) => {
+    await guardAuth(context.queryClient, () =>
+      context.queryClient.ensureQueryData(matterQueryOptions(params.matterId)),
+    )
+    await context.queryClient.prefetchQuery(matterDocumentsQueryOptions(params.matterId))
+  },
   component: MatterDetailRouteComponent,
 })
 

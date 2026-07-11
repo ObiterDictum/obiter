@@ -1,30 +1,40 @@
 import { Link, useNavigate } from '@tanstack/react-router'
 import { ArrowRight, Clock, Folders, MagnifyingGlass, Sparkle, X } from '@phosphor-icons/react'
+import { Skeleton } from '@obiter/ui'
 import type { AppPlatform } from '@obiter/contracts'
 import { useState, type FormEvent } from 'react'
 import { changelogQueryOptions } from '../changelog'
-import {
-  canSeeDevelopmentStatus,
-  shellSnapshotQueryOptions,
-} from '../fixtures'
+import { useMattersList } from '../matters'
 import { useCurrentUser } from '../current-user'
 import { useSuspenseQuery } from '@tanstack/react-query'
 
 /**
- * Home — landing surface. Greeting + a single hero search entry that routes to
- * /search, then a tidy "live today" shortcuts list. Still fixture-backed (M2
- * rewires to real data); structure is the part that matters here.
+ * Home — the authenticated landing surface. Greeting + a single hero search
+ * entry, then a "live today" set of surfaces driven by real data (the signed-in
+ * user's actual matters). No invented widgets: every value shown comes from a
+ * real endpoint. No fixture snapshot remains.
  */
-export function HomeRouteView({ platform }: { platform: AppPlatform }) {
+export function HomeRouteView({ platform: _platform }: { platform: AppPlatform }) {
   const navigate = useNavigate()
   const [homeSearch, setHomeSearch] = useState('')
   const [changelogOpen, setChangelogOpen] = useState(false)
-  const { data } = useSuspenseQuery(shellSnapshotQueryOptions(platform))
   const { data: me } = useCurrentUser()
+  const matters = useMattersList()
   const { data: changelog } = useSuspenseQuery(changelogQueryOptions())
-  const activeMilestone = data.milestones.find((milestone) => milestone.status === 'active')
-  const matterCount = data.matters.length
+
+  // Only treat the list as empty on a confirmed-empty *successful* response —
+  // a pending or failed fetch must not render the "create your first matter"
+  // empty state.
+  const matterCount = matters.data?.length ?? 0
+  const mattersDetail = matters.isLoading
+    ? 'loading'
+    : matters.isError
+      ? 'error'
+      : matterCount > 0
+        ? 'count'
+        : 'empty'
   const firstName = me.user.name.split(' ')[0]
+  const recentMatters = matters.data?.slice(0, 4) ?? []
 
   function handleHomeSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -40,7 +50,7 @@ export function HomeRouteView({ platform }: { platform: AppPlatform }) {
       <header className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1.5">
           <p className="text-xs font-semibold uppercase tracking-wider text-subtle">
-            {data.organisation.name}
+            {me.organisation.name}
           </p>
           <h1 className="text-3xl font-semibold tracking-tight text-ink">
             Welcome back, {firstName}
@@ -58,10 +68,7 @@ export function HomeRouteView({ platform }: { platform: AppPlatform }) {
       </header>
 
       {/* Hero search entry — the single, prominent way into Search. */}
-      <form
-        className="group flex flex-col gap-2"
-        onSubmit={handleHomeSearch}
-      >
+      <form className="group flex flex-col gap-2" onSubmit={handleHomeSearch}>
         <label className="text-sm font-medium text-muted" htmlFor="home-search">
           Search legal sources
         </label>
@@ -88,9 +95,7 @@ export function HomeRouteView({ platform }: { platform: AppPlatform }) {
 
       {/* Live surfaces — what you can do today. */}
       <section className="flex flex-col gap-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-subtle">
-          Live today
-        </h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-subtle">Live today</h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <SurfaceCard
             to="/search"
@@ -103,9 +108,13 @@ export function HomeRouteView({ platform }: { platform: AppPlatform }) {
             icon={<Folders aria-hidden="true" size={18} />}
             title="Matters"
             detail={
-              matterCount > 0
-                ? `${matterCount} open matter ${matterCount === 1 ? 'workspace' : 'workspaces'}.`
-                : 'Matter workspaces land here once created.'
+              mattersDetail === 'loading'
+                ? 'Loading your matters…'
+                : mattersDetail === 'error'
+                  ? 'Your matters could not be loaded. Open Matters to retry.'
+                  : mattersDetail === 'count'
+                    ? `${matterCount} ${matterCount === 1 ? 'matter' : 'matters'} in your organisation.`
+                    : 'Create your first matter workspace.'
             }
           />
           <SurfaceCard
@@ -117,11 +126,73 @@ export function HomeRouteView({ platform }: { platform: AppPlatform }) {
         </div>
       </section>
 
+      {/* Recent matters — real data, not fixture rows. Only rendered when there
+          is something honest to show: rows on success, a skeleton while pending,
+          an error note on failure. A confirmed-empty list hides the section. */}
+      {mattersDetail === 'loading' ? (
+        <section className="flex flex-col gap-3" aria-busy="true" aria-label="Loading recent matters">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-subtle">Recent matters</h2>
+          <div className="flex flex-col gap-2">
+            <Skeleton className="h-14 w-full rounded-lg" />
+            <Skeleton className="h-14 w-full rounded-lg" />
+          </div>
+        </section>
+      ) : mattersDetail === 'error' ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-subtle">Recent matters</h2>
+          <p className="text-sm text-muted">
+            Your matters could not be loaded.{' '}
+            <Link to="/matters" className="font-semibold text-brand hover:text-brand-pressed">
+              Open Matters
+            </Link>{' '}
+            to retry.
+          </p>
+        </section>
+      ) : recentMatters.length > 0 ? (
+        <section className="flex flex-col gap-3">
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-subtle">
+              Recent matters
+            </h2>
+            <Link
+              to="/matters"
+              className="inline-flex items-center gap-1 text-sm font-medium text-brand hover:text-brand-pressed"
+            >
+              All matters
+              <ArrowRight aria-hidden="true" size={14} weight="bold" />
+            </Link>
+          </div>
+          <ul className="flex flex-col gap-2">
+            {recentMatters.map((matter) => (
+              <li key={matter.id}>
+                <Link
+                  to="/matters/$matterId"
+                  params={{ matterId: matter.id }}
+                  className="group flex items-center justify-between gap-3 rounded-lg border border-line bg-surface p-3.5 transition-colors hover:border-line-strong"
+                >
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <span className="truncate text-sm font-medium text-ink">{matter.name}</span>
+                    <span className="truncate text-xs text-muted">
+                      {matter.clientReference || 'No reference'}
+                      {matter.primaryJurisdiction ? ` · ${matter.primaryJurisdiction}` : ''}
+                    </span>
+                  </span>
+                  <ArrowRight
+                    aria-hidden="true"
+                    size={14}
+                    weight="bold"
+                    className="text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-ink"
+                  />
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {/* What's coming — quiet, honest about planned surfaces. */}
       <section className="flex flex-col gap-2">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-subtle">
-          In progress
-        </h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-subtle">In progress</h2>
         <p className="max-w-prose text-sm leading-relaxed text-muted">
           Redaction, verification, drafting, research, and deadlines are planned surfaces on the
           roadmap. The shell is ready for each as it lands.
@@ -144,7 +215,9 @@ export function HomeRouteView({ platform }: { platform: AppPlatform }) {
           <section className="relative mt-16 w-full max-w-[560px] rounded-lg border border-line-strong bg-raised p-5 shadow-lg">
             <header className="mb-4 flex items-start justify-between gap-4">
               <div className="flex flex-col gap-1">
-                <p className="text-xs font-semibold uppercase tracking-wider text-subtle">Product updates</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-subtle">
+                  Product updates
+                </p>
                 <h2 className="text-lg font-semibold text-ink" id="workspace-changelog-title">
                   What changed recently
                 </h2>
@@ -181,13 +254,6 @@ export function HomeRouteView({ platform }: { platform: AppPlatform }) {
             ) : (
               <p className="mt-3 text-sm text-muted">GitHub updates are unavailable right now.</p>
             )}
-            {activeMilestone && canSeeDevelopmentStatus(me) ? (
-              <section className="mt-4 border-t border-line pt-4">
-                <p className="text-xs font-semibold uppercase tracking-wider text-subtle">Development status</p>
-                <h3 className="mt-1 text-base font-semibold text-ink">{activeMilestone.label}</h3>
-                <p className="mt-2 text-sm text-muted">{activeMilestone.detail}</p>
-              </section>
-            ) : null}
           </section>
         </div>
       ) : null}

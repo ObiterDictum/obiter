@@ -73,6 +73,15 @@ Engineering workflow, commands, review expectations, and test guidance live in:
 - [PR.md](PR.md)
 - [TESTING.md](TESTING.md)
 
+### Development data
+
+Obiter has no seed script. To get an organisation, user, matters, and documents in any environment (including development), use the real self-serve flow:
+
+1. Start the API (`pnpm dev:api`) with the database migrated (`packages/database/migrations`).
+2. Open the app and register an account through the sign-up screen. Registration provisions your organisation automatically.
+3. Verify the email (in development the one-time verification URL is logged to the API console when no Resend key is configured).
+4. Sign in, then create matters and upload document metadata through the UI.
+
 Useful product context:
 
 - [Current Product Scope](docs/current-product-scope.md)
