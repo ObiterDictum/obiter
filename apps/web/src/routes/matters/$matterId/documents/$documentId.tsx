@@ -1,4 +1,9 @@
-import { DocumentDetailLayoutView, documentQueryOptions, guardAuth } from '@obiter/app-shell'
+import {
+  DocumentDetailLayoutView,
+  documentQueryOptions,
+  ensureOrganisation,
+  guardAuth,
+} from '@obiter/app-shell'
 import { RedactionRunsRegion } from '@obiter/redact-ui'
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
 
@@ -8,10 +13,12 @@ import { createFileRoute, useNavigate } from '@tanstack/react-router'
  * sub-routes (redact/$runId) nest beneath it. Backed by GET /api/documents/:id.
  */
 export const Route = createFileRoute('/matters/$matterId/documents/$documentId')({
-  loader: ({ context, params }) =>
-    guardAuth(context.queryClient, () =>
+  loader: async ({ context, params }) => {
+    await ensureOrganisation(context.queryClient)
+    await guardAuth(context.queryClient, () =>
       context.queryClient.prefetchQuery(documentQueryOptions(params.documentId)),
-    ),
+    )
+  },
   component: DocumentDetailRouteComponent,
 })
 

@@ -1,5 +1,6 @@
 import { createAuthClient } from 'better-auth/react'
 import { magicLinkClient } from 'better-auth/client/plugins'
+import { useQueryClient } from '@tanstack/react-query'
 
 /**
  * Better-auth client for the browser. The API mounts better-auth at /api/auth/*
@@ -38,6 +39,13 @@ export interface UseAuthReturn {
     input: SignUpEmailInput,
   ) => Promise<{ ok: boolean; message?: string; verificationRequired?: boolean }>
   requestMagicLink: (email: string) => Promise<{ ok: boolean; message?: string }>
+  requestPasswordReset: (
+    email: string,
+  ) => Promise<{ ok: boolean; message?: string }>
+  resetPassword: (
+    token: string,
+    newPassword: string,
+  ) => Promise<{ ok: boolean; message?: string; code?: string }>
   signOut: () => Promise<void>
 }
 
@@ -53,6 +61,7 @@ interface AuthSessionPresence {
  */
 export function useAuth(): UseAuthReturn {
   const realSession = authClient.useSession()
+  const queryClient = useQueryClient()
 
   async function signInWithEmail(input: SignInEmailInput) {
     const result = await authClient.signIn.email(input)
@@ -93,6 +102,45 @@ export function useAuth(): UseAuthReturn {
 
   async function signOut() {
     await authClient.signOut()
+    // Drop cached /api/me (and org-scoped data) so a subsequent sign-in as a
+    // different user never gates routes on the previous user's organisation
+    // state. The current-user query has a 60s staleTime, so without this a
+    // fresh sign-in could read a stale org-less/owning entry.
+    queryClient.clear()
+  }
+
+  // better-auth 1.6.x password reset: POST /request-password-reset never
+  // reveals whether the email exists (it returns the same message and runs a
+  // timing-attack mitigation). The reset link is derived server-side from the
+  // token and always points at the configured web origin (OBITER_WEB_ORIGIN),
+  // so the client does not — and must not — pass a redirectTo. Under the
+  // desktop renderer the window origin is a custom scheme, which better-auth
+  // would reject and which could not open in a browser anyway.
+  async function requestPasswordReset(email: string) {
+    const result = await authClient.requestPasswordReset({ email })
+    if (result.error) {
+      return { ok: false, message: result.error.message ?? 'Could not send a reset link.' }
+    }
+    return {
+      ok: true,
+      message:
+        'If an account exists for that email, we have sent a link to reset your password.',
+    }
+  }
+
+  async function resetPassword(token: string, newPassword: string) {
+    const result = await authClient.resetPassword({ token, newPassword })
+    if (result.error) {
+      // Surface better-auth's error code (e.g. INVALID_TOKEN,
+      // PASSWORD_TOO_LONG) so the reset screen can distinguish a dead token
+      // from a retryable validation/server failure.
+      return {
+        ok: false,
+        message: result.error.message ?? 'Could not reset your password.',
+        code: typeof result.error.code === 'string' ? result.error.code : undefined,
+      }
+    }
+    return { ok: true }
   }
 
   return {
@@ -101,6 +149,8 @@ export function useAuth(): UseAuthReturn {
     signInWithEmail,
     signUpWithEmail,
     requestMagicLink,
+    requestPasswordReset,
+    resetPassword,
     signOut,
   }
 }

@@ -1,6 +1,12 @@
-import { queryOptions, useSuspenseQuery } from '@tanstack/react-query'
-import type { MeResponse } from '@obiter/contracts'
-import { apiFetch } from './api'
+import {
+  type MutationOptions,
+  queryOptions,
+  useMutation,
+  useQueryClient,
+  useSuspenseQuery,
+} from '@tanstack/react-query'
+import type { CurrentOrganisation, MeResponse } from '@obiter/contracts'
+import { apiFetch, ApiError } from './api'
 
 /**
  * Current-user data is always backed by the authenticated `GET /api/me` API.
@@ -16,4 +22,49 @@ export function currentUserQueryOptions() {
 
 export function useCurrentUser() {
   return useSuspenseQuery(currentUserQueryOptions())
+}
+
+export interface CreateOrganisationResult {
+  ok: boolean
+  message?: string
+  organisation?: CurrentOrganisation
+}
+
+/**
+ * Creates the signed-in user's organisation via POST /api/organisations.
+ * On success, the current-user cache is updated immediately with the created
+ * organisation (role becomes 'owner') so the shell flips from the create-org
+ * state to matters without waiting for a refetch, and the query is invalidated
+ * to reconcile with the server.
+ */
+export function createOrganisationMutationOptions(): MutationOptions<
+  CurrentOrganisation,
+  ApiError,
+  { name: string }
+> {
+  const queryClient = useQueryClient()
+  return {
+    mutationFn: async (input) => {
+      const result = await apiFetch<{ organisation: CurrentOrganisation }>(
+        '/api/organisations',
+        {
+          method: 'POST',
+          body: JSON.stringify({ name: input.name }),
+        },
+      )
+      return result.organisation
+    },
+    onSuccess: (organisation) => {
+      // Merge the created organisation into the cached /api/me so the UI
+      // reflects it immediately; the role of the creating user is 'owner'.
+      queryClient.setQueryData<MeResponse>(['current-user'], (prev) =>
+        prev ? { user: { ...prev.user, role: 'owner' }, organisation } : prev,
+      )
+      void queryClient.invalidateQueries({ queryKey: ['current-user'] })
+    },
+  }
+}
+
+export function useCreateOrganisation() {
+  return useMutation(createOrganisationMutationOptions())
 }
