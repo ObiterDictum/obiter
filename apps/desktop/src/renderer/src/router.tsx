@@ -22,6 +22,7 @@ import {
   createRootRouteWithContext,
   createRoute,
   createRouter,
+  redirect,
   useNavigate,
 } from '@tanstack/react-router'
 import { DesktopCasePage } from '../../pages/case'
@@ -46,12 +47,6 @@ function RootLayout() {
 const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
-  component: DesktopSignInRoute,
-})
-
-const workspaceRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: 'workspace',
   loader: async ({ context }) => {
     await guardAuth(context.queryClient, () =>
       Promise.all([
@@ -61,12 +56,20 @@ const workspaceRoute = createRoute({
     )
     await context.queryClient.prefetchQuery(mattersListQueryOptions())
   },
-  component: DesktopWorkspaceRoute,
+  component: DesktopHomeRoute,
 })
 
-function DesktopWorkspaceRoute() {
+function DesktopHomeRoute() {
   return <HomeRouteView platform="desktop" />
 }
+
+const workspaceRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'workspace',
+  beforeLoad: () => {
+    throw redirect({ to: '/' })
+  },
+})
 
 const mattersRoute = createRoute({
   getParentRoute: () => rootRoute,

@@ -28,7 +28,7 @@ Auth owns:
 - `GET /api/me`
 - `/api/auth/*` (better-auth: sign-up, sign-in, sign-out, verify-email, magic-link)
 
-- Home (`/workspace`): the landing surface renders the signed-in user's real matters and organisation from `/api/me` and `GET /api/matters`. No invented widgets — every value shown comes from a real endpoint.
+- Home (`/`): the landing surface renders the signed-in user's real matters and organisation from `/api/me` and `GET /api/matters`. No invented widgets — every value shown comes from a real endpoint. (The legacy `/workspace` path redirects to `/`.)
 
 - Matters: the matters list, matter creation, and matter detail are wired to `GET /api/matters`, `POST /api/matters`, and `GET /api/matters/:id` via TanStack Query, with loading, empty, and error states.
 
@@ -82,7 +82,7 @@ The current implementation is the first slice of that surface: case law search a
 ## Naming Rules
 
 - The user-facing product name is **Obiter** (decided July 2026). "Obiter" remains only as an internal identifier — `@obiter/*` package names, `--obiter-*` token prefixes, and existing planning docs — until a separate rename cleanup.
-- Use "Home" in navigation for the top-level information hub. The implementation may keep `/workspace` until route cleanup is handled separately.
+- Use "Home" in navigation for the top-level information hub. Home lives at the root `/`.
 - Do not use "Atlas" as the product or architecture label for the Search surface.
 - Use "Search" for the implemented legal source search surface.
 - Use "Redaction" and "Verification" in navigation, not internal shorthand.

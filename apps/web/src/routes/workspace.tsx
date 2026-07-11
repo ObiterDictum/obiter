@@ -1,29 +1,11 @@
-import {
-  HomeRouteView,
-  changelogQueryOptions,
-  currentUserQueryOptions,
-  guardAuth,
-  mattersListQueryOptions,
-} from '@obiter/app-shell'
-import { createFileRoute } from '@tanstack/react-router'
+import { createFileRoute, redirect } from '@tanstack/react-router'
 
+/**
+ * Home now lives at the root `/`. This route is kept as a permanent redirect
+ * so existing links and bookmarks resolve to the current Home location.
+ */
 export const Route = createFileRoute('/workspace')({
-  loader: async ({ context }) => {
-    await guardAuth(context.queryClient, () =>
-      Promise.all([
-        context.queryClient.ensureQueryData(currentUserQueryOptions()),
-        context.queryClient.ensureQueryData(changelogQueryOptions()),
-      ]),
-    )
-    // Matters list is non-suspense in the view (renders a skeleton); prefetch
-    // so it appears immediately when data is ready.
-    await guardAuth(context.queryClient, () =>
-      context.queryClient.prefetchQuery(mattersListQueryOptions()),
-    )
+  beforeLoad: () => {
+    throw redirect({ to: '/' })
   },
-  component: WorkspaceRouteComponent,
 })
-
-function WorkspaceRouteComponent() {
-  return <HomeRouteView platform="web" />
-}

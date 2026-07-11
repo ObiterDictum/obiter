@@ -24,12 +24,12 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
   const [notice, setNotice] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  async function goToWorkspace() {
+  async function goToHome() {
     if (platform === 'web') {
-      window.location.assign('/workspace')
+      window.location.assign('/')
       return
     }
-    await navigate({ to: '/workspace' })
+    await navigate({ to: '/' })
   }
 
   async function handlePassword(event: FormEvent<HTMLFormElement>) {
@@ -43,7 +43,7 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
       setError(result.message ?? 'Sign-in failed.')
       return
     }
-    await goToWorkspace()
+    await goToHome()
   }
 
   async function handleRegister(event: FormEvent<HTMLFormElement>) {
@@ -61,7 +61,7 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
       setNotice(result.message ?? 'Check your email to verify your account before signing in.')
       return
     }
-    await goToWorkspace()
+    await goToHome()
   }
 
   async function handleMagicLink(event: FormEvent<HTMLFormElement>) {
