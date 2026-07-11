@@ -8,6 +8,31 @@ export { apiFetch, ApiError } from './api'
 export { authClient, useAuth, type UseAuthReturn, type SignInEmailInput } from './auth'
 export { currentUserQueryOptions, useCurrentUser } from './current-user'
 export { changelogQueryOptions } from './changelog'
+export { guardAuth } from './route-loaders'
+
+// Live-surface data (M2): real matters + documents via TanStack Query.
+export {
+  mattersListQueryOptions,
+  matterQueryOptions,
+  mattersKeys,
+  useMattersList,
+  useMatter,
+  useCreateMatter,
+  type MatterRecord,
+  type MatterStatus,
+  type CreateMatterInput,
+} from './matters'
+export {
+  matterDocumentsQueryOptions,
+  documentQueryOptions,
+  documentsKeys,
+  useMatterDocuments,
+  useDocument,
+  type MatterDocumentRecord,
+  type DocumentVersionRecord,
+  type DocumentStatus,
+  type SyncState,
+} from './documents'
 
 // Layout primitives
 export { AppShellLayout } from './frame'
@@ -42,12 +67,3 @@ export {
   shouldRunLegalSearchRequest,
   writeRecentLegalSearch,
 } from './views/LegalSearchView'
-
-// Phase 0 fixture layer (M2 deletes this entire re-export block + fixtures.ts)
-export {
-  canSeeDevelopmentStatus as canSeeDevelopmentStatusForTest,
-  canSeeStaffNavigation as canSeeStaffNavigationForTest,
-  createPhaseZeroShellSnapshot,
-  findMatterRecord,
-  shellSnapshotQueryOptions,
-} from './fixtures'

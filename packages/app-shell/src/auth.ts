@@ -83,7 +83,7 @@ export function useAuth(): UseAuthReturn {
   async function requestMagicLink(email: string) {
     const callbackURL = typeof window === 'undefined'
       ? undefined
-      : `${window.location.origin}/workspace`
+      : `${window.location.origin}/`
     const result = await authClient.signIn.magicLink({ email, callbackURL })
     if (result.error) {
       return { ok: false, message: result.error.message ?? 'Could not send magic link.' }

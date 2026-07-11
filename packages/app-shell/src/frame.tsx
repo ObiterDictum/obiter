@@ -34,7 +34,7 @@ interface NavItem {
 type PhosphorIcon = (props: { size?: number; weight?: 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone'; 'aria-hidden'?: boolean }) => ReactNode
 
 const LIVE_NAV: NavItem[] = [
-  { label: 'Home', to: '/workspace', icon: House, status: 'live' },
+  { label: 'Home', to: '/', icon: House, status: 'live' },
   { label: 'Search', to: '/search', icon: MagnifyingGlass, status: 'live' },
   { label: 'Matters', to: '/matters', icon: Folders, status: 'live' },
   { label: 'Redaction', to: '/redact', icon: PencilSimple, status: 'live' },
@@ -54,8 +54,9 @@ const PLANNED_NAV: NavItem[] = [
 
 /**
  * App frame. Gates the shell on a real better-auth session: unauthenticated
- * users (off the auth routes) are redirected to /sign-in. Auth routes render
- * bare so the sign-in screen has no sidebar. Driven by real /api/me data.
+ * users are redirected to /sign-in. Only the sign-in route renders bare (no
+ * sidebar); Home lives at the root `/` and renders inside the authenticated
+ * frame. Driven by real /api/me data.
  */
 export function AppShellLayout({
   children,
@@ -66,7 +67,7 @@ export function AppShellLayout({
 }) {
   const { session, isPending } = useAuth()
   const currentPath = useRouterState({ select: (state) => state.location.pathname })
-  const isAuthRoute = currentPath === '/' || currentPath === '/sign-in'
+  const isAuthRoute = currentPath === '/sign-in'
 
   let body: ReactNode
 
@@ -152,7 +153,11 @@ function Sidebar({ platform }: { platform: AppPlatform }) {
 }
 
 function isActive(currentPath: string, item: NavItem) {
-  return Boolean(item.to) && currentPath.startsWith(item.to as string)
+  const target = item.to
+  if (!target) return false
+  // Home ("/') is active only on the root; other items match by prefix.
+  if (target === '/') return currentPath === '/'
+  return currentPath === target || currentPath.startsWith(`${target}/`)
 }
 
 function NavLink({ item, active }: { item: NavItem; active: boolean }) {
