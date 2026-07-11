@@ -73,6 +73,16 @@ Engineering workflow, commands, review expectations, and test guidance live in:
 - [PR.md](PR.md)
 - [TESTING.md](TESTING.md)
 
+### Development dataset
+
+After applying the database migrations (`packages/database/migrations`), seed a development dataset so every surface in the app shell shows real rows:
+
+```bash
+pnpm seed
+```
+
+This creates an organisation, a user, matters, and documents (metadata only). The seeded credentials are printed on completion and can be used to sign in through the sign-in screen. The seed script refuses to run in production.
+
 Useful product context:
 
 - [Current Product Scope](docs/current-product-scope.md)

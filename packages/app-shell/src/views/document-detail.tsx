@@ -1,16 +1,17 @@
 import type { ReactNode } from 'react'
 import { Link, Outlet } from '@tanstack/react-router'
-import { ArrowLeft, FileText, Plus } from '@phosphor-icons/react'
-import { Badge, Button, EmptyState } from '@obiter/ui'
+import { ArrowLeft, FileText } from '@phosphor-icons/react'
+import { Badge, EmptyState, Skeleton } from '@obiter/ui'
+import { useDocument } from '../documents'
 
 /**
- * Document detail — the M1 contract route (PRD FR4). Receives route params as
- * props (the web route passes them via Route.useParams()), renders document
- * metadata + a redaction-runs region (list + "Create Redaction Run" CTA), and a
- * child <Outlet/> so feature sub-routes such as redact/$runId nest beneath it.
+ * Document detail — the contract route (PRD FR4). Receives route params as
+ * props, renders real document metadata from GET /api/documents/:id (filename,
+ * hash, size, status, versions), a redaction-runs region slot, and a child
+ * <Outlet/> so feature sub-routes such as redact/$runId nest beneath it.
  *
- * M1 ships the chrome, the runs region's empty state, and the outlet. Real
- * document + run data is wired by M2 (documents) and Redact PRD 2 (runs).
+ * This is a metadata-only surface — the documents API records filename/hash/
+ * size; no file bytes are received or stored.
  */
 export function DocumentDetailLayoutView({
   matterId,
@@ -21,6 +22,8 @@ export function DocumentDetailLayoutView({
   documentId: string
   redactionRunsRegion?: ReactNode
 }) {
+  const document = useDocument(documentId)
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
@@ -35,10 +38,19 @@ export function DocumentDetailLayoutView({
         <div className="flex items-start justify-between gap-4">
           <div className="flex flex-col gap-1">
             <p className="text-xs font-medium uppercase tracking-wider text-subtle">Document</p>
-            <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-ink">
-              <FileText size={24} aria-hidden="true" />
-              Document {documentId}
-            </h1>
+            {document.isLoading ? (
+              <Skeleton className="h-7 w-64" />
+            ) : document.isError || !document.data ? (
+              <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-ink">
+                <FileText size={24} aria-hidden="true" />
+                Document
+              </h1>
+            ) : (
+              <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-ink">
+                <FileText size={24} aria-hidden="true" />
+                {document.data.document.currentVersion?.filename ?? document.data.document.logicalKey}
+              </h1>
+            )}
             <p className="text-sm text-muted">
               Matter <span className="font-mono text-ink">{matterId}</span>
             </p>
@@ -46,6 +58,20 @@ export function DocumentDetailLayoutView({
           <Badge tone="neutral">Metadata only</Badge>
         </div>
       </div>
+
+      {document.isError ? (
+        <EmptyState
+          title="Document not found"
+          body="This document does not exist in your organisation, or your session may have expired."
+        />
+      ) : document.isLoading ? (
+        <div className="flex flex-col gap-3">
+          <Skeleton className="h-24 w-full rounded-lg" />
+          <Skeleton className="h-24 w-full rounded-lg" />
+        </div>
+      ) : document.data ? (
+        <DocumentMetadata document={document.data.document} versions={document.data.versions} />
+      ) : null}
 
       <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
         <div className="flex items-center justify-between gap-3">
@@ -56,18 +82,125 @@ export function DocumentDetailLayoutView({
               AI-assisted workflows.
             </p>
           </div>
-          <Button variant="secondary" size="sm" iconStart={<Plus size={16} weight="bold" aria-hidden="true" />}>
-            Create redaction run
-          </Button>
         </div>
-        {redactionRunsRegion ?? <EmptyState
-          title="No redaction runs yet"
-          body="When a run is created it appears here for review. This region is the contract surface the Redact review UI fills in."
-        />}
+        {redactionRunsRegion ?? (
+          <EmptyState
+            title="No redaction runs yet"
+            body="When a run is created it appears here for review. This region is the contract surface the Redact review UI fills in."
+          />
+        )}
       </section>
 
       {/* Feature sub-routes (e.g. redact/$runId) render here. */}
       <Outlet />
     </div>
   )
+}
+
+function DocumentMetadata({
+  document,
+  versions,
+}: {
+  document: import('../documents').MatterDocumentRecord
+  versions: import('../documents').DocumentVersionRecord[]
+}) {
+  const current = document.currentVersion
+  const sizeLabel = current ? formatBytes(Number(current.sizeBytes)) : '—'
+
+  return (
+    <>
+      <section className="flex flex-col gap-4 rounded-lg border border-line bg-surface p-5">
+        <h2 className="text-base font-semibold text-ink">Document details</h2>
+        <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
+          <DetailRow label="Filename" value={current?.filename ?? document.logicalKey} mono />
+          <DetailRow label="Status" value={current?.documentStatus ?? '—'} />
+          <DetailRow label="File type" value={current?.fileType ?? '—'} />
+          <DetailRow label="Size" value={sizeLabel} />
+          <DetailRow label="SHA-256" value={truncateSha(current?.contentSha256)} mono />
+          <DetailRow label="Sync state" value={current?.syncState ?? '—'} />
+          <DetailRow label="Created" value={formatTimestamp(current?.createdAt)} />
+          <DetailRow label="Updated" value={formatTimestamp(current?.updatedAt)} />
+        </dl>
+      </section>
+
+      {versions.length > 0 ? (
+        <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
+          <h2 className="text-base font-semibold text-ink">Versions</h2>
+          <ul className="flex flex-col divide-y divide-line">
+            {versions.map((version) => (
+              <li key={version.id} className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0">
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <span className="truncate text-sm font-medium text-ink">
+                    v{version.versionNumber} · {version.filename}
+                  </span>
+                  <span className="truncate text-xs text-muted">
+                    {version.fileType} · {formatBytes(Number(version.sizeBytes))}
+                  </span>
+                </div>
+                <Badge
+                  tone={
+                    version.documentStatus === 'ready'
+                      ? 'success'
+                      : version.documentStatus === 'failed'
+                        ? 'danger'
+                        : 'info'
+                  }
+                >
+                  {version.documentStatus}
+                </Badge>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+    </>
+  )
+}
+
+function DetailRow({
+  label,
+  value,
+  mono,
+}: {
+  label: string
+  value: string
+  mono?: boolean
+}) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <dt className="text-xs font-medium uppercase tracking-wider text-subtle">{label}</dt>
+      <dd
+        className={
+          'text-sm text-ink ' + (mono ? 'break-all font-mono text-xs' : 'truncate')
+        }
+      >
+        {value}
+      </dd>
+    </div>
+  )
+}
+
+function formatBytes(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return '—'
+  if (bytes < 1024) return `${bytes} B`
+  const units = ['KB', 'MB', 'GB']
+  let value = bytes / 1024
+  let unitIndex = 0
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex += 1
+  }
+  return `${value.toFixed(1)} ${units[unitIndex]}`
+}
+
+function formatTimestamp(iso: string | undefined): string {
+  if (!iso) return '—'
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return iso
+  return date.toLocaleString()
+}
+
+function truncateSha(sha: string | undefined): string {
+  if (!sha) return '—'
+  return sha.length <= 16 ? sha : `${sha.slice(0, 16)}…`
 }
