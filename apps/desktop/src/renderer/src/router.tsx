@@ -8,14 +8,13 @@ import {
   ResetPasswordRouteView,
   SignInRouteView,
   caseLawDocumentQueryOptions,
-  changelogQueryOptions,
-  currentUserQueryOptions,
   documentQueryOptions,
   ensureOrganisation,
   guardAuth,
   matterDocumentsQueryOptions,
   matterQueryOptions,
   mattersListQueryOptions,
+  prefetchHomeData,
 } from '@obiter/app-shell'
 import { RedactionReviewView, RedactionRunsRegion, RedactionRunsView } from '@obiter/redact-ui'
 import type { QueryClient } from '@tanstack/react-query'
@@ -51,13 +50,7 @@ const indexRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/',
   loader: async ({ context }) => {
-    await guardAuth(context.queryClient, () =>
-      Promise.all([
-        context.queryClient.ensureQueryData(currentUserQueryOptions()),
-        context.queryClient.ensureQueryData(changelogQueryOptions()),
-      ]),
-    )
-    await context.queryClient.prefetchQuery(mattersListQueryOptions())
+    await prefetchHomeData(context.queryClient)
   },
   component: DesktopHomeRoute,
 })

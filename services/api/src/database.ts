@@ -12,7 +12,10 @@ export interface SessionUserRecord {
 }
 
 export interface AuditRecordInput {
-  organisationId: string
+  // nullable: auth audit rows (sign-in/sign-up) are written for org-less users
+  // before they create an organisation (audit_logs.organisation_id is nullable
+  // as of migration 0009). Org-scoped actions always pass a real id.
+  organisationId: string | null
   userId: string | null
   entityType: string
   entityId: string
@@ -160,11 +163,17 @@ export async function findOrganisation(
 /**
  * Creates an organisation, assigns the creating user to it as owner, and
  * writes the audit row — all in one transaction. The single-org invariant is
- * enforced here (reject if the user already has an organisationId) and at the
- * DB level via a partial unique index (migration 0008).
+ * enforced in code here: the user row is locked with SELECT ... FOR UPDATE
+ * and the function rejects (returns `{ created: false }`, 409 in the route)
+ * if the user already has an organisationId. No DB-level unique constraint
+ * backs this — a per-user index would be wrong (it would allow distinct
+ * organisations per user rather than serialising the same-user race, and a
+ * one-organisation-per-user index would block future multi-member orgs). The
+ * row lock serialises concurrent creation for the same user.
  *
- * Returns null only when the user already has an organisation (409 in the
- * route). Any other failure throws so the caller surfaces a 500.
+ * If the user row is missing entirely, the function rolls back and throws so
+ * the caller surfaces a 500 rather than inserting an orphan organisation +
+ * audit row. Any other failure likewise throws.
  */
 export async function createOrganisationForUser(
   pool: Pool,
@@ -179,6 +188,12 @@ export async function createOrganisationForUser(
       `select "organisationId" from users where id = $1 for update`,
       [input.userId],
     )
+    if (existing.rows.length === 0) {
+      // No user row: a data-integrity failure, not the normal org-less state.
+      // Fail closed rather than inserting an organisation nothing references.
+      await client.query('rollback')
+      throw new Error('User record not found.')
+    }
     const currentOrgId = existing.rows[0]?.organisationId
     if (currentOrgId) {
       await client.query('rollback')

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   createMemoryHistory,
@@ -10,6 +10,7 @@ import {
   RouterProvider,
 } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
+import { ApiError } from './api'
 import { HomeRouteView } from './views/home'
 
 // Control the three data hooks independently.
@@ -192,5 +193,69 @@ describe('HomeRouteView — organisation-less state', () => {
     // The matters hook lives in the org-present subtree; org-less users must
     // never trigger a GET /api/matters that would 403.
     expect(mocks.useMattersList).not.toHaveBeenCalled()
+  })
+})
+
+describe('HomeRouteView — create-organisation error handling', () => {
+  const ORGLESS_ME = {
+    user: { id: 'usr_2', email: 'new@obiter.dev', name: 'New User', role: null },
+    organisation: null,
+  }
+
+  function setupCreateOrg(mutateAsync: ReturnType<typeof vi.fn>) {
+    mocks.useCurrentUser.mockReturnValue({ data: ORGLESS_ME })
+    mocks.useMattersList.mockReturnValue(mattersLoading())
+    mocks.useCreateOrganisation.mockReturnValue({ mutateAsync, isPending: false })
+    return renderHome()
+  }
+
+  async function submitWithName(name: string) {
+    const input = await screen.findByLabelText('Organisation name')
+    fireEvent.change(input, { target: { value: name } })
+    fireEvent.submit(input.closest('form')!)
+  }
+
+  it('surfaces a generic error when the API rejects with a non-conflict ApiError', async () => {
+    const mutateAsync = vi.fn().mockRejectedValue(
+      new ApiError('validation_failed', 'Name is too long.', 400, 'req_1'),
+    )
+    setupCreateOrg(mutateAsync)
+
+    await submitWithName('Acme Law')
+
+    await waitFor(() => {
+      expect(screen.getByText('Could not create the organisation. Try again.')).toBeTruthy()
+    })
+  })
+
+  it('surfaces the distinct conflict message and refreshes /api/me on a 409 (stale cache)', async () => {
+    const invalidateSpy = vi.spyOn(QueryClient.prototype, 'invalidateQueries').mockResolvedValue({
+      refetchPage: undefined as never,
+      errors: [],
+    } as never)
+    const mutateAsync = vi.fn().mockRejectedValue(
+      new ApiError('conflict_detected', 'You already have an organisation.', 409, 'req_2'),
+    )
+    setupCreateOrg(mutateAsync)
+
+    await submitWithName('Acme Law')
+
+    await waitFor(() => {
+      expect(screen.getByText('You already have an organisation. Refreshing…')).toBeTruthy()
+    })
+    // The 409 means the cache is stale: /api/me is invalidated to reconcile.
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['current-user'] })
+    invalidateSpy.mockRestore()
+  })
+
+  it('surfaces a generic error on a non-ApiError rejection (no unhandled throw)', async () => {
+    const mutateAsync = vi.fn().mockRejectedValue(new Error('network down'))
+    setupCreateOrg(mutateAsync)
+
+    await submitWithName('Acme Law')
+
+    await waitFor(() => {
+      expect(screen.getByText('Could not create the organisation. Try again.')).toBeTruthy()
+    })
   })
 })

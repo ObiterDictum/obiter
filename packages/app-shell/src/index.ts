@@ -14,7 +14,7 @@ export {
   type CreateOrganisationResult,
 } from './current-user'
 export { changelogQueryOptions } from './changelog'
-export { guardAuth, ensureOrganisation } from './route-loaders'
+export { guardAuth, ensureOrganisation, prefetchHomeData } from './route-loaders'
 
 // Live-surface data (M2): real matters + documents via TanStack Query.
 export {

@@ -3,10 +3,11 @@ import { ArrowRight, Clock, Folders, MagnifyingGlass, Sparkle, X } from '@phosph
 import { Button, Card, Input, Skeleton } from '@obiter/ui'
 import type { AppPlatform } from '@obiter/contracts'
 import { useState, type FormEvent } from 'react'
+import { useQueryClient, useSuspenseQuery } from '@tanstack/react-query'
 import { changelogQueryOptions } from '../changelog'
 import { useMattersList } from '../matters'
+import { ApiError } from '../api'
 import { useCreateOrganisation, useCurrentUser } from '../current-user'
-import { useSuspenseQuery } from '@tanstack/react-query'
 
 /**
  * Home — the authenticated landing surface. For an org-less user this renders
@@ -35,6 +36,7 @@ export function HomeRouteView({ platform: _platform }: { platform: AppPlatform }
  */
 function CreateOrganisationState({ name }: { name: string }) {
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const createOrganisation = useCreateOrganisation()
   const [orgName, setOrgName] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -47,12 +49,19 @@ function CreateOrganisationState({ name }: { name: string }) {
       return
     }
     setError(null)
-    const result = await createOrganisation.mutateAsync({ name: trimmed })
-    if (!result) {
-      setError('Could not create the organisation. Try again.')
-      return
+    try {
+      await createOrganisation.mutateAsync({ name: trimmed })
+      await navigate({ to: '/' })
+    } catch (cause) {
+      if (cause instanceof ApiError && cause.code === 'conflict_detected') {
+        // The user already has an organisation, so the cached /api/me is
+        // stale. Refresh it and tell them — they do not need to create one.
+        setError('You already have an organisation. Refreshing…')
+        void queryClient.invalidateQueries({ queryKey: ['current-user'] })
+      } else {
+        setError('Could not create the organisation. Try again.')
+      }
     }
-    await navigate({ to: '/' })
   }
 
   return (
