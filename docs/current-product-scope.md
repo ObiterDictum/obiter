@@ -10,7 +10,7 @@ Status is tracked in three tiers. "Implemented" means a user action reaches the 
 
 ### Implemented end-to-end (API + UI)
 
-- Search: the legal source search surface. It searches Obiter-owned stored legal sources first and queues Find Case Law hydration in the background on misses. This is currently the only UI surface wired to the real API.
+- Search: the legal source search surface. It searches Obiter-owned stored legal sources first and queues Find Case Law hydration in the background on misses.
 
 Search owns:
 
@@ -20,16 +20,37 @@ Search owns:
 - `POST /api/search/fetch`
 - `GET /api/search/documents/:documentId`
 
+- Auth: sign-in, sign-out, and self-registration are wired to the real auth API (better-auth email/password + magic link). `useCurrentUser()` is backed by the real `GET /api/me`; signed-out users are redirected to `/sign-in` and session expiry is handled gracefully. Email verification is required on self-registration; that flow is server-side only (no dedicated verification product surface).
+
+Auth owns:
+
+- `/sign-in`
+- `GET /api/me`
+- `/api/auth/*` (better-auth: sign-up, sign-in, sign-out, verify-email, magic-link)
+
+- Home (`/workspace`): the landing surface renders the signed-in user's real matters and organisation from `/api/me` and `GET /api/matters`. No invented widgets — every value shown comes from a real endpoint.
+
+- Matters: the matters list, matter creation, and matter detail are wired to `GET /api/matters`, `POST /api/matters`, and `GET /api/matters/:id` via TanStack Query, with loading, empty, and error states.
+
+Matters owns:
+
+- `/matters`
+- `/matters/:matterId`
+- `GET /api/matters`
+- `POST /api/matters`
+- `GET /api/matters/:id`
+
+- Documents (metadata): the matter detail renders its documents list from `GET /api/matters/:matterId/documents`, and the document detail route renders real document metadata and versions from `GET /api/documents/:id`. This is metadata-only — filename, hash, size, status, versions; no file bytes are received or stored.
+
+Documents owns:
+
+- `/matters/:matterId/documents/:documentId`
+- `GET /api/matters/:matterId/documents`
+- `GET /api/documents/:id`
+
 ### API implemented, UI is demo fixture
 
-The backend for these exists (org-scoped, audited, migration-backed) but the UI renders hardcoded Phase 0 demo data (`createPhaseZeroShellSnapshot` in `packages/app-shell`) and never calls the API. The fixture IDs do not exist in the database. These surfaces must not be described as implemented.
-
-- Auth: sign-in/session API exists (migration 0001); the sign-in screen is cosmetic and the shell's current user is a canned demo response.
-- Home (`/workspace`): the layout exists; the content is fixture data, not a role-aware hub.
-- Matters: full CRUD API exists (`/api/matters`); the matter list and detail screens render fixture data. No code in the web app calls `/api/matters`.
-- Documents: metadata-only API exists (upload records filename/hash/size; no file bytes are received or stored). No document UI beyond fixture data.
-
-Closing this tier is owned by the app shell rebuild (`docs/prds/app-shell-rebuild.md`), which replaces the fixture layer with real API wiring and a new design system. It runs as a parallel track to Redact and is a named dependency of the Redact Phase 2 review UI (`docs/prds/redact-2-review-output.md`).
+(None. The fixture layer (`createPhaseZeroShellSnapshot`, demo `MeResponse`) was deleted in the app shell rebuild M2; these surfaces are now wired to real data. Run `pnpm seed` to populate a development dataset.)
 
 ### Planned (visible but not implemented)
 
