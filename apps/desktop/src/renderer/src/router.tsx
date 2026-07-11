@@ -101,7 +101,9 @@ const documentDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'matters/$matterId/documents/$documentId',
   loader: ({ context, params }) =>
-    context.queryClient.prefetchQuery(documentQueryOptions(params.documentId)),
+    guardAuth(context.queryClient, () =>
+      context.queryClient.prefetchQuery(documentQueryOptions(params.documentId)),
+    ),
   component: DesktopDocumentDetailRoute,
 })
 
