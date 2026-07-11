@@ -32,8 +32,10 @@ export interface CreateOrganisationResult {
 
 /**
  * Creates the signed-in user's organisation via POST /api/organisations.
- * On success, invalidates the current-user query so /api/me refetches and
- * the shell switches from the create-org state to matters — no full reload.
+ * On success, the current-user cache is updated immediately with the created
+ * organisation (role becomes 'owner') so the shell flips from the create-org
+ * state to matters without waiting for a refetch, and the query is invalidated
+ * to reconcile with the server.
  */
 export function createOrganisationMutationOptions(): MutationOptions<
   CurrentOrganisation,
@@ -52,7 +54,12 @@ export function createOrganisationMutationOptions(): MutationOptions<
       )
       return result.organisation
     },
-    onSuccess: () => {
+    onSuccess: (organisation) => {
+      // Merge the created organisation into the cached /api/me so the UI
+      // reflects it immediately; the role of the creating user is 'owner'.
+      queryClient.setQueryData<MeResponse>(['current-user'], (prev) =>
+        prev ? { user: { ...prev.user, role: 'owner' }, organisation } : prev,
+      )
       void queryClient.invalidateQueries({ queryKey: ['current-user'] })
     },
   }

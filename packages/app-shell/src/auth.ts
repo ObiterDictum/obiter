@@ -104,12 +104,13 @@ export function useAuth(): UseAuthReturn {
 
   // better-auth 1.6.x password reset: POST /request-password-reset never
   // reveals whether the email exists (it returns the same message and runs a
-  // timing-attack mitigation). The reset callback redirects to the web with
-  // ?token= on success or ?error=INVALID_TOKEN on an expired/invalid token.
+  // timing-attack mitigation). The reset link is derived server-side from the
+  // token and always points at the configured web origin (OBITER_WEB_ORIGIN),
+  // so the client does not — and must not — pass a redirectTo. Under the
+  // desktop renderer the window origin is a custom scheme, which better-auth
+  // would reject and which could not open in a browser anyway.
   async function requestPasswordReset(email: string) {
-    const redirectTo =
-      typeof window === 'undefined' ? undefined : `${window.location.origin}/reset-password`
-    const result = await authClient.requestPasswordReset({ email, redirectTo })
+    const result = await authClient.requestPasswordReset({ email })
     if (result.error) {
       return { ok: false, message: result.error.message ?? 'Could not send a reset link.' }
     }

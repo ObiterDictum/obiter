@@ -6,17 +6,22 @@ import { useAuth } from '../auth'
 import { Wordmark } from '../wordmark'
 
 /**
- * Reset-password screen. Reached via the reset callback redirect, which
- * appends ?token= on a valid token or ?error=INVALID_TOKEN on an
- * expired/invalid one. Better-auth tokens are single-use. On success the user
- * is sent to /sign-in to sign in with the new password.
+ * Reset-password screen. The reset email links here with ?token= (the token is
+ * derived server-side and always targets the web origin). Better-auth tokens
+ * are single-use and expire (default 1h). Because the link points straight at
+ * this screen, the token is validated on submit — an expired/already-used
+ * token surfaces as a submit failure, which flips the screen to its
+ * "request a new link" state rather than a generic inline error. On success
+ * the user is sent to /sign-in to sign in with the new password.
  */
 export function ResetPasswordRouteView() {
   const navigate = useNavigate()
   const { resetPassword } = useAuth()
   const search = useSearch({ strict: false }) as { token?: string; error?: string }
   const token = typeof search.token === 'string' ? search.token : ''
-  const invalidToken = search.error === 'INVALID_TOKEN' || !token
+  // No token on the URL means the link was malformed; an explicit error is the
+  // legacy pre-validation flag. Both start in the invalid-token state.
+  const [tokenFailed, setTokenFailed] = useState(search.error === 'INVALID_TOKEN' || !token)
 
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -38,8 +43,11 @@ export function ResetPasswordRouteView() {
     const result = await resetPassword(token, password)
     setSubmitting(false)
     if (!result.ok) {
-      // The token may have expired or already been used.
-      setError(result.message ?? 'This reset link is invalid or has expired.')
+      // The token may have expired or already been used. Since validation now
+      // happens on submit (the email links straight here), surface the
+      // dedicated "request a new link" state rather than a generic inline
+      // error so the user has a clear next step.
+      setTokenFailed(true)
       return
     }
     await navigate({ to: '/sign-in', search: { reset: 'success' } })
@@ -54,7 +62,7 @@ export function ResetPasswordRouteView() {
         </header>
 
         <Card>
-          {invalidToken ? (
+          {tokenFailed ? (
             <div className="flex flex-col gap-4">
               <p className="text-sm leading-relaxed text-muted">
                 This reset link is invalid or has expired.
