@@ -1,5 +1,6 @@
 import { Link, useNavigate } from '@tanstack/react-router'
 import { ArrowRight, Clock, Folders, MagnifyingGlass, Sparkle, X } from '@phosphor-icons/react'
+import { Skeleton } from '@obiter/ui'
 import type { AppPlatform } from '@obiter/contracts'
 import { useState, type FormEvent } from 'react'
 import { changelogQueryOptions } from '../changelog'
@@ -21,7 +22,17 @@ export function HomeRouteView({ platform: _platform }: { platform: AppPlatform }
   const matters = useMattersList()
   const { data: changelog } = useSuspenseQuery(changelogQueryOptions())
 
+  // Only treat the list as empty on a confirmed-empty *successful* response —
+  // a pending or failed fetch must not render the "create your first matter"
+  // empty state.
   const matterCount = matters.data?.length ?? 0
+  const mattersDetail = matters.isLoading
+    ? 'loading'
+    : matters.isError
+      ? 'error'
+      : matterCount > 0
+        ? 'count'
+        : 'empty'
   const firstName = me.user.name.split(' ')[0]
   const recentMatters = matters.data?.slice(0, 4) ?? []
 
@@ -97,9 +108,13 @@ export function HomeRouteView({ platform: _platform }: { platform: AppPlatform }
             icon={<Folders aria-hidden="true" size={18} />}
             title="Matters"
             detail={
-              matterCount > 0
-                ? `${matterCount} ${matterCount === 1 ? 'matter' : 'matters'} in your organisation.`
-                : 'Create your first matter workspace.'
+              mattersDetail === 'loading'
+                ? 'Loading your matters…'
+                : mattersDetail === 'error'
+                  ? 'Your matters could not be loaded. Open Matters to retry.'
+                  : mattersDetail === 'count'
+                    ? `${matterCount} ${matterCount === 1 ? 'matter' : 'matters'} in your organisation.`
+                    : 'Create your first matter workspace.'
             }
           />
           <SurfaceCard
@@ -111,8 +126,29 @@ export function HomeRouteView({ platform: _platform }: { platform: AppPlatform }
         </div>
       </section>
 
-      {/* Recent matters — real data, not fixture rows. */}
-      {recentMatters.length > 0 ? (
+      {/* Recent matters — real data, not fixture rows. Only rendered when there
+          is something honest to show: rows on success, a skeleton while pending,
+          an error note on failure. A confirmed-empty list hides the section. */}
+      {mattersDetail === 'loading' ? (
+        <section className="flex flex-col gap-3" aria-busy="true" aria-label="Loading recent matters">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-subtle">Recent matters</h2>
+          <div className="flex flex-col gap-2">
+            <Skeleton className="h-14 w-full rounded-lg" />
+            <Skeleton className="h-14 w-full rounded-lg" />
+          </div>
+        </section>
+      ) : mattersDetail === 'error' ? (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-subtle">Recent matters</h2>
+          <p className="text-sm text-muted">
+            Your matters could not be loaded.{' '}
+            <Link to="/matters" className="font-semibold text-brand hover:text-brand-pressed">
+              Open Matters
+            </Link>{' '}
+            to retry.
+          </p>
+        </section>
+      ) : recentMatters.length > 0 ? (
         <section className="flex flex-col gap-3">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-xs font-semibold uppercase tracking-wider text-subtle">

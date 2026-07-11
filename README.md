@@ -73,15 +73,14 @@ Engineering workflow, commands, review expectations, and test guidance live in:
 - [PR.md](PR.md)
 - [TESTING.md](TESTING.md)
 
-### Development dataset
+### Development data
 
-After applying the database migrations (`packages/database/migrations`), seed a development dataset so every surface in the app shell shows real rows:
+Obiter has no seed script. To get an organisation, user, matters, and documents in any environment (including development), use the real self-serve flow:
 
-```bash
-pnpm seed
-```
-
-This creates an organisation, a user, matters, and documents (metadata only). The seeded credentials are printed on completion and can be used to sign in through the sign-in screen. The seed script refuses to run in production.
+1. Start the API (`pnpm dev:api`) with the database migrated (`packages/database/migrations`).
+2. Open the app and register an account through the sign-up screen. Registration provisions your organisation automatically.
+3. Verify the email (in development the one-time verification URL is logged to the API console when no Resend key is configured).
+4. Sign in, then create matters and upload document metadata through the UI.
 
 Useful product context:
 

@@ -50,7 +50,7 @@ Documents owns:
 
 ### API implemented, UI is demo fixture
 
-(None. The fixture layer (`createPhaseZeroShellSnapshot`, demo `MeResponse`) was deleted in the app shell rebuild M2; these surfaces are now wired to real data. Run `pnpm seed` to populate a development dataset.)
+(None. The fixture layer (`createPhaseZeroShellSnapshot`, demo `MeResponse`) was deleted in the app shell rebuild M2; these surfaces are now wired to real data. To populate any environment, including development, register an account through the sign-up screen — self-serve registration provisions the organisation, then matters and documents are created through the UI.)
 
 ### Planned (visible but not implemented)
 

@@ -24,6 +24,13 @@ export function DocumentDetailLayoutView({
 }) {
   const document = useDocument(documentId)
 
+  // The document is loaded by id alone; guard against the URL's matterId not
+  // matching the document's actual matter. Render not-found rather than show a
+  // valid document under the wrong matter's chrome/back-link.
+  const loaded = document.data
+  const matterMismatch =
+    !document.isLoading && !document.isError && loaded !== undefined && loaded.document.matterId !== matterId
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-col gap-2">
@@ -40,7 +47,7 @@ export function DocumentDetailLayoutView({
             <p className="text-xs font-medium uppercase tracking-wider text-subtle">Document</p>
             {document.isLoading ? (
               <Skeleton className="h-7 w-64" />
-            ) : document.isError || !document.data ? (
+            ) : document.isError || !loaded ? (
               <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-ink">
                 <FileText size={24} aria-hidden="true" />
                 Document
@@ -48,7 +55,7 @@ export function DocumentDetailLayoutView({
             ) : (
               <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-ink">
                 <FileText size={24} aria-hidden="true" />
-                {document.data.document.currentVersion?.filename ?? document.data.document.logicalKey}
+                {loaded.document.currentVersion?.filename ?? loaded.document.logicalKey}
               </h1>
             )}
             <p className="text-sm text-muted">
@@ -59,18 +66,32 @@ export function DocumentDetailLayoutView({
         </div>
       </div>
 
-      {document.isError ? (
+      {matterMismatch && loaded ? (
+        <EmptyState
+          title="This document belongs to a different matter"
+          body="The document exists, but it is not part of the matter in this URL. Open it from its own matter to see it in the right context."
+          action={
+            <Link
+              className="font-semibold text-brand hover:text-brand-pressed"
+              to="/matters/$matterId/documents/$documentId"
+              params={{ matterId: loaded.document.matterId, documentId }}
+            >
+              Open under the correct matter
+            </Link>
+          }
+        />
+      ) : document.isError ? (
         <EmptyState
           title="Document not found"
           body="This document does not exist in your organisation, or your session may have expired."
         />
       ) : document.isLoading ? (
-        <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-3" aria-busy="true" aria-label="Loading document">
           <Skeleton className="h-24 w-full rounded-lg" />
           <Skeleton className="h-24 w-full rounded-lg" />
         </div>
-      ) : document.data ? (
-        <DocumentMetadata document={document.data.document} versions={document.data.versions} />
+      ) : loaded ? (
+        <DocumentMetadata document={loaded.document} versions={loaded.versions} />
       ) : null}
 
       <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
