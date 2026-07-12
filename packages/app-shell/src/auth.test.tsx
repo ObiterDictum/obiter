@@ -106,6 +106,43 @@ describe('useAuth — session refresh after credential auth', () => {
 
     expect(refetch).not.toHaveBeenCalled()
   })
+
+  it('still returns ok when session refetch rejects after a successful sign-in', async () => {
+    signInEmail.mockResolvedValueOnce({ error: null, data: { token: 'tok', user: { id: 'usr_1' } } })
+    refetch.mockRejectedValueOnce(new Error('session GET failed'))
+
+    const { result } = renderHook(() => useAuth(), { wrapper: createWrapper(new QueryClient()) })
+
+    let outcome
+    await act(async () => {
+      outcome = await result.current.signInWithEmail({ email: 'lex@obiter.dev', password: 'obiter-dev' })
+    })
+
+    expect(refetch).toHaveBeenCalledTimes(1)
+    expect(outcome).toEqual({ ok: true })
+  })
+
+  it('still returns ok when session refetch rejects after a session-establishing sign-up', async () => {
+    signUpEmail.mockResolvedValueOnce({
+      error: null,
+      data: { token: 'tok', user: { id: 'usr_2' } },
+    })
+    refetch.mockRejectedValueOnce(new Error('session GET failed'))
+
+    const { result } = renderHook(() => useAuth(), { wrapper: createWrapper(new QueryClient()) })
+
+    let outcome
+    await act(async () => {
+      outcome = await result.current.signUpWithEmail({
+        name: 'Lex',
+        email: 'lex@obiter.dev',
+        password: 'password123',
+      })
+    })
+
+    expect(refetch).toHaveBeenCalledTimes(1)
+    expect(outcome).toEqual({ ok: true })
+  })
 })
 
 describe('useAuth — sign-in success/failure', () => {

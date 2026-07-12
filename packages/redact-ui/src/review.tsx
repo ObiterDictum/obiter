@@ -264,7 +264,9 @@ export function RedactionReviewView({ runId }: { runId: string }) {
       </PageScaffold>
     )
   }
-  if (runQuery.error || textQuery.error || !runQuery.data || !textQuery.data) {
+  // Prefer cached data over a background refetch error (e.g. finalize
+  // invalidateQueries failing) so a successful local write is not blanked out.
+  if (!runQuery.data || !textQuery.data) {
     return (
       <PageScaffold eyebrow="Redact" title="Review unavailable">
         <EmptyState

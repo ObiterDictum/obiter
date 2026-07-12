@@ -71,4 +71,19 @@ describe('RedactionReviewView', () => {
     expect(screen.getByRole('region', { name: 'Redaction output' })).toBeTruthy()
     expect(screen.queryByText('No sensitive data was detected in this document')).toBeNull()
   })
+
+  it('keeps rendering when a background run refetch errors but cached data remains', () => {
+    hooks.useRedactionRun.mockReturnValue({
+      isPending: false,
+      error: new Error('reconcile GET failed'),
+      data: run,
+    })
+    hooks.useRedactionDocumentText.mockReturnValue({ isPending: false, data: { text: 'Jane filed.' } })
+    hooks.useRedactionOutput.mockReturnValue({ isPending: false, data: { text: '[REDACTED] filed.' } })
+    hooks.useSpanDecision.mockReturnValue({})
+    hooks.useFinalizeRun.mockReturnValue({})
+    render(<RedactionReviewView runId="red_1" />)
+    expect(screen.getByRole('heading', { name: 'Redaction review' })).toBeTruthy()
+    expect(screen.queryByText('Could not load this redaction run')).toBeNull()
+  })
 })

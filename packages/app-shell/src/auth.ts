@@ -65,13 +65,17 @@ export function useAuth(): UseAuthReturn {
 
   /**
    * After a successful credential exchange the HTTP session cookie exists, but
-   * `useSession()` may still report null until its store is refetched. The
-   * desktop shell navigates client-side (no full reload), so AppShellLayout
-   * would bounce back to /sign-in and remount an empty form. Web avoids this
-   * via window.location.assign; desktop must refetch before navigate.
+   * `useSession()` may still report null until its store is refetched. Both
+   * platforms navigate client-side after auth, so AppShellLayout would bounce
+   * back to /sign-in without this refresh. A failed session GET must not undo
+   * a successful credential exchange — the cookie is already set.
    */
   async function refreshSessionAfterAuth() {
-    await realSession.refetch()
+    try {
+      await realSession.refetch()
+    } catch {
+      // Best-effort: cookie is set; a later render/refetch can pick up session.
+    }
   }
 
   async function signInWithEmail(input: SignInEmailInput) {
