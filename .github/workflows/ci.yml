@@ -4,7 +4,7 @@ on:
   pull_request:
     branches: [dev, main]
   push:
-    branches: [dev, main]
+    branches: [main]
 
 jobs:
   checks:
@@ -32,8 +32,16 @@ jobs:
       - name: Test
         run: pnpm test
 
+  # Deployable images build only on pushes to main (the release branch).
+  # dev is the integration branch; promote dev -> main to cut a deploy.
+  #
+  # Currently only the web app has a Dockerfile. The API image is deferred
+  # (docs/specs/deployment.md); add a docker-api job here when its Dockerfile
+  # lands. Marketing lives in its own repo; desktop ships as Electron
+  # installers, not server images.
   docker-web:
     name: Build web image
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
