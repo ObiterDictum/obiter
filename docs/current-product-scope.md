@@ -10,7 +10,7 @@ Status is tracked in three tiers. "Implemented" means a user action reaches the 
 
 ### Implemented end-to-end (API + UI)
 
-- Search: the legal source search surface. It searches Obiter-owned stored legal sources first and queues Find Case Law hydration in the background on misses.
+- Search: the legal source search surface. It searches Obiter-owned stored legal sources first and queues Find Case Law hydration in the background on misses. (App shell rebuild M3 confirmed `/search` and `/case/:slug` render on the `--obiter-*` design tokens and `@obiter/ui` components exclusively — no legacy styling remains. The restyle itself shipped in PR #24; M3 is the verification and dead-CSS removal pass.)
 
 Search owns:
 

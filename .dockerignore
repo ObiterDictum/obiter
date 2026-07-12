@@ -1,0 +1,52 @@
+# Root .dockerignore — applies to the build context for apps/web/Dockerfile
+# (invoked as `docker build -f apps/web/Dockerfile .` from the repo root).
+#
+# Docker only consults the .dockerignore at the BUILD CONTEXT root, so this is
+# where exclusions must live. The web Dockerfile requires the monorepo root as
+# its context because its COPY paths span the workspace. Keep secrets and
+# machine state out of every image layer here.
+
+# Secrets — never bake into images. Runtime config comes from the environment.
+**/.env
+**/.env.*
+**/.env.local
+!.env.example
+
+# Dependencies are installed inside the image, never copied from the host.
+**/node_modules
+
+# Build outputs are produced inside the image.
+**/dist
+**/build
+**/out
+**/.output
+**/.tanstack
+
+# VCS and editor/OS cruft.
+.git
+.gitignore
+.github
+.idea
+.vscode
+.DS_Store
+Thumbs.db
+
+# Logs and local caches.
+**/*.log
+npm-debug.log*
+pnpm-debug.log*
+**/coverage
+**/.cache
+tmp/
+temp/
+
+# Local agent/tooling dirs (not part of the product).
+.claude/
+.cursor/
+.code-review
+.code-review.json
+.pi-lens/
+.pi-subagents/
+.oxlintrc.json
+.prettierrc.json
+.agents/
