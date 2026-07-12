@@ -7,7 +7,7 @@ Phase 0.2 uses Hono for the API service and `better-auth` for identity.
 - mounts `better-auth` at `/api/auth/*`
 - enables self-serve email/password sign-up and sign-in
 - enables magic-link sign-in with hashed verification tokens (existing users only)
-- provisions a personal organisation for every new sign-up
+- supports org-less users after registration; organisations are created explicitly via `POST /api/organisations`
 - exposes `GET /api/me` as the organisation-aware current-user contract
 - records sign-in/sign-up/sign-out audit entries through the `/api/auth/*` flow
 - exposes public legal search endpoints at `/api/search/*` for the product and marketing clients
@@ -34,11 +34,11 @@ Production may also provide:
 - `MOJ_FIND_CASE_LAW_BASE_URL` to override the public Find Case Law upstream
 - `MOJ_FIND_CASE_LAW_RATE_LIMIT` to tune the public upstream fetch limiter
 
-Development falls back to local defaults so the service can typecheck and boot before hosted infrastructure is provisioned. With the web Vite proxy, the development default for `BETTER_AUTH_URL` is `http://localhost:3000`, matching `OBITER_WEB_ORIGIN`; override both deliberately when using another local origin. If `OBITER_RESEND_API_KEY` is not configured in development, the API logs the complete magic-link URL with a `[dev-only]` marker instead of sending an email. Never rely on that fallback in production.
+Development falls back to local defaults so the service can typecheck and boot before hosted infrastructure is provisioned. With the web Vite proxy, the development default for `BETTER_AUTH_URL` is `http://localhost:3000`, matching `OBITER_WEB_ORIGIN`; override both deliberately when using another local origin. In development the API also trusts electron-vite renderer Origins on loopback http only (`http://localhost` and `http://127.0.0.1`, ports `5173`–`5199`) for both CORS and better-auth — the same `isDevDesktopRendererOrigin` gate, no port wildcards — so `pnpm dev:desktop` can sign in through the renderer `/api` proxy. Production still only trusts configured web/desktop/marketing origins. If `OBITER_RESEND_API_KEY` is not configured in development, the API logs the complete magic-link URL with a `[dev-only]` marker instead of sending an email. Never rely on that fallback in production.
 
 ## Accounts
 
-Sign-up is public and self-serve (via `/sign-up/email` and the app's "Create account" mode). There are no seed scripts and no seeded accounts — every account, including the first one in a fresh environment, is created by registering through the app. Registration provisions a new organisation and makes the registering user its `owner`.
+Sign-up is public and self-serve (via `/sign-up/email` and the app's "Create account" mode). There are no seed scripts and no seeded accounts — every account, including the first one in a fresh environment, is created by registering through the app. Registration creates an org-less user; the user then explicitly creates an organisation via `POST /api/organisations` and becomes its `owner` at that point.
 
 ## Deploying Only This API
 
@@ -52,6 +52,6 @@ pnpm --filter @obiter/api build
 pnpm --filter @obiter/api start
 ```
 
-Set `NODE_ENV=production` and `PORT` to the port Dokploy exposes to the container. Point the service domain at a backend hostname such as `https://api.obiter.tech` or `https://search-api.obiter.tech`.
+Production deploys **must** set `NODE_ENV=production` (and `PORT` to the port Dokploy exposes to the container). Unset or mistyped `NODE_ENV` falls through to the development path in `readApiEnv`, which would enable the loopback electron-vite Origin trust above. Point the service domain at a backend hostname such as `https://api.obiter.tech` or `https://search-api.obiter.tech`.
 
 For the marketing site, set `VITE_API_ORIGIN` to the API hostname at build time. If the marketing frontend calls the API directly across origins, set `OBITER_MARKETING_ORIGIN` on the API service to the marketing site origin.
