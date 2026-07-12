@@ -1,4 +1,6 @@
 import { ArrowRight } from '@phosphor-icons/react'
+import { Link } from '@tanstack/react-router'
+import { caseResultLocation } from '../../case-navigation'
 import type { LegalSearchBrowseContext, LegalSearchFetchResponse } from './searchTypes'
 
 interface SearchResultsProps {
@@ -16,6 +18,7 @@ export function SearchResults({ response, browse, selectedIndex }: SearchResults
         {formatResultMeta(response, storedResultsAvailable, browse)}
       </p>
       {response.hits.map((result, index) => {
+        const location = caseResultLocation(result)
         const summary = (
           <>
             <span className="min-w-0">
@@ -43,13 +46,13 @@ export function SearchResults({ response, browse, selectedIndex }: SearchResults
             data-selected={selectedIndex === index ? 'true' : undefined}
             key={result.id}
           >
-            <a
-              href={result.canonicalUrl ?? `/cases/${encodeURIComponent(result.id)}`}
+            <Link
+              {...location}
               className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 p-4 text-ink transition-colors hover:bg-canvas"
               aria-current={selectedIndex === index ? 'true' : undefined}
             >
               {summary}
-            </a>
+            </Link>
             {result.snippets && result.snippets.length > 0 ? (
               <div className="flex flex-col gap-2 border-t border-line bg-canvas/40 px-4 pb-4 pt-3" aria-label="Matching judgment snippets">
                 {result.snippets.map((snippet) => (

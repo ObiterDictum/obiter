@@ -100,12 +100,16 @@ function AuthenticatedFrame({
   children: ReactNode
   platform: AppPlatform
 }) {
+  // h-dvh + min-h-0 so the content column is viewport-bounded and main can
+  // scroll. min-h-dvh alone lets the grid grow with content; with desktop's
+  // body { overflow: hidden } that clipped long pages (e.g. redaction review)
+  // with no scrollbar.
   return (
-    <div className="grid min-h-dvh grid-cols-[260px_1fr] bg-canvas text-ink">
+    <div className="grid h-dvh grid-cols-[260px_1fr] bg-canvas text-ink">
       <Sidebar platform={platform} />
-      <div className="flex min-w-0 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-col">
         <TopBar />
-        <main className="flex-1 overflow-y-auto px-8 py-8">{children}</main>
+        <main className="min-h-0 flex-1 overflow-y-auto px-8 py-8">{children}</main>
       </div>
     </div>
   )
@@ -116,7 +120,7 @@ function Sidebar({ platform }: { platform: AppPlatform }) {
   const { data, isLoading } = useQuery(currentUserQueryOptions())
 
   return (
-    <aside className="flex min-h-dvh flex-col gap-6 border-r border-line bg-surface px-3 py-5">
+    <aside className="flex h-dvh flex-col gap-6 overflow-y-auto border-r border-line bg-surface px-3 py-5">
       <div className="px-3 pt-1">
         <Wordmark className="h-7 w-auto" />
       </div>

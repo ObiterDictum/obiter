@@ -1,6 +1,7 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Card } from '@obiter/ui'
+import { caseResultLocation } from '../case-navigation'
 import {
   SearchCommandBar,
   SearchFeedbackPanel,
@@ -306,7 +307,7 @@ export function LegalSearchView() {
         if (!selectedResult) return
 
         event.preventDefault()
-        void navigate({ href: selectedResult.canonicalUrl ?? `/cases/${encodeURIComponent(selectedResult.id)}` })
+        void navigate(caseResultLocation(selectedResult))
       }
     }
 
