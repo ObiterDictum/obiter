@@ -1,0 +1,11 @@
+# git-blame revisions to ignore. Each line is a full commit hash (comments
+# and blank lines are ignored). `git blame --ignore-revs-file .git-blame-ignore-revs`
+# (or setting blame.ignoreRevsFile in git config) skips these commits so
+# purely-cosmetic changes don't clutter authorship.
+#
+# Configure once per clone:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# Repo-wide Prettier reformat. Cosmetic only; no behaviour change.
+# See the commit message for the .prettierignore scope.
+470020beee02e56df2fe51e2a377f756eb8fae9a
