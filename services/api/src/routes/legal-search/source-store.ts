@@ -320,5 +320,5 @@ function documentMatchesSearch(
   )
   const tokens = normalizedQuery.split(' ').filter(Boolean)
 
-  return tokens.length === 0 || tokens.every((token) => haystack.includes(token))
+  return tokens.every((token) => haystack.includes(token))
 }

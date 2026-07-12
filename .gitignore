@@ -45,3 +45,16 @@ Thumbs.db
 .cache/
 tmp/
 temp/
+
+# Machine-local agent / review tooling — never repo content. These are
+# per-developer scratch (editor/agent configs, recorded review state, runtime
+# logs). Each developer's set differs; keep them out of tracked noise.
+.claude/
+.cursor/
+.code-review/
+.code-review.json
+.pi-lens/
+.pi-subagents/
+
+# Local API object storage (OBITER_STORAGE_ROOT default) — runtime data.
+.obiter-storage/

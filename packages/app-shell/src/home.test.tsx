@@ -9,7 +9,6 @@ import {
   createRouter,
   RouterProvider,
 } from '@tanstack/react-router'
-import type { ReactNode } from 'react'
 import { ApiError } from './api'
 import { HomeRouteView } from './views/home'
 

@@ -1,0 +1,44 @@
+# Normalize text files to LF in the repository regardless of checkout
+# platform. Prettier writes LF; this guarantees that is what gets committed
+# (and what CI on ubuntu-latest sees), so no agent's formatter run ever
+# produces line-ending churn. Binary files are marked explicitly.
+
+* text=auto eol=lf
+
+# Source
+*.ts        text eol=lf
+*.tsx       text eol=lf
+*.js        text eol=lf
+*.jsx       text eol=lf
+*.mjs       text eol=lf
+*.cjs       text eol=lf
+*.json      text eol=lf
+*.jsonc     text eol=lf
+*.css       text eol=lf
+*.html      text eol=lf
+*.md        text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+
+# Shell / config
+*.sh        text eol=lf
+
+# Windows-native scripts stay CRLF
+*.cmd       text eol=crlf
+*.bat       text eol=crlf
+*.ps1       text eol=crlf
+
+# Images / fonts / archives are binary — never normalize.
+*.png       binary
+*.jpg       binary
+*.jpeg      binary
+*.gif       binary
+*.webp      binary
+*.ico       binary
+*.svg       text eol=lf
+*.woff      binary
+*.woff2     binary
+*.ttf       binary
+*.otf       binary
+*.docx      binary
+*.pdf       binary

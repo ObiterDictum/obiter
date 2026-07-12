@@ -1,8 +1,8 @@
 import { LegalAuthoritySchema, type LegalAuthority } from '@obiter/legal-schema'
-import { getDocument, indexDocuments, rankLegalSearchHitsByExactMatch } from '@obiter/search-client'
+import { getDocument, indexDocuments } from '@obiter/search-client'
 import type { ApiEnv } from '../../env'
 import { parseFindCaseLawAtom, type AtomEntry } from './atom-parser'
-import { courtFromCitation, findCaseLawJurisdiction, supportedFindCaseLawCourts, toFindCaseLawCourtParam } from './court-utils'
+import { courtFromCitation, findCaseLawJurisdiction, toFindCaseLawCourtParam } from './court-utils'
 import {
   addFindCaseLawDateParams,
   courtFromDocumentId,
@@ -20,7 +20,6 @@ import {
 } from './html-parser'
 import { createMojRateLimiter } from './rate-limiter'
 import {
-  toAuthoritySummary,
   type LegalAuthoritySourceStore,
   type ProviderSourceMetadata,
   type StoredLegalAuthorityRecord,

@@ -8,7 +8,9 @@
     "dev:desktop": "pnpm --filter @obiter/desktop --if-present dev",
     "dev:desktop:api": "pnpm --parallel --stream --filter @obiter/api --filter @obiter/desktop --if-present dev",
     "dev:web": "pnpm --filter @obiter/web --if-present dev",
-    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "oxlint && eslint .",
     "test": "pnpm -r --if-present test",
     "typecheck": "pnpm -r --if-present typecheck"
   },
@@ -18,6 +20,8 @@
     "@types/react-dom": "^19.2.2",
     "@typescript-eslint/parser": "^8.32.0",
     "eslint": "^9.30.0",
+    "oxlint": "^1.73.0",
+    "prettier": "^3.9.5",
     "typescript": "^5.7.2",
     "vitest": "^3.2.4"
   }

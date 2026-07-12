@@ -14,7 +14,7 @@ type Mode = 'password' | 'magic-link' | 'register'
  * sidebar); on success the user is sent to Home. A ?reset=success query
  * param (set after a password reset) surfaces a confirmation notice.
  */
-export function SignInRouteView({ platform }: { platform: AppPlatform }) {
+export function SignInRouteView({ platform: _platform }: { platform: AppPlatform }) {
   const navigate = useNavigate()
   const { signInWithEmail, signUpWithEmail, requestMagicLink } = useAuth()
   const search = useSearch({ strict: false }) as { reset?: string }
