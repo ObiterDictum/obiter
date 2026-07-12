@@ -1,4 +1,4 @@
-import type { ApiErrorCode, ApiErrorResponse } from '@obiter/contracts'
+import type { ApiErrorCode } from '@obiter/contracts'
 import { apiErrorResponseSchema } from '@obiter/contracts'
 import { apiUrl } from './lib/api-url'
 

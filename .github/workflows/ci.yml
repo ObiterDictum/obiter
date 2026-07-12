@@ -8,7 +8,7 @@ on:
 
 jobs:
   checks:
-    name: Typecheck, lint, test
+    name: Typecheck, format, lint, test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -26,6 +26,13 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      # Prettier formatting — rejects unformatted code. Keeps the tree free of
+      # formatter churn (no agent's prettier run should ever produce a diff).
+      - name: Format check
+        run: pnpm format:check
+
+      # Two-stage lint: oxlint (fast correctness pass) then eslint (owns the
+      # icon-pack no-restricted-imports ban and the hex-color-in-styles rule).
       - name: Lint
         run: pnpm lint
 

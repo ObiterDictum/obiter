@@ -234,7 +234,7 @@ function findCitationSlugStart(parts: string[]) {
 }
 
 function slugifyCaseCitation(value: string) {
-  return slugifyCaseText(value.replace(/[\[\]()]/g, ' '))
+  return slugifyCaseText(value.replace(/[[\]()]/g, ' '))
 }
 
 function slugifyCaseText(value: string) {

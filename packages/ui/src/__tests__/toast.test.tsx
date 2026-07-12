@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { Toaster, ToastProvider, useToast } from '../toast'
 
 function Probe({ timeout }: { timeout?: number }) {
