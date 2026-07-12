@@ -1,13 +1,24 @@
 /*
- * Desktop renderer root styles. The design tokens (light default, dark under
- * [data-theme="dark"]) come from @obiter/ui/tailwind.css. The desktop shares the
- * same frame/views as web, so no separate dark sheet is needed.
+ * Desktop renderer root styles.
+ *
+ * - @obiter/ui/tailwind.css brings Tailwind v4 + the --obiter-* design tokens
+ *   and the @theme inline mappings. This is the single Tailwind entry.
+ * - @source MUST point at the workspace package *source trees* (and this
+ *   renderer's own src). Tailwind v4 automatic source detection skips
+ *   node_modules, and pnpm workspace packages are reached via node_modules
+ *   symlinks — so without these directives, utilities used in @obiter/ui /
+ *   @obiter/app-shell / @obiter/redact-ui are never generated and the
+ *   renderer renders as unstyled HTML.
+ * - Paths are relative to THIS file (apps/desktop/src/renderer/src/). Five
+ *   `../` segments reach the monorepo root; four would land in apps/ and
+ *   silently scan nothing. Keep them in sync if this CSS file moves.
  */
 @import "@obiter/ui/tailwind.css";
 
-@source "../../../../packages/ui/src";
-@source "../../../../packages/app-shell/src";
-@source "../../../../packages/redact-ui/src";
+@source ".";
+@source "../../../../../packages/ui/src";
+@source "../../../../../packages/app-shell/src";
+@source "../../../../../packages/redact-ui/src";
 
 html,
 body,
