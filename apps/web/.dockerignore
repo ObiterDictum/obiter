@@ -1,0 +1,35 @@
+# Keep secrets and machine state out of the image.
+# .env* is excluded explicitly — runtime config comes from the environment, never baked in.
+.env
+.env.*
+!.env.example
+
+# Dependencies are installed inside the image, never copied from the host.
+node_modules
+**/node_modules
+
+# Build outputs are produced inside the image.
+dist
+**/dist
+build
+out
+.output
+.tanstack
+**/.tanstack
+
+# VCS and editor/OS cruft.
+.git
+.gitignore
+.idea
+.vscode
+.DS_Store
+Thumbs.db
+
+# Logs and local caches.
+*.log
+npm-debug.log*
+pnpm-debug.log*
+coverage
+.cache
+tmp
+temp

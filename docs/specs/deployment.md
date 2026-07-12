@@ -41,6 +41,22 @@ Three Dokploy applications on the existing VPS, plus the existing database:
 - Dokploy domain config: single host, `/api` path rule to the API app with higher priority, everything else to web.
 - Env: the public base URL (for better-auth client `baseURL`) — with same-domain routing this is just the site origin.
 
+#### Implementation (Milestone 3)
+
+Artifacts shipped under `apps/web/`:
+
+- `Dockerfile` — multi-stage Node 22 slim build. Corepack-enabled pnpm (pinned via the repo `packageManager` field) installs `@obiter/web` and its workspace deps with `--frozen-lockfile`, then `pnpm --filter @obiter/web build` produces `dist/client` (static assets) and `dist/server/server.js` (the SSR fetch handler). No secrets are baked in; `.dockerignore` excludes `.env*`, node_modules, and build outputs.
+- `serve.mjs` — dependency-free production SSR host. TanStack Start's built server module exports a Web Fetch handler (`{ fetch }`) and binds no port itself; `serve.mjs` is a small `node:http` server that serves `dist/client` static assets directly and forwards everything else to the SSR handler. Runtime config from env: `PORT` (default 3000), `HOST` (default 0.0.0.0), and `BETTER_AUTH_URL` (the site origin, consumed by the auth client under same-domain routing).
+- `package.json` gains a `start` script (`node serve.mjs`) so the serve path is reproducible outside Docker too.
+
+**Verification status:** `apps/web/serve.mjs` has been exercised against a local `vite build` output — it serves static assets (CSS/JS/PNG with correct content-types) and SSR routes (`/search`, `/sign-in`) return 200. `docker build` itself has **not** been run (no Docker in the development environment); the Dockerfile is standard Node 22 + corepack pnpm and is CI-verifiable.
+
+**Same-domain routing (Dokploy/Traefik):** deploy the `api` and `web` apps as two Dokploy applications on the same host. Configure the domain with two Traefik rules: `/api/*` → the `api` application (higher priority), `/*` → the `web` application. The web app then calls the API with relative URLs (`apiFetch` already uses `credentials: 'include'`), so better-auth cookie sessions work without third-party-cookie workarounds. This matches the spec's hard requirement above.
+
+**Known follow-up (not in this milestone):** the Satoshi / JetBrains-Mono typefaces currently load from the Fontshare CDN via a `<link>` in `apps/web/src/routes/__root.tsx`. Self-hosting them belongs with a later deployment/CSP hardening pass (an M2 carry-in) — it should land before any production deploy that cares about visitor-IP confidentiality or a strict CSP.
+
+
+
 ### Explicitly deferred
 
 - `services/worker` and `services/legal-ingestor` deployment (deploy when they do something).
