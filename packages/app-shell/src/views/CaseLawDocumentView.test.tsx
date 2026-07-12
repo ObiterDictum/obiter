@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { type ReactNode } from 'react'
+import { Suspense, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
@@ -57,14 +57,21 @@ function mockFetch(): ReturnType<typeof vi.fn> {
   return fetchMock
 }
 
+/**
+ * CaseLawDocumentView uses useSuspenseQuery, which suspends until the query
+ * resolves. Wrap it in a Suspense boundary so the render can complete: while
+ * suspended the fallback shows, and once the query resolves the content appears.
+ * Callers use findBy* (which awaits the suspended content) rather than getBy*.
+ */
 function renderView(caseId = 'uksc-2024-3') {
-  // useSuspenseQuery resolves on the first tick; retry off keeps errors loud.
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   })
   return render(
     <QueryClientProvider client={queryClient}>
-      <CaseLawDocumentView caseId={caseId} />
+      <Suspense fallback={<div>Loading case…</div>}>
+        <CaseLawDocumentView caseId={caseId} />
+      </Suspense>
     </QueryClientProvider>,
   )
 }
@@ -83,31 +90,27 @@ describe('CaseLawDocumentView', () => {
     mockFetch()
     renderView()
 
-    await waitFor(() => {
-      expect(screen.getByRole('document')).toBeTruthy()
-    })
+    // findBy* awaits the Suspense boundary resolving.
+    const documentLandmark = await screen.findByRole('document')
+    expect(documentLandmark).toBeTruthy()
 
     // Header (rendered once in the case metadata, once in the judgment body).
-    expect(screen.getAllByText('Potanina v Potanin').length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/\[2024\] UKSC 3/).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText('Potanina v Potanin')).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText(/\[2024\] UKSC 3/)).length).toBeGreaterThan(0)
     // The readable court label for 'uksc' resolves to 'UKSC'.
-    expect(screen.getAllByText(/UKSC/).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText(/UKSC/)).length).toBeGreaterThan(0)
     // The header formats the date; 2024-01-31 should appear somewhere.
-    expect(screen.getAllByText(/31 Jan 2024/).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText(/31 Jan 2024/)).length).toBeGreaterThan(0)
   })
 
   it('renders paragraphs with their accessible paragraph labels', async () => {
     mockFetch()
     renderView()
 
-    await waitFor(() => {
-      expect(screen.getByRole('document')).toBeTruthy()
-    })
+    await screen.findByRole('document')
 
-    const paragraphLabels = screen.getAllByLabelText('Paragraph 1')
-    expect(paragraphLabels.length).toBe(1)
-    const paragraphTwo = screen.getAllByLabelText('Paragraph 2')
-    expect(paragraphTwo.length).toBe(1)
+    expect((await screen.findAllByLabelText('Paragraph 1')).length).toBe(1)
+    expect((await screen.findAllByLabelText('Paragraph 2')).length).toBe(1)
   })
 
   it('fetches the document from the stored-case documents endpoint', async () => {
