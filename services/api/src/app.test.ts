@@ -11,7 +11,7 @@ const searchClientMock = vi.hoisted(() => ({
 
 vi.mock('@obiter/search-client', () => searchClientMock)
 vi.mock('./redaction-detection', () => ({
-  detectRedactionSpans: async (text: string) => ({
+  detectRedactionSpans: async (_text: string) => ({
     spans: [],
     detectorVersion: 'rampart-inference@0.1.3-vendored;mode=model+supplement',
     degraded: false,
