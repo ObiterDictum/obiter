@@ -1,7 +1,10 @@
 import { useId, type InputHTMLAttributes, type ReactNode } from 'react'
 import { cn } from './lib/cn'
 
-export interface InputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'children'> {
+export interface InputProps extends Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  'children'
+> {
   label?: ReactNode
   helperText?: ReactNode
   error?: ReactNode
@@ -49,7 +52,9 @@ export function Input({
             'transition-[border-color,box-shadow] duration-150',
             'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand',
             'disabled:cursor-not-allowed disabled:opacity-60',
-            showError ? 'border-danger' : 'border-line hover:border-line-strong',
+            showError
+              ? 'border-danger'
+              : 'border-line hover:border-line-strong',
             trailing ? 'pr-10' : '',
             className,
           )}
@@ -64,7 +69,10 @@ export function Input({
       {showError || helperText ? (
         <p
           id={describedById}
-          className={cn('text-xs leading-4', showError ? 'text-danger' : 'text-muted')}
+          className={cn(
+            'text-xs leading-4',
+            showError ? 'text-danger' : 'text-muted',
+          )}
         >
           {showError ? error : helperText}
         </p>

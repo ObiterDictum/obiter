@@ -9,7 +9,9 @@ export const Route = createFileRoute('/case/$caseSlug')({
   loader: ({ context, params }) => {
     const caseId = resolveCaseDocumentIdFromSlug(params.caseSlug)
 
-    return context.queryClient.ensureQueryData(caseLawDocumentQueryOptions(caseId))
+    return context.queryClient.ensureQueryData(
+      caseLawDocumentQueryOptions(caseId),
+    )
   },
   component: CaseRouteComponent,
 })

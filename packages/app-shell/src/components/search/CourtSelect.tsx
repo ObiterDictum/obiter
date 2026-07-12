@@ -1,7 +1,4 @@
-import {
-  courtOptionGroups,
-  getCourtLabel,
-} from './searchTypes'
+import { courtOptionGroups, getCourtLabel } from './searchTypes'
 
 interface CourtSelectProps {
   menuOpen: boolean

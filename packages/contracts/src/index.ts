@@ -33,7 +33,12 @@ export const syncStateSchema = z.enum([
 ])
 export type SyncState = z.infer<typeof syncStateSchema>
 
-export const artifactStatusSchema = z.enum(['queued', 'generating', 'ready', 'failed'])
+export const artifactStatusSchema = z.enum([
+  'queued',
+  'generating',
+  'ready',
+  'failed',
+])
 export type ArtifactStatus = z.infer<typeof artifactStatusSchema>
 
 export const artifactTypeSchema = z.enum([
@@ -66,7 +71,11 @@ export const spanCategorySchema = z.enum([
 ])
 export type SpanCategory = z.infer<typeof spanCategorySchema>
 
-export const spanSourceSchema = z.enum(['rampart_model', 'rampart_deterministic', 'uk_supplement'])
+export const spanSourceSchema = z.enum([
+  'rampart_model',
+  'rampart_deterministic',
+  'uk_supplement',
+])
 export type SpanSource = z.infer<typeof spanSourceSchema>
 
 export const redactionRunStatusSchema = z.enum([
@@ -79,7 +88,10 @@ export const redactionRunStatusSchema = z.enum([
 ])
 export type RedactionRunStatus = z.infer<typeof redactionRunStatusSchema>
 
-export const redactionPolicyModeSchema = z.enum(['internal_ai_minimisation', 'external_sharing'])
+export const redactionPolicyModeSchema = z.enum([
+  'internal_ai_minimisation',
+  'external_sharing',
+])
 export type RedactionPolicyMode = z.infer<typeof redactionPolicyModeSchema>
 
 export const spanConfidenceSchema = z.enum(['high', 'medium', 'low'])
@@ -137,7 +149,9 @@ export const createOrganisationInputSchema = z.object({
     .min(1, 'Organisation name is required.')
     .max(ORGANISATION_NAME_MAX_LENGTH, 'Organisation name is too long.'),
 })
-export type CreateOrganisationInput = z.infer<typeof createOrganisationInputSchema>
+export type CreateOrganisationInput = z.infer<
+  typeof createOrganisationInputSchema
+>
 
 export const apiErrorCodeSchema = z.enum([
   'unauthenticated',
@@ -186,7 +200,9 @@ export function createCanonicalCasePath(input: {
   neutralCitation: string | null
 }) {
   const documentIdSlug = slugifyCaseText(input.id)
-  const citationSlug = input.neutralCitation ? slugifyCaseCitation(input.neutralCitation) : ''
+  const citationSlug = input.neutralCitation
+    ? slugifyCaseCitation(input.neutralCitation)
+    : ''
   const titleSlug = slugifyCaseText(input.title)
   const slug = input.id.startsWith('d-')
     ? [documentIdSlug, titleSlug, citationSlug].filter(Boolean).join('-')
@@ -199,9 +215,11 @@ export function createCanonicalCasePath(input: {
 
 export function resolveCaseDocumentIdFromSlug(caseSlug: string) {
   const normalizedSlug = slugifyCaseText(caseSlug)
-  const stableDocumentId = normalizedSlug.match(
-    /^d-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:-|$)/,
-  )?.[0]?.replace(/-$/, '')
+  const stableDocumentId = normalizedSlug
+    .match(
+      /^d-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:-|$)/,
+    )?.[0]
+    ?.replace(/-$/, '')
   if (stableDocumentId) return stableDocumentId
 
   const parts = normalizedSlug.split('-').filter(Boolean)
@@ -211,7 +229,9 @@ export function resolveCaseDocumentIdFromSlug(caseSlug: string) {
 
   const citationParts = parts.slice(citationStart)
   const year = citationParts[0]
-  const numberIndex = citationParts.findIndex((part, index) => index > 1 && /^\d+$/.test(part))
+  const numberIndex = citationParts.findIndex(
+    (part, index) => index > 1 && /^\d+$/.test(part),
+  )
   if (!year || numberIndex === -1) return normalizedSlug
 
   const number = citationParts[numberIndex]
@@ -225,7 +245,10 @@ export function resolveCaseDocumentIdFromSlug(caseSlug: string) {
 
 function findCitationSlugStart(parts: string[]) {
   for (let index = parts.length - 1; index >= 0; index -= 1) {
-    if (/^\d{4}$/.test(parts[index] ?? '') && parts.slice(index + 2).some((part) => /^\d+$/.test(part))) {
+    if (
+      /^\d{4}$/.test(parts[index] ?? '') &&
+      parts.slice(index + 2).some((part) => /^\d+$/.test(part))
+    ) {
       return index
     }
   }
@@ -234,7 +257,7 @@ function findCitationSlugStart(parts: string[]) {
 }
 
 function slugifyCaseCitation(value: string) {
-  return slugifyCaseText(value.replace(/[\[\]()]/g, ' '))
+  return slugifyCaseText(value.replace(/[[\]()]/g, ' '))
 }
 
 function slugifyCaseText(value: string) {

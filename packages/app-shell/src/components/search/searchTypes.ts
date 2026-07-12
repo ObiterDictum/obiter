@@ -20,10 +20,7 @@ export type LegalSearchMatchReason =
   | 'keyword_match'
 
 export type LegalSearchRetrievalPath =
-  | 'stored_exact_lookup'
-  | 'stored_index'
-  | 'stored_source'
-  | 'live_provider'
+  'stored_exact_lookup' | 'stored_index' | 'stored_source' | 'live_provider'
 export type LegalSearchOutcome =
   | 'results'
   | 'no_match'
@@ -156,17 +153,33 @@ export const courtOptionGroups: CourtOptionGroup[] = [
       { code: 'ukiptrib', label: 'Investigatory Powers Tribunal' },
       { code: 'siac', label: 'Special Immigration Appeals Commission' },
       { code: 'ukist', label: 'Immigration Services Tribunal' },
-      { code: 'ukut/aac', label: 'Upper Tribunal Administrative Appeals Chamber' },
-      { code: 'ukut/iac', label: 'Upper Tribunal Immigration and Asylum Chamber' },
+      {
+        code: 'ukut/aac',
+        label: 'Upper Tribunal Administrative Appeals Chamber',
+      },
+      {
+        code: 'ukut/iac',
+        label: 'Upper Tribunal Immigration and Asylum Chamber',
+      },
       { code: 'ukut/lc', label: 'Upper Tribunal Lands Chamber' },
       { code: 'ukut/tcc', label: 'Upper Tribunal Tax and Chancery Chamber' },
       { code: 'ukftt/credit', label: 'First-tier Tribunal Consumer Credit' },
       { code: 'ukftt/estate', label: 'First-tier Tribunal Estate Agents' },
-      { code: 'ukftt/grc', label: 'First-tier Tribunal General Regulatory Chamber' },
-      { code: 'ukftt/hesc', label: 'First-tier Tribunal Health, Education and Social Care' },
+      {
+        code: 'ukftt/grc',
+        label: 'First-tier Tribunal General Regulatory Chamber',
+      },
+      {
+        code: 'ukftt/hesc',
+        label: 'First-tier Tribunal Health, Education and Social Care',
+      },
       { code: 'ukftt/tc', label: 'First-tier Tribunal Tax Chamber' },
       { code: 'ftt/claims', label: 'First-tier Tribunal Claims Management' },
-      { code: 'ftt/pc', label: 'First-tier Tribunal Land Registration Division (Property Chamber)' },
+      {
+        code: 'ftt/pc',
+        label:
+          'First-tier Tribunal Land Registration Division (Property Chamber)',
+      },
       { code: 'ftt/phl', label: 'First-tier Tribunal Primary Health Lists' },
       { code: 'ftt/transport', label: 'First-tier Tribunal Transport' },
     ],
@@ -178,7 +191,9 @@ export function getCourtLabel(code: string) {
   if (code === 'ewhc') return 'High Court'
 
   for (const group of courtOptionGroups) {
-    const option = group.options.find((courtOption) => courtOption.code === code)
+    const option = group.options.find(
+      (courtOption) => courtOption.code === code,
+    )
     if (option) return option.label
   }
 

@@ -29,7 +29,9 @@ export function caseLawDocumentQueryOptions(caseId: string) {
   return queryOptions({
     queryKey: ['case-law-document', caseId],
     queryFn: async () => {
-      const response = await fetch(apiUrl(`/api/search/documents/${encodeURIComponent(caseId)}`))
+      const response = await fetch(
+        apiUrl(`/api/search/documents/${encodeURIComponent(caseId)}`),
+      )
 
       if (!response.ok) {
         throw new Error('Case law document was not found.')
@@ -47,7 +49,9 @@ function apiUrl(path: string) {
 
   return new URL(
     path,
-    process.env.OBITER_API_ORIGIN ?? process.env.BETTER_AUTH_URL ?? 'http://localhost:8787',
+    process.env.OBITER_API_ORIGIN ??
+      process.env.BETTER_AUTH_URL ??
+      'http://localhost:8787',
   ).toString()
 }
 
@@ -73,14 +77,20 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
           <p className="text-xs font-semibold uppercase tracking-wider text-subtle">
             {formatNeutralCitation(data.neutralCitation)}
           </p>
-          <h1 className="max-w-[860px] text-2xl font-semibold leading-tight text-ink">{data.title}</h1>
+          <h1 className="max-w-[860px] text-2xl font-semibold leading-tight text-ink">
+            {data.title}
+          </h1>
           <dl className="flex flex-wrap gap-x-4 gap-y-1">
             <div className="flex items-baseline gap-1.5">
-              <dt className="text-xs font-semibold uppercase tracking-wide text-subtle">Court</dt>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-subtle">
+                Court
+              </dt>
               <dd className="text-sm font-medium text-ink">{courtLabel}</dd>
             </div>
             <div className="flex items-baseline gap-1.5">
-              <dt className="text-xs font-semibold uppercase tracking-wide text-subtle">Date</dt>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-subtle">
+                Date
+              </dt>
               <dd className="text-sm font-medium text-ink">{dateLabel}</dd>
             </div>
           </dl>
@@ -92,7 +102,9 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
           Back
         </Link>
         <label className="flex items-center gap-2 md:col-start-1 md:col-end-2">
-          <span className="text-xs font-semibold uppercase tracking-wide text-subtle">Search within case</span>
+          <span className="text-xs font-semibold uppercase tracking-wide text-subtle">
+            Search within case
+          </span>
           <input
             className="min-h-[28px] min-w-0 max-w-[320px] flex-1 rounded-md border border-line bg-canvas px-2.5 text-xs text-ink outline-none placeholder:text-subtle focus:border-brand"
             value={caseQuery}
@@ -101,7 +113,9 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
             type="search"
           />
           {trimmedCaseQuery ? (
-            <em className="text-xs font-semibold not-italic text-brand">{visibleParagraphs.length} matches</em>
+            <em className="text-xs font-semibold not-italic text-brand">
+              {visibleParagraphs.length} matches
+            </em>
           ) : null}
         </label>
       </section>
@@ -114,17 +128,25 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
             aria-label={data.title}
           >
             <header className="mb-6 border-b border-line pb-4 text-center">
-              <p className="text-xs font-semibold uppercase tracking-wide text-subtle">{data.court}</p>
+              <p className="text-xs font-semibold uppercase tracking-wide text-subtle">
+                {data.court}
+              </p>
               <h2 className="mx-auto mt-2.5 max-w-[760px] text-2xl font-semibold leading-snug text-ink">
                 {data.title}
               </h2>
               <dl className="mt-4 flex flex-wrap justify-center gap-x-6 gap-y-2">
                 <div className="flex flex-col gap-0.5">
-                  <dt className="text-xs font-semibold uppercase tracking-wide text-subtle">Citation</dt>
-                  <dd className="text-sm text-ink">{formatNeutralCitation(data.neutralCitation)}</dd>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-subtle">
+                    Citation
+                  </dt>
+                  <dd className="text-sm text-ink">
+                    {formatNeutralCitation(data.neutralCitation)}
+                  </dd>
                 </div>
                 <div className="flex flex-col gap-0.5">
-                  <dt className="text-xs font-semibold uppercase tracking-wide text-subtle">Date</dt>
+                  <dt className="text-xs font-semibold uppercase tracking-wide text-subtle">
+                    Date
+                  </dt>
                   <dd className="text-sm text-ink">{data.dateDecided}</dd>
                 </div>
               </dl>
@@ -136,7 +158,10 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
                 const text = paragraphTextWithoutLabel(paragraph)
 
                 return (
-                  <p className="grid grid-cols-[42px_minmax(0,1fr)] gap-4 leading-relaxed text-ink" key={paragraph.id}>
+                  <p
+                    className="grid grid-cols-[42px_minmax(0,1fr)] gap-4 leading-relaxed text-ink"
+                    key={paragraph.id}
+                  >
                     <span
                       aria-label={label ? `Paragraph ${label}` : undefined}
                       className="pt-0.5 text-right text-xs font-semibold text-subtle"
@@ -153,7 +178,9 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
           </div>
         ) : (
           <EmptyState
-            title={trimmedCaseQuery ? 'No matches found' : 'Full text unavailable'}
+            title={
+              trimmedCaseQuery ? 'No matches found' : 'Full text unavailable'
+            }
             body={
               trimmedCaseQuery
                 ? `No paragraphs match "${trimmedCaseQuery}".`
@@ -195,7 +222,10 @@ function formatNeutralCitation(neutralCitation: string | null) {
   return neutralCitation ?? 'No neutral citation'
 }
 
-function isDisplayJudgmentParagraph(paragraph: CaseLawParagraph, document: CaseLawDocument) {
+function isDisplayJudgmentParagraph(
+  paragraph: CaseLawParagraph,
+  document: CaseLawDocument,
+) {
   const text = paragraph.text.replace(/\s+/g, ' ').trim()
   const lower = text.toLowerCase()
   const title = document.title.toLowerCase()
@@ -211,7 +241,11 @@ function isDisplayJudgmentParagraph(paragraph: CaseLawParagraph, document: CaseL
 
   if (excluded.some((phrase) => lower.includes(phrase))) return false
   if (lower === title || lower === `${title} -`) return false
-  if ((citation && lower === citation) || lower.startsWith('neutral citation number')) return false
+  if (
+    (citation && lower === citation) ||
+    lower.startsWith('neutral citation number')
+  )
+    return false
   if (lower.length < 8) return false
 
   return true
@@ -234,7 +268,9 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
   return (
     <>
       {text.slice(0, index)}
-      <mark className="rounded-sm bg-brand/30 px-0.5 text-ink">{text.slice(index, index + query.length)}</mark>
+      <mark className="rounded-sm bg-brand/30 px-0.5 text-ink">
+        {text.slice(index, index + query.length)}
+      </mark>
       {text.slice(index + query.length)}
     </>
   )

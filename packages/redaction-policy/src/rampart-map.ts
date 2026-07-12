@@ -15,7 +15,10 @@ export interface RampartOutput {
   spans: RampartSpanInput[]
 }
 
-const labelMap: Record<string, { category: SpanCategory; source: SpanSource; dateOfBirth?: boolean }> = {
+const labelMap: Record<
+  string,
+  { category: SpanCategory; source: SpanSource; dateOfBirth?: boolean }
+> = {
   GIVEN_NAME: { category: 'person_name', source: 'rampart_model' },
   SURNAME: { category: 'person_name', source: 'rampart_model' },
   PHONE: { category: 'phone', source: 'rampart_model' },
@@ -51,22 +54,25 @@ function confidence(score: number | undefined): RedactionSpan['confidence'] {
 }
 
 export function mapRampartSpans(output: RampartOutput): RedactionSpan[] {
-  return output.spans.filter((span) => span.start < span.end).map((span, index) => {
-    const label = span.label ?? span.entity
-    if (!label || !labelMap[label]) {
-      throw new Error(`Unrecognised Rampart label: ${label ?? '<missing>'}`)
-    }
-    const mapping = labelMap[label]
-    const text = span.text ?? output.text.slice(span.start, span.end)
-    return {
-      id: `span_rampart_${span.start}_${index}`,
-      start: span.start,
-      end: span.end,
-      text,
-      category: mapping.category,
-      source: mapping.source,
-      confidence: confidence(span.score),
-      suggestion: suggestedAction(mapping.category, mapping.dateOfBirth),
-    }
-  }).sort((left, right) => left.start - right.start || left.end - right.end)
+  return output.spans
+    .filter((span) => span.start < span.end)
+    .map((span, index) => {
+      const label = span.label ?? span.entity
+      if (!label || !labelMap[label]) {
+        throw new Error(`Unrecognised Rampart label: ${label ?? '<missing>'}`)
+      }
+      const mapping = labelMap[label]
+      const text = span.text ?? output.text.slice(span.start, span.end)
+      return {
+        id: `span_rampart_${span.start}_${index}`,
+        start: span.start,
+        end: span.end,
+        text,
+        category: mapping.category,
+        source: mapping.source,
+        confidence: confidence(span.score),
+        suggestion: suggestedAction(mapping.category, mapping.dateOfBirth),
+      }
+    })
+    .sort((left, right) => left.start - right.start || left.end - right.end)
 }

@@ -6,7 +6,13 @@ import type {
   SpanSuggestion,
 } from '@obiter/contracts'
 
-export type { SpanCategory, SpanConfidence, SpanDecision, SpanSource, SpanSuggestion }
+export type {
+  SpanCategory,
+  SpanConfidence,
+  SpanDecision,
+  SpanSource,
+  SpanSuggestion,
+}
 
 export interface RedactionSpan {
   id: string

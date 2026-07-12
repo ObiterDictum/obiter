@@ -11,7 +11,11 @@ describe('Button', () => {
   })
 
   it('applies variant classes and merges a caller className', () => {
-    render(<Button variant="secondary" className="mt-4">Save</Button>)
+    render(
+      <Button variant="secondary" className="mt-4">
+        Save
+      </Button>,
+    )
     const button = screen.getByRole('button')
     expect(button.className).toContain('mt-4')
     expect(button.className).toContain('border-line')
@@ -25,7 +29,9 @@ describe('Button', () => {
 
   it('defaults to type="button" so it never accidentally submits a form', () => {
     render(<Button>Save</Button>)
-    expect((screen.getByRole('button') as HTMLButtonElement).type).toBe('button')
+    expect((screen.getByRole('button') as HTMLButtonElement).type).toBe(
+      'button',
+    )
   })
 })
 

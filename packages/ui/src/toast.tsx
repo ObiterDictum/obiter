@@ -81,7 +81,10 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     return id
   }, [])
 
-  const value = useMemo(() => ({ toasts, toast, dismiss }), [toasts, toast, dismiss])
+  const value = useMemo(
+    () => ({ toasts, toast, dismiss }),
+    [toasts, toast, dismiss],
+  )
 
   return <ToastContext.Provider value={value}>{children}</ToastContext.Provider>
 }
@@ -102,7 +105,11 @@ export function useToast(): UseToastReturn {
 /** Renders the notification viewport. Mount once inside <ToastProvider>. */
 export function Toaster() {
   const context = useContext(ToastContext)
-  if (!context || context.toasts.length === 0 || typeof document === 'undefined') {
+  if (
+    !context ||
+    context.toasts.length === 0 ||
+    typeof document === 'undefined'
+  ) {
     return null
   }
 
@@ -113,7 +120,11 @@ export function Toaster() {
       aria-label="Notifications"
     >
       {context.toasts.map((record) => (
-        <ToastItem key={record.id} record={record} onDismiss={context.dismiss} />
+        <ToastItem
+          key={record.id}
+          record={record}
+          onDismiss={context.dismiss}
+        />
       ))}
     </div>,
     document.body,
@@ -149,7 +160,9 @@ function ToastItem({
       <div className="flex min-w-0 flex-col gap-0.5">
         <p className="text-sm font-semibold text-ink">{record.title}</p>
         {record.description ? (
-          <p className="text-xs leading-relaxed text-muted">{record.description}</p>
+          <p className="text-xs leading-relaxed text-muted">
+            {record.description}
+          </p>
         ) : null}
       </div>
       <button

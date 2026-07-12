@@ -13,7 +13,9 @@ export const Route = createFileRoute('/matters/$matterId')({
     await guardAuth(context.queryClient, () =>
       context.queryClient.ensureQueryData(matterQueryOptions(params.matterId)),
     )
-    await context.queryClient.prefetchQuery(matterDocumentsQueryOptions(params.matterId))
+    await context.queryClient.prefetchQuery(
+      matterDocumentsQueryOptions(params.matterId),
+    )
   },
   component: MatterDetailRouteComponent,
 })

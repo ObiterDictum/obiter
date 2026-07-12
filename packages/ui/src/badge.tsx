@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
 import { cn } from './lib/cn'
 
-export type BadgeTone = 'neutral' | 'brand' | 'info' | 'success' | 'warning' | 'danger'
+export type BadgeTone =
+  'neutral' | 'brand' | 'info' | 'success' | 'warning' | 'danger'
 
 export interface BadgeProps {
   tone?: BadgeTone

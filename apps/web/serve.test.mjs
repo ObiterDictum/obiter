@@ -120,20 +120,25 @@ test('applyResponseHeaders — Set-Cookie handling (B6)', async (t) => {
 
   await t.test('does not set set-cookie when absent', () => {
     const res = makeRes()
-    const webRes = new Response('ok', { headers: { 'content-type': 'text/plain' } })
+    const webRes = new Response('ok', {
+      headers: { 'content-type': 'text/plain' },
+    })
     applyResponseHeaders(res, webRes)
     assert.equal(res.headerValues['set-cookie'], undefined)
   })
 
-  await t.test('writes other headers individually and sets the status line', () => {
-    const res = makeRes()
-    const webRes = new Response('ok', {
-      status: 201,
-      headers: { 'content-type': 'text/plain', 'x-custom': 'yes' },
-    })
-    applyResponseHeaders(res, webRes)
-    assert.equal(res.headerValues['content-type'], 'text/plain')
-    assert.equal(res.headerValues['x-custom'], 'yes')
-    assert.equal(res.headerValues.__status, 201)
-  })
+  await t.test(
+    'writes other headers individually and sets the status line',
+    () => {
+      const res = makeRes()
+      const webRes = new Response('ok', {
+        status: 201,
+        headers: { 'content-type': 'text/plain', 'x-custom': 'yes' },
+      })
+      applyResponseHeaders(res, webRes)
+      assert.equal(res.headerValues['content-type'], 'text/plain')
+      assert.equal(res.headerValues['x-custom'], 'yes')
+      assert.equal(res.headerValues.__status, 201)
+    },
+  )
 })

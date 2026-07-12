@@ -19,6 +19,8 @@ describe('Input', () => {
   it('renders helper text when there is no error', () => {
     render(<Input label="Email" helperText="We never share this." />)
     expect(screen.getByText('We never share this.').tagName).toBe('P')
-    expect(screen.getByLabelText('Email').getAttribute('aria-invalid')).toBeNull()
+    expect(
+      screen.getByLabelText('Email').getAttribute('aria-invalid'),
+    ).toBeNull()
   })
 })

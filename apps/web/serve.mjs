@@ -45,7 +45,8 @@ export function parsePort(raw, fallback = DEFAULT_PORT) {
   // Reject anything that isn't a plain decimal integer (no 0x, no 1e3).
   if (!/^[0-9]+$/.test(String(raw))) return fallback
   const parsed = Number(raw)
-  if (!Number.isInteger(parsed) || parsed <= 0 || parsed > 65535) return fallback
+  if (!Number.isInteger(parsed) || parsed <= 0 || parsed > 65535)
+    return fallback
   return parsed
 }
 
@@ -93,13 +94,13 @@ const MIME = {
  * the ServerResponse for chaining.
  */
 export function applyResponseHeaders(res, webRes) {
-  const setCookies = typeof webRes.headers.getSetCookie === 'function'
-    ? webRes.headers.getSetCookie()
-    : []
+  const setCookies =
+    typeof webRes.headers.getSetCookie === 'function'
+      ? webRes.headers.getSetCookie()
+      : []
   const cookieHeader = webRes.headers.get('set-cookie')
-  const cookies = setCookies.length > 0
-    ? setCookies
-    : (cookieHeader ? [cookieHeader] : [])
+  const cookies =
+    setCookies.length > 0 ? setCookies : cookieHeader ? [cookieHeader] : []
 
   if (cookies.length > 0) {
     res.setHeader('set-cookie', cookies)
@@ -230,7 +231,10 @@ export async function start() {
   const port = parsePort(process.env.PORT)
   const host = process.env.HOST ?? DEFAULT_HOST
 
-  if (process.env.PORT !== undefined && String(process.env.PORT) !== String(port)) {
+  if (
+    process.env.PORT !== undefined &&
+    String(process.env.PORT) !== String(port)
+  ) {
     console.warn(
       `[obiter-web] invalid PORT="${process.env.PORT}", falling back to ${port}`,
     )
@@ -249,7 +253,8 @@ export async function start() {
 // pathToFileURL normalizes the cross-platform comparison (Windows paths vs file:// URLs).
 import { pathToFileURL as _pathToFileURL } from 'node:url'
 const invokedScript = process.argv[1]
-const isMain = invokedScript && _pathToFileURL(invokedScript).href === import.meta.url
+const isMain =
+  invokedScript && _pathToFileURL(invokedScript).href === import.meta.url
 if (isMain) {
   start().catch((error) => {
     console.error('[obiter-web] failed to start:', error)

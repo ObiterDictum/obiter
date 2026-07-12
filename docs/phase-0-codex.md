@@ -24,6 +24,7 @@ Before writing any code, read these files in order:
 ## Current State
 
 ### ✅ Complete
+
 - pnpm workspace + TypeScript base config
 - `apps/web` — TanStack Start with Router, Query, SSR
 - `apps/desktop` — Electron via electron-vite
@@ -43,23 +44,23 @@ Before writing any code, read these files in order:
 
 **Milestone 0.3 — Matter & Document CRUD**
 
-| Piece | Files |
-|-------|-------|
-| Matter CRUD API endpoints | `services/api/src/routes/matters.ts` (new) |
-| Document upload/versioning API | `services/api/src/routes/documents.ts` (new) |
-| DB operations for matters | Add to `services/api/src/database.ts` |
-| DB operations for documents | Add to `services/api/src/database.ts` |
+| Piece                                        | Files                                                           |
+| -------------------------------------------- | --------------------------------------------------------------- |
+| Matter CRUD API endpoints                    | `services/api/src/routes/matters.ts` (new)                      |
+| Document upload/versioning API               | `services/api/src/routes/documents.ts` (new)                    |
+| DB operations for matters                    | Add to `services/api/src/database.ts`                           |
+| DB operations for documents                  | Add to `services/api/src/database.ts`                           |
 | Migration: matters + matter_documents tables | `packages/database/migrations/0002_phase_0_3_matters.sql` (new) |
 
 **Milestone 0.4 — Storage, Jobs, Audit & Offline**
 
-| Piece | Files |
-|-------|-------|
-| Hetzner Object Storage client | `services/api/src/storage.ts` (new) |
-| Redis + BullMQ setup | `services/worker/src/` (new service) |
-| Artifact retrieval endpoints | `services/api/src/routes/artifacts.ts` (new) |
-| Desktop encrypted cache | `apps/desktop/src/cache.ts` (new) |
-| Offline queue + reconnect sync | `apps/desktop/src/sync.ts` (new) |
+| Piece                          | Files                                        |
+| ------------------------------ | -------------------------------------------- |
+| Hetzner Object Storage client  | `services/api/src/storage.ts` (new)          |
+| Redis + BullMQ setup           | `services/worker/src/` (new service)         |
+| Artifact retrieval endpoints   | `services/api/src/routes/artifacts.ts` (new) |
+| Desktop encrypted cache        | `apps/desktop/src/cache.ts` (new)            |
+| Offline queue + reconnect sync | `apps/desktop/src/sync.ts` (new)             |
 
 ---
 
@@ -131,27 +132,28 @@ export function createMatterRoutes(pool: Pool) {
 
 **Endpoints:**
 
-| Method | Path | Auth | Body/Params | Returns |
-|--------|------|------|-------------|---------|
-| POST | /api/matters | Required | { name, organisation_id, client_reference?, jurisdiction?, default_redaction_policy? } | MatterRecord |
-| GET | /api/matters | Required | ?organisation_id (from session user's org) | MatterRecord[] |
-| GET | /api/matters/:id | Required | — | MatterRecord |
-| PATCH | /api/matters/:id | Required | { name?, client_reference?, jurisdiction? } | MatterRecord |
-| DELETE | /api/matters/:id | Required | — | { success: true } |
-| PATCH | /api/matters/:id/restore | Required | — | MatterRecord |
+| Method | Path                     | Auth     | Body/Params                                                                            | Returns           |
+| ------ | ------------------------ | -------- | -------------------------------------------------------------------------------------- | ----------------- |
+| POST   | /api/matters             | Required | { name, organisation_id, client_reference?, jurisdiction?, default_redaction_policy? } | MatterRecord      |
+| GET    | /api/matters             | Required | ?organisation_id (from session user's org)                                             | MatterRecord[]    |
+| GET    | /api/matters/:id         | Required | —                                                                                      | MatterRecord      |
+| PATCH  | /api/matters/:id         | Required | { name?, client_reference?, jurisdiction? }                                            | MatterRecord      |
+| DELETE | /api/matters/:id         | Required | —                                                                                      | { success: true } |
+| PATCH  | /api/matters/:id/restore | Required | —                                                                                      | MatterRecord      |
 
 ### API: `services/api/src/routes/documents.ts`
 
 **Endpoints:**
 
-| Method | Path | Auth | Body/Params | Returns |
-|--------|------|------|-------------|---------|
-| POST | /api/matters/:matterId/documents | Required | multipart: file + metadata | MatterDocumentSummary |
-| GET | /api/matters/:matterId/documents | Required | — | MatterDocumentSummary[] |
-| GET | /api/documents/:id | Required | — | MatterDocumentSummary (with download URL) |
-| DELETE | /api/documents/:id | Required | — | { success: true } (soft delete) |
+| Method | Path                             | Auth     | Body/Params                | Returns                                   |
+| ------ | -------------------------------- | -------- | -------------------------- | ----------------------------------------- |
+| POST   | /api/matters/:matterId/documents | Required | multipart: file + metadata | MatterDocumentSummary                     |
+| GET    | /api/matters/:matterId/documents | Required | —                          | MatterDocumentSummary[]                   |
+| GET    | /api/documents/:id               | Required | —                          | MatterDocumentSummary (with download URL) |
+| DELETE | /api/documents/:id               | Required | —                          | { success: true } (soft delete)           |
 
 **Document flow:**
+
 1. Upload → store file in local `./uploads/` (dev) or S3-compatible storage
 2. Compute SHA256
 3. Insert `matter_document` record with `document_status = 'uploading'`
@@ -224,17 +226,22 @@ The schemas `MatterRecord` and `MatterDocumentSummary` should already exist. If 
 Hetzner is S3-compatible. Use the `@aws-sdk/client-s3` package.
 
 ```typescript
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3'
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+} from '@aws-sdk/client-s3'
 
 export function createStorageClient(env: ApiEnv) {
   return new S3Client({
-    region: 'eu-central-1',  // Hetzner region
-    endpoint: env.objectStorageEndpoint,  // e.g. https://fsn1.your-objectstorage.com
+    region: 'eu-central-1', // Hetzner region
+    endpoint: env.objectStorageEndpoint, // e.g. https://fsn1.your-objectstorage.com
     credentials: {
       accessKeyId: env.objectStorageKeyId,
       secretAccessKey: env.objectStorageKeySecret,
     },
-    forcePathStyle: true,  // Required for S3-compatible
+    forcePathStyle: true, // Required for S3-compatible
   })
 }
 
@@ -260,6 +267,7 @@ For dev, fall back to local filesystem storage in `./uploads/`.
 Create a new workspace package at `services/worker/`. Use the existing `services/worker/README.md` as a starting point.
 
 **package.json** (add to workspace):
+
 ```json
 {
   "name": "@obiter/worker",
@@ -279,24 +287,30 @@ Create a new workspace package at `services/worker/`. Use the existing `services
 ```
 
 **Job types:**
+
 - `document.text-extraction` — extract text from uploaded document → store text_object_key
 - `document.thumbnail` — generate thumbnail for preview
 - `matter.export` — package matter files for download
 
 **Worker pattern:**
+
 ```typescript
 import { Worker } from 'bullmq'
 
-const worker = new Worker('document-processing', async job => {
-  switch (job.name) {
-    case 'text-extraction':
-      // Read file from storage, extract text, update DB
-      break
-    case 'thumbnail':
-      // Generate preview thumbnail
-      break
-  }
-}, { connection: { host: 'localhost', port: 6379 } })
+const worker = new Worker(
+  'document-processing',
+  async (job) => {
+    switch (job.name) {
+      case 'text-extraction':
+        // Read file from storage, extract text, update DB
+        break
+      case 'thumbnail':
+        // Generate preview thumbnail
+        break
+    }
+  },
+  { connection: { host: 'localhost', port: 6379 } },
+)
 ```
 
 ### Audit: Extend `services/api/src/database.ts`
@@ -318,11 +332,13 @@ The `appendAuditLog` function already supports this — pass the right entity_ty
 Use an embedded SQLite (via `better-sqlite3` or `sql.js`) for local cache:
 
 **Schema in local cache:**
+
 - `matters` — cached matter records
 - `documents` — cached document metadata
 - `pending_changes` — offline mutation queue
 
 **`sync.ts`:**
+
 - On reconnect: replay `pending_changes` queue in order
 - Conflict resolution: last-write-wins with server timestamp check
 - Pull latest matter/document list from API
@@ -343,6 +359,7 @@ Use an embedded SQLite (via `better-sqlite3` or `sql.js`) for local cache:
 All tests use `vitest`. Follow existing patterns in `services/api/src/app.test.ts` and `services/api/src/env.test.ts`.
 
 **Guidelines:**
+
 - Unit test each route handler with mocked pool
 - Test error cases: missing auth, not found, validation errors
 - Test soft-delete behaviour (still accessible with flag, excluded by default)

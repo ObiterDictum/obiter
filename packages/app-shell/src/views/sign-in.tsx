@@ -14,7 +14,11 @@ type Mode = 'password' | 'magic-link' | 'register'
  * sidebar); on success the user is sent to Home. A ?reset=success query
  * param (set after a password reset) surfaces a confirmation notice.
  */
-export function SignInRouteView({ platform }: { platform: AppPlatform }) {
+export function SignInRouteView({
+  platform: _platform,
+}: {
+  platform: AppPlatform
+}) {
   const navigate = useNavigate()
   const { signInWithEmail, signUpWithEmail, requestMagicLink } = useAuth()
   const search = useSearch({ strict: false }) as { reset?: string }
@@ -24,7 +28,9 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(
-    search.reset === 'success' ? 'Your password has been reset. Sign in with your new password.' : null,
+    search.reset === 'success'
+      ? 'Your password has been reset. Sign in with your new password.'
+      : null,
   )
   const [submitting, setSubmitting] = useState(false)
 
@@ -67,7 +73,10 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
         return
       }
       if (result.verificationRequired) {
-        setNotice(result.message ?? 'Check your email to verify your account before signing in.')
+        setNotice(
+          result.message ??
+            'Check your email to verify your account before signing in.',
+        )
         return
       }
       await goToHome()
@@ -91,14 +100,20 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
       }
       setNotice(result.message ?? 'Check your email for a sign-in link.')
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Could not send magic link.')
+      setError(
+        caught instanceof Error ? caught.message : 'Could not send magic link.',
+      )
     } finally {
       setSubmitting(false)
     }
   }
 
   const handleSubmit =
-    mode === 'password' ? handlePassword : mode === 'register' ? handleRegister : handleMagicLink
+    mode === 'password'
+      ? handlePassword
+      : mode === 'register'
+        ? handleRegister
+        : handleMagicLink
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 text-ink">
@@ -106,13 +121,19 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
         <header className="flex flex-col items-center gap-3 text-center">
           <Wordmark className="h-12 w-auto" />
           <h1 className="text-xl font-semibold tracking-tight">
-            {mode === 'register' ? 'Create your Obiter account' : 'Sign in to Obiter'}
+            {mode === 'register'
+              ? 'Create your Obiter account'
+              : 'Sign in to Obiter'}
           </h1>
         </header>
 
         <Card>
           <div className="flex flex-col gap-4">
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+            <form
+              onSubmit={handleSubmit}
+              className="flex flex-col gap-4"
+              noValidate
+            >
               {mode === 'register' ? (
                 <Input
                   label="Name"
@@ -137,7 +158,9 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
                 <Input
                   label="Password"
                   type="password"
-                  autoComplete={mode === 'register' ? 'new-password' : 'current-password'}
+                  autoComplete={
+                    mode === 'register' ? 'new-password' : 'current-password'
+                  }
                   required
                   minLength={mode === 'register' ? 8 : undefined}
                   value={password}
@@ -177,15 +200,24 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
             </form>
 
             <div className="flex items-center justify-center gap-2 text-sm text-muted">
-              <ModeButton active={mode === 'password'} onClick={() => setMode('password')}>
+              <ModeButton
+                active={mode === 'password'}
+                onClick={() => setMode('password')}
+              >
                 Password
               </ModeButton>
               <span aria-hidden="true">·</span>
-              <ModeButton active={mode === 'magic-link'} onClick={() => setMode('magic-link')}>
+              <ModeButton
+                active={mode === 'magic-link'}
+                onClick={() => setMode('magic-link')}
+              >
                 Magic link
               </ModeButton>
               <span aria-hidden="true">·</span>
-              <ModeButton active={mode === 'register'} onClick={() => setMode('register')}>
+              <ModeButton
+                active={mode === 'register'}
+                onClick={() => setMode('register')}
+              >
                 Create account
               </ModeButton>
             </div>

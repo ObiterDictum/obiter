@@ -7,3 +7,8 @@ This server-only subset retains: `heuristics` (structured PII regex/checksums), 
 Deleted upstream material: chat guard, session placeholders, streaming/browser transform, worker entry, compiled output, examples, benchmarks/evals, and product documentation. Obiter calls the retained lower-level API directly.
 
 The fork defaults to Obiter's `qarlus/rampart` mirror at revision `c3221c5cd838eb69a249ab40f8b442483865f233`; it never defaults to upstream's model id.
+
+## Formatting / linting
+
+This package is **excluded from the repo-wide Prettier, oxlint, and ESLint passes** (see the root `.prettierignore`, `.oxlintrc.json`, and `eslint.config.mjs`). The vendored source is kept byte-faithful to upstream so that future re-vendors produce clean, reviewable diffs against the original tarball — reformatting or repo-policy lint fixes would erase that correspondence for no behavioural gain. The package still typechecks and runs its own tests via its workspace scripts.
+

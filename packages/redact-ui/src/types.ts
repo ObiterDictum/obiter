@@ -1,5 +1,14 @@
-import type { OutputMode, RedactionPolicyMode, RedactionRunStatus, SpanDecision } from '@obiter/contracts'
-import type { Decisions, RedactionSpan, RunSummary } from '@obiter/redaction-policy'
+import type {
+  OutputMode,
+  RedactionPolicyMode,
+  RedactionRunStatus,
+  SpanDecision,
+} from '@obiter/contracts'
+import type {
+  Decisions,
+  RedactionSpan,
+  RunSummary,
+} from '@obiter/redaction-policy'
 
 export interface RedactionRun {
   id: string
@@ -25,5 +34,10 @@ export interface FinalizeResponse {
   warnings: { unreviewedSpanIds: string[] }
 }
 
-export interface SpanDecisionInput { spanId: string; decision: SpanDecision }
-export interface FinalizeInput { outputMode: OutputMode }
+export interface SpanDecisionInput {
+  spanId: string
+  decision: SpanDecision
+}
+export interface FinalizeInput {
+  outputMode: OutputMode
+}

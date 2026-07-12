@@ -14,13 +14,20 @@ type RGB = [number, number, number]
 const tokensCss = readFileSync(resolve(__dirname, '../tokens.css'), 'utf8')
 
 function extractBlock(source: string, selector: string): string {
+  // Prettier normalizes CSS attribute-selector quotes to single quotes; match
+  // either quote style so this raw-source assertion survives reformatting.
+  // Escape the selector for RegExp, then loosen each `"` into `["']`.
+  const re = new RegExp(
+    selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/"/g, '[\'"]'),
+  )
   let from = 0
   // The selector may also appear in comments; only accept an occurrence that is
   // followed (ignoring whitespace) by a `{`.
   for (;;) {
-    const start = source.indexOf(selector, from)
-    expect(start, `theme block ${selector} must exist`).toBeGreaterThan(-1)
-    let i = start + selector.length
+    const match = re.exec(source.slice(from))
+    expect(match, `theme block ${selector} must exist`).toBeTruthy()
+    const start = from + match!.index
+    let i = start + match![0].length
     while (i < source.length && /\s/.test(source[i] ?? '')) i += 1
     if (source[i] === '{') {
       const braceEnd = source.indexOf('}', i)
@@ -49,14 +56,22 @@ function declarations(block: string): Map<string, string> {
 function parseHsl(value: string): RGB | null {
   const match = value.match(/hsl\(\s*([\d.]+)\s+([\d.]+)%\s+([\d.]+)%/i)
   if (!match) return null
-  return hslToRgb(Number(match[1]), Number(match[2]) / 100, Number(match[3]) / 100)
+  return hslToRgb(
+    Number(match[1]),
+    Number(match[2]) / 100,
+    Number(match[3]) / 100,
+  )
 }
 
 function parseHex(value: string): RGB | null {
   const match = value.match(/^#([0-9a-f]{6})$/i)
   if (!match) return null
   const hex = match[1]
-  return [parseInt(hex.slice(0, 2), 16), parseInt(hex.slice(2, 4), 16), parseInt(hex.slice(4, 6), 16)]
+  return [
+    parseInt(hex.slice(0, 2), 16),
+    parseInt(hex.slice(2, 4), 16),
+    parseInt(hex.slice(4, 6), 16),
+  ]
 }
 
 function parseColor(value: string): RGB | null {
@@ -83,7 +98,11 @@ function hslToRgb(h: number, s: number, l: number): RGB {
   else if (hp < 5) [r, g, b] = [x, 0, c]
   else [r, g, b] = [c, 0, x]
   const m = l - c / 2
-  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)]
+  return [
+    Math.round((r + m) * 255),
+    Math.round((g + m) * 255),
+    Math.round((b + m) * 255),
+  ]
 }
 
 function relativeLuminance([r, g, b]: RGB): number {
@@ -124,11 +143,12 @@ describe('design token contrast (WCAG AA >= 4.5)', () => {
     ['dark', darkBlock],
   ])('meets AA for every -fg/base pair in the %s theme', (_theme, block) => {
     const cases = contrastCases(block).sort((a, b) => a.ratio - b.ratio)
-    expect(cases.length, 'at least the status + brand + span pairs must be covered').toBeGreaterThan(5)
-    const failures = cases.filter((c) => c.ratio < 4.5)
     expect(
-      failures.map((c) => `${c.name}: ${c.ratio.toFixed(2)}`),
-    ).toEqual([])
+      cases.length,
+      'at least the status + brand + span pairs must be covered',
+    ).toBeGreaterThan(5)
+    const failures = cases.filter((c) => c.ratio < 4.5)
+    expect(failures.map((c) => `${c.name}: ${c.ratio.toFixed(2)}`)).toEqual([])
   })
 
   it('covers all 15 redaction span categories in both themes', () => {

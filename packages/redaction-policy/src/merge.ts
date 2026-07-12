@@ -14,7 +14,10 @@ const redactByDefault = new Set<SpanCategory>([
   'secret',
 ])
 
-export function suggestedAction(category: SpanCategory, isDateOfBirth = false): SpanSuggestion {
+export function suggestedAction(
+  category: SpanCategory,
+  isDateOfBirth = false,
+): SpanSuggestion {
   if (category === 'date') return isDateOfBirth ? 'redact' : 'keep'
   return redactByDefault.has(category) ? 'redact' : 'keep'
 }
@@ -23,11 +26,17 @@ function overlaps(left: RedactionSpan, right: RedactionSpan) {
   return left.start < right.end && right.start < left.end
 }
 
-export function mergeSpans(rampartSpans: RedactionSpan[], supplementSpans: RedactionSpan[]): RedactionSpan[] {
+export function mergeSpans(
+  rampartSpans: RedactionSpan[],
+  supplementSpans: RedactionSpan[],
+): RedactionSpan[] {
   const validRampart = rampartSpans.filter((span) => span.start < span.end)
-  const validSupplement = supplementSpans.filter((span) => span.start < span.end)
+  const validSupplement = supplementSpans.filter(
+    (span) => span.start < span.end,
+  )
   const keptSupplement = validSupplement.filter(
-    (supplement) => !validRampart.some((rampart) => overlaps(rampart, supplement)),
+    (supplement) =>
+      !validRampart.some((rampart) => overlaps(rampart, supplement)),
   )
 
   return [...validRampart, ...keptSupplement]

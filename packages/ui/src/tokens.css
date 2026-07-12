@@ -15,12 +15,12 @@
   color-scheme: light;
 
   /* Surface + text */
-  --obiter-bg: #f4efe4;                 /* page */
-  --obiter-surface: #fbf8f1;            /* cards, panels */
-  --obiter-surface-raised: #fffdf8;     /* dialogs, menus, popovers */
+  --obiter-bg: #f4efe4; /* page */
+  --obiter-surface: #fbf8f1; /* cards, panels */
+  --obiter-surface-raised: #fffdf8; /* dialogs, menus, popovers */
   --obiter-border: rgba(40, 33, 28, 0.12);
   --obiter-border-strong: rgba(40, 33, 28, 0.22);
-  --obiter-text: #211b16;               /* warm near-black ink */
+  --obiter-text: #211b16; /* warm near-black ink */
   --obiter-text-muted: #6b5f54;
   --obiter-text-subtle: #948576;
 
@@ -42,8 +42,11 @@
   --obiter-status-danger-fg: #fbf8f1;
 
   /* Type */
-  --obiter-font-sans: "Satoshi", system-ui, -apple-system, "Segoe UI Variable", "Segoe UI", sans-serif;
-  --obiter-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --obiter-font-sans:
+    'Satoshi', system-ui, -apple-system, 'Segoe UI Variable', 'Segoe UI',
+    sans-serif;
+  --obiter-font-mono:
+    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   --obiter-font-weight-regular: 400;
   --obiter-font-weight-medium: 500;
   --obiter-font-weight-semibold: 600;
@@ -56,9 +59,12 @@
   --obiter-radius-pill: 9999px;
 
   /* Elevation — tinted to the background hue, no harsh black drop-shadows */
-  --obiter-shadow-sm: 0 1px 2px rgba(40, 33, 28, 0.06), 0 1px 1px rgba(40, 33, 28, 0.04);
-  --obiter-shadow-md: 0 4px 12px rgba(40, 33, 28, 0.08), 0 2px 4px rgba(40, 33, 28, 0.05);
-  --obiter-shadow-lg: 0 20px 40px rgba(40, 33, 28, 0.12), 0 6px 12px rgba(40, 33, 28, 0.06);
+  --obiter-shadow-sm:
+    0 1px 2px rgba(40, 33, 28, 0.06), 0 1px 1px rgba(40, 33, 28, 0.04);
+  --obiter-shadow-md:
+    0 4px 12px rgba(40, 33, 28, 0.08), 0 2px 4px rgba(40, 33, 28, 0.05);
+  --obiter-shadow-lg:
+    0 20px 40px rgba(40, 33, 28, 0.12), 0 6px 12px rgba(40, 33, 28, 0.06);
 
   /* Redaction span-category palette (contract §2.3).
      Light theme: soft tinted bg + deep same-hue fg (AA contrast).
@@ -124,7 +130,7 @@
   --obiter-span-organisation-name: var(--obiter-span-organisation-name-bg);
 }
 
-[data-theme="dark"] {
+[data-theme='dark'] {
   color-scheme: dark;
 
   --obiter-bg: #1a1612;
@@ -151,9 +157,12 @@
   --obiter-status-danger: #d6806a;
   --obiter-status-danger-fg: #1a1612;
 
-  --obiter-shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.3);
-  --obiter-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.3);
-  --obiter-shadow-lg: 0 20px 40px rgba(0, 0, 0, 0.55), 0 6px 12px rgba(0, 0, 0, 0.35);
+  --obiter-shadow-sm:
+    0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.3);
+  --obiter-shadow-md:
+    0 4px 12px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.3);
+  --obiter-shadow-lg:
+    0 20px 40px rgba(0, 0, 0, 0.55), 0 6px 12px rgba(0, 0, 0, 0.35);
 
   /* Span palette, dark theme: deep saturated bg + light same-hue fg. */
   --obiter-span-person-name-bg: hsl(352 40% 28%);

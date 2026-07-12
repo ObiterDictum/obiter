@@ -31,7 +31,11 @@ export function SearchCommandBar({
   return (
     <form className="flex flex-col gap-3" onSubmit={onSubmit}>
       <div className="flex items-center gap-2 rounded-lg border border-line bg-canvas px-3 transition-colors focus-within:border-brand">
-        <MagnifyingGlass aria-hidden="true" size={18} className="shrink-0 text-subtle" />
+        <MagnifyingGlass
+          aria-hidden="true"
+          size={18}
+          className="shrink-0 text-subtle"
+        />
         <label className="sr-only" htmlFor="legal-sources-search">
           Search legal sources
         </label>
@@ -70,19 +74,37 @@ export function SearchCommandBar({
           ) : null}
         </button>
         {courtLabel !== 'All courts and tribunals' ? (
-          <FilterChip label={courtLabel} removeLabel={`Remove ${courtLabel} filter`} onRemove={() => onRemoveFilter('court')} />
+          <FilterChip
+            label={courtLabel}
+            removeLabel={`Remove ${courtLabel} filter`}
+            onRemove={() => onRemoveFilter('court')}
+          />
         ) : null}
         {dateFrom ? (
-          <FilterChip label={`From ${dateFrom}`} removeLabel={`Remove from ${dateFrom} filter`} onRemove={() => onRemoveFilter('dateFrom')} />
+          <FilterChip
+            label={`From ${dateFrom}`}
+            removeLabel={`Remove from ${dateFrom} filter`}
+            onRemove={() => onRemoveFilter('dateFrom')}
+          />
         ) : null}
         {dateTo ? (
-          <FilterChip label={`To ${dateTo}`} removeLabel={`Remove to ${dateTo} filter`} onRemove={() => onRemoveFilter('dateTo')} />
+          <FilterChip
+            label={`To ${dateTo}`}
+            removeLabel={`Remove to ${dateTo} filter`}
+            onRemove={() => onRemoveFilter('dateTo')}
+          />
         ) : null}
       </div>
 
       {isSearching ? (
-        <div className="inline-flex items-center gap-2 text-sm font-medium text-muted" role="status">
-          <span aria-hidden="true" className="h-1.5 w-1.5 animate-pulse rounded-pill bg-brand" />
+        <div
+          className="inline-flex items-center gap-2 text-sm font-medium text-muted"
+          role="status"
+        >
+          <span
+            aria-hidden="true"
+            className="h-1.5 w-1.5 animate-pulse rounded-pill bg-brand"
+          />
           Searching legal sources
         </div>
       ) : null}
@@ -90,7 +112,15 @@ export function SearchCommandBar({
   )
 }
 
-function FilterChip({ label, removeLabel, onRemove }: { label: string; removeLabel: string; onRemove: () => void }) {
+function FilterChip({
+  label,
+  removeLabel,
+  onRemove,
+}: {
+  label: string
+  removeLabel: string
+  onRemove: () => void
+}) {
   return (
     <span className="inline-flex items-center gap-1 rounded-pill border border-brand/40 bg-brand/5 px-2.5 py-1 text-xs font-semibold text-brand">
       {label}
