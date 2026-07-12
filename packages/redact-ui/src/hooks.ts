@@ -63,10 +63,19 @@ export function useSpanDecision(runId: string) {
 export function useFinalizeRun(runId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ outputMode }: FinalizeInput) => apiFetch<FinalizeResponse>(
-      `/api/redaction-runs/${runId}/finalize`,
-      { method: 'POST', body: JSON.stringify({ outputMode }) },
-    ),
-    onSuccess: ({ run }) => queryClient.setQueryData(runKey(runId), run),
+    mutationFn: ({ outputMode }: FinalizeInput) =>
+      apiFetch<FinalizeResponse>(`/api/redaction-runs/${runId}/finalize`, {
+        method: 'POST',
+        body: JSON.stringify({ outputMode }),
+      }),
+    onSuccess: ({ run }) => {
+      // Immediate run detail update (status → finalized, outputArtifactId, summary).
+      queryClient.setQueryData(runKey(runId), run)
+      // Reconcile with server + enable/refetch output; refresh list surfaces.
+      void queryClient.invalidateQueries({ queryKey: runKey(runId) })
+      void queryClient.invalidateQueries({ queryKey: ['redaction-run-output', runId] })
+      void queryClient.invalidateQueries({ queryKey: runsKey })
+      void queryClient.invalidateQueries({ queryKey: ['document-redaction-runs'] })
+    },
   })
 }
