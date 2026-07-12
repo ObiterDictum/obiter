@@ -1,5 +1,9 @@
 # Redact Build Plan
 
+> ## Implementation status (verified against the codebase, July 2026)
+>
+> This build plan describes the **intended** Rampart model integration. The Rampart pipeline (the `@nationaldesignstudio/rampart` dependency, `services/api/src/redaction-detection.ts`, `guard.protect()`, the Effect TS pilot) is **NOT YET IMPLEMENTED** — see the banner on [Redact PRD 1](../../prds/redact-1-detection.md). Detection today runs the deterministic UK supplement only. This plan is retained as the design the model-integration track will build from; present-tense wording below ("runs in-process", "M1: Rampart running in-process") describes the design target, not the current code.
+
 ## Context
 
 The target is a working product within 3 months that firms can verify, then a fuller workflow at 6 months. Redact is the right first target: it's self-contained (no dependency on legal corpus or citation resolution), it's the gateway for firms (no client docs enter any AI tool without redaction), and it produces a reviewable artifact firms can inspect.

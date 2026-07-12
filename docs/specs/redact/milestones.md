@@ -1,8 +1,10 @@
 # Redact Milestones
 
+> **Detection scope (verified July 2026):** "Detection" in M1 means the deterministic UK supplement (`packages/redaction-policy/src/supplement.ts`) only — national insurance numbers, case references, organisation names, emails, UK phone numbers, postcodes, GB IBANs, and context-gated sort codes / account numbers. The Rampart token-classification model integration (names, addresses, dates of birth, context-dependent detection) is planned but not shipped. See [Redact PRD 1](../../prds/redact-1-detection.md) for the design and current status.
+
 ## M1 — complete
 
-- Detection, UK supplement and storage-backed source text work.
+- Detection, UK supplement and storage-backed source text work. "Detection" here is the deterministic UK supplement; the Rampart model integration is outstanding.
 
 ## M2 — complete
 
