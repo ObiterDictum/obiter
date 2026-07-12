@@ -1,35 +1,10 @@
-# Keep secrets and machine state out of the image.
-# .env* is excluded explicitly — runtime config comes from the environment, never baked in.
-.env
-.env.*
-!.env.example
-
-# Dependencies are installed inside the image, never copied from the host.
-node_modules
-**/node_modules
-
-# Build outputs are produced inside the image.
-dist
-**/dist
-build
-out
-.output
-.tanstack
-**/.tanstack
-
-# VCS and editor/OS cruft.
-.git
-.gitignore
-.idea
-.vscode
-.DS_Store
-Thumbs.db
-
-# Logs and local caches.
-*.log
-npm-debug.log*
-pnpm-debug.log*
-coverage
-.cache
-tmp
-temp
+# This file is intentionally a no-op.
+#
+# Docker only consults the .dockerignore at the BUILD CONTEXT root. The web
+# Dockerfile is built with the repo root as context
+# (`docker build -f apps/web/Dockerfile .`), so the REAL exclusions live in the
+# root .dockerignore — including the .env* secret exclusions. This stub exists
+# only to document that fact; leaving protective-looking exclusions here would
+# be misleading, since they would never apply.
+#
+# See /.dockerignore and docs/specs/deployment.md.

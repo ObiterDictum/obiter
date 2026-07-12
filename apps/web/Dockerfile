@@ -2,11 +2,24 @@
 #
 # Production image for @obiter/web (TanStack Start SSR).
 #
+# BUILD INVOCATION — build from the REPO ROOT with the context set to it:
+#
+#     docker build -f apps/web/Dockerfile -t obiter-web .
+#
+# The context must be the repo root because the COPY paths span the monorepo
+# workspace (packages/*, the root lockfile, etc.). In Dokploy: set "Build
+# Context" to the repository root and "Dockerfile path" to apps/web/Dockerfile.
+#
+# Docker consults ONLY the .dockerignore at the build-context root, so all
+# exclusions (including the .env* secret exclusions) live in the REPO-ROOT
+# /.dockerignore — not next to this Dockerfile. See apps/web/.dockerignore for
+# why a nested file would be misleading.
+#
 # Follows docs/specs/deployment.md: Node 22, pnpm via corepack, monorepo build.
 # No secrets are baked into the image — all runtime config comes from the
-# environment (BETTER_AUTH_URL / the public site origin). The web app calls the
-# API with relative URLs over same-domain Dokploy/Traefik routing, so it does
-# not need the API origin at build time either.
+# environment (OBITER_WEB_ORIGIN, BETTER_AUTH_URL). The web app calls the API
+# with relative URLs over same-domain Dokploy/Traefik routing, so it does not
+# need the API origin at build time either.
 #
 # This Dockerfile builds the web app and the workspace packages it depends on.
 # It does NOT build services/api (owned by the Redact track) or run migrations.
