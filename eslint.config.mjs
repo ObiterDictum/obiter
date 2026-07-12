@@ -75,6 +75,8 @@ export default [
       '**/out/**',
       '**/.output/**',
       '**/routeTree.gen.ts',
+      // Vendored Rampart — byte-faithful to upstream; see packages/rampart-inference/README.md
+      'packages/rampart-inference/**',
     ],
   },
   {

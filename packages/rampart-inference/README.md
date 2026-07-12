@@ -10,5 +10,5 @@ The fork defaults to Obiter's `qarlus/rampart` mirror at revision `c3221c5cd838e
 
 ## Formatting / linting
 
-This package is **excluded from the repo-wide Prettier and oxlint passes** (see the root `.prettierignore` and `.oxlintrc.json`). The vendored source is kept byte-faithful to upstream so that future re-vendors produce clean, reviewable diffs against the original tarball — reformatting it would erase that correspondence for no behavioural gain. The package still typechecks and runs its own tests via its workspace scripts.
+This package is **excluded from the repo-wide Prettier, oxlint, and ESLint passes** (see the root `.prettierignore`, `.oxlintrc.json`, and `eslint.config.mjs`). The vendored source is kept byte-faithful to upstream so that future re-vendors produce clean, reviewable diffs against the original tarball — reformatting or repo-policy lint fixes would erase that correspondence for no behavioural gain. The package still typechecks and runs its own tests via its workspace scripts.
 

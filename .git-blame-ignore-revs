@@ -6,6 +6,7 @@
 # Configure once per clone:
 #   git config blame.ignoreRevsFile .git-blame-ignore-revs
 
-# Repo-wide Prettier reformat. Cosmetic only; no behaviour change.
-# See the commit message for the .prettierignore scope.
+# Repo-wide Prettier reformat (470020b). Cosmetic except one `text`→`_text`
+# rename in services/api/src/app.test.ts, reverted in fae669d — net ignored
+# effect is cosmetic. See .prettierignore for scope.
 470020beee02e56df2fe51e2a377f756eb8fae9a
