@@ -4,6 +4,8 @@ import { dirname, resolve, sep } from 'node:path'
 export interface StorageService {
   readText(objectKey: string): Promise<string>
   writeText(objectKey: string, text: string): Promise<void>
+  readBinary?(objectKey: string): Promise<Buffer>
+  writeBinary?(objectKey: string, contents: Buffer): Promise<void>
   delete(objectKey: string): Promise<void>
 }
 
@@ -29,6 +31,14 @@ export function createLocalStorage(root = process.env.OBITER_STORAGE_ROOT ?? '.o
       const path = storagePath(root, objectKey)
       await mkdir(dirname(path), { recursive: true })
       await writeFile(path, text, 'utf8')
+    },
+    async readBinary(objectKey) {
+      return readFile(storagePath(root, objectKey))
+    },
+    async writeBinary(objectKey, contents) {
+      const path = storagePath(root, objectKey)
+      await mkdir(dirname(path), { recursive: true })
+      await writeFile(path, contents)
     },
     async delete(objectKey) {
       await rm(storagePath(root, objectKey), { force: true })

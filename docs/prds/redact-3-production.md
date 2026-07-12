@@ -6,7 +6,7 @@ This phase completes the Obiter Redact module. It turns the Phase 1-2 detection 
 
 Redact Phase 1 established the detection pipeline powered by Rampart (14.7 MB ONNX token-classification model via Transformers.js) and a UK supplement for legal-specific PII patterns. Phase 2 added the review UI, span decision persistence, and redacted/pseudonymised output generation. This phase makes the product demonstrable to firms, producible for audit, and extensible through fine-tuning.
 
-See the detailed implementation at [docs/specs/redact/build-plan.md](../specs/redact/build-plan.md). Cross-reference siblings: [Redact PRD 1: Detection Pipeline](redact-1-detection.md), [Redact PRD 2: Review and Output](redact-2-review-output.md).
+See the detailed implementation at [docs/specs/redact/build-plan.md](../specs/redact/build-plan.md), the [manual demo walkthrough](../specs/redact/demo.md), and [fine-tuning preparation](../specs/redact/fine-tuning.md). Cross-reference siblings: [Redact PRD 1: Detection Pipeline](redact-1-detection.md), [Redact PRD 2: Review and Output](redact-2-review-output.md).
 
 ## Problem
 
@@ -134,7 +134,7 @@ Inspects synthetic data quality, label correctness, and the fine-tuning dataset 
 **Error states:**
 
 | Condition | Behaviour |
-|-----------|-----------|
+| ----------- | ----------- |
 | DOCX uploaded, extraction succeeds | Status → `ready`, text stored at `text_object_key` |
 | DOCX uploaded, extraction fails | Status → `failed`, `failure_reason` set |
 | TXT uploaded | Read inline, status → `ready` |
@@ -269,7 +269,7 @@ The audit report is stored as an `artifact` row with `artifactType: 'redaction_r
 **Document types (7+):**
 
 | Type | Description | Typical PII |
-|------|-------------|-------------|
+| ------ | ------------- | ------------- |
 | Skeleton argument | Legal arguments summarising a party's position | Person names, case references, dates |
 | Witness statement | Sworn statement of fact | Person names, addresses, dates, NI numbers, organisation names |
 | Case report | Anonymised judgment summary | Person names, case references, dates |
@@ -281,10 +281,10 @@ The audit report is stored as an `artifact` row with `artifactType: 'redaction_r
 **PII types to include (12):**
 
 | Category | Description | Examples | Obiter label |
-|----------|-------------|----------|--------------|
+| ---------- | ------------- | ---------- | -------------- |
 | Person with honorific | Named individual with title | Mr James Cartwright, Dr Sarah Chen, Ms Aisha Patel | `person_name` |
 | UK address | Postal address with postcode | 42 Belgrave Road, Leicester LE4 5AB | `address` |
-| Email | Email address | j.cartwright@lawfirm.co.uk | `email` |
+| Email | Email address | <j.cartwright@lawfirm.co.uk> | `email` |
 | UK phone | UK-format phone number | 020 7946 0958, 07700 900482, +44 20 7946 0958 | `phone` |
 | Legal date | Date in legal format | 15 March 2024, the 15th day of March 2024 | `date` |
 | NI number | National Insurance number | JX 12 34 56 D, JX123456D | `national_insurance` |
@@ -292,7 +292,7 @@ The audit report is stored as an `artifact` row with `artifactType: 'redaction_r
 | Case reference | Internal firm reference | REF/2024/0123, CLAIM-2024-Smith-0042 | `case_reference` |
 | Bank account | Bank account or sort code | 12345678 / 12-34-56 | `account_number` |
 | Organisation | Firm or company name | Smith & Jones Solicitors LLP, HM Courts Service | `organisation_name` |
-| URL | Personal or case-related URL | https://solicitors.law/our-team/jcartwright | `url` |
+| URL | Personal or case-related URL | <https://solicitors.law/our-team/jcartwright> | `url` |
 | Secret | Password or API key | Password: TempPass123! | `secret` |
 
 **Output format (Rampart training schema):**
@@ -334,12 +334,13 @@ Legal redaction differs from generic PII detection in one structural way: whethe
 
 - `obiter_legal_v1` (this phase) is deliberately scoped to fixed-format identifiers (`national_insurance`, `case_reference`, `secret`) because ~300 synthetic documents cannot train a person-role taxonomy without degrading base-model recall.
 - `obiter_legal_v2` is the named direction: split `person_name` into `person_party`, `person_professional` (on-record: judges, counsel, solicitors), and `person_protected` (children, anonymity-order subjects); consider `medical_info` for PI matters. Role-aware labels give `policy_mode` real differentiation: e.g. `external_sharing` keeps `person_professional`, `internal_ai_minimisation` redacts everything.
-- Role subtype detection is context-dependent ("His Honour Judge ___" vs "the Claimant, ___") — exactly what a token classifier can learn and what a downstream policy layer cannot recover once detection has flattened everything to `person_name`. This is why roles belong in the model label space, not only in policy.
+- Role subtype detection is context-dependent ("His Honour Judge ___" vs "the Claimant,___") — exactly what a token classifier can learn and what a downstream policy layer cannot recover once detection has flattened everything to `person_name`. This is why roles belong in the model label space, not only in policy.
 - Legally privileged material detection is explicitly out of scope for the token classifier: privilege is passage-level, not span-level, and requires a different mechanism if ever pursued.
 - v2 requires no schema rewrite: the Obiter category schema and the label space are versioned, and both mapping layers (`rampart-map.ts` inbound, dataset export outbound) are explicit. v2 is a data + fine-tune exercise, provided the role metadata below is captured from v1 onwards.
 - Reviewer decisions are also v2 signal: a reviewer rejecting a `person_name` span on a judge's name is implicit role labelling. Rejection records persist in `decisions_json` and can be mined when v2 training data is assembled — no additional tooling is required in this phase.
 
 Note: `organisation_name` and `passport` handling differs between Obiter and Rampart's base label set. In the synthetic data, these are mapped:
+
 - `organisation_name` → `O` (ignored during fine-tuning; the model learns to not flag organisation names as PII unless the firm's policy requires it)
 - `passport` → mapped to `PASSPORT` which Rampart already supports natively
 - `case_reference` → the custom label space includes this; it is a new label not present in base Rampart
@@ -353,7 +354,7 @@ The generation script (`scripts/generate-synthetic-data.ts` or equivalent) must:
 2. **PII value generation**: Use realistic generators for each PII type:
    - Person names: Use a curated list of 100+ common UK names with appropriate honorifics. Mix ethnicities and genders. Include some names that could also be case citations (e.g., "Smith", "Jones") to test context awareness.
    - Addresses: Use real UK street names and postcodes (anonymised). Include single-line and multi-line formats.
-   - Emails: Generate from name + domain patterns (john.smith@lawfirm.co.uk, info@chambers.co.uk).
+   - Emails: Generate from name + domain patterns (<john.smith@lawfirm.co.uk>, <info@chambers.co.uk>).
    - Phone numbers: Generate in multiple UK formats (landline, mobile, international prefix).
    - Dates: Generate in legal formats including "15 March 2024", "the 15th day of March 2024", "15/03/2024".
    - NI numbers: Generate valid-format NI numbers (2 letters, 6 digits, 1 letter — with and without spaces).
@@ -365,12 +366,12 @@ The generation script (`scripts/generate-synthetic-data.ts` or equivalent) must:
 
 3a. **Role metadata annotation**: The generator knows the role of every person it inserts (claimant, defendant, witness, expert, judge, counsel, solicitor, child/protected party). Record this in each JSONL entry's `info` field as a `roles` map (e.g. `"roles": {"James Cartwright": "party", "Sarah Chen": "professional", "Mr Justice Holroyd": "professional"}`) even though `obiter_legal_v1` collapses all of them to `private_person`. This is nearly free at generation time and is the prerequisite for training `obiter_legal_v2`'s role-split labels (see Label space roadmap) without regenerating the corpus. Every generated document MUST include judges, counsel, or solicitors alongside party names so the v2 role distinction has both classes represented.
 
-4. **Overlapping span handling**: Include documents with overlapping entities:
+1. **Overlapping span handling**: Include documents with overlapping entities:
    - "Mr David Smith of Smith & Jones" — where "Smith" could be a name or organisation reference
    - "Smith v Jones" — case reference that looks like names
    - "20 High Street, London SW1A 1AA" — address containing a postcode (should be single span)
 
-5. **Edge case coverage**: Generate specific documents exercising:
+2. **Edge case coverage**: Generate specific documents exercising:
    - Empty text (trivial: just metadata)
    - Text with no PII (court forms with only case numbers that should be flagged)
    - All PII types present in a single document (stress test)
@@ -378,15 +379,15 @@ The generation script (`scripts/generate-synthetic-data.ts` or equivalent) must:
    - Very long documents spanning many 512-token detection chunks (long witness statements with repeated PII, exercising chunk-boundary reassembly)
    - Documents where names look like case citations ("Mr Smith submits... In Smith v Jones, the court held...")
 
-6. **Validation**: After generation, validate every document:
+3. **Validation**: After generation, validate every document:
    - Every span start/end offset is valid (start < end, within text length)
    - Every span's `text` slice matches the original text at those offsets
    - No overlaps are inconsistent (same text covered by two compatible spans is fine; contradictory coverage is flagged)
    - All required fields present (`text`, `spans`, `info`)
 
-7. **Train/validation split**: Split the generated documents into 80% training and 20% validation sets (random stratified by document type).
+4. **Train/validation split**: Split the generated documents into 80% training and 20% validation sets (random stratified by document type).
 
-8. **Output files** (stored in `data/evals/redact/`):
+5. **Output files** (stored in `data/evals/redact/`):
    - `synthetic_train.jsonl` — training set
    - `synthetic_validation.jsonl` — validation set
    - `custom_label_space.json` — label space definition
@@ -396,7 +397,7 @@ The generation script (`scripts/generate-synthetic-data.ts` or equivalent) must:
 **Volume targets:**
 
 | Metric | Target |
-|--------|--------|
+| -------- | -------- |
 | Total documents | 300 (minimum viable) |
 | Training set | 240 |
 | Validation set | 60 |
@@ -438,7 +439,7 @@ Script at `scripts/export-training-data.ts` (or similar) that:
 **Category mapping (Obiter → Rampart):**
 
 | Obiter label | Rampart label |
-|--------------|---------------|
+| -------------- | --------------- |
 | `person_name` | `GIVEN_NAME` + `SURNAME` |
 | `email` | `EMAIL` |
 | `phone` | `PHONE` |
@@ -472,7 +473,7 @@ A realistic skeleton argument in DOCX format, approximately 3–5 pages, contain
 - Dates of birth and hearing dates: The Claimant was born on 10 June 1956; the hearing is listed for 15 March 2024
 - National Insurance numbers: JX 12 34 56 D (Claimant's NI number)
 - Case references: REF/2024/0123, CLAIM-2024-Smith-0042
-- Email addresses: j.cartwright@personal.email, s.chen@smithjones.co.uk
+- Email addresses: <j.cartwright@personal.email>, <s.chen@smithjones.co.uk>
 - Phone numbers: 020 7946 0958, 07700 900482, +44 20 7946 0958
 - Bank account references: Account number 12345678, sort code 12-34-56 (Claimant's account for costs payments)
 - Organisation names: Smith & Jones Solicitors LLP, HM Courts & Tribunals Service, Leicester Royal Infirmary
@@ -549,7 +550,7 @@ Step 10: Re-run on same document
 **Edge cases to verify:**
 
 | Edge case | Expected behaviour |
-|-----------|-------------------|
+| ----------- | ------------------- |
 | Overlapping spans (Rampart + UK supplement overlap) | Rampart span kept, UK supplement span dropped. System logs overlap with confidence comparison. |
 | Empty text (`document` with 0 bytes) | Run created, status → `ready_for_review` with 0 spans, no error |
 | Text with no detectable PII | Run created, 0 spans, status → `ready_for_review`, reviewer sees empty state |
@@ -596,7 +597,7 @@ python scripts/export_onnx.py \
 **Infrastructure requirements:**
 
 | Resource | Specification | Cost estimate |
-|----------|--------------|---------------|
+| ---------- | -------------- | --------------- |
 | GPU | NVIDIA T4 (16GB VRAM) or better | ~$0.50/hr (rented cloud) |
 | Training time (500 docs) | 1–2 hours | ~$0.50–$1.00 per training run |
 | Storage | 2GB per checkpoint | Negligible |
@@ -700,7 +701,7 @@ The Redaction sidebar entry was activated in Phase 2 (Redact PRD 2, FR11). This 
 ### FR1: DOCX Text Extraction
 
 | ID | Requirement |
-|----|-------------|
+| ---- | ------------- |
 | FR1.1 | On document upload with `fileType == 'docx'`, extract text using `mammoth.extractRawText` and store at `document_versions.text_object_key` |
 | FR1.2 | On document upload with `fileType == 'txt'`, store file content directly at `text_object_key` |
 | FR1.3 | On document upload with `fileType == 'pdf'`, reject with clear error: "PDF files are not yet supported for redaction. Please upload DOCX or TXT files." |
@@ -717,7 +718,7 @@ The Redaction sidebar entry was activated in Phase 2 (Redact PRD 2, FR11). This 
 ### FR2: Audit Report Export
 
 | ID | Requirement |
-|----|-------------|
+| ---- | ------------- |
 | FR2.1 | `GET /api/redaction-runs/:runId/audit` returns the audit report for a finalized run |
 | FR2.2 | The audit report contains: original document reference, redaction run summary (total spans by category by source, decisions breakdown), detector version, redacted/pseudonymised output references, full audit log, reviewer info, policy mode |
 | FR2.3 | Support three output formats: JSON (primary, `application/json`), HTML (`text/html`), Markdown (`text/markdown`) |
@@ -728,7 +729,7 @@ The Redaction sidebar entry was activated in Phase 2 (Redact PRD 2, FR11). This 
 ### FR3: Synthetic Training Data Generation
 
 | ID | Requirement |
-|----|-------------|
+| ---- | ------------- |
 | FR3.1 | Generate 200–500 synthetic UK legal documents with labelled PII spans |
 | FR3.2 | Cover at least 7 document types: skeleton arguments, witness statements, case reports, client letters, attendance notes, court forms, pleadings |
 | FR3.3 | Cover at least 12 PII types: person names, addresses, emails, phones, dates, NI numbers, passport numbers, case references, bank accounts, organisations, URLs, secrets |
@@ -745,7 +746,7 @@ The Redaction sidebar entry was activated in Phase 2 (Redact PRD 2, FR11). This 
 ### FR4: Dataset Export Tool
 
 | ID | Requirement |
-|----|-------------|
+| ---- | ------------- |
 | FR4.1 | Script exports finalized redaction runs with human-reviewed decisions as training data |
 | FR4.2 | Map Obiter span categories to Rampart label space per the mapping table |
 | FR4.3 | Exclude rejected and `override_keep` spans from output |
@@ -756,7 +757,7 @@ The Redaction sidebar entry was activated in Phase 2 (Redact PRD 2, FR11). This 
 ### FR5: Demo Preparation
 
 | ID | Requirement |
-|----|-------------|
+| ---- | ------------- |
 | FR5.1 | Create `data/evals/redact/demo-fixture.docx` — a 3–5 page skeleton argument with 10+ PII instances across 8+ categories |
 | FR5.2 | Create companion metadata file `demo-fixture-expected-spans.json` documenting expected spans for automated validation |
 | FR5.3 | Document manual test script covering all 10 steps |
@@ -765,7 +766,7 @@ The Redaction sidebar entry was activated in Phase 2 (Redact PRD 2, FR11). This 
 ### FR6: Polish
 
 | ID | Requirement |
-|----|-------------|
+| ---- | ------------- |
 | FR6.1 | `pnpm --filter @obiter/redaction-policy typecheck` passes with zero errors |
 | FR6.2 | `pnpm --filter @obiter/api typecheck` passes with zero errors |
 | FR6.3 | `pnpm --filter @obiter/redact-ui typecheck` passes with zero errors |
@@ -779,7 +780,7 @@ The Redaction sidebar entry was activated in Phase 2 (Redact PRD 2, FR11). This 
 ## Non-Functional Requirements
 
 | ID | Requirement |
-|----|-------------|
+| ---- | ------------- |
 | NFR1 | DOCX extraction must complete within 5 seconds for a 20-page document |
 | NFR2 | Audit report generation must complete within 2 seconds for a run with up to 200 spans |
 | NFR3 | Synthetic data generation must complete within 5 minutes for 500 documents |
@@ -790,7 +791,7 @@ The Redaction sidebar entry was activated in Phase 2 (Redact PRD 2, FR11). This 
 ## Security and Compliance
 
 | ID | Requirement |
-|----|-------------|
+| ---- | ------------- |
 | SEC1 | The audit report contains PII in the original text (via span excerpts). Access to `GET /api/redaction-runs/:runId/audit` must be org-scoped and auth-guarded, same as the redaction run itself |
 | SEC2 | Synthetic data must use fabricated PII, not real personal data. No real names, addresses, or contact details from any actual person or case |
 | SEC3 | The dataset export tool must not export documents from different organisations into the same file. Each organisation's fine-tuning data must be kept separate |
@@ -803,7 +804,7 @@ The Redaction sidebar entry was activated in Phase 2 (Redact PRD 2, FR11). This 
 ## Dependencies
 
 | Dependency | Status | Notes |
-|------------|--------|-------|
+| ------------ | -------- | ------- |
 | `mammoth` npm package | Available | Add to `services/api/package.json` |
 | Text extraction slot (`text_object_key` column) | Done (migration 0002) | Already exists on `document_versions` |
 | Artifacts table with `redaction_report` type | Done (migration 0002) | Enum includes `redaction_report` |
@@ -866,7 +867,7 @@ The following must be true for M3 sign-off:
 ## Metrics
 
 | Metric | Target | How to measure |
-|--------|--------|----------------|
+| -------- | -------- | ---------------- |
 | DOCX extraction success rate | > 99% of valid DOCX files | Count extraction failures vs total uploads |
 | DOCX extraction latency (p95) | < 5s for 20-page doc | Server-side timing |
 | Audit report generation latency (p95) | < 2s | Server-side timing |
@@ -883,7 +884,7 @@ The following must be true for M3 sign-off:
 ## Risks
 
 | Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|------------|
+| ------ | ----------- | -------- | ------------ |
 | **Mammoth produces poor extraction** from complex legal DOCX (tables, headers, footnotes) | Medium | Medium | Test with 10+ real legal DOCX files before committing. Have fallback (`docx4js`) identified. For tables specifically: verify text reads left-to-right, top-to-bottom per mammoth's documented behaviour. |
 | **Object storage not wired** for text_object_key path | Certain (verified July 2026) | High | Scoped as FR1.11–FR1.12. Phases 1–2 run on the local-filesystem `StorageService` adapter with the same path structure; budget Week 9 for multipart upload and the object-storage adapter. |
 | **Synthetic data unrealistic** — fails the "looks like a real legal document" test | Medium | High | Have a legal professional review 10 sample documents before generating the full set. Iterate on templates. |

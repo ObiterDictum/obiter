@@ -14,10 +14,12 @@ import {
   getRunTextObjectKey,
   listRedactionRuns,
   listRedactionRunsForDocument,
+  listRedactionAuditLog,
   publicRun,
   recordSpanDecision,
 } from '../redaction-database'
 import type { StorageService } from '../storage'
+import { buildAuditReport, renderAuditHtml, renderAuditMarkdown } from '../redaction-audit-report'
 
 interface RouteUser { id: string; organisationId?: string | null }
 interface RouteVariables { requestId: string; user: RouteUser | null }
@@ -195,6 +197,20 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
     const objectKey = await getRedactionOutputKey(pool, user.organisationId, run.outputArtifactId)
     if (!objectKey) return errorResponse(c, 'artifact_not_found', 'Redaction output is not available.', 404)
     return c.json({ text: await storage.readText(objectKey) })
+  })
+
+  routes.get('/api/redaction-runs/:runId/audit', async (c) => {
+    const user = requireUser(c)
+    if (user instanceof Response) return user
+    const run = await getRedactionRun(pool, user.organisationId, c.req.param('runId'))
+    if (!run) return errorResponse(c, 'redaction_run_not_found', 'Redaction run not found.', 404)
+    if (run.status !== 'finalized') return errorResponse(c, 'redaction_run_not_reviewable', 'An audit report is available after finalization.', 400)
+    const report = buildAuditReport(run, await listRedactionAuditLog(pool, user.organisationId, run.id))
+    const format = c.req.query('format') ?? 'json'
+    if (format === 'json') return c.json(report)
+    if (format === 'markdown') return c.body(renderAuditMarkdown(report), 200, { 'content-type': 'text/markdown; charset=utf-8' })
+    if (format === 'html') return c.body(renderAuditHtml(report), 200, { 'content-type': 'text/html; charset=utf-8' })
+    return errorResponse(c, 'validation_failed', 'Audit format must be json, markdown, or html.', 400)
   })
 
   routes.get('/api/redaction-runs/:runId/token-map', async (c) => {

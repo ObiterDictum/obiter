@@ -1,4 +1,4 @@
-import type { Pool, PoolClient } from 'pg'
+import type { Pool } from 'pg'
 import {
   spanCategorySchema,
   spanConfidenceSchema,
@@ -48,8 +48,6 @@ interface ArtifactRecord {
   objectKey: string
   artifactType: 'redaction_output'
 }
-
-type Queryable = Pick<Pool | PoolClient, 'query'>
 
 const columns = `run.id, run.organisation_id, run.matter_id, matter.name as matter_name, run.document_id,
   run.document_version_id, run.source_filename, run.source_text_object_key, run.status, run.policy_mode,
@@ -219,6 +217,31 @@ export async function finalizeRedactionRun(input: { pool: Pool; organisationId: 
     await client.query('commit')
     return { kind: 'finalized' as const, run: mapRun(updated.rows[0]), artifact: { id: artifact.rows[0].id, objectKey: artifact.rows[0].object_key, artifactType: 'redaction_output' as const } satisfies ArtifactRecord }
   } catch (error) { await client.query('rollback'); throw error } finally { client.release() }
+}
+
+export interface RedactionAuditLogEntry {
+  action: string
+  userId: string | null
+  timestamp: string
+  details: Record<string, unknown>
+}
+
+export async function listRedactionAuditLog(pool: Pool, organisationId: string, runId: string): Promise<RedactionAuditLogEntry[]> {
+  // organisation_id is deliberately part of the predicate: nullable auth rows
+  // (migration 0009) cannot leak into an organisation-scoped run report.
+  const result = await pool.query<{ action: string; user_id: string | null; created_at: Date | string; metadata_json: unknown }>(
+    `select action, user_id, created_at, metadata_json
+     from audit_logs
+     where organisation_id = $1 and entity_type = 'redaction_run' and entity_id = $2
+     order by created_at asc`,
+    [organisationId, runId],
+  )
+  return result.rows.map((row) => ({
+    action: row.action,
+    userId: row.user_id,
+    timestamp: timestamp(row.created_at),
+    details: (json(row.metadata_json) as Record<string, unknown>) ?? {},
+  }))
 }
 
 export async function getRedactionOutputKey(pool: Pool, organisationId: string, artifactId: string) {

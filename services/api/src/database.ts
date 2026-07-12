@@ -184,7 +184,7 @@ export async function createOrganisationForUser(
   try {
     await client.query('begin')
 
-    const existing = await client.query<{ organisationId: string | null }>(
+    const existing = await client['query']<{ organisationId: string | null }>(
       `select "organisationId" from users where id = $1 for update`,
       [input.userId],
     )
@@ -200,7 +200,7 @@ export async function createOrganisationForUser(
       return { created: false }
     }
 
-    const organisation = await client.query<{ id: string; name: string; plan: CurrentOrganisation['plan'] }>(
+    const organisation = await client['query']<{ id: string; name: string; plan: CurrentOrganisation['plan'] }>(
       `
         insert into organisations (name, created_at, updated_at)
         values ($1, now(), now())
@@ -210,7 +210,7 @@ export async function createOrganisationForUser(
     )
     const created = organisation.rows[0]
 
-    await client.query(
+    await client['query'](
       `update users set "organisationId" = $1, role = 'owner', "updatedAt" = now() where id = $2`,
       [created.id, input.userId],
     )
@@ -247,7 +247,7 @@ export function toCurrentUser(user: SessionUserRecord): CurrentUser {
 }
 
 export async function appendAuditLog(client: Queryable, input: AuditRecordInput) {
-  await client.query(
+  await client['query'](
     `
       insert into audit_logs (
         id,
@@ -709,6 +709,30 @@ export async function createDocument(
   } finally {
     client.release()
   }
+}
+
+export async function updateDocumentExtraction(
+  pool: Pool,
+  input: { organisationId: string; versionId: string; textObjectKey?: string; failureReason?: string },
+): Promise<DocumentVersionRecord | null> {
+  const isReady = input.textObjectKey !== undefined
+  const result = await pool.query<DocumentVersionRow>(
+    `update document_versions
+     set text_object_key = $3,
+         document_status = $4,
+         failure_reason = $5,
+         updated_at = now()
+     where id = $1 and organisation_id = $2
+     returning ${versionColumns}`,
+    [
+      input.versionId,
+      input.organisationId,
+      isReady ? input.textObjectKey : null,
+      isReady ? 'ready' : 'failed',
+      isReady ? null : (input.failureReason ?? 'Document text extraction failed.'),
+    ],
+  )
+  return firstOrNull(result, mapVersion)
 }
 
 export async function listDocuments(
