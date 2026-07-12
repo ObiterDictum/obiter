@@ -1,5 +1,5 @@
 1. The core problem Obiter is solving
-The big problem
+   The big problem
 
 Legal research is too important to be trapped behind closed, expensive, opaque systems.
 
@@ -14,7 +14,7 @@ So Obiter is solving this:
 How do we make law searchable, understandable, verifiable, privacy-preserving, benchmarked, and open enough to support justice?
 
 2. What we are building
-Product vision
+   Product vision
 
 Obiter is an open legal intelligence platform for research, redaction, verification, benchmarking, and AI-safe legal work.
 
@@ -24,14 +24,14 @@ Westlaw-level legal research, rebuilt for open justice and trustworthy AI.
 
 Not just a chatbot. Not just document search. Not just a citation checker. The product should become a full legal operating system with the following modules:
 
-Product	Purpose	First user-facing value
-Obiter Atlas	Open legal data engine and knowledge graph	Search cases, legislation, citations, paragraphs, references
-Obiter Redact	Legal redaction and pseudonymisation	Safely process client/matter documents before AI use
-Obiter Verify	Citation, quote, and proposition verification	Catch fake cases, bad quotes, unsupported claims
-Obiter Research	AI-assisted legal research	Ask questions and receive source-bound legal analysis
-Obiter Vault	Secure local/cloud matter workspace	Store, search, redact, and analyse legal documents
-Obiter Bench	Legal AI evaluation framework	Benchmark models, retrieval, verification, and redaction
-Obiter API	Developer/legaltech infrastructure	Expose search, citation parsing, redaction, verification
+Product Purpose First user-facing value
+Obiter Atlas Open legal data engine and knowledge graph Search cases, legislation, citations, paragraphs, references
+Obiter Redact Legal redaction and pseudonymisation Safely process client/matter documents before AI use
+Obiter Verify Citation, quote, and proposition verification Catch fake cases, bad quotes, unsupported claims
+Obiter Research AI-assisted legal research Ask questions and receive source-bound legal analysis
+Obiter Vault Secure local/cloud matter workspace Store, search, redact, and analyse legal documents
+Obiter Bench Legal AI evaluation framework Benchmark models, retrieval, verification, and redaction
+Obiter API Developer/legaltech infrastructure Expose search, citation parsing, redaction, verification
 
 The Phase 1 build should focus on:
 
@@ -40,7 +40,7 @@ Atlas + Redact + Verify + a thin Research interface.
 That gives you a real application quickly while building the foundation for the bigger platform.
 
 3. External constraints that shape the build
-OpenAI Privacy Filter changes the redaction plan
+   OpenAI Privacy Filter changes the redaction plan
 
 OpenAI released OpenAI Privacy Filter on 22 April 2026. It is an open-weight model for detecting and redacting personally identifiable information in text, designed for high-throughput privacy workflows, able to run locally, and able to process long inputs in a single pass.
 
@@ -73,19 +73,19 @@ The Legislation API is published by The National Archives and gives access to th
 So Atlas should ingest legislation differently from case law: legislation needs versioning, commencement, amendment history, provision-level structure, and “as at date” logic.
 
 4. The main legal problems and what Obiter builds to solve each one
-Problem	Why it matters	What Obiter builds
-Law is expensive and closed	Access to justice suffers when legal information is locked behind proprietary systems	Obiter Atlas, an open legal data/search layer
-AI hallucinates cases and statutes	Fake authorities can mislead courts and clients	Obiter Verify, citation and authority checking
-AI misquotes real sources	A real case can still be used falsely	Quote fidelity and paragraph-level verification
-AI makes unsupported legal claims	Lawyers need to know whether a proposition is actually supported	Proposition extraction and support classification
-Confidential data blocks safe AI use	Lawyers cannot casually upload client files to AI tools	Obiter Redact, local-first redaction and pseudonymisation
-Redaction is slow and risky	Bad redaction can expose private data or remove legally important context	Human-review redaction UI with audit logs
-Legal search is fragmented	Cases, legislation, CPR, guidance, and uploaded documents are separate	Unified legal/matter search
-Legal AI is hard to evaluate	Vendors claim accuracy but lawyers need proof	Obiter Bench, E&W legal AI benchmarks
-Small firms lack AI governance	The SRA expects supervision, testing, confidentiality, and accountability	Matter-level AI audit logs and governance reports
-Public legal data is not enough by itself	Raw law is hard to navigate	Knowledge graph, issue maps, citation graph, search ranking
+   Problem Why it matters What Obiter builds
+   Law is expensive and closed Access to justice suffers when legal information is locked behind proprietary systems Obiter Atlas, an open legal data/search layer
+   AI hallucinates cases and statutes Fake authorities can mislead courts and clients Obiter Verify, citation and authority checking
+   AI misquotes real sources A real case can still be used falsely Quote fidelity and paragraph-level verification
+   AI makes unsupported legal claims Lawyers need to know whether a proposition is actually supported Proposition extraction and support classification
+   Confidential data blocks safe AI use Lawyers cannot casually upload client files to AI tools Obiter Redact, local-first redaction and pseudonymisation
+   Redaction is slow and risky Bad redaction can expose private data or remove legally important context Human-review redaction UI with audit logs
+   Legal search is fragmented Cases, legislation, CPR, guidance, and uploaded documents are separate Unified legal/matter search
+   Legal AI is hard to evaluate Vendors claim accuracy but lawyers need proof Obiter Bench, E&W legal AI benchmarks
+   Small firms lack AI governance The SRA expects supervision, testing, confidentiality, and accountability Matter-level AI audit logs and governance reports
+   Public legal data is not enough by itself Raw law is hard to navigate Knowledge graph, issue maps, citation graph, search ranking
 5. Phase 1 product definition
-Phase 1 objective
+   Phase 1 objective
 
 Build a working application that allows a user to:
 
@@ -117,17 +117,18 @@ The architecture should be modular from day one.
                                  |
         -----------------------------------------------------
         |                    |                    |          |
-   Obiter Atlas        Obiter Redact       Obiter Verify   Vault
-        |                    |                    |          |
-   Legal Corpus        Privacy Layer        Trust Layer     Docs
-        |                    |                    |          |
-        -----------------------------------------------------
-                                 |
-                         Obiter Research
-                                 |
-                          Obiter Bench
-                                 |
-                           Obiter API
+
+Obiter Atlas Obiter Redact Obiter Verify Vault
+| | | |
+Legal Corpus Privacy Layer Trust Layer Docs
+| | | |
+\-----------------------------------------------------
+|
+Obiter Research
+|
+Obiter Bench
+|
+Obiter API
 Module responsibilities
 Obiter Atlas
 
@@ -233,8 +234,7 @@ evaluate proposition verification
 evaluate redaction
 evaluate full research answers
 version model, prompt, retriever, and data changes
-create public and private benchmark reports
-7. Recommended technical stack
+create public and private benchmark reports 7. Recommended technical stack
 
 Your existing infrastructure guide is still useful. I would adapt it rather than replace it.
 
@@ -243,36 +243,36 @@ Monorepo
 Use a single monorepo:
 
 obiter/
-  apps/
-    web/                 # vault.legal web app
-    desktop/             # Tauri desktop app
-    docs/                # obiter.tech docs
-    marketing/           # obiter.tech / vault.legal landing
-  services/
-    api/                 # main Hono/Fastify API
-    worker/              # BullMQ jobs
-    redact-worker/       # Python Privacy Filter / PDF redaction
-    atlas-ingestor/      # legal data ingestion
-    verify-worker/       # quote/proposition verification
-    bench-runner/        # evaluation jobs
-  packages/
-    ui/                  # shared React components
-    database/            # Prisma/Drizzle schema
-    legal-schema/        # canonical legal document types
-    citation-parser/     # neutral citation/statute parser
-    redaction-policy/    # policy rules and label schema
-    verification-core/   # reusable verification logic
-    search-client/       # typed search client
-    config/              # shared env/config
-  infra/
-    docker/
-    terraform-or-scripts/
-    nginx-or-traefik/
-    monitoring/
-  data/
-    seed/
-    evals/
-    fixtures/
+apps/
+web/ # vault.legal web app
+desktop/ # Tauri desktop app
+docs/ # obiter.tech docs
+marketing/ # obiter.tech / vault.legal landing
+services/
+api/ # main Hono/Fastify API
+worker/ # BullMQ jobs
+redact-worker/ # Python Privacy Filter / PDF redaction
+atlas-ingestor/ # legal data ingestion
+verify-worker/ # quote/proposition verification
+bench-runner/ # evaluation jobs
+packages/
+ui/ # shared React components
+database/ # Prisma/Drizzle schema
+legal-schema/ # canonical legal document types
+citation-parser/ # neutral citation/statute parser
+redaction-policy/ # policy rules and label schema
+verification-core/ # reusable verification logic
+search-client/ # typed search client
+config/ # shared env/config
+infra/
+docker/
+terraform-or-scripts/
+nginx-or-traefik/
+monitoring/
+data/
+seed/
+evals/
+fixtures/
 Frontend
 
 Use:
@@ -323,35 +323,40 @@ Infrastructure
 Use the architecture from your infrastructure guide, renamed for Obiter:
 
 Cloudflare Pages:
-  - obiter.tech
-  - docs.obiter.tech
+
+- obiter.tech
+- docs.obiter.tech
 
 Hetzner app server:
-  - API
-  - web app container if needed
-  - worker
-  - Redis
-  - Traefik/Dokploy
+
+- API
+- web app container if needed
+- worker
+- Redis
+- Traefik/Dokploy
 
 Hetzner database/search server:
-  - PostgreSQL
-  - PgBouncer
-  - Meilisearch
-  - backups
+
+- PostgreSQL
+- PgBouncer
+- Meilisearch
+- backups
 
 Object storage:
-  - source documents
-  - uploaded files
-  - generated reports
-  - benchmark outputs
+
+- source documents
+- uploaded files
+- generated reports
+- benchmark outputs
 
 Add one extra future component:
 
 GPU / ML worker:
-  - Privacy Filter at scale
-  - embedding jobs
-  - reranker inference
-  - future fine-tuned verifier/redaction models
+
+- Privacy Filter at scale
+- embedding jobs
+- reranker inference
+- future fine-tuned verifier/redaction models
 
 For Phase 1, Redact can run locally in the desktop app and through a hosted worker for web users.
 
@@ -361,271 +366,270 @@ The data model is the most important foundation. Do not treat legal documents as
 
 Public legal source tables
 legal_sources
-  id
-  source_type              # case_law, legislation, guidance, cpr, user_document
-  provider                 # TNA, legislation.gov.uk, gov.uk, user_upload
-  licence_type
-  licence_notes
-  computational_analysis_allowed
-  source_url
-  fetched_at
-  version_hash
+id
+source_type # case_law, legislation, guidance, cpr, user_document
+provider # TNA, legislation.gov.uk, gov.uk, user_upload
+licence_type
+licence_notes
+computational_analysis_allowed
+source_url
+fetched_at
+version_hash
 
 legal_documents
-  id
-  source_id
-  canonical_title
-  document_type            # judgment, act, si, rule, practice_direction
-  jurisdiction
-  court_or_body
-  date_published
-  date_decided
-  preferred_identifier
-  source_document_uri
-  neutral_citation
-  status
-  raw_text_object_key
-  html_object_key
-  xml_object_key
-  created_at
-  updated_at
+id
+source_id
+canonical_title
+document_type # judgment, act, si, rule, practice_direction
+jurisdiction
+court_or_body
+date_published
+date_decided
+preferred_identifier
+source_document_uri
+neutral_citation
+status
+raw_text_object_key
+html_object_key
+xml_object_key
+created_at
+updated_at
 
 judgment_paragraphs
-  id
-  document_id
-  paragraph_number
-  paragraph_label
-  text
-  normalized_text
-  page_number
-  char_start
-  char_end
-  embedding_id
-  created_at
+id
+document_id
+paragraph_number
+paragraph_label
+text
+normalized_text
+page_number
+char_start
+char_end
+embedding_id
+created_at
 
 legislation_documents
-  id
-  document_id
-  legislation_type
-  year
-  number
-  title
-  current_version_date
-  original_enactment_date
+id
+document_id
+legislation_type
+year
+number
+title
+current_version_date
+original_enactment_date
 
 legislation_provisions
-  id
-  legislation_document_id
-  provision_type           # section, subsection, schedule, paragraph
-  provision_number
-  parent_id
-  heading
-  text
-  version_start_date
-  version_end_date
-  in_force_status
+id
+legislation_document_id
+provision_type # section, subsection, schedule, paragraph
+provision_number
+parent_id
+heading
+text
+version_start_date
+version_end_date
+in_force_status
 Citation graph tables
 legal_references
-  id
-  source_document_id
-  source_paragraph_id
-  reference_type           # case, legislation, rule, article, regulation
-  raw_reference_text
-  normalized_reference
-  target_document_id
-  target_provision_id
-  confidence
-  resolver_status          # resolved, ambiguous, unresolved
-  created_at
+id
+source_document_id
+source_paragraph_id
+reference_type # case, legislation, rule, article, regulation
+raw_reference_text
+normalized_reference
+target_document_id
+target_provision_id
+confidence
+resolver_status # resolved, ambiguous, unresolved
+created_at
 
 case_treatments
-  id
-  citing_document_id
-  cited_document_id
-  citing_paragraph_id
-  treatment_type           # cited, applied, distinguished, overruled, considered, unknown
-  treatment_confidence
-  evidence_text
-  human_review_status
+id
+citing_document_id
+cited_document_id
+citing_paragraph_id
+treatment_type # cited, applied, distinguished, overruled, considered, unknown
+treatment_confidence
+evidence_text
+human_review_status
 
 Important: do not overclaim treatment detection in Phase 1. It is safer to call this “citation context” or “possible treatment” until there is robust validation.
 
 User/matter tables
 organisations
-  id
-  name
-  plan
-  data_region
-  created_at
+id
+name
+plan
+data_region
+created_at
 
 users
-  id
-  email
-  name
-  role
-  created_at
+id
+email
+name
+role
+created_at
 
 matters
-  id
-  organisation_id
-  name
-  client_reference
-  jurisdiction
-  default_redaction_policy
-  storage_mode             # local, cloud, hybrid
-  created_by
-  created_at
+id
+organisation_id
+name
+client_reference
+jurisdiction
+default_redaction_policy
+storage_mode # local, cloud, hybrid
+created_by
+created_at
 
 matter_documents
-  id
-  matter_id
-  uploaded_by
-  filename
-  file_type
-  object_key
-  text_object_key
-  sha256
-  page_count
-  document_status
-  contains_unredacted_data
-  created_at
+id
+matter_id
+uploaded_by
+filename
+file_type
+object_key
+text_object_key
+sha256
+page_count
+document_status
+contains_unredacted_data
+created_at
 Redaction tables
 redaction_runs
-  id
-  matter_id
-  document_id
-  policy_id
-  model_name
-  model_version
-  mode                     # ai_minimisation, publication, training_data, internal_review
-  status
-  created_by
-  created_at
-  completed_at
+id
+matter_id
+document_id
+policy_id
+model_name
+model_version
+mode # ai_minimisation, publication, training_data, internal_review
+status
+created_by
+created_at
+completed_at
 
 redaction_spans
-  id
-  run_id
-  document_id
-  page_number
-  char_start
-  char_end
-  original_text_hash
-  displayed_original_text  # only if allowed in secure review context
-  label                    # private_person, witness_name, child_name, secret, etc.
-  confidence
-  source                   # privacy_filter, rule, human, llm, manual
-  action                   # redact, pseudonymise, keep, review
-  replacement_text
-  reviewer_id
-  reviewed_at
+id
+run_id
+document_id
+page_number
+char_start
+char_end
+original_text_hash
+displayed_original_text # only if allowed in secure review context
+label # private_person, witness_name, child_name, secret, etc.
+confidence
+source # privacy_filter, rule, human, llm, manual
+action # redact, pseudonymise, keep, review
+replacement_text
+reviewer_id
+reviewed_at
 
 pseudonym_maps
-  id
-  matter_id
-  entity_hash
-  label
-  pseudonym                # CLIENT_1, WITNESS_2
-  encrypted_original_value
-  created_at
+id
+matter_id
+entity_hash
+label
+pseudonym # CLIENT_1, WITNESS_2
+encrypted_original_value
+created_at
 Verification tables
 verification_runs
-  id
-  matter_id
-  input_document_id
-  status
-  model_versions
-  retrieval_version
-  created_by
-  created_at
-  completed_at
+id
+matter_id
+input_document_id
+status
+model_versions
+retrieval_version
+created_by
+created_at
+completed_at
 
 verification_items
-  id
-  run_id
-  item_type                # citation, quote, proposition, statute, jurisdiction, date
-  raw_text
-  normalized_text
-  cited_source_id
-  cited_paragraph_id
-  status                   # verified, unsupported, contradicted, fake, ambiguous, needs_review
-  severity                 # info, warning, serious, critical
-  explanation
-  evidence
-  reviewer_status
-  created_at
+id
+run_id
+item_type # citation, quote, proposition, statute, jurisdiction, date
+raw_text
+normalized_text
+cited_source_id
+cited_paragraph_id
+status # verified, unsupported, contradicted, fake, ambiguous, needs_review
+severity # info, warning, serious, critical
+explanation
+evidence
+reviewer_status
+created_at
 
 legal_propositions
-  id
-  run_id
-  proposition_text
-  source_span_start
-  source_span_end
-  cited_authorities
-  verification_status
-  support_score
-  contradiction_score
+id
+run_id
+proposition_text
+source_span_start
+source_span_end
+cited_authorities
+verification_status
+support_score
+contradiction_score
 Research tables
 research_sessions
-  id
-  matter_id
-  user_id
-  query
-  jurisdiction
-  relevant_date
-  practice_area
-  status
-  created_at
+id
+matter_id
+user_id
+query
+jurisdiction
+relevant_date
+practice_area
+status
+created_at
 
 research_claims
-  id
-  session_id
-  claim_text
-  claim_type
-  support_status
-  supporting_sources
-  contrary_sources
-  confidence_label
-  human_review_required
+id
+session_id
+claim_text
+claim_type
+support_status
+supporting_sources
+contrary_sources
+confidence_label
+human_review_required
 
 research_sources
-  id
-  session_id
-  document_id
-  paragraph_id
-  relevance_score
-  retrieval_method
-  used_in_answer
+id
+session_id
+document_id
+paragraph_id
+relevance_score
+retrieval_method
+used_in_answer
 Benchmark tables
 bench_tasks
-  id
-  benchmark_name
-  task_type                # citation_resolution, quote_check, redaction, rag, proposition_support
-  input
-  expected_output
-  rubric
-  jurisdiction
-  source_ids
-  created_at
+id
+benchmark_name
+task_type # citation_resolution, quote_check, redaction, rag, proposition_support
+input
+expected_output
+rubric
+jurisdiction
+source_ids
+created_at
 
 bench_runs
-  id
-  benchmark_name
-  system_version
-  model_version
-  retriever_version
-  score_summary
-  created_at
+id
+benchmark_name
+system_version
+model_version
+retriever_version
+score_summary
+created_at
 
 bench_results
-  id
-  run_id
-  task_id
-  output
-  score
-  error_type
-  notes
-9. Obiter Atlas build plan
+id
+run_id
+task_id
+output
+score
+error_type
+notes 9. Obiter Atlas build plan
 Problem
 
 Legal data is fragmented and hard to reason over. Current search tools mostly return documents. Obiter needs a structured legal knowledge engine that can power research, verification, redaction policy, and benchmarks.
@@ -670,34 +674,34 @@ full legal advice automation
 full corpus computational analysis before licence approval
 Atlas ingestion pipeline
 Source registry
-  ↓
+↓
 Fetch document
-  ↓
+↓
 Store raw source
-  ↓
+↓
 Parse metadata
-  ↓
+↓
 Parse structure
-  ↓
+↓
 Extract paragraphs/provisions
-  ↓
+↓
 Extract citations/references
-  ↓
+↓
 Resolve references
-  ↓
+↓
 Index keyword search
-  ↓
+↓
 Generate embeddings
-  ↓
+↓
 Quality checks
 Atlas API endpoints
-GET  /api/atlas/search?q=&jurisdiction=&court=&date_from=&date_to=
-GET  /api/atlas/documents/:id
-GET  /api/atlas/documents/:id/paragraphs
-GET  /api/atlas/citations/resolve?citation=
-GET  /api/atlas/legislation/resolve?reference=
-GET  /api/atlas/documents/:id/references/out
-GET  /api/atlas/documents/:id/references/in
+GET /api/atlas/search?q=&jurisdiction=&court=&date_from=&date_to=
+GET /api/atlas/documents/:id
+GET /api/atlas/documents/:id/paragraphs
+GET /api/atlas/citations/resolve?citation=
+GET /api/atlas/legislation/resolve?reference=
+GET /api/atlas/documents/:id/references/out
+GET /api/atlas/documents/:id/references/in
 POST /api/atlas/ingest/fcl
 POST /api/atlas/ingest/legislation
 Atlas acceptance criteria
@@ -710,8 +714,7 @@ a neutral citation can resolve to a source where available
 a statutory reference can resolve to a provision where available
 every source has licence/source metadata
 every search result shows why it was returned
-the system can support Verify and Research without using raw unstructured blobs
-10. Obiter Redact build plan
+the system can support Verify and Research without using raw unstructured blobs 10. Obiter Redact build plan
 Problem
 
 Lawyers cannot safely use AI on real client documents unless they can remove or pseudonymise confidential and personal data first.
@@ -732,6 +735,7 @@ redaction before AI
 redaction before publication
 redaction before training/evaluation
 Redact modes
+
 1. AI minimisation mode
 
 Purpose:
@@ -755,8 +759,7 @@ WITNESS_1
 ADDRESS_1
 PRIVATE_DATE_1
 ACCOUNT_NUMBER_1
-SECRET_1
-2. Publication mode
+SECRET_1 2. Publication mode
 
 Purpose:
 
@@ -767,8 +770,7 @@ Default behaviour:
 require human approval
 irreversible redaction
 stricter handling for children, vulnerable persons, addresses, DOBs, medical data, immigration details
-preserve judge names, court names, citations, statutory references, and public legal content by default
-3. Training-data mode
+preserve judge names, court names, citations, statutory references, and public legal content by default 3. Training-data mode
 
 Purpose:
 
@@ -782,8 +784,7 @@ remove secrets
 remove account numbers
 remove privileged/client-identifying detail
 store dataset licence and consent metadata
-require human review for sensitive sources
-4. Internal review mode
+require human review for sensitive sources 4. Internal review mode
 
 Purpose:
 
@@ -839,38 +840,38 @@ The important product feature is not just detection. It is policy-aware treatmen
 
 Example:
 
-Label	AI minimisation	Publication	Training data
-judge_name	keep	keep	keep
-child_name	pseudonymise	redact	pseudonymise
-witness_address	redact	redact	redact
-neutral_citation	keep	keep	keep
-account_number	redact	redact	redact
-privileged_communication	review	review	exclude
-company_name	review	review	pseudonymise if private
-solicitor_email	redact	redact	redact
+Label AI minimisation Publication Training data
+judge_name keep keep keep
+child_name pseudonymise redact pseudonymise
+witness_address redact redact redact
+neutral_citation keep keep keep
+account_number redact redact redact
+privileged_communication review review exclude
+company_name review review pseudonymise if private
+solicitor_email redact redact redact
 Redact technical pipeline
 Input file
-  ↓
+↓
 File validation and hash
-  ↓
+↓
 Text extraction
-  ↓
+↓
 Layout extraction
-  ↓
+↓
 OpenAI Privacy Filter
-  ↓
+↓
 Legal rules layer
-  ↓
+↓
 Optional LLM-assisted legal sensitivity classifier
-  ↓
+↓
 Span merge and conflict resolution
-  ↓
+↓
 Human review UI
-  ↓
+↓
 Apply redaction / pseudonymisation
-  ↓
+↓
 Export
-  ↓
+↓
 Audit report
 Implementation details
 
@@ -938,8 +939,7 @@ users can review and override spans
 pseudonymisation is consistent within a matter
 a redaction audit report is generated
 the system supports “redact before AI”
-the system clearly says redaction still needs human review for legal/publication use
-11. Obiter Verify build plan
+the system clearly says redaction still needs human review for legal/publication use 11. Obiter Verify build plan
 Problem
 
 AI can invent legal authorities, misstate real authorities, misquote paragraphs, and attach citations to propositions that the source does not actually support. Lawyers need a fast way to verify a draft before it goes to a client, opponent, court, or supervisor.
@@ -959,25 +959,25 @@ proposition support scoring
 verification report
 Verify pipeline
 Input draft
-  ↓
+↓
 Extract citations
-  ↓
+↓
 Extract quotes
-  ↓
+↓
 Extract statutory references
-  ↓
+↓
 Extract legal propositions
-  ↓
+↓
 Resolve authorities in Atlas
-  ↓
+↓
 Check quotes against source text
-  ↓
+↓
 Retrieve cited paragraphs
-  ↓
+↓
 Check whether proposition is supported
-  ↓
+↓
 Check jurisdiction/date mismatch
-  ↓
+↓
 Generate report
 Verification item statuses
 
@@ -1071,6 +1071,7 @@ System version:
 Sources checked:
 
 Summary:
+
 - 12 citations found
 - 10 resolved
 - 1 ambiguous
@@ -1083,6 +1084,7 @@ Summary:
 - 1 unsupported
 
 Critical issues:
+
 1. Possible fake case: [2021] EWCA Civ 9999
 2. Quote not found in cited paragraph
 3. Proposition overstates authority
@@ -1101,8 +1103,7 @@ statutory references are parsed
 legal propositions are extracted
 each proposition has a support status
 report export works
-every generated finding links to evidence
-12. Obiter Research build plan
+every generated finding links to evidence 12. Obiter Research build plan
 Problem
 
 Legal research is not just “find documents.” A lawyer needs to move from question to authorities to propositions to contrary sources to a defensible answer.
@@ -1123,28 +1124,29 @@ research trail
 exportable memo
 Research workflow
 User asks question
-  ↓
+↓
 System asks/infers:
-  - jurisdiction
-  - relevant date
-  - practice area
-  - document context
-  - user role
+
+- jurisdiction
+- relevant date
+- practice area
+- document context
+- user role
   ↓
-Query planner creates search plan
+  Query planner creates search plan
   ↓
-Atlas retrieves sources
+  Atlas retrieves sources
   ↓
-Reranker ranks paragraphs/provisions
+  Reranker ranks paragraphs/provisions
   ↓
-Answer generator drafts source-bound answer
+  Answer generator drafts source-bound answer
   ↓
-Claim extractor splits answer into propositions
+  Claim extractor splits answer into propositions
   ↓
-Verify checks each proposition
+  Verify checks each proposition
   ↓
-UI shows answer + evidence + warnings
-Research answer format
+  UI shows answer + evidence + warnings
+  Research answer format
 
 Every answer should contain:
 
@@ -1157,9 +1159,9 @@ Every answer should contain:
 7. What was searched
 8. What was not searched
 9. Human review checklist
-Example claim card
-Claim:
-A director may be personally liable where they personally made or authorised a fraudulent misrepresentation.
+   Example claim card
+   Claim:
+   A director may be personally liable where they personally made or authorised a fraudulent misrepresentation.
 
 Status:
 Verified
@@ -1194,8 +1196,7 @@ every answer has claim-level citations
 every claim is passed through Verify
 unsupported claims are marked
 contrary sources are shown where available
-research trail can be exported
-13. Obiter Vault build plan
+research trail can be exported 13. Obiter Vault build plan
 Problem
 
 Lawyers need a secure workspace for matter documents. Cloud-only legal AI creates confidentiality and privilege concerns. A local-first desktop workspace gives Obiter a major trust advantage.
@@ -1233,17 +1234,18 @@ Matter screen:
 Matter: ABC v XYZ
 Jurisdiction: England & Wales
 Documents:
-  - witness_statement.pdf
-  - draft_skeleton.docx
-  - advice_note.txt
-Research:
-  - Director liability research
-  - Limitation issue
-Verification:
-  - skeleton verification report
-Redaction:
-  - witness statement redaction report
-Vault acceptance criteria
+
+- witness_statement.pdf
+- draft_skeleton.docx
+- advice_note.txt
+  Research:
+- Director liability research
+- Limitation issue
+  Verification:
+- skeleton verification report
+  Redaction:
+- witness statement redaction report
+  Vault acceptance criteria
 
 Vault v0 is done when:
 
@@ -1253,8 +1255,7 @@ desktop users can keep files local
 documents can be searched
 documents can be redacted before AI use
 verification/research reports attach to a matter
-matter-level audit history exists
-14. Obiter Bench build plan
+matter-level audit history exists 14. Obiter Bench build plan
 Problem
 
 Legal AI systems need rigorous evaluation. Without benchmarks, Obiter cannot know whether Atlas, Redact, Verify, or Research is improving.
@@ -1270,6 +1271,7 @@ retrieval benchmark
 proposition support benchmark
 full research answer benchmark
 Benchmark families
+
 1. CiteBench
 
 Tests whether the system can:
@@ -1287,8 +1289,7 @@ citation_parse_accuracy
 resolution_accuracy
 fake_citation_recall
 fake_citation_precision
-ambiguous_case_detection
-2. QuoteBench
+ambiguous_case_detection 2. QuoteBench
 
 Tests whether the system can:
 
@@ -1302,8 +1303,7 @@ Metrics:
 exact_quote_accuracy
 material_misquote_recall
 wrong_paragraph_detection
-quote_diff_quality
-3. PropBench
+quote_diff_quality 3. PropBench
 
 Tests whether the system can:
 
@@ -1319,8 +1319,7 @@ proposition_extraction_f1
 support_classification_accuracy
 unsupported_claim_recall
 contradiction_detection
-human_review_agreement
-4. RedactBench
+human_review_agreement 4. RedactBench
 
 Tests whether the system can:
 
@@ -1339,8 +1338,7 @@ legal_sensitive_recall
 over_redaction_rate
 under_redaction_rate
 pseudonym_consistency
-pdf_redaction_safety
-5. ResearchBench
+pdf_redaction_safety 5. ResearchBench
 
 Tests whether the system can:
 
@@ -1366,8 +1364,7 @@ every release can run a regression test
 every model/prompt/retriever version is logged
 failures are stored as examples
 benchmark reports are exportable
-product feedback can become benchmark tasks
-15. Open-source and commercial strategy
+product feedback can become benchmark tasks 15. Open-source and commercial strategy
 
 The mission is open justice, but the company still needs a business model.
 
@@ -1419,17 +1416,17 @@ This gives you the right balance:
 Open infrastructure, commercial reliability.
 
 16. Security, privacy, and governance requirements
-Non-negotiable principles
-No unredacted client data to external LLMs by default.
-No training on user documents by default.
-Matter-level encryption and access control.
-Every AI answer gets a source trail.
-Every redaction gets an audit trail.
-Every verification finding links to evidence.
-Every model/retriever/prompt version is logged.
-Every user can export or delete matter data.
-Every sensitive workflow has human review.
-Every legal answer is labelled as requiring professional review.
+    Non-negotiable principles
+    No unredacted client data to external LLMs by default.
+    No training on user documents by default.
+    Matter-level encryption and access control.
+    Every AI answer gets a source trail.
+    Every redaction gets an audit trail.
+    Every verification finding links to evidence.
+    Every model/retriever/prompt version is logged.
+    Every user can export or delete matter data.
+    Every sensitive workflow has human review.
+    Every legal answer is labelled as requiring professional review.
 
 The ICO’s AI data protection guidance is structured around accountability, transparency, lawfulness, accuracy, fairness, security, data minimisation, and individual rights, so Obiter should bake those concepts into product design rather than bolt them on later.
 
@@ -1469,8 +1466,8 @@ external_provider_used
 Do not store raw unredacted text in logs.
 
 17. Detailed 12-week build roadmap
-Week 0: Project decisions and setup
-Problem being solved
+    Week 0: Project decisions and setup
+    Problem being solved
 
 The product needs a clear foundation before code starts, otherwise the system will become a chatbot with scattered features.
 
@@ -1551,7 +1548,7 @@ pseudonym map
 redacted text export
 Redact API
 POST /api/redact/analyze
-GET  /api/redact/runs/:id
+GET /api/redact/runs/:id
 PATCH /api/redact/spans/:id
 POST /api/redact/runs/:id/export
 Acceptance criteria
@@ -1774,8 +1771,7 @@ alpha users can complete Redact workflow
 alpha users can complete Verify workflow
 alpha users can run a Research query
 feedback is captured inside app
-top failure modes become benchmark tasks
-18. First 10 days of actual work
+top failure modes become benchmark tasks 18. First 10 days of actual work
 Day 1
 create repo
 create project board
@@ -1843,55 +1839,55 @@ export basic verification report
 At the end of 10 days, you should have a crude but real product demo.
 
 19. API design
-Auth and matter APIs
-POST   /api/auth/*
-GET    /api/me
-GET    /api/orgs/current
-GET    /api/matters
-POST   /api/matters
-GET    /api/matters/:matterId
-PATCH  /api/matters/:matterId
-DELETE /api/matters/:matterId
-Document APIs
-POST   /api/matters/:matterId/documents
-GET    /api/matters/:matterId/documents
-GET    /api/documents/:documentId
-DELETE /api/documents/:documentId
-POST   /api/documents/:documentId/extract
-Redact APIs
-POST   /api/redact/runs
-GET    /api/redact/runs/:runId
-GET    /api/redact/runs/:runId/spans
-PATCH  /api/redact/spans/:spanId
-POST   /api/redact/runs/:runId/apply
-GET    /api/redact/runs/:runId/export/pdf
-GET    /api/redact/runs/:runId/export/report
-Atlas APIs
-GET    /api/atlas/search
-GET    /api/atlas/documents/:documentId
-GET    /api/atlas/documents/:documentId/paragraphs
-GET    /api/atlas/resolve/citation
-GET    /api/atlas/resolve/legislation
-POST   /api/atlas/ingest/source
-Verify APIs
-POST   /api/verify/runs
-GET    /api/verify/runs/:runId
-GET    /api/verify/runs/:runId/items
-PATCH  /api/verify/items/:itemId
-GET    /api/verify/runs/:runId/export/report
-Research APIs
-POST   /api/research/sessions
-GET    /api/research/sessions/:sessionId
-GET    /api/research/sessions/:sessionId/claims
-GET    /api/research/sessions/:sessionId/sources
-GET    /api/research/sessions/:sessionId/export/memo
-Bench APIs
-GET    /api/bench/suites
-POST   /api/bench/runs
-GET    /api/bench/runs/:runId
-GET    /api/bench/runs/:runId/results
+    Auth and matter APIs
+    POST /api/auth/*
+    GET /api/me
+    GET /api/orgs/current
+    GET /api/matters
+    POST /api/matters
+    GET /api/matters/:matterId
+    PATCH /api/matters/:matterId
+    DELETE /api/matters/:matterId
+    Document APIs
+    POST /api/matters/:matterId/documents
+    GET /api/matters/:matterId/documents
+    GET /api/documents/:documentId
+    DELETE /api/documents/:documentId
+    POST /api/documents/:documentId/extract
+    Redact APIs
+    POST /api/redact/runs
+    GET /api/redact/runs/:runId
+    GET /api/redact/runs/:runId/spans
+    PATCH /api/redact/spans/:spanId
+    POST /api/redact/runs/:runId/apply
+    GET /api/redact/runs/:runId/export/pdf
+    GET /api/redact/runs/:runId/export/report
+    Atlas APIs
+    GET /api/atlas/search
+    GET /api/atlas/documents/:documentId
+    GET /api/atlas/documents/:documentId/paragraphs
+    GET /api/atlas/resolve/citation
+    GET /api/atlas/resolve/legislation
+    POST /api/atlas/ingest/source
+    Verify APIs
+    POST /api/verify/runs
+    GET /api/verify/runs/:runId
+    GET /api/verify/runs/:runId/items
+    PATCH /api/verify/items/:itemId
+    GET /api/verify/runs/:runId/export/report
+    Research APIs
+    POST /api/research/sessions
+    GET /api/research/sessions/:sessionId
+    GET /api/research/sessions/:sessionId/claims
+    GET /api/research/sessions/:sessionId/sources
+    GET /api/research/sessions/:sessionId/export/memo
+    Bench APIs
+    GET /api/bench/suites
+    POST /api/bench/runs
+    GET /api/bench/runs/:runId
+    GET /api/bench/runs/:runId/results
 20. UI screens to build
-Dashboard
+    Dashboard
 
 Shows:
 
@@ -1978,8 +1974,7 @@ latest run
 model/retriever versions
 scores
 failures
-regression warnings
-21. Model strategy
+regression warnings 21. Model strategy
 Do not train a full legal LLM first
 
 The first proprietary model should not be a general legal chatbot.
@@ -2016,7 +2011,7 @@ The moat is:
 We own the legal verification, redaction, citation, source-grounding, and benchmark data generated by real workflows.
 
 22. Legal-data licensing action plan
-Immediate tasks
+    Immediate tasks
 
 Prepare the Find Case Law computational-analysis licence application.
 
@@ -2060,8 +2055,7 @@ Avoid:
 bulk NLP over all Find Case Law records
 bulk extraction of case relationships from the full corpus
 training models on the full corpus
-enriching the full corpus with automated labels
-23. Risk register
+enriching the full corpus with automated labels 23. Risk register
 Risk 1: Overbuilding before shipping
 
 Mitigation:
@@ -2123,97 +2117,97 @@ Mitigation:
 Build model adapters. Keep retrieval, verification, redaction, and benchmarks provider-agnostic.
 
 24. Product metrics
-Redact metrics
-PII recall
-PII precision
-legal-sensitive recall
-over-redaction rate
-under-redaction rate
-human correction rate
-PDF redaction safety failures
-average review time
-Verify metrics
-citation extraction accuracy
-citation resolution accuracy
-fake citation recall
-quote match accuracy
-unsupported proposition recall
-false unsupported rate
-average verification time
-human override rate
-Research metrics
-source precision
-source recall
-claim verification rate
-unsupported claim rate
-user correction rate
-answer export rate
-time to useful answer
-Atlas metrics
-documents indexed
-paragraphs indexed
-citation resolution coverage
-legislation reference coverage
-search latency
-search click-through
-zero-result rate
-Business metrics
-activated users
-matters created
-documents redacted
-verification reports exported
-research memos exported
-weekly active users
-pilot conversion rate
-paid seats
-API usage
+    Redact metrics
+    PII recall
+    PII precision
+    legal-sensitive recall
+    over-redaction rate
+    under-redaction rate
+    human correction rate
+    PDF redaction safety failures
+    average review time
+    Verify metrics
+    citation extraction accuracy
+    citation resolution accuracy
+    fake citation recall
+    quote match accuracy
+    unsupported proposition recall
+    false unsupported rate
+    average verification time
+    human override rate
+    Research metrics
+    source precision
+    source recall
+    claim verification rate
+    unsupported claim rate
+    user correction rate
+    answer export rate
+    time to useful answer
+    Atlas metrics
+    documents indexed
+    paragraphs indexed
+    citation resolution coverage
+    legislation reference coverage
+    search latency
+    search click-through
+    zero-result rate
+    Business metrics
+    activated users
+    matters created
+    documents redacted
+    verification reports exported
+    research memos exported
+    weekly active users
+    pilot conversion rate
+    paid seats
+    API usage
 25. Alpha release scope
-Include
-web app
-desktop app shell
-matter workspace
-text redaction
-PDF redaction
-citation extraction
-citation resolution against seed Atlas
-quote checking
-proposition extraction
-basic research
-report exports
-audit logs
-benchmark runner
-Exclude
-full public legal corpus
-full citator treatment
-automated legal advice
-case outcome prediction
-unsupervised public-facing advice
-training on user documents
-perfect legislation amendment tracking
-firm-wide DMS integrations
-Microsoft Word plugin
-browser extension
+    Include
+    web app
+    desktop app shell
+    matter workspace
+    text redaction
+    PDF redaction
+    citation extraction
+    citation resolution against seed Atlas
+    quote checking
+    proposition extraction
+    basic research
+    report exports
+    audit logs
+    benchmark runner
+    Exclude
+    full public legal corpus
+    full citator treatment
+    automated legal advice
+    case outcome prediction
+    unsupervised public-facing advice
+    training on user documents
+    perfect legislation amendment tracking
+    firm-wide DMS integrations
+    Microsoft Word plugin
+    browser extension
 26. Six-month roadmap after alpha
-Month 4
-expand Atlas corpus subject to licence approval
-improve statutory provision resolver
-add CPR and practice directions
-improve PDF layout mapping
-launch private pilots
-publish first technical blog on Obiter Redact
-Month 5
-build Obiter Bench public dashboard
-fine-tune redaction model on legal eval data
-build better proposition support classifier
-add local semantic search in desktop
-improve source reader and citation graph
-Month 6
-paid beta
-API beta
-chambers/small firm pilot
-university/legal clinic pilot
-first public E&W legal AI evaluation report
-launch obiter.tech docs and open-source packages
+    Month 4
+    expand Atlas corpus subject to licence approval
+    improve statutory provision resolver
+    add CPR and practice directions
+    improve PDF layout mapping
+    launch private pilots
+    publish first technical blog on Obiter Redact
+    Month 5
+    build Obiter Bench public dashboard
+    fine-tune redaction model on legal eval data
+    build better proposition support classifier
+    add local semantic search in desktop
+    improve source reader and citation graph
+    Month 6
+    paid beta
+    API beta
+    chambers/small firm pilot
+    university/legal clinic pilot
+    first public E&W legal AI evaluation report
+    launch obiter.tech docs and open-source packages
 27. Build priority ranking
 
 Start in this order:

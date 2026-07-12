@@ -18,7 +18,10 @@ export interface LegalIngestorEnv {
 }
 
 function readNodeEnv(): LegalIngestorEnv['nodeEnv'] {
-  if (process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'test') {
+  if (
+    process.env.NODE_ENV === 'production' ||
+    process.env.NODE_ENV === 'test'
+  ) {
     return process.env.NODE_ENV
   }
 
@@ -30,13 +33,17 @@ function requireProductionEnv(nodeEnv: LegalIngestorEnv['nodeEnv']) {
     return
   }
 
-  const missing: string[] = requiredProductionKeys.filter((key) => !process.env[key])
+  const missing: string[] = requiredProductionKeys.filter(
+    (key) => !process.env[key],
+  )
   if (!process.env.LEGAL_AUTHORITIES_INDEX) {
     missing.push('LEGAL_AUTHORITIES_INDEX')
   }
 
   if (missing.length > 0) {
-    throw new Error(`Missing required production environment values: ${missing.join(', ')}`)
+    throw new Error(
+      `Missing required production environment values: ${missing.join(', ')}`,
+    )
   }
 }
 
@@ -52,7 +59,11 @@ function readRequiredUrl(key: string, fallback: string): string {
   return parseUrl(key, process.env[key] ?? fallback)
 }
 
-function readSecret(key: string, fallback: string, nodeEnv: LegalIngestorEnv['nodeEnv']) {
+function readSecret(
+  key: string,
+  fallback: string,
+  nodeEnv: LegalIngestorEnv['nodeEnv'],
+) {
   const value = process.env[key] ?? fallback
   const trimmed = value.trim()
 
@@ -82,7 +93,9 @@ function readIndexName(key: string, fallback: string) {
   }
 
   if (!/^[a-zA-Z0-9_-]+$/.test(trimmed)) {
-    throw new Error(`${key} may only contain letters, numbers, underscores, and hyphens.`)
+    throw new Error(
+      `${key} may only contain letters, numbers, underscores, and hyphens.`,
+    )
   }
 
   return trimmed
@@ -112,7 +125,10 @@ function loadLocalDotEnv() {
         if (separatorIndex <= 0) continue
 
         const key = line.slice(0, separatorIndex).trim()
-        const value = line.slice(separatorIndex + 1).trim().replace(/^["']|["']$/g, '')
+        const value = line
+          .slice(separatorIndex + 1)
+          .trim()
+          .replace(/^["']|["']$/g, '')
 
         process.env[key] ??= value
       }
@@ -143,7 +159,10 @@ export function readLegalIngestorEnv(): LegalIngestorEnv {
   requireProductionEnv(nodeEnv)
 
   return {
-    meilisearchHost: readRequiredUrl('MEILISEARCH_HOST', 'http://localhost:7700'),
+    meilisearchHost: readRequiredUrl(
+      'MEILISEARCH_HOST',
+      'http://localhost:7700',
+    ),
     meilisearchAdminApiKey: readAdminApiKey(nodeEnv),
     legalAuthoritiesIndex: readLegalAuthoritiesIndexName(),
     mojFindCaseLawBaseUrl: readRequiredUrl(

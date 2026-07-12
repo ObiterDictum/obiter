@@ -25,16 +25,16 @@ The product goal is not to build another generic legal chatbot. The goal is to b
 
 ## Problems Obiter Must Solve
 
-| Problem | Why It Matters | What Obiter Builds |
-| --- | --- | --- |
-| Law is expensive and closed | Access to justice suffers when legal information is trapped inside proprietary systems | Atlas as an open legal data and search layer |
-| AI hallucinates cases and statutes | Fake authorities can mislead courts and clients | Verify for citation and authority checking |
-| AI misquotes real sources | A real authority can still be used falsely | Quote fidelity and paragraph-level verification |
-| AI makes unsupported legal claims | Lawyers need support, not rhetoric | Proposition extraction and support classification |
-| Confidential data blocks safe AI use | Firms cannot casually upload client files into external tools | Redact for local-first redaction and pseudonymisation |
-| Redaction is slow and risky | Bad redaction can expose data or remove important context | Reviewable redaction workflows with audit logs |
-| Legal search is fragmented | Cases, legislation, guidance, and matter documents live in separate systems | Unified legal and matter search |
-| Legal AI is hard to evaluate | Accuracy claims are not enough in legal practice | Bench for repeatable legal AI benchmarking |
+| Problem                              | Why It Matters                                                                         | What Obiter Builds                                    |
+| ------------------------------------ | -------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Law is expensive and closed          | Access to justice suffers when legal information is trapped inside proprietary systems | Atlas as an open legal data and search layer          |
+| AI hallucinates cases and statutes   | Fake authorities can mislead courts and clients                                        | Verify for citation and authority checking            |
+| AI misquotes real sources            | A real authority can still be used falsely                                             | Quote fidelity and paragraph-level verification       |
+| AI makes unsupported legal claims    | Lawyers need support, not rhetoric                                                     | Proposition extraction and support classification     |
+| Confidential data blocks safe AI use | Firms cannot casually upload client files into external tools                          | Redact for local-first redaction and pseudonymisation |
+| Redaction is slow and risky          | Bad redaction can expose data or remove important context                              | Reviewable redaction workflows with audit logs        |
+| Legal search is fragmented           | Cases, legislation, guidance, and matter documents live in separate systems            | Unified legal and matter search                       |
+| Legal AI is hard to evaluate         | Accuracy claims are not enough in legal practice                                       | Bench for repeatable legal AI benchmarking            |
 
 ## Positioning
 

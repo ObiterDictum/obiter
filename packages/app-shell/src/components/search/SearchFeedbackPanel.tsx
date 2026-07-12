@@ -23,9 +23,13 @@ export function SearchFeedbackPanel({
       role={tone === 'error' ? 'alert' : 'status'}
     >
       <div className="min-w-0">
-        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-subtle">{eyebrow}</p>
+        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-subtle">
+          {eyebrow}
+        </p>
         <h2 className="text-base font-semibold text-ink">{title}</h2>
-        <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted">{body}</p>
+        <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted">
+          {body}
+        </p>
       </div>
       {action ? (
         <button

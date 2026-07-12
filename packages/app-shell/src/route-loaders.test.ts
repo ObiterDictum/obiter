@@ -3,7 +3,11 @@ import { isRedirect } from '@tanstack/react-router'
 import { QueryClient } from '@tanstack/react-query'
 import type { MeResponse } from '@obiter/contracts'
 import { ApiError } from './api'
-import { ensureOrganisation, guardAuth, prefetchHomeData } from './route-loaders'
+import {
+  ensureOrganisation,
+  guardAuth,
+  prefetchHomeData,
+} from './route-loaders'
 
 const noopQueryClient = new QueryClient()
 
@@ -30,22 +34,28 @@ describe('guardAuth', () => {
   })
 
   it('throws a router redirect to /sign-in on an unauthenticated ApiError (not swallowed)', async () => {
-    const run = vi.fn().mockRejectedValue(
-      new ApiError('unauthenticated', 'Sign in is required.', 401, 'req_1'),
-    )
+    const run = vi
+      .fn()
+      .mockRejectedValue(
+        new ApiError('unauthenticated', 'Sign in is required.', 401, 'req_1'),
+      )
 
-    await expect(guardAuth(noopQueryClient, run)).rejects.toSatisfy((error: unknown) => {
-      if (!isRedirect(error)) return false
-      const opts = (error as { options?: { to?: string } }).options
-      return opts?.to === '/sign-in'
-    })
+    await expect(guardAuth(noopQueryClient, run)).rejects.toSatisfy(
+      (error: unknown) => {
+        if (!isRedirect(error)) return false
+        const opts = (error as { options?: { to?: string } }).options
+        return opts?.to === '/sign-in'
+      },
+    )
   })
 
   it('does not report success or run further work after a 401', async () => {
     const after = vi.fn().mockResolvedValue(undefined)
-    const failing = vi.fn().mockRejectedValue(
-      new ApiError('unauthenticated', 'Sign in is required.', 401, 'req_9'),
-    )
+    const failing = vi
+      .fn()
+      .mockRejectedValue(
+        new ApiError('unauthenticated', 'Sign in is required.', 401, 'req_9'),
+      )
 
     await expect(
       guardAuth(noopQueryClient, async () => {
@@ -62,13 +72,15 @@ describe('guardAuth', () => {
     // Simulate an SSR environment where `window` is undefined.
     vi.stubGlobal('window', undefined as unknown as Window)
 
-    const run = vi.fn().mockRejectedValue(
-      new ApiError('unauthenticated', 'Sign in is required.', 401, 'req_2'),
-    )
+    const run = vi
+      .fn()
+      .mockRejectedValue(
+        new ApiError('unauthenticated', 'Sign in is required.', 401, 'req_2'),
+      )
 
     try {
-      await expect(guardAuth(noopQueryClient, run)).rejects.toSatisfy((error: unknown) =>
-        isRedirect(error),
+      await expect(guardAuth(noopQueryClient, run)).rejects.toSatisfy(
+        (error: unknown) => isRedirect(error),
       )
     } finally {
       vi.stubGlobal('window', originalWindow)
@@ -77,9 +89,11 @@ describe('guardAuth', () => {
   })
 
   it('rethrows non-auth errors so the router handles them normally', async () => {
-    const run = vi.fn().mockRejectedValue(
-      new ApiError('matter_not_found', 'Matter not found.', 404, 'req_3'),
-    )
+    const run = vi
+      .fn()
+      .mockRejectedValue(
+        new ApiError('matter_not_found', 'Matter not found.', 404, 'req_3'),
+      )
 
     await expect(guardAuth(noopQueryClient, run)).rejects.toMatchObject({
       code: 'matter_not_found',
@@ -99,11 +113,13 @@ describe('ensureOrganisation', () => {
     const queryClient = new QueryClient()
     queryClient.setQueryData(CURRENT_USER_QUERY_KEY, ORGLESS_ME)
 
-    await expect(ensureOrganisation(queryClient)).rejects.toSatisfy((error: unknown) => {
-      if (!isRedirect(error)) return false
-      const opts = (error as { options?: { to?: string } }).options
-      return opts?.to === '/'
-    })
+    await expect(ensureOrganisation(queryClient)).rejects.toSatisfy(
+      (error: unknown) => {
+        if (!isRedirect(error)) return false
+        const opts = (error as { options?: { to?: string } }).options
+        return opts?.to === '/'
+      },
+    )
   })
 
   it('redirects to /sign-in on a 401 (expired session) instead of surfacing the ApiError', async () => {
@@ -113,17 +129,24 @@ describe('ensureOrganisation', () => {
       new ApiError('unauthenticated', 'Sign in is required.', 401, 'req_4'),
     )
 
-    await expect(ensureOrganisation(queryClient)).rejects.toSatisfy((error: unknown) => {
-      if (!isRedirect(error)) return false
-      const opts = (error as { options?: { to?: string } }).options
-      return opts?.to === '/sign-in'
-    })
+    await expect(ensureOrganisation(queryClient)).rejects.toSatisfy(
+      (error: unknown) => {
+        if (!isRedirect(error)) return false
+        const opts = (error as { options?: { to?: string } }).options
+        return opts?.to === '/sign-in'
+      },
+    )
   })
 
   it('rethrows non-auth errors from the /api/me fetch', async () => {
     const queryClient = new QueryClient()
     vi.spyOn(queryClient, 'ensureQueryData').mockRejectedValueOnce(
-      new ApiError('storage_unavailable', 'The API is unavailable.', 500, 'req_5'),
+      new ApiError(
+        'storage_unavailable',
+        'The API is unavailable.',
+        500,
+        'req_5',
+      ),
     )
 
     await expect(ensureOrganisation(queryClient)).rejects.toMatchObject({
@@ -166,10 +189,12 @@ describe('prefetchHomeData', () => {
       new ApiError('unauthenticated', 'Sign in is required.', 401, 'req_6'),
     )
 
-    await expect(prefetchHomeData(queryClient)).rejects.toSatisfy((error: unknown) => {
-      if (!isRedirect(error)) return false
-      const opts = (error as { options?: { to?: string } }).options
-      return opts?.to === '/sign-in'
-    })
+    await expect(prefetchHomeData(queryClient)).rejects.toSatisfy(
+      (error: unknown) => {
+        if (!isRedirect(error)) return false
+        const opts = (error as { options?: { to?: string } }).options
+        return opts?.to === '/sign-in'
+      },
+    )
   })
 })

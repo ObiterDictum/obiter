@@ -15,12 +15,29 @@ const iconPackRule = {
     'error',
     {
       paths: [
-        { name: '@heroicons/react', message: 'Use @phosphor-icons/react — it is the single icon pack.' },
-        { name: 'lucide-react', message: 'Use @phosphor-icons/react — it is the single icon pack.' },
-        { name: 'react-icons', message: 'Use @phosphor-icons/react — it is the single icon pack.' },
-        { name: '@radix-ui/react-icons', message: 'Use @phosphor-icons/react — it is the single icon pack.' },
+        {
+          name: '@heroicons/react',
+          message: 'Use @phosphor-icons/react — it is the single icon pack.',
+        },
+        {
+          name: 'lucide-react',
+          message: 'Use @phosphor-icons/react — it is the single icon pack.',
+        },
+        {
+          name: 'react-icons',
+          message: 'Use @phosphor-icons/react — it is the single icon pack.',
+        },
+        {
+          name: '@radix-ui/react-icons',
+          message: 'Use @phosphor-icons/react — it is the single icon pack.',
+        },
       ],
-      patterns: ['@heroicons/*', 'lucide-*', 'react-icons/*', '@radix-ui/react-icons*'],
+      patterns: [
+        '@heroicons/*',
+        'lucide-*',
+        'react-icons/*',
+        '@radix-ui/react-icons*',
+      ],
     },
   ],
 }
@@ -42,15 +59,23 @@ const noHexInStylesRule = {
   'no-restricted-syntax': [
     'error',
     {
-      selector: "JSXAttribute[name.name='style'] Literal[value=/^#[0-9a-fA-F]{3,8}$/]",
-      message: 'Do not use raw hex colors in inline styles — use an --obiter-* design token (via a Tailwind utility) instead.',
+      selector:
+        "JSXAttribute[name.name='style'] Literal[value=/^#[0-9a-fA-F]{3,8}$/]",
+      message:
+        'Do not use raw hex colors in inline styles — use an --obiter-* design token (via a Tailwind utility) instead.',
     },
   ],
 }
 
 export default [
   {
-    ignores: ['**/dist/**', '**/node_modules/**', '**/out/**', '**/.output/**', '**/routeTree.gen.ts'],
+    ignores: [
+      '**/dist/**',
+      '**/node_modules/**',
+      '**/out/**',
+      '**/.output/**',
+      '**/routeTree.gen.ts',
+    ],
   },
   {
     files: ['**/*.{ts,tsx,mts,cts}'],

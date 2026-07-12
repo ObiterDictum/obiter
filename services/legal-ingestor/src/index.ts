@@ -1,5 +1,9 @@
 import { legalAuthoritiesSchema } from '@obiter/legal-schema'
-import { createClient, createIndex, indexDocuments } from '@obiter/search-client'
+import {
+  createClient,
+  createIndex,
+  indexDocuments,
+} from '@obiter/search-client'
 import { pathToFileURL } from 'node:url'
 import { readLegalIngestorEnv, type LegalIngestorEnv } from './env'
 import { sampleJudgments } from './fixtures/sample-judgments'
@@ -53,6 +57,9 @@ async function main() {
   }
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   await main()
 }

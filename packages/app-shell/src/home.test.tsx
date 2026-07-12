@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   createMemoryHistory,
@@ -27,7 +33,11 @@ vi.mock('./matters', async (importOriginal) => {
 
 vi.mock('./current-user', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./current-user')>()
-  return { ...actual, useCurrentUser: mocks.useCurrentUser, useCreateOrganisation: mocks.useCreateOrganisation }
+  return {
+    ...actual,
+    useCurrentUser: mocks.useCurrentUser,
+    useCreateOrganisation: mocks.useCreateOrganisation,
+  }
 })
 
 vi.mock('./changelog', async (importOriginal) => {
@@ -39,8 +49,17 @@ vi.mock('./changelog', async (importOriginal) => {
 })
 
 const ME = {
-  user: { id: 'usr_1', email: 'lex@obiter.dev', name: 'Lex Obiter', role: 'owner' as const },
-  organisation: { id: 'org_1', name: 'Obiter Legal', plan: 'private_beta' as const },
+  user: {
+    id: 'usr_1',
+    email: 'lex@obiter.dev',
+    name: 'Lex Obiter',
+    role: 'owner' as const,
+  },
+  organisation: {
+    id: 'org_1',
+    name: 'Obiter Legal',
+    plan: 'private_beta' as const,
+  },
 }
 
 const CHANGELOG = { entries: [], source: 'github_unavailable' }
@@ -133,7 +152,9 @@ describe('HomeRouteView — matters query states', () => {
 
     await waitFor(() => {
       // Error appears in both the Matters card detail and the recent-matters section.
-      expect(screen.getAllByText(/could not be loaded/i).length).toBeGreaterThan(0)
+      expect(
+        screen.getAllByText(/could not be loaded/i).length,
+      ).toBeGreaterThan(0)
     })
     expect(screen.queryByText('Create your first matter workspace.')).toBeNull()
   })
@@ -143,7 +164,9 @@ describe('HomeRouteView — matters query states', () => {
     renderHome()
 
     await waitFor(() => {
-      expect(screen.getByText('Create your first matter workspace.')).toBeTruthy()
+      expect(
+        screen.getByText('Create your first matter workspace.'),
+      ).toBeTruthy()
     })
   })
 
@@ -163,7 +186,12 @@ describe('HomeRouteView — matters query states', () => {
 
 describe('HomeRouteView — organisation-less state', () => {
   const ORGLESS_ME = {
-    user: { id: 'usr_2', email: 'new@obiter.dev', name: 'New User', role: null },
+    user: {
+      id: 'usr_2',
+      email: 'new@obiter.dev',
+      name: 'New User',
+      role: null,
+    },
     organisation: null,
   }
 
@@ -175,7 +203,9 @@ describe('HomeRouteView — organisation-less state', () => {
     await waitFor(() => {
       expect(screen.getByText('Organisation name')).toBeTruthy()
     })
-    expect(await screen.findByRole('button', { name: /create organisation/i })).toBeTruthy()
+    expect(
+      await screen.findByRole('button', { name: /create organisation/i }),
+    ).toBeTruthy()
     // Copy explaining matters/documents live inside an organisation.
     expect(screen.getByText(/live inside an organisation/i)).toBeTruthy()
   })
@@ -197,14 +227,22 @@ describe('HomeRouteView — organisation-less state', () => {
 
 describe('HomeRouteView — create-organisation error handling', () => {
   const ORGLESS_ME = {
-    user: { id: 'usr_2', email: 'new@obiter.dev', name: 'New User', role: null },
+    user: {
+      id: 'usr_2',
+      email: 'new@obiter.dev',
+      name: 'New User',
+      role: null,
+    },
     organisation: null,
   }
 
   function setupCreateOrg(mutateAsync: ReturnType<typeof vi.fn>) {
     mocks.useCurrentUser.mockReturnValue({ data: ORGLESS_ME })
     mocks.useMattersList.mockReturnValue(mattersLoading())
-    mocks.useCreateOrganisation.mockReturnValue({ mutateAsync, isPending: false })
+    mocks.useCreateOrganisation.mockReturnValue({
+      mutateAsync,
+      isPending: false,
+    })
     return renderHome()
   }
 
@@ -215,32 +253,47 @@ describe('HomeRouteView — create-organisation error handling', () => {
   }
 
   it('surfaces a generic error when the API rejects with a non-conflict ApiError', async () => {
-    const mutateAsync = vi.fn().mockRejectedValue(
-      new ApiError('validation_failed', 'Name is too long.', 400, 'req_1'),
-    )
+    const mutateAsync = vi
+      .fn()
+      .mockRejectedValue(
+        new ApiError('validation_failed', 'Name is too long.', 400, 'req_1'),
+      )
     setupCreateOrg(mutateAsync)
 
     await submitWithName('Acme Law')
 
     await waitFor(() => {
-      expect(screen.getByText('Could not create the organisation. Try again.')).toBeTruthy()
+      expect(
+        screen.getByText('Could not create the organisation. Try again.'),
+      ).toBeTruthy()
     })
   })
 
   it('surfaces the distinct conflict message and refetches /api/me on a 409 (stale cache)', async () => {
-    const refetchSpy = vi.spyOn(QueryClient.prototype, 'refetchQueries').mockResolvedValue({
-      refetchPage: undefined as never,
-      errors: [],
-    } as never)
-    const mutateAsync = vi.fn().mockRejectedValue(
-      new ApiError('conflict_detected', 'You already have an organisation.', 409, 'req_2'),
-    )
+    const refetchSpy = vi
+      .spyOn(QueryClient.prototype, 'refetchQueries')
+      .mockResolvedValue({
+        refetchPage: undefined as never,
+        errors: [],
+      } as never)
+    const mutateAsync = vi
+      .fn()
+      .mockRejectedValue(
+        new ApiError(
+          'conflict_detected',
+          'You already have an organisation.',
+          409,
+          'req_2',
+        ),
+      )
     setupCreateOrg(mutateAsync)
 
     await submitWithName('Acme Law')
 
     await waitFor(() => {
-      expect(screen.getByText('You already have an organisation. Refreshing…')).toBeTruthy()
+      expect(
+        screen.getByText('You already have an organisation. Refreshing…'),
+      ).toBeTruthy()
     })
     // The 409 means the cache is stale: /api/me is refetched to reconcile.
     expect(refetchSpy).toHaveBeenCalledWith({ queryKey: ['current-user'] })
@@ -251,18 +304,29 @@ describe('HomeRouteView — create-organisation error handling', () => {
     const refetchSpy = vi
       .spyOn(QueryClient.prototype, 'refetchQueries')
       .mockRejectedValue(new Error('refetch failed'))
-    const mutateAsync = vi.fn().mockRejectedValue(
-      new ApiError('conflict_detected', 'You already have an organisation.', 409, 'req_3'),
-    )
+    const mutateAsync = vi
+      .fn()
+      .mockRejectedValue(
+        new ApiError(
+          'conflict_detected',
+          'You already have an organisation.',
+          409,
+          'req_3',
+        ),
+      )
     setupCreateOrg(mutateAsync)
 
     await submitWithName('Acme Law')
 
     await waitFor(() => {
-      expect(screen.getByText('Could not refresh your account. Reload the page.')).toBeTruthy()
+      expect(
+        screen.getByText('Could not refresh your account. Reload the page.'),
+      ).toBeTruthy()
     })
     // The stuck "Refreshing…" message is gone.
-    expect(screen.queryByText('You already have an organisation. Refreshing…')).toBeNull()
+    expect(
+      screen.queryByText('You already have an organisation. Refreshing…'),
+    ).toBeNull()
     refetchSpy.mockRestore()
   })
 
@@ -273,7 +337,9 @@ describe('HomeRouteView — create-organisation error handling', () => {
     await submitWithName('Acme Law')
 
     await waitFor(() => {
-      expect(screen.getByText('Could not create the organisation. Try again.')).toBeTruthy()
+      expect(
+        screen.getByText('Could not create the organisation. Try again.'),
+      ).toBeTruthy()
     })
   })
 })

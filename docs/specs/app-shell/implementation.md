@@ -27,23 +27,27 @@ The frozen surface this plan delivers is [contract.md](contract.md).
 ## M1 task list
 
 ### 0. Local verification foundation
+
 - [x] Add `infra/docker/compose.yaml`: Postgres 16, user/db/pass `obiter`/`obiter`/`obiter`, port `5432`, plus an `obiter_test` database (for `TEST_DATABASE_URL`). Volumes for persistence.
 - [x] Update `infra/docker/README.md`: verification path is `docker compose up -d`, run migrations, then `pnpm dev:api`.
 - [x] Confirm migrations apply against the compose DB; document the migration command if none is scripted.
 
 ### 1. Design tokens + Tailwind v4
+
 - [x] `packages/ui`: add `tailwindcss` (v4) + `@tailwindcss/vite` (dev), `@base-ui-components/react`, `@phosphor-icons/react`. Add `clsx` (or a tiny local `cn`) + `tailwind-merge`.
 - [x] `packages/ui/src/tokens.css`: full `--obiter-*` set per [contract §2](contract.md) — color, status, the 15 span-category `-bg/-fg` pairs (the full `spanCategorySchema` set including `date` and `secret`; light + dark), spacing, radius, elevation, type. Light default; `[data-theme="dark"]` overrides.
 - [x] Tailwind v4 entry: `packages/ui/src/tailwind.css` with `@import "tailwindcss"; @theme { ... }` mapping tokens to Tailwind's `--color-*`, `--spacing-*`, `--radius-*`, `--font-*`. Verify cross-package content scanning (`@source`) so utility classes authored in `@obiter/ui` compile in the apps.
 - [x] Export `tokens.css` and `tailwind.css` from `@obiter/ui`.
 
 ### 2. `@obiter/ui` primitives
+
 - [x] Implement the 12 primitives in [contract §1](contract.md), each `<300` lines, on Base UI where a primitive exists (Button, Input, Select, Dialog, Tabs, Tooltip, ProgressBar); styled semantic elements where none does (Table). Toast = Base UI-backed `Toaster` + `useToast`.
 - [x] Phosphor only; one global weight convention.
 - [x] Component tests (Vitest + Testing Library): each primitive renders, forwards className, exposes its stable props; focus/keyboard preserved; loading/disabled/invalid states covered.
 - [x] Verify AA contrast for status tones and a representative sample of span pairs in both themes (assert computed contrast in a token test, not eyeballing).
 
 ### 3. Real auth + data helpers (`packages/app-shell`)
+
 - [x] Add `better-auth` client deps to `apps/web` (`createAuthClient` + `magicLink` client plugin); add `@obiter/ui`, keep `@obiter/contracts`; **swap `@heroicons/react` → `@phosphor-icons/react`**.
 - [x] `apiFetch<T>()` + `ApiError` (contract §3.2) in `packages/app-shell/src/api.ts`: `credentials: 'include'`, parse errors through `apiErrorResponseSchema`, throw typed `ApiError`.
 - [x] `useCurrentUser()` + `currentUserQueryOptions()` (contract §3.1): real `GET /api/me` via `apiFetch`.
@@ -52,16 +56,19 @@ The frozen surface this plan delivers is [contract.md](contract.md).
 - [x] Tests: `apiFetch` success path, error-envelope parse for each `ApiErrorCode`, 401 handling; `useCurrentUser` against a stubbed `/api/me`.
 
 ### 4. App frame + page scaffold
+
 - [x] Rebuild `<AppShellLayout>` on tokens + `@obiter/ui`: sidebar (live/planned split from `current-product-scope.md`), top bar, content region, mounted `<Toaster/>`, driven by real `useCurrentUser()`.
 - [x] `<PageScaffold title eyebrow actions>` (contract §5).
 - [x] Responsive behaviour; visible focus ring everywhere; no console warnings.
 - [x] Obiter copy on all user-facing strings (FR6a); `@obiter/*` package/token prefixes stay internal.
 
 ### 5. Document detail layout route
+
 - [x] `apps/web/src/routes/matters/$matterId/documents/$documentId.tsx`: layout route rendering document metadata + redaction-runs region (list + "Create Redaction Run" CTA) + `<Outlet/>` for `redact/$runId` (contract §4). M1 ships the scaffold + outlet; run content is Redact's.
 - [x] Uses `PageScaffold`; loading/empty states via `@obiter/ui`. (M1 can render against a loading/empty state since documents wiring is M2 — the route, its chrome, and its outlet are the M1 deliverable.)
 
 ### 6. Web wiring + icon-pack enforcement
+
 - [x] `apps/web` Vite: add `@tailwindcss/vite`; root CSS imports `@obiter/ui` token/tailwind entry; remove the inline `#000` backgrounds in `__root.tsx`.
 - [x] Sign-in route uses real `useAuth()`; signed-out redirect to `/sign-in`.
 - [x] Add a minimal ESLint flat config with `no-restricted-imports` banning every icon package except `@phosphor-icons/react` (FR5). (If ESLint is not yet set up repo-wide, add the minimal config scoped to this rule.)
@@ -76,6 +83,7 @@ Per [TESTING.md](../../../TESTING.md) and the project rule **"never claim verifi
 - [x] `pnpm lint` — clean; `no-restricted-imports` icon-pack rule enforced.
 
 **Not runnable here (no Docker) — hand-over steps, unverified until run:**
+
 - `docker compose up -d` (infra/docker/compose.yaml) → migrate both DBs → `pnpm dev:api` → `pnpm dev:web`, then manually verify: real sign-in round-trip via better-auth; `/api/me` returns the real user; document-detail route (`/matters/:matterId/documents/:documentId`) renders its scaffold + `<Outlet/>`; light/dark toggle renders with no console errors; sign-out returns to `/sign-in`.
 - `pnpm -r test` is not a clean signal here: `@obiter/api` tests need `TEST_DATABASE_URL` (Postgres). M1 did not touch the API; that suite is out of scope for this pass.
 

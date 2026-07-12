@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { magicLinkEmail, resetPasswordEmail, verificationEmail } from './email-templates'
+import {
+  magicLinkEmail,
+  resetPasswordEmail,
+  verificationEmail,
+} from './email-templates'
 
 const URL = 'https://app.obiter.test/auth/reset?token=abc123'
 

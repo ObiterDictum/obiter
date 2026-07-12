@@ -5,7 +5,11 @@ interface SearchFiltersDialogProps {
   court: string
   dateFrom: string
   dateTo: string
-  onApply: (filters: { court: string; dateFrom: string; dateTo: string }) => void
+  onApply: (filters: {
+    court: string
+    dateFrom: string
+    dateTo: string
+  }) => void
   onClear: () => void
   onClose: () => void
 }
@@ -48,18 +52,27 @@ export function SearchFiltersDialog({
           className="absolute right-4 top-4 inline-flex h-7 w-7 items-center justify-center rounded-md text-muted transition-colors hover:bg-canvas hover:text-ink"
           onClick={closeDialog}
         >
-          <span aria-hidden="true" className="text-lg leading-none">×</span>
+          <span aria-hidden="true" className="text-lg leading-none">
+            ×
+          </span>
         </button>
         <header className="pr-9">
-          <p className="text-xs font-semibold uppercase tracking-wider text-subtle">Search filters</p>
-          <h2 className="mt-1 text-lg font-semibold text-ink" id="search-filter-title">
+          <p className="text-xs font-semibold uppercase tracking-wider text-subtle">
+            Search filters
+          </p>
+          <h2
+            className="mt-1 text-lg font-semibold text-ink"
+            id="search-filter-title"
+          >
             Refine results
           </h2>
         </header>
 
         <div className="grid gap-3.5">
           <fieldset className="flex flex-col gap-2 border-0 p-0">
-            <legend className="text-xs font-semibold uppercase tracking-wide text-muted">Source</legend>
+            <legend className="text-xs font-semibold uppercase tracking-wide text-muted">
+              Source
+            </legend>
             <CourtSelect
               menuOpen={courtMenuOpen}
               onMenuOpenChange={setCourtMenuOpen}
@@ -69,7 +82,9 @@ export function SearchFiltersDialog({
           </fieldset>
 
           <fieldset className="flex flex-col gap-2 border-0 p-0">
-            <legend className="text-xs font-semibold uppercase tracking-wide text-muted">Date decided</legend>
+            <legend className="text-xs font-semibold uppercase tracking-wide text-muted">
+              Date decided
+            </legend>
             <div className="grid grid-cols-2 gap-2.5">
               <label className="flex flex-col gap-1.5 text-xs font-medium text-ink">
                 <span>From</span>
@@ -77,7 +92,9 @@ export function SearchFiltersDialog({
                   className="min-h-[31px] rounded-md border border-line bg-canvas px-2.5 text-xs font-medium text-ink outline-none focus:border-brand"
                   value={draftDateFrom}
                   onChange={(event) => setDraftDateFrom(event.target.value)}
-                  onInput={(event) => setDraftDateFrom(event.currentTarget.value)}
+                  onInput={(event) =>
+                    setDraftDateFrom(event.currentTarget.value)
+                  }
                   name="date-from-filter"
                   type="date"
                 />

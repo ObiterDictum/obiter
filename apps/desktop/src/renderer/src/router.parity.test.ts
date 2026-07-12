@@ -9,7 +9,9 @@ describe('desktop router parity with web shared views', () => {
     const registered = new Set(Object.keys(router.routesByPath))
 
     for (const path of DESKTOP_SHARED_VIEW_PATHS) {
-      expect(registered.has(path), `missing desktop route for ${path}`).toBe(true)
+      expect(registered.has(path), `missing desktop route for ${path}`).toBe(
+        true,
+      )
     }
   })
 

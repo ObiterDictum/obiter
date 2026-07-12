@@ -31,7 +31,13 @@ describe('apiFetch', () => {
   it('throws ApiError with the typed code for a known error envelope', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       mockResponse(
-        { error: { code: 'unauthenticated', message: 'Sign in is required.', requestId: 'req_123' } },
+        {
+          error: {
+            code: 'unauthenticated',
+            message: 'Sign in is required.',
+            requestId: 'req_123',
+          },
+        },
         401,
       ),
     )
@@ -50,7 +56,9 @@ describe('apiFetch', () => {
   })
 
   it('falls back to storage_unavailable for an unparseable error body', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse({ unexpected: true }, 502))
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      mockResponse({ unexpected: true }, 502),
+    )
 
     await expect(apiFetch('/api/matters')).rejects.toMatchObject({
       code: 'storage_unavailable',
@@ -60,7 +68,16 @@ describe('apiFetch', () => {
 
   it('passes a valid-but-unfamiliar error code straight through', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      mockResponse({ error: { code: 'matter_not_found', message: 'Matter not found.', requestId: 'req_456' } }, 404),
+      mockResponse(
+        {
+          error: {
+            code: 'matter_not_found',
+            message: 'Matter not found.',
+            requestId: 'req_456',
+          },
+        },
+        404,
+      ),
     )
 
     await expect(apiFetch('/api/matters/missing')).rejects.toMatchObject({

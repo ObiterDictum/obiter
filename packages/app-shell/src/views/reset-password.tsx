@@ -21,11 +21,16 @@ import { Wordmark } from '../wordmark'
 export function ResetPasswordRouteView() {
   const navigate = useNavigate()
   const { resetPassword } = useAuth()
-  const search = useSearch({ strict: false }) as { token?: string; error?: string }
+  const search = useSearch({ strict: false }) as {
+    token?: string
+    error?: string
+  }
   const token = typeof search.token === 'string' ? search.token : ''
   // No token on the URL means the link was malformed; an explicit error is the
   // legacy pre-validation flag. Both start in the invalid-token state.
-  const [tokenFailed, setTokenFailed] = useState(search.error === 'INVALID_TOKEN' || !token)
+  const [tokenFailed, setTokenFailed] = useState(
+    search.error === 'INVALID_TOKEN' || !token,
+  )
 
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -75,7 +80,9 @@ export function ResetPasswordRouteView() {
     } catch {
       // resetPassword is expected to map errors into { ok: false }; a throw
       // here is a network-level failure — keep the form, surface a message.
-      setError('Could not reset your password. Check your connection and try again.')
+      setError(
+        'Could not reset your password. Check your connection and try again.',
+      )
     } finally {
       setSubmitting(false)
     }
@@ -86,7 +93,9 @@ export function ResetPasswordRouteView() {
       <div className="flex w-full max-w-sm flex-col gap-6">
         <header className="flex flex-col items-center gap-3 text-center">
           <Wordmark className="h-12 w-auto" />
-          <h1 className="text-xl font-semibold tracking-tight">Set a new password</h1>
+          <h1 className="text-xl font-semibold tracking-tight">
+            Set a new password
+          </h1>
         </header>
 
         <Card>
@@ -103,7 +112,11 @@ export function ResetPasswordRouteView() {
               </Link>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+            <form
+              onSubmit={handleSubmit}
+              className="flex flex-col gap-4"
+              noValidate
+            >
               <Input
                 label="New password"
                 type="password"
@@ -138,7 +151,10 @@ export function ResetPasswordRouteView() {
         </Card>
 
         <p className="text-center text-xs text-subtle">
-          <Link to="/sign-in" className="font-medium text-brand hover:text-brand-pressed">
+          <Link
+            to="/sign-in"
+            className="font-medium text-brand hover:text-brand-pressed"
+          >
             Back to sign in
           </Link>
         </p>

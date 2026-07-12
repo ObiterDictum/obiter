@@ -16,20 +16,20 @@ The Redact review UI imports only from `@obiter/ui`, `@obiter/app-shell` public 
 
 Headless behaviour and a11y come from Base UI (`@base-ui-components/react`); `@obiter/ui` owns the visual layer. All components consume the `--obiter-*` tokens (section 2) and never hardcode color/spacing/radius/type values. All accept a `className` override and compose with `cn()`. Icons are Phosphor (`@phosphor-icons/react`) only — enforced by ESLint `no-restricted-imports`.
 
-| Primitive | Export | Stable props |
-|---|---|---|
-| Button | `Button` | `variant: 'primary' \| 'secondary' \| 'ghost' \| 'danger'`, `size: 'sm' \| 'md' \| 'lg'`, `loading?: boolean`, `iconStart?: ReactNode`, `iconEnd?: ReactNode`, plus native `<button>` props |
-| Input | `Input` | `label?: ReactNode`, `helperText?: ReactNode`, `error?: ReactNode`, `invalid?: boolean`, plus native `<input>` props. Label above input, helper/error below (form rule). |
-| Select | `Select` | `options: { value: string; label: string }[]`, `label?: ReactNode`, `placeholder?: string`, `invalid?: boolean`, plus Base UI Select props |
-| Dialog | `Dialog`, `DialogTrigger`, `DialogContent`, `DialogTitle`, `DialogDescription`, `DialogClose` | Compound over Base UI Dialog. `DialogContent` takes `size?: 'sm' \| 'md' \| 'lg'`. |
-| Table | `Table`, `THead`, `TBody`, `TR`, `TH`, `TD` | Styled semantic table elements (no headless lib). `TH` takes `align?: 'start' \| 'end'`. |
-| Tabs | `Tabs`, `TabsList`, `TabsTrigger`, `TabsContent` | Compound over Base UI Tabs. `value`/`defaultValue` controlled. |
-| Badge | `Badge` | `tone: 'neutral' \| 'brand' \| 'info' \| 'success' \| 'warning' \| 'danger'`, children. |
-| Tooltip | `Tooltip`, `TooltipTrigger`, `TooltipContent` | Compound over Base UI Tooltip. |
-| Toast | `Toaster`, `useToast` | `<Toaster />` mounted once in the app frame. `useToast()` returns `toast({ title, description?, tone? })`. `tone: 'info' \| 'success' \| 'warning' \| 'danger'`. Self-contained (aria-live region + per-toast timer), not Base UI's toast manager — Base UI 1.0.0-rc.0 does not export the manager hooks as runtime values. The API is stable; only the internals change if it moves to Base UI later. |
-| EmptyState | `EmptyState` | `title: ReactNode`, `body?: ReactNode`, `icon?: ReactNode`, `action?: ReactNode`. |
-| Skeleton | `Skeleton` | `className?`. Shimmer block; sizing via className. |
-| ProgressBar | `ProgressBar` | `value?: number` (0–100; omit for indeterminate), `label?: ReactNode`, `helperText?: ReactNode`. |
+| Primitive   | Export                                                                                        | Stable props                                                                                                                                                                                                                                                                                                                                                                                           |
+| ----------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Button      | `Button`                                                                                      | `variant: 'primary' \| 'secondary' \| 'ghost' \| 'danger'`, `size: 'sm' \| 'md' \| 'lg'`, `loading?: boolean`, `iconStart?: ReactNode`, `iconEnd?: ReactNode`, plus native `<button>` props                                                                                                                                                                                                            |
+| Input       | `Input`                                                                                       | `label?: ReactNode`, `helperText?: ReactNode`, `error?: ReactNode`, `invalid?: boolean`, plus native `<input>` props. Label above input, helper/error below (form rule).                                                                                                                                                                                                                               |
+| Select      | `Select`                                                                                      | `options: { value: string; label: string }[]`, `label?: ReactNode`, `placeholder?: string`, `invalid?: boolean`, plus Base UI Select props                                                                                                                                                                                                                                                             |
+| Dialog      | `Dialog`, `DialogTrigger`, `DialogContent`, `DialogTitle`, `DialogDescription`, `DialogClose` | Compound over Base UI Dialog. `DialogContent` takes `size?: 'sm' \| 'md' \| 'lg'`.                                                                                                                                                                                                                                                                                                                     |
+| Table       | `Table`, `THead`, `TBody`, `TR`, `TH`, `TD`                                                   | Styled semantic table elements (no headless lib). `TH` takes `align?: 'start' \| 'end'`.                                                                                                                                                                                                                                                                                                               |
+| Tabs        | `Tabs`, `TabsList`, `TabsTrigger`, `TabsContent`                                              | Compound over Base UI Tabs. `value`/`defaultValue` controlled.                                                                                                                                                                                                                                                                                                                                         |
+| Badge       | `Badge`                                                                                       | `tone: 'neutral' \| 'brand' \| 'info' \| 'success' \| 'warning' \| 'danger'`, children.                                                                                                                                                                                                                                                                                                                |
+| Tooltip     | `Tooltip`, `TooltipTrigger`, `TooltipContent`                                                 | Compound over Base UI Tooltip.                                                                                                                                                                                                                                                                                                                                                                         |
+| Toast       | `Toaster`, `useToast`                                                                         | `<Toaster />` mounted once in the app frame. `useToast()` returns `toast({ title, description?, tone? })`. `tone: 'info' \| 'success' \| 'warning' \| 'danger'`. Self-contained (aria-live region + per-toast timer), not Base UI's toast manager — Base UI 1.0.0-rc.0 does not export the manager hooks as runtime values. The API is stable; only the internals change if it moves to Base UI later. |
+| EmptyState  | `EmptyState`                                                                                  | `title: ReactNode`, `body?: ReactNode`, `icon?: ReactNode`, `action?: ReactNode`.                                                                                                                                                                                                                                                                                                                      |
+| Skeleton    | `Skeleton`                                                                                    | `className?`. Shimmer block; sizing via className.                                                                                                                                                                                                                                                                                                                                                     |
+| ProgressBar | `ProgressBar`                                                                                 | `value?: number` (0–100; omit for indeterminate), `label?: ReactNode`, `helperText?: ReactNode`.                                                                                                                                                                                                                                                                                                       |
 
 **Re-exports from `@obiter/ui` index:** the full set above, plus `cn` (the class-merge helper).
 
@@ -51,23 +51,23 @@ One token per span category from `spanCategorySchema` (snake_case → kebab toke
 
 Categories (15 — the full `spanCategorySchema` set; `date` and `secret` were missing from the first draft and are required by PRD 2's FR5 color mapping):
 
-| Span category | Token prefix |
-|---|---|
-| `person_name` | `--obiter-span-person-name` |
-| `email` | `--obiter-span-email` |
-| `phone` | `--obiter-span-phone` |
-| `address` | `--obiter-span-address` |
-| `date` | `--obiter-span-date` |
-| `government_id` | `--obiter-span-government-id` |
-| `secret` | `--obiter-span-secret` |
-| `account_number` | `--obiter-span-account-number` |
-| `passport` | `--obiter-span-passport` |
-| `drivers_license` | `--obiter-span-drivers-license` |
-| `url` | `--obiter-span-url` |
-| `ip_address` | `--obiter-span-ip-address` |
+| Span category        | Token prefix                       |
+| -------------------- | ---------------------------------- |
+| `person_name`        | `--obiter-span-person-name`        |
+| `email`              | `--obiter-span-email`              |
+| `phone`              | `--obiter-span-phone`              |
+| `address`            | `--obiter-span-address`            |
+| `date`               | `--obiter-span-date`               |
+| `government_id`      | `--obiter-span-government-id`      |
+| `secret`             | `--obiter-span-secret`             |
+| `account_number`     | `--obiter-span-account-number`     |
+| `passport`           | `--obiter-span-passport`           |
+| `drivers_license`    | `--obiter-span-drivers-license`    |
+| `url`                | `--obiter-span-url`                |
+| `ip_address`         | `--obiter-span-ip-address`         |
 | `national_insurance` | `--obiter-span-national-insurance` |
-| `case_reference` | `--obiter-span-case-reference` |
-| `organisation_name` | `--obiter-span-organisation-name` |
+| `case_reference`     | `--obiter-span-case-reference`     |
+| `organisation_name`  | `--obiter-span-organisation-name`  |
 
 **Contract guarantees:** every category renders with AA-contrast text over its fill in both themes; adjacent categories are hue-distinguishable; saturation stays restrained (no neon), per the design skills. Exact hues are implementation; the names, the pair convention, and the accessibility contract are frozen.
 
@@ -93,7 +93,7 @@ Backed by the real `GET /api/me`. Unauthenticated → the session/redirect layer
 
 ```ts
 export class ApiError extends Error {
-  readonly code: ApiErrorCode      // from @obiter/contracts apiErrorCodeSchema
+  readonly code: ApiErrorCode // from @obiter/contracts apiErrorCodeSchema
   readonly status: number
   readonly requestId: string
 }
@@ -118,6 +118,7 @@ Sign-in is real, via `createAuthClient({ baseURL })` from `better-auth/client` w
 - **Feature sub-route (owned by Redact PRD 2):** `redact/$runId` nests under the document detail layout route. The shell provides the parent chrome and the outlet; it does not implement the review screen.
 
 In TanStack file-routing terms:
+
 ```
 apps/web/src/routes/matters/$matterId/documents/$documentId.tsx   (layout: chrome + <Outlet/>)
 apps/web/src/routes/matters/$matterId/documents/$documentId/redact/$runId.tsx   (Redact track)
@@ -131,8 +132,8 @@ A layout primitive feature screens compose instead of building their own frame:
 export function PageScaffold(props: {
   title: ReactNode
   eyebrow?: ReactNode
-  actions?: ReactNode      // slot for buttons/links in the header
-  children: ReactNode      // the content region
+  actions?: ReactNode // slot for buttons/links in the header
+  children: ReactNode // the content region
 }): JSX.Element
 ```
 

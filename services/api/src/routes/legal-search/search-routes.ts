@@ -5,7 +5,10 @@ import {
   search,
   type LegalSearchFilters,
 } from '@obiter/search-client'
-import { LegalSourceFamilySchema, LegalSourceTypeSchema } from '@obiter/legal-schema'
+import {
+  LegalSourceFamilySchema,
+  LegalSourceTypeSchema,
+} from '@obiter/legal-schema'
 import type { ApiErrorResponse } from '@obiter/contracts'
 import type { ApiEnv } from '../../env'
 

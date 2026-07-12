@@ -18,7 +18,10 @@ export function changelogQueryOptions() {
     queryFn: async () => {
       const response = await fetch(apiUrl('/api/changelog'))
       if (!response.ok) {
-        return { entries: [], source: 'github_unavailable' } satisfies ChangelogResponse
+        return {
+          entries: [],
+          source: 'github_unavailable',
+        } satisfies ChangelogResponse
       }
       return (await response.json()) as ChangelogResponse
     },

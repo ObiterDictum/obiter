@@ -185,16 +185,33 @@ async function main() {
   const labelSpace = {
     category_version: 'obiter_legal_v1',
     span_class_names: [
-      'O', 'private_person', 'private_address', 'private_email', 'private_phone',
-      'private_date', 'account_number', 'secret', 'private_url',
-      'national_insurance', 'case_reference', 'passport', 'organisation_name',
+      'O',
+      'private_person',
+      'private_address',
+      'private_email',
+      'private_phone',
+      'private_date',
+      'account_number',
+      'secret',
+      'private_url',
+      'national_insurance',
+      'case_reference',
+      'passport',
+      'organisation_name',
     ],
   }
-  const labels = new Set(labelSpace.span_class_names.filter((label) => label !== 'O'))
+  const labels = new Set(
+    labelSpace.span_class_names.filter((label) => label !== 'O'),
+  )
   entries.forEach((entry) => validate(entry, labels))
-  const emitted = new Set(entries.flatMap((entry) => Object.keys(entry.spans).map((key) => key.slice(0, key.indexOf(': ')))))
+  const emitted = new Set(
+    entries.flatMap((entry) =>
+      Object.keys(entry.spans).map((key) => key.slice(0, key.indexOf(': '))),
+    ),
+  )
   for (const label of labels) {
-    if (!emitted.has(label)) throw new Error(`Label-space entry ${label} is never emitted`)
+    if (!emitted.has(label))
+      throw new Error(`Label-space entry ${label} is never emitted`)
   }
   await mkdir(output, { recursive: true })
   const train = entries.filter((_, index) => index % 5 !== 0)

@@ -1,5 +1,8 @@
 import { z } from 'zod'
-import { LegalSourceFamilySchema, LegalSourceTypeSchema } from '@obiter/legal-schema'
+import {
+  LegalSourceFamilySchema,
+  LegalSourceTypeSchema,
+} from '@obiter/legal-schema'
 import { normalizeCourtCode } from './court-utils'
 
 const legalSlugSchema = z
@@ -27,4 +30,7 @@ export const legalFetchRequestSchema = z.object({
 
 export type LegalFetchRequest = z.infer<typeof legalFetchRequestSchema>
 
-export const legalDocumentIdSchema = z.string().trim().regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)
+export const legalDocumentIdSchema = z
+  .string()
+  .trim()
+  .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/)

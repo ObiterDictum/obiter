@@ -53,7 +53,8 @@ export interface CreateMatterInput {
 export const mattersKeys = {
   all: ['matters'] as const,
   lists: () => [...mattersKeys.all, 'list'] as const,
-  detail: (matterId: string) => [...mattersKeys.all, 'detail', matterId] as const,
+  detail: (matterId: string) =>
+    [...mattersKeys.all, 'detail', matterId] as const,
 }
 
 export function mattersListQueryOptions() {
@@ -70,7 +71,9 @@ export function matterQueryOptions(matterId: string) {
   return queryOptions({
     queryKey: mattersKeys.detail(matterId),
     queryFn: async () => {
-      const response = await apiFetch<MatterResponse>(`/api/matters/${matterId}`)
+      const response = await apiFetch<MatterResponse>(
+        `/api/matters/${matterId}`,
+      )
       return response.matter
     },
   })
@@ -82,7 +85,11 @@ export function matterQueryOptions(matterId: string) {
  * without a manual reload) and the new matter is optimistically inserted into
  * the list cache.
  */
-export function useCreateMatter(): UseMutationResult<MatterRecord, Error, CreateMatterInput> {
+export function useCreateMatter(): UseMutationResult<
+  MatterRecord,
+  Error,
+  CreateMatterInput
+> {
   const queryClient = useQueryClient()
 
   return useMutation({

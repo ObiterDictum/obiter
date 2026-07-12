@@ -1,6 +1,9 @@
 import type { Pool, QueryResultRow } from 'pg'
 import { LegalAuthoritySchema, type LegalAuthority } from '@obiter/legal-schema'
-import { rankLegalSearchHitsByExactMatch, type LegalSearchFilters } from '@obiter/search-client'
+import {
+  rankLegalSearchHitsByExactMatch,
+  type LegalSearchFilters,
+} from '@obiter/search-client'
 
 export interface ProviderSourceMetadata {
   documentUri: string
@@ -19,8 +22,14 @@ export interface StoredLegalAuthorityRecord {
 }
 
 export interface LegalAuthoritySourceStore {
-  upsertSummary(summary: LegalAuthority, provider: ProviderSourceMetadata): Promise<void>
-  upsertDocument(document: LegalAuthority, provider: ProviderSourceMetadata): Promise<void>
+  upsertSummary(
+    summary: LegalAuthority,
+    provider: ProviderSourceMetadata,
+  ): Promise<void>
+  upsertDocument(
+    document: LegalAuthority,
+    provider: ProviderSourceMetadata,
+  ): Promise<void>
   get(documentId: string): Promise<StoredLegalAuthorityRecord | null>
   search(query: string, filters: LegalSearchFilters): Promise<LegalAuthority[]>
 }
@@ -33,7 +42,10 @@ export function createInMemoryLegalAuthoritySourceStore(): LegalAuthoritySourceS
   const records = new Map<string, StoredLegalAuthorityRecord>()
 
   return {
-    async upsertSummary(summary: LegalAuthority, provider: ProviderSourceMetadata) {
+    async upsertSummary(
+      summary: LegalAuthority,
+      provider: ProviderSourceMetadata,
+    ) {
       const existing = records.get(summary.id)
       records.set(summary.id, {
         summary,
@@ -44,7 +56,10 @@ export function createInMemoryLegalAuthoritySourceStore(): LegalAuthoritySourceS
         },
       })
     },
-    async upsertDocument(document: LegalAuthority, provider: ProviderSourceMetadata) {
+    async upsertDocument(
+      document: LegalAuthority,
+      provider: ProviderSourceMetadata,
+    ) {
       const existing = records.get(document.id)
       records.set(document.id, {
         summary: existing?.summary ?? toAuthoritySummary(document),
@@ -62,11 +77,17 @@ export function createInMemoryLegalAuthoritySourceStore(): LegalAuthoritySourceS
       const normalizedQuery = normalizeSearchText(query)
       const dateOrderedMatches = Array.from(records.values())
         .map((record) => record.document ?? record.summary)
-        .filter((document) => documentMatchesSearch(document, normalizedQuery, filters))
-        .sort((left, right) => right.dateDecided.localeCompare(left.dateDecided))
+        .filter((document) =>
+          documentMatchesSearch(document, normalizedQuery, filters),
+        )
+        .sort((left, right) =>
+          right.dateDecided.localeCompare(left.dateDecided),
+        )
 
-      return rankLegalSearchHitsByExactMatch(dateOrderedMatches, query)
-        .slice(0, 10)
+      return rankLegalSearchHitsByExactMatch(dateOrderedMatches, query).slice(
+        0,
+        10,
+      )
     },
   }
 }
@@ -77,7 +98,9 @@ interface LegalAuthoritySourceRow extends QueryResultRow {
   provider_json: ProviderSourceMetadata
 }
 
-export function createPostgresLegalAuthoritySourceStore(pool: Pool): LegalAuthoritySourceStore {
+export function createPostgresLegalAuthoritySourceStore(
+  pool: Pool,
+): LegalAuthoritySourceStore {
   return {
     async upsertSummary(summary, provider) {
       await pool.query(
@@ -246,11 +269,15 @@ export function createPostgresLegalAuthoritySourceStore(pool: Pool): LegalAuthor
   }
 }
 
-function toStoredLegalAuthorityRecord(row?: LegalAuthoritySourceRow): StoredLegalAuthorityRecord | null {
+function toStoredLegalAuthorityRecord(
+  row?: LegalAuthoritySourceRow,
+): StoredLegalAuthorityRecord | null {
   if (!row) return null
 
   const summary = LegalAuthoritySchema.parse(row.summary_json)
-  const document = row.document_json ? LegalAuthoritySchema.parse(row.document_json) : undefined
+  const document = row.document_json
+    ? LegalAuthoritySchema.parse(row.document_json)
+    : undefined
 
   return {
     summary,
@@ -305,8 +332,10 @@ function documentMatchesSearch(
   filters: LegalSearchFilters,
 ) {
   if (filters.court && document.court !== filters.court) return false
-  if (filters.jurisdiction && document.jurisdiction !== filters.jurisdiction) return false
-  if (filters.sourceType && document.sourceType !== filters.sourceType) return false
+  if (filters.jurisdiction && document.jurisdiction !== filters.jurisdiction)
+    return false
+  if (filters.sourceType && document.sourceType !== filters.sourceType)
+    return false
   if (filters.dateFrom && document.dateDecided < filters.dateFrom) return false
   if (filters.dateTo && document.dateDecided > filters.dateTo) return false
 

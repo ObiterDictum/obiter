@@ -11,7 +11,7 @@ const searchClientMock = vi.hoisted(() => ({
 
 vi.mock('@obiter/search-client', () => searchClientMock)
 vi.mock('./redaction-detection', () => ({
-  detectRedactionSpans: async (text: string) => ({
+  detectRedactionSpans: async (_text: string) => ({
     spans: [],
     detectorVersion: 'rampart-inference@0.1.3-vendored;mode=model+supplement',
     degraded: false,
@@ -71,27 +71,33 @@ describe('createApiApp', () => {
       },
       handler: async () => new Response(null, { status: 404 }),
     } as unknown as Auth
-    const fetchMock = vi.fn(async () =>
-      new Response(
-        JSON.stringify([
-          {
-            html_url: 'https://github.com/ObiterDictum/obiter/releases/tag/v1',
-            name: 'Initial search release',
-            published_at: '2026-05-22T10:00:00Z',
-            tag_name: 'v1',
-          },
-        ]),
-        { status: 200 },
-      ),
+    const fetchMock = vi.fn(
+      async () =>
+        new Response(
+          JSON.stringify([
+            {
+              html_url:
+                'https://github.com/ObiterDictum/obiter/releases/tag/v1',
+              name: 'Initial search release',
+              published_at: '2026-05-22T10:00:00Z',
+              tag_name: 'v1',
+            },
+          ]),
+          { status: 200 },
+        ),
     )
     vi.stubGlobal('fetch', fetchMock)
-    const app = createApiApp(testEnv, createPool(async () => ({ rows: [] })), {
-      auth,
-    })
+    const app = createApiApp(
+      testEnv,
+      createPool(async () => ({ rows: [] })),
+      {
+        auth,
+      },
+    )
 
     try {
       const response = await app.request('/api/changelog')
-      const body = await response.json() as {
+      const body = (await response.json()) as {
         entries: Array<{ date: string; title: string; url: string }>
         source: string
       }
@@ -123,9 +129,13 @@ describe('createApiApp', () => {
       handler: async () => new Response(null, { status: 404 }),
     } as unknown as Auth
 
-    const app = createApiApp(testEnv, createPool(async () => ({ rows: [] })), {
-      auth,
-    })
+    const app = createApiApp(
+      testEnv,
+      createPool(async () => ({ rows: [] })),
+      {
+        auth,
+      },
+    )
 
     try {
       const response = await app.request('/api/me')
@@ -149,27 +159,43 @@ describe('createApiApp', () => {
       api: { getSession: async () => null },
       handler: async () => new Response(null, { status: 404 }),
     } as unknown as Auth
-    const app = createApiApp(testEnv, createPool(async () => ({ rows: [] })), { auth })
+    const app = createApiApp(
+      testEnv,
+      createPool(async () => ({ rows: [] })),
+      { auth },
+    )
 
     const response = await app.request('/api/me')
 
     expect(response.status).toBe(401)
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'unauthenticated' } })
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'unauthenticated' },
+    })
   })
 
   it('returns the active organisation for a real session at /api/me', async () => {
     const auth = {
       api: {
         getSession: async () => ({
-          user: { id: 'usr_1', email: 'user@example.test', name: 'User', organisationId: 'org_1', role: 'owner' },
+          user: {
+            id: 'usr_1',
+            email: 'user@example.test',
+            name: 'User',
+            organisationId: 'org_1',
+            role: 'owner',
+          },
           session: { id: 'ses_1' },
         }),
       },
       handler: async () => new Response(null, { status: 404 }),
     } as unknown as Auth
-    const app = createApiApp(testEnv, createPool(async () => ({
-      rows: [{ id: 'org_1', name: 'Organisation', plan: 'private_beta' }],
-    })), { auth })
+    const app = createApiApp(
+      testEnv,
+      createPool(async () => ({
+        rows: [{ id: 'org_1', name: 'Organisation', plan: 'private_beta' }],
+      })),
+      { auth },
+    )
 
     const response = await app.request('/api/me')
 
@@ -185,13 +211,23 @@ describe('createApiApp', () => {
     const auth = {
       api: {
         getSession: async () => ({
-          user: { id: 'usr_2', email: 'new@example.test', name: 'New User', organisationId: null, role: null },
+          user: {
+            id: 'usr_2',
+            email: 'new@example.test',
+            name: 'New User',
+            organisationId: null,
+            role: null,
+          },
           session: { id: 'ses_2' },
         }),
       },
       handler: async () => new Response(null, { status: 404 }),
     } as unknown as Auth
-    const app = createApiApp(testEnv, createPool(async () => ({ rows: [] })), { auth })
+    const app = createApiApp(
+      testEnv,
+      createPool(async () => ({ rows: [] })),
+      { auth },
+    )
 
     const response = await app.request('/api/me')
 
@@ -212,7 +248,11 @@ describe('createApiApp', () => {
       },
       handler: async () => new Response(null, { status: 404 }),
     } as unknown as Auth
-    const app = createApiApp(testEnv, createPool(async () => ({ rows: [] })), { auth })
+    const app = createApiApp(
+      testEnv,
+      createPool(async () => ({ rows: [] })),
+      { auth },
+    )
 
     const response = await app.request('/api/matters')
     const body = (await response.json()) as ErrorBody
@@ -237,12 +277,15 @@ describe('createApiApp', () => {
       createConnectedPool(async (...args) => {
         queries.push(args)
         const sql = String(args[0])
-        if (sql === 'begin' || sql === 'commit' || sql === 'rollback') return { rows: [] }
+        if (sql === 'begin' || sql === 'commit' || sql === 'rollback')
+          return { rows: [] }
         if (sql.includes('select "organisationId" from users')) {
           return { rows: [{ organisationId: null }] }
         }
         if (sql.includes('insert into organisations')) {
-          return { rows: [{ id: 'org_new', name: 'Acme Law', plan: 'private_beta' }] }
+          return {
+            rows: [{ id: 'org_new', name: 'Acme Law', plan: 'private_beta' }],
+          }
         }
         return { rows: [] }
       }),
@@ -270,7 +313,13 @@ describe('createApiApp', () => {
     ) as unknown[] | undefined
     expect(auditQuery).toBeTruthy()
     expect(auditQuery?.[1]).toEqual(
-      expect.arrayContaining(['org_new', 'usr_2', 'organisation', 'org_new', 'organisation.create']),
+      expect.arrayContaining([
+        'org_new',
+        'usr_2',
+        'organisation',
+        'org_new',
+        'organisation.create',
+      ]),
     )
   })
 
@@ -318,7 +367,11 @@ describe('createApiApp', () => {
       },
       handler: async () => new Response(null, { status: 404 }),
     } as unknown as Auth
-    const app = createApiApp(testEnv, createPool(async () => ({ rows: [] })), { auth })
+    const app = createApiApp(
+      testEnv,
+      createPool(async () => ({ rows: [] })),
+      { auth },
+    )
 
     const response = await app.request('/api/organisations', {
       method: 'POST',
@@ -344,7 +397,11 @@ describe('createApiApp', () => {
       },
       handler: async () => new Response(null, { status: 404 }),
     } as unknown as Auth
-    const app = createApiApp(testEnv, createPool(async () => ({ rows: [] })), { auth })
+    const app = createApiApp(
+      testEnv,
+      createPool(async () => ({ rows: [] })),
+      { auth },
+    )
 
     const response = await app.request('/api/organisations', {
       method: 'POST',
@@ -365,9 +422,13 @@ describe('createApiApp', () => {
       handler: async () => new Response(null, { status: 404 }),
     } as unknown as Auth
 
-    const app = createApiApp(testEnv, createPool(async () => ({ rows: [] })), {
-      auth,
-    })
+    const app = createApiApp(
+      testEnv,
+      createPool(async () => ({ rows: [] })),
+      {
+        auth,
+      },
+    )
 
     const response = await app.request('/api/health', {
       headers: {
@@ -620,7 +681,15 @@ describe('createApiApp', () => {
     })
 
     expect(response.status).toBe(200)
-    expect(queries.map((args) => String((args as unknown[])[0]).trim().split(/\s+/).slice(0, 3).join(' '))).toEqual([
+    expect(
+      queries.map((args) =>
+        String((args as unknown[])[0])
+          .trim()
+          .split(/\s+/)
+          .slice(0, 3)
+          .join(' '),
+      ),
+    ).toEqual([
       'begin',
       'update matters set',
       'insert into audit_logs',
@@ -628,7 +697,14 @@ describe('createApiApp', () => {
     ])
     expect(queries[2]).toEqual([
       expect.stringContaining('insert into audit_logs'),
-      expect.arrayContaining(['org_1', 'usr_1', 'matter', 'mtr_1', 'matter.restore', '{}']),
+      expect.arrayContaining([
+        'org_1',
+        'usr_1',
+        'matter',
+        'mtr_1',
+        'matter.restore',
+        '{}',
+      ]),
     ])
   })
 
@@ -721,7 +797,13 @@ describe('createApiApp', () => {
     expect(queries).toHaveLength(1)
     expect(queries[0]).toEqual([
       expect.stringContaining('insert into audit_logs'),
-      expect.arrayContaining([null, 'usr_orgless', 'session', 'ses_orgless', 'auth.sign_out']),
+      expect.arrayContaining([
+        null,
+        'usr_orgless',
+        'session',
+        'ses_orgless',
+        'auth.sign_out',
+      ]),
     ])
   })
 
@@ -758,9 +840,13 @@ describe('createApiApp', () => {
       handler: async () => new Response(null, { status: 404 }),
     } as unknown as Auth
 
-    const app = createApiApp(testEnv, createPool(async () => ({ rows: [] })), {
-      auth,
-    })
+    const app = createApiApp(
+      testEnv,
+      createPool(async () => ({ rows: [] })),
+      {
+        auth,
+      },
+    )
 
     const response = await app.request(
       '/api/search?q=Potanina&court=ewhc/admin&jurisdiction=england-and-wales&dateFrom=2024-01-01&dateTo=2024-12-31&sourceType=judgment',
@@ -798,9 +884,13 @@ describe('createApiApp', () => {
       },
       handler: async () => new Response(null, { status: 404 }),
     } as unknown as Auth
-    const app = createApiApp(testEnv, createPool(async () => ({ rows: [] })), {
-      auth,
-    })
+    const app = createApiApp(
+      testEnv,
+      createPool(async () => ({ rows: [] })),
+      {
+        auth,
+      },
+    )
 
     const response = await app.request(
       '/api/search?q=&dateFrom=not-a-date&sourceType=legislation',
@@ -824,9 +914,13 @@ describe('createApiApp', () => {
       },
       handler: async () => new Response(null, { status: 404 }),
     } as unknown as Auth
-    const app = createApiApp(testEnv, createPool(async () => ({ rows: [] })), {
-      auth,
-    })
+    const app = createApiApp(
+      testEnv,
+      createPool(async () => ({ rows: [] })),
+      {
+        auth,
+      },
+    )
     searchClientMock.search.mockClear()
 
     const invalidFilterValues = [
@@ -855,36 +949,92 @@ describe('createApiApp', () => {
     const stored = new Map<string, string>()
     const auth = {
       api: {
-        getSession: async () => ({ user: { id: 'usr_1', organisationId: 'org_1' }, session: { id: 'ses_1' } }),
+        getSession: async () => ({
+          user: { id: 'usr_1', organisationId: 'org_1' },
+          session: { id: 'ses_1' },
+        }),
       },
       handler: async () => new Response(null, { status: 404 }),
     } as unknown as Auth
-    const app = createApiApp(testEnv, createPool(async (query) => {
-      if (typeof query === 'string' && query.includes('insert into redaction_runs')) {
-        return { rows: [{
-          id: 'red_1', organisation_id: 'org_1', matter_id: null, matter_name: null, document_id: null, document_version_id: null,
-          source_filename: 'source.txt', source_text_object_key: 'org/org_1/redaction-runs/red_1/source', status: 'ready_for_review',
-          policy_mode: 'internal_ai_minimisation', spans_json: [], decisions_json: {}, output_artifact_id: null, summary_json: { totalSpans: 0, byCategory: {}, bySource: { rampartModel: 0, rampartDeterministic: 0, ukSupplement: 0 }, byDecision: { accept: 0, reject: 0, override_redact: 0, override_keep: 0, pseudonymise: 0, undecided: 0 }, reviewedCount: 0, unreviewedCount: 0 }, detector_version: null, created_by: 'usr_1', created_at: '2026-01-01T00:00:00.000Z', updated_at: '2026-01-01T00:00:00.000Z',
-        }] }
-      }
-      return { rows: [] }
-    }), {
-      auth,
-      storage: {
-        readText: async (key) => stored.get(key) ?? '',
-        writeText: async (key, text) => { stored.set(key, text) },
-        delete: async (key) => { stored.delete(key) },
+    const app = createApiApp(
+      testEnv,
+      createPool(async (query) => {
+        if (
+          typeof query === 'string' &&
+          query.includes('insert into redaction_runs')
+        ) {
+          return {
+            rows: [
+              {
+                id: 'red_1',
+                organisation_id: 'org_1',
+                matter_id: null,
+                matter_name: null,
+                document_id: null,
+                document_version_id: null,
+                source_filename: 'source.txt',
+                source_text_object_key: 'org/org_1/redaction-runs/red_1/source',
+                status: 'ready_for_review',
+                policy_mode: 'internal_ai_minimisation',
+                spans_json: [],
+                decisions_json: {},
+                output_artifact_id: null,
+                summary_json: {
+                  totalSpans: 0,
+                  byCategory: {},
+                  bySource: {
+                    rampartModel: 0,
+                    rampartDeterministic: 0,
+                    ukSupplement: 0,
+                  },
+                  byDecision: {
+                    accept: 0,
+                    reject: 0,
+                    override_redact: 0,
+                    override_keep: 0,
+                    pseudonymise: 0,
+                    undecided: 0,
+                  },
+                  reviewedCount: 0,
+                  unreviewedCount: 0,
+                },
+                detector_version: null,
+                created_by: 'usr_1',
+                created_at: '2026-01-01T00:00:00.000Z',
+                updated_at: '2026-01-01T00:00:00.000Z',
+              },
+            ],
+          }
+        }
+        return { rows: [] }
+      }),
+      {
+        auth,
+        storage: {
+          readText: async (key) => stored.get(key) ?? '',
+          writeText: async (key, text) => {
+            stored.set(key, text)
+          },
+          delete: async (key) => {
+            stored.delete(key)
+          },
+        },
       },
-    })
+    )
 
     const response = await app.request('/api/redaction-runs', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ filename: 'source.txt', text: 'Synthetic test text.' }),
+      body: JSON.stringify({
+        filename: 'source.txt',
+        text: 'Synthetic test text.',
+      }),
     })
 
     expect(response.status).toBe(201)
-    expect(await response.json()).toMatchObject({ run: { id: 'red_1', sourceFilename: 'source.txt', matterId: null } })
+    expect(await response.json()).toMatchObject({
+      run: { id: 'red_1', sourceFilename: 'source.txt', matterId: null },
+    })
     expect([...stored.values()]).toEqual(['Synthetic test text.'])
   })
 
@@ -895,9 +1045,13 @@ describe('createApiApp', () => {
       },
       handler: async () => new Response(null, { status: 404 }),
     } as unknown as Auth
-    const app = createApiApp(testEnv, createPool(async () => ({ rows: [] })), {
-      auth,
-    })
+    const app = createApiApp(
+      testEnv,
+      createPool(async () => ({ rows: [] })),
+      {
+        auth,
+      },
+    )
 
     const response = await app.request(
       '/api/search?q=section%206&sourceType=legislation_provision&sourceFamily=legislation&legalDomain=human-rights&provider=legislation-gov-uk&topic=Human%20Rights%20Act&asAtDate=2024-01-01&legislationVersion=current',

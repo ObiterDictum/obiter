@@ -50,59 +50,271 @@ const hit = {
 }
 
 const findCaseLawCourtCases = [
-  { requestCourt: 'eat', apiCourt: 'eat', storedCourt: 'eat', citation: '[2024] EAT 1' },
-  { requestCourt: 'uksc', apiCourt: 'uksc', storedCourt: 'uksc', citation: '[2024] UKSC 2' },
-  { requestCourt: 'ukpc', apiCourt: 'ukpc', storedCourt: 'ukpc', citation: '[2024] UKPC 3' },
-  { requestCourt: 'ewca/civ', apiCourt: 'ewca/civ', storedCourt: 'ewca-civ', citation: '[2024] EWCA Civ 4' },
-  { requestCourt: 'ewca/crim', apiCourt: 'ewca/crim', storedCourt: 'ewca-crim', citation: '[2024] EWCA Crim 5' },
-  { requestCourt: 'ewcr', apiCourt: 'ewcr', storedCourt: 'ewcr', citation: '[2024] EWCR 6' },
-  { requestCourt: 'ewhc/admin', apiCourt: 'ewhc/admin', storedCourt: 'ewhc-admin', citation: '[2024] EWHC 7 (Admin)' },
-  { requestCourt: 'ewhc/admlty', apiCourt: 'ewhc/admlty', storedCourt: 'ewhc-admlty', citation: '[2024] EWHC 8 (Admlty)' },
-  { requestCourt: 'ewhc/ch', apiCourt: 'ewhc/ch', storedCourt: 'ewhc-ch', citation: '[2024] EWHC 9 (Ch)' },
-  { requestCourt: 'ewhc/comm', apiCourt: 'ewhc/comm', storedCourt: 'ewhc-comm', citation: '[2024] EWHC 10 (Comm)' },
-  { requestCourt: 'ewhc/fam', apiCourt: 'ewhc/fam', storedCourt: 'ewhc-fam', citation: '[2024] EWHC 11 (Fam)' },
-  { requestCourt: 'ewhc/ipec', apiCourt: 'ewhc/ipec', storedCourt: 'ewhc-ipec', citation: '[2024] EWHC 12 (IPEC)' },
-  { requestCourt: 'ewhc/kb', apiCourt: 'ewhc/kb', storedCourt: 'ewhc-kb', citation: '[2024] EWHC 13 (KB)' },
-  { requestCourt: 'ewhc/mercantile', apiCourt: 'ewhc/mercantile', storedCourt: 'ewhc-mercantile', citation: '[2024] EWHC 14 (Mercantile)' },
-  { requestCourt: 'ewhc/pat', apiCourt: 'ewhc/pat', storedCourt: 'ewhc-pat', citation: '[2024] EWHC 15 (Pat)' },
-  { requestCourt: 'ewhc/scco', apiCourt: 'ewhc/scco', storedCourt: 'ewhc-scco', citation: '[2024] EWHC 16 (SCCO)' },
-  { requestCourt: 'ewhc/tcc', apiCourt: 'ewhc/tcc', storedCourt: 'ewhc-tcc', citation: '[2024] EWHC 17 (TCC)' },
-  { requestCourt: 'ewfc', apiCourt: 'ewfc', storedCourt: 'ewfc', citation: '[2024] EWFC 18' },
-  { requestCourt: 'ewcop', apiCourt: 'ewcop', storedCourt: 'ewcop', citation: '[2024] EWCOP 19' },
-  { requestCourt: 'ewcc', apiCourt: 'ewcc', storedCourt: 'ewcc', citation: '[2024] EWCC 20' },
-  { requestCourt: 'ukiptrib', apiCourt: 'ukiptrib', storedCourt: 'ukiptrib', citation: '[2024] UKIPTrib 21' },
-  { requestCourt: 'siac', apiCourt: 'siac', storedCourt: 'siac', citation: '[2024] SIAC 22' },
-  { requestCourt: 'ukist', apiCourt: 'ukist', storedCourt: 'ukist', citation: '[2024] UKIST 23' },
-  { requestCourt: 'ukut/aac', apiCourt: 'ukut/aac', storedCourt: 'ukut-aac', citation: '[2024] UKUT 24 (AAC)' },
-  { requestCourt: 'ukut/iac', apiCourt: 'ukut/iac', storedCourt: 'ukut-iac', citation: '[2024] UKUT 25 (IAC)' },
-  { requestCourt: 'ukut/lc', apiCourt: 'ukut/lc', storedCourt: 'ukut-lc', citation: '[2024] UKUT 26 (LC)' },
-  { requestCourt: 'ukut/tcc', apiCourt: 'ukut/tcc', storedCourt: 'ukut-tcc', citation: '[2024] UKUT 27 (TCC)' },
-  { requestCourt: 'ukftt/credit', apiCourt: 'ukftt/credit', storedCourt: 'ukftt-credit', citation: '[2024] UKFTT 28 (Credit)' },
-  { requestCourt: 'ukftt/estate', apiCourt: 'ukftt/estate', storedCourt: 'ukftt-estate', citation: '[2024] UKFTT 29 (Estate)' },
-  { requestCourt: 'ukftt/grc', apiCourt: 'ukftt/grc', storedCourt: 'ukftt-grc', citation: '[2024] UKFTT 30 (GRC)' },
-  { requestCourt: 'ukftt/hesc', apiCourt: 'ukftt/hesc', storedCourt: 'ukftt-hesc', citation: '[2024] UKFTT 31 (HESC)' },
-  { requestCourt: 'ukftt/tc', apiCourt: 'ukftt/tc', storedCourt: 'ukftt-tc', citation: '[2024] UKFTT 32 (TC)' },
-  { requestCourt: 'ftt/claims', apiCourt: 'ftt/claims', storedCourt: 'ftt-claims', citation: '[2024] FTT 33 (Claims)' },
-  { requestCourt: 'ftt/pc', apiCourt: 'ftt/pc', storedCourt: 'ftt-pc', citation: '[2024] FTT 34 (PC)' },
-  { requestCourt: 'ftt/phl', apiCourt: 'ftt/phl', storedCourt: 'ftt-phl', citation: '[2024] FTT 35 (PHL)' },
-  { requestCourt: 'ftt/transport', apiCourt: 'ftt/transport', storedCourt: 'ftt-transport', citation: '[2024] FTT 36 (Transport)' },
+  {
+    requestCourt: 'eat',
+    apiCourt: 'eat',
+    storedCourt: 'eat',
+    citation: '[2024] EAT 1',
+  },
+  {
+    requestCourt: 'uksc',
+    apiCourt: 'uksc',
+    storedCourt: 'uksc',
+    citation: '[2024] UKSC 2',
+  },
+  {
+    requestCourt: 'ukpc',
+    apiCourt: 'ukpc',
+    storedCourt: 'ukpc',
+    citation: '[2024] UKPC 3',
+  },
+  {
+    requestCourt: 'ewca/civ',
+    apiCourt: 'ewca/civ',
+    storedCourt: 'ewca-civ',
+    citation: '[2024] EWCA Civ 4',
+  },
+  {
+    requestCourt: 'ewca/crim',
+    apiCourt: 'ewca/crim',
+    storedCourt: 'ewca-crim',
+    citation: '[2024] EWCA Crim 5',
+  },
+  {
+    requestCourt: 'ewcr',
+    apiCourt: 'ewcr',
+    storedCourt: 'ewcr',
+    citation: '[2024] EWCR 6',
+  },
+  {
+    requestCourt: 'ewhc/admin',
+    apiCourt: 'ewhc/admin',
+    storedCourt: 'ewhc-admin',
+    citation: '[2024] EWHC 7 (Admin)',
+  },
+  {
+    requestCourt: 'ewhc/admlty',
+    apiCourt: 'ewhc/admlty',
+    storedCourt: 'ewhc-admlty',
+    citation: '[2024] EWHC 8 (Admlty)',
+  },
+  {
+    requestCourt: 'ewhc/ch',
+    apiCourt: 'ewhc/ch',
+    storedCourt: 'ewhc-ch',
+    citation: '[2024] EWHC 9 (Ch)',
+  },
+  {
+    requestCourt: 'ewhc/comm',
+    apiCourt: 'ewhc/comm',
+    storedCourt: 'ewhc-comm',
+    citation: '[2024] EWHC 10 (Comm)',
+  },
+  {
+    requestCourt: 'ewhc/fam',
+    apiCourt: 'ewhc/fam',
+    storedCourt: 'ewhc-fam',
+    citation: '[2024] EWHC 11 (Fam)',
+  },
+  {
+    requestCourt: 'ewhc/ipec',
+    apiCourt: 'ewhc/ipec',
+    storedCourt: 'ewhc-ipec',
+    citation: '[2024] EWHC 12 (IPEC)',
+  },
+  {
+    requestCourt: 'ewhc/kb',
+    apiCourt: 'ewhc/kb',
+    storedCourt: 'ewhc-kb',
+    citation: '[2024] EWHC 13 (KB)',
+  },
+  {
+    requestCourt: 'ewhc/mercantile',
+    apiCourt: 'ewhc/mercantile',
+    storedCourt: 'ewhc-mercantile',
+    citation: '[2024] EWHC 14 (Mercantile)',
+  },
+  {
+    requestCourt: 'ewhc/pat',
+    apiCourt: 'ewhc/pat',
+    storedCourt: 'ewhc-pat',
+    citation: '[2024] EWHC 15 (Pat)',
+  },
+  {
+    requestCourt: 'ewhc/scco',
+    apiCourt: 'ewhc/scco',
+    storedCourt: 'ewhc-scco',
+    citation: '[2024] EWHC 16 (SCCO)',
+  },
+  {
+    requestCourt: 'ewhc/tcc',
+    apiCourt: 'ewhc/tcc',
+    storedCourt: 'ewhc-tcc',
+    citation: '[2024] EWHC 17 (TCC)',
+  },
+  {
+    requestCourt: 'ewfc',
+    apiCourt: 'ewfc',
+    storedCourt: 'ewfc',
+    citation: '[2024] EWFC 18',
+  },
+  {
+    requestCourt: 'ewcop',
+    apiCourt: 'ewcop',
+    storedCourt: 'ewcop',
+    citation: '[2024] EWCOP 19',
+  },
+  {
+    requestCourt: 'ewcc',
+    apiCourt: 'ewcc',
+    storedCourt: 'ewcc',
+    citation: '[2024] EWCC 20',
+  },
+  {
+    requestCourt: 'ukiptrib',
+    apiCourt: 'ukiptrib',
+    storedCourt: 'ukiptrib',
+    citation: '[2024] UKIPTrib 21',
+  },
+  {
+    requestCourt: 'siac',
+    apiCourt: 'siac',
+    storedCourt: 'siac',
+    citation: '[2024] SIAC 22',
+  },
+  {
+    requestCourt: 'ukist',
+    apiCourt: 'ukist',
+    storedCourt: 'ukist',
+    citation: '[2024] UKIST 23',
+  },
+  {
+    requestCourt: 'ukut/aac',
+    apiCourt: 'ukut/aac',
+    storedCourt: 'ukut-aac',
+    citation: '[2024] UKUT 24 (AAC)',
+  },
+  {
+    requestCourt: 'ukut/iac',
+    apiCourt: 'ukut/iac',
+    storedCourt: 'ukut-iac',
+    citation: '[2024] UKUT 25 (IAC)',
+  },
+  {
+    requestCourt: 'ukut/lc',
+    apiCourt: 'ukut/lc',
+    storedCourt: 'ukut-lc',
+    citation: '[2024] UKUT 26 (LC)',
+  },
+  {
+    requestCourt: 'ukut/tcc',
+    apiCourt: 'ukut/tcc',
+    storedCourt: 'ukut-tcc',
+    citation: '[2024] UKUT 27 (TCC)',
+  },
+  {
+    requestCourt: 'ukftt/credit',
+    apiCourt: 'ukftt/credit',
+    storedCourt: 'ukftt-credit',
+    citation: '[2024] UKFTT 28 (Credit)',
+  },
+  {
+    requestCourt: 'ukftt/estate',
+    apiCourt: 'ukftt/estate',
+    storedCourt: 'ukftt-estate',
+    citation: '[2024] UKFTT 29 (Estate)',
+  },
+  {
+    requestCourt: 'ukftt/grc',
+    apiCourt: 'ukftt/grc',
+    storedCourt: 'ukftt-grc',
+    citation: '[2024] UKFTT 30 (GRC)',
+  },
+  {
+    requestCourt: 'ukftt/hesc',
+    apiCourt: 'ukftt/hesc',
+    storedCourt: 'ukftt-hesc',
+    citation: '[2024] UKFTT 31 (HESC)',
+  },
+  {
+    requestCourt: 'ukftt/tc',
+    apiCourt: 'ukftt/tc',
+    storedCourt: 'ukftt-tc',
+    citation: '[2024] UKFTT 32 (TC)',
+  },
+  {
+    requestCourt: 'ftt/claims',
+    apiCourt: 'ftt/claims',
+    storedCourt: 'ftt-claims',
+    citation: '[2024] FTT 33 (Claims)',
+  },
+  {
+    requestCourt: 'ftt/pc',
+    apiCourt: 'ftt/pc',
+    storedCourt: 'ftt-pc',
+    citation: '[2024] FTT 34 (PC)',
+  },
+  {
+    requestCourt: 'ftt/phl',
+    apiCourt: 'ftt/phl',
+    storedCourt: 'ftt-phl',
+    citation: '[2024] FTT 35 (PHL)',
+  },
+  {
+    requestCourt: 'ftt/transport',
+    apiCourt: 'ftt/transport',
+    storedCourt: 'ftt-transport',
+    citation: '[2024] FTT 36 (Transport)',
+  },
 ] as const
 
 const liveFindCaseLawCourtCases = [
   { court: 'uksc', storedCourt: 'uksc', citation: '[2026] UKSC 15' },
   { court: 'ukpc', storedCourt: 'ukpc', citation: '[2026] UKPC 22' },
-  { court: 'ewca/civ', storedCourt: 'ewca-civ', citation: '[2026] EWCA Civ 659' },
-  { court: 'ewca/crim', storedCourt: 'ewca-crim', citation: '[2026] EWCA Crim 637' },
-  { court: 'ewhc/admin', storedCourt: 'ewhc-admin', citation: '[2026] EWHC 1246 (Admin)' },
-  { court: 'ewhc/ch', storedCourt: 'ewhc-ch', citation: '[2026] EWHC 1182 (Ch)' },
-  { court: 'ewhc/comm', storedCourt: 'ewhc-comm', citation: '[2026] EWHC 1236 (Comm)' },
-  { court: 'ewhc/fam', storedCourt: 'ewhc-fam', citation: '[2026] EWHC 1100 (Fam)' },
-  { court: 'ewhc/kb', storedCourt: 'ewhc-kb', citation: '[2026] EWHC 1245 (KB)' },
+  {
+    court: 'ewca/civ',
+    storedCourt: 'ewca-civ',
+    citation: '[2026] EWCA Civ 659',
+  },
+  {
+    court: 'ewca/crim',
+    storedCourt: 'ewca-crim',
+    citation: '[2026] EWCA Crim 637',
+  },
+  {
+    court: 'ewhc/admin',
+    storedCourt: 'ewhc-admin',
+    citation: '[2026] EWHC 1246 (Admin)',
+  },
+  {
+    court: 'ewhc/ch',
+    storedCourt: 'ewhc-ch',
+    citation: '[2026] EWHC 1182 (Ch)',
+  },
+  {
+    court: 'ewhc/comm',
+    storedCourt: 'ewhc-comm',
+    citation: '[2026] EWHC 1236 (Comm)',
+  },
+  {
+    court: 'ewhc/fam',
+    storedCourt: 'ewhc-fam',
+    citation: '[2026] EWHC 1100 (Fam)',
+  },
+  {
+    court: 'ewhc/kb',
+    storedCourt: 'ewhc-kb',
+    citation: '[2026] EWHC 1245 (KB)',
+  },
   { court: 'ewfc', storedCourt: 'ewfc', citation: '[2026] EWFC 116 (B)' },
   { court: 'ewcop', storedCourt: 'ewcop', citation: '[2026] EWCOP 23 (T3)' },
   { court: 'ewcc', storedCourt: 'ewcc', citation: '[2026] EWCC 29' },
   { court: 'eat', storedCourt: 'eat', citation: '[2026] EAT 74' },
-  { court: 'ukut/iac', storedCourt: 'ukut-iac', citation: '[2026] UKUT 150 (IAC)' },
+  {
+    court: 'ukut/iac',
+    storedCourt: 'ukut-iac',
+    citation: '[2026] UKUT 150 (IAC)',
+  },
 ] as const
 
 beforeEach(() => {
@@ -142,7 +354,9 @@ describe('createLegalSearchProxyRoutes', () => {
     })
 
     expect(response.status).toBe(200)
-    const body = (await response.json()) as { hits: Array<Record<string, unknown>> }
+    const body = (await response.json()) as {
+      hits: Array<Record<string, unknown>>
+    }
     expect(body).toMatchObject({
       cached: true,
       outcome: 'results',
@@ -187,7 +401,11 @@ describe('createLegalSearchProxyRoutes', () => {
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
-      body: JSON.stringify({ query: '', court: 'uksc', foregroundLiveResults: false }),
+      body: JSON.stringify({
+        query: '',
+        court: 'uksc',
+        foregroundLiveResults: false,
+      }),
       headers: { 'content-type': 'application/json' },
     })
 
@@ -539,7 +757,9 @@ describe('createLegalSearchProxyRoutes', () => {
       estimatedTotalHits: 0,
       processingTimeMs: 1,
     })
-    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('network unavailable'))
+    vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(
+      new Error('network unavailable'),
+    )
     const app = createLegalSearchProxyRoutes(env)
 
     const response = await app.request('/api/search/fetch', {
@@ -618,9 +838,9 @@ describe('createLegalSearchProxyRoutes', () => {
     )
 
     expect(documentResponse.status).toBe(200)
-    expect(fetchMock.mock.calls.map((call) => (call[0] as URL).pathname)).toContain(
-      '/ewfc/2026/80',
-    )
+    expect(
+      fetchMock.mock.calls.map((call) => (call[0] as URL).pathname),
+    ).toContain('/ewfc/2026/80')
     expect(await documentResponse.json()).toMatchObject({
       document: {
         id: 'd-f9e1d9a7-b267-4a57-9a63-bf9d6c955de3',
@@ -715,7 +935,9 @@ describe('createLegalSearchProxyRoutes', () => {
       outcome: 'hydration_queued',
       hits: [],
     })
-    await vi.waitFor(() => expect(searchClientMock.indexDocuments).toHaveBeenCalled())
+    await vi.waitFor(() =>
+      expect(searchClientMock.indexDocuments).toHaveBeenCalled(),
+    )
 
     fetchMock.mockClear()
     const secondResponse = await app.request('/api/search/fetch', {
@@ -725,7 +947,9 @@ describe('createLegalSearchProxyRoutes', () => {
     })
 
     expect(secondResponse.status).toBe(200)
-    const secondBody = (await secondResponse.json()) as { hits: Array<Record<string, unknown>> }
+    const secondBody = (await secondResponse.json()) as {
+      hits: Array<Record<string, unknown>>
+    }
     expect(secondBody).toMatchObject({
       cached: true,
       hits: [{ id: 'uksc-2024-3', neutralCitation: '[2024] UKSC 3' }],
@@ -837,10 +1061,10 @@ describe('createLegalSearchProxyRoutes', () => {
 
     expect(results).toMatchObject([{ id: 'uksc-2024-3' }])
     expect(client.query).toHaveBeenCalledWith('begin')
-    expect(client.query).toHaveBeenCalledWith('select set_config($1, $2, true)', [
-      'statement_timeout',
-      '350ms',
-    ])
+    expect(client.query).toHaveBeenCalledWith(
+      'select set_config($1, $2, true)',
+      ['statement_timeout', '350ms'],
+    )
     expect(client.query).toHaveBeenCalledWith('commit')
     expect(client.release).toHaveBeenCalled()
     const searchSql = queries.find((query) =>
@@ -894,7 +1118,9 @@ describe('createLegalSearchProxyRoutes', () => {
   })
 
   it('queues Find Case Law hydration when stored search is slow', async () => {
-    searchClientMock.search.mockImplementationOnce(() => new Promise(() => undefined))
+    searchClientMock.search.mockImplementationOnce(
+      () => new Promise(() => undefined),
+    )
     searchClientMock.indexDocuments.mockResolvedValueOnce({
       indexedCount: 1,
       failedCount: 0,
@@ -942,7 +1168,9 @@ describe('createLegalSearchProxyRoutes', () => {
       estimatedTotalHits: 0,
       processingTimeMs: 1,
     })
-    searchClientMock.indexDocuments.mockRejectedValueOnce(new Error('index write failed'))
+    searchClientMock.indexDocuments.mockRejectedValueOnce(
+      new Error('index write failed'),
+    )
     vi.spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(
         new Response(
@@ -970,7 +1198,9 @@ describe('createLegalSearchProxyRoutes', () => {
       hydrationQueued: true,
       hits: [],
     })
-    await vi.waitFor(() => expect(searchClientMock.indexDocuments).toHaveBeenCalled())
+    await vi.waitFor(() =>
+      expect(searchClientMock.indexDocuments).toHaveBeenCalled(),
+    )
   })
 
   it('rejects unsupported Find Case Law metadata filters before cache or fetch', async () => {
@@ -1023,7 +1253,9 @@ describe('createLegalSearchProxyRoutes', () => {
       estimatedTotalHits: 0,
       processingTimeMs: 1,
     })
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('<feed />'))
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response('<feed />'))
     const app = createLegalSearchProxyRoutes(env)
 
     const response = await app.request('/api/search/fetch', {
@@ -1054,11 +1286,13 @@ describe('createLegalSearchProxyRoutes', () => {
       estimatedTotalHits: 0,
       processingTimeMs: 1,
     })
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
-      new Response(
-        `<feed><entry><title>Tinkler v Esken Ltd</title><link href="https://caselaw.nationalarchives.gov.uk/ewca/civ/2026/659" rel="alternate"/><published>2026-05-22T00:00:00Z</published><tna:identifier slug="ewca/civ/2026/659" type="ukncn">[2026] EWCA Civ 659</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry></feed>`,
-      ),
-    )
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          `<feed><entry><title>Tinkler v Esken Ltd</title><link href="https://caselaw.nationalarchives.gov.uk/ewca/civ/2026/659" rel="alternate"/><published>2026-05-22T00:00:00Z</published><tna:identifier slug="ewca/civ/2026/659" type="ukncn">[2026] EWCA Civ 659</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry></feed>`,
+        ),
+      )
     const app = createLegalSearchProxyRoutes(env)
 
     const response = await app.request('/api/search/fetch', {
@@ -1150,7 +1384,7 @@ describe('createLegalSearchProxyRoutes', () => {
         .spyOn(globalThis, 'fetch')
         .mockResolvedValueOnce(
           new Response(
-          `<feed><entry><title>Find Case Law ${storedCourt} retrieval fixture</title><link href="https://caselaw.nationalarchives.gov.uk${documentUri}" rel="alternate"/><published>2024-02-01T00:00:00Z</published><tna:identifier slug="${apiCourt}/2024/1" type="ukncn">${citation}</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry></feed>`,
+            `<feed><entry><title>Find Case Law ${storedCourt} retrieval fixture</title><link href="https://caselaw.nationalarchives.gov.uk${documentUri}" rel="alternate"/><published>2024-02-01T00:00:00Z</published><tna:identifier slug="${apiCourt}/2024/1" type="ukncn">${citation}</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry></feed>`,
           ),
         )
         .mockResolvedValueOnce(
@@ -1177,14 +1411,21 @@ describe('createLegalSearchProxyRoutes', () => {
       expect(fetchMock).toHaveBeenNthCalledWith(
         1,
         expect.objectContaining({
-          search: expect.stringContaining(`court=${encodeURIComponent(apiCourt)}`),
+          search: expect.stringContaining(
+            `court=${encodeURIComponent(apiCourt)}`,
+          ),
         }),
       )
       await vi.waitFor(() =>
         expect(searchClientMock.indexDocuments).toHaveBeenCalledWith(
           { id: 'meili-client' },
           'legal_authorities',
-          [expect.objectContaining({ neutralCitation: citation, court: storedCourt })],
+          [
+            expect.objectContaining({
+              neutralCitation: citation,
+              court: storedCourt,
+            }),
+          ],
         ),
       )
     },
@@ -1197,11 +1438,13 @@ describe('createLegalSearchProxyRoutes', () => {
       estimatedTotalHits: 0,
       processingTimeMs: 1,
     })
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
-      new Response(
-        `<feed><entry><title>Potanina v Potanin</title><link href="https://caselaw.nationalarchives.gov.uk/uksc/2024/3" rel="alternate"/><published>2024-01-31T00:00:00Z</published><tna:identifier slug="uksc/2024/3" type="ukncn">[2024] UKSC 3</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry></feed>`,
-      ),
-    )
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          `<feed><entry><title>Potanina v Potanin</title><link href="https://caselaw.nationalarchives.gov.uk/uksc/2024/3" rel="alternate"/><published>2024-01-31T00:00:00Z</published><tna:identifier slug="uksc/2024/3" type="ukncn">[2024] UKSC 3</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry></feed>`,
+        ),
+      )
     const app = createLegalSearchProxyRoutes(env)
 
     const response = await app.request('/api/search/fetch', {
@@ -1227,7 +1470,9 @@ describe('createLegalSearchProxyRoutes', () => {
       estimatedTotalHits: 0,
       processingTimeMs: 1,
     })
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('<feed />'))
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response('<feed />'))
     const app = createLegalSearchProxyRoutes(env)
 
     const response = await app.request('/api/search/fetch', {
@@ -1288,7 +1533,10 @@ describe('createLegalSearchProxyRoutes', () => {
     })
 
     expect(response.status).toBe(200)
-    expect(await response.json()).toMatchObject({ hydrationQueued: true, hits: [] })
+    expect(await response.json()).toMatchObject({
+      hydrationQueued: true,
+      hits: [],
+    })
     await vi.waitFor(() =>
       expect(searchClientMock.indexDocuments).toHaveBeenCalledWith(
         { id: 'meili-client' },
@@ -1319,7 +1567,10 @@ describe('createLegalSearchProxyRoutes', () => {
     })
 
     expect(response.status).toBe(200)
-    expect(await response.json()).toMatchObject({ cached: true, indexedCount: 0 })
+    expect(await response.json()).toMatchObject({
+      cached: true,
+      indexedCount: 0,
+    })
     expect(fetchMock).not.toHaveBeenCalled()
     expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
   })
@@ -1402,7 +1653,9 @@ describe('createLegalSearchProxyRoutes', () => {
       hydrationQueued: true,
       hits: [],
     })
-    await vi.waitFor(() => expect(sourceStore.upsertDocument).toHaveBeenCalled())
+    await vi.waitFor(() =>
+      expect(sourceStore.upsertDocument).toHaveBeenCalled(),
+    )
     expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
   })
 
@@ -1418,7 +1671,10 @@ describe('createLegalSearchProxyRoutes', () => {
         `<feed><entry><title>Potanina v Potanin</title><link href="https://caselaw.nationalarchives.gov.uk/uksc/2024/3" rel="alternate"/><published>2024-01-31T00:00:00Z</published><tna:identifier slug="uksc/2024/3" type="ukncn">[2024] UKSC 3</tna:identifier></entry></feed>`,
       ),
     )
-    const app = createLegalSearchProxyRoutes({ ...env, mojFindCaseLawRateLimit: 1 })
+    const app = createLegalSearchProxyRoutes({
+      ...env,
+      mojFindCaseLawRateLimit: 1,
+    })
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -1533,7 +1789,9 @@ describe('createLegalSearchProxyRoutes', () => {
       estimatedTotalHits: 0,
       processingTimeMs: 1,
     })
-    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('', { status: 503 }))
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response('', { status: 503 }),
+    )
     const app = createLegalSearchProxyRoutes(env)
 
     const response = await app.request('/api/search/fetch', {
@@ -1586,7 +1844,9 @@ describe('createLegalSearchProxyRoutes', () => {
     )
     const app = createLegalSearchProxyRoutes(env)
 
-    const response = await app.request('/api/search/documents/ewhc-admin-2026-1246')
+    const response = await app.request(
+      '/api/search/documents/ewhc-admin-2026-1246',
+    )
 
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({
@@ -1621,14 +1881,19 @@ describe('createLegalSearchProxyRoutes', () => {
       failedCount: 0,
       errors: [],
     })
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
-      new Response(
-        `<html><body><h1>Secretary of State for the Home Department v Miah</h1><h2><span>Neutral Citation Number</span>[2026] EWHC 1246 (Admin)</h2><article><div class="judgment-header__date">Date: 22/05/2026</div><p>The court considered the administrative law challenge and the evidence before the Secretary of State.</p></article></body></html>`,
-      ),
-    )
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(
+        async () =>
+          new Response(
+            `<html><body><h1>Secretary of State for the Home Department v Miah</h1><h2><span>Neutral Citation Number</span>[2026] EWHC 1246 (Admin)</h2><article><div class="judgment-header__date">Date: 22/05/2026</div><p>The court considered the administrative law challenge and the evidence before the Secretary of State.</p></article></body></html>`,
+          ),
+      )
     const app = createLegalSearchProxyRoutes(env)
 
-    const firstResponse = await app.request('/api/search/documents/ewhc-admin-2026-1246')
+    const firstResponse = await app.request(
+      '/api/search/documents/ewhc-admin-2026-1246',
+    )
 
     expect(firstResponse.status).toBe(200)
     expect(await firstResponse.json()).toMatchObject({
@@ -1639,7 +1904,9 @@ describe('createLegalSearchProxyRoutes', () => {
     })
 
     fetchMock.mockClear()
-    const secondResponse = await app.request('/api/search/documents/ewhc-admin-2026-1246')
+    const secondResponse = await app.request(
+      '/api/search/documents/ewhc-admin-2026-1246',
+    )
 
     expect(secondResponse.status).toBe(200)
     expect(await secondResponse.json()).toMatchObject({
@@ -1657,7 +1924,9 @@ describe('createLegalSearchProxyRoutes', () => {
     })
 
     expect(searchResponse.status).toBe(200)
-    const searchBody = (await searchResponse.json()) as { hits: Array<Record<string, unknown>> }
+    const searchBody = (await searchResponse.json()) as {
+      hits: Array<Record<string, unknown>>
+    }
     expect(searchBody).toMatchObject({
       cached: true,
       hits: [{ id: 'ewhc-admin-2026-1246' }],
@@ -1687,7 +1956,9 @@ describe('createLegalSearchProxyRoutes', () => {
     )
     const app = createLegalSearchProxyRoutes(env, sourceStore)
 
-    const response = await app.request('/api/search/documents/ewhc-admin-2026-1246')
+    const response = await app.request(
+      '/api/search/documents/ewhc-admin-2026-1246',
+    )
 
     expect(response.status).toBe(503)
     expect(await response.json()).toMatchObject({
@@ -1707,7 +1978,9 @@ describe('createLegalSearchProxyRoutes', () => {
     )
     const app = createLegalSearchProxyRoutes(env)
 
-    const response = await app.request('/api/search/documents/ewhc-admin-2026-1246')
+    const response = await app.request(
+      '/api/search/documents/ewhc-admin-2026-1246',
+    )
 
     expect(response.status).toBe(503)
     expect(await response.json()).toMatchObject({
@@ -1719,10 +1992,14 @@ describe('createLegalSearchProxyRoutes', () => {
 
   it('returns storage unavailable when direct live document fetch has a provider outage', async () => {
     searchClientMock.getDocument.mockRejectedValueOnce(new Error('not found'))
-    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(new Response('', { status: 503 }))
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response('', { status: 503 }),
+    )
     const app = createLegalSearchProxyRoutes(env)
 
-    const response = await app.request('/api/search/documents/ewhc-admin-2026-1246')
+    const response = await app.request(
+      '/api/search/documents/ewhc-admin-2026-1246',
+    )
 
     expect(response.status).toBe(503)
     expect(await response.json()).toMatchObject({
@@ -1776,11 +2053,13 @@ describe('createLegalSearchProxyRoutes', () => {
       failedCount: 0,
       errors: [],
     })
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
-      new Response(
-        `<html><body><h1>NHS Kent v OQD</h1><h2><span>Neutral Citation Number</span>[2026] EWCOP 23 (T3)</h2><article><div class="judgment-header__date">Date: 22/05/2026</div><p>This nested Court of Protection judgment paragraph is long enough to render.</p></article></body></html>`,
-      ),
-    )
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          `<html><body><h1>NHS Kent v OQD</h1><h2><span>Neutral Citation Number</span>[2026] EWCOP 23 (T3)</h2><article><div class="judgment-header__date">Date: 22/05/2026</div><p>This nested Court of Protection judgment paragraph is long enough to render.</p></article></body></html>`,
+        ),
+      )
     const app = createLegalSearchProxyRoutes(env)
 
     const response = await app.request('/api/search/documents/ewcop-t3-2026-23')
@@ -1838,9 +2117,9 @@ describe('createLegalSearchProxyRoutes', () => {
     const response = await app.request(`/api/search/documents/${documentId}`)
 
     expect(response.status).toBe(200)
-    expect(fetchMock.mock.calls.map((call) => (call[0] as URL).pathname)).not.toContain(
-      `/${documentId}`,
-    )
+    expect(
+      fetchMock.mock.calls.map((call) => (call[0] as URL).pathname),
+    ).not.toContain(`/${documentId}`)
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
       expect.objectContaining({ pathname: '/ukftt/grc/2026/754' }),
@@ -1870,7 +2149,9 @@ describe('createLegalSearchProxyRoutes', () => {
     searchClientMock.getDocument.mockRejectedValueOnce(new Error('not found'))
     const app = createLegalSearchProxyRoutes(env)
 
-    const response = await app.request('/api/search/documents/uksc-2024-missing')
+    const response = await app.request(
+      '/api/search/documents/uksc-2024-missing',
+    )
 
     expect(response.status).toBe(404)
     expect(await response.json()).toMatchObject({
@@ -1996,13 +2277,19 @@ describe('Find Case Law parsing', () => {
         dateTo: '2024-01-31',
       }),
     ).toMatchObject([{ neutralCitation: '[2024] UKSC 3' }])
-    expect(parseFindCaseLawAtom(xml, { query: 'Potanina', jurisdiction: 'scotland' })).toEqual([])
+    expect(
+      parseFindCaseLawAtom(xml, {
+        query: 'Potanina',
+        jurisdiction: 'scotland',
+      }),
+    ).toEqual([])
   })
 
   it('extracts all clean judgment paragraphs from noisy HTML', () => {
     const paragraphs = Array.from(
       { length: 90 },
-      (_, index) => `<p>Indexed paragraph ${index + 1} has enough judgment text to be retained.</p>`,
+      (_, index) =>
+        `<p>Indexed paragraph ${index + 1} has enough judgment text to be retained.</p>`,
     ).join('')
 
     const result = parseJudgmentParagraphs(
@@ -2082,7 +2369,9 @@ describe('Find Case Law parsing', () => {
 })
 
 const describeLiveFindCaseLaw =
-  process.env.OBITER_RUN_LIVE_FIND_CASE_LAW_TESTS === '1' ? describe : describe.skip
+  process.env.OBITER_RUN_LIVE_FIND_CASE_LAW_TESTS === '1'
+    ? describe
+    : describe.skip
 
 describeLiveFindCaseLaw('Find Case Law live retrieval', () => {
   it.each(liveFindCaseLawCourtCases)(

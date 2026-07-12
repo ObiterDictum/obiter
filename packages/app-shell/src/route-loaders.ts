@@ -59,7 +59,9 @@ export async function guardAuth(
  * Usage in a route file:
  *   loader: ({ context }) => ensureOrganisation(context.queryClient)
  */
-export async function ensureOrganisation(queryClient: QueryClient): Promise<void> {
+export async function ensureOrganisation(
+  queryClient: QueryClient,
+): Promise<void> {
   let me: MeResponse
   try {
     me = await queryClient.ensureQueryData(currentUserQueryOptions())
@@ -84,7 +86,9 @@ export async function ensureOrganisation(queryClient: QueryClient): Promise<void
  * Shared by the web and desktop Home routes so the org-aware prefetch decision
  * lives in one place.
  */
-export async function prefetchHomeData(queryClient: QueryClient): Promise<void> {
+export async function prefetchHomeData(
+  queryClient: QueryClient,
+): Promise<void> {
   await guardAuth(queryClient, () =>
     Promise.all([
       queryClient.ensureQueryData(currentUserQueryOptions()),

@@ -75,7 +75,11 @@ describe('useFinalizeRun cache updates', () => {
     }
     const response: FinalizeResponse = {
       run: finalized,
-      artifact: { id: 'art_1', objectKey: 'org/x/artifacts/art_1', artifactType: 'redaction_output' },
+      artifact: {
+        id: 'art_1',
+        objectKey: 'org/x/artifacts/art_1',
+        artifactType: 'redaction_output',
+      },
       warnings: { unreviewedSpanIds: [] },
     }
     apiFetch.mockResolvedValueOnce(response)
@@ -94,9 +98,15 @@ describe('useFinalizeRun cache updates', () => {
       expect(client.getQueryData(['redaction-run', 'red_1'])).toEqual(finalized)
     })
 
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['redaction-run', 'red_1'] })
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['redaction-run-output', 'red_1'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['redaction-run', 'red_1'],
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['redaction-run-output', 'red_1'],
+    })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['redaction-runs'] })
-    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['document-redaction-runs'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['document-redaction-runs'],
+    })
   })
 })

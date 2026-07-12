@@ -1,4 +1,7 @@
-import { createCanonicalCasePath, type ApiErrorResponse } from '@obiter/contracts'
+import {
+  createCanonicalCasePath,
+  type ApiErrorResponse,
+} from '@obiter/contracts'
 import type { LegalAuthority } from '@obiter/legal-schema'
 import {
   createJudgmentParagraphEvidenceId,
@@ -8,10 +11,7 @@ import {
 } from '@obiter/search-client'
 
 export type LegalFetchRetrievalPath =
-  | 'stored_exact_lookup'
-  | 'stored_index'
-  | 'stored_source'
-  | 'live_provider'
+  'stored_exact_lookup' | 'stored_index' | 'stored_source' | 'live_provider'
 export type LegalFetchOutcome =
   | 'results'
   | 'no_match'
@@ -77,13 +77,17 @@ export function toFetchResponse(
 export function toSummaryHit(
   hit: LegalSearchHit,
   query = '',
-  options: { retrievalPath?: LegalFetchRetrievalPath; retrievalRank?: number } = {},
+  options: {
+    retrievalPath?: LegalFetchRetrievalPath
+    retrievalRank?: number
+  } = {},
 ): LegalFetchSearchHit {
   const snippets = hit.snippets ?? extractLegalSearchSnippets(hit, query)
   const matchReason = getLegalSearchMatchReason(hit, query, snippets.length > 0)
-  const evidenceIds = snippets.length > 0
-    ? snippets.map((snippet) => snippet.evidenceId)
-    : [createJudgmentParagraphEvidenceId(hit.id, 1)]
+  const evidenceIds =
+    snippets.length > 0
+      ? snippets.map((snippet) => snippet.evidenceId)
+      : [createJudgmentParagraphEvidenceId(hit.id, 1)]
 
   return {
     id: hit.id,
@@ -111,11 +115,16 @@ function getLegalSearchMatchReason(
 ): LegalSearchMatchReason {
   const normalizedQuery = normalizeSearchValue(query)
   if (!normalizedQuery) return 'keyword_match'
-  if (normalizeSearchValue(hit.id) === normalizedQuery) return 'exact_document_id'
-  if (normalizeSearchValue(hit.neutralCitation) === normalizedQuery) return 'exact_neutral_citation'
+  if (normalizeSearchValue(hit.id) === normalizedQuery)
+    return 'exact_document_id'
+  if (normalizeSearchValue(hit.neutralCitation) === normalizedQuery)
+    return 'exact_neutral_citation'
 
   const normalizedTitle = normalizeSearchValue(hit.title)
-  if (normalizedTitle === normalizedQuery || normalizedTitle.includes(normalizedQuery)) {
+  if (
+    normalizedTitle === normalizedQuery ||
+    normalizedTitle.includes(normalizedQuery)
+  ) {
     return 'title_match'
   }
 
@@ -143,7 +152,10 @@ function normalizeSearchValue(value: string | null | undefined) {
   return value?.trim().toLowerCase().replace(/\s+/g, ' ') ?? ''
 }
 
-function inferFetchOutcome(hits: LegalFetchSearchHit[], hydrationQueued: boolean): LegalFetchOutcome {
+function inferFetchOutcome(
+  hits: LegalFetchSearchHit[],
+  hydrationQueued: boolean,
+): LegalFetchOutcome {
   if (hits.length > 0) return 'results'
   if (hydrationQueued) return 'hydration_queued'
   return 'no_match'

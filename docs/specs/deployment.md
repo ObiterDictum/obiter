@@ -14,11 +14,11 @@ Status: planned (July 2026). PostgreSQL 16 already runs on the Hetzner VPS under
 
 Three Dokploy applications on the existing VPS, plus the existing database:
 
-| App | Source | Runtime | Notes |
-|---|---|---|---|
-| `api` | `services/api` Dockerfile | Node 22 | Hono server; serves `/api/*` including all better-auth routes. Runs migrations before start. |
-| `web` | `apps/web` Dockerfile | Node 22 | TanStack Start SSR server. |
-| `postgres` | already deployed | — | Existing Dokploy service; API connects via internal network `DATABASE_URL`. |
+| App        | Source                    | Runtime | Notes                                                                                        |
+| ---------- | ------------------------- | ------- | -------------------------------------------------------------------------------------------- |
+| `api`      | `services/api` Dockerfile | Node 22 | Hono server; serves `/api/*` including all better-auth routes. Runs migrations before start. |
+| `web`      | `apps/web` Dockerfile     | Node 22 | TanStack Start SSR server.                                                                   |
+| `postgres` | already deployed          | —       | Existing Dokploy service; API connects via internal network `DATABASE_URL`.                  |
 
 **Same-domain routing is a hard requirement.** better-auth uses cookie sessions; serving web and API from different origins forces third-party-cookie workarounds that break quietly. Route one domain through Dokploy's Traefik: `/*` → `web`, `/api/*` → `api`. The web app then calls the API with relative URLs and `credentials: 'include'` just works (this matches the contract's `apiFetch` design).
 
@@ -60,8 +60,6 @@ Artifacts shipped:
 **Same-domain routing (Dokploy/Traefik):** deploy the `api` and `web` apps as two Dokploy applications on the same host. Configure the domain with two Traefik rules: `/api/*` → the `api` application (higher priority), `/*` → the `web` application. The web app then calls the API with relative URLs (`apiFetch` already uses `credentials: 'include'`), so better-auth cookie sessions work without third-party-cookie workarounds. This matches the spec's hard requirement above.
 
 **Known follow-up (not in this milestone):** the Satoshi / JetBrains-Mono typefaces currently load from the Fontshare CDN via a `<link>` in `apps/web/src/routes/__root.tsx`. Self-hosting them belongs with a later deployment/CSP hardening pass (an M2 carry-in) — it should land before any production deploy that cares about visitor-IP confidentiality or a strict CSP.
-
-
 
 ### Explicitly deferred
 

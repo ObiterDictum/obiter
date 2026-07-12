@@ -5,7 +5,12 @@
 
 // Data + auth helpers (contract §3)
 export { apiFetch, ApiError } from './api'
-export { authClient, useAuth, type UseAuthReturn, type SignInEmailInput } from './auth'
+export {
+  authClient,
+  useAuth,
+  type UseAuthReturn,
+  type SignInEmailInput,
+} from './auth'
 export {
   currentUserQueryOptions,
   useCurrentUser,
@@ -14,7 +19,11 @@ export {
   type CreateOrganisationResult,
 } from './current-user'
 export { changelogQueryOptions } from './changelog'
-export { guardAuth, ensureOrganisation, prefetchHomeData } from './route-loaders'
+export {
+  guardAuth,
+  ensureOrganisation,
+  prefetchHomeData,
+} from './route-loaders'
 
 // Live-surface data (M2): real matters + documents via TanStack Query.
 export {

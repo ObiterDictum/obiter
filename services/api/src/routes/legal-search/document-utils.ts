@@ -1,20 +1,30 @@
 import type { LegalFetchRequest } from './fetch-schema'
-import { supportedFindCaseLawCourts, toFindCaseLawCourtParam } from './court-utils'
+import {
+  supportedFindCaseLawCourts,
+  toFindCaseLawCourtParam,
+} from './court-utils'
 
 export function readTag(xml: string, tag: string) {
-  return xml.match(new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'))?.[1]
+  return xml.match(
+    new RegExp(`<${tag}\\b[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i'),
+  )?.[1]
 }
 
 export function readAlternateLink(xml: string) {
-  return readLink(xml, (attributes) =>
-    hasLinkRel(attributes, 'alternate') && !readLinkAttribute(attributes, 'type'),
+  return readLink(
+    xml,
+    (attributes) =>
+      hasLinkRel(attributes, 'alternate') &&
+      !readLinkAttribute(attributes, 'type'),
   )
 }
 
 export function readTypedLink(xml: string, type: string) {
-  return readLink(xml, (attributes) =>
-    hasLinkRel(attributes, 'alternate') &&
-    readLinkAttribute(attributes, 'type')?.toLowerCase() === type,
+  return readLink(
+    xml,
+    (attributes) =>
+      hasLinkRel(attributes, 'alternate') &&
+      readLinkAttribute(attributes, 'type')?.toLowerCase() === type,
   )
 }
 
@@ -23,7 +33,9 @@ export function readRelLink(xml: string, rel: string) {
 }
 
 export function readIdentifier(xml: string) {
-  return xml.match(/<tna:identifier\b[^>]*type=["']ukncn["'][^>]*>([\s\S]*?)<\/tna:identifier>/i)?.[1]
+  return xml.match(
+    /<tna:identifier\b[^>]*type=["']ukncn["'][^>]*>([\s\S]*?)<\/tna:identifier>/i,
+  )?.[1]
 }
 
 function readLink(xml: string, predicate: (attributes: string) => boolean) {
@@ -35,9 +47,11 @@ function readLink(xml: string, predicate: (attributes: string) => boolean) {
 }
 
 function hasLinkRel(attributes: string, rel: string) {
-  return readLinkAttribute(attributes, 'rel')
-    ?.split(/\s+/)
-    .some((value) => value.toLowerCase() === rel.toLowerCase()) ?? false
+  return (
+    readLinkAttribute(attributes, 'rel')
+      ?.split(/\s+/)
+      .some((value) => value.toLowerCase() === rel.toLowerCase()) ?? false
+  )
 }
 
 function readLinkAttribute(attributes: string, name: string) {
@@ -55,7 +69,11 @@ export function toDocumentUri(value: string) {
 }
 
 export function documentIdFromUri(uri: string) {
-  return uri.replace(/^\/+/, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').toLowerCase()
+  return uri
+    .replace(/^\/+/, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase()
 }
 
 export function documentUriFromId(documentId: string) {
@@ -72,7 +90,8 @@ export function documentUriFromId(documentId: string) {
   const suffix = documentId.slice(court.length + 1)
   const segments = suffix.split('-').filter(Boolean)
   const yearIndex = segments.findIndex(
-    (segment, index) => /^\d{4}$/.test(segment) && /^\d+$/.test(segments[index + 1] ?? ''),
+    (segment, index) =>
+      /^\d{4}$/.test(segment) && /^\d+$/.test(segments[index + 1] ?? ''),
   )
 
   if (yearIndex === -1) return null
@@ -87,9 +106,11 @@ export function documentUriFromId(documentId: string) {
 }
 
 export function courtFromDocumentId(documentId: string) {
-  return Array.from(supportedFindCaseLawCourts)
-    .sort((left, right) => right.length - left.length)
-    .find((court) => documentId.startsWith(`${court}-`)) ?? null
+  return (
+    Array.from(supportedFindCaseLawCourts)
+      .sort((left, right) => right.length - left.length)
+      .find((court) => documentId.startsWith(`${court}-`)) ?? null
+  )
 }
 
 export function dateFromDocumentId(documentId: string) {
@@ -112,7 +133,11 @@ export function addFindCaseLawDateParams(
   addFindCaseLawDateParam(url, 'to_date', request.dateTo)
 }
 
-function addFindCaseLawDateParam(url: URL, prefix: 'from_date' | 'to_date', value?: string) {
+function addFindCaseLawDateParam(
+  url: URL,
+  prefix: 'from_date' | 'to_date',
+  value?: string,
+) {
   if (!value) return
 
   const [year, month, day] = value.split('-')

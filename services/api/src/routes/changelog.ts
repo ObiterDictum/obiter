@@ -51,7 +51,10 @@ export function createChangelogRoutes() {
     if (releasesResponse.ok) {
       const releases = (await releasesResponse.json()) as GitHubRelease[]
       if (releases.length > 0) {
-        return c.json({ entries: releases.map(releaseEntry), source: 'github_releases' })
+        return c.json({
+          entries: releases.map(releaseEntry),
+          source: 'github_releases',
+        })
       }
     }
 
@@ -65,7 +68,10 @@ export function createChangelogRoutes() {
     }
 
     const commits = (await commitsResponse.json()) as GitHubCommit[]
-    return c.json({ entries: commits.map(commitEntry), source: 'github_commits' })
+    return c.json({
+      entries: commits.map(commitEntry),
+      source: 'github_commits',
+    })
   })
 
   return app

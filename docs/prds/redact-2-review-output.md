@@ -5,6 +5,7 @@
 This phase builds the human review layer on top of Phase 1's detection pipeline. After detection runs and spans are stored, reviewers need to examine every detected span, make a decision (accept, reject, override, or pseudonymise), and produce a final output artifact. This phase delivers the span decisions API, the output generation engine (redacted and pseudonymised modes), the finalize flow, a complete review UI, artifact storage integration, and audit logging for all redaction actions.
 
 After Phase 2 is complete, a user can:
+
 1. Create a redaction run and see its detected spans (built in [Phase 1](redact-1-detection.md))
 2. Review each span in the UI, sorted and filtered by category or source
 3. Submit accept/reject/override/pseudonymise decisions on individual spans
@@ -162,6 +163,7 @@ The artifact references `document_version_id` to trace back to the source docume
 The database schema defines the storage paths — `object_key` on document versions and artifacts, `text_object_key` on document versions — with constraints enforcing the path shape, but no storage wiring exists in the codebase (verified July 2026): document upload records metadata only, no file bytes reach the server, and there is no storage client anywhere in the API.
 
 For this phase, the finalize API needs to:
+
 1. Read extracted text at `document_versions.text_object_key` (written by Phase 1's fallback-text persistence — see [Redact PRD 1](redact-1-detection.md), Open Question 7)
 2. Write the output text at the artifact's `object_key` path
 
@@ -169,8 +171,8 @@ Both go through the `StorageService` abstraction introduced in Phase 1, with loc
 
 ### Concurrency And Atomicity
 
-- **Span decisions**: each decision write MUST be atomic at the database level — a single `UPDATE` using `jsonb_set` on the span's key (or an equivalent transaction with a row lock), never an application-level read-modify-write of the whole `decisions_json` blob. Two reviewers deciding *different* spans concurrently must both persist.
-- **Same-span races**: MVP assumes a single active reviewer per run; concurrent decisions on the *same* span resolve as last-write-wins. Every decision is individually audited (`redaction.span_decision`), so the sequence is reconstructible after the fact.
+- **Span decisions**: each decision write MUST be atomic at the database level — a single `UPDATE` using `jsonb_set` on the span's key (or an equivalent transaction with a row lock), never an application-level read-modify-write of the whole `decisions_json` blob. Two reviewers deciding _different_ spans concurrently must both persist.
+- **Same-span races**: MVP assumes a single active reviewer per run; concurrent decisions on the _same_ span resolve as last-write-wins. Every decision is individually audited (`redaction.span_decision`), so the sequence is reconstructible after the fact.
 - **Finalize**: runs inside one transaction with `SELECT ... FOR UPDATE` on the run row and a status re-check after acquiring the lock (see Finalize flow). Double-finalize is therefore impossible: the second request observes `finalized` and receives `redaction_already_finalized`.
 - **Summary recomputation**: the summary is recomputed from `spans_json` + `decisions_json` inside the same transaction as the mutation that changed them, so it can never be observed out of sync with the decisions it summarises.
 
@@ -202,7 +204,7 @@ Response 404: run not found / not in org scope
 
 Every call writes an audit log entry `redaction.token_map_access` (entity: the run, metadata: `{ tokenCount }`), so re-identification events are individually traceable. For MVP, access requires the same org-scoped authentication as the run itself; restricting it to an elevated role is post-MVP (when roles exist).
 
-**Known limitation — text-keyed consistency:** pseudonym consistency is keyed on the entity *text* within a category, not on entity identity. "Smith" the claimant and "Smith" appearing in a case citation resolve to the same token if both are `person_name` spans. This is acceptable for MVP but MUST be documented in the UI/API docs so evaluators are not surprised; entity-identity resolution is a future concern.
+**Known limitation — text-keyed consistency:** pseudonym consistency is keyed on the entity _text_ within a category, not on entity identity. "Smith" the claimant and "Smith" appearing in a case citation resolve to the same token if both are `person_name` spans. This is acceptable for MVP but MUST be documented in the UI/API docs so evaluators are not surprised; entity-identity resolution is a future concern.
 
 ## Functional Requirements
 
@@ -231,6 +233,7 @@ Errors:
 - 400: invalid decision type, run not in reviewable state
 - 409: run already finalized
 ```
+
 - Decision body is validated against `spanDecisionSchema`
 - `spanId` must exist in the run's `spans_json` array
 - If run status is `ready_for_review` and this is the first decision, auto-transition to `reviewing`
@@ -294,6 +297,7 @@ Errors:
 ```
 
 Finalize flow (all steps inside a single database transaction; step 1 acquires `SELECT ... FOR UPDATE` on the run row so concurrent finalize attempts serialize — the second sees `finalized` and gets `redaction_already_finalized`):
+
 1. Lock the run row and validate it is in `reviewing` or `ready_for_review` status
 2. Load document version's extracted text from `text_object_key` via the storage service
 3. **Integrity check (fail-closed)**: for every span with an output-affecting decision, assert `text.slice(span.start, span.end) === span.text`. On any mismatch, abort the entire finalize with `redaction_span_integrity_error`. No partial output is ever written.
@@ -475,12 +479,12 @@ useFinalizeRun(runId: string): UseMutationResult<
 
 Extend the `AuditRecordInput` action union in `services/api/src/database.ts` with three new actions:
 
-| Action | Description | Entity Type | Metadata |
-|---|---|---|---|
-| `redaction.run_create` | Run created (Phase 1) | `redaction_run` | `{ policyMode, documentVersionId, spanCount }` |
-| `redaction.span_decision` | Decision on a span | `redaction_run` | `{ spanId, decision, category }` |
-| `redaction.finalize` | Run finalized | `redaction_run` | `{ outputMode, artifactId, spanCount, reviewedCount, unreviewedCount }` |
-| `redaction.token_map_access` | Token map read (re-identification event) | `redaction_run` | `{ tokenCount }` |
+| Action                       | Description                              | Entity Type     | Metadata                                                                |
+| ---------------------------- | ---------------------------------------- | --------------- | ----------------------------------------------------------------------- |
+| `redaction.run_create`       | Run created (Phase 1)                    | `redaction_run` | `{ policyMode, documentVersionId, spanCount }`                          |
+| `redaction.span_decision`    | Decision on a span                       | `redaction_run` | `{ spanId, decision, category }`                                        |
+| `redaction.finalize`         | Run finalized                            | `redaction_run` | `{ outputMode, artifactId, spanCount, reviewedCount, unreviewedCount }` |
+| `redaction.token_map_access` | Token map read (re-identification event) | `redaction_run` | `{ tokenCount }`                                                        |
 
 Each audit log entry includes `organisationId`, `userId`, `entityType` (`redaction_run`), `entityId` (run id), `action`, `metadata` (JSON), `requestId`, and `createdAt`.
 
@@ -601,8 +605,8 @@ This already exists from Phase 1; Phase 2 adds the `summary` field if not alread
 
 ## Open Questions
 
-1. **Object storage wiring** — *Resolved (verified July 2026)*: neither. No storage client exists in the API at all; document upload is metadata-only and no file bytes reach the server. Phases 1–2 use the `StorageService` local-filesystem adapter; Phase 3 adds binary upload and the object-storage adapter.
-2. **Document text storage** — *Resolved*: text extraction does not exist before Phase 3. Text is available at `text_object_key` only because Phase 1's `text` fallback persists the submitted text there ([Redact PRD 1](redact-1-detection.md), Open Question 7). Finalize reads that persisted text.
-3. **Token map disclosure** — *Resolved*: the token map is stripped from all standard API responses and served only via the dedicated `GET /api/redaction-runs/:runId/token-map` endpoint, with every read audit-logged as `redaction.token_map_access`. Remaining (post-MVP): should access require an elevated role once role-based access control exists?
+1. **Object storage wiring** — _Resolved (verified July 2026)_: neither. No storage client exists in the API at all; document upload is metadata-only and no file bytes reach the server. Phases 1–2 use the `StorageService` local-filesystem adapter; Phase 3 adds binary upload and the object-storage adapter.
+2. **Document text storage** — _Resolved_: text extraction does not exist before Phase 3. Text is available at `text_object_key` only because Phase 1's `text` fallback persists the submitted text there ([Redact PRD 1](redact-1-detection.md), Open Question 7). Finalize reads that persisted text.
+3. **Token map disclosure** — _Resolved_: the token map is stripped from all standard API responses and served only via the dedicated `GET /api/redaction-runs/:runId/token-map` endpoint, with every read audit-logged as `redaction.token_map_access`. Remaining (post-MVP): should access require an elevated role once role-based access control exists?
 4. **Redacted mode with pseudonymise decisions**: For a run finalized in `redacted` mode, should spans with `pseudonymise` decision be replaced with `[REDACTED]` (current design) or with the pseudonym token? Current design says `[REDACTED]` since the user chose redacted mode.
 5. **Multiple runs on the same document**: Should the UI allow creating multiple redaction runs on the same document? If so, how does a user decide which finalized artifact to use?

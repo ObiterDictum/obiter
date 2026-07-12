@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react'
 import {
   createMemoryHistory,
   createRootRoute,
@@ -56,10 +62,18 @@ describe('ForgotPasswordRouteView — submit failure resets the pending state', 
     fireEvent.submit(emailInput.closest('form')!)
 
     await waitFor(() => {
-      expect(screen.getByText(/Check your connection and try again/)).toBeTruthy()
+      expect(
+        screen.getByText(/Check your connection and try again/),
+      ).toBeTruthy()
     })
     // submitting returned to false: the button is not stuck disabled.
-    expect((screen.getByRole('button', { name: /send reset link/i }) as HTMLButtonElement).disabled).toBe(false)
+    expect(
+      (
+        screen.getByRole('button', {
+          name: /send reset link/i,
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false)
   })
 
   it('reaches the confirmation state on a successful request', async () => {
@@ -77,7 +91,10 @@ describe('ForgotPasswordRouteView — submit failure resets the pending state', 
   })
 
   it('shows the returned message when the request fails with an error result', async () => {
-    mocks.requestPasswordReset.mockResolvedValue({ ok: false, message: 'Rate limited.' })
+    mocks.requestPasswordReset.mockResolvedValue({
+      ok: false,
+      message: 'Rate limited.',
+    })
 
     renderForgot()
 

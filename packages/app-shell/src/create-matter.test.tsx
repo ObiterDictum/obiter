@@ -3,7 +3,12 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { ApiError } from './api'
-import { mattersKeys, mattersListQueryOptions, useCreateMatter, useMattersList } from './matters'
+import {
+  mattersKeys,
+  mattersListQueryOptions,
+  useCreateMatter,
+  useMattersList,
+} from './matters'
 import type { ReactNode } from 'react'
 
 const api = vi.hoisted(() => ({ apiFetch: vi.fn() }))
@@ -61,19 +66,29 @@ describe('useCreateMatter', () => {
 
     expect(api.apiFetch).toHaveBeenCalledWith('/api/matters', {
       method: 'POST',
-      body: JSON.stringify({ name: 'New matter', primaryJurisdiction: 'england_and_wales' }),
+      body: JSON.stringify({
+        name: 'New matter',
+        primaryJurisdiction: 'england_and_wales',
+      }),
     })
 
     // The new matter should be in the detail cache, and the list invalidated.
     await waitFor(() => {
-      expect(client.getQueryData(mattersKeys.detail('mtr_new'))).toMatchObject({ id: 'mtr_new' })
+      expect(client.getQueryData(mattersKeys.detail('mtr_new'))).toMatchObject({
+        id: 'mtr_new',
+      })
     })
   })
 
   it('propagates a validation error from the API', async () => {
     const client = new QueryClient()
     api.apiFetch.mockRejectedValueOnce(
-      new ApiError('validation_failed', 'name and primaryJurisdiction are required.', 400, 'req_3'),
+      new ApiError(
+        'validation_failed',
+        'name and primaryJurisdiction are required.',
+        400,
+        'req_3',
+      ),
     )
 
     const { result } = renderHook(() => useCreateMatter(), {
@@ -91,7 +106,9 @@ describe('useCreateMatter', () => {
 describe('useMattersList — happy path with the real query', () => {
   it('loads matters through the cache-backed query', async () => {
     const client = new QueryClient()
-    api.apiFetch.mockResolvedValueOnce({ matters: [sampleMatter({ id: 'mtr_a' })] })
+    api.apiFetch.mockResolvedValueOnce({
+      matters: [sampleMatter({ id: 'mtr_a' })],
+    })
 
     const { result } = renderHook(() => useMattersList(), {
       wrapper: createWrapper(client),

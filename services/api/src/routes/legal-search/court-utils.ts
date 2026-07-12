@@ -39,7 +39,10 @@ const supportedFindCaseLawCourts = new Set([
 ])
 
 const findCaseLawCourtParamByCourt = new Map<string, string>(
-  Array.from(supportedFindCaseLawCourts, (court) => [court, court.replace(/-/g, '/')] as const),
+  Array.from(
+    supportedFindCaseLawCourts,
+    (court) => [court, court.replace(/-/g, '/')] as const,
+  ),
 )
 const findCaseLawCourtPathAliases = new Map<string, string>([
   ['ukftt/claims', 'ftt-claims'],
@@ -48,7 +51,10 @@ const findCaseLawCourtPathAliases = new Map<string, string>([
   ['ukftt/transport', 'ftt-transport'],
 ])
 const findCaseLawCourtByPath = new Map<string, string>([
-  ...Array.from(findCaseLawCourtParamByCourt, ([court, path]) => [path, court] as const),
+  ...Array.from(
+    findCaseLawCourtParamByCourt,
+    ([court, path]) => [path, court] as const,
+  ),
   ...findCaseLawCourtPathAliases,
 ])
 
@@ -103,14 +109,15 @@ const citationDivisionCourtByBaseCourt = new Map<string, Map<string, string>>([
   ],
 ])
 
-
 function courtFromFindCaseLawPath(uri: string | null) {
   if (!uri) return null
 
   const path = uri.replace(/^\/+/, '').toLowerCase()
   const match = Array.from(findCaseLawCourtByPath)
     .sort((left, right) => right[0].length - left[0].length)
-    .find(([courtPath]) => path === courtPath || path.startsWith(`${courtPath}/`))
+    .find(
+      ([courtPath]) => path === courtPath || path.startsWith(`${courtPath}/`),
+    )
 
   return match?.[1] ?? null
 }
@@ -127,7 +134,9 @@ function courtFromCitation(citation: string) {
   const court = slugifyCourtToken(token)
 
   if (division) {
-    const divisionCourt = citationDivisionCourtByBaseCourt.get(court)?.get(slugifyCourtToken(division))
+    const divisionCourt = citationDivisionCourtByBaseCourt
+      .get(court)
+      ?.get(slugifyCourtToken(division))
     if (divisionCourt) return divisionCourt
   }
 
@@ -135,7 +144,10 @@ function courtFromCitation(citation: string) {
 }
 
 function slugifyCourtToken(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
 }
 
 function normalizeCourtCode(value: string) {
@@ -146,5 +158,11 @@ function toFindCaseLawCourtParam(court: string) {
   return findCaseLawCourtParamByCourt.get(court) ?? court
 }
 
-
-export { findCaseLawJurisdiction, supportedFindCaseLawCourts, courtFromFindCaseLawPath, courtFromCitation, normalizeCourtCode, toFindCaseLawCourtParam }
+export {
+  findCaseLawJurisdiction,
+  supportedFindCaseLawCourts,
+  courtFromFindCaseLawPath,
+  courtFromCitation,
+  normalizeCourtCode,
+  toFindCaseLawCourtParam,
+}

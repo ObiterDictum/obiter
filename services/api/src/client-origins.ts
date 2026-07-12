@@ -9,9 +9,12 @@ export const DEV_DESKTOP_RENDERER_PORT_MAX = 5199
  * `authBaseUrl` is included for CORS; better-auth also trusts its own baseURL.
  */
 export function configuredClientOrigins(env: ApiEnv): string[] {
-  return [env.webOrigin, env.authBaseUrl, env.desktopOrigin, env.marketingOrigin].filter(
-    (origin): origin is string => Boolean(origin),
-  )
+  return [
+    env.webOrigin,
+    env.authBaseUrl,
+    env.desktopOrigin,
+    env.marketingOrigin,
+  ].filter((origin): origin is string => Boolean(origin))
 }
 
 /**
@@ -56,8 +59,7 @@ export function isAllowedClientOrigin(env: ApiEnv, origin: string): boolean {
 }
 
 export type AuthTrustedOrigins =
-  | string[]
-  | ((request?: Request) => string[] | Promise<string[]>)
+  string[] | ((request?: Request) => string[] | Promise<string[]>)
 
 /**
  * better-auth `trustedOrigins`. Static configured clients outside development;

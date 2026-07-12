@@ -28,7 +28,10 @@ vi.mock('@tanstack/react-router', () => ({
     const resolvedHref =
       href ??
       (typeof to === 'string'
-        ? to.replace(/\$([A-Za-z0-9_]+)/g, (_, key: string) => params?.[key] ?? '')
+        ? to.replace(
+            /\$([A-Za-z0-9_]+)/g,
+            (_, key: string) => params?.[key] ?? '',
+          )
         : undefined)
     return (
       <a className={className} href={resolvedHref} {...props}>
@@ -56,7 +59,10 @@ function createDeferredResponse(): DeferredResponse {
   return { promise, resolve }
 }
 
-function createSearchResponse(hits: unknown[] = [], options: { cached?: boolean } = {}) {
+function createSearchResponse(
+  hits: unknown[] = [],
+  options: { cached?: boolean } = {},
+) {
   return {
     ok: true,
     json: async () => ({
@@ -119,7 +125,10 @@ function getSearchInput(container: HTMLElement) {
 
 async function changeSearchInput(input: HTMLInputElement, value: string) {
   await act(async () => {
-    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    const setValue = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    )?.set
     setValue?.call(input, value)
     input.dispatchEvent(new Event('input', { bubbles: true }))
   })
@@ -127,15 +136,20 @@ async function changeSearchInput(input: HTMLInputElement, value: string) {
 
 async function changeInput(input: HTMLInputElement, value: string) {
   await act(async () => {
-    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+    const setValue = Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      'value',
+    )?.set
     setValue?.call(input, value)
     input.dispatchEvent(new Event('input', { bubbles: true }))
   })
 }
 
 async function clickButton(container: HTMLElement, name: string) {
-  const button = [...container.querySelectorAll('button')].find((candidate) =>
-    candidate.textContent?.includes(name) || candidate.getAttribute('aria-label')?.includes(name),
+  const button = [...container.querySelectorAll('button')].find(
+    (candidate) =>
+      candidate.textContent?.includes(name) ||
+      candidate.getAttribute('aria-label')?.includes(name),
   )
   if (!button) throw new Error(`Button not found: ${name}`)
 
@@ -221,7 +235,9 @@ describe('LegalSearchView debounce lifecycle', () => {
     firstSearch.resolve(createSearchResponse())
     await flushMicrotasks()
 
-    expect(container.textContent).not.toContain('No stored legal sources matched "Potanina"')
+    expect(container.textContent).not.toContain(
+      'No stored legal sources matched "Potanina"',
+    )
 
     await act(async () => {
       vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
@@ -237,16 +253,19 @@ describe('LegalSearchView debounce lifecycle', () => {
 
   it('runs a stored-only court browse when a court shortcut has no query', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      createSearchResponse([
-        {
-          id: 'uksc-2024-3',
-          title: 'Potanina v Potanin',
-          neutralCitation: '[2024] UKSC 3',
-          court: 'uksc',
-          dateDecided: '2024-01-31',
-          sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
-        },
-      ], { cached: true }),
+      createSearchResponse(
+        [
+          {
+            id: 'uksc-2024-3',
+            title: 'Potanina v Potanin',
+            neutralCitation: '[2024] UKSC 3',
+            court: 'uksc',
+            dateDecided: '2024-01-31',
+            sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
+          },
+        ],
+        { cached: true },
+      ),
     )
     vi.stubGlobal('fetch', fetchMock)
     const rendered = renderLegalSearchView()
@@ -271,7 +290,9 @@ describe('LegalSearchView debounce lifecycle', () => {
       foregroundLiveResults: false,
       court: 'uksc',
     })
-    expect(container.textContent).toContain('1 recent case for UK Supreme Court')
+    expect(container.textContent).toContain(
+      '1 recent case for UK Supreme Court',
+    )
     expect(container.textContent).toContain('Potanina v Potanin')
   })
 
@@ -292,12 +313,16 @@ describe('LegalSearchView debounce lifecycle', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(container.textContent).toContain('No recent cases found')
-    expect(container.textContent).toContain('No recent stored cases found for UK Supreme Court.')
+    expect(container.textContent).toContain(
+      'No recent stored cases found for UK Supreme Court.',
+    )
     expect(container.textContent).not.toContain('matched ""')
   })
 
   it('runs shortcut searches with a supported court filter', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(createSearchResponse())
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(createSearchResponse())
     vi.stubGlobal('fetch', fetchMock)
     const rendered = renderLegalSearchView()
     root = rendered.root
@@ -321,7 +346,9 @@ describe('LegalSearchView debounce lifecycle', () => {
   })
 
   it('stores successful non-empty searches as recent idle shortcuts', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(createSearchResponse())
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(createSearchResponse())
     vi.stubGlobal('fetch', fetchMock)
     const rendered = renderLegalSearchView()
     root = rendered.root
@@ -340,7 +367,9 @@ describe('LegalSearchView debounce lifecycle', () => {
   })
 
   it('removes one active filter while preserving the others through stored-only browse', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(createSearchResponse())
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(createSearchResponse())
     vi.stubGlobal('fetch', fetchMock)
     const rendered = renderLegalSearchView()
     root = rendered.root
@@ -349,9 +378,14 @@ describe('LegalSearchView debounce lifecycle', () => {
     await clickButton(container, 'UKSC')
     await clickButton(container, 'Filters')
 
-    const dateFromInput = container.querySelector<HTMLInputElement>('input[name="date-from-filter"]')
-    const dateToInput = container.querySelector<HTMLInputElement>('input[name="date-to-filter"]')
-    if (!dateFromInput || !dateToInput) throw new Error('Date filters were not rendered')
+    const dateFromInput = container.querySelector<HTMLInputElement>(
+      'input[name="date-from-filter"]',
+    )
+    const dateToInput = container.querySelector<HTMLInputElement>(
+      'input[name="date-to-filter"]',
+    )
+    if (!dateFromInput || !dateToInput)
+      throw new Error('Date filters were not rendered')
 
     await changeInput(dateFromInput, '2024-01-01')
     await changeInput(dateToInput, '2024-12-31')
@@ -380,9 +414,11 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(container.textContent).toContain('To 2024-12-31')
   })
   it('selects search results with keyboard navigation', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      createSearchResponse(createTwoResultHits(), { cached: true }),
-    )
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        createSearchResponse(createTwoResultHits(), { cached: true }),
+      )
     vi.stubGlobal('fetch', fetchMock)
     const rendered = renderLegalSearchView()
     root = rendered.root
@@ -394,7 +430,11 @@ describe('LegalSearchView debounce lifecycle', () => {
     })
     await flushMicrotasks()
 
-    const resultLinks = () => [...rendered.container.querySelectorAll<HTMLAnchorElement>('a[href^="/case/"]')]
+    const resultLinks = () => [
+      ...rendered.container.querySelectorAll<HTMLAnchorElement>(
+        'a[href^="/case/"]',
+      ),
+    ]
     expect(resultLinks()[0]?.getAttribute('aria-current')).toBe('true')
     expect(resultLinks()[1]?.getAttribute('aria-current')).toBeNull()
 
@@ -410,9 +450,11 @@ describe('LegalSearchView debounce lifecycle', () => {
   })
 
   it('does not treat j and k as result navigation while typing', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      createSearchResponse(createTwoResultHits(), { cached: true }),
-    )
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        createSearchResponse(createTwoResultHits(), { cached: true }),
+      )
     vi.stubGlobal('fetch', fetchMock)
     const rendered = renderLegalSearchView()
     root = rendered.root
@@ -426,15 +468,19 @@ describe('LegalSearchView debounce lifecycle', () => {
     await flushMicrotasks()
     await pressKey('j', input)
 
-    const resultLinks = [...container.querySelectorAll<HTMLAnchorElement>('a[href^="/case/"]')]
+    const resultLinks = [
+      ...container.querySelectorAll<HTMLAnchorElement>('a[href^="/case/"]'),
+    ]
     expect(resultLinks[0]?.getAttribute('aria-current')).toBe('true')
     expect(resultLinks[1]?.getAttribute('aria-current')).toBeNull()
   })
 
   it('does not treat arrow keys as result navigation while typing', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      createSearchResponse(createTwoResultHits(), { cached: true }),
-    )
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        createSearchResponse(createTwoResultHits(), { cached: true }),
+      )
     vi.stubGlobal('fetch', fetchMock)
     const rendered = renderLegalSearchView()
     root = rendered.root
@@ -448,15 +494,19 @@ describe('LegalSearchView debounce lifecycle', () => {
     await flushMicrotasks()
     await pressKey('ArrowDown', input)
 
-    const resultLinks = [...container.querySelectorAll<HTMLAnchorElement>('a[href^="/case/"]')]
+    const resultLinks = [
+      ...container.querySelectorAll<HTMLAnchorElement>('a[href^="/case/"]'),
+    ]
     expect(resultLinks[0]?.getAttribute('aria-current')).toBe('true')
     expect(resultLinks[1]?.getAttribute('aria-current')).toBeNull()
   })
 
   it('does not open the selected result when Enter is pressed in the search input', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      createSearchResponse(createTwoResultHits(), { cached: true }),
-    )
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        createSearchResponse(createTwoResultHits(), { cached: true }),
+      )
     vi.stubGlobal('fetch', fetchMock)
     const rendered = renderLegalSearchView()
     root = rendered.root
@@ -474,9 +524,11 @@ describe('LegalSearchView debounce lifecycle', () => {
   })
 
   it('uses canonical case URLs for result links and keyboard opening', async () => {
-    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(
-      createSearchResponse(createTwoResultHits(), { cached: true }),
-    )
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(
+        createSearchResponse(createTwoResultHits(), { cached: true }),
+      )
     vi.stubGlobal('fetch', fetchMock)
     const rendered = renderLegalSearchView()
     root = rendered.root
@@ -488,8 +540,11 @@ describe('LegalSearchView debounce lifecycle', () => {
     })
     await flushMicrotasks()
 
-    const firstResultLink = container.querySelector<HTMLAnchorElement>('a[href^="/case/"]')
-    expect(firstResultLink?.getAttribute('href')).toBe('/case/potanina-v-potanin-2024-uksc-3')
+    const firstResultLink =
+      container.querySelector<HTMLAnchorElement>('a[href^="/case/"]')
+    expect(firstResultLink?.getAttribute('href')).toBe(
+      '/case/potanina-v-potanin-2024-uksc-3',
+    )
     expect(container.textContent).toContain('Exact citation · stored index')
 
     await pressKey('Enter')
@@ -511,7 +566,9 @@ describe('LegalSearchView debounce lifecycle', () => {
 
     expect(container.textContent).toContain('Keyboard Shortcuts')
     expect(container.textContent).toContain('ArrowDown / j')
-    expect(document.activeElement).toBe(container.querySelector('[tabindex="-1"]'))
+    expect(document.activeElement).toBe(
+      container.querySelector('[tabindex="-1"]'),
+    )
 
     await pressKey('Escape')
 
