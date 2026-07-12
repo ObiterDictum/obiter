@@ -2,7 +2,7 @@
 
 > ## Implementation status (verified against the codebase, July 2026)
 >
-> **Implementation status (July 2026): Rampart inference now ships server-side.** `services/api/src/redaction-detection.ts` runs the vendored `@obiter/rampart-inference` adapter against Obiter's `qarlus/rampart` mirror at a pinned revision, then maps and merges Rampart deterministic/model spans with the UK supplement. Model failures deliberately complete supplement-only and record that degraded detector version; desktop-local inference remains future work.
+> **Implementation status (July 2026): Rampart inference now ships server-side.** `services/api/src/redaction-detection.ts` runs the vendored `@obiter/rampart-inference` adapter against Obiter's `qarlus/rampart` mirror at a pinned revision, then maps and merges Rampart deterministic/model spans with the UK supplement. Model failures deliberately complete with Rampart deterministic heuristics plus the UK supplement (`heuristics+supplement`) and record that degraded detector version; desktop-local inference remains future work.
 >
 > The proposed Effect TS pilot was **never implemented** and `effect` was never installed. The detector ships as plain TypeScript, consistent with the rest of the API. Any future Effect evaluation requires a separate decision.
 
@@ -152,19 +152,19 @@ Redact uses three detection layers in sequence:
 
 Rampart outputs BIO token tags for 17 entity types. These are decoded into contiguous character spans and mapped to Obiter's category set:
 
-| Rampart Label | Obiter Category | Source |
-| --- | --- | --- |
-| `GIVEN_NAME` + `SURNAME` | `person_name` | `rampart_model` |
-| `PHONE` | `phone` | `rampart_model` |
-| `PASSPORT` | `passport` | `rampart_model` |
-| `DRIVERS_LICENSE` | `drivers_license` | `rampart_model` |
-| `DATE` + `DOB` | `date` | `rampart_model` |
-| `BUILDING_NUMBER` + `STREET_NAME` + `SECONDARY_ADDRESS` | `address` | `rampart_model` |
-| `EMAIL` | `email` | `rampart_deterministic` |
-| `URL` | `url` | `rampart_deterministic` |
-| `IP_ADDRESS` | `ip_address` | `rampart_deterministic` |
-| `CREDIT_CARD` + `BANK_ACCOUNT` + `ROUTING_NUMBER` | `account_number` | `rampart_mix` |
-| `SSN` + `GOVERNMENT_ID` + `TAX_ID` | `government_id` | `rampart_mix` |
+| Rampart Label                                           | Obiter Category   | Source                  |
+| ------------------------------------------------------- | ----------------- | ----------------------- |
+| `GIVEN_NAME` + `SURNAME`                                | `person_name`     | `rampart_model`         |
+| `PHONE`                                                 | `phone`           | `rampart_model`         |
+| `PASSPORT`                                              | `passport`        | `rampart_model`         |
+| `DRIVERS_LICENSE`                                       | `drivers_license` | `rampart_model`         |
+| `DATE` + `DOB`                                          | `date`            | `rampart_model`         |
+| `BUILDING_NUMBER` + `STREET_NAME` + `SECONDARY_ADDRESS` | `address`         | `rampart_model`         |
+| `EMAIL`                                                 | `email`           | `rampart_deterministic` |
+| `URL`                                                   | `url`             | `rampart_deterministic` |
+| `IP_ADDRESS`                                            | `ip_address`      | `rampart_deterministic` |
+| `CREDIT_CARD` + `BANK_ACCOUNT` + `ROUTING_NUMBER`       | `account_number`  | `rampart_mix`           |
+| `SSN` + `GOVERNMENT_ID` + `TAX_ID`                      | `government_id`   | `rampart_mix`           |
 
 The label strings in this table are indicative. The exact Rampart label names (including whether dates of birth are emitted as a distinct `DOB` label or folded into `DATE`) MUST be verified against the `@nationaldesignstudio/rampart` package at implementation time, before `rampart-map.ts` is written. The mapping module MUST fail loudly (typed error at load time) on an unrecognised label rather than silently dropping spans.
 
@@ -183,17 +183,17 @@ The mandated pre-implementation spike was executed against `@nationaldesignstudi
 
 The UK supplement catches patterns Rampart does not cover. These are the **currently shipped** detection surface (the model integration is the outstanding track — see the implementation-status banner):
 
-| Obiter Category | Pattern | Anchoring / gating | Example |
-| --- | --- | --- | --- |
-| `national_insurance` | `[A-Z]{2}\d{6}[A-Z]` (with/without spaces) | word-bounded | QQ 12 34 56 C |
-| `case_reference` | firm-specific reference formats | word-bounded | `2024/ABC/123`, `CR-2024-00123` |
-| `organisation_name` | suffix-based: LLP, Ltd, plc, Solicitors, Chambers | suffix-required | Smith & Jones Solicitors LLP |
-| `email` | standard address pattern | word-bounded, TLD required | <jane.smith@example.com> |
-| `phone` | UK `+44` and `0`-prefixed, mobile and geographic | digit-bounded lookarounds (no dates/citations/figures) | `+44 20 7946 0958`, `07700 900482` |
-| `address` (postcode) | UK postcode outward/inward code | word-bounded; too specific to collide with prose | LE4 5AB, SW1A 1AA |
-| `account_number` (GB IBAN) | `GB` + check digits + bank code + 14 digits | well-specified, matched bare | GB29 NWBK 6016 1331 9268 19 |
-| `account_number` (sort code) | `xx-xx-xx` / `xx xx xx` | **context-gated** on "sort code" cue only | 12-34-56 |
-| `account_number` (account no.) | 8 digits | **context-gated** on "account number" / "a/c" cue only | 12345678 |
+| Obiter Category                | Pattern                                           | Anchoring / gating                                     | Example                            |
+| ------------------------------ | ------------------------------------------------- | ------------------------------------------------------ | ---------------------------------- |
+| `national_insurance`           | `[A-Z]{2}\d{6}[A-Z]` (with/without spaces)        | word-bounded                                           | QQ 12 34 56 C                      |
+| `case_reference`               | firm-specific reference formats                   | word-bounded                                           | `2024/ABC/123`, `CR-2024-00123`    |
+| `organisation_name`            | suffix-based: LLP, Ltd, plc, Solicitors, Chambers | suffix-required                                        | Smith & Jones Solicitors LLP       |
+| `email`                        | standard address pattern                          | word-bounded, TLD required                             | <jane.smith@example.com>           |
+| `phone`                        | UK `+44` and `0`-prefixed, mobile and geographic  | digit-bounded lookarounds (no dates/citations/figures) | `+44 20 7946 0958`, `07700 900482` |
+| `address` (postcode)           | UK postcode outward/inward code                   | word-bounded; too specific to collide with prose       | LE4 5AB, SW1A 1AA                  |
+| `account_number` (GB IBAN)     | `GB` + check digits + bank code + 14 digits       | well-specified, matched bare                           | GB29 NWBK 6016 1331 9268 19        |
+| `account_number` (sort code)   | `xx-xx-xx` / `xx xx xx`                           | **context-gated** on "sort code" cue only              | 12-34-56                           |
+| `account_number` (account no.) | 8 digits                                          | **context-gated** on "account number" / "a/c" cue only | 12345678                           |
 
 Precision is weighted over recall: a false positive erodes reviewer trust more than a miss. The bare-digit bank patterns are deliberately gated — without a nearby cue, a 6- or 8-digit run is too ambiguous in legal text (dates, page numbers, damages figures). Confidence levels: email/postcode/IBAN and NI are `high`; phone and context-gated bank details are `medium`; organisation names are `low`.
 
@@ -417,29 +417,29 @@ Phase 1 is complete when all of the following are true:
 
 ## Metrics
 
-| Metric | Target | How Measured |
-| --- | --- | --- |
-| Rampart inference latency (per chunk) | < 50 ms | Detection module logs: `inference_time_ms` |
-| Detection latency (per 10K chars) | < 2 seconds | API request duration excluding DB writes |
-| Model cold-start load time | < 5 seconds | Time from first `createGuard()` call to guard ready |
-| UK supplement recall | 100% on known-format NI/case-ref test set | Unit tests with fixture data |
-| Merge deduplication correctness | 100% overlap test cases pass | Unit tests with overlapping/non-overlapping fixtures |
-| Chunk offset reassembly correctness | 100% chunked test cases pass | Unit tests with multi-chunk documents |
-| Create-run success rate | > 95% of requests | API response status codes |
-| Run status correctness | 100% of runs follow status state machine | Integration tests for each transition path |
-| Existing test pass rate | 100% | CI pipeline |
+| Metric                                | Target                                    | How Measured                                         |
+| ------------------------------------- | ----------------------------------------- | ---------------------------------------------------- |
+| Rampart inference latency (per chunk) | < 50 ms                                   | Detection module logs: `inference_time_ms`           |
+| Detection latency (per 10K chars)     | < 2 seconds                               | API request duration excluding DB writes             |
+| Model cold-start load time            | < 5 seconds                               | Time from first `createGuard()` call to guard ready  |
+| UK supplement recall                  | 100% on known-format NI/case-ref test set | Unit tests with fixture data                         |
+| Merge deduplication correctness       | 100% overlap test cases pass              | Unit tests with overlapping/non-overlapping fixtures |
+| Chunk offset reassembly correctness   | 100% chunked test cases pass              | Unit tests with multi-chunk documents                |
+| Create-run success rate               | > 95% of requests                         | API response status codes                            |
+| Run status correctness                | 100% of runs follow status state machine  | Integration tests for each transition path           |
+| Existing test pass rate               | 100%                                      | CI pipeline                                          |
 
 ## Risks
 
-| Risk | Likelihood | Impact | Mitigation |
-| --- | --- | --- | --- |
-| Rampart model produces high false-positive rate on legal text (e.g. flags "Smith" as person when it is part of a case citation) | Medium | Low-Medium | Token-level context window and bidirectional understanding are designed to reduce this. False positives are visible as spans that reviewers can reject. Fine-tuning (post-MVP) will improve accuracy for legal text. |
-| First request after API restart is slow (model download + initialization) | High | Low | 14.7 MB downloads in 1-2 seconds. Warm the guard on API startup. Document the behaviour. |
-| Chunking edge cases (spans split across chunk boundaries) | Medium | Medium | Overlap chunks by 50 tokens on each side. Deduplicate spans in overlap region. Test with documents at chunk boundaries. |
-| Rampart 512-token limit truncates long paragraphs | Low | Medium | Chunking handles this. Document the chunking strategy. Test with very long legal documents. |
-| UK supplement regex patterns match false positives (e.g. a random 9-digit number that is not a passport) | Medium | Low | Regex patterns are deliberately conservative. NI pattern requires the two-letter prefix. Case reference patterns match known firm formats. Matches appear as `low` confidence suggestions. Reviewers can reject. |
-| Migration conflicts with future migrations | Low | Low | The migration uses `create table if not exists`. The filename `0005_redaction.sql` follows the existing numbering convention. |
-| Effect pilot underdelivers (idiom violations, review drag) | Medium | Low | Contained behind the promise facade by construction; unwind is a one-module rewrite in plain TS with no API, contract, or schedule contagion. Exit criteria and decision gate defined in the Effect TS Pilot section. |
+| Risk                                                                                                                            | Likelihood | Impact     | Mitigation                                                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------------------------- | ---------- | ---------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rampart model produces high false-positive rate on legal text (e.g. flags "Smith" as person when it is part of a case citation) | Medium     | Low-Medium | Token-level context window and bidirectional understanding are designed to reduce this. False positives are visible as spans that reviewers can reject. Fine-tuning (post-MVP) will improve accuracy for legal text.  |
+| First request after API restart is slow (model download + initialization)                                                       | High       | Low        | 14.7 MB downloads in 1-2 seconds. Warm the guard on API startup. Document the behaviour.                                                                                                                              |
+| Chunking edge cases (spans split across chunk boundaries)                                                                       | Medium     | Medium     | Overlap chunks by 50 tokens on each side. Deduplicate spans in overlap region. Test with documents at chunk boundaries.                                                                                               |
+| Rampart 512-token limit truncates long paragraphs                                                                               | Low        | Medium     | Chunking handles this. Document the chunking strategy. Test with very long legal documents.                                                                                                                           |
+| UK supplement regex patterns match false positives (e.g. a random 9-digit number that is not a passport)                        | Medium     | Low        | Regex patterns are deliberately conservative. NI pattern requires the two-letter prefix. Case reference patterns match known firm formats. Matches appear as `low` confidence suggestions. Reviewers can reject.      |
+| Migration conflicts with future migrations                                                                                      | Low        | Low        | The migration uses `create table if not exists`. The filename `0005_redaction.sql` follows the existing numbering convention.                                                                                         |
+| Effect pilot underdelivers (idiom violations, review drag)                                                                      | Medium     | Low        | Contained behind the promise facade by construction; unwind is a one-module rewrite in plain TS with no API, contract, or schedule contagion. Exit criteria and decision gate defined in the Effect TS Pilot section. |
 
 ## Open Questions
 
