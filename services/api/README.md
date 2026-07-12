@@ -34,7 +34,7 @@ Production may also provide:
 - `MOJ_FIND_CASE_LAW_BASE_URL` to override the public Find Case Law upstream
 - `MOJ_FIND_CASE_LAW_RATE_LIMIT` to tune the public upstream fetch limiter
 
-Development falls back to local defaults so the service can typecheck and boot before hosted infrastructure is provisioned. With the web Vite proxy, the development default for `BETTER_AUTH_URL` is `http://localhost:3000`, matching `OBITER_WEB_ORIGIN`; override both deliberately when using another local origin. If `OBITER_RESEND_API_KEY` is not configured in development, the API logs the complete magic-link URL with a `[dev-only]` marker instead of sending an email. Never rely on that fallback in production.
+Development falls back to local defaults so the service can typecheck and boot before hosted infrastructure is provisioned. With the web Vite proxy, the development default for `BETTER_AUTH_URL` is `http://localhost:3000`, matching `OBITER_WEB_ORIGIN`; override both deliberately when using another local origin. In development the API also trusts electron-vite renderer Origins (`http://localhost:5173`–`5175`, plus a loopback wildcard for better-auth) so `pnpm dev:desktop` can sign in through the renderer `/api` proxy — production still only trusts configured web/desktop/marketing origins. If `OBITER_RESEND_API_KEY` is not configured in development, the API logs the complete magic-link URL with a `[dev-only]` marker instead of sending an email. Never rely on that fallback in production.
 
 ## Accounts
 

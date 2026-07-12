@@ -4,6 +4,7 @@ import { magicLink } from 'better-auth/plugins'
 import { Resend } from 'resend'
 import type { Pool } from 'pg'
 import { appendAuditLog } from './database'
+import { authTrustedOrigins } from './client-origins'
 import type { ApiEnv } from './env'
 import { magicLinkEmail, resetPasswordEmail, verificationEmail } from './email-templates'
 
@@ -243,6 +244,9 @@ export function createAuth(env: ApiEnv, pool: Pool) {
     appName: 'Obiter',
     baseURL: env.authBaseUrl,
     secret: env.authSecret,
+    // CSRF / Origin check. baseURL alone only trusts BETTER_AUTH_URL (web);
+    // desktop Electron in dev sends Origin: http://localhost:5173 (Vite).
+    trustedOrigins: authTrustedOrigins(env),
     database: pool,
     emailAndPassword: emailAndPasswordOptions(env),
     emailVerification: {

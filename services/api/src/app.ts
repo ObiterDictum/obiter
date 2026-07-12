@@ -5,6 +5,7 @@ import type { ApiErrorCode, ApiErrorResponse, MeResponse } from '@obiter/contrac
 import { appendAuditLog, findOrganisation, toCurrentUser } from './database'
 import type { ApiEnv } from './env'
 import { createAuth } from './auth'
+import { corsAllowedOrigin } from './client-origins'
 import {
   createLegalSearchRoutes,
   createLegalSearchProxyRoutes,
@@ -84,9 +85,7 @@ export function createApiApp(env: ApiEnv, pool: Pool, options: ApiAppOptions = {
   app.use(
     '*',
     cors({
-      origin: [env.webOrigin, env.authBaseUrl, env.desktopOrigin, env.marketingOrigin].filter(
-        (origin): origin is string => Boolean(origin),
-      ),
+      origin: (origin) => corsAllowedOrigin(env, origin),
       allowHeaders: ['Content-Type', 'Authorization'],
       allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
       credentials: true,

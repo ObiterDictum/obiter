@@ -373,6 +373,31 @@ describe('createApiApp', () => {
     )
   })
 
+  it('allows the electron-vite renderer origin through CORS in development', async () => {
+    const auth = {
+      api: {
+        getSession: async () => null,
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+
+    const app = createApiApp(
+      { ...testEnv, nodeEnv: 'development' },
+      createPool(async () => ({ rows: [] })),
+      { auth },
+    )
+
+    const response = await app.request('/api/health', {
+      headers: {
+        Origin: 'http://localhost:5173',
+      },
+    })
+
+    expect(response.headers.get('access-control-allow-origin')).toBe(
+      'http://localhost:5173',
+    )
+  })
+
   it('creates matters for the signed-in organisation', async () => {
     const queries: unknown[] = []
     const auth = {
