@@ -6,7 +6,7 @@
 >
 > What detection actually does today is **deterministic UK patterns only**, in `packages/redaction-policy/src/supplement.ts`, called directly from `services/api/src/routes/redact.ts` via `supplementSpans(text)`. There is no `@nationaldesignstudio/rampart` dependency, no `services/api/src/redaction-detection.ts` module, no ONNX model load, and no model inference at run-creation time. The sections below that describe the Rampart pipeline (guard lifecycle, label mapping, chunking against a 512-token limit, the Effect TS pilot, F1–F8, F22, F30, F31) describe the **planned** integration, not the shipped implementation.
 >
-> Shipped detection covers: national insurance numbers, case references, organisation names, emails, UK phone numbers, UK postcodes, GB IBANs, and context-gated sort codes / account numbers. Names, addresses, dates of birth, and all context-dependent detection remain model-track work — regexes cannot do these. `rampart-map.ts` exists and is exercised by tests, but nothing produces Rampart spans at detection time today; it is consumed only by the PRD-3 dataset-export tool's reverse mapping.
+> Shipped detection covers: national insurance numbers, case references, organisation names, emails, UK phone numbers, UK postcodes, GB IBANs, and context-gated sort codes / account numbers. Names, addresses, dates of birth, and all context-dependent detection remain model-track work — regexes cannot do these. `rampart-map.ts` exists and is exercised by unit tests, but nothing produces Rampart spans at detection time today; its only consumer is the inbound `mapRampartSpans` map (plus those tests). The PRD-3 dataset-export tool carries its own reverse mapping inline and does not import `rampart-map.ts`.
 
 ## Summary
 
