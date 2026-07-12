@@ -113,7 +113,7 @@ export function createApiApp(env: ApiEnv, pool: Pool, options: ApiAppOptions = {
 
     if (
       c.req.method === 'POST' &&
-      new URL(c.req.url).pathname === '/api/auth/sign-out' &&
+      c.req.path === '/api/auth/sign-out' &&
       response.ok &&
       sessionUser &&
       session
@@ -146,7 +146,7 @@ export function createApiApp(env: ApiEnv, pool: Pool, options: ApiAppOptions = {
 
   app.route('/', createMattersRoutes(pool))
   app.route('/', createOrganisationsRoutes(pool))
-  app.route('/', createDocumentsRoutes(pool))
+  app.route('/', createDocumentsRoutes(pool, storage))
   app.route('/', createRedactRoutes(pool, storage))
   app.route('/', createLegalSearchRoutes(env))
   app.route('/', createLegalSearchProxyRoutes(env, createPostgresLegalAuthoritySourceStore(pool)))

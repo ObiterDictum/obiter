@@ -43,13 +43,21 @@ Matters owns:
 - `POST /api/matters`
 - `GET /api/matters/:id`
 
-- Documents (metadata): the matter detail renders its documents list from `GET /api/matters/:matterId/documents`, and the document detail route renders real document metadata and versions from `GET /api/documents/:id`. This is metadata-only — filename, hash, size, status, versions; no file bytes are received or stored.
+- Documents (metadata): the matter detail renders its documents list from `GET /api/matters/:matterId/documents`, and the document detail route renders real document metadata and versions from `GET /api/documents/:id`. The API supports DOCX/TXT multipart extraction for Redaction, but the shell has no file-upload control yet; PDF extraction is not supported.
 
 Documents owns:
 
 - `/matters/:matterId/documents/:documentId`
 - `GET /api/matters/:matterId/documents`
 - `GET /api/documents/:id`
+
+- Redaction: `/redact` and `/redact/:runId` provide organisation-scoped standalone-text detection review, decisions and finalized outputs. The API exposes an audit-report download and can create document-linked runs from extracted DOCX/TXT text; selecting/uploading a matter document from the shell remains future work.
+
+Redaction owns:
+
+- `/redact`
+- `/redact/:runId`
+- `GET /api/redaction-runs/:runId/audit`
 
 ### API implemented, UI is demo fixture
 
@@ -62,7 +70,6 @@ These entries can appear in the sidebar to show product direction, but they must
 - Drafting
 - Research
 - Documents
-- Redaction
 - Verification
 - Review Queue
 - Deadlines

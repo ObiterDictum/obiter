@@ -6,7 +6,7 @@ This phase completes the Obiter Redact module. It turns the Phase 1-2 detection 
 
 Redact Phase 1 established the detection pipeline powered by Rampart (14.7 MB ONNX token-classification model via Transformers.js) and a UK supplement for legal-specific PII patterns. Phase 2 added the review UI, span decision persistence, and redacted/pseudonymised output generation. This phase makes the product demonstrable to firms, producible for audit, and extensible through fine-tuning.
 
-See the detailed implementation at [docs/specs/redact/build-plan.md](../specs/redact/build-plan.md). Cross-reference siblings: [Redact PRD 1: Detection Pipeline](redact-1-detection.md), [Redact PRD 2: Review and Output](redact-2-review-output.md).
+See the detailed implementation at [docs/specs/redact/build-plan.md](../specs/redact/build-plan.md), the [manual demo walkthrough](../specs/redact/demo.md), and [fine-tuning preparation](../specs/redact/fine-tuning.md). Cross-reference siblings: [Redact PRD 1: Detection Pipeline](redact-1-detection.md), [Redact PRD 2: Review and Output](redact-2-review-output.md).
 
 ## Problem
 
@@ -133,13 +133,13 @@ Inspects synthetic data quality, label correctness, and the fine-tuning dataset 
 
 **Error states:**
 
-| Condition | Behaviour |
-|-----------|-----------|
-| DOCX uploaded, extraction succeeds | Status → `ready`, text stored at `text_object_key` |
-| DOCX uploaded, extraction fails | Status → `failed`, `failure_reason` set |
-| TXT uploaded | Read inline, status → `ready` |
-| PDF uploaded | Blocked at upload with "PDF not yet supported" error |
-| Run created before extraction done | Trigger extraction synchronously |
+| Condition                                    | Behaviour                                                         |
+| -------------------------------------------- | ----------------------------------------------------------------- |
+| DOCX uploaded, extraction succeeds           | Status → `ready`, text stored at `text_object_key`                |
+| DOCX uploaded, extraction fails              | Status → `failed`, `failure_reason` set                           |
+| TXT uploaded                                 | Read inline, status → `ready`                                     |
+| PDF uploaded                                 | Blocked at upload with "PDF not yet supported" error              |
+| Run created before extraction done           | Trigger extraction synchronously                                  |
 | Object storage unavailable during extraction | Status → `failed`, `failure_reason: "object storage unavailable"` |
 
 **Mammoth configuration:**
@@ -252,7 +252,7 @@ Response 403: user not in run's organisation
 }
 ```
 
-Each run has exactly one output artifact (type `redaction_output`), determined by the `outputMode` chosen at finalize (PRD 2). A pseudonymised output requires a separate run. Note on `spanText`: the audit *log table* stores no raw document text (PRD 2 security requirement). The `spanText` values shown in the report are enriched from the run's `spans_json` at report generation time — the report artifact therefore contains PII and is access-controlled per SEC1.
+Each run has exactly one output artifact (type `redaction_output`), determined by the `outputMode` chosen at finalize (PRD 2). A pseudonymised output requires a separate run. Note on `spanText`: the audit _log table_ stores no raw document text (PRD 2 security requirement). The `spanText` values shown in the report are enriched from the run's `spans_json` at report generation time — the report artifact therefore contains PII and is access-controlled per SEC1.
 
 **HTML/Markdown formats:**
 
@@ -260,7 +260,7 @@ The HTML export is a self-contained page suitable for printing or filing. The Ma
 
 **Artifact storage:**
 
-The audit report is stored as an `artifact` row with `artifactType: 'redaction_report'` alongside the redacted output. The report is generated at finalize time and stored in object storage. Subsequent reads of `GET /api/redaction-runs/:runId/audit` serve the stored report (or generate on demand if missing — e.g., during development).
+The audit report is generated on authenticated read from the finalized run and its run-scoped audit log. Persisting a `redaction_report` artifact alongside the output is deferred to a follow-up; this does not change the versioned report content or organisation-scoped access contract.
 
 ### 3. Synthetic Training Data Generation
 
@@ -268,37 +268,121 @@ The audit report is stored as an `artifact` row with `artifactType: 'redaction_r
 
 **Document types (7+):**
 
-| Type | Description | Typical PII |
-|------|-------------|-------------|
-| Skeleton argument | Legal arguments summarising a party's position | Person names, case references, dates |
-| Witness statement | Sworn statement of fact | Person names, addresses, dates, NI numbers, organisation names |
-| Case report | Anonymised judgment summary | Person names, case references, dates |
-| Client letter | Correspondence between solicitor and client | Person names, addresses, emails, phone numbers, dates, case references |
-| Attendance note | Record of a meeting or call | Person names, organisation names, dates, case references, phone numbers |
-| Court form | Official court filing form | Person names, addresses, NI numbers, passport numbers, dates, case references |
-| Pleadings | Statement of case (Particulars of Claim, Defence) | Person names, addresses, organisation names, dates, case references, bank account numbers |
+| Type              | Description                                       | Typical PII                                                                               |
+| ----------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Skeleton argument | Legal arguments summarising a party's position    | Person names, case references, dates                                                      |
+| Witness statement | Sworn statement of fact                           | Person names, addresses, dates, NI numbers, organisation names                            |
+| Case report       | Anonymised judgment summary                       | Person names, case references, dates                                                      |
+| Client letter     | Correspondence between solicitor and client       | Person names, addresses, emails, phone numbers, dates, case references                    |
+| Attendance note   | Record of a meeting or call                       | Person names, organisation names, dates, case references, phone numbers                   |
+| Court form        | Official court filing form                        | Person names, addresses, NI numbers, passport numbers, dates, case references             |
+| Pleadings         | Statement of case (Particulars of Claim, Defence) | Person names, addresses, organisation names, dates, case references, bank account numbers |
 
 **PII types to include (12):**
 
-| Category | Description | Examples | Obiter label |
-|----------|-------------|----------|--------------|
-| Person with honorific | Named individual with title | Mr James Cartwright, Dr Sarah Chen, Ms Aisha Patel | `person_name` |
-| UK address | Postal address with postcode | 42 Belgrave Road, Leicester LE4 5AB | `address` |
-| Email | Email address | j.cartwright@lawfirm.co.uk | `email` |
-| UK phone | UK-format phone number | 020 7946 0958, 07700 900482, +44 20 7946 0958 | `phone` |
-| Legal date | Date in legal format | 15 March 2024, the 15th day of March 2024 | `date` |
-| NI number | National Insurance number | JX 12 34 56 D, JX123456D | `national_insurance` |
-| Passport number | UK passport number | 987654321 | `passport` |
-| Case reference | Internal firm reference | REF/2024/0123, CLAIM-2024-Smith-0042 | `case_reference` |
-| Bank account | Bank account or sort code | 12345678 / 12-34-56 | `account_number` |
-| Organisation | Firm or company name | Smith & Jones Solicitors LLP, HM Courts Service | `organisation_name` |
-| URL | Personal or case-related URL | https://solicitors.law/our-team/jcartwright | `url` |
-| Secret | Password or API key | Password: TempPass123! | `secret` |
+| Category              | Description                  | Examples                                           | Obiter label         |
+| --------------------- | ---------------------------- | -------------------------------------------------- | -------------------- |
+| Person with honorific | Named individual with title  | Mr James Cartwright, Dr Sarah Chen, Ms Aisha Patel | `person_name`        |
+| UK address            | Postal address with postcode | 42 Belgrave Road, Leicester LE4 5AB                | `address`            |
+| Email                 | Email address                | <j.cartwright@lawfirm.co.uk>                       | `email`              |
+| UK phone              | UK-format phone number       | 020 7946 0958, 07700 900482, +44 20 7946 0958      | `phone`              |
+| Legal date            | Date in legal format         | 15 March 2024, the 15th day of March 2024          | `date`               |
+| NI number             | National Insurance number    | JX 12 34 56 D, JX123456D                           | `national_insurance` |
+| Passport number       | UK passport number           | 987654321                                          | `passport`           |
+| Case reference        | Internal firm reference      | REF/2024/0123, CLAIM-2024-Smith-0042               | `case_reference`     |
+| Bank account          | Bank account or sort code    | 12345678 / 12-34-56                                | `account_number`     |
+| Organisation          | Firm or company name         | Smith & Jones Solicitors LLP, HM Courts Service    | `organisation_name`  |
+| URL                   | Personal or case-related URL | <https://solicitors.law/our-team/jcartwright>      | `url`                |
+| Secret                | Password or API key          | Password: TempPass123!                             | `secret`             |
 
 **Output format (Rampart training schema):**
 
 ```jsonl
-{"text": "IN THE HIGH COURT OF JUSTICE\nQUEEN'S BENCH DIVISION\n\nCLAIM No: REF/2024/0123\n\nBETWEEN:\n\nMr James Cartwright\nand\nMrs Sarah Chen\n\nSKELETON ARGUMENT OF THE CLAIMANT\n\n1. The Claimant, Mr James Cartwright of 42 Belgrave Road, Leicester LE4 5AB, is a retired school teacher born on 10 June 1956. His National Insurance number is JX 12 34 56 D.\n\n2. The Defendant, Mrs Sarah Chen, is a solicitor employed by Smith & Jones Solicitors LLP of 78 High Holborn, London WC1V 6XX. Her email address is s.chen@smithjones.co.uk and her direct telephone number is 020 7946 0958.\n\n3. This claim arises from a road traffic accident on 15 March 2024 at approximately 14:30 hours...", "spans": {"private_person: James Cartwright": [[94, 111], [184, 199]], "private_address: 42 Belgrave Road, Leicester LE4 5AB": [[203, 242]], "private_person: Mr James Cartwright": [[181, 201]], "private_date: 10 June 1956": [[269, 282]], "national_insurance: JX 12 34 56 D": [[314, 327]], "private_person: Mrs Sarah Chen": [[357, 372]], "private_person: Sarah Chen": [[389, 400]], "organisation_name: Smith & Jones Solicitors LLP": [[421, 449]], "private_address: 78 High Holborn, London WC1V 6XX": [[453, 488]], "private_email: s.chen@smithjones.co.uk": [[511, 535]], "private_phone: 020 7946 0958": [[567, 580]], "private_date: 15 March 2024": [[624, 638]]}, "info": {"id": "legal_001", "source": "obiter.synthetic"}}
+{
+  "text": "IN THE HIGH COURT OF JUSTICE\nQUEEN'S BENCH DIVISION\n\nCLAIM No: REF/2024/0123\n\nBETWEEN:\n\nMr James Cartwright\nand\nMrs Sarah Chen\n\nSKELETON ARGUMENT OF THE CLAIMANT\n\n1. The Claimant, Mr James Cartwright of 42 Belgrave Road, Leicester LE4 5AB, is a retired school teacher born on 10 June 1956. His National Insurance number is JX 12 34 56 D.\n\n2. The Defendant, Mrs Sarah Chen, is a solicitor employed by Smith & Jones Solicitors LLP of 78 High Holborn, London WC1V 6XX. Her email address is s.chen@smithjones.co.uk and her direct telephone number is 020 7946 0958.\n\n3. This claim arises from a road traffic accident on 15 March 2024 at approximately 14:30 hours...",
+  "spans": {
+    "private_person: James Cartwright": [
+      [
+        94,
+        111
+      ],
+      [
+        184,
+        199
+      ]
+    ],
+    "private_address: 42 Belgrave Road, Leicester LE4 5AB": [
+      [
+        203,
+        242
+      ]
+    ],
+    "private_person: Mr James Cartwright": [
+      [
+        181,
+        201
+      ]
+    ],
+    "private_date: 10 June 1956": [
+      [
+        269,
+        282
+      ]
+    ],
+    "national_insurance: JX 12 34 56 D": [
+      [
+        314,
+        327
+      ]
+    ],
+    "private_person: Mrs Sarah Chen": [
+      [
+        357,
+        372
+      ]
+    ],
+    "private_person: Sarah Chen": [
+      [
+        389,
+        400
+      ]
+    ],
+    "organisation_name: Smith & Jones Solicitors LLP": [
+      [
+        421,
+        449
+      ]
+    ],
+    "private_address: 78 High Holborn, London WC1V 6XX": [
+      [
+        453,
+        488
+      ]
+    ],
+    "private_email: s.chen@smithjones.co.uk": [
+      [
+        511,
+        535
+      ]
+    ],
+    "private_phone: 020 7946 0958": [
+      [
+        567,
+        580
+      ]
+    ],
+    "private_date: 15 March 2024": [
+      [
+        624,
+        638
+      ]
+    ]
+  },
+  "info": {
+    "id": "legal_001",
+    "source": "obiter.synthetic"
+  }
+}
 ```
 
 **Custom label space file:**
@@ -330,16 +414,17 @@ The label space MUST be a superset of every base-model label the product consume
 
 **Label space roadmap (`obiter_legal_v2`, post-MVP):**
 
-Legal redaction differs from generic PII detection in one structural way: whether a span is redacted depends on the *role* of the entity, not just its type. A judge, counsel, or instructing solicitor is on the public record and is normally kept; a claimant, witness, or client is normally redacted; a child or protected party under an anonymity order MUST be redacted (statutory consequence, not preference). All of these are `person_name` in v1, which means neither the model nor the policy layer can distinguish them — the reviewer carries the full burden.
+Legal redaction differs from generic PII detection in one structural way: whether a span is redacted depends on the _role_ of the entity, not just its type. A judge, counsel, or instructing solicitor is on the public record and is normally kept; a claimant, witness, or client is normally redacted; a child or protected party under an anonymity order MUST be redacted (statutory consequence, not preference). All of these are `person_name` in v1, which means neither the model nor the policy layer can distinguish them — the reviewer carries the full burden.
 
 - `obiter_legal_v1` (this phase) is deliberately scoped to fixed-format identifiers (`national_insurance`, `case_reference`, `secret`) because ~300 synthetic documents cannot train a person-role taxonomy without degrading base-model recall.
 - `obiter_legal_v2` is the named direction: split `person_name` into `person_party`, `person_professional` (on-record: judges, counsel, solicitors), and `person_protected` (children, anonymity-order subjects); consider `medical_info` for PI matters. Role-aware labels give `policy_mode` real differentiation: e.g. `external_sharing` keeps `person_professional`, `internal_ai_minimisation` redacts everything.
-- Role subtype detection is context-dependent ("His Honour Judge ___" vs "the Claimant, ___") — exactly what a token classifier can learn and what a downstream policy layer cannot recover once detection has flattened everything to `person_name`. This is why roles belong in the model label space, not only in policy.
+- Role subtype detection is context-dependent ("His Honour Judge _**" vs "the Claimant,**_") — exactly what a token classifier can learn and what a downstream policy layer cannot recover once detection has flattened everything to `person_name`. This is why roles belong in the model label space, not only in policy.
 - Legally privileged material detection is explicitly out of scope for the token classifier: privilege is passage-level, not span-level, and requires a different mechanism if ever pursued.
 - v2 requires no schema rewrite: the Obiter category schema and the label space are versioned, and both mapping layers (`rampart-map.ts` inbound, dataset export outbound) are explicit. v2 is a data + fine-tune exercise, provided the role metadata below is captured from v1 onwards.
 - Reviewer decisions are also v2 signal: a reviewer rejecting a `person_name` span on a judge's name is implicit role labelling. Rejection records persist in `decisions_json` and can be mined when v2 training data is assembled — no additional tooling is required in this phase.
 
 Note: `organisation_name` and `passport` handling differs between Obiter and Rampart's base label set. In the synthetic data, these are mapped:
+
 - `organisation_name` → `O` (ignored during fine-tuning; the model learns to not flag organisation names as PII unless the firm's policy requires it)
 - `passport` → mapped to `PASSPORT` which Rampart already supports natively
 - `case_reference` → the custom label space includes this; it is a new label not present in base Rampart
@@ -353,7 +438,7 @@ The generation script (`scripts/generate-synthetic-data.ts` or equivalent) must:
 2. **PII value generation**: Use realistic generators for each PII type:
    - Person names: Use a curated list of 100+ common UK names with appropriate honorifics. Mix ethnicities and genders. Include some names that could also be case citations (e.g., "Smith", "Jones") to test context awareness.
    - Addresses: Use real UK street names and postcodes (anonymised). Include single-line and multi-line formats.
-   - Emails: Generate from name + domain patterns (john.smith@lawfirm.co.uk, info@chambers.co.uk).
+   - Emails: Generate from name + domain patterns (<john.smith@lawfirm.co.uk>, <info@chambers.co.uk>).
    - Phone numbers: Generate in multiple UK formats (landline, mobile, international prefix).
    - Dates: Generate in legal formats including "15 March 2024", "the 15th day of March 2024", "15/03/2024".
    - NI numbers: Generate valid-format NI numbers (2 letters, 6 digits, 1 letter — with and without spaces).
@@ -365,12 +450,12 @@ The generation script (`scripts/generate-synthetic-data.ts` or equivalent) must:
 
 3a. **Role metadata annotation**: The generator knows the role of every person it inserts (claimant, defendant, witness, expert, judge, counsel, solicitor, child/protected party). Record this in each JSONL entry's `info` field as a `roles` map (e.g. `"roles": {"James Cartwright": "party", "Sarah Chen": "professional", "Mr Justice Holroyd": "professional"}`) even though `obiter_legal_v1` collapses all of them to `private_person`. This is nearly free at generation time and is the prerequisite for training `obiter_legal_v2`'s role-split labels (see Label space roadmap) without regenerating the corpus. Every generated document MUST include judges, counsel, or solicitors alongside party names so the v2 role distinction has both classes represented.
 
-4. **Overlapping span handling**: Include documents with overlapping entities:
+1. **Overlapping span handling**: Include documents with overlapping entities:
    - "Mr David Smith of Smith & Jones" — where "Smith" could be a name or organisation reference
    - "Smith v Jones" — case reference that looks like names
    - "20 High Street, London SW1A 1AA" — address containing a postcode (should be single span)
 
-5. **Edge case coverage**: Generate specific documents exercising:
+2. **Edge case coverage**: Generate specific documents exercising:
    - Empty text (trivial: just metadata)
    - Text with no PII (court forms with only case numbers that should be flagged)
    - All PII types present in a single document (stress test)
@@ -378,15 +463,15 @@ The generation script (`scripts/generate-synthetic-data.ts` or equivalent) must:
    - Very long documents spanning many 512-token detection chunks (long witness statements with repeated PII, exercising chunk-boundary reassembly)
    - Documents where names look like case citations ("Mr Smith submits... In Smith v Jones, the court held...")
 
-6. **Validation**: After generation, validate every document:
+3. **Validation**: After generation, validate every document:
    - Every span start/end offset is valid (start < end, within text length)
    - Every span's `text` slice matches the original text at those offsets
    - No overlaps are inconsistent (same text covered by two compatible spans is fine; contradictory coverage is flagged)
    - All required fields present (`text`, `spans`, `info`)
 
-7. **Train/validation split**: Split the generated documents into 80% training and 20% validation sets (random stratified by document type).
+4. **Train/validation split**: Split the generated documents into 80% training and 20% validation sets (random stratified by document type).
 
-8. **Output files** (stored in `data/evals/redact/`):
+5. **Output files** (stored in `data/evals/redact/`):
    - `synthetic_train.jsonl` — training set
    - `synthetic_validation.jsonl` — validation set
    - `custom_label_space.json` — label space definition
@@ -395,21 +480,21 @@ The generation script (`scripts/generate-synthetic-data.ts` or equivalent) must:
 
 **Volume targets:**
 
-| Metric | Target |
-|--------|--------|
-| Total documents | 300 (minimum viable) |
-| Training set | 240 |
-| Validation set | 60 |
-| Min PII instances per document | 3 |
-| Max PII instances per document | 25 |
-| Documents with overlapping spans | ≥ 10 |
-| Documents with zero PII | ≥ 5 |
-| Documents with only UK supplement PII | ≥ 10 |
-| Document types covered | ≥ 7 |
-| Unique person names | ≥ 80 |
-| Unique addresses | ≥ 50 |
-| Person spans with role metadata | 100% |
-| Documents containing on-record professionals (judge/counsel/solicitor) | 100% |
+| Metric                                                                 | Target               |
+| ---------------------------------------------------------------------- | -------------------- |
+| Total documents                                                        | 300 (minimum viable) |
+| Training set                                                           | 240                  |
+| Validation set                                                         | 60                   |
+| Min PII instances per document                                         | 3                    |
+| Max PII instances per document                                         | 25                   |
+| Documents with overlapping spans                                       | ≥ 10                 |
+| Documents with zero PII                                                | ≥ 5                  |
+| Documents with only UK supplement PII                                  | ≥ 10                 |
+| Document types covered                                                 | ≥ 7                  |
+| Unique person names                                                    | ≥ 80                 |
+| Unique addresses                                                       | ≥ 50                 |
+| Person spans with role metadata                                        | 100%                 |
+| Documents containing on-record professionals (judge/counsel/solicitor) | 100%                 |
 
 **Realism guidelines:**
 
@@ -437,23 +522,23 @@ Script at `scripts/export-training-data.ts` (or similar) that:
 
 **Category mapping (Obiter → Rampart):**
 
-| Obiter label | Rampart label |
-|--------------|---------------|
-| `person_name` | `GIVEN_NAME` + `SURNAME` |
-| `email` | `EMAIL` |
-| `phone` | `PHONE` |
-| `address` | `BUILDING_NUMBER` + `STREET_NAME` + `SECONDARY_ADDRESS` |
-| `government_id` | `SSN` / `GOVERNMENT_ID` / `TAX_ID` |
-| `account_number` | `CREDIT_CARD` / `BANK_ACCOUNT` / `ROUTING_NUMBER` |
-| `passport` | `PASSPORT` |
-| `drivers_license` | `DRIVERS_LICENSE` |
-| `url` | `URL` |
-| `ip_address` | `IP_ADDRESS` |
-| `date` | `DATE` / `DOB` |
-| `secret` | custom: `secret` |
-| `national_insurance` | custom: `national_insurance` |
-| `case_reference` | custom: `case_reference` |
-| `organisation_name` | Excluded (not in label space) |
+| Obiter label         | Rampart label                                           |
+| -------------------- | ------------------------------------------------------- |
+| `person_name`        | `GIVEN_NAME` + `SURNAME`                                |
+| `email`              | `EMAIL`                                                 |
+| `phone`              | `PHONE`                                                 |
+| `address`            | `BUILDING_NUMBER` + `STREET_NAME` + `SECONDARY_ADDRESS` |
+| `government_id`      | `SSN` / `GOVERNMENT_ID` / `TAX_ID`                      |
+| `account_number`     | `CREDIT_CARD` / `BANK_ACCOUNT` / `ROUTING_NUMBER`       |
+| `passport`           | `PASSPORT`                                              |
+| `drivers_license`    | `DRIVERS_LICENSE`                                       |
+| `url`                | `URL`                                                   |
+| `ip_address`         | `IP_ADDRESS`                                            |
+| `date`               | `DATE` / `DOB`                                          |
+| `secret`             | custom: `secret`                                        |
+| `national_insurance` | custom: `national_insurance`                            |
+| `case_reference`     | custom: `case_reference`                                |
+| `organisation_name`  | Excluded (not in label space)                           |
 
 **Quality gates:**
 
@@ -472,7 +557,7 @@ A realistic skeleton argument in DOCX format, approximately 3–5 pages, contain
 - Dates of birth and hearing dates: The Claimant was born on 10 June 1956; the hearing is listed for 15 March 2024
 - National Insurance numbers: JX 12 34 56 D (Claimant's NI number)
 - Case references: REF/2024/0123, CLAIM-2024-Smith-0042
-- Email addresses: j.cartwright@personal.email, s.chen@smithjones.co.uk
+- Email addresses: <j.cartwright@personal.email>, <s.chen@smithjones.co.uk>
 - Phone numbers: 020 7946 0958, 07700 900482, +44 20 7946 0958
 - Bank account references: Account number 12345678, sort code 12-34-56 (Claimant's account for costs payments)
 - Organisation names: Smith & Jones Solicitors LLP, HM Courts & Tribunals Service, Leicester Royal Infirmary
@@ -548,18 +633,18 @@ Step 10: Re-run on same document
 
 **Edge cases to verify:**
 
-| Edge case | Expected behaviour |
-|-----------|-------------------|
-| Overlapping spans (Rampart + UK supplement overlap) | Rampart span kept, UK supplement span dropped. System logs overlap with confidence comparison. |
-| Empty text (`document` with 0 bytes) | Run created, status → `ready_for_review` with 0 spans, no error |
-| Text with no detectable PII | Run created, 0 spans, status → `ready_for_review`, reviewer sees empty state |
-| All spans rejected | Finalize with 0 accepted spans. Output is identical to original text. Report shows 0 modifications. |
-| Finalize without reviewing all spans | Allowed but warning shown: "X spans unreviewed — unreviewed spans are left as-is in the output" (per PRD 2: no automated redaction without human review). Audit log records the unreviewed span ids at finalize. |
-| Re-run on same document | Independent run, new span IDs, new detection results (model inference is deterministic but decisions start fresh) |
-| Detection failure (model load error, inference error) | Post returns `redaction_detection_failed` error. Run status → `failed`. `failure_reason` set. |
-| DOCX with tables | Table text extracted row by row, spans detected in table cells. No text lost. |
-| DOCX with headers/footers | Header/footer text extracted and available for detection (names in headers). |
-| Very long documents | Document chunked at 512-token boundaries. All chunks processed, spans reassembled with correct offsets. |
+| Edge case                                             | Expected behaviour                                                                                                                                                                                               |
+| ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Overlapping spans (Rampart + UK supplement overlap)   | Rampart span kept, UK supplement span dropped. System logs overlap with confidence comparison.                                                                                                                   |
+| Empty text (`document` with 0 bytes)                  | Run created, status → `ready_for_review` with 0 spans, no error                                                                                                                                                  |
+| Text with no detectable PII                           | Run created, 0 spans, status → `ready_for_review`, reviewer sees empty state                                                                                                                                     |
+| All spans rejected                                    | Finalize with 0 accepted spans. Output is identical to original text. Report shows 0 modifications.                                                                                                              |
+| Finalize without reviewing all spans                  | Allowed but warning shown: "X spans unreviewed — unreviewed spans are left as-is in the output" (per PRD 2: no automated redaction without human review). Audit log records the unreviewed span ids at finalize. |
+| Re-run on same document                               | Independent run, new span IDs, new detection results (model inference is deterministic but decisions start fresh)                                                                                                |
+| Detection failure (model load error, inference error) | Post returns `redaction_detection_failed` error. Run status → `failed`. `failure_reason` set.                                                                                                                    |
+| DOCX with tables                                      | Table text extracted row by row, spans detected in table cells. No text lost.                                                                                                                                    |
+| DOCX with headers/footers                             | Header/footer text extracted and available for detection (names in headers).                                                                                                                                     |
+| Very long documents                                   | Document chunked at 512-token boundaries. All chunks processed, spans reassembled with correct offsets.                                                                                                          |
 
 ### 6. Fine-Tuning Preparation (Documentation Only)
 
@@ -595,12 +680,12 @@ python scripts/export_onnx.py \
 
 **Infrastructure requirements:**
 
-| Resource | Specification | Cost estimate |
-|----------|--------------|---------------|
-| GPU | NVIDIA T4 (16GB VRAM) or better | ~$0.50/hr (rented cloud) |
-| Training time (500 docs) | 1–2 hours | ~$0.50–$1.00 per training run |
-| Storage | 2GB per checkpoint | Negligible |
-| Software | Python 3.10+, `torch`, `transformers`, `datasets`, `onnx` | Free/open-source |
+| Resource                 | Specification                                             | Cost estimate                 |
+| ------------------------ | --------------------------------------------------------- | ----------------------------- |
+| GPU                      | NVIDIA T4 (16GB VRAM) or better                           | ~$0.50/hr (rented cloud)      |
+| Training time (500 docs) | 1–2 hours                                                 | ~$0.50–$1.00 per training run |
+| Storage                  | 2GB per checkpoint                                        | Negligible                    |
+| Software                 | Python 3.10+, `torch`, `transformers`, `datasets`, `onnx` | Free/open-source              |
 
 **The fine-tuning loop:**
 
@@ -699,123 +784,123 @@ The Redaction sidebar entry was activated in Phase 2 (Redact PRD 2, FR11). This 
 
 ### FR1: DOCX Text Extraction
 
-| ID | Requirement |
-|----|-------------|
-| FR1.1 | On document upload with `fileType == 'docx'`, extract text using `mammoth.extractRawText` and store at `document_versions.text_object_key` |
-| FR1.2 | On document upload with `fileType == 'txt'`, store file content directly at `text_object_key` |
-| FR1.3 | On document upload with `fileType == 'pdf'`, reject with clear error: "PDF files are not yet supported for redaction. Please upload DOCX or TXT files." |
-| FR1.4 | After successful extraction, set `document_versions.document_status` to `ready` |
-| FR1.5 | On extraction failure (mammoth throws), set `document_versions.document_status` to `failed` and record `document_versions.failure_reason` |
-| FR1.6 | On redaction run creation, if `document_status != 'ready'`, trigger extraction synchronously before creating the run |
-| FR1.7 | Log mammoth extraction warnings (formatting loss, unsupported features) but do not treat them as failures |
-| FR1.8 | Preserve original DOCX in object storage for later download or reprocessing |
-| FR1.9 | Migration `0006_document_extraction.sql` MUST add `document_status` (check constraint: `'pending'`, `'ready'`, `'failed'`) and `failure_reason` (text, nullable) columns to `document_versions` — these columns do not exist prior to this phase |
-| FR1.10 | Remove the Phase 1 `text` request-body fallback from `POST /api/documents/:documentId/redaction-runs` — runs must read text exclusively from `text_object_key` |
+| ID     | Requirement                                                                                                                                                                                                                                                                                                                                                           |
+| ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR1.1  | On document upload with `fileType == 'docx'`, extract text using `mammoth.extractRawText` and store at `document_versions.text_object_key`                                                                                                                                                                                                                            |
+| FR1.2  | On document upload with `fileType == 'txt'`, store file content directly at `text_object_key`                                                                                                                                                                                                                                                                         |
+| FR1.3  | On document upload with `fileType == 'pdf'`, reject with clear error: "PDF files are not yet supported for redaction. Please upload DOCX or TXT files."                                                                                                                                                                                                               |
+| FR1.4  | After successful extraction, set `document_versions.document_status` to `ready`                                                                                                                                                                                                                                                                                       |
+| FR1.5  | On extraction failure (mammoth throws), set `document_versions.document_status` to `failed` and record `document_versions.failure_reason`                                                                                                                                                                                                                             |
+| FR1.6  | On redaction run creation, if `document_status != 'ready'`, trigger extraction synchronously before creating the run                                                                                                                                                                                                                                                  |
+| FR1.7  | Log mammoth extraction warnings (formatting loss, unsupported features) but do not treat them as failures                                                                                                                                                                                                                                                             |
+| FR1.8  | Preserve original DOCX in object storage for later download or reprocessing                                                                                                                                                                                                                                                                                           |
+| FR1.9  | Migration `0006_document_extraction.sql` MUST add `document_status` (check constraint: `'pending'`, `'ready'`, `'failed'`) and `failure_reason` (text, nullable) columns to `document_versions` — these columns do not exist prior to this phase                                                                                                                      |
+| FR1.10 | Remove the Phase 1 `text` request-body fallback from `POST /api/documents/:documentId/redaction-runs` — runs must read text exclusively from `text_object_key`                                                                                                                                                                                                        |
 | FR1.11 | Implement binary content upload: extend `POST /api/matters/:matterId/documents` (or add a companion content-upload step) to accept multipart file content and store the original file via the storage service at the document version's `object_key` path. The current endpoint accepts JSON metadata only — no file bytes ever reach the server (verified July 2026) |
-| FR1.12 | Implement the object-storage adapter for the `StorageService` abstraction (introduced in Phase 1 with a local-filesystem adapter) and switch text, original-file, and artifact reads/writes to it in production configuration |
+| FR1.12 | Implement the object-storage adapter for the `StorageService` abstraction (introduced in Phase 1 with a local-filesystem adapter) and switch text, original-file, and artifact reads/writes to it in production configuration                                                                                                                                         |
 
 ### FR2: Audit Report Export
 
-| ID | Requirement |
-|----|-------------|
-| FR2.1 | `GET /api/redaction-runs/:runId/audit` returns the audit report for a finalized run |
+| ID    | Requirement                                                                                                                                                                                                                                    |
+| ----- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR2.1 | `GET /api/redaction-runs/:runId/audit` returns the audit report for a finalized run                                                                                                                                                            |
 | FR2.2 | The audit report contains: original document reference, redaction run summary (total spans by category by source, decisions breakdown), detector version, redacted/pseudonymised output references, full audit log, reviewer info, policy mode |
-| FR2.3 | Support three output formats: JSON (primary, `application/json`), HTML (`text/html`), Markdown (`text/markdown`) |
-| FR2.4 | The audit report is stored as an artifact with type `redaction_report` at finalize time |
-| FR2.5 | Subsequent reads serve the stored artifact (not regenerated from log table) |
-| FR2.6 | Return 404 if run not found, 403 if user not in run's organisation, 400 if run not yet finalized |
+| FR2.3 | Support three output formats: JSON (primary, `application/json`), HTML (`text/html`), Markdown (`text/markdown`)                                                                                                                               |
+| FR2.4 | The audit report is stored as an artifact with type `redaction_report` at finalize time                                                                                                                                                        |
+| FR2.5 | Subsequent reads serve the stored artifact (not regenerated from log table)                                                                                                                                                                    |
+| FR2.6 | Return 404 if run not found, 403 if user not in run's organisation, 400 if run not yet finalized                                                                                                                                               |
 
 ### FR3: Synthetic Training Data Generation
 
-| ID | Requirement |
-|----|-------------|
-| FR3.1 | Generate 200–500 synthetic UK legal documents with labelled PII spans |
-| FR3.2 | Cover at least 7 document types: skeleton arguments, witness statements, case reports, client letters, attendance notes, court forms, pleadings |
-| FR3.3 | Cover at least 12 PII types: person names, addresses, emails, phones, dates, NI numbers, passport numbers, case references, bank accounts, organisations, URLs, secrets |
-| FR3.4 | Output in Rampart training JSONL format with `text`, `spans`, and `info` fields |
-| FR3.5 | Generate a custom label space file (`custom_label_space.json`) defining `obiter_legal_v1` |
-| FR3.6 | Validate all documents: correct offsets, correct text slices, valid labels |
-| FR3.7 | Split into train (80%) and validation (20%) sets |
-| FR3.8 | Include edge-case documents: overlapping spans, zero PII, regex-only PII, names-as-case-citations |
-| FR3.9 | Store outputs in `data/evals/redact/` |
-| FR3.10 | Generate a manifest (`generation_manifest.json`) summarising composition |
-| FR3.11 | Generate a validation report (`validation_report.json`) documenting pass/fail per document |
+| ID     | Requirement                                                                                                                                                                                                                                                                                                            |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| FR3.1  | Generate 200–500 synthetic UK legal documents with labelled PII spans                                                                                                                                                                                                                                                  |
+| FR3.2  | Cover at least 7 document types: skeleton arguments, witness statements, case reports, client letters, attendance notes, court forms, pleadings                                                                                                                                                                        |
+| FR3.3  | Cover at least 12 PII types: person names, addresses, emails, phones, dates, NI numbers, passport numbers, case references, bank accounts, organisations, URLs, secrets                                                                                                                                                |
+| FR3.4  | Output in Rampart training JSONL format with `text`, `spans`, and `info` fields                                                                                                                                                                                                                                        |
+| FR3.5  | Generate a custom label space file (`custom_label_space.json`) defining `obiter_legal_v1`                                                                                                                                                                                                                              |
+| FR3.6  | Validate all documents: correct offsets, correct text slices, valid labels                                                                                                                                                                                                                                             |
+| FR3.7  | Split into train (80%) and validation (20%) sets                                                                                                                                                                                                                                                                       |
+| FR3.8  | Include edge-case documents: overlapping spans, zero PII, regex-only PII, names-as-case-citations                                                                                                                                                                                                                      |
+| FR3.9  | Store outputs in `data/evals/redact/`                                                                                                                                                                                                                                                                                  |
+| FR3.10 | Generate a manifest (`generation_manifest.json`) summarising composition                                                                                                                                                                                                                                               |
+| FR3.11 | Generate a validation report (`validation_report.json`) documenting pass/fail per document                                                                                                                                                                                                                             |
 | FR3.12 | Annotate every generated person span with role metadata (`party`, `professional`, `witness`, `protected`) in the entry's `info.roles` map, and include on-record professionals (judges, counsel, solicitors) in every document — captured for `obiter_legal_v2` even though v1 collapses all roles to `private_person` |
 
 ### FR4: Dataset Export Tool
 
-| ID | Requirement |
-|----|-------------|
+| ID    | Requirement                                                                            |
+| ----- | -------------------------------------------------------------------------------------- |
 | FR4.1 | Script exports finalized redaction runs with human-reviewed decisions as training data |
-| FR4.2 | Map Obiter span categories to Rampart label space per the mapping table |
-| FR4.3 | Exclude rejected and `override_keep` spans from output |
-| FR4.4 | Skip runs finalized with un-reviewed spans unless `--include-partial` flag passed |
-| FR4.5 | Output: `data/evals/redact/exported_training_data.jsonl` in Rampart BIO format |
-| FR4.6 | Validate output format before writing |
+| FR4.2 | Map Obiter span categories to Rampart label space per the mapping table                |
+| FR4.3 | Exclude rejected and `override_keep` spans from output                                 |
+| FR4.4 | Skip runs finalized with un-reviewed spans unless `--include-partial` flag passed      |
+| FR4.5 | Output: `data/evals/redact/exported_training_data.jsonl` in Rampart BIO format         |
+| FR4.6 | Validate output format before writing                                                  |
 
 ### FR5: Demo Preparation
 
-| ID | Requirement |
-|----|-------------|
+| ID    | Requirement                                                                                                             |
+| ----- | ----------------------------------------------------------------------------------------------------------------------- |
 | FR5.1 | Create `data/evals/redact/demo-fixture.docx` — a 3–5 page skeleton argument with 10+ PII instances across 8+ categories |
-| FR5.2 | Create companion metadata file `demo-fixture-expected-spans.json` documenting expected spans for automated validation |
-| FR5.3 | Document manual test script covering all 10 steps |
-| FR5.4 | Verify all edge cases listed in Edge Cases section |
+| FR5.2 | Create companion metadata file `demo-fixture-expected-spans.json` documenting expected spans for automated validation   |
+| FR5.3 | Document manual test script covering all 10 steps                                                                       |
+| FR5.4 | Verify all edge cases listed in Edge Cases section                                                                      |
 
 ### FR6: Polish
 
-| ID | Requirement |
-|----|-------------|
-| FR6.1 | `pnpm --filter @obiter/redaction-policy typecheck` passes with zero errors |
-| FR6.2 | `pnpm --filter @obiter/api typecheck` passes with zero errors |
-| FR6.3 | `pnpm --filter @obiter/redact-ui typecheck` passes with zero errors |
-| FR6.4 | `pnpm --filter @obiter/redaction-policy test` passes with zero failures |
-| FR6.5 | `pnpm --filter @obiter/api test` passes with zero failures |
-| FR6.6 | `docs/current-product-scope.md` updated: Redaction moved to Implemented Navigation |
-| FR6.7 | `docs/specs/redact/milestones.md` updated with M3 completion notes |
-| FR6.8 | Redaction sidebar entry (activated in Phase 2, PRD 2 FR11) verified to resolve to a working route; any remaining "(planned)" badge removed |
+| ID    | Requirement                                                                                                                                            |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| FR6.1 | `pnpm --filter @obiter/redaction-policy typecheck` passes with zero errors                                                                             |
+| FR6.2 | `pnpm --filter @obiter/api typecheck` passes with zero errors                                                                                          |
+| FR6.3 | `pnpm --filter @obiter/redact-ui typecheck` passes with zero errors                                                                                    |
+| FR6.4 | `pnpm --filter @obiter/redaction-policy test` passes with zero failures                                                                                |
+| FR6.5 | `pnpm --filter @obiter/api test` passes with zero failures                                                                                             |
+| FR6.6 | `docs/current-product-scope.md` updated: Redaction moved to Implemented Navigation                                                                     |
+| FR6.7 | `docs/specs/redact/milestones.md` updated with M3 completion notes                                                                                     |
+| FR6.8 | Redaction sidebar entry (activated in Phase 2, PRD 2 FR11) verified to resolve to a working route; any remaining "(planned)" badge removed             |
 | FR6.9 | `NOTICE` file added to the repo crediting `@nationaldesignstudio/rampart` (CC BY 4.0), and attribution surfaced in any user-facing about/licences page |
 
 ## Non-Functional Requirements
 
-| ID | Requirement |
-|----|-------------|
-| NFR1 | DOCX extraction must complete within 5 seconds for a 20-page document |
-| NFR2 | Audit report generation must complete within 2 seconds for a run with up to 200 spans |
-| NFR3 | Synthetic data generation must complete within 5 minutes for 500 documents |
+| ID   | Requirement                                                                                                     |
+| ---- | --------------------------------------------------------------------------------------------------------------- |
+| NFR1 | DOCX extraction must complete within 5 seconds for a 20-page document                                           |
+| NFR2 | Audit report generation must complete within 2 seconds for a run with up to 200 spans                           |
+| NFR3 | Synthetic data generation must complete within 5 minutes for 500 documents                                      |
 | NFR4 | Object storage must be available for extraction; if unavailable, extraction fails gracefully with a clear error |
-| NFR5 | All API endpoints must return proper JSON error responses with Obiter error codes |
-| NFR6 | Audit log entries must be append-only and immutable after creation |
+| NFR5 | All API endpoints must return proper JSON error responses with Obiter error codes                               |
+| NFR6 | Audit log entries must be append-only and immutable after creation                                              |
 
 ## Security and Compliance
 
-| ID | Requirement |
-|----|-------------|
-| SEC1 | The audit report contains PII in the original text (via span excerpts). Access to `GET /api/redaction-runs/:runId/audit` must be org-scoped and auth-guarded, same as the redaction run itself |
-| SEC2 | Synthetic data must use fabricated PII, not real personal data. No real names, addresses, or contact details from any actual person or case |
-| SEC3 | The dataset export tool must not export documents from different organisations into the same file. Each organisation's fine-tuning data must be kept separate |
-| SEC4 | Checkpoint files (fine-tuned weights) stored in object storage must be access-controlled. Checkpoints contain model weights derived from organisation's data |
-| SEC5 | Text extraction (mammoth) must run server-side only. The extraction logic must never be exposed client-side |
-| SEC6 | Original DOCX files and extracted text must have the same access controls: org-scoped, matter-scoped |
-| SEC7 | Audit report artifacts contain PII (span excerpts) and follow the matter lifecycle: deleting a matter or document version deletes its redaction runs, output artifacts, and audit report artifacts. Audit log *table* rows are retained append-only and contain no raw text (per PRD 2), so erasure requests do not break the audit trail |
-| SEC8 | Attribution: Rampart is CC BY 4.0 — a `NOTICE` file (or equivalent repo + user-facing attribution) crediting Rampart must ship with the product (FR6.9) |
+| ID   | Requirement                                                                                                                                                                                                                                                                                                                               |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SEC1 | The audit report contains PII in the original text (via span excerpts). Access to `GET /api/redaction-runs/:runId/audit` must be org-scoped and auth-guarded, same as the redaction run itself                                                                                                                                            |
+| SEC2 | Synthetic data must use fabricated PII, not real personal data. No real names, addresses, or contact details from any actual person or case                                                                                                                                                                                               |
+| SEC3 | The dataset export tool must not export documents from different organisations into the same file. Each organisation's fine-tuning data must be kept separate                                                                                                                                                                             |
+| SEC4 | Checkpoint files (fine-tuned weights) stored in object storage must be access-controlled. Checkpoints contain model weights derived from organisation's data                                                                                                                                                                              |
+| SEC5 | Text extraction (mammoth) must run server-side only. The extraction logic must never be exposed client-side                                                                                                                                                                                                                               |
+| SEC6 | Original DOCX files and extracted text must have the same access controls: org-scoped, matter-scoped                                                                                                                                                                                                                                      |
+| SEC7 | Audit report artifacts contain PII (span excerpts) and follow the matter lifecycle: deleting a matter or document version deletes its redaction runs, output artifacts, and audit report artifacts. Audit log _table_ rows are retained append-only and contain no raw text (per PRD 2), so erasure requests do not break the audit trail |
+| SEC8 | Attribution: Rampart is CC BY 4.0 — a `NOTICE` file (or equivalent repo + user-facing attribution) crediting Rampart must ship with the product (FR6.9)                                                                                                                                                                                   |
 
 ## Dependencies
 
-| Dependency | Status | Notes |
-|------------|--------|-------|
-| `mammoth` npm package | Available | Add to `services/api/package.json` |
-| Text extraction slot (`text_object_key` column) | Done (migration 0002) | Already exists on `document_versions` |
-| Artifacts table with `redaction_report` type | Done (migration 0002) | Enum includes `redaction_report` |
-| Audit log function (`appendAuditLog`) | Done (`database.ts`) | The `redaction.*` action types do not exist yet — they are added to the `AuditRecordInput` union by PRDs 1–2 |
-| Object storage for text and output | Not wired (verified July 2026) | No storage client exists; document upload is metadata-only. Binary upload + object-storage adapter scoped as FR1.11–FR1.12; Phases 1–2 run on the local-FS `StorageService` adapter |
-| Rampart custom label space | New | Defined in this PRD as `obiter_legal_v1` |
-| Migration `0006_document_extraction.sql` (`document_status`, `failure_reason` on `document_versions`) | New | Defined in this PRD (FR1.9) |
-| Redact PRD 1: Detection Pipeline | Assumed complete | Worker, supplement, merge, database queries |
-| Redact PRD 2: Review and Output | Assumed complete | Review UI, decisions, finalize, pseudonymisation |
-| App shell rebuild (real auth/matters wiring, design system) | Planned — parallel track ([App Shell Rebuild PRD](app-shell-rebuild.md)) | The firm-facing demo navigates real matters in the UI; today's shell renders Phase 0 fixture data and nothing calls `/api/matters`. The rebuild delivers the live matters UI and the component contract PRD 2's review UI builds against |
-| Synthetic data generation scripts | New | Node.js/TypeScript scripts under `scripts/` |
-| Dataset export tool | New | Node.js/TypeScript script under `scripts/` |
+| Dependency                                                                                            | Status                                                                   | Notes                                                                                                                                                                                                                                    |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `mammoth` npm package                                                                                 | Available                                                                | Add to `services/api/package.json`                                                                                                                                                                                                       |
+| Text extraction slot (`text_object_key` column)                                                       | Done (migration 0002)                                                    | Already exists on `document_versions`                                                                                                                                                                                                    |
+| Artifacts table with `redaction_report` type                                                          | Done (migration 0002)                                                    | Enum includes `redaction_report`                                                                                                                                                                                                         |
+| Audit log function (`appendAuditLog`)                                                                 | Done (`database.ts`)                                                     | The `redaction.*` action types do not exist yet — they are added to the `AuditRecordInput` union by PRDs 1–2                                                                                                                             |
+| Object storage for text and output                                                                    | Not wired (verified July 2026)                                           | No storage client exists; document upload is metadata-only. Binary upload + object-storage adapter scoped as FR1.11–FR1.12; Phases 1–2 run on the local-FS `StorageService` adapter                                                      |
+| Rampart custom label space                                                                            | New                                                                      | Defined in this PRD as `obiter_legal_v1`                                                                                                                                                                                                 |
+| Migration `0006_document_extraction.sql` (`document_status`, `failure_reason` on `document_versions`) | New                                                                      | Defined in this PRD (FR1.9)                                                                                                                                                                                                              |
+| Redact PRD 1: Detection Pipeline                                                                      | Assumed complete                                                         | Worker, supplement, merge, database queries                                                                                                                                                                                              |
+| Redact PRD 2: Review and Output                                                                       | Assumed complete                                                         | Review UI, decisions, finalize, pseudonymisation                                                                                                                                                                                         |
+| App shell rebuild (real auth/matters wiring, design system)                                           | Planned — parallel track ([App Shell Rebuild PRD](app-shell-rebuild.md)) | The firm-facing demo navigates real matters in the UI; today's shell renders Phase 0 fixture data and nothing calls `/api/matters`. The rebuild delivers the live matters UI and the component contract PRD 2's review UI builds against |
+| Synthetic data generation scripts                                                                     | New                                                                      | Node.js/TypeScript scripts under `scripts/`                                                                                                                                                                                              |
+| Dataset export tool                                                                                   | New                                                                      | Node.js/TypeScript script under `scripts/`                                                                                                                                                                                               |
 
 See sibling PRDs: [Redact PRD 1: Detection Pipeline](redact-1-detection.md), [Redact PRD 2: Review and Output](redact-2-review-output.md).
 
@@ -865,46 +950,46 @@ The following must be true for M3 sign-off:
 
 ## Metrics
 
-| Metric | Target | How to measure |
-|--------|--------|----------------|
-| DOCX extraction success rate | > 99% of valid DOCX files | Count extraction failures vs total uploads |
-| DOCX extraction latency (p95) | < 5s for 20-page doc | Server-side timing |
-| Audit report generation latency (p95) | < 2s | Server-side timing |
-| Synthetic data generation speed | < 5 min for 500 docs | Script execution time |
-| Synthetic data validation pass rate | 100% | All generated documents must pass validation |
-| Demo end-to-end time | < 5 min (manual) | Stopwatch |
-| Type-check zero-errors | 100% | CI pipeline |
-| Test pass rate | 100% | CI pipeline (`pnpm test`) |
-| Synthetic data documents | ≥ 200 | Generated manifest count |
-| PII types covered | ≥ 10 | Manifest category coverage |
-| Document types covered | ≥ 7 | Manifest document type list |
-| Dataset export tool runs without error | 100% | Test with at least 10 runs |
+| Metric                                 | Target                    | How to measure                               |
+| -------------------------------------- | ------------------------- | -------------------------------------------- |
+| DOCX extraction success rate           | > 99% of valid DOCX files | Count extraction failures vs total uploads   |
+| DOCX extraction latency (p95)          | < 5s for 20-page doc      | Server-side timing                           |
+| Audit report generation latency (p95)  | < 2s                      | Server-side timing                           |
+| Synthetic data generation speed        | < 5 min for 500 docs      | Script execution time                        |
+| Synthetic data validation pass rate    | 100%                      | All generated documents must pass validation |
+| Demo end-to-end time                   | < 5 min (manual)          | Stopwatch                                    |
+| Type-check zero-errors                 | 100%                      | CI pipeline                                  |
+| Test pass rate                         | 100%                      | CI pipeline (`pnpm test`)                    |
+| Synthetic data documents               | ≥ 200                     | Generated manifest count                     |
+| PII types covered                      | ≥ 10                      | Manifest category coverage                   |
+| Document types covered                 | ≥ 7                       | Manifest document type list                  |
+| Dataset export tool runs without error | 100%                      | Test with at least 10 runs                   |
 
 ## Risks
 
-| Risk | Likelihood | Impact | Mitigation |
-|------|-----------|--------|------------|
-| **Mammoth produces poor extraction** from complex legal DOCX (tables, headers, footnotes) | Medium | Medium | Test with 10+ real legal DOCX files before committing. Have fallback (`docx4js`) identified. For tables specifically: verify text reads left-to-right, top-to-bottom per mammoth's documented behaviour. |
-| **Object storage not wired** for text_object_key path | Certain (verified July 2026) | High | Scoped as FR1.11–FR1.12. Phases 1–2 run on the local-filesystem `StorageService` adapter with the same path structure; budget Week 9 for multipart upload and the object-storage adapter. |
-| **Synthetic data unrealistic** — fails the "looks like a real legal document" test | Medium | High | Have a legal professional review 10 sample documents before generating the full set. Iterate on templates. |
-| **Rampart model memory on 4vCPU/8GB server** during synthetic data generation | Low (generation happens offline) | Low | Generation runs on dev machine, not server. Rampart runs in-process at ~50-100 MB steady state. |
-| **Audit report HTML export** has poor rendering for large span sets | Low | Medium | Test with 200-span run. Limit HTML page size by paginating audit log entries if needed. |
-| **Dataset export tool produces sparse output** — few finalized runs with full review | Medium | Medium | Seed with synthetic data initially (from the generator). Real data grows over time. The tool itself should work correctly even with 1 run. |
-| **Sidebar link** (activated in Phase 2) resolves to an empty or broken state | Low | Medium | Verify the route end-to-end during Week 11 polish. Use the matter-level document list as entry point. |
-| **PDF uploads need clear error handling** — users will try uploading PDFs | High | Low | Block at upload with clear error message. Document in API docs. |
+| Risk                                                                                      | Likelihood                       | Impact | Mitigation                                                                                                                                                                                               |
+| ----------------------------------------------------------------------------------------- | -------------------------------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Mammoth produces poor extraction** from complex legal DOCX (tables, headers, footnotes) | Medium                           | Medium | Test with 10+ real legal DOCX files before committing. Have fallback (`docx4js`) identified. For tables specifically: verify text reads left-to-right, top-to-bottom per mammoth's documented behaviour. |
+| **Object storage not wired** for text_object_key path                                     | Certain (verified July 2026)     | High   | Scoped as FR1.11–FR1.12. Phases 1–2 run on the local-filesystem `StorageService` adapter with the same path structure; budget Week 9 for multipart upload and the object-storage adapter.                |
+| **Synthetic data unrealistic** — fails the "looks like a real legal document" test        | Medium                           | High   | Have a legal professional review 10 sample documents before generating the full set. Iterate on templates.                                                                                               |
+| **Rampart model memory on 4vCPU/8GB server** during synthetic data generation             | Low (generation happens offline) | Low    | Generation runs on dev machine, not server. Rampart runs in-process at ~50-100 MB steady state.                                                                                                          |
+| **Audit report HTML export** has poor rendering for large span sets                       | Low                              | Medium | Test with 200-span run. Limit HTML page size by paginating audit log entries if needed.                                                                                                                  |
+| **Dataset export tool produces sparse output** — few finalized runs with full review      | Medium                           | Medium | Seed with synthetic data initially (from the generator). Real data grows over time. The tool itself should work correctly even with 1 run.                                                               |
+| **Sidebar link** (activated in Phase 2) resolves to an empty or broken state              | Low                              | Medium | Verify the route end-to-end during Week 11 polish. Use the matter-level document list as entry point.                                                                                                    |
+| **PDF uploads need clear error handling** — users will try uploading PDFs                 | High                             | Low    | Block at upload with clear error message. Document in API docs.                                                                                                                                          |
 
 ## Open Questions
 
-1. **Should mammoth be replaced with a Python-based DOCX extractor** (python-docx)? This would keep text extraction closer to detection logic if Python is needed for fine-tuning anyway. *Decision: stay with mammoth for Phase 3. The Node.js API already handles uploads. No Python service runs in production. Python is only used offline for fine-tuning.*
+1. **Should mammoth be replaced with a Python-based DOCX extractor** (python-docx)? This would keep text extraction closer to detection logic if Python is needed for fine-tuning anyway. _Decision: stay with mammoth for Phase 3. The Node.js API already handles uploads. No Python service runs in production. Python is only used offline for fine-tuning._
 
-2. **How should the synthetic data generator be validated by a legal professional?** We need a process for at least one qualified reviewer to spot-check synthetic documents. *Approach: generate 300, randomly sample 30 across all document types, send as PDF for review. Iterate on templates.*
+2. **How should the synthetic data generator be validated by a legal professional?** We need a process for at least one qualified reviewer to spot-check synthetic documents. _Approach: generate 300, randomly sample 30 across all document types, send as PDF for review. Iterate on templates._
 
-3. **Should the synthetic data include organisation names as PII?** Rampart does not label `organisation_name` natively. If firms want to redact organisation names (e.g., competitor names in a commercial dispute), this needs a custom label and fine-tuning. *Deferred: for Phase 3, organisation names are marked but not included in the custom label space. Add `organisation_name` as a custom label post-MVP if firms require it.*
+3. **Should the synthetic data include organisation names as PII?** Rampart does not label `organisation_name` natively. If firms want to redact organisation names (e.g., competitor names in a commercial dispute), this needs a custom label and fine-tuning. _Deferred: for Phase 3, organisation names are marked but not included in the custom label space. Add `organisation_name` as a custom label post-MVP if firms require it._
 
 4. **What is the checkpoint versioning strategy for fine-tuned models?** Simple: store checkpoints in `op_artifacts/redact-checkpoints/obiter_legal_v1/YYYY-MM-DD/` with a metadata JSON. For Phase 3, a `checkpoint_versions` table is optional — document the path first, implement the table when the first fine-tune happens.
 
 5. **Should the audit report include the full extracted text?** No — the report includes span excerpts but not the full text. Full text is accessible via the original document reference. Including it would make the audit artifact very large and duplicate storage.
 
-6. **What is the right role taxonomy for `obiter_legal_v2`?** The roadmap proposes `person_party` / `person_professional` / `person_protected`, but the boundaries need legal review: is a witness a party or its own class? Do McKenzie friends, litigation friends, and interpreters count as professionals? Does `person_protected` need to distinguish statutory anonymity (contempt risk) from discretionary anonymity orders? *Approach: validate the taxonomy with the same legal professional who reviews the synthetic data samples (Open Question 2), before v2 data generation begins. The v1 role metadata (`info.roles`) should use fine-grained role names (judge, counsel, solicitor, claimant, defendant, witness, expert, child) so the v2 taxonomy can be decided later by grouping, not re-annotation.*
+6. **What is the right role taxonomy for `obiter_legal_v2`?** The roadmap proposes `person_party` / `person_professional` / `person_protected`, but the boundaries need legal review: is a witness a party or its own class? Do McKenzie friends, litigation friends, and interpreters count as professionals? Does `person_protected` need to distinguish statutory anonymity (contempt risk) from discretionary anonymity orders? _Approach: validate the taxonomy with the same legal professional who reviews the synthetic data samples (Open Question 2), before v2 data generation begins. The v1 role metadata (`info.roles`) should use fine-grained role names (judge, counsel, solicitor, claimant, defendant, witness, expert, child) so the v2 taxonomy can be decided later by grouping, not re-annotation._
 
-7. **How do we handle redaction of text inside DOCX tables specifically?** Mammoth extracts table cells as text separated by newlines, preserving row and cell order. Rampart detects PII across all text regardless of original layout. *Acceptable for Phase 3 — detecting PII in table text at the right granularity. Position-aware redaction (e.g., overlay redaction boxes over original content) is deferred to a future phase (PDF handling).*
+7. **How do we handle redaction of text inside DOCX tables specifically?** Mammoth extracts table cells as text separated by newlines, preserving row and cell order. Rampart detects PII across all text regardless of original layout. _Acceptable for Phase 3 — detecting PII in table text at the right granularity. Position-aware redaction (e.g., overlay redaction boxes over original content) is deferred to a future phase (PDF handling)._

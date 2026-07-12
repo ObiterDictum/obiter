@@ -1,0 +1,24 @@
+{
+  "fixture": "demo-fixture.docx",
+  "purpose": "Manual Redact demo smoke fixture; not an accuracy benchmark.",
+  "expectedCategories": [
+    "person_name",
+    "address",
+    "email",
+    "phone",
+    "date",
+    "national_insurance",
+    "case_reference",
+    "account_number",
+    "organisation_name"
+  ],
+  "notableValues": [
+    "Mr James Cartwright",
+    "42 Belgrave Road, Leicester LE4 5AB",
+    "JX 12 34 56 D",
+    "REF/2024/0123",
+    "j.cartwright@personal.example",
+    "020 7946 0958"
+  ],
+  "reviewGuidance": "Reject Mr Justice Holroyd and Ms Priya Sharma as public-record professionals; accept private party and contact details."
+}
