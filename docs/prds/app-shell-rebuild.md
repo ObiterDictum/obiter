@@ -29,14 +29,14 @@ Verified against the codebase (July 2026):
 Verified current stack: React 19, TanStack Router + Query + Start, Vite 8, TypeScript, pnpm workspace, Vitest. Electron desktop app (`apps/desktop`) consumes `@obiter/app-shell`.
 
 | Decision | Choice | Rationale |
-|---|---|---|
+| --- | --- | --- |
 | Framework, routing, data | **Keep**: React 19, TanStack Router/Query/Start, Vite 8 | Modern, working, and the Search surface already proves the pattern. A framework swap would discard working infrastructure for no stated deficiency. |
 | Component primitives | **Add**: Base UI (`@base-ui-components/react`) | Headless, accessible primitives (dialog, menu, popover, select, tabs, tooltip) from the Radix/MUI lineage. We own the visual layer; Base UI owns focus management, ARIA, and interaction correctness. |
 | Styling | **Add**: Tailwind CSS v4, driven by design tokens as CSS variables | Replaces the 3,219-line hand-rolled stylesheet. Tokens (`--obiter-*` CSS variables) are the source of truth; Tailwind consumes them via `@theme`. Note: Redact PRD 2's category color mapping consumes these tokens. |
 | Component library | **Build**: `@obiter/ui` becomes real | The existing stub package becomes the styled component library: Button, Input, Select, Dialog, Table, Tabs, Badge, Toast, EmptyState, Skeleton, etc., built on Base UI + tokens. |
 | Icons | **One pack**: Phosphor (`@phosphor-icons/react`); remove `@heroicons/react` | Deliberately not Lucide — the founder wants a less generic visual identity than the default stack. Phosphor: 1,200+ icons, first-class React package, multiple weights (regular/bold/duotone/fill) that give the UI distinctive character while staying coherent. Enforced by an ESLint `no-restricted-imports` rule against any other icon package. |
 | Fixture layer | **Delete**: `createPhaseZeroShellSnapshot`, demo `MeResponse`, `demo-shell.test.ts` | Replaced by real endpoints + a `pnpm seed` development dataset. |
-| Effect TS | **Not used in the shell or UI packages** | Effect is running as a contained pilot in the Redact detection module only ([Redact PRD 1](redact-1-detection.md), Effect TS Pilot section). Do not add `effect` as a dependency of `@obiter/ui`, `@obiter/app-shell`, or `@obiter/web`; async/data concerns in the UI belong to TanStack Query. |
+| Effect TS | **Not used** | The proposed Redact detection-module pilot was never implemented. Detection ships as plain TypeScript; a future Effect evaluation requires its own decision. Do not add `effect` as a dependency of `@obiter/ui`, `@obiter/app-shell`, or `@obiter/web`; async/data concerns in the UI belong to TanStack Query. |
 
 ## Scope
 
@@ -106,23 +106,27 @@ The Redact review UI imports only from `@obiter/ui`, `@obiter/app-shell` public 
 ## Rollout
 
 ### Milestone 1 — Foundation and contract freeze
+
 Design tokens, Tailwind v4 setup, `@obiter/ui` primitive set, app frame, auth wiring, `apiFetch` + `useCurrentUser`, empty document-detail route scaffold. **Contract freeze at the end of M1** — the Redact track starts its UI build here.
 
 ### Milestone 2 — Live surfaces
+
 Matters list/create/detail, documents list, document detail content, Home, seed script. Delete the fixture layer. This is the moment the "demo data" tier ceases to exist.
 
 ### Milestone 3 — Migration and polish
+
 Search and stored-case-page restyle; **desktop parity pass** (Electron renderer on the new tokens/components/typefaces, legacy `styles.css` deleted everywhere — FR9); theming pass, lint enforcement, scope-doc update, dead CSS removal. Web deployability: `apps/web` Dockerfile + Dokploy same-domain Traefik routing (`/api` → api app) per [docs/specs/deployment.md](../specs/deployment.md). Exit check: click through every reachable screen on web and desktop — none may render the legacy design.
 
 > **Status (July 2026, M3 close):** the Search/case restyle itself shipped earlier in PR #24 (`app-shell-ui-redesign`), which moved `LegalSearchView` / `CaseLawDocumentView` onto the `--obiter-*` tokens and `@obiter/ui` and deleted the 3,219-line `packages/app-shell/src/styles.css`. M3 closes the residue honestly: the two remaining orphaned legacy files (`packages/ui/src/styles.css`, `packages/ui/src/index.tsx`) are deleted; the hex-color lint guard is added (the icon-pack rule already existed); the desktop window background picks light/dark via `nativeTheme.shouldUseDarkColors`; the `apps/web` Dockerfile + dependency-free SSR host + Dokploy/Traefik same-domain routing are in place (see deployment.md). One verification gap is documented: `docker build` was not run in the dev environment (no Docker there); the SSR host was exercised against a local build instead. Desktop parity is verified grep-only (no Electron runtime in the dev environment) — desktop shares the web shell's views and CSS by construction, so the web proof covers it.
 
 ### Definition of Done
+
 All FRs met; both themes verified on every screen; contract exports documented; Redact review UI (built in parallel) renders inside the shell without contract violations; `pnpm typecheck` and all tests pass across `@obiter/ui`, `@obiter/app-shell`, `@obiter/web`.
 
 ## Risks
 
 | Risk | Likelihood | Impact | Mitigation |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Parallel-track drift: Redact UI needs a component or token the contract lacks | Medium | Medium | Contract freeze at M1 with an explicit change process (both PRDs updated together); the plan owner reviews both tracks at each milestone. |
 | Base UI gaps (it is a newer library) for a needed primitive | Low-Medium | Medium | The styled layer lives in `@obiter/ui`, so a single primitive can be swapped (e.g. hand-rolled or another headless source) without feature-code changes. |
 | Search regression during restyle | Medium | Medium | Search logic untouched; existing tests must pass; restyle is markup/class-level only. |

@@ -51,7 +51,7 @@ Documents owns:
 - `GET /api/matters/:matterId/documents`
 - `GET /api/documents/:id`
 
-- Redaction: `/redact` and `/redact/:runId` provide organisation-scoped standalone-text detection review, decisions and finalized outputs. The API exposes an audit-report download and can create document-linked runs from extracted DOCX/TXT text; selecting/uploading a matter document from the shell remains future work. **Detection today is deterministic UK patterns only** (`packages/redaction-policy/src/supplement.ts`): national insurance numbers, case references, organisation names, emails, UK phone numbers, postcodes, GB IBANs, and context-gated sort codes / account numbers. The Rampart token-classification model integration (names, addresses, dates of birth, and all context-dependent detection) is planned but not shipped — it is a separate upcoming track, not part of the current implementation.
+- Redaction: `/redact` and `/redact/:runId` provide organisation-scoped standalone-text detection review, decisions and finalized outputs. The API exposes an audit-report download and can create document-linked runs from extracted DOCX/TXT text; selecting/uploading a matter document from the shell remains future work. Detection runs server-side vendored Rampart inference from Obiter's pinned `qarlus/rampart` mirror plus the deterministic UK supplement, with merged spans and an auditable detector version. If model loading or inference fails, runs complete supplement-only and record degraded mode. Desktop-local inference remains future work.
 
 Redaction owns:
 
