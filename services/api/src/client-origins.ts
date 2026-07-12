@@ -1,5 +1,9 @@
 import type { ApiEnv } from './env'
 
+/** electron-vite / Vite default port and the bump range when the default is taken. */
+export const DEV_DESKTOP_RENDERER_PORT_MIN = 5173
+export const DEV_DESKTOP_RENDERER_PORT_MAX = 5199
+
 /**
  * Origins of product clients that may call this API (CORS + better-auth CSRF).
  * `authBaseUrl` is included for CORS; better-auth also trusts its own baseURL.
@@ -11,55 +15,83 @@ export function configuredClientOrigins(env: ApiEnv): string[] {
 }
 
 /**
- * Electron `pnpm dev:desktop` loads the renderer from electron-vite
- * (default http://localhost:5173, next free port if taken). That Origin reaches
- * the API via the renderer /api proxy and must be trusted in development.
+ * Electron `pnpm dev:desktop` loads the renderer from electron-vite over plain
+ * http (default http://localhost:5173, next free port if taken). That Origin
+ * reaches the API via the renderer /api proxy and must be trusted in
+ * development. https is rejected: electron-vite does not serve TLS in dev, and
+ * CORS + better-auth must use the same gate.
  */
 export function isDevDesktopRendererOrigin(origin: string): boolean {
   try {
     const url = new URL(origin)
-    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    if (url.protocol !== 'http:') {
       return false
     }
     if (url.hostname !== 'localhost' && url.hostname !== '127.0.0.1') {
       return false
     }
-    // Vite / electron-vite default range; avoid trusting arbitrary local ports.
-    const port = url.port === '' ? (url.protocol === 'https:' ? 443 : 80) : Number(url.port)
-    return Number.isInteger(port) && port >= 5173 && port <= 5199
+    const port = url.port === '' ? 80 : Number(url.port)
+    return (
+      Number.isInteger(port) &&
+      port >= DEV_DESKTOP_RENDERER_PORT_MIN &&
+      port <= DEV_DESKTOP_RENDERER_PORT_MAX
+    )
   } catch {
     return false
   }
 }
 
 /**
- * better-auth `trustedOrigins` (supports `*` wildcards). Includes configured
- * clients plus loopback Vite ports in development for the desktop renderer.
+ * Single allow decision shared by CORS and better-auth. Configured clients
+ * always; in development, also the electron-vite renderer Origin gate.
+ *
+ * Assumes real deploys set NODE_ENV=production. Unset/typo'd NODE_ENV falls
+ * through to development in readApiEnv and would enable this loopback trust.
  */
-export function authTrustedOrigins(env: ApiEnv): string[] {
-  const origins = configuredClientOrigins(env)
-  if (env.nodeEnv === 'development') {
-    // Port may bump when 5173 is busy; wildcard matches electron-vite's range.
-    origins.push('http://localhost:5173', 'http://localhost:5174', 'http://localhost:5175')
-    origins.push('http://127.0.0.1:5173', 'http://127.0.0.1:5174', 'http://127.0.0.1:5175')
-    origins.push('http://localhost:*', 'http://127.0.0.1:*')
+export function isAllowedClientOrigin(env: ApiEnv, origin: string): boolean {
+  if (configuredClientOrigins(env).includes(origin)) {
+    return true
   }
-  return [...new Set(origins)]
+  return env.nodeEnv === 'development' && isDevDesktopRendererOrigin(origin)
+}
+
+export type AuthTrustedOrigins =
+  | string[]
+  | ((request?: Request) => string[] | Promise<string[]>)
+
+/**
+ * better-auth `trustedOrigins`. Static configured clients outside development;
+ * in development a per-request function that adds the request Origin only when
+ * it passes `isDevDesktopRendererOrigin` (same gate as CORS — no port wildcards).
+ *
+ * Assumes real deploys set NODE_ENV=production (see isAllowedClientOrigin).
+ */
+export function authTrustedOrigins(env: ApiEnv): AuthTrustedOrigins {
+  const configured = configuredClientOrigins(env)
+
+  if (env.nodeEnv !== 'development') {
+    return configured
+  }
+
+  return (request?: Request) => {
+    const origins = [...configured]
+    const header = request?.headers.get('origin')
+    if (header && isDevDesktopRendererOrigin(header)) {
+      origins.push(header)
+    }
+    return origins
+  }
 }
 
 /**
- * Hono CORS `origin` option: exact allowlist, plus loopback Vite renderer
- * Origins in development (credentials require reflecting the request Origin).
+ * Hono CORS `origin` option: reflect the request Origin when allowed
+ * (credentials require an exact match, not `*`).
+ *
+ * Assumes real deploys set NODE_ENV=production (see isAllowedClientOrigin).
  */
 export function corsAllowedOrigin(
   env: ApiEnv,
   requestOrigin: string,
 ): string | undefined {
-  if (configuredClientOrigins(env).includes(requestOrigin)) {
-    return requestOrigin
-  }
-  if (env.nodeEnv === 'development' && isDevDesktopRendererOrigin(requestOrigin)) {
-    return requestOrigin
-  }
-  return undefined
+  return isAllowedClientOrigin(env, requestOrigin) ? requestOrigin : undefined
 }
