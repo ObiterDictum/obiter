@@ -161,21 +161,21 @@ export async function getDocumentRedactionSource(pool: Pool, organisationId: str
 
 export async function createRedactionRun(input: {
   pool: Pool; id: string; organisationId: string; userId: string; sourceFilename: string; sourceTextObjectKey: string | null
-  spans: RedactionSpan[]; policyMode: RedactionPolicyMode; matterId?: string; documentId?: string; documentVersionId?: string
+  spans: RedactionSpan[]; detectorVersion: string; policyMode: RedactionPolicyMode; matterId?: string; documentId?: string; documentVersionId?: string
 }) {
   const linked = input.matterId && input.documentId && input.documentVersionId
   const result = await input.pool.query<RedactionRunRow>(`
     insert into redaction_runs (
       id, organisation_id, matter_id, document_id, document_version_id, source_filename, source_text_object_key,
-      status, policy_mode, spans_json, decisions_json, summary_json, created_by, created_at, updated_at
-    ) values ($1, $2, $3, $4, $5, $6, $7, 'ready_for_review', $8, $9::jsonb, '{}'::jsonb, $10::jsonb, $11, now(), now())
+      status, policy_mode, spans_json, decisions_json, summary_json, detector_version, created_by, created_at, updated_at
+    ) values ($1, $2, $3, $4, $5, $6, $7, 'ready_for_review', $8, $9::jsonb, '{}'::jsonb, $10::jsonb, $11, $12, now(), now())
     returning id, organisation_id, matter_id, null::text as matter_name, document_id, document_version_id,
       source_filename, source_text_object_key, status, policy_mode, spans_json, decisions_json, output_artifact_id,
       summary_json, detector_version, created_by, created_at, updated_at
   `, [
     input.id, input.organisationId, linked ? input.matterId : null, linked ? input.documentId : null,
     linked ? input.documentVersionId : null, input.sourceFilename, input.sourceTextObjectKey, input.policyMode,
-    JSON.stringify(input.spans), JSON.stringify(computeSummary(input.spans, {})), input.userId,
+    JSON.stringify(input.spans), JSON.stringify(computeSummary(input.spans, {})), input.detectorVersion, input.userId,
   ])
   return mapRun(result.rows[0])
 }
