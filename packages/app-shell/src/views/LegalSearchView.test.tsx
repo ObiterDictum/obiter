@@ -13,12 +13,29 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({
     children,
     className,
+    to,
+    params,
+    href,
     ...props
   }: {
     children: ReactNode
     className?: string
+    to?: string
+    params?: Record<string, string>
+    href?: string
     [key: string]: unknown
-  }) => <a className={className} {...props}>{children}</a>,
+  }) => {
+    const resolvedHref =
+      href ??
+      (typeof to === 'string'
+        ? to.replace(/\$([A-Za-z0-9_]+)/g, (_, key: string) => params?.[key] ?? '')
+        : undefined)
+    return (
+      <a className={className} href={resolvedHref} {...props}>
+        {children}
+      </a>
+    )
+  },
 }))
 
 interface DeferredResponse {
@@ -478,7 +495,8 @@ describe('LegalSearchView debounce lifecycle', () => {
     await pressKey('Enter')
 
     expect(routerMocks.navigate).toHaveBeenCalledWith({
-      href: '/case/potanina-v-potanin-2024-uksc-3',
+      to: '/case/$caseSlug',
+      params: { caseSlug: 'potanina-v-potanin-2024-uksc-3' },
     })
   })
 
