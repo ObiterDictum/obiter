@@ -51,12 +51,17 @@ export { ResetPasswordRouteView } from './views/reset-password'
 export { HomeRouteView } from './views/home'
 export { MattersRouteView, MatterRouteView } from './views/matters'
 export { DocumentDetailLayoutView } from './views/document-detail'
+export { caseResultLocation } from './case-navigation'
 
 // Search surfaces (M3 restyle; logic unchanged)
 export {
   CaseLawDocumentView,
   caseLawDocumentQueryOptions,
 } from './views/CaseLawDocumentView'
+export {
+  createCanonicalCasePath,
+  resolveCaseDocumentIdFromSlug,
+} from '@obiter/contracts'
 export {
   LegalSearchView,
   LEGAL_SEARCH_DEBOUNCE_MS,

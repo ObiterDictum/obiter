@@ -11,6 +11,7 @@ const mock = vi.hoisted(() => ({
   signUpEmail: vi.fn(),
   signOutFn: vi.fn(),
   useSession: vi.fn(),
+  refetch: vi.fn(),
 }))
 
 vi.mock('better-auth/react', () => ({
@@ -26,7 +27,7 @@ vi.mock('better-auth/client/plugins', () => ({
   magicLinkClient: () => ({}),
 }))
 
-const { signInEmail, signUpEmail, useSession, signOutFn } = mock
+const { signInEmail, signUpEmail, useSession, signOutFn, refetch } = mock
 
 function createWrapper(client: QueryClient) {
   return function Wrapper({ children }: { children: ReactNode }) {
@@ -36,7 +37,112 @@ function createWrapper(client: QueryClient) {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  useSession.mockReturnValue({ data: null, isPending: false })
+  refetch.mockResolvedValue(undefined)
+  useSession.mockReturnValue({ data: null, isPending: false, refetch })
+})
+
+describe('useAuth — session refresh after credential auth', () => {
+  it('refetches the session store after a successful email/password sign-in', async () => {
+    signInEmail.mockResolvedValueOnce({ error: null, data: { token: 'tok', user: { id: 'usr_1' } } })
+
+    const { result } = renderHook(() => useAuth(), { wrapper: createWrapper(new QueryClient()) })
+
+    await act(async () => {
+      await result.current.signInWithEmail({ email: 'lex@obiter.dev', password: 'obiter-dev' })
+    })
+
+    expect(refetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not refetch the session when sign-in fails', async () => {
+    signInEmail.mockResolvedValueOnce({
+      error: { message: 'Invalid email or password.' },
+      data: null,
+    })
+
+    const { result } = renderHook(() => useAuth(), { wrapper: createWrapper(new QueryClient()) })
+
+    await act(async () => {
+      await result.current.signInWithEmail({ email: 'lex@obiter.dev', password: 'wrong' })
+    })
+
+    expect(refetch).not.toHaveBeenCalled()
+  })
+
+  it('refetches the session when sign-up establishes a session token', async () => {
+    signUpEmail.mockResolvedValueOnce({
+      error: null,
+      data: { token: 'tok', user: { id: 'usr_2' } },
+    })
+
+    const { result } = renderHook(() => useAuth(), { wrapper: createWrapper(new QueryClient()) })
+
+    await act(async () => {
+      await result.current.signUpWithEmail({
+        name: 'Lex',
+        email: 'lex@obiter.dev',
+        password: 'password123',
+      })
+    })
+
+    expect(refetch).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not refetch when sign-up only requires email verification', async () => {
+    signUpEmail.mockResolvedValueOnce({
+      error: null,
+      data: { token: null, user: { id: 'usr_2' } },
+    })
+
+    const { result } = renderHook(() => useAuth(), { wrapper: createWrapper(new QueryClient()) })
+
+    await act(async () => {
+      await result.current.signUpWithEmail({
+        name: 'New',
+        email: 'new@obiter.dev',
+        password: 'password123',
+      })
+    })
+
+    expect(refetch).not.toHaveBeenCalled()
+  })
+
+  it('still returns ok when session refetch rejects after a successful sign-in', async () => {
+    signInEmail.mockResolvedValueOnce({ error: null, data: { token: 'tok', user: { id: 'usr_1' } } })
+    refetch.mockRejectedValueOnce(new Error('session GET failed'))
+
+    const { result } = renderHook(() => useAuth(), { wrapper: createWrapper(new QueryClient()) })
+
+    let outcome
+    await act(async () => {
+      outcome = await result.current.signInWithEmail({ email: 'lex@obiter.dev', password: 'obiter-dev' })
+    })
+
+    expect(refetch).toHaveBeenCalledTimes(1)
+    expect(outcome).toEqual({ ok: true })
+  })
+
+  it('still returns ok when session refetch rejects after a session-establishing sign-up', async () => {
+    signUpEmail.mockResolvedValueOnce({
+      error: null,
+      data: { token: 'tok', user: { id: 'usr_2' } },
+    })
+    refetch.mockRejectedValueOnce(new Error('session GET failed'))
+
+    const { result } = renderHook(() => useAuth(), { wrapper: createWrapper(new QueryClient()) })
+
+    let outcome
+    await act(async () => {
+      outcome = await result.current.signUpWithEmail({
+        name: 'Lex',
+        email: 'lex@obiter.dev',
+        password: 'password123',
+      })
+    })
+
+    expect(refetch).toHaveBeenCalledTimes(1)
+    expect(outcome).toEqual({ ok: true })
+  })
 })
 
 describe('useAuth — sign-in success/failure', () => {
@@ -119,6 +225,7 @@ describe('useAuth — session presence', () => {
     useSession.mockReturnValue({
       data: { user: { id: 'usr_1' }, session: { id: 'ses_1' } },
       isPending: false,
+      refetch,
     })
 
     const { result } = renderHook(() => useAuth(), { wrapper: createWrapper(new QueryClient()) })
@@ -131,7 +238,7 @@ describe('useAuth — session presence', () => {
   })
 
   it('reports null session when unauthenticated', () => {
-    useSession.mockReturnValue({ data: null, isPending: false })
+    useSession.mockReturnValue({ data: null, isPending: false, refetch })
     const { result } = renderHook(() => useAuth(), { wrapper: createWrapper(new QueryClient()) })
     expect(result.current.session).toBeNull()
   })

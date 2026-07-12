@@ -29,10 +29,10 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
   const [submitting, setSubmitting] = useState(false)
 
   async function goToHome() {
-    if (platform === 'web') {
-      window.location.assign('/')
-      return
-    }
+    // After session refetch, client-side navigation works on both platforms.
+    // Web previously used window.location.assign('/') as a session-visibility
+    // workaround; that full reload could bounce back to /sign-in and remount
+    // an empty form when the soft session/cookie handshake was still settling.
     await navigate({ to: '/' })
   }
 
@@ -41,13 +41,18 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
     setError(null)
     setNotice(null)
     setSubmitting(true)
-    const result = await signInWithEmail({ email, password })
-    setSubmitting(false)
-    if (!result.ok) {
-      setError(result.message ?? 'Sign-in failed.')
-      return
+    try {
+      const result = await signInWithEmail({ email, password })
+      if (!result.ok) {
+        setError(result.message ?? 'Sign-in failed.')
+        return
+      }
+      await goToHome()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Sign-in failed.')
+    } finally {
+      setSubmitting(false)
     }
-    await goToHome()
   }
 
   async function handleRegister(event: FormEvent<HTMLFormElement>) {
@@ -55,17 +60,22 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
     setError(null)
     setNotice(null)
     setSubmitting(true)
-    const result = await signUpWithEmail({ name, email, password })
-    setSubmitting(false)
-    if (!result.ok) {
-      setError(result.message ?? 'Sign-up failed.')
-      return
+    try {
+      const result = await signUpWithEmail({ name, email, password })
+      if (!result.ok) {
+        setError(result.message ?? 'Sign-up failed.')
+        return
+      }
+      if (result.verificationRequired) {
+        setNotice(result.message ?? 'Check your email to verify your account before signing in.')
+        return
+      }
+      await goToHome()
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Sign-up failed.')
+    } finally {
+      setSubmitting(false)
     }
-    if (result.verificationRequired) {
-      setNotice(result.message ?? 'Check your email to verify your account before signing in.')
-      return
-    }
-    await goToHome()
   }
 
   async function handleMagicLink(event: FormEvent<HTMLFormElement>) {
@@ -73,13 +83,18 @@ export function SignInRouteView({ platform }: { platform: AppPlatform }) {
     setError(null)
     setNotice(null)
     setSubmitting(true)
-    const result = await requestMagicLink(email)
-    setSubmitting(false)
-    if (!result.ok) {
-      setError(result.message ?? 'Could not send magic link.')
-      return
+    try {
+      const result = await requestMagicLink(email)
+      if (!result.ok) {
+        setError(result.message ?? 'Could not send magic link.')
+        return
+      }
+      setNotice(result.message ?? 'Check your email for a sign-in link.')
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : 'Could not send magic link.')
+    } finally {
+      setSubmitting(false)
     }
-    setNotice(result.message ?? 'Check your email for a sign-in link.')
   }
 
   const handleSubmit =

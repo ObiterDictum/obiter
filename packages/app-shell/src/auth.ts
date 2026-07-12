@@ -63,11 +63,27 @@ export function useAuth(): UseAuthReturn {
   const realSession = authClient.useSession()
   const queryClient = useQueryClient()
 
+  /**
+   * After a successful credential exchange the HTTP session cookie exists, but
+   * `useSession()` may still report null until its store is refetched. Both
+   * platforms navigate client-side after auth, so AppShellLayout would bounce
+   * back to /sign-in without this refresh. A failed session GET must not undo
+   * a successful credential exchange — the cookie is already set.
+   */
+  async function refreshSessionAfterAuth() {
+    try {
+      await realSession.refetch()
+    } catch {
+      // Best-effort: cookie is set; a later render/refetch can pick up session.
+    }
+  }
+
   async function signInWithEmail(input: SignInEmailInput) {
     const result = await authClient.signIn.email(input)
     if (result.error) {
       return { ok: false, message: result.error.message ?? 'Sign-in failed.' }
     }
+    await refreshSessionAfterAuth()
     return { ok: true }
   }
 
@@ -86,6 +102,7 @@ export function useAuth(): UseAuthReturn {
         message: 'Check your email to verify your account before signing in.',
       }
     }
+    await refreshSessionAfterAuth()
     return { ok: true }
   }
 

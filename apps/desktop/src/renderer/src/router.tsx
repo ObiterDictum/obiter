@@ -1,5 +1,6 @@
 import {
   AppShellLayout,
+  CaseLawDocumentView,
   DocumentDetailLayoutView,
   ForgotPasswordRouteView,
   HomeRouteView,
@@ -8,6 +9,7 @@ import {
   ResetPasswordRouteView,
   SignInRouteView,
   caseLawDocumentQueryOptions,
+  createCanonicalCasePath,
   documentQueryOptions,
   ensureOrganisation,
   guardAuth,
@@ -15,8 +17,10 @@ import {
   matterQueryOptions,
   mattersListQueryOptions,
   prefetchHomeData,
+  resolveCaseDocumentIdFromSlug,
 } from '@obiter/app-shell'
 import { RedactionReviewView, RedactionRunsRegion, RedactionRunsView } from '@obiter/redact-ui'
+import { EmptyState } from '@obiter/ui'
 import type { QueryClient } from '@tanstack/react-query'
 import {
   Outlet,
@@ -27,8 +31,27 @@ import {
   redirect,
   useNavigate,
 } from '@tanstack/react-router'
-import { DesktopCasePage } from '../../pages/case'
 import { DesktopSearchPage } from '../../pages/search'
+
+/**
+ * Shared-view paths the web app exposes that desktop must also register.
+ * Kept here so router.parity.test.ts can catch route drift permanently.
+ */
+export const DESKTOP_SHARED_VIEW_PATHS = [
+  '/',
+  '/workspace',
+  '/matters',
+  '/matters/$matterId',
+  '/matters/$matterId/documents/$documentId',
+  '/redact',
+  '/redact/$runId',
+  '/search',
+  '/cases/$caseId',
+  '/case/$caseSlug',
+  '/sign-in',
+  '/forgot-password',
+  '/reset-password',
+] as const
 
 interface RouterContext {
   queryClient: QueryClient
@@ -36,6 +59,7 @@ interface RouterContext {
 
 const rootRoute = createRootRouteWithContext<RouterContext>()({
   component: RootLayout,
+  notFoundComponent: DesktopNotFound,
 })
 
 function RootLayout() {
@@ -43,6 +67,15 @@ function RootLayout() {
     <AppShellLayout platform="desktop">
       <Outlet />
     </AppShellLayout>
+  )
+}
+
+function DesktopNotFound() {
+  return (
+    <EmptyState
+      title="Page not found"
+      body="That route is not registered in the desktop shell. Check the URL or return Home from the sidebar."
+    />
   )
 }
 
@@ -108,6 +141,9 @@ const documentDetailRoute = createRoute({
   component: DesktopDocumentDetailRoute,
 })
 
+// Sibling routes (not parent→child): match web's /redact/ + /redact/$runId so
+// navigating to a run replaces the runs list instead of nesting under it
+// without an Outlet (which made Review appear to do nothing).
 const redactRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'redact',
@@ -116,8 +152,9 @@ const redactRoute = createRoute({
 })
 
 const redactReviewRoute = createRoute({
-  getParentRoute: () => redactRoute,
-  path: '$runId',
+  getParentRoute: () => rootRoute,
+  path: 'redact/$runId',
+  loader: ({ context }) => ensureOrganisation(context.queryClient),
   component: DesktopRedactionReviewRoute,
 })
 
@@ -127,13 +164,40 @@ const searchRoute = createRoute({
   component: DesktopSearchPage,
 })
 
-const caseRoute = createRoute({
+const casesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'cases/$caseId',
-  loader: ({ context, params }) =>
-    context.queryClient.ensureQueryData(caseLawDocumentQueryOptions(params.caseId)),
-  component: DesktopCaseRoute,
+  loader: async ({ context, params }) => {
+    const document = await context.queryClient.ensureQueryData(
+      caseLawDocumentQueryOptions(params.caseId),
+    )
+    const canonicalPath = createCanonicalCasePath(document)
+    const caseSlug = canonicalPath.replace(/^\/case\//, '')
+    throw redirect({ to: '/case/$caseSlug', params: { caseSlug } })
+  },
+  component: DesktopCasesRedirectRoute,
 })
+
+function DesktopCasesRedirectRoute() {
+  // Loader always redirects; component is a typed-route placeholder.
+  return null
+}
+
+const caseSlugRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'case/$caseSlug',
+  loader: ({ context, params }) => {
+    const caseId = resolveCaseDocumentIdFromSlug(params.caseSlug)
+    return context.queryClient.ensureQueryData(caseLawDocumentQueryOptions(caseId))
+  },
+  component: DesktopCaseSlugRoute,
+})
+
+function DesktopCaseSlugRoute() {
+  const { caseSlug } = caseSlugRoute.useParams()
+  const caseId = resolveCaseDocumentIdFromSlug(caseSlug)
+  return <CaseLawDocumentView caseId={caseId} />
+}
 
 function DesktopMatterDetailRoute() {
   const { matterId } = matterDetailRoute.useParams()
@@ -145,28 +209,32 @@ function DesktopDocumentDetailRoute() {
   const { matterId, documentId } = documentDetailRoute.useParams()
   const navigate = useNavigate()
 
-  return <DocumentDetailLayoutView matterId={matterId} documentId={documentId} redactionRunsRegion={
-    <RedactionRunsRegion
+  return (
+    <DocumentDetailLayoutView
+      matterId={matterId}
       documentId={documentId}
-      onOpenRun={(runId) => navigate({ to: '/redact/$runId', params: { runId } })}
+      redactionRunsRegion={
+        <RedactionRunsRegion
+          documentId={documentId}
+          onOpenRun={(runId) => navigate({ to: '/redact/$runId', params: { runId } })}
+        />
+      }
     />
-  } />
+  )
 }
 
 function DesktopRedactionRunsRoute() {
   const navigate = useNavigate()
-  return <RedactionRunsView onOpenRun={(runId) => navigate({ to: '/redact/$runId', params: { runId } })} />
+  return (
+    <RedactionRunsView
+      onOpenRun={(runId) => navigate({ to: '/redact/$runId', params: { runId } })}
+    />
+  )
 }
 
 function DesktopRedactionReviewRoute() {
   const { runId } = redactReviewRoute.useParams()
   return <RedactionReviewView runId={runId} />
-}
-
-function DesktopCaseRoute() {
-  const { caseId } = caseRoute.useParams()
-
-  return <DesktopCasePage caseId={caseId} />
 }
 
 const signInRoute = createRoute({
@@ -205,9 +273,11 @@ const routeTree = rootRoute.addChildren([
   mattersRoute,
   matterDetailRoute,
   documentDetailRoute,
-  redactRoute.addChildren([redactReviewRoute]),
+  redactRoute,
+  redactReviewRoute,
   searchRoute,
-  caseRoute,
+  casesRoute,
+  caseSlugRoute,
   signInRoute,
   forgotPasswordRoute,
   resetPasswordRoute,
