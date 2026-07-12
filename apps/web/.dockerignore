@@ -1,0 +1,10 @@
+# This file is intentionally a no-op.
+#
+# Docker only consults the .dockerignore at the BUILD CONTEXT root. The web
+# Dockerfile is built with the repo root as context
+# (`docker build -f apps/web/Dockerfile .`), so the REAL exclusions live in the
+# root .dockerignore — including the .env* secret exclusions. This stub exists
+# only to document that fact; leaving protective-looking exclusions here would
+# be misleading, since they would never apply.
+#
+# See /.dockerignore and docs/specs/deployment.md.
