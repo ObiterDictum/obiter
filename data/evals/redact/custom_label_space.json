@@ -1,0 +1,20 @@
+{
+  "category_version": "obiter_legal_v1",
+  "span_class_names": [
+    "O",
+    "private_person",
+    "private_address",
+    "private_email",
+    "private_phone",
+    "private_date",
+    "account_number",
+    "secret",
+    "private_url",
+    "national_insurance",
+    "case_reference",
+    "passport",
+    "drivers_license",
+    "government_id",
+    "ip_address"
+  ]
+}

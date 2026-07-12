@@ -1,20 +1,24 @@
 # Redact Milestones
 
-## M1
+## M1 — complete
 
-- text extraction works
-- first detection run works
+- Detection, UK supplement and storage-backed source text work.
 
-## M2
+## M2 — complete
 
-- review UI works
-- span decisions persist
+- Review UI, decisions, redacted output and pseudonymised output work.
 
-## M3
+## M3 — production readiness
 
-- pseudonymised and redacted export works
-- audit log export works
+- DOCX/TXT multipart upload extracts server-side text and records a ready or failed document status.
+- Versioned audit export is available at `GET /api/redaction-runs/:runId/audit` (JSON, HTML and Markdown).
+- Synthetic UK legal training data, a reviewed-run JSONL exporter, demo fixture and walkthrough are checked in.
+- Fine-tuning preparation is documented in `fine-tuning.md`.
 
-## Done When
+Deferred: PDF extraction/redaction, actual Rampart fine-tuning, desktop-local redaction, batch processing and firm-specific policy configuration.
 
-- a user can review and finalize sensitive content handling safely
+## Verification references
+
+- Demo walkthrough: `docs/specs/redact/demo.md`
+- Demo fixture: `data/evals/redact/demo-fixture.docx`
+- Training corpus generator: `scripts/generate-synthetic-data.ts`
