@@ -27,9 +27,9 @@ data/
 
 # Vendored code — kept byte-faithful to upstream so future re-vendors produce
 # clean diffs. packages/rampart-inference is vendored from
-# @nationaldesignstudio/rampart (see its README); it is excluded from
-# formatting, linting, and blame churn. The accompanying .git-blame-ignore-revs
-# entry covers the whole-repo format commit.
+# @nationaldesignstudio/rampart (see its README); excluded from Prettier,
+# oxlint, and ESLint so the vendored source stays byte-faithful. The
+# .git-blame-ignore-revs entry covers the whole-repo format commit.
 packages/rampart-inference/
 
 # Machine-local tooling scratch (also in .gitignore).
