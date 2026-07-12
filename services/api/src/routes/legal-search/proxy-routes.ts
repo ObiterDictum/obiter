@@ -8,9 +8,18 @@ import {
 import type { ApiEnv } from '../../env'
 import { isSupportedFindCaseLawRequest } from './atom-parser'
 import { createMojRateLimiter } from './rate-limiter'
-import { legalDocumentIdSchema, legalFetchRequestSchema, type LegalFetchRequest } from './fetch-schema'
+import {
+  legalDocumentIdSchema,
+  legalFetchRequestSchema,
+  type LegalFetchRequest,
+} from './fetch-schema'
 import { extractNeutralCitation } from './document-utils'
-import { apiError, toFetchResponse, toSummaryHit, type LegalFetchSearchHit } from './response-utils'
+import {
+  apiError,
+  toFetchResponse,
+  toSummaryHit,
+  type LegalFetchSearchHit,
+} from './response-utils'
 import {
   createInMemoryLegalAuthoritySourceStore,
   rememberForegroundSourceRecord,
@@ -32,7 +41,6 @@ import {
   upsertLegalAuthorityDocument,
 } from './moj-client'
 
-
 interface LegalSearchProxyRouteVariables {
   requestId: string
 }
@@ -45,14 +53,22 @@ export function createLegalSearchProxyRoutes(
   legalAuthorityStore: LegalAuthoritySourceStore = createInMemoryLegalAuthoritySourceStore(),
 ) {
   const app = new Hono<{ Variables: LegalSearchProxyRouteVariables }>()
-  const searchClient = createClient(env.meilisearchHost, env.meilisearchSearchApiKey)
-  const indexClient = createClient(env.meilisearchHost, env.meilisearchAdminApiKey)
+  const searchClient = createClient(
+    env.meilisearchHost,
+    env.meilisearchSearchApiKey,
+  )
+  const indexClient = createClient(
+    env.meilisearchHost,
+    env.meilisearchAdminApiKey,
+  )
   const mojRateLimiter = createMojRateLimiter(env.mojFindCaseLawRateLimit)
   const foregroundSourceRecords = new Map<string, StoredLegalAuthorityRecord>()
 
   app.post('/api/search/fetch', async (c) => {
     const requestId = c.get('requestId')
-    const parsed = legalFetchRequestSchema.safeParse(await c.req.json().catch(() => null))
+    const parsed = legalFetchRequestSchema.safeParse(
+      await c.req.json().catch(() => null),
+    )
 
     if (
       !parsed.success ||
@@ -60,36 +76,43 @@ export function createLegalSearchProxyRoutes(
       !isSupportedFetchSearchMode(parsed.data)
     ) {
       return c.json(
-        apiError('validation_failed', 'Fetch search request is invalid.', requestId),
+        apiError(
+          'validation_failed',
+          'Fetch search request is invalid.',
+          requestId,
+        ),
         400,
       )
     }
 
     if (!isImplementedFetchSourceType(parsed.data)) {
-      return c.json(toFetchResponse([], parsed.data.query, true, 0, 0, false, {
-        outcome: 'unsupported_source_type',
-        diagnostics: {
-          storedIndexSearched: false,
-          storedSourceSearched: false,
-          liveProviderSearched: false,
-          storedOnlyBrowse: false,
-        },
-      }))
+      return c.json(
+        toFetchResponse([], parsed.data.query, true, 0, 0, false, {
+          outcome: 'unsupported_source_type',
+          diagnostics: {
+            storedIndexSearched: false,
+            storedSourceSearched: false,
+            liveProviderSearched: false,
+            storedOnlyBrowse: false,
+          },
+        }),
+      )
     }
 
     const filters = toSearchFilters(parsed.data)
     const storedOnlyBrowse = isStoredOnlyBrowse(parsed.data)
     const exactLookup = classifyExactLookup(parsed.data.query)
-    const exactStoredAuthority = !storedOnlyBrowse && exactLookup
-      ? await findExactStoredAuthority(
-        searchClient,
-        legalAuthorityStore,
-        env.legalAuthoritiesIndex,
-        parsed.data.query,
-        filters,
-        exactLookup,
-      )
-      : null
+    const exactStoredAuthority =
+      !storedOnlyBrowse && exactLookup
+        ? await findExactStoredAuthority(
+            searchClient,
+            legalAuthorityStore,
+            env.legalAuthoritiesIndex,
+            parsed.data.query,
+            filters,
+            exactLookup,
+          )
+        : null
 
     if (exactStoredAuthority) {
       return c.json(
@@ -133,7 +156,8 @@ export function createLegalSearchProxyRoutes(
             toSummaryHit(hit, parsed.data.query, {
               retrievalPath: 'stored_index',
               retrievalRank: index + 1,
-            })),
+            }),
+          ),
           parsed.data.query,
           true,
           0,
@@ -169,7 +193,8 @@ export function createLegalSearchProxyRoutes(
             toSummaryHit(hit, parsed.data.query, {
               retrievalPath: 'stored_source',
               retrievalRank: index + 1,
-            })),
+            }),
+          ),
           parsed.data.query,
           true,
           0,
@@ -189,16 +214,18 @@ export function createLegalSearchProxyRoutes(
     }
 
     if (!parsed.data.query.trim()) {
-      return c.json(toFetchResponse([], parsed.data.query, true, 0, 0, false, {
-        outcome: 'stored_browse_empty',
-        diagnostics: {
-          exactLookupSearched: Boolean(exactLookup),
-          storedIndexSearched: true,
-          storedSourceSearched: true,
-          liveProviderSearched: false,
-          storedOnlyBrowse,
-        },
-      }))
+      return c.json(
+        toFetchResponse([], parsed.data.query, true, 0, 0, false, {
+          outcome: 'stored_browse_empty',
+          diagnostics: {
+            exactLookupSearched: Boolean(exactLookup),
+            storedIndexSearched: true,
+            storedSourceSearched: true,
+            liveProviderSearched: false,
+            storedOnlyBrowse,
+          },
+        }),
+      )
     }
 
     if (!parsed.data.foregroundLiveResults) {
@@ -212,24 +239,16 @@ export function createLegalSearchProxyRoutes(
       )
 
       return c.json(
-        toFetchResponse(
-          [],
-          parsed.data.query,
-          false,
-          0,
-          0,
-          true,
-          {
-            outcome: 'hydration_queued',
-            diagnostics: {
-              exactLookupSearched: Boolean(exactLookup),
-              storedIndexSearched: true,
-              storedSourceSearched: true,
-              liveProviderSearched: false,
-              storedOnlyBrowse,
-            },
+        toFetchResponse([], parsed.data.query, false, 0, 0, true, {
+          outcome: 'hydration_queued',
+          diagnostics: {
+            exactLookupSearched: Boolean(exactLookup),
+            storedIndexSearched: true,
+            storedSourceSearched: true,
+            liveProviderSearched: false,
+            storedOnlyBrowse,
           },
-        ),
+        }),
       )
     }
 
@@ -242,7 +261,11 @@ export function createLegalSearchProxyRoutes(
     if (liveResult.status === 'rate_limited') {
       return c.json(
         {
-          ...apiError('storage_unavailable', 'Find Case Law is rate limited.', requestId),
+          ...apiError(
+            'storage_unavailable',
+            'Find Case Law is rate limited.',
+            requestId,
+          ),
           retryAfter: liveResult.retryAfter,
         },
         503,
@@ -251,7 +274,11 @@ export function createLegalSearchProxyRoutes(
 
     if (liveResult.status === 'unavailable') {
       return c.json(
-        apiError('storage_unavailable', 'Find Case Law is unavailable.', requestId),
+        apiError(
+          'storage_unavailable',
+          'Find Case Law is unavailable.',
+          requestId,
+        ),
         503,
       )
     }
@@ -289,7 +316,8 @@ export function createLegalSearchProxyRoutes(
           toSummaryHit(hit, parsed.data.query, {
             retrievalPath: 'live_provider',
             retrievalRank: index + 1,
-          })),
+          }),
+        ),
         parsed.data.query,
         false,
         0,
@@ -329,16 +357,24 @@ export function createLegalSearchProxyRoutes(
       return c.json({ document })
     }
 
-    const storedSourceRecord = await getLegalAuthoritySourceRecord(legalAuthorityStore, parsed.data)
+    const storedSourceRecord = await getLegalAuthoritySourceRecord(
+      legalAuthorityStore,
+      parsed.data,
+    )
     const foregroundSourceRecord = foregroundSourceRecords.get(parsed.data)
     const sourceRecord = storedSourceRecord ?? foregroundSourceRecord ?? null
-    const sourceRecordIsForegroundOnly = !storedSourceRecord && Boolean(foregroundSourceRecord)
+    const sourceRecordIsForegroundOnly =
+      !storedSourceRecord && Boolean(foregroundSourceRecord)
     if (sourceRecord?.document) {
       return c.json({ document: sourceRecord.document })
     }
 
     const liveDocument = sourceRecord
-      ? await fetchMojAuthorityDocumentFromRecord(env, sourceRecord, mojRateLimiter)
+      ? await fetchMojAuthorityDocumentFromRecord(
+          env,
+          sourceRecord,
+          mojRateLimiter,
+        )
       : await fetchMojAuthorityDocumentById(env, parsed.data, mojRateLimiter)
 
     if (liveDocument.status === 'ok') {
@@ -362,7 +398,9 @@ export function createLegalSearchProxyRoutes(
             liveDocument.provider,
             liveDocument.document,
           )
-          void indexFetchedAuthorities(indexClient, env.legalAuthoritiesIndex, [liveDocument.document])
+          void indexFetchedAuthorities(indexClient, env.legalAuthoritiesIndex, [
+            liveDocument.document,
+          ])
           return c.json({ document: liveDocument.document })
         }
 
@@ -375,14 +413,20 @@ export function createLegalSearchProxyRoutes(
           503,
         )
       }
-      void indexFetchedAuthorities(indexClient, env.legalAuthoritiesIndex, [liveDocument.document])
+      void indexFetchedAuthorities(indexClient, env.legalAuthoritiesIndex, [
+        liveDocument.document,
+      ])
       return c.json({ document: liveDocument.document })
     }
 
     if (liveDocument.status === 'rate_limited') {
       return c.json(
         {
-          ...apiError('storage_unavailable', 'Find Case Law is rate limited.', requestId),
+          ...apiError(
+            'storage_unavailable',
+            'Find Case Law is rate limited.',
+            requestId,
+          ),
           retryAfter: liveDocument.retryAfter,
         },
         503,
@@ -391,13 +435,21 @@ export function createLegalSearchProxyRoutes(
 
     if (liveDocument.status === 'unavailable') {
       return c.json(
-        apiError('storage_unavailable', 'Find Case Law is unavailable.', requestId),
+        apiError(
+          'storage_unavailable',
+          'Find Case Law is unavailable.',
+          requestId,
+        ),
         503,
       )
     }
 
     return c.json(
-      apiError('document_not_found', 'Document was not found in stored or live sources.', requestId),
+      apiError(
+        'document_not_found',
+        'Document was not found in stored or live sources.',
+        requestId,
+      ),
       404,
     )
   })
@@ -434,7 +486,10 @@ function classifyExactLookup(query: string): ExactLookup | null {
   }
 
   const extractedCitation = extractNeutralCitation(query)
-  if (extractedCitation && normalizeSearchValue(extractedCitation) === normalizedQuery) {
+  if (
+    extractedCitation &&
+    normalizeSearchValue(extractedCitation) === normalizedQuery
+  ) {
     return { kind: 'neutral_citation', normalizedQuery }
   }
 
@@ -449,21 +504,41 @@ async function findExactStoredAuthority(
   filters: LegalSearchFilters,
   lookup: ExactLookup,
 ) {
-  const storedIndexResult = await searchStoredAuthorities(searchClient, indexName, query, filters, 5)
-  const storedIndexHit = storedIndexResult.hits.find((hit) => isExactLookupHit(hit, lookup))
-  if (storedIndexHit) return { hit: storedIndexHit, storedSourceSearched: false }
+  const storedIndexResult = await searchStoredAuthorities(
+    searchClient,
+    indexName,
+    query,
+    filters,
+    5,
+  )
+  const storedIndexHit = storedIndexResult.hits.find((hit) =>
+    isExactLookupHit(hit, lookup),
+  )
+  if (storedIndexHit)
+    return { hit: storedIndexHit, storedSourceSearched: false }
 
   if (lookup.kind === 'document_id') {
-    const storedRecord = await getLegalAuthoritySourceRecord(legalAuthorityStore, lookup.normalizedQuery)
+    const storedRecord = await getLegalAuthoritySourceRecord(
+      legalAuthorityStore,
+      lookup.normalizedQuery,
+    )
     const storedDocument = storedRecord?.document ?? storedRecord?.summary
     if (storedDocument && sourceMatchesFilters(storedDocument, filters)) {
       return { hit: storedDocument, storedSourceSearched: true }
     }
   }
 
-  const storedSourceHits = await searchLegalAuthoritySourceStore(legalAuthorityStore, query, filters)
-  const storedSourceHit = storedSourceHits.find((hit) => isExactLookupHit(hit, lookup))
-  return storedSourceHit ? { hit: storedSourceHit, storedSourceSearched: true } : null
+  const storedSourceHits = await searchLegalAuthoritySourceStore(
+    legalAuthorityStore,
+    query,
+    filters,
+  )
+  const storedSourceHit = storedSourceHits.find((hit) =>
+    isExactLookupHit(hit, lookup),
+  )
+  return storedSourceHit
+    ? { hit: storedSourceHit, storedSourceSearched: true }
+    : null
 }
 
 function isExactDocumentId(normalizedQuery: string) {
@@ -478,13 +553,19 @@ function isExactLookupHit(hit: LegalFetchSearchHit, lookup: ExactLookup) {
     case 'document_id':
       return normalizeSearchValue(hit.id) === lookup.normalizedQuery
     case 'neutral_citation':
-      return normalizeSearchValue(hit.neutralCitation) === lookup.normalizedQuery
+      return (
+        normalizeSearchValue(hit.neutralCitation) === lookup.normalizedQuery
+      )
   }
 }
 
-function sourceMatchesFilters(hit: LegalFetchSearchHit, filters: LegalSearchFilters) {
+function sourceMatchesFilters(
+  hit: LegalFetchSearchHit,
+  filters: LegalSearchFilters,
+) {
   if (filters.court && hit.court !== filters.court) return false
-  if (filters.jurisdiction && hit.jurisdiction !== filters.jurisdiction) return false
+  if (filters.jurisdiction && hit.jurisdiction !== filters.jurisdiction)
+    return false
   if (filters.sourceType && hit.sourceType !== filters.sourceType) return false
   if (filters.dateFrom && hit.dateDecided < filters.dateFrom) return false
   if (filters.dateTo && hit.dateDecided > filters.dateTo) return false
@@ -499,9 +580,10 @@ async function searchStoredAuthorities(
   limit?: number,
 ) {
   try {
-    const searchOptions = typeof limit === 'number'
-      ? { includeSnippets: true, limit }
-      : { includeSnippets: true }
+    const searchOptions =
+      typeof limit === 'number'
+        ? { includeSnippets: true, limit }
+        : { includeSnippets: true }
     const result = await withTimeout(
       search(searchClient, indexName, query, filters, searchOptions),
       storedSearchTimeoutMs,
@@ -510,11 +592,11 @@ async function searchStoredAuthorities(
     if (result) {
       return {
         ...result,
-        hits: typeof limit === 'number' ? result.hits.slice(0, limit) : result.hits,
+        hits:
+          typeof limit === 'number' ? result.hits.slice(0, limit) : result.hits,
       }
     }
-  } catch {
-  }
+  } catch {}
 
   return {
     hits: [],
@@ -530,10 +612,12 @@ async function searchLegalAuthoritySourceStore(
   filters: LegalSearchFilters,
 ) {
   try {
-    return (await withTimeout(
-      legalAuthorityStore.search(query, filters),
-      storedSearchTimeoutMs,
-    )) ?? []
+    return (
+      (await withTimeout(
+        legalAuthorityStore.search(query, filters),
+        storedSearchTimeoutMs,
+      )) ?? []
+    )
   } catch {
     return []
   }
@@ -544,13 +628,19 @@ async function getLegalAuthoritySourceRecord(
   documentId: string,
 ) {
   try {
-    return await withTimeout(legalAuthorityStore.get(documentId), storedSearchTimeoutMs)
+    return await withTimeout(
+      legalAuthorityStore.get(documentId),
+      storedSearchTimeoutMs,
+    )
   } catch {
     return null
   }
 }
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T | null> {
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => resolve(null), timeoutMs)
     promise.then(
@@ -579,7 +669,6 @@ function toSearchFilters(request: LegalFetchRequest): LegalSearchFilters {
     sourceType: request.sourceType ?? 'judgment',
   }
 }
-
 
 export { parseFindCaseLawAtom } from './atom-parser'
 export { parseJudgmentParagraphs } from './html-parser'

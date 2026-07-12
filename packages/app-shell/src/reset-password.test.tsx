@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react'
 import {
   createMemoryHistory,
   createRootRoute,
@@ -30,7 +36,9 @@ function buildRouter(token?: string) {
   const search = token ? `?token=${token}` : ''
   return createRouter({
     routeTree: rootRoute.addChildren([resetRoute]),
-    history: createMemoryHistory({ initialEntries: [`/reset-password${search}`] }),
+    history: createMemoryHistory({
+      initialEntries: [`/reset-password${search}`],
+    }),
   })
 }
 
@@ -56,20 +64,30 @@ async function submitForm(password: string, confirm: string) {
 
 describe('ResetPasswordRouteView — token failure vs retryable failure', () => {
   it('flips to the invalid-token state on a dead-token code (INVALID_TOKEN)', async () => {
-    mocks.resetPassword.mockResolvedValue({ ok: false, message: 'Invalid token', code: 'INVALID_TOKEN' })
+    mocks.resetPassword.mockResolvedValue({
+      ok: false,
+      message: 'Invalid token',
+      code: 'INVALID_TOKEN',
+    })
 
     renderReset('tok_expired')
 
     await submitForm('newpassword123', 'newpassword123')
 
     await waitFor(() => {
-      expect(screen.getByText('This reset link is invalid or has expired.')).toBeTruthy()
+      expect(
+        screen.getByText('This reset link is invalid or has expired.'),
+      ).toBeTruthy()
     })
     expect(screen.getByText('Request a new reset link')).toBeTruthy()
   })
 
   it('flips to the invalid-token state on a TOKEN_EXPIRED code', async () => {
-    mocks.resetPassword.mockResolvedValue({ ok: false, message: 'Token expired', code: 'TOKEN_EXPIRED' })
+    mocks.resetPassword.mockResolvedValue({
+      ok: false,
+      message: 'Token expired',
+      code: 'TOKEN_EXPIRED',
+    })
 
     renderReset('tok_expired')
 
@@ -120,10 +138,18 @@ describe('ResetPasswordRouteView — token failure vs retryable failure', () => 
     await submitForm('newpassword123', 'newpassword123')
 
     await waitFor(() => {
-      expect(screen.getByText(/Check your connection and try again/)).toBeTruthy()
+      expect(
+        screen.getByText(/Check your connection and try again/),
+      ).toBeTruthy()
     })
     // submitting reset to false (W2): the button is not stuck disabled.
-    expect((screen.getByRole('button', { name: /reset password/i }) as HTMLButtonElement).disabled).toBe(false)
+    expect(
+      (
+        screen.getByRole('button', {
+          name: /reset password/i,
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false)
     expect(screen.queryByText('Request a new reset link')).toBeNull()
   })
 })
@@ -132,7 +158,9 @@ describe('ResetPasswordRouteView — client validation and in-flight guard', () 
   it('renders the invalid-token state immediately when no token is present', async () => {
     renderReset()
 
-    expect(await screen.findByText('This reset link is invalid or has expired.')).toBeTruthy()
+    expect(
+      await screen.findByText('This reset link is invalid or has expired.'),
+    ).toBeTruthy()
   })
 
   it('shows a local error for a too-short password (not the token state)', async () => {
@@ -141,7 +169,9 @@ describe('ResetPasswordRouteView — client validation and in-flight guard', () 
     await submitForm('short', 'short')
 
     await waitFor(() => {
-      expect(screen.getByText('Password must be at least 8 characters.')).toBeTruthy()
+      expect(
+        screen.getByText('Password must be at least 8 characters.'),
+      ).toBeTruthy()
     })
   })
 
@@ -151,7 +181,9 @@ describe('ResetPasswordRouteView — client validation and in-flight guard', () 
     await submitForm('x'.repeat(129), 'x'.repeat(129))
 
     await waitFor(() => {
-      expect(screen.getByText('Password must be at most 128 characters.')).toBeTruthy()
+      expect(
+        screen.getByText('Password must be at most 128 characters.'),
+      ).toBeTruthy()
     })
     expect(mocks.resetPassword).not.toHaveBeenCalled()
   })
@@ -159,9 +191,10 @@ describe('ResetPasswordRouteView — client validation and in-flight guard', () 
   it('does not call resetPassword twice on a rapid double-submit', async () => {
     let resolveFirst: (value: { ok: true }) => void = () => {}
     mocks.resetPassword.mockImplementationOnce(
-      () => new Promise((resolve) => {
-        resolveFirst = resolve
-      }),
+      () =>
+        new Promise((resolve) => {
+          resolveFirst = resolve
+        }),
     )
 
     renderReset('tok_valid')

@@ -32,8 +32,16 @@ const DOCUMENT_PAYLOAD = {
     dateDecided: '2024-01-31',
     sourceUrl: 'https://example.org/uksc/2024/3',
     paragraphs: [
-      { id: 'p1', paragraphNumber: 1, text: '1. The appellant appeals the decision below.' },
-      { id: 'p2', paragraphNumber: 2, text: '2. The central issue is jurisdiction.' },
+      {
+        id: 'p1',
+        paragraphNumber: 1,
+        text: '1. The appellant appeals the decision below.',
+      },
+      {
+        id: 'p2',
+        paragraphNumber: 2,
+        text: '2. The central issue is jurisdiction.',
+      },
     ],
   },
 }
@@ -48,7 +56,9 @@ function jsonResponse(body: unknown): Response {
 function mockFetch(): ReturnType<typeof vi.fn> {
   const fetchMock = vi.fn(async (url: string) => {
     // The view's queryFn fetches `/api/search/documents/:caseId`.
-    if (url.includes(`/api/search/documents/${encodeURIComponent('uksc-2024-3')}`)) {
+    if (
+      url.includes(`/api/search/documents/${encodeURIComponent('uksc-2024-3')}`)
+    ) {
       return jsonResponse(DOCUMENT_PAYLOAD)
     }
     return jsonResponse({})
@@ -95,12 +105,18 @@ describe('CaseLawDocumentView', () => {
     expect(documentLandmark).toBeTruthy()
 
     // Header (rendered once in the case metadata, once in the judgment body).
-    expect((await screen.findAllByText('Potanina v Potanin')).length).toBeGreaterThan(0)
-    expect((await screen.findAllByText(/\[2024\] UKSC 3/)).length).toBeGreaterThan(0)
+    expect(
+      (await screen.findAllByText('Potanina v Potanin')).length,
+    ).toBeGreaterThan(0)
+    expect(
+      (await screen.findAllByText(/\[2024\] UKSC 3/)).length,
+    ).toBeGreaterThan(0)
     // The readable court label for 'uksc' resolves to 'UKSC'.
     expect((await screen.findAllByText(/UKSC/)).length).toBeGreaterThan(0)
     // The header formats the date; 2024-01-31 should appear somewhere.
-    expect((await screen.findAllByText(/31 Jan 2024/)).length).toBeGreaterThan(0)
+    expect((await screen.findAllByText(/31 Jan 2024/)).length).toBeGreaterThan(
+      0,
+    )
   })
 
   it('renders paragraphs with their accessible paragraph labels', async () => {
@@ -120,7 +136,9 @@ describe('CaseLawDocumentView', () => {
     await waitFor(() => {
       expect(
         fetchMock.mock.calls.some(([url]) =>
-          String(url).includes(`/api/search/documents/${encodeURIComponent('uksc-2024-3')}`),
+          String(url).includes(
+            `/api/search/documents/${encodeURIComponent('uksc-2024-3')}`,
+          ),
         ),
       ).toBe(true)
     })

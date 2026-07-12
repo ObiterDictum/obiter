@@ -46,11 +46,17 @@ describe('sendMagicLink', () => {
   it('logs the magic-link URL to the console and never calls Resend when no API key is configured', async () => {
     const consoleInfo = vi.spyOn(console, 'info').mockImplementation(() => {})
 
-    await sendMagicLink(baseEnv, 'user@example.test', 'https://app.example.test/verify?token=abc')
+    await sendMagicLink(
+      baseEnv,
+      'user@example.test',
+      'https://app.example.test/verify?token=abc',
+    )
 
     expect(consoleInfo).toHaveBeenCalledWith(
       expect.stringContaining('[dev-only]'),
-      expect.objectContaining({ url: 'https://app.example.test/verify?token=abc' }),
+      expect.objectContaining({
+        url: 'https://app.example.test/verify?token=abc',
+      }),
     )
     expect(resendSendMock).not.toHaveBeenCalled()
 
@@ -58,7 +64,10 @@ describe('sendMagicLink', () => {
   })
 
   it('sends via Resend when an API key is configured', async () => {
-    resendSendMock.mockResolvedValueOnce({ data: { id: 'email_1' }, error: null })
+    resendSendMock.mockResolvedValueOnce({
+      data: { id: 'email_1' },
+      error: null,
+    })
 
     await sendMagicLink(
       { ...baseEnv, resendApiKey: 're_test_key' },
@@ -75,7 +84,10 @@ describe('sendMagicLink', () => {
   })
 
   it('throws when Resend reports a delivery error', async () => {
-    resendSendMock.mockResolvedValueOnce({ data: null, error: { message: 'invalid domain' } })
+    resendSendMock.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'invalid domain' },
+    })
 
     await expect(
       sendMagicLink(
@@ -99,7 +111,9 @@ describe('sendVerificationEmail', () => {
 
     expect(consoleInfo).toHaveBeenCalledWith(
       expect.stringContaining('[dev-only]'),
-      expect.objectContaining({ url: 'https://app.example.test/verify-email?token=abc' }),
+      expect.objectContaining({
+        url: 'https://app.example.test/verify-email?token=abc',
+      }),
     )
     expect(resendSendMock).not.toHaveBeenCalled()
 
@@ -107,7 +121,10 @@ describe('sendVerificationEmail', () => {
   })
 
   it('sends via Resend when an API key is configured', async () => {
-    resendSendMock.mockResolvedValueOnce({ data: { id: 'email_2' }, error: null })
+    resendSendMock.mockResolvedValueOnce({
+      data: { id: 'email_2' },
+      error: null,
+    })
 
     await sendVerificationEmail(
       { ...baseEnv, resendApiKey: 're_test_key' },
@@ -126,7 +143,10 @@ describe('sendVerificationEmail', () => {
 
   it('throws and logs when Resend reports a delivery error', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    resendSendMock.mockResolvedValueOnce({ data: null, error: { message: 'invalid domain' } })
+    resendSendMock.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'invalid domain' },
+    })
 
     await expect(
       sendVerificationEmail(
@@ -157,7 +177,9 @@ describe('sendResetPasswordEmail', () => {
 
     expect(consoleInfo).toHaveBeenCalledWith(
       expect.stringContaining('[dev-only]'),
-      expect.objectContaining({ url: 'https://app.example.test/reset-password?token=abc' }),
+      expect.objectContaining({
+        url: 'https://app.example.test/reset-password?token=abc',
+      }),
     )
     expect(resendSendMock).not.toHaveBeenCalled()
 
@@ -165,7 +187,10 @@ describe('sendResetPasswordEmail', () => {
   })
 
   it('sends via Resend with both html and text parts when an API key is configured', async () => {
-    resendSendMock.mockResolvedValueOnce({ data: { id: 'email_3' }, error: null })
+    resendSendMock.mockResolvedValueOnce({
+      data: { id: 'email_3' },
+      error: null,
+    })
 
     await sendResetPasswordEmail(
       { ...baseEnv, resendApiKey: 're_test_key' },
@@ -182,14 +207,21 @@ describe('sendResetPasswordEmail', () => {
     )
     const call = resendSendMock.mock.calls[0][0]
     expect(typeof call.html).toBe('string')
-    expect(call.html).toContain('https://app.example.test/reset-password?token=abc')
+    expect(call.html).toContain(
+      'https://app.example.test/reset-password?token=abc',
+    )
     expect(typeof call.text).toBe('string')
-    expect(call.text).toContain('https://app.example.test/reset-password?token=abc')
+    expect(call.text).toContain(
+      'https://app.example.test/reset-password?token=abc',
+    )
   })
 
   it('throws and logs when Resend reports a delivery error', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    resendSendMock.mockResolvedValueOnce({ data: null, error: { message: 'invalid domain' } })
+    resendSendMock.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'invalid domain' },
+    })
 
     await expect(
       sendResetPasswordEmail(
@@ -210,13 +242,19 @@ describe('sendResetPasswordEmail', () => {
 
 describe('resetPasswordUrl', () => {
   it('builds the reset link at the configured web origin with the token', () => {
-    const url = resetPasswordUrl({ ...baseEnv, webOrigin: 'https://app.obiter.test' }, 'tok_123')
+    const url = resetPasswordUrl(
+      { ...baseEnv, webOrigin: 'https://app.obiter.test' },
+      'tok_123',
+    )
 
     expect(url).toBe('https://app.obiter.test/reset-password?token=tok_123')
   })
 
   it('URL-encodes the token', () => {
-    const url = resetPasswordUrl({ ...baseEnv, webOrigin: 'https://app.obiter.test' }, 'a b/c')
+    const url = resetPasswordUrl(
+      { ...baseEnv, webOrigin: 'https://app.obiter.test' },
+      'a b/c',
+    )
 
     expect(url).toBe('https://app.obiter.test/reset-password?token=a%20b%2Fc')
   })
@@ -225,7 +263,11 @@ describe('resetPasswordUrl', () => {
     // The desktop renderer origin (env.desktopOrigin) must never appear in the
     // reset link — it would not open in a browser.
     const url = resetPasswordUrl(
-      { ...baseEnv, webOrigin: 'https://app.obiter.test', desktopOrigin: 'obiter://desktop-auth' },
+      {
+        ...baseEnv,
+        webOrigin: 'https://app.obiter.test',
+        desktopOrigin: 'obiter://desktop-auth',
+      },
       'tok_xyz',
     )
 
@@ -239,17 +281,31 @@ describe('sendResetPasswordEmail — reset link targets the web origin', () => {
   // better-auth's default or the desktop scheme. This catches the case where
   // the sendResetPassword callback silently fails to derive the URL.
   it('sends an email whose URL contains the web origin and ?token=', async () => {
-    resendSendMock.mockResolvedValueOnce({ data: { id: 'email_4' }, error: null })
+    resendSendMock.mockResolvedValueOnce({
+      data: { id: 'email_4' },
+      error: null,
+    })
 
     await sendResetPasswordEmail(
-      { ...baseEnv, resendApiKey: 're_test_key', webOrigin: 'https://app.obiter.test' },
+      {
+        ...baseEnv,
+        resendApiKey: 're_test_key',
+        webOrigin: 'https://app.obiter.test',
+      },
       'user@example.test',
-      resetPasswordUrl({ ...baseEnv, webOrigin: 'https://app.obiter.test' }, 'tok_abc'),
+      resetPasswordUrl(
+        { ...baseEnv, webOrigin: 'https://app.obiter.test' },
+        'tok_abc',
+      ),
     )
 
     const call = resendSendMock.mock.calls[0][0]
-    expect(call.html).toContain('https://app.obiter.test/reset-password?token=tok_abc')
-    expect(call.text).toContain('https://app.obiter.test/reset-password?token=tok_abc')
+    expect(call.html).toContain(
+      'https://app.obiter.test/reset-password?token=tok_abc',
+    )
+    expect(call.text).toContain(
+      'https://app.obiter.test/reset-password?token=tok_abc',
+    )
     // The desktop custom scheme must never leak into the reset link.
     expect(call.html).not.toContain('obiter://')
   })
@@ -335,7 +391,10 @@ describe('buildAuthAuditEvent', () => {
   })
 
   it('returns null when no session was established', () => {
-    const event = buildAuthAuditEvent({ path: '/sign-in/email', newSession: null })
+    const event = buildAuthAuditEvent({
+      path: '/sign-in/email',
+      newSession: null,
+    })
 
     expect(event).toBeNull()
   })
@@ -347,7 +406,9 @@ describe('emailAndPasswordOptions — password reset revokes sessions (config re
   // deleteSessions(userId) only when this option is true, so without it a
   // stolen session cookie survives a password reset.
   it('enables revokeSessionsOnPasswordReset so a stolen session is invalidated on reset', () => {
-    expect(emailAndPasswordOptions(baseEnv).revokeSessionsOnPasswordReset).toBe(true)
+    expect(emailAndPasswordOptions(baseEnv).revokeSessionsOnPasswordReset).toBe(
+      true,
+    )
   })
 })
 
@@ -359,11 +420,18 @@ describe('sendResetPasswordForUser — delivery failure is logged, not silent', 
   // account-existence leak).
   it('logs at error level and resolves when Resend rejects the reset email', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    resendSendMock.mockResolvedValueOnce({ data: null, error: { message: 'invalid domain' } })
+    resendSendMock.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'invalid domain' },
+    })
 
     await expect(
       sendResetPasswordForUser(
-        { ...baseEnv, resendApiKey: 're_test_key', webOrigin: 'https://app.obiter.test' },
+        {
+          ...baseEnv,
+          resendApiKey: 're_test_key',
+          webOrigin: 'https://app.obiter.test',
+        },
         'user@example.test',
         'tok_1',
       ),
@@ -381,7 +449,8 @@ describe('sendResetPasswordForUser — delivery failure is logged, not silent', 
     )
     expect(
       consoleError.mock.calls.some(
-        ([, ctx]) => typeof (ctx as { requestId?: unknown })?.requestId === 'string',
+        ([, ctx]) =>
+          typeof (ctx as { requestId?: unknown })?.requestId === 'string',
       ),
     ).toBe(true)
 
@@ -390,10 +459,17 @@ describe('sendResetPasswordForUser — delivery failure is logged, not silent', 
 
   it('does not log an error on a successful send', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
-    resendSendMock.mockResolvedValueOnce({ data: { id: 'email_ok' }, error: null })
+    resendSendMock.mockResolvedValueOnce({
+      data: { id: 'email_ok' },
+      error: null,
+    })
 
     await sendResetPasswordForUser(
-      { ...baseEnv, resendApiKey: 're_test_key', webOrigin: 'https://app.obiter.test' },
+      {
+        ...baseEnv,
+        resendApiKey: 're_test_key',
+        webOrigin: 'https://app.obiter.test',
+      },
       'user@example.test',
       'tok_2',
     )

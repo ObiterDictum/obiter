@@ -1,5 +1,12 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import {
+  act,
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SignInRouteView } from './sign-in'
@@ -27,7 +34,15 @@ vi.mock('../auth', () => ({
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => authMocks.navigate,
   useSearch: () => ({}),
-  Link: ({ children, to, className }: { children: ReactNode; to?: string; className?: string }) => (
+  Link: ({
+    children,
+    to,
+    className,
+  }: {
+    children: ReactNode
+    to?: string
+    className?: string
+  }) => (
     <a href={typeof to === 'string' ? to : '#'} className={className}>
       {children}
     </a>
@@ -36,7 +51,9 @@ vi.mock('@tanstack/react-router', () => ({
 
 function fillPasswordForm(email: string, password: string) {
   const emailInput = screen.getByRole('textbox', { name: 'Email' })
-  const passwordInput = document.querySelector('input[type="password"]') as HTMLInputElement
+  const passwordInput = document.querySelector(
+    'input[type="password"]',
+  ) as HTMLInputElement
   fireEvent.change(emailInput, { target: { value: email } })
   fireEvent.change(passwordInput, { target: { value: password } })
 }
@@ -64,9 +81,10 @@ describe('SignInRouteView — password submit outcomes', () => {
       expect(screen.getByText('Invalid email or password.')).toBeTruthy()
     })
     expect(authMocks.navigate).not.toHaveBeenCalled()
-    expect((screen.getByRole('textbox', { name: 'Email' }) as HTMLInputElement).value).toBe(
-      'lex@obiter.dev',
-    )
+    expect(
+      (screen.getByRole('textbox', { name: 'Email' }) as HTMLInputElement)
+        .value,
+    ).toBe('lex@obiter.dev')
   })
 
   it('navigates to Home on successful sign-in', async () => {

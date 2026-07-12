@@ -1,8 +1,12 @@
 import { LegalAuthoritySchema, type LegalAuthority } from '@obiter/legal-schema'
-import { getDocument, indexDocuments, rankLegalSearchHitsByExactMatch } from '@obiter/search-client'
+import { getDocument, indexDocuments } from '@obiter/search-client'
 import type { ApiEnv } from '../../env'
 import { parseFindCaseLawAtom, type AtomEntry } from './atom-parser'
-import { courtFromCitation, findCaseLawJurisdiction, supportedFindCaseLawCourts, toFindCaseLawCourtParam } from './court-utils'
+import {
+  courtFromCitation,
+  findCaseLawJurisdiction,
+  toFindCaseLawCourtParam,
+} from './court-utils'
 import {
   addFindCaseLawDateParams,
   courtFromDocumentId,
@@ -20,7 +24,6 @@ import {
 } from './html-parser'
 import { createMojRateLimiter } from './rate-limiter'
 import {
-  toAuthoritySummary,
   type LegalAuthoritySourceStore,
   type ProviderSourceMetadata,
   type StoredLegalAuthorityRecord,
@@ -36,8 +39,7 @@ export async function upsertLegalAuthoritySummary(
 ) {
   try {
     await legalAuthorityStore.upsertSummary(summary, provider)
-  } catch {
-  }
+  } catch {}
 }
 
 export async function upsertLegalAuthorityDocument(
@@ -48,7 +50,10 @@ export async function upsertLegalAuthorityDocument(
   await legalAuthorityStore.upsertDocument(document, provider)
 }
 
-function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T | null> {
+function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+): Promise<T | null> {
   let timeout: ReturnType<typeof setTimeout>
 
   return Promise.race([
@@ -99,13 +104,19 @@ export async function fetchMojAuthoritySummaries(
   request: LegalFetchRequest,
   rateLimiter: ReturnType<typeof createMojRateLimiter>,
 ): Promise<
-  | { status: 'ok'; entries: AtomEntry[]; documents: LegalAuthority[]; skippedCount: number }
+  | {
+      status: 'ok'
+      entries: AtomEntry[]
+      documents: LegalAuthority[]
+      skippedCount: number
+    }
   | { status: 'rate_limited'; retryAfter: string | null }
   | { status: 'unavailable' }
 > {
   const atomUrl = new URL('/atom.xml', env.mojFindCaseLawBaseUrl)
   atomUrl.searchParams.set('query', request.query)
-  if (request.court) atomUrl.searchParams.set('court', toFindCaseLawCourtParam(request.court))
+  if (request.court)
+    atomUrl.searchParams.set('court', toFindCaseLawCourtParam(request.court))
   addFindCaseLawDateParams(atomUrl, request)
 
   const entries: AtomEntry[] = []
@@ -121,7 +132,10 @@ export async function fetchMojAuthoritySummaries(
 
     const atomLimit = rateLimiter.take()
     if (!atomLimit.allowed) {
-      return { status: 'rate_limited', retryAfter: atomLimit.retryAfterSeconds.toString() }
+      return {
+        status: 'rate_limited',
+        retryAfter: atomLimit.retryAfterSeconds.toString(),
+      }
     }
 
     let atomResponse: Response
@@ -146,7 +160,9 @@ export async function fetchMojAuthoritySummaries(
     nextUrl = nextHref ? new URL(nextHref, nextUrl) : null
   }
 
-  const documents = entries.slice(0, 10).map((entry) => atomEntryToAuthoritySummary(env, entry))
+  const documents = entries
+    .slice(0, 10)
+    .map((entry) => atomEntryToAuthoritySummary(env, entry))
 
   return {
     status: 'ok',
@@ -165,7 +181,11 @@ export async function hydrateMojAuthoritiesFromSearch(
   rateLimiter: ReturnType<typeof createMojRateLimiter>,
 ) {
   try {
-    const mojResult = await fetchMojAuthoritySummaries(env, request, rateLimiter)
+    const mojResult = await fetchMojAuthoritySummaries(
+      env,
+      request,
+      rateLimiter,
+    )
     if (mojResult.status !== 'ok') return
 
     for (const entry of mojResult.entries) {
@@ -208,7 +228,11 @@ export async function hydrateAndIndexMojAuthorities(
     for (const result of detailResults) {
       if (result.status !== 'ok') continue
       try {
-        await upsertLegalAuthorityDocument(legalAuthorityStore, result.document, result.provider)
+        await upsertLegalAuthorityDocument(
+          legalAuthorityStore,
+          result.document,
+          result.provider,
+        )
       } catch {
         continue
       }
@@ -221,7 +245,10 @@ export async function hydrateAndIndexMojAuthorities(
   }
 }
 
-export function atomEntryToAuthoritySummary(env: ApiEnv, entry: AtomEntry): LegalAuthority {
+export function atomEntryToAuthoritySummary(
+  env: ApiEnv,
+  entry: AtomEntry,
+): LegalAuthority {
   return {
     id: documentIdFromUri(entry.uri),
     title: entry.title,
@@ -234,7 +261,9 @@ export function atomEntryToAuthoritySummary(env: ApiEnv, entry: AtomEntry): Lega
   }
 }
 
-export function providerMetadataFromAtomEntry(entry: AtomEntry): ProviderSourceMetadata {
+export function providerMetadataFromAtomEntry(
+  entry: AtomEntry,
+): ProviderSourceMetadata {
   return {
     documentUri: entry.uri,
     sourceUri: entry.sourceUri,
@@ -259,7 +288,10 @@ async function fetchMojAuthorityDetail(
   const detailLimit = rateLimiter.take()
 
   if (!detailLimit.allowed) {
-    return { status: 'rate_limited', retryAfter: detailLimit.retryAfterSeconds.toString() }
+    return {
+      status: 'rate_limited',
+      retryAfter: detailLimit.retryAfterSeconds.toString(),
+    }
   }
 
   const detailResponse = await fetch(detailUrl)
@@ -316,7 +348,10 @@ export async function fetchMojAuthorityDocumentFromRecord(
   for (const sourceUri of sourceUris) {
     const limit = rateLimiter.take()
     if (!limit.allowed) {
-      return { status: 'rate_limited', retryAfter: limit.retryAfterSeconds.toString() }
+      return {
+        status: 'rate_limited',
+        retryAfter: limit.retryAfterSeconds.toString(),
+      }
     }
 
     const detailUrl = new URL(sourceUri, env.mojFindCaseLawBaseUrl)
@@ -364,7 +399,10 @@ export async function fetchMojAuthorityDocumentById(
 
   const limit = rateLimiter.take()
   if (!limit.allowed) {
-    return { status: 'rate_limited', retryAfter: limit.retryAfterSeconds.toString() }
+    return {
+      status: 'rate_limited',
+      retryAfter: limit.retryAfterSeconds.toString(),
+    }
   }
 
   const detailUrl = new URL(uri, env.mojFindCaseLawBaseUrl)
@@ -375,16 +413,21 @@ export async function fetchMojAuthorityDocumentById(
   if (!detailResponse.ok) return { status: 'skipped' }
 
   const html = await detailResponse.text()
-  const document = parseMojAuthorityDocument(documentId, html, detailUrl.toString(), {
-    id: documentId,
-    title: documentId,
-    neutralCitation: extractNeutralCitationFromHtml(html) ?? null,
-    court: courtFromDocumentId(documentId) ?? '',
-    jurisdiction: findCaseLawJurisdiction,
-    dateDecided: dateFromDocumentId(documentId) ?? '',
-    sourceType: 'judgment',
-    sourceUrl: detailUrl.toString(),
-  })
+  const document = parseMojAuthorityDocument(
+    documentId,
+    html,
+    detailUrl.toString(),
+    {
+      id: documentId,
+      title: documentId,
+      neutralCitation: extractNeutralCitationFromHtml(html) ?? null,
+      court: courtFromDocumentId(documentId) ?? '',
+      jurisdiction: findCaseLawJurisdiction,
+      dateDecided: dateFromDocumentId(documentId) ?? '',
+      sourceType: 'judgment',
+      sourceUrl: detailUrl.toString(),
+    },
+  )
 
   if (!document) return { status: 'skipped' }
 
@@ -424,10 +467,17 @@ function parseMojAuthorityDocument(
   sourceUrl: string,
   fallback: LegalAuthority,
 ) {
-  const neutralCitation = extractNeutralCitationFromHtml(html) ?? fallback.neutralCitation ?? null
-  const court = (neutralCitation ? courtFromCitation(neutralCitation) : null) ?? fallback.court
+  const neutralCitation =
+    extractNeutralCitationFromHtml(html) ?? fallback.neutralCitation ?? null
+  const court =
+    (neutralCitation ? courtFromCitation(neutralCitation) : null) ??
+    fallback.court
   const dateDecided = extractJudgmentDateFromHtml(html) ?? fallback.dateDecided
-  const title = extractJudgmentTitleFromHtml(html) ?? fallback.title ?? neutralCitation ?? documentId
+  const title =
+    extractJudgmentTitleFromHtml(html) ??
+    fallback.title ??
+    neutralCitation ??
+    documentId
 
   if (!court || !dateDecided) {
     return null

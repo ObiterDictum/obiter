@@ -1,13 +1,20 @@
-import { decodeHtml, extractDate, extractNeutralCitation, readTag } from './document-utils'
+import {
+  decodeHtml,
+  extractDate,
+  extractNeutralCitation,
+  readTag,
+} from './document-utils'
 
 export function parseJudgmentParagraphs(html: string, documentId: string) {
   const judgmentHtml = extractJudgmentHtml(html)
-  const structuredBlocks = Array.from(judgmentHtml.matchAll(/<(p|li)\b[^>]*>([\s\S]*?)<\/\1>/gi))
-    .map((match) => htmlFragmentToText(match[2]))
+  const structuredBlocks = Array.from(
+    judgmentHtml.matchAll(/<(p|li)\b[^>]*>([\s\S]*?)<\/\1>/gi),
+  ).map((match) => htmlFragmentToText(match[2]))
   const fallbackBlocks = htmlFragmentToText(
     judgmentHtml.replace(/<\/(p|div|li|h[1-6])>/gi, '\n'),
   ).split(/\n+/)
-  const bodyBlocks = structuredBlocks.length > 0 ? structuredBlocks : fallbackBlocks
+  const bodyBlocks =
+    structuredBlocks.length > 0 ? structuredBlocks : fallbackBlocks
 
   return bodyBlocks
     .map((line) => line.replace(/\s+/g, ' ').trim())
@@ -63,13 +70,15 @@ export function extractJudgmentTitleFromHtml(html: string) {
     html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i)?.[1] ??
     ''
 
-  return decodeHtml(
-    title
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+-\s+Find Case Law[\s\S]*$/i, '')
-      .replace(/\s+/g, ' ')
-      .trim(),
-  ) || null
+  return (
+    decodeHtml(
+      title
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+-\s+Find Case Law[\s\S]*$/i, '')
+        .replace(/\s+/g, ' ')
+        .trim(),
+    ) || null
+  )
 }
 
 export function extractNeutralCitationFromHtml(html: string) {
@@ -78,7 +87,9 @@ export function extractNeutralCitationFromHtml(html: string) {
     html.match(/judgment-header__neutral-citation[\s\S]{0,300}/i)?.[0] ??
     html
 
-  return extractNeutralCitation(decodeHtml(citationSource.replace(/<[^>]+>/g, ' ')))
+  return extractNeutralCitation(
+    decodeHtml(citationSource.replace(/<[^>]+>/g, ' ')),
+  )
 }
 
 export function extractJudgmentDateFromHtml(html: string) {

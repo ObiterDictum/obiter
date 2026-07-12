@@ -66,7 +66,9 @@ function matterRow(overrides: Record<string, unknown> = {}) {
   }
 }
 
-function createTransactionalPool(query: (sql: string, params?: unknown[]) => Promise<unknown>) {
+function createTransactionalPool(
+  query: (sql: string, params?: unknown[]) => Promise<unknown>,
+) {
   const calls: QueryCall[] = []
   const client = {
     query: async (sql: string, params?: unknown[]) => {
@@ -121,7 +123,9 @@ describe('matter workspace database operations', () => {
       contentSha256: 'a'.repeat(64),
     })
 
-    expect(calls.map(([sql]) => sql.trim().split(/\s+/).slice(0, 3).join(' '))).toEqual([
+    expect(
+      calls.map(([sql]) => sql.trim().split(/\s+/).slice(0, 3).join(' ')),
+    ).toEqual([
       'begin',
       'insert into matter_documents',
       'insert into document_versions',
@@ -147,7 +151,9 @@ describe('matter workspace database operations', () => {
       'skeleton.pdf',
       'application/pdf',
       1234,
-      expect.stringMatching(/^org\/org_1\/matters\/mtr_1\/documents\/doc_1\/versions\/ver_.+\/source$/),
+      expect.stringMatching(
+        /^org\/org_1\/matters\/mtr_1\/documents\/doc_1\/versions\/ver_.+\/source$/,
+      ),
       'a'.repeat(64),
       'synced',
       'usr_1',
@@ -249,7 +255,9 @@ describe('matter workspace database operations', () => {
       requestId: 'req_1',
     })
 
-    expect(calls.map(([sql]) => sql.trim().split(/\s+/).slice(0, 3).join(' '))).toEqual([
+    expect(
+      calls.map(([sql]) => sql.trim().split(/\s+/).slice(0, 3).join(' ')),
+    ).toEqual([
       'begin',
       'update matters set',
       'insert into audit_logs',
@@ -306,7 +314,9 @@ describe('createOrganisationForUser', () => {
         return { rows: [] }
       }
       if (sql.includes('insert into organisations')) {
-        return { rows: [{ id: 'org_orphan', name: 'Orphan', plan: 'private_beta' }] }
+        return {
+          rows: [{ id: 'org_orphan', name: 'Orphan', plan: 'private_beta' }],
+        }
       }
       throw new Error(`Unexpected SQL: ${sql}`)
     })
@@ -323,8 +333,12 @@ describe('createOrganisationForUser', () => {
     expect(sequence).toContain('rollback')
     expect(sequence).not.toContain('commit')
     // Must not have created an orphan organisation or audit row.
-    expect(sequence.some((s) => s.includes('insert into organisations'))).toBe(false)
-    expect(sequence.some((s) => s.includes('insert into audit_logs'))).toBe(false)
+    expect(sequence.some((s) => s.includes('insert into organisations'))).toBe(
+      false,
+    )
+    expect(sequence.some((s) => s.includes('insert into audit_logs'))).toBe(
+      false,
+    )
   })
 
   it('returns created:false when the user already has an organisation', async () => {
@@ -349,6 +363,8 @@ describe('createOrganisationForUser', () => {
     const sequence = calls.map(([sql]) => sql)
     expect(sequence).toContain('rollback')
     expect(sequence).not.toContain('commit')
-    expect(sequence.some((s) => s.includes('insert into organisations'))).toBe(false)
+    expect(sequence.some((s) => s.includes('insert into organisations'))).toBe(
+      false,
+    )
   })
 })

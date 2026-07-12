@@ -37,13 +37,23 @@ export function buildAuditReport(
         }
       : null,
     auditLog,
-    spanDecisions: Object.entries(run.decisions).flatMap(([spanId, decision]) => {
-      const span = run.spans.find((item) => item.id === spanId)
-      return span ? [{
-        spanId, spanText: span.text, category: span.category, decision: decision.decision,
-        decidedBy: decision.decidedBy, decidedAt: decision.decidedAt,
-      }] : []
-    }),
+    spanDecisions: Object.entries(run.decisions).flatMap(
+      ([spanId, decision]) => {
+        const span = run.spans.find((item) => item.id === spanId)
+        return span
+          ? [
+              {
+                spanId,
+                spanText: span.text,
+                category: span.category,
+                decision: decision.decision,
+                decidedBy: decision.decidedBy,
+                decidedAt: decision.decidedAt,
+              },
+            ]
+          : []
+      },
+    ),
     reviewerInfo: finalized
       ? { userId: finalized.userId, reviewedAt: finalized.timestamp }
       : null,

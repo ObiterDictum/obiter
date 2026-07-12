@@ -19,12 +19,12 @@ services:
       POSTGRES_PASSWORD: obiter
       POSTGRES_DB: obiter
     ports:
-      - "5432:5432"
+      - '5432:5432'
     volumes:
       - obiter_pg_data:/var/lib/postgresql/data
       - ./init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U obiter -d obiter"]
+      test: ['CMD-SHELL', 'pg_isready -U obiter -d obiter']
       interval: 5s
       timeout: 3s
       retries: 10

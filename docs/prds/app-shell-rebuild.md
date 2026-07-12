@@ -28,15 +28,15 @@ Verified against the codebase (July 2026):
 
 Verified current stack: React 19, TanStack Router + Query + Start, Vite 8, TypeScript, pnpm workspace, Vitest. Electron desktop app (`apps/desktop`) consumes `@obiter/app-shell`.
 
-| Decision | Choice | Rationale |
-| --- | --- | --- |
-| Framework, routing, data | **Keep**: React 19, TanStack Router/Query/Start, Vite 8 | Modern, working, and the Search surface already proves the pattern. A framework swap would discard working infrastructure for no stated deficiency. |
-| Component primitives | **Add**: Base UI (`@base-ui-components/react`) | Headless, accessible primitives (dialog, menu, popover, select, tabs, tooltip) from the Radix/MUI lineage. We own the visual layer; Base UI owns focus management, ARIA, and interaction correctness. |
-| Styling | **Add**: Tailwind CSS v4, driven by design tokens as CSS variables | Replaces the 3,219-line hand-rolled stylesheet. Tokens (`--obiter-*` CSS variables) are the source of truth; Tailwind consumes them via `@theme`. Note: Redact PRD 2's category color mapping consumes these tokens. |
-| Component library | **Build**: `@obiter/ui` becomes real | The existing stub package becomes the styled component library: Button, Input, Select, Dialog, Table, Tabs, Badge, Toast, EmptyState, Skeleton, etc., built on Base UI + tokens. |
-| Icons | **One pack**: Phosphor (`@phosphor-icons/react`); remove `@heroicons/react` | Deliberately not Lucide — the founder wants a less generic visual identity than the default stack. Phosphor: 1,200+ icons, first-class React package, multiple weights (regular/bold/duotone/fill) that give the UI distinctive character while staying coherent. Enforced by an ESLint `no-restricted-imports` rule against any other icon package. |
-| Fixture layer | **Delete**: `createPhaseZeroShellSnapshot`, demo `MeResponse`, `demo-shell.test.ts` | Replaced by real endpoints + a `pnpm seed` development dataset. |
-| Effect TS | **Not used** | The proposed Redact detection-module pilot was never implemented. Detection ships as plain TypeScript; a future Effect evaluation requires its own decision. Do not add `effect` as a dependency of `@obiter/ui`, `@obiter/app-shell`, or `@obiter/web`; async/data concerns in the UI belong to TanStack Query. |
+| Decision                 | Choice                                                                              | Rationale                                                                                                                                                                                                                                                                                                                                            |
+| ------------------------ | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Framework, routing, data | **Keep**: React 19, TanStack Router/Query/Start, Vite 8                             | Modern, working, and the Search surface already proves the pattern. A framework swap would discard working infrastructure for no stated deficiency.                                                                                                                                                                                                  |
+| Component primitives     | **Add**: Base UI (`@base-ui-components/react`)                                      | Headless, accessible primitives (dialog, menu, popover, select, tabs, tooltip) from the Radix/MUI lineage. We own the visual layer; Base UI owns focus management, ARIA, and interaction correctness.                                                                                                                                                |
+| Styling                  | **Add**: Tailwind CSS v4, driven by design tokens as CSS variables                  | Replaces the 3,219-line hand-rolled stylesheet. Tokens (`--obiter-*` CSS variables) are the source of truth; Tailwind consumes them via `@theme`. Note: Redact PRD 2's category color mapping consumes these tokens.                                                                                                                                 |
+| Component library        | **Build**: `@obiter/ui` becomes real                                                | The existing stub package becomes the styled component library: Button, Input, Select, Dialog, Table, Tabs, Badge, Toast, EmptyState, Skeleton, etc., built on Base UI + tokens.                                                                                                                                                                     |
+| Icons                    | **One pack**: Phosphor (`@phosphor-icons/react`); remove `@heroicons/react`         | Deliberately not Lucide — the founder wants a less generic visual identity than the default stack. Phosphor: 1,200+ icons, first-class React package, multiple weights (regular/bold/duotone/fill) that give the UI distinctive character while staying coherent. Enforced by an ESLint `no-restricted-imports` rule against any other icon package. |
+| Fixture layer            | **Delete**: `createPhaseZeroShellSnapshot`, demo `MeResponse`, `demo-shell.test.ts` | Replaced by real endpoints + a `pnpm seed` development dataset.                                                                                                                                                                                                                                                                                      |
+| Effect TS                | **Not used**                                                                        | The proposed Redact detection-module pilot was never implemented. Detection ships as plain TypeScript; a future Effect evaluation requires its own decision. Do not add `effect` as a dependency of `@obiter/ui`, `@obiter/app-shell`, or `@obiter/web`; async/data concerns in the UI belong to TanStack Query.                                     |
 
 ## Scope
 
@@ -125,16 +125,16 @@ All FRs met; both themes verified on every screen; contract exports documented; 
 
 ## Risks
 
-| Risk | Likelihood | Impact | Mitigation |
-| --- | --- | --- | --- |
-| Parallel-track drift: Redact UI needs a component or token the contract lacks | Medium | Medium | Contract freeze at M1 with an explicit change process (both PRDs updated together); the plan owner reviews both tracks at each milestone. |
-| Base UI gaps (it is a newer library) for a needed primitive | Low-Medium | Medium | The styled layer lives in `@obiter/ui`, so a single primitive can be swapped (e.g. hand-rolled or another headless source) without feature-code changes. |
-| Search regression during restyle | Medium | Medium | Search logic untouched; existing tests must pass; restyle is markup/class-level only. |
-| Desktop (Electron) breakage from new CSS pipeline | Medium | Low | M3 includes an explicit desktop build-and-render verification step. |
-| Auth API assumptions (session shape, cookie vs token) don't match the UI plan | Medium | Medium | M1 starts with a half-day spike reading `services/api/src/auth.ts` and the auth spec before component work begins. |
+| Risk                                                                          | Likelihood | Impact | Mitigation                                                                                                                                               |
+| ----------------------------------------------------------------------------- | ---------- | ------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Parallel-track drift: Redact UI needs a component or token the contract lacks | Medium     | Medium | Contract freeze at M1 with an explicit change process (both PRDs updated together); the plan owner reviews both tracks at each milestone.                |
+| Base UI gaps (it is a newer library) for a needed primitive                   | Low-Medium | Medium | The styled layer lives in `@obiter/ui`, so a single primitive can be swapped (e.g. hand-rolled or another headless source) without feature-code changes. |
+| Search regression during restyle                                              | Medium     | Medium | Search logic untouched; existing tests must pass; restyle is markup/class-level only.                                                                    |
+| Desktop (Electron) breakage from new CSS pipeline                             | Medium     | Low    | M3 includes an explicit desktop build-and-render verification step.                                                                                      |
+| Auth API assumptions (session shape, cookie vs token) don't match the UI plan | Medium     | Medium | M1 starts with a half-day spike reading `services/api/src/auth.ts` and the auth spec before component work begins.                                       |
 
 ## Open Questions
 
-1. **Icon pack** — *Resolved (July 2026)*: Phosphor (`@phosphor-icons/react`). Explicitly not Lucide.
-2. **Theme default** — *Resolved (July 2026)*: light by default; dark ships as a persisted preference.
+1. **Icon pack** — _Resolved (July 2026)_: Phosphor (`@phosphor-icons/react`). Explicitly not Lucide.
+2. **Theme default** — _Resolved (July 2026)_: light by default; dark ships as a persisted preference.
 3. **Seed data shape** — should `pnpm seed` create the Redact demo fixture matter (PRD 3's skeleton argument) so both tracks share one dataset? Recommended: yes, coordinate with the Redact track at M2.

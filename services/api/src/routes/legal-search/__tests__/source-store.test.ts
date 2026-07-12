@@ -76,10 +76,10 @@ describe('legal authority source store search', () => {
     const results = await store.search('fiduciary appendix', { court: 'uksc' })
 
     expect(results).toMatchObject([{ id: 'uksc-2024-3' }])
-    expect(client.query).toHaveBeenCalledWith('select set_config($1, $2, true)', [
-      'statement_timeout',
-      '350ms',
-    ])
+    expect(client.query).toHaveBeenCalledWith(
+      'select set_config($1, $2, true)',
+      ['statement_timeout', '350ms'],
+    )
     const searchSql = queries.find((query) =>
       query.text.includes('from legal_source_documents'),
     )?.text
@@ -94,7 +94,9 @@ describe('legal authority source store search', () => {
       ),
       'utf8',
     )
-    expect(migration).toContain("jsonb_path_query_array(document_json, '$.paragraphs[*].text')")
+    expect(migration).toContain(
+      "jsonb_path_query_array(document_json, '$.paragraphs[*].text')",
+    )
     expect(migration).toContain('using gin (search_vector)')
   })
 })

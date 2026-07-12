@@ -25,9 +25,14 @@ export function SearchIdleState({
   onRecentSearch,
 }: SearchIdleStateProps) {
   return (
-    <section className="grid gap-5 rounded-lg border border-line bg-surface p-5" aria-label="Search start points">
+    <section
+      className="grid gap-5 rounded-lg border border-line bg-surface p-5"
+      aria-label="Search start points"
+    >
       <div className="flex flex-col gap-2.5">
-        <p className="text-xs font-semibold uppercase tracking-wider text-subtle">Recent searches</p>
+        <p className="text-xs font-semibold uppercase tracking-wider text-subtle">
+          Recent searches
+        </p>
         {recentSearches.length > 0 ? (
           <div className="flex flex-wrap gap-2">
             {recentSearches.map((recentSearch) => (
@@ -42,25 +47,35 @@ export function SearchIdleState({
             ))}
           </div>
         ) : (
-          <p className="text-sm leading-relaxed text-muted">Recent searches appear here for this session.</p>
+          <p className="text-sm leading-relaxed text-muted">
+            Recent searches appear here for this session.
+          </p>
         )}
       </div>
 
       <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <div className="flex flex-col gap-2.5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-subtle">Search tips</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-subtle">
+            Search tips
+          </p>
           <ul className="flex flex-col gap-2">
             {searchTips.map((tip) => (
               <li className="flex items-baseline gap-2.5" key={tip.label}>
-                <span className="w-[104px] shrink-0 text-sm text-muted">{tip.label}</span>
-                <strong className="text-sm font-semibold text-ink">{tip.example}</strong>
+                <span className="w-[104px] shrink-0 text-sm text-muted">
+                  {tip.label}
+                </span>
+                <strong className="text-sm font-semibold text-ink">
+                  {tip.example}
+                </strong>
               </li>
             ))}
           </ul>
         </div>
 
         <div className="flex flex-col gap-2.5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-subtle">Court shortcuts</p>
+          <p className="text-xs font-semibold uppercase tracking-wider text-subtle">
+            Court shortcuts
+          </p>
           <div className="flex flex-wrap gap-2">
             {courtShortcuts.map((shortcut) => (
               <button

@@ -6,7 +6,11 @@ import type { Pool } from 'pg'
 import { appendAuditLog } from './database'
 import { authTrustedOrigins } from './client-origins'
 import type { ApiEnv } from './env'
-import { magicLinkEmail, resetPasswordEmail, verificationEmail } from './email-templates'
+import {
+  magicLinkEmail,
+  resetPasswordEmail,
+  verificationEmail,
+} from './email-templates'
 
 function maskEmail(email: string) {
   const [localPart, domain] = email.split('@')
@@ -42,10 +46,13 @@ async function sendEmail(
   if (!env.resendApiKey) {
     // Development-only delivery intentionally exposes the one-time URL so a
     // local developer can complete the auth flow without an email provider.
-    console.info(`[dev-only] ${options.logLabel} URL (no OBITER_RESEND_API_KEY configured)`, {
-      email: maskEmail(options.email),
-      url: options.url,
-    })
+    console.info(
+      `[dev-only] ${options.logLabel} URL (no OBITER_RESEND_API_KEY configured)`,
+      {
+        email: maskEmail(options.email),
+        url: options.url,
+      },
+    )
     return
   }
 
@@ -66,7 +73,9 @@ async function sendEmail(
       message: result.error.message,
       name: result.error.name,
     })
-    throw new Error(`${options.logLabel} email delivery failed: ${result.error.message}`)
+    throw new Error(
+      `${options.logLabel} email delivery failed: ${result.error.message}`,
+    )
   }
 }
 
@@ -82,7 +91,11 @@ export async function sendMagicLink(env: ApiEnv, email: string, url: string) {
   })
 }
 
-export async function sendVerificationEmail(env: ApiEnv, email: string, url: string) {
+export async function sendVerificationEmail(
+  env: ApiEnv,
+  email: string,
+  url: string,
+) {
   const emailContent = verificationEmail(url)
   await sendEmail(env, {
     email,
@@ -94,7 +107,11 @@ export async function sendVerificationEmail(env: ApiEnv, email: string, url: str
   })
 }
 
-export async function sendResetPasswordEmail(env: ApiEnv, email: string, url: string) {
+export async function sendResetPasswordEmail(
+  env: ApiEnv,
+  email: string,
+  url: string,
+) {
   const emailContent = resetPasswordEmail(url)
   await sendEmail(env, {
     email,
@@ -147,8 +164,11 @@ export interface AuthAuditEvent {
  * migration 0009). Kept separate from the better-auth hook so it is testable
  * without booting the auth instance.
  */
-export function buildAuthAuditEvent(ctx: AuthAuditContext): AuthAuditEvent | null {
-  const isSignIn = ctx.path === '/sign-in/email' || ctx.path === '/magic-link/verify'
+export function buildAuthAuditEvent(
+  ctx: AuthAuditContext,
+): AuthAuditEvent | null {
+  const isSignIn =
+    ctx.path === '/sign-in/email' || ctx.path === '/magic-link/verify'
   const isSignUp = ctx.path === '/sign-up/email'
   const isVerifyEmail = ctx.path === '/verify-email'
 
@@ -168,7 +188,8 @@ export function buildAuthAuditEvent(ctx: AuthAuditContext): AuthAuditEvent | nul
     entityId: newSession.session.id,
     action: isSignUp || isVerifyEmail ? 'auth.sign_up' : 'auth.sign_in',
     metadata: {
-      method: ctx.path === '/magic-link/verify' ? 'magic_link' : 'email_password',
+      method:
+        ctx.path === '/magic-link/verify' ? 'magic_link' : 'email_password',
       emailVerified: isVerifyEmail,
     },
   }
@@ -184,7 +205,11 @@ export function buildAuthAuditEvent(ctx: AuthAuditContext): AuthAuditEvent | nul
  * delivery problems are observable in server logs, without changing the
  * client-facing response.
  */
-export async function sendResetPasswordForUser(env: ApiEnv, email: string, token: string) {
+export async function sendResetPasswordForUser(
+  env: ApiEnv,
+  email: string,
+  token: string,
+) {
   try {
     await sendResetPasswordEmail(env, email, resetPasswordUrl(env, token))
   } catch (error) {
@@ -231,7 +256,13 @@ export function emailAndPasswordOptions(env: ApiEnv) {
     // — the reset screen renders its "request a new link" state on that
     // failure. This avoids reset links that target the desktop custom
     // scheme, which would not open in a browser.
-    sendResetPassword: async ({ user, token }: { user: { email: string }; token: string }) => {
+    sendResetPassword: async ({
+      user,
+      token,
+    }: {
+      user: { email: string }
+      token: string
+    }) => {
       // Delegates to sendResetPasswordForUser, which logs delivery failures
       // at error level instead of letting better-auth swallow the throw.
       await sendResetPasswordForUser(env, user.email, token)
@@ -305,7 +336,8 @@ export function createAuth(env: ApiEnv, pool: Pool) {
             ? {
                 user: {
                   id: ctx.context.newSession.user.id,
-                  organisationId: ctx.context.newSession.user.organisationId ?? null,
+                  organisationId:
+                    ctx.context.newSession.user.organisationId ?? null,
                 },
                 session: { id: ctx.context.newSession.session.id },
               }

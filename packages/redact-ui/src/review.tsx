@@ -1,7 +1,19 @@
 import { useEffect, useState } from 'react'
 import type { KeyboardEvent } from 'react'
-import { Check, CircleNotch, DownloadSimple, EyeSlash, Funnel, ShieldCheck } from '@phosphor-icons/react'
-import type { OutputMode, SpanCategory, SpanDecision, SpanSource } from '@obiter/contracts'
+import {
+  Check,
+  CircleNotch,
+  DownloadSimple,
+  EyeSlash,
+  Funnel,
+  ShieldCheck,
+} from '@phosphor-icons/react'
+import type {
+  OutputMode,
+  SpanCategory,
+  SpanDecision,
+  SpanSource,
+} from '@obiter/contracts'
 import {
   Badge,
   Button,
@@ -38,7 +50,8 @@ const categoryClasses: Record<SpanCategory, string> = {
   drivers_license: 'bg-span-drivers-license text-span-drivers-license-fg',
   url: 'bg-span-url text-span-url-fg',
   ip_address: 'bg-span-ip-address text-span-ip-address-fg',
-  national_insurance: 'bg-span-national-insurance text-span-national-insurance-fg',
+  national_insurance:
+    'bg-span-national-insurance text-span-national-insurance-fg',
   case_reference: 'bg-span-case-reference text-span-case-reference-fg',
   organisation_name: 'bg-span-organisation-name text-span-organisation-name-fg',
   secret: 'bg-span-secret text-span-secret-fg',
@@ -53,7 +66,11 @@ const sourceLabel: Record<SpanSource, string> = {
   rampart_deterministic: 'Rampart deterministic',
   uk_supplement: 'UK supplement',
 }
-const decisions: Array<{ value: SpanDecision; label: string; shortcut: string }> = [
+const decisions: Array<{
+  value: SpanDecision
+  label: string
+  shortcut: string
+}> = [
   { value: 'accept', label: 'Accept', shortcut: 'Enter' },
   { value: 'reject', label: 'Reject', shortcut: 'R' },
   { value: 'override_redact', label: 'Override redact', shortcut: 'Ctrl+R' },
@@ -65,12 +82,16 @@ function ReviewSummary({ run }: { run: RedactionRun }) {
   const total = run.summary.totalSpans
   const progress = total === 0 ? 100 : (run.summary.reviewedCount / total) * 100
   return (
-    <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4" aria-label="Review summary">
+    <section
+      className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4"
+      aria-label="Review summary"
+    >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-semibold text-ink">Review progress</h2>
           <p className="text-sm text-muted">
-            {total} spans · {run.summary.reviewedCount} reviewed · {run.summary.unreviewedCount} unreviewed
+            {total} spans · {run.summary.reviewedCount} reviewed ·{' '}
+            {run.summary.unreviewedCount} unreviewed
           </p>
         </div>
         {run.summary.reviewedCount === total ? (
@@ -79,10 +100,15 @@ function ReviewSummary({ run }: { run: RedactionRun }) {
           </Badge>
         ) : null}
       </div>
-      <ProgressBar value={progress} label="Reviewed spans" helperText={`${Math.round(progress)}% complete`} />
+      <ProgressBar
+        value={progress}
+        label="Reviewed spans"
+        helperText={`${Math.round(progress)}% complete`}
+      />
       <p className="text-xs text-subtle">
-        {run.summary.bySource.rampartModel} Rampart model · {run.summary.bySource.rampartDeterministic}{' '}
-        deterministic · {run.summary.bySource.ukSupplement} UK supplement
+        {run.summary.bySource.rampartModel} Rampart model ·{' '}
+        {run.summary.bySource.rampartDeterministic} deterministic ·{' '}
+        {run.summary.bySource.ukSupplement} UK supplement
       </p>
     </section>
   )
@@ -99,7 +125,9 @@ function HighlightedText({
   selectedId: string | null
   onSelect: (id: string) => void
 }) {
-  const spans = [...run.spans].sort((left, right) => left.start - right.start || right.end - left.end)
+  const spans = [...run.spans].sort(
+    (left, right) => left.start - right.start || right.end - left.end,
+  )
   let position = 0
   return (
     <article
@@ -172,21 +200,32 @@ function FinalizeDialog({ run }: { run: RedactionRun }) {
     )
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <Button variant="primary" onClick={() => setOpen(true)} iconStart={<DownloadSimple size={16} aria-hidden="true" />}>
+      <Button
+        variant="primary"
+        onClick={() => setOpen(true)}
+        iconStart={<DownloadSimple size={16} aria-hidden="true" />}
+      >
         Finalize
       </Button>
       <DialogContent>
         <DialogTitle>Finalize redaction output</DialogTitle>
         <DialogDescription>
-          Choose the output format. Pseudonymisation is keyed by exact text within each category, not entity identity.
+          Choose the output format. Pseudonymisation is keyed by exact text
+          within each category, not entity identity.
         </DialogDescription>
         <div className="flex flex-col gap-3">
           <label className="flex gap-2 text-sm text-ink">
-            <input type="radio" checked={outputMode === 'redacted'} onChange={() => setOutputMode('redacted')} />{' '}
+            <input
+              type="radio"
+              checked={outputMode === 'redacted'}
+              onChange={() => setOutputMode('redacted')}
+            />{' '}
             <span>
               <strong>Redacted</strong>
               <br />
-              <span className="text-muted">Replaces approved spans with [REDACTED].</span>
+              <span className="text-muted">
+                Replaces approved spans with [REDACTED].
+              </span>
             </span>
           </label>
           <label className="flex gap-2 text-sm text-ink">
@@ -199,7 +238,8 @@ function FinalizeDialog({ run }: { run: RedactionRun }) {
               <strong>Pseudonymised</strong>
               <br />
               <span className="text-muted">
-                Uses consistent category tokens; re-identification requires token-map access.
+                Uses consistent category tokens; re-identification requires
+                token-map access.
               </span>
             </span>
           </label>
@@ -211,10 +251,13 @@ function FinalizeDialog({ run }: { run: RedactionRun }) {
                 checked={confirmed}
                 onChange={(event) => setConfirmed(event.target.checked)}
               />
-              {run.summary.unreviewedCount} spans are unreviewed and will remain unchanged. I understand.
+              {run.summary.unreviewedCount} spans are unreviewed and will remain
+              unchanged. I understand.
             </label>
           ) : null}
-          {finalize.error ? <p className="text-sm text-danger">{finalize.error.message}</p> : null}
+          {finalize.error ? (
+            <p className="text-sm text-danger">{finalize.error.message}</p>
+          ) : null}
           <div className="flex justify-end gap-2">
             <DialogClose render={<Button variant="secondary">Cancel</Button>} />
             <Button
@@ -241,7 +284,10 @@ function reviewEyebrow(run: RedactionRun) {
 export function RedactionReviewView({ runId }: { runId: string }) {
   const runQuery = useRedactionRun(runId)
   const textQuery = useRedactionDocumentText(runId)
-  const outputQuery = useRedactionOutput(runId, runQuery.data?.status === 'finalized')
+  const outputQuery = useRedactionOutput(
+    runId,
+    runQuery.data?.status === 'finalized',
+  )
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [categoryFilter, setCategoryFilter] = useState('all')
   const [sourceFilter, setSourceFilter] = useState('all')
@@ -250,7 +296,9 @@ export function RedactionReviewView({ runId }: { runId: string }) {
   // Keep the document mark for the selected span in view when choosing from the list.
   useEffect(() => {
     if (!selectedId) return
-    const mark = document.querySelector<HTMLElement>(`[data-span-id="${CSS.escape(selectedId)}"]`)
+    const mark = document.querySelector<HTMLElement>(
+      `[data-span-id="${CSS.escape(selectedId)}"]`,
+    )
     mark?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
   }, [selectedId])
 
@@ -287,7 +335,13 @@ export function RedactionReviewView({ runId }: { runId: string }) {
         <EmptyState
           title="Rampart is scanning the document"
           body="This may take a moment for a large document. This screen will update when detection is complete."
-          icon={<CircleNotch className="animate-spin" size={28} aria-hidden="true" />}
+          icon={
+            <CircleNotch
+              className="animate-spin"
+              size={28}
+              aria-hidden="true"
+            />
+          }
         />
       </PageScaffold>
     )
@@ -299,7 +353,11 @@ export function RedactionReviewView({ runId }: { runId: string }) {
     return (
       <PageScaffold
         eyebrow={eyebrow}
-        title={run.status === 'finalized' ? 'Redaction review' : 'No sensitive data detected'}
+        title={
+          run.status === 'finalized'
+            ? 'Redaction review'
+            : 'No sensitive data detected'
+        }
         actions={
           run.status === 'finalized' ? (
             <Badge tone="success">Finalized</Badge>
@@ -326,16 +384,21 @@ export function RedactionReviewView({ runId }: { runId: string }) {
       (categoryFilter === 'all' || span.category === categoryFilter) &&
       (sourceFilter === 'all' || span.source === sourceFilter),
   )
-  const selected = run.spans.find((span) => span.id === selectedId) ?? filtered[0]
+  const selected =
+    run.spans.find((span) => span.id === selectedId) ?? filtered[0]
 
   const onListKeys = (event: KeyboardEvent<HTMLDivElement>) => {
     if (!filtered.length) return
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault()
-      const index = selected ? filtered.findIndex((span) => span.id === selected.id) : 0
+      const index = selected
+        ? filtered.findIndex((span) => span.id === selected.id)
+        : 0
       setSelectedId(
-        filtered[(index + (event.key === 'ArrowDown' ? 1 : -1) + filtered.length) % filtered.length]
-          ?.id ?? null,
+        filtered[
+          (index + (event.key === 'ArrowDown' ? 1 : -1) + filtered.length) %
+            filtered.length
+        ]?.id ?? null,
       )
       return
     }
@@ -364,11 +427,17 @@ export function RedactionReviewView({ runId }: { runId: string }) {
       eyebrow={eyebrow}
       title="Redaction review"
       actions={
-        run.status === 'finalized' ? <Badge tone="success">Finalized</Badge> : <FinalizeDialog run={run} />
+        run.status === 'finalized' ? (
+          <Badge tone="success">Finalized</Badge>
+        ) : (
+          <FinalizeDialog run={run} />
+        )
       }
     >
       <ReviewSummary run={run} />
-      {run.status === 'finalized' ? <FinalizedOutput outputQuery={outputQuery} /> : null}
+      {run.status === 'finalized' ? (
+        <FinalizedOutput outputQuery={outputQuery} />
+      ) : null}
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="flex min-w-0 flex-col gap-3">
           <h2 className="font-semibold text-ink">Document</h2>
@@ -390,7 +459,9 @@ export function RedactionReviewView({ runId }: { runId: string }) {
               onValueChange={(value) => setCategoryFilter(value ?? 'all')}
               options={[
                 { value: 'all', label: 'All categories' },
-                ...Array.from(new Set(run.spans.map((span) => span.category))).map((value) => ({
+                ...Array.from(
+                  new Set(run.spans.map((span) => span.category)),
+                ).map((value) => ({
                   value,
                   label: value.replaceAll('_', ' '),
                 })),
@@ -401,7 +472,10 @@ export function RedactionReviewView({ runId }: { runId: string }) {
               onValueChange={(value) => setSourceFilter(value ?? 'all')}
               options={[
                 { value: 'all', label: 'All sources' },
-                ...Object.entries(sourceLabel).map(([value, label]) => ({ value, label })),
+                ...Object.entries(sourceLabel).map(([value, label]) => ({
+                  value,
+                  label,
+                })),
               ]}
             />
           </div>
@@ -425,10 +499,14 @@ export function RedactionReviewView({ runId }: { runId: string }) {
               >
                 <span className="truncate font-mono text-ink">{span.text}</span>
                 <span className="flex flex-wrap gap-1">
-                  <Badge tone="neutral">{span.category.replaceAll('_', ' ')}</Badge>
+                  <Badge tone="neutral">
+                    {span.category.replaceAll('_', ' ')}
+                  </Badge>
                   <Badge tone="info">{span.confidence}</Badge>
                   {run.decisions[span.id] ? (
-                    <Badge tone="success">{run.decisions[span.id].decision.replaceAll('_', ' ')}</Badge>
+                    <Badge tone="success">
+                      {run.decisions[span.id].decision.replaceAll('_', ' ')}
+                    </Badge>
                   ) : (
                     <Badge tone="neutral">Unreviewed</Badge>
                   )}
@@ -439,22 +517,42 @@ export function RedactionReviewView({ runId }: { runId: string }) {
           {selected && run.status !== 'finalized' ? (
             <div className="border-t border-line pt-3">
               <p className="mb-2 text-sm text-muted">
-                Decision for <span className="font-mono text-ink">{selected.text}</span>
+                Decision for{' '}
+                <span className="font-mono text-ink">{selected.text}</span>
               </p>
               <div className="grid grid-cols-1 gap-2">
                 {decisions.map((action) => (
                   <Button
                     key={action.value}
                     size="sm"
-                    variant={action.value === 'override_redact' ? 'danger' : 'secondary'}
-                    loading={decision.isPending && decision.variables?.spanId === selected.id}
-                    onClick={() => decision.mutate({ spanId: selected.id, decision: action.value })}
+                    variant={
+                      action.value === 'override_redact'
+                        ? 'danger'
+                        : 'secondary'
+                    }
+                    loading={
+                      decision.isPending &&
+                      decision.variables?.spanId === selected.id
+                    }
+                    onClick={() =>
+                      decision.mutate({
+                        spanId: selected.id,
+                        decision: action.value,
+                      })
+                    }
                   >
-                    {action.label} <span className="ml-auto text-subtle">{action.shortcut}</span>
+                    {action.label}{' '}
+                    <span className="ml-auto text-subtle">
+                      {action.shortcut}
+                    </span>
                   </Button>
                 ))}
               </div>
-              {decision.error ? <p className="mt-2 text-sm text-danger">{decision.error.message}</p> : null}
+              {decision.error ? (
+                <p className="mt-2 text-sm text-danger">
+                  {decision.error.message}
+                </p>
+              ) : null}
             </div>
           ) : null}
         </aside>

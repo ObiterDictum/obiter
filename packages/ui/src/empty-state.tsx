@@ -10,7 +10,13 @@ export interface EmptyStateProps {
 }
 
 /** EmptyState — a calm, directive empty surface (no data, no results, not found). */
-export function EmptyState({ title, body, icon, action, className }: EmptyStateProps) {
+export function EmptyState({
+  title,
+  body,
+  icon,
+  action,
+  className,
+}: EmptyStateProps) {
   return (
     <div
       className={cn(
@@ -21,7 +27,11 @@ export function EmptyState({ title, body, icon, action, className }: EmptyStateP
       {icon ? <div className="text-subtle">{icon}</div> : null}
       <div className="flex flex-col gap-1.5">
         <h2 className="text-lg font-semibold text-ink">{title}</h2>
-        {body ? <p className="max-w-prose text-sm leading-relaxed text-muted">{body}</p> : null}
+        {body ? (
+          <p className="max-w-prose text-sm leading-relaxed text-muted">
+            {body}
+          </p>
+        ) : null}
       </div>
       {action ? <div className="mt-1">{action}</div> : null}
     </div>

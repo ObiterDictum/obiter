@@ -32,7 +32,9 @@ export function ForgotPasswordRouteView() {
       // does not reveal whether the account exists.
       setSubmitted(true)
     } catch {
-      setError('Could not send a reset link. Check your connection and try again.')
+      setError(
+        'Could not send a reset link. Check your connection and try again.',
+      )
     } finally {
       setSubmitting(false)
     }
@@ -43,14 +45,17 @@ export function ForgotPasswordRouteView() {
       <div className="flex w-full max-w-sm flex-col gap-6">
         <header className="flex flex-col items-center gap-3 text-center">
           <Wordmark className="h-12 w-auto" />
-          <h1 className="text-xl font-semibold tracking-tight">Reset your password</h1>
+          <h1 className="text-xl font-semibold tracking-tight">
+            Reset your password
+          </h1>
         </header>
 
         <Card>
           {submitted ? (
             <div className="flex flex-col gap-4">
               <p className="text-sm leading-relaxed text-muted">
-                If an account exists for that email, we have sent a link to reset your password.
+                If an account exists for that email, we have sent a link to
+                reset your password.
               </p>
               <Link
                 to="/sign-in"
@@ -61,7 +66,11 @@ export function ForgotPasswordRouteView() {
               </Link>
             </div>
           ) : (
-            <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+            <form
+              onSubmit={handleSubmit}
+              className="flex flex-col gap-4"
+              noValidate
+            >
               <Input
                 label="Email"
                 type="email"
@@ -84,7 +93,10 @@ export function ForgotPasswordRouteView() {
         </Card>
 
         <p className="text-center text-xs text-subtle">
-          <Link to="/sign-in" className="font-medium text-brand hover:text-brand-pressed">
+          <Link
+            to="/sign-in"
+            className="font-medium text-brand hover:text-brand-pressed"
+          >
             Back to sign in
           </Link>
         </p>

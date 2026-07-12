@@ -58,7 +58,9 @@ describe('readLegalIngestorEnv', () => {
     process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef'
     process.env.LEGAL_AUTHORITIES_INDEX = 'legal_authorities'
 
-    expect(() => readLegalIngestorEnv()).toThrow('MEILISEARCH_HOST must be a valid URL.')
+    expect(() => readLegalIngestorEnv()).toThrow(
+      'MEILISEARCH_HOST must be a valid URL.',
+    )
 
     process.env.MEILISEARCH_HOST = 'https://search.obiter.example/'
     process.env.MEILISEARCH_ADMIN_API_KEY = ' short '
@@ -74,5 +76,4 @@ describe('readLegalIngestorEnv', () => {
       'LEGAL_AUTHORITIES_INDEX may only contain letters, numbers, underscores, and hyphens.',
     )
   })
-
 })

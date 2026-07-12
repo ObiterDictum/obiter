@@ -18,9 +18,14 @@ export function chunkText(text: string, maxTokens = 400): TextChunk[] {
 
   const chunks: TextChunk[] = []
   const overlap = Math.min(50, Math.floor(maxTokens / 4))
-  for (let tokenIndex = 0; tokenIndex < tokenMatches.length; tokenIndex += Math.max(1, maxTokens - overlap)) {
+  for (
+    let tokenIndex = 0;
+    tokenIndex < tokenMatches.length;
+    tokenIndex += Math.max(1, maxTokens - overlap)
+  ) {
     const first = tokenMatches[tokenIndex]
-    const last = tokenMatches[Math.min(tokenIndex + maxTokens, tokenMatches.length) - 1]
+    const last =
+      tokenMatches[Math.min(tokenIndex + maxTokens, tokenMatches.length) - 1]
     if (!first || !last?.index) continue
     const startOffset = first.index
     const endOffset = last.index + last[0].length
@@ -35,7 +40,11 @@ export function reassembleSpans(chunkedSpans: ChunkedSpans[]): RedactionSpan[] {
   const spans: RedactionSpan[] = []
   for (const chunk of chunkedSpans) {
     for (const span of chunk.spans) {
-      const adjusted = { ...span, start: span.start + chunk.chunkOffset, end: span.end + chunk.chunkOffset }
+      const adjusted = {
+        ...span,
+        start: span.start + chunk.chunkOffset,
+        end: span.end + chunk.chunkOffset,
+      }
       const key = `${adjusted.start}:${adjusted.end}:${adjusted.category}:${adjusted.text}`
       if (!seen.has(key)) {
         seen.add(key)
@@ -43,5 +52,7 @@ export function reassembleSpans(chunkedSpans: ChunkedSpans[]): RedactionSpan[] {
       }
     }
   }
-  return spans.sort((left, right) => left.start - right.start || left.end - right.end)
+  return spans.sort(
+    (left, right) => left.start - right.start || left.end - right.end,
+  )
 }

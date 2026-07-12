@@ -19,7 +19,11 @@ import {
   prefetchHomeData,
   resolveCaseDocumentIdFromSlug,
 } from '@obiter/app-shell'
-import { RedactionReviewView, RedactionRunsRegion, RedactionRunsView } from '@obiter/redact-ui'
+import {
+  RedactionReviewView,
+  RedactionRunsRegion,
+  RedactionRunsView,
+} from '@obiter/redact-ui'
 import { EmptyState } from '@obiter/ui'
 import type { QueryClient } from '@tanstack/react-query'
 import {
@@ -124,7 +128,9 @@ const matterDetailRoute = createRoute({
     await guardAuth(context.queryClient, () =>
       context.queryClient.ensureQueryData(matterQueryOptions(params.matterId)),
     )
-    await context.queryClient.prefetchQuery(matterDocumentsQueryOptions(params.matterId))
+    await context.queryClient.prefetchQuery(
+      matterDocumentsQueryOptions(params.matterId),
+    )
   },
   component: DesktopMatterDetailRoute,
 })
@@ -135,7 +141,9 @@ const documentDetailRoute = createRoute({
   loader: async ({ context, params }) => {
     await ensureOrganisation(context.queryClient)
     await guardAuth(context.queryClient, () =>
-      context.queryClient.prefetchQuery(documentQueryOptions(params.documentId)),
+      context.queryClient.prefetchQuery(
+        documentQueryOptions(params.documentId),
+      ),
     )
   },
   component: DesktopDocumentDetailRoute,
@@ -188,7 +196,9 @@ const caseSlugRoute = createRoute({
   path: 'case/$caseSlug',
   loader: ({ context, params }) => {
     const caseId = resolveCaseDocumentIdFromSlug(params.caseSlug)
-    return context.queryClient.ensureQueryData(caseLawDocumentQueryOptions(caseId))
+    return context.queryClient.ensureQueryData(
+      caseLawDocumentQueryOptions(caseId),
+    )
   },
   component: DesktopCaseSlugRoute,
 })
@@ -216,7 +226,9 @@ function DesktopDocumentDetailRoute() {
       redactionRunsRegion={
         <RedactionRunsRegion
           documentId={documentId}
-          onOpenRun={(runId) => navigate({ to: '/redact/$runId', params: { runId } })}
+          onOpenRun={(runId) =>
+            navigate({ to: '/redact/$runId', params: { runId } })
+          }
         />
       }
     />
@@ -227,7 +239,9 @@ function DesktopRedactionRunsRoute() {
   const navigate = useNavigate()
   return (
     <RedactionRunsView
-      onOpenRun={(runId) => navigate({ to: '/redact/$runId', params: { runId } })}
+      onOpenRun={(runId) =>
+        navigate({ to: '/redact/$runId', params: { runId } })
+      }
     />
   )
 }

@@ -5,7 +5,7 @@
  * - @source points Tailwind at the workspace packages so utility classes
  *   authored inside @obiter/ui and @obiter/app-shell are detected.
  */
-@import "@obiter/ui/tailwind.css";
+@import '@obiter/ui/tailwind.css';
 
 @source "../../../packages/ui/src";
 @source "../../../packages/app-shell/src";

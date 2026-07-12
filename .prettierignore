@@ -1,0 +1,41 @@
+# Build / generated outputs
+dist/
+build/
+out/
+release/
+.next/
+.turbo/
+.nuxt/
+.output/
+coverage/
+
+# Generated source — owned by a codegen step, not authors.
+# (TanStack Router file-route tree; regenerated on route changes.)
+apps/web/src/routeTree.gen.ts
+**/*.gen.ts
+**/*.gen.tsx
+
+# Lockfiles — machine-edited, not hand-formatted.
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Eval corpora, seed data and binary fixtures — content is data, not prose.
+# Prettier would otherwise rewrite JSON/MD structure and risk shifting corpus
+# offsets/line numbers that tests or evals key off of.
+data/
+
+# Vendored code — kept byte-faithful to upstream so future re-vendors produce
+# clean diffs. packages/rampart-inference is vendored from
+# @nationaldesignstudio/rampart (see its README); excluded from Prettier,
+# oxlint, and ESLint so the vendored source stays byte-faithful. The
+# .git-blame-ignore-revs entry covers the whole-repo format commit.
+packages/rampart-inference/
+
+# Machine-local tooling scratch (also in .gitignore).
+.claude/
+.cursor/
+.code-review/
+.code-review.json
+.pi-lens/
+.pi-subagents/

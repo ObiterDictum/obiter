@@ -8,7 +8,10 @@ import { describe, expect, it } from 'vitest'
  * Wrong relative depth (e.g. four `../` instead of five) silently resolves
  * outside the monorepo packages and starves the desktop renderer of utilities.
  */
-const stylesPath = resolve(dirname(fileURLToPath(import.meta.url)), './styles.css')
+const stylesPath = resolve(
+  dirname(fileURLToPath(import.meta.url)),
+  './styles.css',
+)
 const stylesDir = dirname(stylesPath)
 const stylesCss = readFileSync(stylesPath, 'utf8')
 

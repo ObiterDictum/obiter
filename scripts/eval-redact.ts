@@ -49,7 +49,10 @@ function overlaps(left: ExpectedSpan, right: ExpectedSpan): boolean {
   return left.start < right.end && right.start < left.end
 }
 
-function row(counts: Map<SpanCategory, Counts>, category: SpanCategory): Counts {
+function row(
+  counts: Map<SpanCategory, Counts>,
+  category: SpanCategory,
+): Counts {
   const current = counts.get(category)
   if (current !== undefined) return current
   const created = { expected: 0, detected: 0, matched: 0 }
@@ -86,13 +89,17 @@ async function main() {
   const counts = new Map<SpanCategory, Counts>()
   const details: Array<Counts & { id: string }> = []
   for (const fixture of fixtures) {
-    const expected = Object.entries(fixture.spans).flatMap(([label, offsets]) => {
-      const category = CORPUS_LABEL_TO_CATEGORY[corpusLabel(label)]
-      if (category === undefined) {
-        throw new Error(`No detection category mapping for corpus label: ${label}`)
-      }
-      return offsets.map(([start, end]) => ({ category, start, end }))
-    })
+    const expected = Object.entries(fixture.spans).flatMap(
+      ([label, offsets]) => {
+        const category = CORPUS_LABEL_TO_CATEGORY[corpusLabel(label)]
+        if (category === undefined) {
+          throw new Error(
+            `No detection category mapping for corpus label: ${label}`,
+          )
+        }
+        return offsets.map(([start, end]) => ({ category, start, end }))
+      },
+    )
     const result = await detect(fixture.text)
     const matchedDetected = new Set<number>()
     let matched = 0

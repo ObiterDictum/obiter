@@ -13,9 +13,20 @@ export interface CardProps {
  * Card — a quiet surface for grouping related content. Existing API (kept for
  * the Search views); elevation is restrained, borders carry the structure.
  */
-export function Card({ action, children, className, eyebrow, title }: CardProps) {
+export function Card({
+  action,
+  children,
+  className,
+  eyebrow,
+  title,
+}: CardProps) {
   return (
-    <section className={cn('rounded-lg border border-line bg-surface shadow-sm', className)}>
+    <section
+      className={cn(
+        'rounded-lg border border-line bg-surface shadow-sm',
+        className,
+      )}
+    >
       {eyebrow || title || action ? (
         <div className="flex items-start justify-between gap-4 px-5 pt-4">
           <div>
@@ -24,7 +35,9 @@ export function Card({ action, children, className, eyebrow, title }: CardProps)
                 {eyebrow}
               </p>
             ) : null}
-            {title ? <h2 className="text-base font-semibold text-ink">{title}</h2> : null}
+            {title ? (
+              <h2 className="text-base font-semibold text-ink">{title}</h2>
+            ) : null}
           </div>
           {action ? <div className="text-sm text-muted">{action}</div> : null}
         </div>

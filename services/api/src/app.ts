@@ -1,7 +1,11 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import type { Pool } from 'pg'
-import type { ApiErrorCode, ApiErrorResponse, MeResponse } from '@obiter/contracts'
+import type {
+  ApiErrorCode,
+  ApiErrorResponse,
+  MeResponse,
+} from '@obiter/contracts'
 import { appendAuditLog, findOrganisation, toCurrentUser } from './database'
 import type { ApiEnv } from './env'
 import { createAuth } from './auth'
@@ -59,7 +63,11 @@ function requestIdFromContext(c: { var: Partial<AppVariables> }) {
   return c.var.requestId ?? createRequestId()
 }
 
-export function createApiApp(env: ApiEnv, pool: Pool, options: ApiAppOptions = {}) {
+export function createApiApp(
+  env: ApiEnv,
+  pool: Pool,
+  options: ApiAppOptions = {},
+) {
   const auth = options.auth ?? createAuth(env, pool)
   const storage = options.storage ?? createLocalStorage()
   const app = new Hono<{ Variables: AppVariables }>()
@@ -148,7 +156,13 @@ export function createApiApp(env: ApiEnv, pool: Pool, options: ApiAppOptions = {
   app.route('/', createDocumentsRoutes(pool, storage))
   app.route('/', createRedactRoutes(pool, storage))
   app.route('/', createLegalSearchRoutes(env))
-  app.route('/', createLegalSearchProxyRoutes(env, createPostgresLegalAuthoritySourceStore(pool)))
+  app.route(
+    '/',
+    createLegalSearchProxyRoutes(
+      env,
+      createPostgresLegalAuthoritySourceStore(pool),
+    ),
+  )
   app.route('/', createChangelogRoutes())
 
   app.get('/api/me', async (c) => {

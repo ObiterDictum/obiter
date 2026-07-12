@@ -129,21 +129,28 @@ function renderText(content: EmailBody): string {
 export function magicLinkEmail(url: string): EmailContent {
   const body: EmailBody = {
     heading: 'Sign in to Obiter',
-    bodyText: 'Use the link below to sign in to your Obiter account. The link expires in 10 minutes.',
+    bodyText:
+      'Use the link below to sign in to your Obiter account. The link expires in 10 minutes.',
     buttonLabel: 'Sign in',
     url,
     ignoreLine: 'If you did not request this link, you can ignore this email.',
   }
-  return { subject: 'Your Obiter sign-in link', html: renderEmail(body), text: renderText(body) }
+  return {
+    subject: 'Your Obiter sign-in link',
+    html: renderEmail(body),
+    text: renderText(body),
+  }
 }
 
 export function verificationEmail(url: string): EmailContent {
   const body: EmailBody = {
     heading: 'Verify your email',
-    bodyText: 'Confirm your email address to finish creating your Obiter account.',
+    bodyText:
+      'Confirm your email address to finish creating your Obiter account.',
     buttonLabel: 'Verify email',
     url,
-    ignoreLine: 'If you did not create this account, you can ignore this email.',
+    ignoreLine:
+      'If you did not create this account, you can ignore this email.',
   }
   return {
     subject: 'Verify your Obiter email',
@@ -155,10 +162,12 @@ export function verificationEmail(url: string): EmailContent {
 export function resetPasswordEmail(url: string): EmailContent {
   const body: EmailBody = {
     heading: 'Reset your password',
-    bodyText: 'Set a new password for your Obiter account using the link below.',
+    bodyText:
+      'Set a new password for your Obiter account using the link below.',
     buttonLabel: 'Reset password',
     url,
-    ignoreLine: 'If you did not request a password reset, you can ignore this email and your password will stay the same.',
+    ignoreLine:
+      'If you did not request a password reset, you can ignore this email and your password will stay the same.',
   }
   return {
     subject: 'Reset your Obiter password',

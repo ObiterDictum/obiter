@@ -98,7 +98,9 @@ export function createRedactionDetector(
       usedClassifier = classifier ??= load()
       const loaded = await usedClassifier
       const masked = premask(text, heuristic)
-      const model = await serializeInference(() => runNer(masked.masked, loaded))
+      const model = await serializeInference(() =>
+        runNer(masked.masked, loaded),
+      )
       const projected = model.flatMap((span) => {
         const result = projectMaskedSpan(span, text, masked)
         return result ? [result] : []

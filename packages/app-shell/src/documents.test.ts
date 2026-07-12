@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from './api'
-import { documentsKeys, documentQueryOptions, matterDocumentsQueryOptions } from './documents'
+import {
+  documentsKeys,
+  documentQueryOptions,
+  matterDocumentsQueryOptions,
+} from './documents'
 
 const api = vi.hoisted(() => ({ apiFetch: vi.fn() }))
 
@@ -34,14 +38,24 @@ function sampleVersion(overrides: Record<string, unknown> = {}) {
 
 describe('documentsKeys', () => {
   it('separates by-matter lists from single-document detail keys', () => {
-    expect(documentsKeys.byMatter('mtr_1')).toEqual(['documents', 'matter', 'mtr_1'])
-    expect(documentsKeys.detail('doc_1')).toEqual(['documents', 'detail', 'doc_1'])
+    expect(documentsKeys.byMatter('mtr_1')).toEqual([
+      'documents',
+      'matter',
+      'mtr_1',
+    ])
+    expect(documentsKeys.detail('doc_1')).toEqual([
+      'documents',
+      'detail',
+      'doc_1',
+    ])
   })
 })
 
 describe('matterDocumentsQueryOptions', () => {
   it('resolves the documents list through the matters-documents endpoint', async () => {
-    api.apiFetch.mockResolvedValueOnce({ documents: [{ id: 'doc_1', currentVersion: sampleVersion() }] })
+    api.apiFetch.mockResolvedValueOnce({
+      documents: [{ id: 'doc_1', currentVersion: sampleVersion() }],
+    })
 
     const options = matterDocumentsQueryOptions('mtr_1')
     const result = await options.queryFn?.({} as never)

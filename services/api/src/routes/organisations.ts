@@ -54,12 +54,18 @@ export function createOrganisationsRoutes(pool: Pool) {
     if (user instanceof Response) return user
 
     const value: unknown = await c.req.json().catch(() => null)
-    const rawName = typeof value === 'object' && value !== null && !Array.isArray(value)
-      ? (value as Record<string, unknown>).name
-      : undefined
+    const rawName =
+      typeof value === 'object' && value !== null && !Array.isArray(value)
+        ? (value as Record<string, unknown>).name
+        : undefined
 
     if (typeof rawName !== 'string') {
-      return errorResponse(c, 'validation_failed', 'Organisation name is required.', 400)
+      return errorResponse(
+        c,
+        'validation_failed',
+        'Organisation name is required.',
+        400,
+      )
     }
 
     // Strip Unicode format characters (category Cf — zero-width spaces, joiners,
@@ -68,7 +74,12 @@ export function createOrganisationsRoutes(pool: Pool) {
     // an invisible organisation name.
     const name = rawName.replace(/\p{Cf}/gu, '').trim()
     if (name.length === 0) {
-      return errorResponse(c, 'validation_failed', 'Organisation name is required.', 400)
+      return errorResponse(
+        c,
+        'validation_failed',
+        'Organisation name is required.',
+        400,
+      )
     }
     if (name.length > ORGANISATION_NAME_MAX_LENGTH) {
       return errorResponse(
@@ -86,7 +97,12 @@ export function createOrganisationsRoutes(pool: Pool) {
     })
 
     if (!result.created) {
-      return errorResponse(c, 'conflict_detected', 'You already have an organisation.', 409)
+      return errorResponse(
+        c,
+        'conflict_detected',
+        'You already have an organisation.',
+        409,
+      )
     }
 
     return c.json({ organisation: result.organisation }, 201)

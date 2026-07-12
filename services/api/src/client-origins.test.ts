@@ -39,7 +39,9 @@ async function resolveAuthTrustedOrigins(
   if (originHeader) {
     headers.set('origin', originHeader)
   }
-  return configured(new Request('http://localhost:8787/api/auth/sign-in/email', { headers }))
+  return configured(
+    new Request('http://localhost:8787/api/auth/sign-in/email', { headers }),
+  )
 }
 
 describe('configuredClientOrigins', () => {
@@ -103,19 +105,22 @@ describe('isAllowedClientOrigin — CORS and auth share one gate', () => {
 
 describe('authTrustedOrigins', () => {
   it('trusts in-range Vite Origin via the per-request function in development', async () => {
-    const origins = await resolveAuthTrustedOrigins(baseEnv, 'http://localhost:5173')
+    const origins = await resolveAuthTrustedOrigins(
+      baseEnv,
+      'http://localhost:5173',
+    )
     expect(origins).toContain('http://localhost:5173')
     expect(origins).toContain('obiter://desktop-auth')
     expect(origins.some((o) => o.includes(':*'))).toBe(false)
   })
 
   it('does not trust out-of-range or https Vite Origins in development', async () => {
-    expect(await resolveAuthTrustedOrigins(baseEnv, 'http://localhost:9999')).not.toContain(
-      'http://localhost:9999',
-    )
-    expect(await resolveAuthTrustedOrigins(baseEnv, 'https://localhost:5173')).not.toContain(
-      'https://localhost:5173',
-    )
+    expect(
+      await resolveAuthTrustedOrigins(baseEnv, 'http://localhost:9999'),
+    ).not.toContain('http://localhost:9999')
+    expect(
+      await resolveAuthTrustedOrigins(baseEnv, 'https://localhost:5173'),
+    ).not.toContain('https://localhost:5173')
   })
 
   it('returns only configured clients outside development', async () => {
@@ -125,9 +130,9 @@ describe('authTrustedOrigins', () => {
     )
     expect(origins).not.toContain('http://localhost:5173')
     expect(origins).toContain('obiter://desktop-auth')
-    expect(Array.isArray(authTrustedOrigins({ ...baseEnv, nodeEnv: 'production' }))).toBe(
-      true,
-    )
+    expect(
+      Array.isArray(authTrustedOrigins({ ...baseEnv, nodeEnv: 'production' })),
+    ).toBe(true)
   })
 })
 
@@ -157,7 +162,10 @@ describe('corsAllowedOrigin', () => {
 
   it('rejects the desktop Vite origin outside development', () => {
     expect(
-      corsAllowedOrigin({ ...baseEnv, nodeEnv: 'production' }, 'http://localhost:5173'),
+      corsAllowedOrigin(
+        { ...baseEnv, nodeEnv: 'production' },
+        'http://localhost:5173',
+      ),
     ).toBeUndefined()
   })
 

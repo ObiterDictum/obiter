@@ -30,9 +30,17 @@ interface RouteVariables {
 
 type RouteContext = Context<{ Variables: RouteVariables }>
 
-const updatableMatterStatuses = new Set<UpdatableMatterStatus>(['active', 'archived'])
+const updatableMatterStatuses = new Set<UpdatableMatterStatus>([
+  'active',
+  'archived',
+])
 
-function errorResponse(c: RouteContext, code: ApiErrorCode, message: string, status: 400 | 401 | 403 | 404) {
+function errorResponse(
+  c: RouteContext,
+  code: ApiErrorCode,
+  message: string,
+  status: 400 | 401 | 403 | 404,
+) {
   const body: ApiErrorResponse = {
     error: { code, message, requestId: c.get('requestId') },
   }
@@ -45,7 +53,12 @@ function requireUser(c: RouteContext): AuthenticatedRouteUser | Response {
     return errorResponse(c, 'unauthenticated', 'Sign in is required.', 401)
   }
   if (!user.organisationId) {
-    return errorResponse(c, 'no_organisation', 'Create an organisation to use this area.', 403)
+    return errorResponse(
+      c,
+      'no_organisation',
+      'Create an organisation to use this area.',
+      403,
+    )
   }
   return { id: user.id, organisationId: user.organisationId }
 }
@@ -70,8 +83,11 @@ function stringArray(value: unknown): string[] | undefined {
     : undefined
 }
 
-function updatableMatterStatus(value: unknown): UpdatableMatterStatus | undefined {
-  return typeof value === 'string' && updatableMatterStatuses.has(value as UpdatableMatterStatus)
+function updatableMatterStatus(
+  value: unknown,
+): UpdatableMatterStatus | undefined {
+  return typeof value === 'string' &&
+    updatableMatterStatuses.has(value as UpdatableMatterStatus)
     ? (value as UpdatableMatterStatus)
     : undefined
 }
@@ -92,13 +108,28 @@ export function createMattersRoutes(pool: Pool) {
     const clientReference = stringValue(body?.clientReference)
 
     if (!body || !name || !primaryJurisdiction) {
-      return errorResponse(c, 'validation_failed', 'name and primaryJurisdiction are required.', 400)
+      return errorResponse(
+        c,
+        'validation_failed',
+        'name and primaryJurisdiction are required.',
+        400,
+      )
     }
     if (body.description !== undefined && description === undefined) {
-      return errorResponse(c, 'validation_failed', 'Invalid matter description.', 400)
+      return errorResponse(
+        c,
+        'validation_failed',
+        'Invalid matter description.',
+        400,
+      )
     }
     if (body.secondaryJurisdictions !== undefined && !secondaryJurisdictions) {
-      return errorResponse(c, 'validation_failed', 'Invalid secondaryJurisdictions.', 400)
+      return errorResponse(
+        c,
+        'validation_failed',
+        'Invalid secondaryJurisdictions.',
+        400,
+      )
     }
     if (body.legalDomains !== undefined && !legalDomains) {
       return errorResponse(c, 'validation_failed', 'Invalid legalDomains.', 400)
@@ -141,9 +172,14 @@ export function createMattersRoutes(pool: Pool) {
     const user = requireUser(c)
     if (user instanceof Response) return user
 
-    const matter = await getMatter(pool, user.organisationId, c.req.param('id'), {
-      includeDeleted: c.req.query('includeDeleted') === 'true',
-    })
+    const matter = await getMatter(
+      pool,
+      user.organisationId,
+      c.req.param('id'),
+      {
+        includeDeleted: c.req.query('includeDeleted') === 'true',
+      },
+    )
     if (!matter) {
       return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
     }
@@ -164,39 +200,76 @@ export function createMattersRoutes(pool: Pool) {
     const status = updatableMatterStatus(body?.status)
 
     if (!body) {
-      return errorResponse(c, 'validation_failed', 'Invalid matter update payload.', 400)
+      return errorResponse(
+        c,
+        'validation_failed',
+        'Invalid matter update payload.',
+        400,
+      )
     }
     if (body.name !== undefined && !name) {
       return errorResponse(c, 'validation_failed', 'Invalid matter name.', 400)
     }
     if (body.description !== undefined && description === undefined) {
-      return errorResponse(c, 'validation_failed', 'Invalid matter description.', 400)
+      return errorResponse(
+        c,
+        'validation_failed',
+        'Invalid matter description.',
+        400,
+      )
     }
     if (body.primaryJurisdiction !== undefined && !primaryJurisdiction) {
-      return errorResponse(c, 'validation_failed', 'Invalid primaryJurisdiction.', 400)
+      return errorResponse(
+        c,
+        'validation_failed',
+        'Invalid primaryJurisdiction.',
+        400,
+      )
     }
     if (body.secondaryJurisdictions !== undefined && !secondaryJurisdictions) {
-      return errorResponse(c, 'validation_failed', 'Invalid secondaryJurisdictions.', 400)
+      return errorResponse(
+        c,
+        'validation_failed',
+        'Invalid secondaryJurisdictions.',
+        400,
+      )
     }
     if (body.legalDomains !== undefined && !legalDomains) {
       return errorResponse(c, 'validation_failed', 'Invalid legalDomains.', 400)
     }
     if (body.status === 'deleted') {
-      return errorResponse(c, 'validation_failed', 'Use DELETE /api/matters/:id to delete matters.', 400)
+      return errorResponse(
+        c,
+        'validation_failed',
+        'Use DELETE /api/matters/:id to delete matters.',
+        400,
+      )
     }
     if (body.status !== undefined && !status) {
-      return errorResponse(c, 'validation_failed', 'Invalid matter status.', 400)
+      return errorResponse(
+        c,
+        'validation_failed',
+        'Invalid matter status.',
+        400,
+      )
     }
 
-    const matter = await updateMatter(pool, user.organisationId, c.req.param('id'), {
-      ...(name === undefined ? {} : { name }),
-      ...(body.description === undefined ? {} : { description }),
-      ...(primaryJurisdiction === undefined ? {} : { primaryJurisdiction }),
-      ...(secondaryJurisdictions === undefined ? {} : { secondaryJurisdictions }),
-      ...(legalDomains === undefined ? {} : { legalDomains }),
-      ...(clientReference === undefined ? {} : { clientReference }),
-      ...(status === undefined ? {} : { status }),
-    })
+    const matter = await updateMatter(
+      pool,
+      user.organisationId,
+      c.req.param('id'),
+      {
+        ...(name === undefined ? {} : { name }),
+        ...(body.description === undefined ? {} : { description }),
+        ...(primaryJurisdiction === undefined ? {} : { primaryJurisdiction }),
+        ...(secondaryJurisdictions === undefined
+          ? {}
+          : { secondaryJurisdictions }),
+        ...(legalDomains === undefined ? {} : { legalDomains }),
+        ...(clientReference === undefined ? {} : { clientReference }),
+        ...(status === undefined ? {} : { status }),
+      },
+    )
     if (!matter) {
       return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
     }
@@ -216,7 +289,11 @@ export function createMattersRoutes(pool: Pool) {
     const user = requireUser(c)
     if (user instanceof Response) return user
 
-    const matter = await softDeleteMatter(pool, user.organisationId, c.req.param('id'))
+    const matter = await softDeleteMatter(
+      pool,
+      user.organisationId,
+      c.req.param('id'),
+    )
     if (!matter) {
       return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
     }

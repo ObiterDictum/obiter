@@ -18,7 +18,9 @@ export function Tabs(props: ComponentPropsWithoutRef<typeof BaseTabs.Root>) {
   return <BaseTabs.Root {...props} />
 }
 
-export function TabsList(props: ComponentPropsWithoutRef<typeof BaseTabs.List>) {
+export function TabsList(
+  props: ComponentPropsWithoutRef<typeof BaseTabs.List>,
+) {
   return (
     <BaseTabs.List
       className="inline-flex items-center gap-1 border-b border-line"
@@ -50,5 +52,7 @@ export function TabsContent({
   className,
   ...props
 }: ComponentPropsWithoutRef<typeof BaseTabs.Panel>) {
-  return <BaseTabs.Panel className={cn('pt-4 text-ink', className)} {...props} />
+  return (
+    <BaseTabs.Panel className={cn('pt-4 text-ink', className)} {...props} />
+  )
 }

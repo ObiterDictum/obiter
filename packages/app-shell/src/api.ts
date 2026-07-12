@@ -1,4 +1,4 @@
-import type { ApiErrorCode, ApiErrorResponse } from '@obiter/contracts'
+import type { ApiErrorCode } from '@obiter/contracts'
 import { apiErrorResponseSchema } from '@obiter/contracts'
 import { apiUrl } from './lib/api-url'
 
@@ -11,7 +11,12 @@ export class ApiError extends Error {
   readonly status: number
   readonly requestId: string
 
-  constructor(code: ApiErrorCode, message: string, status: number, requestId: string) {
+  constructor(
+    code: ApiErrorCode,
+    message: string,
+    status: number,
+    requestId: string,
+  ) {
     super(message)
     this.name = 'ApiError'
     this.code = code
@@ -31,7 +36,10 @@ const UNKNOWN_REQUEST_ID = 'req_unknown'
  *   expected envelope is treated as a storage-level failure (no silent success).
  * - Network-level failures (fetch itself rejects) propagate as native Errors.
  */
-export async function apiFetch<T>(input: string, init?: RequestInit): Promise<T> {
+export async function apiFetch<T>(
+  input: string,
+  init?: RequestInit,
+): Promise<T> {
   const response = await fetch(apiUrl(input), {
     credentials: 'include',
     ...init,

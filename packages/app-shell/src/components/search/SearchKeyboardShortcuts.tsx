@@ -12,7 +12,9 @@ const shortcuts = [
   { keys: 'Escape', action: 'Close shortcuts' },
 ]
 
-export function SearchKeyboardShortcuts({ onClose }: SearchKeyboardShortcutsProps) {
+export function SearchKeyboardShortcuts({
+  onClose,
+}: SearchKeyboardShortcutsProps) {
   const panelRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -59,7 +61,10 @@ export function SearchKeyboardShortcuts({ onClose }: SearchKeyboardShortcutsProp
         tabIndex={-1}
       >
         <div className="flex items-center justify-between gap-4">
-          <h2 className="text-base font-semibold text-ink" id="search-shortcuts-title">
+          <h2
+            className="text-base font-semibold text-ink"
+            id="search-shortcuts-title"
+          >
             Keyboard Shortcuts
           </h2>
           <button
@@ -73,11 +78,16 @@ export function SearchKeyboardShortcuts({ onClose }: SearchKeyboardShortcutsProp
         </div>
         <dl className="flex flex-col gap-2">
           {shortcuts.map((shortcut) => (
-            <div className="flex items-center justify-between gap-3" key={shortcut.keys}>
+            <div
+              className="flex items-center justify-between gap-3"
+              key={shortcut.keys}
+            >
               <dt className="rounded-md border border-line bg-canvas px-2 py-1.5 text-sm text-ink">
                 {shortcut.keys}
               </dt>
-              <dd className="text-right text-sm text-muted">{shortcut.action}</dd>
+              <dd className="text-right text-sm text-muted">
+                {shortcut.action}
+              </dd>
             </div>
           ))}
         </dl>

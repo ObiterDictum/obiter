@@ -1,6 +1,10 @@
 import { Pool } from 'pg'
 import type { PoolClient, QueryResult, QueryResultRow } from 'pg'
-import type { CurrentOrganisation, CurrentUser, UserRole } from '@obiter/contracts'
+import type {
+  CurrentOrganisation,
+  CurrentUser,
+  UserRole,
+} from '@obiter/contracts'
 import type { ApiEnv } from './env'
 
 export interface SessionUserRecord {
@@ -41,8 +45,10 @@ export interface AuditRecordInput {
 
 export type MatterStatus = 'active' | 'archived' | 'deleted'
 export type UpdatableMatterStatus = Exclude<MatterStatus, 'deleted'>
-export type DocumentStatus = 'queued' | 'processing' | 'ready' | 'failed' | 'needs_review'
-export type SyncState = 'local_only' | 'queued' | 'syncing' | 'synced' | 'conflict' | 'failed'
+export type DocumentStatus =
+  'queued' | 'processing' | 'ready' | 'failed' | 'needs_review'
+export type SyncState =
+  'local_only' | 'queued' | 'syncing' | 'synced' | 'conflict' | 'failed'
 
 export interface MatterRecord {
   id: string
@@ -178,7 +184,9 @@ export async function findOrganisation(
 export async function createOrganisationForUser(
   pool: Pool,
   input: { userId: string; name: string; requestId: string },
-): Promise<{ created: false } | { created: true; organisation: CurrentOrganisation }> {
+): Promise<
+  { created: false } | { created: true; organisation: CurrentOrganisation }
+> {
   const client = await pool.connect()
 
   try {
@@ -200,7 +208,11 @@ export async function createOrganisationForUser(
       return { created: false }
     }
 
-    const organisation = await client['query']<{ id: string; name: string; plan: CurrentOrganisation['plan'] }>(
+    const organisation = await client['query']<{
+      id: string
+      name: string
+      plan: CurrentOrganisation['plan']
+    }>(
       `
         insert into organisations (name, created_at, updated_at)
         values ($1, now(), now())
@@ -246,7 +258,10 @@ export function toCurrentUser(user: SessionUserRecord): CurrentUser {
   }
 }
 
-export async function appendAuditLog(client: Queryable, input: AuditRecordInput) {
+export async function appendAuditLog(
+  client: Queryable,
+  input: AuditRecordInput,
+) {
   await client['query'](
     `
       insert into audit_logs (
@@ -341,7 +356,9 @@ function nullableTimestamp(value: Date | string | null) {
 }
 
 function stringArray(value: unknown): string[] {
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : []
 }
 
 function firstOrNull<Row extends QueryResultRow, Record>(
@@ -423,7 +440,10 @@ const versionColumns = `
   version_number, content_sha256, sync_state, created_by, created_at, updated_at
 `
 
-export async function createMatter(pool: Pool, input: CreateMatterInput): Promise<MatterRecord> {
+export async function createMatter(
+  pool: Pool,
+  input: CreateMatterInput,
+): Promise<MatterRecord> {
   const result = await pool.query<MatterRow>(
     `
       insert into matters (
@@ -713,7 +733,12 @@ export async function createDocument(
 
 export async function updateDocumentExtraction(
   pool: Pool,
-  input: { organisationId: string; versionId: string; textObjectKey?: string; failureReason?: string },
+  input: {
+    organisationId: string
+    versionId: string
+    textObjectKey?: string
+    failureReason?: string
+  },
 ): Promise<DocumentVersionRecord | null> {
   const isReady = input.textObjectKey !== undefined
   const result = await pool.query<DocumentVersionRow>(
@@ -729,7 +754,9 @@ export async function updateDocumentExtraction(
       input.organisationId,
       isReady ? input.textObjectKey : null,
       isReady ? 'ready' : 'failed',
-      isReady ? null : (input.failureReason ?? 'Document text extraction failed.'),
+      isReady
+        ? null
+        : (input.failureReason ?? 'Document text extraction failed.'),
     ],
   )
   return firstOrNull(result, mapVersion)
@@ -741,7 +768,9 @@ export async function listDocuments(
   matterId: string,
   options: { includeDeleted?: boolean } = {},
 ): Promise<MatterDocumentRecord[]> {
-  const result = await pool.query<(MatterDocumentRow & { current_version: DocumentVersionRow | null })>(
+  const result = await pool.query<
+    MatterDocumentRow & { current_version: DocumentVersionRow | null }
+  >(
     `
       select
         d.id, d.organisation_id, d.matter_id, d.current_version_id,
@@ -759,7 +788,9 @@ export async function listDocuments(
 
   return result.rows.map((row) => ({
     ...mapDocument(row),
-    currentVersion: row.current_version ? mapVersion(row.current_version) : null,
+    currentVersion: row.current_version
+      ? mapVersion(row.current_version)
+      : null,
   }))
 }
 
@@ -768,7 +799,10 @@ export async function getDocument(
   organisationId: string,
   id: string,
   options: { includeDeleted?: boolean } = {},
-): Promise<{ document: MatterDocumentRecord; versions: DocumentVersionRecord[] } | null> {
+): Promise<{
+  document: MatterDocumentRecord
+  versions: DocumentVersionRecord[]
+} | null> {
   const documentResult = await pool.query<MatterDocumentRow>(
     `
       select ${documentColumns}

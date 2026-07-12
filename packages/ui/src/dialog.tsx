@@ -24,11 +24,15 @@ const sizeClasses: Record<Size, string> = {
  *     </DialogContent>
  *   </Dialog>
  */
-export function Dialog(props: ComponentPropsWithoutRef<typeof BaseDialog.Root>) {
+export function Dialog(
+  props: ComponentPropsWithoutRef<typeof BaseDialog.Root>,
+) {
   return <BaseDialog.Root {...props} />
 }
 
-export function DialogTrigger(props: ComponentPropsWithoutRef<typeof BaseDialog.Trigger>) {
+export function DialogTrigger(
+  props: ComponentPropsWithoutRef<typeof BaseDialog.Trigger>,
+) {
   return <BaseDialog.Trigger {...props} />
 }
 
@@ -38,7 +42,11 @@ export interface DialogContentProps {
   className?: string
 }
 
-export function DialogContent({ children, size = 'md', className }: DialogContentProps) {
+export function DialogContent({
+  children,
+  size = 'md',
+  className,
+}: DialogContentProps) {
   return (
     <BaseDialog.Portal>
       <BaseDialog.Backdrop className="fixed inset-0 z-50 bg-overlay" />
@@ -56,7 +64,9 @@ export function DialogContent({ children, size = 'md', className }: DialogConten
   )
 }
 
-export function DialogTitle(props: ComponentPropsWithoutRef<typeof BaseDialog.Title>) {
+export function DialogTitle(
+  props: ComponentPropsWithoutRef<typeof BaseDialog.Title>,
+) {
   return (
     <BaseDialog.Title
       className="mb-1 text-lg font-semibold text-ink"
@@ -65,7 +75,9 @@ export function DialogTitle(props: ComponentPropsWithoutRef<typeof BaseDialog.Ti
   )
 }
 
-export function DialogDescription(props: ComponentPropsWithoutRef<typeof BaseDialog.Description>) {
+export function DialogDescription(
+  props: ComponentPropsWithoutRef<typeof BaseDialog.Description>,
+) {
   return (
     <BaseDialog.Description
       className="mb-4 text-sm leading-relaxed text-muted"
@@ -74,7 +86,9 @@ export function DialogDescription(props: ComponentPropsWithoutRef<typeof BaseDia
   )
 }
 
-export function DialogClose(props: ComponentPropsWithoutRef<typeof BaseDialog.Close>) {
+export function DialogClose(
+  props: ComponentPropsWithoutRef<typeof BaseDialog.Close>,
+) {
   return <BaseDialog.Close {...props} />
 }
 

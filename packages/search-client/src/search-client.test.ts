@@ -42,8 +42,13 @@ function completedTask(overrides: Record<string, unknown> = {}) {
     error: null,
     ...overrides,
   }
-  const promise = Promise.resolve({ taskUid: task.uid }) as Promise<{ taskUid: number }> & {
-    waitTask(options?: { timeout?: number; interval?: number }): Promise<typeof task>
+  const promise = Promise.resolve({ taskUid: task.uid }) as Promise<{
+    taskUid: number
+  }> & {
+    waitTask(options?: {
+      timeout?: number
+      interval?: number
+    }): Promise<typeof task>
   }
   promise.waitTask = vi.fn(async () => task)
   return promise
@@ -71,10 +76,20 @@ describe('Legal search client', () => {
       primaryKey: 'id',
     })
     expect(index.updateSearchableAttributes).toHaveBeenCalledWith(
-      expect.arrayContaining(['id', 'title', 'neutralCitation', 'paragraphs.text']),
+      expect.arrayContaining([
+        'id',
+        'title',
+        'neutralCitation',
+        'paragraphs.text',
+      ]),
     )
     expect(index.updateFilterableAttributes).toHaveBeenCalledWith(
-      expect.arrayContaining(['court', 'jurisdiction', 'sourceType', 'dateDecided']),
+      expect.arrayContaining([
+        'court',
+        'jurisdiction',
+        'sourceType',
+        'dateDecided',
+      ]),
     )
     expect(index.updateRankingRules).toHaveBeenCalledWith([
       'words',
@@ -179,10 +194,14 @@ describe('Legal search client', () => {
       index: () => ({ addDocuments }),
     }
 
-    const result = await indexDocuments(client, 'legal_authorities', [authority()])
+    const result = await indexDocuments(client, 'legal_authorities', [
+      authority(),
+    ])
 
     expect(result).toEqual({ indexedCount: 1, failedCount: 0, errors: [] })
-    expect(addDocuments).toHaveBeenCalledWith([authority()], { primaryKey: 'id' })
+    expect(addDocuments).toHaveBeenCalledWith([authority()], {
+      primaryKey: 'id',
+    })
   })
 
   it('reports failed indexing tasks after enqueue', async () => {
@@ -204,7 +223,9 @@ describe('Legal search client', () => {
       index: () => ({ addDocuments }),
     }
 
-    const result = await indexDocuments(client, 'legal_authorities', [authority()])
+    const result = await indexDocuments(client, 'legal_authorities', [
+      authority(),
+    ])
 
     expect(result).toEqual({
       indexedCount: 0,
@@ -287,7 +308,13 @@ describe('Legal search client', () => {
       index: () => ({ search: searchMock }),
     }
 
-    await search(client, 'legal_authorities', '', { court: 'uksc' }, { limit: 10 })
+    await search(
+      client,
+      'legal_authorities',
+      '',
+      { court: 'uksc' },
+      { limit: 10 },
+    )
 
     expect(searchMock).toHaveBeenCalledWith(
       '',
@@ -338,8 +365,16 @@ describe('Legal search client', () => {
       index: () => ({ search: searchMock }),
     }
 
-    const citationResult = await search(client, 'legal_authorities', '[2024] UKSC 3')
-    const idResult = await search(client, 'legal_authorities', 'ewca-civ-2026-659')
+    const citationResult = await search(
+      client,
+      'legal_authorities',
+      '[2024] UKSC 3',
+    )
+    const idResult = await search(
+      client,
+      'legal_authorities',
+      'ewca-civ-2026-659',
+    )
 
     expect(citationResult.hits.map((hit) => hit.id)).toEqual([
       'uksc-2024-3',
@@ -371,10 +406,7 @@ describe('Legal search client', () => {
         [withoutCitation, withCitation] as LegalSearchHit[],
         '[2024] UKSC 3',
       ),
-    ).toEqual([
-      withCitation,
-      withoutCitation,
-    ])
+    ).toEqual([withCitation, withoutCitation])
   })
 
   it('ranks title matches ahead of provider hits that only match body text', () => {
@@ -397,10 +429,7 @@ describe('Legal search client', () => {
         [bodyReferenceOnly, titleMatch] as LegalSearchHit[],
         'Potanina',
       ),
-    ).toEqual([
-      titleMatch,
-      bodyReferenceOnly,
-    ])
+    ).toEqual([titleMatch, bodyReferenceOnly])
   })
 
   it('can retrieve paragraphs for fetch-on-miss cached results', async () => {
@@ -414,9 +443,15 @@ describe('Legal search client', () => {
       index: () => ({ search: searchMock }),
     }
 
-    const result = await search(client, 'legal_authorities', 'test', {}, {
-      includeParagraphs: true,
-    })
+    const result = await search(
+      client,
+      'legal_authorities',
+      'test',
+      {},
+      {
+        includeParagraphs: true,
+      },
+    )
 
     expect(result.hits[0]?.paragraphs).toEqual(authority().paragraphs)
     expect(searchMock).toHaveBeenCalledWith(
@@ -545,9 +580,15 @@ describe('Legal search client', () => {
       index: () => ({ search: searchMock }),
     }
 
-    const result = await search(client, 'legal_authorities', 'Potanina', {}, {
-      includeSnippets: true,
-    })
+    const result = await search(
+      client,
+      'legal_authorities',
+      'Potanina',
+      {},
+      {
+        includeSnippets: true,
+      },
+    )
 
     expect(result.hits[0]).toMatchObject({
       id: 'uksc-2024-3',

@@ -9,7 +9,9 @@ export function createMojRateLimiter(limit: number) {
       }
 
       if (timestamps.length >= limit) {
-        const retryAfterSeconds = Math.ceil((timestamps[0] + windowMs - now) / 1000)
+        const retryAfterSeconds = Math.ceil(
+          (timestamps[0] + windowMs - now) / 1000,
+        )
         return { allowed: false as const, retryAfterSeconds }
       }
 

@@ -12,7 +12,11 @@ import {
   listDocuments,
   softDeleteDocument,
 } from '../database'
-import { DocumentExtractionError, extractDocumentText, normaliseFileType } from '../document-extraction'
+import {
+  DocumentExtractionError,
+  extractDocumentText,
+  normaliseFileType,
+} from '../document-extraction'
 import type { StorageService } from '../storage'
 
 interface RouteUser {
@@ -129,7 +133,12 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
       requiredInteger(form?.get('sizeBytes')) ??
       requiredInteger(body?.sizeBytes)
 
-    if (!filename || !fileType || (!file && !contentSha256) || sizeBytes === null) {
+    if (
+      !filename ||
+      !fileType ||
+      (!file && !contentSha256) ||
+      sizeBytes === null
+    ) {
       return errorResponse(
         c,
         'validation_failed',
@@ -153,9 +162,19 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
         400,
       )
     if (file && file.size > MAX_DOCUMENT_UPLOAD_BYTES)
-      return errorResponse(c, 'validation_failed', `Document uploads must be at most ${MAX_DOCUMENT_UPLOAD_BYTES / 1024 / 1024} MB.`, 400)
+      return errorResponse(
+        c,
+        'validation_failed',
+        `Document uploads must be at most ${MAX_DOCUMENT_UPLOAD_BYTES / 1024 / 1024} MB.`,
+        400,
+      )
     if (file && !storage?.writeBinary)
-      return errorResponse(c, 'storage_unavailable', 'Document storage is unavailable.', 400)
+      return errorResponse(
+        c,
+        'storage_unavailable',
+        'Document storage is unavailable.',
+        400,
+      )
 
     let uploadContents: Buffer | null = null
     let verifiedType = supportedType
@@ -164,34 +183,72 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
       uploadContents = Buffer.from(await file.arrayBuffer())
       verifiedType = uploadType(filename, uploadContents)
       if (!verifiedType || !supportedType || supportedType !== verifiedType)
-        return errorResponse(c, 'validation_failed', 'The filename, declared type, and file content must agree.', 400)
-      const computedHash = createHash('sha256').update(uploadContents).digest('hex')
+        return errorResponse(
+          c,
+          'validation_failed',
+          'The filename, declared type, and file content must agree.',
+          400,
+        )
+      const computedHash = createHash('sha256')
+        .update(uploadContents)
+        .digest('hex')
       if (contentSha256 && contentSha256.toLowerCase() !== computedHash)
-        return errorResponse(c, 'validation_failed', 'The supplied content SHA-256 does not match the uploaded file.', 400)
+        return errorResponse(
+          c,
+          'validation_failed',
+          'The supplied content SHA-256 does not match the uploaded file.',
+          400,
+        )
       verifiedHash = computedHash
     }
 
     const result = await createDocument(pool, {
-      organisationId: user.organisationId, matterId: matter.id, userId: user.id, filename,
-      fileType: verifiedType ?? fileType, sizeBytes: uploadContents?.byteLength ?? sizeBytes,
+      organisationId: user.organisationId,
+      matterId: matter.id,
+      userId: user.id,
+      filename,
+      fileType: verifiedType ?? fileType,
+      sizeBytes: uploadContents?.byteLength ?? sizeBytes,
       contentSha256: verifiedHash!,
     })
 
     if (uploadContents && verifiedType && storage?.writeBinary) {
-      const textObjectKey = result.version.objectKey.replace(/\/source$/, '/text')
+      const textObjectKey = result.version.objectKey.replace(
+        /\/source$/,
+        '/text',
+      )
       try {
         await storage.writeBinary(result.version.objectKey, uploadContents)
       } catch {
-        return errorResponse(c, 'storage_unavailable', 'Document storage is unavailable.', 400)
+        return errorResponse(
+          c,
+          'storage_unavailable',
+          'Document storage is unavailable.',
+          400,
+        )
       }
       try {
         const text = await extractDocumentText(verifiedType, uploadContents)
         await storage.writeText(textObjectKey, text)
-        const version = await updateDocumentExtraction(pool, { organisationId: user.organisationId, versionId: result.version.id, textObjectKey })
+        const version = await updateDocumentExtraction(pool, {
+          organisationId: user.organisationId,
+          versionId: result.version.id,
+          textObjectKey,
+        })
         if (version) result.version = version
       } catch (error) {
-        if (!(error instanceof DocumentExtractionError)) return errorResponse(c, 'storage_unavailable', 'Document storage is unavailable.', 400)
-        const version = await updateDocumentExtraction(pool, { organisationId: user.organisationId, versionId: result.version.id, failureReason: error.message })
+        if (!(error instanceof DocumentExtractionError))
+          return errorResponse(
+            c,
+            'storage_unavailable',
+            'Document storage is unavailable.',
+            400,
+          )
+        const version = await updateDocumentExtraction(pool, {
+          organisationId: user.organisationId,
+          versionId: result.version.id,
+          failureReason: error.message,
+        })
         if (version) result.version = version
       }
     }

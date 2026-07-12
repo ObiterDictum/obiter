@@ -36,7 +36,10 @@ export interface ApiEnv {
 }
 
 function readNodeEnv(): ApiEnv['nodeEnv'] {
-  if (process.env.NODE_ENV === 'production' || process.env.NODE_ENV === 'test') {
+  if (
+    process.env.NODE_ENV === 'production' ||
+    process.env.NODE_ENV === 'test'
+  ) {
     return process.env.NODE_ENV
   }
 
@@ -48,13 +51,17 @@ function requireProductionEnv(nodeEnv: ApiEnv['nodeEnv']) {
     return
   }
 
-  const missing: string[] = requiredProductionKeys.filter((key) => !process.env[key])
+  const missing: string[] = requiredProductionKeys.filter(
+    (key) => !process.env[key],
+  )
   if (!process.env.LEGAL_AUTHORITIES_INDEX) {
     missing.push('LEGAL_AUTHORITIES_INDEX')
   }
 
   if (missing.length > 0) {
-    throw new Error(`Missing required production environment values: ${missing.join(', ')}`)
+    throw new Error(
+      `Missing required production environment values: ${missing.join(', ')}`,
+    )
   }
 }
 
@@ -66,7 +73,9 @@ function requireTestEnv(nodeEnv: ApiEnv['nodeEnv']) {
   const missing = requiredTestKeys.filter((key) => !process.env[key])
 
   if (missing.length > 0) {
-    throw new Error(`Missing required test environment values: ${missing.join(', ')}`)
+    throw new Error(
+      `Missing required test environment values: ${missing.join(', ')}`,
+    )
   }
 }
 
@@ -90,7 +99,10 @@ function readDatabaseUrl(nodeEnv: ApiEnv['nodeEnv']) {
     )
   }
 
-  const testDatabaseUrl = parseUrl('TEST_DATABASE_URL', process.env.TEST_DATABASE_URL ?? '')
+  const testDatabaseUrl = parseUrl(
+    'TEST_DATABASE_URL',
+    process.env.TEST_DATABASE_URL ?? '',
+  )
   const productionDatabaseUrl = process.env.DATABASE_URL
     ? parseUrl('DATABASE_URL', process.env.DATABASE_URL)
     : null
@@ -146,7 +158,9 @@ function readIndexName(key: string, fallback: string) {
   }
 
   if (!/^[a-zA-Z0-9_-]+$/.test(trimmed)) {
-    throw new Error(`${key} may only contain letters, numbers, underscores, and hyphens.`)
+    throw new Error(
+      `${key} may only contain letters, numbers, underscores, and hyphens.`,
+    )
   }
 
   return trimmed
@@ -197,7 +211,10 @@ function loadLocalDotEnv() {
         if (separatorIndex <= 0) continue
 
         const key = line.slice(0, separatorIndex).trim()
-        const value = line.slice(separatorIndex + 1).trim().replace(/^["']|["']$/g, '')
+        const value = line
+          .slice(separatorIndex + 1)
+          .trim()
+          .replace(/^["']|["']$/g, '')
 
         process.env[key] ??= value
       }
@@ -239,7 +256,10 @@ export function readApiEnv(): ApiEnv {
     throw new Error('OBITER_RESEND_API_KEY must be configured in production.')
   }
 
-  const webOrigin = readRequiredUrl('OBITER_WEB_ORIGIN', 'http://localhost:3000')
+  const webOrigin = readRequiredUrl(
+    'OBITER_WEB_ORIGIN',
+    'http://localhost:3000',
+  )
 
   return {
     databaseUrl: readDatabaseUrl(nodeEnv),
@@ -259,8 +279,13 @@ export function readApiEnv(): ApiEnv {
       'obiter://desktop-auth',
     ),
     resendApiKey,
-    emailFrom: (process.env.OBITER_EMAIL_FROM ?? 'onboarding@resend.dev').trim(),
-    meilisearchHost: readRequiredUrl('MEILISEARCH_HOST', 'http://localhost:7700'),
+    emailFrom: (
+      process.env.OBITER_EMAIL_FROM ?? 'onboarding@resend.dev'
+    ).trim(),
+    meilisearchHost: readRequiredUrl(
+      'MEILISEARCH_HOST',
+      'http://localhost:7700',
+    ),
     meilisearchSearchApiKey: readSearchApiKey(nodeEnv),
     meilisearchAdminApiKey: readAdminApiKey(nodeEnv),
     legalAuthoritiesIndex: readLegalAuthoritiesIndexName(),

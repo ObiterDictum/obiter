@@ -14,13 +14,22 @@ export interface ProgressBarProps {
  * ProgressBar — a calm indicator of a known or indeterminate operation.
  * Built on Base UI Progress; pass `value` for determinate, omit for indeterminate.
  */
-export function ProgressBar({ value, label, helperText, className }: ProgressBarProps) {
+export function ProgressBar({
+  value,
+  label,
+  helperText,
+  className,
+}: ProgressBarProps) {
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
       {label || helperText ? (
         <div className="flex items-baseline justify-between">
-          {label ? <span className="text-sm font-medium text-ink">{label}</span> : null}
-          {helperText ? <span className="text-xs text-muted">{helperText}</span> : null}
+          {label ? (
+            <span className="text-sm font-medium text-ink">{label}</span>
+          ) : null}
+          {helperText ? (
+            <span className="text-xs text-muted">{helperText}</span>
+          ) : null}
         </div>
       ) : null}
       <BaseProgress.Root

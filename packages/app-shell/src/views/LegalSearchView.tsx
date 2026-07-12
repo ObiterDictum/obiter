@@ -63,7 +63,9 @@ export function selectParagraphExcerpts(
   return (matches.length > 0 ? matches : paragraphs).slice(0, 3)
 }
 
-export function selectJudgmentParagraphs(result: LegalSearchResult): CaseLawParagraph[] {
+export function selectJudgmentParagraphs(
+  result: LegalSearchResult,
+): CaseLawParagraph[] {
   return result.paragraphs ?? []
 }
 
@@ -116,7 +118,9 @@ export function createLegalSearchFetchRequest(
   return request
 }
 
-export function countActiveLegalSearchFilters(filters: LegalSearchRequestFilters) {
+export function countActiveLegalSearchFilters(
+  filters: LegalSearchRequestFilters,
+) {
   return [
     filters.court,
     filters.dateFrom,
@@ -141,7 +145,8 @@ export function getLegalSearchEmptyFeedback(input: {
   hydrationQueued?: boolean
   browse?: { courtLabel: string }
 }) {
-  const outcome = input.outcome ?? (input.hydrationQueued ? 'hydration_queued' : 'no_match')
+  const outcome =
+    input.outcome ?? (input.hydrationQueued ? 'hydration_queued' : 'no_match')
 
   if (outcome === 'hydration_queued') {
     return {
@@ -170,11 +175,16 @@ export function shouldRunLegalSearch(query: string) {
   return query.trim().length > 0
 }
 
-export function shouldRunLegalSearchRequest(query: string, filters: LegalSearchRequestFilters) {
+export function shouldRunLegalSearchRequest(
+  query: string,
+  filters: LegalSearchRequestFilters,
+) {
   return shouldRunLegalSearch(query) || Boolean(filters.court.trim())
 }
 
-export function getRecentLegalSearches(storage: Pick<Storage, 'getItem'> | undefined) {
+export function getRecentLegalSearches(
+  storage: Pick<Storage, 'getItem'> | undefined,
+) {
   if (!storage) return []
 
   const storedSearches = storage.getItem(legalSearchRecentSearchesKey)
@@ -185,7 +195,9 @@ export function getRecentLegalSearches(storage: Pick<Storage, 'getItem'> | undef
     if (!Array.isArray(parsedSearches)) return []
 
     return dedupeRecentLegalSearches(
-      parsedSearches.filter((search): search is string => typeof search === 'string'),
+      parsedSearches.filter(
+        (search): search is string => typeof search === 'string',
+      ),
     )
   } catch {
     return []
@@ -198,7 +210,10 @@ export function writeRecentLegalSearch(
 ) {
   if (!storage) return []
 
-  const recentSearches = dedupeRecentLegalSearches([query, ...getRecentLegalSearches(storage)])
+  const recentSearches = dedupeRecentLegalSearches([
+    query,
+    ...getRecentLegalSearches(storage),
+  ])
   storage.setItem(legalSearchRecentSearchesKey, JSON.stringify(recentSearches))
   return recentSearches
 }
@@ -227,7 +242,9 @@ export function LegalSearchView() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [recentSearches, setRecentSearches] = useState(() =>
-    typeof window === 'undefined' ? [] : getRecentLegalSearches(window.sessionStorage),
+    typeof window === 'undefined'
+      ? []
+      : getRecentLegalSearches(window.sessionStorage),
   )
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [shortcutsOpen, setShortcutsOpen] = useState(false)
@@ -290,19 +307,33 @@ export function LegalSearchView() {
 
       const textEntryTarget = isTextEntryTarget(event.target)
 
-      if (!textEntryTarget && (event.key === 'ArrowDown' || event.key.toLowerCase() === 'j')) {
+      if (
+        !textEntryTarget &&
+        (event.key === 'ArrowDown' || event.key.toLowerCase() === 'j')
+      ) {
         event.preventDefault()
-        setSelectedResultIndex((currentIndex) => Math.min(currentIndex + 1, resultCount - 1))
+        setSelectedResultIndex((currentIndex) =>
+          Math.min(currentIndex + 1, resultCount - 1),
+        )
         return
       }
 
-      if (!textEntryTarget && (event.key === 'ArrowUp' || event.key.toLowerCase() === 'k')) {
+      if (
+        !textEntryTarget &&
+        (event.key === 'ArrowUp' || event.key.toLowerCase() === 'k')
+      ) {
         event.preventDefault()
-        setSelectedResultIndex((currentIndex) => (currentIndex <= 0 ? 0 : currentIndex - 1))
+        setSelectedResultIndex((currentIndex) =>
+          currentIndex <= 0 ? 0 : currentIndex - 1,
+        )
         return
       }
 
-      if (!textEntryTarget && event.key === 'Enter' && selectedResultIndex >= 0) {
+      if (
+        !textEntryTarget &&
+        event.key === 'Enter' &&
+        selectedResultIndex >= 0
+      ) {
         const selectedResult = state.response.hits[selectedResultIndex]
         if (!selectedResult) return
 
@@ -333,7 +364,8 @@ export function LegalSearchView() {
     if (options.clearDebounce ?? true) clearAutoSearchTimer()
 
     const trimmedQuery = searchQuery.trim()
-    const storedOnlyBrowse = !trimmedQuery && Boolean(searchFilters.court.trim())
+    const storedOnlyBrowse =
+      !trimmedQuery && Boolean(searchFilters.court.trim())
     const browse = storedOnlyBrowse
       ? { courtLabel: getCourtLabel(searchFilters.court) }
       : undefined
@@ -342,7 +374,9 @@ export function LegalSearchView() {
       return
     }
     if (trimmedQuery && typeof window !== 'undefined') {
-      setRecentSearches(writeRecentLegalSearch(window.sessionStorage, trimmedQuery))
+      setRecentSearches(
+        writeRecentLegalSearch(window.sessionStorage, trimmedQuery),
+      )
     }
 
     const requestId = searchRequestId.current + 1
@@ -368,7 +402,8 @@ export function LegalSearchView() {
       if (searchRequestId.current !== requestId) return
 
       if (!response.ok) {
-        if (abortController.current === requestAbortController) abortController.current = null
+        if (abortController.current === requestAbortController)
+          abortController.current = null
         setState({
           status: 'error',
           query: trimmedQuery,
@@ -383,7 +418,8 @@ export function LegalSearchView() {
 
       const body = (await response.json()) as LegalSearchFetchResponse
       if (searchRequestId.current !== requestId) return
-      if (abortController.current === requestAbortController) abortController.current = null
+      if (abortController.current === requestAbortController)
+        abortController.current = null
       setState(
         body.hits.length > 0
           ? { status: 'results', query: trimmedQuery, response: body, browse }
@@ -400,7 +436,8 @@ export function LegalSearchView() {
     } catch {
       if (searchRequestId.current !== requestId) return
       if (requestAbortController.signal.aborted) return
-      if (abortController.current === requestAbortController) abortController.current = null
+      if (abortController.current === requestAbortController)
+        abortController.current = null
       setState({
         status: 'error',
         query: trimmedQuery,
@@ -484,14 +521,23 @@ export function LegalSearchView() {
   }
 
   const courtLabel = getCourtLabel(court)
-  const activeFilterCount = countActiveLegalSearchFilters({ court, dateFrom, dateTo })
-  const shouldShowIdleState = state.status === 'idle' && !shouldRunLegalSearch(query)
+  const activeFilterCount = countActiveLegalSearchFilters({
+    court,
+    dateFrom,
+    dateTo,
+  })
+  const shouldShowIdleState =
+    state.status === 'idle' && !shouldRunLegalSearch(query)
 
   return (
     <div className="mx-auto flex w-full max-w-[920px] flex-col gap-6">
       <section className="flex flex-col gap-1">
-        <p className="text-xs font-semibold uppercase tracking-wider text-subtle">Legal sources</p>
-        <h1 className="text-3xl font-semibold tracking-tight text-ink">Search</h1>
+        <p className="text-xs font-semibold uppercase tracking-wider text-subtle">
+          Legal sources
+        </p>
+        <h1 className="text-3xl font-semibold tracking-tight text-ink">
+          Search
+        </h1>
         <p className="mt-1 text-sm text-muted">
           Stored judgments and Find Case Law across UK courts and tribunals.
         </p>
@@ -552,7 +598,10 @@ export function LegalSearchView() {
 
       {state.status === 'error' ? (
         <SearchFeedbackPanel
-          action={{ label: 'Retry search', onClick: () => void runSearch(state.query) }}
+          action={{
+            label: 'Retry search',
+            onClick: () => void runSearch(state.query),
+          }}
           eyebrow="Search error"
           title="Search could not complete"
           body={state.message}
@@ -587,7 +636,8 @@ function readInitialSearchQuery() {
     return ''
   }
 
-  const query = window.sessionStorage.getItem('obiter.search.initialQuery') ?? ''
+  const query =
+    window.sessionStorage.getItem('obiter.search.initialQuery') ?? ''
   window.sessionStorage.removeItem('obiter.search.initialQuery')
   return query
 }

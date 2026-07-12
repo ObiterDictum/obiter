@@ -63,7 +63,9 @@ describe('mattersListQueryOptions', () => {
 
 describe('matterQueryOptions', () => {
   it('resolves a single matter through GET /api/matters/:id', async () => {
-    api.apiFetch.mockResolvedValueOnce({ matter: sampleMatter({ id: 'mtr_42' }) })
+    api.apiFetch.mockResolvedValueOnce({
+      matter: sampleMatter({ id: 'mtr_42' }),
+    })
 
     const options = matterQueryOptions('mtr_42')
     const result = await options.queryFn?.({} as never)

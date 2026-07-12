@@ -94,9 +94,15 @@ describe('Legal authority schemas', () => {
   })
 
   it('defines future source types without treating them as implemented judgment records', () => {
-    expect(LegalSourceTypeSchema.parse('legislation_document')).toBe('legislation_document')
-    expect(LegalSourceTypeSchema.parse('legislation_provision')).toBe('legislation_provision')
-    expect(LegalSourceTypeSchema.parse('international_instrument')).toBe('international_instrument')
+    expect(LegalSourceTypeSchema.parse('legislation_document')).toBe(
+      'legislation_document',
+    )
+    expect(LegalSourceTypeSchema.parse('legislation_provision')).toBe(
+      'legislation_provision',
+    )
+    expect(LegalSourceTypeSchema.parse('international_instrument')).toBe(
+      'international_instrument',
+    )
     expect(() => LegalSourceTypeSchema.parse('legislation')).toThrow()
   })
 })

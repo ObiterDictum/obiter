@@ -31,7 +31,10 @@ export interface AtomEntry {
   rawXml: string
 }
 
-export function parseFindCaseLawAtom(xml: string, request: LegalFetchRequest): AtomEntry[] {
+export function parseFindCaseLawAtom(
+  xml: string,
+  request: LegalFetchRequest,
+): AtomEntry[] {
   const normalizedRequest: LegalFetchRequest = {
     ...request,
     court: request.court ? normalizeCourtCode(request.court) : undefined,
@@ -43,17 +46,24 @@ export function parseFindCaseLawAtom(xml: string, request: LegalFetchRequest): A
     .filter((entry) => entryMatchesFetchRequest(entry, normalizedRequest))
 }
 
-function parseAtomEntry(xml: string, request: LegalFetchRequest): AtomEntry | null {
+function parseAtomEntry(
+  xml: string,
+  request: LegalFetchRequest,
+): AtomEntry | null {
   const title = decodeXml(readTag(xml, 'title') ?? '')
   const source = readAlternateLink(xml) ?? decodeXml(readTag(xml, 'id') ?? '')
   const sourceUri = toDocumentUri(source)
-  const documentUri = toDocumentUri(decodeXml(readTag(xml, 'tna:uri') ?? '')) ?? sourceUri
+  const documentUri =
+    toDocumentUri(decodeXml(readTag(xml, 'tna:uri') ?? '')) ?? sourceUri
   const xmlUri =
     readTypedLink(xml, 'application/xml') ??
     (sourceUri ? `${sourceUri.replace(/\/$/, '')}/data.xml` : null)
   const pdfUri = readTypedLink(xml, 'application/pdf') ?? null
-  const updated = decodeXml(readTag(xml, 'published') ?? readTag(xml, 'updated') ?? '')
-  const neutralCitation = extractNeutralCitation(readIdentifier(xml) ?? title) ?? null
+  const updated = decodeXml(
+    readTag(xml, 'published') ?? readTag(xml, 'updated') ?? '',
+  )
+  const neutralCitation =
+    extractNeutralCitation(readIdentifier(xml) ?? title) ?? null
   const dateDecided = extractDate(updated) ?? extractDate(title)
   const court =
     (neutralCitation ? courtFromCitation(neutralCitation) : null) ??
@@ -75,7 +85,8 @@ function parseAtomEntry(xml: string, request: LegalFetchRequest): AtomEntry | nu
     sourceUri,
     xmlUri,
     pdfUri,
-    contentHash: decodeXml(readTag(xml, 'tna:contenthash') ?? '') || hashText(xml),
+    contentHash:
+      decodeXml(readTag(xml, 'tna:contenthash') ?? '') || hashText(xml),
     rawXml: xml,
   }
 }
@@ -87,9 +98,13 @@ export function isSupportedFindCaseLawRequest(request: LegalFetchRequest) {
   )
 }
 
-function entryMatchesFetchRequest(entry: AtomEntry, request: LegalFetchRequest) {
+function entryMatchesFetchRequest(
+  entry: AtomEntry,
+  request: LegalFetchRequest,
+) {
   if (request.court && entry.court !== request.court) return false
-  if (request.jurisdiction && request.jurisdiction !== findCaseLawJurisdiction) return false
+  if (request.jurisdiction && request.jurisdiction !== findCaseLawJurisdiction)
+    return false
   if (request.dateFrom && entry.dateDecided < request.dateFrom) return false
   if (request.dateTo && entry.dateDecided > request.dateTo) return false
   return true

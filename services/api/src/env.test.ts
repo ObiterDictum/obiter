@@ -24,15 +24,19 @@ describe('readApiEnv', () => {
     expect(env.meilisearchSearchApiKey).toBe('dev-key')
     expect(env.meilisearchAdminApiKey).toBe('dev-key')
     expect(env.legalAuthoritiesIndex).toBe('legal_authorities')
-    expect(env.mojFindCaseLawBaseUrl).toBe('https://caselaw.nationalarchives.gov.uk')
+    expect(env.mojFindCaseLawBaseUrl).toBe(
+      'https://caselaw.nationalarchives.gov.uk',
+    )
     expect(env.mojFindCaseLawRateLimit).toBe(1000)
     expect(env.nodeEnv).toBe('development')
   })
 
   it('uses TEST_DATABASE_URL as the only database URL in test mode', () => {
     process.env.NODE_ENV = 'test'
-    process.env.DATABASE_URL = 'postgres://obiter:obiter@db.example.com:5432/prod'
-    process.env.TEST_DATABASE_URL = 'postgres://obiter:obiter@db.example.com:5432/obiter_test'
+    process.env.DATABASE_URL =
+      'postgres://obiter:obiter@db.example.com:5432/prod'
+    process.env.TEST_DATABASE_URL =
+      'postgres://obiter:obiter@db.example.com:5432/obiter_test'
 
     const env = readApiEnv()
 
@@ -44,14 +48,19 @@ describe('readApiEnv', () => {
 
   it('fails loudly when test mode does not have a separate test database', () => {
     process.env.NODE_ENV = 'test'
-    process.env.DATABASE_URL = 'postgres://obiter:obiter@db.example.com:5432/prod'
+    process.env.DATABASE_URL =
+      'postgres://obiter:obiter@db.example.com:5432/prod'
     delete process.env.TEST_DATABASE_URL
 
-    expect(() => readApiEnv()).toThrow('Missing required test environment values')
+    expect(() => readApiEnv()).toThrow(
+      'Missing required test environment values',
+    )
 
     process.env.TEST_DATABASE_URL = process.env.DATABASE_URL
 
-    expect(() => readApiEnv()).toThrow('TEST_DATABASE_URL must not match DATABASE_URL.')
+    expect(() => readApiEnv()).toThrow(
+      'TEST_DATABASE_URL must not match DATABASE_URL.',
+    )
   })
 
   it('fails loudly when production auth and database values are missing', () => {
@@ -65,12 +74,15 @@ describe('readApiEnv', () => {
     delete process.env.MEILISEARCH_ADMIN_API_KEY
     delete process.env.LEGAL_AUTHORITIES_INDEX
 
-    expect(() => readApiEnv()).toThrow('Missing required production environment values')
+    expect(() => readApiEnv()).toThrow(
+      'Missing required production environment values',
+    )
   })
 
   it('rejects weak production secrets', () => {
     process.env.NODE_ENV = 'production'
-    process.env.DATABASE_URL = 'postgres://obiter:obiter@db.example.com:5432/obiter'
+    process.env.DATABASE_URL =
+      'postgres://obiter:obiter@db.example.com:5432/obiter'
     process.env.BETTER_AUTH_SECRET = 'short-secret'
     process.env.BETTER_AUTH_URL = 'https://api.obiter.example'
     process.env.OBITER_WEB_ORIGIN = 'https://app.obiter.example'
@@ -79,7 +91,8 @@ describe('readApiEnv', () => {
     process.env.MEILISEARCH_SEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
     process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'
     process.env.LEGAL_AUTHORITIES_INDEX = 'legal_authorities'
-    process.env.MOJ_FIND_CASE_LAW_BASE_URL = 'https://caselaw.nationalarchives.gov.uk'
+    process.env.MOJ_FIND_CASE_LAW_BASE_URL =
+      'https://caselaw.nationalarchives.gov.uk'
 
     expect(() => readApiEnv()).toThrow(
       'BETTER_AUTH_SECRET must be at least 32 characters in production.',
@@ -97,11 +110,13 @@ describe('readApiEnv', () => {
     process.env.MEILISEARCH_SEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
     process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'
     process.env.LEGAL_AUTHORITIES_INDEX = 'legal_authorities'
-    process.env.MOJ_FIND_CASE_LAW_BASE_URL = 'https://caselaw.nationalarchives.gov.uk'
+    process.env.MOJ_FIND_CASE_LAW_BASE_URL =
+      'https://caselaw.nationalarchives.gov.uk'
 
     expect(() => readApiEnv()).toThrow('DATABASE_URL must be a valid URL.')
 
-    process.env.DATABASE_URL = 'postgres://obiter:obiter@db.example.com:5432/obiter'
+    process.env.DATABASE_URL =
+      'postgres://obiter:obiter@db.example.com:5432/obiter'
     process.env.PORT = '70000'
 
     expect(() => readApiEnv()).toThrow(
@@ -123,9 +138,12 @@ describe('readApiEnv', () => {
     process.env.LEGAL_AUTHORITIES_INDEX = 'legal_authorities'
     process.env.MOJ_FIND_CASE_LAW_BASE_URL = 'not a url'
 
-    expect(() => readApiEnv()).toThrow('MOJ_FIND_CASE_LAW_BASE_URL must be a valid URL.')
+    expect(() => readApiEnv()).toThrow(
+      'MOJ_FIND_CASE_LAW_BASE_URL must be a valid URL.',
+    )
 
-    process.env.MOJ_FIND_CASE_LAW_BASE_URL = 'https://caselaw.nationalarchives.gov.uk'
+    process.env.MOJ_FIND_CASE_LAW_BASE_URL =
+      'https://caselaw.nationalarchives.gov.uk'
     process.env.MOJ_FIND_CASE_LAW_RATE_LIMIT = '0'
 
     expect(() => readApiEnv()).toThrow(
@@ -135,7 +153,8 @@ describe('readApiEnv', () => {
 
   it('parses valid production configuration', () => {
     process.env.NODE_ENV = 'production'
-    process.env.DATABASE_URL = 'postgres://obiter:obiter@db.example.com:5432/obiter'
+    process.env.DATABASE_URL =
+      'postgres://obiter:obiter@db.example.com:5432/obiter'
     process.env.BETTER_AUTH_SECRET = '0123456789abcdef0123456789abcdef'
     process.env.BETTER_AUTH_URL = 'https://api.obiter.example/'
     process.env.OBITER_WEB_ORIGIN = 'https://app.obiter.example/'
@@ -145,7 +164,8 @@ describe('readApiEnv', () => {
     process.env.MEILISEARCH_SEARCH_API_KEY = '0123456789abcdef0123456789abcdef'
     process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'
     process.env.LEGAL_AUTHORITIES_INDEX = 'legal_authorities'
-    process.env.MOJ_FIND_CASE_LAW_BASE_URL = 'https://caselaw.nationalarchives.gov.uk/'
+    process.env.MOJ_FIND_CASE_LAW_BASE_URL =
+      'https://caselaw.nationalarchives.gov.uk/'
     process.env.MOJ_FIND_CASE_LAW_RATE_LIMIT = '250'
     process.env.PORT = '8788'
 
@@ -159,14 +179,17 @@ describe('readApiEnv', () => {
     expect(env.meilisearchSearchApiKey).toBe('0123456789abcdef0123456789abcdef')
     expect(env.meilisearchAdminApiKey).toBe('0123456789abcdef0123456789abcdef')
     expect(env.legalAuthoritiesIndex).toBe('legal_authorities')
-    expect(env.mojFindCaseLawBaseUrl).toBe('https://caselaw.nationalarchives.gov.uk')
+    expect(env.mojFindCaseLawBaseUrl).toBe(
+      'https://caselaw.nationalarchives.gov.uk',
+    )
     expect(env.mojFindCaseLawRateLimit).toBe(250)
     expect(env.port).toBe(8788)
   })
 
   it('does not allow the legacy Meilisearch API key', () => {
     process.env.NODE_ENV = 'production'
-    process.env.DATABASE_URL = 'postgres://obiter:obiter@db.example.com:5432/obiter'
+    process.env.DATABASE_URL =
+      'postgres://obiter:obiter@db.example.com:5432/obiter'
     process.env.BETTER_AUTH_SECRET = '0123456789abcdef0123456789abcdef'
     process.env.BETTER_AUTH_URL = 'https://api.obiter.example'
     process.env.OBITER_WEB_ORIGIN = 'https://app.obiter.example'
@@ -176,7 +199,8 @@ describe('readApiEnv', () => {
     delete process.env.MEILISEARCH_SEARCH_API_KEY
     process.env.MEILISEARCH_ADMIN_API_KEY = '0123456789abcdef0123456789abcdef'
     process.env.LEGAL_AUTHORITIES_INDEX = 'legal_authorities'
-    process.env.MOJ_FIND_CASE_LAW_BASE_URL = 'https://caselaw.nationalarchives.gov.uk'
+    process.env.MOJ_FIND_CASE_LAW_BASE_URL =
+      'https://caselaw.nationalarchives.gov.uk'
 
     expect(() => readApiEnv()).toThrow(
       'Missing required production environment values: MEILISEARCH_SEARCH_API_KEY',

@@ -9,6 +9,7 @@ Not executing yet. This is the plan for when we run it.
 ## Why DeepSeek
 
 DeepSeek generates high-quality structured text at low cost. For synthetic data generation, we need:
+
 - Realistic UK legal language (formal, specific, structured)
 - Controllable PII placement (we define what to include)
 - Consistent output format
@@ -21,11 +22,13 @@ DeepSeek handles all of this. The generation prompt specifies the document type,
 Asking an LLM to generate text AND character offsets directly is unreliable. The model counts tokens, not characters, so offsets are usually wrong.
 
 **Solution: marker-based generation.** DeepSeek generates text with PII wrapped in markers:
+
 ```
 Mr [[PERSON: James Cartwright]] of [[ADDRESS: 42 Belgrave Road, Leicester LE4 5AB]] appeared before the court on [[DATE: 15 March 2024]].
 ```
 
 A Python post-processor:
+
 1. Strips markers from the text
 2. Records the character positions where each marker was
 3. Outputs the clean text + spans with correct offsets
@@ -37,7 +40,9 @@ This is deterministic and reliable. The model doesn't need to count characters.
 Seven document types covering the main contexts where PII appears in legal work:
 
 ### 1. Skeleton Arguments (40-60 examples)
+
 Dense formal documents filed before hearings. PII appears in:
+
 - Party names with honorifics (Mr, Mrs, Ms, Dr, etc.)
 - Addresses (residential, business)
 - Dates (hearings, deadlines, events)
@@ -47,7 +52,9 @@ Dense formal documents filed before hearings. PII appears in:
 - Article 9: health data (personal injury, medical negligence), racial/ethnic origin (discrimination), religious belief (discrimination), trade union membership (employment)
 
 ### 2. Witness Statements (40-60 examples)
+
 First-person testimony. PII appears in:
+
 - Witness names and addresses
 - Dates of events
 - Phone numbers, email addresses
@@ -56,7 +63,9 @@ First-person testimony. PII appears in:
 - Article 9: health data (injury descriptions), sexual orientation (family cases), political opinions (public order cases)
 
 ### 3. Case Reports / Judgment Summaries (30-50 examples)
+
 Summaries of decided cases. PII appears in:
+
 - Party names (though many are public, some are anonymised)
 - Neutral citations
 - Dates of hearings and judgments
@@ -64,7 +73,9 @@ Summaries of decided cases. PII appears in:
 - Article 9: health data (clinical negligence cases), racial/ethnic origin (discrimination cases)
 
 ### 4. Client Letters (30-50 examples)
+
 Solicitor to client correspondence. PII appears in:
+
 - Client name and address
 - Matter reference numbers
 - Financial details (settlement amounts, costs, account numbers)
@@ -73,14 +84,18 @@ Solicitor to client correspondence. PII appears in:
 - Article 9: any data relevant to the matter
 
 ### 5. Attendance Notes (30-50 examples)
+
 Internal records of meetings/calls. PII appears in:
+
 - Attendee names
 - Dates and times
 - PII discussed in the meeting (names, addresses, financial details)
 - Article 9: health data discussed in family/employment matters
 
 ### 6. Court Forms (20-40 examples)
+
 Standardised forms (N1 claim form, C100 child arrangements, etc.). PII appears in:
+
 - Claimant/respondent names and addresses
 - Dates of birth
 - NI numbers
@@ -88,7 +103,9 @@ Standardised forms (N1 claim form, C100 child arrangements, etc.). PII appears i
 - Article 9: health data (certain form types)
 
 ### 7. Pleadings / Particulars of Claim (20-40 examples)
+
 Formal statements of the case. PII appears in:
+
 - Party names
 - Addresses
 - Financial amounts
@@ -99,38 +116,38 @@ Formal statements of the case. PII appears in:
 
 ### Layer 1: Standard PII (Privacy Filter's 8 categories + UK supplement)
 
-| Category | Label | Format/Pattern | Example |
-|----------|-------|----------------|---------|
-| Person name | `private_person` | Honorific + first + last | Mr James Cartwright |
-| Address | `private_address` | UK postcode format | 42 Belgrave Road, Leicester LE4 5AB |
-| Email | `private_email` | Standard email | j.smith@firm.co.uk |
-| Phone | `private_phone` | UK formats: 0116, 07, +44 | 0116 555 0199 |
-| Date | `private_date` | Legal formats: "15 March 2024", "the 15th day of March 2024", "15/03/2024" | 15 March 2024 |
-| Account number | `account_number` | UK sort code + account, or card number | 12-34-56 12345678 |
-| Secret | `secret` | API keys, passwords, tokens | sk-test-abc123 |
-| URL with PII | `private_url` | URLs containing tokens/params | https://portal.firm.co.uk/case?id=12345 |
-| NI number | `national_insurance` | 2 letters, 6 digits, 1 letter | JX 12 34 56 D |
-| Passport | `passport_number` | UK: 9 digits, or alphanumeric | 123456789 |
-| Case reference | `case_reference` | Neutral citation, internal ref | [2024] UKSC 3, REF/2024/0123 |
+| Category       | Label                | Format/Pattern                                                             | Example                                 |
+| -------------- | -------------------- | -------------------------------------------------------------------------- | --------------------------------------- |
+| Person name    | `private_person`     | Honorific + first + last                                                   | Mr James Cartwright                     |
+| Address        | `private_address`    | UK postcode format                                                         | 42 Belgrave Road, Leicester LE4 5AB     |
+| Email          | `private_email`      | Standard email                                                             | j.smith@firm.co.uk                      |
+| Phone          | `private_phone`      | UK formats: 0116, 07, +44                                                  | 0116 555 0199                           |
+| Date           | `private_date`       | Legal formats: "15 March 2024", "the 15th day of March 2024", "15/03/2024" | 15 March 2024                           |
+| Account number | `account_number`     | UK sort code + account, or card number                                     | 12-34-56 12345678                       |
+| Secret         | `secret`             | API keys, passwords, tokens                                                | sk-test-abc123                          |
+| URL with PII   | `private_url`        | URLs containing tokens/params                                              | https://portal.firm.co.uk/case?id=12345 |
+| NI number      | `national_insurance` | 2 letters, 6 digits, 1 letter                                              | JX 12 34 56 D                           |
+| Passport       | `passport_number`    | UK: 9 digits, or alphanumeric                                              | 123456789                               |
+| Case reference | `case_reference`     | Neutral citation, internal ref                                             | [2024] UKSC 3, REF/2024/0123            |
 
 ### Layer 2: UK GDPR Article 9 Special Category Data
 
-| Category | Label | How it appears in legal text | Example |
-|----------|-------|------------------------------|---------|
-| Health data | `health_data` | Medical conditions, treatments, diagnoses mentioned in personal injury, medical negligence, family cases | "diagnosed with Type 2 diabetes", "receiving treatment for depression" |
-| Racial/ethnic origin | `racial_ethnic_origin` | In discrimination cases, immigration | "British Asian", "of Afro-Caribbean descent" |
-| Religious belief | `religious_belief` | In discrimination cases, employment | "practising Muslim", "Catholic by faith" |
-| Political opinion | `political_opinion` | In employment, public law cases | "member of the Conservative Party" |
-| Trade union | `trade_union_membership` | In employment cases | "UNITE union representative" |
-| Sexual orientation | `sexual_orientation` | In family, discrimination cases | "in a same-sex relationship" |
+| Category             | Label                    | How it appears in legal text                                                                             | Example                                                                |
+| -------------------- | ------------------------ | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Health data          | `health_data`            | Medical conditions, treatments, diagnoses mentioned in personal injury, medical negligence, family cases | "diagnosed with Type 2 diabetes", "receiving treatment for depression" |
+| Racial/ethnic origin | `racial_ethnic_origin`   | In discrimination cases, immigration                                                                     | "British Asian", "of Afro-Caribbean descent"                           |
+| Religious belief     | `religious_belief`       | In discrimination cases, employment                                                                      | "practising Muslim", "Catholic by faith"                               |
+| Political opinion    | `political_opinion`      | In employment, public law cases                                                                          | "member of the Conservative Party"                                     |
+| Trade union          | `trade_union_membership` | In employment cases                                                                                      | "UNITE union representative"                                           |
+| Sexual orientation   | `sexual_orientation`     | In family, discrimination cases                                                                          | "in a same-sex relationship"                                           |
 
 ### Layer 3: Legal-Specific Identifiers
 
-| Category | Label | How it appears | Example |
-|----------|-------|----------------|---------|
-| Settlement amount | `settlement_amount` | Financial figures in settlement context | "accepted settlement of GBP 125,000" |
-| Minor identity | `minor_identity` | Names of under-18s | "the child, Thomas (aged 14)" |
-| Witness identity | `witness_identity` | Witness names in protected contexts | "Witness A" (already anonymised, but tag contexts where real names are used) |
+| Category          | Label               | How it appears                          | Example                                                                      |
+| ----------------- | ------------------- | --------------------------------------- | ---------------------------------------------------------------------------- |
+| Settlement amount | `settlement_amount` | Financial figures in settlement context | "accepted settlement of GBP 125,000"                                         |
+| Minor identity    | `minor_identity`    | Names of under-18s                      | "the child, Thomas (aged 14)"                                                |
+| Witness identity  | `witness_identity`  | Witness names in protected contexts     | "Witness A" (already anonymised, but tag contexts where real names are used) |
 
 ## Custom Label Space
 
@@ -178,6 +195,7 @@ For each document type, craft a DeepSeek prompt that:
 6. For Article 9 data, specifies the legal context where it would naturally appear (personal injury case, discrimination claim, employment tribunal, family proceedings)
 
 **Prompt template:**
+
 ```
 You are generating a synthetic UK legal document for training a PII detection model.
 
@@ -232,6 +250,7 @@ A Python script (`scripts/generate_training_data.py`):
 ### Step 4: Evaluate Base Model Before Fine-Tuning
 
 Before fine-tuning, run the base Privacy Filter against the validation set:
+
 ```bash
 opf eval data/evals/redact/validation.jsonl --output-dir data/evals/redact/baseline_eval
 ```
@@ -250,15 +269,15 @@ This gives a baseline F1 score. After fine-tuning, run the same eval and compare
 
 Not every document type includes every PII category. The mapping:
 
-| Document Type | Layer 1 PII | Layer 2 (Article 9) | Layer 3 |
-|---------------|-------------|---------------------|---------|
-| Skeleton argument | person, address, date, case_ref, NI, account, phone, email | health, racial, religious, political, trade_union, sexual_orientation | settlement_amount |
-| Witness statement | person, address, date, phone, email, NI, passport | health, racial, sexual_orientation | minor_identity |
-| Case report | person, date, case_ref | health, racial | - |
-| Client letter | person, address, date, case_ref, account, email, phone | (varies by matter) | settlement_amount |
-| Attendance note | person, date, phone | health, political, trade_union | - |
-| Court form | person, address, date, NI, passport, case_ref | health | - |
-| Pleadings | person, address, date, account, case_ref | health, racial, religious, political, trade_union, sexual_orientation | settlement_amount, minor_identity |
+| Document Type     | Layer 1 PII                                                | Layer 2 (Article 9)                                                   | Layer 3                           |
+| ----------------- | ---------------------------------------------------------- | --------------------------------------------------------------------- | --------------------------------- |
+| Skeleton argument | person, address, date, case_ref, NI, account, phone, email | health, racial, religious, political, trade_union, sexual_orientation | settlement_amount                 |
+| Witness statement | person, address, date, phone, email, NI, passport          | health, racial, sexual_orientation                                    | minor_identity                    |
+| Case report       | person, date, case_ref                                     | health, racial                                                        | -                                 |
+| Client letter     | person, address, date, case_ref, account, email, phone     | (varies by matter)                                                    | settlement_amount                 |
+| Attendance note   | person, date, phone                                        | health, political, trade_union                                        | -                                 |
+| Court form        | person, address, date, NI, passport, case_ref              | health                                                                | -                                 |
+| Pleadings         | person, address, date, account, case_ref                   | health, racial, religious, political, trade_union, sexual_orientation | settlement_amount, minor_identity |
 
 ## Edge Cases to Cover
 
@@ -327,11 +346,11 @@ scripts/
 
 The same pipeline applies to other verticals. When legal is done:
 
-| Sector | Document types | Additional PII categories |
-|--------|----------------|--------------------------|
-| Healthcare | Clinic letters, discharge summaries, referral letters, mental health notes | `nhs_number`, `patient_id`, `medication`, `mental_health_reference` |
-| Finance | KYC files, transaction reports, loan applications, audit reports | `sort_code`, `credit_score`, `transaction_id`, `income_figure` |
-| Police/CPS | MG forms, witness statements (criminal), case file summaries | `officer_id`, `collar_number`, `informant_identity`, `surveillance_reference` |
-| HR | Performance reviews, sickness records, disciplinary notes | `employee_id`, `salary`, `performance_rating`, `sickness_reference` |
+| Sector     | Document types                                                             | Additional PII categories                                                     |
+| ---------- | -------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Healthcare | Clinic letters, discharge summaries, referral letters, mental health notes | `nhs_number`, `patient_id`, `medication`, `mental_health_reference`           |
+| Finance    | KYC files, transaction reports, loan applications, audit reports           | `sort_code`, `credit_score`, `transaction_id`, `income_figure`                |
+| Police/CPS | MG forms, witness statements (criminal), case file summaries               | `officer_id`, `collar_number`, `informant_identity`, `surveillance_reference` |
+| HR         | Performance reviews, sickness records, disciplinary notes                  | `employee_id`, `salary`, `performance_rating`, `sickness_reference`           |
 
 Each sector gets its own generation run, its own label space extension, and its own training data directory. The fine-tuning checkpoint can be trained on multi-sector data or sector-specific depending on the deployment target.
