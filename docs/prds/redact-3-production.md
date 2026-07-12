@@ -1,10 +1,16 @@
 # Redact PRD 3: Production Readiness, Audit, and Synthetic Data
 
+> ## Implementation status (verified against the codebase, July 2026)
+>
+> The **audit export, DOCX/TXT extraction, review/finalize, and the dataset-export tool described here are shipped.** The **detection pipeline is deterministic UK patterns only** — not "powered by Rampart" (see the banner on [Redact PRD 1](redact-1-detection.md)). The Rampart token-classification model integration is planned but not shipped. The synthetic-data and fine-tuning content below remains accurate as *preparation* for that integration: generating training data and documenting the fine-tuning loop is real work that is done; the claim that the base model runs in production today is what is false, and is not made by the code. The dataset-export tool's category→label reverse mapping (`rampart-map.ts`) is the only current consumer of the Rampart label set.
+
 ## Summary
 
 This phase completes the Obiter Redact module. It turns the Phase 1-2 detection and review pipeline into a production-ready capability by adding real document format support (DOCX text extraction via `mammoth`), formal audit report export, synthetic training data generation for Rampart fine-tuning, a dataset export tool for the human-in-the-loop improvement loop, a prepared demo for firm evaluations, and full end-to-end testing.
 
 Redact Phase 1 established the detection pipeline powered by Rampart (14.7 MB ONNX token-classification model via Transformers.js) and a UK supplement for legal-specific PII patterns. Phase 2 added the review UI, span decision persistence, and redacted/pseudonymised output generation. This phase makes the product demonstrable to firms, producible for audit, and extensible through fine-tuning.
+
+> **Status correction:** "the detection pipeline powered by Rampart" overstates the shipped state. Detection today runs the UK supplement only (deterministic patterns); the Rampart model is not wired in. See the implementation-status banner above and on PRD 1.
 
 See the detailed implementation at [docs/specs/redact/build-plan.md](../specs/redact/build-plan.md), the [manual demo walkthrough](../specs/redact/demo.md), and [fine-tuning preparation](../specs/redact/fine-tuning.md). Cross-reference siblings: [Redact PRD 1: Detection Pipeline](redact-1-detection.md), [Redact PRD 2: Review and Output](redact-2-review-output.md).
 

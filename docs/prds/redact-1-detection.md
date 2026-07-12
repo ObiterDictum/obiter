@@ -1,10 +1,20 @@
 # Redact PRD 1: Detection Pipeline Foundation
 
+> ## Implementation status (verified against the codebase, July 2026)
+>
+> **The Rampart model integration described in this PRD is NOT YET IMPLEMENTED.** This document remains the design for the model-integration track; it is retained on purpose so that work can proceed from a settled design rather than rediscovery.
+>
+> What detection actually does today is **deterministic UK patterns only**, in `packages/redaction-policy/src/supplement.ts`, called directly from `services/api/src/routes/redact.ts` via `supplementSpans(text)`. There is no `@nationaldesignstudio/rampart` dependency, no `services/api/src/redaction-detection.ts` module, no ONNX model load, and no model inference at run-creation time. The sections below that describe the Rampart pipeline (guard lifecycle, label mapping, chunking against a 512-token limit, the Effect TS pilot, F1–F8, F22, F30, F31) describe the **planned** integration, not the shipped implementation.
+>
+> Shipped detection covers: national insurance numbers, case references, organisation names, emails, UK phone numbers, UK postcodes, GB IBANs, and context-gated sort codes / account numbers. Names, addresses, dates of birth, and all context-dependent detection remain model-track work — regexes cannot do these. `rampart-map.ts` exists and is exercised by tests, but nothing produces Rampart spans at detection time today; it is consumed only by the PRD-3 dataset-export tool's reverse mapping.
+
 ## Summary
 
 Redact is Obiter's confidentiality and privacy layer. It detects personally identifiable information (PII) and secrets in matter documents, applies legal-specific redaction policy, supports pseudonymisation, and produces audited outputs with human review checkpoints.
 
 This phase builds the detection pipeline end-to-end: Rampart (14.7 MB ONNX token-classification model, 18.5M params, CC BY 4.0) running in-process in the Hono API via Transformers.js, the database schema for redaction runs, a TypeScript UK supplement for legal-specific patterns, a span merging engine, and the API skeleton for run creation and lifecycle. After Phase 1, a user can upload a document, trigger a redaction run, and see detected spans ready for review.
+
+> **Status:** the Rampart model portion of this summary is the design intent, not the shipped state — see the implementation-status banner above. What shipped from this phase is the database schema, the UK supplement (deterministic patterns), the merge/chunk engine, and the run-creation API. The model integration is the outstanding track.
 
 Follow-on work is defined in sibling PRDs:
 - [Redact PRD 2: Review and Output](redact-2-review-output.md): span review UI, decision submission, pseudonymisation, output generation, finalization.
@@ -127,6 +137,8 @@ Phase 1 delivers the detection pipeline and API skeleton. Everything needed to g
 
 ## Detection Architecture
 
+> **Status:** this section describes the planned Rampart pipeline. At runtime today only layer 3 (the UK supplement) runs, called directly from the route handler. Layers 1 and 2 (the Rampart deterministic recognizer and the token-classification model) do not exist in the codebase yet.
+
 ### Three-Layer Detection Strategy
 
 Redact uses three detection layers in sequence:
@@ -170,13 +182,21 @@ The mandated pre-implementation spike was executed against `@nationaldesignstudi
 
 ### UK Supplement Patterns
 
-The UK supplement catches patterns Rampart does not cover:
+The UK supplement catches patterns Rampart does not cover. These are the **currently shipped** detection surface (the model integration is the outstanding track — see the implementation-status banner):
 
-| Obiter Category | Pattern | Example |
-|---|---|---|
-| `national_insurance` | `[A-Z]{2}\d{6}[A-Z]` (with/without spaces) | QQ123456C |
-| `case_reference` | Flexible pattern for firm-specific reference formats | `2024/ABC/123`, `CR-2024-00123` |
-| `organisation_name` | Suffix-based: LLP, Ltd, plc, Solicitors, Chambers | Smith & Jones Solicitors LLP |
+| Obiter Category | Pattern | Anchoring / gating | Example |
+|---|---|---|---|
+| `national_insurance` | `[A-Z]{2}\d{6}[A-Z]` (with/without spaces) | word-bounded | QQ 12 34 56 C |
+| `case_reference` | firm-specific reference formats | word-bounded | `2024/ABC/123`, `CR-2024-00123` |
+| `organisation_name` | suffix-based: LLP, Ltd, plc, Solicitors, Chambers | suffix-required | Smith & Jones Solicitors LLP |
+| `email` | standard address pattern | word-bounded, TLD required | jane.smith@example.com |
+| `phone` | UK `+44` and `0`-prefixed, mobile and geographic | digit-bounded lookarounds (no dates/citations/figures) | `+44 20 7946 0958`, `07700 900482` |
+| `address` (postcode) | UK postcode outward/inward code | word-bounded; too specific to collide with prose | LE4 5AB, SW1A 1AA |
+| `account_number` (GB IBAN) | `GB` + check digits + bank code + 14 digits | well-specified, matched bare | GB29 NWBK 6016 1331 9268 19 |
+| `account_number` (sort code) | `xx-xx-xx` / `xx xx xx` | **context-gated** on "sort code" cue only | 12-34-56 |
+| `account_number` (account no.) | 8 digits | **context-gated** on "account number" / "a/c" cue only | 12345678 |
+
+Precision is weighted over recall: a false positive erodes reviewer trust more than a miss. The bare-digit bank patterns are deliberately gated — without a nearby cue, a 6- or 8-digit run is too ambiguous in legal text (dates, page numbers, damages figures). Confidence levels: email/postcode/IBAN and NI are `high`; phone and context-gated bank details are `medium`; organisation names are `low`.
 
 ### Span Merging Rules
 
