@@ -11,7 +11,7 @@
 ## M3 — production readiness
 
 - DOCX/TXT multipart upload extracts server-side text and records a ready or failed document status.
-- Versioned audit export is available at `GET /api/redaction-runs/:runId/audit` (JSON, HTML and Markdown).
+- Versioned audit export is generated on read at `GET /api/redaction-runs/:runId/audit` (JSON, HTML and Markdown). Persisting `redaction_report` artifacts is deferred to a tracked follow-up.
 - Synthetic UK legal training data, a reviewed-run JSONL exporter, demo fixture and walkthrough are checked in.
 - Fine-tuning preparation is documented in `fine-tuning.md`.
 

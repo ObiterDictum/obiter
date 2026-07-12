@@ -13,8 +13,6 @@
     "national_insurance",
     "case_reference",
     "passport",
-    "drivers_license",
-    "government_id",
-    "ip_address"
+    "organisation_name"
   ]
 }

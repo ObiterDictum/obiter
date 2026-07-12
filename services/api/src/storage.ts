@@ -10,7 +10,11 @@ export interface StorageService {
 }
 
 function storagePath(root: string, objectKey: string) {
-  if (!/^org\/[^/]+\/(?:matters\/[^/]+\/(?:documents\/[^/]+\/versions\/[^/]+\/text|artifacts\/[^/]+)|redaction-runs\/[^/]+\/source|artifacts\/[^/]+)$/.test(objectKey)) {
+  if (
+    !/^org\/[^/]+\/(?:matters\/[^/]+\/(?:documents\/[^/]+\/versions\/[^/]+\/(?:source|text)|artifacts\/[^/]+)|redaction-runs\/[^/]+\/source|artifacts\/[^/]+)$/.test(
+      objectKey,
+    )
+  ) {
     throw new Error('Invalid storage object key.')
   }
 
@@ -22,7 +26,9 @@ function storagePath(root: string, objectKey: string) {
   return path
 }
 
-export function createLocalStorage(root = process.env.OBITER_STORAGE_ROOT ?? '.obiter-storage'): StorageService {
+export function createLocalStorage(
+  root = process.env.OBITER_STORAGE_ROOT ?? '.obiter-storage',
+): StorageService {
   return {
     async readText(objectKey) {
       return readFile(storagePath(root, objectKey), 'utf8')

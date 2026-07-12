@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { Hono } from 'hono'
 import type { Context } from 'hono'
 import type { Pool } from 'pg'
@@ -11,7 +12,7 @@ import {
   listDocuments,
   softDeleteDocument,
 } from '../database'
-import { extractDocumentText, normaliseFileType } from '../document-extraction'
+import { DocumentExtractionError, extractDocumentText, normaliseFileType } from '../document-extraction'
 import type { StorageService } from '../storage'
 
 interface RouteUser {
@@ -31,7 +32,12 @@ interface RouteVariables {
 
 type RouteContext = Context<{ Variables: RouteVariables }>
 
-function errorResponse(c: RouteContext, code: ApiErrorCode, message: string, status: 400 | 401 | 403 | 404) {
+function errorResponse(
+  c: RouteContext,
+  code: ApiErrorCode,
+  message: string,
+  status: 400 | 401 | 403 | 404,
+) {
   const body: ApiErrorResponse = {
     error: { code, message, requestId: c.get('requestId') },
   }
@@ -44,7 +50,12 @@ function requireUser(c: RouteContext): AuthenticatedRouteUser | Response {
     return errorResponse(c, 'unauthenticated', 'Sign in is required.', 401)
   }
   if (!user.organisationId) {
-    return errorResponse(c, 'no_organisation', 'Create an organisation to use this area.', 403)
+    return errorResponse(
+      c,
+      'no_organisation',
+      'Create an organisation to use this area.',
+      403,
+    )
   }
   return { id: user.id, organisationId: user.organisationId }
 }
@@ -60,7 +71,20 @@ function requiredString(value: unknown): string | null {
 }
 
 function requiredInteger(value: unknown): number | null {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 ? value : null
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
+    ? value
+    : null
+}
+
+/** Bounds buffering and mammoth/ZIP parse work for authenticated uploads. */
+export const MAX_DOCUMENT_UPLOAD_BYTES = 25 * 1024 * 1024
+
+function uploadType(filename: string, contents: Buffer): 'docx' | 'txt' | null {
+  const extension = filename.toLowerCase().split('.').pop()
+  const isZip = contents.subarray(0, 2).equals(Buffer.from('PK'))
+  if (extension === 'docx' && isZip) return 'docx'
+  if (extension === 'txt' && !isZip) return 'txt'
+  return null
 }
 
 export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
@@ -70,54 +94,104 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
     const user = requireUser(c)
     if (user instanceof Response) return user
 
-    const matter = await getMatter(pool, user.organisationId, c.req.param('matterId'))
+    const matter = await getMatter(
+      pool,
+      user.organisationId,
+      c.req.param('matterId'),
+    )
     if (!matter) {
       return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
     }
 
-    const isMultipart = c.req.header('content-type')?.toLowerCase().startsWith('multipart/form-data') ?? false
+    const isMultipart =
+      c.req
+        .header('content-type')
+        ?.toLowerCase()
+        .startsWith('multipart/form-data') ?? false
     const form = isMultipart ? await c.req.formData().catch(() => null) : null
     const body = form ? null : asRecord(await c.req.json().catch(() => null))
     const upload = form?.get('file')
     const file = upload instanceof File ? upload : null
-    const filename = file?.name || requiredString(form?.get('filename')) || requiredString(body?.filename)
-    const fileType = requiredString(form?.get('fileType')) || requiredString(body?.fileType) || file?.type || null
-    const contentSha256 = requiredString(form?.get('contentSha256')) || requiredString(body?.contentSha256)
-    const sizeBytes = file?.size ?? requiredInteger(form?.get('sizeBytes')) ?? requiredInteger(body?.sizeBytes)
+    const filename =
+      file?.name ||
+      requiredString(form?.get('filename')) ||
+      requiredString(body?.filename)
+    const fileType =
+      requiredString(form?.get('fileType')) ||
+      requiredString(body?.fileType) ||
+      file?.type ||
+      null
+    const contentSha256 =
+      requiredString(form?.get('contentSha256')) ||
+      requiredString(body?.contentSha256)
+    const sizeBytes =
+      file?.size ??
+      requiredInteger(form?.get('sizeBytes')) ??
+      requiredInteger(body?.sizeBytes)
 
-    if (!filename || !fileType || !contentSha256 || sizeBytes === null) {
-      return errorResponse(c, 'validation_failed', 'Document upload metadata is required.', 400)
+    if (!filename || !fileType || (!file && !contentSha256) || sizeBytes === null) {
+      return errorResponse(
+        c,
+        'validation_failed',
+        'Document upload metadata is required.',
+        400,
+      )
     }
     const supportedType = normaliseFileType(fileType)
-    if (supportedType === 'pdf') return errorResponse(c, 'validation_failed', 'PDF files are not yet supported for redaction. Please upload DOCX or TXT files.', 400)
-    if (file && !supportedType) return errorResponse(c, 'validation_failed', 'Only DOCX and TXT files are supported for redaction.', 400)
-    if (file && !storage?.writeBinary) return errorResponse(c, 'storage_unavailable', 'Document storage is unavailable.', 400)
+    if (supportedType === 'pdf')
+      return errorResponse(
+        c,
+        'validation_failed',
+        'PDF files are not yet supported for redaction. Please upload DOCX or TXT files.',
+        400,
+      )
+    if (file && !supportedType)
+      return errorResponse(
+        c,
+        'validation_failed',
+        'Only DOCX and TXT files are supported for redaction.',
+        400,
+      )
+    if (file && file.size > MAX_DOCUMENT_UPLOAD_BYTES)
+      return errorResponse(c, 'validation_failed', `Document uploads must be at most ${MAX_DOCUMENT_UPLOAD_BYTES / 1024 / 1024} MB.`, 400)
+    if (file && !storage?.writeBinary)
+      return errorResponse(c, 'storage_unavailable', 'Document storage is unavailable.', 400)
+
+    let uploadContents: Buffer | null = null
+    let verifiedType = supportedType
+    let verifiedHash = contentSha256
+    if (file) {
+      uploadContents = Buffer.from(await file.arrayBuffer())
+      verifiedType = uploadType(filename, uploadContents)
+      if (!verifiedType || !supportedType || supportedType !== verifiedType)
+        return errorResponse(c, 'validation_failed', 'The filename, declared type, and file content must agree.', 400)
+      const computedHash = createHash('sha256').update(uploadContents).digest('hex')
+      if (contentSha256 && contentSha256.toLowerCase() !== computedHash)
+        return errorResponse(c, 'validation_failed', 'The supplied content SHA-256 does not match the uploaded file.', 400)
+      verifiedHash = computedHash
+    }
 
     const result = await createDocument(pool, {
-      organisationId: user.organisationId,
-      matterId: matter.id,
-      userId: user.id,
-      filename,
-      fileType: supportedType ?? fileType,
-      sizeBytes,
-      contentSha256,
+      organisationId: user.organisationId, matterId: matter.id, userId: user.id, filename,
+      fileType: verifiedType ?? fileType, sizeBytes: uploadContents?.byteLength ?? sizeBytes,
+      contentSha256: verifiedHash!,
     })
 
-    if (file && supportedType && storage?.writeBinary) {
-      const contents = Buffer.from(await file.arrayBuffer())
+    if (uploadContents && verifiedType && storage?.writeBinary) {
+      const textObjectKey = result.version.objectKey.replace(/\/source$/, '/text')
       try {
-        await storage.writeBinary(result.version.objectKey, contents)
-        const text = await extractDocumentText(supportedType, contents)
-        await storage.writeText(result.version.objectKey.replace(/\/source$/, '/text'), text)
-        const version = await updateDocumentExtraction(pool, {
-          organisationId: user.organisationId,
-          versionId: result.version.id,
-          textObjectKey: result.version.objectKey.replace(/\/source$/, '/text'),
-        })
+        await storage.writeBinary(result.version.objectKey, uploadContents)
+      } catch {
+        return errorResponse(c, 'storage_unavailable', 'Document storage is unavailable.', 400)
+      }
+      try {
+        const text = await extractDocumentText(verifiedType, uploadContents)
+        await storage.writeText(textObjectKey, text)
+        const version = await updateDocumentExtraction(pool, { organisationId: user.organisationId, versionId: result.version.id, textObjectKey })
         if (version) result.version = version
       } catch (error) {
-        const message = error instanceof Error ? error.message : 'Document text extraction failed.'
-        const version = await updateDocumentExtraction(pool, { organisationId: user.organisationId, versionId: result.version.id, failureReason: message })
+        if (!(error instanceof DocumentExtractionError)) return errorResponse(c, 'storage_unavailable', 'Document storage is unavailable.', 400)
+        const version = await updateDocumentExtraction(pool, { organisationId: user.organisationId, versionId: result.version.id, failureReason: error.message })
         if (version) result.version = version
       }
     }
@@ -147,14 +221,24 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
     const user = requireUser(c)
     if (user instanceof Response) return user
 
-    const matter = await getMatter(pool, user.organisationId, c.req.param('matterId'))
+    const matter = await getMatter(
+      pool,
+      user.organisationId,
+      c.req.param('matterId'),
+    )
     if (!matter) {
       return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
     }
 
-    const documents = await listDocuments(pool, user.organisationId, matter.id, {
-      includeDeleted: c.req.queries('includeDeleted')?.includes('true') ?? false,
-    })
+    const documents = await listDocuments(
+      pool,
+      user.organisationId,
+      matter.id,
+      {
+        includeDeleted:
+          c.req.queries('includeDeleted')?.includes('true') ?? false,
+      },
+    )
     return c.json({ documents })
   })
 
@@ -162,9 +246,15 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
     const user = requireUser(c)
     if (user instanceof Response) return user
 
-    const result = await getDocument(pool, user.organisationId, c.req.param('id'), {
-      includeDeleted: c.req.queries('includeDeleted')?.includes('true') ?? false,
-    })
+    const result = await getDocument(
+      pool,
+      user.organisationId,
+      c.req.param('id'),
+      {
+        includeDeleted:
+          c.req.queries('includeDeleted')?.includes('true') ?? false,
+      },
+    )
     if (!result) {
       return errorResponse(c, 'document_not_found', 'Document not found.', 404)
     }
@@ -175,7 +265,11 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
     const user = requireUser(c)
     if (user instanceof Response) return user
 
-    const document = await softDeleteDocument(pool, user.organisationId, c.req.param('id'))
+    const document = await softDeleteDocument(
+      pool,
+      user.organisationId,
+      c.req.param('id'),
+    )
     if (!document) {
       return errorResponse(c, 'document_not_found', 'Document not found.', 404)
     }
