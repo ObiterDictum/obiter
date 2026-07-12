@@ -6,6 +6,7 @@
     "build": "vite build",
     "dev": "vite dev --port 3000",
     "preview": "vite preview",
+    "start": "node serve.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
