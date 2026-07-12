@@ -1,0 +1,1 @@
+{"name":"@obiter/rampart-inference","private":true,"version":"0.1.3-vendored","type":"module","exports":{".":"./src/index.ts"},"scripts":{"typecheck":"tsc --noEmit -p tsconfig.json","test":"vitest run --passWithNoTests"},"dependencies":{"@huggingface/transformers":"^3.8.1"}}

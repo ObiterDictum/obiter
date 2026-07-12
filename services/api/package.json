@@ -22,7 +22,8 @@
     "pg": "^8.20.0",
     "resend": "^4.0.1",
     "tsx": "^4.23.0",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "@obiter/rampart-inference": "workspace:*"
   },
   "devDependencies": {
     "@types/pg": "^8.20.0"

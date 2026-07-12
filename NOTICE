@@ -1,0 +1,1 @@
+Obiter vendors server inference code derived from @nationaldesignstudio/rampart@0.1.3 (CC-BY-4.0; npm tarball shasum 9d95f9efb5920ddeb883fdb591b2fd3abb562ab6) and mirrors the Rampart model at qarlus/rampart. See packages/rampart-inference/README.md and LICENSE.

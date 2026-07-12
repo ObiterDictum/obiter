@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Pool } from 'pg'
 import { createApiApp } from './app'
-import { createAuth } from './auth'
+import type { createAuth } from './auth'
 import type { ApiEnv } from './env'
 
 const searchClientMock = vi.hoisted(() => ({
@@ -10,6 +10,13 @@ const searchClientMock = vi.hoisted(() => ({
 }))
 
 vi.mock('@obiter/search-client', () => searchClientMock)
+vi.mock('./redaction-detection', () => ({
+  detectRedactionSpans: async (text: string) => ({
+    spans: [],
+    detectorVersion: 'rampart-inference@0.1.3-vendored;mode=model+supplement',
+    degraded: false,
+  }),
+}))
 
 type Auth = ReturnType<typeof createAuth>
 type QueryMock = (...args: unknown[]) => Promise<unknown>

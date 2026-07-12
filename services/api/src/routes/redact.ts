@@ -3,7 +3,8 @@ import type { Context } from 'hono'
 import type { Pool } from 'pg'
 import { outputModeSchema, redactionPolicyModeSchema, spanDecisionSchema } from '@obiter/contracts'
 import type { ApiErrorCode, ApiErrorResponse } from '@obiter/contracts'
-import { applyPseudonymised, applyRedacted, createTokenMap, RedactionSpanIntegrityError, supplementSpans } from '@obiter/redaction-policy'
+import { applyPseudonymised, applyRedacted, createTokenMap, RedactionSpanIntegrityError } from '@obiter/redaction-policy'
+import { detectRedactionSpans } from '../redaction-detection'
 import { appendAuditLog } from '../database'
 import {
   createRedactionRun,
@@ -76,9 +77,10 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
     await storage.writeText(sourceTextObjectKey, input.text)
     let run
     try {
+      const detection = await detectRedactionSpans(input.text)
       run = await createRedactionRun({
         pool, id, organisationId: user.organisationId, userId: user.id, sourceFilename: input.filename,
-        sourceTextObjectKey, spans: supplementSpans(input.text), policyMode: input.policyMode.data,
+        sourceTextObjectKey, spans: detection.spans, detectorVersion: detection.detectorVersion, policyMode: input.policyMode.data,
       })
     } catch (error) {
       await storage.delete(sourceTextObjectKey)
@@ -101,9 +103,10 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
     if (!source) return errorResponse(c, 'document_not_found', 'Document not found.', 404)
     if (!source.text_object_key) return errorResponse(c, 'document_version_not_found', 'Document text is not available for redaction.', 404)
     const text = await storage.readText(source.text_object_key)
+    const detection = await detectRedactionSpans(text)
     const run = await createRedactionRun({
       pool, id: `red_${crypto.randomUUID()}`, organisationId: user.organisationId, userId: user.id,
-      sourceFilename: source.filename, sourceTextObjectKey: null, spans: supplementSpans(text), policyMode: policyMode.data,
+      sourceFilename: source.filename, sourceTextObjectKey: null, spans: detection.spans, detectorVersion: detection.detectorVersion, policyMode: policyMode.data,
       matterId: source.matter_id, documentId: c.req.param('documentId'), documentVersionId: source.version_id,
     })
     await appendAuditLog(pool, {

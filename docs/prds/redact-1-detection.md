@@ -2,11 +2,9 @@
 
 > ## Implementation status (verified against the codebase, July 2026)
 >
-> **The Rampart model integration described in this PRD is NOT YET IMPLEMENTED.** This document remains the design for the model-integration track; it is retained on purpose so that work can proceed from a settled design rather than rediscovery.
+> **Implementation status (July 2026): Rampart inference now ships server-side.** `services/api/src/redaction-detection.ts` runs the vendored `@obiter/rampart-inference` adapter against Obiter's `qarlus/rampart` mirror at a pinned revision, then maps and merges Rampart deterministic/model spans with the UK supplement. Model failures deliberately complete supplement-only and record that degraded detector version; desktop-local inference remains future work.
 >
-> What detection actually does today is **deterministic UK patterns only**, in `packages/redaction-policy/src/supplement.ts`, called directly from `services/api/src/routes/redact.ts` via `supplementSpans(text)`. There is no `@nationaldesignstudio/rampart` dependency, no `services/api/src/redaction-detection.ts` module, no ONNX model load, and no model inference at run-creation time. The sections below that describe the Rampart pipeline (guard lifecycle, label mapping, chunking against a 512-token limit, the Effect TS pilot, F1–F8, F22, F30, F31) describe the **planned** integration, not the shipped implementation.
->
-> Shipped detection covers: national insurance numbers, case references, organisation names, emails, UK phone numbers, UK postcodes, GB IBANs, and context-gated sort codes / account numbers. Names, addresses, dates of birth, and all context-dependent detection remain model-track work — regexes cannot do these. `rampart-map.ts` exists and is exercised by unit tests, but nothing produces Rampart spans at detection time today; its only consumer is the inbound `mapRampartSpans` map (plus those tests). The PRD-3 dataset-export tool carries its own reverse mapping inline and does not import `rampart-map.ts`.
+> The proposed Effect TS pilot was **never implemented** and `effect` was never installed. The detector ships as plain TypeScript, consistent with the rest of the API. Any future Effect evaluation requires a separate decision.
 
 ## Summary
 
@@ -17,6 +15,7 @@ This phase builds the detection pipeline end-to-end: Rampart (14.7 MB ONNX token
 > **Status:** the Rampart model portion of this summary is the design intent, not the shipped state — see the implementation-status banner above. What shipped from this phase is the database schema, the UK supplement (deterministic patterns), the merge/chunk engine, and the run-creation API. The model integration is the outstanding track.
 
 Follow-on work is defined in sibling PRDs:
+
 - [Redact PRD 2: Review and Output](redact-2-review-output.md): span review UI, decision submission, pseudonymisation, output generation, finalization.
 - [Redact PRD 3: Production Readiness](redact-3-production.md): DOCX extraction, audit report export, demo fixture, end-to-end testing, edge case handling.
 
@@ -154,7 +153,7 @@ Redact uses three detection layers in sequence:
 Rampart outputs BIO token tags for 17 entity types. These are decoded into contiguous character spans and mapped to Obiter's category set:
 
 | Rampart Label | Obiter Category | Source |
-|---|---|---|
+| --- | --- | --- |
 | `GIVEN_NAME` + `SURNAME` | `person_name` | `rampart_model` |
 | `PHONE` | `phone` | `rampart_model` |
 | `PASSPORT` | `passport` | `rampart_model` |
@@ -185,11 +184,11 @@ The mandated pre-implementation spike was executed against `@nationaldesignstudi
 The UK supplement catches patterns Rampart does not cover. These are the **currently shipped** detection surface (the model integration is the outstanding track — see the implementation-status banner):
 
 | Obiter Category | Pattern | Anchoring / gating | Example |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `national_insurance` | `[A-Z]{2}\d{6}[A-Z]` (with/without spaces) | word-bounded | QQ 12 34 56 C |
 | `case_reference` | firm-specific reference formats | word-bounded | `2024/ABC/123`, `CR-2024-00123` |
 | `organisation_name` | suffix-based: LLP, Ltd, plc, Solicitors, Chambers | suffix-required | Smith & Jones Solicitors LLP |
-| `email` | standard address pattern | word-bounded, TLD required | jane.smith@example.com |
+| `email` | standard address pattern | word-bounded, TLD required | <jane.smith@example.com> |
 | `phone` | UK `+44` and `0`-prefixed, mobile and geographic | digit-bounded lookarounds (no dates/citations/figures) | `+44 20 7946 0958`, `07700 900482` |
 | `address` (postcode) | UK postcode outward/inward code | word-bounded; too specific to collide with prose | LE4 5AB, SW1A 1AA |
 | `account_number` (GB IBAN) | `GB` + check digits + bank code + 14 digits | well-specified, matched bare | GB29 NWBK 6016 1331 9268 19 |
@@ -221,7 +220,9 @@ Rampart has a 512-token max sequence length. Documents exceeding this must be ch
 
 The Rampart guard is loaded once and cached as a module-level singleton in `services/api/src/redaction-detection.ts`. First request loads the model (14.7 MB, downloads from HuggingFace if not cached on disk, then initializes the ONNX Runtime). Subsequent requests reuse the cached guard. No health check endpoint is needed since detection runs in-process. No Docker container, no separate service.
 
-### Effect TS Pilot (contained to the detection module)
+### Effect TS pilot (not implemented)
+
+> **Superseded:** the proposed pilot never happened. The shipped detector is plain TypeScript and no module imports `effect`. A future evaluation must have its own explicit decision.
 
 The detection module is a deliberate, contained pilot of Effect TS (`effect` npm package), decided July 2026. Rationale: the module is greenfield, isolated, and Effect-shaped — a typed failure channel (model load vs inference vs timeout), resource lifecycle around the model guard, and retry/timeout policy — making it the cheapest place to gather real evidence on whether agent-written Effect meets the project's maintainability bar, instead of settling the question by assertion.
 
@@ -248,6 +249,7 @@ pending -> detecting -> failed (detection error or model load failure)
 ```
 
 Status transitions:
+
 - `pending`: Run record created in database. No detection started.
 - `detecting`: API has called `guard.protect(text)` and is awaiting response. Set before the call, not after.
 - `ready_for_review`: Rampart returned spans. UK supplement ran. Merging complete. Spans stored in `spans_json`. Run ready for human review.
@@ -416,7 +418,7 @@ Phase 1 is complete when all of the following are true:
 ## Metrics
 
 | Metric | Target | How Measured |
-|---|---|---|
+| --- | --- | --- |
 | Rampart inference latency (per chunk) | < 50 ms | Detection module logs: `inference_time_ms` |
 | Detection latency (per 10K chars) | < 2 seconds | API request duration excluding DB writes |
 | Model cold-start load time | < 5 seconds | Time from first `createGuard()` call to guard ready |
@@ -430,7 +432,7 @@ Phase 1 is complete when all of the following are true:
 ## Risks
 
 | Risk | Likelihood | Impact | Mitigation |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Rampart model produces high false-positive rate on legal text (e.g. flags "Smith" as person when it is part of a case citation) | Medium | Low-Medium | Token-level context window and bidirectional understanding are designed to reduce this. False positives are visible as spans that reviewers can reject. Fine-tuning (post-MVP) will improve accuracy for legal text. |
 | First request after API restart is slow (model download + initialization) | High | Low | 14.7 MB downloads in 1-2 seconds. Warm the guard on API startup. Document the behaviour. |
 | Chunking edge cases (spans split across chunk boundaries) | Medium | Medium | Overlap chunks by 50 tokens on each side. Deduplicate spans in overlap region. Test with documents at chunk boundaries. |
