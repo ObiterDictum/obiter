@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
-import { createMemoryHistory, createRootRoute, createRoute, createRouter, RouterProvider } from '@tanstack/react-router'
+import {
+  createMemoryHistory,
+  createRootRoute,
+  createRoute,
+  createRouter,
+  RouterProvider,
+} from '@tanstack/react-router'
 import { DocumentDetailLayoutView } from './views/document-detail'
 import type { DocumentDetailResponse } from './documents'
 
@@ -32,7 +38,8 @@ function sampleDocumentDetail(matterId: string): DocumentDetailResponse {
         filename: 'brief.pdf',
         fileType: 'application/pdf',
         sizeBytes: '1024',
-        objectKey: 'org/org_1/matters/mtr_1/documents/doc_1/versions/ver_1/source',
+        objectKey:
+          'org/org_1/matters/mtr_1/documents/doc_1/versions/ver_1/source',
         textObjectKey: null,
         documentStatus: 'ready',
         failureReason: null,
@@ -85,7 +92,9 @@ afterEach(() => {
 
 describe('DocumentDetailLayoutView — matter mismatch', () => {
   it('renders the document details region when the document belongs to the URL matter', async () => {
-    docs.useDocument.mockReturnValue(successQuery(sampleDocumentDetail('mtr_1')))
+    docs.useDocument.mockReturnValue(
+      successQuery(sampleDocumentDetail('mtr_1')),
+    )
     render(<RouterProvider router={buildRouter('mtr_1', 'doc_1')} />)
     await waitFor(() => {
       expect(screen.getByText('Document details')).toBeTruthy()
@@ -93,8 +102,12 @@ describe('DocumentDetailLayoutView — matter mismatch', () => {
   })
 
   it('renders a mismatch notice instead of the metadata when the document belongs to a different matter', async () => {
-    docs.useDocument.mockReturnValue(successQuery(sampleDocumentDetail('mtr_real')))
-    const { container } = render(<RouterProvider router={buildRouter('mtr_wrong', 'doc_1')} />)
+    docs.useDocument.mockReturnValue(
+      successQuery(sampleDocumentDetail('mtr_real')),
+    )
+    const { container } = render(
+      <RouterProvider router={buildRouter('mtr_wrong', 'doc_1')} />,
+    )
 
     await waitFor(() => {
       expect(
@@ -102,7 +115,9 @@ describe('DocumentDetailLayoutView — matter mismatch', () => {
       ).toBeTruthy()
     })
     // The metadata region must not render under the wrong matter.
-    expect(container.querySelector('h2')?.textContent).not.toBe('Document details')
+    expect(container.querySelector('h2')?.textContent).not.toBe(
+      'Document details',
+    )
     expect(screen.queryByText('Document details')).toBeNull()
   })
 
@@ -116,7 +131,9 @@ describe('DocumentDetailLayoutView — matter mismatch', () => {
 
   it('renders a loading skeleton while pending', async () => {
     docs.useDocument.mockReturnValue(loadingQuery())
-    const { container } = render(<RouterProvider router={buildRouter('mtr_1', 'doc_1')} />)
+    const { container } = render(
+      <RouterProvider router={buildRouter('mtr_1', 'doc_1')} />,
+    )
     await waitFor(() => {
       expect(container.querySelector('[aria-busy="true"]')).toBeTruthy()
     })

@@ -14,7 +14,9 @@ function readThemeAttribute(): AppTheme {
   if (typeof document === 'undefined') {
     return 'light'
   }
-  return document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light'
+  return document.documentElement.getAttribute('data-theme') === 'dark'
+    ? 'dark'
+    : 'light'
 }
 
 const subscribe = (callback: () => void) => {

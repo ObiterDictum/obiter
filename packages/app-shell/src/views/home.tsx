@@ -1,5 +1,12 @@
 import { Link, useNavigate } from '@tanstack/react-router'
-import { ArrowRight, Clock, Folders, MagnifyingGlass, Sparkle, X } from '@phosphor-icons/react'
+import {
+  ArrowRight,
+  Clock,
+  Folders,
+  MagnifyingGlass,
+  Sparkle,
+  X,
+} from '@phosphor-icons/react'
 import { Button, Card, Input, Skeleton } from '@obiter/ui'
 import type { AppPlatform } from '@obiter/contracts'
 import { useState, type FormEvent } from 'react'
@@ -17,14 +24,23 @@ import { useCreateOrganisation, useCurrentUser } from '../current-user'
  * driven by real data (the signed-in user's actual matters). No invented
  * widgets: every value shown comes from a real endpoint. No fixture snapshot.
  */
-export function HomeRouteView({ platform: _platform }: { platform: AppPlatform }) {
+export function HomeRouteView({
+  platform: _platform,
+}: {
+  platform: AppPlatform
+}) {
   const { data: me } = useCurrentUser()
 
   if (!me.organisation) {
     return <CreateOrganisationState name={me.user.name} />
   }
 
-  return <OrganisationHome organisationName={me.organisation.name} userName={me.user.name} />
+  return (
+    <OrganisationHome
+      organisationName={me.organisation.name}
+      userName={me.user.name}
+    />
+  )
 }
 
 /**
@@ -77,8 +93,8 @@ function CreateOrganisationState({ name }: { name: string }) {
           Welcome to Obiter, {name.split(' ')[0]}
         </h1>
         <p className="text-sm leading-relaxed text-muted">
-          Matters and documents live inside an organisation. Create one to get started.
-          You can rename it later.
+          Matters and documents live inside an organisation. Create one to get
+          started. You can rename it later.
         </p>
       </header>
 
@@ -172,7 +188,11 @@ function OrganisationHome({
           Search legal sources
         </label>
         <div className="flex items-center gap-2 rounded-lg border border-line bg-surface px-3 py-2 transition-colors focus-within:border-brand">
-          <MagnifyingGlass aria-hidden="true" size={18} className="text-subtle" />
+          <MagnifyingGlass
+            aria-hidden="true"
+            size={18}
+            className="text-subtle"
+          />
           <input
             id="home-search"
             className="min-h-[28px] flex-1 bg-transparent text-base text-ink outline-none placeholder:text-subtle"
@@ -194,7 +214,9 @@ function OrganisationHome({
 
       {/* Live surfaces — what you can do today. */}
       <section className="flex flex-col gap-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-subtle">Live today</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-subtle">
+          Live today
+        </h2>
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <SurfaceCard
             to="/search"
@@ -229,8 +251,14 @@ function OrganisationHome({
           is something honest to show: rows on success, a skeleton while pending,
           an error note on failure. A confirmed-empty list hides the section. */}
       {mattersDetail === 'loading' ? (
-        <section className="flex flex-col gap-3" aria-busy="true" aria-label="Loading recent matters">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-subtle">Recent matters</h2>
+        <section
+          className="flex flex-col gap-3"
+          aria-busy="true"
+          aria-label="Loading recent matters"
+        >
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-subtle">
+            Recent matters
+          </h2>
           <div className="flex flex-col gap-2">
             <Skeleton className="h-14 w-full rounded-lg" />
             <Skeleton className="h-14 w-full rounded-lg" />
@@ -238,10 +266,15 @@ function OrganisationHome({
         </section>
       ) : mattersDetail === 'error' ? (
         <section className="flex flex-col gap-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wider text-subtle">Recent matters</h2>
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-subtle">
+            Recent matters
+          </h2>
           <p className="text-sm text-muted">
             Your matters could not be loaded.{' '}
-            <Link to="/matters" className="font-semibold text-brand hover:text-brand-pressed">
+            <Link
+              to="/matters"
+              className="font-semibold text-brand hover:text-brand-pressed"
+            >
               Open Matters
             </Link>{' '}
             to retry.
@@ -270,10 +303,14 @@ function OrganisationHome({
                   className="group flex items-center justify-between gap-3 rounded-lg border border-line bg-surface p-3.5 transition-colors hover:border-line-strong"
                 >
                   <span className="flex min-w-0 flex-col gap-0.5">
-                    <span className="truncate text-sm font-medium text-ink">{matter.name}</span>
+                    <span className="truncate text-sm font-medium text-ink">
+                      {matter.name}
+                    </span>
                     <span className="truncate text-xs text-muted">
                       {matter.clientReference || 'No reference'}
-                      {matter.primaryJurisdiction ? ` · ${matter.primaryJurisdiction}` : ''}
+                      {matter.primaryJurisdiction
+                        ? ` · ${matter.primaryJurisdiction}`
+                        : ''}
                     </span>
                   </span>
                   <ArrowRight
@@ -291,10 +328,12 @@ function OrganisationHome({
 
       {/* What's coming — quiet, honest about planned surfaces. */}
       <section className="flex flex-col gap-2">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-subtle">In progress</h2>
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-subtle">
+          In progress
+        </h2>
         <p className="max-w-prose text-sm leading-relaxed text-muted">
-          Redaction, verification, drafting, research, and deadlines are planned surfaces on the
-          roadmap. The shell is ready for each as it lands.
+          Redaction, verification, drafting, research, and deadlines are planned
+          surfaces on the roadmap. The shell is ready for each as it lands.
         </p>
       </section>
 
@@ -317,7 +356,10 @@ function OrganisationHome({
                 <p className="text-xs font-semibold uppercase tracking-wider text-subtle">
                   Product updates
                 </p>
-                <h2 className="text-lg font-semibold text-ink" id="workspace-changelog-title">
+                <h2
+                  className="text-lg font-semibold text-ink"
+                  id="workspace-changelog-title"
+                >
                   What changed recently
                 </h2>
               </div>
@@ -341,8 +383,12 @@ function OrganisationHome({
                     target="_blank"
                   >
                     <div className="min-w-0">
-                      <strong className="block text-sm font-medium text-ink">{entry.title}</strong>
-                      <p className="mt-1 text-sm text-muted">{entry.date ?? 'Date unavailable'}</p>
+                      <strong className="block text-sm font-medium text-ink">
+                        {entry.title}
+                      </strong>
+                      <p className="mt-1 text-sm text-muted">
+                        {entry.date ?? 'Date unavailable'}
+                      </p>
                     </div>
                     <span className="shrink-0 rounded-pill border border-line bg-canvas px-2 py-1 text-xs font-semibold text-muted">
                       GitHub
@@ -351,7 +397,9 @@ function OrganisationHome({
                 ))}
               </div>
             ) : (
-              <p className="mt-3 text-sm text-muted">GitHub updates are unavailable right now.</p>
+              <p className="mt-3 text-sm text-muted">
+                GitHub updates are unavailable right now.
+              </p>
             )}
           </section>
         </div>

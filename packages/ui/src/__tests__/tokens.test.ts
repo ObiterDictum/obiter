@@ -18,7 +18,7 @@ function extractBlock(source: string, selector: string): string {
   // either quote style so this raw-source assertion survives reformatting.
   // Escape the selector for RegExp, then loosen each `"` into `["']`.
   const re = new RegExp(
-    selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/"/g, "['\"]"),
+    selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/"/g, '[\'"]'),
   )
   let from = 0
   // The selector may also appear in comments; only accept an occurrence that is

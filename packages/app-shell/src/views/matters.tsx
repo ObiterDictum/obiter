@@ -31,7 +31,11 @@ import { useMatterDocuments } from '../documents'
  * and error states use @obiter/ui (Skeleton, EmptyState). Matter creation posts
  * to the real API and appears in the list via cache invalidation.
  */
-export function MattersRouteView({ platform: _platform }: { platform: AppPlatform }) {
+export function MattersRouteView({
+  platform: _platform,
+}: {
+  platform: AppPlatform
+}) {
   const list = useMattersList()
   const data = list.data ?? []
 
@@ -44,10 +48,15 @@ export function MattersRouteView({ platform: _platform }: { platform: AppPlatfor
     <div className="mx-auto flex w-full max-w-[920px] flex-col gap-8">
       <header className="flex items-start justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <p className="text-xs font-semibold uppercase tracking-wider text-subtle">Matters</p>
-          <h1 className="text-3xl font-semibold tracking-tight text-ink">Matters</h1>
+          <p className="text-xs font-semibold uppercase tracking-wider text-subtle">
+            Matters
+          </p>
+          <h1 className="text-3xl font-semibold tracking-tight text-ink">
+            Matters
+          </h1>
           <p className="mt-1 text-sm text-muted">
-            Private workspaces for legal documents, review state, deadlines, and artifacts.
+            Private workspaces for legal documents, review state, deadlines, and
+            artifacts.
           </p>
         </div>
         <CreateMatterDialog />
@@ -76,12 +85,16 @@ export function MattersRouteView({ platform: _platform }: { platform: AppPlatfor
                   </strong>
                   <small className="mt-0.5 block truncate text-xs text-muted">
                     {matter.clientReference || 'No reference'}
-                    {matter.primaryJurisdiction ? ` · ${matter.primaryJurisdiction}` : ''}
+                    {matter.primaryJurisdiction
+                      ? ` · ${matter.primaryJurisdiction}`
+                      : ''}
                   </small>
                 </span>
               </span>
               <span className="flex shrink-0 items-center gap-2">
-                <Badge tone={matter.status === 'active' ? 'success' : 'neutral'}>
+                <Badge
+                  tone={matter.status === 'active' ? 'success' : 'neutral'}
+                >
                   {matter.status}
                 </Badge>
                 <ArrowRight
@@ -108,7 +121,11 @@ export function MattersRouteView({ platform: _platform }: { platform: AppPlatfor
 
 function MattersListSkeleton() {
   return (
-    <section className="flex flex-col gap-2.5" aria-busy="true" aria-label="Loading matters">
+    <section
+      className="flex flex-col gap-2.5"
+      aria-busy="true"
+      aria-label="Loading matters"
+    >
       {[0, 1, 2].map((index) => (
         <div
           key={index}
@@ -128,7 +145,11 @@ function MattersListSkeleton() {
   )
 }
 
-function CreateMatterDialog({ trigger = 'Create matter' }: { trigger?: string }) {
+function CreateMatterDialog({
+  trigger = 'Create matter',
+}: {
+  trigger?: string
+}) {
   const { toast } = useToast()
   const createMatter = useCreateMatter()
   const [name, setName] = useState('')
@@ -189,7 +210,11 @@ function CreateMatterDialog({ trigger = 'Create matter' }: { trigger?: string })
           <DialogCloseButton />
         </div>
 
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
+        <form
+          onSubmit={handleSubmit}
+          className="flex flex-col gap-4"
+          noValidate
+        >
           <Input
             label="Matter name"
             required
@@ -216,7 +241,13 @@ function CreateMatterDialog({ trigger = 'Create matter' }: { trigger?: string })
           {error ? <p className="text-sm text-danger">{error}</p> : null}
 
           <div className="flex items-center justify-end gap-2">
-            <DialogClose render={<Button variant="ghost" type="button">Cancel</Button>} />
+            <DialogClose
+              render={
+                <Button variant="ghost" type="button">
+                  Cancel
+                </Button>
+              }
+            />
             <Button type="submit" loading={createMatter.isPending}>
               Create matter
             </Button>
@@ -245,7 +276,10 @@ export function MatterRouteView({
           title="Matter not found"
           body="This matter does not exist in your organisation, or your session may have expired."
           action={
-            <Link className="font-semibold text-brand hover:text-brand-pressed" to="/matters">
+            <Link
+              className="font-semibold text-brand hover:text-brand-pressed"
+              to="/matters"
+            >
               Return to matters
             </Link>
           }
@@ -278,9 +312,13 @@ export function MatterRouteView({
         <p className="text-xs font-semibold uppercase tracking-wider text-subtle">
           {m.clientReference || 'No reference'}
         </p>
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">{m.name}</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-ink">
+          {m.name}
+        </h1>
         <div className="flex flex-wrap items-center gap-2 pt-1">
-          <Badge tone={m.status === 'active' ? 'success' : 'neutral'}>{m.status}</Badge>
+          <Badge tone={m.status === 'active' ? 'success' : 'neutral'}>
+            {m.status}
+          </Badge>
           <Badge tone="neutral">{m.primaryJurisdiction}</Badge>
         </div>
       </div>
@@ -298,7 +336,10 @@ export function MatterRouteView({
         </div>
 
         {documents.isError ? (
-          <EmptyState title="Couldn’t load documents" body="Check your connection and try again." />
+          <EmptyState
+            title="Couldn’t load documents"
+            body="Check your connection and try again."
+          />
         ) : documents.isLoading ? (
           <div className="flex flex-col gap-2.5" aria-busy="true">
             {[0, 1].map((index) => (
@@ -352,7 +393,8 @@ export function MatterRouteView({
 
 function DocumentStatusBadge({ status }: { status?: string }) {
   if (!status) return null
-  const tone = status === 'ready' ? 'success' : status === 'failed' ? 'danger' : 'info'
+  const tone =
+    status === 'ready' ? 'success' : status === 'failed' ? 'danger' : 'info'
   return <Badge tone={tone}>{status}</Badge>
 }
 

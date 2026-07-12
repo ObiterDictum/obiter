@@ -43,7 +43,9 @@ export function Select({
 }: SelectProps) {
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
-      {label ? <span className="text-sm font-medium text-ink">{label}</span> : null}
+      {label ? (
+        <span className="text-sm font-medium text-ink">{label}</span>
+      ) : null}
       <BaseSelect.Root
         name={name}
         value={value}
@@ -75,10 +77,7 @@ export function Select({
           </BaseSelect.Icon>
         </BaseSelect.Trigger>
         <BaseSelect.Portal>
-          <BaseSelect.Positioner
-            sideOffset={6}
-            className="z-50 outline-none"
-          >
+          <BaseSelect.Positioner sideOffset={6} className="z-50 outline-none">
             <BaseSelect.Popup
               className={cn(
                 'max-h-72 w-[var(--select-anchor-width)] overflow-auto rounded-md border border-line bg-raised p-1 shadow-lg',

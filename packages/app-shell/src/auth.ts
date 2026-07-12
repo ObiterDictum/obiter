@@ -11,7 +11,11 @@ function authBaseURL(): string {
   if (typeof window !== 'undefined') {
     return window.location.origin
   }
-  return process.env.OBITER_API_ORIGIN ?? process.env.BETTER_AUTH_URL ?? 'http://localhost:8787'
+  return (
+    process.env.OBITER_API_ORIGIN ??
+    process.env.BETTER_AUTH_URL ??
+    'http://localhost:8787'
+  )
 }
 
 export const authClient = createAuthClient({
@@ -34,11 +38,17 @@ export interface UseAuthReturn {
   /** Present when better-auth has established a real session. */
   session: AuthSessionPresence | null
   isPending: boolean
-  signInWithEmail: (input: SignInEmailInput) => Promise<{ ok: boolean; message?: string }>
-  signUpWithEmail: (
-    input: SignUpEmailInput,
-  ) => Promise<{ ok: boolean; message?: string; verificationRequired?: boolean }>
-  requestMagicLink: (email: string) => Promise<{ ok: boolean; message?: string }>
+  signInWithEmail: (
+    input: SignInEmailInput,
+  ) => Promise<{ ok: boolean; message?: string }>
+  signUpWithEmail: (input: SignUpEmailInput) => Promise<{
+    ok: boolean
+    message?: string
+    verificationRequired?: boolean
+  }>
+  requestMagicLink: (
+    email: string,
+  ) => Promise<{ ok: boolean; message?: string }>
   requestPasswordReset: (
     email: string,
   ) => Promise<{ ok: boolean; message?: string }>
@@ -107,12 +117,14 @@ export function useAuth(): UseAuthReturn {
   }
 
   async function requestMagicLink(email: string) {
-    const callbackURL = typeof window === 'undefined'
-      ? undefined
-      : `${window.location.origin}/`
+    const callbackURL =
+      typeof window === 'undefined' ? undefined : `${window.location.origin}/`
     const result = await authClient.signIn.magicLink({ email, callbackURL })
     if (result.error) {
-      return { ok: false, message: result.error.message ?? 'Could not send magic link.' }
+      return {
+        ok: false,
+        message: result.error.message ?? 'Could not send magic link.',
+      }
     }
     return { ok: true, message: 'Check your email for a sign-in link.' }
   }
@@ -136,7 +148,10 @@ export function useAuth(): UseAuthReturn {
   async function requestPasswordReset(email: string) {
     const result = await authClient.requestPasswordReset({ email })
     if (result.error) {
-      return { ok: false, message: result.error.message ?? 'Could not send a reset link.' }
+      return {
+        ok: false,
+        message: result.error.message ?? 'Could not send a reset link.',
+      }
     }
     return {
       ok: true,
@@ -154,7 +169,8 @@ export function useAuth(): UseAuthReturn {
       return {
         ok: false,
         message: result.error.message ?? 'Could not reset your password.',
-        code: typeof result.error.code === 'string' ? result.error.code : undefined,
+        code:
+          typeof result.error.code === 'string' ? result.error.code : undefined,
       }
     }
     return { ok: true }

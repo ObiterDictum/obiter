@@ -8,9 +8,11 @@ import { apiFetch } from './api'
  * bytes are ever received or stored).
  */
 
-export type DocumentStatus = 'queued' | 'processing' | 'ready' | 'failed' | 'needs_review'
+export type DocumentStatus =
+  'queued' | 'processing' | 'ready' | 'failed' | 'needs_review'
 
-export type SyncState = 'local_only' | 'queued' | 'syncing' | 'synced' | 'conflict' | 'failed'
+export type SyncState =
+  'local_only' | 'queued' | 'syncing' | 'synced' | 'conflict' | 'failed'
 
 export interface DocumentVersionRecord {
   id: string
@@ -57,8 +59,10 @@ export interface DocumentDetailResponse {
 /** Query key factory for documents. */
 export const documentsKeys = {
   all: ['documents'] as const,
-  byMatter: (matterId: string) => [...documentsKeys.all, 'matter', matterId] as const,
-  detail: (documentId: string) => [...documentsKeys.all, 'detail', documentId] as const,
+  byMatter: (matterId: string) =>
+    [...documentsKeys.all, 'matter', matterId] as const,
+  detail: (documentId: string) =>
+    [...documentsKeys.all, 'detail', documentId] as const,
 }
 
 /** Documents list for a matter (metadata only). */
@@ -78,7 +82,8 @@ export function matterDocumentsQueryOptions(matterId: string) {
 export function documentQueryOptions(documentId: string) {
   return queryOptions({
     queryKey: documentsKeys.detail(documentId),
-    queryFn: async () => apiFetch<DocumentDetailResponse>(`/api/documents/${documentId}`),
+    queryFn: async () =>
+      apiFetch<DocumentDetailResponse>(`/api/documents/${documentId}`),
   })
 }
 

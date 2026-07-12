@@ -15,12 +15,18 @@ export type TokenMap = Record<string, string>
 type OutputSpan = RedactionSpan & { replacement: string }
 
 function affectsOutput(decision: Decisions[string] | undefined) {
-  return decision?.decision === 'accept'
-    || decision?.decision === 'override_redact'
-    || decision?.decision === 'pseudonymise'
+  return (
+    decision?.decision === 'accept' ||
+    decision?.decision === 'override_redact' ||
+    decision?.decision === 'pseudonymise'
+  )
 }
 
-function outputSpans(text: string, spans: RedactionSpan[], decisions: Decisions): RedactionSpan[] {
+function outputSpans(
+  text: string,
+  spans: RedactionSpan[],
+  decisions: Decisions,
+): RedactionSpan[] {
   const affected = spans.filter((span) => affectsOutput(decisions[span.id]))
 
   for (const span of affected) {
@@ -41,19 +47,31 @@ function replace(text: string, spans: OutputSpan[]) {
   return spans
     .sort((left, right) => right.start - left.start || right.end - left.end)
     .reduce(
-      (result, span) => `${result.slice(0, span.start)}${span.replacement}${result.slice(span.end)}`,
+      (result, span) =>
+        `${result.slice(0, span.start)}${span.replacement}${result.slice(span.end)}`,
       text,
     )
 }
 
-export function applyRedacted(text: string, spans: RedactionSpan[], decisions: Decisions): string {
+export function applyRedacted(
+  text: string,
+  spans: RedactionSpan[],
+  decisions: Decisions,
+): string {
   return replace(
     text,
-    outputSpans(text, spans, decisions).map((span) => ({ ...span, replacement: '[REDACTED]' })),
+    outputSpans(text, spans, decisions).map((span) => ({
+      ...span,
+      replacement: '[REDACTED]',
+    })),
   )
 }
 
-export function createTokenMap(text: string, spans: RedactionSpan[], decisions: Decisions): TokenMap {
+export function createTokenMap(
+  text: string,
+  spans: RedactionSpan[],
+  decisions: Decisions,
+): TokenMap {
   const tokens: TokenMap = {}
   const entityTokens = new Map<string, string>()
   const nextByCategory = new Map<string, number>()
@@ -74,7 +92,11 @@ export function createTokenMap(text: string, spans: RedactionSpan[], decisions: 
   return tokens
 }
 
-export function applyPseudonymised(text: string, spans: RedactionSpan[], decisions: Decisions): string {
+export function applyPseudonymised(
+  text: string,
+  spans: RedactionSpan[],
+  decisions: Decisions,
+): string {
   const tokenMap = createTokenMap(text, spans, decisions)
   const tokensByEntity = new Map(
     Object.entries(tokenMap).map(([token, value]) => [
@@ -87,7 +109,8 @@ export function applyPseudonymised(text: string, spans: RedactionSpan[], decisio
     text,
     outputSpans(text, spans, decisions).map((span) => {
       const token = tokensByEntity.get(`${span.category}:${span.text}`)
-      if (!token) throw new Error(`Missing pseudonym token for span ${span.id}.`)
+      if (!token)
+        throw new Error(`Missing pseudonym token for span ${span.id}.`)
       return { ...span, replacement: `[${token}]` }
     }),
   )

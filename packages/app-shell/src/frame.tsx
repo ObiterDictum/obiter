@@ -1,5 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
-import { Link, Navigate, useNavigate, useRouterState } from '@tanstack/react-router'
+import {
+  Link,
+  Navigate,
+  useNavigate,
+  useRouterState,
+} from '@tanstack/react-router'
 import {
   Bookmark,
   CalendarBlank,
@@ -31,7 +36,11 @@ interface NavItem {
   status: 'live' | 'planned'
 }
 
-type PhosphorIcon = (props: { size?: number; weight?: 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone'; 'aria-hidden'?: boolean }) => ReactNode
+type PhosphorIcon = (props: {
+  size?: number
+  weight?: 'thin' | 'light' | 'regular' | 'bold' | 'fill' | 'duotone'
+  'aria-hidden'?: boolean
+}) => ReactNode
 
 const LIVE_NAV: NavItem[] = [
   { label: 'Home', to: '/', icon: House, status: 'live' },
@@ -66,7 +75,9 @@ export function AppShellLayout({
   platform: AppPlatform
 }) {
   const { session, isPending } = useAuth()
-  const currentPath = useRouterState({ select: (state) => state.location.pathname })
+  const currentPath = useRouterState({
+    select: (state) => state.location.pathname,
+  })
   // These routes render bare (no sidebar) and are reachable while signed out.
   const isAuthRoute =
     currentPath === '/sign-in' ||
@@ -82,7 +93,9 @@ export function AppShellLayout({
   } else if (!session) {
     body = <Navigate to="/sign-in" />
   } else {
-    body = <AuthenticatedFrame platform={platform}>{children}</AuthenticatedFrame>
+    body = (
+      <AuthenticatedFrame platform={platform}>{children}</AuthenticatedFrame>
+    )
   }
 
   return (
@@ -109,14 +122,18 @@ function AuthenticatedFrame({
       <Sidebar platform={platform} />
       <div className="flex min-h-0 min-w-0 flex-col">
         <TopBar />
-        <main className="min-h-0 flex-1 overflow-y-auto px-8 py-8">{children}</main>
+        <main className="min-h-0 flex-1 overflow-y-auto px-8 py-8">
+          {children}
+        </main>
       </div>
     </div>
   )
 }
 
 function Sidebar({ platform }: { platform: AppPlatform }) {
-  const currentPath = useRouterState({ select: (state) => state.location.pathname })
+  const currentPath = useRouterState({
+    select: (state) => state.location.pathname,
+  })
   const { data, isLoading } = useQuery(currentUserQueryOptions())
 
   return (
@@ -127,7 +144,11 @@ function Sidebar({ platform }: { platform: AppPlatform }) {
 
       <nav className="flex flex-col gap-0.5" aria-label="Primary">
         {LIVE_NAV.map((item) => (
-          <NavLink key={item.label} item={item} active={isActive(currentPath, item)} />
+          <NavLink
+            key={item.label}
+            item={item}
+            active={isActive(currentPath, item)}
+          />
         ))}
       </nav>
 
@@ -233,7 +254,9 @@ function UserCard({
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-ink">{name}</p>
-          {orgName ? <p className="truncate text-xs text-muted">{orgName}</p> : null}
+          {orgName ? (
+            <p className="truncate text-xs text-muted">{orgName}</p>
+          ) : null}
         </div>
       </div>
       <div className="flex items-center justify-between gap-2">
@@ -244,7 +267,12 @@ function UserCard({
           {platform}
         </span>
       </div>
-      <Button variant="ghost" size="sm" className="justify-start" onClick={handleSignOut}>
+      <Button
+        variant="ghost"
+        size="sm"
+        className="justify-start"
+        onClick={handleSignOut}
+      >
         Sign out
       </Button>
     </div>

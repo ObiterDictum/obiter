@@ -5,7 +5,10 @@ import { Toaster, ToastProvider, useToast } from '../toast'
 function Probe({ timeout }: { timeout?: number }) {
   const { toast } = useToast()
   return (
-    <button type="button" onClick={() => toast({ title: 'Saved', tone: 'success', timeout })}>
+    <button
+      type="button"
+      onClick={() => toast({ title: 'Saved', tone: 'success', timeout })}
+    >
       fire
     </button>
   )
@@ -54,7 +57,9 @@ describe('Toast', () => {
   it('throws when useToast is used outside the provider', () => {
     // Suppress the expected console.error from React's error boundary logging.
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    expect(() => render(<NoProviderConsumer />)).toThrow(/useToast must be used within/)
+    expect(() => render(<NoProviderConsumer />)).toThrow(
+      /useToast must be used within/,
+    )
     spy.mockRestore()
   })
 })

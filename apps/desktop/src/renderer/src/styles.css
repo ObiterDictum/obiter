@@ -13,7 +13,7 @@
  *   `../` segments reach the monorepo root; four would land in apps/ and
  *   silently scan nothing. Keep them in sync if this CSS file moves.
  */
-@import "@obiter/ui/tailwind.css";
+@import '@obiter/ui/tailwind.css';
 
 @source ".";
 @source "../../../../../packages/ui/src";

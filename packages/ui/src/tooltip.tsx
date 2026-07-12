@@ -11,11 +11,15 @@ import { cn } from './lib/cn'
  *     <TooltipContent>Helpful context</TooltipContent>
  *   </Tooltip>
  */
-export function Tooltip(props: ComponentPropsWithoutRef<typeof BaseTooltip.Root>) {
+export function Tooltip(
+  props: ComponentPropsWithoutRef<typeof BaseTooltip.Root>,
+) {
   return <BaseTooltip.Root {...props} />
 }
 
-export function TooltipTrigger(props: ComponentPropsWithoutRef<typeof BaseTooltip.Trigger>) {
+export function TooltipTrigger(
+  props: ComponentPropsWithoutRef<typeof BaseTooltip.Trigger>,
+) {
   return <BaseTooltip.Trigger {...props} />
 }
 

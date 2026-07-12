@@ -12,5 +12,11 @@ export const Route = createFileRoute('/redact/')({
 
 function RedactionRunsRoute() {
   const navigate = useNavigate()
-  return <RedactionRunsView onOpenRun={(runId) => navigate({ to: '/redact/$runId', params: { runId } })} />
+  return (
+    <RedactionRunsView
+      onOpenRun={(runId) =>
+        navigate({ to: '/redact/$runId', params: { runId } })
+      }
+    />
+  )
 }

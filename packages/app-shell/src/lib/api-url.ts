@@ -12,6 +12,8 @@ export function apiUrl(path: string): string {
 
   return new URL(
     path,
-    process.env.OBITER_API_ORIGIN ?? process.env.BETTER_AUTH_URL ?? 'http://localhost:8787',
+    process.env.OBITER_API_ORIGIN ??
+      process.env.BETTER_AUTH_URL ??
+      'http://localhost:8787',
   ).toString()
 }

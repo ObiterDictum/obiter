@@ -18,7 +18,12 @@ const ORGLESS_ME: MeResponse = {
 describe('currentUserQueryOptions', () => {
   it('always resolves the current user through the authenticated API', async () => {
     api.apiFetch.mockResolvedValueOnce({
-      user: { id: 'usr_1', email: 'user@example.test', name: 'User', role: 'owner' },
+      user: {
+        id: 'usr_1',
+        email: 'user@example.test',
+        name: 'User',
+        role: 'owner',
+      },
       organisation: { id: 'org_1', name: 'Organisation', plan: 'private_beta' },
     })
 
@@ -58,7 +63,10 @@ describe('useCreateOrganisation', () => {
     // The cache reflects the created organisation without a refetch.
     await waitFor(() => {
       const cached = client.getQueryData<MeResponse>(['current-user'])
-      expect(cached?.organisation).toMatchObject({ id: 'org_new', name: 'Acme Law' })
+      expect(cached?.organisation).toMatchObject({
+        id: 'org_new',
+        name: 'Acme Law',
+      })
       expect(cached?.user.role).toBe('owner')
     })
   })

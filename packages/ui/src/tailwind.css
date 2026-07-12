@@ -14,8 +14,8 @@
  *   bg-span-person-name  text-span-person-name-fg  ...
  *   rounded-md  shadow-md  font-sans  font-mono
  */
-@import "tailwindcss";
-@import "./tokens.css";
+@import 'tailwindcss';
+@import './tokens.css';
 
 /* Satoshi + JetBrains Mono are loaded via <link> in the app document head
    (a CSS @import url() here would violate the "imports precede rules" rule). */
