@@ -42,9 +42,7 @@ export async function apiFetch<T>(
   input: string,
   init?: RequestInit,
 ): Promise<T> {
-  const desktopToken = readDesktopBridge()
-    ? await getDesktopAuthToken()
-    : null
+  const desktopToken = readDesktopBridge() ? await getDesktopAuthToken() : null
   const response = await fetch(apiUrl(input), {
     credentials: 'include',
     ...init,

@@ -23,7 +23,8 @@ async function loadTokenModule() {
 describe('desktop auth token', () => {
   it('loads the bridge token once and retains it in renderer memory', async () => {
     bridge.getAuthToken.mockResolvedValue('token_123')
-    ;(window as Window & { obiterDesktop?: typeof bridge }).obiterDesktop = bridge
+    ;(window as Window & { obiterDesktop?: typeof bridge }).obiterDesktop =
+      bridge
     const { getDesktopAuthToken } = await loadTokenModule()
 
     await expect(getDesktopAuthToken()).resolves.toBe('token_123')
@@ -35,7 +36,8 @@ describe('desktop auth token', () => {
   it('persists a received token only through the desktop bridge', async () => {
     bridge.getAuthToken.mockResolvedValue(null)
     bridge.setAuthToken.mockResolvedValue(undefined)
-    ;(window as Window & { obiterDesktop?: typeof bridge }).obiterDesktop = bridge
+    ;(window as Window & { obiterDesktop?: typeof bridge }).obiterDesktop =
+      bridge
     const { getDesktopAuthToken, setDesktopAuthToken } = await loadTokenModule()
 
     await setDesktopAuthToken('token_123')
@@ -47,8 +49,10 @@ describe('desktop auth token', () => {
   it('clears renderer memory and main-process persistence', async () => {
     bridge.getAuthToken.mockResolvedValue('token_123')
     bridge.clearAuthToken.mockResolvedValue(undefined)
-    ;(window as Window & { obiterDesktop?: typeof bridge }).obiterDesktop = bridge
-    const { clearDesktopAuthToken, getDesktopAuthToken } = await loadTokenModule()
+    ;(window as Window & { obiterDesktop?: typeof bridge }).obiterDesktop =
+      bridge
+    const { clearDesktopAuthToken, getDesktopAuthToken } =
+      await loadTokenModule()
 
     await getDesktopAuthToken()
     await clearDesktopAuthToken()
