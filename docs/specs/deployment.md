@@ -59,7 +59,9 @@ Artifacts shipped:
 
 **Same-domain routing (Dokploy/Traefik):** deploy the `api` and `web` apps as two Dokploy applications on the same host. Configure the domain with two Traefik rules: `/api/*` → the `api` application (higher priority), `/*` → the `web` application. The web app then calls the API with relative URLs (`apiFetch` already uses `credentials: 'include'`), so better-auth cookie sessions work without third-party-cookie workarounds. This matches the spec's hard requirement above.
 
-**Known follow-up (not in this milestone):** the Satoshi / JetBrains-Mono typefaces currently load from the Fontshare CDN via a `<link>` in `apps/web/src/routes/__root.tsx`. Self-hosting them belongs with a later deployment/CSP hardening pass (an M2 carry-in) — it should land before any production deploy that cares about visitor-IP confidentiality or a strict CSP.
+**Fonts (resolved):** the Satoshi / JetBrains-Mono typefaces are now self-hosted (woff2 vendored in `packages/ui/src/fonts/`, served via `@font-face`) — no Fontshare CDN dependency in web or desktop. See [desktop-release.md](./desktop-release.md) for the packaging and licensing notes.
+
+**Desktop packaging** (installers, the packaged API origin, and the packaged Origin/trust story) is covered in [desktop-release.md](./desktop-release.md).
 
 ### Explicitly deferred
 
