@@ -10,6 +10,7 @@ import {
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { pathToFileURL } from 'node:url'
+import { resolveRendererPath } from './renderer-path'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -38,20 +39,51 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 /**
+ * Resolve the packaged API origin at boot. The value must be a valid absolute
+ * http/https URL: the renderer builds every API/auth URL with
+ * `new URL(path, origin)`, which throws on a malformed origin. Validate here
+ * so a bad operator config falls back to the build default with a clear log
+ * rather than breaking every renderer request with a TypeError.
+ *
+ * Empty/whitespace-only OBITER_API_ORIGIN is treated as absent (an unset env
+ * var must not silently win over the default and degrade the app to relative
+ * paths that have nowhere to go in a packaged build).
+ */
+function resolvePackagedApiOrigin(): string {
+  const raw = (process.env.OBITER_API_ORIGIN ?? '').trim()
+
+  if (raw.length > 0) {
+    try {
+      const parsed = new URL(raw)
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        return raw
+      }
+      console.error(
+        `[obiter] OBITER_API_ORIGIN "${raw}" is not an http/https URL; falling back to the build default.`,
+      )
+    } catch {
+      console.error(
+        `[obiter] OBITER_API_ORIGIN "${raw}" is not a valid URL; falling back to the build default.`,
+      )
+    }
+  }
+
+  return __PACKAGED_API_ORIGIN_DEFAULT__
+}
+
+/**
  * The absolute API origin the packaged renderer talks to, or null in
- * dev-desktop. Owned by the main process: in a packaged app an operator points
- * it at an API by setting OBITER_API_ORIGIN on the launched process (no
- * rebuild); absent that, the build-time default (electron.vite.config.ts
- * define) is used. In dev-desktop the renderer loads from the electron-vite
- * dev server and `/api` is proxied to the API, so the bridge exposes null and
- * apiUrl() keeps using relative paths — exactly the pre-bridge behaviour.
+ * dev-desktop. In a packaged app an operator points it at an API by setting
+ * OBITER_API_ORIGIN on the launched process (no rebuild); absent or invalid,
+ * the validated build-time default (electron.vite.config.ts define) is used.
+ * In dev-desktop the renderer loads from the electron-vite dev server and
+ * `/api` is proxied to the API, so the bridge exposes null and apiUrl() keeps
+ * using relative paths — exactly the pre-bridge behaviour.
  *
  * Read once at boot and exposed to the renderer through the preload bridge as a
  * sync property (apiUrl() and the better-auth client baseURL are both sync).
  */
-const packagedApiOrigin = app.isPackaged
-  ? (process.env.OBITER_API_ORIGIN ?? __PACKAGED_API_ORIGIN_DEFAULT__)
-  : null
+const packagedApiOrigin = app.isPackaged ? resolvePackagedApiOrigin() : null
 
 ipcMain.on('obiter:get-api-origin', (event) => {
   event.returnValue = packagedApiOrigin
@@ -71,36 +103,41 @@ const windowBackground = nativeTheme.shouldUseDarkColors ? '#1a1612' : '#f4efe4'
  * Serve the packaged renderer bundle over the obiter:// scheme. The built
  * index.html and its hashed assets live in ../renderer (relative to the main
  * entry) after electron-vite build; this handler maps obiter://desktop-auth/<p>
- * onto those files. Path traversal is rejected by normalizing and asserting the
- * result stays within the renderer root.
+ * onto those files.
+ *
+ * Containment (traversal rejection) is delegated to resolveRendererPath, the
+ * pure, Electron-free boundary. The handler wraps every step that can throw or
+ * reject so no request surfaces as an unhandled rejection:
+ *   - malformed % sequences in the URL decode → 400
+ *   - traversal or an out-of-root resolve → 403
+ *   - a missing file from net.fetch → 404
  */
 function registerRendererProtocol() {
   const rendererRoot = join(__dirname, '../renderer')
 
-  protocol.handle('obiter', (request) => {
-    const requestUrl = new URL(request.url)
-    // The "host" of an obiter:// URL is the desktop-auth segment; only the
-    // pathname is the file path we serve.
-    let requestPath = decodeURIComponent(requestUrl.pathname)
-
-    // Treat the directory root as the document entry.
-    if (requestPath === '/' || requestPath === '') {
-      requestPath = '/index.html'
+  protocol.handle('obiter', async (request) => {
+    let requestPath: string
+    try {
+      requestPath = decodeURIComponent(new URL(request.url).pathname)
+    } catch {
+      // Malformed percent-encoding (e.g. /%zz) throws URIError on decode.
+      return new Response('Bad Request', { status: 400 })
     }
 
-    // Resolve against the renderer root, then confirm the normalized path did
-    // not escape it (rejects encoded or literal '..' traversal).
-    const resolved = join(rendererRoot, requestPath)
-    const relative = resolved.slice(rendererRoot.length)
-    if (
-      relative !== '' &&
-      !relative.startsWith('/') &&
-      !relative.startsWith('\\')
-    ) {
+    const resolved = resolveRendererPath(rendererRoot, requestPath)
+    if (resolved === null) {
+      // Escaped the renderer root — literal or encoded '..' traversal, or an
+      // absolute path on a different root.
       return new Response('Forbidden', { status: 403 })
     }
 
-    return net.fetch(pathToFileURL(resolved).toString())
+    try {
+      return await net.fetch(pathToFileURL(resolved).toString())
+    } catch {
+      // net.fetch rejects when the file does not exist (ENOENT) or is
+      // unreadable; surface a 404 rather than an unhandled rejection.
+      return new Response('Not Found', { status: 404 })
+    }
   })
 }
 
@@ -128,6 +165,27 @@ function createWindow() {
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url)
     return { action: 'deny' }
+  })
+
+  // Block in-page navigation of the main window to any origin other than the
+  // renderer's own. The window-open handler already routes new windows to the
+  // browser, but an <a>/<meta>/<script> navigation of the main frame would
+  // load remote content into the privileged obiter:// renderer (preload bridge
+  // attached, same Origin the API trusts) — a full privilege escape. Only
+  // same-origin navigations (obiter://desktop-auth in a packaged build, the
+  // electron-vite dev URL in dev) are allowed.
+  const allowedOrigin =
+    process.env.ELECTRON_RENDERER_URL ?? 'obiter://desktop-auth'
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    let targetOrigin: string | null = null
+    try {
+      targetOrigin = new URL(url).origin
+    } catch {
+      targetOrigin = null
+    }
+    if (targetOrigin !== new URL(allowedOrigin).origin) {
+      event.preventDefault()
+    }
   })
 
   if (process.env.ELECTRON_RENDERER_URL) {
