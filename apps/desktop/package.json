@@ -1,12 +1,17 @@
 {
   "name": "@obiter/desktop",
   "private": true,
+  "version": "0.0.0",
+  "description": "Obiter desktop application (Electron shell for the shared app-shell).",
+  "author": "Obiter",
   "type": "module",
   "main": "./out/main/index.js",
   "scripts": {
     "build": "electron-vite build",
     "dev": "electron-vite dev",
     "preview": "electron-vite preview",
+    "package": "electron-vite build && electron-builder",
+    "package:win": "electron-vite build && electron-builder --win",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
@@ -23,6 +28,7 @@
     "@tailwindcss/vite": "^4.3.2",
     "@vitejs/plugin-react": "^5.2.0",
     "electron": "^37.0.0",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "tailwindcss": "^4.3.2",
     "vite": "^7.2.0"

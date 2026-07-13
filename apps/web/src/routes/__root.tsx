@@ -29,14 +29,6 @@ export const Route = createRootRouteWithContext<RouterContext>()({
     ],
     links: [
       {
-        rel: 'preconnect',
-        href: 'https://api.fontshare.com',
-      },
-      {
-        rel: 'stylesheet',
-        href: 'https://api.fontshare.com/v2/css?f[]=satoshi@400,500,600,700&f[]=jetbrains-mono@400,500&display=swap',
-      },
-      {
         href: appCss,
         rel: 'stylesheet',
       },

@@ -1,0 +1,78 @@
+# electron-builder config for the Obiter desktop app.
+#
+# Windows NSIS is the primary target (the maintainer is Windows-based). mac and
+# linux targets are configured so a future signing/notarization pass can build
+# them without re-architecting, but they are NOT built or verified in this PR.
+#
+# Builds are UNSIGNED for now. Windows SmartScreen will warn on first launch of
+# an unsigned installer; code signing is a future decision. See
+# docs/specs/desktop-release.md.
+#
+# The model does NOT run in the desktop app (redaction inference is server-side
+# in services/api), so onnxruntime / model weights are deliberately not bundled.
+
+appId: dev.obiter.desktop
+productName: Obiter
+copyright: Copyright © 2026 Obiter
+
+# electron-vite emits out/{main,preload,renderer}. main (package.json "main")
+# points at out/main/index.js; the renderer is served over obiter:// from
+# out/renderer by the main process. Package the built output, not the source.
+#
+# The desktop app has NO runtime npm dependencies: the main and preload bundles
+# import only `electron` and node: built-ins, and the renderer is a fully
+# bundled static asset set. electron-vite externalizes declared dependencies,
+# which by default makes electron-builder pull them into the asar — none are
+# needed at runtime, so node_modules is excluded to keep the installer lean.
+files:
+  - out/main/**
+  - out/preload/**
+  - out/renderer/**
+  - package.json
+  - '!**/node_modules/**'
+  - '!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}'
+  - '!**/._*'
+
+asar: true
+
+directories:
+  output: release
+  buildResources: build
+
+# Windows installer (primary target).
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  # No signing configuration: unsigned for now (documented).
+  # icon: build/icon.ico  # follow-up: ship a real .ico
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Obiter
+
+# macOS (configured, not built/verified in this PR).
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  category: public.app-category.productivity
+  # icon: build/icon.icns  # follow-up: ship a real .icns
+  hardenedRuntime: true
+  # Notarization is a follow-up (requires Apple credentials).
+
+# Linux (configured, not built/verified in this PR).
+linux:
+  target:
+    - target: AppImage
+      arch:
+        - x64
+  category: Office
+  # icon: build/icon.png  # follow-up: ship a real 512x512 png
