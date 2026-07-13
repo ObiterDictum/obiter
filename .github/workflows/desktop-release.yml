@@ -1,0 +1,42 @@
+name: Desktop release
+
+# Build the Windows installer artifact on push to main (the release branch),
+# consistent with the docker-image policy in ci.yml. dev is the integration
+# branch; promote dev -> main to cut a desktop artifact. Artifacts only — no
+# release publishing yet. This workflow first executes on the next dev -> main
+# promotion.
+on:
+  push:
+    branches: [main]
+
+jobs:
+  windows-installer:
+    name: Build Windows installer artifact
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Builds the desktop app (electron-vite) and packages the NSIS installer.
+      # The model is not bundled (server-side inference); see
+      # docs/specs/desktop-release.md. Unsigned for now.
+      - name: Build Windows installer
+        run: pnpm --filter @obiter/desktop package:win
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: obiter-windows-installer
+          # electron-builder output (electron-builder.yml directories.output).
+          path: apps/desktop/release/Obiter Setup *.exe
+          if-no-files-found: error
+          retention-days: 30

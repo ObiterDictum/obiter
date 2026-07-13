@@ -111,7 +111,11 @@ function createWindow() {
     title: 'Obiter',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     webPreferences: {
-      preload: join(__dirname, '../preload/index.js'),
+      // package.json is "type": "module", so electron-vite emits the preload
+      // as ESM (.mjs). The packaged main loads this file from disk; the .mjs
+      // extension must match the build output (out/preload/index.mjs). In dev,
+      // electron-vite resolves the preload independently of this path.
+      preload: join(__dirname, '../preload/index.mjs'),
       contextIsolation: true,
       sandbox: false,
     },
