@@ -21,13 +21,14 @@
  * read — the preload resolved it once at load time before the renderer module
  * graph runs.
  */
+import { readDesktopBridge } from './desktop-bridge'
+
 export function resolvePackagedApiOrigin(): string | null {
   if (typeof window === 'undefined') {
     return null
   }
 
-  const bridge = (window as Window).obiterDesktop
-  const origin = bridge?.apiOrigin
+  const origin = readDesktopBridge()?.apiOrigin
   return typeof origin === 'string' && origin.length > 0 ? origin : null
 }
 

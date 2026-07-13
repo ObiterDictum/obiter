@@ -92,7 +92,11 @@ function registerRendererProtocol() {
     // not escape it (rejects encoded or literal '..' traversal).
     const resolved = join(rendererRoot, requestPath)
     const relative = resolved.slice(rendererRoot.length)
-    if (relative !== '' && !relative.startsWith('/') && !relative.startsWith('\\')) {
+    if (
+      relative !== '' &&
+      !relative.startsWith('/') &&
+      !relative.startsWith('\\')
+    ) {
       return new Response('Forbidden', { status: 403 })
     }
 
