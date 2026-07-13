@@ -90,8 +90,25 @@ Needs governance over tool access, external model calls, and audit state.
 - trace inspector UI
 - Bench agent benchmark family
 - multi-agent delegation
+- organisation verification policies
+- Legal Front Door agent (Slack/Teams)
 
 Multi-agent delegation is intentionally out of scope until single-agent trace quality is proven.
+
+### Organisation Verification Policies (Exploratory)
+
+An organisation should eventually be able to encode its verification standards as policy rather than per-run choices — for example, "every citation must resolve in Atlas" or "every quote must pass paragraph-level checking". Pi agents and Verify runs would then apply the organisation policy automatically, and traces would show which policy version was in force. This turns team judgment into a standard applied on every matter instead of ad hoc discipline. No schema or milestone commitment yet; depends on Verify (1.3+) and the policy boundary fields already in the run record.
+
+### Legal Front Door Agent (Exploratory)
+
+A Pi agent exposed through Slack or Teams that lets non-lawyers in an organisation ask bounded legal questions and get source-bound, verified answers — or a handoff to a lawyer when evidence is weak or judgment is required. This is Pi's existing Research Trace Agent behind a channel connector, not a new autonomy level:
+
+- same agent registry, tool boundaries, run/step/tool-call traces
+- answers carry evidence links and verification warnings into the channel
+- handoff posts a structured request to the legal team instead of guessing
+- channel messages are treated as untrusted input; no tool escalation from message content
+
+Prerequisites: Research Trace Agent proven (Gate 2), Verify live, and organisation auth mapping between chat identities and Obiter users. Intentionally not an intake/triage workflow product — it is one agent surface, not a matter-routing system.
 
 ## Agent Registry
 

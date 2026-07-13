@@ -6,6 +6,7 @@ They complement the shorter implementation specs under `docs/specs/`.
 
 ## PRDs
 
+- Project Overview (full-platform PRD, shareable) — lives outside the repo with the collaboration documents, in `Obiter/legal/` alongside this checkout
 - [App Shell Rebuild](app-shell-rebuild.md)
 - [Search Quality](search-quality.md)
 - [Bench](bench.md)
