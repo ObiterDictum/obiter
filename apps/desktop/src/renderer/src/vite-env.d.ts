@@ -18,5 +18,8 @@ interface Window {
     platform: 'desktop'
     shellVersion: string
     apiOrigin: string | null
+    getAuthToken(): Promise<string | null>
+    setAuthToken(token: string): Promise<void>
+    clearAuthToken(): Promise<void>
   }
 }
