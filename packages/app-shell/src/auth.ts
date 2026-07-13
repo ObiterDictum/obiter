@@ -2,6 +2,13 @@ import { createAuthClient } from 'better-auth/react'
 import { magicLinkClient } from 'better-auth/client/plugins'
 import { useQueryClient } from '@tanstack/react-query'
 import { resolvePackagedApiOrigin } from './lib/api-url'
+import {
+  clearDesktopAuthToken,
+  getDesktopAuthToken,
+  loadDesktopAuthToken,
+  setDesktopAuthToken,
+} from './lib/auth-token'
+import { readDesktopBridge } from './lib/desktop-bridge'
 
 /**
  * Better-auth client for the browser. The API mounts better-auth at /api/auth/*
@@ -21,9 +28,29 @@ function authBaseURL(): string {
   )
 }
 
+const desktopAuthFetchOptions = readDesktopBridge()
+  ? {
+      auth: {
+        type: 'Bearer' as const,
+        token: async () => (await getDesktopAuthToken()) ?? undefined,
+      },
+      onSuccess: async (context: { response: Response }) => {
+        const token = context.response.headers.get('set-auth-token')
+        if (token) {
+          await setDesktopAuthToken(token)
+        }
+      },
+    }
+  : undefined
+
+if (desktopAuthFetchOptions) {
+  void loadDesktopAuthToken()
+}
+
 export const authClient = createAuthClient({
   baseURL: authBaseURL(),
   plugins: [magicLinkClient()],
+  fetchOptions: desktopAuthFetchOptions,
 })
 
 export interface SignInEmailInput {
@@ -133,12 +160,19 @@ export function useAuth(): UseAuthReturn {
   }
 
   async function signOut() {
-    await authClient.signOut()
-    // Drop cached /api/me (and org-scoped data) so a subsequent sign-in as a
-    // different user never gates routes on the previous user's organisation
-    // state. The current-user query has a 60s staleTime, so without this a
-    // fresh sign-in could read a stale org-less/owning entry.
-    queryClient.clear()
+    try {
+      await authClient.signOut()
+    } finally {
+      try {
+        await clearDesktopAuthToken()
+      } finally {
+        // Drop cached /api/me (and org-scoped data) so a subsequent sign-in as
+        // a different user never gates routes on the previous user's organisation
+        // state. The current-user query has a 60s staleTime, so without this a
+        // fresh sign-in could read a stale org-less/owning entry.
+        queryClient.clear()
+      }
+    }
   }
 
   // better-auth 1.6.x password reset: POST /request-password-reset never
