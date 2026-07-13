@@ -1,6 +1,7 @@
 import { betterAuth } from 'better-auth'
 import { createAuthMiddleware } from 'better-auth/api'
 import { magicLink } from 'better-auth/plugins'
+import { bearer } from 'better-auth/plugins/bearer'
 import { Resend } from 'resend'
 import type { Pool } from 'pg'
 import { appendAuditLog } from './database'
@@ -270,6 +271,22 @@ export function emailAndPasswordOptions(env: ApiEnv) {
   }
 }
 
+/**
+ * Auth plugins kept separate from createAuth so configuration can be regression
+ * tested without initializing better-auth's asynchronous database adapter.
+ */
+export function authPlugins(env: ApiEnv) {
+  return [
+    bearer(),
+    magicLink({
+      disableSignUp: true,
+      expiresIn: 60 * 10,
+      storeToken: 'hashed',
+      sendMagicLink: ({ email, url }) => sendMagicLink(env, email, url),
+    }),
+  ]
+}
+
 export function createAuth(env: ApiEnv, pool: Pool) {
   return betterAuth({
     appName: 'Obiter',
@@ -359,13 +376,6 @@ export function createAuth(env: ApiEnv, pool: Pool) {
         })
       }),
     },
-    plugins: [
-      magicLink({
-        disableSignUp: true,
-        expiresIn: 60 * 10,
-        storeToken: 'hashed',
-        sendMagicLink: ({ email, url }) => sendMagicLink(env, email, url),
-      }),
-    ],
+    plugins: authPlugins(env),
   })
 }
