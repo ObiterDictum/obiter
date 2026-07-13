@@ -16,9 +16,7 @@
  */
 @import 'tailwindcss';
 @import './tokens.css';
-
-/* Satoshi + JetBrains Mono are loaded via <link> in the app document head
-   (a CSS @import url() here would violate the "imports precede rules" rule). */
+@import './fonts.css';
 
 @theme inline {
   /* Surfaces + text */
