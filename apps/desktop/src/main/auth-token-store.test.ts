@@ -13,7 +13,11 @@ async function tokenPath() {
 }
 
 afterEach(async () => {
-  await Promise.all(directories.splice(0).map((directory) => rm(directory, { recursive: true })))
+  await Promise.all(
+    directories
+      .splice(0)
+      .map((directory) => rm(directory, { recursive: true })),
+  )
 })
 
 describe('DesktopAuthTokenStore', () => {
@@ -55,7 +59,29 @@ describe('DesktopAuthTokenStore', () => {
     await expect(readFile(path)).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
-  it('clears memory and removes the encrypted token file', async () => {
+  it('removes a persisted token when encryption becomes unavailable', async () => {
+    const path = await tokenPath()
+    let encryptionAvailable = true
+    const encryptionStorage = {
+      isEncryptionAvailable: () => encryptionAvailable,
+      encryptString: (token: string) =>
+        Buffer.from(Buffer.from(token).toString('base64')),
+      decryptString: (value: Buffer) =>
+        Buffer.from(value.toString(), 'base64').toString(),
+    }
+    const store = new DesktopAuthTokenStore(path, encryptionStorage)
+
+    await store.set('token_123')
+    encryptionAvailable = false
+    await store.set('token_456')
+    encryptionAvailable = true
+
+    expect(
+      await new DesktopAuthTokenStore(path, encryptionStorage).get(),
+    ).toBeNull()
+  })
+
+  it('serializes sign-out behind an in-flight token write', async () => {
     const path = await tokenPath()
     const encryptionStorage = {
       isEncryptionAvailable: () => true,
@@ -66,8 +92,9 @@ describe('DesktopAuthTokenStore', () => {
     }
     const store = new DesktopAuthTokenStore(path, encryptionStorage)
 
-    await store.set('token_123')
-    await store.clear()
+    const write = store.set('token_123')
+    const clear = store.clear()
+    await Promise.all([write, clear])
 
     expect(await store.get()).toBeNull()
     await expect(readFile(path)).rejects.toMatchObject({ code: 'ENOENT' })

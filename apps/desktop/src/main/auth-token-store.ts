@@ -1,4 +1,5 @@
 import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
 
 export interface EncryptionStorage {
@@ -14,6 +15,7 @@ export interface EncryptionStorage {
 export class DesktopAuthTokenStore {
   private memoryToken: string | null = null
   private warnedEncryptionUnavailable = false
+  private operation: Promise<void> = Promise.resolve()
 
   constructor(
     private readonly tokenPath: string,
@@ -21,41 +23,61 @@ export class DesktopAuthTokenStore {
     private readonly warn: (message: string) => void = console.warn,
   ) {}
 
-  async get(): Promise<string | null> {
-    if (!this.encryptionStorage.isEncryptionAvailable()) {
-      this.warnEncryptionUnavailable()
-      return this.memoryToken
-    }
-
-    try {
-      const encrypted = await readFile(this.tokenPath)
-      this.memoryToken = this.encryptionStorage.decryptString(encrypted)
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-        this.warn('[obiter] Unable to read the desktop auth token.')
+  get(): Promise<string | null> {
+    return this.enqueue(async () => {
+      if (!this.encryptionStorage.isEncryptionAvailable()) {
+        this.warnEncryptionUnavailable()
+        await rm(this.tokenPath, { force: true })
+        return this.memoryToken
       }
-    }
 
-    return this.memoryToken
+      try {
+        const encrypted = await readFile(this.tokenPath)
+        this.memoryToken = this.encryptionStorage.decryptString(encrypted)
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          this.warn('[obiter] Unable to read the desktop auth token.')
+        }
+      }
+
+      return this.memoryToken
+    })
   }
 
-  async set(token: string): Promise<void> {
-    this.memoryToken = token
+  set(token: string): Promise<void> {
+    return this.enqueue(async () => {
+      this.memoryToken = token
 
-    if (!this.encryptionStorage.isEncryptionAvailable()) {
-      this.warnEncryptionUnavailable()
-      return
-    }
+      if (!this.encryptionStorage.isEncryptionAvailable()) {
+        this.warnEncryptionUnavailable()
+        await rm(this.tokenPath, { force: true })
+        return
+      }
 
-    const temporaryPath = `${this.tokenPath}.tmp`
-    await mkdir(dirname(this.tokenPath), { recursive: true })
-    await writeFile(temporaryPath, this.encryptionStorage.encryptString(token))
-    await rename(temporaryPath, this.tokenPath)
+      const temporaryPath = `${this.tokenPath}.${randomUUID()}.tmp`
+      await mkdir(dirname(this.tokenPath), { recursive: true })
+      await writeFile(
+        temporaryPath,
+        this.encryptionStorage.encryptString(token),
+      )
+      await rename(temporaryPath, this.tokenPath)
+    })
   }
 
-  async clear(): Promise<void> {
-    this.memoryToken = null
-    await rm(this.tokenPath, { force: true })
+  clear(): Promise<void> {
+    return this.enqueue(async () => {
+      this.memoryToken = null
+      await rm(this.tokenPath, { force: true })
+    })
+  }
+
+  private enqueue<T>(operation: () => Promise<T>): Promise<T> {
+    const result = this.operation.then(operation, operation)
+    this.operation = result.then(
+      () => undefined,
+      () => undefined,
+    )
+    return result
   }
 
   private warnEncryptionUnavailable() {

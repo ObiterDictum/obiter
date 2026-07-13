@@ -28,7 +28,8 @@ function response(body: unknown): Response {
 describe('apiFetch desktop bearer authentication', () => {
   it('attaches the main-process token while retaining cookie credentials', async () => {
     bridge.getAuthToken.mockResolvedValue('token_123')
-    ;(window as Window & { obiterDesktop?: typeof bridge }).obiterDesktop = bridge
+    ;(window as Window & { obiterDesktop?: typeof bridge }).obiterDesktop =
+      bridge
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(response({ user: { id: 'usr_1' } }))
@@ -43,8 +44,11 @@ describe('apiFetch desktop bearer authentication', () => {
 
   it('does not add authorization when the desktop token is absent', async () => {
     bridge.getAuthToken.mockResolvedValue(null)
-    ;(window as Window & { obiterDesktop?: typeof bridge }).obiterDesktop = bridge
-    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(response({}))
+    ;(window as Window & { obiterDesktop?: typeof bridge }).obiterDesktop =
+      bridge
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(response({}))
     const { apiFetch } = await import('./api')
 
     await apiFetch('/api/me')

@@ -42,17 +42,22 @@ describe('auth client desktop bearer support', () => {
   it('stores the bearer response header through the desktop bridge', async () => {
     bridge.getAuthToken.mockResolvedValue(null)
     bridge.setAuthToken.mockResolvedValue(undefined)
-    ;(window as Window & { obiterDesktop?: typeof bridge }).obiterDesktop = bridge
+    ;(window as Window & { obiterDesktop?: typeof bridge }).obiterDesktop =
+      bridge
 
     await import('./auth')
 
-    const fetchOptions = (mock.clientOptions as {
-      fetchOptions: {
-        onSuccess(context: { response: Response }): Promise<void>
+    const fetchOptions = (
+      mock.clientOptions as {
+        fetchOptions: {
+          onSuccess(context: { response: Response }): Promise<void>
+        }
       }
-    }).fetchOptions
+    ).fetchOptions
     await fetchOptions.onSuccess({
-      response: new Response(null, { headers: { 'set-auth-token': 'token_123' } }),
+      response: new Response(null, {
+        headers: { 'set-auth-token': 'token_123' },
+      }),
     })
 
     expect(bridge.setAuthToken).toHaveBeenCalledWith('token_123')

@@ -196,7 +196,9 @@ function createWindow() {
   try {
     allowedNavigationOrigin = new URL(allowedOrigin).origin
   } catch {
-    console.error('[obiter] Invalid Electron renderer URL; blocking navigation.')
+    console.error(
+      '[obiter] Invalid Electron renderer URL; blocking navigation.',
+    )
   }
 
   mainWindow.webContents.on('will-navigate', (event, url) => {
