@@ -1,6 +1,7 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Card } from '@obiter/ui'
+import { apiUrl } from '../lib/api-url'
 import { caseResultLocation } from '../case-navigation'
 import {
   SearchCommandBar,
@@ -388,7 +389,7 @@ export function LegalSearchView() {
     setSelectedResultIndex(-1)
 
     try {
-      const response = await fetch('/api/search/fetch', {
+      const response = await fetch(apiUrl('/api/search/fetch'), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         signal: requestAbortController.signal,
