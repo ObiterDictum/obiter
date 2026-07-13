@@ -1,6 +1,8 @@
 import type { ApiErrorCode } from '@obiter/contracts'
 import { apiErrorResponseSchema } from '@obiter/contracts'
 import { apiUrl } from './lib/api-url'
+import { getDesktopAuthToken } from './lib/auth-token'
+import { readDesktopBridge } from './lib/desktop-bridge'
 
 /**
  * Typed error thrown by `apiFetch` when the API returns a non-2xx response that
@@ -40,11 +42,15 @@ export async function apiFetch<T>(
   input: string,
   init?: RequestInit,
 ): Promise<T> {
+  const desktopToken = readDesktopBridge()
+    ? await getDesktopAuthToken()
+    : null
   const response = await fetch(apiUrl(input), {
     credentials: 'include',
     ...init,
     headers: {
       Accept: 'application/json',
+      ...(desktopToken ? { Authorization: `Bearer ${desktopToken}` } : {}),
       ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
       ...init?.headers,
     },
