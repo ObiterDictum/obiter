@@ -2,6 +2,7 @@ import { queryOptions, useSuspenseQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { EmptyState } from '@obiter/ui'
+import { apiUrl } from '../lib/api-url'
 import { selectJudgmentParagraphs } from './LegalSearchView'
 import { getCourtLabel } from '../components/search'
 
@@ -40,19 +41,6 @@ export function caseLawDocumentQueryOptions(caseId: string) {
       return ((await response.json()) as CaseLawDocumentResponse).document
     },
   })
-}
-
-function apiUrl(path: string) {
-  if (typeof window !== 'undefined') {
-    return path
-  }
-
-  return new URL(
-    path,
-    process.env.OBITER_API_ORIGIN ??
-      process.env.BETTER_AUTH_URL ??
-      'http://localhost:8787',
-  ).toString()
 }
 
 export function CaseLawDocumentView({ caseId }: { caseId: string }) {
