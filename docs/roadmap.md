@@ -77,16 +77,18 @@ Outcome:
 
 - authoritative source substrate exists
 
-### Milestone 1.2: Redact
+### Milestone 1.2: Redact (largely delivered, built ahead of sequence)
+
+Redact was built before Atlas and Verify. Delivered: hosted redaction path, review UI, decisions and finalized outputs, audit report, pseudonymised and hard-redacted outputs (see `current-product-scope.md`).
+
+Remaining:
 
 - integrate local desktop redaction path
-- integrate hosted redaction path
-- build review UI
-- support pseudonymised and hard-redacted outputs
+- select/upload matter documents from the shell
 
 Outcome:
 
-- privacy workflow exists
+- privacy workflow exists (achieved for the hosted path)
 
 ### Milestone 1.3: Verify
 
@@ -121,6 +123,13 @@ Outcome:
 Outcome:
 
 - source-bound research experience exists
+
+## Later (No Milestone Yet)
+
+Exploratory directions recorded in PRDs but intentionally unscheduled:
+
+- organisation verification policies — encode a team's verification standards so Verify and Pi apply them on every run (see [Pi Agent Framework PRD](prds/pi-agent-framework.md))
+- Legal Front Door agent — the Research Trace Agent exposed via Slack/Teams so non-lawyers can ask bounded, verified legal questions with lawyer handoff (see [Pi Agent Framework PRD](prds/pi-agent-framework.md))
 
 ## Start Here
 
