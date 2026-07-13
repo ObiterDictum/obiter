@@ -1,15 +1,18 @@
 import { createAuthClient } from 'better-auth/react'
 import { magicLinkClient } from 'better-auth/client/plugins'
 import { useQueryClient } from '@tanstack/react-query'
+import { resolvePackagedApiOrigin } from './lib/api-url'
 
 /**
  * Better-auth client for the browser. The API mounts better-auth at /api/auth/*
  * with email/password and magic-link enabled (services/api/src/auth.ts). In dev
- * the Vite proxy forwards /api to the API; in production it is same-origin.
+ * the Vite proxy forwards /api to the API; in production it is same-origin. In
+ * the packaged Electron renderer the API is cross-scheme, so the main-process
+ * API origin (exposed via the preload bridge) takes precedence.
  */
 function authBaseURL(): string {
   if (typeof window !== 'undefined') {
-    return window.location.origin
+    return resolvePackagedApiOrigin() ?? window.location.origin
   }
   return (
     process.env.OBITER_API_ORIGIN ??
