@@ -8,7 +8,7 @@ let revision = 0
  * Loads the main-process-held desktop token once. Web and SSR have no bridge,
  * so they never enter this persistence path.
  */
-export async function loadDesktopAuthToken(): Promise<void> {
+export function loadDesktopAuthToken(): Promise<void> {
   const bridge = readDesktopBridge()
   if (!bridge || loadPromise) {
     return loadPromise ?? Promise.resolve()
