@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./tokens.css": "./src/tokens.css",
-    "./tailwind.css": "./src/tailwind.css"
+    "./tailwind.css": "./src/tailwind.css",
+    "./fonts.css": "./src/fonts.css"
   },
   "dependencies": {
     "@base-ui-components/react": "1.0.0-rc.0",
