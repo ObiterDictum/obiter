@@ -46,13 +46,16 @@ describe('resolveRendererPath', () => {
     expect(resolveRendererPath(root, '/')).toBe(join(root, 'index.html'))
   })
 
-  it('rejects an absolute sibling path whose name starts with the root basename', () => {
+  it('rejects a traversal into a sibling whose name starts with the root basename', () => {
     // The startsWith-prefix trap: root ends in "renderer", an attacker targets
-    // ".../renderer-evil/x". resolve() turns the absolute pathname into a path
-    // on the same drive, and relative() returns ".." to climb back out of the
-    // real root — rejected.
-    const sibling = `${root}-evil`
-    expect(resolveRendererPath(root, sibling)).toBeNull()
+    // "../renderer-evil/x" — one level up into a directory the old
+    // slice/startsWith guards would have accepted as "inside" the root.
+    // relative() returns a ".."-prefixed path — rejected. URL pathnames only
+    // ever arrive "/"-prefixed, so the traversal form is what the handler can
+    // actually see; a platform-absolute pathname is not reachable through
+    // new URL().pathname on POSIX (join nests it harmlessly inside the root),
+    // and the win32 absolute form is covered by the drive-change case below.
+    expect(resolveRendererPath(root, '/../renderer-evil/index.html')).toBeNull()
   })
 
   it('rejects an absolute path on a different root (drive change on Windows)', () => {
