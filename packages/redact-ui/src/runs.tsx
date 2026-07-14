@@ -2,7 +2,11 @@ import { useState } from 'react'
 import { FileText, Plus } from '@phosphor-icons/react'
 import { Badge, Button, EmptyState, Skeleton } from '@obiter/ui'
 import { PageScaffold } from '@obiter/app-shell'
-import { useCreateRedactionRun, useRedactionRuns } from './hooks'
+import {
+  useCreateRedactionRun,
+  useCreateUploadedRedactionRun,
+  useRedactionRuns,
+} from './hooks'
 
 function formatCreatedAt(value: string) {
   return new Intl.DateTimeFormat(undefined, {
@@ -18,6 +22,7 @@ export function RedactionRunsView({
 }) {
   const query = useRedactionRuns()
   const create = useCreateRedactionRun()
+  const upload = useCreateUploadedRedactionRun()
   const [filename, setFilename] = useState('')
   const [text, setText] = useState('')
 
@@ -33,8 +38,11 @@ export function RedactionRunsView({
       },
     )
 
+  const submitUpload = (file: File) =>
+    upload.mutate(file, { onSuccess: ({ run }) => onOpenRun(run.id) })
+
   return (
-    <PageScaffold eyebrow="Redact" title="Redaction runs">
+    <PageScaffold eyebrow="Redaction" title="Redaction runs">
       <section
         className="flex flex-col gap-4 rounded-lg border border-line bg-surface p-5"
         aria-label="Start a redaction run"
@@ -71,6 +79,30 @@ export function RedactionRunsView({
         {create.error ? (
           <p className="text-sm text-danger">{create.error.message}</p>
         ) : null}
+        <div className="border-t border-line pt-4">
+          <label className="flex flex-col gap-1 text-sm font-medium text-ink">
+            Or upload a document
+            <span className="text-xs font-normal text-muted">
+              DOCX or TXT, up to 25 MB. The file is processed as a standalone
+              redaction run.
+            </span>
+            <input
+              type="file"
+              aria-label="Or upload a document"
+              accept=".docx,.txt,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              disabled={upload.isPending}
+              className="block text-sm font-normal text-ink"
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                if (file) submitUpload(file)
+                event.target.value = ''
+              }}
+            />
+          </label>
+          {upload.error ? (
+            <p className="mt-2 text-sm text-danger">{upload.error.message}</p>
+          ) : null}
+        </div>
         <div>
           <Button
             variant="primary"
