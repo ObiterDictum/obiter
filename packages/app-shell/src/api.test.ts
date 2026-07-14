@@ -28,6 +28,19 @@ describe('apiFetch', () => {
     expect(init?.credentials).toBe('include')
   })
 
+  it('does not override multipart content type with JSON', async () => {
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValue(mockResponse({ document: {} }))
+    const form = new FormData()
+    form.set('file', new File(['text'], 'source.txt', { type: 'text/plain' }))
+
+    await apiFetch('/api/redaction-runs', { method: 'POST', body: form })
+
+    const init = fetchMock.mock.calls[0]?.[1] as RequestInit | undefined
+    expect(new Headers(init?.headers).get('content-type')).toBeNull()
+  })
+
   it('throws ApiError with the typed code for a known error envelope', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       mockResponse(
