@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { FileText, Plus } from '@phosphor-icons/react'
 import { Badge, Button, EmptyState, Skeleton } from '@obiter/ui'
 import { PageScaffold } from '@obiter/app-shell'
@@ -25,21 +25,49 @@ export function RedactionRunsView({
   const upload = useCreateUploadedRedactionRun()
   const [filename, setFilename] = useState('')
   const [text, setText] = useState('')
+  const creating = useRef(false)
+  const mounted = useRef(true)
+  useEffect(
+    () => () => {
+      mounted.current = false
+    },
+    [],
+  )
+  const creationPending =
+    creating.current || create.isPending || upload.isPending
 
-  const submit = () =>
+  const submit = () => {
+    if (creationPending) return
+    creating.current = true
     create.mutate(
       { filename, text },
       {
         onSuccess: ({ run }) => {
+          creating.current = false
           setFilename('')
           setText('')
-          onOpenRun(run.id)
+          if (mounted.current) onOpenRun(run.id)
+        },
+        onError: () => {
+          creating.current = false
         },
       },
     )
+  }
 
-  const submitUpload = (file: File) =>
-    upload.mutate(file, { onSuccess: ({ run }) => onOpenRun(run.id) })
+  const submitUpload = (file: File) => {
+    if (creationPending) return
+    creating.current = true
+    upload.mutate(file, {
+      onSuccess: ({ run }) => {
+        creating.current = false
+        if (mounted.current) onOpenRun(run.id)
+      },
+      onError: () => {
+        creating.current = false
+      },
+    })
+  }
 
   return (
     <PageScaffold eyebrow="Redaction" title="Redaction runs">
@@ -90,7 +118,7 @@ export function RedactionRunsView({
               type="file"
               aria-label="Or upload a document"
               accept=".docx,.txt,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-              disabled={upload.isPending}
+              disabled={creationPending}
               className="block text-sm font-normal text-ink"
               onChange={(event) => {
                 const file = event.target.files?.[0]
@@ -108,7 +136,7 @@ export function RedactionRunsView({
             variant="primary"
             iconStart={<Plus size={16} aria-hidden="true" />}
             loading={create.isPending}
-            disabled={!filename.trim() || !text}
+            disabled={creationPending || !filename.trim() || !text}
             onClick={submit}
           >
             Create redaction run

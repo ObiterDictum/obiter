@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiFetch } from '@obiter/app-shell'
+import { apiFetch, declaredFileType } from '@obiter/app-shell'
 import type {
   FinalizeInput,
   FinalizeResponse,
@@ -36,7 +36,7 @@ export function useCreateUploadedRedactionRun() {
     mutationFn: (file: File) => {
       const form = new FormData()
       form.set('file', file)
-      form.set('fileType', file.type || file.name.split('.').pop() || '')
+      form.set('fileType', declaredFileType(file))
       return apiFetch<{ run: RedactionRun }>('/api/redaction-runs', {
         method: 'POST',
         body: form,
@@ -46,15 +46,15 @@ export function useCreateUploadedRedactionRun() {
   })
 }
 
-export function useCreateDocumentRedactionRun(documentId: string) {
+export function useCreateDocumentRedactionRun() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: () =>
+    mutationFn: (documentId: string) =>
       apiFetch<{ run: RedactionRun }>(
         `/api/documents/${documentId}/redaction-runs`,
         { method: 'POST', body: JSON.stringify({}) },
       ),
-    onSuccess: () => {
+    onSuccess: (_result, documentId) => {
       void queryClient.invalidateQueries({ queryKey: runsKey })
       void queryClient.invalidateQueries({
         queryKey: ['document-redaction-runs', documentId],
