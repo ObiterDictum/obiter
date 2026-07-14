@@ -17,6 +17,7 @@ const {
   buildAuthAuditEvent,
   emailAndPasswordOptions,
   sendResetPasswordForUser,
+  authPlugins,
 } = await import('./auth')
 
 beforeEach(() => {
@@ -41,6 +42,19 @@ const baseEnv: ApiEnv = {
   port: 8787,
   nodeEnv: 'test',
 }
+
+describe('authPlugins', () => {
+  it('enables bearer authentication without changing cookie configuration', () => {
+    const plugins = authPlugins(baseEnv)
+
+    expect(plugins.map((plugin) => plugin.id)).toEqual(
+      expect.arrayContaining(['bearer', 'magic-link']),
+    )
+    expect(plugins.find((plugin) => plugin.id === 'bearer')?.options).toEqual(
+      undefined,
+    )
+  })
+})
 
 describe('sendMagicLink', () => {
   it('logs the magic-link URL to the console and never calls Resend when no API key is configured', async () => {
