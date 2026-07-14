@@ -9,9 +9,6 @@ import { useDocument } from '../documents'
  * props, renders real document metadata from GET /api/documents/:id (filename,
  * hash, size, status, versions), a redaction-runs region slot, and a child
  * <Outlet/> so feature sub-routes such as redact/$runId nest beneath it.
- *
- * This is a metadata-only surface — the documents API records filename/hash/
- * size; no file bytes are received or stored.
  */
 export function DocumentDetailLayoutView({
   matterId,
@@ -68,7 +65,7 @@ export function DocumentDetailLayoutView({
               Matter <span className="font-mono text-ink">{matterId}</span>
             </p>
           </div>
-          <Badge tone="neutral">Metadata only</Badge>
+          <Badge tone="neutral">Immutable versions</Badge>
         </div>
       </div>
 

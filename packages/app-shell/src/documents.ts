@@ -1,6 +1,7 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryOptions } from '@tanstack/react-query'
 import { apiFetch } from './api'
+import { declaredFileType } from './file-type'
 
 /**
  * Real document domain types, mirroring the wire shapes returned by the
@@ -56,6 +57,11 @@ export interface DocumentDetailResponse {
   versions: DocumentVersionRecord[]
 }
 
+export interface DocumentUploadResponse {
+  document: MatterDocumentRecord
+  version: DocumentVersionRecord
+}
+
 /** Query key factory for documents. */
 export const documentsKeys = {
   all: ['documents'] as const,
@@ -93,4 +99,23 @@ export function useMatterDocuments(matterId: string) {
 
 export function useDocument(documentId: string) {
   return useQuery(documentQueryOptions(documentId))
+}
+
+export function useUploadMatterDocument(matterId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData()
+      form.set('file', file)
+      form.set('fileType', declaredFileType(file))
+      return apiFetch<DocumentUploadResponse>(
+        `/api/matters/${matterId}/documents`,
+        { method: 'POST', body: form },
+      )
+    },
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: documentsKeys.byMatter(matterId),
+      }),
+  })
 }

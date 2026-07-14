@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiFetch } from '@obiter/app-shell'
+import { apiFetch, declaredFileType } from '@obiter/app-shell'
 import type {
   FinalizeInput,
   FinalizeResponse,
@@ -27,6 +27,39 @@ export function useCreateRedactionRun() {
         body: JSON.stringify(input),
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: runsKey }),
+  })
+}
+
+export function useCreateUploadedRedactionRun() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData()
+      form.set('file', file)
+      form.set('fileType', declaredFileType(file))
+      return apiFetch<{ run: RedactionRun }>('/api/redaction-runs', {
+        method: 'POST',
+        body: form,
+      })
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: runsKey }),
+  })
+}
+
+export function useCreateDocumentRedactionRun() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (documentId: string) =>
+      apiFetch<{ run: RedactionRun }>(
+        `/api/documents/${documentId}/redaction-runs`,
+        { method: 'POST', body: JSON.stringify({}) },
+      ),
+    onSuccess: (_result, documentId) => {
+      void queryClient.invalidateQueries({ queryKey: runsKey })
+      void queryClient.invalidateQueries({
+        queryKey: ['document-redaction-runs', documentId],
+      })
+    },
   })
 }
 
