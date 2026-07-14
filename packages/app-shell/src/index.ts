@@ -43,8 +43,10 @@ export {
   documentsKeys,
   useMatterDocuments,
   useDocument,
+  useUploadMatterDocument,
   type MatterDocumentRecord,
   type DocumentVersionRecord,
+  type DocumentUploadResponse,
   type DocumentStatus,
   type SyncState,
 } from './documents'
