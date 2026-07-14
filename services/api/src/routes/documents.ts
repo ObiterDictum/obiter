@@ -17,6 +17,7 @@ import {
   extractDocumentText,
   normaliseFileType,
 } from '../document-extraction'
+import { DocumentUploadError, readDocumentUpload } from '../document-upload'
 import type { StorageService } from '../storage'
 
 interface RouteUser {
@@ -80,16 +81,7 @@ function requiredInteger(value: unknown): number | null {
     : null
 }
 
-/** Bounds buffering and mammoth/ZIP parse work for authenticated uploads. */
-export const MAX_DOCUMENT_UPLOAD_BYTES = 25 * 1024 * 1024
-
-function uploadType(filename: string, contents: Buffer): 'docx' | 'txt' | null {
-  const extension = filename.toLowerCase().split('.').pop()
-  const isZip = contents.subarray(0, 2).equals(Buffer.from('PK'))
-  if (extension === 'docx' && isZip) return 'docx'
-  if (extension === 'txt' && !isZip) return 'txt'
-  return null
-}
+export { MAX_DOCUMENT_UPLOAD_BYTES } from '../document-upload'
 
 export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
   const routes = new Hono<{ Variables: RouteVariables }>()
@@ -154,20 +146,6 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
         'PDF files are not yet supported for redaction. Please upload DOCX or TXT files.',
         400,
       )
-    if (file && !supportedType)
-      return errorResponse(
-        c,
-        'validation_failed',
-        'Only DOCX and TXT files are supported for redaction.',
-        400,
-      )
-    if (file && file.size > MAX_DOCUMENT_UPLOAD_BYTES)
-      return errorResponse(
-        c,
-        'validation_failed',
-        `Document uploads must be at most ${MAX_DOCUMENT_UPLOAD_BYTES / 1024 / 1024} MB.`,
-        400,
-      )
     if (file && !storage?.writeBinary)
       return errorResponse(
         c,
@@ -180,15 +158,16 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
     let verifiedType = supportedType
     let verifiedHash = contentSha256
     if (file) {
-      uploadContents = Buffer.from(await file.arrayBuffer())
-      verifiedType = uploadType(filename, uploadContents)
-      if (!verifiedType || !supportedType || supportedType !== verifiedType)
-        return errorResponse(
-          c,
-          'validation_failed',
-          'The filename, declared type, and file content must agree.',
-          400,
-        )
+      let upload: Awaited<ReturnType<typeof readDocumentUpload>>
+      try {
+        upload = await readDocumentUpload(file, fileType)
+      } catch (error) {
+        if (error instanceof DocumentUploadError)
+          return errorResponse(c, 'validation_failed', error.message, 400)
+        throw error
+      }
+      uploadContents = upload.contents
+      verifiedType = upload.fileType
       const computedHash = createHash('sha256')
         .update(uploadContents)
         .digest('hex')
@@ -213,6 +192,18 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
     })
 
     if (uploadContents && verifiedType && storage?.writeBinary) {
+      const markExtractionFailed = async (failureReason: string) => {
+        try {
+          const version = await updateDocumentExtraction(pool, {
+            organisationId: user.organisationId,
+            versionId: result.version.id,
+            failureReason,
+          })
+          if (version) result.version = version
+        } catch {
+          // Preserve the original storage failure response.
+        }
+      }
       const textObjectKey = result.version.objectKey.replace(
         /\/source$/,
         '/text',
@@ -220,6 +211,7 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
       try {
         await storage.writeBinary(result.version.objectKey, uploadContents)
       } catch {
+        await markExtractionFailed('Document storage write failed.')
         return errorResponse(
           c,
           'storage_unavailable',
@@ -237,13 +229,15 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
         })
         if (version) result.version = version
       } catch (error) {
-        if (!(error instanceof DocumentExtractionError))
+        if (!(error instanceof DocumentExtractionError)) {
+          await markExtractionFailed('Document storage write failed.')
           return errorResponse(
             c,
             'storage_unavailable',
             'Document storage is unavailable.',
             400,
           )
+        }
         const version = await updateDocumentExtraction(pool, {
           organisationId: user.organisationId,
           versionId: result.version.id,

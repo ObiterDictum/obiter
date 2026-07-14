@@ -12,7 +12,7 @@ export class DocumentExtractionError extends Error {
 export function normaliseFileType(
   fileType: string,
 ): SupportedDocumentType | 'pdf' | null {
-  const value = fileType.trim().toLowerCase()
+  const value = fileType.split(';', 1)[0]?.trim().toLowerCase() ?? ''
   if (
     value === 'docx' ||
     value === '.docx' ||

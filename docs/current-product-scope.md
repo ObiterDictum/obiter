@@ -43,7 +43,7 @@ Matters owns:
 - `POST /api/matters`
 - `GET /api/matters/:id`
 
-- Documents (metadata): the matter detail renders its documents list from `GET /api/matters/:matterId/documents`, and the document detail route renders real document metadata and versions from `GET /api/documents/:id`. The API supports DOCX/TXT multipart extraction for Redaction, but the shell has no file-upload control yet; PDF extraction is not supported.
+- Documents: matter detail supports DOCX/TXT multipart upload (up to 25 MB) through `POST /api/matters/:matterId/documents`; the document detail route renders immutable versions and can start a document-linked Redaction run. PDF extraction is not supported.
 
 Documents owns:
 
@@ -51,7 +51,7 @@ Documents owns:
 - `GET /api/matters/:matterId/documents`
 - `GET /api/documents/:id`
 
-- Redaction: `/redact` and `/redact/:runId` provide organisation-scoped standalone-text detection review, decisions and finalized outputs. The API exposes an audit-report download and can create document-linked runs from extracted DOCX/TXT text; selecting/uploading a matter document from the shell remains future work. Detection runs server-side vendored Rampart inference from Obiter's pinned `qarlus/rampart` mirror plus the deterministic UK supplement, with merged spans and an auditable detector version. If model loading or inference fails, runs complete with Rampart deterministic heuristics plus the UK supplement (`heuristics+supplement`) and record degraded mode. Desktop-local inference remains future work.
+- Redaction: `/redact` and `/redact/:runId` provide organisation-scoped standalone-text and DOCX/TXT upload detection review, decisions and finalized outputs. Standalone paste/upload remains the default; document-linked runs can be started from a matter document detail after extraction. Uploads accept DOCX/TXT up to 25 MB; PDF extraction is not supported. The API exposes an audit-report download. Detection runs server-side vendored Rampart inference from Obiter's pinned `qarlus/rampart` mirror plus the deterministic UK supplement, with merged spans and an auditable detector version. If model loading or inference fails, runs complete with Rampart deterministic heuristics plus the UK supplement (`heuristics+supplement`) and record degraded mode. Desktop-local inference remains future work.
 
 Redaction owns:
 

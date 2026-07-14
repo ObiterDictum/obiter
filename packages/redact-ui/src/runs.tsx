@@ -1,8 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { FileText, Plus } from '@phosphor-icons/react'
 import { Badge, Button, EmptyState, Skeleton } from '@obiter/ui'
 import { PageScaffold } from '@obiter/app-shell'
-import { useCreateRedactionRun, useRedactionRuns } from './hooks'
+import {
+  useCreateRedactionRun,
+  useCreateUploadedRedactionRun,
+  useRedactionRuns,
+} from './hooks'
 
 function formatCreatedAt(value: string) {
   return new Intl.DateTimeFormat(undefined, {
@@ -18,23 +22,55 @@ export function RedactionRunsView({
 }) {
   const query = useRedactionRuns()
   const create = useCreateRedactionRun()
+  const upload = useCreateUploadedRedactionRun()
   const [filename, setFilename] = useState('')
   const [text, setText] = useState('')
+  const creating = useRef(false)
+  const mounted = useRef(true)
+  useEffect(
+    () => () => {
+      mounted.current = false
+    },
+    [],
+  )
+  const creationPending =
+    creating.current || create.isPending || upload.isPending
 
-  const submit = () =>
+  const submit = () => {
+    if (creationPending) return
+    creating.current = true
     create.mutate(
       { filename, text },
       {
         onSuccess: ({ run }) => {
+          creating.current = false
           setFilename('')
           setText('')
-          onOpenRun(run.id)
+          if (mounted.current) onOpenRun(run.id)
+        },
+        onError: () => {
+          creating.current = false
         },
       },
     )
+  }
+
+  const submitUpload = (file: File) => {
+    if (creationPending) return
+    creating.current = true
+    upload.mutate(file, {
+      onSuccess: ({ run }) => {
+        creating.current = false
+        if (mounted.current) onOpenRun(run.id)
+      },
+      onError: () => {
+        creating.current = false
+      },
+    })
+  }
 
   return (
-    <PageScaffold eyebrow="Redact" title="Redaction runs">
+    <PageScaffold eyebrow="Redaction" title="Redaction runs">
       <section
         className="flex flex-col gap-4 rounded-lg border border-line bg-surface p-5"
         aria-label="Start a redaction run"
@@ -71,12 +107,36 @@ export function RedactionRunsView({
         {create.error ? (
           <p className="text-sm text-danger">{create.error.message}</p>
         ) : null}
+        <div className="border-t border-line pt-4">
+          <label className="flex flex-col gap-1 text-sm font-medium text-ink">
+            Or upload a document
+            <span className="text-xs font-normal text-muted">
+              DOCX or TXT, up to 25 MB. The file is processed as a standalone
+              redaction run.
+            </span>
+            <input
+              type="file"
+              aria-label="Or upload a document"
+              accept=".docx,.txt,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              disabled={creationPending}
+              className="block text-sm font-normal text-ink"
+              onChange={(event) => {
+                const file = event.target.files?.[0]
+                if (file) submitUpload(file)
+                event.target.value = ''
+              }}
+            />
+          </label>
+          {upload.error ? (
+            <p className="mt-2 text-sm text-danger">{upload.error.message}</p>
+          ) : null}
+        </div>
         <div>
           <Button
             variant="primary"
             iconStart={<Plus size={16} aria-hidden="true" />}
             loading={create.isPending}
-            disabled={!filename.trim() || !text}
+            disabled={creationPending || !filename.trim() || !text}
             onClick={submit}
           >
             Create redaction run

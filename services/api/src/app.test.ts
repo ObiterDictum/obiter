@@ -1035,7 +1035,26 @@ describe('createApiApp', () => {
     expect(await response.json()).toMatchObject({
       run: { id: 'red_1', sourceFilename: 'source.txt', matterId: null },
     })
-    expect([...stored.values()]).toEqual(['Synthetic test text.'])
+
+    const form = new FormData()
+    form.set(
+      'file',
+      new File(['Uploaded test text.'], 'uploaded.txt', { type: 'text/plain' }),
+    )
+    form.set('fileType', 'text/plain')
+    const uploadResponse = await app.request('/api/redaction-runs', {
+      method: 'POST',
+      body: form,
+    })
+
+    expect(uploadResponse.status).toBe(201)
+    expect(await uploadResponse.json()).toMatchObject({
+      run: { id: 'red_1', sourceFilename: 'source.txt', matterId: null },
+    })
+    expect([...stored.values()]).toEqual([
+      'Synthetic test text.',
+      'Uploaded test text.',
+    ])
   })
 
   it('models future legal source query params without running judgment search', async () => {

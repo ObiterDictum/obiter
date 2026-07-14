@@ -14,6 +14,11 @@ import {
   RedactionSpanIntegrityError,
 } from '@obiter/redaction-policy'
 import { detectRedactionSpans } from '../redaction-detection'
+import {
+  DocumentExtractionError,
+  extractDocumentText,
+} from '../document-extraction'
+import { DocumentUploadError, readDocumentUpload } from '../document-upload'
 import { appendAuditLog } from '../database'
 import {
   createRedactionRun,
@@ -90,6 +95,14 @@ function sourceInput(body: Record<string, unknown> | null) {
   return { filename, text, policyMode }
 }
 
+export const MAX_REDACTION_SOURCE_TEXT_LENGTH = 200_000
+
+function validSourceText(text: string) {
+  return (
+    text.trim().length > 0 && text.length <= MAX_REDACTION_SOURCE_TEXT_LENGTH
+  )
+}
+
 function listItem(run: ReturnType<typeof publicRun>) {
   const { spans: _spans, decisions: _decisions, ...item } = run
   return item
@@ -108,8 +121,53 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
   routes.post('/api/redaction-runs', async (c) => {
     const user = requireUser(c)
     if (user instanceof Response) return user
-    const input = sourceInput(await jsonBody(c))
-    if (!input.filename || input.text === null || !input.policyMode.success) {
+
+    const isMultipart =
+      c.req
+        .header('content-type')
+        ?.toLowerCase()
+        .startsWith('multipart/form-data') ?? false
+    const form = isMultipart ? await c.req.formData().catch(() => null) : null
+    if (isMultipart && !form)
+      return errorResponse(
+        c,
+        'validation_failed',
+        'The uploaded file could not be read. Please try again.',
+        400,
+      )
+    const input = sourceInput(
+      form ? { policyMode: form.get('policyMode') } : await jsonBody(c),
+    )
+    let filename = input.filename
+    let text = input.text
+
+    if (form) {
+      const file = form.get('file')
+      if (!(file instanceof File))
+        return errorResponse(
+          c,
+          'validation_failed',
+          'A DOCX or TXT file is required.',
+          400,
+        )
+      try {
+        const upload = await readDocumentUpload(
+          file,
+          form.get('fileType')?.toString() ?? file.type,
+        )
+        filename = upload.filename
+        text = await extractDocumentText(upload.fileType, upload.contents)
+      } catch (error) {
+        if (
+          error instanceof DocumentUploadError ||
+          error instanceof DocumentExtractionError
+        )
+          return errorResponse(c, 'validation_failed', error.message, 400)
+        throw error
+      }
+    }
+
+    if (!filename || text === null || !input.policyMode.success) {
       return errorResponse(
         c,
         'validation_failed',
@@ -117,18 +175,27 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
         400,
       )
     }
+    if (!validSourceText(text))
+      return errorResponse(
+        c,
+        'validation_failed',
+        text.trim().length === 0
+          ? 'The document contains no extractable text.'
+          : `Extracted text must be at most ${MAX_REDACTION_SOURCE_TEXT_LENGTH} characters.`,
+        400,
+      )
     const id = `red_${crypto.randomUUID()}`
     const sourceTextObjectKey = `org/${user.organisationId}/redaction-runs/${id}/source`
-    await storage.writeText(sourceTextObjectKey, input.text)
+    await storage.writeText(sourceTextObjectKey, text)
     let run
     try {
-      const detection = await detectRedactionSpans(input.text)
+      const detection = await detectRedactionSpans(text)
       run = await createRedactionRun({
         pool,
         id,
         organisationId: user.organisationId,
         userId: user.id,
-        sourceFilename: input.filename,
+        sourceFilename: filename,
         sourceTextObjectKey,
         spans: detection.spans,
         detectorVersion: detection.detectorVersion,
@@ -179,6 +246,15 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
         404,
       )
     const text = await storage.readText(source.text_object_key)
+    if (!validSourceText(text))
+      return errorResponse(
+        c,
+        'validation_failed',
+        text.trim().length === 0
+          ? 'The document contains no extractable text.'
+          : `Extracted text must be at most ${MAX_REDACTION_SOURCE_TEXT_LENGTH} characters.`,
+        400,
+      )
     const detection = await detectRedactionSpans(text)
     const run = await createRedactionRun({
       pool,
