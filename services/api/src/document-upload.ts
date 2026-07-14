@@ -17,11 +17,14 @@ export class DocumentUploadError extends Error {
 function verifiedType(
   filename: string,
   contents: Buffer,
+  declaredType: SupportedDocumentType | null,
 ): SupportedDocumentType | null {
   const extension = filename.toLowerCase().split('.').pop()
   const isZip = contents.subarray(0, 2).equals(Buffer.from('PK'))
   if (extension === 'docx' && isZip) return 'docx'
   if (extension === 'txt' && !isZip) return 'txt'
+  if (!filename.includes('.') && declaredType === 'docx' && isZip) return 'docx'
+  if (!filename.includes('.') && declaredType === 'txt' && !isZip) return 'txt'
   return null
 }
 
@@ -38,18 +41,16 @@ export async function readDocumentUpload(
     throw new DocumentUploadError(
       'PDF files are not yet supported for redaction. Please upload DOCX or TXT files.',
     )
-  if (!supportedType)
-    throw new DocumentUploadError(
-      'Only DOCX and TXT files are supported for redaction.',
-    )
+  const declaredSupported =
+    supportedType === 'docx' || supportedType === 'txt' ? supportedType : null
   if (file.size > MAX_DOCUMENT_UPLOAD_BYTES)
     throw new DocumentUploadError(
       `Document uploads must be at most ${MAX_DOCUMENT_UPLOAD_BYTES / 1024 / 1024} MB.`,
     )
 
   const contents = Buffer.from(await file.arrayBuffer())
-  const fileType = verifiedType(file.name, contents)
-  if (!fileType || fileType !== supportedType)
+  const fileType = verifiedType(file.name, contents, declaredSupported)
+  if (!fileType || (declaredSupported && fileType !== declaredSupported))
     throw new DocumentUploadError(
       'The filename, declared type, and file content must agree.',
     )

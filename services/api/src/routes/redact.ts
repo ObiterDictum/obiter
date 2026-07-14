@@ -95,6 +95,14 @@ function sourceInput(body: Record<string, unknown> | null) {
   return { filename, text, policyMode }
 }
 
+export const MAX_REDACTION_SOURCE_TEXT_LENGTH = 200_000
+
+function validSourceText(text: string) {
+  return (
+    text.trim().length > 0 && text.length <= MAX_REDACTION_SOURCE_TEXT_LENGTH
+  )
+}
+
 function listItem(run: ReturnType<typeof publicRun>) {
   const { spans: _spans, decisions: _decisions, ...item } = run
   return item
@@ -120,6 +128,13 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
         ?.toLowerCase()
         .startsWith('multipart/form-data') ?? false
     const form = isMultipart ? await c.req.formData().catch(() => null) : null
+    if (isMultipart && !form)
+      return errorResponse(
+        c,
+        'validation_failed',
+        'The uploaded file could not be read. Please try again.',
+        400,
+      )
     const input = sourceInput(
       form ? { policyMode: form.get('policyMode') } : await jsonBody(c),
     )
@@ -160,6 +175,15 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
         400,
       )
     }
+    if (!validSourceText(text))
+      return errorResponse(
+        c,
+        'validation_failed',
+        text.trim().length === 0
+          ? 'The document contains no extractable text.'
+          : `Extracted text must be at most ${MAX_REDACTION_SOURCE_TEXT_LENGTH} characters.`,
+        400,
+      )
     const id = `red_${crypto.randomUUID()}`
     const sourceTextObjectKey = `org/${user.organisationId}/redaction-runs/${id}/source`
     await storage.writeText(sourceTextObjectKey, text)
@@ -222,6 +246,15 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
         404,
       )
     const text = await storage.readText(source.text_object_key)
+    if (!validSourceText(text))
+      return errorResponse(
+        c,
+        'validation_failed',
+        text.trim().length === 0
+          ? 'The document contains no extractable text.'
+          : `Extracted text must be at most ${MAX_REDACTION_SOURCE_TEXT_LENGTH} characters.`,
+        400,
+      )
     const detection = await detectRedactionSpans(text)
     const run = await createRedactionRun({
       pool,

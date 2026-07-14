@@ -146,13 +146,6 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
         'PDF files are not yet supported for redaction. Please upload DOCX or TXT files.',
         400,
       )
-    if (file && !supportedType)
-      return errorResponse(
-        c,
-        'validation_failed',
-        'Only DOCX and TXT files are supported for redaction.',
-        400,
-      )
     if (file && !storage?.writeBinary)
       return errorResponse(
         c,
@@ -199,6 +192,18 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
     })
 
     if (uploadContents && verifiedType && storage?.writeBinary) {
+      const markExtractionFailed = async (failureReason: string) => {
+        try {
+          const version = await updateDocumentExtraction(pool, {
+            organisationId: user.organisationId,
+            versionId: result.version.id,
+            failureReason,
+          })
+          if (version) result.version = version
+        } catch {
+          // Preserve the original storage failure response.
+        }
+      }
       const textObjectKey = result.version.objectKey.replace(
         /\/source$/,
         '/text',
@@ -206,6 +211,7 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
       try {
         await storage.writeBinary(result.version.objectKey, uploadContents)
       } catch {
+        await markExtractionFailed('Document storage write failed.')
         return errorResponse(
           c,
           'storage_unavailable',
@@ -223,13 +229,15 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
         })
         if (version) result.version = version
       } catch (error) {
-        if (!(error instanceof DocumentExtractionError))
+        if (!(error instanceof DocumentExtractionError)) {
+          await markExtractionFailed('Document storage write failed.')
           return errorResponse(
             c,
             'storage_unavailable',
             'Document storage is unavailable.',
             400,
           )
+        }
         const version = await updateDocumentExtraction(pool, {
           organisationId: user.organisationId,
           versionId: result.version.id,
