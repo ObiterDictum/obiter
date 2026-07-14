@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { queryOptions } from '@tanstack/react-query'
 import { apiFetch } from './api'
+import { declaredFileType } from './file-type'
 
 /**
  * Real document domain types, mirroring the wire shapes returned by the
@@ -106,7 +107,7 @@ export function useUploadMatterDocument(matterId: string) {
     mutationFn: (file: File) => {
       const form = new FormData()
       form.set('file', file)
-      form.set('fileType', file.type || file.name.split('.').pop() || '')
+      form.set('fileType', declaredFileType(file))
       return apiFetch<DocumentUploadResponse>(
         `/api/matters/${matterId}/documents`,
         { method: 'POST', body: form },
