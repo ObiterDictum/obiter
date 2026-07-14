@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { useRef } from 'react'
 import { apiFetch, useDocument } from '@obiter/app-shell'
 import { Badge, Button, EmptyState, Skeleton } from '@obiter/ui'
 import type { RedactionRun } from './types'
@@ -12,7 +13,8 @@ export function RedactionRunsRegion({
   onOpenRun: (runId: string) => void
 }) {
   const document = useDocument(documentId)
-  const create = useCreateDocumentRedactionRun(documentId)
+  const create = useCreateDocumentRedactionRun()
+  const creating = useRef(false)
   const query = useQuery({
     queryKey: ['document-redaction-runs', documentId],
     queryFn: () =>
@@ -21,13 +23,32 @@ export function RedactionRunsRegion({
       ),
     staleTime: 30_000,
   })
-  const ready =
-    document.data?.document.currentVersion?.documentStatus === 'ready'
-  const createRun = () =>
-    create.mutate(undefined, { onSuccess: ({ run }) => onOpenRun(run.id) })
+  const version = document.data?.document.currentVersion
+  const ready = version?.documentStatus === 'ready'
+  const failed = version?.documentStatus === 'failed'
+  const createRun = () => {
+    if (create.isPending || creating.current || !ready) return
+    creating.current = true
+    create.mutate(documentId, {
+      onSuccess: ({ run }) => {
+        creating.current = false
+        onOpenRun(run.id)
+      },
+      onError: () => {
+        creating.current = false
+      },
+    })
+  }
 
   if (query.isPending || document.isPending)
     return <Skeleton className="h-24" />
+  if (document.isError)
+    return (
+      <EmptyState
+        title="Document is unavailable"
+        body={document.error.message}
+      />
+    )
   if (query.error)
     return (
       <EmptyState
@@ -43,7 +64,10 @@ export function RedactionRunsRegion({
           body={
             ready
               ? 'Create a run to detect sensitive information before reviewing this document.'
-              : 'This document must finish text extraction before it can be redacted.'
+              : failed
+                ? version?.failureReason ||
+                  'Text extraction failed for this document.'
+                : 'This document must finish text extraction before it can be redacted.'
           }
         />
         <CreateDocumentRunButton
