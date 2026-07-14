@@ -1,6 +1,7 @@
 /**
  * Shape of the Electron preload bridge as seen from the shared app-shell.
- * Constructed in apps/desktop/src/preload; app-shell only reads `apiOrigin`.
+ * Constructed in apps/desktop/src/preload; app-shell accesses desktop state only
+ * through this typed boundary.
  *
  * `apiOrigin` is the absolute API URL the packaged renderer talks to, or null
  * in dev-desktop (where the Vite proxy handles /api). Web and SSR have no
@@ -10,6 +11,9 @@ export interface DesktopBridge {
   platform: 'desktop'
   shellVersion: string
   apiOrigin: string | null
+  getAuthToken(): Promise<string | null>
+  setAuthToken(token: string): Promise<void>
+  clearAuthToken(): Promise<void>
 }
 
 /**

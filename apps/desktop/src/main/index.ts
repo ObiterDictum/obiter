@@ -5,12 +5,15 @@ import {
   BrowserWindow,
   net,
   protocol,
+  safeStorage,
   shell,
 } from 'electron'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { pathToFileURL } from 'node:url'
 import { resolveRendererPath } from './renderer-path'
+import { DesktopAuthTokenStore } from './auth-token-store'
+import { isAllowedNavigation, parseAllowedOrigin } from './navigation-guard'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
 
@@ -88,6 +91,20 @@ const packagedApiOrigin = app.isPackaged ? resolvePackagedApiOrigin() : null
 ipcMain.on('obiter:get-api-origin', (event) => {
   event.returnValue = packagedApiOrigin
 })
+
+const authTokenStore = new DesktopAuthTokenStore(
+  join(app.getPath('userData'), 'desktop-auth-token'),
+  safeStorage,
+)
+
+ipcMain.handle('obiter:get-auth-token', () => authTokenStore.get())
+ipcMain.handle('obiter:set-auth-token', (_event, token: unknown) => {
+  if (typeof token !== 'string' || token.trim().length === 0) {
+    throw new Error('Desktop auth token must be a non-empty string.')
+  }
+  return authTokenStore.set(token)
+})
+ipcMain.handle('obiter:clear-auth-token', () => authTokenStore.clear())
 
 /**
  * Page background for the Electron window, picked before the renderer loads
@@ -174,16 +191,18 @@ function createWindow() {
   // attached, same Origin the API trusts) — a full privilege escape. Only
   // same-origin navigations (obiter://desktop-auth in a packaged build, the
   // electron-vite dev URL in dev) are allowed.
-  const allowedOrigin =
-    process.env.ELECTRON_RENDERER_URL ?? 'obiter://desktop-auth'
+  //
+  // The comparison is protocol+host, NOT URL.origin: in the WHATWG URL spec the
+  // origin of every non-special scheme (obiter://, file://, anything://) is the
+  // literal string "null", so an .origin comparison collapses to "null" ===
+  // "null" and would allow file:/// or any arbitrary scheme through. Fail
+  // closed: an unparseable allowlist or target blocks the navigation.
+  const allowedOrigin = parseAllowedOrigin(
+    process.env.ELECTRON_RENDERER_URL ?? 'obiter://desktop-auth',
+  )
+
   mainWindow.webContents.on('will-navigate', (event, url) => {
-    let targetOrigin: string | null = null
-    try {
-      targetOrigin = new URL(url).origin
-    } catch {
-      targetOrigin = null
-    }
-    if (targetOrigin !== new URL(allowedOrigin).origin) {
+    if (!isAllowedNavigation(allowedOrigin, url)) {
       event.preventDefault()
     }
   })
