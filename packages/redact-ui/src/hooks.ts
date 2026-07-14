@@ -30,6 +30,39 @@ export function useCreateRedactionRun() {
   })
 }
 
+export function useCreateUploadedRedactionRun() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (file: File) => {
+      const form = new FormData()
+      form.set('file', file)
+      form.set('fileType', file.type || file.name.split('.').pop() || '')
+      return apiFetch<{ run: RedactionRun }>('/api/redaction-runs', {
+        method: 'POST',
+        body: form,
+      })
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: runsKey }),
+  })
+}
+
+export function useCreateDocumentRedactionRun(documentId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<{ run: RedactionRun }>(
+        `/api/documents/${documentId}/redaction-runs`,
+        { method: 'POST', body: JSON.stringify({}) },
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: runsKey })
+      void queryClient.invalidateQueries({
+        queryKey: ['document-redaction-runs', documentId],
+      })
+    },
+  })
+}
+
 export function useRedactionRun(runId: string) {
   return useQuery({
     queryKey: runKey(runId),
