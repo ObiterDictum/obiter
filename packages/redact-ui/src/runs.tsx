@@ -1,10 +1,24 @@
 import { useEffect, useRef, useState } from 'react'
-import { FileText, Plus } from '@phosphor-icons/react'
-import { Badge, Button, EmptyState, Skeleton } from '@obiter/ui'
-import { PageScaffold } from '@obiter/app-shell'
+import { FileText, Plus, Trash } from '@phosphor-icons/react'
+import {
+  Badge,
+  Button,
+  Dialog,
+  DialogClose,
+  DialogCloseButton,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTrigger,
+  EmptyState,
+  Skeleton,
+  useToast,
+} from '@obiter/ui'
+import { PageScaffold, useCurrentUser } from '@obiter/app-shell'
 import {
   useCreateRedactionRun,
   useCreateUploadedRedactionRun,
+  useDeleteRedactionRun,
   useRedactionRuns,
 } from './hooks'
 
@@ -23,6 +37,10 @@ export function RedactionRunsView({
   const query = useRedactionRuns()
   const create = useCreateRedactionRun()
   const upload = useCreateUploadedRedactionRun()
+  const deleteRun = useDeleteRedactionRun()
+  const { toast } = useToast()
+  const { data: me } = useCurrentUser()
+  const canManage = me?.user.role === 'owner' || me?.user.role === 'admin'
   const [filename, setFilename] = useState('')
   const [text, setText] = useState('')
   const creating = useRef(false)
@@ -204,6 +222,45 @@ export function RedactionRunsView({
                   >
                     Review
                   </Button>
+                  {canManage ? (
+                    <Dialog>
+                      <DialogTrigger
+                        render={
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            aria-label="Delete redaction run"
+                          >
+                            <Trash aria-hidden /> Delete
+                          </Button>
+                        }
+                      />
+                      <DialogContent size="md">
+                        <DialogTitle>Delete redaction run</DialogTitle>
+                        <DialogDescription>
+                          This removes the run and its review state. Removals
+                          are soft — rows persist for audit and can be restored
+                          by an operator.
+                        </DialogDescription>
+                        <div className="flex justify-end gap-2">
+                          <DialogClose
+                            render={<Button variant="ghost">Cancel</Button>}
+                          />
+                          <Button
+                            variant="danger"
+                            loading={deleteRun.isPending}
+                            onClick={async () => {
+                              await deleteRun.mutateAsync(run.id)
+                              toast({ title: 'Redaction run deleted' })
+                            }}
+                          >
+                            Delete run
+                          </Button>
+                        </div>
+                        <DialogCloseButton />
+                      </DialogContent>
+                    </Dialog>
+                  ) : null}
                 </div>
               </div>
             ))}
