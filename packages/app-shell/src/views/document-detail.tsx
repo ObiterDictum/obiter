@@ -1,8 +1,22 @@
 import type { ReactNode } from 'react'
-import { Link, Outlet } from '@tanstack/react-router'
-import { ArrowLeft, FileText } from '@phosphor-icons/react'
-import { Badge, EmptyState, Skeleton } from '@obiter/ui'
-import { useDocument } from '../documents'
+import { Link, Outlet, useNavigate } from '@tanstack/react-router'
+import { ArrowLeft, FileText, Trash } from '@phosphor-icons/react'
+import {
+  Badge,
+  Button,
+  Dialog,
+  DialogClose,
+  DialogCloseButton,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTrigger,
+  EmptyState,
+  Skeleton,
+  useToast,
+} from '@obiter/ui'
+import { useCurrentUser } from '../current-user'
+import { useDeleteDocument, useDocument } from '../documents'
 
 /**
  * Document detail — the contract route (PRD FR4). Receives route params as
@@ -20,6 +34,11 @@ export function DocumentDetailLayoutView({
   redactionRunsRegion?: ReactNode
 }) {
   const document = useDocument(documentId)
+  const deleteDocument = useDeleteDocument()
+  const navigate = useNavigate()
+  const { toast } = useToast()
+  const { data: me } = useCurrentUser()
+  const canManage = me?.user.role === 'owner' || me?.user.role === 'admin'
 
   // The document is loaded by id alone; guard against the URL's matterId not
   // matching the document's actual matter. Render not-found rather than show a
@@ -65,7 +84,55 @@ export function DocumentDetailLayoutView({
               Matter <span className="font-mono text-ink">{matterId}</span>
             </p>
           </div>
-          <Badge tone="neutral">Immutable versions</Badge>
+          <div className="flex items-center gap-2">
+            <Badge tone="neutral">Immutable versions</Badge>
+            {canManage ? (
+              <Dialog>
+                <DialogTrigger
+                  render={
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      aria-label="Delete document"
+                    >
+                      <Trash aria-hidden /> Delete
+                    </Button>
+                  }
+                />
+                <DialogContent size="md">
+                  <DialogTitle>Delete document</DialogTitle>
+                  <DialogDescription>
+                    Deleting this document also removes its redaction runs.
+                    Removals are soft — rows persist for audit and can be
+                    restored by an operator.
+                  </DialogDescription>
+                  <div className="flex justify-end gap-2">
+                    <DialogClose
+                      render={<Button variant="ghost">Cancel</Button>}
+                    />
+                    <Button
+                      variant="danger"
+                      loading={deleteDocument.isPending}
+                      onClick={async () => {
+                        await deleteDocument.mutateAsync({
+                          documentId,
+                          matterId,
+                        })
+                        toast({ title: 'Document deleted' })
+                        navigate({
+                          to: '/matters/$matterId',
+                          params: { matterId: String(matterId) },
+                        })
+                      }}
+                    >
+                      Delete document
+                    </Button>
+                  </div>
+                  <DialogCloseButton />
+                </DialogContent>
+              </Dialog>
+            ) : null}
+          </div>
         </div>
       </div>
 

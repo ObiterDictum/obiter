@@ -30,6 +30,7 @@ export interface MatterRecord {
   createdAt: string
   updatedAt: string
   deletedAt: string | null
+  deletedBy: string | null
 }
 
 interface MatterListResponse {
@@ -115,4 +116,22 @@ export function useMattersList() {
 /** Single matter via TanStack Query. */
 export function useMatter(matterId: string) {
   return useQuery(matterQueryOptions(matterId))
+}
+
+/**
+ * Soft-delete a matter and its documents/runs (owner/admin only). On success
+ * the detail is removed from cache and the list invalidated so the matter
+ * disappears on next read.
+ */
+export function useDeleteMatter() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (matterId: string) => {
+      await apiFetch(`/api/matters/${matterId}`, { method: 'DELETE' })
+    },
+    onSuccess: (_data, matterId) => {
+      queryClient.removeQueries({ queryKey: mattersKeys.detail(matterId) })
+      queryClient.invalidateQueries({ queryKey: mattersKeys.lists() })
+    },
+  })
 }

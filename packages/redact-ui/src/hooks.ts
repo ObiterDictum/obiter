@@ -30,6 +30,22 @@ export function useCreateRedactionRun() {
   })
 }
 
+/**
+ * Soft-delete a standalone redaction run (owner/admin only). On success the
+ * run detail is removed from cache and the runs list invalidated.
+ */
+export function useDeleteRedactionRun() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (runId: string) =>
+      apiFetch(`/api/redaction-runs/${runId}`, { method: 'DELETE' }),
+    onSuccess: (_data, runId) => {
+      queryClient.removeQueries({ queryKey: runKey(runId) })
+      queryClient.invalidateQueries({ queryKey: runsKey })
+    },
+  })
+}
+
 export function useCreateUploadedRedactionRun() {
   const queryClient = useQueryClient()
   return useMutation({

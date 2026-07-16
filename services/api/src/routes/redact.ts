@@ -6,7 +6,11 @@ import {
   redactionPolicyModeSchema,
   spanDecisionSchema,
 } from '@obiter/contracts'
-import type { ApiErrorCode, ApiErrorResponse } from '@obiter/contracts'
+import type {
+  ApiErrorCode,
+  ApiErrorResponse,
+  UserRole,
+} from '@obiter/contracts'
 import {
   applyPseudonymised,
   applyRedacted,
@@ -32,6 +36,7 @@ import {
   listRedactionAuditLog,
   publicRun,
   recordSpanDecision,
+  softDeleteRedactionRun,
 } from '../redaction-database'
 import type { StorageService } from '../storage'
 import {
@@ -39,10 +44,12 @@ import {
   renderAuditHtml,
   renderAuditMarkdown,
 } from '../redaction-audit-report'
+import { requireManageRole } from '../authz'
 
 interface RouteUser {
   id: string
   organisationId?: string | null
+  role?: UserRole | null
 }
 interface RouteVariables {
   requestId: string
@@ -301,6 +308,25 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
       user.organisationId,
       c.req.param('runId'),
     )
+    if (!run)
+      return errorResponse(
+        c,
+        'redaction_run_not_found',
+        'Redaction run not found.',
+        404,
+      )
+    return c.json({ run: publicRun(run) })
+  })
+
+  routes.delete('/api/redaction-runs/:runId', async (c) => {
+    const user = requireManageRole(c)
+    if (user instanceof Response) return user
+    const run = await softDeleteRedactionRun(pool, {
+      organisationId: user.organisationId,
+      userId: user.id,
+      runId: c.req.param('runId'),
+      requestId: c.get('requestId'),
+    })
     if (!run)
       return errorResponse(
         c,
@@ -580,10 +606,15 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
   routes.get('/api/redaction-runs/:runId/audit', async (c) => {
     const user = requireUser(c)
     if (user instanceof Response) return user
+    // The audit report survives deletion (ruling 2): fetch with includeDeleted
+    // so a deleted finalized run's report stays retrievable. A deleted run is
+    // sensitive (the run itself is gone from every other surface), so only
+    // owner/admin may read it — live runs' audit access is unchanged.
     const run = await getRedactionRun(
       pool,
       user.organisationId,
       c.req.param('runId'),
+      { includeDeleted: true },
     )
     if (!run)
       return errorResponse(
@@ -592,6 +623,10 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
         'Redaction run not found.',
         404,
       )
+    if (run.deletedAt) {
+      const manageUser = requireManageRole(c)
+      if (manageUser instanceof Response) return manageUser
+    }
     if (run.status !== 'finalized')
       return errorResponse(
         c,

@@ -15,3 +15,4 @@ They complement the shorter implementation specs under `docs/specs/`.
 - [Redact PRD 1: Detection Pipeline Foundation](redact-1-detection.md)
 - [Redact PRD 2: Review, Decisions, and Output](redact-2-review-output.md)
 - [Redact PRD 3: Production Readiness, Audit, and Synthetic Data](redact-3-production.md)
+- [Platform Deletion](platform-deletion.md)

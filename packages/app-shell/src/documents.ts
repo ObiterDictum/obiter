@@ -45,6 +45,7 @@ export interface MatterDocumentRecord {
   createdAt: string
   updatedAt: string
   deletedAt: string | null
+  deletedBy: string | null
   currentVersion?: DocumentVersionRecord | null
 }
 
@@ -117,5 +118,27 @@ export function useUploadMatterDocument(matterId: string) {
       queryClient.invalidateQueries({
         queryKey: documentsKeys.byMatter(matterId),
       }),
+  })
+}
+
+/**
+ * Soft-delete a document and its redaction runs (owner/admin only). On success
+ * the detail is removed from cache and the parent matter's document list is
+ * invalidated so the document disappears on next read.
+ */
+export function useDeleteDocument() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { documentId: string; matterId: string }) => {
+      await apiFetch(`/api/documents/${input.documentId}`, {
+        method: 'DELETE',
+      })
+    },
+    onSuccess: (_data, { documentId, matterId }) => {
+      queryClient.removeQueries({ queryKey: documentsKeys.detail(documentId) })
+      queryClient.invalidateQueries({
+        queryKey: documentsKeys.byMatter(matterId),
+      })
+    },
   })
 }
