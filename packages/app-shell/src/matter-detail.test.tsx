@@ -190,6 +190,20 @@ describe('MatterRouteView delete affordance', () => {
     expect((confirm as HTMLButtonElement).disabled).toBe(true)
   })
 
+  it('accepts DOCX, PDF, and TXT documents for text extraction', async () => {
+    mocks.useMatter.mockReturnValue(successMatter())
+    mocks.useCurrentUser.mockReturnValue({ data: OWNER })
+    mocks.useDeleteMatter.mockReturnValue(deleteMutationSpy())
+
+    render(<RouterProvider router={buildRouter('mtr_1')} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('DOCX, PDF, and TXT, up to 25 MB')).toBeTruthy()
+    })
+    const input = screen.getByLabelText('Upload document')
+    expect(input).toHaveProperty('accept', expect.stringContaining('.pdf'))
+  })
+
   it('hides the delete control for a member', async () => {
     mocks.useMatter.mockReturnValue(successMatter())
     mocks.useCurrentUser.mockReturnValue({ data: MEMBER })

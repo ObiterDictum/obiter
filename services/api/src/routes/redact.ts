@@ -154,7 +154,7 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
         return errorResponse(
           c,
           'validation_failed',
-          'A DOCX or TXT file is required.',
+          'A PDF, DOCX or TXT file is required.',
           400,
         )
       try {

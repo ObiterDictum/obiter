@@ -2,7 +2,7 @@
 
 > ## Implementation status (verified against the codebase, July 2026)
 >
-> The **audit export, DOCX/TXT extraction, review/finalize, and the dataset-export tool described here are shipped.** The **detection pipeline is deterministic UK patterns only** — not "powered by Rampart" (see the banner on [Redact PRD 1](redact-1-detection.md)). The Rampart token-classification model integration is planned but not shipped. The synthetic-data and fine-tuning content below remains accurate as _preparation_ for that integration: generating training data and documenting the fine-tuning loop is real work that is done; the claim that the base model runs in production today is what is false, and is not made by the code. The dataset-export tool's category→label reverse mapping (`rampart-map.ts`) is the only current consumer of the Rampart label set.
+> The **audit export, DOCX, TXT, and text-layer-PDF extraction, review/finalize, and the dataset-export tool described here are shipped.** The **detection pipeline is deterministic UK patterns only** — not "powered by Rampart" (see the banner on [Redact PRD 1](redact-1-detection.md)). The Rampart token-classification model integration is planned but not shipped. The synthetic-data and fine-tuning content below remains accurate as _preparation_ for that integration: generating training data and documenting the fine-tuning loop is real work that is done; the claim that the base model runs in production today is what is false, and is not made by the code. The dataset-export tool's category→label reverse mapping (`rampart-map.ts`) is the only current consumer of the Rampart label set.
 
 ## Summary
 
@@ -31,7 +31,7 @@ This phase closes all four gaps.
 ## Product Principles
 
 - **A redaction tool that cannot export an audit report is not a redaction tool.** Every redaction run must produce a downloadable, inspectable audit artifact that records every decision, timestamp, user, and policy mode.
-- **Real documents are DOCX, not TXT.** The pipeline must work on the file format law firms actually use. PDF is deferred (Phase 2), but DOCX is the minimum viable format.
+- **Real documents are DOCX and PDFs, not only TXT.** The pipeline extracts text-layer PDF content for text-based redaction; it does not alter the original PDF or perform OCR.
 - **Fine-tuning requires data first.** The synthetic data generator and dataset export tool create the raw material for Rampart fine-tuning. Without these, the fine-tuning path remains theoretical.
 - **Synthetic data must be realistic.** Generated documents must use genuine UK legal language, document structures, and PII placements that reflect real law firm documents. Unrealistic data degrades fine-tuning quality.
 - **The demo must be repeatable and inspectable.** A firm evaluator should be able to follow a script, inspect every artifact, and verify the tool's behaviour without ambiguity.
@@ -39,7 +39,7 @@ This phase closes all four gaps.
 
 ## Goals
 
-1. **DOCX text extraction** — On upload, extract text from `.docx` files using `mammoth`, store the extracted text in object storage at the `text_object_key` path, and update the document status to `ready`.
+1. **DOCX and text-layer PDF extraction** — On upload, extract text from `.docx` files using `mammoth` or text-layer PDFs using `unpdf`, store the extracted text in object storage at the `text_object_key` path, and update the document status to `ready`.
 2. **Audit report export** — `GET /api/redaction-runs/:runId/audit` returns a structured audit record. The redaction report artifact contains the original document reference, run summary, full audit log, detector version, and output reference.
 3. **Synthetic training data generation** — Generate 200–500 realistic UK legal documents with labelled PII spans, in Rampart's training JSONL format, stored under `data/evals/redact/`. Covers 10+ PII types across 7+ UK legal document types.
 4. **Dataset export tool** — Export reviewed redaction runs as training data in Rampart's training JSONL format, mapping Obiter span categories back to Rampart's 17 entity types.
@@ -49,7 +49,7 @@ This phase closes all four gaps.
 
 ## Non-Goals
 
-- **PDF text extraction** — PDF redaction requires PDF manipulation libraries (pdfplumber, PyMuPDF) and position-aware redaction boxes. This is deferred to a future phase.
+- **Position-aware PDF redaction** — PDF inputs are extracted to text only. Rendering redaction boxes over the original PDF, emitting a redacted PDF, and OCR for scanned/image-only PDFs remain deferred.
 - **Rampart fine-tuning execution** — This phase generates the synthetic data, the export pipeline, and the documentation, but fine-tuning itself requires a rented GPU and is a post-MVP activity after data quality has been reviewed.
 - **Desktop-local redaction** — Electron offline processing is still Phase 2+.
 - **Batch redaction** — Multiple documents in a single redaction run is not in Phase 3.
@@ -113,7 +113,7 @@ Inspects synthetic data quality, label correctness, and the fine-tuning dataset 
 
 ### Deferred (Post-M3 / Phase 2)
 
-- PDF text extraction and redaction
+- Position-aware PDF redaction and OCR for scanned/image-only PDFs
 - Fine-tuning execution (requires rented GPU, separate budget)
 - Desktop-local redaction
 - Batch redaction runs
@@ -123,15 +123,15 @@ Inspects synthetic data quality, label correctness, and the fine-tuning dataset 
 
 ## Domain-Specific Sections
 
-### 1. DOCX Text Extraction
+### 1. Document Text Extraction
 
-**Rationale:** UK legal documents are authored in Microsoft Word and distributed as DOCX. The entire Obiter product upload flow is built around `matter_documents` and `document_versions`, which already support any file type. The gap is that Phase 1 only extracts text from plain `.txt` files. For DOCX, an extraction step is needed between upload and redaction-readiness.
+**Rationale:** UK legal documents are authored in Microsoft Word and frequently distributed as PDFs. The entire Obiter product upload flow is built around `matter_documents` and `document_versions`, which already support any file type. DOCX and text-layer PDFs are extracted into the same plain-text redaction input; no PDF output is produced.
 
 **Approach:**
 
 - **Prerequisite — binary upload does not exist yet.** The current `POST /api/matters/:matterId/documents` accepts JSON metadata only (filename, hash, size); no file bytes are ever received or stored, and no storage client exists in the API (verified July 2026). Before extraction can work, this phase adds multipart content upload with original-file storage (FR1.11) and the object-storage adapter for the `StorageService` abstraction introduced in Phases 1–2 (FR1.12).
-- Add `mammoth` as a dependency in the API service (`services/api/package.json`). Mammoth is a mature DOCX-to-HTML/text library that handles paragraphs, tables, headers, footers, embedded images (skipped for text extraction), and common formatting. It is available as an npm package (`mammoth`) and runs in Node.js without external binaries.
-- On document upload, inspect the `fileType` field of `matter_documents`. If `fileType` is `.docx`, run mammoth extraction. If `.txt`, read the file content directly (existing Phase 1 path).
+- Use `mammoth` for DOCX and `unpdf` for text-layer PDF extraction in the API service. Both run in Node.js without external binaries. `unpdf`'s PDF.js text path is configured with evaluation disabled.
+- On document upload, inspect the `fileType` field of `matter_documents`. If `fileType` is `.docx`, run mammoth extraction; if `.pdf`, extract each PDF page and join them as text; if `.txt`, read the file content directly. Empty PDFs, and multi-page PDFs with fewer than 20 non-whitespace characters per page on average, are treated as scanned-like. A short one-page text-layer PDF remains valid.
 - Store the extracted text at the `text_object_key` path in object storage. The `document_versions` table already has this column.
 - After extraction, update `document_versions.document_status` to `ready`. (`document_status` and `failure_reason` are new columns added by migration `0006_document_extraction.sql`, scoped to this phase — see FR1.9.)
 - On redaction run creation (`POST /api/documents/:documentId/redaction-runs`), check `document_status`. If not yet `ready`, trigger extraction synchronously before creating the run. If extraction fails, the run goes to `failed` with a `failure_reason` field.
@@ -139,14 +139,15 @@ Inspects synthetic data quality, label correctness, and the fine-tuning dataset 
 
 **Error states:**
 
-| Condition                                    | Behaviour                                                         |
-| -------------------------------------------- | ----------------------------------------------------------------- |
-| DOCX uploaded, extraction succeeds           | Status → `ready`, text stored at `text_object_key`                |
-| DOCX uploaded, extraction fails              | Status → `failed`, `failure_reason` set                           |
-| TXT uploaded                                 | Read inline, status → `ready`                                     |
-| PDF uploaded                                 | Blocked at upload with "PDF not yet supported" error              |
-| Run created before extraction done           | Trigger extraction synchronously                                  |
-| Object storage unavailable during extraction | Status → `failed`, `failure_reason: "object storage unavailable"` |
+| Condition                                    | Behaviour                                                                   |
+| -------------------------------------------- | --------------------------------------------------------------------------- |
+| DOCX uploaded, extraction succeeds           | Status → `ready`, text stored at `text_object_key`                          |
+| DOCX uploaded, extraction fails              | Status → `failed`, `failure_reason` set                                     |
+| TXT uploaded                                 | Read inline, status → `ready`                                               |
+| Text-layer PDF uploaded                      | Extracted to text and status → `ready`; output remains text                 |
+| Scanned/image-only PDF uploaded              | Standalone: rejected; matter version: retained as `failed`; OCR unavailable |
+| Run created before extraction done           | Trigger extraction synchronously                                            |
+| Object storage unavailable during extraction | Status → `failed`, `failure_reason: "object storage unavailable"`           |
 
 **Mammoth configuration:**
 
@@ -794,7 +795,7 @@ The Redaction sidebar entry was activated in Phase 2 (Redact PRD 2, FR11). This 
 | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | FR1.1  | On document upload with `fileType == 'docx'`, extract text using `mammoth.extractRawText` and store at `document_versions.text_object_key`                                                                                                                                                                                                                            |
 | FR1.2  | On document upload with `fileType == 'txt'`, store file content directly at `text_object_key`                                                                                                                                                                                                                                                                         |
-| FR1.3  | On document upload with `fileType == 'pdf'`, reject with clear error: "PDF files are not yet supported for redaction. Please upload DOCX or TXT files."                                                                                                                                                                                                               |
+| FR1.3  | On document upload with `fileType == 'pdf'`, require the `%PDF-` signature, extract text-layer content, and reject scanned/image-only standalone PDFs with the OCR-unavailable message. Matter uploads retain the source and record extraction failure.                                                                                                               |
 | FR1.4  | After successful extraction, set `document_versions.document_status` to `ready`                                                                                                                                                                                                                                                                                       |
 | FR1.5  | On extraction failure (mammoth throws), set `document_versions.document_status` to `failed` and record `document_versions.failure_reason`                                                                                                                                                                                                                             |
 | FR1.6  | On redaction run creation, if `document_status != 'ready'`, trigger extraction synchronously before creating the run                                                                                                                                                                                                                                                  |
@@ -982,7 +983,7 @@ The following must be true for M3 sign-off:
 | **Audit report HTML export** has poor rendering for large span sets                       | Low                              | Medium | Test with 200-span run. Limit HTML page size by paginating audit log entries if needed.                                                                                                                  |
 | **Dataset export tool produces sparse output** — few finalized runs with full review      | Medium                           | Medium | Seed with synthetic data initially (from the generator). Real data grows over time. The tool itself should work correctly even with 1 run.                                                               |
 | **Sidebar link** (activated in Phase 2) resolves to an empty or broken state              | Low                              | Medium | Verify the route end-to-end during Week 11 polish. Use the matter-level document list as entry point.                                                                                                    |
-| **PDF uploads need clear error handling** — users will try uploading PDFs                 | High                             | Low    | Block at upload with clear error message. Document in API docs.                                                                                                                                          |
+| **Scanned/image-only PDFs need clear error handling** — OCR is unavailable                | High                             | Low    | Detect absent/trivially sparse extracted text; reject standalone runs and mark matter versions failed with the OCR-unavailable message.                                                                  |
 
 ## Open Questions
 

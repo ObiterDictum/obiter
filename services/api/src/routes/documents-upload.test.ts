@@ -11,6 +11,9 @@ import { createLocalStorage } from '../storage'
 const roots: string[] = []
 const hash = (value: Buffer) => createHash('sha256').update(value).digest('hex')
 const fixture = await readFile('../../data/evals/redact/demo-fixture.docx')
+const pdfFixture = await readFile(
+  '../../data/evals/redact/pdf-text-layer-fixture.pdf',
+)
 
 function matterRow() {
   return {
@@ -68,7 +71,7 @@ function versionRow(
     updated_at: '2026-01-01T00:00:00.000Z',
   }
 }
-function pool(): Pool {
+function pool(failExtractionStatusUpdate = false): Pool {
   const query = async (sql: string, params?: unknown[]) => {
     if (
       sql === 'begin' ||
@@ -90,6 +93,8 @@ function pool(): Pool {
       const id = String(params?.[0])
       const key = params?.[2] as string | null
       const status = String(params?.[3])
+      if (failExtractionStatusUpdate && status === 'failed')
+        throw new Error('status update unavailable')
       return {
         rows: [versionRow(id, status, key, params?.[4] as string | null)],
       }
@@ -101,7 +106,11 @@ function pool(): Pool {
     connect: async () => ({ query, release: () => undefined }),
   } as unknown as Pool
 }
-async function app(root: string, storage = createLocalStorage(root)) {
+async function app(
+  root: string,
+  storage = createLocalStorage(root),
+  database = pool(),
+) {
   const api = new Hono<{
     Variables: {
       requestId: string
@@ -113,7 +122,7 @@ async function app(root: string, storage = createLocalStorage(root)) {
     c.set('user', { id: 'usr_1', organisationId: 'org_1' })
     await next()
   })
-  api.route('/', createDocumentsRoutes(pool(), storage))
+  api.route('/', createDocumentsRoutes(database, storage))
   return api
 }
 async function upload(
@@ -162,6 +171,27 @@ describe('multipart document extraction', () => {
       readFile(join(root, body.version.textObjectKey), 'utf8'),
     ).resolves.toContain('Mr James Cartwright')
   })
+  it('stores text-layer PDF source and extracted text', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'obiter-upload-'))
+    roots.push(root)
+    const api = await app(root)
+    const response = await upload(api, 'fixture.pdf', pdfFixture, 'pdf')
+    const body = (await response.json()) as {
+      version: {
+        objectKey: string
+        textObjectKey: string
+        documentStatus: string
+      }
+    }
+    expect(response.status).toBe(201)
+    expect(body.version.documentStatus).toBe('ready')
+    await expect(readFile(join(root, body.version.objectKey))).resolves.toEqual(
+      pdfFixture,
+    )
+    await expect(
+      readFile(join(root, body.version.textObjectKey), 'utf8'),
+    ).resolves.toContain('amina.rahman@example.test')
+  })
   it('stores TXT source and text', async () => {
     const root = await mkdtemp(join(tmpdir(), 'obiter-upload-'))
     roots.push(root)
@@ -204,6 +234,22 @@ describe('multipart document extraction', () => {
       bytes,
     )
   })
+  it('does not turn an extraction failure into a server error when status recording fails', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'obiter-upload-'))
+    roots.push(root)
+    const api = await app(root, createLocalStorage(root), pool(true))
+    const response = await upload(
+      api,
+      'broken.docx',
+      Buffer.from('PK broken archive'),
+    )
+    const body = (await response.json()) as {
+      version: { documentStatus: string; textObjectKey: string | null }
+    }
+    expect(response.status).toBe(201)
+    expect(body.version.documentStatus).toBe('queued')
+    expect(body.version.textObjectKey).toBeNull()
+  })
   it.each([
     [
       'too large',
@@ -220,6 +266,13 @@ describe('multipart document extraction', () => {
       hash(Buffer.from('not zip')),
     ],
     ['hash mismatch', 'fixture.docx', fixture, 'docx', '0'.repeat(64)],
+    [
+      'PDF filename with ZIP bytes',
+      'fixture.pdf',
+      fixture,
+      'pdf',
+      hash(fixture),
+    ],
   ])(
     'rejects %s without writing storage',
     async (_name, filename, bytes, type, suppliedHash) => {

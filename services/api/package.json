@@ -14,6 +14,7 @@
     "@hono/node-server": "^2.0.0",
     "@obiter/contracts": "workspace:*",
     "@obiter/legal-schema": "workspace:*",
+    "@obiter/rampart-inference": "workspace:*",
     "@obiter/redaction-policy": "workspace:*",
     "@obiter/search-client": "workspace:*",
     "better-auth": "^1.6.8",
@@ -22,8 +23,8 @@
     "pg": "^8.20.0",
     "resend": "^4.0.1",
     "tsx": "^4.23.0",
-    "zod": "^4.3.6",
-    "@obiter/rampart-inference": "workspace:*"
+    "unpdf": "1.6.2",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@types/pg": "^8.20.0"
