@@ -27,9 +27,10 @@ shipped by the implementation so a future contributor does not relitigate it.
   and every API read path, but their rows persist. Rationale: demonstrate what
   existed; recover from accidental deletion; satisfy retention expectations
   without a separate erasure pipeline.
-- **The audit trail is append-only and survives deletion.** Every deletion writes
-  a `*.delete` audit row; audit rows are never deleted, including for deleted
-  entities. A deleted redaction run's audit report remains internally retrievable.
+- **The audit trail is append-only and survives deletion.** Every runtime
+  deletion writes a `*.delete` audit row; audit rows are never deleted, including
+  for deleted entities. A deleted redaction run's audit report remains internally
+  retrievable.
 - **Deletion is a privileged action.** Only `owner` and `admin` roles may delete
   or restore. This is the first real authorization distinction in the product and
   is enforced server-side — UI hiding is not authorization.
@@ -143,9 +144,14 @@ soft-deleted; physical cleanup is part of the future purge work.
 
 A restore endpoint exists for matters (`PATCH /api/matters/:id/restore`) and
 cascades with provenance as described above. Restore is an operator/server-side
-action; no UI surfaces it. Restore coverage is consistent across matters,
-documents, and redaction runs at the data layer (each cascade delete has a
-symmetric cascade restore). A restore UI is deferred future work.
+action; no UI surfaces it. A restore UI is deferred future work.
+
+#### Deferred document and run restore endpoints
+
+`restoreDocumentWithAudit` and `restoreRedactionRunWithAudit` exist with full
+parent-liveness checks and audit rows, but their HTTP endpoints are intentionally
+deferred. Matter restore is the only exposed restore route; document and run
+restore remain operator/server-side actions for now.
 
 ## Migration
 
@@ -158,7 +164,10 @@ users(id)`; replace the non-partial index from migration 0007 with
 - `matters`: add `deleted_by text references users(id)`.
 - `matter_documents`: add `deleted_by text references users(id)`.
 - Backfill documents and runs left live beneath parents deleted before cascade
-  support, copying the parent deletion timestamp and actor.
+  support, copying the parent deletion timestamp and actor. The original parent
+  deletions were audited when they happened, so the backfill does not fabricate
+  new `*.delete` events. This is the one deliberate exception to every
+  soft-delete writing an audit row.
 
 Column additions and index operations are guarded so the migration can be
 re-run safely; existing migrations are never edited.
