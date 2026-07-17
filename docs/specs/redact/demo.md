@@ -22,6 +22,6 @@ Run the API and web app locally. Register through the sign-up screen, create an 
 - Empty text and zero spans: runs reach `ready_for_review` and can finalize unchanged.
 - All spans rejected: output equals source text.
 - Detection/extraction failures: the relevant record reaches `failed` with a failure reason; no unhandled error is exposed.
-- PDF: upload is rejected with a DOCX/TXT guidance message.
+- Text-layer PDF: extracts to text for Redaction; output remains text, not a redacted PDF. Scanned/image-only PDFs require OCR, so standalone runs are rejected and matter versions fail extraction.
 
 The fixture metadata is `demo-fixture-expected-spans.json`.

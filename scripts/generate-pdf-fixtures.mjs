@@ -9,6 +9,12 @@ function escapePdfText(value) {
     .replaceAll(')', '\\)')
 }
 
+function pdfText(value) {
+  if (![...value].some((character) => character.codePointAt(0) > 0x7f))
+    return `(${escapePdfText(value)})`
+  return `<FEFF${Buffer.from(value, 'utf16le').swap16().toString('hex').toUpperCase()}>`
+}
+
 function createPdf(pages) {
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
@@ -25,7 +31,7 @@ function createPdf(pages) {
       '72 720 Td',
       ...lines.flatMap((line, lineIndex) => [
         ...(lineIndex === 0 ? [] : ['0 -18 Td']),
-        `(${escapePdfText(line)}) Tj`,
+        `${pdfText(line)} Tj`,
       ]),
       'ET',
     ].join('\n')
@@ -71,6 +77,16 @@ await writeFile(
 await writeFile(
   new URL('pdf-low-text-multipage-fixture.pdf', outputDirectory),
   createPdf([['Short'], ['note']]),
+)
+await writeFile(
+  new URL('pdf-spaced-pii-fixture.pdf', outputDirectory),
+  createPdf([
+    ['Q Q 1 2 3 4 5 6 C', 'a m i n a @ e x a m p l e . t e s t', 'I am a QC'],
+  ]),
+)
+await writeFile(
+  new URL('pdf-zero-width-scanned-fixture.pdf', outputDirectory),
+  createPdf([['\u200B'.repeat(30)], ['\u200B'.repeat(30)]]),
 )
 await writeFile(
   new URL('pdf-scanned-like-fixture.pdf', outputDirectory),
