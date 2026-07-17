@@ -277,6 +277,7 @@ export function MatterRouteView({
   const { data: me } = useCurrentUser()
   const canManage = me?.user.role === 'owner' || me?.user.role === 'admin'
   const documentCount = documents.data?.length ?? 0
+  const isDocumentCountLoading = documents.isLoading
 
   if (matter.isError && !matter.isLoading) {
     return (
@@ -344,16 +345,23 @@ export function MatterRouteView({
           <DialogContent size="md">
             <DialogTitle>Delete matter</DialogTitle>
             <DialogDescription>
-              Deleting this matter also removes {documentCount}{' '}
-              {documentCount === 1 ? 'document' : 'documents'} and their
-              redaction runs. Removals are soft — rows persist for audit and can
-              be restored by an operator.
+              {isDocumentCountLoading ? (
+                <>Loading the document count before deletion.</>
+              ) : (
+                <>
+                  Deleting this matter also removes {documentCount}{' '}
+                  {documentCount === 1 ? 'document' : 'documents'} and their
+                  redaction runs. Removals are soft; rows persist for audit and
+                  can be restored by an operator.
+                </>
+              )}
             </DialogDescription>
             <div className="flex justify-end gap-2">
               <DialogClose render={<Button variant="ghost">Cancel</Button>} />
               <Button
                 variant="danger"
                 loading={deleteMatter.isPending}
+                disabled={isDocumentCountLoading}
                 onClick={async () => {
                   await deleteMatter.mutateAsync(matterId)
                   toast({ title: 'Matter deleted' })

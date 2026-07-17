@@ -101,6 +101,10 @@ function noDocuments() {
   return { isLoading: false, isError: false, data: [] }
 }
 
+function loadingDocuments() {
+  return { isLoading: true, isError: false, data: undefined }
+}
+
 function deleteMutationSpy() {
   const mutateAsync = vi.fn().mockResolvedValue(undefined)
   return { mutateAsync, isPending: false }
@@ -162,6 +166,28 @@ describe('MatterRouteView delete affordance', () => {
     await waitFor(() => {
       expect(deleteSpy.mutateAsync).toHaveBeenCalledWith('mtr_1')
     })
+  })
+
+  it('waits for the document count before enabling confirmation', async () => {
+    mocks.useMatter.mockReturnValue(successMatter())
+    mocks.useMatterDocuments.mockReturnValue(loadingDocuments())
+    mocks.useCurrentUser.mockReturnValue({ data: OWNER })
+    mocks.useDeleteMatter.mockReturnValue(deleteMutationSpy())
+
+    render(<RouterProvider router={buildRouter('mtr_1')} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('Share purchase')).toBeTruthy()
+    })
+    screen.getByRole('button', { name: 'Delete matter' }).click()
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Loading the document count before deletion.'),
+      ).toBeTruthy()
+    })
+    const confirm = screen.getByRole('button', { name: 'Delete matter' })
+    expect((confirm as HTMLButtonElement).disabled).toBe(true)
   })
 
   it('hides the delete control for a member', async () => {

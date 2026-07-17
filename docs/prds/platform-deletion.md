@@ -152,12 +152,16 @@ symmetric cascade restore). A restore UI is deferred future work.
 New migration `0010_soft_delete_redaction_runs_and_deleted_by.sql`:
 
 - `redaction_runs`: add `deleted_at timestamptz`, `deleted_by text references
-users(id)`; partial index `where deleted_at is null` on
-  `(organisation_id, created_at desc)`, mirroring matters.
+users(id)`; replace the non-partial index from migration 0007 with
+  `redaction_runs_organisation_created_at_live_idx`, filtered by
+  `deleted_at is null`.
 - `matters`: add `deleted_by text references users(id)`.
 - `matter_documents`: add `deleted_by text references users(id)`.
+- Backfill documents and runs left live beneath parents deleted before cascade
+  support, copying the parent deletion timestamp and actor.
 
-All `add column if not exists`; existing migrations are never edited.
+Column additions and index operations are guarded so the migration can be
+re-run safely; existing migrations are never edited.
 
 ## API surface
 
