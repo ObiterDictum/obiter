@@ -2,7 +2,7 @@
 
 > ## Implementation status (verified against the codebase, July 2026)
 >
-> The **audit export, DOCX/TXT/text-layer-PDF extraction, review/finalize, and the dataset-export tool described here are shipped.** The **detection pipeline is deterministic UK patterns only** — not "powered by Rampart" (see the banner on [Redact PRD 1](redact-1-detection.md)). The Rampart token-classification model integration is planned but not shipped. The synthetic-data and fine-tuning content below remains accurate as _preparation_ for that integration: generating training data and documenting the fine-tuning loop is real work that is done; the claim that the base model runs in production today is what is false, and is not made by the code. The dataset-export tool's category→label reverse mapping (`rampart-map.ts`) is the only current consumer of the Rampart label set.
+> The **audit export, DOCX, TXT, and text-layer-PDF extraction, review/finalize, and the dataset-export tool described here are shipped.** The **detection pipeline is deterministic UK patterns only** — not "powered by Rampart" (see the banner on [Redact PRD 1](redact-1-detection.md)). The Rampart token-classification model integration is planned but not shipped. The synthetic-data and fine-tuning content below remains accurate as _preparation_ for that integration: generating training data and documenting the fine-tuning loop is real work that is done; the claim that the base model runs in production today is what is false, and is not made by the code. The dataset-export tool's category→label reverse mapping (`rampart-map.ts`) is the only current consumer of the Rampart label set.
 
 ## Summary
 

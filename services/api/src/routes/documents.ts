@@ -240,12 +240,7 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
             400,
           )
         }
-        const version = await updateDocumentExtraction(pool, {
-          organisationId: user.organisationId,
-          versionId: result.version.id,
-          failureReason: error.message,
-        })
-        if (version) result.version = version
+        await markExtractionFailed(error.message)
       }
     }
     await appendAuditLog(pool, {

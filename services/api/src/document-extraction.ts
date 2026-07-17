@@ -36,9 +36,11 @@ export function normaliseFileType(
 
 function normalisePdfPageText(text: string) {
   return text
+    .replace(/[\p{Cf}]/gu, '')
     .replace(/\r\n?/g, '\n')
-    .replace(/\b(?:[A-Za-z]\s){3,}[A-Za-z]\b/g, (characters) =>
-      characters.replaceAll(/\s/g, ''),
+    .replace(
+      /(?<![A-Za-z0-9@._%+-])(?:[A-Za-z0-9@._%+-] ){3,}[A-Za-z0-9@._%+-](?![A-Za-z0-9@._%+-])/g,
+      (characters) => characters.replaceAll(' ', ''),
     )
     .trim()
 }
@@ -46,7 +48,14 @@ function normalisePdfPageText(text: string) {
 async function extractPdfText(buffer: Buffer) {
   // unpdf's PDF.js wrapper explicitly sets isEvalSupported: false. This path
   // only calls getTextContent(), so embedded PDF JavaScript is not executed.
-  const pdf = await getDocumentProxy(new Uint8Array(buffer))
+  // PDF.js accepts this view without transferring it, so matter uploads can
+  // still persist the original Buffer after extraction without a second 25 MB copy.
+  const bytes = new Uint8Array(
+    buffer.buffer,
+    buffer.byteOffset,
+    buffer.byteLength,
+  )
+  const pdf = await getDocumentProxy(bytes)
   try {
     if (pdf.numPages > MAX_PDF_PAGE_COUNT)
       throw new DocumentExtractionError(
@@ -70,7 +79,7 @@ async function extractPdfText(buffer: Buffer) {
     }
 
     const text = pages.join('\n\n')
-    const characters = text.replaceAll(/\s/g, '').length
+    const characters = text.replaceAll(/[\s\p{Cf}]/gu, '').length
 
     // A short one-page text-layer PDF is valid. For multi-page PDFs, fewer than
     // 20 non-whitespace characters per page is treated as scanned-like.
@@ -83,7 +92,7 @@ async function extractPdfText(buffer: Buffer) {
 
     return text
   } finally {
-    await pdf.destroy()
+    await pdf.destroy().catch(() => undefined)
   }
 }
 

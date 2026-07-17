@@ -71,7 +71,7 @@ function versionRow(
     updated_at: '2026-01-01T00:00:00.000Z',
   }
 }
-function pool(): Pool {
+function pool(failExtractionStatusUpdate = false): Pool {
   const query = async (sql: string, params?: unknown[]) => {
     if (
       sql === 'begin' ||
@@ -93,6 +93,8 @@ function pool(): Pool {
       const id = String(params?.[0])
       const key = params?.[2] as string | null
       const status = String(params?.[3])
+      if (failExtractionStatusUpdate && status === 'failed')
+        throw new Error('status update unavailable')
       return {
         rows: [versionRow(id, status, key, params?.[4] as string | null)],
       }
@@ -104,7 +106,11 @@ function pool(): Pool {
     connect: async () => ({ query, release: () => undefined }),
   } as unknown as Pool
 }
-async function app(root: string, storage = createLocalStorage(root)) {
+async function app(
+  root: string,
+  storage = createLocalStorage(root),
+  database = pool(),
+) {
   const api = new Hono<{
     Variables: {
       requestId: string
@@ -116,7 +122,7 @@ async function app(root: string, storage = createLocalStorage(root)) {
     c.set('user', { id: 'usr_1', organisationId: 'org_1' })
     await next()
   })
-  api.route('/', createDocumentsRoutes(pool(), storage))
+  api.route('/', createDocumentsRoutes(database, storage))
   return api
 }
 async function upload(
@@ -227,6 +233,22 @@ describe('multipart document extraction', () => {
     await expect(readFile(join(root, body.version.objectKey))).resolves.toEqual(
       bytes,
     )
+  })
+  it('does not turn an extraction failure into a server error when status recording fails', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'obiter-upload-'))
+    roots.push(root)
+    const api = await app(root, createLocalStorage(root), pool(true))
+    const response = await upload(
+      api,
+      'broken.docx',
+      Buffer.from('PK broken archive'),
+    )
+    const body = (await response.json()) as {
+      version: { documentStatus: string; textObjectKey: string | null }
+    }
+    expect(response.status).toBe(201)
+    expect(body.version.documentStatus).toBe('queued')
+    expect(body.version.textObjectKey).toBeNull()
   })
   it.each([
     [
