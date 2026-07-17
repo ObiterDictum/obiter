@@ -145,13 +145,6 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
       )
     }
     const supportedType = normaliseFileType(fileType)
-    if (supportedType === 'pdf')
-      return errorResponse(
-        c,
-        'validation_failed',
-        'PDF files are not yet supported for redaction. Please upload DOCX or TXT files.',
-        400,
-      )
     if (file && !storage?.writeBinary)
       return errorResponse(
         c,

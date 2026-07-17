@@ -386,13 +386,15 @@ export function MatterRouteView({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-base font-semibold text-ink">Documents</h2>
-            <p className="text-xs text-subtle">DOCX and TXT, up to 25 MB</p>
+            <p className="text-xs text-subtle">
+              DOCX, PDF, and TXT, up to 25 MB
+            </p>
           </div>
           <label className="inline-flex cursor-pointer items-center rounded-md border border-line px-3 py-2 text-sm font-medium text-ink hover:bg-canvas">
             {upload.isPending ? 'Uploading…' : 'Upload document'}
             <input
               type="file"
-              accept=".docx,.txt,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              accept=".docx,.pdf,.txt,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
               className="sr-only"
               disabled={upload.isPending}
               onChange={(event) => {
@@ -455,7 +457,7 @@ export function MatterRouteView({
         ) : (
           <EmptyState
             title="No documents yet"
-            body="Upload a DOCX or TXT document to extract text for Redaction."
+            body="Upload a DOCX, text-layer PDF, or TXT document to extract text for Redaction."
           />
         )}
       </section>

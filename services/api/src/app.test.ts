@@ -1,8 +1,12 @@
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { Pool } from 'pg'
 import { createApiApp } from './app'
 import type { createAuth } from './auth'
 import type { ApiEnv } from './env'
+import { createLocalStorage } from './storage'
 
 const searchClientMock = vi.hoisted(() => ({
   createClient: vi.fn(() => ({ id: 'meili-client' })),
@@ -973,7 +977,9 @@ describe('createApiApp', () => {
   })
 
   it('creates an organisation-scoped standalone redaction run and stores its source text', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'obiter-redaction-upload-'))
     const stored = new Map<string, string>()
+    const localStorage = createLocalStorage(root)
     const auth = {
       api: {
         getSession: async () => ({
@@ -1040,12 +1046,16 @@ describe('createApiApp', () => {
       {
         auth,
         storage: {
-          readText: async (key) => stored.get(key) ?? '',
+          ...localStorage,
+          readText: async (key) =>
+            stored.get(key) ?? localStorage.readText(key),
           writeText: async (key, text) => {
             stored.set(key, text)
+            await localStorage.writeText(key, text)
           },
           delete: async (key) => {
             stored.delete(key)
+            await localStorage.delete(key)
           },
         },
       },
@@ -1066,11 +1076,14 @@ describe('createApiApp', () => {
     })
 
     const form = new FormData()
+    const pdfFixture = await readFile(
+      '../../data/evals/redact/pdf-text-layer-fixture.pdf',
+    )
     form.set(
       'file',
-      new File(['Uploaded test text.'], 'uploaded.txt', { type: 'text/plain' }),
+      new File([pdfFixture], 'uploaded.pdf', { type: 'application/pdf' }),
     )
-    form.set('fileType', 'text/plain')
+    form.set('fileType', 'application/pdf')
     const uploadResponse = await app.request('/api/redaction-runs', {
       method: 'POST',
       body: form,
@@ -1082,8 +1095,9 @@ describe('createApiApp', () => {
     })
     expect([...stored.values()]).toEqual([
       'Synthetic test text.',
-      'Uploaded test text.',
+      expect.stringContaining('amina.rahman@example.test'),
     ])
+    await rm(root, { recursive: true, force: true })
   })
 
   it('models future legal source query params without running judgment search', async () => {

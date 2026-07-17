@@ -11,6 +11,9 @@ import { createLocalStorage } from '../storage'
 const roots: string[] = []
 const hash = (value: Buffer) => createHash('sha256').update(value).digest('hex')
 const fixture = await readFile('../../data/evals/redact/demo-fixture.docx')
+const pdfFixture = await readFile(
+  '../../data/evals/redact/pdf-text-layer-fixture.pdf',
+)
 
 function matterRow() {
   return {
@@ -162,6 +165,27 @@ describe('multipart document extraction', () => {
       readFile(join(root, body.version.textObjectKey), 'utf8'),
     ).resolves.toContain('Mr James Cartwright')
   })
+  it('stores text-layer PDF source and extracted text', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'obiter-upload-'))
+    roots.push(root)
+    const api = await app(root)
+    const response = await upload(api, 'fixture.pdf', pdfFixture, 'pdf')
+    const body = (await response.json()) as {
+      version: {
+        objectKey: string
+        textObjectKey: string
+        documentStatus: string
+      }
+    }
+    expect(response.status).toBe(201)
+    expect(body.version.documentStatus).toBe('ready')
+    await expect(readFile(join(root, body.version.objectKey))).resolves.toEqual(
+      pdfFixture,
+    )
+    await expect(
+      readFile(join(root, body.version.textObjectKey), 'utf8'),
+    ).resolves.toContain('amina.rahman@example.test')
+  })
   it('stores TXT source and text', async () => {
     const root = await mkdtemp(join(tmpdir(), 'obiter-upload-'))
     roots.push(root)
@@ -220,6 +244,13 @@ describe('multipart document extraction', () => {
       hash(Buffer.from('not zip')),
     ],
     ['hash mismatch', 'fixture.docx', fixture, 'docx', '0'.repeat(64)],
+    [
+      'PDF filename with ZIP bytes',
+      'fixture.pdf',
+      fixture,
+      'pdf',
+      hash(fixture),
+    ],
   ])(
     'rejects %s without writing storage',
     async (_name, filename, bytes, type, suppliedHash) => {

@@ -4,7 +4,7 @@ import {
   type SupportedDocumentType,
 } from './document-extraction'
 
-/** Bounds buffering and DOCX parsing for authenticated uploads. */
+/** Bounds buffering and document parsing for authenticated uploads. */
 export const MAX_DOCUMENT_UPLOAD_BYTES = 25 * 1024 * 1024
 
 export class DocumentUploadError extends Error {
@@ -21,10 +21,14 @@ function verifiedType(
 ): SupportedDocumentType | null {
   const extension = filename.toLowerCase().split('.').pop()
   const isZip = contents.subarray(0, 2).equals(Buffer.from('PK'))
+  const isPdf = contents.subarray(0, 5).equals(Buffer.from('%PDF-'))
   if (extension === 'docx' && isZip) return 'docx'
-  if (extension === 'txt' && !isZip) return 'txt'
+  if (extension === 'pdf' && isPdf) return 'pdf'
+  if (extension === 'txt' && !isZip && !isPdf) return 'txt'
   if (!filename.includes('.') && declaredType === 'docx' && isZip) return 'docx'
-  if (!filename.includes('.') && declaredType === 'txt' && !isZip) return 'txt'
+  if (!filename.includes('.') && declaredType === 'pdf' && isPdf) return 'pdf'
+  if (!filename.includes('.') && declaredType === 'txt' && !isZip && !isPdf)
+    return 'txt'
   return null
 }
 
@@ -36,13 +40,7 @@ export async function readDocumentUpload(
   fileType: SupportedDocumentType
   contents: Buffer
 }> {
-  const supportedType = normaliseFileType(declaredType)
-  if (supportedType === 'pdf')
-    throw new DocumentUploadError(
-      'PDF files are not yet supported for redaction. Please upload DOCX or TXT files.',
-    )
-  const declaredSupported =
-    supportedType === 'docx' || supportedType === 'txt' ? supportedType : null
+  const declaredSupported = normaliseFileType(declaredType)
   if (file.size > MAX_DOCUMENT_UPLOAD_BYTES)
     throw new DocumentUploadError(
       `Document uploads must be at most ${MAX_DOCUMENT_UPLOAD_BYTES / 1024 / 1024} MB.`,
