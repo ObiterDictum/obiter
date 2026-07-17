@@ -6,6 +6,7 @@ import {
 } from '@tanstack/react-query'
 import { queryOptions } from '@tanstack/react-query'
 import { apiFetch } from './api'
+import { documentsKeys } from './documents'
 
 /**
  * Real matter + document domain types, mirroring the wire shapes returned by
@@ -129,9 +130,18 @@ export function useDeleteMatter() {
     mutationFn: async (matterId: string) => {
       await apiFetch(`/api/matters/${matterId}`, { method: 'DELETE' })
     },
-    onSuccess: (_data, matterId) => {
+    onSuccess: async (_data, matterId) => {
       queryClient.removeQueries({ queryKey: mattersKeys.detail(matterId) })
-      queryClient.invalidateQueries({ queryKey: mattersKeys.lists() })
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: mattersKeys.lists() }),
+        queryClient.invalidateQueries({
+          queryKey: documentsKeys.byMatter(matterId),
+        }),
+        queryClient.invalidateQueries({ queryKey: ['redaction-runs'] }),
+        queryClient.invalidateQueries({
+          queryKey: ['document-redaction-runs'],
+        }),
+      ])
     },
   })
 }

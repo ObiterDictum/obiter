@@ -3,6 +3,7 @@ import type { Pool, PoolClient } from 'pg'
 import {
   createDocument,
   createOrganisationForUser,
+  restoreDocumentWithAudit,
   restoreMatterWithAudit,
   softDeleteMatterWithCascade,
 } from './database'
@@ -93,6 +94,9 @@ describe('matter workspace database operations', () => {
       if (sql === 'begin' || sql === 'commit' || sql === 'rollback') {
         return { rows: [] }
       }
+      if (sql.includes('select id from matters')) {
+        return { rows: [{ id: 'mtr_1' }] }
+      }
       if (sql.includes('insert into matter_documents')) {
         return { rows: [documentRow()] }
       }
@@ -129,11 +133,14 @@ describe('matter workspace database operations', () => {
       calls.map(([sql]) => sql.trim().split(/\s+/).slice(0, 3).join(' ')),
     ).toEqual([
       'begin',
+      'select id from',
       'insert into matter_documents',
       'insert into document_versions',
       'update matter_documents set',
       'commit',
     ])
+    expect(result).not.toBeNull()
+    if (!result) throw new Error('Expected document creation to succeed.')
     expect(result.document).toMatchObject({
       id: 'doc_1',
       currentVersionId: result.version.id,
@@ -144,7 +151,11 @@ describe('matter workspace database operations', () => {
       documentStatus: 'queued',
       syncState: 'synced',
     })
-    const versionParams = calls[2][1]
+    const parentLock = calls[1]
+    expect(parentLock[0]).toContain('deleted_at is null')
+    expect(parentLock[0]).toContain('for update')
+    expect(parentLock[1]).toEqual(['mtr_1', 'org_1'])
+    const versionParams = calls[3][1]
     expect(versionParams).toEqual([
       expect.stringMatching(/^ver_/),
       'org_1',
@@ -165,10 +176,36 @@ describe('matter workspace database operations', () => {
     )
   })
 
+  it('returns null before inserting when the parent matter is deleted', async () => {
+    const { pool, calls } = createTransactionalPool(async (sql) => {
+      if (sql === 'begin' || sql === 'rollback') return { rows: [] }
+      if (sql.includes('select id from matters')) return { rows: [] }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    await expect(
+      createDocument(pool, {
+        organisationId: 'org_1',
+        matterId: 'mtr_1',
+        userId: 'usr_1',
+        filename: 'skeleton.pdf',
+        fileType: 'application/pdf',
+        sizeBytes: 1234,
+        contentSha256: 'a'.repeat(64),
+      }),
+    ).resolves.toBeNull()
+
+    expect(calls.some(([sql]) => sql.includes('insert into'))).toBe(false)
+    expect(calls.map(([sql]) => sql)).toContain('rollback')
+  })
+
   it('rolls back document creation when version creation fails', async () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       if (sql === 'begin' || sql === 'rollback') {
         return { rows: [] }
+      }
+      if (sql.includes('select id from matters')) {
+        return { rows: [{ id: 'mtr_1' }] }
       }
       if (sql.includes('insert into matter_documents')) {
         return { rows: [documentRow()] }
@@ -442,11 +479,64 @@ describe('matter workspace database operations', () => {
     expect(docRestore?.[0]).not.toMatch(/deleted_at is not null/)
     expect(docRestore?.[1]?.[2]).toBe(parentDeletedAt)
     expect(runRestore?.[0]).toMatch(/deleted_at = \$3::timestamptz/)
+    expect(runRestore?.[0]).toContain('document.deleted_at is null')
+    expect(runRestore?.[0]).toContain('document_id is null')
     expect(runRestore?.[1]?.[2]).toBe(parentDeletedAt)
     // Precision guard: the lock selects deleted_at::text so the timestamp can
     // round-trip with full microsecond fidelity. Selecting it as a Date would
     // drop microseconds and the equality match would silently match 0 rows.
     expect(lock?.[0]).toMatch(/deleted_at::text/)
+  })
+
+  it('restores a document and only runs with the same deletion timestamp', async () => {
+    const deletedAt = '2026-02-01 00:00:00.123456+00'
+    const { pool, calls } = createTransactionalPool(async (sql) => {
+      const text = sql.trim()
+      if (text === 'begin' || text === 'commit') return { rows: [] }
+      if (text.startsWith('select matter_id from matter_documents')) {
+        return { rows: [{ matter_id: 'mtr_1' }] }
+      }
+      if (text.startsWith('select id from matters')) {
+        return { rows: [{ id: 'mtr_1' }] }
+      }
+      if (text.startsWith('select deleted_at::text from matter_documents')) {
+        return { rows: [{ deleted_at: deletedAt }] }
+      }
+      if (text.startsWith('update matter_documents')) {
+        return { rows: [documentRow()] }
+      }
+      if (text.startsWith('update redaction_runs')) {
+        return { rows: [{ id: 'red_1' }] }
+      }
+      if (text.includes('insert into audit_logs')) return { rows: [] }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    const result = await restoreDocumentWithAudit(pool, {
+      organisationId: 'org_1',
+      userId: 'usr_1',
+      id: 'doc_1',
+      requestId: 'req_1',
+    })
+
+    expect(result).toMatchObject({
+      document: { id: 'doc_1', deletedAt: null },
+      runs: [{ id: 'red_1' }],
+    })
+    const documentRestore = calls.find(([sql]) =>
+      sql.includes('update matter_documents'),
+    )
+    const runRestore = calls.find(([sql]) =>
+      sql.includes('update redaction_runs'),
+    )
+    expect(documentRestore?.[0]).toContain('deleted_at = $3::timestamptz')
+    expect(documentRestore?.[1]?.[2]).toBe(deletedAt)
+    expect(runRestore?.[0]).toContain('deleted_at = $3::timestamptz')
+    expect(runRestore?.[1]?.[2]).toBe(deletedAt)
+    const auditActions = calls
+      .filter(([sql]) => sql.includes('insert into audit_logs'))
+      .map(([, params]) => params?.[4])
+    expect(auditActions).toEqual(['document.restore', 'redaction_run.restore'])
   })
 })
 

@@ -212,6 +212,8 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
       await storage.delete(sourceTextObjectKey)
       throw error
     }
+    if (!run)
+      throw new Error('Standalone redaction run creation returned no row.')
     await appendAuditLog(pool, {
       organisationId: user.organisationId,
       userId: user.id,
@@ -277,6 +279,8 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
       documentId: c.req.param('documentId'),
       documentVersionId: source.version_id,
     })
+    if (!run)
+      return errorResponse(c, 'document_not_found', 'Document not found.', 404)
     await appendAuditLog(pool, {
       organisationId: user.organisationId,
       userId: user.id,

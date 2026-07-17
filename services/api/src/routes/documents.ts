@@ -196,6 +196,9 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
       sizeBytes: uploadContents?.byteLength ?? sizeBytes,
       contentSha256: verifiedHash!,
     })
+    if (!result) {
+      return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
+    }
 
     if (uploadContents && verifiedType && storage?.writeBinary) {
       const markExtractionFailed = async (failureReason: string) => {

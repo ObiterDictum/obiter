@@ -134,11 +134,17 @@ export function useDeleteDocument() {
         method: 'DELETE',
       })
     },
-    onSuccess: (_data, { documentId, matterId }) => {
+    onSuccess: async (_data, { documentId, matterId }) => {
       queryClient.removeQueries({ queryKey: documentsKeys.detail(documentId) })
-      queryClient.invalidateQueries({
-        queryKey: documentsKeys.byMatter(matterId),
-      })
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: documentsKeys.byMatter(matterId),
+        }),
+        queryClient.invalidateQueries({ queryKey: ['redaction-runs'] }),
+        queryClient.invalidateQueries({
+          queryKey: ['document-redaction-runs'],
+        }),
+      ])
     },
   })
 }

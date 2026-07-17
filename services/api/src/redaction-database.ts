@@ -313,34 +313,80 @@ export async function createRedactionRun(input: {
   matterId?: string
   documentId?: string
   documentVersionId?: string
-}) {
-  const linked = input.matterId && input.documentId && input.documentVersionId
-  const result = await input.pool.query<RedactionRunRow>(
-    `
-    insert into redaction_runs (
-      id, organisation_id, matter_id, document_id, document_version_id, source_filename, source_text_object_key,
-      status, policy_mode, spans_json, decisions_json, summary_json, detector_version, created_by, created_at, updated_at
-    ) values ($1, $2, $3, $4, $5, $6, $7, 'ready_for_review', $8, $9::jsonb, '{}'::jsonb, $10::jsonb, $11, $12, now(), now())
-    returning id, organisation_id, matter_id, null::text as matter_name, document_id, document_version_id,
-      source_filename, source_text_object_key, status, policy_mode, spans_json, decisions_json, output_artifact_id,
-      summary_json, detector_version, created_by, created_at, updated_at, deleted_at, deleted_by
-  `,
-    [
-      input.id,
-      input.organisationId,
-      linked ? input.matterId : null,
-      linked ? input.documentId : null,
-      linked ? input.documentVersionId : null,
-      input.sourceFilename,
-      input.sourceTextObjectKey,
-      input.policyMode,
-      JSON.stringify(input.spans),
-      JSON.stringify(computeSummary(input.spans, {})),
-      input.detectorVersion,
-      input.userId,
-    ],
-  )
-  return mapRun(result.rows[0])
+}): Promise<RedactionRunRecord | null> {
+  const matterId = input.matterId ?? null
+  const documentId = input.documentId ?? null
+  const documentVersionId = input.documentVersionId ?? null
+  const linked = Boolean(matterId && documentId && documentVersionId)
+  const insertRun = async (queryable: Pick<Pool, 'query'>) => {
+    const result = await queryable.query<RedactionRunRow>(
+      `
+        insert into redaction_runs (
+          id, organisation_id, matter_id, document_id, document_version_id, source_filename, source_text_object_key,
+          status, policy_mode, spans_json, decisions_json, summary_json, detector_version, created_by, created_at, updated_at
+        ) values ($1, $2, $3, $4, $5, $6, $7, 'ready_for_review', $8, $9::jsonb, '{}'::jsonb, $10::jsonb, $11, $12, now(), now())
+        returning id, organisation_id, matter_id, null::text as matter_name, document_id, document_version_id,
+          source_filename, source_text_object_key, status, policy_mode, spans_json, decisions_json, output_artifact_id,
+          summary_json, detector_version, created_by, created_at, updated_at, deleted_at, deleted_by
+      `,
+      [
+        input.id,
+        input.organisationId,
+        linked ? matterId : null,
+        linked ? documentId : null,
+        linked ? documentVersionId : null,
+        input.sourceFilename,
+        input.sourceTextObjectKey,
+        input.policyMode,
+        JSON.stringify(input.spans),
+        JSON.stringify(computeSummary(input.spans, {})),
+        input.detectorVersion,
+        input.userId,
+      ],
+    )
+    return mapRun(result.rows[0])
+  }
+
+  if (!linked) return insertRun(input.pool)
+
+  const client = await input.pool.connect()
+  try {
+    await client.query('begin')
+    const matter = await client.query<{ id: string }>(
+      `select id from matters
+       where id = $1 and organisation_id = $2 and deleted_at is null
+       for update`,
+      [matterId, input.organisationId],
+    )
+    if (matter.rows.length === 0) {
+      await client.query('rollback')
+      return null
+    }
+
+    const document = await client.query<{ id: string }>(
+      `select id from matter_documents
+       where id = $1
+         and organisation_id = $2
+         and matter_id = $3
+         and current_version_id = $4
+         and deleted_at is null
+       for update`,
+      [documentId, input.organisationId, matterId, documentVersionId],
+    )
+    if (document.rows.length === 0) {
+      await client.query('rollback')
+      return null
+    }
+
+    const run = await insertRun(client)
+    await client.query('commit')
+    return run
+  } catch (error) {
+    await client.query('rollback')
+    throw error
+  } finally {
+    client.release()
+  }
 }
 
 export async function recordSpanDecision(input: {
@@ -355,7 +401,7 @@ export async function recordSpanDecision(input: {
   try {
     await client.query('begin')
     const locked = await client.query<RedactionRunRow>(
-      `select ${columns} ${fromRuns} where run.id = $1 and run.organisation_id = $2 for update of run`,
+      `select ${columns} ${fromRuns} where run.id = $1 and run.organisation_id = $2 and run.deleted_at is null for update of run`,
       [input.runId, input.organisationId],
     )
     if (!locked.rows[0]) {
@@ -386,7 +432,7 @@ export async function recordSpanDecision(input: {
     }
     const summary = computeSummary(run.spans, decisions)
     const updated = await client.query<RedactionRunRow>(
-      `update redaction_runs set status = case when status = 'ready_for_review' then 'reviewing' else status end, decisions_json = $3::jsonb, summary_json = $4::jsonb, updated_at = now() where id = $1 and organisation_id = $2 returning id, organisation_id, matter_id, null::text as matter_name, document_id, document_version_id, source_filename, source_text_object_key, status, policy_mode, spans_json, decisions_json, output_artifact_id, summary_json, detector_version, created_by, created_at, updated_at`,
+      `update redaction_runs set status = case when status = 'ready_for_review' then 'reviewing' else status end, decisions_json = $3::jsonb, summary_json = $4::jsonb, updated_at = now() where id = $1 and organisation_id = $2 returning id, organisation_id, matter_id, null::text as matter_name, document_id, document_version_id, source_filename, source_text_object_key, status, policy_mode, spans_json, decisions_json, output_artifact_id, summary_json, detector_version, created_by, created_at, updated_at, deleted_at, deleted_by`,
       [
         run.id,
         run.organisationId,
@@ -416,7 +462,7 @@ export async function finalizeRedactionRun(input: {
   try {
     await client.query('begin')
     const locked = await client.query<RedactionRunRow>(
-      `select ${columns} ${fromRuns} where run.id = $1 and run.organisation_id = $2 for update of run`,
+      `select ${columns} ${fromRuns} where run.id = $1 and run.organisation_id = $2 and run.deleted_at is null for update of run`,
       [input.runId, input.organisationId],
     )
     if (!locked.rows[0]) {
@@ -453,7 +499,7 @@ export async function finalizeRedactionRun(input: {
       outputMode: input.outputMode,
     }
     const updated = await client.query<RedactionRunRow>(
-      `update redaction_runs set status = 'finalized', output_artifact_id = $3, summary_json = $4::jsonb, updated_at = now() where id = $1 and organisation_id = $2 returning id, organisation_id, matter_id, null::text as matter_name, document_id, document_version_id, source_filename, source_text_object_key, status, policy_mode, spans_json, decisions_json, output_artifact_id, summary_json, detector_version, created_by, created_at, updated_at`,
+      `update redaction_runs set status = 'finalized', output_artifact_id = $3, summary_json = $4::jsonb, updated_at = now() where id = $1 and organisation_id = $2 returning id, organisation_id, matter_id, null::text as matter_name, document_id, document_version_id, source_filename, source_text_object_key, status, policy_mode, spans_json, decisions_json, output_artifact_id, summary_json, detector_version, created_by, created_at, updated_at, deleted_at, deleted_by`,
       [run.id, run.organisationId, input.artifactId, JSON.stringify(summary)],
     )
     await client.query('commit')
@@ -571,6 +617,115 @@ export async function softDeleteRedactionRun(
       entityType: 'redaction_run',
       entityId: run.id,
       action: 'redaction_run.delete',
+      metadata: {},
+      requestId: input.requestId,
+    })
+
+    await client.query('commit')
+    return run
+  } catch (error) {
+    await client.query('rollback')
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+/** Restores one run without allowing a live child beneath a deleted parent. */
+export async function restoreRedactionRunWithAudit(
+  pool: Pool,
+  input: {
+    organisationId: string
+    userId: string
+    runId: string
+    requestId: string
+  },
+): Promise<RedactionRunRecord | null> {
+  const client = await pool.connect()
+
+  try {
+    await client.query('begin')
+
+    const candidate = await client.query<{
+      matter_id: string | null
+      document_id: string | null
+    }>(
+      `select matter_id, document_id from redaction_runs
+       where id = $1 and organisation_id = $2 and deleted_at is not null`,
+      [input.runId, input.organisationId],
+    )
+    if (candidate.rows.length === 0) {
+      await client.query('rollback')
+      return null
+    }
+
+    const parent = candidate.rows[0]
+    if (parent.matter_id) {
+      const matter = await client.query<{ id: string }>(
+        `select id from matters
+         where id = $1 and organisation_id = $2 and deleted_at is null
+         for update`,
+        [parent.matter_id, input.organisationId],
+      )
+      if (matter.rows.length === 0) {
+        await client.query('rollback')
+        return null
+      }
+    }
+    if (parent.document_id) {
+      const document = await client.query<{ id: string }>(
+        `select id from matter_documents
+         where id = $1
+           and organisation_id = $2
+           and matter_id = $3
+           and deleted_at is null
+         for update`,
+        [parent.document_id, input.organisationId, parent.matter_id],
+      )
+      if (document.rows.length === 0) {
+        await client.query('rollback')
+        return null
+      }
+    }
+
+    const lock = await client.query<{ deleted_at: string }>(
+      `select deleted_at::text from redaction_runs
+       where id = $1
+         and organisation_id = $2
+         and deleted_at is not null
+         and matter_id is not distinct from $3
+         and document_id is not distinct from $4
+       for update`,
+      [input.runId, input.organisationId, parent.matter_id, parent.document_id],
+    )
+    if (lock.rows.length === 0) {
+      await client.query('rollback')
+      return null
+    }
+    const cascadeTimestamp = lock.rows[0].deleted_at
+
+    const result = await client.query<RedactionRunRow>(
+      `
+        update redaction_runs
+        set deleted_at = null, deleted_by = null, updated_at = now()
+        where id = $1
+          and organisation_id = $2
+          and deleted_at = $3::timestamptz
+        returning id, organisation_id, matter_id, null::text as matter_name, document_id,
+          document_version_id, source_filename, source_text_object_key, status, policy_mode,
+          spans_json, decisions_json, output_artifact_id, summary_json, detector_version,
+          created_by, created_at, updated_at, deleted_at, deleted_by
+      `,
+      [input.runId, input.organisationId, cascadeTimestamp],
+    )
+    const run = mapRun(result.rows[0])
+
+    await appendAuditLog(client, {
+      organisationId: input.organisationId,
+      userId: input.userId,
+      entityType: 'redaction_run',
+      entityId: run.id,
+      action: 'redaction_run.restore',
       metadata: {},
       requestId: input.requestId,
     })

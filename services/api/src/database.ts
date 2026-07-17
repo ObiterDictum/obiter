@@ -738,7 +738,20 @@ export async function restoreMatterWithAudit(
       `
         update redaction_runs
         set deleted_at = null, deleted_by = null, updated_at = now()
-        where matter_id = $1 and organisation_id = $2 and deleted_at = $3::timestamptz
+        where matter_id = $1
+          and organisation_id = $2
+          and deleted_at = $3::timestamptz
+          and (
+            document_id is null
+            or exists (
+              select 1
+              from matter_documents document
+              where document.id = redaction_runs.document_id
+                and document.matter_id = redaction_runs.matter_id
+                and document.organisation_id = redaction_runs.organisation_id
+                and document.deleted_at is null
+            )
+          )
         returning id
       `,
       [input.id, input.organisationId, cascadeTimestamp],
@@ -824,11 +837,25 @@ async function getDocumentVersion(
 export async function createDocument(
   pool: Pool,
   input: CreateDocumentInput,
-): Promise<{ document: MatterDocumentRecord; version: DocumentVersionRecord }> {
+): Promise<{
+  document: MatterDocumentRecord
+  version: DocumentVersionRecord
+} | null> {
   const client = await pool.connect()
 
   try {
     await client.query('begin')
+
+    const matter = await client.query<{ id: string }>(
+      `select id from matters
+       where id = $1 and organisation_id = $2 and deleted_at is null
+       for update`,
+      [input.matterId, input.organisationId],
+    )
+    if (matter.rows.length === 0) {
+      await client.query('rollback')
+      return null
+    }
 
     const documentResult = await client.query<MatterDocumentRow>(
       `
@@ -1083,6 +1110,115 @@ export async function softDeleteDocumentWithCascade(
         entityType: 'redaction_run',
         entityId: run.id,
         action: 'redaction_run.delete',
+        metadata: { cascadedFrom: document.id },
+        requestId: input.requestId,
+      })
+    }
+
+    await client.query('commit')
+    return { document, runs }
+  } catch (error) {
+    await client.query('rollback')
+    throw error
+  } finally {
+    client.release()
+  }
+}
+
+/** Restores a document and only the runs deleted by the same cascade. */
+export async function restoreDocumentWithAudit(
+  pool: Pool,
+  input: {
+    organisationId: string
+    userId: string
+    id: string
+    requestId: string
+  },
+): Promise<DeleteDocumentCascadeResult | null> {
+  const client = await pool.connect()
+
+  try {
+    await client.query('begin')
+
+    const candidate = await client.query<{ matter_id: string }>(
+      `select matter_id from matter_documents
+       where id = $1 and organisation_id = $2 and deleted_at is not null`,
+      [input.id, input.organisationId],
+    )
+    if (candidate.rows.length === 0) {
+      await client.query('rollback')
+      return null
+    }
+
+    const matterId = candidate.rows[0].matter_id
+    const matter = await client.query<{ id: string }>(
+      `select id from matters
+       where id = $1 and organisation_id = $2 and deleted_at is null
+       for update`,
+      [matterId, input.organisationId],
+    )
+    if (matter.rows.length === 0) {
+      await client.query('rollback')
+      return null
+    }
+
+    const lock = await client.query<{ deleted_at: string }>(
+      `select deleted_at::text from matter_documents
+       where id = $1
+         and organisation_id = $2
+         and matter_id = $3
+         and deleted_at is not null
+       for update`,
+      [input.id, input.organisationId, matterId],
+    )
+    if (lock.rows.length === 0) {
+      await client.query('rollback')
+      return null
+    }
+    const cascadeTimestamp = lock.rows[0].deleted_at
+
+    const documentResult = await client.query<MatterDocumentRow>(
+      `
+        update matter_documents
+        set deleted_at = null, deleted_by = null, updated_at = now()
+        where id = $1
+          and organisation_id = $2
+          and deleted_at = $3::timestamptz
+        returning ${documentColumns}
+      `,
+      [input.id, input.organisationId, cascadeTimestamp],
+    )
+    const document = mapDocument(documentResult.rows[0])
+
+    const runsResult = await client.query<{ id: string }>(
+      `
+        update redaction_runs
+        set deleted_at = null, deleted_by = null, updated_at = now()
+        where document_id = $1
+          and organisation_id = $2
+          and deleted_at = $3::timestamptz
+        returning id
+      `,
+      [input.id, input.organisationId, cascadeTimestamp],
+    )
+    const runs = runsResult.rows
+
+    await appendAuditLog(client, {
+      organisationId: input.organisationId,
+      userId: input.userId,
+      entityType: 'document',
+      entityId: document.id,
+      action: 'document.restore',
+      metadata: { runCount: runs.length },
+      requestId: input.requestId,
+    })
+    for (const run of runs) {
+      await appendAuditLog(client, {
+        organisationId: input.organisationId,
+        userId: input.userId,
+        entityType: 'redaction_run',
+        entityId: run.id,
+        action: 'redaction_run.restore',
         metadata: { cascadedFrom: document.id },
         requestId: input.requestId,
       })

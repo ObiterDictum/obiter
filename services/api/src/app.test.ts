@@ -63,6 +63,16 @@ function createConnectedPool(query: QueryMock): Pool {
   } as unknown as Pool
 }
 
+function createHybridPool(query: QueryMock, transactionQuery: QueryMock): Pool {
+  return {
+    query,
+    connect: async () => ({
+      query: transactionQuery,
+      release: () => undefined,
+    }),
+  } as unknown as Pool
+}
+
 describe('createApiApp', () => {
   it('returns changelog entries from GitHub releases', async () => {
     const auth = {
@@ -1175,6 +1185,190 @@ function finalizedRunRow(overrides: Record<string, unknown> = {}) {
     ...overrides,
   }
 }
+
+describe('createApiApp soft-delete write races', () => {
+  it('returns 404 when a run is deleted before a span decision locks it', async () => {
+    const app = createApiApp(
+      testEnv,
+      createHybridPool(
+        async () => ({ rows: [] }),
+        async (sql) => {
+          const text = String(sql)
+          if (text === 'begin' || text === 'rollback') return { rows: [] }
+          if (text.includes('for update of run')) return { rows: [] }
+          throw new Error(`Unexpected SQL: ${text}`)
+        },
+      ),
+      { auth: authWithRole('owner') },
+    )
+
+    const response = await app.request(
+      '/api/redaction-runs/red_1/spans/span_1/decision',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ decision: 'accept' }),
+      },
+    )
+
+    expect(response.status).toBe(404)
+    expect(((await response.json()) as ErrorBody).error.code).toBe(
+      'redaction_run_not_found',
+    )
+  })
+
+  it('returns 404 and removes staged output when a run is deleted during finalization', async () => {
+    const deletedKeys: string[] = []
+    const app = createApiApp(
+      testEnv,
+      createHybridPool(
+        async (sql) => {
+          if (String(sql).includes('from redaction_runs')) {
+            return {
+              rows: [
+                finalizedRunRow({
+                  status: 'ready_for_review',
+                  output_artifact_id: null,
+                }),
+              ],
+            }
+          }
+          return { rows: [] }
+        },
+        async (sql) => {
+          const text = String(sql)
+          if (text === 'begin' || text === 'rollback') return { rows: [] }
+          if (text.includes('for update of run')) return { rows: [] }
+          throw new Error(`Unexpected SQL: ${text}`)
+        },
+      ),
+      {
+        auth: authWithRole('owner'),
+        storage: {
+          readText: async () => 'Synthetic text.',
+          writeText: async () => undefined,
+          delete: async (key) => {
+            deletedKeys.push(key)
+          },
+        },
+      },
+    )
+
+    const response = await app.request('/api/redaction-runs/red_1/finalize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ outputMode: 'redacted' }),
+    })
+
+    expect(response.status).toBe(404)
+    expect(((await response.json()) as ErrorBody).error.code).toBe(
+      'redaction_run_not_found',
+    )
+    expect(deletedKeys).toHaveLength(1)
+  })
+
+  it('returns document_not_found when a linked run parent is deleted during detection', async () => {
+    const directQueries: string[] = []
+    const app = createApiApp(
+      testEnv,
+      createHybridPool(
+        async (sql) => {
+          directQueries.push(String(sql))
+          if (String(sql).includes('from matter_documents document')) {
+            return {
+              rows: [
+                {
+                  matter_id: 'mtr_1',
+                  version_id: 'ver_1',
+                  filename: 'source.txt',
+                  text_object_key: 'org/org_1/text/ver_1',
+                },
+              ],
+            }
+          }
+          return { rows: [] }
+        },
+        async (sql) => {
+          const text = String(sql)
+          if (text === 'begin' || text === 'rollback') return { rows: [] }
+          if (text.includes('select id from matters')) return { rows: [] }
+          throw new Error(`Unexpected SQL: ${text}`)
+        },
+      ),
+      {
+        auth: authWithRole('owner'),
+        storage: {
+          readText: async () => 'Synthetic text.',
+          writeText: async () => undefined,
+          delete: async () => undefined,
+        },
+      },
+    )
+
+    const response = await app.request('/api/documents/doc_1/redaction-runs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+
+    expect(response.status).toBe(404)
+    expect(((await response.json()) as ErrorBody).error.code).toBe(
+      'document_not_found',
+    )
+    expect(directQueries.some((sql) => sql.includes('audit_logs'))).toBe(false)
+  })
+
+  it('returns matter_not_found when a document parent is deleted before insertion', async () => {
+    const transactionQueries: string[] = []
+    const app = createApiApp(
+      testEnv,
+      createHybridPool(
+        async (sql) => {
+          if (String(sql).includes('from matters')) {
+            return {
+              rows: [
+                {
+                  ...deletedMatterRow,
+                  status: 'active',
+                  deleted_at: null,
+                  deleted_by: null,
+                },
+              ],
+            }
+          }
+          return { rows: [] }
+        },
+        async (sql) => {
+          const text = String(sql)
+          transactionQueries.push(text)
+          if (text === 'begin' || text === 'rollback') return { rows: [] }
+          if (text.includes('select id from matters')) return { rows: [] }
+          throw new Error(`Unexpected SQL: ${text}`)
+        },
+      ),
+      { auth: authWithRole('owner') },
+    )
+
+    const response = await app.request('/api/matters/mtr_1/documents', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        filename: 'source.txt',
+        fileType: 'text/plain',
+        sizeBytes: 15,
+        contentSha256: 'a'.repeat(64),
+      }),
+    })
+
+    expect(response.status).toBe(404)
+    expect(((await response.json()) as ErrorBody).error.code).toBe(
+      'matter_not_found',
+    )
+    expect(transactionQueries.some((sql) => sql.includes('insert into'))).toBe(
+      false,
+    )
+  })
+})
 
 describe('createApiApp deletion authorization', () => {
   it('rejects matter deletion by a member with 403 forbidden', async () => {
