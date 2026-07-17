@@ -1160,6 +1160,19 @@ const deletedDocumentRow = {
   deleted_by: 'usr_1',
 }
 
+const liveMatterRow = {
+  ...deletedMatterRow,
+  status: 'active',
+  deleted_at: null,
+  deleted_by: null,
+}
+
+const liveDocumentRow = {
+  ...deletedDocumentRow,
+  deleted_at: null,
+  deleted_by: null,
+}
+
 function finalizedRunRow(overrides: Record<string, unknown> = {}) {
   return {
     id: 'red_1',
@@ -1488,6 +1501,105 @@ describe('createApiApp deletion cascade and idempotence', () => {
       ),
     ).toBe(false)
   })
+})
+
+describe('createApiApp includeDeleted authorization', () => {
+  const routes = [
+    {
+      path: '/api/matters',
+      normalResponse: { matters: [] },
+      deletedResponse: { matters: [{ id: 'mtr_1' }] },
+    },
+    {
+      path: '/api/matters/mtr_1',
+      normalResponse: { matter: { id: 'mtr_1', deletedAt: null } },
+      deletedResponse: {
+        matter: {
+          id: 'mtr_1',
+          deletedAt: '2026-02-01T00:00:00.000Z',
+        },
+      },
+    },
+    {
+      path: '/api/matters/mtr_1/documents',
+      normalResponse: { documents: [] },
+      deletedResponse: { documents: [{ id: 'doc_1' }] },
+    },
+    {
+      path: '/api/documents/doc_1',
+      normalResponse: { document: { id: 'doc_1', deletedAt: null } },
+      deletedResponse: {
+        document: {
+          id: 'doc_1',
+          deletedAt: '2026-02-01T00:00:00.000Z',
+        },
+      },
+    },
+  ]
+
+  function appForIncludeDeletedRead(role: string) {
+    return createApiApp(
+      testEnv,
+      createPool(async (sql, parameters) => {
+        const text = String(sql)
+        const values = Array.isArray(parameters) ? parameters : []
+        const includeDeleted = values.includes(true)
+
+        if (text.includes('from matter_documents d')) {
+          return { rows: includeDeleted ? [deletedDocumentRow] : [] }
+        }
+        if (text.includes('from matter_documents')) {
+          return {
+            rows: includeDeleted ? [deletedDocumentRow] : [liveDocumentRow],
+          }
+        }
+        if (text.includes('from matters')) {
+          if (values.length === 2)
+            return { rows: includeDeleted ? [deletedMatterRow] : [] }
+          return {
+            rows: includeDeleted ? [deletedMatterRow] : [liveMatterRow],
+          }
+        }
+        return { rows: [] }
+      }),
+      { auth: authWithRole(role) },
+    )
+  }
+
+  for (const { path } of routes) {
+    it(`rejects a member requesting includeDeleted from ${path}`, async () => {
+      const response = await appForIncludeDeletedRead('member').request(
+        `${path}?includeDeleted=true`,
+      )
+
+      expect(response.status).toBe(403)
+      expect(((await response.json()) as ErrorBody).error.code).toBe(
+        'forbidden',
+      )
+    })
+  }
+
+  for (const { path, normalResponse } of routes) {
+    it(`keeps the normal member response live-only for ${path}`, async () => {
+      const response = await appForIncludeDeletedRead('member').request(path)
+
+      expect(response.status).toBe(200)
+      expect(await response.json()).toMatchObject(normalResponse)
+    })
+  }
+
+  for (const role of ['owner', 'admin']) {
+    for (const { path, deletedResponse } of routes) {
+      it(`returns deleted rows to an ${role} requesting includeDeleted from ${path}`, async () => {
+        const response = await appForIncludeDeletedRead(role).request(
+          `${path}?includeDeleted=true`,
+        )
+
+        expect(response.status).toBe(200)
+        expect(await response.json()).toMatchObject(deletedResponse)
+      })
+    }
+  }
 })
 
 describe('createApiApp deleted-run audit access shape', () => {

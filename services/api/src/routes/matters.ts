@@ -69,6 +69,14 @@ function requireUser(c: RouteContext): AuthenticatedRouteUser | Response {
   return { id: user.id, organisationId: user.organisationId }
 }
 
+function includeDeletedRequested(c: RouteContext) {
+  try {
+    return new URL(c.req.url).searchParams.get('includeDeleted') === 'true'
+  } catch {
+    throw new Error('Request URL is invalid.')
+  }
+}
+
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -168,8 +176,14 @@ export function createMattersRoutes(pool: Pool) {
     const user = requireUser(c)
     if (user instanceof Response) return user
 
+    const includeDeleted = includeDeletedRequested(c)
+    if (includeDeleted) {
+      const manageUser = requireManageRole(c)
+      if (manageUser instanceof Response) return manageUser
+    }
+
     const matters = await listMatters(pool, user.organisationId, {
-      includeDeleted: c.req.query('includeDeleted') === 'true',
+      includeDeleted,
     })
     return c.json({ matters })
   })
@@ -178,13 +192,17 @@ export function createMattersRoutes(pool: Pool) {
     const user = requireUser(c)
     if (user instanceof Response) return user
 
+    const includeDeleted = includeDeletedRequested(c)
+    if (includeDeleted) {
+      const manageUser = requireManageRole(c)
+      if (manageUser instanceof Response) return manageUser
+    }
+
     const matter = await getMatter(
       pool,
       user.organisationId,
       c.req.param('id'),
-      {
-        includeDeleted: c.req.query('includeDeleted') === 'true',
-      },
+      { includeDeleted },
     )
     if (!matter) {
       return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)

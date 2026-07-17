@@ -31,8 +31,11 @@ alter table matters
 alter table matter_documents
   add column if not exists deleted_by text references users(id);
 
--- Pre-0010 matter deletes could leave documents and runs live. Bring those
--- rows into the cascade while preserving the parent's timestamp and actor.
+-- Pre-0010 matter deletes could leave documents and runs live. This backfill
+-- intentionally writes no *.delete audit rows: the original parent deletions
+-- were audited when they happened, so copy the parent's timestamp and actor
+-- rather than fabricating new events. This is the sole exception to every
+-- soft-delete writing an audit row.
 update matter_documents document
 set deleted_at = matter.deleted_at,
     deleted_by = matter.deleted_by

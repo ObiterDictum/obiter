@@ -631,7 +631,7 @@ export async function softDeleteRedactionRun(
   }
 }
 
-/** Restores one run without allowing a live child beneath a deleted parent. */
+/** Restores one run after parent-liveness checks; intentionally not yet routed. */
 export async function restoreRedactionRunWithAudit(
   pool: Pool,
   input: {

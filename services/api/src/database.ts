@@ -1125,7 +1125,7 @@ export async function softDeleteDocumentWithCascade(
   }
 }
 
-/** Restores a document and only the runs deleted by the same cascade. */
+/** Restores a document and its cascade-deleted runs; intentionally not yet routed. */
 export async function restoreDocumentWithAudit(
   pool: Pool,
   input: {

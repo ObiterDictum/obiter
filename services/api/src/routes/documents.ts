@@ -281,6 +281,13 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
     const user = requireUser(c)
     if (user instanceof Response) return user
 
+    const includeDeleted =
+      c.req.queries('includeDeleted')?.includes('true') ?? false
+    if (includeDeleted) {
+      const manageUser = requireManageRole(c)
+      if (manageUser instanceof Response) return manageUser
+    }
+
     const matter = await getMatter(
       pool,
       user.organisationId,
@@ -294,10 +301,7 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
       pool,
       user.organisationId,
       matter.id,
-      {
-        includeDeleted:
-          c.req.queries('includeDeleted')?.includes('true') ?? false,
-      },
+      { includeDeleted },
     )
     return c.json({ documents })
   })
@@ -306,14 +310,18 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
     const user = requireUser(c)
     if (user instanceof Response) return user
 
+    const includeDeleted =
+      c.req.queries('includeDeleted')?.includes('true') ?? false
+    if (includeDeleted) {
+      const manageUser = requireManageRole(c)
+      if (manageUser instanceof Response) return manageUser
+    }
+
     const result = await getDocument(
       pool,
       user.organisationId,
       c.req.param('id'),
-      {
-        includeDeleted:
-          c.req.queries('includeDeleted')?.includes('true') ?? false,
-      },
+      { includeDeleted },
     )
     if (!result) {
       return errorResponse(c, 'document_not_found', 'Document not found.', 404)
