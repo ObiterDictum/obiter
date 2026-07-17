@@ -3,6 +3,7 @@ export { RedactionRunsView } from './runs'
 export { RedactionRunsRegion } from './runs-region'
 export {
   useCreateRedactionRun,
+  useDeleteRedactionRun,
   useRedactionDocumentText,
   useRedactionOutput,
   useRedactionRun,

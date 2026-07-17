@@ -63,6 +63,16 @@ function createConnectedPool(query: QueryMock): Pool {
   } as unknown as Pool
 }
 
+function createHybridPool(query: QueryMock, transactionQuery: QueryMock): Pool {
+  return {
+    query,
+    connect: async () => ({
+      query: transactionQuery,
+      release: () => undefined,
+    }),
+  } as unknown as Pool
+}
+
 describe('createApiApp', () => {
   it('returns changelog entries from GitHub releases', async () => {
     const auth = {
@@ -630,6 +640,7 @@ describe('createApiApp', () => {
           user: {
             id: 'usr_1',
             organisationId: 'org_1',
+            role: 'owner',
           },
           session: {
             id: 'ses_1',
@@ -649,6 +660,12 @@ describe('createApiApp', () => {
         if (sql === 'begin' || sql === 'commit' || sql === 'rollback') {
           return { rows: [] }
         }
+        if (
+          sql.includes('for update') &&
+          sql.includes('deleted_at is not null')
+        ) {
+          return { rows: [{ deleted_at: '2026-02-01T00:00:00.000Z' }] }
+        }
         if (sql.includes('update matters')) {
           return {
             rows: [
@@ -664,11 +681,19 @@ describe('createApiApp', () => {
                 status: 'active',
                 created_by: 'usr_1',
                 deleted_at: null,
+                deleted_by: null,
                 created_at: '2026-01-01T00:00:00.000Z',
                 updated_at: '2026-01-01T00:00:00.000Z',
               },
             ],
           }
+        }
+        // Cascade-restore matches deleted_at = T; no children in this fixture.
+        if (
+          sql.includes('update matter_documents') ||
+          sql.includes('update redaction_runs')
+        ) {
+          return { rows: [] }
         }
 
         return { rows: [] }
@@ -691,11 +716,14 @@ describe('createApiApp', () => {
       ),
     ).toEqual([
       'begin',
+      'select deleted_at::text from',
       'update matters set',
+      'update matter_documents set',
+      'update redaction_runs set',
       'insert into audit_logs',
       'commit',
     ])
-    expect(queries[2]).toEqual([
+    expect(queries[5]).toEqual([
       expect.stringContaining('insert into audit_logs'),
       expect.arrayContaining([
         'org_1',
@@ -703,7 +731,6 @@ describe('createApiApp', () => {
         'matter',
         'mtr_1',
         'matter.restore',
-        '{}',
       ]),
     ])
   })
@@ -1002,6 +1029,8 @@ describe('createApiApp', () => {
                 created_by: 'usr_1',
                 created_at: '2026-01-01T00:00:00.000Z',
                 updated_at: '2026-01-01T00:00:00.000Z',
+                deleted_at: null,
+                deleted_by: null,
               },
             ],
           }
@@ -1086,5 +1115,558 @@ describe('createApiApp', () => {
       outcome: 'unsupported_source_type',
     })
     expect(searchClientMock.search).not.toHaveBeenCalled()
+  })
+})
+
+function authWithRole(role: string | null): Auth {
+  return {
+    api: {
+      getSession: async () => ({
+        user: { id: 'usr_1', organisationId: 'org_1', role },
+        session: { id: 'ses_1' },
+      }),
+    },
+    handler: async () => new Response(null, { status: 404 }),
+  } as unknown as Auth
+}
+
+const deletedMatterRow = {
+  id: 'mtr_1',
+  organisation_id: 'org_1',
+  name: 'Share purchase',
+  description: null,
+  primary_jurisdiction: 'england_and_wales',
+  secondary_jurisdictions: [],
+  legal_domains: [],
+  client_reference: '',
+  status: 'deleted',
+  created_by: 'usr_1',
+  created_at: '2026-01-01T00:00:00.000Z',
+  updated_at: '2026-01-01T00:00:00.000Z',
+  deleted_at: '2026-02-01T00:00:00.000Z',
+  deleted_by: 'usr_1',
+}
+
+const deletedDocumentRow = {
+  id: 'doc_1',
+  organisation_id: 'org_1',
+  matter_id: 'mtr_1',
+  current_version_id: null,
+  logical_key: 'doc_logical_1',
+  created_by: 'usr_1',
+  created_at: '2026-01-01T00:00:00.000Z',
+  updated_at: '2026-01-01T00:00:00.000Z',
+  deleted_at: '2026-02-01T00:00:00.000Z',
+  deleted_by: 'usr_1',
+}
+
+const liveMatterRow = {
+  ...deletedMatterRow,
+  status: 'active',
+  deleted_at: null,
+  deleted_by: null,
+}
+
+const liveDocumentRow = {
+  ...deletedDocumentRow,
+  deleted_at: null,
+  deleted_by: null,
+}
+
+function finalizedRunRow(overrides: Record<string, unknown> = {}) {
+  return {
+    id: 'red_1',
+    organisation_id: 'org_1',
+    matter_id: null,
+    matter_name: null,
+    document_id: null,
+    document_version_id: null,
+    source_filename: 'source.txt',
+    source_text_object_key: 'org/org_1/redaction-runs/red_1/source',
+    status: 'finalized',
+    policy_mode: 'internal_ai_minimisation',
+    spans_json: [],
+    decisions_json: {},
+    output_artifact_id: 'art_1',
+    summary_json: { totalSpans: 0 },
+    detector_version: null,
+    created_by: 'usr_1',
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-01T00:00:00.000Z',
+    deleted_at: null,
+    deleted_by: null,
+    ...overrides,
+  }
+}
+
+describe('createApiApp soft-delete write races', () => {
+  it('returns 404 when a run is deleted before a span decision locks it', async () => {
+    const app = createApiApp(
+      testEnv,
+      createHybridPool(
+        async () => ({ rows: [] }),
+        async (sql) => {
+          const text = String(sql)
+          if (text === 'begin' || text === 'rollback') return { rows: [] }
+          if (text.includes('for update of run')) return { rows: [] }
+          throw new Error(`Unexpected SQL: ${text}`)
+        },
+      ),
+      { auth: authWithRole('owner') },
+    )
+
+    const response = await app.request(
+      '/api/redaction-runs/red_1/spans/span_1/decision',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ decision: 'accept' }),
+      },
+    )
+
+    expect(response.status).toBe(404)
+    expect(((await response.json()) as ErrorBody).error.code).toBe(
+      'redaction_run_not_found',
+    )
+  })
+
+  it('returns 404 and removes staged output when a run is deleted during finalization', async () => {
+    const deletedKeys: string[] = []
+    const app = createApiApp(
+      testEnv,
+      createHybridPool(
+        async (sql) => {
+          if (String(sql).includes('from redaction_runs')) {
+            return {
+              rows: [
+                finalizedRunRow({
+                  status: 'ready_for_review',
+                  output_artifact_id: null,
+                }),
+              ],
+            }
+          }
+          return { rows: [] }
+        },
+        async (sql) => {
+          const text = String(sql)
+          if (text === 'begin' || text === 'rollback') return { rows: [] }
+          if (text.includes('for update of run')) return { rows: [] }
+          throw new Error(`Unexpected SQL: ${text}`)
+        },
+      ),
+      {
+        auth: authWithRole('owner'),
+        storage: {
+          readText: async () => 'Synthetic text.',
+          writeText: async () => undefined,
+          delete: async (key) => {
+            deletedKeys.push(key)
+          },
+        },
+      },
+    )
+
+    const response = await app.request('/api/redaction-runs/red_1/finalize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ outputMode: 'redacted' }),
+    })
+
+    expect(response.status).toBe(404)
+    expect(((await response.json()) as ErrorBody).error.code).toBe(
+      'redaction_run_not_found',
+    )
+    expect(deletedKeys).toHaveLength(1)
+  })
+
+  it('returns document_not_found when a linked run parent is deleted during detection', async () => {
+    const directQueries: string[] = []
+    const app = createApiApp(
+      testEnv,
+      createHybridPool(
+        async (sql) => {
+          directQueries.push(String(sql))
+          if (String(sql).includes('from matter_documents document')) {
+            return {
+              rows: [
+                {
+                  matter_id: 'mtr_1',
+                  version_id: 'ver_1',
+                  filename: 'source.txt',
+                  text_object_key: 'org/org_1/text/ver_1',
+                },
+              ],
+            }
+          }
+          return { rows: [] }
+        },
+        async (sql) => {
+          const text = String(sql)
+          if (text === 'begin' || text === 'rollback') return { rows: [] }
+          if (text.includes('select id from matters')) return { rows: [] }
+          throw new Error(`Unexpected SQL: ${text}`)
+        },
+      ),
+      {
+        auth: authWithRole('owner'),
+        storage: {
+          readText: async () => 'Synthetic text.',
+          writeText: async () => undefined,
+          delete: async () => undefined,
+        },
+      },
+    )
+
+    const response = await app.request('/api/documents/doc_1/redaction-runs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+
+    expect(response.status).toBe(404)
+    expect(((await response.json()) as ErrorBody).error.code).toBe(
+      'document_not_found',
+    )
+    expect(directQueries.some((sql) => sql.includes('audit_logs'))).toBe(false)
+  })
+
+  it('returns matter_not_found when a document parent is deleted before insertion', async () => {
+    const transactionQueries: string[] = []
+    const app = createApiApp(
+      testEnv,
+      createHybridPool(
+        async (sql) => {
+          if (String(sql).includes('from matters')) {
+            return {
+              rows: [
+                {
+                  ...deletedMatterRow,
+                  status: 'active',
+                  deleted_at: null,
+                  deleted_by: null,
+                },
+              ],
+            }
+          }
+          return { rows: [] }
+        },
+        async (sql) => {
+          const text = String(sql)
+          transactionQueries.push(text)
+          if (text === 'begin' || text === 'rollback') return { rows: [] }
+          if (text.includes('select id from matters')) return { rows: [] }
+          throw new Error(`Unexpected SQL: ${text}`)
+        },
+      ),
+      { auth: authWithRole('owner') },
+    )
+
+    const response = await app.request('/api/matters/mtr_1/documents', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        filename: 'source.txt',
+        fileType: 'text/plain',
+        sizeBytes: 15,
+        contentSha256: 'a'.repeat(64),
+      }),
+    })
+
+    expect(response.status).toBe(404)
+    expect(((await response.json()) as ErrorBody).error.code).toBe(
+      'matter_not_found',
+    )
+    expect(transactionQueries.some((sql) => sql.includes('insert into'))).toBe(
+      false,
+    )
+  })
+})
+
+describe('createApiApp deletion authorization', () => {
+  it('rejects matter deletion by a member with 403 forbidden', async () => {
+    const app = createApiApp(
+      testEnv,
+      createConnectedPool(async () => ({ rows: [] })),
+      { auth: authWithRole('member') },
+    )
+    const response = await app.request('/api/matters/mtr_1', {
+      method: 'DELETE',
+    })
+    expect(response.status).toBe(403)
+    expect(((await response.json()) as ErrorBody).error.code).toBe('forbidden')
+  })
+
+  it('rejects matter restore by a member with 403 forbidden', async () => {
+    const app = createApiApp(
+      testEnv,
+      createConnectedPool(async () => ({ rows: [] })),
+      { auth: authWithRole('member') },
+    )
+    const response = await app.request('/api/matters/mtr_1/restore', {
+      method: 'PATCH',
+    })
+    expect(response.status).toBe(403)
+    expect(((await response.json()) as ErrorBody).error.code).toBe('forbidden')
+  })
+
+  it('rejects document deletion by a member with 403 forbidden', async () => {
+    const app = createApiApp(
+      testEnv,
+      createConnectedPool(async () => ({ rows: [] })),
+      { auth: authWithRole('member') },
+    )
+    const response = await app.request('/api/documents/doc_1', {
+      method: 'DELETE',
+    })
+    expect(response.status).toBe(403)
+  })
+
+  it('rejects redaction run deletion by a member with 403 forbidden', async () => {
+    const app = createApiApp(
+      testEnv,
+      createConnectedPool(async () => ({ rows: [] })),
+      { auth: authWithRole('member') },
+    )
+    const response = await app.request('/api/redaction-runs/red_1', {
+      method: 'DELETE',
+    })
+    expect(response.status).toBe(403)
+  })
+})
+
+describe('createApiApp deletion cascade and idempotence', () => {
+  it('cascades matter deletion to documents and runs, auditing each entity', async () => {
+    const queries: unknown[] = []
+    const app = createApiApp(
+      testEnv,
+      createConnectedPool(async (...args) => {
+        queries.push(args)
+        const sql = String(args[0]).trim()
+        if (sql === 'begin' || sql === 'commit' || sql === 'rollback') {
+          return { rows: [] }
+        }
+        if (sql.includes('for update') && sql.includes('deleted_at is null')) {
+          return { rows: [{ id: 'mtr_1' }] }
+        }
+        if (sql.startsWith('update matters'))
+          return { rows: [deletedMatterRow] }
+        if (sql.startsWith('update matter_documents'))
+          return { rows: [deletedDocumentRow] }
+        if (sql.startsWith('update redaction_runs'))
+          return { rows: [{ id: 'red_1' }] }
+        if (sql.includes('insert into audit_logs')) return { rows: [] }
+        return { rows: [] }
+      }),
+      { auth: authWithRole('owner') },
+    )
+
+    const response = await app.request('/api/matters/mtr_1', {
+      method: 'DELETE',
+    })
+    expect(response.status).toBe(200)
+    const auditActions = queries
+      .filter((args) => String((args as unknown[])[0]).includes('audit_logs'))
+      .map((args) => (args as unknown[])[1] as unknown[])
+      .map((params) => params[4])
+    expect(auditActions).toEqual([
+      'matter.delete',
+      'document.delete',
+      'redaction_run.delete',
+    ])
+  })
+
+  it('returns 404 without auditing when deleting an already-deleted matter', async () => {
+    const queries: unknown[] = []
+    const app = createApiApp(
+      testEnv,
+      createConnectedPool(async (...args) => {
+        queries.push(args)
+        const sql = String(args[0]).trim()
+        if (sql === 'begin' || sql === 'rollback') return { rows: [] }
+        // FOR UPDATE finds no live row (matter already deleted).
+        if (sql.includes('for update')) return { rows: [] }
+        return { rows: [] }
+      }),
+      { auth: authWithRole('owner') },
+    )
+
+    const response = await app.request('/api/matters/mtr_1', {
+      method: 'DELETE',
+    })
+    expect(response.status).toBe(404)
+    expect(
+      queries.some((args) =>
+        String((args as unknown[])[0]).includes('insert into audit_logs'),
+      ),
+    ).toBe(false)
+  })
+})
+
+describe('createApiApp includeDeleted authorization', () => {
+  const routes = [
+    {
+      path: '/api/matters',
+      normalResponse: { matters: [] },
+      deletedResponse: { matters: [{ id: 'mtr_1' }] },
+    },
+    {
+      path: '/api/matters/mtr_1',
+      normalResponse: { matter: { id: 'mtr_1', deletedAt: null } },
+      deletedResponse: {
+        matter: {
+          id: 'mtr_1',
+          deletedAt: '2026-02-01T00:00:00.000Z',
+        },
+      },
+    },
+    {
+      path: '/api/matters/mtr_1/documents',
+      normalResponse: { documents: [] },
+      deletedResponse: { documents: [{ id: 'doc_1' }] },
+    },
+    {
+      path: '/api/documents/doc_1',
+      normalResponse: { document: { id: 'doc_1', deletedAt: null } },
+      deletedResponse: {
+        document: {
+          id: 'doc_1',
+          deletedAt: '2026-02-01T00:00:00.000Z',
+        },
+      },
+    },
+  ]
+
+  function appForIncludeDeletedRead(role: string) {
+    return createApiApp(
+      testEnv,
+      createPool(async (sql, parameters) => {
+        const text = String(sql)
+        const values = Array.isArray(parameters) ? parameters : []
+        const includeDeleted = values.includes(true)
+
+        if (text.includes('from matter_documents d')) {
+          return { rows: includeDeleted ? [deletedDocumentRow] : [] }
+        }
+        if (text.includes('from matter_documents')) {
+          return {
+            rows: includeDeleted ? [deletedDocumentRow] : [liveDocumentRow],
+          }
+        }
+        if (text.includes('from matters')) {
+          if (values.length === 2)
+            return { rows: includeDeleted ? [deletedMatterRow] : [] }
+          return {
+            rows: includeDeleted ? [deletedMatterRow] : [liveMatterRow],
+          }
+        }
+        return { rows: [] }
+      }),
+      { auth: authWithRole(role) },
+    )
+  }
+
+  for (const { path } of routes) {
+    it(`rejects a member requesting includeDeleted from ${path}`, async () => {
+      const response = await appForIncludeDeletedRead('member').request(
+        `${path}?includeDeleted=true`,
+      )
+
+      expect(response.status).toBe(403)
+      expect(((await response.json()) as ErrorBody).error.code).toBe(
+        'forbidden',
+      )
+    })
+  }
+
+  for (const { path, normalResponse } of routes) {
+    it(`keeps the normal member response live-only for ${path}`, async () => {
+      const response = await appForIncludeDeletedRead('member').request(path)
+
+      expect(response.status).toBe(200)
+      expect(await response.json()).toMatchObject(normalResponse)
+    })
+  }
+
+  for (const role of ['owner', 'admin']) {
+    for (const { path, deletedResponse } of routes) {
+      it(`returns deleted rows to an ${role} requesting includeDeleted from ${path}`, async () => {
+        const response = await appForIncludeDeletedRead(role).request(
+          `${path}?includeDeleted=true`,
+        )
+
+        expect(response.status).toBe(200)
+        expect(await response.json()).toMatchObject(deletedResponse)
+      })
+    }
+  }
+})
+
+describe('createApiApp deleted-run audit access shape', () => {
+  it('returns the audit report of a deleted run to an owner', async () => {
+    const app = createApiApp(
+      testEnv,
+      createPool(async (sql) => {
+        if (typeof sql === 'string' && sql.includes('from redaction_runs')) {
+          return {
+            rows: [
+              finalizedRunRow({
+                deleted_at: '2026-02-01T00:00:00.000Z',
+                deleted_by: 'usr_1',
+              }),
+            ],
+          }
+        }
+        if (typeof sql === 'string' && sql.includes('audit_logs')) {
+          return { rows: [] }
+        }
+        return { rows: [] }
+      }),
+      { auth: authWithRole('owner') },
+    )
+
+    const response = await app.request('/api/redaction-runs/red_1/audit')
+    expect(response.status).toBe(200)
+  })
+
+  it('forbids a member from reading a deleted run audit report', async () => {
+    const app = createApiApp(
+      testEnv,
+      createPool(async (sql) => {
+        if (typeof sql === 'string' && sql.includes('from redaction_runs')) {
+          return {
+            rows: [
+              finalizedRunRow({
+                deleted_at: '2026-02-01T00:00:00.000Z',
+                deleted_by: 'usr_1',
+              }),
+            ],
+          }
+        }
+        return { rows: [] }
+      }),
+      { auth: authWithRole('member') },
+    )
+
+    const response = await app.request('/api/redaction-runs/red_1/audit')
+    expect(response.status).toBe(403)
+    expect(((await response.json()) as ErrorBody).error.code).toBe('forbidden')
+  })
+
+  it('returns 404 for a direct GET of a deleted run (excluded by default)', async () => {
+    const app = createApiApp(
+      testEnv,
+      createPool(async (sql) => {
+        if (typeof sql === 'string' && sql.includes('from redaction_runs')) {
+          // Default includeDeleted=false filters the soft-deleted row out.
+          return { rows: [] }
+        }
+        return { rows: [] }
+      }),
+      { auth: authWithRole('owner') },
+    )
+
+    const response = await app.request('/api/redaction-runs/red_1')
+    expect(response.status).toBe(404)
   })
 })

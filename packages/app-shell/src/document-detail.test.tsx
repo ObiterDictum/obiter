@@ -11,11 +11,36 @@ import {
 import { DocumentDetailLayoutView } from './views/document-detail'
 import type { DocumentDetailResponse } from './documents'
 
-const docs = vi.hoisted(() => ({ useDocument: vi.fn() }))
+const docs = vi.hoisted(() => ({
+  useDocument: vi.fn(),
+  useDeleteDocument: vi.fn(),
+}))
+const currentUser = vi.hoisted(() => ({ useCurrentUser: vi.fn() }))
+const nav = vi.hoisted(() => ({ useNavigate: vi.fn() }))
+const toast = vi.hoisted(() => ({ useToast: vi.fn() }))
 
 vi.mock('./documents', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./documents')>()
-  return { ...actual, useDocument: docs.useDocument }
+  return {
+    ...actual,
+    useDocument: docs.useDocument,
+    useDeleteDocument: docs.useDeleteDocument,
+  }
+})
+
+vi.mock('./current-user', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./current-user')>()
+  return { ...actual, useCurrentUser: currentUser.useCurrentUser }
+})
+
+vi.mock('@tanstack/react-router', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@tanstack/react-router')>()
+  return { ...actual, useNavigate: nav.useNavigate }
+})
+
+vi.mock('@obiter/ui', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@obiter/ui')>()
+  return { ...actual, useToast: toast.useToast }
 })
 
 function sampleDocumentDetail(matterId: string): DocumentDetailResponse {
@@ -30,6 +55,7 @@ function sampleDocumentDetail(matterId: string): DocumentDetailResponse {
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
       deletedAt: null,
+      deletedBy: null,
       currentVersion: {
         id: 'ver_1',
         organisationId: 'org_1',
@@ -84,6 +110,23 @@ function buildRouter(matterId: string, documentId: string) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  docs.useDeleteDocument.mockReturnValue({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  })
+  currentUser.useCurrentUser.mockReturnValue({
+    data: {
+      user: {
+        id: 'usr_1',
+        email: 'lex@obiter.dev',
+        name: 'Lex',
+        role: 'owner',
+      },
+      organisation: { id: 'org_1', name: 'Obiter', plan: 'private_beta' },
+    },
+  })
+  nav.useNavigate.mockReturnValue(vi.fn())
+  toast.useToast.mockReturnValue({ toast: vi.fn() })
 })
 
 afterEach(() => {

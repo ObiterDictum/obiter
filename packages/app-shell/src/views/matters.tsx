@@ -1,5 +1,5 @@
-import { Link } from '@tanstack/react-router'
-import { ArrowRight, Folders, Plus } from '@phosphor-icons/react'
+import { Link, useNavigate } from '@tanstack/react-router'
+import { ArrowRight, Folders, Plus, Trash } from '@phosphor-icons/react'
 import {
   Badge,
   Button,
@@ -20,10 +20,12 @@ import { useState, type FormEvent } from 'react'
 import {
   mattersListQueryOptions,
   useCreateMatter,
+  useDeleteMatter,
   useMatter,
   useMattersList,
   type CreateMatterInput,
 } from '../matters'
+import { useCurrentUser } from '../current-user'
 import { useMatterDocuments, useUploadMatterDocument } from '../documents'
 
 /**
@@ -269,6 +271,13 @@ export function MatterRouteView({
   const matter = useMatter(matterId)
   const documents = useMatterDocuments(matterId)
   const upload = useUploadMatterDocument(matterId)
+  const deleteMatter = useDeleteMatter()
+  const navigate = useNavigate()
+  const { toast } = useToast()
+  const { data: me } = useCurrentUser()
+  const canManage = me?.user.role === 'owner' || me?.user.role === 'admin'
+  const documentCount = documents.data?.length ?? 0
+  const isDocumentCountLoading = documents.isLoading
 
   if (matter.isError && !matter.isLoading) {
     return (
@@ -323,6 +332,49 @@ export function MatterRouteView({
           <Badge tone="neutral">{m.primaryJurisdiction}</Badge>
         </div>
       </div>
+
+      {canManage ? (
+        <Dialog>
+          <DialogTrigger
+            render={
+              <Button variant="ghost" size="sm" aria-label="Delete matter">
+                <Trash aria-hidden /> Delete
+              </Button>
+            }
+          />
+          <DialogContent size="md">
+            <DialogTitle>Delete matter</DialogTitle>
+            <DialogDescription>
+              {isDocumentCountLoading ? (
+                <>Loading the document count before deletion.</>
+              ) : (
+                <>
+                  Deleting this matter also removes {documentCount}{' '}
+                  {documentCount === 1 ? 'document' : 'documents'} and their
+                  redaction runs. Removals are soft; rows persist for audit and
+                  can be restored by an operator.
+                </>
+              )}
+            </DialogDescription>
+            <div className="flex justify-end gap-2">
+              <DialogClose render={<Button variant="ghost">Cancel</Button>} />
+              <Button
+                variant="danger"
+                loading={deleteMatter.isPending}
+                disabled={isDocumentCountLoading}
+                onClick={async () => {
+                  await deleteMatter.mutateAsync(matterId)
+                  toast({ title: 'Matter deleted' })
+                  navigate({ to: '/matters' })
+                }}
+              >
+                Delete matter
+              </Button>
+            </div>
+            <DialogCloseButton />
+          </DialogContent>
+        </Dialog>
+      ) : null}
 
       {m.description ? (
         <div className="rounded-lg border border-line bg-surface p-5">

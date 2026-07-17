@@ -1,21 +1,27 @@
 import { Hono } from 'hono'
 import type { Context } from 'hono'
 import type { Pool } from 'pg'
-import type { ApiErrorCode, ApiErrorResponse } from '@obiter/contracts'
+import type {
+  ApiErrorCode,
+  ApiErrorResponse,
+  UserRole,
+} from '@obiter/contracts'
 import {
   appendAuditLog,
   createMatter,
   getMatter,
   listMatters,
   restoreMatterWithAudit,
-  softDeleteMatter,
+  softDeleteMatterWithCascade,
   updateMatter,
   type UpdatableMatterStatus,
 } from '../database'
+import { requireManageRole } from '../authz'
 
 interface RouteUser {
   id: string
   organisationId?: string | null
+  role?: UserRole | null
 }
 
 interface AuthenticatedRouteUser {
@@ -61,6 +67,14 @@ function requireUser(c: RouteContext): AuthenticatedRouteUser | Response {
     )
   }
   return { id: user.id, organisationId: user.organisationId }
+}
+
+function includeDeletedRequested(c: RouteContext) {
+  try {
+    return new URL(c.req.url).searchParams.get('includeDeleted') === 'true'
+  } catch {
+    throw new Error('Request URL is invalid.')
+  }
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -162,8 +176,14 @@ export function createMattersRoutes(pool: Pool) {
     const user = requireUser(c)
     if (user instanceof Response) return user
 
+    const includeDeleted = includeDeletedRequested(c)
+    if (includeDeleted) {
+      const manageUser = requireManageRole(c)
+      if (manageUser instanceof Response) return manageUser
+    }
+
     const matters = await listMatters(pool, user.organisationId, {
-      includeDeleted: c.req.query('includeDeleted') === 'true',
+      includeDeleted,
     })
     return c.json({ matters })
   })
@@ -172,13 +192,17 @@ export function createMattersRoutes(pool: Pool) {
     const user = requireUser(c)
     if (user instanceof Response) return user
 
+    const includeDeleted = includeDeletedRequested(c)
+    if (includeDeleted) {
+      const manageUser = requireManageRole(c)
+      if (manageUser instanceof Response) return manageUser
+    }
+
     const matter = await getMatter(
       pool,
       user.organisationId,
       c.req.param('id'),
-      {
-        includeDeleted: c.req.query('includeDeleted') === 'true',
-      },
+      { includeDeleted },
     )
     if (!matter) {
       return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
@@ -286,31 +310,23 @@ export function createMattersRoutes(pool: Pool) {
   })
 
   routes.delete('/api/matters/:id', async (c) => {
-    const user = requireUser(c)
+    const user = requireManageRole(c)
     if (user instanceof Response) return user
 
-    const matter = await softDeleteMatter(
-      pool,
-      user.organisationId,
-      c.req.param('id'),
-    )
-    if (!matter) {
-      return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
-    }
-    await appendAuditLog(pool, {
+    const result = await softDeleteMatterWithCascade(pool, {
       organisationId: user.organisationId,
       userId: user.id,
-      entityType: 'matter',
-      entityId: matter.id,
-      action: 'matter.delete',
-      metadata: {},
+      id: c.req.param('id'),
       requestId: c.get('requestId'),
     })
-    return c.json({ matter })
+    if (!result) {
+      return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
+    }
+    return c.json(result)
   })
 
   routes.patch('/api/matters/:id/restore', async (c) => {
-    const user = requireUser(c)
+    const user = requireManageRole(c)
     if (user instanceof Response) return user
 
     const matter = await restoreMatterWithAudit(pool, {

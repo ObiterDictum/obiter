@@ -1,9 +1,14 @@
+// @vitest-environment jsdom
+import { createElement, type PropsWithChildren } from 'react'
+import { act, renderHook } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from './api'
 import {
   documentsKeys,
   documentQueryOptions,
   matterDocumentsQueryOptions,
+  useDeleteDocument,
 } from './documents'
 
 const api = vi.hoisted(() => ({ apiFetch: vi.fn() }))
@@ -36,6 +41,11 @@ function sampleVersion(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function queryWrapper(client: QueryClient) {
+  return ({ children }: PropsWithChildren) =>
+    createElement(QueryClientProvider, { client }, children)
+}
+
 describe('documentsKeys', () => {
   it('separates by-matter lists from single-document detail keys', () => {
     expect(documentsKeys.byMatter('mtr_1')).toEqual([
@@ -63,6 +73,43 @@ describe('matterDocumentsQueryOptions', () => {
     expect(result).toHaveLength(1)
     expect(result?.[0]?.currentVersion?.filename).toBe('brief.pdf')
     expect(api.apiFetch).toHaveBeenCalledWith('/api/matters/mtr_1/documents')
+  })
+})
+
+describe('useDeleteDocument', () => {
+  it('invalidates redaction-run caches after a cascade delete', async () => {
+    api.apiFetch.mockResolvedValueOnce({})
+    const client = new QueryClient({
+      defaultOptions: {
+        mutations: { retry: false },
+        queries: { retry: false },
+      },
+    })
+    const invalidate = vi
+      .spyOn(client, 'invalidateQueries')
+      .mockResolvedValue(undefined)
+    const remove = vi.spyOn(client, 'removeQueries')
+    const { result } = renderHook(() => useDeleteDocument(), {
+      wrapper: queryWrapper(client),
+    })
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        documentId: 'doc_1',
+        matterId: 'mtr_1',
+      })
+    })
+
+    expect(remove).toHaveBeenCalledWith({
+      queryKey: documentsKeys.detail('doc_1'),
+    })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: documentsKeys.byMatter('mtr_1'),
+    })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['redaction-runs'] })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: ['document-redaction-runs'],
+    })
   })
 })
 

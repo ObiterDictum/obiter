@@ -2,7 +2,11 @@ import { createHash } from 'node:crypto'
 import { Hono } from 'hono'
 import type { Context } from 'hono'
 import type { Pool } from 'pg'
-import type { ApiErrorCode, ApiErrorResponse } from '@obiter/contracts'
+import type {
+  ApiErrorCode,
+  ApiErrorResponse,
+  UserRole,
+} from '@obiter/contracts'
 import {
   appendAuditLog,
   createDocument,
@@ -10,7 +14,7 @@ import {
   updateDocumentExtraction,
   getMatter,
   listDocuments,
-  softDeleteDocument,
+  softDeleteDocumentWithCascade,
 } from '../database'
 import {
   DocumentExtractionError,
@@ -19,10 +23,12 @@ import {
 } from '../document-extraction'
 import { DocumentUploadError, readDocumentUpload } from '../document-upload'
 import type { StorageService } from '../storage'
+import { requireManageRole } from '../authz'
 
 interface RouteUser {
   id: string
   organisationId?: string | null
+  role?: UserRole | null
 }
 
 interface AuthenticatedRouteUser {
@@ -190,6 +196,9 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
       sizeBytes: uploadContents?.byteLength ?? sizeBytes,
       contentSha256: verifiedHash!,
     })
+    if (!result) {
+      return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
+    }
 
     if (uploadContents && verifiedType && storage?.writeBinary) {
       const markExtractionFailed = async (failureReason: string) => {
@@ -272,6 +281,13 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
     const user = requireUser(c)
     if (user instanceof Response) return user
 
+    const includeDeleted =
+      c.req.queries('includeDeleted')?.includes('true') ?? false
+    if (includeDeleted) {
+      const manageUser = requireManageRole(c)
+      if (manageUser instanceof Response) return manageUser
+    }
+
     const matter = await getMatter(
       pool,
       user.organisationId,
@@ -285,10 +301,7 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
       pool,
       user.organisationId,
       matter.id,
-      {
-        includeDeleted:
-          c.req.queries('includeDeleted')?.includes('true') ?? false,
-      },
+      { includeDeleted },
     )
     return c.json({ documents })
   })
@@ -297,14 +310,18 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
     const user = requireUser(c)
     if (user instanceof Response) return user
 
+    const includeDeleted =
+      c.req.queries('includeDeleted')?.includes('true') ?? false
+    if (includeDeleted) {
+      const manageUser = requireManageRole(c)
+      if (manageUser instanceof Response) return manageUser
+    }
+
     const result = await getDocument(
       pool,
       user.organisationId,
       c.req.param('id'),
-      {
-        includeDeleted:
-          c.req.queries('includeDeleted')?.includes('true') ?? false,
-      },
+      { includeDeleted },
     )
     if (!result) {
       return errorResponse(c, 'document_not_found', 'Document not found.', 404)
@@ -313,27 +330,19 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
   })
 
   routes.delete('/api/documents/:id', async (c) => {
-    const user = requireUser(c)
+    const user = requireManageRole(c)
     if (user instanceof Response) return user
 
-    const document = await softDeleteDocument(
-      pool,
-      user.organisationId,
-      c.req.param('id'),
-    )
-    if (!document) {
-      return errorResponse(c, 'document_not_found', 'Document not found.', 404)
-    }
-    await appendAuditLog(pool, {
+    const result = await softDeleteDocumentWithCascade(pool, {
       organisationId: user.organisationId,
       userId: user.id,
-      entityType: 'document',
-      entityId: document.id,
-      action: 'document.delete',
-      metadata: {},
+      id: c.req.param('id'),
       requestId: c.get('requestId'),
     })
-    return c.json({ document })
+    if (!result) {
+      return errorResponse(c, 'document_not_found', 'Document not found.', 404)
+    }
+    return c.json(result)
   })
 
   return routes
