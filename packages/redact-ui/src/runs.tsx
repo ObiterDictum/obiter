@@ -129,13 +129,13 @@ export function RedactionRunsView({
           <label className="flex flex-col gap-1 text-sm font-medium text-ink">
             Or upload a document
             <span className="text-xs font-normal text-muted">
-              DOCX or TXT, up to 25 MB. The file is processed as a standalone
-              redaction run.
+              DOCX, text-layer PDF, or TXT, up to 25 MB. The file is processed
+              as a standalone redaction run; output is text, not a redacted PDF.
             </span>
             <input
               type="file"
               aria-label="Or upload a document"
-              accept=".docx,.txt,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+              accept=".docx,.pdf,.txt,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
               disabled={creationPending}
               className="block text-sm font-normal text-ink"
               onChange={(event) => {

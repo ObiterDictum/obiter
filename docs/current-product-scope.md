@@ -43,7 +43,7 @@ Matters owns:
 - `POST /api/matters`
 - `GET /api/matters/:id`
 
-- Documents: matter detail supports DOCX/TXT multipart upload (up to 25 MB) through `POST /api/matters/:matterId/documents`; the document detail route renders immutable versions and can start a document-linked Redaction run. PDF extraction is not supported.
+- Documents: matter detail supports DOCX, text-layer PDF, and TXT multipart upload (up to 25 MB) through `POST /api/matters/:matterId/documents`; the document detail route renders immutable versions and can start a document-linked Redaction run. PDF inputs produce extracted text for Redaction, not a redacted PDF. Scanned/image-only PDFs require OCR: standalone runs are rejected and matter versions are retained as failed.
 
 Documents owns:
 
@@ -51,7 +51,7 @@ Documents owns:
 - `GET /api/matters/:matterId/documents`
 - `GET /api/documents/:id`
 
-- Redaction: `/redact` and `/redact/:runId` provide organisation-scoped standalone-text and DOCX/TXT upload detection review, decisions and finalized outputs. Standalone paste/upload remains the default; document-linked runs can be started from a matter document detail after extraction. Uploads accept DOCX/TXT up to 25 MB; PDF extraction is not supported. The API exposes an audit-report download. Detection runs server-side vendored Rampart inference from Obiter's pinned `qarlus/rampart` mirror plus the deterministic UK supplement, with merged spans and an auditable detector version. If model loading or inference fails, runs complete with Rampart deterministic heuristics plus the UK supplement (`heuristics+supplement`) and record degraded mode. Desktop-local inference remains future work.
+- Redaction: `/redact` and `/redact/:runId` provide organisation-scoped standalone-text and DOCX, text-layer PDF, or TXT upload detection review, decisions and finalized outputs. Standalone paste/upload remains the default; document-linked runs can be started from a matter document detail after extraction. Uploads accept DOCX, text-layer PDF, and TXT up to 25 MB; scanned/image-only PDFs require OCR, so standalone runs are rejected and matter versions fail extraction. Output remains redacted or pseudonymised text plus the audit report, not a redacted PDF. The API exposes an audit-report download. Detection runs server-side vendored Rampart inference from Obiter's pinned `qarlus/rampart` mirror plus the deterministic UK supplement, with merged spans and an auditable detector version. If model loading or inference fails, runs complete with Rampart deterministic heuristics plus the UK supplement (`heuristics+supplement`) and record degraded mode. Desktop-local inference remains future work.
 
 Redaction owns:
 

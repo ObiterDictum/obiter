@@ -24,7 +24,7 @@ vi.mock('@obiter/app-shell', async (importOriginal) => {
 })
 
 describe('RedactionRunsView', () => {
-  it('keeps pasted text as the standalone default and accepts DOCX/TXT uploads', () => {
+  it('keeps pasted text as the standalone default and accepts DOCX, PDF, and TXT uploads', () => {
     hooks.useRedactionRuns.mockReturnValue({
       isPending: false,
       data: { runs: [] },
@@ -50,6 +50,8 @@ describe('RedactionRunsView', () => {
     const upload = screen.getByLabelText('Or upload a document')
     expect(upload).toHaveProperty('accept', expect.stringContaining('.docx'))
     expect(upload).toHaveProperty('accept', expect.stringContaining('.txt'))
+    expect(upload).toHaveProperty('accept', expect.stringContaining('.pdf'))
+    expect(screen.getByText(/text-layer PDF/)).toBeTruthy()
     expect(screen.getByText(/up to 25 MB/)).toBeTruthy()
   })
 })
