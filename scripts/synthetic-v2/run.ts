@@ -287,6 +287,19 @@ async function generateAndValidate(
       } catch (error) {
         const initialReason =
           error instanceof Error ? error.message : 'Unknown validation failure'
+        if (!initialReason.startsWith('Supplement found unlabelled spans:')) {
+          validationDiscards++
+          rejections.push({
+            id: spec.id,
+            attempt,
+            reason: initialReason,
+            markedText: result.text,
+          })
+          next.push({ ...spec, seed: `${spec.seed}:draft:${attempt}` })
+          continue
+        }
+
+        let repairText = result.text
         try {
           console.log(`[${options.label}] repairing labels for ${spec.id}.`)
           const repair = await submitLabelsWithCap(
@@ -304,6 +317,7 @@ async function generateAndValidate(
           actualGbp += repair.actualGbp
           const repaired = repair.documents.get(spec.id)
           if (!repaired) throw new Error('Repair label response was missing')
+          repairText = repaired.text
           const repairedDocument = normalizeGenerated(spec, repaired)
           if (supplementMisses([repairedDocument]).length)
             throw new Error('Repair left an unlabelled detectable identifier')
@@ -314,7 +328,7 @@ async function generateAndValidate(
             id: spec.id,
             attempt,
             reason: `${initialReason}; repair failed: ${repairError instanceof Error ? repairError.message : 'unknown failure'}`,
-            markedText: result.text,
+            markedText: repairText,
           })
           next.push({ ...spec, seed: `${spec.seed}:validation:${attempt}` })
         }

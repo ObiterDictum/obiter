@@ -57,7 +57,7 @@ const patterns: Array<{
   // and case numbers do not match.
   {
     category: 'address',
-    regex: /\b[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}\b/g,
+    regex: /\b[A-Z]{1,2}[1-9][A-Z\d]?\s?\d[A-Z]{2}\b/g,
     confidence: 'high',
   },
 
