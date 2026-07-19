@@ -2,6 +2,7 @@ import { systemPrompt, userPrompt } from './prompts'
 import type {
   DocumentSpec,
   GeneratedDocument,
+  GenerationProgress,
   GeneratorAdapter,
   Usage,
 } from './types'
@@ -29,22 +30,34 @@ export class OpenRouterGenerator implements GeneratorAdapter {
 
   constructor(
     private readonly model: string,
-    private readonly options: { baseUrl?: string; concurrency?: number } = {},
+    private readonly options: {
+      baseUrl?: string
+      concurrency?: number
+      timeoutMs?: number
+    } = {},
   ) {
     this.name = `openrouter:${model}`
     this.apiKey = requiredEnvironment('OPENROUTER_API_KEY')
   }
 
-  async generate(specs: DocumentSpec[]): Promise<GeneratedDocument[]> {
-    return mapConcurrent(specs, this.options.concurrency ?? 3, async (spec) => {
-      const response = await this.request(spec)
-      return {
-        customId: spec.id,
-        text: response.text,
-        generator: `openrouter:${response.model}`,
-        usage: response.usage,
-      }
-    })
+  async generate(
+    specs: DocumentSpec[],
+    onProgress?: (progress: GenerationProgress) => void,
+  ): Promise<GeneratedDocument[]> {
+    return generateConcurrent(
+      specs,
+      this.options.concurrency ?? 3,
+      onProgress,
+      async (spec) => {
+        const response = await this.request(spec)
+        return {
+          customId: spec.id,
+          text: response.text,
+          generator: `openrouter:${response.model}`,
+          usage: response.usage,
+        }
+      },
+    )
   }
 
   private async request(spec: DocumentSpec) {
@@ -52,6 +65,7 @@ export class OpenRouterGenerator implements GeneratorAdapter {
       `${this.options.baseUrl ?? 'https://openrouter.ai/api/v1'}/chat/completions`,
       {
         method: 'POST',
+        signal: AbortSignal.timeout(this.options.timeoutMs ?? 120_000),
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
@@ -114,25 +128,40 @@ export class DeepSeekGenerator implements GeneratorAdapter {
       baseUrl?: string
       concurrency?: number
       retries?: number
+      timeoutMs?: number
     } = {},
   ) {
     this.name = `deepseek:${model}`
     this.apiKey = requiredEnvironment('DEEPSEEK_API_KEY')
   }
 
-  async generate(specs: DocumentSpec[]): Promise<GeneratedDocument[]> {
-    const concurrency = this.options.concurrency ?? 3
-    return mapConcurrent(specs, concurrency, async (spec) => {
-      const response = await withRetries(
-        () => this.request(spec),
-        this.options.retries ?? 3,
-      )
-      return {
-        customId: spec.id,
-        ...response,
-        generator: `deepseek:${response.model}`,
-      }
-    })
+  async generate(
+    specs: DocumentSpec[],
+    onProgress?: (progress: GenerationProgress) => void,
+  ): Promise<GeneratedDocument[]> {
+    return generateConcurrent(
+      specs,
+      this.options.concurrency ?? 3,
+      onProgress,
+      async (spec) => {
+        const response = await withRetries(
+          () => this.request(spec),
+          this.options.retries ?? 3,
+          () =>
+            onProgress?.({
+              phase: 'retrying',
+              completed: 0,
+              total: specs.length,
+              specId: spec.id,
+            }),
+        )
+        return {
+          customId: spec.id,
+          ...response,
+          generator: `deepseek:${response.model}`,
+        }
+      },
+    )
   }
 
   private async request(spec: DocumentSpec) {
@@ -140,6 +169,7 @@ export class DeepSeekGenerator implements GeneratorAdapter {
       `${this.options.baseUrl ?? 'https://api.deepseek.com'}/chat/completions`,
       {
         method: 'POST',
+        signal: AbortSignal.timeout(this.options.timeoutMs ?? 120_000),
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
@@ -161,18 +191,29 @@ export class DeepSeekGenerator implements GeneratorAdapter {
   }
 }
 
-async function mapConcurrent<T, Result>(
+async function generateConcurrent<T extends DocumentSpec, Result>(
   values: T[],
   concurrency: number,
+  onProgress: ((progress: GenerationProgress) => void) | undefined,
   operation: (value: T) => Promise<Result>,
 ) {
   const output: Result[] = []
   let next = 0
+  let completed = 0
+  onProgress?.({ phase: 'submitted', completed, total: values.length })
   await Promise.all(
     Array.from({ length: Math.min(concurrency, values.length) }, async () => {
       while (next < values.length) {
         const index = next++
-        output[index] = await operation(values[index]!)
+        const spec = values[index]!
+        output[index] = await operation(spec)
+        completed++
+        onProgress?.({
+          phase: 'completed',
+          completed,
+          total: values.length,
+          specId: spec.id,
+        })
       }
       return undefined
     }),
@@ -180,7 +221,11 @@ async function mapConcurrent<T, Result>(
   return output
 }
 
-async function withRetries<T>(operation: () => Promise<T>, retries: number) {
+async function withRetries<T>(
+  operation: () => Promise<T>,
+  retries: number,
+  onRetry?: () => void,
+) {
   let lastError: unknown
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
@@ -188,6 +233,7 @@ async function withRetries<T>(operation: () => Promise<T>, retries: number) {
     } catch (error) {
       lastError = error
       if (attempt === retries) break
+      onRetry?.()
       await sleep(500 * 2 ** attempt + Math.floor(Math.random() * 250))
     }
   }

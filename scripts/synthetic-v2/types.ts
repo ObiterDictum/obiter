@@ -80,11 +80,21 @@ export interface SyntheticDocument {
   contentHash: string
 }
 
+export interface GenerationProgress {
+  phase: 'submitted' | 'completed' | 'retrying'
+  completed: number
+  total: number
+  specId?: string
+}
+
 export interface GeneratorAdapter {
   readonly name: string
   /** Maximum billable attempts per request, including the initial attempt. */
   readonly maxChargeAttempts: number
-  generate(specs: DocumentSpec[]): Promise<GeneratedDocument[]>
+  generate(
+    specs: DocumentSpec[],
+    onProgress?: (progress: GenerationProgress) => void,
+  ): Promise<GeneratedDocument[]>
 }
 
 export interface SpendEntry {

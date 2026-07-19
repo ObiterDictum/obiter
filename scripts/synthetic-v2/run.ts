@@ -13,6 +13,7 @@ import { openRouterBenchmarkModel } from './models'
 import { DeepSeekGenerator, OpenRouterGenerator } from './providers'
 import type {
   DocumentSpec,
+  GenerationProgress,
   GeneratorAdapter,
   SyntheticDocument,
   Usage,
@@ -90,7 +91,18 @@ async function runDryRun(pricing: PricingTable) {
 
   for (const generator of generators) {
     mapping[generator.blind] = generator.adapter.name
-    const result = await generateAndValidate(specs, generator.adapter, pricing)
+    console.log(
+      `[dry-run ${generator.blind}] Starting ${generator.adapter.name}.`,
+    )
+    const result = await generateAndValidate(
+      specs,
+      generator.adapter,
+      pricing,
+      {
+        dryRun: true,
+        label: `dry-run ${generator.blind}`,
+      },
+    )
     await writeText(
       resolve(output, `${generator.blind}.jsonl`),
       `${result.documents.map(({ id, text }) => JSON.stringify({ id, text })).join('\n')}\n`,
@@ -132,11 +144,13 @@ async function runFull(
     buildQuotaSpecs(2_500, 'train'),
     new DeepSeekGenerator(model),
     pricing,
+    { label: 'training' },
   )
   const benchmark = await generateAndValidate(
     buildQuotaSpecs(280, 'bench'),
     new OpenRouterGenerator(openRouterBenchmarkModel()),
     pricing,
+    { label: 'benchmark' },
   )
   await writeDataset(
     resolve('data/synthetic/uk-legal-train'),
@@ -162,10 +176,18 @@ async function runFull(
   })
 }
 
+type Rejection = {
+  id: string
+  attempt: number
+  reason: string
+  markedText: string
+}
+
 async function generateAndValidate(
   initialSpecs: DocumentSpec[],
   adapter: GeneratorAdapter,
   pricing: PricingTable,
+  options: { dryRun?: boolean; label: string },
 ) {
   const accepted: SyntheticDocument[] = []
   const usage: Usage = { inputTokens: 0, outputTokens: 0 }
@@ -174,13 +196,27 @@ async function generateAndValidate(
   let dedupeDiscards = 0
   let supplementDiscards = 0
   let pending = initialSpecs
+  const rejections: Rejection[] = []
   let attempt = 0
   while (pending.length) {
     if (attempt++ === 4)
       throw new Error(
         `Marker or dedupe validation did not converge for ${pending.length} documents`,
       )
-    const submission = await submitWithCap(pending, adapter, pricing)
+    console.log(
+      `[${options.label}] Validation round ${attempt}: submitting ${pending.length} document(s) to ${adapter.name}.`,
+    )
+    const submission = await submitWithCap(
+      pending,
+      adapter,
+      pricing,
+      (progress) => {
+        const detail = progress.specId ? ` (${progress.specId})` : ''
+        console.log(
+          `[${options.label}] ${progress.phase}: ${progress.completed}/${progress.total}${detail}`,
+        )
+      },
+    )
     addUsage(usage, submission.usage)
     actualGbp += submission.actualGbp
     const generated = submission.documents
@@ -192,19 +228,53 @@ async function generateAndValidate(
         const document = normalizeGenerated(spec, result)
         if (nearDuplicatePairs([...accepted, document]).length) {
           dedupeDiscards++
+          rejections.push({
+            id: spec.id,
+            attempt,
+            reason: 'Near-duplicate document',
+            markedText: result.text,
+          })
           next.push({ ...spec, seed: `${spec.seed}:dedupe:${attempt}` })
           continue
         }
         if (supplementMisses([document]).length) {
           supplementDiscards++
+          rejections.push({
+            id: spec.id,
+            attempt,
+            reason: 'Supplement found an unlabelled detectable identifier',
+            markedText: result.text,
+          })
           next.push({ ...spec, seed: `${spec.seed}:supplement:${attempt}` })
           continue
         }
         accepted.push(document)
-      } catch {
+      } catch (error) {
         validationDiscards++
+        rejections.push({
+          id: spec.id,
+          attempt,
+          reason:
+            error instanceof Error
+              ? error.message
+              : 'Unknown validation failure',
+          markedText: result.text,
+        })
         next.push({ ...spec, seed: `${spec.seed}:validation:${attempt}` })
       }
+    }
+    if (options.dryRun && next.length) {
+      const reportPath = resolve(
+        '.synthetic-v2/rejections',
+        `${adapter.name.replaceAll(/[^a-z0-9]+/gi, '_')}.jsonl`,
+      )
+      await writeText(
+        reportPath,
+        `${rejections.map((rejection) => JSON.stringify(rejection)).join('\n')}\n`,
+      )
+      throw new Error(
+        `Dry run stopped: ${next.length}/${pending.length} ${adapter.name} documents failed validation. Evidence written to ${reportPath}. No automatic regeneration was submitted.`,
+      )
     }
     pending = next
   }
@@ -222,6 +292,7 @@ async function submitWithCap(
   specs: DocumentSpec[],
   adapter: GeneratorAdapter,
   pricing: PricingTable,
+  onProgress: (progress: GenerationProgress) => void,
 ) {
   const model = adapter.name.split(':', 2)[1]
   const modelPricing = pricing[model]
@@ -239,7 +310,7 @@ async function submitWithCap(
     gbp: costGbp(maximumUsage, modelPricing, gbpPerUsd),
     reservationId,
   })
-  const generated = await adapter.generate(specs)
+  const generated = await adapter.generate(specs, onProgress)
   const actualUsage = generated.reduce(
     (total, document) => {
       addUsage(total, document.usage)
