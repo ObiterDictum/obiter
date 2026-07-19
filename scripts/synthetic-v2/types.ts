@@ -89,6 +89,20 @@ export interface GenerationProgress {
   reason?: string
 }
 
+export interface LabelInput {
+  spec: DocumentSpec
+  text: string
+}
+
+export interface LabelingAdapter {
+  readonly name: string
+  readonly maxChargeAttempts: number
+  label(
+    inputs: LabelInput[],
+    onProgress?: (progress: GenerationProgress) => void,
+  ): Promise<GeneratedDocument[]>
+}
+
 export interface GeneratorAdapter {
   readonly name: string
   /** Maximum billable attempts per request, including the initial attempt. */

@@ -9,12 +9,17 @@ import {
 } from './budget'
 import { writeDataset, writeText } from './artifacts'
 import { buildQuotaSpecs } from './matrix'
-import { openRouterBenchmarkModel } from './models'
-import { DeepSeekGenerator, OpenRouterGenerator } from './providers'
+import { openRouterBenchmarkModel, openRouterQaModel } from './models'
+import {
+  DeepSeekGenerator,
+  OpenRouterGenerator,
+  OpenRouterLabeler,
+} from './providers'
 import type {
   DocumentSpec,
   GenerationProgress,
   GeneratorAdapter,
+  LabelingAdapter,
   SyntheticDocument,
   Usage,
 } from './types'
@@ -76,7 +81,10 @@ async function loadPricing(): Promise<PricingTable> {
 }
 
 async function runDryRun(pricing: PricingTable) {
-  const specs = buildQuotaSpecs(10, 'dry')
+  const specs = buildQuotaSpecs(
+    Number(process.env.SYNTHETIC_V2_DRY_RUN_COUNT ?? '3'),
+    'dry',
+  )
   const generators: Array<{ blind: string; adapter: GeneratorAdapter }> = [
     { blind: 'A', adapter: new DeepSeekGenerator('deepseek-v4-pro') },
     { blind: 'B', adapter: new DeepSeekGenerator('deepseek-v4-flash') },
@@ -86,6 +94,7 @@ async function runDryRun(pricing: PricingTable) {
     },
   ]
   const output = resolve('data/synthetic-v2-review/dry-run')
+  const labeler = new OpenRouterLabeler(openRouterQaModel())
   const reports: Array<Record<string, unknown>> = []
   const mapping: Record<string, string> = {}
 
@@ -97,6 +106,7 @@ async function runDryRun(pricing: PricingTable) {
     const result = await generateAndValidate(
       specs,
       generator.adapter,
+      labeler,
       pricing,
       {
         dryRun: true,
@@ -115,8 +125,12 @@ async function runDryRun(pricing: PricingTable) {
       costPerDocumentGbp: Number(
         (result.actualGbp / result.documents.length).toFixed(6),
       ),
-      projectedTraining2500Gbp: Number((result.actualGbp * 250).toFixed(2)),
-      projectedBenchmark280Gbp: Number((result.actualGbp * 28).toFixed(2)),
+      projectedTraining2500Gbp: Number(
+        ((result.actualGbp / result.documents.length) * 2_500).toFixed(2),
+      ),
+      projectedBenchmark280Gbp: Number(
+        ((result.actualGbp / result.documents.length) * 280).toFixed(2),
+      ),
       validationDiscards: result.validationDiscards,
       dedupeDiscards: result.dedupeDiscards,
       supplementDiscards: result.supplementDiscards,
@@ -124,7 +138,7 @@ async function runDryRun(pricing: PricingTable) {
   }
   await writeText(
     resolve(output, 'BLIND-REVIEW.md'),
-    '# Synthetic v2 blind review\n\nReview prose authenticity in A.jsonl, B.jsonl, and C.jsonl. Provider names and cost mapping are intentionally withheld.\n',
+    '# Synthetic v2 blind pilot\n\nReview prose authenticity in A.jsonl, B.jsonl, and C.jsonl. Provider names and cost mapping are intentionally withheld. This three-document pilot must pass before the ten-document blind comparison.\n',
   )
   await writeText(
     resolve('.synthetic-v2/dry-run-provider-map.json'),
@@ -143,12 +157,14 @@ async function runFull(
   const train = await generateAndValidate(
     buildQuotaSpecs(2_500, 'train'),
     new DeepSeekGenerator(model),
+    new OpenRouterLabeler(openRouterQaModel()),
     pricing,
     { label: 'training' },
   )
   const benchmark = await generateAndValidate(
     buildQuotaSpecs(280, 'bench'),
     new OpenRouterGenerator(openRouterBenchmarkModel()),
+    new OpenRouterLabeler(openRouterQaModel()),
     pricing,
     { label: 'benchmark' },
   )
@@ -186,6 +202,7 @@ type Rejection = {
 async function generateAndValidate(
   initialSpecs: DocumentSpec[],
   adapter: GeneratorAdapter,
+  labeler: LabelingAdapter,
   pricing: PricingTable,
   options: { dryRun?: boolean; label: string },
 ) {
@@ -221,7 +238,21 @@ async function generateAndValidate(
     )
     addUsage(usage, submission.usage)
     actualGbp += submission.actualGbp
-    const generated = submission.documents
+    const labelSubmission = await submitLabelsWithCap(
+      pending,
+      submission.documents,
+      labeler,
+      pricing,
+      (progress) => {
+        const detail = progress.specId ? ` (${progress.specId})` : ''
+        console.log(
+          `[${options.label}] labelling ${progress.phase}: ${progress.completed}/${progress.total}${detail}`,
+        )
+      },
+    )
+    addUsage(usage, labelSubmission.usage)
+    actualGbp += labelSubmission.actualGbp
+    const generated = labelSubmission.documents
     const next: DocumentSpec[] = []
     for (const spec of pending) {
       const result = generated.get(spec.id)
@@ -329,6 +360,64 @@ async function submitWithCap(
   return {
     documents: new Map(
       generated.map((document) => [document.customId, document]),
+    ),
+    usage: actualUsage,
+    actualGbp: costGbp(actualUsage, modelPricing, gbpPerUsd),
+  }
+}
+
+async function submitLabelsWithCap(
+  specs: DocumentSpec[],
+  drafts: Map<string, { text: string }>,
+  labeler: LabelingAdapter,
+  pricing: PricingTable,
+  onProgress: (progress: GenerationProgress) => void,
+) {
+  const inputs = specs.map((spec) => {
+    const draft = drafts.get(spec.id)
+    if (!draft || draft.text.trim().length === 0)
+      throw new Error(`Draft provider returned empty text for ${spec.id}`)
+    const minimumWords = Math.floor(spec.lengthWords * 0.45)
+    const words = draft.text.trim().split(/\s+/).length
+    if (words < minimumWords)
+      throw new Error(
+        `Draft provider returned only ${words}/${minimumWords} minimum words for ${spec.id}`,
+      )
+    return { spec, text: draft.text }
+  })
+  const model = labeler.name.split(':', 2)[1]
+  const modelPricing = pricing[model]
+  if (!modelPricing) throw new Error(`No reviewed pricing entry for ${model}`)
+  const reservationId = `${labeler.name}:${specs[0]?.id}:${Date.now()}`
+  const ledger = await readLedger(ledgerPath, capGbp)
+  const maximumUsage: Usage = {
+    inputTokens: specs.length * 1_500 * labeler.maxChargeAttempts,
+    outputTokens: specs.length * 2_400 * labeler.maxChargeAttempts,
+  }
+  await reserveSpend(ledgerPath, ledger, {
+    provider: labeler.name.split(':', 1)[0]!,
+    model,
+    ...maximumUsage,
+    gbp: costGbp(maximumUsage, modelPricing, gbpPerUsd),
+    reservationId,
+  })
+  const labelled = await labeler.label(inputs, onProgress)
+  const actualUsage = labelled.reduce(
+    (total, document) => {
+      addUsage(total, document.usage)
+      return total
+    },
+    { inputTokens: 0, outputTokens: 0 } satisfies Usage,
+  )
+  await reconcileSpend(ledgerPath, ledger, reservationId, {
+    provider: labeler.name.split(':', 1)[0]!,
+    model,
+    ...actualUsage,
+    gbp: costGbp(actualUsage, modelPricing, gbpPerUsd),
+  })
+  return {
+    documents: new Map(
+      labelled.map((document) => [document.customId, document]),
     ),
     usage: actualUsage,
     actualGbp: costGbp(actualUsage, modelPricing, gbpPerUsd),

@@ -1,7 +1,8 @@
 import { spanCategories, type SyntheticSpan } from './types'
 
-const open = '⟦'
-const close = '⟦/⟧'
+const openPrefix = '<pii category="'
+const openSuffix = '">'
+const close = '</pii>'
 const labels = new Set<string>(spanCategories)
 
 export class MarkerValidationError extends Error {
@@ -11,7 +12,7 @@ export class MarkerValidationError extends Error {
   }
 }
 
-/** Converts ⟦category⟧value⟦/⟧ markers into plain text and exact offsets. */
+/** Converts XML PII tags into plain text and exact UTF-16 offsets. */
 export function stripMarkers(markedText: string): {
   text: string
   spans: SyntheticSpan[]
@@ -21,34 +22,37 @@ export function stripMarkers(markedText: string): {
   const spans: SyntheticSpan[] = []
 
   while (sourceIndex < markedText.length) {
-    const nextOpen = markedText.indexOf(open, sourceIndex)
+    const nextOpen = markedText.indexOf(openPrefix, sourceIndex)
     if (nextOpen === -1) {
       const tail = markedText.slice(sourceIndex)
       if (tail.includes(close))
-        throw new MarkerValidationError('Dangling closing marker')
+        throw new MarkerValidationError('Dangling closing tag')
       text += tail
       break
     }
 
     const before = markedText.slice(sourceIndex, nextOpen)
     if (before.includes(close))
-      throw new MarkerValidationError('Dangling closing marker')
+      throw new MarkerValidationError('Dangling closing tag')
     text += before
 
-    const labelEnd = markedText.indexOf('⟧', nextOpen + open.length)
-    if (labelEnd === -1)
-      throw new MarkerValidationError('Unterminated opening marker')
-    const category = markedText.slice(nextOpen + open.length, labelEnd)
+    const categoryEnd = markedText.indexOf(
+      openSuffix,
+      nextOpen + openPrefix.length,
+    )
+    if (categoryEnd === -1)
+      throw new MarkerValidationError('Unterminated opening tag')
+    const category = markedText.slice(nextOpen + openPrefix.length, categoryEnd)
     if (!labels.has(category))
       throw new MarkerValidationError(`Unknown marker label: ${category}`)
 
-    const valueStart = labelEnd + 1
+    const valueStart = categoryEnd + openSuffix.length
     const closeIndex = markedText.indexOf(close, valueStart)
     if (closeIndex === -1)
-      throw new MarkerValidationError('Unterminated span marker')
+      throw new MarkerValidationError('Unterminated span tag')
     const value = markedText.slice(valueStart, closeIndex)
     if (value.length === 0) throw new MarkerValidationError('Empty marked span')
-    if (value.includes(open) || value.includes(close))
+    if (value.includes(openPrefix) || value.includes(close))
       throw new MarkerValidationError('Nested marker')
 
     const start = text.length
@@ -63,7 +67,7 @@ export function stripMarkers(markedText: string): {
     sourceIndex = closeIndex + close.length
   }
 
-  if (text.includes(open) || text.includes(close))
+  if (text.includes(openPrefix) || text.includes(close))
     throw new MarkerValidationError('Unresolved marker')
   validateSpans(text, spans)
   return { text, spans }

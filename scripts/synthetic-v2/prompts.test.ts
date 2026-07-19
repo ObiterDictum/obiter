@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { systemPrompt, userPrompt } from './prompts'
+import {
+  draftSystemPrompt,
+  draftUserPrompt,
+  labelSystemPrompt,
+  labelUserPrompt,
+} from './prompts'
 import type { DocumentSpec } from './types'
 
 const spec: DocumentSpec = {
@@ -16,19 +21,20 @@ const spec: DocumentSpec = {
 }
 
 describe('synthetic-v2 prompts', () => {
-  it('requires complete markers and preserves professional/public context', () => {
-    expect(systemPrompt).toContain('person_professional')
-    expect(systemPrompt).toContain(
-      'Professional names remain person_professional',
-    )
-    expect(systemPrompt).toContain('Do not leave a dangling')
+  it('keeps drafting plain while requiring role-aware XML labelling', () => {
+    expect(draftSystemPrompt).toContain('Do not output labels')
+    expect(labelSystemPrompt).toContain('person_professional')
+    expect(labelSystemPrompt).toContain('<pii category="category">')
   })
 
   it('turns every requested category and hard negative into an explicit requirement', () => {
-    const prompt = userPrompt(spec)
+    const prompt = draftUserPrompt(spec)
     expect(prompt).toContain('person_private: a private person')
     expect(prompt).toContain('person_professional: a named legal')
     expect(prompt).toContain('email: a fictional .test email address')
     expect(prompt).toContain('Hard negatives:')
+    expect(labelUserPrompt(spec, 'Fictional text.')).toContain(
+      'Document to annotate verbatim',
+    )
   })
 })

@@ -4,7 +4,7 @@ import { MarkerValidationError, stripMarkers } from './markers'
 describe('stripMarkers', () => {
   it('strips markers and keeps exact UTF-16 offsets', () => {
     const result = stripMarkers(
-      'Dear ⟦person_private⟧Zoë Patel⟦/⟧, email ⟦email⟧zoe@example.test⟦/⟧.',
+      'Dear <pii category="person_private">Zoë Patel</pii>, email <pii category="email">zoe@example.test</pii>.',
     )
     expect(result.text).toBe('Dear Zoë Patel, email zoe@example.test.')
     expect(result.spans).toEqual([
@@ -14,10 +14,10 @@ describe('stripMarkers', () => {
   })
 
   it.each([
-    '⟦unknown⟧value⟦/⟧',
-    '⟦person_private⟧value',
-    'value⟦/⟧',
-    '⟦person_private⟧outer ⟦email⟧inner⟦/⟧⟦/⟧',
+    '<pii category="unknown">value</pii>',
+    '<pii category="person_private">value',
+    'value</pii>',
+    '<pii category="person_private">outer <pii category="email">inner</pii></pii>',
   ])('rejects malformed markers: %s', (input) => {
     expect(() => stripMarkers(input)).toThrow(MarkerValidationError)
   })

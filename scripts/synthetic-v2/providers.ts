@@ -1,9 +1,16 @@
-import { systemPrompt, userPrompt } from './prompts'
+import {
+  draftSystemPrompt,
+  draftUserPrompt,
+  labelSystemPrompt,
+  labelUserPrompt,
+} from './prompts'
 import type {
   DocumentSpec,
   GeneratedDocument,
   GenerationProgress,
   GeneratorAdapter,
+  LabelingAdapter,
+  LabelInput,
   Usage,
 } from './types'
 
@@ -83,16 +90,79 @@ export class OpenRouterGenerator implements GeneratorAdapter {
         body: JSON.stringify({
           model: this.model,
           max_tokens: 2_400,
-          temperature: 0.85,
+          temperature: 0.65,
           messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt(spec) },
+            { role: 'system', content: draftSystemPrompt },
+            { role: 'user', content: draftUserPrompt(spec) },
           ],
         }),
       },
     )
     if (!response.ok)
       throw new Error(`OpenRouter request failed with HTTP ${response.status}`)
+    return parseOpenAICompatibleResponse(await response.json(), 'OpenRouter')
+  }
+}
+
+export class OpenRouterLabeler implements LabelingAdapter {
+  readonly name: string
+  readonly maxChargeAttempts = 1
+  private readonly apiKey: string
+
+  constructor(
+    private readonly model: string,
+    private readonly options: {
+      baseUrl?: string
+      concurrency?: number
+      timeoutMs?: number
+    } = {},
+  ) {
+    this.name = `openrouter:${model}`
+    this.apiKey = requiredEnvironment('OPENROUTER_API_KEY')
+  }
+
+  async label(
+    inputs: LabelInput[],
+    onProgress?: (progress: GenerationProgress) => void,
+  ): Promise<GeneratedDocument[]> {
+    return generateConcurrent(
+      inputs.map((input) => ({ ...input.spec, draftText: input.text })),
+      this.options.concurrency ?? 3,
+      onProgress,
+      async (input) => {
+        const response = await this.request(input, input.draftText)
+        return {
+          customId: input.id,
+          text: response.text,
+          generator: `openrouter:${response.model}`,
+          usage: response.usage,
+        }
+      },
+    )
+  }
+
+  private async request(spec: DocumentSpec, text: string) {
+    const response = await fetch(
+      `${this.options.baseUrl ?? 'https://openrouter.ai/api/v1'}/chat/completions`,
+      {
+        method: 'POST',
+        signal: AbortSignal.timeout(this.options.timeoutMs ?? 120_000),
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: this.model,
+          max_tokens: 2_400,
+          temperature: 0,
+          messages: [
+            { role: 'system', content: labelSystemPrompt },
+            { role: 'user', content: labelUserPrompt(spec, text) },
+          ],
+        }),
+      },
+    )
+    if (!response.ok) throw new ProviderHttpError('OpenRouter', response.status)
     return parseOpenAICompatibleResponse(await response.json(), 'OpenRouter')
   }
 }
@@ -189,10 +259,10 @@ export class DeepSeekGenerator implements GeneratorAdapter {
         body: JSON.stringify({
           model: this.model,
           max_tokens: 2_400,
-          temperature: 0.85,
+          temperature: 0.65,
           messages: [
-            { role: 'system', content: systemPrompt },
-            { role: 'user', content: userPrompt(spec) },
+            { role: 'system', content: draftSystemPrompt },
+            { role: 'user', content: draftUserPrompt(spec) },
           ],
         }),
       },
