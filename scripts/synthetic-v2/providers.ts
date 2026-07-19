@@ -189,11 +189,14 @@ function parseOpenAICompatibleResponse(
   const outputTokens = body.usage?.completion_tokens
   if (
     typeof text !== 'string' ||
+    text.trim().length === 0 ||
     typeof body.model !== 'string' ||
     typeof inputTokens !== 'number' ||
     typeof outputTokens !== 'number'
   )
-    throw new Error(`${provider} response omitted text, model, or usage`)
+    throw new Error(
+      `${provider} response omitted visible text, model, or usage`,
+    )
   return { text, model: body.model, usage: { inputTokens, outputTokens } }
 }
 
@@ -260,6 +263,7 @@ export class DeepSeekGenerator implements GeneratorAdapter {
           model: this.model,
           max_tokens: 2_400,
           temperature: 0.65,
+          thinking: { type: 'disabled' },
           messages: [
             { role: 'system', content: draftSystemPrompt },
             { role: 'user', content: draftUserPrompt(spec) },
