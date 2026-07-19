@@ -37,7 +37,7 @@ const patterns: Array<{
   {
     category: 'organisation_name',
     regex:
-      /\b[A-Z][A-Za-z]*(?:\s+(?:&\s+)?[A-Z][A-Za-z]*){0,5}\s+(?:LLP|Ltd|plc|Solicitors|Chambers)\b/g,
+      /\b[A-Z][A-Za-z]*(?:[ \t]+(?:&[ \t]+)?[A-Z][A-Za-z]*){0,5}[ \t]+(?:LLP|Ltd|plc|Solicitors|Chambers)\b/g,
     confidence: 'low',
   },
 
