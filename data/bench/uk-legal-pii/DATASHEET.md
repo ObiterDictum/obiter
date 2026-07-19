@@ -14,9 +14,9 @@ Benchmark prose is generated only with Claude Opus 4.8 (`claude-opus-4-8`) using
 
 ## Labels and validation
 
-The v2 label space contains person names, contact details, addresses, personal dates (including natural DOB wording and age references), government and financial identifiers, passports and driving licences, URLs/IP addresses, national-insurance numbers, case references, organisation names, and secrets. Neutral citations, statutes, courts, procedural dates, damages figures, and corporate registration numbers are deliberate hard negatives.
+The v2 label space separates `person_private`, `person_protected`, and `person_professional`. Solicitors, in-house counsel, judges, counsel, experts, and named professionals are detected as professional spans but normally retained by later policy. Clients, parties, witnesses, children, anonymity-order subjects, and people in sensitive family, medical, immigration, employment, criminal, or safeguarding contexts receive private/protected labels. Private-looking contact details remain in scope regardless of a person's professional role. Neutral citations, statutes, courts, procedural dates, damages figures, and corporate registration numbers are deliberate hard negatives.
 
-A Haiku 4.5 sample review will cover at least 10% of each corpus and report label agreement and obvious missed PII by matrix cell. `supplementSpans` is run over every document as an additional mechanical miss signal. Cells over the documented disagreement threshold are regenerated. The final committed QA report will state sample sizes, agreement, flagged cells, and regeneration counts.
+An independent Haiku 4.5 judge will review every benchmark document against the plain text and proposed spans. A second independent judge handles disagreement, uncertainty, protected-person examples, and hard-negative conflicts; a document is regenerated unless it receives automated agreement. `supplementSpans` is run over every document as an additional mechanical miss signal. Human review is limited to every disputed item and a stratified 15–20% benchmark audit. The final committed QA report will state sample sizes, agreement, flagged cells, regeneration counts, and audit outcomes.
 
 ## Privacy, licensing, and limitations
 

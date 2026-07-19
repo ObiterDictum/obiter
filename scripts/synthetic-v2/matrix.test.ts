@@ -10,12 +10,12 @@ describe('v2 diversity matrix', () => {
       for (const cell of spec.matrixCells)
         counts.set(cell, (counts.get(cell) ?? 0) + 1)
 
-    expect(expectedMatrixCells()).toHaveLength(720)
+    expect(expectedMatrixCells()).toHaveLength(816)
     expect(expectedMatrixCells().every((cell) => counts.has(cell))).toBe(true)
   })
 
   it('reports a missing cell rather than silently treating a partial matrix as full', () => {
     const stats = datasetStats([])
-    expect(stats.missingMatrixCells).toHaveLength(720)
+    expect(stats.missingMatrixCells).toHaveLength(816)
   })
 })

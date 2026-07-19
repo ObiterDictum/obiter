@@ -18,7 +18,9 @@
   "v2_category_version": "obiter_legal_v2",
   "v2_span_class_names": [
     "O",
-    "person_name",
+    "person_private",
+    "person_protected",
+    "person_professional",
     "email",
     "phone",
     "address",

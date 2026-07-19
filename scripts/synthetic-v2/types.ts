@@ -1,5 +1,7 @@
 export const spanCategories = [
-  'person_name',
+  'person_private',
+  'person_protected',
+  'person_professional',
   'email',
   'phone',
   'address',

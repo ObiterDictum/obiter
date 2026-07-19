@@ -1,6 +1,6 @@
 # Synthetic v2 provider terms gate
 
-**Status: blocked.** Do not set `OBITER_DEEPSEEK_TERMS_CONFIRMED=1` or call a DeepSeek model until the account-specific agreement has been reviewed and this file is updated with the approval date and evidence location (not secrets).
+**Status: maintainer-approved on 2026-07-19.** The maintainer confirmed DeepSeek is approved for this fictional synthetic-data workflow. `OBITER_DEEPSEEK_TERMS_CONFIRMED=1` may be set for an explicitly opted-in run. Do not use real client data or secrets as generation input.
 
 The public DeepSeek [Terms of Use](https://cdn.deepseek.com/policies/en-US/deepseek-terms-of-use.html) and [Privacy Policy](https://cdn.deepseek.com/policies/en-US/deepseek-privacy-policy.html) do not, by themselves, confirm rights to commercially redistribute a generated dataset or an API-specific no-training/retention/deletion commitment. The privacy policy describes service-wide processing and retention as necessary for stated purposes, rather than a zero-retention API commitment.
 

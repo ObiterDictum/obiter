@@ -14,15 +14,16 @@ const registers: Register[] = [
 ]
 const difficulties: Difficulty[] = ['standard', 'hard_negative']
 const categoryGroups: SpanCategory[][] = [
-  ['person_name', 'address', 'email', 'phone', 'date'],
   [
-    'national_insurance',
-    'account_number',
-    'passport',
-    'government_id',
-    'drivers_license',
+    'person_private',
+    'person_protected',
+    'person_professional',
+    'address',
+    'email',
   ],
-  ['organisation_name', 'case_reference', 'url', 'ip_address', 'secret'],
+  ['phone', 'date', 'national_insurance', 'account_number', 'passport'],
+  ['government_id', 'drivers_license', 'organisation_name', 'case_reference'],
+  ['url', 'ip_address', 'secret'],
 ]
 
 export function matrixCell(
