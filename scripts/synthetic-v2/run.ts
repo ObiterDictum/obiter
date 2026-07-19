@@ -279,17 +279,10 @@ async function generateAndValidate(
               )
             ),
         )
-        if (unlabelledSupplementSpans.length) {
-          supplementDiscards++
-          rejections.push({
-            id: spec.id,
-            attempt,
-            reason: 'Supplement found an unlabelled detectable identifier',
-            markedText: result.text,
-          })
-          next.push({ ...spec, seed: `${spec.seed}:supplement:${attempt}` })
-          continue
-        }
+        if (unlabelledSupplementSpans.length)
+          throw new Error(
+            'Supplement found an unlabelled detectable identifier',
+          )
         accepted.push(document)
       } catch (error) {
         const initialReason =
@@ -310,7 +303,10 @@ async function generateAndValidate(
           actualGbp += repair.actualGbp
           const repaired = repair.documents.get(spec.id)
           if (!repaired) throw new Error('Repair label response was missing')
-          accepted.push(normalizeGenerated(spec, repaired))
+          const repairedDocument = normalizeGenerated(spec, repaired)
+          if (supplementMisses([repairedDocument]).length)
+            throw new Error('Repair left an unlabelled detectable identifier')
+          accepted.push(repairedDocument)
         } catch (repairError) {
           validationDiscards++
           rejections.push({
