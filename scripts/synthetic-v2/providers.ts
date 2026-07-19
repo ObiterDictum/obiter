@@ -125,12 +125,32 @@ export class OpenRouterLabeler implements LabelingAdapter {
     inputs: LabelInput[],
     onProgress?: (progress: GenerationProgress) => void,
   ): Promise<GeneratedDocument[]> {
+    return this.annotate(inputs, undefined, onProgress)
+  }
+
+  async repair(
+    inputs: LabelInput[],
+    feedback: Map<string, string>,
+    onProgress?: (progress: GenerationProgress) => void,
+  ): Promise<GeneratedDocument[]> {
+    return this.annotate(inputs, feedback, onProgress)
+  }
+
+  private async annotate(
+    inputs: LabelInput[],
+    feedback: Map<string, string> | undefined,
+    onProgress: ((progress: GenerationProgress) => void) | undefined,
+  ) {
     return generateConcurrent(
       inputs.map((input) => ({ ...input.spec, draftText: input.text })),
       this.options.concurrency ?? 3,
       onProgress,
       async (input) => {
-        const response = await this.request(input, input.draftText)
+        const response = await this.request(
+          input,
+          input.draftText,
+          feedback?.get(input.id),
+        )
         return {
           customId: input.id,
           text: response.text,
@@ -141,7 +161,11 @@ export class OpenRouterLabeler implements LabelingAdapter {
     )
   }
 
-  private async request(spec: DocumentSpec, text: string) {
+  private async request(
+    spec: DocumentSpec,
+    text: string,
+    repairFeedback?: string,
+  ) {
     const response = await fetch(
       `${this.options.baseUrl ?? 'https://openrouter.ai/api/v1'}/chat/completions`,
       {
@@ -157,7 +181,10 @@ export class OpenRouterLabeler implements LabelingAdapter {
           temperature: 0,
           messages: [
             { role: 'system', content: labelSystemPrompt },
-            { role: 'user', content: labelUserPrompt(spec, text) },
+            {
+              role: 'user',
+              content: labelUserPrompt(spec, text, repairFeedback),
+            },
           ],
         }),
       },

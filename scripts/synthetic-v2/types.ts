@@ -101,6 +101,11 @@ export interface LabelingAdapter {
     inputs: LabelInput[],
     onProgress?: (progress: GenerationProgress) => void,
   ): Promise<GeneratedDocument[]>
+  repair(
+    inputs: LabelInput[],
+    feedback: Map<string, string>,
+    onProgress?: (progress: GenerationProgress) => void,
+  ): Promise<GeneratedDocument[]>
 }
 
 export interface GeneratorAdapter {

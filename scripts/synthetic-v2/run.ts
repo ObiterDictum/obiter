@@ -281,7 +281,7 @@ async function generateAndValidate(
         )
         if (unlabelledSupplementSpans.length)
           throw new Error(
-            'Supplement found an unlabelled detectable identifier',
+            `Supplement found unlabelled spans: ${unlabelledSupplementSpans.map((miss) => `${miss.category}=${JSON.stringify(miss.text)}`).join(', ')}`,
           )
         accepted.push(document)
       } catch (error) {
@@ -298,6 +298,7 @@ async function generateAndValidate(
               console.log(
                 `[${options.label}] repair ${progress.phase}: ${progress.completed}/${progress.total}`,
               ),
+            new Map([[spec.id, initialReason]]),
           )
           addUsage(usage, repair.usage)
           actualGbp += repair.actualGbp
@@ -395,6 +396,7 @@ async function submitLabelsWithCap(
   labeler: LabelingAdapter,
   pricing: PricingTable,
   onProgress: (progress: GenerationProgress) => void,
+  repairFeedback?: Map<string, string>,
 ) {
   const inputs = specs.map((spec) => {
     const draft = drafts.get(spec.id)
@@ -424,7 +426,9 @@ async function submitLabelsWithCap(
     gbp: costGbp(maximumUsage, modelPricing, gbpPerUsd),
     reservationId,
   })
-  const labelled = await labeler.label(inputs, onProgress)
+  const labelled = repairFeedback
+    ? await labeler.repair(inputs, repairFeedback, onProgress)
+    : await labeler.label(inputs, onProgress)
   const actualUsage = labelled.reduce(
     (total, document) => {
       addUsage(total, document.usage)

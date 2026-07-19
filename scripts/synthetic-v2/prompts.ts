@@ -65,6 +65,13 @@ Keep distinct categories genuinely distinct: a driving licence is not a governme
 The legal purpose comes first. Spread identifiers through a plausible chronology, correspondence trail, evidence, signature block, or schedule. Include a professional/public-role distinction where natural to the scenario. Finish the document cleanly.`
 }
 
-export function labelUserPrompt(spec: DocumentSpec, text: string) {
-  return `Required categories to label:\n${requiredContent(spec)}\n\nDocument to annotate verbatim:\n${text}`
+export function labelUserPrompt(
+  spec: DocumentSpec,
+  text: string,
+  repairFeedback?: string,
+) {
+  const repair = repairFeedback
+    ? `\n\nREPAIR FEEDBACK — fix these exact failures while preserving all correct tags:\n${repairFeedback}`
+    : ''
+  return `Required categories to label:\n${requiredContent(spec)}${repair}\n\nDocument to annotate verbatim:\n${text}`
 }
