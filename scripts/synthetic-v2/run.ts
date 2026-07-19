@@ -9,7 +9,7 @@ import {
 } from './budget'
 import { writeDataset, writeText } from './artifacts'
 import { buildQuotaSpecs } from './matrix'
-import { AnthropicBatchGenerator, DeepSeekGenerator } from './providers'
+import { DeepSeekGenerator, OpenRouterGenerator } from './providers'
 import type {
   DocumentSpec,
   GeneratorAdapter,
@@ -80,7 +80,10 @@ async function runDryRun(pricing: PricingTable) {
   const generators: Array<{ blind: string; adapter: GeneratorAdapter }> = [
     { blind: 'A', adapter: new DeepSeekGenerator('deepseek-v4-pro') },
     { blind: 'B', adapter: new DeepSeekGenerator('deepseek-v4-flash') },
-    { blind: 'C', adapter: new AnthropicBatchGenerator('claude-opus-4-8') },
+    {
+      blind: 'C',
+      adapter: new OpenRouterGenerator(openRouterBenchmarkModel()),
+    },
   ]
   const output = resolve('data/synthetic-v2-review/dry-run')
   const reports: Array<Record<string, unknown>> = []
@@ -133,7 +136,7 @@ async function runFull(
   )
   const benchmark = await generateAndValidate(
     buildQuotaSpecs(280, 'bench'),
-    new AnthropicBatchGenerator('claude-opus-4-8'),
+    new OpenRouterGenerator(openRouterBenchmarkModel()),
     pricing,
   )
   await writeDataset(
@@ -150,7 +153,7 @@ async function runFull(
     },
   )
   await writeDataset(resolve('data/bench/uk-legal-pii'), benchmark.documents, {
-    generator: 'claude-opus-4-8',
+    generator: openRouterBenchmarkModel(),
     public: true,
     usage: benchmark.usage,
     spendGbp: benchmark.actualGbp,
@@ -229,12 +232,6 @@ async function submitWithCap(
   const maximumUsage: Usage = {
     inputTokens: specs.length * 1_500 * adapter.maxChargeAttempts,
     outputTokens: specs.length * 2_400 * adapter.maxChargeAttempts,
-    ...(adapter.name.startsWith('anthropic:')
-      ? {
-          cacheCreationInputTokens: specs.length * 1_500,
-          cacheReadInputTokens: specs.length * 1_500,
-        }
-      : {}),
   }
   await reserveSpend(ledgerPath, ledger, {
     provider: adapter.name.split(':', 1)[0]!,
@@ -274,6 +271,15 @@ function addUsage(total: Usage, addition: Usage) {
     (addition.cacheCreationInputTokens ?? 0)
   total.cacheReadInputTokens =
     (total.cacheReadInputTokens ?? 0) + (addition.cacheReadInputTokens ?? 0)
+}
+
+function openRouterBenchmarkModel() {
+  const model = process.env.OPENROUTER_BENCHMARK_MODEL
+  if (!model)
+    throw new Error(
+      'OPENROUTER_BENCHMARK_MODEL is required. Copy the exact Claude model slug from OpenRouter; do not guess or hard-code a provider-specific id.',
+    )
+  return model
 }
 
 function flag(name: string) {

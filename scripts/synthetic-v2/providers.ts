@@ -1,4 +1,3 @@
-import Anthropic from '@anthropic-ai/sdk'
 import { systemPrompt, userPrompt } from './prompts'
 import type {
   DocumentSpec,
@@ -23,117 +22,74 @@ function requiredEnvironment(name: string) {
   return value
 }
 
-function textFromAnthropic(content: Array<{ type: string; text?: string }>) {
-  const text = content.find((block) => block.type === 'text')?.text
-  if (!text) throw new Error('Anthropic response contained no text block')
-  return text
-}
-
-function usageFromAnthropic(usage: {
-  input_tokens: number
-  output_tokens: number
-  cache_creation_input_tokens?: number | null
-  cache_read_input_tokens?: number | null
-}): Usage {
-  return {
-    inputTokens: usage.input_tokens,
-    outputTokens: usage.output_tokens,
-    cacheCreationInputTokens: usage.cache_creation_input_tokens ?? undefined,
-    cacheReadInputTokens: usage.cache_read_input_tokens ?? undefined,
-  }
-}
-
-export class AnthropicBatchGenerator implements GeneratorAdapter {
+export class OpenRouterGenerator implements GeneratorAdapter {
   readonly name: string
   readonly maxChargeAttempts = 1
-  private readonly client: Anthropic
+  private readonly apiKey: string
 
   constructor(
     private readonly model: string,
-    options: { pollIntervalMs?: number } = {},
+    private readonly options: { baseUrl?: string; concurrency?: number } = {},
   ) {
-    this.name = `anthropic:${model}`
-    this.client = new Anthropic({
-      apiKey: requiredEnvironment('ANTHROPIC_API_KEY'),
-    })
-    this.pollIntervalMs = options.pollIntervalMs ?? 15_000
+    this.name = `openrouter:${model}`
+    this.apiKey = requiredEnvironment('OPENROUTER_API_KEY')
   }
 
-  private readonly pollIntervalMs: number
-
   async generate(specs: DocumentSpec[]): Promise<GeneratedDocument[]> {
-    const batch = await this.client.messages.batches.create({
-      requests: specs.map((spec) => ({
-        custom_id: spec.id,
-        params: {
+    return mapConcurrent(specs, this.options.concurrency ?? 3, async (spec) => {
+      const response = await this.request(spec)
+      return {
+        customId: spec.id,
+        text: response.text,
+        generator: `openrouter:${response.model}`,
+        usage: response.usage,
+      }
+    })
+  }
+
+  private async request(spec: DocumentSpec) {
+    const response = await fetch(
+      `${this.options.baseUrl ?? 'https://openrouter.ai/api/v1'}/chat/completions`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
           model: this.model,
           max_tokens: 2_400,
-          system: [
-            {
-              type: 'text',
-              text: systemPrompt,
-              cache_control: { type: 'ephemeral' },
-            },
+          temperature: 0.85,
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt(spec) },
           ],
-          messages: [{ role: 'user', content: userPrompt(spec) }],
-        },
-      })),
-    })
-
-    let completed = batch
-    while (completed.processing_status !== 'ended') {
-      await sleep(this.pollIntervalMs)
-      completed = await this.client.messages.batches.retrieve(batch.id)
-    }
-
-    const results = new Map<string, GeneratedDocument>()
-    const failures: string[] = []
-    for await (const result of await this.client.messages.batches.results(
-      batch.id,
-    )) {
-      if (result.result.type !== 'succeeded') {
-        failures.push(`${result.custom_id}: ${result.result.type}`)
-        continue
-      }
-      const message = result.result.message
-      results.set(result.custom_id, {
-        customId: result.custom_id,
-        text: textFromAnthropic(message.content),
-        generator: `anthropic:${message.model}`,
-        usage: usageFromAnthropic(message.usage),
-      })
-    }
-    if (failures.length)
-      throw new Error(
-        `Anthropic batch ${batch.id} had failures: ${failures.join(', ')}`,
-      )
-    if (results.size !== specs.length)
-      throw new Error(
-        `Anthropic batch ${batch.id} returned ${results.size}/${specs.length} results`,
-      )
-    return specs.map((spec) => {
-      const result = results.get(spec.id)
-      if (!result)
-        throw new Error(`Anthropic result missing custom_id ${spec.id}`)
-      return result
-    })
+        }),
+      },
+    )
+    if (!response.ok)
+      throw new Error(`OpenRouter request failed with HTTP ${response.status}`)
+    return parseOpenAICompatibleResponse(await response.json(), 'OpenRouter')
   }
 }
 
-type DeepSeekResponse = {
+type OpenAICompatibleResponse = {
   model?: unknown
   usage?: { prompt_tokens?: unknown; completion_tokens?: unknown }
   choices?: Array<{ message?: { content?: unknown } }>
 }
 
-function parseDeepSeekResponse(value: unknown): {
+function parseOpenAICompatibleResponse(
+  value: unknown,
+  provider: string,
+): {
   text: string
   model: string
   usage: Usage
 } {
   if (!value || typeof value !== 'object')
-    throw new Error('DeepSeek returned invalid JSON')
-  const body = value as DeepSeekResponse
+    throw new Error(`${provider} returned invalid JSON`)
+  const body = value as OpenAICompatibleResponse
   const text = body.choices?.[0]?.message?.content
   const inputTokens = body.usage?.prompt_tokens
   const outputTokens = body.usage?.completion_tokens
@@ -143,7 +99,7 @@ function parseDeepSeekResponse(value: unknown): {
     typeof inputTokens !== 'number' ||
     typeof outputTokens !== 'number'
   )
-    throw new Error('DeepSeek response omitted text, model, or usage')
+    throw new Error(`${provider} response omitted text, model, or usage`)
   return { text, model: body.model, usage: { inputTokens, outputTokens } }
 }
 
@@ -201,7 +157,7 @@ export class DeepSeekGenerator implements GeneratorAdapter {
     )
     if (!response.ok)
       throw new Error(`DeepSeek request failed with HTTP ${response.status}`)
-    return parseDeepSeekResponse(await response.json())
+    return parseOpenAICompatibleResponse(await response.json(), 'DeepSeek')
   }
 }
 
