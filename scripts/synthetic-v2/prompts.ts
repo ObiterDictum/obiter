@@ -31,7 +31,8 @@ function categoryInstruction(category: string) {
     national_insurance: 'a fictional National Insurance number',
     account_number: 'a fictional account detail in a credible context',
     passport: 'a fictional passport number',
-    government_id: 'a fictional government identifier',
+    government_id:
+      'a fictional government-issued identity-document number (for example a BRP or residence-permit number), explicitly separate from any National Insurance, passport, or driving-licence number',
     drivers_license: 'a fictional driving-licence number',
     organisation_name: 'a fictional organisation name',
     case_reference: 'a fictional personal/matter case reference',
