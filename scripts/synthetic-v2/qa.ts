@@ -34,9 +34,7 @@ export function supplementMisses(
         (candidate: RedactionSpan) =>
           !document.spans.some(
             (span) =>
-              span.category === candidate.category &&
-              span.start <= candidate.start &&
-              candidate.end <= span.end,
+              span.start <= candidate.start && candidate.end <= span.end,
           ),
       )
       .map((candidate: RedactionSpan) => ({
