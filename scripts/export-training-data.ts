@@ -1,4 +1,5 @@
 import { readFile, writeFile } from 'node:fs/promises'
+import { assertNoBenchmarkOverlapText, benchmarkHashes } from './bench-guard'
 
 type Category =
   | 'person_name'
@@ -97,10 +98,14 @@ async function main() {
     throw new Error(`Could not read reviewed runs: ${message}`)
   }
   const entries = exportReviewedRuns(runs, flag === '--include-partial')
-  await writeFile(
-    outputPath,
+  const output =
     entries.map((entry) => JSON.stringify(entry)).join('\n') +
-      (entries.length ? '\n' : ''),
+    (entries.length ? '\n' : '')
+  assertNoBenchmarkOverlapText(
+    output,
+    await benchmarkHashes('data/bench/uk-legal-pii/MANIFEST.json'),
+    outputPath,
   )
+  await writeFile(outputPath, output)
 }
 if (process.argv[1]?.endsWith('export-training-data.ts')) void main()

@@ -1,12 +1,13 @@
 # Rampart fine-tuning preparation
 
-Fine-tuning is not performed by Obiter and requires a separately provisioned GPU environment.
+Fine-tuning is not performed by Obiter and requires a separately provisioned GPU environment. The private v2 corpus comprises synthetic UK legal documents generated with commercial LLMs and contains no real personal data; it is never a public artifact. Before any training run, execute `pnpm bench:guard` against the private corpus or a reviewed-run export. A non-zero result means it overlaps the public benchmark and must not be used for training.
 
 ```bash
 git clone https://github.com/nationaldesignstudio/rampart
 cd rampart
 pip install torch transformers datasets onnx onnxruntime
-python scripts/train.py --train-data /path/to/obiter/data/evals/redact/synthetic_train.jsonl --validation-data /path/to/obiter/data/evals/redact/synthetic_validation.jsonl --label-space /path/to/obiter/data/evals/redact/custom_label_space.json --output-dir /path/to/checkpoint
+pnpm --dir /path/to/obiter bench:guard
+python scripts/train.py --train-data /path/to/obiter/data/synthetic/uk-legal-train/documents.jsonl --label-space /path/to/obiter/data/evals/redact/custom_label_space.json --output-dir /path/to/checkpoint
 python scripts/export_onnx.py --checkpoint /path/to/checkpoint --output /path/to/rampart-legal-q4.onnx
 ```
 
