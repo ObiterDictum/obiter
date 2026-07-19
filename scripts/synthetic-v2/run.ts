@@ -318,7 +318,32 @@ async function generateAndValidate(
           const repaired = repair.documents.get(spec.id)
           if (!repaired) throw new Error('Repair label response was missing')
           repairText = repaired.text
-          const repairedDocument = normalizeGenerated(spec, repaired)
+          let repairedDocument = normalizeGenerated(spec, repaired)
+          const remainingMisses = supplementMisses([repairedDocument])
+          if (remainingMisses.length) {
+            const remainingFeedback = `Supplement found unlabelled spans: ${remainingMisses.map((miss) => `${miss.category}=${JSON.stringify(miss.text)}`).join(', ')}`
+            console.log(
+              `[${options.label}] repairing remaining labels for ${spec.id}.`,
+            )
+            const finalRepair = await submitLabelsWithCap(
+              [spec],
+              new Map([[spec.id, { text: repairText }]]),
+              labeler,
+              pricing,
+              (progress) =>
+                console.log(
+                  `[${options.label}] final repair ${progress.phase}: ${progress.completed}/${progress.total}`,
+                ),
+              new Map([[spec.id, remainingFeedback]]),
+            )
+            addUsage(usage, finalRepair.usage)
+            actualGbp += finalRepair.actualGbp
+            const finalDocument = finalRepair.documents.get(spec.id)
+            if (!finalDocument)
+              throw new Error('Final repair label response was missing')
+            repairText = finalDocument.text
+            repairedDocument = normalizeGenerated(spec, finalDocument)
+          }
           if (supplementMisses([repairedDocument]).length)
             throw new Error('Repair left an unlabelled detectable identifier')
           accepted.push(repairedDocument)
