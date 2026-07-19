@@ -14,7 +14,7 @@ Categories: person_private, person_protected, person_professional, address, emai
 
 Use person_private for clients, parties, witnesses, and ordinary private people; person_protected for children, anonymity-order subjects, and people in family, medical, immigration, employment, criminal, or safeguarding contexts; and person_professional for solicitors, in-house counsel, judges, counsel, experts, and named professionals acting in-role. Label every coreferent name variation. A professional's private-looking home address, personal mobile, or non-work email still receives its own category.
 
-Do not label neutral citations, statutes, court names, hearing dates, procedural deadlines, damages figures, company registration numbers, or generic role references. Do not alter, paraphrase, add, remove, reorder, or correct document text. Output only the original document with complete, non-nested XML tags. Before responding, silently verify that every required category appears at least once and every <pii> tag closes.`
+Do not label neutral citations, statutes, court names, hearing dates, procedural deadlines, damages figures, company registration numbers, or generic role references. Do not alter, paraphrase, add, remove, reorder, or correct document text. The ONLY permitted tags are <pii category="one-of-the-listed-categories">text</pii>; never use category names as XML elements. Exhaustively scan the whole document, not only the requested examples. Before responding, silently verify that every required category appears at least once and every <pii> tag closes.`
 
 function categoryInstruction(category: string) {
   const requirements: Record<string, string> = {
@@ -58,7 +58,9 @@ Scenario seed: ${spec.scenario}
 Diversity seed: ${spec.seed}
 
 The document must naturally contain these facts for later annotation:
-${requiredContent(spec)}${hardNegative}
+${requiredContent(spec)}
+
+Keep distinct categories genuinely distinct: a driving licence is not a government ID, a procedural date is not a personal date, and a professional work address is not a private home address.${hardNegative}
 
 The legal purpose comes first. Spread identifiers through a plausible chronology, correspondence trail, evidence, signature block, or schedule. Include a professional/public-role distinction where natural to the scenario. Finish the document cleanly.`
 }
