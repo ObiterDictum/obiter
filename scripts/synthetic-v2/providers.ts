@@ -14,6 +14,16 @@ export class ProviderConfigurationError extends Error {
   }
 }
 
+class ProviderHttpError extends Error {
+  constructor(
+    readonly provider: string,
+    readonly status: number,
+  ) {
+    super(`${provider} request failed with HTTP ${status}`)
+    this.name = 'ProviderHttpError'
+  }
+}
+
 function requiredEnvironment(name: string) {
   const value = process.env[name]
   if (!value)
@@ -147,12 +157,14 @@ export class DeepSeekGenerator implements GeneratorAdapter {
         const response = await withRetries(
           () => this.request(spec),
           this.options.retries ?? 3,
-          () =>
+          (error, attempt) =>
             onProgress?.({
               phase: 'retrying',
               completed: 0,
               total: specs.length,
               specId: spec.id,
+              attempt,
+              reason: retryReason(error),
             }),
         )
         return {
@@ -185,8 +197,7 @@ export class DeepSeekGenerator implements GeneratorAdapter {
         }),
       },
     )
-    if (!response.ok)
-      throw new Error(`DeepSeek request failed with HTTP ${response.status}`)
+    if (!response.ok) throw new ProviderHttpError('DeepSeek', response.status)
     return parseOpenAICompatibleResponse(await response.json(), 'DeepSeek')
   }
 }
@@ -224,7 +235,7 @@ async function generateConcurrent<T extends DocumentSpec, Result>(
 async function withRetries<T>(
   operation: () => Promise<T>,
   retries: number,
-  onRetry?: () => void,
+  onRetry?: (error: unknown, attempt: number) => void,
 ) {
   let lastError: unknown
   for (let attempt = 0; attempt <= retries; attempt++) {
@@ -232,14 +243,31 @@ async function withRetries<T>(
       return await operation()
     } catch (error) {
       lastError = error
-      if (attempt === retries) break
-      onRetry?.()
+      if (attempt === retries || !isRetryable(error)) break
+      onRetry?.(error, attempt + 1)
       await sleep(500 * 2 ** attempt + Math.floor(Math.random() * 250))
     }
   }
   throw lastError instanceof Error
     ? lastError
     : new Error('DeepSeek request failed')
+}
+
+function isRetryable(error: unknown) {
+  if (error instanceof ProviderHttpError)
+    return error.status === 408 || error.status === 429 || error.status >= 500
+  return (
+    error instanceof TypeError ||
+    (error instanceof Error && error.name === 'TimeoutError')
+  )
+}
+
+function retryReason(error: unknown) {
+  if (error instanceof ProviderHttpError) return `HTTP ${error.status}`
+  if (error instanceof TypeError) return 'network failure'
+  if (error instanceof Error && error.name === 'TimeoutError')
+    return 'request timeout'
+  return 'transient provider failure'
 }
 
 function sleep(milliseconds: number) {

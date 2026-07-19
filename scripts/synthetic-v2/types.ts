@@ -85,6 +85,8 @@ export interface GenerationProgress {
   completed: number
   total: number
   specId?: string
+  attempt?: number
+  reason?: string
 }
 
 export interface GeneratorAdapter {

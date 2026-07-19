@@ -212,9 +212,11 @@ async function generateAndValidate(
       pricing,
       (progress) => {
         const detail = progress.specId ? ` (${progress.specId})` : ''
-        console.log(
-          `[${options.label}] ${progress.phase}: ${progress.completed}/${progress.total}${detail}`,
-        )
+        const retry =
+          progress.phase === 'retrying'
+            ? `attempt ${progress.attempt}: ${progress.reason}`
+            : `${progress.completed}/${progress.total}`
+        console.log(`[${options.label}] ${progress.phase}: ${retry}${detail}`)
       },
     )
     addUsage(usage, submission.usage)
