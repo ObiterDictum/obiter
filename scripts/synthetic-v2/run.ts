@@ -270,7 +270,16 @@ async function generateAndValidate(
           next.push({ ...spec, seed: `${spec.seed}:dedupe:${attempt}` })
           continue
         }
-        if (supplementMisses([document]).length) {
+        const unlabelledSupplementSpans = supplementMisses([document]).filter(
+          (miss) =>
+            !(
+              miss.category === 'case_reference' &&
+              spec.hardNegatives.some((negative) =>
+                negative.toLowerCase().includes('claim number'),
+              )
+            ),
+        )
+        if (unlabelledSupplementSpans.length) {
           supplementDiscards++
           rejections.push({
             id: spec.id,
@@ -283,17 +292,35 @@ async function generateAndValidate(
         }
         accepted.push(document)
       } catch (error) {
-        validationDiscards++
-        rejections.push({
-          id: spec.id,
-          attempt,
-          reason:
-            error instanceof Error
-              ? error.message
-              : 'Unknown validation failure',
-          markedText: result.text,
-        })
-        next.push({ ...spec, seed: `${spec.seed}:validation:${attempt}` })
+        const initialReason =
+          error instanceof Error ? error.message : 'Unknown validation failure'
+        try {
+          console.log(`[${options.label}] repairing labels for ${spec.id}.`)
+          const repair = await submitLabelsWithCap(
+            [spec],
+            submission.documents,
+            labeler,
+            pricing,
+            (progress) =>
+              console.log(
+                `[${options.label}] repair ${progress.phase}: ${progress.completed}/${progress.total}`,
+              ),
+          )
+          addUsage(usage, repair.usage)
+          actualGbp += repair.actualGbp
+          const repaired = repair.documents.get(spec.id)
+          if (!repaired) throw new Error('Repair label response was missing')
+          accepted.push(normalizeGenerated(spec, repaired))
+        } catch (repairError) {
+          validationDiscards++
+          rejections.push({
+            id: spec.id,
+            attempt,
+            reason: `${initialReason}; repair failed: ${repairError instanceof Error ? repairError.message : 'unknown failure'}`,
+            markedText: result.text,
+          })
+          next.push({ ...spec, seed: `${spec.seed}:validation:${attempt}` })
+        }
       }
     }
     if (options.dryRun && next.length) {
