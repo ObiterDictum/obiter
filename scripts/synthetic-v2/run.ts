@@ -96,6 +96,7 @@ async function runDryRun(pricing: PricingTable) {
   const output = resolve('data/synthetic-v2-review/dry-run')
   const labeler = new OpenRouterLabeler(openRouterQaModel())
   const reports: Array<Record<string, unknown>> = []
+  const failures: Array<{ set: string; reason: string }> = []
   const mapping: Record<string, string> = {}
 
   for (const generator of generators) {
@@ -103,38 +104,45 @@ async function runDryRun(pricing: PricingTable) {
     console.log(
       `[dry-run ${generator.blind}] Starting ${generator.adapter.name}.`,
     )
-    const result = await generateAndValidate(
-      specs,
-      generator.adapter,
-      labeler,
-      pricing,
-      {
-        dryRun: true,
-        label: `dry-run ${generator.blind}`,
-      },
-    )
-    await writeText(
-      resolve(output, `${generator.blind}.jsonl`),
-      `${result.documents.map(({ id, text }) => JSON.stringify({ id, text })).join('\n')}\n`,
-    )
-    reports.push({
-      set: generator.blind,
-      documents: result.documents.length,
-      usage: result.usage,
-      measuredCostGbp: result.actualGbp,
-      costPerDocumentGbp: Number(
-        (result.actualGbp / result.documents.length).toFixed(6),
-      ),
-      projectedTraining2500Gbp: Number(
-        ((result.actualGbp / result.documents.length) * 2_500).toFixed(2),
-      ),
-      projectedBenchmark280Gbp: Number(
-        ((result.actualGbp / result.documents.length) * 280).toFixed(2),
-      ),
-      validationDiscards: result.validationDiscards,
-      dedupeDiscards: result.dedupeDiscards,
-      supplementDiscards: result.supplementDiscards,
-    })
+    try {
+      const result = await generateAndValidate(
+        specs,
+        generator.adapter,
+        labeler,
+        pricing,
+        {
+          dryRun: true,
+          label: `dry-run ${generator.blind}`,
+        },
+      )
+      await writeText(
+        resolve(output, `${generator.blind}.jsonl`),
+        `${result.documents.map(({ id, text }) => JSON.stringify({ id, text })).join('\n')}\n`,
+      )
+      reports.push({
+        set: generator.blind,
+        documents: result.documents.length,
+        usage: result.usage,
+        measuredCostGbp: result.actualGbp,
+        costPerDocumentGbp: Number(
+          (result.actualGbp / result.documents.length).toFixed(6),
+        ),
+        projectedTraining2500Gbp: Number(
+          ((result.actualGbp / result.documents.length) * 2_500).toFixed(2),
+        ),
+        projectedBenchmark280Gbp: Number(
+          ((result.actualGbp / result.documents.length) * 280).toFixed(2),
+        ),
+        validationDiscards: result.validationDiscards,
+        dedupeDiscards: result.dedupeDiscards,
+        supplementDiscards: result.supplementDiscards,
+      })
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'Unknown failure'
+      failures.push({ set: generator.blind, reason })
+      reports.push({ set: generator.blind, error: reason })
+      console.error(`[dry-run ${generator.blind}] ${reason}`)
+    }
   }
   await writeText(
     resolve(output, 'BLIND-REVIEW.md'),
@@ -148,6 +156,10 @@ async function runDryRun(pricing: PricingTable) {
     resolve('.synthetic-v2/dry-run-cost-report.json'),
     `${JSON.stringify({ capGbp, reports, projection: 'Multiply measured per-document cost by 2500 for training and 280 for benchmark after blind-review approval.' }, null, 2)}\n`,
   )
+  if (failures.length)
+    throw new Error(
+      `Dry-run validation failed for ${failures.map((failure) => failure.set).join(', ')}. All routes were attempted; inspect their rejection evidence and the cost report.`,
+    )
 }
 
 async function runFull(
