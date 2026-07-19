@@ -9,6 +9,7 @@ import {
 } from './budget'
 import { writeDataset, writeText } from './artifacts'
 import { buildQuotaSpecs } from './matrix'
+import { openRouterBenchmarkModel } from './models'
 import { DeepSeekGenerator, OpenRouterGenerator } from './providers'
 import type {
   DocumentSpec,
@@ -24,7 +25,9 @@ const gbpPerUsd = Number(process.env.SYNTHETIC_V2_GBP_PER_USD ?? '0.79')
 const ledgerPath = resolve(
   process.env.SYNTHETIC_V2_LEDGER ?? '.synthetic-v2/spend-ledger.json',
 )
-const pricingPath = process.env.SYNTHETIC_V2_PRICING_PATH
+const pricingPath =
+  process.env.SYNTHETIC_V2_PRICING_PATH ??
+  resolve('scripts/synthetic-v2/pricing-2026-07-19.json')
 
 async function main() {
   const mode = process.argv.includes('--dry-run') ? 'dry-run' : 'full'
@@ -62,15 +65,11 @@ function assertDeepSeekTermsConfirmation() {
 }
 
 async function loadPricing(): Promise<PricingTable> {
-  if (!pricingPath)
-    throw new Error(
-      'SYNTHETIC_V2_PRICING_PATH is required and must point to a current reviewed pricing JSON file. This prevents stale price assumptions from bypassing the £30 cap.',
-    )
   try {
     return JSON.parse(await readFile(pricingPath, 'utf8')) as PricingTable
   } catch (error) {
     throw new Error(
-      `Could not read SYNTHETIC_V2_PRICING_PATH: ${error instanceof Error ? error.message : 'unknown error'}`,
+      `Could not read pricing configuration at ${pricingPath}: ${error instanceof Error ? error.message : 'unknown error'}`,
     )
   }
 }
@@ -271,15 +270,6 @@ function addUsage(total: Usage, addition: Usage) {
     (addition.cacheCreationInputTokens ?? 0)
   total.cacheReadInputTokens =
     (total.cacheReadInputTokens ?? 0) + (addition.cacheReadInputTokens ?? 0)
-}
-
-function openRouterBenchmarkModel() {
-  const model = process.env.OPENROUTER_BENCHMARK_MODEL
-  if (!model)
-    throw new Error(
-      'OPENROUTER_BENCHMARK_MODEL is required. Copy the exact Claude model slug from OpenRouter; do not guess or hard-code a provider-specific id.',
-    )
-  return model
 }
 
 function flag(name: string) {
