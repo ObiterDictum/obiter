@@ -9,6 +9,21 @@ export type SpanMetrics = {
   f1: number
 }
 
+export function hardNegativeFalsePositiveRate(
+  totalNegatives: number,
+  falsePositives: number,
+) {
+  if (
+    !Number.isInteger(totalNegatives) ||
+    totalNegatives < 0 ||
+    !Number.isInteger(falsePositives) ||
+    falsePositives < 0 ||
+    falsePositives > totalNegatives
+  )
+    throw new Error('Invalid hard-negative counts')
+  return totalNegatives === 0 ? 0 : falsePositives / totalNegatives
+}
+
 export type EvaluationReport = {
   overall: SpanMetrics
   byCategory: Record<string, SpanMetrics>

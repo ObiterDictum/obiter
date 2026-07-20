@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { evaluateSpans } from './metrics'
+import { evaluateSpans, hardNegativeFalsePositiveRate } from './metrics'
 
 describe('benchmark span metrics', () => {
   it('reports per-category and role-confusion metrics', () => {
@@ -17,5 +17,8 @@ describe('benchmark span metrics', () => {
       'person_private->person_protected': 1,
     })
     expect(report.documentExactMatchRate).toBe(0)
+  })
+  it('reports hard-negative false-positive rate', () => {
+    expect(hardNegativeFalsePositiveRate(20, 1)).toBe(0.05)
   })
 })
