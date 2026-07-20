@@ -3,7 +3,9 @@ import { resolve } from 'node:path'
 import { contentHash } from './synthetic-v2/validation'
 
 export type BenchmarkManifest = {
-  documents: Array<{ id: string; contentHash: string }>
+  stage: string
+  documents: Array<{ id: string; textHash?: string; contentHash?: string }>
+  nearDuplicateSignatures?: Array<{ id: string; shingles: string[] }>
 }
 
 export async function benchmarkHashes(manifestPath: string) {
@@ -11,12 +13,29 @@ export async function benchmarkHashes(manifestPath: string) {
     await readFile(manifestPath, 'utf8'),
     manifestPath,
   )
-  return new Set(manifest.documents.map((document) => document.contentHash))
+  if (
+    manifest.stage !== 'benchmark' ||
+    !Array.isArray(manifest.documents) ||
+    manifest.documents.length === 0
+  )
+    throw new Error(
+      'Benchmark manifest must be a non-empty benchmark partition manifest',
+    )
+  const hashes = manifest.documents.map(
+    (document) => document.textHash ?? document.contentHash,
+  )
+  if (
+    hashes.some(
+      (hash) => typeof hash !== 'string' || !/^[a-f0-9]{64}$/.test(hash),
+    )
+  )
+    throw new Error('Benchmark manifest contains invalid text hashes')
+  return new Set(hashes as string[])
 }
 
 export async function assertNoBenchmarkOverlap(
   trainingPath: string,
-  manifestPath = 'data/bench/uk-legal-pii/MANIFEST.json',
+  manifestPath: string,
 ) {
   const [training, hashes] = await Promise.all([
     readFile(trainingPath, 'utf8'),
@@ -46,27 +65,18 @@ export function assertNoBenchmarkOverlapText(
 
 async function main() {
   const input = flag('--input')
-  if (input) {
-    await assertNoBenchmarkOverlap(input, flag('--manifest'))
-    return
-  }
-  const defaultTraining = resolve(
-    'data/synthetic/uk-legal-train/documents.jsonl',
-  )
-  try {
-    await assertNoBenchmarkOverlap(defaultTraining, flag('--manifest'))
-  } catch (error) {
-    if (isMissingTrainingFile(error)) return
-    throw error
-  }
+  const manifest = flag('--benchmark-manifest')
+  if (!input || !manifest)
+    throw new Error(
+      'Usage: pnpm bench:guard --input=/external/private/documents.jsonl --benchmark-manifest=/external/benchmark/MANIFEST.json',
+    )
+  await assertNoBenchmarkOverlap(resolve(input), resolve(manifest))
 }
-
 function flag(name: string) {
   return process.argv
     .find((value) => value.startsWith(`${name}=`))
     ?.slice(name.length + 1)
 }
-
 function parseJson<T>(value: string, context: string): T {
   try {
     return JSON.parse(value) as T
@@ -74,16 +84,6 @@ function parseJson<T>(value: string, context: string): T {
     throw new Error(`Invalid JSON in ${context}`)
   }
 }
-
-function isMissingTrainingFile(error: unknown) {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    error.code === 'ENOENT'
-  )
-}
-
 if (process.argv[1]?.endsWith('bench-guard.ts'))
   void main().catch((error: unknown) => {
     console.error(

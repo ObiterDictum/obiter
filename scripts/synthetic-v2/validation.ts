@@ -1,6 +1,22 @@
 import { createHash } from 'node:crypto'
 import { stripMarkers } from './markers'
-import type { DocumentSpec, SyntheticDocument } from './types'
+import type {
+  DocumentSpec,
+  HardNegativeAssertion,
+  SyntheticDocument,
+} from './types'
+
+export type NearDuplicateMatch = {
+  left: string
+  right: string
+  similarity: number
+}
+
+export type NearDuplicateSignature = {
+  id: string
+  textHash: string
+  shingles: string[]
+}
 
 export function normalizeGenerated(
   spec: DocumentSpec,
@@ -30,6 +46,7 @@ function documentFromSpans(
     if (!emitted.has(category))
       throw new Error(`${spec.id} omitted required category ${category}`)
   }
+  assertHardNegatives(text, spans, spec.hardNegatives)
   return {
     id: spec.id,
     text,
@@ -38,6 +55,38 @@ function documentFromSpans(
     specCell: `${spec.docType}|${spec.register}|${spec.difficulty}`,
     matrixCells: spec.matrixCells,
     contentHash: contentHash(text),
+    hardNegatives: spec.hardNegatives,
+  }
+}
+
+/** Verifies required neutral literals and forbids positive annotation overlap. */
+export function assertHardNegatives(
+  text: string,
+  spans: SyntheticDocument['spans'],
+  assertions: HardNegativeAssertion[],
+) {
+  for (const assertion of assertions) {
+    const starts = occurrences(text, assertion.quote)
+    if (starts.length !== assertion.expectedCount)
+      throw new Error(
+        `${assertion.id} expected ${assertion.expectedCount} source occurrence(s), found ${starts.length}`,
+      )
+    const start = starts[assertion.occurrence - 1]
+    if (start === undefined)
+      throw new Error(
+        `${assertion.id} source occurrence ${assertion.occurrence} is missing`,
+      )
+    const end = start + assertion.quote.length
+    const overlap = spans.find(
+      (span) =>
+        assertion.mustNotOverlap.includes(span.category) &&
+        span.start < end &&
+        start < span.end,
+    )
+    if (overlap)
+      throw new Error(
+        `${assertion.id} must not overlap ${overlap.category} annotation`,
+      )
   }
 }
 
@@ -45,7 +94,7 @@ export function contentHash(text: string) {
   return createHash('sha256').update(text).digest('hex')
 }
 
-function shingles(text: string, size = 5) {
+export function normalizedShingles(text: string, size = 5) {
   const words = text.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? []
   return new Set(
     Array.from({ length: Math.max(0, words.length - size + 1) }, (_, index) =>
@@ -54,28 +103,95 @@ function shingles(text: string, size = 5) {
   )
 }
 
+export function nearDuplicateSignature(
+  document: Pick<SyntheticDocument, 'id' | 'text' | 'contentHash'>,
+): NearDuplicateSignature {
+  return {
+    id: document.id,
+    textHash: document.contentHash,
+    shingles: [...normalizedShingles(document.text)].sort(),
+  }
+}
+
+function similarity(left: Set<string>, right: Set<string>) {
+  const intersection = [...left].filter((shingle) => right.has(shingle)).length
+  const union = left.size + right.size - intersection
+  return union === 0 ? 1 : intersection / union
+}
+
+/** Incremental deterministic index; never re-compares accepted documents. */
+export class NearDuplicateIndex {
+  private readonly entries = new Map<string, Set<string>>()
+  constructor(
+    private readonly threshold = 0.82,
+    signatures: NearDuplicateSignature[] = [],
+  ) {
+    for (const signature of signatures)
+      this.entries.set(signature.id, new Set(signature.shingles))
+  }
+
+  check(
+    document: Pick<SyntheticDocument, 'id' | 'text'>,
+  ): NearDuplicateMatch | undefined {
+    const candidate = normalizedShingles(document.text)
+    for (const [id, existing] of this.entries) {
+      const value = similarity(candidate, existing)
+      if (value >= this.threshold)
+        return {
+          left: document.id,
+          right: id,
+          similarity: Number(value.toFixed(4)),
+        }
+    }
+    return undefined
+  }
+
+  add(document: Pick<SyntheticDocument, 'id' | 'text'>) {
+    this.entries.set(document.id, normalizedShingles(document.text))
+  }
+
+  signatures(): NearDuplicateSignature[] {
+    return [...this.entries].map(([id, shingles]) => ({
+      id,
+      textHash: '',
+      shingles: [...shingles].sort(),
+    }))
+  }
+}
+
+/** Retained as a reference oracle for regression tests and small diagnostics. */
 export function nearDuplicatePairs(
   documents: SyntheticDocument[],
   threshold = 0.82,
-) {
-  const pairs: Array<{ left: string; right: string; similarity: number }> = []
-  const documentShingles = documents.map((document) => shingles(document.text))
+): NearDuplicateMatch[] {
+  const pairs: NearDuplicateMatch[] = []
+  const documentShingles = documents.map((document) =>
+    normalizedShingles(document.text),
+  )
   for (let left = 0; left < documents.length; left++) {
     for (let right = 0; right < left; right++) {
-      const leftSet = documentShingles[left]!
-      const rightSet = documentShingles[right]!
-      const intersection = [...leftSet].filter((shingle) =>
-        rightSet.has(shingle),
-      ).length
-      const union = leftSet.size + rightSet.size - intersection
-      const similarity = union === 0 ? 1 : intersection / union
-      if (similarity >= threshold)
+      const value = similarity(
+        documentShingles[left]!,
+        documentShingles[right]!,
+      )
+      if (value >= threshold)
         pairs.push({
           left: documents[left]!.id,
           right: documents[right]!.id,
-          similarity: Number(similarity.toFixed(4)),
+          similarity: Number(value.toFixed(4)),
         })
     }
   }
   return pairs
+}
+
+function occurrences(source: string, quote: string) {
+  const found: number[] = []
+  for (
+    let index = source.indexOf(quote);
+    index !== -1;
+    index = source.indexOf(quote, index + 1)
+  )
+    found.push(index)
+  return found
 }

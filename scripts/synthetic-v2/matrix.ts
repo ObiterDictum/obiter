@@ -59,15 +59,47 @@ function scenarioFor(index: number) {
   return `Matter ${index + 1}: ${matters[index % matters.length]} in ${regions[index % regions.length]}.`
 }
 
-function hardNegatives(difficulty: Difficulty) {
-  return difficulty === 'hard_negative'
-    ? [
-        'three neutral case citations',
-        'a non-personal claim number',
-        'a damages schedule with several six-to-eight digit figures',
-        'a company registration number in a corporate context',
-      ]
-    : []
+function hardNegatives(
+  difficulty: Difficulty,
+  id: string,
+): DocumentSpec['hardNegatives'] {
+  if (difficulty !== 'hard_negative') return []
+  const token = id.toUpperCase().replaceAll('-', '')
+  const noOverlap = [...spanCategories]
+  return [
+    {
+      id: `${id}:neutral-citation`,
+      kind: 'neutral_citation',
+      quote: `[2099] EWHC ${token.slice(-4)} (KB)`,
+      occurrence: 1,
+      expectedCount: 1,
+      mustNotOverlap: noOverlap,
+    },
+    {
+      id: `${id}:claim-number`,
+      kind: 'claim_number',
+      quote: `Claim No. ${token.slice(-8)}/CIV`,
+      occurrence: 1,
+      expectedCount: 1,
+      mustNotOverlap: noOverlap,
+    },
+    {
+      id: `${id}:damages-figure`,
+      kind: 'damages_figure',
+      quote: `£${String(100000 + Number(token.slice(-3) || 0)).slice(-6)}`,
+      occurrence: 1,
+      expectedCount: 1,
+      mustNotOverlap: noOverlap,
+    },
+    {
+      id: `${id}:company-registration`,
+      kind: 'company_registration',
+      quote: `Company No. ${token.slice(-8)}`,
+      occurrence: 1,
+      expectedCount: 1,
+      mustNotOverlap: noOverlap,
+    },
+  ]
 }
 
 /**
@@ -105,7 +137,10 @@ export function buildQuotaSpecs(total: number, prefix: string): DocumentSpec[] {
       lengthWords: base.difficulty === 'hard_negative' ? 850 : 650,
       seed: `${prefix}:${index + 1}:${base.docType}:${base.register}:${base.difficulty}`,
       scenario: scenarioFor(index),
-      hardNegatives: hardNegatives(base.difficulty),
+      hardNegatives: hardNegatives(
+        base.difficulty,
+        `${prefix}-${String(index + 1).padStart(5, '0')}`,
+      ),
       matrixCells,
     }
   })

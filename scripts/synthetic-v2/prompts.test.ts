@@ -16,7 +16,24 @@ const spec: DocumentSpec = {
   lengthWords: 500,
   seed: 'prompt:test',
   scenario: 'A fictional tenancy dispute.',
-  hardNegatives: ['a neutral citation', 'a damages figure'],
+  hardNegatives: [
+    {
+      id: 'negative:citation',
+      kind: 'neutral_citation',
+      quote: '[2099] EWHC 101 (KB)',
+      occurrence: 1,
+      expectedCount: 1,
+      mustNotOverlap: ['case_reference'],
+    },
+    {
+      id: 'negative:damages',
+      kind: 'damages_figure',
+      quote: '£100001',
+      occurrence: 1,
+      expectedCount: 1,
+      mustNotOverlap: ['case_reference'],
+    },
+  ],
   matrixCells: [],
 }
 
@@ -33,7 +50,8 @@ describe('synthetic-v2 prompts', () => {
     expect(prompt).toContain('person_private: a private person')
     expect(prompt).toContain('person_professional: a named legal')
     expect(prompt).toContain('email: a fictional .test email address')
-    expect(prompt).toContain('Hard negatives:')
+    expect(prompt).toContain('Hard-negative literals:')
+    expect(prompt).toContain('[2099] EWHC 101 (KB)')
     expect(labelUserPrompt(spec, 'Fictional text.')).toContain(
       'Immutable document source',
     )

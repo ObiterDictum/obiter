@@ -36,14 +36,26 @@ describe('benchmark promotion', () => {
         disputeVerdicts: [],
         audits: [],
       }),
-    ).toThrow('completed audits')
+    ).toThrow('completed audit')
   })
   it('accepts independently judged and audited documents', () => {
     expect(() =>
       assertBenchmarkPromotion([document], {
         judgeVerdicts: [verdict],
         disputeVerdicts: [],
-        audits: [{ id: 'bench-1', completed: true, reviewer: 'human' }],
+        audits: [
+          {
+            id: 'bench-1',
+            completed: true,
+            reviewer: 'human',
+            evidenceHash: 'a'.repeat(64),
+          },
+        ],
+        approval: {
+          approvedBy: 'human',
+          approvedAt: '2026-07-20T12:00:00.000Z',
+          termsReviewReference: 'terms-2026-07',
+        },
       }),
     ).not.toThrow()
   })

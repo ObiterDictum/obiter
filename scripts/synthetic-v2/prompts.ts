@@ -51,7 +51,7 @@ function requiredContent(spec: DocumentSpec) {
 
 export function draftUserPrompt(spec: DocumentSpec) {
   const hardNegative = spec.hardNegatives.length
-    ? `\nHard negatives: weave these in naturally: ${spec.hardNegatives.join('; ')}.`
+    ? `\nHard-negative literals: include each exact fictional literal exactly once and do not alter it: ${spec.hardNegatives.map((negative) => JSON.stringify(negative.quote)).join('; ')}. These are neutral counterexamples and must not be labelled.`
     : ''
   return `Draft a ${spec.docType.replaceAll('_', ' ')} of approximately ${spec.lengthWords} words in the register of ${spec.register.replaceAll('_', ' ')}.
 

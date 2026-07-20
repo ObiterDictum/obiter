@@ -65,6 +65,6 @@ describe('mechanical QA', () => {
       ...document,
       id: `qa-${index}`,
     }))
-    expect(qaSample(documents)).toHaveLength(2)
+    expect(qaSample(documents)).toHaveLength(3)
   })
 })

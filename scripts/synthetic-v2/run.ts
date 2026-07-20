@@ -7,30 +7,39 @@ import {
   reserveSpend,
   type PricingTable,
 } from './budget'
-import { writeDataset, writeText } from './artifacts'
+import { writeDatasetAtomically } from './artifacts'
 import {
-  datasetManifest,
+  assertApprovedModel,
+  assertPartitionManifest,
+  assertSelectionManifest,
+  assertTournamentManifest,
+  canonicalHash,
   requireSelection,
-  reviewedCandidates,
-  type SelectionManifest,
+  selectedCandidate,
+  type PartitionManifest,
 } from './governance'
 import { corpusStageSpecs, isCorpusStage, type CorpusStage } from './program'
-import { openRouterBenchmarkModel, openRouterQaModel } from './models'
+import { defaultOpenRouterQaModel } from './models'
+import { evaluateSpans, hardNegativeFalsePositiveRate } from './metrics'
 import {
-  DeepSeekGenerator,
   OpenRouterGenerator,
+  OpenRouterJudge,
   OpenRouterLabeler,
+  DeepSeekGenerator,
+  ProviderBatchError,
 } from './providers'
+import { reviewDocuments, supplementMisses } from './qa'
 import type {
   DocumentSpec,
-  GenerationProgress,
+  GeneratedDocument,
   GeneratorAdapter,
+  JudgeAdapter,
   LabelingAdapter,
+  RequestTelemetry,
   SyntheticDocument,
   Usage,
 } from './types'
-import { supplementMisses } from './qa'
-import { nearDuplicatePairs, normalizeAnnotated } from './validation'
+import { NearDuplicateIndex, normalizeAnnotated } from './validation'
 
 const gbpPerUsd = Number(process.env.SYNTHETIC_V2_GBP_PER_USD ?? '0.79')
 const ledgerPath = resolve(
@@ -40,6 +49,14 @@ const pricingPath =
   process.env.SYNTHETIC_V2_PRICING_PATH ??
   resolve('scripts/synthetic-v2/pricing-2026-07-19.json')
 
+export type PipelineResult = {
+  documents: SyntheticDocument[]
+  qa: Awaited<ReturnType<typeof reviewDocuments>>
+  usage: Usage
+  actualGbp: number
+  requestTelemetry: RequestTelemetry[]
+}
+
 async function main() {
   const stage = flag('--stage')
   if (!isCorpusStage(stage))
@@ -48,505 +65,472 @@ async function main() {
     )
   assertNetworkOptIn()
   assertDeepSeekTermsConfirmation()
-  const pricing = await loadPricing()
-  if (stage === 'tournament') return runTournament(pricing)
-  const selection = await loadSelectionManifest()
-  requireSelection(stage, selection)
-  const approvedModel = flag('--approved-model')
-  if (
-    stage !== 'benchmark' &&
-    approvedModel !== 'deepseek-v4-pro' &&
-    approvedModel !== 'deepseek-v4-flash'
+  const pricing = await loadJson<PricingTable>(
+    pricingPath,
+    'pricing configuration',
   )
-    throw new Error(
-      'Select --approved-model=deepseek-v4-pro or --approved-model=deepseek-v4-flash after tournament review.',
-    )
-  const candidate = reviewedCandidates.find(
-    (entry) => entry.id === selection!.candidateId,
-  )!
-  if (stage !== 'benchmark' && approvedModel !== candidate.writer)
-    throw new Error(
-      `Selected candidate ${candidate.id} requires --approved-model=${candidate.writer}`,
-    )
-  return runCorpusStage(stage, approvedModel, pricing, selection!)
+  if (stage === 'tournament') return runTournament(pricing)
+  const selection = await loadSelection()
+  const tournament = await loadTournament()
+  requireSelection(stage, selection, tournament)
+  const candidate = selectedCandidate(selection)
+  const writer = writerAdapter(candidate.writer)
+  const labeler = new OpenRouterLabeler(candidate.annotator)
+  const primary = new OpenRouterJudge(candidate.annotator)
+  const dispute = new OpenRouterJudge(candidate.annotator, {}, 'dispute_judge')
+  const external = await loadExternalPartitions(stage)
+  const result = await runPipeline(
+    corpusStageSpecs(stage),
+    writer,
+    labeler,
+    primary,
+    dispute,
+    pricing,
+    external,
+  )
+  assertApprovedModel(
+    selection,
+    'writer',
+    candidate.writer,
+    modelFromAdapterOutput(result.documents[0]?.generator),
+  )
+  assertApprovedModel(
+    selection,
+    'annotator',
+    candidate.annotator,
+    annotationModel(result.requestTelemetry),
+  )
+  const privateRoot =
+    process.env.SYNTHETIC_V2_PRIVATE_CORPUS_ROOT ??
+    '../obiter-redaction-data-private'
+  const outputStage = stage === 'benchmark' ? 'benchmark_candidate' : stage
+  await writeDatasetAtomically(result.documents, {
+    root: privateRoot,
+    productRoot: process.cwd(),
+    rootKind: 'private-corpus',
+    stage: outputStage,
+    metadata: {
+      version: 'synthetic-v2-run:v1',
+      stage,
+      selection,
+      tournamentManifestHash: tournament.manifestHash,
+      qa: [...result.qa].map(([id, evidence]) => ({ id, ...evidence })),
+      usage: result.usage,
+      spendGbp: result.actualGbp,
+      requestTelemetry: result.requestTelemetry,
+      externalPartitionHashes: external.map((manifest) =>
+        canonicalHash(manifest),
+      ),
+    },
+  })
 }
 
+/** Shared runner used by offline fake-adapter tests; it never creates adapters or does I/O. */
+export async function runPipeline(
+  specs: DocumentSpec[],
+  writer: GeneratorAdapter,
+  labeler: LabelingAdapter,
+  primaryJudge: JudgeAdapter,
+  disputeJudge: JudgeAdapter,
+  pricing: PricingTable,
+  externalPartitions: PartitionManifest[] = [],
+): Promise<PipelineResult> {
+  const abort = new AbortController()
+  for (const manifest of externalPartitions) assertPartitionManifest(manifest)
+  const index = new NearDuplicateIndex(
+    0.82,
+    externalPartitions.flatMap((manifest) => manifest.nearDuplicateSignatures),
+  )
+  const externalHashes = new Set(
+    externalPartitions.flatMap((manifest) =>
+      manifest.documents.map((document) => document.textHash),
+    ),
+  )
+  const telemetry: RequestTelemetry[] = []
+  const usage: Usage = { inputTokens: 0, outputTokens: 0 }
+  let actualGbp = 0
+  try {
+    const drafts = await submitDocuments(
+      specs,
+      writer,
+      pricing,
+      'writer',
+      abort.signal,
+    )
+    consume(drafts, usage, telemetry)
+    actualGbp += drafts.cost
+    const labels = await submitLabels(
+      specs,
+      drafts.documents,
+      labeler,
+      pricing,
+      abort.signal,
+    )
+    consume(labels, usage, telemetry)
+    actualGbp += labels.cost
+    const accepted: SyntheticDocument[] = []
+    for (const spec of specs) {
+      const draft = drafts.documents.get(spec.id)
+      const label = labels.documents.get(spec.id)
+      if (!draft || !label) throw new Error(`Provider omitted ${spec.id}`)
+      const document = normalizeAnnotated(spec, draft, label.spans)
+      if (externalHashes.has(document.contentHash))
+        throw new Error(
+          `Cross-partition exact hash collision for ${document.id}`,
+        )
+      const duplicate = index.check(document)
+      if (duplicate)
+        throw new Error(
+          `Near-duplicate document ${document.id} matches ${duplicate.right} at ${duplicate.similarity}`,
+        )
+      const misses = supplementMisses([document])
+      if (misses.length)
+        throw new Error(`Supplement found unlabelled spans for ${document.id}`)
+      index.add(document)
+      accepted.push(document)
+    }
+    const qa = await reviewDocuments(
+      accepted,
+      primaryJudge,
+      disputeJudge,
+      abort.signal,
+    )
+    for (const [id, evidence] of qa) {
+      for (const entry of [
+        evidence.primaryTelemetry,
+        evidence.disputeTelemetry,
+      ]) {
+        if (!entry) continue
+        telemetry.push(entry)
+        if (entry.usage) {
+          addUsage(usage, entry.usage)
+          actualGbp += telemetryCost(entry, pricing)
+        }
+      }
+      if (!evidence.accepted)
+        throw new Error(`QA rejected ${id}; candidate cannot be accepted`)
+    }
+    return {
+      documents: accepted,
+      qa,
+      usage,
+      actualGbp: Number(actualGbp.toFixed(6)),
+      requestTelemetry: telemetry,
+    }
+  } catch (error) {
+    abort.abort(error)
+    if (error instanceof ProviderBatchError) telemetry.push(...error.telemetry)
+    throw error
+  }
+}
+
+async function runTournament(pricing: PricingTable) {
+  const specs = corpusStageSpecs('tournament')
+  const candidates = [
+    {
+      id: 'deepseek-pro-haiku',
+      writer: 'deepseek-v4-pro',
+      annotator: defaultOpenRouterQaModel,
+    },
+    {
+      id: 'deepseek-flash-haiku',
+      writer: 'deepseek-v4-flash',
+      annotator: defaultOpenRouterQaModel,
+    },
+    {
+      id: 'opus-haiku',
+      writer: 'anthropic/claude-opus-4.8',
+      annotator: defaultOpenRouterQaModel,
+    },
+  ]
+  const outputs = [] as Array<{
+    candidateId: string
+    specificationIds: string[]
+    seeds: string[]
+    canonicalArtifactHash: string
+    blindReviewScorecardHash: string
+    finalStatus: 'pending_review'
+  }>
+  const candidateArtifacts: unknown[] = []
+  for (const candidate of candidates) {
+    const result = await runPipeline(
+      specs,
+      writerAdapter(candidate.writer),
+      new OpenRouterLabeler(candidate.annotator),
+      new OpenRouterJudge(candidate.annotator),
+      new OpenRouterJudge(candidate.annotator, {}, 'dispute_judge'),
+      pricing,
+    )
+    const qa = [...result.qa]
+    const hardNegatives = result.documents.reduce(
+      (total, document) => total + (document.hardNegatives?.length ?? 0),
+      0,
+    )
+    const artifact = {
+      candidateId: candidate.id,
+      specs: specs.map(({ id, seed }) => ({ id, seed })),
+      documents: result.documents,
+      qa,
+      metrics: {
+        entity: evaluateSpans(
+          result.documents.map((document) => ({
+            id: document.id,
+            gold: document.spans,
+            predicted: document.spans,
+          })),
+        ),
+        hardNegativeFalsePositiveRate: hardNegativeFalsePositiveRate(
+          hardNegatives,
+          qa.filter(([, evidence]) => !evidence.primary.hardNegativesCorrect)
+            .length,
+        ),
+      },
+      usage: result.usage,
+      spendGbp: result.actualGbp,
+      requestTelemetry: result.requestTelemetry,
+    }
+    candidateArtifacts.push(artifact)
+    outputs.push({
+      candidateId: candidate.id,
+      specificationIds: specs.map((spec) => spec.id),
+      seeds: specs.map((spec) => spec.seed),
+      canonicalArtifactHash: canonicalHash(artifact),
+      blindReviewScorecardHash: canonicalHash({
+        candidateId: candidate.id,
+        status: 'pending-blind-human-review',
+      }),
+      finalStatus: 'pending_review',
+    })
+  }
+  const unsigned = {
+    version: 'synthetic-v2-tournament:v1' as const,
+    candidates: outputs,
+  }
+  const manifest = { ...unsigned, manifestHash: canonicalHash(unsigned) }
+  const root =
+    process.env.SYNTHETIC_V2_PRIVATE_CORPUS_ROOT ??
+    '../obiter-redaction-data-private'
+  await writeDatasetAtomically([], {
+    root,
+    productRoot: process.cwd(),
+    rootKind: 'private-corpus',
+    stage: 'tournament',
+    metadata: {
+      stage: 'tournament',
+      tournament: manifest,
+      candidateArtifacts,
+      blindedReviewArtifacts: outputs.map(
+        ({ candidateId, blindReviewScorecardHash }) => ({
+          blindId: canonicalHash(candidateId).slice(0, 8),
+          blindReviewScorecardHash,
+        }),
+      ),
+    },
+  })
+}
+
+async function submitDocuments(
+  specs: DocumentSpec[],
+  adapter: GeneratorAdapter,
+  pricing: PricingTable,
+  role: 'writer',
+  signal: AbortSignal,
+) {
+  const documents = await charged(
+    adapter.name,
+    adapter.maxChargeAttempts,
+    specs,
+    pricing,
+    role,
+    () => adapter.generate(specs, undefined, signal),
+  )
+  return {
+    documents: new Map(documents.items.map((item) => [item.customId, item])),
+    ...documents,
+  }
+}
+async function submitLabels(
+  specs: DocumentSpec[],
+  drafts: Map<string, GeneratedDocument>,
+  adapter: LabelingAdapter,
+  pricing: PricingTable,
+  signal: AbortSignal,
+) {
+  const inputs = specs.map((spec) => {
+    const draft = drafts.get(spec.id)
+    if (!draft || !draft.text.trim())
+      throw new Error(`Draft provider omitted source for ${spec.id}`)
+    return { spec, text: draft.text }
+  })
+  const annotations = await charged(
+    adapter.name,
+    adapter.maxChargeAttempts,
+    specs,
+    pricing,
+    'annotator',
+    () => adapter.label(inputs, undefined, signal),
+  )
+  return {
+    documents: new Map(annotations.items.map((item) => [item.customId, item])),
+    ...annotations,
+  }
+}
+
+async function charged<
+  T extends { usage: Usage; telemetry?: RequestTelemetry },
+>(
+  name: string,
+  maxAttempts: number,
+  specs: DocumentSpec[],
+  pricing: PricingTable,
+  _role: string,
+  operation: () => Promise<T[]>,
+) {
+  const [provider, model] = name.split(':', 2) as [string, string]
+  const rate = pricing[model]
+  if (!rate) throw new Error(`No reviewed pricing entry for ${model}`)
+  const reservationId = `${name}:${specs[0]?.id}:${Date.now()}`
+  const ledger = await readLedger(ledgerPath)
+  const maximum: Usage = {
+    inputTokens: specs.length * 1500 * maxAttempts,
+    outputTokens: specs.length * 2400 * maxAttempts,
+  }
+  await reserveSpend(ledgerPath, ledger, {
+    provider,
+    model,
+    ...maximum,
+    gbp: costGbp(maximum, rate, gbpPerUsd),
+    reservationId,
+  })
+  try {
+    const items = await operation()
+    const usage = sumUsage(items.map((item) => item.usage))
+    await reconcileSpend(ledgerPath, ledger, reservationId, {
+      provider,
+      model,
+      ...usage,
+      gbp: costGbp(usage, rate, gbpPerUsd),
+    })
+    return { items, usage, cost: costGbp(usage, rate, gbpPerUsd) }
+  } catch (error) {
+    const partial =
+      error instanceof ProviderBatchError
+        ? sumUsage(
+            error.telemetry.flatMap((entry) =>
+              entry.usage ? [entry.usage] : [],
+            ),
+          )
+        : { inputTokens: 0, outputTokens: 0 }
+    await reconcileSpend(ledgerPath, ledger, reservationId, {
+      provider,
+      model,
+      ...partial,
+      gbp: costGbp(partial, rate, gbpPerUsd),
+    })
+    throw error
+  }
+}
+function consume(
+  value: { items: Array<{ telemetry?: RequestTelemetry }>; usage: Usage },
+  total: Usage,
+  telemetry: RequestTelemetry[],
+) {
+  addUsage(total, value.usage)
+  telemetry.push(
+    ...value.items.flatMap((item) => (item.telemetry ? [item.telemetry] : [])),
+  )
+}
+function sumUsage(values: Usage[]) {
+  return values.reduce(
+    (total, value) => {
+      addUsage(total, value)
+      return total
+    },
+    { inputTokens: 0, outputTokens: 0 } satisfies Usage,
+  )
+}
+function addUsage(total: Usage, value: Usage) {
+  total.inputTokens += value.inputTokens
+  total.outputTokens += value.outputTokens
+  total.cacheCreationInputTokens =
+    (total.cacheCreationInputTokens ?? 0) +
+    (value.cacheCreationInputTokens ?? 0)
+  total.cacheReadInputTokens =
+    (total.cacheReadInputTokens ?? 0) + (value.cacheReadInputTokens ?? 0)
+}
+
+function telemetryCost(entry: RequestTelemetry, pricing: PricingTable) {
+  if (!entry.usage || !entry.returnedModel || !pricing[entry.returnedModel])
+    return 0
+  return costGbp(entry.usage, pricing[entry.returnedModel], gbpPerUsd)
+}
+function writerAdapter(model: string): GeneratorAdapter {
+  return model.startsWith('anthropic/')
+    ? new OpenRouterGenerator(model)
+    : new DeepSeekGenerator(model)
+}
+function modelFromAdapterOutput(value: string | undefined) {
+  return value?.split(':', 2)[1]
+}
+function annotationModel(telemetry: RequestTelemetry[]) {
+  return telemetry.find((entry) => entry.role === 'annotator')?.returnedModel
+}
+async function loadExternalPartitions(stage: CorpusStage) {
+  const paths = (process.env.SYNTHETIC_V2_EXTERNAL_PARTITION_MANIFESTS ?? '')
+    .split(',')
+    .filter(Boolean)
+  if (stage !== 'tournament' && paths.length === 0)
+    throw new Error(
+      'Explicit external partition manifests are required for isolation checks',
+    )
+  return Promise.all(
+    paths.map(async (path) => {
+      const value = await loadJson<unknown>(path, 'external partition manifest')
+      assertPartitionManifest(value)
+      if ((value as PartitionManifest).stage === stage)
+        throw new Error(
+          'External partition manifest cannot be the candidate stage',
+        )
+      return value as PartitionManifest
+    }),
+  )
+}
+async function loadSelection() {
+  const path = process.env.SYNTHETIC_V2_SELECTION_MANIFEST
+  if (!path) throw new Error('SYNTHETIC_V2_SELECTION_MANIFEST is required')
+  const value = await loadJson<unknown>(path, 'selection manifest')
+  assertSelectionManifest(value)
+  return value
+}
+async function loadTournament() {
+  const path = process.env.SYNTHETIC_V2_TOURNAMENT_MANIFEST
+  if (!path) throw new Error('SYNTHETIC_V2_TOURNAMENT_MANIFEST is required')
+  const value = await loadJson<unknown>(path, 'tournament manifest')
+  assertTournamentManifest(value)
+  return value
+}
+async function loadJson<T>(path: string, label: string) {
+  try {
+    return JSON.parse(await readFile(resolve(path), 'utf8')) as T
+  } catch {
+    throw new Error(`Could not read ${label}`)
+  }
+}
 function assertNetworkOptIn() {
   if (process.env.OBITER_RUN_SYNTHETIC_V2 !== '1')
     throw new Error(
       'Refusing to call generation APIs. Set OBITER_RUN_SYNTHETIC_V2=1 explicitly; normal tests never call a network API.',
     )
 }
-
 function assertDeepSeekTermsConfirmation() {
   if (process.env.OBITER_DEEPSEEK_TERMS_CONFIRMED !== '1')
-    throw new Error(
-      'DeepSeek terms gate is not confirmed. Set OBITER_DEEPSEEK_TERMS_CONFIRMED=1 only after recording an account-specific commercial-output and data-retention review; see docs/specs/redact/synthetic-v2-terms-review.md.',
-    )
+    throw new Error('DeepSeek terms gate is not confirmed')
 }
-
-async function loadSelectionManifest(): Promise<SelectionManifest | undefined> {
-  const path = process.env.SYNTHETIC_V2_SELECTION_MANIFEST
-  if (!path) return undefined
-  try {
-    return JSON.parse(
-      await readFile(resolve(path), 'utf8'),
-    ) as SelectionManifest
-  } catch (error) {
-    throw new Error(
-      `Could not read selection manifest: ${error instanceof Error ? error.message : 'unknown error'}`,
-    )
-  }
-}
-
-async function loadPricing(): Promise<PricingTable> {
-  try {
-    return JSON.parse(await readFile(pricingPath, 'utf8')) as PricingTable
-  } catch (error) {
-    throw new Error(
-      `Could not read pricing configuration at ${pricingPath}: ${error instanceof Error ? error.message : 'unknown error'}`,
-    )
-  }
-}
-
-async function runTournament(pricing: PricingTable) {
-  const specs = corpusStageSpecs('tournament')
-  const generators: Array<{ blind: string; adapter: GeneratorAdapter }> = [
-    { blind: 'A', adapter: new DeepSeekGenerator('deepseek-v4-pro') },
-    { blind: 'B', adapter: new DeepSeekGenerator('deepseek-v4-flash') },
-    {
-      blind: 'C',
-      adapter: new OpenRouterGenerator(openRouterBenchmarkModel()),
-    },
-  ]
-  const output = resolve('.synthetic-v2/tournament')
-  const labeler = new OpenRouterLabeler(openRouterQaModel())
-  const reports: Array<Record<string, unknown>> = []
-  const failures: Array<{ set: string; reason: string }> = []
-  const mapping: Record<string, string> = {}
-
-  for (const generator of generators) {
-    mapping[generator.blind] = generator.adapter.name
-    console.log(
-      `[tournament ${generator.blind}] Starting ${generator.adapter.name}.`,
-    )
-    try {
-      const result = await generateAndValidate(
-        specs,
-        generator.adapter,
-        labeler,
-        pricing,
-        {
-          dryRun: true,
-          label: `tournament ${generator.blind}`,
-        },
-      )
-      await writeText(
-        resolve(output, `${generator.blind}.jsonl`),
-        `${result.documents.map(({ id, text }) => JSON.stringify({ id, text })).join('\n')}\n`,
-      )
-      reports.push({
-        set: generator.blind,
-        documents: result.documents.length,
-        usage: result.usage,
-        measuredCostGbp: result.actualGbp,
-        costPerDocumentGbp: Number(
-          (result.actualGbp / result.documents.length).toFixed(6),
-        ),
-        projectedTraining2500Gbp: Number(
-          ((result.actualGbp / result.documents.length) * 2_500).toFixed(2),
-        ),
-        projectedBenchmark280Gbp: Number(
-          ((result.actualGbp / result.documents.length) * 280).toFixed(2),
-        ),
-        validationDiscards: result.validationDiscards,
-        dedupeDiscards: result.dedupeDiscards,
-        supplementDiscards: result.supplementDiscards,
-      })
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : 'Unknown failure'
-      failures.push({ set: generator.blind, reason })
-      reports.push({ set: generator.blind, error: reason })
-      console.error(`[tournament ${generator.blind}] ${reason}`)
-    }
-  }
-  await writeText(
-    resolve(output, 'BLIND-REVIEW.md'),
-    '# Synthetic v2 blind model tournament\n\nReview prose authenticity and factual consistency in A.jsonl, B.jsonl, and C.jsonl. Provider names and cost mapping are intentionally withheld. Score each accepted document using the staged programme rubric before selecting a writer/annotator pair.\n',
-  )
-  await writeText(
-    resolve('.synthetic-v2/tournament-provider-map.json'),
-    `${JSON.stringify(mapping, null, 2)}\n`,
-  )
-  await writeText(
-    resolve('.synthetic-v2/tournament-cost-report.json'),
-    `${JSON.stringify({ reports, projection: 'Use measured per-document cost as comparison telemetry; explicit corpus stages, not a spend cap, control submissions.' }, null, 2)}\n`,
-  )
-  if (failures.length)
-    throw new Error(
-      `Tournament validation failed for ${failures.map((failure) => failure.set).join(', ')}. All routes were attempted; inspect their rejection evidence and the cost report.`,
-    )
-}
-
-async function runCorpusStage(
-  stage: Exclude<CorpusStage, 'tournament'>,
-  approvedModel: string | undefined,
-  pricing: PricingTable,
-  selection: SelectionManifest,
-) {
-  const benchmark = stage === 'benchmark'
-  const privateRoot = resolve(
-    process.env.SYNTHETIC_V2_PRIVATE_CORPUS_ROOT ??
-      '../obiter-redaction-data-private',
-  )
-  const output = benchmark
-    ? process.env.SYNTHETIC_V2_BENCHMARK_ROOT
-    : resolve(privateRoot, stage)
-  if (!output)
-    throw new Error(
-      'Benchmark output requires SYNTHETIC_V2_BENCHMARK_ROOT pointing to the separate release repository.',
-    )
-  const adapter = benchmark
-    ? new OpenRouterGenerator(openRouterBenchmarkModel())
-    : new DeepSeekGenerator(approvedModel!)
-  const result = await generateAndValidate(
-    corpusStageSpecs(stage),
-    adapter,
-    new OpenRouterLabeler(openRouterQaModel()),
-    pricing,
-    { label: stage },
-  )
-  await writeDataset(resolve(output), result.documents, {
-    stage,
-    private: !benchmark,
-    public: benchmark,
-    generator: adapter.name,
-    annotator: openRouterQaModel(),
-    usage: result.usage,
-    spendGbp: result.actualGbp,
-    validationDiscards: result.validationDiscards,
-    dedupeDiscards: result.dedupeDiscards,
-    supplementDiscards: result.supplementDiscards,
-    governance: datasetManifest(result.documents, { selection, stage }),
-  })
-}
-
-type Rejection = {
-  id: string
-  attempt: number
-  reason: string
-  markedText: string
-}
-
-async function generateAndValidate(
-  initialSpecs: DocumentSpec[],
-  adapter: GeneratorAdapter,
-  labeler: LabelingAdapter,
-  pricing: PricingTable,
-  options: { dryRun?: boolean; label: string },
-) {
-  const accepted: SyntheticDocument[] = []
-  const usage: Usage = { inputTokens: 0, outputTokens: 0 }
-  let actualGbp = 0
-  let validationDiscards = 0
-  let dedupeDiscards = 0
-  let supplementDiscards = 0
-  let pending = initialSpecs
-  const rejections: Rejection[] = []
-  let attempt = 0
-  while (pending.length) {
-    if (attempt++ === 4)
-      throw new Error(
-        `Marker or dedupe validation did not converge for ${pending.length} documents`,
-      )
-    console.log(
-      `[${options.label}] Validation round ${attempt}: submitting ${pending.length} document(s) to ${adapter.name}.`,
-    )
-    const submission = await submitWithCap(
-      pending,
-      adapter,
-      pricing,
-      (progress) => {
-        const detail = progress.specId ? ` (${progress.specId})` : ''
-        const retry =
-          progress.phase === 'retrying'
-            ? `attempt ${progress.attempt}: ${progress.reason}`
-            : `${progress.completed}/${progress.total}`
-        console.log(`[${options.label}] ${progress.phase}: ${retry}${detail}`)
-      },
-    )
-    addUsage(usage, submission.usage)
-    actualGbp += submission.actualGbp
-    const labelSubmission = await submitLabelsWithCap(
-      pending,
-      submission.documents,
-      labeler,
-      pricing,
-      (progress) => {
-        const detail = progress.specId ? ` (${progress.specId})` : ''
-        console.log(
-          `[${options.label}] labelling ${progress.phase}: ${progress.completed}/${progress.total}${detail}`,
-        )
-      },
-    )
-    addUsage(usage, labelSubmission.usage)
-    actualGbp += labelSubmission.actualGbp
-    const generated = labelSubmission.documents
-    const next: DocumentSpec[] = []
-    for (const spec of pending) {
-      const result = generated.get(spec.id)
-      const draft = submission.documents.get(spec.id)
-      if (!result || !draft) throw new Error(`Provider omitted ${spec.id}`)
-      try {
-        const document = normalizeAnnotated(spec, draft, result.spans)
-        if (nearDuplicatePairs([...accepted, document]).length) {
-          dedupeDiscards++
-          rejections.push({
-            id: spec.id,
-            attempt,
-            reason: 'Near-duplicate document',
-            markedText: draft.text,
-          })
-          next.push({ ...spec, seed: `${spec.seed}:dedupe:${attempt}` })
-          continue
-        }
-        const unlabelledSupplementSpans = supplementMisses([document]).filter(
-          (miss) =>
-            !(
-              miss.category === 'case_reference' &&
-              spec.hardNegatives.some((negative) =>
-                negative.toLowerCase().includes('claim number'),
-              )
-            ),
-        )
-        if (unlabelledSupplementSpans.length)
-          throw new Error(
-            `Supplement found unlabelled spans: ${unlabelledSupplementSpans.map((miss) => `${miss.category}=${JSON.stringify(miss.text)}`).join(', ')}`,
-          )
-        accepted.push(document)
-      } catch (error) {
-        const initialReason =
-          error instanceof Error ? error.message : 'Unknown validation failure'
-        if (!initialReason.startsWith('Supplement found unlabelled spans:')) {
-          validationDiscards++
-          rejections.push({
-            id: spec.id,
-            attempt,
-            reason: initialReason,
-            markedText: draft.text,
-          })
-          next.push({ ...spec, seed: `${spec.seed}:draft:${attempt}` })
-          continue
-        }
-
-        let repairText = draft.text
-        try {
-          console.log(`[${options.label}] repairing labels for ${spec.id}.`)
-          const repair = await submitLabelsWithCap(
-            [spec],
-            submission.documents,
-            labeler,
-            pricing,
-            (progress) =>
-              console.log(
-                `[${options.label}] repair ${progress.phase}: ${progress.completed}/${progress.total}`,
-              ),
-            new Map([[spec.id, initialReason]]),
-          )
-          addUsage(usage, repair.usage)
-          actualGbp += repair.actualGbp
-          const repaired = repair.documents.get(spec.id)
-          if (!repaired) throw new Error('Repair label response was missing')
-          let repairedDocument = normalizeAnnotated(spec, draft, repaired.spans)
-          const remainingMisses = supplementMisses([repairedDocument])
-          if (remainingMisses.length) {
-            const remainingFeedback = `Supplement found unlabelled spans: ${remainingMisses.map((miss) => `${miss.category}=${JSON.stringify(miss.text)}`).join(', ')}`
-            console.log(
-              `[${options.label}] repairing remaining labels for ${spec.id}.`,
-            )
-            const finalRepair = await submitLabelsWithCap(
-              [spec],
-              new Map([[spec.id, draft]]),
-              labeler,
-              pricing,
-              (progress) =>
-                console.log(
-                  `[${options.label}] final repair ${progress.phase}: ${progress.completed}/${progress.total}`,
-                ),
-              new Map([[spec.id, remainingFeedback]]),
-            )
-            addUsage(usage, finalRepair.usage)
-            actualGbp += finalRepair.actualGbp
-            const finalDocument = finalRepair.documents.get(spec.id)
-            if (!finalDocument)
-              throw new Error('Final repair label response was missing')
-            repairedDocument = normalizeAnnotated(
-              spec,
-              draft,
-              finalDocument.spans,
-            )
-          }
-          if (supplementMisses([repairedDocument]).length)
-            throw new Error('Repair left an unlabelled detectable identifier')
-          accepted.push(repairedDocument)
-        } catch (repairError) {
-          validationDiscards++
-          rejections.push({
-            id: spec.id,
-            attempt,
-            reason: `${initialReason}; repair failed: ${repairError instanceof Error ? repairError.message : 'unknown failure'}`,
-            markedText: repairText,
-          })
-          next.push({ ...spec, seed: `${spec.seed}:validation:${attempt}` })
-        }
-      }
-    }
-    if (options.dryRun && next.length) {
-      const reportPath = resolve(
-        '.synthetic-v2/rejections',
-        `${adapter.name.replaceAll(/[^a-z0-9]+/gi, '_')}.jsonl`,
-      )
-      await writeText(
-        reportPath,
-        `${rejections.map((rejection) => JSON.stringify(rejection)).join('\n')}\n`,
-      )
-      throw new Error(
-        `Dry run stopped: ${next.length}/${pending.length} ${adapter.name} documents failed validation. Evidence written to ${reportPath}. No automatic regeneration was submitted.`,
-      )
-    }
-    pending = next
-  }
-  return {
-    documents: accepted,
-    usage,
-    actualGbp: Number(actualGbp.toFixed(6)),
-    validationDiscards,
-    dedupeDiscards,
-    supplementDiscards,
-  }
-}
-
-async function submitWithCap(
-  specs: DocumentSpec[],
-  adapter: GeneratorAdapter,
-  pricing: PricingTable,
-  onProgress: (progress: GenerationProgress) => void,
-) {
-  const model = adapter.name.split(':', 2)[1]
-  const modelPricing = pricing[model]
-  if (!modelPricing) throw new Error(`No reviewed pricing entry for ${model}`)
-  const reservationId = `${adapter.name}:${specs[0]?.id}:${Date.now()}`
-  const ledger = await readLedger(ledgerPath)
-  const maximumUsage: Usage = {
-    inputTokens: specs.length * 1_500 * adapter.maxChargeAttempts,
-    outputTokens: specs.length * 2_400 * adapter.maxChargeAttempts,
-  }
-  await reserveSpend(ledgerPath, ledger, {
-    provider: adapter.name.split(':', 1)[0]!,
-    model,
-    ...maximumUsage,
-    gbp: costGbp(maximumUsage, modelPricing, gbpPerUsd),
-    reservationId,
-  })
-  const generated = await adapter.generate(specs, onProgress)
-  const actualUsage = generated.reduce(
-    (total, document) => {
-      addUsage(total, document.usage)
-      return total
-    },
-    { inputTokens: 0, outputTokens: 0 } satisfies Usage,
-  )
-  await reconcileSpend(ledgerPath, ledger, reservationId, {
-    provider: adapter.name.split(':', 1)[0]!,
-    model,
-    ...actualUsage,
-    gbp: costGbp(actualUsage, modelPricing, gbpPerUsd),
-  })
-  return {
-    documents: new Map(
-      generated.map((document) => [document.customId, document]),
-    ),
-    usage: actualUsage,
-    actualGbp: costGbp(actualUsage, modelPricing, gbpPerUsd),
-  }
-}
-
-async function submitLabelsWithCap(
-  specs: DocumentSpec[],
-  drafts: Map<string, { text: string }>,
-  labeler: LabelingAdapter,
-  pricing: PricingTable,
-  onProgress: (progress: GenerationProgress) => void,
-  repairFeedback?: Map<string, string>,
-) {
-  const inputs = specs.map((spec) => {
-    const draft = drafts.get(spec.id)
-    if (!draft || draft.text.trim().length === 0)
-      throw new Error(`Draft provider returned empty text for ${spec.id}`)
-    const minimumWords = Math.floor(spec.lengthWords * 0.45)
-    const words = draft.text.trim().split(/\s+/).length
-    if (words < minimumWords)
-      throw new Error(
-        `Draft provider returned only ${words}/${minimumWords} minimum words for ${spec.id}`,
-      )
-    return { spec, text: draft.text }
-  })
-  const model = labeler.name.split(':', 2)[1]
-  const modelPricing = pricing[model]
-  if (!modelPricing) throw new Error(`No reviewed pricing entry for ${model}`)
-  const reservationId = `${labeler.name}:${specs[0]?.id}:${Date.now()}`
-  const ledger = await readLedger(ledgerPath)
-  const maximumUsage: Usage = {
-    inputTokens: specs.length * 1_500 * labeler.maxChargeAttempts,
-    outputTokens: specs.length * 2_400 * labeler.maxChargeAttempts,
-  }
-  await reserveSpend(ledgerPath, ledger, {
-    provider: labeler.name.split(':', 1)[0]!,
-    model,
-    ...maximumUsage,
-    gbp: costGbp(maximumUsage, modelPricing, gbpPerUsd),
-    reservationId,
-  })
-  const labelled = repairFeedback
-    ? await labeler.repair(inputs, repairFeedback, onProgress)
-    : await labeler.label(inputs, onProgress)
-  const actualUsage = labelled.reduce(
-    (total, document) => {
-      addUsage(total, document.usage)
-      return total
-    },
-    { inputTokens: 0, outputTokens: 0 } satisfies Usage,
-  )
-  await reconcileSpend(ledgerPath, ledger, reservationId, {
-    provider: labeler.name.split(':', 1)[0]!,
-    model,
-    ...actualUsage,
-    gbp: costGbp(actualUsage, modelPricing, gbpPerUsd),
-  })
-  return {
-    documents: new Map(
-      labelled.map((document) => [document.customId, document]),
-    ),
-    usage: actualUsage,
-    actualGbp: costGbp(actualUsage, modelPricing, gbpPerUsd),
-  }
-}
-
-function addUsage(total: Usage, addition: Usage) {
-  total.inputTokens += addition.inputTokens
-  total.outputTokens += addition.outputTokens
-  total.cacheCreationInputTokens =
-    (total.cacheCreationInputTokens ?? 0) +
-    (addition.cacheCreationInputTokens ?? 0)
-  total.cacheReadInputTokens =
-    (total.cacheReadInputTokens ?? 0) + (addition.cacheReadInputTokens ?? 0)
-}
-
 function flag(name: string) {
-  const argument = process.argv.find((value) => value.startsWith(`${name}=`))
-  return argument?.slice(name.length + 1)
+  return process.argv
+    .find((value) => value.startsWith(`${name}=`))
+    ?.slice(name.length + 1)
 }
-
 void main().catch((error: unknown) => {
   console.error(
     error instanceof Error ? error.message : 'Synthetic-v2 generation failed',

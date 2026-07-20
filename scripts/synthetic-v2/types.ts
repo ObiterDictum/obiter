@@ -35,6 +35,24 @@ export type DocumentType = (typeof documentTypes)[number]
 export type Register =
   'formal_pleading' | 'solicitor_correspondence' | 'internal_note'
 export type Difficulty = 'standard' | 'hard_negative'
+export type HardNegativeKind =
+  | 'neutral_citation'
+  | 'claim_number'
+  | 'damages_figure'
+  | 'company_registration'
+
+/** Exact, fictional counterexample required in immutable source text. */
+export interface HardNegativeAssertion {
+  id: string
+  kind: HardNegativeKind
+  quote: string
+  /** One-based source occurrence. */
+  occurrence: number
+  /** Exact number of times the literal must occur in the source. */
+  expectedCount: number
+  /** Positive annotation categories which may never cover this assertion. */
+  mustNotOverlap: SpanCategory[]
+}
 
 export interface DocumentSpec {
   id: string
@@ -45,7 +63,7 @@ export interface DocumentSpec {
   lengthWords: number
   seed: string
   scenario: string
-  hardNegatives: string[]
+  hardNegatives: HardNegativeAssertion[]
   matrixCells: string[]
 }
 
@@ -63,19 +81,33 @@ export interface Usage {
   cacheReadInputTokens?: number
 }
 
+export interface RequestTelemetry {
+  requestId: string
+  specId: string
+  role: 'writer' | 'annotator' | 'primary_judge' | 'dispute_judge'
+  requestedModel: string
+  returnedModel?: string
+  usage?: Usage
+  latencyMs: number
+  status: 'success' | 'error' | 'aborted'
+  errorCode?: string
+}
+
 export interface GeneratedDocument {
   customId: string
   text: string
   generator: string
   usage: Usage
+  telemetry?: RequestTelemetry
 }
 
-/** Model annotations reference the immutable generated document text. */
+/** Model annotations reference immutable generated document text. */
 export interface GeneratedAnnotation {
   customId: string
   spans: SyntheticSpan[]
   generator: string
   usage: Usage
+  telemetry?: RequestTelemetry
 }
 
 export interface SyntheticDocument {
@@ -86,6 +118,7 @@ export interface SyntheticDocument {
   specCell: string
   matrixCells: string[]
   contentHash: string
+  hardNegatives?: HardNegativeAssertion[]
 }
 
 export interface GenerationProgress {
@@ -108,22 +141,34 @@ export interface LabelingAdapter {
   label(
     inputs: LabelInput[],
     onProgress?: (progress: GenerationProgress) => void,
+    signal?: AbortSignal,
   ): Promise<GeneratedAnnotation[]>
   repair(
     inputs: LabelInput[],
     feedback: Map<string, string>,
     onProgress?: (progress: GenerationProgress) => void,
+    signal?: AbortSignal,
   ): Promise<GeneratedAnnotation[]>
 }
 
 export interface GeneratorAdapter {
   readonly name: string
-  /** Maximum billable attempts per request, including the initial attempt. */
   readonly maxChargeAttempts: number
   generate(
     specs: DocumentSpec[],
     onProgress?: (progress: GenerationProgress) => void,
+    signal?: AbortSignal,
   ): Promise<GeneratedDocument[]>
+}
+
+export interface JudgeAdapter {
+  readonly name: string
+  judge(
+    documents: SyntheticDocument[],
+    signal?: AbortSignal,
+  ): Promise<
+    Array<{ id: string; verdict: string; telemetry?: RequestTelemetry }>
+  >
 }
 
 export interface SpendEntry {

@@ -23,7 +23,7 @@ describe('bench guard', () => {
     const train = join(directory, 'train.jsonl')
     await writeFile(
       manifest,
-      `${JSON.stringify({ documents: [{ id: 'bench-1', contentHash: contentHash(text) }] })}\n`,
+      `${JSON.stringify({ stage: 'benchmark', documents: [{ id: 'bench-1', textHash: contentHash(text) }] })}\n`,
     )
     await writeFile(train, `${JSON.stringify({ id: 'train-1', text })}\n`)
 
