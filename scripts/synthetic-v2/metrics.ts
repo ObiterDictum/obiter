@@ -26,8 +26,10 @@ export function hardNegativeFalsePositiveRate(
 
 export type EvaluationReport = {
   overall: SpanMetrics
+  macroF1: number
   byCategory: Record<string, SpanMetrics>
   roleConfusion: Record<string, number>
+  hardNegativeFalsePositiveRate?: number
   documentExactMatchRate: number
 }
 
@@ -38,7 +40,7 @@ type EvaluationDocument = {
 }
 
 function key(span: SyntheticSpan) {
-  return `${span.category}:${span.start}:${span.end}`
+  return `${span.category}:${span.start}:${span.end}:${span.text}`
 }
 
 function score(gold: SyntheticSpan[], predicted: SyntheticSpan[]): SpanMetrics {
@@ -78,17 +80,19 @@ export function evaluateSpans(
     ),
   )
   const byCategory = Object.fromEntries(
-    [...categories].map((category) => [
-      category,
-      score(
-        documents.flatMap((document) =>
-          document.gold.filter((span) => span.category === category),
-        ),
-        documents.flatMap((document) =>
-          document.predicted.filter((span) => span.category === category),
-        ),
-      ),
-    ]),
+    [...categories].map((category) => {
+      const gold = documents.flatMap((document) =>
+        document.gold
+          .filter((span) => span.category === category)
+          .map((span) => ({ ...span, text: `${document.id}:${span.text}` })),
+      )
+      const predicted = documents.flatMap((document) =>
+        document.predicted
+          .filter((span) => span.category === category)
+          .map((span) => ({ ...span, text: `${document.id}:${span.text}` })),
+      )
+      return [category, score(gold, predicted)]
+    }),
   )
   const roleCategories = new Set([
     'person_private',
@@ -115,11 +119,25 @@ export function evaluateSpans(
     const result = score(document.gold, document.predicted)
     return result.falsePositive === 0 && result.falseNegative === 0
   }).length
+  const overallGold = documents.flatMap((document) =>
+    document.gold.map((span) => ({
+      ...span,
+      text: `${document.id}:${span.text}`,
+    })),
+  )
+  const overallPredicted = documents.flatMap((document) =>
+    document.predicted.map((span) => ({
+      ...span,
+      text: `${document.id}:${span.text}`,
+    })),
+  )
   return {
-    overall: score(
-      documents.flatMap((document) => document.gold),
-      documents.flatMap((document) => document.predicted),
-    ),
+    overall: score(overallGold, overallPredicted),
+    macroF1:
+      Object.values(byCategory).reduce(
+        (total, metric) => total + metric.f1,
+        0,
+      ) / Math.max(1, Object.keys(byCategory).length),
     byCategory,
     roleConfusion,
     documentExactMatchRate:
