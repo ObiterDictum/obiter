@@ -7,7 +7,15 @@ describe('structured annotation responses', () => {
       parseAnnotationResponse(
         JSON.stringify({
           id: 'doc-1',
-          spans: [{ category: 'person_private', start: 5, end: 14 }],
+          spans: [
+            {
+              category: 'person_private',
+              quote: 'Zoë Patel',
+              occurrence: 1,
+              start: 5,
+              end: 14,
+            },
+          ],
         }),
         'Dear Zoë Patel.',
         'doc-1',
@@ -23,7 +31,15 @@ describe('structured annotation responses', () => {
       parseAnnotationResponse(
         JSON.stringify({
           id: 'doc-1',
-          spans: [{ category: 'email', start: 0, end: 99 }],
+          spans: [
+            {
+              category: 'email',
+              quote: 'Alice',
+              occurrence: 1,
+              start: 0,
+              end: 99,
+            },
+          ],
         }),
         'Alice',
         'doc-1',

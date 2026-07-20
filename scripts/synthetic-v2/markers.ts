@@ -81,11 +81,20 @@ export function renderMarkers(text: string, spans: SyntheticSpan[]) {
   for (const span of [...spans].sort(
     (left, right) => left.start - right.start,
   )) {
-    marked += text.slice(cursor, span.start)
-    marked += `<pii category="${span.category}">${span.text}</pii>`
+    marked += escapeXml(text.slice(cursor, span.start))
+    marked += `<pii category="${span.category}">${escapeXml(span.text)}</pii>`
     cursor = span.end
   }
-  return marked + text.slice(cursor)
+  return marked + escapeXml(text.slice(cursor))
+}
+
+function escapeXml(value: string) {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;')
 }
 
 export function validateSpans(text: string, spans: SyntheticSpan[]) {
