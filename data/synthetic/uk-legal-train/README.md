@@ -1,5 +1,5 @@
-# Private synthetic UK legal training corpus
+# Private synthetic UK legal training corpus pointer
 
-This directory is reserved for the private fine-tuning corpus. It is not a published artifact and must not be copied into releases, public repositories, demos, or benchmark packages.
+The private fine-tuning corpus is **not stored in this product repository**. Approved fictional UK legal training releases live in sibling private repository `../obiter-redaction-data-private` with immutable manifests and hashes.
 
-When the maintainer approves the dry run, it will contain fictional UK legal documents generated with commercial LLMs, with no real personal data. Run `pnpm bench:guard` before using any export for fine-tuning; a non-zero result means the export overlaps the public benchmark and must not be used.
+This placeholder documents the product boundary only. Do not add corpus documents, raw provider output, review annotations, or run logs here. Run `pnpm bench:guard` before using any private-corpus export for fine-tuning; a non-zero result means the export overlaps the public benchmark and must not be used.
