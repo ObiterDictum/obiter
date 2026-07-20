@@ -8,6 +8,12 @@ import {
   type PricingTable,
 } from './budget'
 import { writeDataset, writeText } from './artifacts'
+import {
+  datasetManifest,
+  requireSelection,
+  reviewedCandidates,
+  type SelectionManifest,
+} from './governance'
 import { corpusStageSpecs, isCorpusStage, type CorpusStage } from './program'
 import { openRouterBenchmarkModel, openRouterQaModel } from './models'
 import {
@@ -44,6 +50,8 @@ async function main() {
   assertDeepSeekTermsConfirmation()
   const pricing = await loadPricing()
   if (stage === 'tournament') return runTournament(pricing)
+  const selection = await loadSelectionManifest()
+  requireSelection(stage, selection)
   const approvedModel = flag('--approved-model')
   if (
     stage !== 'benchmark' &&
@@ -53,7 +61,14 @@ async function main() {
     throw new Error(
       'Select --approved-model=deepseek-v4-pro or --approved-model=deepseek-v4-flash after tournament review.',
     )
-  return runCorpusStage(stage, approvedModel, pricing)
+  const candidate = reviewedCandidates.find(
+    (entry) => entry.id === selection!.candidateId,
+  )!
+  if (stage !== 'benchmark' && approvedModel !== candidate.writer)
+    throw new Error(
+      `Selected candidate ${candidate.id} requires --approved-model=${candidate.writer}`,
+    )
+  return runCorpusStage(stage, approvedModel, pricing, selection!)
 }
 
 function assertNetworkOptIn() {
@@ -68,6 +83,20 @@ function assertDeepSeekTermsConfirmation() {
     throw new Error(
       'DeepSeek terms gate is not confirmed. Set OBITER_DEEPSEEK_TERMS_CONFIRMED=1 only after recording an account-specific commercial-output and data-retention review; see docs/specs/redact/synthetic-v2-terms-review.md.',
     )
+}
+
+async function loadSelectionManifest(): Promise<SelectionManifest | undefined> {
+  const path = process.env.SYNTHETIC_V2_SELECTION_MANIFEST
+  if (!path) return undefined
+  try {
+    return JSON.parse(
+      await readFile(resolve(path), 'utf8'),
+    ) as SelectionManifest
+  } catch (error) {
+    throw new Error(
+      `Could not read selection manifest: ${error instanceof Error ? error.message : 'unknown error'}`,
+    )
+  }
 }
 
 async function loadPricing(): Promise<PricingTable> {
@@ -163,6 +192,7 @@ async function runCorpusStage(
   stage: Exclude<CorpusStage, 'tournament'>,
   approvedModel: string | undefined,
   pricing: PricingTable,
+  selection: SelectionManifest,
 ) {
   const benchmark = stage === 'benchmark'
   const privateRoot = resolve(
@@ -197,6 +227,7 @@ async function runCorpusStage(
     validationDiscards: result.validationDiscards,
     dedupeDiscards: result.dedupeDiscards,
     supplementDiscards: result.supplementDiscards,
+    governance: datasetManifest(result.documents, { selection, stage }),
   })
 }
 
