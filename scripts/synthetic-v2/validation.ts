@@ -7,6 +7,24 @@ export function normalizeGenerated(
   generated: { text: string; generator: string },
 ): SyntheticDocument {
   const { text, spans } = stripMarkers(generated.text)
+  return documentFromSpans(spec, text, spans, generated.generator)
+}
+
+/** Preferred structured-annotation path: source text is never model-rewritten. */
+export function normalizeAnnotated(
+  spec: DocumentSpec,
+  generated: { text: string; generator: string },
+  spans: SyntheticDocument['spans'],
+): SyntheticDocument {
+  return documentFromSpans(spec, generated.text, spans, generated.generator)
+}
+
+function documentFromSpans(
+  spec: DocumentSpec,
+  text: string,
+  spans: SyntheticDocument['spans'],
+  generator: string,
+): SyntheticDocument {
   const emitted = new Set(spans.map((span) => span.category))
   for (const category of spec.requiredCategories) {
     if (!emitted.has(category))
@@ -16,7 +34,7 @@ export function normalizeGenerated(
     id: spec.id,
     text,
     spans,
-    generator: generated.generator,
+    generator,
     specCell: `${spec.docType}|${spec.register}|${spec.difficulty}`,
     matrixCells: spec.matrixCells,
     contentHash: contentHash(text),

@@ -1,3 +1,4 @@
+import { parseAnnotationResponse } from './annotations'
 import {
   draftSystemPrompt,
   draftUserPrompt,
@@ -6,6 +7,7 @@ import {
 } from './prompts'
 import type {
   DocumentSpec,
+  GeneratedAnnotation,
   GeneratedDocument,
   GenerationProgress,
   GeneratorAdapter,
@@ -124,7 +126,7 @@ export class OpenRouterLabeler implements LabelingAdapter {
   async label(
     inputs: LabelInput[],
     onProgress?: (progress: GenerationProgress) => void,
-  ): Promise<GeneratedDocument[]> {
+  ): Promise<GeneratedAnnotation[]> {
     return this.annotate(inputs, undefined, onProgress)
   }
 
@@ -132,7 +134,7 @@ export class OpenRouterLabeler implements LabelingAdapter {
     inputs: LabelInput[],
     feedback: Map<string, string>,
     onProgress?: (progress: GenerationProgress) => void,
-  ): Promise<GeneratedDocument[]> {
+  ): Promise<GeneratedAnnotation[]> {
     return this.annotate(inputs, feedback, onProgress)
   }
 
@@ -153,7 +155,11 @@ export class OpenRouterLabeler implements LabelingAdapter {
         )
         return {
           customId: input.id,
-          text: response.text,
+          spans: parseAnnotationResponse(
+            response.text,
+            input.draftText,
+            input.id,
+          ),
           generator: `openrouter:${response.model}`,
           usage: response.usage,
         }

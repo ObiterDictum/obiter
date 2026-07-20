@@ -21,10 +21,11 @@ const spec: DocumentSpec = {
 }
 
 describe('synthetic-v2 prompts', () => {
-  it('keeps drafting plain while requiring role-aware XML labelling', () => {
+  it('keeps drafting plain while requiring role-aware structured offsets', () => {
     expect(draftSystemPrompt).toContain('Do not output labels')
     expect(labelSystemPrompt).toContain('person_professional')
-    expect(labelSystemPrompt).toContain('<pii category="category">')
+    expect(labelSystemPrompt).toContain('UTF-16 offsets')
+    expect(labelSystemPrompt).toContain('Do not return XML')
   })
 
   it('turns every requested category and hard negative into an explicit requirement', () => {
@@ -34,7 +35,7 @@ describe('synthetic-v2 prompts', () => {
     expect(prompt).toContain('email: a fictional .test email address')
     expect(prompt).toContain('Hard negatives:')
     expect(labelUserPrompt(spec, 'Fictional text.')).toContain(
-      'Document to annotate verbatim',
+      'Immutable document source',
     )
   })
 })

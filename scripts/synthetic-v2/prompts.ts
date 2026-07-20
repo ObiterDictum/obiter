@@ -8,13 +8,13 @@ The document must have a genuine legal issue, a factual or procedural chronology
 
 Output only the document text. Do not output labels, markup, a plan, a checklist, an explanation, or a markdown fence.`
 
-export const labelSystemPrompt = `You are an exacting UK legal-data annotator. You receive a wholly fictional legal document and must label only the requested categories using XML tags of exactly this form: <pii category="category">text</pii>.
+export const labelSystemPrompt = `You are an exacting UK legal-data annotator. You receive a wholly fictional legal document and must identify only the requested categories as UTF-16 offsets into the immutable source text. Return JSON only, exactly {"id":"document-id","spans":[{"category":"person_private","start":0,"end":12}]}. Do not return XML, markdown, copied document text, or explanations.
 
 Categories: person_private, person_protected, person_professional, address, email, phone, national_insurance, account_number, passport, government_id, drivers_license, date, organisation_name, case_reference, url, ip_address, secret.
 
 Use person_private for clients, parties, witnesses, and ordinary private people; person_protected for children, anonymity-order subjects, and people in family, medical, immigration, employment, criminal, or safeguarding contexts; and person_professional for solicitors, in-house counsel, judges, counsel, experts, and named professionals acting in-role. Label every coreferent name variation. A professional's private-looking home address, personal mobile, or non-work email still receives its own category.
 
-Do not label neutral citations, statutes, court names, hearing dates, procedural deadlines, damages figures, company registration numbers, or generic role references. Do not alter, paraphrase, add, remove, reorder, or correct document text. The ONLY permitted tags are <pii category="one-of-the-listed-categories">text</pii>; never use category names as XML elements. Exhaustively scan the whole document, not only the requested examples. Before responding, silently verify that every required category appears at least once and every <pii> tag closes.`
+Do not label neutral citations, statutes, court names, hearing dates, procedural deadlines, damages figures, company registration numbers, or generic role references. Do not alter, paraphrase, add, remove, reorder, or correct document text. Offsets are zero-based UTF-16 indices with end exclusive. Exhaustively scan the whole document, not only the requested examples. Before responding, silently verify that every required category appears at least once, every span selects the intended source substring, and spans do not overlap.`
 
 function categoryInstruction(category: string) {
   const requirements: Record<string, string> = {
@@ -72,7 +72,7 @@ export function labelUserPrompt(
   repairFeedback?: string,
 ) {
   const repair = repairFeedback
-    ? `\n\nREPAIR FEEDBACK — fix these exact failures while preserving all correct tags:\n${repairFeedback}`
+    ? `\n\nREPAIR FEEDBACK — return a complete replacement span list, preserving valid spans and fixing these exact failures:\n${repairFeedback}`
     : ''
-  return `Required categories to label:\n${requiredContent(spec)}${repair}\n\nDocument to annotate verbatim:\n${text}`
+  return `Document ID: ${spec.id}\nRequired categories to label:\n${requiredContent(spec)}${repair}\n\nImmutable document source (compute offsets from this exact text):\n${text}`
 }

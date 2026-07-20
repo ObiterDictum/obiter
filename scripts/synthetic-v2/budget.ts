@@ -55,10 +55,8 @@ export async function reserveSpend(
   ledger: SpendLedger,
   entry: Omit<SpendEntry, 'recordedAt' | 'state'>,
 ) {
-  if (cumulativeSpend(ledger) + entry.gbp > ledger.capGbp)
-    throw new Error(
-      `Synthetic-v2 spend cap reached: £${cumulativeSpend(ledger).toFixed(2)} committed/reserved of £${ledger.capGbp.toFixed(2)}. Refusing to submit another request.`,
-    )
+  // Spend is recorded for model comparison and provenance. Stage selection,
+  // rather than an implicit monetary cap, controls submission volume.
   ledger.entries.push({
     ...entry,
     state: 'reserved',

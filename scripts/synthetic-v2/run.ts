@@ -24,7 +24,7 @@ import type {
   Usage,
 } from './types'
 import { supplementMisses } from './qa'
-import { nearDuplicatePairs, normalizeGenerated } from './validation'
+import { nearDuplicatePairs, normalizeAnnotated } from './validation'
 
 const capGbp = Number(process.env.SYNTHETIC_V2_CAP_GBP ?? '30')
 const gbpPerUsd = Number(process.env.SYNTHETIC_V2_GBP_PER_USD ?? '0.79')
@@ -268,16 +268,17 @@ async function generateAndValidate(
     const next: DocumentSpec[] = []
     for (const spec of pending) {
       const result = generated.get(spec.id)
-      if (!result) throw new Error(`Provider omitted ${spec.id}`)
+      const draft = submission.documents.get(spec.id)
+      if (!result || !draft) throw new Error(`Provider omitted ${spec.id}`)
       try {
-        const document = normalizeGenerated(spec, result)
+        const document = normalizeAnnotated(spec, draft, result.spans)
         if (nearDuplicatePairs([...accepted, document]).length) {
           dedupeDiscards++
           rejections.push({
             id: spec.id,
             attempt,
             reason: 'Near-duplicate document',
-            markedText: result.text,
+            markedText: draft.text,
           })
           next.push({ ...spec, seed: `${spec.seed}:dedupe:${attempt}` })
           continue
@@ -305,13 +306,13 @@ async function generateAndValidate(
             id: spec.id,
             attempt,
             reason: initialReason,
-            markedText: result.text,
+            markedText: draft.text,
           })
           next.push({ ...spec, seed: `${spec.seed}:draft:${attempt}` })
           continue
         }
 
-        let repairText = result.text
+        let repairText = draft.text
         try {
           console.log(`[${options.label}] repairing labels for ${spec.id}.`)
           const repair = await submitLabelsWithCap(
@@ -329,8 +330,7 @@ async function generateAndValidate(
           actualGbp += repair.actualGbp
           const repaired = repair.documents.get(spec.id)
           if (!repaired) throw new Error('Repair label response was missing')
-          repairText = repaired.text
-          let repairedDocument = normalizeGenerated(spec, repaired)
+          let repairedDocument = normalizeAnnotated(spec, draft, repaired.spans)
           const remainingMisses = supplementMisses([repairedDocument])
           if (remainingMisses.length) {
             const remainingFeedback = `Supplement found unlabelled spans: ${remainingMisses.map((miss) => `${miss.category}=${JSON.stringify(miss.text)}`).join(', ')}`
@@ -339,7 +339,7 @@ async function generateAndValidate(
             )
             const finalRepair = await submitLabelsWithCap(
               [spec],
-              new Map([[spec.id, { text: repairText }]]),
+              new Map([[spec.id, draft]]),
               labeler,
               pricing,
               (progress) =>
@@ -353,8 +353,11 @@ async function generateAndValidate(
             const finalDocument = finalRepair.documents.get(spec.id)
             if (!finalDocument)
               throw new Error('Final repair label response was missing')
-            repairText = finalDocument.text
-            repairedDocument = normalizeGenerated(spec, finalDocument)
+            repairedDocument = normalizeAnnotated(
+              spec,
+              draft,
+              finalDocument.spans,
+            )
           }
           if (supplementMisses([repairedDocument]).length)
             throw new Error('Repair left an unlabelled detectable identifier')

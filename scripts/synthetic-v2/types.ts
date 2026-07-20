@@ -70,6 +70,14 @@ export interface GeneratedDocument {
   usage: Usage
 }
 
+/** Model annotations reference the immutable generated document text. */
+export interface GeneratedAnnotation {
+  customId: string
+  spans: SyntheticSpan[]
+  generator: string
+  usage: Usage
+}
+
 export interface SyntheticDocument {
   id: string
   text: string
@@ -100,12 +108,12 @@ export interface LabelingAdapter {
   label(
     inputs: LabelInput[],
     onProgress?: (progress: GenerationProgress) => void,
-  ): Promise<GeneratedDocument[]>
+  ): Promise<GeneratedAnnotation[]>
   repair(
     inputs: LabelInput[],
     feedback: Map<string, string>,
     onProgress?: (progress: GenerationProgress) => void,
-  ): Promise<GeneratedDocument[]>
+  ): Promise<GeneratedAnnotation[]>
 }
 
 export interface GeneratorAdapter {
