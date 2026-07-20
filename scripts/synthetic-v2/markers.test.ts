@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { MarkerValidationError, stripMarkers } from './markers'
+import { MarkerValidationError, renderMarkers, stripMarkers } from './markers'
 
 describe('stripMarkers', () => {
   it('strips markers and keeps exact UTF-16 offsets', () => {
@@ -11,6 +11,14 @@ describe('stripMarkers', () => {
       { category: 'person_private', start: 5, end: 14, text: 'Zoë Patel' },
       { category: 'email', start: 22, end: 38, text: 'zoe@example.test' },
     ])
+  })
+
+  it('renders XML deterministically from validated source offsets', () => {
+    expect(
+      renderMarkers('Dear Zoë Patel.', [
+        { category: 'person_private', start: 5, end: 14, text: 'Zoë Patel' },
+      ]),
+    ).toBe('Dear <pii category="person_private">Zoë Patel</pii>.')
   })
 
   it.each([

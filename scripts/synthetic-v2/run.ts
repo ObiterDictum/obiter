@@ -8,7 +8,7 @@ import {
   type PricingTable,
 } from './budget'
 import { writeDataset, writeText } from './artifacts'
-import { buildQuotaSpecs } from './matrix'
+import { corpusStageSpecs, isCorpusStage, type CorpusStage } from './program'
 import { openRouterBenchmarkModel, openRouterQaModel } from './models'
 import {
   DeepSeekGenerator,
@@ -26,7 +26,6 @@ import type {
 import { supplementMisses } from './qa'
 import { nearDuplicatePairs, normalizeAnnotated } from './validation'
 
-const capGbp = Number(process.env.SYNTHETIC_V2_CAP_GBP ?? '30')
 const gbpPerUsd = Number(process.env.SYNTHETIC_V2_GBP_PER_USD ?? '0.79')
 const ledgerPath = resolve(
   process.env.SYNTHETIC_V2_LEDGER ?? '.synthetic-v2/spend-ledger.json',
@@ -36,24 +35,25 @@ const pricingPath =
   resolve('scripts/synthetic-v2/pricing-2026-07-19.json')
 
 async function main() {
-  const mode = process.argv.includes('--dry-run') ? 'dry-run' : 'full'
+  const stage = flag('--stage')
+  if (!isCorpusStage(stage))
+    throw new Error(
+      'Select an explicit stage: --stage=tournament, training_seed, development_challenge, or benchmark.',
+    )
   assertNetworkOptIn()
   assertDeepSeekTermsConfirmation()
   const pricing = await loadPricing()
-  if (mode === 'dry-run') {
-    await runDryRun(pricing)
-    return
-  }
-
+  if (stage === 'tournament') return runTournament(pricing)
   const approvedModel = flag('--approved-model')
   if (
+    stage !== 'benchmark' &&
     approvedModel !== 'deepseek-v4-pro' &&
     approvedModel !== 'deepseek-v4-flash'
   )
     throw new Error(
-      'Full generation is stopped pending the maintainer blind review. Re-run only after approval with --approved-model=deepseek-v4-pro or --approved-model=deepseek-v4-flash.',
+      'Select --approved-model=deepseek-v4-pro or --approved-model=deepseek-v4-flash after tournament review.',
     )
-  await runFull(approvedModel, pricing)
+  return runCorpusStage(stage, approvedModel, pricing)
 }
 
 function assertNetworkOptIn() {
@@ -80,11 +80,8 @@ async function loadPricing(): Promise<PricingTable> {
   }
 }
 
-async function runDryRun(pricing: PricingTable) {
-  const specs = buildQuotaSpecs(
-    Number(process.env.SYNTHETIC_V2_DRY_RUN_COUNT ?? '3'),
-    'dry',
-  )
+async function runTournament(pricing: PricingTable) {
+  const specs = corpusStageSpecs('tournament')
   const generators: Array<{ blind: string; adapter: GeneratorAdapter }> = [
     { blind: 'A', adapter: new DeepSeekGenerator('deepseek-v4-pro') },
     { blind: 'B', adapter: new DeepSeekGenerator('deepseek-v4-flash') },
@@ -93,7 +90,7 @@ async function runDryRun(pricing: PricingTable) {
       adapter: new OpenRouterGenerator(openRouterBenchmarkModel()),
     },
   ]
-  const output = resolve('data/synthetic-v2-review/dry-run')
+  const output = resolve('.synthetic-v2/tournament')
   const labeler = new OpenRouterLabeler(openRouterQaModel())
   const reports: Array<Record<string, unknown>> = []
   const failures: Array<{ set: string; reason: string }> = []
@@ -102,7 +99,7 @@ async function runDryRun(pricing: PricingTable) {
   for (const generator of generators) {
     mapping[generator.blind] = generator.adapter.name
     console.log(
-      `[dry-run ${generator.blind}] Starting ${generator.adapter.name}.`,
+      `[tournament ${generator.blind}] Starting ${generator.adapter.name}.`,
     )
     try {
       const result = await generateAndValidate(
@@ -112,7 +109,7 @@ async function runDryRun(pricing: PricingTable) {
         pricing,
         {
           dryRun: true,
-          label: `dry-run ${generator.blind}`,
+          label: `tournament ${generator.blind}`,
         },
       )
       await writeText(
@@ -141,66 +138,65 @@ async function runDryRun(pricing: PricingTable) {
       const reason = error instanceof Error ? error.message : 'Unknown failure'
       failures.push({ set: generator.blind, reason })
       reports.push({ set: generator.blind, error: reason })
-      console.error(`[dry-run ${generator.blind}] ${reason}`)
+      console.error(`[tournament ${generator.blind}] ${reason}`)
     }
   }
   await writeText(
     resolve(output, 'BLIND-REVIEW.md'),
-    '# Synthetic v2 blind pilot\n\nReview prose authenticity in A.jsonl, B.jsonl, and C.jsonl. Provider names and cost mapping are intentionally withheld. This three-document pilot must pass before the ten-document blind comparison.\n',
+    '# Synthetic v2 blind model tournament\n\nReview prose authenticity and factual consistency in A.jsonl, B.jsonl, and C.jsonl. Provider names and cost mapping are intentionally withheld. Score each accepted document using the staged programme rubric before selecting a writer/annotator pair.\n',
   )
   await writeText(
-    resolve('.synthetic-v2/dry-run-provider-map.json'),
+    resolve('.synthetic-v2/tournament-provider-map.json'),
     `${JSON.stringify(mapping, null, 2)}\n`,
   )
   await writeText(
-    resolve('.synthetic-v2/dry-run-cost-report.json'),
-    `${JSON.stringify({ capGbp, reports, projection: 'Multiply measured per-document cost by 2500 for training and 280 for benchmark after blind-review approval.' }, null, 2)}\n`,
+    resolve('.synthetic-v2/tournament-cost-report.json'),
+    `${JSON.stringify({ reports, projection: 'Use measured per-document cost as comparison telemetry; explicit corpus stages, not a spend cap, control submissions.' }, null, 2)}\n`,
   )
   if (failures.length)
     throw new Error(
-      `Dry-run validation failed for ${failures.map((failure) => failure.set).join(', ')}. All routes were attempted; inspect their rejection evidence and the cost report.`,
+      `Tournament validation failed for ${failures.map((failure) => failure.set).join(', ')}. All routes were attempted; inspect their rejection evidence and the cost report.`,
     )
 }
 
-async function runFull(
-  model: 'deepseek-v4-pro' | 'deepseek-v4-flash',
+async function runCorpusStage(
+  stage: Exclude<CorpusStage, 'tournament'>,
+  approvedModel: string | undefined,
   pricing: PricingTable,
 ) {
-  const train = await generateAndValidate(
-    buildQuotaSpecs(2_500, 'train'),
-    new DeepSeekGenerator(model),
+  const benchmark = stage === 'benchmark'
+  const privateRoot = resolve(
+    process.env.SYNTHETIC_V2_PRIVATE_CORPUS_ROOT ??
+      '../obiter-redaction-data-private',
+  )
+  const output = benchmark
+    ? process.env.SYNTHETIC_V2_BENCHMARK_ROOT
+    : resolve(privateRoot, stage)
+  if (!output)
+    throw new Error(
+      'Benchmark output requires SYNTHETIC_V2_BENCHMARK_ROOT pointing to the separate release repository.',
+    )
+  const adapter = benchmark
+    ? new OpenRouterGenerator(openRouterBenchmarkModel())
+    : new DeepSeekGenerator(approvedModel!)
+  const result = await generateAndValidate(
+    corpusStageSpecs(stage),
+    adapter,
     new OpenRouterLabeler(openRouterQaModel()),
     pricing,
-    { label: 'training' },
+    { label: stage },
   )
-  const benchmark = await generateAndValidate(
-    buildQuotaSpecs(280, 'bench'),
-    new OpenRouterGenerator(openRouterBenchmarkModel()),
-    new OpenRouterLabeler(openRouterQaModel()),
-    pricing,
-    { label: 'benchmark' },
-  )
-  await writeDataset(
-    resolve('data/synthetic/uk-legal-train'),
-    train.documents,
-    {
-      private: true,
-      generator: model,
-      usage: train.usage,
-      spendGbp: train.actualGbp,
-      validationDiscards: train.validationDiscards,
-      dedupeDiscards: train.dedupeDiscards,
-      supplementDiscards: train.supplementDiscards,
-    },
-  )
-  await writeDataset(resolve('data/bench/uk-legal-pii'), benchmark.documents, {
-    generator: openRouterBenchmarkModel(),
-    public: true,
-    usage: benchmark.usage,
-    spendGbp: benchmark.actualGbp,
-    validationDiscards: benchmark.validationDiscards,
-    dedupeDiscards: benchmark.dedupeDiscards,
-    supplementDiscards: benchmark.supplementDiscards,
+  await writeDataset(resolve(output), result.documents, {
+    stage,
+    private: !benchmark,
+    public: benchmark,
+    generator: adapter.name,
+    annotator: openRouterQaModel(),
+    usage: result.usage,
+    spendGbp: result.actualGbp,
+    validationDiscards: result.validationDiscards,
+    dedupeDiscards: result.dedupeDiscards,
+    supplementDiscards: result.supplementDiscards,
   })
 }
 
@@ -409,7 +405,7 @@ async function submitWithCap(
   const modelPricing = pricing[model]
   if (!modelPricing) throw new Error(`No reviewed pricing entry for ${model}`)
   const reservationId = `${adapter.name}:${specs[0]?.id}:${Date.now()}`
-  const ledger = await readLedger(ledgerPath, capGbp)
+  const ledger = await readLedger(ledgerPath)
   const maximumUsage: Usage = {
     inputTokens: specs.length * 1_500 * adapter.maxChargeAttempts,
     outputTokens: specs.length * 2_400 * adapter.maxChargeAttempts,
@@ -468,7 +464,7 @@ async function submitLabelsWithCap(
   const modelPricing = pricing[model]
   if (!modelPricing) throw new Error(`No reviewed pricing entry for ${model}`)
   const reservationId = `${labeler.name}:${specs[0]?.id}:${Date.now()}`
-  const ledger = await readLedger(ledgerPath, capGbp)
+  const ledger = await readLedger(ledgerPath)
   const maximumUsage: Usage = {
     inputTokens: specs.length * 1_500 * labeler.maxChargeAttempts,
     outputTokens: specs.length * 2_400 * labeler.maxChargeAttempts,

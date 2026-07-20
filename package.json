@@ -12,7 +12,7 @@
     "format:check": "prettier --check .",
     "lint": "oxlint && eslint .",
     "bench:guard": "tsx scripts/bench-guard.ts",
-    "synthetic-v2:dry-run": "tsx scripts/synthetic-v2/run.ts --dry-run",
+    "synthetic-v2:tournament": "tsx scripts/synthetic-v2/run.ts --stage=tournament",
     "test": "pnpm -r --if-present test && pnpm bench:guard && vitest run scripts/synthetic-v2",
     "typecheck": "pnpm -r --if-present typecheck && tsc --noEmit -p scripts/synthetic-v2/tsconfig.json"
   },

@@ -73,6 +73,21 @@ export function stripMarkers(markedText: string): {
   return { text, spans }
 }
 
+/** Deterministically render validated span offsets as XML for downstream exports. */
+export function renderMarkers(text: string, spans: SyntheticSpan[]) {
+  validateSpans(text, spans)
+  let cursor = 0
+  let marked = ''
+  for (const span of [...spans].sort(
+    (left, right) => left.start - right.start,
+  )) {
+    marked += text.slice(cursor, span.start)
+    marked += `<pii category="${span.category}">${span.text}</pii>`
+    cursor = span.end
+  }
+  return marked + text.slice(cursor)
+}
+
 export function validateSpans(text: string, spans: SyntheticSpan[]) {
   let previousEnd = 0
   for (const span of [...spans].sort(
