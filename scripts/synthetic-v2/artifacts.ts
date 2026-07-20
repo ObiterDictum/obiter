@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { expectedMatrixCells } from './matrix'
@@ -16,13 +17,7 @@ export async function writeDataset(
   await writeFile(
     join(directory, 'MANIFEST.json'),
     `${JSON.stringify(
-      {
-        algorithm: 'sha256:text:utf8',
-        documents: documents.map(({ id, contentHash }) => ({
-          id,
-          contentHash,
-        })),
-      },
+      releaseManifest(documents, metadata),
       null,
       2,
     )}\n`,
@@ -31,6 +26,36 @@ export async function writeDataset(
     join(directory, 'stats.json'),
     `${JSON.stringify({ ...datasetStats(documents), ...metadata }, null, 2)}\n`,
   )
+}
+
+export function releaseManifest(
+  documents: SyntheticDocument[],
+  metadata: Record<string, unknown>,
+) {
+  const records = documents
+    .map((document) => ({
+      id: document.id,
+      textHash: document.contentHash,
+      recordHash: createHash('sha256')
+        .update(
+          JSON.stringify({
+            id: document.id,
+            text: document.text,
+            spans: [...document.spans].sort((left, right) => left.start - right.start),
+            specCell: document.specCell,
+            matrixCells: document.matrixCells,
+            generator: document.generator,
+          }),
+        )
+        .digest('hex'),
+    }))
+    .sort((left, right) => left.id.localeCompare(right.id))
+  return {
+    algorithm: 'sha256:canonical-record:v1',
+    metadata,
+    documents: records,
+    manifestHash: createHash('sha256').update(JSON.stringify({ metadata, records })).digest('hex'),
+  }
 }
 
 export function datasetStats(documents: SyntheticDocument[]) {
