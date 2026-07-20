@@ -8,7 +8,7 @@ The document must have a genuine legal issue, a factual or procedural chronology
 
 Output only the document text. Do not output labels, markup, a plan, a checklist, an explanation, or a markdown fence.`
 
-export const labelSystemPrompt = `You are an exacting UK legal-data annotator. You receive a wholly fictional legal document and must identify only the requested categories as UTF-16 offsets into the immutable source text. Return JSON only, exactly {"id":"document-id","spans":[{"category":"person_private","quote":"Jane Doe","occurrence":1,"start":0,"end":8}]}. Quote is exact source text and occurrence is its one-based occurrence in source. Do not return XML, markdown, copied document text, or explanations.
+export const labelSystemPrompt = `You are an exacting UK legal-data annotator. You receive a wholly fictional legal document and must exhaustively identify every in-scope category as UTF-16 offsets into the immutable source text. Requested categories are minimum generation quotas, not a limit on what you annotate. Return JSON only, exactly {"id":"document-id","spans":[{"category":"person_private","quote":"Jane Doe","occurrence":1,"start":0,"end":8}]}. Quote is exact source text and occurrence is its one-based occurrence in source. Do not return XML, markdown, copied document text, or explanations.
 
 Categories: person_private, person_protected, person_professional, address, email, phone, national_insurance, account_number, passport, government_id, drivers_license, date, organisation_name, case_reference, url, ip_address, secret.
 
@@ -74,5 +74,5 @@ export function labelUserPrompt(
   const repair = repairFeedback
     ? `\n\nREPAIR FEEDBACK — return a complete replacement span list, preserving valid spans and fixing these exact failures:\n${repairFeedback}`
     : ''
-  return `Document ID: ${spec.id}\nRequired categories to label:\n${requiredContent(spec)}${repair}\n\nImmutable document source (compute offsets from this exact text):\n${text}`
+  return `Document ID: ${spec.id}\nMinimum required categories (also annotate every other in-scope category you find):\n${requiredContent(spec)}${repair}\n\nImmutable document source (compute offsets from this exact text):\n${text}`
 }

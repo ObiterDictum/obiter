@@ -25,6 +25,24 @@ describe('mechanical QA', () => {
     ])
   })
 
+  it('does not treat a wrong-category containing span as covered', () => {
+    expect(
+      supplementMisses([
+        {
+          ...document,
+          spans: [
+            {
+              category: 'person_private',
+              start: 8,
+              end: 25,
+              text: 'alex@example.test',
+            },
+          ],
+        },
+      ]),
+    ).toMatchObject([{ category: 'email', text: 'alex@example.test' }])
+  })
+
   it('rejects a low-confidence or incomplete automated judgement', () => {
     const verdict = parseJudgeVerdict(
       JSON.stringify({
