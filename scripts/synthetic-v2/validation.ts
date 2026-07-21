@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { canonicalJson } from './governance'
 import { generationSpecIdentity } from './matrix'
 import { stripMarkers, validateSpans } from './markers'
 import type {
@@ -79,8 +80,8 @@ export function assertDocumentMatchesSpec(
   )
     throw new Error(`${spec.id} has invalid matrix coverage`)
   if (
-    JSON.stringify(document.hardNegatives ?? []) !==
-    JSON.stringify(spec.hardNegatives)
+    canonicalJson(document.hardNegatives ?? []) !==
+    canonicalJson(spec.hardNegatives)
   )
     throw new Error(`${spec.id} has invalid hard-negative assertions`)
   assertHardNegatives(document.text, document.spans, spec.hardNegatives)

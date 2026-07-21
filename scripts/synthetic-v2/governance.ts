@@ -65,7 +65,8 @@ export type TournamentCandidate = {
   canonicalArtifactHash: string
   blindReviewPackageHash: string
   blindReviewScorecardHash?: string
-  finalStatus: 'pending_review' | 'reviewed' | 'rejected'
+  finalStatus:
+    'pending_review' | 'human_adjudication_required' | 'reviewed' | 'rejected'
 }
 
 export type TournamentManifest = {
@@ -219,13 +220,19 @@ export function assertTournamentManifest(
       !isHash(candidate.canonicalArtifactHash) ||
       !isBlindId(candidate.blindId) ||
       !isHash(candidate.blindReviewPackageHash) ||
-      (candidate.finalStatus !== 'pending_review' &&
+      (candidate.blindReviewScorecardHash !== undefined &&
         !isHash(candidate.blindReviewScorecardHash)) ||
-      (candidate.finalStatus === 'pending_review' &&
+      (candidate.finalStatus === 'reviewed' &&
+        !isHash(candidate.blindReviewScorecardHash)) ||
+      ((candidate.finalStatus === 'pending_review' ||
+        candidate.finalStatus === 'human_adjudication_required') &&
         candidate.blindReviewScorecardHash !== undefined) ||
-      !['pending_review', 'reviewed', 'rejected'].includes(
-        candidate.finalStatus,
-      )
+      ![
+        'pending_review',
+        'human_adjudication_required',
+        'reviewed',
+        'rejected',
+      ].includes(candidate.finalStatus)
     )
       throw new Error('Tournament manifest contains invalid candidate evidence')
     seen.add(candidate.candidateId)
@@ -243,6 +250,14 @@ export function finalizeTournament(tournament: unknown, finalization: unknown) {
   )
     throw new Error(
       'Tournament finalization cannot revise an already reviewed candidate',
+    )
+  if (
+    tournament.candidates.some(
+      (candidate) => candidate.finalStatus === 'human_adjudication_required',
+    )
+  )
+    throw new Error(
+      'Tournament finalization requires every human adjudication to be resumed first',
     )
   if (!isTournamentFinalization(finalization))
     throw new Error('Tournament finalization is not bound to a valid approval')
