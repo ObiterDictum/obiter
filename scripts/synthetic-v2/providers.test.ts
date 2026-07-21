@@ -1,19 +1,35 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   DeepSeekGenerator,
+  OpenCodeGoJudge,
   OpenRouterJudge,
   OpenRouterLabeler,
   ProviderBatchError,
+  ZaiJudge,
 } from './providers'
 import type { LabelInput, SyntheticDocument } from './types'
 
 const previousOpenRouter = process.env.OPENROUTER_API_KEY
 const previousDeepSeek = process.env.DEEPSEEK_API_KEY
+const previousOpenCodeGo = process.env.OPENCODE_GO_API_KEY
+const previousZai = process.env.ZAI_API_KEY
+const previousOpenCodeGoTerms = process.env.OBITER_OPENCODE_GO_TERMS_CONFIRMED
+const previousZaiGeneralApi = process.env.OBITER_ZAI_GENERAL_API_CONFIRMED
 afterEach(() => {
   if (previousOpenRouter === undefined) delete process.env.OPENROUTER_API_KEY
   else process.env.OPENROUTER_API_KEY = previousOpenRouter
   if (previousDeepSeek === undefined) delete process.env.DEEPSEEK_API_KEY
   else process.env.DEEPSEEK_API_KEY = previousDeepSeek
+  if (previousOpenCodeGo === undefined) delete process.env.OPENCODE_GO_API_KEY
+  else process.env.OPENCODE_GO_API_KEY = previousOpenCodeGo
+  if (previousZai === undefined) delete process.env.ZAI_API_KEY
+  else process.env.ZAI_API_KEY = previousZai
+  if (previousOpenCodeGoTerms === undefined)
+    delete process.env.OBITER_OPENCODE_GO_TERMS_CONFIRMED
+  else process.env.OBITER_OPENCODE_GO_TERMS_CONFIRMED = previousOpenCodeGoTerms
+  if (previousZaiGeneralApi === undefined)
+    delete process.env.OBITER_ZAI_GENERAL_API_CONFIRMED
+  else process.env.OBITER_ZAI_GENERAL_API_CONFIRMED = previousZaiGeneralApi
 })
 const input: LabelInput = {
   spec: {
@@ -29,6 +45,15 @@ const input: LabelInput = {
     matrixCells: [],
   },
   text: 'Fictional source.',
+}
+const document: SyntheticDocument = {
+  id: 'doc-1',
+  text: 'Fictional.',
+  spans: [{ category: 'person_private', start: 0, end: 9, text: 'Fictional' }],
+  generator: 'fixture',
+  specCell: 'fixture',
+  matrixCells: [],
+  contentHash: 'fixture',
 }
 
 function parseRequestBody(
@@ -50,8 +75,29 @@ function fakeFetch(
   return async (_input, init) => handler(parseRequestBody(init?.body))
 }
 
+const judgeReference = {
+  id: 'doc-1',
+  referenceSpans: [],
+  realismScore: 5,
+  confidence: 1,
+  rationale: 'fictional',
+}
+
+function annotationToolMessage(payload: unknown) {
+  return {
+    tool_calls: [
+      {
+        function: {
+          name: 'synthetic_v2_annotation',
+          arguments: JSON.stringify(payload),
+        },
+      },
+    ],
+  }
+}
+
 describe('OpenRouter schema and offline failure behaviour', () => {
-  it('requests strict JSON schema and keeps local quote validation', async () => {
+  it('forces a schema tool and keeps local quote validation', async () => {
     process.env.OPENROUTER_API_KEY = 'offline-test-only'
     let body: Record<string, unknown> | undefined
     const labeler = new OpenRouterLabeler('fake/model', {
@@ -64,7 +110,14 @@ describe('OpenRouter schema and offline failure behaviour', () => {
             choices: [
               {
                 message: {
-                  content: JSON.stringify({ id: 'doc-1', spans: [] }),
+                  tool_calls: [
+                    {
+                      function: {
+                        name: 'synthetic_v2_annotation',
+                        arguments: { id: 'doc-1', spans: [] },
+                      },
+                    },
+                  ],
                 },
               },
             ],
@@ -73,11 +126,54 @@ describe('OpenRouter schema and offline failure behaviour', () => {
       }),
     })
     await expect(labeler.label([input])).resolves.toHaveLength(1)
-    expect(body?.response_format).toMatchObject({
-      type: 'json_schema',
-      json_schema: { strict: true },
+    expect(body?.provider).toEqual({ require_parameters: true })
+    expect(body?.reasoning).toEqual({ effort: 'minimal' })
+    expect(body?.tool_choice).toEqual({
+      type: 'function',
+      function: { name: 'synthetic_v2_annotation' },
     })
+    expect(body?.tools).toMatchObject([
+      {
+        function: {
+          name: 'synthetic_v2_annotation',
+          parameters: {
+            properties: {
+              spans: {
+                items: {
+                  required: ['category', 'quote', 'occurrence'],
+                },
+              },
+            },
+          },
+        },
+      },
+    ])
+    expect(JSON.stringify(body?.tools)).not.toContain('"start"')
   })
+
+  it('accepts a locally validated content fallback when a route omits tool_calls', async () => {
+    process.env.OPENROUTER_API_KEY = 'offline-test-only'
+    const labeler = new OpenRouterLabeler('fake/model', {
+      fetch: fakeFetch(
+        () =>
+          new Response(
+            JSON.stringify({
+              model: 'fake/model',
+              usage: { prompt_tokens: 2, completion_tokens: 3 },
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({ id: 'doc-1', spans: [] }),
+                  },
+                },
+              ],
+            }),
+          ),
+      ),
+    })
+    await expect(labeler.label([input])).resolves.toHaveLength(1)
+  })
+
   it('sends judges only text and a quote-occurrence reference schema', async () => {
     process.env.OPENROUTER_API_KEY = 'offline-test-only'
     let body: Record<string, unknown> | undefined
@@ -105,17 +201,6 @@ describe('OpenRouter schema and offline failure behaviour', () => {
         )
       }),
     })
-    const document: SyntheticDocument = {
-      id: 'doc-1',
-      text: 'Fictional.',
-      spans: [
-        { category: 'person_private', start: 0, end: 9, text: 'Fictional' },
-      ],
-      generator: 'fixture',
-      specCell: 'fixture',
-      matrixCells: [],
-      contentHash: 'fixture',
-    }
     await expect(judge.judge([document])).resolves.toHaveLength(1)
     if (!body) throw new Error('Judge request body was not captured')
     const prompt = String(
@@ -123,6 +208,7 @@ describe('OpenRouter schema and offline failure behaviour', () => {
     )
     expect(prompt).not.toContain('Proposed spans')
     expect(prompt).not.toContain('"start"')
+    expect(body.provider).toEqual({ require_parameters: true })
     expect(body.response_format).toMatchObject({
       json_schema: {
         schema: {
@@ -147,18 +233,16 @@ describe('OpenRouter schema and offline failure behaviour', () => {
               usage: { prompt_tokens: 2, completion_tokens: 3 },
               choices: [
                 {
-                  message: {
-                    content: JSON.stringify({
-                      id: 'doc-1',
-                      spans: [
-                        {
-                          category: 'email',
-                          quote: 'absent@example.test',
-                          occurrence: 1,
-                        },
-                      ],
-                    }),
-                  },
+                  message: annotationToolMessage({
+                    id: 'doc-1',
+                    spans: [
+                      {
+                        category: 'email',
+                        quote: 'absent@example.test',
+                        occurrence: 1,
+                      },
+                    ],
+                  }),
                 },
               ],
             }),
@@ -169,7 +253,7 @@ describe('OpenRouter schema and offline failure behaviour', () => {
       (error: unknown) =>
         error instanceof ProviderBatchError &&
         error.telemetry[0]?.usage?.outputTokens === 3 &&
-        error.telemetry[0]?.errorCode === 'annotation_validation_failed',
+        error.telemetry[0]?.errorCode === 'annotation_quote_not_in_source',
     )
   })
 
@@ -184,9 +268,10 @@ describe('OpenRouter schema and offline failure behaviour', () => {
               usage: { prompt_tokens: 2, completion_tokens: 3 },
               choices: [
                 {
-                  message: {
-                    content: JSON.stringify({ id: 'doc-1', spans: [] }),
-                  },
+                  message: annotationToolMessage({
+                    id: 'doc-1',
+                    spans: [],
+                  }),
                 },
               ],
             }),
@@ -219,9 +304,11 @@ describe('OpenRouter schema and offline failure behaviour', () => {
       ]),
     ).rejects.toSatisfy(
       (error: unknown) =>
-        error instanceof ProviderBatchError && error.telemetry.length === 1,
+        error instanceof ProviderBatchError &&
+        error.telemetry.length === 2 &&
+        error.telemetry[1]?.retryOfRequestId === error.telemetry[0]?.requestId,
     )
-    expect(calls).toBe(1)
+    expect(calls).toBe(2)
   })
   it('retains all terminal DeepSeek retry attempts with linked request IDs', async () => {
     process.env.DEEPSEEK_API_KEY = 'offline-test-only'
@@ -239,6 +326,138 @@ describe('OpenRouter schema and offline failure behaviour', () => {
           second?.retryOfRequestId === first?.requestId
         )
       },
+    )
+  })
+
+  it('uses Z.ai JSON mode with local schema validation and provider telemetry', async () => {
+    process.env.ZAI_API_KEY = 'offline-test-only'
+    process.env.OBITER_ZAI_GENERAL_API_CONFIRMED = '1'
+    let body: Record<string, unknown> | undefined
+    const judge = new ZaiJudge('glm-5.2', {
+      fetch: fakeFetch((request) => {
+        body = request
+        return new Response(
+          JSON.stringify({
+            model: 'glm-5.2',
+            usage: { prompt_tokens: 2, completion_tokens: 3 },
+            choices: [{ message: { content: JSON.stringify(judgeReference) } }],
+          }),
+        )
+      }),
+    })
+    const [result] = await judge.judge([document])
+    expect(body?.response_format).toEqual({ type: 'json_object' })
+    expect(JSON.stringify(body?.messages)).toContain('referenceSpans')
+    expect(result?.telemetry?.provider).toBe('zai')
+  })
+
+  it('uses OpenCode Go OpenAI-compatible models with explicit JSON mode', async () => {
+    process.env.OPENCODE_GO_API_KEY = 'offline-test-only'
+    process.env.OBITER_OPENCODE_GO_TERMS_CONFIRMED = '1'
+    let body: Record<string, unknown> | undefined
+    const judge = new OpenCodeGoJudge('glm-5.2', {
+      fetch: fakeFetch((request) => {
+        body = request
+        return new Response(
+          JSON.stringify({
+            model: 'glm-5.2',
+            usage: { prompt_tokens: 2, completion_tokens: 3 },
+            choices: [{ message: { content: JSON.stringify(judgeReference) } }],
+          }),
+        )
+      }),
+    })
+    const [result] = await judge.judge([document])
+    expect(body?.response_format).toEqual({ type: 'json_object' })
+    expect(body?.thinking).toEqual({ type: 'disabled' })
+    expect(body?.reasoning_effort).toBe('none')
+    expect(result?.telemetry?.provider).toBe('opencode-go')
+  })
+
+  it('retries a locally invalid judge reference with validation feedback', async () => {
+    process.env.OPENCODE_GO_API_KEY = 'offline-test-only'
+    process.env.OBITER_OPENCODE_GO_TERMS_CONFIRMED = '1'
+    const bodies: Record<string, unknown>[] = []
+    const judge = new OpenCodeGoJudge('glm-5.2', {
+      fetch: fakeFetch((request) => {
+        bodies.push(request)
+        const reference =
+          bodies.length === 1
+            ? {
+                ...judgeReference,
+                referenceSpans: [
+                  {
+                    category: 'person_private',
+                    quote: 'Absent',
+                    occurrence: 1,
+                  },
+                ],
+              }
+            : judgeReference
+        return new Response(
+          JSON.stringify({
+            model: 'glm-5.2',
+            usage: { prompt_tokens: 2, completion_tokens: 3 },
+            choices: [{ message: { content: JSON.stringify(reference) } }],
+          }),
+        )
+      }),
+    })
+    const [result] = await judge.judge([document])
+    expect(bodies).toHaveLength(2)
+    expect(JSON.stringify(bodies[1]?.messages)).toContain('VALIDATION FEEDBACK')
+    expect(result?.retryTelemetry).toHaveLength(1)
+    expect(result?.telemetry?.retryOfRequestId).toBe(
+      result?.retryTelemetry?.[0]?.requestId,
+    )
+  })
+
+  it('uses a forced schema tool for OpenCode Go Anthropic-compatible models', async () => {
+    process.env.OPENCODE_GO_API_KEY = 'offline-test-only'
+    process.env.OBITER_OPENCODE_GO_TERMS_CONFIRMED = '1'
+    let body: Record<string, unknown> | undefined
+    const judge = new OpenCodeGoJudge('qwen3.7-max', {
+      fetch: fakeFetch((request) => {
+        body = request
+        return new Response(
+          JSON.stringify({
+            model: 'qwen3.7-max',
+            usage: { input_tokens: 2, output_tokens: 3 },
+            content: [
+              {
+                type: 'tool_use',
+                name: 'synthetic_v2_independent_reference',
+                input: judgeReference,
+              },
+            ],
+          }),
+        )
+      }),
+    })
+    await expect(judge.judge([document])).resolves.toHaveLength(1)
+    expect(body?.tool_choice).toEqual({
+      type: 'tool',
+      name: 'synthetic_v2_independent_reference',
+    })
+    expect(JSON.stringify(body?.tools)).toContain('referenceSpans')
+  })
+
+  it('rejects OpenCode Go models outside the reviewed endpoint allowlist', () => {
+    process.env.OPENCODE_GO_API_KEY = 'offline-test-only'
+    process.env.OBITER_OPENCODE_GO_TERMS_CONFIRMED = '1'
+    expect(() => new OpenCodeGoJudge('unreviewed-model')).toThrow(
+      'reviewed endpoint allowlist',
+    )
+  })
+
+  it('fails closed until provider-specific terms are confirmed', () => {
+    process.env.ZAI_API_KEY = 'offline-test-only'
+    process.env.OPENCODE_GO_API_KEY = 'offline-test-only'
+    delete process.env.OBITER_ZAI_GENERAL_API_CONFIRMED
+    delete process.env.OBITER_OPENCODE_GO_TERMS_CONFIRMED
+    expect(() => new ZaiJudge('glm-5.2')).toThrow('general Z.ai API key')
+    expect(() => new OpenCodeGoJudge('grok-4.5')).toThrow(
+      'reviewing the Go API terms',
     )
   })
 

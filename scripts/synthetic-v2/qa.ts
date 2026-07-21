@@ -1,5 +1,6 @@
 import { supplementSpans } from '../../packages/redaction-policy/src/supplement'
 import type { RedactionSpan } from '../../packages/redaction-policy/src/types'
+import { resolveExactQuoteOccurrence } from './annotations'
 import { canonicalHash } from './governance'
 import { validateSpans } from './markers'
 import {
@@ -64,7 +65,9 @@ export type QaEvidence = {
   dispute?: JudgeVerdict
   human?: HumanAdjudication
   primaryTelemetry?: RequestTelemetry
+  primaryRetryTelemetry?: RequestTelemetry[]
   disputeTelemetry?: RequestTelemetry
+  disputeRetryTelemetry?: RequestTelemetry[]
   escalationReasons: string[]
   outcome: QaOutcome
   /** Retained for artifact consumers; never true for an unresolved dispute. */
@@ -107,8 +110,14 @@ export function supplementMisses(
   )
 }
 
-export function judgePrompt(document: SyntheticDocument) {
-  return `Independently produce an exhaustive reference annotation for this fictional UK legal text. You receive only source text and policy, never proposed annotations. Professional names (solicitors, judges, counsel, experts, in-house counsel) are person_professional; private parties/witnesses are person_private; children, anonymity subjects, and people in family, medical, immigration, employment, criminal, or safeguarding contexts are person_protected. Do not label procedural dates, neutral citations, damages figures, or corporate registration numbers. For each span provide its exact quote and one-based occurrence among identical quotes; do not calculate character offsets.\n\nText:\n${document.text}\n\nReturn JSON only: {"id": string, "referenceSpans": [{"category": string, "quote": string, "occurrence": integer}], "realismScore": 1|2|3|4|5, "confidence": number, "rationale": string}.`
+export function judgePrompt(
+  document: SyntheticDocument,
+  repairFeedback?: string,
+) {
+  const repair = repairFeedback
+    ? `\n\nVALIDATION FEEDBACK — return a complete replacement reference and fix this failure: ${repairFeedback}`
+    : ''
+  return `Independently produce an exhaustive reference annotation for this fictional UK legal text. You receive only source text and policy, never proposed annotations. Professional names (solicitors, judges, counsel, experts, in-house counsel) are person_professional; private parties/witnesses are person_private; children, anonymity subjects, and people in family, medical, immigration, employment, criminal, or safeguarding contexts are person_protected. Do not label procedural dates, neutral citations, damages figures, or corporate registration numbers. For each span provide its exact quote and one-based occurrence among identical quotes; do not calculate character offsets.\n\nText:\n${document.text}${repair}\n\nReturn JSON only: {"id": string, "referenceSpans": [{"category": string, "quote": string, "occurrence": integer}], "realismScore": 1|2|3|4|5, "confidence": number, "rationale": string}.`
 }
 
 export function parseJudgeVerdict(
@@ -263,8 +272,7 @@ function resolveQuoteOccurrence(text: string, value: unknown): SyntheticSpan {
     occurrence < 1
   )
     throw new Error('Judge reference requires category, quote, and occurrence')
-  const starts = occurrences(text, quote)
-  const start = starts[occurrence - 1]
+  const start = resolveExactQuoteOccurrence(text, quote, occurrence)
   if (start === undefined)
     throw new Error('Judge reference quote occurrence is absent or ambiguous')
   return {
@@ -444,7 +452,9 @@ export async function reviewDocuments(
           dispute: second?.verdict,
           human,
           primaryTelemetry: first.telemetry,
+          primaryRetryTelemetry: first.retryTelemetry,
           disputeTelemetry: second?.telemetry,
+          disputeRetryTelemetry: second?.retryTelemetry,
           escalationReasons: reasons,
           outcome,
           accepted: outcome === 'accepted',
@@ -519,6 +529,7 @@ function responsesById(
     id: string
     verdict: string
     telemetry?: RequestTelemetry
+    retryTelemetry?: RequestTelemetry[]
   }>,
   documents: SyntheticDocument[],
   label: string,
@@ -543,7 +554,14 @@ function responsesById(
         // shape. New provider responses are constrained to quote occurrences.
         verdict = parseJudgeVerdict(response.verdict, response.id, document)
       }
-      return [response.id, { verdict, telemetry: response.telemetry }]
+      return [
+        response.id,
+        {
+          verdict,
+          telemetry: response.telemetry,
+          retryTelemetry: response.retryTelemetry,
+        },
+      ]
     }),
   )
   if (result.size !== documents.length)

@@ -16,21 +16,21 @@ export type Candidate = {
 
 export const reviewedCandidates: Candidate[] = [
   {
-    id: 'deepseek-pro-haiku',
+    id: 'deepseek-pro-gemini-flash',
     writer: 'deepseek-v4-pro',
-    annotator: 'anthropic/claude-haiku-4.5',
+    annotator: 'google/gemini-3.6-flash',
     reviewed: true,
   },
   {
-    id: 'deepseek-flash-haiku',
+    id: 'deepseek-flash-gemini-flash',
     writer: 'deepseek-v4-flash',
-    annotator: 'anthropic/claude-haiku-4.5',
+    annotator: 'google/gemini-3.6-flash',
     reviewed: true,
   },
   {
-    id: 'opus-haiku',
+    id: 'opus-gemini-flash',
     writer: 'anthropic/claude-opus-4.8',
-    annotator: 'anthropic/claude-haiku-4.5',
+    annotator: 'google/gemini-3.6-flash',
     reviewed: true,
   },
 ]

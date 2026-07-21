@@ -212,9 +212,9 @@ function registryFor(stage: RunStage) {
 function selection(tournamentManifestHash: string): SelectionManifest {
   return {
     version: 'synthetic-v2-selection:v1',
-    candidateId: 'deepseek-pro-haiku',
+    candidateId: 'deepseek-pro-gemini-flash',
     writerId: 'deepseek-v4-pro',
-    annotatorId: 'anthropic/claude-haiku-4.5',
+    annotatorId: 'google/gemini-3.6-flash',
     tournamentManifestHash,
     approvedAt: '2026-07-21T12:00:00.000Z',
     approvedBy: 'fixture approver',

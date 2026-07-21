@@ -47,12 +47,21 @@ export function parseAnnotationResponse(
       throw new MarkerValidationError(
         'Annotation span requires category, quote, and occurrence',
       )
-    const matches = occurrences(sourceText, quote)
-    const resolved = matches[(occurrence as number) - 1]
-    if (resolved === undefined)
+    const resolved = resolveExactQuoteOccurrence(
+      sourceText,
+      quote,
+      occurrence as number,
+    )
+    if (resolved === undefined) {
+      const matches = occurrences(sourceText, quote)
+      if (matches.length === 0)
+        throw new MarkerValidationError(
+          `Annotation quote is not in source for ${category}: ${JSON.stringify(quote)}`,
+        )
       throw new MarkerValidationError(
-        'Annotation quote occurrence is not in source',
+        `Annotation quote occurrence is out of range for ${category}: ${JSON.stringify(quote)}`,
       )
+    }
     if (start !== undefined || end !== undefined) {
       if (
         !Number.isInteger(start) ||
@@ -71,8 +80,85 @@ export function parseAnnotationResponse(
       text: quote,
     }
   })
-  validateSpans(sourceText, spans)
-  return spans
+  const canonical = canonicalizePersonOverlaps(spans)
+  const ordered = [...canonical].sort(
+    (left, right) => left.start - right.start || left.end - right.end,
+  )
+  for (let index = 1; index < ordered.length; index++) {
+    const previous = ordered[index - 1]!
+    const current = ordered[index]!
+    if (current.start < previous.end)
+      throw new MarkerValidationError(
+        `Overlapping or nested spans: ${previous.category} ${JSON.stringify(previous.text)} conflicts with ${current.category} ${JSON.stringify(current.text)}`,
+      )
+  }
+  validateSpans(sourceText, canonical)
+  return canonical
+}
+
+const personCategoryPriority: Partial<
+  Record<SyntheticSpan['category'], number>
+> = {
+  person_private: 1,
+  person_professional: 2,
+  person_protected: 3,
+}
+
+/**
+ * Models sometimes emit a full person mention and a nested name variant, or
+ * classify the same mention under multiple person roles. These spans describe
+ * one source entity, so retain the enclosing mention and the most protective
+ * role. Other cross-category overlaps remain hard failures.
+ */
+function canonicalizePersonOverlaps(spans: SyntheticSpan[]) {
+  const ordered = [...spans].sort(
+    (left, right) => left.start - right.start || right.end - left.end,
+  )
+  const canonical: SyntheticSpan[] = []
+  for (const span of ordered) {
+    const previous = canonical.at(-1)
+    if (!previous || span.start >= previous.end) {
+      canonical.push(span)
+      continue
+    }
+    const sameCategory = previous.category === span.category
+    const exactDuplicate =
+      sameCategory &&
+      previous.start === span.start &&
+      previous.end === span.end &&
+      previous.text === span.text
+    if (exactDuplicate) continue
+    const bothPeople =
+      personCategoryPriority[previous.category] !== undefined &&
+      personCategoryPriority[span.category] !== undefined
+    const nested = span.end <= previous.end
+    if (!nested || !bothPeople) {
+      canonical.push(span)
+      continue
+    }
+    if (
+      personCategoryPriority[span.category]! >
+      personCategoryPriority[previous.category]!
+    )
+      canonical[canonical.length - 1] = {
+        ...previous,
+        category: span.category,
+      }
+  }
+  return canonical
+}
+
+/** Resolve a model occurrence while tolerating entity-count semantics only
+ * when an exact quote has one unambiguous source location. */
+export function resolveExactQuoteOccurrence(
+  source: string,
+  quote: string,
+  occurrence: number,
+) {
+  const matches = occurrences(source, quote)
+  return (
+    matches[occurrence - 1] ?? (matches.length === 1 ? matches[0] : undefined)
+  )
 }
 
 function occurrences(source: string, quote: string) {

@@ -137,6 +137,41 @@ describe('independent QA execution gates', () => {
     ).rejects.toThrow('stale or invalid')
   })
 
+  it('preserves judge retry telemetry for spend and provenance accounting', async () => {
+    const retryTelemetry = {
+      requestId: 'retry-1',
+      specId: document.id,
+      role: 'primary_judge' as const,
+      provider: 'fake',
+      requestedModel: 'primary',
+      returnedModel: 'primary',
+      usage: { inputTokens: 2, outputTokens: 3 },
+      latencyMs: 1,
+      status: 'error' as const,
+      attempt: 1,
+      errorCode: 'judge_span_overlap',
+    }
+    const primary: JudgeAdapter = {
+      name: 'fake:primary',
+      model: 'primary',
+      maxChargeAttempts: 2,
+      judge: async (documents) =>
+        documents.map((entry) => ({
+          id: entry.id,
+          verdict: good,
+          retryTelemetry: [retryTelemetry],
+        })),
+    }
+    const evidence = await reviewDocuments(
+      [document],
+      primary,
+      judge(good, 'dispute'),
+    )
+    expect(evidence.get(document.id)?.primaryRetryTelemetry).toEqual([
+      retryTelemetry,
+    ])
+  })
+
   it('persists second-judge evidence for protected/hard-negative escalation', async () => {
     const protectedDocument = {
       ...document,

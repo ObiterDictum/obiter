@@ -62,8 +62,12 @@ export function isQaEvidence(value: unknown): value is QaEvidence {
     (value.human === undefined || isHumanAdjudication(value.human)) &&
     (value.primaryTelemetry === undefined ||
       isRequestTelemetry(value.primaryTelemetry)) &&
+    (value.primaryRetryTelemetry === undefined ||
+      isRequestTelemetryArray(value.primaryRetryTelemetry)) &&
     (value.disputeTelemetry === undefined ||
       isRequestTelemetry(value.disputeTelemetry)) &&
+    (value.disputeRetryTelemetry === undefined ||
+      isRequestTelemetryArray(value.disputeRetryTelemetry)) &&
     Array.isArray(value.escalationReasons) &&
     value.escalationReasons.every((reason) => typeof reason === 'string') &&
     isStringIn(value.outcome, [
@@ -140,6 +144,10 @@ export function isTournamentCandidateIdentity(
   )
 }
 
+function isRequestTelemetryArray(value: unknown): value is RequestTelemetry[] {
+  return Array.isArray(value) && value.every(isRequestTelemetry)
+}
+
 export function isRequestTelemetry(value: unknown): value is RequestTelemetry {
   return (
     isRecord(value) &&
@@ -151,6 +159,7 @@ export function isRequestTelemetry(value: unknown): value is RequestTelemetry {
       'primary_judge',
       'dispute_judge',
     ]) &&
+    (value.provider === undefined || typeof value.provider === 'string') &&
     typeof value.requestedModel === 'string' &&
     (value.returnedModel === undefined ||
       typeof value.returnedModel === 'string') &&

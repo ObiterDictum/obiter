@@ -26,10 +26,11 @@ import { defaultOpenRouterQaModel } from './models'
 import { scoreAdjudicatedDocuments } from './scoring'
 import { corpusStageSpecs, isCorpusStage, type CorpusStage } from './program'
 import {
+  createJudgeAdapter,
   DeepSeekGenerator,
   OpenRouterGenerator,
-  OpenRouterJudge,
   OpenRouterLabeler,
+  parseJudgeProvider,
   ProviderBatchError,
 } from './providers'
 import {
@@ -90,7 +91,20 @@ const ledgerPath = resolve(
 )
 const pricingPath =
   process.env.SYNTHETIC_V2_PRICING_PATH ??
-  resolve('scripts/synthetic-v2/pricing-2026-07-19.json')
+  resolve('scripts/synthetic-v2/pricing-2026-07-21.json')
+
+export class PipelineExecutionError extends Error {
+  readonly name = 'PipelineExecutionError'
+
+  constructor(
+    message: string,
+    readonly usage: Usage,
+    readonly actualGbp: number,
+    readonly requestTelemetry: RequestTelemetry[],
+  ) {
+    super(message)
+  }
+}
 
 export type PipelineResult = {
   documents: SyntheticDocument[]
@@ -106,10 +120,20 @@ export type PipelineResult = {
   requestTelemetry: RequestTelemetry[]
 }
 
+export type PipelineProgress = {
+  specId: string
+  completed: number
+  total: number
+  phase: 'generate' | 'label' | 'repair_label' | 'judge' | 'complete'
+  attempt?: number
+  status?: DocumentProcessingState['status']
+}
+
 export type PipelineOptions = {
   requireIndependentAdjudication?: boolean
   maxRegenerations?: number
   humanAdjudications?: Map<string, HumanAdjudication>
+  onProgress?: (progress: PipelineProgress) => void
 }
 
 export async function main() {
@@ -206,15 +230,14 @@ export async function main() {
   const candidate = selectedCandidate(selection)
   const writer = writerAdapter(candidate.writer)
   const labeler = new OpenRouterLabeler(candidate.annotator)
-  const primary = new OpenRouterJudge(
-    requiredModel('SYNTHETIC_V2_PRIMARY_JUDGE_MODEL'),
+  const primary = configuredJudge('primary')
+  const dispute = configuredJudge('adjudicator')
+  assertDistinctRoleModels(
+    candidate.writer,
+    candidate.annotator,
+    primary.model,
+    dispute.model,
   )
-  const dispute = new OpenRouterJudge(
-    requiredModel('SYNTHETIC_V2_ADJUDICATOR_MODEL'),
-    {},
-    'dispute_judge',
-  )
-  assertDistinctRoleModels(candidate.annotator, primary.model, dispute.model)
   const external = await loadExternalPartitions(stage)
   const result = await runPipeline(
     corpusStageSpecs(stage),
@@ -224,7 +247,10 @@ export async function main() {
     dispute,
     pricing,
     external.manifests,
-    { requireIndependentAdjudication: stage === 'benchmark' },
+    {
+      requireIndependentAdjudication: stage === 'benchmark',
+      onProgress: terminalProgress(stage),
+    },
   )
   assertApprovedModel(selection, 'writer', candidate.writer, writer.model)
   assertApprovedModel(
@@ -333,7 +359,9 @@ export async function runPipeline(
   }
   const consumeQa = (evidence: QaEvidence, state: DocumentProcessingState) => {
     for (const entry of [
+      ...(evidence.primaryRetryTelemetry ?? []),
       evidence.primaryTelemetry,
+      ...(evidence.disputeRetryTelemetry ?? []),
       evidence.disputeTelemetry,
     ]) {
       if (!entry) continue
@@ -347,7 +375,7 @@ export async function runPipeline(
   }
 
   try {
-    for (const spec of specs) {
+    for (const [specIndex, spec] of specs.entries()) {
       const state: DocumentProcessingState = {
         id: spec.id,
         status: 'failed',
@@ -371,6 +399,13 @@ export async function runPipeline(
           phase: 'generate',
           reason: regeneration ? 'qa_or_validation_rejection' : undefined,
         })
+        options.onProgress?.({
+          specId: spec.id,
+          completed: specIndex,
+          total: specs.length,
+          phase: 'generate',
+          attempt: regeneration + 1,
+        })
         const drafts = await submitDocuments(
           [spec],
           writer,
@@ -384,6 +419,12 @@ export async function runPipeline(
 
         state.annotationAttempts++
         state.transitions.push({ phase: 'label' })
+        options.onProgress?.({
+          specId: spec.id,
+          completed: specIndex,
+          total: specs.length,
+          phase: 'label',
+        })
         const labels = await submitLabels(
           [spec],
           new Map([[spec.id, draft]]),
@@ -413,6 +454,12 @@ export async function runPipeline(
               typeof candidate === 'string'
                 ? candidate
                 : 'mechanical_supplement_miss',
+          })
+          options.onProgress?.({
+            specId: spec.id,
+            completed: specIndex,
+            total: specs.length,
+            phase: 'repair_label',
           })
           const feedback = new Map([
             [
@@ -471,6 +518,12 @@ export async function runPipeline(
         finalPassAnnotations.set(candidate.id, candidate.spans)
         state.qaAttempts++
         state.transitions.push({ phase: 'judge' })
+        options.onProgress?.({
+          specId: spec.id,
+          completed: specIndex,
+          total: specs.length,
+          phase: 'judge',
+        })
         const evidence = (
           await reviewDocuments(
             [candidate],
@@ -577,13 +630,29 @@ export async function runPipeline(
         })
       }
       if (state.status === 'repair_required') state.status = 'failed'
+      options.onProgress?.({
+        specId: spec.id,
+        completed: specIndex + 1,
+        total: specs.length,
+        phase: 'complete',
+        status: state.status,
+      })
     }
-    assertTelemetryModelIdentity(telemetry, {
-      writer: writer.model,
-      annotator: labeler.model,
-      primary_judge: primaryJudge.model,
-      dispute_judge: disputeJudge.model,
-    })
+    assertTelemetryModelIdentity(
+      telemetry,
+      {
+        writer: writer.model,
+        annotator: labeler.model,
+        primary_judge: primaryJudge.model,
+        dispute_judge: disputeJudge.model,
+      },
+      {
+        writer: providerFromAdapter(writer),
+        annotator: providerFromAdapter(labeler),
+        primary_judge: providerFromAdapter(primaryJudge),
+        dispute_judge: providerFromAdapter(disputeJudge),
+      },
+    )
     return {
       documents,
       firstPassAnnotations,
@@ -597,8 +666,20 @@ export async function runPipeline(
     }
   } catch (error) {
     abort.abort(error)
-    if (error instanceof ProviderBatchError) telemetry.push(...error.telemetry)
-    throw error
+    if (error instanceof ProviderBatchError)
+      for (const entry of error.telemetry) {
+        telemetry.push(entry)
+        if (entry.usage) {
+          addUsage(usage, entry.usage)
+          actualGbp += telemetryCost(entry, pricing)
+        }
+      }
+    throw new PipelineExecutionError(
+      error instanceof Error ? error.message : 'Pipeline execution failed',
+      { ...usage },
+      Number(actualGbp.toFixed(6)),
+      [...telemetry],
+    )
   }
 }
 
@@ -621,17 +702,17 @@ async function runTournament(pricing: PricingTable) {
   assertTournamentStratification(specs)
   const candidates = [
     {
-      id: 'deepseek-pro-haiku',
+      id: 'deepseek-pro-gemini-flash',
       writer: 'deepseek-v4-pro',
       annotator: defaultOpenRouterQaModel,
     },
     {
-      id: 'deepseek-flash-haiku',
+      id: 'deepseek-flash-gemini-flash',
       writer: 'deepseek-v4-flash',
       annotator: defaultOpenRouterQaModel,
     },
     {
-      id: 'opus-haiku',
+      id: 'opus-gemini-flash',
       writer: 'anthropic/claude-opus-4.8',
       annotator: defaultOpenRouterQaModel,
     },
@@ -647,8 +728,10 @@ async function runTournament(pricing: PricingTable) {
   }> = []
   const candidateArtifacts: unknown[] = []
   const blindReviewPackages: unknown[] = []
-  const primaryModel = requiredModel('SYNTHETIC_V2_PRIMARY_JUDGE_MODEL')
-  const disputeModel = requiredModel('SYNTHETIC_V2_ADJUDICATOR_MODEL')
+  const primary = configuredJudge('primary')
+  const dispute = configuredJudge('adjudicator')
+  const primaryModel = primary.model
+  const disputeModel = dispute.model
   const root =
     process.env.SYNTHETIC_V2_PRIVATE_CORPUS_ROOT ??
     '../obiter-redaction-data-private'
@@ -661,16 +744,24 @@ async function runTournament(pricing: PricingTable) {
     let checkpointHash: string | undefined
     let mustPersistCheckpoint = false
     try {
-      assertDistinctRoleModels(candidate.annotator, primaryModel, disputeModel)
+      assertDistinctRoleModels(
+        candidate.writer,
+        candidate.annotator,
+        primaryModel,
+        disputeModel,
+      )
       const result = await runPipeline(
         specs,
         writerAdapter(candidate.writer),
         new OpenRouterLabeler(candidate.annotator),
-        new OpenRouterJudge(primaryModel),
-        new OpenRouterJudge(disputeModel, {}, 'dispute_judge'),
+        primary,
+        dispute,
         pricing,
         [],
-        { requireIndependentAdjudication: true },
+        {
+          requireIndependentAdjudication: true,
+          onProgress: terminalProgress(`tournament:${candidate.id}`),
+        },
       )
       if (result.pendingAdjudications.length) {
         mustPersistCheckpoint = true
@@ -793,11 +884,16 @@ type ChargedResult<T extends ChargedItem = ChargedItem> = {
 
 export function assertConfiguredPricing(
   pricing: PricingTable,
-  adapters: Array<{ model: string }>,
+  adapters: Array<{ model: string; name?: string }>,
 ) {
-  for (const adapter of adapters)
-    if (!pricing[adapter.model])
-      throw new Error(`No reviewed pricing entry for ${adapter.model}`)
+  for (const adapter of adapters) {
+    const pricingKey =
+      adapter.name && pricing[adapter.name] ? adapter.name : adapter.model
+    if (!pricing[pricingKey])
+      throw new Error(
+        `No reviewed pricing entry for ${adapter.name ?? adapter.model}`,
+      )
+  }
 }
 
 function meteredJudge(
@@ -874,8 +970,8 @@ async function charged<T extends ChargedItem>(
   operation: () => Promise<T[]>,
 ): Promise<ChargedResult<T>> {
   const [provider, model] = name.split(':', 2) as [string, string]
-  const rate = pricing[model]
-  if (!rate) throw new Error(`No reviewed pricing entry for ${model}`)
+  const rate = pricing[name] ?? pricing[model]
+  if (!rate) throw new Error(`No reviewed pricing entry for ${name}`)
   const reservationId = `${name}:${specs[0]?.id}:${Date.now()}`
   const ledger = await readLedger(ledgerPath)
   const maximum: Usage = {
@@ -963,15 +1059,22 @@ function addUsage(total: Usage, value: Usage) {
     (total.cacheReadInputTokens ?? 0) + (value.cacheReadInputTokens ?? 0)
 }
 function telemetryCost(entry: RequestTelemetry, pricing: PricingTable) {
-  if (!entry.usage || !entry.returnedModel || !pricing[entry.returnedModel])
-    return 0
-  return costGbp(entry.usage, pricing[entry.returnedModel], gbpPerUsd)
+  if (!entry.usage || !entry.returnedModel) return 0
+  const providerKey = entry.provider
+    ? `${entry.provider}:${entry.returnedModel}`
+    : undefined
+  const rate =
+    (providerKey && pricing[providerKey]) ?? pricing[entry.returnedModel]
+  return rate ? costGbp(entry.usage, rate, gbpPerUsd) : 0
 }
 function assertTelemetryModelIdentity(
   telemetry: RequestTelemetry[],
   expected: Record<ProviderRole, string>,
+  expectedProviders: Record<ProviderRole, string>,
 ) {
   for (const entry of telemetry) {
+    if (entry.provider !== expectedProviders[entry.role])
+      throw new Error(`Telemetry used an unapproved ${entry.role} provider`)
     if (entry.requestedModel !== expected[entry.role])
       throw new Error(`Telemetry requested an unapproved ${entry.role} model`)
     if (
@@ -981,20 +1084,48 @@ function assertTelemetryModelIdentity(
       throw new Error(`Telemetry returned an unapproved ${entry.role} model`)
   }
 }
+function providerFromAdapter(adapter: { name: string }) {
+  const provider = adapter.name.split(':', 1)[0]
+  if (!provider) throw new Error('Provider adapter name is malformed')
+  return provider
+}
+export function terminalProgress(scope: string) {
+  return (progress: PipelineProgress) => {
+    const position = `${progress.completed}/${progress.total}`
+    const attempt = progress.attempt ? ` attempt=${progress.attempt}` : ''
+    const status = progress.status ? ` status=${progress.status}` : ''
+    console.log(
+      `[synthetic-v2] ${scope} ${position} ${progress.specId} ${progress.phase}${attempt}${status}`,
+    )
+  }
+}
+
 function requiredModel(name: string) {
   const model = process.env[name]?.trim()
   if (!model)
     throw new Error(`${name} must name an independently configured judge model`)
   return model
 }
+function configuredJudge(role: 'primary' | 'adjudicator') {
+  const prefix =
+    role === 'primary'
+      ? 'SYNTHETIC_V2_PRIMARY_JUDGE'
+      : 'SYNTHETIC_V2_ADJUDICATOR'
+  return createJudgeAdapter(
+    parseJudgeProvider(process.env[`${prefix}_PROVIDER`], `${prefix}_PROVIDER`),
+    requiredModel(`${prefix}_MODEL`),
+    role === 'primary' ? 'primary_judge' : 'dispute_judge',
+  )
+}
 function assertDistinctRoleModels(
+  writer: string,
   annotator: string,
   primary: string,
   dispute: string,
 ) {
-  if (new Set([annotator, primary, dispute]).size !== 3)
+  if (new Set([writer, annotator, primary, dispute]).size !== 4)
     throw new Error(
-      'Annotator, primary judge, and dispute judge must use distinct model identities',
+      'Writer, annotator, primary judge, and dispute judge must use distinct model identities',
     )
 }
 function writerAdapter(model: string): GeneratorAdapter {

@@ -81,8 +81,6 @@ const annotationSchema = {
             category: { type: 'string' },
             quote: { type: 'string' },
             occurrence: { type: 'integer', minimum: 1 },
-            start: { type: 'integer', minimum: 0 },
-            end: { type: 'integer', minimum: 0 },
           },
         },
       },
@@ -179,7 +177,7 @@ export class OpenRouterGenerator implements GeneratorAdapter {
 
 export class OpenRouterLabeler implements LabelingAdapter {
   readonly name: string
-  readonly maxChargeAttempts = 1
+  readonly maxChargeAttempts = 2
   private readonly apiKey: string
   constructor(
     readonly model: string,
@@ -221,80 +219,168 @@ export class OpenRouterLabeler implements LabelingAdapter {
       onProgress,
       signal,
       async (input, requestSignal) => {
-        const response = await requestOpenAi(
-          this.model,
-          this.apiKey,
-          this.options,
-          {
-            max_tokens: 2400,
-            temperature: 0,
-            response_format: {
-              type: 'json_schema',
-              json_schema: annotationSchema,
-            },
-            messages: [
-              { role: 'system', content: labelSystemPrompt },
-              {
-                role: 'user',
-                content: labelUserPrompt(
-                  input,
-                  input.draftText,
-                  feedback?.get(input.id),
-                ),
-              },
-            ],
-          },
-          input.id,
-          'annotator',
-          requestSignal,
-        )
-        try {
-          return {
-            customId: input.id,
-            spans: parseAnnotationResponse(
-              response.text,
-              input.draftText,
-              input.id,
-            ),
-            generator: `openrouter:${response.model}`,
-            usage: response.usage,
-            telemetry: response.telemetry,
+        const retryTelemetry: RequestTelemetry[] = []
+        let previousRequestId: string | undefined
+        let previousValidationMessage: string | undefined
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          const validationFeedback =
+            attempt === 1
+              ? feedback?.get(input.id)
+              : `The previous response failed local validation: ${previousValidationMessage ?? 'unknown validation error'}. Return a complete replacement list using only quotes copied verbatim from the immutable source. Do not invent a span for an absent requirement. Occurrence counts repetitions of that exact quote, not mentions of the person or entity; use 1 when the exact quote appears once.`
+          let response: {
+            text: string
+            model: string
+            usage: Usage
+            telemetry: RequestTelemetry
           }
-        } catch {
-          throw new ProviderBatchError(
-            'Annotation response failed validation',
-            [
+          try {
+            response = await requestOpenAi(
+              this.model,
+              this.apiKey,
+              this.options,
               {
-                ...response.telemetry,
-                status: 'error',
-                errorCode: 'annotation_validation_failed',
+                max_tokens: 2400,
+                temperature: 0,
+                reasoning: { effort: 'minimal' },
+                tools: [
+                  {
+                    type: 'function',
+                    function: {
+                      name: annotationSchema.name,
+                      description: 'Submit the complete annotation span list.',
+                      parameters: annotationSchema.schema,
+                    },
+                  },
+                ],
+                tool_choice: {
+                  type: 'function',
+                  function: { name: annotationSchema.name },
+                },
+                provider: { require_parameters: true },
+                messages: [
+                  { role: 'system', content: labelSystemPrompt },
+                  {
+                    role: 'user',
+                    content: labelUserPrompt(
+                      input,
+                      input.draftText,
+                      validationFeedback,
+                    ),
+                  },
+                ],
               },
-            ],
-          )
+              input.id,
+              'annotator',
+              requestSignal,
+              'https://openrouter.ai/api/v1',
+              attempt,
+              'openrouter',
+              annotationSchema.name,
+            )
+          } catch (error) {
+            if (error instanceof ProviderBatchError)
+              for (const entry of error.telemetry) {
+                retryTelemetry.push({
+                  ...entry,
+                  retryOfRequestId: previousRequestId,
+                })
+                previousRequestId = entry.requestId
+              }
+            if (attempt < 2 && isRetryable(error)) continue
+            throw new ProviderBatchError(
+              'Annotation request failed after bounded attempts',
+              retryTelemetry,
+            )
+          }
+          try {
+            return {
+              customId: input.id,
+              spans: parseAnnotationResponse(
+                response.text,
+                input.draftText,
+                input.id,
+              ),
+              generator: `openrouter:${response.model}`,
+              usage: response.usage,
+              telemetry: {
+                ...response.telemetry,
+                retryOfRequestId: previousRequestId,
+              },
+              retryTelemetry,
+            }
+          } catch (error) {
+            previousValidationMessage =
+              error instanceof Error
+                ? error.message
+                : 'unknown validation error'
+            const failure = {
+              ...response.telemetry,
+              status: 'error',
+              errorCode: annotationValidationErrorCode(error),
+              retryOfRequestId: previousRequestId,
+            } satisfies RequestTelemetry
+            retryTelemetry.push(failure)
+            previousRequestId = response.telemetry.requestId
+            if (attempt === 2)
+              throw new ProviderBatchError(
+                'Annotation response failed validation twice',
+                retryTelemetry,
+              )
+          }
         }
+        throw new Error('Annotation retry loop terminated unexpectedly')
       },
     )
   }
 }
 
-export class OpenRouterJudge implements JudgeAdapter {
-  readonly name: string
-  readonly maxChargeAttempts = 1
-  private readonly apiKey: string
+export const judgeProviders = ['openrouter', 'zai', 'opencode-go'] as const
+export type JudgeProvider = (typeof judgeProviders)[number]
+type JudgeRole = 'primary_judge' | 'dispute_judge'
+type JudgeOptions = Options & { schemaMode?: 'required' | 'unsupported' }
+
+const openCodeGoAnthropicModels = new Set([
+  'minimax-m2.5',
+  'minimax-m2.7',
+  'minimax-m3',
+  'qwen3.6-plus',
+  'qwen3.7-max',
+  'qwen3.7-plus',
+])
+const openCodeGoOpenAiModels = new Set([
+  'glm-5.1',
+  'glm-5.2',
+  'grok-4.5',
+  'kimi-k2.6',
+  'kimi-k2.7-code',
+  'kimi-k3',
+  'mimo-v2.5',
+  'mimo-v2.5-pro',
+])
+
+abstract class IndependentJudge implements JudgeAdapter {
+  abstract readonly name: string
+  readonly maxChargeAttempts = 2
+  protected abstract request(
+    document: SyntheticDocument,
+    signal?: AbortSignal,
+    validationFeedback?: string,
+    attempt?: number,
+  ): Promise<{
+    text: string
+    telemetry: RequestTelemetry
+  }>
+
   constructor(
     readonly model: string,
-    private readonly options: Options & {
-      schemaMode?: 'required' | 'unsupported'
-    } = {},
-    private readonly role: 'primary_judge' | 'dispute_judge' = 'primary_judge',
-  ) {
-    this.name = `openrouter:${model}`
-    this.apiKey = requiredEnvironment('OPENROUTER_API_KEY')
-  }
+    protected readonly options: JudgeOptions = {},
+    protected readonly role: JudgeRole = 'primary_judge',
+  ) {}
+
   async judge(documents: SyntheticDocument[], signal?: AbortSignal) {
     if (this.options.schemaMode === 'unsupported')
       throw new ProviderConfigurationError(
-        `OpenRouter model ${this.model} does not support required JSON-schema judge mode`,
+        `${this.name} does not support the required structured judge mode`,
       )
     return generateConcurrent(
       documents,
@@ -302,41 +388,307 @@ export class OpenRouterJudge implements JudgeAdapter {
       undefined,
       signal,
       async (document, requestSignal) => {
-        const response = await requestOpenAi(
-          this.model,
-          this.apiKey,
-          this.options,
-          {
-            max_tokens: 1200,
-            temperature: 0,
-            response_format: { type: 'json_schema', json_schema: judgeSchema },
-            messages: [{ role: 'user', content: judgePrompt(document) }],
-          },
-          document.id,
-          this.role,
-          requestSignal,
-        )
-        try {
-          // Validate the provider's independent reference before it leaves the
-          // billed adapter boundary, so failures retain response telemetry.
-          parseIndependentJudgeReference(response.text, document.id, document)
-          return {
-            id: document.id,
-            verdict: response.text,
-            telemetry: response.telemetry,
+        const retryTelemetry: RequestTelemetry[] = []
+        let previousRequestId: string | undefined
+        let validationFeedback: string | undefined
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          let response: {
+            text: string
+            telemetry: RequestTelemetry
           }
-        } catch {
-          throw new ProviderBatchError('Judge reference failed validation', [
-            {
+          try {
+            response = await this.request(
+              document,
+              requestSignal,
+              validationFeedback,
+              attempt,
+            )
+          } catch (error) {
+            if (error instanceof ProviderBatchError)
+              for (const entry of error.telemetry) {
+                retryTelemetry.push({
+                  ...entry,
+                  retryOfRequestId: previousRequestId,
+                })
+                previousRequestId = entry.requestId
+              }
+            if (attempt < 2 && isRetryable(error)) continue
+            throw new ProviderBatchError(
+              'Judge request failed after bounded attempts',
+              retryTelemetry,
+            )
+          }
+          try {
+            // Provider constraints reduce malformed output; this local parse is
+            // still authoritative and validates quotes against immutable text.
+            parseIndependentJudgeReference(response.text, document.id, document)
+            return {
+              id: document.id,
+              verdict: response.text,
+              telemetry: {
+                ...response.telemetry,
+                retryOfRequestId: previousRequestId,
+              },
+              retryTelemetry,
+            }
+          } catch (error) {
+            validationFeedback =
+              error instanceof Error
+                ? error.message
+                : 'unknown validation error'
+            retryTelemetry.push({
               ...response.telemetry,
               status: 'error',
-              errorCode: 'judge_reference_validation_failed',
-            },
-          ])
+              errorCode: judgeValidationErrorCode(error),
+              retryOfRequestId: previousRequestId,
+            })
+            previousRequestId = response.telemetry.requestId
+            if (attempt === 2)
+              throw new ProviderBatchError(
+                'Judge reference failed validation twice',
+                retryTelemetry,
+              )
+          }
         }
+        throw new Error('Judge retry loop terminated unexpectedly')
       },
     )
   }
+}
+
+export class OpenRouterJudge extends IndependentJudge {
+  readonly name: string
+  private readonly apiKey: string
+
+  constructor(
+    model: string,
+    options: JudgeOptions = {},
+    role: JudgeRole = 'primary_judge',
+  ) {
+    super(model, options, role)
+    this.name = `openrouter:${model}`
+    this.apiKey = requiredEnvironment('OPENROUTER_API_KEY')
+  }
+
+  protected request(
+    document: SyntheticDocument,
+    signal?: AbortSignal,
+    validationFeedback?: string,
+    attempt = 1,
+  ) {
+    return requestOpenAi(
+      this.model,
+      this.apiKey,
+      this.options,
+      {
+        max_tokens: 1200,
+        temperature: 0,
+        response_format: { type: 'json_schema', json_schema: judgeSchema },
+        provider: { require_parameters: true },
+        messages: [
+          {
+            role: 'user',
+            content: judgePrompt(document, validationFeedback),
+          },
+        ],
+      },
+      document.id,
+      this.role,
+      signal,
+      'https://openrouter.ai/api/v1',
+      attempt,
+    )
+  }
+}
+
+export class ZaiJudge extends IndependentJudge {
+  readonly name: string
+  private readonly apiKey: string
+
+  constructor(
+    model: string,
+    options: JudgeOptions = {},
+    role: JudgeRole = 'primary_judge',
+  ) {
+    super(model, options, role)
+    this.name = `zai:${model}`
+    if (process.env.OBITER_ZAI_GENERAL_API_CONFIRMED !== '1')
+      throw new ProviderConfigurationError(
+        'Set OBITER_ZAI_GENERAL_API_CONFIRMED=1 only for a general Z.ai API key; Coding Plan keys are not eligible',
+      )
+    this.apiKey = requiredEnvironment('ZAI_API_KEY')
+  }
+
+  protected request(
+    document: SyntheticDocument,
+    signal?: AbortSignal,
+    validationFeedback?: string,
+    attempt = 1,
+  ) {
+    return requestOpenAi(
+      this.model,
+      this.apiKey,
+      this.options,
+      {
+        max_tokens: 2400,
+        temperature: 0,
+        thinking: { type: 'disabled' },
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'system',
+            content: jsonSchemaInstruction(judgeSchema.schema),
+          },
+          {
+            role: 'user',
+            content: judgePrompt(document, validationFeedback),
+          },
+        ],
+      },
+      document.id,
+      this.role,
+      signal,
+      'https://api.z.ai/api/paas/v4',
+      attempt,
+      'zai',
+    )
+  }
+}
+
+export class OpenCodeGoJudge extends IndependentJudge {
+  readonly name: string
+  private readonly apiKey: string
+
+  constructor(
+    model: string,
+    options: JudgeOptions = {},
+    role: JudgeRole = 'primary_judge',
+  ) {
+    super(model, options, role)
+    this.name = `opencode-go:${model}`
+    if (process.env.OBITER_OPENCODE_GO_TERMS_CONFIRMED !== '1')
+      throw new ProviderConfigurationError(
+        'Set OBITER_OPENCODE_GO_TERMS_CONFIRMED=1 after reviewing the Go API terms',
+      )
+    this.apiKey = requiredEnvironment('OPENCODE_GO_API_KEY')
+    if (
+      !openCodeGoOpenAiModels.has(model) &&
+      !openCodeGoAnthropicModels.has(model)
+    )
+      throw new ProviderConfigurationError(
+        `OpenCode Go model ${model} is not in the reviewed endpoint allowlist`,
+      )
+  }
+
+  protected request(
+    document: SyntheticDocument,
+    signal?: AbortSignal,
+    validationFeedback?: string,
+    attempt = 1,
+  ) {
+    if (openCodeGoAnthropicModels.has(this.model))
+      return requestAnthropicTool(
+        this.model,
+        this.apiKey,
+        this.options,
+        document,
+        this.role,
+        signal,
+        validationFeedback,
+        attempt,
+      )
+    return requestOpenAi(
+      this.model,
+      this.apiKey,
+      this.options,
+      {
+        max_tokens: 2400,
+        temperature: 0,
+        ...(this.model.startsWith('glm-')
+          ? {
+              thinking: { type: 'disabled' },
+              reasoning_effort: 'none',
+            }
+          : {}),
+        response_format: { type: 'json_object' },
+        messages: [
+          {
+            role: 'system',
+            content: jsonSchemaInstruction(judgeSchema.schema),
+          },
+          {
+            role: 'user',
+            content: judgePrompt(document, validationFeedback),
+          },
+        ],
+      },
+      document.id,
+      this.role,
+      signal,
+      'https://opencode.ai/zen/go/v1',
+      attempt,
+      'opencode-go',
+    )
+  }
+}
+
+export function createJudgeAdapter(
+  provider: JudgeProvider,
+  model: string,
+  role: JudgeRole = 'primary_judge',
+): JudgeAdapter {
+  if (provider === 'zai') return new ZaiJudge(model, {}, role)
+  if (provider === 'opencode-go') return new OpenCodeGoJudge(model, {}, role)
+  return new OpenRouterJudge(model, {}, role)
+}
+
+export function parseJudgeProvider(value: string | undefined, name: string) {
+  if (value && judgeProviders.some((provider) => provider === value))
+    return value as JudgeProvider
+  throw new ProviderConfigurationError(
+    `${name} must be one of: ${judgeProviders.join(', ')}`,
+  )
+}
+
+function jsonSchemaInstruction(schema: unknown) {
+  return `Return only one JSON object matching this schema exactly. Do not include markdown.\n${JSON.stringify(schema)}`
+}
+
+function judgeValidationErrorCode(error: unknown) {
+  const message = error instanceof Error ? error.message : ''
+  if (message.includes('invalid JSON')) return 'judge_invalid_json'
+  if (message.includes('requires category, quote, and occurrence'))
+    return 'judge_span_shape_invalid'
+  if (message.includes('quote occurrence is absent or ambiguous'))
+    return 'judge_quote_or_occurrence_invalid'
+  if (message.includes('Overlapping or nested spans'))
+    return 'judge_span_overlap'
+  return 'judge_reference_validation_failed'
+}
+
+function annotationValidationErrorCode(error: unknown) {
+  const message = error instanceof Error ? error.message : ''
+  if (message.includes('ID does not match')) return 'annotation_id_mismatch'
+  if (message.includes('quote is not in source'))
+    return 'annotation_quote_not_in_source'
+  if (message.includes('quote occurrence is out of range'))
+    return 'annotation_occurrence_out_of_range'
+  if (message.includes('offsets do not match'))
+    return 'annotation_offset_mismatch'
+  if (
+    message.includes('spans overlap') ||
+    message.includes('Overlapping or nested spans')
+  )
+    return 'annotation_span_overlap'
+  if (message.includes('not valid JSON')) return 'annotation_invalid_json'
+  if (
+    message.includes('requires category, quote, and occurrence') ||
+    message.includes('must contain spans')
+  )
+    return 'annotation_span_shape_invalid'
+  if (message.includes('Offset round-trip failed'))
+    return 'annotation_offset_round_trip_failed'
+  return 'annotation_validation_failed'
 }
 
 export class DeepSeekGenerator implements GeneratorAdapter {
@@ -432,6 +784,7 @@ export class DeepSeekGenerator implements GeneratorAdapter {
       signal,
       'https://api.deepseek.com',
       attempt,
+      'deepseek',
     )
   }
 }
@@ -446,6 +799,8 @@ async function requestOpenAi(
   outerSignal?: AbortSignal,
   defaultUrl = 'https://openrouter.ai/api/v1',
   attempt = 1,
+  provider = 'openrouter',
+  expectedToolName?: string,
 ) {
   const started = performance.now()
   const requestId = `${role}:${specId}:${Date.now()}`
@@ -468,14 +823,11 @@ async function requestOpenAi(
         body: JSON.stringify({ model, ...body }),
       },
     )
-    if (!response.ok)
-      throw new ProviderHttpError(
-        defaultUrl.includes('deepseek') ? 'DeepSeek' : 'OpenRouter',
-        response.status,
-      )
+    if (!response.ok) throw new ProviderHttpError(provider, response.status)
     const parsed = parseOpenAICompatibleResponse(
       await response.json(),
-      defaultUrl.includes('deepseek') ? 'DeepSeek' : 'OpenRouter',
+      provider,
+      expectedToolName,
     )
     if (parsed.model !== model) {
       throw new ProviderBatchError('Provider returned an unrequested model', [
@@ -483,6 +835,7 @@ async function requestOpenAi(
           requestId,
           specId,
           role,
+          provider,
           requestedModel: model,
           returnedModel: parsed.model,
           usage: parsed.usage,
@@ -499,6 +852,7 @@ async function requestOpenAi(
         requestId,
         specId,
         role,
+        provider,
         requestedModel: model,
         returnedModel: parsed.model,
         usage: parsed.usage,
@@ -514,6 +868,7 @@ async function requestOpenAi(
       requestId,
       specId,
       role,
+      provider,
       requestedModel: model,
       latencyMs: Math.round(performance.now() - started),
       status: aborted ? 'aborted' : 'error',
@@ -529,32 +884,212 @@ async function requestOpenAi(
   }
 }
 
-type OpenAICompatibleResponse = {
-  model?: unknown
-  usage?: { prompt_tokens?: unknown; completion_tokens?: unknown }
-  choices?: Array<{ message?: { content?: unknown } }>
+async function requestAnthropicTool(
+  model: string,
+  apiKey: string,
+  options: Options,
+  document: SyntheticDocument,
+  role: JudgeRole,
+  outerSignal?: AbortSignal,
+  validationFeedback?: string,
+  attempt = 1,
+) {
+  const provider = 'opencode-go'
+  const specId = document.id
+  const requestId = `${role}:${specId}:${Date.now()}`
+  const started = performance.now()
+  const signal = outerSignal
+    ? AbortSignal.any([
+        outerSignal,
+        AbortSignal.timeout(options.timeoutMs ?? 120000),
+      ])
+    : AbortSignal.timeout(options.timeoutMs ?? 120000)
+  try {
+    const response = await (options.fetch ?? fetch)(
+      `${options.baseUrl ?? 'https://opencode.ai/zen/go/v1'}/messages`,
+      {
+        method: 'POST',
+        signal,
+        headers: {
+          'x-api-key': apiKey,
+          'Content-Type': 'application/json',
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 1200,
+          temperature: 0,
+          messages: [
+            {
+              role: 'user',
+              content: judgePrompt(document, validationFeedback),
+            },
+          ],
+          tools: [
+            {
+              name: judgeSchema.name,
+              description: 'Submit the independent reference annotation.',
+              input_schema: judgeSchema.schema,
+            },
+          ],
+          tool_choice: { type: 'tool', name: judgeSchema.name },
+        }),
+      },
+    )
+    if (!response.ok) throw new ProviderHttpError(provider, response.status)
+    const parsed = parseAnthropicToolResponse(await response.json(), provider)
+    const telemetry = {
+      requestId,
+      specId,
+      role,
+      provider,
+      requestedModel: model,
+      returnedModel: parsed.model,
+      usage: parsed.usage,
+      latencyMs: Math.round(performance.now() - started),
+      status: 'success',
+      attempt,
+    } satisfies RequestTelemetry
+    if (parsed.model !== model)
+      throw new ProviderBatchError('Provider returned an unrequested model', [
+        {
+          ...telemetry,
+          status: 'error',
+          errorCode: 'model_identity_mismatch',
+        },
+      ])
+    return { ...parsed, telemetry }
+  } catch (error) {
+    if (error instanceof ProviderBatchError) throw error
+    const aborted = signal.aborted
+    throw new ProviderBatchError('Provider request failed', [
+      {
+        requestId,
+        specId,
+        role,
+        provider,
+        requestedModel: model,
+        latencyMs: Math.round(performance.now() - started),
+        status: aborted ? 'aborted' : 'error',
+        attempt,
+        errorCode:
+          error instanceof ProviderHttpError
+            ? `http_${error.status}`
+            : error instanceof Error
+              ? error.name
+              : 'unknown',
+      },
+    ])
+  }
 }
-function parseOpenAICompatibleResponse(
-  value: unknown,
-  provider: string,
-): { text: string; model: string; usage: Usage } {
+
+type AnthropicToolResponse = {
+  model?: unknown
+  usage?: { input_tokens?: unknown; output_tokens?: unknown }
+  content?: Array<{ type?: unknown; name?: unknown; input?: unknown }>
+}
+function parseAnthropicToolResponse(value: unknown, provider: string) {
   if (!value || typeof value !== 'object')
     throw new Error(`${provider} returned invalid JSON`)
-  const body = value as OpenAICompatibleResponse
-  const text = body.choices?.[0]?.message?.content
-  const inputTokens = body.usage?.prompt_tokens
-  const outputTokens = body.usage?.completion_tokens
+  const body = value as AnthropicToolResponse
+  const tool = body.content?.find(
+    (entry) =>
+      entry.type === 'tool_use' &&
+      entry.name === judgeSchema.name &&
+      entry.input !== undefined,
+  )
+  const inputTokens = body.usage?.input_tokens
+  const outputTokens = body.usage?.output_tokens
   if (
-    typeof text !== 'string' ||
-    text.trim().length === 0 ||
+    !tool ||
     typeof body.model !== 'string' ||
     typeof inputTokens !== 'number' ||
     typeof outputTokens !== 'number'
   )
     throw new Error(
-      `${provider} response omitted visible text, model, or usage`,
+      `${provider} response omitted judge tool input, model, or usage`,
     )
+  return {
+    text: JSON.stringify(tool.input),
+    model: body.model,
+    usage: { inputTokens, outputTokens } satisfies Usage,
+  }
+}
+
+type OpenAICompatibleResponse = {
+  model?: unknown
+  usage?: {
+    prompt_tokens?: unknown
+    completion_tokens?: unknown
+    input_tokens?: unknown
+    output_tokens?: unknown
+  }
+  choices?: Array<{
+    message?: {
+      content?: unknown
+      tool_calls?: Array<{
+        function?: { name?: unknown; arguments?: unknown }
+      }>
+    }
+  }>
+}
+function parseOpenAICompatibleResponse(
+  value: unknown,
+  provider: string,
+  expectedToolName?: string,
+): { text: string; model: string; usage: Usage } {
+  if (!value || typeof value !== 'object')
+    throw new Error(`${provider} returned invalid JSON`)
+  const body = value as OpenAICompatibleResponse
+  const message = body.choices?.[0]?.message
+  const toolCalls = message?.tool_calls
+  const selectedTool = expectedToolName
+    ? toolCalls?.find((call) => call.function?.name === expectedToolName)
+    : undefined
+  if (expectedToolName && toolCalls?.length && !selectedTool)
+    throw providerResponseError(provider, 'tool_name_mismatch')
+  const toolArguments = selectedTool?.function?.arguments
+  if (selectedTool && toolArguments === undefined)
+    throw providerResponseError(provider, 'missing_tool_arguments')
+  // Some OpenRouter model routes honour the forced schema but normalize the
+  // result into assistant content instead of an OpenAI tool_calls entry. The
+  // same authoritative local parser validates either transport shape.
+  const rawText = selectedTool ? toolArguments : message?.content
+  const text =
+    selectedTool && rawText && typeof rawText === 'object'
+      ? JSON.stringify(rawText)
+      : openAiText(rawText)
+  if (expectedToolName && !selectedTool && !text)
+    throw providerResponseError(provider, 'missing_tool_call')
+  const inputTokens = body.usage?.prompt_tokens ?? body.usage?.input_tokens
+  const outputTokens =
+    body.usage?.completion_tokens ?? body.usage?.output_tokens
+  if (!text) throw providerResponseError(provider, 'missing_output')
+  if (typeof body.model !== 'string')
+    throw providerResponseError(provider, 'missing_model')
+  if (typeof inputTokens !== 'number' || typeof outputTokens !== 'number')
+    throw providerResponseError(provider, 'missing_usage')
   return { text, model: body.model, usage: { inputTokens, outputTokens } }
+}
+
+function providerResponseError(provider: string, reason: string) {
+  const error = new Error(`${provider} response ${reason.replaceAll('_', ' ')}`)
+  error.name = `provider_${reason}`
+  return error
+}
+
+function openAiText(value: unknown) {
+  if (typeof value === 'string' && value.trim()) return value
+  if (!Array.isArray(value)) return undefined
+  const text = value
+    .flatMap((part) =>
+      part && typeof part === 'object' && 'text' in part
+        ? [(part as { text?: unknown }).text]
+        : [],
+    )
+    .filter((part): part is string => typeof part === 'string')
+    .join('')
+  return text.trim() ? text : undefined
 }
 
 async function generateConcurrent<T extends { id: string }, Result>(
@@ -649,7 +1184,11 @@ function isRetryable(error: unknown) {
       : undefined
   const status = code?.startsWith('http_') ? Number(code.slice(5)) : undefined
   return (
-    status === 408 || status === 429 || (status !== undefined && status >= 500)
+    code === 'TimeoutError' ||
+    code === 'TypeError' ||
+    status === 408 ||
+    status === 429 ||
+    (status !== undefined && status >= 500)
   )
 }
 function retryReason(error: unknown) {

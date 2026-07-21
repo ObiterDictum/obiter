@@ -5,8 +5,8 @@ import {
 } from './models'
 
 describe('OpenRouter model configuration', () => {
-  it('pins the approved Claude model defaults', () => {
+  it('pins the approved generation and annotation model defaults', () => {
     expect(defaultOpenRouterBenchmarkModel).toBe('anthropic/claude-opus-4.8')
-    expect(defaultOpenRouterQaModel).toBe('anthropic/claude-haiku-4.5')
+    expect(defaultOpenRouterQaModel).toBe('google/gemini-3.6-flash')
   })
 })

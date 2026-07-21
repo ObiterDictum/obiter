@@ -94,6 +94,8 @@ export interface RequestTelemetry {
   requestId: string
   specId: string
   role: ProviderRole
+  /** Provider route used for this request. Optional only for legacy artifacts. */
+  provider?: string
   requestedModel: string
   returnedModel?: string
   usage?: Usage
@@ -184,7 +186,12 @@ export interface JudgeAdapter {
     documents: SyntheticDocument[],
     signal?: AbortSignal,
   ): Promise<
-    Array<{ id: string; verdict: string; telemetry?: RequestTelemetry }>
+    Array<{
+      id: string
+      verdict: string
+      telemetry?: RequestTelemetry
+      retryTelemetry?: RequestTelemetry[]
+    }>
   >
 }
 
