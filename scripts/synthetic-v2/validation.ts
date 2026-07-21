@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
-import { stripMarkers } from './markers'
+import { generationSpecIdentity } from './matrix'
+import { stripMarkers, validateSpans } from './markers'
 import type {
   DocumentSpec,
   HardNegativeAssertion,
@@ -41,22 +42,48 @@ function documentFromSpans(
   spans: SyntheticDocument['spans'],
   generator: string,
 ): SyntheticDocument {
-  const emitted = new Set(spans.map((span) => span.category))
-  for (const category of spec.requiredCategories) {
-    if (!emitted.has(category))
-      throw new Error(`${spec.id} omitted required category ${category}`)
-  }
-  assertHardNegatives(text, spans, spec.hardNegatives)
-  return {
+  const document = {
     id: spec.id,
     text,
     spans,
     generator,
-    specCell: `${spec.docType}|${spec.register}|${spec.difficulty}`,
+    specCell: generationSpecIdentity(spec),
     matrixCells: spec.matrixCells,
     contentHash: contentHash(text),
     hardNegatives: spec.hardNegatives,
   }
+  assertDocumentMatchesSpec(document, spec)
+  return document
+}
+
+/** One fail-closed validation contract for generated and persisted documents. */
+export function assertDocumentMatchesSpec(
+  document: SyntheticDocument,
+  spec: DocumentSpec,
+) {
+  if (document.id !== spec.id)
+    throw new Error(`Document does not bind specification ${spec.id}`)
+  if (document.contentHash !== contentHash(document.text))
+    throw new Error(`${document.id} has an invalid content hash`)
+  validateSpans(document.text, document.spans)
+  const emitted = new Set(document.spans.map((span) => span.category))
+  for (const category of spec.requiredCategories) {
+    if (!emitted.has(category))
+      throw new Error(`${spec.id} omitted required category ${category}`)
+  }
+  if (document.specCell !== generationSpecIdentity(spec))
+    throw new Error(`${spec.id} has an invalid specification identity`)
+  if (
+    JSON.stringify([...document.matrixCells].sort()) !==
+    JSON.stringify([...spec.matrixCells].sort())
+  )
+    throw new Error(`${spec.id} has invalid matrix coverage`)
+  if (
+    JSON.stringify(document.hardNegatives ?? []) !==
+    JSON.stringify(spec.hardNegatives)
+  )
+    throw new Error(`${spec.id} has invalid hard-negative assertions`)
+  assertHardNegatives(document.text, document.spans, spec.hardNegatives)
 }
 
 /** Verifies required neutral literals and forbids positive annotation overlap. */

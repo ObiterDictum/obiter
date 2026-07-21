@@ -35,6 +35,16 @@ export function matrixCell(
   return `${docType}|${category}|${register}|${difficulty}`
 }
 
+/**
+ * Stable identity persisted with generated documents. A specification can
+ * require several category cells, so its identity must bind all of them.
+ */
+export function generationSpecIdentity(
+  spec: Pick<DocumentSpec, 'matrixCells'>,
+) {
+  return [...spec.matrixCells].sort().join('||')
+}
+
 function scenarioFor(index: number) {
   const matters = [
     'a disputed service-charge demand following remedial roof works',
@@ -62,15 +72,29 @@ function scenarioFor(index: number) {
 function hardNegatives(
   difficulty: Difficulty,
   id: string,
+  requiredCategories: SpanCategory[],
 ): DocumentSpec['hardNegatives'] {
   if (difficulty !== 'hard_negative') return []
-  const token = id.toUpperCase().replaceAll('-', '')
+  const ordinal = Number(id.match(/(\d+)$/)?.[1] ?? 1)
   const noOverlap = [...spanCategories]
+  const claimSequence = String(ordinal).padStart(6, '0')
+  const companyNumber = String(10_000_000 + ordinal).slice(-8)
+  const categoryAssertions = requiredCategories.map((category, index) => {
+    const counterexample = categoryCounterexample(category, index)
+    return {
+      id: `${id}:${category}:counterexample`,
+      ...counterexample,
+      occurrence: 1,
+      expectedCount: 1,
+      mustNotOverlap: noOverlap,
+    }
+  })
   return [
+    ...categoryAssertions,
     {
       id: `${id}:neutral-citation`,
       kind: 'neutral_citation',
-      quote: `[2099] EWHC ${token.slice(-4)} (KB)`,
+      quote: `[2099] EWHC ${100 + (ordinal % 900)} (KB)`,
       occurrence: 1,
       expectedCount: 1,
       mustNotOverlap: noOverlap,
@@ -78,7 +102,7 @@ function hardNegatives(
     {
       id: `${id}:claim-number`,
       kind: 'claim_number',
-      quote: `Claim No. ${token.slice(-8)}/CIV`,
+      quote: `Claim No. KB-2026-${claimSequence}`,
       occurrence: 1,
       expectedCount: 1,
       mustNotOverlap: noOverlap,
@@ -86,7 +110,7 @@ function hardNegatives(
     {
       id: `${id}:damages-figure`,
       kind: 'damages_figure',
-      quote: `£${String(100000 + Number(token.slice(-3) || 0)).slice(-6)}`,
+      quote: `£${(125_000 + ordinal).toLocaleString('en-GB')}`,
       occurrence: 1,
       expectedCount: 1,
       mustNotOverlap: noOverlap,
@@ -94,12 +118,43 @@ function hardNegatives(
     {
       id: `${id}:company-registration`,
       kind: 'company_registration',
-      quote: `Company No. ${token.slice(-8)}`,
+      quote: `Company No. ${companyNumber}`,
       occurrence: 1,
       expectedCount: 1,
       mustNotOverlap: noOverlap,
     },
   ]
+}
+
+function categoryCounterexample(category: SpanCategory, index: number) {
+  const role = ['the Claimant', 'the Respondent', 'the Applicant'][index % 3]!
+  switch (category) {
+    case 'person_private':
+    case 'person_protected':
+    case 'person_professional':
+      return { kind: 'role_reference' as const, quote: role }
+    case 'address':
+      return {
+        kind: 'court_address' as const,
+        quote: 'Royal Courts of Justice',
+      }
+    case 'email':
+    case 'phone':
+      return {
+        kind: 'court_contact' as const,
+        quote:
+          category === 'email'
+            ? 'registrar@justice.gov.uk'
+            : 'Royal Courts switchboard 020 7947 6000',
+      }
+    case 'date':
+      return { kind: 'procedural_date' as const, quote: '12 March 2026' }
+    default:
+      return {
+        kind: 'public_legal_reference' as const,
+        quote: `CPR 31.6 paragraph ${index + 1}`,
+      }
+  }
 }
 
 /**
@@ -140,10 +195,56 @@ export function buildQuotaSpecs(total: number, prefix: string): DocumentSpec[] {
       hardNegatives: hardNegatives(
         base.difficulty,
         `${prefix}-${String(index + 1).padStart(5, '0')}`,
+        base.requiredCategories,
       ),
       matrixCells,
     }
   })
+}
+
+/**
+ * A 24-document tournament cannot fill the full 816-cell benchmark matrix.
+ * It instead deliberately covers every document type, register, difficulty,
+ * and category group before candidate comparison.
+ */
+export function buildTournamentQuotaSpecs(total = 24, prefix = 'tournament') {
+  if (total !== 24)
+    throw new Error(
+      'Tournament comparison requires the fixed 24-document specification set',
+    )
+  const all = buildQuotaSpecs(192, prefix)
+  return Array.from({ length: total }, (_, index) => {
+    const documentType = index % documentTypes.length
+    const register = Math.floor(index / documentTypes.length) % registers.length
+    const difficulty = (index + Math.floor(index / 4)) % difficulties.length
+    const categoryGroup = index % categoryGroups.length
+    const baseIndex =
+      ((documentType * registers.length + register) * difficulties.length +
+        difficulty) *
+        categoryGroups.length +
+      categoryGroup
+    return all[baseIndex]!
+  })
+}
+
+export function assertTournamentStratification(specs: DocumentSpec[]) {
+  if (specs.length !== 24)
+    throw new Error('Tournament must contain exactly 24 documents')
+  const documentTypeCoverage = new Set(specs.map((spec) => spec.docType))
+  const registerCoverage = new Set(specs.map((spec) => spec.register))
+  const difficultyCoverage = new Set(specs.map((spec) => spec.difficulty))
+  const categoryCoverage = new Set(
+    specs.flatMap((spec) => spec.requiredCategories),
+  )
+  if (
+    documentTypeCoverage.size !== documentTypes.length ||
+    registerCoverage.size !== registers.length ||
+    difficultyCoverage.size !== difficulties.length ||
+    categoryCoverage.size !== spanCategories.length
+  )
+    throw new Error(
+      'Tournament specifications are not stratified across required dimensions',
+    )
 }
 
 export function expectedMatrixCells() {

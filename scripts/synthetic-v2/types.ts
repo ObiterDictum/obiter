@@ -40,6 +40,11 @@ export type HardNegativeKind =
   | 'claim_number'
   | 'damages_figure'
   | 'company_registration'
+  | 'role_reference'
+  | 'procedural_date'
+  | 'court_contact'
+  | 'court_address'
+  | 'public_legal_reference'
 
 /** Exact, fictional counterexample required in immutable source text. */
 export interface HardNegativeAssertion {
@@ -81,16 +86,22 @@ export interface Usage {
   cacheReadInputTokens?: number
 }
 
+export type ProviderRole =
+  'writer' | 'annotator' | 'primary_judge' | 'dispute_judge'
+
+/** Request-level evidence, including failed retries; never includes source text. */
 export interface RequestTelemetry {
   requestId: string
   specId: string
-  role: 'writer' | 'annotator' | 'primary_judge' | 'dispute_judge'
+  role: ProviderRole
   requestedModel: string
   returnedModel?: string
   usage?: Usage
   latencyMs: number
   status: 'success' | 'error' | 'aborted'
   errorCode?: string
+  attempt: number
+  retryOfRequestId?: string
 }
 
 export interface GeneratedDocument {
@@ -99,6 +110,7 @@ export interface GeneratedDocument {
   generator: string
   usage: Usage
   telemetry?: RequestTelemetry
+  retryTelemetry?: RequestTelemetry[]
 }
 
 /** Model annotations reference immutable generated document text. */
@@ -108,6 +120,7 @@ export interface GeneratedAnnotation {
   generator: string
   usage: Usage
   telemetry?: RequestTelemetry
+  retryTelemetry?: RequestTelemetry[]
 }
 
 export interface SyntheticDocument {
@@ -137,6 +150,7 @@ export interface LabelInput {
 
 export interface LabelingAdapter {
   readonly name: string
+  readonly model: string
   readonly maxChargeAttempts: number
   label(
     inputs: LabelInput[],
@@ -153,6 +167,7 @@ export interface LabelingAdapter {
 
 export interface GeneratorAdapter {
   readonly name: string
+  readonly model: string
   readonly maxChargeAttempts: number
   generate(
     specs: DocumentSpec[],
@@ -163,6 +178,8 @@ export interface GeneratorAdapter {
 
 export interface JudgeAdapter {
   readonly name: string
+  readonly model: string
+  readonly maxChargeAttempts: number
   judge(
     documents: SyntheticDocument[],
     signal?: AbortSignal,

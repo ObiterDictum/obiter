@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
   NearDuplicateIndex,
+  assertDocumentMatchesSpec,
   assertHardNegatives,
+  contentHash,
   nearDuplicatePairs,
 } from './validation'
+import { buildQuotaSpecs, generationSpecIdentity } from './matrix'
 import type { HardNegativeAssertion, SyntheticDocument } from './types'
 
 const negative: HardNegativeAssertion = {
@@ -57,6 +60,45 @@ describe('structured hard negatives', () => {
         [negative],
       ),
     ).toThrow('must not overlap')
+  })
+})
+
+describe('document-to-spec validation', () => {
+  const spec = buildQuotaSpecs(1, 'validation')[0]!
+  const values = spec.requiredCategories.map((category) => `value-${category}`)
+  const text = values.join(' ')
+  const spans = spec.requiredCategories.map((category, index) => {
+    const value = values[index]!
+    const start = text.indexOf(value)
+    return { category, start, end: start + value.length, text: value }
+  })
+  const document = {
+    id: spec.id,
+    text,
+    spans,
+    generator: 'test',
+    specCell: generationSpecIdentity(spec),
+    matrixCells: spec.matrixCells,
+    contentHash: contentHash(text),
+    hardNegatives: spec.hardNegatives,
+  }
+
+  it('rejects overlaps, missing categories, forged coverage, and invalid hashes', () => {
+    expect(() =>
+      assertDocumentMatchesSpec(
+        { ...document, spans: [...spans, { ...spans[0]!, start: 1, end: 2, text: text.slice(1, 2) }] },
+        spec,
+      ),
+    ).toThrow(/Overlapping|Offset round-trip/)
+    expect(() =>
+      assertDocumentMatchesSpec({ ...document, spans: spans.slice(1) }, spec),
+    ).toThrow('omitted required category')
+    expect(() =>
+      assertDocumentMatchesSpec({ ...document, matrixCells: [] }, spec),
+    ).toThrow('invalid matrix coverage')
+    expect(() =>
+      assertDocumentMatchesSpec({ ...document, contentHash: 'a'.repeat(64) }, spec),
+    ).toThrow('invalid content hash')
   })
 })
 

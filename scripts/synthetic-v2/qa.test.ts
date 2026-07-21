@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  evaluateIndependentReference,
   judgePrompt,
+  parseIndependentJudgeReference,
   parseJudgeVerdict,
   qaSample,
   requiresRegeneration,
@@ -43,12 +45,53 @@ describe('mechanical QA', () => {
     ).toMatchObject([{ category: 'email', text: 'alex@example.test' }])
   })
 
+  it('creates text-only quote-occurrence references and resolves repeats locally', () => {
+    const repeated = {
+      ...document,
+      text: 'Alex met Alex at the fictional hearing.',
+      spans: [],
+    }
+    const prompt = judgePrompt(repeated)
+    expect(prompt).not.toContain('Proposed spans')
+    expect(prompt).not.toContain(JSON.stringify(repeated.spans))
+    const reference = parseIndependentJudgeReference(
+      JSON.stringify({
+        id: repeated.id,
+        referenceSpans: [
+          { category: 'person_private', quote: 'Alex', occurrence: 2 },
+        ],
+        realismScore: 5,
+        confidence: 1,
+        rationale: 'fictional',
+      }),
+      repeated.id,
+      repeated,
+    )
+    expect(
+      evaluateIndependentReference(repeated, reference).referenceSpans,
+    ).toEqual([{ category: 'person_private', start: 9, end: 13, text: 'Alex' }])
+    expect(() =>
+      parseIndependentJudgeReference(
+        JSON.stringify({
+          ...reference,
+          referenceSpans: [
+            { category: 'person_private', quote: 'Absent', occurrence: 1 },
+          ],
+        }),
+        repeated.id,
+        repeated,
+      ),
+    ).toThrow('absent or ambiguous')
+  })
+
   it('rejects a low-confidence or incomplete automated judgement', () => {
     const verdict = parseJudgeVerdict(
       JSON.stringify({
         id: 'qa-1',
         allProposedSpansCorrect: true,
         hardNegativesCorrect: true,
+        hardNegativeAssertions: [],
+        referenceSpans: [],
         obviousUnmarkedSpans: [],
         realismScore: 5,
         confidence: 0.79,

@@ -1,8 +1,14 @@
+import { createHash } from 'node:crypto'
 import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { rootSentinelFile, writeDatasetAtomically } from './artifacts'
+import {
+  readDatasetManifest,
+  rootSentinelFile,
+  writeDatasetAtomically,
+} from './artifacts'
+import { contentHash } from './validation'
 import type { SyntheticDocument } from './types'
 
 const directories: string[] = []
@@ -20,19 +26,7 @@ const document: SyntheticDocument = {
   generator: 'fake:model',
   specCell: 'x',
   matrixCells: [],
-  contentHash: 'a'.repeat(64),
-}
-
-async function readManifest(
-  path: string,
-): Promise<{ documents: Array<{ textHash: string }> }> {
-  try {
-    return JSON.parse(await readFile(path, 'utf8')) as {
-      documents: Array<{ textHash: string }>
-    }
-  } catch {
-    throw new Error('Test fixture manifest was not readable JSON')
-  }
+  contentHash: contentHash('Synthetic.'),
 }
 
 async function root(kind: 'private-corpus' | 'benchmark-release') {
@@ -52,20 +46,62 @@ describe('safe synthetic artifact outputs', () => {
       productRoot: product,
       rootKind: 'private-corpus',
       stage: 'training_seed',
-      metadata: {},
+      metadata: { stage: 'training_seed' },
     })
-    const manifest = await readManifest(join(destination, 'MANIFEST.json'))
-    expect(manifest.documents[0].textHash).toBe(document.contentHash)
+    const { manifest } = await readDatasetManifest(destination, 'training_seed')
+    expect(manifest.documents[0]?.textHash).toBe(document.contentHash)
     await expect(
       writeDatasetAtomically([document], {
         root: output,
         productRoot: product,
         rootKind: 'private-corpus',
         stage: 'training_seed',
-        metadata: {},
+        metadata: { stage: 'training_seed' },
       }),
     ).rejects.toThrow('overwrite')
   })
+
+  it('hashes the exact canonical JSON record persisted in documents.jsonl', async () => {
+    const output = await root('private-corpus')
+    const product = await mkdtemp(join(tmpdir(), 'product-'))
+    directories.push(product)
+    const destination = await writeDatasetAtomically([document], {
+      root: output,
+      productRoot: product,
+      rootKind: 'private-corpus',
+      stage: 'training_seed',
+      metadata: { stage: 'training_seed' },
+    })
+    const [line, { manifest }] = await Promise.all([
+      readFile(join(destination, 'documents.jsonl'), 'utf8').then((content) =>
+        content.trim(),
+      ),
+      readDatasetManifest(destination, 'training_seed'),
+    ])
+    expect(manifest.documents[0]?.recordHash).toBe(
+      createHash('sha256').update(line).digest('hex'),
+    )
+    await writeFile(join(destination, 'documents.jsonl'), `${line} `)
+    await expect(
+      readDatasetManifest(destination, 'training_seed'),
+    ).rejects.toThrow('does not bind')
+  })
+
+  it('rejects stale manifests and document content hashes before publication', async () => {
+    const output = await root('private-corpus')
+    const product = await mkdtemp(join(tmpdir(), 'product-'))
+    directories.push(product)
+    await expect(
+      writeDatasetAtomically([{ ...document, contentHash: 'a'.repeat(64) }], {
+        root: output,
+        productRoot: product,
+        rootKind: 'private-corpus',
+        stage: 'training_seed',
+        metadata: { stage: 'training_seed' },
+      }),
+    ).rejects.toThrow('content hash is invalid')
+  })
+
   it('fails closed for missing/wrong sentinels, repository containment, and commit failure cleanup', async () => {
     const output = await mkdtemp(join(tmpdir(), 'synthetic-v2-no-sentinel-'))
     directories.push(output)
@@ -77,7 +113,7 @@ describe('safe synthetic artifact outputs', () => {
         productRoot: product,
         rootKind: 'private-corpus',
         stage: 'training_seed',
-        metadata: {},
+        metadata: { stage: 'training_seed' },
       }),
     ).rejects.toThrow(/sentinel/i)
     await writeFile(
@@ -90,7 +126,7 @@ describe('safe synthetic artifact outputs', () => {
         productRoot: product,
         rootKind: 'private-corpus',
         stage: 'training_seed',
-        metadata: {},
+        metadata: { stage: 'training_seed' },
       }),
     ).rejects.toThrow('kind')
     await expect(
@@ -99,7 +135,7 @@ describe('safe synthetic artifact outputs', () => {
         productRoot: product,
         rootKind: 'private-corpus',
         stage: 'training_seed',
-        metadata: {},
+        metadata: { stage: 'training_seed' },
       }),
     ).rejects.toThrow('outside')
     const valid = await root('private-corpus')
@@ -109,7 +145,7 @@ describe('safe synthetic artifact outputs', () => {
         productRoot: product,
         rootKind: 'private-corpus',
         stage: 'training_seed',
-        metadata: {},
+        metadata: { stage: 'training_seed' },
         beforeCommit: async () => {
           throw new Error('test failure')
         },

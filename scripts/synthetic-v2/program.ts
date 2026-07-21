@@ -1,4 +1,4 @@
-import { buildQuotaSpecs } from './matrix'
+import { buildQuotaSpecs, buildTournamentQuotaSpecs } from './matrix'
 import type { DocumentSpec } from './types'
 
 /**
@@ -34,7 +34,9 @@ export type CorpusStage = keyof typeof corpusProgramme
 
 export function corpusStageSpecs(stage: CorpusStage): DocumentSpec[] {
   const definition = corpusProgramme[stage]
-  return buildQuotaSpecs(definition.documents, definition.prefix)
+  return stage === 'tournament'
+    ? buildTournamentQuotaSpecs(definition.documents, definition.prefix)
+    : buildQuotaSpecs(definition.documents, definition.prefix)
 }
 
 export function isCorpusStage(value: string | undefined): value is CorpusStage {

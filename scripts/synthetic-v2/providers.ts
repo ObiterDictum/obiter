@@ -5,7 +5,7 @@ import {
   labelSystemPrompt,
   labelUserPrompt,
 } from './prompts'
-import { judgePrompt } from './qa'
+import { judgePrompt, parseIndependentJudgeReference } from './qa'
 import type {
   DocumentSpec,
   GeneratedAnnotation,
@@ -90,33 +90,30 @@ const annotationSchema = {
   },
 } as const
 const judgeSchema = {
-  name: 'synthetic_v2_judge',
+  name: 'synthetic_v2_independent_reference',
   strict: true,
   schema: {
     type: 'object',
     additionalProperties: false,
     required: [
       'id',
-      'allProposedSpansCorrect',
-      'hardNegativesCorrect',
-      'obviousUnmarkedSpans',
+      'referenceSpans',
       'realismScore',
       'confidence',
       'rationale',
     ],
     properties: {
       id: { type: 'string' },
-      allProposedSpansCorrect: { type: 'boolean' },
-      hardNegativesCorrect: { type: 'boolean' },
-      obviousUnmarkedSpans: {
+      referenceSpans: {
         type: 'array',
         items: {
           type: 'object',
           additionalProperties: false,
-          required: ['category', 'text'],
+          required: ['category', 'quote', 'occurrence'],
           properties: {
             category: { type: 'string' },
-            text: { type: 'string' },
+            quote: { type: 'string' },
+            occurrence: { type: 'integer', minimum: 1 },
           },
         },
       },
@@ -132,7 +129,7 @@ export class OpenRouterGenerator implements GeneratorAdapter {
   readonly maxChargeAttempts = 1
   private readonly apiKey: string
   constructor(
-    private readonly model: string,
+    readonly model: string,
     private readonly options: Options = {},
   ) {
     this.name = `openrouter:${model}`
@@ -185,7 +182,7 @@ export class OpenRouterLabeler implements LabelingAdapter {
   readonly maxChargeAttempts = 1
   private readonly apiKey: string
   constructor(
-    private readonly model: string,
+    readonly model: string,
     private readonly options: Options & {
       schemaMode?: 'required' | 'unsupported'
     } = {},
@@ -251,16 +248,29 @@ export class OpenRouterLabeler implements LabelingAdapter {
           'annotator',
           requestSignal,
         )
-        return {
-          customId: input.id,
-          spans: parseAnnotationResponse(
-            response.text,
-            input.draftText,
-            input.id,
-          ),
-          generator: `openrouter:${response.model}`,
-          usage: response.usage,
-          telemetry: response.telemetry,
+        try {
+          return {
+            customId: input.id,
+            spans: parseAnnotationResponse(
+              response.text,
+              input.draftText,
+              input.id,
+            ),
+            generator: `openrouter:${response.model}`,
+            usage: response.usage,
+            telemetry: response.telemetry,
+          }
+        } catch {
+          throw new ProviderBatchError(
+            'Annotation response failed validation',
+            [
+              {
+                ...response.telemetry,
+                status: 'error',
+                errorCode: 'annotation_validation_failed',
+              },
+            ],
+          )
         }
       },
     )
@@ -269,9 +279,10 @@ export class OpenRouterLabeler implements LabelingAdapter {
 
 export class OpenRouterJudge implements JudgeAdapter {
   readonly name: string
+  readonly maxChargeAttempts = 1
   private readonly apiKey: string
   constructor(
-    private readonly model: string,
+    readonly model: string,
     private readonly options: Options & {
       schemaMode?: 'required' | 'unsupported'
     } = {},
@@ -305,10 +316,23 @@ export class OpenRouterJudge implements JudgeAdapter {
           this.role,
           requestSignal,
         )
-        return {
-          id: document.id,
-          verdict: response.text,
-          telemetry: response.telemetry,
+        try {
+          // Validate the provider's independent reference before it leaves the
+          // billed adapter boundary, so failures retain response telemetry.
+          parseIndependentJudgeReference(response.text, document.id, document)
+          return {
+            id: document.id,
+            verdict: response.text,
+            telemetry: response.telemetry,
+          }
+        } catch {
+          throw new ProviderBatchError('Judge reference failed validation', [
+            {
+              ...response.telemetry,
+              status: 'error',
+              errorCode: 'judge_reference_validation_failed',
+            },
+          ])
         }
       },
     )
@@ -320,7 +344,7 @@ export class DeepSeekGenerator implements GeneratorAdapter {
   readonly maxChargeAttempts = 4
   private readonly apiKey: string
   constructor(
-    private readonly model: string,
+    readonly model: string,
     private readonly options: Options & { retries?: number } = {},
   ) {
     this.name = `deepseek:${model}`
@@ -337,29 +361,59 @@ export class DeepSeekGenerator implements GeneratorAdapter {
       onProgress,
       signal,
       async (spec, requestSignal) => {
-        const response = await withRetries(
-          () => this.request(spec, requestSignal),
-          this.options.retries ?? 3,
-          (error, attempt) =>
-            onProgress?.({
-              phase: 'retrying',
-              completed: 0,
-              total: specs.length,
-              specId: spec.id,
-              attempt,
-              reason: retryReason(error),
-            }),
-          requestSignal,
-        )
-        return {
-          customId: spec.id,
-          ...response,
-          generator: `deepseek:${response.model}`,
+        const retryTelemetry: RequestTelemetry[] = []
+        let previousRequestId: string | undefined
+        try {
+          const response = await withRetries(
+            (attempt) => this.request(spec, requestSignal, attempt),
+            this.options.retries ?? 3,
+            (error, attempt) => {
+              if (error instanceof ProviderBatchError)
+                for (const entry of error.telemetry) {
+                  retryTelemetry.push({
+                    ...entry,
+                    retryOfRequestId: previousRequestId,
+                  })
+                  previousRequestId = entry.requestId
+                }
+              onProgress?.({
+                phase: 'retrying',
+                completed: 0,
+                total: specs.length,
+                specId: spec.id,
+                attempt,
+                reason: retryReason(error),
+              })
+            },
+            requestSignal,
+          )
+          return {
+            customId: spec.id,
+            ...response,
+            generator: `deepseek:${response.model}`,
+            retryTelemetry,
+          }
+        } catch (error) {
+          if (error instanceof ProviderBatchError) {
+            const terminal = error.telemetry.map((entry) => ({
+              ...entry,
+              retryOfRequestId: previousRequestId,
+            }))
+            throw new ProviderBatchError('DeepSeek retries exhausted', [
+              ...retryTelemetry,
+              ...terminal,
+            ])
+          }
+          throw error
         }
       },
     )
   }
-  private async request(spec: DocumentSpec, signal?: AbortSignal) {
+  private async request(
+    spec: DocumentSpec,
+    signal: AbortSignal | undefined,
+    attempt: number,
+  ) {
     return requestOpenAi(
       this.model,
       this.apiKey,
@@ -377,6 +431,7 @@ export class DeepSeekGenerator implements GeneratorAdapter {
       'writer',
       signal,
       'https://api.deepseek.com',
+      attempt,
     )
   }
 }
@@ -390,6 +445,7 @@ async function requestOpenAi(
   role: RequestTelemetry['role'],
   outerSignal?: AbortSignal,
   defaultUrl = 'https://openrouter.ai/api/v1',
+  attempt = 1,
 ) {
   const started = performance.now()
   const requestId = `${role}:${specId}:${Date.now()}`
@@ -421,6 +477,22 @@ async function requestOpenAi(
       await response.json(),
       defaultUrl.includes('deepseek') ? 'DeepSeek' : 'OpenRouter',
     )
+    if (parsed.model !== model) {
+      throw new ProviderBatchError('Provider returned an unrequested model', [
+        {
+          requestId,
+          specId,
+          role,
+          requestedModel: model,
+          returnedModel: parsed.model,
+          usage: parsed.usage,
+          latencyMs: Math.round(performance.now() - started),
+          status: 'error',
+          errorCode: 'model_identity_mismatch',
+          attempt,
+        },
+      ])
+    }
     return {
       ...parsed,
       telemetry: {
@@ -432,9 +504,11 @@ async function requestOpenAi(
         usage: parsed.usage,
         latencyMs: Math.round(performance.now() - started),
         status: 'success',
+        attempt,
       } satisfies RequestTelemetry,
     }
   } catch (error) {
+    if (error instanceof ProviderBatchError) throw error
     const aborted = signal.aborted
     const telemetry: RequestTelemetry = {
       requestId,
@@ -443,6 +517,7 @@ async function requestOpenAi(
       requestedModel: model,
       latencyMs: Math.round(performance.now() - started),
       status: aborted ? 'aborted' : 'error',
+      attempt,
       errorCode:
         error instanceof ProviderHttpError
           ? `http_${error.status}`
@@ -547,7 +622,7 @@ function resultTelemetry(value: unknown): RequestTelemetry | undefined {
 }
 
 async function withRetries<T>(
-  operation: () => Promise<T>,
+  operation: (attempt: number) => Promise<T>,
   retries: number,
   onRetry?: (error: unknown, attempt: number) => void,
   signal?: AbortSignal,
@@ -555,7 +630,7 @@ async function withRetries<T>(
   let lastError: unknown
   for (let attempt = 0; attempt <= retries; attempt++) {
     try {
-      return await operation()
+      return await operation(attempt + 1)
     } catch (error) {
       lastError = error
       if (signal?.aborted || attempt === retries || !isRetryable(error)) break

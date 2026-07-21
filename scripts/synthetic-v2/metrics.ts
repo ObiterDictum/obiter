@@ -1,4 +1,8 @@
-import type { SyntheticSpan } from './types'
+import type {
+  HardNegativeAssertion,
+  SyntheticDocument,
+  SyntheticSpan,
+} from './types'
 
 export type SpanMetrics = {
   truePositive: number
@@ -7,6 +11,57 @@ export type SpanMetrics = {
   precision: number
   recall: number
   f1: number
+}
+
+export type HardNegativeScore = {
+  totalAssertions: number
+  falsePositiveAssertions: number
+  falsePositiveRate: number
+  falsePositiveAssertionIds: string[]
+}
+
+/** Scores actual predicted offsets against each immutable hard-negative assertion. */
+export function scoreHardNegativeAssertions(
+  documents: Array<Pick<SyntheticDocument, 'text' | 'spans' | 'hardNegatives'>>,
+): HardNegativeScore {
+  const falsePositiveAssertionIds: string[] = []
+  let totalAssertions = 0
+  for (const document of documents)
+    for (const assertion of document.hardNegatives ?? []) {
+      totalAssertions++
+      const start = assertionStart(document.text, assertion)
+      const end = start + assertion.quote.length
+      if (
+        document.spans.some(
+          (span) =>
+            assertion.mustNotOverlap.includes(span.category) &&
+            span.start < end &&
+            start < span.end,
+        )
+      )
+        falsePositiveAssertionIds.push(assertion.id)
+    }
+  return {
+    totalAssertions,
+    falsePositiveAssertions: falsePositiveAssertionIds.length,
+    falsePositiveRate: hardNegativeFalsePositiveRate(
+      totalAssertions,
+      falsePositiveAssertionIds.length,
+    ),
+    falsePositiveAssertionIds,
+  }
+}
+
+function assertionStart(text: string, assertion: HardNegativeAssertion) {
+  let offset = -1
+  for (let occurrence = 0; occurrence < assertion.occurrence; occurrence++) {
+    offset = text.indexOf(assertion.quote, offset + 1)
+    if (offset === -1)
+      throw new Error(
+        `Hard-negative assertion ${assertion.id} is absent from source`,
+      )
+  }
+  return offset
 }
 
 export function hardNegativeFalsePositiveRate(

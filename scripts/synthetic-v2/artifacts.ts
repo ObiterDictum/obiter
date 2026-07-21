@@ -11,18 +11,34 @@ import {
 } from 'node:fs/promises'
 import { dirname, join, relative, resolve } from 'node:path'
 import { expectedMatrixCells } from './matrix'
-import { canonicalHash } from './governance'
-import { nearDuplicateSignature } from './validation'
+import { canonicalHash, canonicalJson } from './governance'
 import type { CorpusStage } from './program'
+import { contentHash, nearDuplicateSignature } from './validation'
 import type { SyntheticDocument } from './types'
 
 export const rootSentinelFile = 'SYNTHETIC_V2_ROOT.json'
 type RootKind = 'private-corpus' | 'benchmark-release'
+type DatasetStage = CorpusStage | 'benchmark_candidate'
+
+type ManifestDocument = {
+  id: string
+  textHash: string
+  recordHash: string
+}
+
+export type ReleaseManifest = {
+  version: 'synthetic-v2-release:v2'
+  stage: CorpusStage
+  metadata: Record<string, unknown>
+  documents: ManifestDocument[]
+  nearDuplicateSignatures: ReturnType<typeof nearDuplicateSignature>[]
+  manifestHash: string
+}
 
 export type DatasetWriteOptions = {
   root: string
   productRoot: string
-  stage: CorpusStage | 'benchmark_candidate'
+  stage: DatasetStage
   rootKind: RootKind
   metadata: Record<string, unknown>
   version?: string
@@ -33,7 +49,7 @@ export async function assertSafeOutputRoot(
   root: string,
   productRoot: string,
   kind: RootKind,
-  stage: DatasetWriteOptions['stage'],
+  stage: DatasetStage,
 ) {
   const canonicalRoot = await canonicalExistingPath(root, 'output root')
   const canonicalProduct = await canonicalExistingPath(
@@ -100,72 +116,94 @@ export async function writeDatasetAtomically(
   }
 }
 
-async function writeDatasetFiles(
+export async function readDatasetManifest(
   directory: string,
-  documents: SyntheticDocument[],
-  metadata: Record<string, unknown>,
+  expectedStage?: CorpusStage,
 ) {
-  const manifest = releaseManifest(documents, metadata)
-  await Promise.all([
-    writeFile(
-      join(directory, 'documents.jsonl'),
-      `${documents.map((document) => JSON.stringify(document)).join('\n')}\n`,
-    ),
-    writeFile(
-      join(directory, 'MANIFEST.json'),
-      `${JSON.stringify(manifest, null, 2)}\n`,
-    ),
-    writeFile(
-      join(directory, 'stats.json'),
-      `${JSON.stringify({ ...datasetStats(documents), ...metadata }, null, 2)}\n`,
-    ),
+  const root = resolve(directory)
+  const [persistedDocuments, manifest] = await Promise.all([
+    readDocuments(join(root, 'documents.jsonl')),
+    readJson(join(root, 'MANIFEST.json'), 'dataset manifest'),
   ])
-  for (const file of ['documents.jsonl', 'MANIFEST.json', 'stats.json'])
-    await access(join(directory, file))
+  const documents = persistedDocuments.map(({ document }) => document)
+  assertReleaseManifestBinding(
+    manifest,
+    documents,
+    expectedStage,
+    persistedDocuments.map(({ json }) => json),
+  )
+  return { manifest, documents }
+}
+
+export function assertReleaseManifestBinding(
+  value: unknown,
+  documents: SyntheticDocument[],
+  expectedStage?: CorpusStage,
+  persistedJson?: string[],
+): asserts value is ReleaseManifest {
+  if (!value || typeof value !== 'object')
+    throw new Error('Dataset manifest must be an object')
+  const manifest = value as Partial<ReleaseManifest>
+  if (
+    manifest.version !== 'synthetic-v2-release:v2' ||
+    !isCorpusStage(manifest.stage) ||
+    !isRecord(manifest.metadata) ||
+    !Array.isArray(manifest.documents) ||
+    !Array.isArray(manifest.nearDuplicateSignatures) ||
+    !isHash(manifest.manifestHash)
+  )
+    throw new Error('Dataset manifest has invalid versioned fields')
+  if (expectedStage && manifest.stage !== expectedStage)
+    throw new Error(
+      `Dataset manifest stage mismatch: expected ${expectedStage}`,
+    )
+  assertPersistedDocuments(documents)
+  const expected = releaseManifest(documents, manifest.metadata)
+  if (canonicalJson(expected) !== canonicalJson(manifest))
+    throw new Error('Dataset manifest does not bind the persisted documents')
+  if (persistedJson) {
+    const records = new Map(
+      manifest.documents.map((record) => [record.id, record]),
+    )
+    for (const [index, document] of documents.entries()) {
+      const json = persistedJson[index]
+      const record = records.get(document.id)
+      if (
+        !json ||
+        !record ||
+        createHash('sha256').update(json).digest('hex') !== record.recordHash
+      )
+        throw new Error('Dataset manifest does not bind the persisted JSON')
+    }
+  }
 }
 
 export function releaseManifest(
   documents: SyntheticDocument[],
   metadata: Record<string, unknown>,
-) {
+): ReleaseManifest {
+  assertPersistedDocuments(documents)
+  const stage = metadata.stage
+  if (!isCorpusStage(stage))
+    throw new Error('Dataset metadata must name a corpus stage')
   const records = documents
-    .map((document) => ({
-      id: document.id,
-      textHash: document.contentHash,
-      recordHash: createHash('sha256')
-        .update(canonicalJsonRecord(document))
-        .digest('hex'),
-    }))
+    .map((document) => persistedDocumentRecord(document))
     .sort((left, right) => left.id.localeCompare(right.id))
   const nearDuplicateSignatures = documents
     .map(nearDuplicateSignature)
     .sort((left, right) => left.id.localeCompare(right.id))
-  const stage = typeof metadata.stage === 'string' ? metadata.stage : 'unknown'
-  return {
-    version: 'synthetic-v2-release:v2',
+  const unsigned = {
+    version: 'synthetic-v2-release:v2' as const,
     stage,
     metadata,
     documents: records,
     nearDuplicateSignatures,
-    manifestHash: canonicalHash({
-      stage,
-      metadata,
-      records,
-      nearDuplicateSignatures,
-    }),
   }
+  return { ...unsigned, manifestHash: canonicalHash(unsigned) }
 }
 
-function canonicalJsonRecord(document: SyntheticDocument) {
-  return JSON.stringify({
-    id: document.id,
-    text: document.text,
-    spans: [...document.spans].sort((left, right) => left.start - right.start),
-    specCell: document.specCell,
-    matrixCells: document.matrixCells,
-    generator: document.generator,
-    hardNegatives: document.hardNegatives,
-  })
+export function persistedDocumentJson(document: SyntheticDocument) {
+  return canonicalJson(document)
 }
 
 export function datasetStats(documents: SyntheticDocument[]) {
@@ -197,6 +235,78 @@ export function datasetStats(documents: SyntheticDocument[]) {
 export async function writeText(path: string, text: string) {
   await mkdir(dirname(path), { recursive: true })
   await writeFile(path, text, { flag: 'wx' })
+}
+
+async function writeDatasetFiles(
+  directory: string,
+  documents: SyntheticDocument[],
+  metadata: Record<string, unknown>,
+) {
+  const manifest = releaseManifest(documents, metadata)
+  await Promise.all([
+    writeFile(
+      join(directory, 'documents.jsonl'),
+      `${documents.map(persistedDocumentJson).join('\n')}\n`,
+    ),
+    writeFile(join(directory, 'MANIFEST.json'), `${canonicalJson(manifest)}\n`),
+    writeFile(
+      join(directory, 'stats.json'),
+      `${canonicalJson({ ...datasetStats(documents), ...metadata })}\n`,
+    ),
+  ])
+  for (const file of ['documents.jsonl', 'MANIFEST.json', 'stats.json'])
+    await access(join(directory, file))
+}
+
+function persistedDocumentRecord(
+  document: SyntheticDocument,
+): ManifestDocument {
+  return {
+    id: document.id,
+    textHash: contentHash(document.text),
+    recordHash: createHash('sha256')
+      .update(persistedDocumentJson(document))
+      .digest('hex'),
+  }
+}
+
+function assertPersistedDocuments(documents: SyntheticDocument[]) {
+  const ids = new Set<string>()
+  for (const document of documents) {
+    if (!document.id || ids.has(document.id))
+      throw new Error('Dataset documents must have unique IDs')
+    if (document.contentHash !== contentHash(document.text))
+      throw new Error(
+        `Dataset document content hash is invalid for ${document.id}`,
+      )
+    ids.add(document.id)
+  }
+}
+
+async function readDocuments(path: string) {
+  let content: string
+  try {
+    content = await readFile(path, 'utf8')
+  } catch {
+    throw new Error('Dataset documents must be readable JSONL')
+  }
+  const lines = content.split('\n').filter(Boolean)
+  if (!lines.length) throw new Error('Dataset documents must not be empty')
+  return lines.map((json, index) => {
+    try {
+      return { document: JSON.parse(json) as SyntheticDocument, json }
+    } catch {
+      throw new Error(`Dataset document JSON is invalid at line ${index + 1}`)
+    }
+  })
+}
+
+async function readJson(path: string, label: string) {
+  try {
+    return JSON.parse(await readFile(path, 'utf8')) as unknown
+  } catch {
+    throw new Error(`Synthetic ${label} must be readable JSON`)
+  }
 }
 
 async function canonicalExistingPath(path: string, label: string) {
@@ -231,4 +341,24 @@ function hasCode(error: unknown, code: string) {
 function isInside(child: string, parent: string) {
   const path = relative(parent, child)
   return path === '' || (!path.startsWith('..') && !path.includes(':'))
+}
+
+function isCorpusStage(value: unknown): value is CorpusStage {
+  return (
+    typeof value === 'string' &&
+    [
+      'tournament',
+      'training_seed',
+      'development_challenge',
+      'benchmark',
+    ].includes(value)
+  )
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+function isHash(value: unknown): value is string {
+  return typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)
 }
