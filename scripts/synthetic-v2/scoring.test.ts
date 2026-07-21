@@ -39,6 +39,8 @@ describe('adjudicated scoring', () => {
     const score = scoreAdjudicatedDocuments(
       [document],
       new Map([[document.id, evidence]]),
+      new Map([[document.id, document.spans]]),
+      new Map([[document.id, document.spans]]),
     )
     expect(score.entity.overall.falsePositive).toBe(1)
     expect(score.entity.documentExactMatchRate).toBe(0)
@@ -63,6 +65,7 @@ describe('adjudicated scoring', () => {
     const score = scoreAdjudicatedDocuments(
       [hardNegativeDocument],
       new Map([[hardNegativeDocument.id, evidence]]),
+      new Map([[hardNegativeDocument.id, hardNegativeDocument.spans]]),
       new Map([
         [
           hardNegativeDocument.id,
@@ -87,6 +90,7 @@ describe('adjudicated scoring', () => {
       scoreAdjudicatedDocuments(
         [document],
         new Map([[document.id, unadjudicated]]),
+        new Map([[document.id, document.spans]]),
       ),
     ).toThrow('Missing independently adjudicated reference')
   })

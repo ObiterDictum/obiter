@@ -95,26 +95,35 @@ describe('provider pricing preflight', () => {
 })
 
 describe('pending human adjudication artifacts', () => {
-  it('persists a private checkpoint and resumes accepted or rejected dispositions without providers', async () => {
-    const artifact = pendingAdjudicationArtifact('benchmark', [
-      {
-        document,
-        evidence,
-        state: {
-          id: document.id,
-          status: 'human_adjudication_required',
-          generationAttempts: 1,
-          annotationAttempts: 1,
-          repairAttempts: 0,
-          regenerationAttempts: 0,
-          qaAttempts: 1,
-          transitions: [],
-          telemetryRequestIds: [],
+  it('persists a complete private checkpoint and resumes accepted or rejected dispositions without providers', async () => {
+    const completed: SyntheticDocument = { ...document, id: 'completed-1' }
+    const artifact = pendingAdjudicationArtifact(
+      'benchmark',
+      [completed.id, document.id],
+      [completed],
+      [
+        {
+          document,
+          evidence,
+          state: {
+            id: document.id,
+            status: 'human_adjudication_required',
+            generationAttempts: 1,
+            annotationAttempts: 1,
+            repairAttempts: 0,
+            regenerationAttempts: 0,
+            qaAttempts: 1,
+            transitions: [],
+            telemetryRequestIds: [],
+          },
         },
-      },
-    ])
+      ],
+    )
     const accepted = resumePendingAdjudications(artifact, [disposition()])
-    expect(accepted.accepted[0]?.spans).toEqual(dispute.referenceSpans)
+    expect(accepted.accepted).toEqual([
+      completed,
+      { ...document, spans: dispute.referenceSpans },
+    ])
     expect(accepted.rejected).toEqual([])
     expect(
       resumePendingAdjudications(artifact, [disposition('rejected')]).rejected,
@@ -134,23 +143,28 @@ describe('pending human adjudication artifacts', () => {
   })
 
   it('rejects stale evidence and invalid human reference spans', () => {
-    const artifact = pendingAdjudicationArtifact('benchmark', [
-      {
-        document,
-        evidence,
-        state: {
-          id: document.id,
-          status: 'human_adjudication_required',
-          generationAttempts: 1,
-          annotationAttempts: 1,
-          repairAttempts: 0,
-          regenerationAttempts: 0,
-          qaAttempts: 1,
-          transitions: [],
-          telemetryRequestIds: [],
+    const artifact = pendingAdjudicationArtifact(
+      'benchmark',
+      [document.id],
+      [],
+      [
+        {
+          document,
+          evidence,
+          state: {
+            id: document.id,
+            status: 'human_adjudication_required',
+            generationAttempts: 1,
+            annotationAttempts: 1,
+            repairAttempts: 0,
+            regenerationAttempts: 0,
+            qaAttempts: 1,
+            transitions: [],
+            telemetryRequestIds: [],
+          },
         },
-      },
-    ])
+      ],
+    )
     expect(() =>
       resumePendingAdjudications(
         { ...artifact, artifactHash: 'a'.repeat(64) },

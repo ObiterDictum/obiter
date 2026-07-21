@@ -146,7 +146,9 @@ export function publicPromotionMetadata(
   if (!evidence.approval)
     throw new Error('Benchmark promotion requires approval before publication')
   if (!isHash(evidence.partitionRegistryHash))
-    throw new Error('Benchmark promotion requires bound partition registry evidence')
+    throw new Error(
+      'Benchmark promotion requires bound partition registry evidence',
+    )
   return {
     stage: 'benchmark',
     version: 'synthetic-v2-benchmark-promotion:v2',

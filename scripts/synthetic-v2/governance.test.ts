@@ -15,7 +15,6 @@ import {
   reviewedCandidates,
   selectionManifestVersion,
   tournamentManifestVersion,
-  type PartitionManifest,
   type TournamentManifest,
 } from './governance'
 

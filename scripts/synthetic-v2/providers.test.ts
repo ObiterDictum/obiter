@@ -117,12 +117,13 @@ describe('OpenRouter schema and offline failure behaviour', () => {
       contentHash: 'fixture',
     }
     await expect(judge.judge([document])).resolves.toHaveLength(1)
+    if (!body) throw new Error('Judge request body was not captured')
     const prompt = String(
-      (body?.messages as Array<{ content?: unknown }>)[0]?.content,
+      (body.messages as Array<{ content?: unknown }>)[0]?.content,
     )
     expect(prompt).not.toContain('Proposed spans')
     expect(prompt).not.toContain('"start"')
-    expect(body?.response_format).toMatchObject({
+    expect(body.response_format).toMatchObject({
       json_schema: {
         schema: {
           properties: {

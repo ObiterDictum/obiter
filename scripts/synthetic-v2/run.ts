@@ -89,8 +89,10 @@ export type PendingAdjudication = {
 }
 
 export type PendingAdjudicationArtifact = {
-  version: 'synthetic-v2-pending-adjudication:v1'
+  version: 'synthetic-v2-pending-adjudication:v2'
   stage: CorpusStage
+  expectedSpecificationIds: string[]
+  accepted: SyntheticDocument[]
   pending: PendingAdjudication[]
   artifactHash: string
 }
@@ -99,6 +101,8 @@ export type PipelineResult = {
   documents: SyntheticDocument[]
   /** Initial annotation predictions, retained even when later repaired. */
   firstPassAnnotations: Map<string, SyntheticDocument['spans']>
+  /** Final model predictions before adjudicated references replace export spans. */
+  finalPassAnnotations: Map<string, SyntheticDocument['spans']>
   pendingAdjudications: PendingAdjudication[]
   qa: Map<string, QaEvidence>
   documentStates: DocumentProcessingState[]
@@ -115,12 +119,27 @@ export type PipelineOptions = {
 
 export function pendingAdjudicationArtifact(
   stage: CorpusStage,
+  expectedSpecificationIds: string[],
+  accepted: SyntheticDocument[],
   pending: PendingAdjudication[],
 ): PendingAdjudicationArtifact {
   if (!pending.length) throw new Error('Pending adjudication artifact is empty')
+  if (
+    !expectedSpecificationIds.length ||
+    new Set(expectedSpecificationIds).size !== expectedSpecificationIds.length
+  )
+    throw new Error('Pending adjudication artifact has invalid specifications')
+  const documentIds = [...accepted, ...pending.map((entry) => entry.document)]
+  if (
+    new Set(documentIds.map((document) => document.id)).size !==
+    documentIds.length
+  )
+    throw new Error('Pending adjudication artifact has duplicate documents')
   const unsigned = {
-    version: 'synthetic-v2-pending-adjudication:v1' as const,
+    version: 'synthetic-v2-pending-adjudication:v2' as const,
     stage,
+    expectedSpecificationIds,
+    accepted,
     pending,
   }
   return { ...unsigned, artifactHash: canonicalHash(unsigned) }
@@ -132,7 +151,7 @@ export function resumePendingAdjudications(
 ) {
   const { artifactHash, ...unsigned } = artifact
   if (
-    artifact.version !== 'synthetic-v2-pending-adjudication:v1' ||
+    artifact.version !== 'synthetic-v2-pending-adjudication:v2' ||
     !isCorpusStage(artifact.stage) ||
     canonicalHash(unsigned) !== artifactHash
   )
@@ -140,8 +159,27 @@ export function resumePendingAdjudications(
   const pending = new Map(
     artifact.pending.map((entry) => [entry.document.id, entry]),
   )
-  if (pending.size !== artifact.pending.length)
+  const allDocuments = [
+    ...artifact.accepted,
+    ...artifact.pending.map((entry) => entry.document),
+  ]
+  if (
+    pending.size !== artifact.pending.length ||
+    new Set(allDocuments.map((document) => document.id)).size !==
+      allDocuments.length
+  )
     throw new Error('Pending adjudication artifact has duplicate documents')
+  if (
+    artifact.expectedSpecificationIds.length !== allDocuments.length ||
+    new Set(artifact.expectedSpecificationIds).size !==
+      artifact.expectedSpecificationIds.length ||
+    !allDocuments.every((document) =>
+      artifact.expectedSpecificationIds.includes(document.id),
+    )
+  )
+    throw new Error(
+      'Pending adjudication artifact does not contain every specification',
+    )
   const dispositionById = new Map(
     dispositions.map((entry) => [entry.id, entry]),
   )
@@ -152,7 +190,7 @@ export function resumePendingAdjudications(
     throw new Error(
       'Human dispositions do not exactly match pending adjudications',
     )
-  const accepted: SyntheticDocument[] = []
+  const accepted = [...artifact.accepted]
   const rejected: string[] = []
   for (const [id, entry] of pending) {
     const human = dispositionById.get(id)
@@ -293,6 +331,8 @@ export async function main() {
   if (result.pendingAdjudications.length) {
     const artifact = pendingAdjudicationArtifact(
       stage,
+      corpusStageSpecs(stage).map((spec) => spec.id),
+      result.documents,
       result.pendingAdjudications,
     )
     await persistPendingAdjudications(privateRoot, process.cwd(), artifact)
@@ -316,6 +356,7 @@ export async function main() {
       tournamentManifestHash: tournament.manifestHash,
       qa: [...result.qa].map(([id, evidence]) => ({ id, ...evidence })),
       firstPassAnnotations: [...result.firstPassAnnotations],
+      finalPassAnnotations: [...result.finalPassAnnotations],
       documentStates: result.documentStates,
       usage: result.usage,
       spendGbp: result.actualGbp,
@@ -359,6 +400,7 @@ export async function runPipeline(
   let actualGbp = 0
   const documents: SyntheticDocument[] = []
   const firstPassAnnotations = new Map<string, SyntheticDocument['spans']>()
+  const finalPassAnnotations = new Map<string, SyntheticDocument['spans']>()
   const pendingAdjudications: PendingAdjudication[] = []
   const qa = new Map<string, QaEvidence>()
   const documentStates: DocumentProcessingState[] = []
@@ -535,6 +577,7 @@ export async function runPipeline(
         qa.set(spec.id, evidence)
         consumeQa(evidence, state)
         if (evidence.accepted) {
+          finalPassAnnotations.set(candidate.id, candidate.spans)
           const finalized = applyAdjudicatedReference(candidate, evidence)
           index.add(finalized)
           documents.push(finalized)
@@ -592,6 +635,10 @@ export async function runPipeline(
           qa.set(spec.id, repairedEvidence)
           consumeQa(repairedEvidence, state)
           if (repairedEvidence.accepted) {
+            finalPassAnnotations.set(
+              repairedCandidate.id,
+              repairedCandidate.spans,
+            )
             const finalized = applyAdjudicatedReference(
               repairedCandidate,
               repairedEvidence,
@@ -630,6 +677,7 @@ export async function runPipeline(
     return {
       documents,
       firstPassAnnotations,
+      finalPassAnnotations,
       pendingAdjudications,
       qa,
       documentStates,
@@ -642,6 +690,15 @@ export async function runPipeline(
     if (error instanceof ProviderBatchError) telemetry.push(...error.telemetry)
     throw error
   }
+}
+
+function isHumanAdjudicationArtifact(artifact: unknown) {
+  return (
+    typeof artifact === 'object' &&
+    artifact !== null &&
+    'status' in artifact &&
+    artifact.status === 'human_adjudication_required'
+  )
 }
 
 function normaliseCandidate(
@@ -685,12 +742,15 @@ async function runTournament(pricing: PricingTable) {
     seeds: string[]
     canonicalArtifactHash: string
     blindReviewPackageHash: string
-    finalStatus: 'pending_review' | 'rejected'
+    finalStatus: 'pending_review' | 'human_adjudication_required' | 'rejected'
   }> = []
   const candidateArtifacts: unknown[] = []
   const blindReviewPackages: unknown[] = []
   const primaryModel = requiredModel('SYNTHETIC_V2_PRIMARY_JUDGE_MODEL')
   const disputeModel = requiredModel('SYNTHETIC_V2_ADJUDICATOR_MODEL')
+  const root =
+    process.env.SYNTHETIC_V2_PRIVATE_CORPUS_ROOT ??
+    '../obiter-redaction-data-private'
   for (const candidate of candidates) {
     let artifact: unknown
     let blindPackage: ReturnType<typeof blindReviewPackage> | undefined
@@ -706,28 +766,58 @@ async function runTournament(pricing: PricingTable) {
         [],
         { requireIndependentAdjudication: true },
       )
-      if (result.documentStates.some((state) => state.status !== 'accepted'))
-        throw new Error('Candidate has unresolved documents')
-      artifact = {
-        candidateId: candidate.id,
-        specs: specs.map(({ id, seed }) => ({ id, seed })),
-        documents: result.documents,
-        qa: [...result.qa],
-        metrics: scoreAdjudicatedDocuments(
+      if (result.pendingAdjudications.length) {
+        const checkpoint = pendingAdjudicationArtifact(
+          'tournament',
+          specs.map((spec) => spec.id),
           result.documents,
-          result.qa,
-          result.firstPassAnnotations,
-        ),
-        usage: result.usage,
-        spendGbp: result.actualGbp,
-        requestTelemetry: result.requestTelemetry,
-        documentStates: result.documentStates,
-        firstPassAnnotations: [...result.firstPassAnnotations],
+          result.pendingAdjudications,
+        )
+        const checkpointPath = await persistPendingAdjudications(
+          root,
+          process.cwd(),
+          checkpoint,
+        )
+        artifact = {
+          candidateId: candidate.id,
+          specs: specs.map(({ id, seed }) => ({ id, seed })),
+          status: 'human_adjudication_required',
+          checkpoint,
+          checkpointPath,
+          qa: [...result.qa],
+          usage: result.usage,
+          spendGbp: result.actualGbp,
+          requestTelemetry: result.requestTelemetry,
+          documentStates: result.documentStates,
+          firstPassAnnotations: [...result.firstPassAnnotations],
+          finalPassAnnotations: [...result.finalPassAnnotations],
+        }
+      } else {
+        if (result.documentStates.some((state) => state.status !== 'accepted'))
+          throw new Error('Candidate has unresolved documents')
+        artifact = {
+          candidateId: candidate.id,
+          specs: specs.map(({ id, seed }) => ({ id, seed })),
+          documents: result.documents,
+          qa: [...result.qa],
+          metrics: scoreAdjudicatedDocuments(
+            result.documents,
+            result.qa,
+            result.finalPassAnnotations,
+            result.firstPassAnnotations,
+          ),
+          usage: result.usage,
+          spendGbp: result.actualGbp,
+          requestTelemetry: result.requestTelemetry,
+          documentStates: result.documentStates,
+          firstPassAnnotations: [...result.firstPassAnnotations],
+          finalPassAnnotations: [...result.finalPassAnnotations],
+        }
+        blindPackage = blindReviewPackage(
+          `review-${outputs.length + 1}`,
+          result.documents,
+        )
       }
-      blindPackage = blindReviewPackage(
-        `review-${outputs.length + 1}`,
-        result.documents,
-      )
     } catch (error) {
       artifact = {
         candidateId: candidate.id,
@@ -748,7 +838,11 @@ async function runTournament(pricing: PricingTable) {
       blindReviewPackageHash: canonicalHash(
         blindPackage ?? { status: 'ineligible' },
       ),
-      finalStatus: blindPackage ? 'pending_review' : 'rejected',
+      finalStatus: blindPackage
+        ? 'pending_review'
+        : isHumanAdjudicationArtifact(artifact)
+          ? 'human_adjudication_required'
+          : 'rejected',
     })
   }
   const unsigned = {
@@ -756,9 +850,6 @@ async function runTournament(pricing: PricingTable) {
     candidates: outputs,
   }
   const manifest = { ...unsigned, manifestHash: canonicalHash(unsigned) }
-  const root =
-    process.env.SYNTHETIC_V2_PRIVATE_CORPUS_ROOT ??
-    '../obiter-redaction-data-private'
   await writeDatasetAtomically([], {
     root,
     productRoot: process.cwd(),

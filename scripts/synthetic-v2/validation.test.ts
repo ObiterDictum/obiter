@@ -86,7 +86,13 @@ describe('document-to-spec validation', () => {
   it('rejects overlaps, missing categories, forged coverage, and invalid hashes', () => {
     expect(() =>
       assertDocumentMatchesSpec(
-        { ...document, spans: [...spans, { ...spans[0]!, start: 1, end: 2, text: text.slice(1, 2) }] },
+        {
+          ...document,
+          spans: [
+            ...spans,
+            { ...spans[0]!, start: 1, end: 2, text: text.slice(1, 2) },
+          ],
+        },
         spec,
       ),
     ).toThrow(/Overlapping|Offset round-trip/)
@@ -97,7 +103,10 @@ describe('document-to-spec validation', () => {
       assertDocumentMatchesSpec({ ...document, matrixCells: [] }, spec),
     ).toThrow('invalid matrix coverage')
     expect(() =>
-      assertDocumentMatchesSpec({ ...document, contentHash: 'a'.repeat(64) }, spec),
+      assertDocumentMatchesSpec(
+        { ...document, contentHash: 'a'.repeat(64) },
+        spec,
+      ),
     ).toThrow('invalid content hash')
   })
 })
