@@ -1,0 +1,82 @@
+{
+  "deepseek-v4-pro": {
+    "inputUsdPerMillion": 0.435,
+    "outputUsdPerMillion": 0.87
+  },
+  "deepseek-v4-flash": {
+    "inputUsdPerMillion": 0.098,
+    "outputUsdPerMillion": 0.196
+  },
+  "anthropic/claude-opus-4.8": {
+    "inputUsdPerMillion": 5,
+    "outputUsdPerMillion": 25
+  },
+  "anthropic/claude-haiku-4.5": {
+    "inputUsdPerMillion": 1,
+    "outputUsdPerMillion": 5
+  },
+  "google/gemini-3.6-flash": {
+    "inputUsdPerMillion": 1.5,
+    "outputUsdPerMillion": 7.5
+  },
+  "zai:glm-5.2": {
+    "inputUsdPerMillion": 1.4,
+    "outputUsdPerMillion": 4.4
+  },
+  "opencode-go:grok-4.5": {
+    "inputUsdPerMillion": 2,
+    "outputUsdPerMillion": 6
+  },
+  "opencode-go:glm-5.2": {
+    "inputUsdPerMillion": 1.4,
+    "outputUsdPerMillion": 4.4
+  },
+  "opencode-go:glm-5.1": {
+    "inputUsdPerMillion": 1.4,
+    "outputUsdPerMillion": 4.4
+  },
+  "opencode-go:kimi-k3": {
+    "inputUsdPerMillion": 3,
+    "outputUsdPerMillion": 15
+  },
+  "opencode-go:kimi-k2.7-code": {
+    "inputUsdPerMillion": 0.95,
+    "outputUsdPerMillion": 4
+  },
+  "opencode-go:kimi-k2.6": {
+    "inputUsdPerMillion": 0.95,
+    "outputUsdPerMillion": 4
+  },
+  "opencode-go:mimo-v2.5": {
+    "inputUsdPerMillion": 0.14,
+    "outputUsdPerMillion": 0.28
+  },
+  "opencode-go:mimo-v2.5-pro": {
+    "inputUsdPerMillion": 0.435,
+    "outputUsdPerMillion": 0.87
+  },
+  "opencode-go:minimax-m3": {
+    "inputUsdPerMillion": 0.3,
+    "outputUsdPerMillion": 1.2
+  },
+  "opencode-go:minimax-m2.7": {
+    "inputUsdPerMillion": 0.3,
+    "outputUsdPerMillion": 1.2
+  },
+  "opencode-go:minimax-m2.5": {
+    "inputUsdPerMillion": 0.3,
+    "outputUsdPerMillion": 1.2
+  },
+  "opencode-go:qwen3.7-max": {
+    "inputUsdPerMillion": 2.5,
+    "outputUsdPerMillion": 7.5
+  },
+  "opencode-go:qwen3.7-plus": {
+    "inputUsdPerMillion": 0.4,
+    "outputUsdPerMillion": 1.6
+  },
+  "opencode-go:qwen3.6-plus": {
+    "inputUsdPerMillion": 0.5,
+    "outputUsdPerMillion": 3
+  }
+}

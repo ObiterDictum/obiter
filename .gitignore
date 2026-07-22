@@ -58,3 +58,7 @@ temp/
 
 # Local API object storage (OBITER_STORAGE_ROOT default) — runtime data.
 .obiter-storage/
+
+# Synthetic-v2 local API outputs, review mapping, and spend ledger.
+.synthetic-v2/
+data/synthetic-v2-review/

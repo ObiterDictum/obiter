@@ -30,6 +30,14 @@ Follow the roadmap. Do not jump ahead because a later feature looks interesting.
 5. Verify Advanced
 6. Research
 
+## Synthetic Redaction Corpus
+
+- Keep the synthetic-v2 pipeline, label policy, schemas, manifests, and evaluation harness in this repository.
+- Do not commit generated private training/development documents, raw provider output, run logs, or human-review annotations here; use the separate private corpus store/repository.
+- Publish a frozen, versioned benchmark separately once approved so external redaction systems can evaluate against it without product-repository coupling.
+- Never put corpus material or raw legal text in the `review` knowledge repository.
+- Read [synthetic-v2-programme.md](docs/specs/redact/synthetic-v2-programme.md) before changing synthetic-v2 stages, data splits, or evaluation criteria.
+
 ## Working Style
 
 - Keep `AGENTS.md` small. Do not turn it into a second README.
