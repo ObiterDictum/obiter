@@ -47,6 +47,12 @@ async function validCanaryRoot(
       annotator: candidate.annotator,
       status: 'human_adjudication_required',
       firstAttemptValid: true,
+      requestTelemetry: [
+        { role: 'writer', status: 'success' },
+        { role: 'annotator', status: 'success' },
+        { role: 'primary_judge', status: 'success' },
+        { role: 'dispute_judge', status: 'success' },
+      ],
       documentStates: [
         {
           generationAttempts: 1,
@@ -90,6 +96,34 @@ describe('synthetic v2 tournament canary gate', () => {
     ).resolves.toMatch(/^[a-f0-9]{64}$/)
   })
 
+  it('accepts first-attempt provider conformance with candidate-quality rejection', async () => {
+    const results = reviewedCandidates.map((candidate) => ({
+      candidateId: candidate.id,
+      writer: candidate.writer,
+      annotator: candidate.annotator,
+      status: 'candidate_quality_rejected',
+      firstAttemptValid: true,
+      requestTelemetry: [
+        { role: 'writer', status: 'success' },
+        { role: 'annotator', status: 'success' },
+        { role: 'primary_judge', status: 'success' },
+        { role: 'dispute_judge', status: 'success' },
+      ],
+      documentStates: [
+        {
+          generationAttempts: 1,
+          annotationAttempts: 1,
+          repairAttempts: 0,
+          regenerationAttempts: 0,
+        },
+      ],
+    }))
+    const root = await validCanaryRoot({ results })
+    await expect(
+      assertMatchingTournamentCanary(root, configuration),
+    ).resolves.toMatch(/^[a-f0-9]{64}$/)
+  })
+
   it('rejects a structurally repaired candidate', async () => {
     const root = await validCanaryRoot({
       results: reviewedCandidates.map((candidate, index) => ({
@@ -98,6 +132,12 @@ describe('synthetic v2 tournament canary gate', () => {
         annotator: candidate.annotator,
         status: 'human_adjudication_required',
         firstAttemptValid: index !== 0,
+        requestTelemetry: [
+          { role: 'writer', status: 'success' },
+          { role: 'annotator', status: 'success' },
+          { role: 'primary_judge', status: 'success' },
+          { role: 'dispute_judge', status: 'success' },
+        ],
         documentStates: [
           {
             generationAttempts: 1,

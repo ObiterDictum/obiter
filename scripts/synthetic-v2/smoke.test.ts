@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { PricingTable } from './budget'
+import type { RequestTelemetry } from './types'
 import { corpusStageSpecs } from './program'
 import {
   assertSmokeBudget,
@@ -56,10 +57,25 @@ describe('synthetic v2 provider smoke preflight', () => {
       repairAttempts: 0,
       regenerationAttempts: 0,
     }
-    expect(firstAttemptContractValid([], [state])).toBe(true)
+    const successfulTelemetry: RequestTelemetry[] = [
+      'writer',
+      'annotator',
+      'primary_judge',
+      'dispute_judge',
+    ].map((role, index) => ({
+      requestId: `success-${index}`,
+      specId: 'tournament-00001',
+      role: role as RequestTelemetry['role'],
+      requestedModel: 'model',
+      latencyMs: 1,
+      status: 'success',
+      attempt: 1,
+    }))
+    expect(firstAttemptContractValid(successfulTelemetry, [state])).toBe(true)
     expect(
       firstAttemptContractValid(
         [
+          ...successfulTelemetry,
           {
             requestId: 'request-1',
             specId: 'tournament-00001',
@@ -75,7 +91,9 @@ describe('synthetic v2 provider smoke preflight', () => {
       ),
     ).toBe(false)
     expect(
-      firstAttemptContractValid([], [{ ...state, annotationAttempts: 2 }]),
+      firstAttemptContractValid(successfulTelemetry, [
+        { ...state, annotationAttempts: 2 },
+      ]),
     ).toBe(false)
   })
 

@@ -7,7 +7,7 @@ export const tournamentCanaryVersion = 'synthetic-v2-tournament-canary:v1'
 // Bump whenever prompts, local validation, retries, or provider contracts change
 // in a way that can alter real-model tournament qualification.
 export const tournamentCanaryContractVersion =
-  'synthetic-v2-tournament-provider-contract:2026-07-22.5'
+  'synthetic-v2-tournament-provider-contract:2026-07-22.6'
 
 export type TournamentCanaryConfiguration = {
   primaryJudgeProvider: string
@@ -132,6 +132,11 @@ export async function assertMatchingTournamentCanary(
           (result: {
             status?: string
             firstAttemptValid?: boolean
+            requestTelemetry?: Array<{
+              role?: string
+              status?: string
+              errorCode?: string
+            }>
             documentStates?: Array<{
               generationAttempts?: number
               annotationAttempts?: number
@@ -140,6 +145,19 @@ export async function assertMatchingTournamentCanary(
             }>
           }) =>
             result.firstAttemptValid !== true ||
+            !Array.isArray(result.requestTelemetry) ||
+            ['writer', 'annotator', 'primary_judge', 'dispute_judge'].some(
+              (role) =>
+                !result.requestTelemetry!.some(
+                  (entry) => entry.role === role && entry.status === 'success',
+                ),
+            ) ||
+            result.requestTelemetry.some(
+              (entry) =>
+                entry.status === 'error' &&
+                (entry.errorCode?.startsWith('annotation_') ||
+                  entry.errorCode?.startsWith('judge_')),
+            ) ||
             !Array.isArray(result.documentStates) ||
             result.documentStates.some(
               (state) =>
@@ -149,7 +167,8 @@ export async function assertMatchingTournamentCanary(
                 state.regenerationAttempts !== 0,
             ) ||
             (result.status !== 'accepted' &&
-              result.status !== 'human_adjudication_required'),
+              result.status !== 'human_adjudication_required' &&
+              result.status !== 'candidate_quality_rejected'),
         )
       )
         continue

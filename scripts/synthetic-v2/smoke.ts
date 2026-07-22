@@ -40,8 +40,16 @@ export function firstAttemptContractValid(
       (entry.errorCode?.startsWith('annotation_') ||
         entry.errorCode?.startsWith('judge_')),
   )
+  const successfulRoles = new Set(
+    telemetry
+      .filter((entry) => entry.status === 'success')
+      .map((entry) => entry.role),
+  )
   return (
     !structuralRetry &&
+    ['writer', 'annotator', 'primary_judge', 'dispute_judge'].every((role) =>
+      successfulRoles.has(role as RequestTelemetry['role']),
+    ) &&
     documentStates.every(
       (state) =>
         state.generationAttempts === 1 &&
@@ -285,7 +293,11 @@ export async function main() {
         break
       }
     } catch (error) {
-      failed = true
+      const candidateQualityRejection =
+        error instanceof PipelineExecutionError
+          ? error.candidateQualityRejection
+          : undefined
+      if (!candidateQualityRejection) failed = true
       const diagnostics =
         error instanceof PipelineExecutionError
           ? error.requestTelemetry
@@ -298,14 +310,23 @@ export async function main() {
             `${entry.provider ?? 'unknown'}:${entry.requestedModel}:${entry.errorCode ?? entry.status}`,
         )
         .join(', ')
+      const documentStates =
+        error instanceof PipelineExecutionError ? error.documentStates : []
+      const firstAttemptValid = candidateQualityRejection
+        ? firstAttemptContractValid(diagnostics ?? [], documentStates)
+        : false
       console.error(
-        `[synthetic-v2] smoke candidate ${candidate.id} failed: ${error instanceof Error ? error.message : 'unknown error'}${diagnosticSummary ? ` (${diagnosticSummary})` : ''}`,
+        `[synthetic-v2] smoke candidate ${candidate.id} ${candidateQualityRejection ? 'quality-rejected' : 'failed'}: ${error instanceof Error ? error.message : 'unknown error'}${diagnosticSummary ? ` (${diagnosticSummary})` : ''}`,
       )
       results.push({
         candidateId: candidate.id,
         writer: candidate.writer,
         annotator: candidate.annotator,
-        status: 'failed',
+        status: candidateQualityRejection
+          ? 'candidate_quality_rejected'
+          : 'failed',
+        firstAttemptValid,
+        rejection: candidateQualityRejection,
         error:
           error instanceof Error ? error.message : 'Smoke candidate failed',
         usage:
@@ -313,10 +334,13 @@ export async function main() {
         spendGbp:
           error instanceof PipelineExecutionError ? error.actualGbp : undefined,
         requestTelemetry: diagnostics,
+        documentStates,
       })
-      // Any failed paid candidate may indicate a shared invariant, accounting,
-      // or provider problem. Stop rather than paying for less useful repeats.
+      // Any terminal candidate result stops a selected diagnostic. Full
+      // qualification continues after quality rejection so all reviewed role
+      // routes are exercised, but operational failure always stops.
       const remaining = candidates.slice(candidateIndex + 1)
+      if (candidateQualityRejection && !requestedCandidateId) continue
       for (const skipped of remaining)
         results.push({
           candidateId: skipped.id,

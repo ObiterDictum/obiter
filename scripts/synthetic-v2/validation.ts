@@ -6,6 +6,7 @@ import type {
   DocumentSpec,
   HardNegativeAssertion,
   SyntheticDocument,
+  SyntheticSpan,
 } from './types'
 
 export type NearDuplicateMatch = {
@@ -28,22 +29,72 @@ export function normalizeGenerated(
   return documentFromSpans(spec, text, spans, generated.generator)
 }
 
-/** Preferred structured-annotation path: source text is never model-rewritten. */
+/** Preferred persisted-document path: source text is never model-rewritten. */
 export function normalizeAnnotated(
   spec: DocumentSpec,
   generated: { text: string; generator: string },
   spans: SyntheticDocument['spans'],
 ): SyntheticDocument {
-  return documentFromSpans(spec, generated.text, spans, generated.generator)
+  const document = createAnnotatedCandidate(spec, generated, spans)
+  assertDocumentMatchesSpec(document, spec)
+  return document
 }
 
-function documentFromSpans(
+/** Constructs a safely bound candidate without converting generation-quality
+ * requirements into annotation-format failures. */
+export function createAnnotatedCandidate(
+  spec: DocumentSpec,
+  generated: { text: string; generator: string },
+  spans: SyntheticDocument['spans'],
+): SyntheticDocument {
+  const document = candidateFromSpans(
+    spec,
+    generated.text,
+    spans,
+    generated.generator,
+  )
+  assertStructuralDocumentBinding(document, spec)
+  return document
+}
+
+export type CandidateQualityReason =
+  | {
+      code: 'required_category_not_evidenced'
+      category: SyntheticSpan['category']
+    }
+  | { code: 'hard_negative_contract_failed'; assertionId: string }
+
+export function candidateQualityReasons(
+  document: SyntheticDocument,
+  spec: DocumentSpec,
+): CandidateQualityReason[] {
+  const emitted = new Set(document.spans.map((span) => span.category))
+  const reasons: CandidateQualityReason[] = spec.requiredCategories
+    .filter((category) => !emitted.has(category))
+    .map((category) => ({
+      code: 'required_category_not_evidenced',
+      category,
+    }))
+  for (const assertion of spec.hardNegatives) {
+    try {
+      assertHardNegatives(document.text, document.spans, [assertion])
+    } catch {
+      reasons.push({
+        code: 'hard_negative_contract_failed',
+        assertionId: assertion.id,
+      })
+    }
+  }
+  return reasons
+}
+
+function candidateFromSpans(
   spec: DocumentSpec,
   text: string,
   spans: SyntheticDocument['spans'],
   generator: string,
 ): SyntheticDocument {
-  const document = {
+  return {
     id: spec.id,
     text,
     spans,
@@ -53,6 +104,15 @@ function documentFromSpans(
     contentHash: contentHash(text),
     hardNegatives: spec.hardNegatives,
   }
+}
+
+function documentFromSpans(
+  spec: DocumentSpec,
+  text: string,
+  spans: SyntheticDocument['spans'],
+  generator: string,
+): SyntheticDocument {
+  const document = candidateFromSpans(spec, text, spans, generator)
   assertDocumentMatchesSpec(document, spec)
   return document
 }
@@ -62,16 +122,23 @@ export function assertDocumentMatchesSpec(
   document: SyntheticDocument,
   spec: DocumentSpec,
 ) {
+  assertStructuralDocumentBinding(document, spec)
+  const first = candidateQualityReasons(document, spec)[0]
+  if (!first) return
+  if (first.code === 'required_category_not_evidenced')
+    throw new Error(`${spec.id} omitted required category ${first.category}`)
+  throw new Error(`${first.assertionId} failed hard-negative contract`)
+}
+
+function assertStructuralDocumentBinding(
+  document: SyntheticDocument,
+  spec: DocumentSpec,
+) {
   if (document.id !== spec.id)
     throw new Error(`Document does not bind specification ${spec.id}`)
   if (document.contentHash !== contentHash(document.text))
     throw new Error(`${document.id} has an invalid content hash`)
   validateSpans(document.text, document.spans)
-  const emitted = new Set(document.spans.map((span) => span.category))
-  for (const category of spec.requiredCategories) {
-    if (!emitted.has(category))
-      throw new Error(`${spec.id} omitted required category ${category}`)
-  }
   if (document.specCell !== generationSpecIdentity(spec))
     throw new Error(`${spec.id} has an invalid specification identity`)
   if (
@@ -84,7 +151,6 @@ export function assertDocumentMatchesSpec(
     canonicalJson(spec.hardNegatives)
   )
     throw new Error(`${spec.id} has invalid hard-negative assertions`)
-  assertHardNegatives(document.text, document.spans, spec.hardNegatives)
 }
 
 /** Verifies required neutral literals and forbids positive annotation overlap. */

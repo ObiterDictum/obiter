@@ -283,14 +283,7 @@ describe('pipeline paid fail-fast behavior', () => {
         labelCalls += inputs.length
         return inputs.map(({ spec }) => ({
           customId: spec.id,
-          spans: [
-            {
-              category: 'person_private',
-              start: 0,
-              end: 999,
-              text: 'not in source',
-            },
-          ],
+          spans: [],
           generator: 'labeler',
           usage: { inputTokens: 1, outputTokens: 1 },
         }))
@@ -311,7 +304,16 @@ describe('pipeline paid fail-fast behavior', () => {
       maxChargeAttempts: 1,
       judge: async (documents) => {
         judgeCalls += documents.length
-        return []
+        return documents.map((document) => ({
+          id: document.id,
+          verdict: JSON.stringify({
+            id: document.id,
+            referenceSpans: [],
+            realismScore: 5,
+            confidence: 1,
+            rationale: 'Synthetic fixture.',
+          }),
+        }))
       },
     })
     const pricing = Object.fromEntries(
@@ -328,12 +330,16 @@ describe('pipeline paid fail-fast behavior', () => {
         judge('dispute'),
         pricing,
         [],
-        { maxRegenerations: 0, failFastOnTerminalState: true },
+        {
+          maxRegenerations: 0,
+          failFastOnTerminalState: true,
+          requireIndependentAdjudication: true,
+        },
       ),
     ).rejects.toThrow('tournament-00001')
     expect(writerCalls).toBe(1)
-    expect(labelCalls).toBe(2)
-    expect(judgeCalls).toBe(0)
+    expect(labelCalls).toBe(1)
+    expect(judgeCalls).toBe(2)
   })
 })
 
@@ -361,6 +367,12 @@ describe('offline tournament candidate assembly', () => {
         annotator: candidate.annotator,
         status: 'human_adjudication_required',
         firstAttemptValid: true,
+        requestTelemetry: [
+          { role: 'writer', status: 'success' },
+          { role: 'annotator', status: 'success' },
+          { role: 'primary_judge', status: 'success' },
+          { role: 'dispute_judge', status: 'success' },
+        ],
         documentStates: [
           {
             generationAttempts: 1,
@@ -505,6 +517,16 @@ describe('tournament failure classification', () => {
           { inputTokens: 1, outputTokens: 1 },
           0.1,
           [],
+          [],
+          {
+            specId: 'tournament-00001',
+            reasons: [
+              {
+                code: 'required_category_not_evidenced',
+                category: 'person_protected',
+              },
+            ],
+          },
         ),
       ),
     ).toBe(true)

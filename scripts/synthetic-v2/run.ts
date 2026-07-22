@@ -63,7 +63,12 @@ import type {
   SyntheticDocument,
   Usage,
 } from './types'
-import { NearDuplicateIndex, normalizeAnnotated } from './validation'
+import {
+  candidateQualityReasons,
+  createAnnotatedCandidate,
+  NearDuplicateIndex,
+  type CandidateQualityReason,
+} from './validation'
 import {
   assertPendingAdjudicationArtifact,
   assertRunCheckpointMetadata,
@@ -118,8 +123,22 @@ export class PipelineExecutionError extends Error {
     readonly usage: Usage,
     readonly actualGbp: number,
     readonly requestTelemetry: RequestTelemetry[],
+    readonly documentStates: DocumentProcessingState[] = [],
+    readonly candidateQualityRejection?: {
+      specId: string
+      reasons: CandidateQualityReason[]
+    },
   ) {
     super(message)
+  }
+}
+
+class CandidateQualitySignal extends Error {
+  constructor(
+    readonly specId: string,
+    readonly reasons: CandidateQualityReason[],
+  ) {
+    super(`Document ${specId} exhausted validation and regeneration attempts`)
   }
 }
 
@@ -441,6 +460,7 @@ export async function runPipeline(
         telemetryRequestIds: [],
       }
       documentStates.push(state)
+      let terminalQualityReasons: CandidateQualityReason[] = []
       for (
         let regeneration = 0;
         regeneration <= maxRegenerations;
@@ -493,80 +513,27 @@ export async function runPipeline(
         // Replace this only when the source is regenerated; repairs must not
         // erase the original prediction used for hard-negative FPR.
         firstPassAnnotations.set(spec.id, label.spans)
-        let candidate = normaliseCandidate(spec, draft, label.spans)
-
-        if (
-          typeof candidate === 'string' ||
-          supplementMisses([candidate]).length
-        ) {
-          state.repairAttempts++
-          state.annotationAttempts++
-          state.transitions.push({
-            phase: 'repair_label',
-            reason:
-              typeof candidate === 'string'
-                ? candidate
-                : 'mechanical_supplement_miss',
+        const candidate = createAnnotatedCandidate(spec, draft, label.spans)
+        const deterministicQualityReasons = candidateQualityReasons(
+          candidate,
+          spec,
+        )
+        if (supplementMisses([candidate]).length)
+          deterministicQualityReasons.push({
+            code: 'hard_negative_contract_failed',
+            assertionId: 'mechanical_supplement_miss',
           })
-          options.onProgress?.({
-            specId: spec.id,
-            completed: specIndex,
-            total: specs.length,
-            phase: 'repair_label',
+        if (externalHashes.has(candidate.contentHash))
+          deterministicQualityReasons.push({
+            code: 'hard_negative_contract_failed',
+            assertionId: 'cross_partition_exact_duplicate',
           })
-          const feedback = new Map([
-            [
-              spec.id,
-              typeof candidate === 'string'
-                ? candidate
-                : 'Mechanical supplement found unlabelled PII; return exhaustive corrected spans.',
-            ],
-          ])
-          const repaired = await submitRepair(
-            spec,
-            draft,
-            labeler,
-            feedback,
-            pricing,
-            abort.signal,
-          )
-          consumeCharged(repaired)
-          appendStateTelemetry(state, repaired.items)
-          const repairedLabel = repaired.items[0]
-          if (!repairedLabel)
-            throw new Error(
-              `Provider omitted repaired annotations for ${spec.id}`,
-            )
-          candidate = normaliseCandidate(spec, draft, repairedLabel.spans)
-        }
-        if (
-          typeof candidate === 'string' ||
-          supplementMisses([candidate]).length
-        ) {
-          state.transitions.push({
-            phase: 'regenerate',
-            reason:
-              typeof candidate === 'string'
-                ? candidate
-                : 'mechanical_supplement_miss',
-          })
-          continue
-        }
-        if (externalHashes.has(candidate.contentHash)) {
-          state.transitions.push({
-            phase: 'regenerate',
-            reason: 'cross_partition_exact_duplicate',
-          })
-          continue
-        }
         const duplicate = index.check(candidate)
-        if (duplicate) {
-          state.transitions.push({
-            phase: 'regenerate',
-            reason: `near_duplicate:${duplicate.right}:${duplicate.similarity}`,
+        if (duplicate)
+          deterministicQualityReasons.push({
+            code: 'hard_negative_contract_failed',
+            assertionId: 'near_duplicate',
           })
-          continue
-        }
 
         finalPassAnnotations.set(candidate.id, candidate.spans)
         state.qaAttempts++
@@ -593,6 +560,21 @@ export async function runPipeline(
         if (!evidence) throw new Error(`QA omitted ${spec.id}`)
         qa.set(spec.id, evidence)
         consumeQa(evidence, state)
+        if (deterministicQualityReasons.length) {
+          terminalQualityReasons = deterministicQualityReasons
+          state.status = 'repair_required'
+          state.transitions.push({
+            phase: 'regenerate',
+            reason: deterministicQualityReasons
+              .map((reason) =>
+                reason.code === 'required_category_not_evidenced'
+                  ? `${reason.code}:${reason.category}`
+                  : `${reason.code}:${reason.assertionId}`,
+              )
+              .join(','),
+          })
+          continue
+        }
         if (evidence.accepted) {
           const finalized = applyAdjudicatedReference(candidate, evidence)
           index.add(finalized)
@@ -625,10 +607,11 @@ export async function runPipeline(
         appendStateTelemetry(state, qaRepair.items)
         const repairedLabel = qaRepair.items[0]
         const repairedCandidate = repairedLabel
-          ? normaliseCandidate(spec, draft, repairedLabel.spans)
-          : 'Provider omitted repaired annotations'
+          ? createAnnotatedCandidate(spec, draft, repairedLabel.spans)
+          : undefined
         if (
-          typeof repairedCandidate !== 'string' &&
+          repairedCandidate &&
+          !candidateQualityReasons(repairedCandidate, spec).length &&
           !supplementMisses([repairedCandidate]).length
         ) {
           finalPassAnnotations.set(
@@ -676,6 +659,12 @@ export async function runPipeline(
             break
           }
         }
+        terminalQualityReasons = [
+          {
+            code: 'hard_negative_contract_failed',
+            assertionId: `judge_rejection:${evidence.outcome}`,
+          },
+        ]
         state.status = 'repair_required'
         state.transitions.push({
           phase: 'regenerate',
@@ -691,9 +680,7 @@ export async function runPipeline(
         status: state.status,
       })
       if (options.failFastOnTerminalState && state.status === 'failed')
-        throw new Error(
-          `Document ${spec.id} exhausted validation and regeneration attempts`,
-        )
+        throw new CandidateQualitySignal(spec.id, terminalQualityReasons)
     }
     assertTelemetryModelIdentity(
       telemetry,
@@ -741,21 +728,11 @@ export async function runPipeline(
       { ...usage },
       Number(actualGbp.toFixed(6)),
       [...telemetry],
+      structuredClone(documentStates),
+      error instanceof CandidateQualitySignal
+        ? { specId: error.specId, reasons: error.reasons }
+        : undefined,
     )
-  }
-}
-
-function normaliseCandidate(
-  spec: DocumentSpec,
-  draft: GeneratedDocument,
-  spans: SyntheticDocument['spans'],
-) {
-  try {
-    return normalizeAnnotated(spec, draft, spans)
-  } catch (error) {
-    return error instanceof Error
-      ? error.message
-      : 'annotation validation failed'
   }
 }
 
@@ -961,6 +938,14 @@ async function runTournament(pricing: PricingTable) {
             ? accountedError.actualGbp
             : undefined,
         requestTelemetry: diagnostics,
+        documentStates:
+          accountedError instanceof PipelineExecutionError
+            ? accountedError.documentStates
+            : undefined,
+        rejection:
+          accountedError instanceof PipelineExecutionError
+            ? accountedError.candidateQualityRejection
+            : undefined,
       }
       const candidateQualityRejection =
         isCandidateQualityRejection(accountedError)
@@ -1337,8 +1322,7 @@ function assertTournamentCandidateRunEvidence(
 export function isCandidateQualityRejection(error: unknown) {
   return (
     error instanceof PipelineExecutionError &&
-    error.message.startsWith('Document ') &&
-    error.message.endsWith(' exhausted validation and regeneration attempts')
+    error.candidateQualityRejection !== undefined
   )
 }
 
