@@ -49,6 +49,7 @@ export type JudgeVerdict = {
   realismScore: number
   confidence: number
   rationale: string
+  reviewConflicts?: string[]
 }
 
 export type HumanAdjudication = {
@@ -270,12 +271,32 @@ export function evaluateIndependentReference(
   const missing = reference.missingSpans.map((span) =>
     resolveQuoteOccurrence(document.text, span),
   )
-  const referenceSpans = [...retained, ...missing]
+  const acceptedMissing: SyntheticSpan[] = []
+  const reviewConflicts: string[] = []
+  for (const span of missing) {
+    const overlap = [...retained, ...acceptedMissing].find(
+      (existing) => existing.start < span.end && span.start < existing.end,
+    )
+    if (!overlap) {
+      acceptedMissing.push(span)
+      continue
+    }
+    const exactDuplicate =
+      overlap.category === span.category &&
+      overlap.start === span.start &&
+      overlap.end === span.end
+    reviewConflicts.push(
+      exactDuplicate ? 'duplicate_missing_span' : 'overlapping_missing_span',
+    )
+  }
+  const referenceSpans = [...retained, ...acceptedMissing]
   validateSpans(document.text, referenceSpans)
   const allProposedSpansCorrect =
     reference.proposedSpanDecisions.every(
       (decision) => decision.action === 'keep',
-    ) && missing.length === 0
+    ) &&
+    missing.length === 0 &&
+    reviewConflicts.length === 0
   const hardNegativesCorrect = reference.hardNegativeAssertions.every(
     (assertion) => assertion.correctlyUnlabelled,
   )
@@ -292,6 +313,7 @@ export function evaluateIndependentReference(
     realismScore: reference.realismScore,
     confidence: reference.confidence,
     rationale: reference.rationale,
+    reviewConflicts,
   }
 }
 
@@ -410,7 +432,8 @@ export function requiresRegeneration(verdict: JudgeVerdict) {
     ) ||
     verdict.obviousUnmarkedSpans.length > 0 ||
     verdict.realismScore < 4 ||
-    verdict.confidence < 0.8
+    verdict.confidence < 0.8 ||
+    (verdict.reviewConflicts?.length ?? 0) > 0
   )
 }
 
@@ -622,7 +645,9 @@ function sameReference(left: JudgeVerdict, right: JudgeVerdict) {
     JSON.stringify(sortedSpans(left.referenceSpans)) ===
       JSON.stringify(sortedSpans(right.referenceSpans)) &&
     JSON.stringify(sortedHardNegatives(left.hardNegativeAssertions)) ===
-      JSON.stringify(sortedHardNegatives(right.hardNegativeAssertions))
+      JSON.stringify(sortedHardNegatives(right.hardNegativeAssertions)) &&
+    JSON.stringify([...(left.reviewConflicts ?? [])].sort()) ===
+      JSON.stringify([...(right.reviewConflicts ?? [])].sort())
   )
 }
 function sortedSpans(spans: SyntheticSpan[]) {

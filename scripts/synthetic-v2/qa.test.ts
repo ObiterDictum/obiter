@@ -152,6 +152,25 @@ describe('mechanical QA', () => {
       ),
     )
     expect(kept.referenceSpans).toEqual(proposed.spans)
+    const conflicted = evaluateIndependentReference(
+      proposed,
+      parseIndependentJudgeReference(
+        JSON.stringify({
+          ...payload,
+          proposedSpanDecisions: [
+            { index: 0, action: 'keep', correctedCategory: null },
+          ],
+          missingSpans: [
+            { category: 'person_private', quote: 'Alex', occurrence: 1 },
+          ],
+        }),
+        proposed.id,
+        proposed,
+      ),
+    )
+    expect(conflicted.referenceSpans).toEqual(proposed.spans)
+    expect(conflicted.reviewConflicts).toEqual(['duplicate_missing_span'])
+    expect(requiresRegeneration(conflicted)).toBe(true)
     expect(() =>
       parseIndependentJudgeReference(
         JSON.stringify({ ...payload, proposedSpanDecisions: [] }),
