@@ -518,8 +518,8 @@ export class OpenRouterJudge extends IndependentJudge {
       this.options,
       {
         max_tokens: 2400,
-        ...(this.model.startsWith('openai/')
-          ? { reasoning: { effort: 'minimal' } }
+        ...(this.model.startsWith('openai/gpt-5')
+          ? { reasoning: { effort: 'none' } }
           : { temperature: 0 }),
         response_format: { type: 'json_schema', json_schema: judgeSchema },
         provider: { require_parameters: true },

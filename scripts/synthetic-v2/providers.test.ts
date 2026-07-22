@@ -235,12 +235,12 @@ describe('OpenRouter schema and offline failure behaviour', () => {
   it('sends judges only text and a quote-occurrence reference schema', async () => {
     process.env.OPENROUTER_API_KEY = 'offline-test-only'
     let body: Record<string, unknown> | undefined
-    const judge = new OpenRouterJudge('openai/gpt-5.4-mini', {
+    const judge = new OpenRouterJudge('openai/gpt-4.1', {
       fetch: fakeFetch((request) => {
         body = request
         return new Response(
           JSON.stringify({
-            model: 'openai/gpt-5.4-mini',
+            model: 'openai/gpt-4.1',
             usage: { prompt_tokens: 2, completion_tokens: 3 },
             choices: [
               {
@@ -267,9 +267,9 @@ describe('OpenRouter schema and offline failure behaviour', () => {
     expect(prompt).not.toContain('Proposed spans')
     expect(prompt).not.toContain('"start"')
     expect(body.provider).toEqual({ require_parameters: true })
-    expect(body.temperature).toBeUndefined()
+    expect(body.temperature).toBe(0)
     expect(body.max_tokens).toBe(2400)
-    expect(body.reasoning).toEqual({ effort: 'minimal' })
+    expect(body.reasoning).toBeUndefined()
     expect(body.response_format).toMatchObject({
       json_schema: {
         schema: {

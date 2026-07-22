@@ -27,6 +27,10 @@
     "inputUsdPerMillion": 0.75,
     "outputUsdPerMillion": 4.5
   },
+  "openrouter:openai/gpt-4.1": {
+    "inputUsdPerMillion": 2,
+    "outputUsdPerMillion": 8
+  },
   "zai:glm-5.2": {
     "inputUsdPerMillion": 1.4,
     "outputUsdPerMillion": 4.4
