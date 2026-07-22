@@ -4,6 +4,7 @@ import { corpusStageSpecs } from './program'
 import {
   assertSmokeBudget,
   assertSmokeOptIn,
+  firstAttemptContractValid,
   parseSmokeProfile,
   smokeSpecification,
   smokeWorstCaseGbp,
@@ -48,6 +49,36 @@ const pricing: PricingTable = {
 }
 
 describe('synthetic v2 provider smoke preflight', () => {
+  it('does not qualify structurally repaired provider output', () => {
+    const state = {
+      generationAttempts: 1,
+      annotationAttempts: 1,
+      repairAttempts: 0,
+      regenerationAttempts: 0,
+    }
+    expect(firstAttemptContractValid([], [state])).toBe(true)
+    expect(
+      firstAttemptContractValid(
+        [
+          {
+            requestId: 'request-1',
+            specId: 'tournament-00001',
+            role: 'annotator',
+            requestedModel: 'model',
+            latencyMs: 1,
+            status: 'error',
+            errorCode: 'annotation_span_overlap',
+            attempt: 1,
+          },
+        ],
+        [state],
+      ),
+    ).toBe(false)
+    expect(
+      firstAttemptContractValid([], [{ ...state, annotationAttempts: 2 }]),
+    ).toBe(false)
+  })
+
   it('uses one bounded standard specification outside corpus IDs', () => {
     const spec = smokeSpecification()
     expect(spec.id).toBe('smoke-00001')

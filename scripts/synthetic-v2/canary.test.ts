@@ -4,7 +4,9 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   assertMatchingTournamentCanary,
+  assertReviewedTournamentJudgeConfiguration,
   createTournamentCanaryReceipt,
+  reviewedTournamentJudgeConfiguration,
   tournamentCanarySpecificationHash,
 } from './canary'
 import { canonicalHash, reviewedCandidates } from './governance'
@@ -44,6 +46,15 @@ async function validCanaryRoot(
       writer: candidate.writer,
       annotator: candidate.annotator,
       status: 'human_adjudication_required',
+      firstAttemptValid: true,
+      documentStates: [
+        {
+          generationAttempts: 1,
+          annotationAttempts: 1,
+          repairAttempts: 0,
+          regenerationAttempts: 0,
+        },
+      ],
     })),
     ...artifactOverrides,
   }
@@ -61,11 +72,45 @@ async function validCanaryRoot(
 }
 
 describe('synthetic v2 tournament canary gate', () => {
+  it('permits only the reviewed tournament judge route', () => {
+    expect(() =>
+      assertReviewedTournamentJudgeConfiguration(
+        reviewedTournamentJudgeConfiguration,
+      ),
+    ).not.toThrow()
+    expect(() =>
+      assertReviewedTournamentJudgeConfiguration(configuration),
+    ).toThrow('qwen3.7-max')
+  })
+
   it('accepts matching successful full-candidate evidence', async () => {
     const root = await validCanaryRoot()
     await expect(
       assertMatchingTournamentCanary(root, configuration),
     ).resolves.toMatch(/^[a-f0-9]{64}$/)
+  })
+
+  it('rejects a structurally repaired candidate', async () => {
+    const root = await validCanaryRoot({
+      results: reviewedCandidates.map((candidate, index) => ({
+        candidateId: candidate.id,
+        writer: candidate.writer,
+        annotator: candidate.annotator,
+        status: 'human_adjudication_required',
+        firstAttemptValid: index !== 0,
+        documentStates: [
+          {
+            generationAttempts: 1,
+            annotationAttempts: index === 0 ? 2 : 1,
+            repairAttempts: 0,
+            regenerationAttempts: 0,
+          },
+        ],
+      })),
+    })
+    await expect(
+      assertMatchingTournamentCanary(root, configuration),
+    ).rejects.toThrow('no matching successful')
   })
 
   it('rejects stale judge configuration', async () => {

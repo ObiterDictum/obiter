@@ -6,8 +6,9 @@ import {
   labelUserPrompt,
 } from './prompts'
 import { judgePrompt, parseIndependentJudgeReference } from './qa'
-import type {
-  DocumentSpec,
+import {
+  spanCategories,
+  type DocumentSpec,
   GeneratedAnnotation,
   GeneratedDocument,
   GenerationProgress,
@@ -78,8 +79,8 @@ const annotationSchema = {
           additionalProperties: false,
           required: ['category', 'quote', 'occurrence'],
           properties: {
-            category: { type: 'string' },
-            quote: { type: 'string' },
+            category: { type: 'string', enum: spanCategories },
+            quote: { type: 'string', minLength: 1 },
             occurrence: { type: 'integer', minimum: 1 },
           },
         },
@@ -109,8 +110,8 @@ const judgeSchema = {
           additionalProperties: false,
           required: ['category', 'quote', 'occurrence'],
           properties: {
-            category: { type: 'string' },
-            quote: { type: 'string' },
+            category: { type: 'string', enum: spanCategories },
+            quote: { type: 'string', minLength: 1 },
             occurrence: { type: 'integer', minimum: 1 },
           },
         },

@@ -15,14 +15,42 @@ import {
 } from './providers'
 import { PipelineExecutionError, runPipeline, terminalProgress } from './run'
 import {
+  assertReviewedTournamentJudgeConfiguration,
   createTournamentCanaryReceipt,
   tournamentCanarySpecificationHash,
 } from './canary'
-import type { DocumentSpec } from './types'
+import type { DocumentSpec, RequestTelemetry } from './types'
 
 const defaultSmokeCapGbp = 1
 const defaultGbpPerUsd = 0.79
 export type SmokeProfile = 'connectivity' | 'tournament-canary'
+
+export function firstAttemptContractValid(
+  telemetry: RequestTelemetry[],
+  documentStates: Array<{
+    generationAttempts: number
+    annotationAttempts: number
+    repairAttempts: number
+    regenerationAttempts: number
+  }>,
+) {
+  const structuralRetry = telemetry.some(
+    (entry) =>
+      entry.status === 'error' &&
+      (entry.errorCode?.startsWith('annotation_') ||
+        entry.errorCode?.startsWith('judge_')),
+  )
+  return (
+    !structuralRetry &&
+    documentStates.every(
+      (state) =>
+        state.generationAttempts === 1 &&
+        state.annotationAttempts === 1 &&
+        state.repairAttempts === 0 &&
+        state.regenerationAttempts === 0,
+    )
+  )
+}
 const pricingPath =
   process.env.SYNTHETIC_V2_PRICING_PATH ??
   resolve('scripts/synthetic-v2/pricing-2026-07-21.json')
@@ -125,6 +153,13 @@ export async function main() {
     process.env.SYNTHETIC_V2_ADJUDICATOR_PROVIDER,
     'SYNTHETIC_V2_ADJUDICATOR_PROVIDER',
   )
+  if (profile === 'tournament-canary')
+    assertReviewedTournamentJudgeConfiguration({
+      primaryJudgeProvider,
+      primaryJudgeModel,
+      disputeJudgeProvider,
+      disputeJudgeModel,
+    })
   const requestedCandidateId =
     process.env.SYNTHETIC_V2_SMOKE_CANDIDATE?.trim() || undefined
   const candidates = requestedCandidateId
@@ -203,12 +238,19 @@ export async function main() {
           onProgress: terminalProgress(`smoke:${candidate.id}`),
         },
       )
-      const status = result.pendingAdjudications.length
-        ? 'human_adjudication_required'
-        : result.documentStates.every((state) => state.status === 'accepted')
-          ? 'accepted'
-          : 'failed'
-      if (status === 'failed') failed = true
+      const firstAttemptValid = firstAttemptContractValid(
+        result.requestTelemetry,
+        result.documentStates,
+      )
+      const status = !firstAttemptValid
+        ? 'failed_contract_retry'
+        : result.pendingAdjudications.length
+          ? 'human_adjudication_required'
+          : result.documentStates.every((state) => state.status === 'accepted')
+            ? 'accepted'
+            : 'failed'
+      if (status === 'failed' || status === 'failed_contract_retry')
+        failed = true
       console.log(
         `[synthetic-v2] smoke candidate ${candidate.id} complete status=${status}`,
       )
@@ -217,6 +259,7 @@ export async function main() {
         writer: candidate.writer,
         annotator: candidate.annotator,
         status,
+        firstAttemptValid,
         documents: result.documents,
         pendingAdjudications: result.pendingAdjudications,
         qa: [...result.qa],
@@ -227,7 +270,7 @@ export async function main() {
         spendGbp: result.actualGbp,
         requestTelemetry: result.requestTelemetry,
       })
-      if (status === 'failed') {
+      if (status === 'failed' || status === 'failed_contract_retry') {
         const remaining = candidates.slice(candidateIndex + 1)
         for (const skipped of remaining)
           results.push({

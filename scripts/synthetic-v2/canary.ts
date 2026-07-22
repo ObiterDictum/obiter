@@ -7,13 +7,32 @@ export const tournamentCanaryVersion = 'synthetic-v2-tournament-canary:v1'
 // Bump whenever prompts, local validation, retries, or provider contracts change
 // in a way that can alter real-model tournament qualification.
 export const tournamentCanaryContractVersion =
-  'synthetic-v2-tournament-provider-contract:2026-07-22.2'
+  'synthetic-v2-tournament-provider-contract:2026-07-22.4'
 
 export type TournamentCanaryConfiguration = {
   primaryJudgeProvider: string
   primaryJudgeModel: string
   disputeJudgeProvider: string
   disputeJudgeModel: string
+}
+
+export const reviewedTournamentJudgeConfiguration = {
+  primaryJudgeProvider: 'opencode-go',
+  primaryJudgeModel: 'qwen3.7-max',
+  disputeJudgeProvider: 'opencode-go',
+  disputeJudgeModel: 'grok-4.5',
+} as const satisfies TournamentCanaryConfiguration
+
+export function assertReviewedTournamentJudgeConfiguration(
+  configuration: TournamentCanaryConfiguration,
+) {
+  if (
+    canonicalHash(configuration) !==
+    canonicalHash(reviewedTournamentJudgeConfiguration)
+  )
+    throw new Error(
+      `Tournament judge configuration must be ${reviewedTournamentJudgeConfiguration.primaryJudgeProvider}:${reviewedTournamentJudgeConfiguration.primaryJudgeModel} primary and ${reviewedTournamentJudgeConfiguration.disputeJudgeProvider}:${reviewedTournamentJudgeConfiguration.disputeJudgeModel} dispute`,
+    )
 }
 
 export function tournamentCanarySpecificationHash() {
@@ -110,9 +129,27 @@ export async function assertMatchingTournamentCanary(
           ),
         ) !== canonicalHash(reviewedCandidates) ||
         artifact.results.some(
-          (result: { status?: string }) =>
-            result.status !== 'accepted' &&
-            result.status !== 'human_adjudication_required',
+          (result: {
+            status?: string
+            firstAttemptValid?: boolean
+            documentStates?: Array<{
+              generationAttempts?: number
+              annotationAttempts?: number
+              repairAttempts?: number
+              regenerationAttempts?: number
+            }>
+          }) =>
+            result.firstAttemptValid !== true ||
+            !Array.isArray(result.documentStates) ||
+            result.documentStates.some(
+              (state) =>
+                state.generationAttempts !== 1 ||
+                state.annotationAttempts !== 1 ||
+                state.repairAttempts !== 0 ||
+                state.regenerationAttempts !== 0,
+            ) ||
+            (result.status !== 'accepted' &&
+              result.status !== 'human_adjudication_required'),
         )
       )
         continue

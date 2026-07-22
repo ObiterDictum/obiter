@@ -17,6 +17,7 @@ import {
 } from './artifacts'
 import {
   assertMatchingTournamentCanary,
+  assertReviewedTournamentJudgeConfiguration,
   tournamentCanaryContractVersion,
 } from './canary'
 import {
@@ -787,6 +788,12 @@ async function runTournament(pricing: PricingTable) {
   )
   const primaryModel = requiredModel('SYNTHETIC_V2_PRIMARY_JUDGE_MODEL')
   const disputeModel = requiredModel('SYNTHETIC_V2_ADJUDICATOR_MODEL')
+  assertReviewedTournamentJudgeConfiguration({
+    primaryJudgeProvider: primaryProvider,
+    primaryJudgeModel: primaryModel,
+    disputeJudgeProvider: disputeProvider,
+    disputeJudgeModel: disputeModel,
+  })
   const primaryProviderPricingKey = `${primaryProvider}:${primaryModel}`
   const disputeProviderPricingKey = `${disputeProvider}:${disputeModel}`
   const estimatedMaxGbp = pipelineWorstCaseGbp(
@@ -1181,14 +1188,16 @@ export async function assembleTournamentCandidateRuns() {
         throw new Error(
           'Tournament candidate runs use different judge configurations',
         )
+  const assembledJudgeConfiguration = {
+    primaryJudgeProvider: requiredStringField(first, 'primaryJudgeProvider'),
+    primaryJudgeModel: requiredStringField(first, 'primaryJudgeModel'),
+    disputeJudgeProvider: requiredStringField(first, 'disputeJudgeProvider'),
+    disputeJudgeModel: requiredStringField(first, 'disputeJudgeModel'),
+  }
+  assertReviewedTournamentJudgeConfiguration(assembledJudgeConfiguration)
   const matchingCanaryReceiptHash = await assertMatchingTournamentCanary(
     approvedRealRoot,
-    {
-      primaryJudgeProvider: requiredStringField(first, 'primaryJudgeProvider'),
-      primaryJudgeModel: requiredStringField(first, 'primaryJudgeModel'),
-      disputeJudgeProvider: requiredStringField(first, 'disputeJudgeProvider'),
-      disputeJudgeModel: requiredStringField(first, 'disputeJudgeModel'),
-    },
+    assembledJudgeConfiguration,
   )
   if (matchingCanaryReceiptHash !== first.canaryReceiptHash)
     throw new Error('Tournament candidate runs do not match the active canary')

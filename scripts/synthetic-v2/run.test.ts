@@ -12,6 +12,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { rootSentinelFile } from './artifacts'
 import {
   createTournamentCanaryReceipt,
+  reviewedTournamentJudgeConfiguration,
   tournamentCanaryContractVersion,
   tournamentCanarySpecificationHash,
 } from './canary'
@@ -345,12 +346,7 @@ describe('offline tournament candidate assembly', () => {
       JSON.stringify({ kind: 'private-corpus' }),
     )
     const specs = corpusStageSpecs('tournament')
-    const judgeConfiguration = {
-      primaryJudgeProvider: 'opencode-go',
-      primaryJudgeModel: 'glm-5.2',
-      disputeJudgeProvider: 'opencode-go',
-      disputeJudgeModel: 'grok-4.5',
-    }
+    const judgeConfiguration = reviewedTournamentJudgeConfiguration
     const unsignedSmoke = {
       version: 'synthetic-v2-provider-smoke:v1',
       purpose: 'diagnostic-only-not-a-corpus-partition',
@@ -364,6 +360,15 @@ describe('offline tournament candidate assembly', () => {
         writer: candidate.writer,
         annotator: candidate.annotator,
         status: 'human_adjudication_required',
+        firstAttemptValid: true,
+        documentStates: [
+          {
+            generationAttempts: 1,
+            annotationAttempts: 1,
+            repairAttempts: 0,
+            regenerationAttempts: 0,
+          },
+        ],
       })),
     }
     const smokeArtifactHash = canonicalHash(unsignedSmoke)
