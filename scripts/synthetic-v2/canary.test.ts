@@ -65,7 +65,7 @@ describe('synthetic v2 tournament canary gate', () => {
     const root = await validCanaryRoot()
     await expect(
       assertMatchingTournamentCanary(root, configuration),
-    ).resolves.toBeUndefined()
+    ).resolves.toMatch(/^[a-f0-9]{64}$/)
   })
 
   it('rejects stale judge configuration', async () => {

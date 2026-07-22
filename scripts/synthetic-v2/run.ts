@@ -1,6 +1,6 @@
-import { readFile } from 'node:fs/promises'
+import { readFile, realpath } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
-import { join, resolve } from 'node:path'
+import { isAbsolute, join, relative, resolve } from 'node:path'
 import {
   costGbp,
   maximumBillableRequestUsage,
@@ -15,11 +15,15 @@ import {
   writeDatasetAtomically,
   writeText,
 } from './artifacts'
-import { assertMatchingTournamentCanary } from './canary'
+import {
+  assertMatchingTournamentCanary,
+  tournamentCanaryContractVersion,
+} from './canary'
 import {
   assertApprovedModel,
   assertExternalPartitionRegistry,
   blindReviewPackage,
+  assertBlindReviewPackage,
   assertPartitionManifest,
   assertSelectionManifest,
   assertTournamentManifest,
@@ -60,7 +64,9 @@ import type {
 } from './types'
 import { NearDuplicateIndex, normalizeAnnotated } from './validation'
 import {
+  assertPendingAdjudicationArtifact,
   assertRunCheckpointMetadata,
+  assertTournamentCandidateCheckpointMetadata,
   pendingAdjudicationArtifact,
   persistPendingAdjudications,
   resumePendingAdjudications,
@@ -162,6 +168,8 @@ export type PipelineOptions = {
 }
 
 export async function main() {
+  if (process.argv.includes('--assemble-tournament'))
+    return assembleTournamentCandidateRuns()
   const stage = flag('--stage')
   if (!isCorpusStage(stage))
     throw new Error(
@@ -753,7 +761,11 @@ function normaliseCandidate(
 async function runTournament(pricing: PricingTable) {
   const specs = corpusStageSpecs('tournament')
   assertTournamentStratification(specs)
-  const candidates = reviewedCandidates
+  const selectedTournamentCandidate = selectTournamentCandidate(
+    process.env.SYNTHETIC_V2_TOURNAMENT_CANDIDATE,
+  )
+  const requestedCandidateId = selectedTournamentCandidate.id
+  const candidates = [selectedTournamentCandidate]
   const outputs: Array<{
     candidateId: string
     blindId: string
@@ -788,11 +800,11 @@ async function runTournament(pricing: PricingTable) {
       : disputeModel,
     specs.length,
     gbpPerUsd,
-    defaultMaxRegenerations + 1,
+    1,
   )
   const tournamentCapGbp = assertTournamentBudget(
     estimatedMaxGbp,
-    process.env.SYNTHETIC_V2_TOURNAMENT_MAX_GBP,
+    process.env.SYNTHETIC_V2_TOURNAMENT_CANDIDATE_MAX_GBP,
   )
   const root =
     process.env.SYNTHETIC_V2_PRIVATE_CORPUS_ROOT ??
@@ -803,7 +815,7 @@ async function runTournament(pricing: PricingTable) {
     'private-corpus',
     'tournament',
   )
-  await assertMatchingTournamentCanary(approvedRoot, {
+  const canaryReceiptHash = await assertMatchingTournamentCanary(approvedRoot, {
     primaryJudgeProvider: primaryProvider,
     primaryJudgeModel: primaryModel,
     disputeJudgeProvider: disputeProvider,
@@ -823,7 +835,7 @@ async function runTournament(pricing: PricingTable) {
     'dispute_judge',
   )
   for (const candidate of candidates) {
-    const blindId = `review-${outputs.length + 1}`
+    const blindId = `review-${reviewedCandidates.findIndex((reviewed) => reviewed.id === candidate.id) + 1}`
     let artifact: unknown
     let blindPackage: ReturnType<typeof blindReviewPackage> | undefined
     let pipelineResult: PipelineResult | undefined
@@ -847,6 +859,7 @@ async function runTournament(pricing: PricingTable) {
         [],
         {
           requireIndependentAdjudication: true,
+          maxRegenerations: 0,
           failFastOnTerminalState: true,
           onProgress: terminalProgress(`tournament:${candidate.id}`),
         },
@@ -923,7 +936,7 @@ async function runTournament(pricing: PricingTable) {
             `${entry.provider ?? 'unknown'}:${entry.requestedModel}:${entry.errorCode ?? entry.status}`,
         )
         .join(', ')
-      artifact = {
+      const failedArtifact = {
         version: 'synthetic-v2-tournament-failure:v1',
         candidateId: candidate.id,
         specs: specs.map(({ id, seed }) => ({ id, seed })),
@@ -942,19 +955,33 @@ async function runTournament(pricing: PricingTable) {
             : undefined,
         requestTelemetry: diagnostics,
       }
-      candidateArtifacts.push(artifact)
-      await stopFailedTournament({
-        approvedRoot,
-        candidateId: candidate.id,
-        primaryJudgeProvider: primaryProvider,
-        primaryJudgeModel: primaryModel,
-        disputeJudgeProvider: disputeProvider,
-        disputeJudgeModel: disputeModel,
-        candidateArtifacts,
-        completedCandidates: outputs,
-        error: accountedError,
-        diagnosticSummary,
-      })
+      const candidateQualityRejection =
+        isCandidateQualityRejection(accountedError)
+      if (candidateQualityRejection) {
+        artifact = {
+          ...failedArtifact,
+          status: 'rejected',
+          rejectionKind: 'candidate_quality',
+        }
+        console.error(
+          `[synthetic-v2] tournament candidate ${candidate.id} rejected after terminal document validation`,
+        )
+      } else {
+        artifact = failedArtifact
+        candidateArtifacts.push(artifact)
+        await stopFailedTournament({
+          approvedRoot,
+          candidateId: candidate.id,
+          primaryJudgeProvider: primaryProvider,
+          primaryJudgeModel: primaryModel,
+          disputeJudgeProvider: disputeProvider,
+          disputeJudgeModel: disputeModel,
+          candidateArtifacts,
+          completedCandidates: outputs,
+          error: accountedError,
+          diagnosticSummary,
+        })
+      }
     }
     candidateArtifacts.push(artifact)
     if (blindPackage) blindReviewPackages.push(blindPackage)
@@ -970,11 +997,224 @@ async function runTournament(pricing: PricingTable) {
       finalStatus,
     })
   }
-  const unsigned = {
+  const unsignedRun = {
+    version: 'synthetic-v2-tournament-candidate-run:v1' as const,
+    providerContractVersion: tournamentCanaryContractVersion,
+    canaryReceiptHash,
+    tournamentSpecificationHash: canonicalHash(specs),
+    candidateConfigurationHash: canonicalHash(reviewedCandidates),
+    pricingConfigurationHash: canonicalHash(pricing),
+    gbpPerUsd,
+    maxRegenerations: 0,
+    estimatedMaxGbp,
+    capGbp: tournamentCapGbp,
+    primaryJudgeProvider: primaryProvider,
+    primaryJudgeModel: primaryModel,
+    disputeJudgeProvider: disputeProvider,
+    disputeJudgeModel: disputeModel,
+    candidate: outputs[0],
+    candidateArtifact: candidateArtifacts[0],
+    blindReviewPackage: blindReviewPackages[0],
+  }
+  const candidateRun = {
+    ...unsignedRun,
+    artifactHash: canonicalHash(unsignedRun),
+  }
+  const candidateRunPath = join(
+    approvedRoot,
+    'tournament-candidate-runs',
+    requestedCandidateId,
+    `${candidateRun.artifactHash}.json`,
+  )
+  await writeText(candidateRunPath, `${JSON.stringify(candidateRun)}\n`)
+  console.log(
+    `[synthetic-v2] tournament candidate complete candidate=${requestedCandidateId} status=${outputs[0]?.finalStatus} artifact=${candidateRunPath}`,
+  )
+}
+
+export function selectTournamentCandidate(value: string | undefined) {
+  const candidateId = value?.trim()
+  if (!candidateId)
+    throw new Error(
+      'SYNTHETIC_V2_TOURNAMENT_CANDIDATE must select one reviewed candidate',
+    )
+  const candidate = reviewedCandidates.find((entry) => entry.id === candidateId)
+  if (!candidate)
+    throw new Error(
+      `SYNTHETIC_V2_TOURNAMENT_CANDIDATE is not reviewed: ${candidateId}`,
+    )
+  return candidate
+}
+
+export async function assembleTournamentCandidateRuns() {
+  const root =
+    process.env.SYNTHETIC_V2_PRIVATE_CORPUS_ROOT ??
+    '../obiter-redaction-data-private'
+  const approvedRoot = await assertSafeOutputRoot(
+    root,
+    process.cwd(),
+    'private-corpus',
+    'tournament',
+  )
+  const approvedRealRoot = await realpath(approvedRoot)
+  const configuredRegistryPath = requiredFlag('--candidate-run-registry')
+  const registryPath = await realpath(
+    isAbsolute(configuredRegistryPath)
+      ? configuredRegistryPath
+      : resolve(approvedRealRoot, configuredRegistryPath),
+  )
+  const registryRelativePath = relative(approvedRealRoot, registryPath)
+  if (
+    !registryRelativePath ||
+    registryRelativePath.startsWith('..') ||
+    isAbsolute(registryRelativePath)
+  )
+    throw new Error(
+      'Tournament candidate-run registry must be inside the private root',
+    )
+  const registry = await loadJson<{
+    version: string
+    candidateRuns: Array<{
+      candidateId: string
+      path: string
+      artifactHash: string
+    }>
+    registryHash: string
+  }>(registryPath, 'tournament candidate-run registry')
+  const { registryHash, ...unsignedRegistry } = registry
+  if (
+    canonicalHash(unsignedRegistry) !== registryHash ||
+    registry.version !== 'synthetic-v2-tournament-candidate-run-registry:v1' ||
+    !Array.isArray(registry.candidateRuns) ||
+    registry.candidateRuns.length !== reviewedCandidates.length
+  )
+    throw new Error('Tournament candidate-run registry is invalid')
+  const runs: Array<Record<string, unknown>> = []
+  const seen = new Set<string>()
+  for (const entry of registry.candidateRuns) {
+    if (
+      !reviewedCandidates.some(
+        (candidate) => candidate.id === entry.candidateId,
+      ) ||
+      seen.has(entry.candidateId)
+    )
+      throw new Error(
+        'Tournament candidate-run registry has invalid candidates',
+      )
+    const path = await realpath(resolve(approvedRealRoot, entry.path))
+    const pathFromRoot = relative(approvedRealRoot, path)
+    if (pathFromRoot.startsWith('..') || isAbsolute(pathFromRoot))
+      throw new Error(
+        'Tournament candidate-run artifact must be inside the private root',
+      )
+    const expectedPath = await realpath(
+      join(
+        approvedRealRoot,
+        'tournament-candidate-runs',
+        entry.candidateId,
+        `${entry.artifactHash}.json`,
+      ),
+    )
+    if (path !== expectedPath)
+      throw new Error('Tournament candidate-run path does not match its hash')
+    const run = await loadJson<Record<string, unknown>>(
+      path,
+      `tournament candidate run ${entry.candidateId}`,
+    )
+    const { artifactHash, ...unsigned } = run
+    if (
+      run.version !== 'synthetic-v2-tournament-candidate-run:v1' ||
+      artifactHash !== entry.artifactHash ||
+      canonicalHash(unsigned) !== artifactHash ||
+      run.providerContractVersion !== tournamentCanaryContractVersion ||
+      typeof run.canaryReceiptHash !== 'string' ||
+      !/^[a-f0-9]{64}$/.test(run.canaryReceiptHash) ||
+      typeof run.primaryJudgeProvider !== 'string' ||
+      typeof run.primaryJudgeModel !== 'string' ||
+      typeof run.disputeJudgeProvider !== 'string' ||
+      typeof run.disputeJudgeModel !== 'string' ||
+      run.tournamentSpecificationHash !==
+        canonicalHash(corpusStageSpecs('tournament')) ||
+      run.candidateConfigurationHash !== canonicalHash(reviewedCandidates) ||
+      typeof run.pricingConfigurationHash !== 'string' ||
+      typeof run.gbpPerUsd !== 'number' ||
+      run.maxRegenerations !== 0 ||
+      typeof run.estimatedMaxGbp !== 'number' ||
+      typeof run.capGbp !== 'number' ||
+      run.estimatedMaxGbp > run.capGbp ||
+      !run.candidate ||
+      typeof run.candidate !== 'object' ||
+      (run.candidate as { candidateId?: string }).candidateId !==
+        entry.candidateId ||
+      (run.candidate as { canonicalArtifactHash?: string })
+        .canonicalArtifactHash !==
+        embeddedArtifactHash(run.candidateArtifact) ||
+      (run.candidate as { blindReviewPackageHash?: string })
+        .blindReviewPackageHash !==
+        canonicalHash(run.blindReviewPackage ?? { status: 'ineligible' })
+    )
+      throw new Error(
+        `Tournament candidate run is invalid: ${entry.candidateId}`,
+      )
+    assertTournamentCandidateRunEvidence(
+      run,
+      entry.candidateId,
+      corpusStageSpecs('tournament'),
+    )
+    seen.add(entry.candidateId)
+    runs.push(run)
+  }
+  const first = runs[0]!
+  for (const run of runs.slice(1))
+    for (const field of [
+      'providerContractVersion',
+      'canaryReceiptHash',
+      'pricingConfigurationHash',
+      'gbpPerUsd',
+      'maxRegenerations',
+      'primaryJudgeProvider',
+      'primaryJudgeModel',
+      'disputeJudgeProvider',
+      'disputeJudgeModel',
+    ])
+      if (run[field] !== first[field])
+        throw new Error(
+          'Tournament candidate runs use different judge configurations',
+        )
+  const matchingCanaryReceiptHash = await assertMatchingTournamentCanary(
+    approvedRealRoot,
+    {
+      primaryJudgeProvider: requiredStringField(first, 'primaryJudgeProvider'),
+      primaryJudgeModel: requiredStringField(first, 'primaryJudgeModel'),
+      disputeJudgeProvider: requiredStringField(first, 'disputeJudgeProvider'),
+      disputeJudgeModel: requiredStringField(first, 'disputeJudgeModel'),
+    },
+  )
+  if (matchingCanaryReceiptHash !== first.canaryReceiptHash)
+    throw new Error('Tournament candidate runs do not match the active canary')
+  const ordered = reviewedCandidates.map((reviewed) => {
+    const run = runs.find(
+      (candidate) =>
+        (candidate.candidate as { candidateId?: string }).candidateId ===
+        reviewed.id,
+    )
+    if (!run)
+      throw new Error(`Missing tournament candidate run: ${reviewed.id}`)
+    return run
+  })
+  const outputs = ordered.map((run) => run.candidate)
+  const candidateArtifacts = ordered.map((run) => run.candidateArtifact)
+  const blindReviewPackages = ordered
+    .map((run) => run.blindReviewPackage)
+    .filter((value) => value !== undefined)
+  const unsignedManifest = {
     version: 'synthetic-v2-tournament:v1' as const,
     candidates: outputs,
   }
-  const manifest = { ...unsigned, manifestHash: canonicalHash(unsigned) }
+  const manifest = {
+    ...unsignedManifest,
+    manifestHash: canonicalHash(unsignedManifest),
+  }
   assertTournamentManifest(manifest)
   await writeDatasetAtomically([], {
     root: approvedRoot,
@@ -986,6 +1226,8 @@ async function runTournament(pricing: PricingTable) {
       tournament: manifest,
       candidateArtifacts,
       blindReviewPackages,
+      candidateRunRegistryHash: registryHash,
+      candidateRunHashes: ordered.map((run) => run.artifactHash),
     },
     beforeCommit: async (staging) => {
       await writeText(
@@ -995,8 +1237,111 @@ async function runTournament(pricing: PricingTable) {
     },
   })
   console.log(
-    `[synthetic-v2] tournament complete candidates=${outputs.length}/${candidates.length} status=${outputs.map((output) => `${output.candidateId}:${output.finalStatus}`).join(',')}`,
+    `[synthetic-v2] tournament assembled candidates=${outputs.length}/${reviewedCandidates.length}`,
   )
+}
+
+function requiredStringField(value: Record<string, unknown>, field: string) {
+  const selected = value[field]
+  if (typeof selected !== 'string')
+    throw new Error(`Tournament candidate run requires ${field}`)
+  return selected
+}
+
+function assertTournamentCandidateRunEvidence(
+  run: Record<string, unknown>,
+  candidateId: string,
+  specs: DocumentSpec[],
+) {
+  const output = run.candidate as {
+    candidateId?: string
+    blindId?: string
+    specificationIds?: unknown
+    seeds?: unknown
+    finalStatus?: string
+  }
+  const reviewedIndex = reviewedCandidates.findIndex(
+    (candidate) => candidate.id === candidateId,
+  )
+  if (
+    output.candidateId !== candidateId ||
+    output.blindId !== `review-${reviewedIndex + 1}` ||
+    canonicalHash(output.specificationIds) !==
+      canonicalHash(specs.map((spec) => spec.id)) ||
+    canonicalHash(output.seeds) !==
+      canonicalHash(specs.map((spec) => spec.seed))
+  )
+    throw new Error(`Tournament candidate evidence is misbound: ${candidateId}`)
+  if (output.finalStatus === 'human_adjudication_required') {
+    const pendingArtifact = run.candidateArtifact
+    assertPendingAdjudicationArtifact(pendingArtifact)
+    assertTournamentCandidateCheckpointMetadata(pendingArtifact.metadata)
+    if (
+      pendingArtifact.stage !== 'tournament' ||
+      pendingArtifact.metadata.candidate.candidateId !== candidateId ||
+      pendingArtifact.metadata.candidate.blindId !== output.blindId ||
+      canonicalHash(pendingArtifact.expectedSpecificationIds) !==
+        canonicalHash(specs.map((spec) => spec.id))
+    )
+      throw new Error('Pending tournament candidate evidence is misbound')
+    if (run.blindReviewPackage !== undefined)
+      throw new Error('Pending candidate cannot have a blind review package')
+    return
+  }
+  if (output.finalStatus === 'pending_review') {
+    const artifact = run.candidateArtifact
+    if (
+      !artifact ||
+      typeof artifact !== 'object' ||
+      !('version' in artifact) ||
+      artifact.version !== 'synthetic-v2-tournament-candidate:v2' ||
+      !('candidateId' in artifact) ||
+      artifact.candidateId !== candidateId ||
+      !('blindId' in artifact) ||
+      artifact.blindId !== output.blindId ||
+      !('specs' in artifact) ||
+      canonicalHash(artifact.specs) !==
+        canonicalHash(specs.map(({ id, seed }) => ({ id, seed }))) ||
+      !('documents' in artifact) ||
+      !Array.isArray(artifact.documents) ||
+      artifact.documents.length !== specs.length
+    )
+      throw new Error('Pending-review candidate artifact is invalid')
+    assertBlindReviewPackage(run.blindReviewPackage)
+    return
+  }
+  if (output.finalStatus === 'rejected') {
+    const artifact = run.candidateArtifact
+    if (
+      !artifact ||
+      typeof artifact !== 'object' ||
+      !('status' in artifact) ||
+      artifact.status !== 'rejected' ||
+      run.blindReviewPackage !== undefined
+    )
+      throw new Error('Rejected candidate evidence is invalid')
+    return
+  }
+  throw new Error(`Tournament candidate run has invalid status: ${candidateId}`)
+}
+
+export function isCandidateQualityRejection(error: unknown) {
+  return (
+    error instanceof PipelineExecutionError &&
+    error.message.startsWith('Document ') &&
+    error.message.endsWith(' exhausted validation and regeneration attempts')
+  )
+}
+
+function embeddedArtifactHash(value: unknown) {
+  if (
+    value &&
+    typeof value === 'object' &&
+    'artifactHash' in value &&
+    typeof value.artifactHash === 'string'
+  )
+    return value.artifactHash
+  return canonicalHash(value)
 }
 
 export function accountTournamentError(
@@ -1022,11 +1367,13 @@ export function assertTournamentBudget(
     throw new Error('Tournament worst-case spend estimate must be positive')
   if (!configuredCap)
     throw new Error(
-      'SYNTHETIC_V2_TOURNAMENT_MAX_GBP must explicitly cap tournament spend',
+      'SYNTHETIC_V2_TOURNAMENT_CANDIDATE_MAX_GBP must explicitly cap one candidate run',
     )
   const capGbp = Number(configuredCap)
   if (!Number.isFinite(capGbp) || capGbp <= 0)
-    throw new Error('SYNTHETIC_V2_TOURNAMENT_MAX_GBP must be positive')
+    throw new Error(
+      'SYNTHETIC_V2_TOURNAMENT_CANDIDATE_MAX_GBP must be positive',
+    )
   if (estimatedGbp > capGbp)
     throw new Error(
       `Tournament worst-case reservation GBP ${estimatedGbp.toFixed(6)} exceeds cap ${capGbp.toFixed(6)}`,

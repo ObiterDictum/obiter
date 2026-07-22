@@ -10,18 +10,30 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { rootSentinelFile } from './artifacts'
-import { canonicalHash, reviewedCandidates } from './governance'
+import {
+  createTournamentCanaryReceipt,
+  tournamentCanaryContractVersion,
+  tournamentCanarySpecificationHash,
+} from './canary'
+import {
+  blindReviewPackage,
+  canonicalHash,
+  reviewedCandidates,
+} from './governance'
 import { corpusStageSpecs } from './program'
 import { ProviderBatchError } from './providers'
 import {
   accountTournamentError,
+  assembleTournamentCandidateRuns,
   assertConfiguredPricing,
   assertTournamentBudget,
+  isCandidateQualityRejection,
   pendingAdjudicationArtifact,
   persistPendingAdjudications,
   PipelineExecutionError,
   resumePendingAdjudications,
   runPipeline,
+  selectTournamentCandidate,
   stopFailedTournament,
   type DocumentProcessingState,
   type TournamentCandidateCheckpointMetadata,
@@ -38,9 +50,15 @@ import type {
 
 const directories: string[] = []
 const originalLedger = process.env.SYNTHETIC_V2_LEDGER
+const originalPrivateRoot = process.env.SYNTHETIC_V2_PRIVATE_CORPUS_ROOT
+const originalArgv = [...process.argv]
 afterEach(async () => {
   if (originalLedger === undefined) delete process.env.SYNTHETIC_V2_LEDGER
   else process.env.SYNTHETIC_V2_LEDGER = originalLedger
+  if (originalPrivateRoot === undefined)
+    delete process.env.SYNTHETIC_V2_PRIVATE_CORPUS_ROOT
+  else process.env.SYNTHETIC_V2_PRIVATE_CORPUS_ROOT = originalPrivateRoot
+  process.argv.splice(0, process.argv.length, ...originalArgv)
   await Promise.all(
     directories
       .splice(0)
@@ -318,6 +336,148 @@ describe('pipeline paid fail-fast behavior', () => {
   })
 })
 
+describe('offline tournament candidate assembly', () => {
+  it('assembles exactly one immutable run for every reviewed candidate', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'synthetic-v2-private-'))
+    directories.push(root)
+    await writeFile(
+      join(root, rootSentinelFile),
+      JSON.stringify({ kind: 'private-corpus' }),
+    )
+    const specs = corpusStageSpecs('tournament')
+    const judgeConfiguration = {
+      primaryJudgeProvider: 'opencode-go',
+      primaryJudgeModel: 'glm-5.2',
+      disputeJudgeProvider: 'opencode-go',
+      disputeJudgeModel: 'grok-4.5',
+    }
+    const unsignedSmoke = {
+      version: 'synthetic-v2-provider-smoke:v1',
+      purpose: 'diagnostic-only-not-a-corpus-partition',
+      profile: 'tournament-canary',
+      specification: specs[0],
+      tournamentSpecificationHash: tournamentCanarySpecificationHash(),
+      ...judgeConfiguration,
+      requestedCandidateId: undefined,
+      results: reviewedCandidates.map((candidate) => ({
+        candidateId: candidate.id,
+        writer: candidate.writer,
+        annotator: candidate.annotator,
+        status: 'human_adjudication_required',
+      })),
+    }
+    const smokeArtifactHash = canonicalHash(unsignedSmoke)
+    await mkdir(join(root, 'smoke'), { recursive: true })
+    await writeFile(
+      join(root, 'smoke', `${smokeArtifactHash}.json`),
+      JSON.stringify({ ...unsignedSmoke, artifactHash: smokeArtifactHash }),
+    )
+    const canaryReceipt = createTournamentCanaryReceipt(
+      judgeConfiguration,
+      smokeArtifactHash,
+    )
+    await mkdir(join(root, 'tournament-canaries'), { recursive: true })
+    await writeFile(
+      join(root, 'tournament-canaries', `${canaryReceipt.receiptHash}.json`),
+      JSON.stringify(canaryReceipt),
+    )
+    const candidateRuns = []
+    for (const [index, candidate] of reviewedCandidates.entries()) {
+      const documents = specs.map((spec) => ({
+        id: spec.id,
+        text: `Fictional ${spec.id}.`,
+        spans: [],
+        generator: candidate.writer,
+        specCell: 'fixture',
+        matrixCells: spec.matrixCells,
+        contentHash: canonicalHash(`Fictional ${spec.id}.`),
+        hardNegatives: [],
+      }))
+      const candidateArtifact = {
+        version: 'synthetic-v2-tournament-candidate:v2',
+        candidateId: candidate.id,
+        blindId: `review-${index + 1}`,
+        specs: specs.map(({ id, seed }) => ({ id, seed })),
+        documents,
+      }
+      const reviewPackage = blindReviewPackage(`review-${index + 1}`, documents)
+      const output = {
+        candidateId: candidate.id,
+        blindId: `review-${index + 1}`,
+        specificationIds: specs.map((spec) => spec.id),
+        seeds: specs.map((spec) => spec.seed),
+        canonicalArtifactHash: canonicalHash(candidateArtifact),
+        blindReviewPackageHash: canonicalHash(reviewPackage),
+        finalStatus: 'pending_review',
+      }
+      const unsigned = {
+        version: 'synthetic-v2-tournament-candidate-run:v1',
+        providerContractVersion: tournamentCanaryContractVersion,
+        canaryReceiptHash: canaryReceipt.receiptHash,
+        tournamentSpecificationHash: canonicalHash(specs),
+        candidateConfigurationHash: canonicalHash(reviewedCandidates),
+        pricingConfigurationHash: 'b'.repeat(64),
+        gbpPerUsd: 0.79,
+        maxRegenerations: 0,
+        estimatedMaxGbp: 10,
+        capGbp: 10,
+        ...judgeConfiguration,
+        candidate: output,
+        candidateArtifact,
+        blindReviewPackage: reviewPackage,
+      }
+      const run = { ...unsigned, artifactHash: canonicalHash(unsigned) }
+      const relativePath = join(
+        'tournament-candidate-runs',
+        candidate.id,
+        `${run.artifactHash}.json`,
+      )
+      await mkdir(join(root, 'tournament-candidate-runs', candidate.id), {
+        recursive: true,
+      })
+      await writeFile(join(root, relativePath), JSON.stringify(run))
+      candidateRuns.push({
+        candidateId: candidate.id,
+        path: relativePath,
+        artifactHash: run.artifactHash,
+      })
+    }
+    const registryPath = join(root, 'candidate-run-registry.json')
+    const unsignedRegistry = {
+      version: 'synthetic-v2-tournament-candidate-run-registry:v1',
+      candidateRuns,
+    }
+    await writeFile(
+      registryPath,
+      JSON.stringify({
+        ...unsignedRegistry,
+        registryHash: canonicalHash(unsignedRegistry),
+      }),
+    )
+    process.env.SYNTHETIC_V2_PRIVATE_CORPUS_ROOT = root
+    process.argv.push(`--candidate-run-registry=${registryPath}`)
+    await assembleTournamentCandidateRuns()
+    const tournament = JSON.parse(
+      await readFile(join(root, 'tournament', 'TOURNAMENT.json'), 'utf8'),
+    )
+    expect(
+      tournament.candidates.map(
+        (candidate: { candidateId: string }) => candidate.candidateId,
+      ),
+    ).toEqual(reviewedCandidates.map((candidate) => candidate.id))
+  })
+})
+
+describe('tournament candidate selection', () => {
+  it('requires exactly one reviewed candidate', () => {
+    expect(() => selectTournamentCandidate(undefined)).toThrow('must select')
+    expect(() => selectTournamentCandidate('unknown')).toThrow('not reviewed')
+    expect(selectTournamentCandidate('deepseek-pro-gemini-flash').id).toBe(
+      'deepseek-pro-gemini-flash',
+    )
+  })
+})
+
 describe('tournament spend preflight', () => {
   it('requires an explicit cap at or above the conservative estimate', () => {
     expect(() => assertTournamentBudget(30.2, undefined)).toThrow(
@@ -328,6 +488,31 @@ describe('tournament spend preflight', () => {
     expect(() => assertTournamentBudget(Number.NaN, '100')).toThrow(
       'estimate must be positive',
     )
+  })
+})
+
+describe('tournament failure classification', () => {
+  it('separates candidate validation rejection from operational errors', () => {
+    expect(
+      isCandidateQualityRejection(
+        new PipelineExecutionError(
+          'Document tournament-00001 exhausted validation and regeneration attempts',
+          { inputTokens: 1, outputTokens: 1 },
+          0.1,
+          [],
+        ),
+      ),
+    ).toBe(true)
+    expect(
+      isCandidateQualityRejection(
+        new PipelineExecutionError(
+          'Provider batch stopped after terminal failure',
+          { inputTokens: 1, outputTokens: 1 },
+          0.1,
+          [],
+        ),
+      ),
+    ).toBe(false)
   })
 })
 

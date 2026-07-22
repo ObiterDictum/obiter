@@ -116,7 +116,7 @@ export async function assertMatchingTournamentCanary(
         )
       )
         continue
-      return
+      return receiptHash
     } catch {
       // Ignore malformed or stale receipts and continue looking for a match.
     }
