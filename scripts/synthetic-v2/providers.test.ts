@@ -5,6 +5,7 @@ import {
   OpenRouterJudge,
   OpenRouterLabeler,
   ProviderBatchError,
+  requestTelemetryFromResult,
   ZaiJudge,
 } from './providers'
 import type { LabelInput, SyntheticDocument } from './types'
@@ -96,6 +97,39 @@ function annotationToolMessage(payload: unknown) {
   }
 }
 
+describe('provider batch telemetry', () => {
+  it('retains successful-item retry telemetry for later peer failures', () => {
+    const retry = {
+      requestId: 'retry-1',
+      specId: 'doc-1',
+      role: 'annotator' as const,
+      provider: 'openrouter',
+      requestedModel: 'fake/model',
+      returnedModel: 'fake/model',
+      usage: { inputTokens: 123, outputTokens: 45 },
+      latencyMs: 1,
+      status: 'error' as const,
+      errorCode: 'annotation_invalid_json',
+      attempt: 1,
+    }
+    const success = {
+      ...retry,
+      requestId: 'success-1',
+      usage: { inputTokens: 100, outputTokens: 20 },
+      status: 'success' as const,
+      errorCode: undefined,
+      attempt: 2,
+      retryOfRequestId: retry.requestId,
+    }
+    expect(
+      requestTelemetryFromResult({
+        telemetry: success,
+        retryTelemetry: [retry],
+      }),
+    ).toEqual([retry, success])
+  })
+})
+
 describe('OpenRouter schema and offline failure behaviour', () => {
   it('forces a schema tool and keeps local quote validation', async () => {
     process.env.OPENROUTER_API_KEY = 'offline-test-only'
@@ -149,6 +183,30 @@ describe('OpenRouter schema and offline failure behaviour', () => {
       },
     ])
     expect(JSON.stringify(body?.tools)).not.toContain('"start"')
+  })
+
+  it('retains billing evidence when a successful response omits output', async () => {
+    process.env.OPENROUTER_API_KEY = 'offline-test-only'
+    const labeler = new OpenRouterLabeler('fake/model', {
+      fetch: fakeFetch(
+        () =>
+          new Response(
+            JSON.stringify({
+              model: 'fake/model',
+              usage: { prompt_tokens: 123, completion_tokens: 45 },
+              choices: [{ message: {} }],
+            }),
+          ),
+      ),
+    })
+    await expect(labeler.label([input])).rejects.toSatisfy(
+      (error: unknown) =>
+        error instanceof ProviderBatchError &&
+        error.telemetry[0]?.returnedModel === 'fake/model' &&
+        error.telemetry[0]?.usage?.inputTokens === 123 &&
+        error.telemetry[0]?.usage?.outputTokens === 45 &&
+        error.telemetry[0]?.errorCode === 'provider_missing_tool_call',
+    )
   })
 
   it('accepts a locally validated content fallback when a route omits tool_calls', async () => {
@@ -440,6 +498,30 @@ describe('OpenRouter schema and offline failure behaviour', () => {
       name: 'synthetic_v2_independent_reference',
     })
     expect(JSON.stringify(body?.tools)).toContain('referenceSpans')
+  })
+
+  it('retains Anthropic-compatible billing evidence when tool output is missing', async () => {
+    process.env.OPENCODE_GO_API_KEY = 'offline-test-only'
+    process.env.OBITER_OPENCODE_GO_TERMS_CONFIRMED = '1'
+    const judge = new OpenCodeGoJudge('qwen3.7-max', {
+      fetch: fakeFetch(
+        () =>
+          new Response(
+            JSON.stringify({
+              model: 'qwen3.7-max',
+              usage: { input_tokens: 123, output_tokens: 45 },
+              content: [],
+            }),
+          ),
+      ),
+    })
+    await expect(judge.judge([document])).rejects.toSatisfy(
+      (error: unknown) =>
+        error instanceof ProviderBatchError &&
+        error.telemetry[0]?.returnedModel === 'qwen3.7-max' &&
+        error.telemetry[0]?.usage?.inputTokens === 123 &&
+        error.telemetry[0]?.usage?.outputTokens === 45,
+    )
   })
 
   it('rejects OpenCode Go models outside the reviewed endpoint allowlist', () => {

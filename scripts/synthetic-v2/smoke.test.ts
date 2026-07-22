@@ -1,8 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type { PricingTable } from './budget'
+import { corpusStageSpecs } from './program'
 import {
   assertSmokeBudget,
   assertSmokeOptIn,
+  parseSmokeProfile,
   smokeSpecification,
   smokeWorstCaseGbp,
 } from './smoke'
@@ -56,6 +58,19 @@ describe('synthetic v2 provider smoke preflight', () => {
     expect(spec.hardNegatives).toEqual([])
   })
 
+  it('uses an unabridged tournament specification for canary qualification', () => {
+    const spec = smokeSpecification('tournament-canary')
+    expect(spec).toEqual(corpusStageSpecs('tournament')[0])
+    expect(spec.lengthWords).toBeGreaterThan(300)
+    expect(spec.requiredCategories).toContain('person_protected')
+  })
+
+  it('rejects unknown smoke profiles instead of silently simplifying them', () => {
+    expect(parseSmokeProfile(undefined)).toBe('connectivity')
+    expect(parseSmokeProfile('tournament-canary')).toBe('tournament-canary')
+    expect(() => parseSmokeProfile('tournament')).toThrow('Unsupported')
+  })
+
   it('calculates a bounded worst-case reservation and rejects a lower cap', () => {
     const estimate = smokeWorstCaseGbp(
       pricing,
@@ -65,7 +80,7 @@ describe('synthetic v2 provider smoke preflight', () => {
       'zai',
       'opencode-go',
     )
-    expect(estimate).toBe(0.1989)
+    expect(estimate).toBe(0.7344)
     const selectedEstimate = smokeWorstCaseGbp(
       pricing,
       'judge-primary',
@@ -82,7 +97,7 @@ describe('synthetic v2 provider smoke preflight', () => {
         },
       ],
     )
-    expect(selectedEstimate).toBe(0.0702)
+    expect(selectedEstimate).toBe(0.2592)
     expect(() => assertSmokeBudget(estimate, estimate)).not.toThrow()
     expect(() => assertSmokeBudget(estimate, estimate - 0.000001)).toThrow(
       'exceeds cap',

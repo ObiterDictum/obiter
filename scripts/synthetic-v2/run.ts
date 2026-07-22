@@ -3,12 +3,19 @@ import { fileURLToPath } from 'node:url'
 import { join, resolve } from 'node:path'
 import {
   costGbp,
+  maximumBillableRequestUsage,
+  pipelineWorstCaseGbp,
   readLedger,
   reconcileSpend,
   reserveSpend,
   type PricingTable,
 } from './budget'
-import { writeDatasetAtomically, writeText } from './artifacts'
+import {
+  assertSafeOutputRoot,
+  writeDatasetAtomically,
+  writeText,
+} from './artifacts'
+import { assertMatchingTournamentCanary } from './canary'
 import {
   assertApprovedModel,
   assertExternalPartitionRegistry,
@@ -18,11 +25,11 @@ import {
   assertTournamentManifest,
   canonicalHash,
   requireSelection,
+  reviewedCandidates,
   selectedCandidate,
   type PartitionManifest,
 } from './governance'
 import { assertTournamentStratification } from './matrix'
-import { defaultOpenRouterQaModel } from './models'
 import { scoreAdjudicatedDocuments } from './scoring'
 import { corpusStageSpecs, isCorpusStage, type CorpusStage } from './program'
 import {
@@ -86,9 +93,12 @@ export type {
 export { assertTournamentCandidateContinuation } from './tournament-resume'
 
 const gbpPerUsd = Number(process.env.SYNTHETIC_V2_GBP_PER_USD ?? '0.79')
-const ledgerPath = resolve(
-  process.env.SYNTHETIC_V2_LEDGER ?? '.synthetic-v2/spend-ledger.json',
-)
+export const defaultMaxRegenerations = 2
+function configuredLedgerPath() {
+  return resolve(
+    process.env.SYNTHETIC_V2_LEDGER ?? '.synthetic-v2/spend-ledger.json',
+  )
+}
 const pricingPath =
   process.env.SYNTHETIC_V2_PRICING_PATH ??
   resolve('scripts/synthetic-v2/pricing-2026-07-21.json')
@@ -103,6 +113,20 @@ export class PipelineExecutionError extends Error {
     readonly requestTelemetry: RequestTelemetry[],
   ) {
     super(message)
+  }
+}
+
+export class ChargedAccountingError extends Error {
+  readonly name = 'ChargedAccountingError'
+
+  constructor(
+    message: string,
+    readonly usage: Usage,
+    readonly actualGbp: number,
+    readonly requestTelemetry: RequestTelemetry[],
+    options?: ErrorOptions,
+  ) {
+    super(message, options)
   }
 }
 
@@ -132,6 +156,7 @@ export type PipelineProgress = {
 export type PipelineOptions = {
   requireIndependentAdjudication?: boolean
   maxRegenerations?: number
+  failFastOnTerminalState?: boolean
   humanAdjudications?: Map<string, HumanAdjudication>
   onProgress?: (progress: PipelineProgress) => void
 }
@@ -340,22 +365,30 @@ export async function runPipeline(
   const pendingAdjudications: PendingAdjudication[] = []
   const qa = new Map<string, QaEvidence>()
   const documentStates: DocumentProcessingState[] = []
-  const maxRegenerations = options.maxRegenerations ?? 2
+  const maxRegenerations = options.maxRegenerations ?? defaultMaxRegenerations
   assertConfiguredPricing(pricing, [
     writer,
     labeler,
     primaryJudge,
     disputeJudge,
   ])
-  const meteredPrimaryJudge = meteredJudge(primaryJudge, pricing)
-  const meteredDisputeJudge = meteredJudge(disputeJudge, pricing)
   if (!Number.isInteger(maxRegenerations) || maxRegenerations < 0)
     throw new Error('maxRegenerations must be a non-negative integer')
 
+  const recordedRequestIds = new Set<string>()
+  const recordTelemetry = (entry: RequestTelemetry) => {
+    if (recordedRequestIds.has(entry.requestId)) return false
+    recordedRequestIds.add(entry.requestId)
+    telemetry.push(entry)
+    return true
+  }
   const consumeCharged = (value: ChargedResult) => {
     addUsage(usage, value.usage)
     actualGbp += value.cost
-    collectItemTelemetry(value.items, telemetry)
+    for (const item of value.items) {
+      for (const entry of [...(item.retryTelemetry ?? []), item.telemetry])
+        if (entry) recordTelemetry(entry)
+    }
   }
   const consumeQa = (evidence: QaEvidence, state: DocumentProcessingState) => {
     for (const entry of [
@@ -365,14 +398,25 @@ export async function runPipeline(
       evidence.disputeTelemetry,
     ]) {
       if (!entry) continue
-      telemetry.push(entry)
-      state.telemetryRequestIds.push(entry.requestId)
+      if (!state.telemetryRequestIds.includes(entry.requestId))
+        state.telemetryRequestIds.push(entry.requestId)
+      if (!recordTelemetry(entry)) continue
       if (entry.usage) {
         addUsage(usage, entry.usage)
         actualGbp += telemetryCost(entry, pricing)
       }
     }
   }
+  const meteredPrimaryJudge = meteredJudge(
+    primaryJudge,
+    pricing,
+    consumeCharged,
+  )
+  const meteredDisputeJudge = meteredJudge(
+    disputeJudge,
+    pricing,
+    consumeCharged,
+  )
 
   try {
     for (const [specIndex, spec] of specs.entries()) {
@@ -637,6 +681,10 @@ export async function runPipeline(
         phase: 'complete',
         status: state.status,
       })
+      if (options.failFastOnTerminalState && state.status === 'failed')
+        throw new Error(
+          `Document ${spec.id} exhausted validation and regeneration attempts`,
+        )
     }
     assertTelemetryModelIdentity(
       telemetry,
@@ -666,6 +714,11 @@ export async function runPipeline(
     }
   } catch (error) {
     abort.abort(error)
+    if (error instanceof ChargedAccountingError) {
+      addUsage(usage, error.usage)
+      actualGbp += error.actualGbp
+      telemetry.push(...error.requestTelemetry)
+    }
     if (error instanceof ProviderBatchError)
       for (const entry of error.telemetry) {
         telemetry.push(entry)
@@ -700,23 +753,7 @@ function normaliseCandidate(
 async function runTournament(pricing: PricingTable) {
   const specs = corpusStageSpecs('tournament')
   assertTournamentStratification(specs)
-  const candidates = [
-    {
-      id: 'deepseek-pro-gemini-flash',
-      writer: 'deepseek-v4-pro',
-      annotator: defaultOpenRouterQaModel,
-    },
-    {
-      id: 'deepseek-flash-gemini-flash',
-      writer: 'deepseek-v4-flash',
-      annotator: defaultOpenRouterQaModel,
-    },
-    {
-      id: 'opus-gemini-flash',
-      writer: 'anthropic/claude-opus-4.8',
-      annotator: defaultOpenRouterQaModel,
-    },
-  ]
+  const candidates = reviewedCandidates
   const outputs: Array<{
     candidateId: string
     blindId: string
@@ -728,21 +765,71 @@ async function runTournament(pricing: PricingTable) {
   }> = []
   const candidateArtifacts: unknown[] = []
   const blindReviewPackages: unknown[] = []
-  const primary = configuredJudge('primary')
-  const dispute = configuredJudge('adjudicator')
-  const primaryModel = primary.model
-  const disputeModel = dispute.model
+  const primaryProvider = parseJudgeProvider(
+    process.env.SYNTHETIC_V2_PRIMARY_JUDGE_PROVIDER,
+    'SYNTHETIC_V2_PRIMARY_JUDGE_PROVIDER',
+  )
+  const disputeProvider = parseJudgeProvider(
+    process.env.SYNTHETIC_V2_ADJUDICATOR_PROVIDER,
+    'SYNTHETIC_V2_ADJUDICATOR_PROVIDER',
+  )
+  const primaryModel = requiredModel('SYNTHETIC_V2_PRIMARY_JUDGE_MODEL')
+  const disputeModel = requiredModel('SYNTHETIC_V2_ADJUDICATOR_MODEL')
+  const primaryProviderPricingKey = `${primaryProvider}:${primaryModel}`
+  const disputeProviderPricingKey = `${disputeProvider}:${disputeModel}`
+  const estimatedMaxGbp = pipelineWorstCaseGbp(
+    pricing,
+    candidates,
+    pricing[primaryProviderPricingKey]
+      ? primaryProviderPricingKey
+      : primaryModel,
+    pricing[disputeProviderPricingKey]
+      ? disputeProviderPricingKey
+      : disputeModel,
+    specs.length,
+    gbpPerUsd,
+    defaultMaxRegenerations + 1,
+  )
+  const tournamentCapGbp = assertTournamentBudget(
+    estimatedMaxGbp,
+    process.env.SYNTHETIC_V2_TOURNAMENT_MAX_GBP,
+  )
   const root =
     process.env.SYNTHETIC_V2_PRIVATE_CORPUS_ROOT ??
     '../obiter-redaction-data-private'
+  const approvedRoot = await assertSafeOutputRoot(
+    root,
+    process.cwd(),
+    'private-corpus',
+    'tournament',
+  )
+  await assertMatchingTournamentCanary(approvedRoot, {
+    primaryJudgeProvider: primaryProvider,
+    primaryJudgeModel: primaryModel,
+    disputeJudgeProvider: disputeProvider,
+    disputeJudgeModel: disputeModel,
+  })
+  console.log(
+    `[synthetic-v2] tournament preflight worst-case=GBP ${estimatedMaxGbp.toFixed(6)} cap=GBP ${tournamentCapGbp.toFixed(6)}`,
+  )
+  const primary = createJudgeAdapter(
+    primaryProvider,
+    primaryModel,
+    'primary_judge',
+  )
+  const dispute = createJudgeAdapter(
+    disputeProvider,
+    disputeModel,
+    'dispute_judge',
+  )
   for (const candidate of candidates) {
     const blindId = `review-${outputs.length + 1}`
     let artifact: unknown
     let blindPackage: ReturnType<typeof blindReviewPackage> | undefined
+    let pipelineResult: PipelineResult | undefined
     let finalStatus:
       'pending_review' | 'human_adjudication_required' | 'rejected' = 'rejected'
     let checkpointHash: string | undefined
-    let mustPersistCheckpoint = false
     try {
       assertDistinctRoleModels(
         candidate.writer,
@@ -750,7 +837,7 @@ async function runTournament(pricing: PricingTable) {
         primaryModel,
         disputeModel,
       )
-      const result = await runPipeline(
+      pipelineResult = await runPipeline(
         specs,
         writerAdapter(candidate.writer),
         new OpenRouterLabeler(candidate.annotator),
@@ -760,11 +847,12 @@ async function runTournament(pricing: PricingTable) {
         [],
         {
           requireIndependentAdjudication: true,
+          failFastOnTerminalState: true,
           onProgress: terminalProgress(`tournament:${candidate.id}`),
         },
       )
+      const result = pipelineResult
       if (result.pendingAdjudications.length) {
-        mustPersistCheckpoint = true
         const metadata: TournamentCandidateCheckpointMetadata = {
           version: 'synthetic-v2-tournament-candidate:v1',
           stage: 'tournament',
@@ -822,14 +910,51 @@ async function runTournament(pricing: PricingTable) {
         finalStatus = 'pending_review'
       }
     } catch (error) {
-      if (mustPersistCheckpoint) throw error
+      const accountedError = accountTournamentError(error, pipelineResult)
+      const diagnostics =
+        accountedError instanceof PipelineExecutionError
+          ? accountedError.requestTelemetry
+          : accountedError instanceof ProviderBatchError
+            ? accountedError.telemetry
+            : undefined
+      const diagnosticSummary = diagnostics
+        ?.map(
+          (entry) =>
+            `${entry.provider ?? 'unknown'}:${entry.requestedModel}:${entry.errorCode ?? entry.status}`,
+        )
+        .join(', ')
       artifact = {
+        version: 'synthetic-v2-tournament-failure:v1',
         candidateId: candidate.id,
         specs: specs.map(({ id, seed }) => ({ id, seed })),
         status: 'failed',
         error:
-          error instanceof Error ? error.message : 'Unknown candidate failure',
+          accountedError instanceof Error
+            ? accountedError.message
+            : 'Unknown candidate failure',
+        usage:
+          accountedError instanceof PipelineExecutionError
+            ? accountedError.usage
+            : undefined,
+        spendGbp:
+          accountedError instanceof PipelineExecutionError
+            ? accountedError.actualGbp
+            : undefined,
+        requestTelemetry: diagnostics,
       }
+      candidateArtifacts.push(artifact)
+      await stopFailedTournament({
+        approvedRoot,
+        candidateId: candidate.id,
+        primaryJudgeProvider: primaryProvider,
+        primaryJudgeModel: primaryModel,
+        disputeJudgeProvider: disputeProvider,
+        disputeJudgeModel: disputeModel,
+        candidateArtifacts,
+        completedCandidates: outputs,
+        error: accountedError,
+        diagnosticSummary,
+      })
     }
     candidateArtifacts.push(artifact)
     if (blindPackage) blindReviewPackages.push(blindPackage)
@@ -852,7 +977,7 @@ async function runTournament(pricing: PricingTable) {
   const manifest = { ...unsigned, manifestHash: canonicalHash(unsigned) }
   assertTournamentManifest(manifest)
   await writeDatasetAtomically([], {
-    root,
+    root: approvedRoot,
     productRoot: process.cwd(),
     rootKind: 'private-corpus',
     stage: 'tournament',
@@ -869,6 +994,87 @@ async function runTournament(pricing: PricingTable) {
       )
     },
   })
+  console.log(
+    `[synthetic-v2] tournament complete candidates=${outputs.length}/${candidates.length} status=${outputs.map((output) => `${output.candidateId}:${output.finalStatus}`).join(',')}`,
+  )
+}
+
+export function accountTournamentError(
+  error: unknown,
+  pipelineResult: PipelineResult | undefined,
+) {
+  if (error instanceof PipelineExecutionError || !pipelineResult) return error
+  return new PipelineExecutionError(
+    error instanceof Error
+      ? error.message
+      : 'Tournament post-processing failed',
+    pipelineResult.usage,
+    pipelineResult.actualGbp,
+    pipelineResult.requestTelemetry,
+  )
+}
+
+export function assertTournamentBudget(
+  estimatedGbp: number,
+  configuredCap: string | undefined,
+) {
+  if (!Number.isFinite(estimatedGbp) || estimatedGbp <= 0)
+    throw new Error('Tournament worst-case spend estimate must be positive')
+  if (!configuredCap)
+    throw new Error(
+      'SYNTHETIC_V2_TOURNAMENT_MAX_GBP must explicitly cap tournament spend',
+    )
+  const capGbp = Number(configuredCap)
+  if (!Number.isFinite(capGbp) || capGbp <= 0)
+    throw new Error('SYNTHETIC_V2_TOURNAMENT_MAX_GBP must be positive')
+  if (estimatedGbp > capGbp)
+    throw new Error(
+      `Tournament worst-case reservation GBP ${estimatedGbp.toFixed(6)} exceeds cap ${capGbp.toFixed(6)}`,
+    )
+  return capGbp
+}
+
+export async function stopFailedTournament(context: {
+  approvedRoot: string
+  candidateId: string
+  primaryJudgeProvider: string
+  primaryJudgeModel: string
+  disputeJudgeProvider: string
+  disputeJudgeModel: string
+  candidateArtifacts: unknown[]
+  completedCandidates: unknown[]
+  error: unknown
+  diagnosticSummary?: string
+}) {
+  const unsignedFailure = {
+    version: 'synthetic-v2-failed-tournament-run:v1',
+    failedCandidateId: context.candidateId,
+    primaryJudgeProvider: context.primaryJudgeProvider,
+    primaryJudgeModel: context.primaryJudgeModel,
+    disputeJudgeProvider: context.disputeJudgeProvider,
+    disputeJudgeModel: context.disputeJudgeModel,
+    candidateArtifacts: context.candidateArtifacts,
+    completedCandidates: context.completedCandidates,
+  }
+  const failureArtifact = {
+    ...unsignedFailure,
+    artifactHash: canonicalHash(unsignedFailure),
+  }
+  const failurePath = join(
+    context.approvedRoot,
+    'failed-tournaments',
+    `${failureArtifact.artifactHash}.json`,
+  )
+  await writeText(failurePath, `${JSON.stringify(failureArtifact)}\n`)
+  console.error(
+    `[synthetic-v2] tournament candidate ${context.candidateId} failed: ${context.error instanceof Error ? context.error.message : 'unknown error'}${context.diagnosticSummary ? ` (${context.diagnosticSummary})` : ''}`,
+  )
+  console.error(
+    `[synthetic-v2] tournament stopped after terminal failure; evidence=${failurePath}`,
+  )
+  throw new Error(
+    `Synthetic v2 tournament stopped after ${context.candidateId} failed`,
+  )
 }
 
 type ChargedItem = {
@@ -899,6 +1105,7 @@ export function assertConfiguredPricing(
 function meteredJudge(
   adapter: JudgeAdapter,
   pricing: PricingTable,
+  onCharged: (result: ChargedResult) => void,
 ): JudgeAdapter {
   return {
     ...adapter,
@@ -917,6 +1124,7 @@ function meteredJudge(
             },
           })),
       )
+      onCharged(result)
       return result.items
     },
   }
@@ -973,10 +1181,13 @@ async function charged<T extends ChargedItem>(
   const rate = pricing[name] ?? pricing[model]
   if (!rate) throw new Error(`No reviewed pricing entry for ${name}`)
   const reservationId = `${name}:${specs[0]?.id}:${Date.now()}`
+  const ledgerPath = configuredLedgerPath()
   const ledger = await readLedger(ledgerPath)
   const maximum: Usage = {
-    inputTokens: specs.length * 1500 * maxAttempts,
-    outputTokens: specs.length * 2400 * maxAttempts,
+    inputTokens:
+      specs.length * maximumBillableRequestUsage.inputTokens * maxAttempts,
+    outputTokens:
+      specs.length * maximumBillableRequestUsage.outputTokens * maxAttempts,
   }
   await reserveSpend(ledgerPath, ledger, {
     provider,
@@ -985,23 +1196,9 @@ async function charged<T extends ChargedItem>(
     gbp: costGbp(maximum, rate, gbpPerUsd),
     reservationId,
   })
+  let items: T[]
   try {
-    const items = await operation()
-    const usage = sumUsage(
-      items.flatMap((item) => [
-        item.usage,
-        ...(item.retryTelemetry ?? []).flatMap((entry) =>
-          entry.usage ? [entry.usage] : [],
-        ),
-      ]),
-    )
-    await reconcileSpend(ledgerPath, ledger, reservationId, {
-      provider,
-      model,
-      ...usage,
-      gbp: costGbp(usage, rate, gbpPerUsd),
-    })
-    return { items, usage, cost: costGbp(usage, rate, gbpPerUsd) }
+    items = await operation()
   } catch (error) {
     const partial =
       error instanceof ProviderBatchError
@@ -1011,23 +1208,87 @@ async function charged<T extends ChargedItem>(
             ),
           )
         : { inputTokens: 0, outputTokens: 0 }
+    const partialGbp = costGbp(partial, rate, gbpPerUsd)
+    try {
+      await reconcileSpend(ledgerPath, ledger, reservationId, {
+        provider,
+        model,
+        ...partial,
+        gbp: partialGbp,
+      })
+    } catch (reconciliationError) {
+      throw new ChargedAccountingError(
+        'Spend reconciliation failed after a paid provider error',
+        partial,
+        partialGbp,
+        error instanceof ProviderBatchError ? error.telemetry : [],
+        { cause: reconciliationError },
+      )
+    }
+    if (error instanceof ProviderBatchError)
+      throw new ChargedAccountingError(
+        error.message,
+        partial,
+        partialGbp,
+        error.telemetry,
+        { cause: error },
+      )
+    throw error
+  }
+  const requestTelemetry = items.flatMap((item) => [
+    ...(item.retryTelemetry ?? []),
+    ...(item.telemetry ? [item.telemetry] : []),
+  ])
+  let usage: Usage
+  try {
+    usage = sumUsage(
+      items.flatMap((item) => [
+        item.usage,
+        ...(item.retryTelemetry ?? []).flatMap((entry) =>
+          entry.usage ? [entry.usage] : [],
+        ),
+      ]),
+    )
+  } catch (error) {
+    const evidencedUsage = sumUsage(
+      requestTelemetry.flatMap((entry) => (entry.usage ? [entry.usage] : [])),
+    )
+    throw new ChargedAccountingError(
+      'Provider usage accounting failed after a paid response',
+      evidencedUsage,
+      costGbp(evidencedUsage, rate, gbpPerUsd),
+      requestTelemetry,
+      { cause: error },
+    )
+  }
+  const actualGbp = costGbp(usage, rate, gbpPerUsd)
+  try {
     await reconcileSpend(ledgerPath, ledger, reservationId, {
       provider,
       model,
-      ...partial,
-      gbp: costGbp(partial, rate, gbpPerUsd),
+      ...usage,
+      gbp: actualGbp,
     })
-    throw error
+  } catch (error) {
+    throw new ChargedAccountingError(
+      'Spend reconciliation failed after a paid response',
+      usage,
+      actualGbp,
+      requestTelemetry,
+      { cause: error },
+    )
   }
-}
-function collectItemTelemetry(
-  items: ChargedItem[],
-  telemetry: RequestTelemetry[],
-) {
-  for (const item of items) {
-    if (item.telemetry) telemetry.push(item.telemetry)
-    telemetry.push(...(item.retryTelemetry ?? []))
-  }
+  if (
+    usage.inputTokens > maximum.inputTokens ||
+    usage.outputTokens > maximum.outputTokens
+  )
+    throw new ChargedAccountingError(
+      'Paid response exceeded its reviewed usage reservation',
+      usage,
+      actualGbp,
+      requestTelemetry,
+    )
+  return { items, usage, cost: actualGbp }
 }
 function appendStateTelemetry(
   state: DocumentProcessingState,

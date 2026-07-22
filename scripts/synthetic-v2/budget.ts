@@ -12,6 +12,54 @@ export type ModelPricing = {
 
 export type PricingTable = Record<string, ModelPricing>
 
+// Covers the largest reviewed tournament prompt: bounded generated source,
+// annotation evidence, QA context, and provider-visible completion tokens.
+export const maximumBillableRequestUsage: Usage = {
+  inputTokens: 12_000,
+  outputTokens: 2_400,
+}
+
+export function pipelineWorstCaseGbp(
+  pricing: PricingTable,
+  candidates: Array<{ writer: string; annotator: string }>,
+  primaryJudgePricingKey: string,
+  disputeJudgePricingKey: string,
+  documents: number,
+  gbpPerUsd: number,
+  generationCycles = 1,
+) {
+  if (!Number.isInteger(generationCycles) || generationCycles < 1)
+    throw new Error('generationCycles must be a positive integer')
+  const charge = (key: string, attempts: number) => {
+    const rate = pricing[key]
+    if (!rate) throw new Error(`No reviewed pricing entry for ${key}`)
+    return costGbp(
+      {
+        inputTokens:
+          maximumBillableRequestUsage.inputTokens * attempts * documents,
+        outputTokens:
+          maximumBillableRequestUsage.outputTokens * attempts * documents,
+      },
+      rate,
+      gbpPerUsd,
+    )
+  }
+  return Number(
+    candidates
+      .reduce((total, candidate) => {
+        const writerAttempts = candidate.writer.startsWith('anthropic/') ? 1 : 4
+        return (
+          total +
+          charge(candidate.writer, writerAttempts * generationCycles) +
+          charge(candidate.annotator, 6 * generationCycles) +
+          charge(primaryJudgePricingKey, 4 * generationCycles) +
+          charge(disputeJudgePricingKey, 4 * generationCycles)
+        )
+      }, 0)
+      .toFixed(6),
+  )
+}
+
 export async function readLedger(
   path: string,
   capGbp = 30,

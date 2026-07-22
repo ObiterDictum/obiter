@@ -824,11 +824,32 @@ async function requestOpenAi(
       },
     )
     if (!response.ok) throw new ProviderHttpError(provider, response.status)
-    const parsed = parseOpenAICompatibleResponse(
-      await response.json(),
-      provider,
-      expectedToolName,
-    )
+    const responseBody: unknown = await response.json()
+    let parsed: ReturnType<typeof parseOpenAICompatibleResponse>
+    try {
+      parsed = parseOpenAICompatibleResponse(
+        responseBody,
+        provider,
+        expectedToolName,
+      )
+    } catch (error) {
+      const evidence = openAiBillingEvidence(responseBody)
+      throw new ProviderBatchError('Provider response was invalid', [
+        {
+          requestId,
+          specId,
+          role,
+          provider,
+          requestedModel: model,
+          returnedModel: evidence.returnedModel,
+          usage: evidence.usage,
+          latencyMs: Math.round(performance.now() - started),
+          status: 'error',
+          errorCode: providerErrorCode(error),
+          attempt,
+        },
+      ])
+    }
     if (parsed.model !== model) {
       throw new ProviderBatchError('Provider returned an unrequested model', [
         {
@@ -937,7 +958,28 @@ async function requestAnthropicTool(
       },
     )
     if (!response.ok) throw new ProviderHttpError(provider, response.status)
-    const parsed = parseAnthropicToolResponse(await response.json(), provider)
+    const responseBody: unknown = await response.json()
+    let parsed: ReturnType<typeof parseAnthropicToolResponse>
+    try {
+      parsed = parseAnthropicToolResponse(responseBody, provider)
+    } catch (error) {
+      const evidence = anthropicBillingEvidence(responseBody)
+      throw new ProviderBatchError('Provider response was invalid', [
+        {
+          requestId,
+          specId,
+          role,
+          provider,
+          requestedModel: model,
+          returnedModel: evidence.returnedModel,
+          usage: evidence.usage,
+          latencyMs: Math.round(performance.now() - started),
+          status: 'error',
+          errorCode: providerErrorCode(error),
+          attempt,
+        },
+      ])
+    }
     const telemetry = {
       requestId,
       specId,
@@ -1003,8 +1045,8 @@ function parseAnthropicToolResponse(value: unknown, provider: string) {
   if (
     !tool ||
     typeof body.model !== 'string' ||
-    typeof inputTokens !== 'number' ||
-    typeof outputTokens !== 'number'
+    !isTokenCount(inputTokens) ||
+    !isTokenCount(outputTokens)
   )
     throw new Error(
       `${provider} response omitted judge tool input, model, or usage`,
@@ -1067,9 +1109,46 @@ function parseOpenAICompatibleResponse(
   if (!text) throw providerResponseError(provider, 'missing_output')
   if (typeof body.model !== 'string')
     throw providerResponseError(provider, 'missing_model')
-  if (typeof inputTokens !== 'number' || typeof outputTokens !== 'number')
+  if (!isTokenCount(inputTokens) || !isTokenCount(outputTokens))
     throw providerResponseError(provider, 'missing_usage')
   return { text, model: body.model, usage: { inputTokens, outputTokens } }
+}
+
+function openAiBillingEvidence(value: unknown) {
+  if (!value || typeof value !== 'object') return {}
+  const body = value as OpenAICompatibleResponse
+  const inputTokens = body.usage?.prompt_tokens ?? body.usage?.input_tokens
+  const outputTokens =
+    body.usage?.completion_tokens ?? body.usage?.output_tokens
+  return {
+    returnedModel: typeof body.model === 'string' ? body.model : undefined,
+    usage:
+      isTokenCount(inputTokens) && isTokenCount(outputTokens)
+        ? ({ inputTokens, outputTokens } satisfies Usage)
+        : undefined,
+  }
+}
+
+function anthropicBillingEvidence(value: unknown) {
+  if (!value || typeof value !== 'object') return {}
+  const body = value as AnthropicToolResponse
+  const inputTokens = body.usage?.input_tokens
+  const outputTokens = body.usage?.output_tokens
+  return {
+    returnedModel: typeof body.model === 'string' ? body.model : undefined,
+    usage:
+      isTokenCount(inputTokens) && isTokenCount(outputTokens)
+        ? ({ inputTokens, outputTokens } satisfies Usage)
+        : undefined,
+  }
+}
+
+function isTokenCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+}
+
+function providerErrorCode(error: unknown) {
+  return error instanceof Error ? error.name : 'unknown'
 }
 
 function providerResponseError(provider: string, reason: string) {
@@ -1117,8 +1196,7 @@ async function generateConcurrent<T extends { id: string }, Result>(
       try {
         const result = await operation(value, signal)
         output[index] = result
-        const request = resultTelemetry(result)
-        if (request) telemetry.push(request)
+        telemetry.push(...requestTelemetryFromResult(result))
         completed++
         onProgress?.({
           phase: 'completed',
@@ -1147,13 +1225,20 @@ async function generateConcurrent<T extends { id: string }, Result>(
   return output
 }
 
-function resultTelemetry(value: unknown): RequestTelemetry | undefined {
-  if (!value || typeof value !== 'object' || !('telemetry' in value))
-    return undefined
-  const telemetry = value.telemetry
-  return telemetry && typeof telemetry === 'object' && 'requestId' in telemetry
-    ? (telemetry as RequestTelemetry)
-    : undefined
+export function requestTelemetryFromResult(value: unknown): RequestTelemetry[] {
+  if (!value || typeof value !== 'object') return []
+  const result = value as { telemetry?: unknown; retryTelemetry?: unknown }
+  const retries = Array.isArray(result.retryTelemetry)
+    ? result.retryTelemetry.filter(isRequestTelemetry)
+    : []
+  return [
+    ...retries,
+    ...(isRequestTelemetry(result.telemetry) ? [result.telemetry] : []),
+  ]
+}
+
+function isRequestTelemetry(value: unknown): value is RequestTelemetry {
+  return Boolean(value && typeof value === 'object' && 'requestId' in value)
 }
 
 async function withRetries<T>(

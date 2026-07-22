@@ -2,7 +2,13 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { costGbp, readLedger, reconcileSpend, reserveSpend } from './budget'
+import {
+  costGbp,
+  pipelineWorstCaseGbp,
+  readLedger,
+  reconcileSpend,
+  reserveSpend,
+} from './budget'
 
 const directories: string[] = []
 afterEach(async () => {
@@ -41,6 +47,34 @@ describe('spend cap accounting', () => {
         1,
       ),
     ).toThrow('Pricing is missing cache read')
+  })
+
+  it('multiplies the complete paid plan across regeneration cycles', () => {
+    const rates = Object.fromEntries(
+      ['writer', 'annotator', 'primary', 'dispute'].map((model) => [
+        model,
+        { inputUsdPerMillion: 1, outputUsdPerMillion: 1 },
+      ]),
+    )
+    const oneCycle = pipelineWorstCaseGbp(
+      rates,
+      [{ writer: 'writer', annotator: 'annotator' }],
+      'primary',
+      'dispute',
+      1,
+      1,
+      1,
+    )
+    const threeCycles = pipelineWorstCaseGbp(
+      rates,
+      [{ writer: 'writer', annotator: 'annotator' }],
+      'primary',
+      'dispute',
+      1,
+      1,
+      3,
+    )
+    expect(threeCycles).toBeCloseTo(oneCycle * 3, 6)
   })
 
   it('keeps unused retry capacity reserved after recording a successful attempt', async () => {
