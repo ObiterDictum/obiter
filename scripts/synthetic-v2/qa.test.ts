@@ -52,6 +52,8 @@ describe('mechanical QA', () => {
       spans: [],
     }
     const prompt = judgePrompt(repeated)
+    expect(prompt).toContain('Document ID: qa-1')
+    expect(prompt).toContain('response id must be exactly qa-1')
     expect(prompt).toContain('Proposed spans')
     expect(prompt).toContain(JSON.stringify(repeated.spans))
     const reference = parseIndependentJudgeReference(

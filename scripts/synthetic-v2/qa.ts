@@ -136,7 +136,7 @@ export function judgePrompt(
     occurrence: assertion.occurrence,
     mustNotOverlap: assertion.mustNotOverlap,
   }))
-  return `Review the proposed annotation for this fictional UK legal text. Categories are person_private, person_protected, person_professional, address, email, phone, national_insurance, account_number, passport, government_id, drivers_license, date, organisation_name, case_reference, url, ip_address, and secret. Professional names are person_professional; private parties and witnesses are person_private; children, anonymity subjects, and people in family, medical, immigration, employment, criminal, or safeguarding contexts are person_protected. Do not label procedural dates, neutral citations, damages figures, corporate registration numbers, or substrings inside emails, URLs, identifiers, or secrets. Return exactly one decision for every proposed index: keep, remove, or recategorize. correctedCategory is ignored for keep/remove and contains the replacement category only for recategorize. Report only genuinely missing spans, copied verbatim from Text with one-based exact-quote occurrence. Missing spans must not overlap retained spans or each other. Return exactly one result for every hard-negative assertion.\n\nText:\n${document.text}\n\nProposed spans:\n${JSON.stringify(proposed)}\n\nHard-negative assertions:\n${JSON.stringify(hardNegatives)}${repair}\n\nReturn JSON only with id, proposedSpanDecisions, missingSpans, hardNegativeAssertions, realismScore, confidence, and rationale.`
+  return `Review the proposed annotation for this fictional UK legal text. The response id must be exactly ${document.id}. Categories are person_private, person_protected, person_professional, address, email, phone, national_insurance, account_number, passport, government_id, drivers_license, date, organisation_name, case_reference, url, ip_address, and secret. Professional names are person_professional; private parties and witnesses are person_private; children, anonymity subjects, and people in family, medical, immigration, employment, criminal, or safeguarding contexts are person_protected. Do not label procedural dates, neutral citations, damages figures, corporate registration numbers, or substrings inside emails, URLs, identifiers, or secrets. Return exactly one decision for every proposed index: keep, remove, or recategorize. correctedCategory is ignored for keep/remove and contains the replacement category only for recategorize. Report only genuinely missing spans, copied verbatim from Text with one-based exact-quote occurrence. Missing spans must not overlap retained spans or each other. Return exactly one result for every hard-negative assertion.\n\nDocument ID: ${document.id}\n\nText:\n${document.text}\n\nProposed spans:\n${JSON.stringify(proposed)}\n\nHard-negative assertions:\n${JSON.stringify(hardNegatives)}${repair}\n\nReturn JSON only with id, proposedSpanDecisions, missingSpans, hardNegativeAssertions, realismScore, confidence, and rationale.`
 }
 
 export function parseJudgeVerdict(
@@ -195,8 +195,8 @@ export function parseIndependentJudgeReference(
   if (!parsed || typeof parsed !== 'object')
     throw new Error(`Judge returned an invalid review for ${id}`)
   const review = parsed as Partial<IndependentJudgeReference>
+  if (review.id !== id) throw new Error(`Judge review ID does not match ${id}`)
   if (
-    review.id !== id ||
     !Array.isArray(review.proposedSpanDecisions) ||
     !Array.isArray(review.missingSpans) ||
     !Array.isArray(review.hardNegativeAssertions) ||

@@ -7,7 +7,7 @@ export const tournamentCanaryVersion = 'synthetic-v2-tournament-canary:v1'
 // Bump whenever prompts, local validation, retries, or provider contracts change
 // in a way that can alter real-model tournament qualification.
 export const tournamentCanaryContractVersion =
-  'synthetic-v2-tournament-provider-contract:2026-07-22.12'
+  'synthetic-v2-tournament-provider-contract:2026-07-22.13'
 
 export type TournamentCanaryConfiguration = {
   primaryJudgeProvider: string

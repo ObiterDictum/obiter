@@ -741,6 +741,7 @@ function judgeValidationErrorCode(error: unknown) {
     return 'judge_span_shape_invalid'
   if (message.includes('omitted proposed span decisions'))
     return 'judge_span_decisions_incomplete'
+  if (message.includes('review ID does not match')) return 'judge_id_mismatch'
   if (message.includes('invalid review')) return 'judge_review_shape_invalid'
   if (message.includes('hard-negative evidence'))
     return 'judge_hard_negative_evidence_invalid'
