@@ -111,11 +111,11 @@ const annotationSchema = {
         items: {
           type: 'object',
           additionalProperties: false,
-          required: ['category', 'quote', 'occurrence'],
+          required: ['category', 'startToken', 'endToken'],
           properties: {
             category: { type: 'string', enum: spanCategories },
-            quote: { type: 'string', minLength: 1 },
-            occurrence: { type: 'integer', minimum: 1 },
+            startToken: { type: 'integer', minimum: 0 },
+            endToken: { type: 'integer', minimum: 1 },
           },
         },
       },
@@ -289,7 +289,7 @@ export class OpenRouterLabeler implements LabelingAdapter {
           const validationFeedback =
             attempt === 1
               ? feedback?.get(input.id)
-              : `The previous response failed local validation: ${previousValidationMessage ?? 'unknown validation error'}. Return a complete replacement list using only quotes copied verbatim from the immutable source. Do not invent a span for an absent requirement. Occurrence counts repetitions of that exact quote, not mentions of the person or entity; use 1 when the exact quote appears once.`
+              : `The previous response failed local validation: ${previousValidationMessage ?? 'unknown validation error'}. Return a complete replacement list using only valid non-overlapping token ranges from the immutable source. Do not invent a span for an absent requirement.`
           let response: {
             text: string
             model: string
@@ -763,6 +763,7 @@ function annotationValidationErrorCode(error: unknown) {
   if (message.includes('not valid JSON')) return 'annotation_invalid_json'
   if (
     message.includes('requires category, quote, and occurrence') ||
+    message.includes('requires category and a valid token range') ||
     message.includes('must contain spans')
   )
     return 'annotation_span_shape_invalid'

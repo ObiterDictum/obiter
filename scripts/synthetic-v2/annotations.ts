@@ -4,10 +4,28 @@ import { MarkerValidationError, validateSpans } from './markers'
 type AnnotationPayload = { id?: unknown; spans?: unknown }
 type AnnotationCandidate = {
   category?: unknown
-  quote?: unknown
-  occurrence?: unknown
-  start?: unknown
-  end?: unknown
+  startToken?: unknown
+  endToken?: unknown
+}
+
+export type SourceToken = {
+  index: number
+  start: number
+  end: number
+  text: string
+}
+
+/** Stable lexical/punctuation tokens; whitespace between selected tokens is
+ * included locally when constructing the immutable source slice. */
+export function sourceTokens(source: string): SourceToken[] {
+  return [
+    ...source.matchAll(/[\p{L}\p{N}]+(?:['’-][\p{L}\p{N}]+)*|[^\s]/gu),
+  ].map((match, index) => ({
+    index,
+    start: match.index,
+    end: match.index + match[0].length,
+    text: match[0],
+  }))
 }
 
 /**
@@ -31,53 +49,30 @@ export function parseAnnotationResponse(
     throw new MarkerValidationError('Annotation response ID does not match')
 
   const categories = new Set<string>(spanCategories)
+  const tokens = sourceTokens(sourceText)
   const spans = payload.spans.map((value): SyntheticSpan => {
     if (!value || typeof value !== 'object')
       throw new MarkerValidationError('Annotation span is not an object')
-    const { category, quote, occurrence, start, end } =
-      value as AnnotationCandidate
+    const { category, startToken, endToken } = value as AnnotationCandidate
     if (
       typeof category !== 'string' ||
       !categories.has(category) ||
-      typeof quote !== 'string' ||
-      quote.length === 0 ||
-      !Number.isInteger(occurrence) ||
-      (occurrence as number) < 1
+      !Number.isInteger(startToken) ||
+      !Number.isInteger(endToken) ||
+      (startToken as number) < 0 ||
+      (endToken as number) <= (startToken as number) ||
+      (endToken as number) > tokens.length
     )
       throw new MarkerValidationError(
-        'Annotation span requires category, quote, and occurrence',
+        'Annotation span requires category and a valid token range',
       )
-    const resolved = resolveExactQuoteOccurrence(
-      sourceText,
-      quote,
-      occurrence as number,
-    )
-    if (resolved === undefined) {
-      const matches = occurrences(sourceText, quote)
-      if (matches.length === 0)
-        throw new MarkerValidationError(
-          `Annotation quote is not in source for ${category}: ${JSON.stringify(quote)}`,
-        )
-      throw new MarkerValidationError(
-        `Annotation quote occurrence is out of range for ${category}: ${JSON.stringify(quote)}`,
-      )
-    }
-    if (start !== undefined || end !== undefined) {
-      if (
-        !Number.isInteger(start) ||
-        !Number.isInteger(end) ||
-        start !== resolved ||
-        end !== resolved + quote.length
-      )
-        throw new MarkerValidationError(
-          'Annotation offsets do not match quote occurrence',
-        )
-    }
+    const first = tokens[startToken as number]!
+    const last = tokens[(endToken as number) - 1]!
     return {
       category: category as SyntheticSpan['category'],
-      start: resolved,
-      end: resolved + quote.length,
-      text: quote,
+      start: first.start,
+      end: last.end,
+      text: sourceText.slice(first.start, last.end),
     }
   })
   const canonical = canonicalizePersonOverlaps(spans)

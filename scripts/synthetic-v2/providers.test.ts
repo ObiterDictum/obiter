@@ -139,7 +139,7 @@ describe('provider batch telemetry', () => {
 })
 
 describe('OpenRouter schema and offline failure behaviour', () => {
-  it('forces a schema tool and keeps local quote validation', async () => {
+  it('forces a schema tool and keeps local token-range validation', async () => {
     process.env.OPENROUTER_API_KEY = 'offline-test-only'
     let body: Record<string, unknown> | undefined
     const labeler = new OpenRouterLabeler('fake/model', {
@@ -182,7 +182,7 @@ describe('OpenRouter schema and offline failure behaviour', () => {
             properties: {
               spans: {
                 items: {
-                  required: ['category', 'quote', 'occurrence'],
+                  required: ['category', 'startToken', 'endToken'],
                 },
               },
             },
@@ -371,8 +371,8 @@ describe('OpenRouter schema and offline failure behaviour', () => {
                     spans: [
                       {
                         category: 'email',
-                        quote: 'absent@example.test',
-                        occurrence: 1,
+                        startToken: 0,
+                        endToken: 99,
                       },
                     ],
                   }),
@@ -386,7 +386,7 @@ describe('OpenRouter schema and offline failure behaviour', () => {
       (error: unknown) =>
         error instanceof ProviderBatchError &&
         error.telemetry[0]?.usage?.outputTokens === 3 &&
-        error.telemetry[0]?.errorCode === 'annotation_quote_not_in_source',
+        error.telemetry[0]?.errorCode === 'annotation_span_shape_invalid',
     )
   })
 

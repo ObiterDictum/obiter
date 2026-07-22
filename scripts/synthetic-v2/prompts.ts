@@ -1,3 +1,4 @@
+import { sourceTokens } from './annotations'
 import type { DocumentSpec } from './types'
 
 export const draftSystemPrompt = `You draft fictional English, Welsh, Scottish, and Northern Irish legal documents for a UK legal-redaction dataset. Write as an experienced solicitor, barrister, tribunal representative, or legal professional, matching the requested document's legal purpose and register.
@@ -8,13 +9,13 @@ The document must have a genuine legal issue, a factual or procedural chronology
 
 Output only the document text. Do not output labels, markup, a plan, a checklist, an explanation, or a markdown fence.`
 
-export const labelSystemPrompt = `You are an exacting UK legal-data annotator. You receive a wholly fictional legal document and must exhaustively identify every in-scope category using exact quotes from the immutable source text. The immutable source text is authoritative: annotate only text that actually appears, and never invent a span to satisfy a requested category. Return JSON only, exactly {"id":"document-id","spans":[{"category":"person_private","quote":"Jane Doe","occurrence":1}]}. Quote is exact source text and occurrence is the one-based occurrence of that exact quote in source, not the mention number of the person or entity; use 1 when the exact quote appears once. The pipeline resolves and validates UTF-16 offsets deterministically; do not return start or end fields. Do not return XML, markdown, copied document text, or explanations.
+export const labelSystemPrompt = `You are an exacting UK legal-data annotator. You receive a wholly fictional legal document and must exhaustively identify every in-scope category using exact quotes from the immutable source text. The immutable source text is authoritative: annotate only text that actually appears, and never invent a span to satisfy a requested category. Return JSON only, exactly {"id":"document-id","spans":[{"category":"person_private","startToken":0,"endToken":2}]}. Token ranges are zero-based and endToken is exclusive. Select only ranges from the supplied immutable token list. The pipeline constructs exact source text and UTF-16 offsets locally; do not return quotes, occurrences, or character offsets. Do not return XML, markdown, copied document text, or explanations.
 
 Categories: person_private, person_protected, person_professional, address, email, phone, national_insurance, account_number, passport, government_id, drivers_license, date, organisation_name, case_reference, url, ip_address, secret.
 
 Use person_private for clients, parties, witnesses, and ordinary private people; person_protected for children, anonymity-order subjects, and people in family, medical, immigration, employment, criminal, or safeguarding contexts; and person_professional for solicitors, in-house counsel, judges, counsel, experts, and named professionals acting in-role. Label every coreferent name variation. A professional's private-looking home address, personal mobile, or non-work email still receives its own category.
 
-Do not label neutral citations, statutes, court names, hearing dates, procedural deadlines, damages figures, company registration numbers, or generic role references. Do not alter, paraphrase, add, remove, reorder, or correct document text. Quote plus occurrence is authoritative and offsets are computed locally. Exhaustively label every in-scope category that actually appears in the whole document. If a generation requirement is absent from the source, omit it rather than inventing it; downstream QA will reject the draft. Never return two spans for the same person mention: choose exactly one of person_protected, person_professional, or person_private, in that precedence when more than one could apply. Use the full natural name mention rather than a nested surname span. Keep organisation names outside address spans, and do not separately label substrings inside emails, URLs, identifiers, or secrets. Before responding, silently verify that every quote is copied verbatim from the source, every span selects the intended source substring, and spans do not overlap.`
+Do not label neutral citations, statutes, court names, hearing dates, procedural deadlines, damages figures, company registration numbers, or generic role references. Do not alter, paraphrase, add, remove, reorder, or correct document text. Token ranges are authoritative and exact text and offsets are computed locally. Exhaustively label every in-scope category that actually appears in the whole document. If a generation requirement is absent from the source, omit it rather than inventing it; downstream QA will reject the draft. Never return two spans for the same person mention: choose exactly one of person_protected, person_professional, or person_private, in that precedence when more than one could apply. Use the full natural name mention rather than a nested surname span. Keep organisation names outside address spans, and do not separately label substrings inside emails, URLs, identifiers, or secrets. Before responding, silently verify that every token range is valid, every span selects the intended source substring, and ranges do not overlap.`
 
 function categoryInstruction(category: string) {
   const requirements: Record<string, string> = {
@@ -74,5 +75,9 @@ export function labelUserPrompt(
   const repair = repairFeedback
     ? `\n\nREPAIR FEEDBACK — return a complete replacement span list, preserving valid spans and fixing these exact failures:\n${repairFeedback}`
     : ''
-  return `Document ID: ${spec.id}${repair}\n\nAnnotate every in-scope category that actually appears. Never invent text to satisfy a generation requirement.\n\nImmutable document source (copy every quote verbatim from this exact text):\n${text}`
+  const tokens = sourceTokens(text).map(({ index, text: token }) => ({
+    index,
+    text: token,
+  }))
+  return `Document ID: ${spec.id}${repair}\n\nAnnotate every in-scope category that actually appears. Never invent text to satisfy a generation requirement. Select zero-based token ranges with exclusive endToken.\n\nImmutable document source:\n${text}\n\nImmutable source tokens:\n${JSON.stringify(tokens)}`
 }
