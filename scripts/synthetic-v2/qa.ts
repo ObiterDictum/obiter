@@ -117,7 +117,7 @@ export function judgePrompt(
   const repair = repairFeedback
     ? `\n\nVALIDATION FEEDBACK — return a complete replacement reference and fix this failure: ${repairFeedback}`
     : ''
-  return `Independently produce an exhaustive reference annotation for this fictional UK legal text. You receive only source text and policy, never proposed annotations. Professional names (solicitors, judges, counsel, experts, in-house counsel) are person_professional; private parties/witnesses are person_private; children, anonymity subjects, and people in family, medical, immigration, employment, criminal, or safeguarding contexts are person_protected. Do not label procedural dates, neutral citations, damages figures, or corporate registration numbers. For each span provide its exact quote and one-based occurrence among identical quotes; do not calculate character offsets.\n\nText:\n${document.text}${repair}\n\nReturn JSON only: {"id": string, "referenceSpans": [{"category": string, "quote": string, "occurrence": integer}], "realismScore": 1|2|3|4|5, "confidence": number, "rationale": string}.`
+  return `Independently produce an exhaustive reference annotation for this fictional UK legal text. You receive only source text and policy, never proposed annotations. Professional names (solicitors, judges, counsel, experts, in-house counsel) are person_professional; private parties/witnesses are person_private; children, anonymity subjects, and people in family, medical, immigration, employment, criminal, or safeguarding contexts are person_protected. Do not label procedural dates, neutral citations, damages figures, or corporate registration numbers. For each span copy one contiguous exact quote directly from Text and provide its one-based occurrence among identical quotes; do not reconstruct, normalize, paraphrase, trim, or calculate character offsets. Preserve every character exactly, including whitespace, punctuation, apostrophes, and hyphens. Before returning, verify that every quote is an exact substring of Text; omit any span whose exact quote cannot be copied.\n\nText:\n${document.text}${repair}\n\nReturn JSON only: {"id": string, "referenceSpans": [{"category": string, "quote": string, "occurrence": integer}], "realismScore": 1|2|3|4|5, "confidence": number, "rationale": string}.`
 }
 
 export function parseJudgeVerdict(
@@ -273,8 +273,16 @@ function resolveQuoteOccurrence(text: string, value: unknown): SyntheticSpan {
   )
     throw new Error('Judge reference requires category, quote, and occurrence')
   const start = resolveExactQuoteOccurrence(text, quote, occurrence)
-  if (start === undefined)
-    throw new Error('Judge reference quote occurrence is absent or ambiguous')
+  if (start === undefined) {
+    const exactMatchCount = occurrences(text, quote).length
+    if (exactMatchCount === 0)
+      throw new Error(
+        `Judge reference quote is not an exact source substring: ${JSON.stringify(quote)}. Copy the replacement quote directly from Text without normalization or paraphrase.`,
+      )
+    throw new Error(
+      `Judge reference quote occurrence ${occurrence} is out of range for ${exactMatchCount} exact source matches`,
+    )
+  }
   return {
     category: category as SyntheticSpan['category'],
     start,

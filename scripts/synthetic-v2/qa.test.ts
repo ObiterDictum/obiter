@@ -81,7 +81,7 @@ describe('mechanical QA', () => {
         repeated.id,
         repeated,
       ),
-    ).toThrow('absent or ambiguous')
+    ).toThrow('not an exact source substring')
   })
 
   it('rejects a low-confidence or incomplete automated judgement', () => {

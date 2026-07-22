@@ -464,6 +464,10 @@ describe('OpenRouter schema and offline failure behaviour', () => {
     const [result] = await judge.judge([document])
     expect(bodies).toHaveLength(2)
     expect(JSON.stringify(bodies[1]?.messages)).toContain('VALIDATION FEEDBACK')
+    expect(JSON.stringify(bodies[1]?.messages)).toContain('Absent')
+    expect(JSON.stringify(bodies[1]?.messages)).toContain(
+      'Copy the replacement quote directly from Text',
+    )
     expect(result?.retryTelemetry).toHaveLength(1)
     expect(result?.telemetry?.retryOfRequestId).toBe(
       result?.retryTelemetry?.[0]?.requestId,

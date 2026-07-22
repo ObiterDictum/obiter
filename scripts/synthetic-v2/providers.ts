@@ -659,7 +659,10 @@ function judgeValidationErrorCode(error: unknown) {
   if (message.includes('invalid JSON')) return 'judge_invalid_json'
   if (message.includes('requires category, quote, and occurrence'))
     return 'judge_span_shape_invalid'
-  if (message.includes('quote occurrence is absent or ambiguous'))
+  if (
+    message.includes('quote is not an exact source substring') ||
+    message.includes('quote occurrence')
+  )
     return 'judge_quote_or_occurrence_invalid'
   if (message.includes('Overlapping or nested spans'))
     return 'judge_span_overlap'
