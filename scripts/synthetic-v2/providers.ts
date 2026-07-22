@@ -161,7 +161,12 @@ const judgeSchema = {
               type: 'string',
               enum: ['keep', 'remove', 'recategorize'],
             },
-            correctedCategory: { type: 'string', enum: spanCategories },
+            correctedCategory: {
+              anyOf: [
+                { type: 'string', enum: spanCategories },
+                { type: 'null' },
+              ],
+            },
           },
         },
       },

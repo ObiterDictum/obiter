@@ -142,7 +142,7 @@ describe('mechanical QA', () => {
             {
               index: 0,
               action: 'keep',
-              correctedCategory: 'person_professional',
+              correctedCategory: null,
             },
           ],
           missingSpans: [],

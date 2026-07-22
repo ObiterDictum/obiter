@@ -82,7 +82,7 @@ const judgeReference = {
     {
       index: 0,
       action: 'keep',
-      correctedCategory: 'person_private',
+      correctedCategory: null,
     },
   ],
   missingSpans: [],
