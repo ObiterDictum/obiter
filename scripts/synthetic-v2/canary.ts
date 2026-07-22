@@ -7,7 +7,7 @@ export const tournamentCanaryVersion = 'synthetic-v2-tournament-canary:v1'
 // Bump whenever prompts, local validation, retries, or provider contracts change
 // in a way that can alter real-model tournament qualification.
 export const tournamentCanaryContractVersion =
-  'synthetic-v2-tournament-provider-contract:2026-07-22.6'
+  'synthetic-v2-tournament-provider-contract:2026-07-22.7'
 
 export type TournamentCanaryConfiguration = {
   primaryJudgeProvider: string
@@ -17,8 +17,8 @@ export type TournamentCanaryConfiguration = {
 }
 
 export const reviewedTournamentJudgeConfiguration = {
-  primaryJudgeProvider: 'opencode-go',
-  primaryJudgeModel: 'qwen3.7-max',
+  primaryJudgeProvider: 'openrouter',
+  primaryJudgeModel: 'openai/gpt-5.4-mini',
   disputeJudgeProvider: 'opencode-go',
   disputeJudgeModel: 'grok-4.5',
 } as const satisfies TournamentCanaryConfiguration

@@ -86,7 +86,7 @@ describe('synthetic v2 tournament canary gate', () => {
     ).not.toThrow()
     expect(() =>
       assertReviewedTournamentJudgeConfiguration(configuration),
-    ).toThrow('qwen3.7-max')
+    ).toThrow('openai/gpt-5.4-mini')
   })
 
   it('accepts matching successful full-candidate evidence', async () => {

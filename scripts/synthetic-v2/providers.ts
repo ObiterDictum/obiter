@@ -31,10 +31,40 @@ class ProviderHttpError extends Error {
   constructor(
     readonly provider: string,
     readonly status: number,
+    readonly detailCode?: string,
   ) {
     super(`${provider} request failed with HTTP ${status}`)
     this.name = 'ProviderHttpError'
   }
+}
+
+async function providerHttpError(provider: string, response: Response) {
+  let body: unknown
+  try {
+    body = await response.json()
+  } catch {
+    return new ProviderHttpError(provider, response.status)
+  }
+  const error =
+    body && typeof body === 'object' && 'error' in body
+      ? (body as { error?: unknown }).error
+      : body
+  if (!error || typeof error !== 'object')
+    return new ProviderHttpError(provider, response.status)
+  const detail = error as { type?: unknown; code?: unknown; param?: unknown }
+  const safeParts = [detail.type, detail.code, detail.param]
+    .filter(
+      (value): value is string =>
+        typeof value === 'string' &&
+        value.length <= 64 &&
+        /^[a-zA-Z0-9_./-]+$/.test(value),
+    )
+    .map((value) => value.toLowerCase())
+  return new ProviderHttpError(
+    provider,
+    response.status,
+    safeParts.length ? [...new Set(safeParts)].join(':') : undefined,
+  )
 }
 export class ProviderBatchError extends Error {
   constructor(
@@ -483,7 +513,9 @@ export class OpenRouterJudge extends IndependentJudge {
       this.options,
       {
         max_tokens: 1200,
-        temperature: 0,
+        ...(this.model.startsWith('openai/')
+          ? { reasoning: { effort: 'minimal' } }
+          : { temperature: 0 }),
         response_format: { type: 'json_schema', json_schema: judgeSchema },
         provider: { require_parameters: true },
         messages: [
@@ -827,7 +859,7 @@ async function requestOpenAi(
         body: JSON.stringify({ model, ...body }),
       },
     )
-    if (!response.ok) throw new ProviderHttpError(provider, response.status)
+    if (!response.ok) throw await providerHttpError(provider, response)
     const responseBody: unknown = await response.json()
     let parsed: ReturnType<typeof parseOpenAICompatibleResponse>
     try {
@@ -900,7 +932,7 @@ async function requestOpenAi(
       attempt,
       errorCode:
         error instanceof ProviderHttpError
-          ? `http_${error.status}`
+          ? `http_${error.status}${error.detailCode ? `:${error.detailCode}` : ''}`
           : error instanceof Error
             ? error.name
             : 'unknown',
@@ -961,7 +993,7 @@ async function requestAnthropicTool(
         }),
       },
     )
-    if (!response.ok) throw new ProviderHttpError(provider, response.status)
+    if (!response.ok) throw await providerHttpError(provider, response)
     const responseBody: unknown = await response.json()
     let parsed: ReturnType<typeof parseAnthropicToolResponse>
     try {
@@ -1020,7 +1052,7 @@ async function requestAnthropicTool(
         attempt,
         errorCode:
           error instanceof ProviderHttpError
-            ? `http_${error.status}`
+            ? `http_${error.status}${error.detailCode ? `:${error.detailCode}` : ''}`
             : error instanceof Error
               ? error.name
               : 'unknown',

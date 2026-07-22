@@ -235,12 +235,12 @@ describe('OpenRouter schema and offline failure behaviour', () => {
   it('sends judges only text and a quote-occurrence reference schema', async () => {
     process.env.OPENROUTER_API_KEY = 'offline-test-only'
     let body: Record<string, unknown> | undefined
-    const judge = new OpenRouterJudge('fake/model', {
+    const judge = new OpenRouterJudge('openai/gpt-5.4-mini', {
       fetch: fakeFetch((request) => {
         body = request
         return new Response(
           JSON.stringify({
-            model: 'fake/model',
+            model: 'openai/gpt-5.4-mini',
             usage: { prompt_tokens: 2, completion_tokens: 3 },
             choices: [
               {
@@ -267,6 +267,8 @@ describe('OpenRouter schema and offline failure behaviour', () => {
     expect(prompt).not.toContain('Proposed spans')
     expect(prompt).not.toContain('"start"')
     expect(body.provider).toEqual({ require_parameters: true })
+    expect(body.temperature).toBeUndefined()
+    expect(body.reasoning).toEqual({ effort: 'minimal' })
     expect(body.response_format).toMatchObject({
       json_schema: {
         schema: {
@@ -278,6 +280,42 @@ describe('OpenRouter schema and offline failure behaviour', () => {
         },
       },
     })
+  })
+
+  it('retains only sanitized provider error fields for HTTP failures', async () => {
+    process.env.OPENROUTER_API_KEY = 'offline-test-only'
+    const judge = new OpenRouterJudge('openai/gpt-5.4-mini', {
+      fetch: fakeFetch(
+        () =>
+          new Response(
+            JSON.stringify({
+              error: {
+                type: 'invalid_request_error',
+                code: 'unsupported_parameter',
+                param: 'temperature',
+                message: 'must not persist this provider message',
+              },
+            }),
+            { status: 400 },
+          ),
+      ),
+    })
+    let failure: unknown
+    try {
+      await judge.judge([document])
+    } catch (error) {
+      failure = error
+    }
+    expect(failure).toBeInstanceOf(ProviderBatchError)
+    expect(failure).toMatchObject({
+      telemetry: [
+        expect.objectContaining({
+          errorCode:
+            'http_400:invalid_request_error:unsupported_parameter:temperature',
+        }),
+      ],
+    })
+    expect(JSON.stringify(failure)).not.toContain('must not persist')
   })
 
   it('retains billed response telemetry when annotation validation fails', async () => {
