@@ -37,7 +37,7 @@ const patterns: Array<{
   {
     category: 'organisation_name',
     regex:
-      /\b[A-Z][A-Za-z]*(?:\s+(?:&\s+)?[A-Z][A-Za-z]*){0,5}\s+(?:LLP|Ltd|plc|Solicitors|Chambers)\b/g,
+      /\b[A-Z][A-Za-z]*(?:[ \t]+(?:&[ \t]+)?[A-Z][A-Za-z]*){0,5}[ \t]+(?:LLP|Ltd|plc|Solicitors|Chambers)\b/g,
     confidence: 'low',
   },
 
@@ -57,7 +57,7 @@ const patterns: Array<{
   // and case numbers do not match.
   {
     category: 'address',
-    regex: /\b[A-Z]{1,2}\d[A-Z\d]?\s?\d[A-Z]{2}\b/g,
+    regex: /\b[A-Z]{1,2}[1-9][A-Z\d]?\s?\d[A-Z]{2}\b/g,
     confidence: 'high',
   },
 

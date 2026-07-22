@@ -14,5 +14,26 @@
     "case_reference",
     "passport",
     "organisation_name"
+  ],
+  "v2_category_version": "obiter_legal_v2",
+  "v2_span_class_names": [
+    "O",
+    "person_private",
+    "person_protected",
+    "person_professional",
+    "email",
+    "phone",
+    "address",
+    "date",
+    "government_id",
+    "account_number",
+    "passport",
+    "drivers_license",
+    "url",
+    "ip_address",
+    "national_insurance",
+    "case_reference",
+    "organisation_name",
+    "secret"
   ]
 }
