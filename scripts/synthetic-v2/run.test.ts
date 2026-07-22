@@ -308,7 +308,9 @@ describe('pipeline paid fail-fast behavior', () => {
           id: document.id,
           verdict: JSON.stringify({
             id: document.id,
-            referenceSpans: [],
+            proposedSpanDecisions: [],
+            missingSpans: [],
+            hardNegativeAssertions: [],
             realismScore: 5,
             confidence: 1,
             rationale: 'Synthetic fixture.',

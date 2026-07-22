@@ -78,7 +78,15 @@ function fakeFetch(
 
 const judgeReference = {
   id: 'doc-1',
-  referenceSpans: [],
+  proposedSpanDecisions: [
+    {
+      index: 0,
+      action: 'keep',
+      correctedCategory: 'person_private',
+    },
+  ],
+  missingSpans: [],
+  hardNegativeAssertions: [],
   realismScore: 5,
   confidence: 1,
   rationale: 'fictional',
@@ -245,13 +253,7 @@ describe('OpenRouter schema and offline failure behaviour', () => {
             choices: [
               {
                 message: {
-                  content: JSON.stringify({
-                    id: 'doc-1',
-                    referenceSpans: [],
-                    realismScore: 5,
-                    confidence: 1,
-                    rationale: 'fictional',
-                  }),
+                  content: JSON.stringify(judgeReference),
                 },
               },
             ],
@@ -264,7 +266,7 @@ describe('OpenRouter schema and offline failure behaviour', () => {
     const prompt = String(
       (body.messages as Array<{ content?: unknown }>)[0]?.content,
     )
-    expect(prompt).not.toContain('Proposed spans')
+    expect(prompt).toContain('Proposed spans')
     expect(prompt).not.toContain('"start"')
     expect(body.provider).toEqual({ require_parameters: true })
     expect(body.temperature).toBe(0)
@@ -274,7 +276,12 @@ describe('OpenRouter schema and offline failure behaviour', () => {
       json_schema: {
         schema: {
           properties: {
-            referenceSpans: {
+            proposedSpanDecisions: {
+              items: {
+                required: ['index', 'action', 'correctedCategory'],
+              },
+            },
+            missingSpans: {
               items: { required: ['category', 'quote', 'occurrence'] },
             },
           },
@@ -473,7 +480,7 @@ describe('OpenRouter schema and offline failure behaviour', () => {
     })
     const [result] = await judge.judge([document])
     expect(body?.response_format).toEqual({ type: 'json_object' })
-    expect(JSON.stringify(body?.messages)).toContain('referenceSpans')
+    expect(JSON.stringify(body?.messages)).toContain('proposedSpanDecisions')
     expect(result?.telemetry?.provider).toBe('zai')
   })
 
@@ -511,7 +518,7 @@ describe('OpenRouter schema and offline failure behaviour', () => {
           bodies.length === 1
             ? {
                 ...judgeReference,
-                referenceSpans: [
+                missingSpans: [
                   {
                     category: 'person_private',
                     quote: 'Absent',
@@ -556,7 +563,7 @@ describe('OpenRouter schema and offline failure behaviour', () => {
             content: [
               {
                 type: 'tool_use',
-                name: 'synthetic_v2_independent_reference',
+                name: 'synthetic_v2_structured_review',
                 input: judgeReference,
               },
             ],
@@ -567,9 +574,9 @@ describe('OpenRouter schema and offline failure behaviour', () => {
     await expect(judge.judge([document])).resolves.toHaveLength(1)
     expect(body?.tool_choice).toEqual({
       type: 'tool',
-      name: 'synthetic_v2_independent_reference',
+      name: 'synthetic_v2_structured_review',
     })
-    expect(JSON.stringify(body?.tools)).toContain('referenceSpans')
+    expect(JSON.stringify(body?.tools)).toContain('proposedSpanDecisions')
   })
 
   it('retains Anthropic-compatible billing evidence when tool output is missing', async () => {

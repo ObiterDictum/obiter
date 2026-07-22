@@ -52,14 +52,16 @@ describe('mechanical QA', () => {
       spans: [],
     }
     const prompt = judgePrompt(repeated)
-    expect(prompt).not.toContain('Proposed spans')
-    expect(prompt).not.toContain(JSON.stringify(repeated.spans))
+    expect(prompt).toContain('Proposed spans')
+    expect(prompt).toContain(JSON.stringify(repeated.spans))
     const reference = parseIndependentJudgeReference(
       JSON.stringify({
         id: repeated.id,
-        referenceSpans: [
+        proposedSpanDecisions: [],
+        missingSpans: [
           { category: 'person_private', quote: 'Alex', occurrence: 2 },
         ],
+        hardNegativeAssertions: [],
         realismScore: 5,
         confidence: 1,
         rationale: 'fictional',
@@ -74,7 +76,7 @@ describe('mechanical QA', () => {
       parseIndependentJudgeReference(
         JSON.stringify({
           ...reference,
-          referenceSpans: [
+          missingSpans: [
             { category: 'person_private', quote: 'Absent', occurrence: 1 },
           ],
         }),
@@ -82,6 +84,60 @@ describe('mechanical QA', () => {
         repeated,
       ),
     ).toThrow('not an exact source substring')
+  })
+
+  it('constructs corrected references from complete indexed decisions', () => {
+    const proposed: SyntheticDocument = {
+      ...document,
+      text: 'Alex used alex@example.test.',
+      spans: [{ category: 'person_private', start: 0, end: 4, text: 'Alex' }],
+    }
+    const payload = {
+      id: proposed.id,
+      proposedSpanDecisions: [
+        {
+          index: 0,
+          action: 'recategorize',
+          correctedCategory: 'person_professional',
+        },
+      ],
+      missingSpans: [
+        { category: 'email', quote: 'alex@example.test', occurrence: 1 },
+      ],
+      hardNegativeAssertions: [],
+      realismScore: 5,
+      confidence: 1,
+      rationale: 'Reviewed.',
+    }
+    const verdict = evaluateIndependentReference(
+      proposed,
+      parseIndependentJudgeReference(
+        JSON.stringify(payload),
+        proposed.id,
+        proposed,
+      ),
+    )
+    expect(verdict.referenceSpans).toEqual([
+      {
+        category: 'person_professional',
+        start: 0,
+        end: 4,
+        text: 'Alex',
+      },
+      {
+        category: 'email',
+        start: 10,
+        end: 27,
+        text: 'alex@example.test',
+      },
+    ])
+    expect(() =>
+      parseIndependentJudgeReference(
+        JSON.stringify({ ...payload, proposedSpanDecisions: [] }),
+        proposed.id,
+        proposed,
+      ),
+    ).toThrow('omitted proposed span decisions')
   })
 
   it('rejects a low-confidence or incomplete automated judgement', () => {

@@ -5,7 +5,11 @@ import {
   labelSystemPrompt,
   labelUserPrompt,
 } from './prompts'
-import { judgePrompt, parseIndependentJudgeReference } from './qa'
+import {
+  evaluateIndependentReference,
+  judgePrompt,
+  parseIndependentJudgeReference,
+} from './qa'
 import {
   spanCategories,
   type DocumentSpec,
@@ -118,31 +122,59 @@ const annotationSchema = {
     },
   },
 } as const
+const quoteOccurrenceSpanSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['category', 'quote', 'occurrence'],
+  properties: {
+    category: { type: 'string', enum: spanCategories },
+    quote: { type: 'string', minLength: 1 },
+    occurrence: { type: 'integer', minimum: 1 },
+  },
+} as const
 const judgeSchema = {
-  name: 'synthetic_v2_independent_reference',
+  name: 'synthetic_v2_structured_review',
   strict: true,
   schema: {
     type: 'object',
     additionalProperties: false,
     required: [
       'id',
-      'referenceSpans',
+      'proposedSpanDecisions',
+      'missingSpans',
+      'hardNegativeAssertions',
       'realismScore',
       'confidence',
       'rationale',
     ],
     properties: {
       id: { type: 'string' },
-      referenceSpans: {
+      proposedSpanDecisions: {
         type: 'array',
         items: {
           type: 'object',
           additionalProperties: false,
-          required: ['category', 'quote', 'occurrence'],
+          required: ['index', 'action', 'correctedCategory'],
           properties: {
-            category: { type: 'string', enum: spanCategories },
-            quote: { type: 'string', minLength: 1 },
-            occurrence: { type: 'integer', minimum: 1 },
+            index: { type: 'integer', minimum: 0 },
+            action: {
+              type: 'string',
+              enum: ['keep', 'remove', 'recategorize'],
+            },
+            correctedCategory: { type: 'string', enum: spanCategories },
+          },
+        },
+      },
+      missingSpans: { type: 'array', items: quoteOccurrenceSpanSchema },
+      hardNegativeAssertions: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['assertionId', 'correctlyUnlabelled'],
+          properties: {
+            assertionId: { type: 'string', minLength: 1 },
+            correctlyUnlabelled: { type: 'boolean' },
           },
         },
       },
@@ -454,7 +486,14 @@ abstract class IndependentJudge implements JudgeAdapter {
           try {
             // Provider constraints reduce malformed output; this local parse is
             // still authoritative and validates quotes against immutable text.
-            parseIndependentJudgeReference(response.text, document.id, document)
+            evaluateIndependentReference(
+              document,
+              parseIndependentJudgeReference(
+                response.text,
+                document.id,
+                document,
+              ),
+            )
             return {
               id: document.id,
               verdict: response.text,
