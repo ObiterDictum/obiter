@@ -268,6 +268,7 @@ describe('OpenRouter schema and offline failure behaviour', () => {
     expect(prompt).not.toContain('"start"')
     expect(body.provider).toEqual({ require_parameters: true })
     expect(body.temperature).toBeUndefined()
+    expect(body.max_tokens).toBe(2400)
     expect(body.reasoning).toEqual({ effort: 'minimal' })
     expect(body.response_format).toMatchObject({
       json_schema: {
@@ -279,6 +280,35 @@ describe('OpenRouter schema and offline failure behaviour', () => {
           },
         },
       },
+    })
+  })
+
+  it('classifies length-limited invalid judge JSON as truncation', async () => {
+    process.env.OPENROUTER_API_KEY = 'offline-test-only'
+    const judge = new OpenRouterJudge('openai/gpt-5.4-mini', {
+      fetch: fakeFetch(
+        () =>
+          new Response(
+            JSON.stringify({
+              model: 'openai/gpt-5.4-mini',
+              usage: { prompt_tokens: 2, completion_tokens: 2400 },
+              choices: [{ finish_reason: 'length', message: { content: '{' } }],
+            }),
+          ),
+      ),
+    })
+    let failure: unknown
+    try {
+      await judge.judge([document])
+    } catch (error) {
+      failure = error
+    }
+    expect(failure).toBeInstanceOf(ProviderBatchError)
+    expect(failure).toMatchObject({
+      telemetry: [
+        expect.objectContaining({ errorCode: 'judge_output_truncated' }),
+        expect.objectContaining({ errorCode: 'judge_output_truncated' }),
+      ],
     })
   })
 

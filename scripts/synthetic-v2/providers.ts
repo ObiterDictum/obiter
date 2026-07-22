@@ -400,6 +400,7 @@ abstract class IndependentJudge implements JudgeAdapter {
   ): Promise<{
     text: string
     telemetry: RequestTelemetry
+    finishReason?: string
   }>
 
   constructor(
@@ -426,6 +427,7 @@ abstract class IndependentJudge implements JudgeAdapter {
           let response: {
             text: string
             telemetry: RequestTelemetry
+            finishReason?: string
           }
           try {
             response = await this.request(
@@ -470,7 +472,10 @@ abstract class IndependentJudge implements JudgeAdapter {
             retryTelemetry.push({
               ...response.telemetry,
               status: 'error',
-              errorCode: judgeValidationErrorCode(error),
+              errorCode:
+                response.finishReason === 'length'
+                  ? 'judge_output_truncated'
+                  : judgeValidationErrorCode(error),
               retryOfRequestId: previousRequestId,
             })
             previousRequestId = response.telemetry.requestId
@@ -512,7 +517,7 @@ export class OpenRouterJudge extends IndependentJudge {
       this.apiKey,
       this.options,
       {
-        max_tokens: 1200,
+        max_tokens: 2400,
         ...(this.model.startsWith('openai/')
           ? { reasoning: { effort: 'minimal' } }
           : { temperature: 0 }),
@@ -1103,6 +1108,7 @@ type OpenAICompatibleResponse = {
     output_tokens?: unknown
   }
   choices?: Array<{
+    finish_reason?: unknown
     message?: {
       content?: unknown
       tool_calls?: Array<{
@@ -1115,7 +1121,7 @@ function parseOpenAICompatibleResponse(
   value: unknown,
   provider: string,
   expectedToolName?: string,
-): { text: string; model: string; usage: Usage } {
+): { text: string; model: string; usage: Usage; finishReason?: string } {
   if (!value || typeof value !== 'object')
     throw new Error(`${provider} returned invalid JSON`)
   const body = value as OpenAICompatibleResponse
@@ -1147,7 +1153,13 @@ function parseOpenAICompatibleResponse(
     throw providerResponseError(provider, 'missing_model')
   if (!isTokenCount(inputTokens) || !isTokenCount(outputTokens))
     throw providerResponseError(provider, 'missing_usage')
-  return { text, model: body.model, usage: { inputTokens, outputTokens } }
+  const finishReason = body.choices?.[0]?.finish_reason
+  return {
+    text,
+    model: body.model,
+    usage: { inputTokens, outputTokens },
+    finishReason: typeof finishReason === 'string' ? finishReason : undefined,
+  }
 }
 
 function openAiBillingEvidence(value: unknown) {
