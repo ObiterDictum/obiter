@@ -734,8 +734,16 @@ function jsonSchemaInstruction(schema: unknown) {
 function judgeValidationErrorCode(error: unknown) {
   const message = error instanceof Error ? error.message : ''
   if (message.includes('invalid JSON')) return 'judge_invalid_json'
-  if (message.includes('requires category, quote, and occurrence'))
+  if (
+    message.includes('requires category, quote, and occurrence') ||
+    message.includes('invalid span decision')
+  )
     return 'judge_span_shape_invalid'
+  if (message.includes('omitted proposed span decisions'))
+    return 'judge_span_decisions_incomplete'
+  if (message.includes('invalid review')) return 'judge_review_shape_invalid'
+  if (message.includes('hard-negative evidence'))
+    return 'judge_hard_negative_evidence_invalid'
   if (
     message.includes('quote is not an exact source substring') ||
     message.includes('quote occurrence')

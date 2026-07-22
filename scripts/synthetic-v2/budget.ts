@@ -15,7 +15,7 @@ export type PricingTable = Record<string, ModelPricing>
 // Covers the largest reviewed tournament prompt: bounded generated source,
 // annotation evidence, QA context, and provider-visible completion tokens.
 export const maximumBillableRequestUsage: Usage = {
-  inputTokens: 12_000,
+  inputTokens: 20_000,
   outputTokens: 2_400,
 }
 

@@ -131,6 +131,25 @@ describe('mechanical QA', () => {
         text: 'alex@example.test',
       },
     ])
+    const kept = evaluateIndependentReference(
+      proposed,
+      parseIndependentJudgeReference(
+        JSON.stringify({
+          ...payload,
+          proposedSpanDecisions: [
+            {
+              index: 0,
+              action: 'keep',
+              correctedCategory: 'person_professional',
+            },
+          ],
+          missingSpans: [],
+        }),
+        proposed.id,
+        proposed,
+      ),
+    )
+    expect(kept.referenceSpans).toEqual(proposed.spans)
     expect(() =>
       parseIndependentJudgeReference(
         JSON.stringify({ ...payload, proposedSpanDecisions: [] }),

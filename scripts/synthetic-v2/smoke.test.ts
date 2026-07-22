@@ -129,7 +129,7 @@ describe('synthetic v2 provider smoke preflight', () => {
       'zai',
       'opencode-go',
     )
-    expect(estimate).toBe(0.7344)
+    expect(estimate).toBe(1.1424)
     const selectedEstimate = smokeWorstCaseGbp(
       pricing,
       'judge-primary',
@@ -146,7 +146,7 @@ describe('synthetic v2 provider smoke preflight', () => {
         },
       ],
     )
-    expect(selectedEstimate).toBe(0.2592)
+    expect(selectedEstimate).toBe(0.4032)
     expect(() => assertSmokeBudget(estimate, estimate)).not.toThrow()
     expect(() => assertSmokeBudget(estimate, estimate - 0.000001)).toThrow(
       'exceeds cap',
