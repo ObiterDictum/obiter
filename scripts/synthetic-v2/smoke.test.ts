@@ -34,7 +34,7 @@ const pricing: PricingTable = {
     inputUsdPerMillion: 1,
     outputUsdPerMillion: 1,
   },
-  'google/gemini-3.6-flash': {
+  'anthropic/claude-sonnet-4.6': {
     inputUsdPerMillion: 1,
     outputUsdPerMillion: 1,
   },
@@ -121,9 +121,9 @@ describe('synthetic v2 provider smoke preflight', () => {
       'opencode-go',
       [
         {
-          id: 'deepseek-pro-gemini-flash',
+          id: 'deepseek-pro-sonnet',
           writer: 'deepseek-v4-pro',
-          annotator: 'google/gemini-3.6-flash',
+          annotator: 'anthropic/claude-sonnet-4.6',
           reviewed: true,
         },
       ],

@@ -477,8 +477,8 @@ describe('tournament candidate selection', () => {
   it('requires exactly one reviewed candidate', () => {
     expect(() => selectTournamentCandidate(undefined)).toThrow('must select')
     expect(() => selectTournamentCandidate('unknown')).toThrow('not reviewed')
-    expect(selectTournamentCandidate('deepseek-pro-gemini-flash').id).toBe(
-      'deepseek-pro-gemini-flash',
+    expect(selectTournamentCandidate('deepseek-pro-sonnet').id).toBe(
+      'deepseek-pro-sonnet',
     )
   })
 })
@@ -562,7 +562,7 @@ describe('tournament terminal failure handling', () => {
     await expect(
       stopFailedTournament({
         approvedRoot: root,
-        candidateId: 'deepseek-pro-gemini-flash',
+        candidateId: 'deepseek-pro-sonnet',
         primaryJudgeProvider: 'opencode-go',
         primaryJudgeModel: 'glm-5.2',
         disputeJudgeProvider: 'opencode-go',
@@ -578,7 +578,7 @@ describe('tournament terminal failure handling', () => {
     const artifact = JSON.parse(
       await readFile(join(root, 'failed-tournaments', entries[0]!), 'utf8'),
     )
-    expect(artifact.failedCandidateId).toBe('deepseek-pro-gemini-flash')
+    expect(artifact.failedCandidateId).toBe('deepseek-pro-sonnet')
     expect(artifact.candidateArtifacts[0].errorCode).toBe('fixture_error')
   })
 })
