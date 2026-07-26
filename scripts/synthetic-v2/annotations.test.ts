@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'vitest'
-import { parseAnnotationResponse } from './annotations'
+import { parseAnnotationResponse, sourceTokens } from './annotations'
 
 describe('structured annotation responses', () => {
-  it('validates zero-based UTF-16 offsets against immutable source text', () => {
+  it('constructs exact UTF-16 spans from immutable token ranges', () => {
+    expect(
+      sourceTokens('Dear Zoë Patel.').map(({ index, text }) => ({
+        index,
+        text,
+      })),
+    ).toEqual([
+      { index: 0, text: 'Dear' },
+      { index: 1, text: 'Zoë' },
+      { index: 2, text: 'Patel' },
+      { index: 3, text: '.' },
+    ])
     expect(
       parseAnnotationResponse(
         JSON.stringify({
@@ -10,10 +21,8 @@ describe('structured annotation responses', () => {
           spans: [
             {
               category: 'person_private',
-              quote: 'Zoë Patel',
-              occurrence: 1,
-              start: 5,
-              end: 14,
+              startToken: 1,
+              endToken: 3,
             },
           ],
         }),
@@ -25,7 +34,7 @@ describe('structured annotation responses', () => {
     ])
   })
 
-  it('resolves a unique exact quote even when the model counts entity mentions', () => {
+  it('selects repeated mentions without model-supplied occurrence counts', () => {
     expect(
       parseAnnotationResponse(
         JSON.stringify({
@@ -33,20 +42,20 @@ describe('structured annotation responses', () => {
           spans: [
             {
               category: 'person_private',
-              quote: 'Ms Patel',
-              occurrence: 2,
+              startToken: 4,
+              endToken: 6,
             },
           ],
         }),
-        'Zoë Patel spoke. Ms Patel agreed.',
+        'Ms Patel spoke. Ms Patel agreed.',
         'doc-1',
       ),
     ).toEqual([
-      { category: 'person_private', start: 17, end: 25, text: 'Ms Patel' },
+      { category: 'person_private', start: 16, end: 24, text: 'Ms Patel' },
     ])
   })
 
-  it('rejects an out-of-range occurrence when the exact quote is repeated', () => {
+  it('rejects invalid token ranges', () => {
     expect(() =>
       parseAnnotationResponse(
         JSON.stringify({
@@ -54,15 +63,15 @@ describe('structured annotation responses', () => {
           spans: [
             {
               category: 'person_private',
-              quote: 'Ms Patel',
-              occurrence: 3,
+              startToken: 0,
+              endToken: 99,
             },
           ],
         }),
-        'Ms Patel spoke. Ms Patel agreed.',
+        'Ms Patel spoke.',
         'doc-1',
       ),
-    ).toThrow('occurrence is out of range')
+    ).toThrow('valid token range')
   })
 
   it('canonicalizes nested and conflicting labels for one person mention', () => {
@@ -73,13 +82,13 @@ describe('structured annotation responses', () => {
           spans: [
             {
               category: 'person_private',
-              quote: 'Ms Zoë Patel',
-              occurrence: 1,
+              startToken: 0,
+              endToken: 3,
             },
             {
               category: 'person_protected',
-              quote: 'Zoë Patel',
-              occurrence: 1,
+              startToken: 1,
+              endToken: 3,
             },
           ],
         }),
@@ -96,14 +105,14 @@ describe('structured annotation responses', () => {
     ])
   })
 
-  it('rejects rewritten, malformed, or non-person overlaps', () => {
+  it('rejects malformed or non-person overlaps', () => {
     expect(() =>
       parseAnnotationResponse(
         JSON.stringify({
           id: 'doc-1',
           spans: [
-            { category: 'url', quote: 'https://example.test', occurrence: 1 },
-            { category: 'url', quote: 'example.test', occurrence: 1 },
+            { category: 'url', startToken: 1, endToken: 6 },
+            { category: 'url', startToken: 3, endToken: 6 },
           ],
         }),
         'Visit https://example.test.',
@@ -111,23 +120,5 @@ describe('structured annotation responses', () => {
       ),
     ).toThrow('Overlapping or nested spans')
     expect(() => parseAnnotationResponse('{}', 'Alice', 'doc-1')).toThrow()
-    expect(() =>
-      parseAnnotationResponse(
-        JSON.stringify({
-          id: 'doc-1',
-          spans: [
-            {
-              category: 'email',
-              quote: 'Alice',
-              occurrence: 1,
-              start: 0,
-              end: 99,
-            },
-          ],
-        }),
-        'Alice',
-        'doc-1',
-      ),
-    ).toThrow()
   })
 })

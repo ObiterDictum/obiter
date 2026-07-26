@@ -5,6 +5,7 @@ import {
   OpenRouterJudge,
   OpenRouterLabeler,
   ProviderBatchError,
+  requestTelemetryFromResult,
   ZaiJudge,
 } from './providers'
 import type { LabelInput, SyntheticDocument } from './types'
@@ -77,7 +78,15 @@ function fakeFetch(
 
 const judgeReference = {
   id: 'doc-1',
-  referenceSpans: [],
+  proposedSpanDecisions: [
+    {
+      index: 0,
+      action: 'keep',
+      correctedCategory: null,
+    },
+  ],
+  missingSpans: [],
+  hardNegativeAssertions: [],
   realismScore: 5,
   confidence: 1,
   rationale: 'fictional',
@@ -96,8 +105,41 @@ function annotationToolMessage(payload: unknown) {
   }
 }
 
+describe('provider batch telemetry', () => {
+  it('retains successful-item retry telemetry for later peer failures', () => {
+    const retry = {
+      requestId: 'retry-1',
+      specId: 'doc-1',
+      role: 'annotator' as const,
+      provider: 'openrouter',
+      requestedModel: 'fake/model',
+      returnedModel: 'fake/model',
+      usage: { inputTokens: 123, outputTokens: 45 },
+      latencyMs: 1,
+      status: 'error' as const,
+      errorCode: 'annotation_invalid_json',
+      attempt: 1,
+    }
+    const success = {
+      ...retry,
+      requestId: 'success-1',
+      usage: { inputTokens: 100, outputTokens: 20 },
+      status: 'success' as const,
+      errorCode: undefined,
+      attempt: 2,
+      retryOfRequestId: retry.requestId,
+    }
+    expect(
+      requestTelemetryFromResult({
+        telemetry: success,
+        retryTelemetry: [retry],
+      }),
+    ).toEqual([retry, success])
+  })
+})
+
 describe('OpenRouter schema and offline failure behaviour', () => {
-  it('forces a schema tool and keeps local quote validation', async () => {
+  it('forces a schema tool and keeps local token-range validation', async () => {
     process.env.OPENROUTER_API_KEY = 'offline-test-only'
     let body: Record<string, unknown> | undefined
     const labeler = new OpenRouterLabeler('fake/model', {
@@ -140,7 +182,7 @@ describe('OpenRouter schema and offline failure behaviour', () => {
             properties: {
               spans: {
                 items: {
-                  required: ['category', 'quote', 'occurrence'],
+                  required: ['category', 'startToken', 'endToken'],
                 },
               },
             },
@@ -149,6 +191,30 @@ describe('OpenRouter schema and offline failure behaviour', () => {
       },
     ])
     expect(JSON.stringify(body?.tools)).not.toContain('"start"')
+  })
+
+  it('retains billing evidence when a successful response omits output', async () => {
+    process.env.OPENROUTER_API_KEY = 'offline-test-only'
+    const labeler = new OpenRouterLabeler('fake/model', {
+      fetch: fakeFetch(
+        () =>
+          new Response(
+            JSON.stringify({
+              model: 'fake/model',
+              usage: { prompt_tokens: 123, completion_tokens: 45 },
+              choices: [{ message: {} }],
+            }),
+          ),
+      ),
+    })
+    await expect(labeler.label([input])).rejects.toSatisfy(
+      (error: unknown) =>
+        error instanceof ProviderBatchError &&
+        error.telemetry[0]?.returnedModel === 'fake/model' &&
+        error.telemetry[0]?.usage?.inputTokens === 123 &&
+        error.telemetry[0]?.usage?.outputTokens === 45 &&
+        error.telemetry[0]?.errorCode === 'provider_missing_tool_call',
+    )
   })
 
   it('accepts a locally validated content fallback when a route omits tool_calls', async () => {
@@ -177,23 +243,17 @@ describe('OpenRouter schema and offline failure behaviour', () => {
   it('sends judges only text and a quote-occurrence reference schema', async () => {
     process.env.OPENROUTER_API_KEY = 'offline-test-only'
     let body: Record<string, unknown> | undefined
-    const judge = new OpenRouterJudge('fake/model', {
+    const judge = new OpenRouterJudge('openai/gpt-4.1', {
       fetch: fakeFetch((request) => {
         body = request
         return new Response(
           JSON.stringify({
-            model: 'fake/model',
+            model: 'openai/gpt-4.1',
             usage: { prompt_tokens: 2, completion_tokens: 3 },
             choices: [
               {
                 message: {
-                  content: JSON.stringify({
-                    id: 'doc-1',
-                    referenceSpans: [],
-                    realismScore: 5,
-                    confidence: 1,
-                    rationale: 'fictional',
-                  }),
+                  content: JSON.stringify(judgeReference),
                 },
               },
             ],
@@ -206,20 +266,93 @@ describe('OpenRouter schema and offline failure behaviour', () => {
     const prompt = String(
       (body.messages as Array<{ content?: unknown }>)[0]?.content,
     )
-    expect(prompt).not.toContain('Proposed spans')
+    expect(prompt).toContain('Proposed spans')
     expect(prompt).not.toContain('"start"')
     expect(body.provider).toEqual({ require_parameters: true })
+    expect(body.temperature).toBe(0)
+    expect(body.max_tokens).toBe(2400)
+    expect(body.reasoning).toBeUndefined()
     expect(body.response_format).toMatchObject({
       json_schema: {
         schema: {
           properties: {
-            referenceSpans: {
+            proposedSpanDecisions: {
+              items: {
+                required: ['index', 'action', 'correctedCategory'],
+              },
+            },
+            missingSpans: {
               items: { required: ['category', 'quote', 'occurrence'] },
             },
           },
         },
       },
     })
+  })
+
+  it('classifies length-limited invalid judge JSON as truncation', async () => {
+    process.env.OPENROUTER_API_KEY = 'offline-test-only'
+    const judge = new OpenRouterJudge('openai/gpt-5.4-mini', {
+      fetch: fakeFetch(
+        () =>
+          new Response(
+            JSON.stringify({
+              model: 'openai/gpt-5.4-mini',
+              usage: { prompt_tokens: 2, completion_tokens: 2400 },
+              choices: [{ finish_reason: 'length', message: { content: '{' } }],
+            }),
+          ),
+      ),
+    })
+    let failure: unknown
+    try {
+      await judge.judge([document])
+    } catch (error) {
+      failure = error
+    }
+    expect(failure).toBeInstanceOf(ProviderBatchError)
+    expect(failure).toMatchObject({
+      telemetry: [
+        expect.objectContaining({ errorCode: 'judge_output_truncated' }),
+        expect.objectContaining({ errorCode: 'judge_output_truncated' }),
+      ],
+    })
+  })
+
+  it('retains only sanitized provider error fields for HTTP failures', async () => {
+    process.env.OPENROUTER_API_KEY = 'offline-test-only'
+    const judge = new OpenRouterJudge('openai/gpt-5.4-mini', {
+      fetch: fakeFetch(
+        () =>
+          new Response(
+            JSON.stringify({
+              error: {
+                type: 'invalid_request_error',
+                code: 'unsupported_parameter',
+                param: 'temperature',
+                message: 'must not persist this provider message',
+              },
+            }),
+            { status: 400 },
+          ),
+      ),
+    })
+    let failure: unknown
+    try {
+      await judge.judge([document])
+    } catch (error) {
+      failure = error
+    }
+    expect(failure).toBeInstanceOf(ProviderBatchError)
+    expect(failure).toMatchObject({
+      telemetry: [
+        expect.objectContaining({
+          errorCode:
+            'http_400:invalid_request_error:unsupported_parameter:temperature',
+        }),
+      ],
+    })
+    expect(JSON.stringify(failure)).not.toContain('must not persist')
   })
 
   it('retains billed response telemetry when annotation validation fails', async () => {
@@ -238,8 +371,8 @@ describe('OpenRouter schema and offline failure behaviour', () => {
                     spans: [
                       {
                         category: 'email',
-                        quote: 'absent@example.test',
-                        occurrence: 1,
+                        startToken: 0,
+                        endToken: 99,
                       },
                     ],
                   }),
@@ -253,7 +386,7 @@ describe('OpenRouter schema and offline failure behaviour', () => {
       (error: unknown) =>
         error instanceof ProviderBatchError &&
         error.telemetry[0]?.usage?.outputTokens === 3 &&
-        error.telemetry[0]?.errorCode === 'annotation_quote_not_in_source',
+        error.telemetry[0]?.errorCode === 'annotation_span_shape_invalid',
     )
   })
 
@@ -347,7 +480,7 @@ describe('OpenRouter schema and offline failure behaviour', () => {
     })
     const [result] = await judge.judge([document])
     expect(body?.response_format).toEqual({ type: 'json_object' })
-    expect(JSON.stringify(body?.messages)).toContain('referenceSpans')
+    expect(JSON.stringify(body?.messages)).toContain('proposedSpanDecisions')
     expect(result?.telemetry?.provider).toBe('zai')
   })
 
@@ -385,7 +518,7 @@ describe('OpenRouter schema and offline failure behaviour', () => {
           bodies.length === 1
             ? {
                 ...judgeReference,
-                referenceSpans: [
+                missingSpans: [
                   {
                     category: 'person_private',
                     quote: 'Absent',
@@ -406,6 +539,10 @@ describe('OpenRouter schema and offline failure behaviour', () => {
     const [result] = await judge.judge([document])
     expect(bodies).toHaveLength(2)
     expect(JSON.stringify(bodies[1]?.messages)).toContain('VALIDATION FEEDBACK')
+    expect(JSON.stringify(bodies[1]?.messages)).toContain('Absent')
+    expect(JSON.stringify(bodies[1]?.messages)).toContain(
+      'Copy the replacement quote directly from Text',
+    )
     expect(result?.retryTelemetry).toHaveLength(1)
     expect(result?.telemetry?.retryOfRequestId).toBe(
       result?.retryTelemetry?.[0]?.requestId,
@@ -426,7 +563,7 @@ describe('OpenRouter schema and offline failure behaviour', () => {
             content: [
               {
                 type: 'tool_use',
-                name: 'synthetic_v2_independent_reference',
+                name: 'synthetic_v2_structured_review',
                 input: judgeReference,
               },
             ],
@@ -437,9 +574,33 @@ describe('OpenRouter schema and offline failure behaviour', () => {
     await expect(judge.judge([document])).resolves.toHaveLength(1)
     expect(body?.tool_choice).toEqual({
       type: 'tool',
-      name: 'synthetic_v2_independent_reference',
+      name: 'synthetic_v2_structured_review',
     })
-    expect(JSON.stringify(body?.tools)).toContain('referenceSpans')
+    expect(JSON.stringify(body?.tools)).toContain('proposedSpanDecisions')
+  })
+
+  it('retains Anthropic-compatible billing evidence when tool output is missing', async () => {
+    process.env.OPENCODE_GO_API_KEY = 'offline-test-only'
+    process.env.OBITER_OPENCODE_GO_TERMS_CONFIRMED = '1'
+    const judge = new OpenCodeGoJudge('qwen3.7-max', {
+      fetch: fakeFetch(
+        () =>
+          new Response(
+            JSON.stringify({
+              model: 'qwen3.7-max',
+              usage: { input_tokens: 123, output_tokens: 45 },
+              content: [],
+            }),
+          ),
+      ),
+    })
+    await expect(judge.judge([document])).rejects.toSatisfy(
+      (error: unknown) =>
+        error instanceof ProviderBatchError &&
+        error.telemetry[0]?.returnedModel === 'qwen3.7-max' &&
+        error.telemetry[0]?.usage?.inputTokens === 123 &&
+        error.telemetry[0]?.usage?.outputTokens === 45,
+    )
   })
 
   it('rejects OpenCode Go models outside the reviewed endpoint allowlist', () => {

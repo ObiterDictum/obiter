@@ -22,15 +22,23 @@ export type QuoteOccurrenceSpan = {
   occurrence: number
 }
 
+export type ProposedSpanDecision = {
+  index: number
+  action: 'keep' | 'remove' | 'recategorize'
+  correctedCategory: SyntheticSpan['category'] | null
+}
+
 export type IndependentJudgeReference = {
   id: string
-  referenceSpans: QuoteOccurrenceSpan[]
+  proposedSpanDecisions: ProposedSpanDecision[]
+  missingSpans: QuoteOccurrenceSpan[]
+  hardNegativeAssertions: HardNegativeJudgeResult[]
   realismScore: number
   confidence: number
   rationale: string
 }
 
-/** A judge's independently produced reference, never a copy of the labeler output. */
+/** A distinct model's structured review of the proposed annotation. */
 export type JudgeVerdict = {
   id: string
   allProposedSpansCorrect: boolean
@@ -41,6 +49,7 @@ export type JudgeVerdict = {
   realismScore: number
   confidence: number
   rationale: string
+  reviewConflicts?: string[]
 }
 
 export type HumanAdjudication = {
@@ -117,7 +126,18 @@ export function judgePrompt(
   const repair = repairFeedback
     ? `\n\nVALIDATION FEEDBACK — return a complete replacement reference and fix this failure: ${repairFeedback}`
     : ''
-  return `Independently produce an exhaustive reference annotation for this fictional UK legal text. You receive only source text and policy, never proposed annotations. Professional names (solicitors, judges, counsel, experts, in-house counsel) are person_professional; private parties/witnesses are person_private; children, anonymity subjects, and people in family, medical, immigration, employment, criminal, or safeguarding contexts are person_protected. Do not label procedural dates, neutral citations, damages figures, or corporate registration numbers. For each span provide its exact quote and one-based occurrence among identical quotes; do not calculate character offsets.\n\nText:\n${document.text}${repair}\n\nReturn JSON only: {"id": string, "referenceSpans": [{"category": string, "quote": string, "occurrence": integer}], "realismScore": 1|2|3|4|5, "confidence": number, "rationale": string}.`
+  const proposed = document.spans.map((span, index) => ({
+    index,
+    category: span.category,
+    quote: span.text,
+  }))
+  const hardNegatives = (document.hardNegatives ?? []).map((assertion) => ({
+    assertionId: assertion.id,
+    quote: assertion.quote,
+    occurrence: assertion.occurrence,
+    mustNotOverlap: assertion.mustNotOverlap,
+  }))
+  return `Review the proposed annotation for this fictional UK legal text. The response id must be exactly ${document.id}. Categories are person_private, person_protected, person_professional, address, email, phone, national_insurance, account_number, passport, government_id, drivers_license, date, organisation_name, case_reference, url, ip_address, and secret. Professional names are person_professional; private parties and witnesses are person_private; children, anonymity subjects, and people in family, medical, immigration, employment, criminal, or safeguarding contexts are person_protected. Do not label procedural dates, neutral citations, damages figures, corporate registration numbers, or substrings inside emails, URLs, identifiers, or secrets. Return exactly one decision for every proposed index: keep, remove, or recategorize. correctedCategory must be null for keep/remove and contains the replacement category only for recategorize. Report only genuinely missing spans, copied verbatim from Text with one-based exact-quote occurrence. Missing spans must not overlap retained spans or each other. Return exactly one result for every hard-negative assertion.\n\nDocument ID: ${document.id}\n\nText:\n${document.text}\n\nProposed spans:\n${JSON.stringify(proposed)}\n\nHard-negative assertions:\n${JSON.stringify(hardNegatives)}${repair}\n\nReturn JSON only with id, proposedSpanDecisions, missingSpans, hardNegativeAssertions, realismScore, confidence, and rationale.`
 }
 
 export function parseJudgeVerdict(
@@ -174,87 +194,126 @@ export function parseIndependentJudgeReference(
     throw new Error(`Judge returned invalid JSON for ${id}`)
   }
   if (!parsed || typeof parsed !== 'object')
-    throw new Error(`Judge returned an invalid reference for ${id}`)
-  const reference = parsed as Partial<IndependentJudgeReference>
-  const { referenceSpans, realismScore, confidence, rationale } = reference
+    throw new Error(`Judge returned an invalid review for ${id}`)
+  const review = parsed as Partial<IndependentJudgeReference>
+  if (review.id !== id) throw new Error(`Judge review ID does not match ${id}`)
   if (
-    reference.id !== id ||
-    !Array.isArray(referenceSpans) ||
-    typeof realismScore !== 'number' ||
-    !Number.isInteger(realismScore) ||
-    realismScore < 1 ||
-    realismScore > 5 ||
-    typeof confidence !== 'number' ||
-    confidence < 0 ||
-    confidence > 1 ||
-    typeof rationale !== 'string'
+    !Array.isArray(review.proposedSpanDecisions) ||
+    !Array.isArray(review.missingSpans) ||
+    !Array.isArray(review.hardNegativeAssertions) ||
+    typeof review.realismScore !== 'number' ||
+    !Number.isInteger(review.realismScore) ||
+    review.realismScore < 1 ||
+    review.realismScore > 5 ||
+    typeof review.confidence !== 'number' ||
+    review.confidence < 0 ||
+    review.confidence > 1 ||
+    typeof review.rationale !== 'string'
   )
-    throw new Error(`Judge returned an invalid reference for ${id}`)
-  const spans = referenceSpans.map((span) =>
-    resolveQuoteOccurrence(document.text, span),
-  )
-  validateSpans(document.text, spans)
-  return {
-    id,
-    referenceSpans: referenceSpans as QuoteOccurrenceSpan[],
-    realismScore,
-    confidence,
-    rationale,
+    throw new Error(`Judge returned an invalid review for ${id}`)
+  const decisions = review.proposedSpanDecisions
+  const indices = new Set<number>()
+  for (const value of decisions) {
+    if (!value || typeof value !== 'object')
+      throw new Error(`Judge returned an invalid span decision for ${id}`)
+    const decision = value as Partial<ProposedSpanDecision>
+    const original =
+      typeof decision.index === 'number'
+        ? document.spans[decision.index]
+        : undefined
+    if (
+      !original ||
+      indices.has(decision.index!) ||
+      !['keep', 'remove', 'recategorize'].includes(decision.action ?? '') ||
+      ((decision.action === 'keep' || decision.action === 'remove') &&
+        decision.correctedCategory !== null) ||
+      (decision.action === 'recategorize' &&
+        !spanCategories.includes(
+          decision.correctedCategory as SyntheticSpan['category'],
+        ))
+    )
+      throw new Error(`Judge returned an invalid span decision for ${id}`)
+    indices.add(decision.index!)
   }
+  if (indices.size !== document.spans.length)
+    throw new Error(`Judge omitted proposed span decisions for ${id}`)
+  for (const span of review.missingSpans)
+    resolveQuoteOccurrence(document.text, span)
+  if (!review.hardNegativeAssertions.every(isHardNegativeJudgeResult))
+    throw new Error(`Judge returned invalid hard-negative evidence for ${id}`)
+  const expected = new Set(
+    (document.hardNegatives ?? []).map((assertion) => assertion.id),
+  )
+  const reported = new Set(
+    review.hardNegativeAssertions.map((result) => result.assertionId),
+  )
+  if (
+    expected.size !== reported.size ||
+    [...expected].some((assertionId) => !reported.has(assertionId))
+  )
+    throw new Error(`Judge omitted hard-negative evidence for ${id}`)
+  return review as IndependentJudgeReference
 }
 
 export function evaluateIndependentReference(
   document: SyntheticDocument,
   reference: IndependentJudgeReference,
 ): JudgeVerdict {
-  const referenceSpans = reference.referenceSpans.map((span) =>
+  const retained = reference.proposedSpanDecisions.flatMap((decision) => {
+    const span = document.spans[decision.index]!
+    if (decision.action === 'remove') return []
+    return [
+      decision.action === 'recategorize'
+        ? { ...span, category: decision.correctedCategory! }
+        : span,
+    ]
+  })
+  const missing = reference.missingSpans.map((span) =>
     resolveQuoteOccurrence(document.text, span),
   )
-  const same =
-    canonicalHash(sortedSpans(referenceSpans)) ===
-    canonicalHash(sortedSpans(document.spans))
-  const hardNegativeAssertions = (document.hardNegatives ?? []).map(
-    (assertion) => {
-      const starts = occurrences(document.text, assertion.quote)
-      const start = starts[assertion.occurrence - 1]
-      const end = start === undefined ? -1 : start + assertion.quote.length
-      return {
-        assertionId: assertion.id,
-        correctlyUnlabelled:
-          starts.length === assertion.expectedCount &&
-          start !== undefined &&
-          !document.spans.some(
-            (span) =>
-              assertion.mustNotOverlap.includes(span.category) &&
-              span.start < end &&
-              start < span.end,
-          ),
-      }
-    },
-  )
-  const hardNegativesCorrect = hardNegativeAssertions.every(
+  const acceptedMissing: SyntheticSpan[] = []
+  const reviewConflicts: string[] = []
+  for (const span of missing) {
+    const overlap = [...retained, ...acceptedMissing].find(
+      (existing) => existing.start < span.end && span.start < existing.end,
+    )
+    if (!overlap) {
+      acceptedMissing.push(span)
+      continue
+    }
+    const exactDuplicate =
+      overlap.category === span.category &&
+      overlap.start === span.start &&
+      overlap.end === span.end
+    reviewConflicts.push(
+      exactDuplicate ? 'duplicate_missing_span' : 'overlapping_missing_span',
+    )
+  }
+  const referenceSpans = [...retained, ...acceptedMissing]
+  validateSpans(document.text, referenceSpans)
+  const allProposedSpansCorrect =
+    reference.proposedSpanDecisions.every(
+      (decision) => decision.action === 'keep',
+    ) &&
+    missing.length === 0 &&
+    reviewConflicts.length === 0
+  const hardNegativesCorrect = reference.hardNegativeAssertions.every(
     (assertion) => assertion.correctlyUnlabelled,
   )
   return {
     id: document.id,
-    allProposedSpansCorrect: same,
+    allProposedSpansCorrect,
     hardNegativesCorrect,
-    hardNegativeAssertions,
+    hardNegativeAssertions: reference.hardNegativeAssertions,
     referenceSpans,
-    obviousUnmarkedSpans: referenceSpans
-      .filter(
-        (referenceSpan) =>
-          !document.spans.some(
-            (span) =>
-              span.category === referenceSpan.category &&
-              span.start === referenceSpan.start &&
-              span.end === referenceSpan.end,
-          ),
-      )
-      .map(({ category, text }) => ({ category, text })),
+    obviousUnmarkedSpans: missing.map(({ category, text }) => ({
+      category,
+      text,
+    })),
     realismScore: reference.realismScore,
     confidence: reference.confidence,
     rationale: reference.rationale,
+    reviewConflicts,
   }
 }
 
@@ -273,8 +332,16 @@ function resolveQuoteOccurrence(text: string, value: unknown): SyntheticSpan {
   )
     throw new Error('Judge reference requires category, quote, and occurrence')
   const start = resolveExactQuoteOccurrence(text, quote, occurrence)
-  if (start === undefined)
-    throw new Error('Judge reference quote occurrence is absent or ambiguous')
+  if (start === undefined) {
+    const exactMatchCount = occurrences(text, quote).length
+    if (exactMatchCount === 0)
+      throw new Error(
+        `Judge reference quote is not an exact source substring: ${JSON.stringify(quote)}. Copy the replacement quote directly from Text without normalization or paraphrase.`,
+      )
+    throw new Error(
+      `Judge reference quote occurrence ${occurrence} is out of range for ${exactMatchCount} exact source matches`,
+    )
+  }
   return {
     category: category as SyntheticSpan['category'],
     start,
@@ -365,7 +432,8 @@ export function requiresRegeneration(verdict: JudgeVerdict) {
     ) ||
     verdict.obviousUnmarkedSpans.length > 0 ||
     verdict.realismScore < 4 ||
-    verdict.confidence < 0.8
+    verdict.confidence < 0.8 ||
+    (verdict.reviewConflicts?.length ?? 0) > 0
   )
 }
 
@@ -577,7 +645,9 @@ function sameReference(left: JudgeVerdict, right: JudgeVerdict) {
     JSON.stringify(sortedSpans(left.referenceSpans)) ===
       JSON.stringify(sortedSpans(right.referenceSpans)) &&
     JSON.stringify(sortedHardNegatives(left.hardNegativeAssertions)) ===
-      JSON.stringify(sortedHardNegatives(right.hardNegativeAssertions))
+      JSON.stringify(sortedHardNegatives(right.hardNegativeAssertions)) &&
+    JSON.stringify([...(left.reviewConflicts ?? [])].sort()) ===
+      JSON.stringify([...(right.reviewConflicts ?? [])].sort())
   )
 }
 function sortedSpans(spans: SyntheticSpan[]) {

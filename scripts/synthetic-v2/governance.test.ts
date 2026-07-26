@@ -55,9 +55,9 @@ const tournament = {
 }
 const selection = {
   version: selectionManifestVersion,
-  candidateId: 'deepseek-pro-gemini-flash',
+  candidateId: 'deepseek-pro-sonnet',
   writerId: 'deepseek-v4-pro',
-  annotatorId: 'google/gemini-3.6-flash',
+  annotatorId: 'anthropic/claude-sonnet-4.6',
   tournamentManifestHash: tournament.manifestHash,
   approvedAt: '2026-07-20T12:00:00.000Z',
   approvedBy: 'reviewer',
@@ -140,7 +140,7 @@ describe('synthetic-v2 governance', () => {
         completedScorecard: scorecard,
         finalStatus: index === 1 ? 'rejected' : 'reviewed',
       })),
-      selectedCandidateId: 'deepseek-pro-gemini-flash',
+      selectedCandidateId: 'deepseek-pro-sonnet',
       approvedAt: '2026-07-20T12:00:00.000Z',
       approvedBy: 'reviewer',
       termsReviewReference: 'terms-2026-07',
@@ -167,7 +167,7 @@ describe('synthetic-v2 governance', () => {
           completedScorecard: scorecard,
           finalStatus: 'reviewed' as const,
         })),
-        selectedCandidateId: 'deepseek-pro-gemini-flash',
+        selectedCandidateId: 'deepseek-pro-sonnet',
         approvedAt: '2026-07-20T12:00:00.000Z',
         approvedBy: 'reviewer',
         termsReviewReference: 'terms-2026-07',
@@ -177,7 +177,7 @@ describe('synthetic-v2 governance', () => {
       finalizeTournament(pending, {
         tournamentManifestHash: pending.manifestHash,
         reviews: [],
-        selectedCandidateId: 'deepseek-pro-gemini-flash',
+        selectedCandidateId: 'deepseek-pro-sonnet',
         approvedAt: '2026-07-20T12:00:00.000Z',
         approvedBy: 'reviewer',
         termsReviewReference: 'terms-2026-07',
