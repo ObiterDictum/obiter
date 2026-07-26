@@ -3,7 +3,9 @@ import {
   NearDuplicateIndex,
   assertDocumentMatchesSpec,
   assertHardNegatives,
+  candidateQualityReasons,
   contentHash,
+  createAnnotatedCandidate,
   nearDuplicatePairs,
 } from './validation'
 import { buildQuotaSpecs, generationSpecIdentity } from './matrix'
@@ -82,6 +84,22 @@ describe('document-to-spec validation', () => {
     contentHash: contentHash(text),
     hardNegatives: spec.hardNegatives,
   }
+
+  it('constructs structurally valid candidates without hiding quality rejection', () => {
+    const candidate = createAnnotatedCandidate(
+      spec,
+      { text, generator: 'test' },
+      [],
+    )
+    expect(candidateQualityReasons(candidate, spec)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'required_category_not_evidenced' }),
+      ]),
+    )
+    expect(() => assertDocumentMatchesSpec(candidate, spec)).toThrow(
+      'omitted required category',
+    )
+  })
 
   it('rejects overlaps, missing categories, forged coverage, and invalid hashes', () => {
     expect(() =>

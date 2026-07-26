@@ -5,9 +5,14 @@ import {
   labelSystemPrompt,
   labelUserPrompt,
 } from './prompts'
-import { judgePrompt, parseIndependentJudgeReference } from './qa'
-import type {
-  DocumentSpec,
+import {
+  evaluateIndependentReference,
+  judgePrompt,
+  parseIndependentJudgeReference,
+} from './qa'
+import {
+  spanCategories,
+  type DocumentSpec,
   GeneratedAnnotation,
   GeneratedDocument,
   GenerationProgress,
@@ -30,10 +35,40 @@ class ProviderHttpError extends Error {
   constructor(
     readonly provider: string,
     readonly status: number,
+    readonly detailCode?: string,
   ) {
     super(`${provider} request failed with HTTP ${status}`)
     this.name = 'ProviderHttpError'
   }
+}
+
+async function providerHttpError(provider: string, response: Response) {
+  let body: unknown
+  try {
+    body = await response.json()
+  } catch {
+    return new ProviderHttpError(provider, response.status)
+  }
+  const error =
+    body && typeof body === 'object' && 'error' in body
+      ? (body as { error?: unknown }).error
+      : body
+  if (!error || typeof error !== 'object')
+    return new ProviderHttpError(provider, response.status)
+  const detail = error as { type?: unknown; code?: unknown; param?: unknown }
+  const safeParts = [detail.type, detail.code, detail.param]
+    .filter(
+      (value): value is string =>
+        typeof value === 'string' &&
+        value.length <= 64 &&
+        /^[a-zA-Z0-9_./-]+$/.test(value),
+    )
+    .map((value) => value.toLowerCase())
+  return new ProviderHttpError(
+    provider,
+    response.status,
+    safeParts.length ? [...new Set(safeParts)].join(':') : undefined,
+  )
 }
 export class ProviderBatchError extends Error {
   constructor(
@@ -62,7 +97,7 @@ function requiredEnvironment(name: string) {
   return value
 }
 
-const annotationSchema = {
+export const annotationSchema = {
   name: 'synthetic_v2_annotation',
   strict: true,
   schema: {
@@ -76,42 +111,75 @@ const annotationSchema = {
         items: {
           type: 'object',
           additionalProperties: false,
-          required: ['category', 'quote', 'occurrence'],
+          required: ['category', 'startToken', 'endToken'],
           properties: {
-            category: { type: 'string' },
-            quote: { type: 'string' },
-            occurrence: { type: 'integer', minimum: 1 },
+            category: { type: 'string', enum: spanCategories },
+            startToken: { type: 'integer', minimum: 0 },
+            endToken: { type: 'integer', minimum: 1 },
           },
         },
       },
     },
   },
 } as const
-const judgeSchema = {
-  name: 'synthetic_v2_independent_reference',
+const quoteOccurrenceSpanSchema = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['category', 'quote', 'occurrence'],
+  properties: {
+    category: { type: 'string', enum: spanCategories },
+    quote: { type: 'string', minLength: 1 },
+    occurrence: { type: 'integer', minimum: 1 },
+  },
+} as const
+export const judgeSchema = {
+  name: 'synthetic_v2_structured_review',
   strict: true,
   schema: {
     type: 'object',
     additionalProperties: false,
     required: [
       'id',
-      'referenceSpans',
+      'proposedSpanDecisions',
+      'missingSpans',
+      'hardNegativeAssertions',
       'realismScore',
       'confidence',
       'rationale',
     ],
     properties: {
       id: { type: 'string' },
-      referenceSpans: {
+      proposedSpanDecisions: {
         type: 'array',
         items: {
           type: 'object',
           additionalProperties: false,
-          required: ['category', 'quote', 'occurrence'],
+          required: ['index', 'action', 'correctedCategory'],
           properties: {
-            category: { type: 'string' },
-            quote: { type: 'string' },
-            occurrence: { type: 'integer', minimum: 1 },
+            index: { type: 'integer', minimum: 0 },
+            action: {
+              type: 'string',
+              enum: ['keep', 'remove', 'recategorize'],
+            },
+            correctedCategory: {
+              anyOf: [
+                { type: 'string', enum: spanCategories },
+                { type: 'null' },
+              ],
+            },
+          },
+        },
+      },
+      missingSpans: { type: 'array', items: quoteOccurrenceSpanSchema },
+      hardNegativeAssertions: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['assertionId', 'correctlyUnlabelled'],
+          properties: {
+            assertionId: { type: 'string', minLength: 1 },
+            correctlyUnlabelled: { type: 'boolean' },
           },
         },
       },
@@ -121,6 +189,9 @@ const judgeSchema = {
     },
   },
 } as const
+
+export const annotationValidationAttempts = 2
+export const judgeValidationAttempts = 2
 
 export class OpenRouterGenerator implements GeneratorAdapter {
   readonly name: string
@@ -177,7 +248,7 @@ export class OpenRouterGenerator implements GeneratorAdapter {
 
 export class OpenRouterLabeler implements LabelingAdapter {
   readonly name: string
-  readonly maxChargeAttempts = 2
+  readonly maxChargeAttempts = annotationValidationAttempts
   private readonly apiKey: string
   constructor(
     readonly model: string,
@@ -222,11 +293,15 @@ export class OpenRouterLabeler implements LabelingAdapter {
         const retryTelemetry: RequestTelemetry[] = []
         let previousRequestId: string | undefined
         let previousValidationMessage: string | undefined
-        for (let attempt = 1; attempt <= 2; attempt++) {
+        for (
+          let attempt = 1;
+          attempt <= annotationValidationAttempts;
+          attempt++
+        ) {
           const validationFeedback =
             attempt === 1
               ? feedback?.get(input.id)
-              : `The previous response failed local validation: ${previousValidationMessage ?? 'unknown validation error'}. Return a complete replacement list using only quotes copied verbatim from the immutable source. Do not invent a span for an absent requirement. Occurrence counts repetitions of that exact quote, not mentions of the person or entity; use 1 when the exact quote appears once.`
+              : `The previous response failed local validation: ${previousValidationMessage ?? 'unknown validation error'}. Return a complete replacement list using only valid non-overlapping token ranges from the immutable source. Do not invent a span for an absent requirement.`
           let response: {
             text: string
             model: string
@@ -286,7 +361,8 @@ export class OpenRouterLabeler implements LabelingAdapter {
                 })
                 previousRequestId = entry.requestId
               }
-            if (attempt < 2 && isRetryable(error)) continue
+            if (attempt < annotationValidationAttempts && isRetryable(error))
+              continue
             throw new ProviderBatchError(
               'Annotation request failed after bounded attempts',
               retryTelemetry,
@@ -321,7 +397,7 @@ export class OpenRouterLabeler implements LabelingAdapter {
             } satisfies RequestTelemetry
             retryTelemetry.push(failure)
             previousRequestId = response.telemetry.requestId
-            if (attempt === 2)
+            if (attempt === annotationValidationAttempts)
               throw new ProviderBatchError(
                 'Annotation response failed validation twice',
                 retryTelemetry,
@@ -360,7 +436,7 @@ const openCodeGoOpenAiModels = new Set([
 
 abstract class IndependentJudge implements JudgeAdapter {
   abstract readonly name: string
-  readonly maxChargeAttempts = 2
+  readonly maxChargeAttempts = judgeValidationAttempts
   protected abstract request(
     document: SyntheticDocument,
     signal?: AbortSignal,
@@ -369,6 +445,7 @@ abstract class IndependentJudge implements JudgeAdapter {
   ): Promise<{
     text: string
     telemetry: RequestTelemetry
+    finishReason?: string
   }>
 
   constructor(
@@ -391,10 +468,11 @@ abstract class IndependentJudge implements JudgeAdapter {
         const retryTelemetry: RequestTelemetry[] = []
         let previousRequestId: string | undefined
         let validationFeedback: string | undefined
-        for (let attempt = 1; attempt <= 2; attempt++) {
+        for (let attempt = 1; attempt <= judgeValidationAttempts; attempt++) {
           let response: {
             text: string
             telemetry: RequestTelemetry
+            finishReason?: string
           }
           try {
             response = await this.request(
@@ -412,7 +490,8 @@ abstract class IndependentJudge implements JudgeAdapter {
                 })
                 previousRequestId = entry.requestId
               }
-            if (attempt < 2 && isRetryable(error)) continue
+            if (attempt < judgeValidationAttempts && isRetryable(error))
+              continue
             throw new ProviderBatchError(
               'Judge request failed after bounded attempts',
               retryTelemetry,
@@ -421,7 +500,14 @@ abstract class IndependentJudge implements JudgeAdapter {
           try {
             // Provider constraints reduce malformed output; this local parse is
             // still authoritative and validates quotes against immutable text.
-            parseIndependentJudgeReference(response.text, document.id, document)
+            evaluateIndependentReference(
+              document,
+              parseIndependentJudgeReference(
+                response.text,
+                document.id,
+                document,
+              ),
+            )
             return {
               id: document.id,
               verdict: response.text,
@@ -439,11 +525,14 @@ abstract class IndependentJudge implements JudgeAdapter {
             retryTelemetry.push({
               ...response.telemetry,
               status: 'error',
-              errorCode: judgeValidationErrorCode(error),
+              errorCode:
+                response.finishReason === 'length'
+                  ? 'judge_output_truncated'
+                  : judgeValidationErrorCode(error),
               retryOfRequestId: previousRequestId,
             })
             previousRequestId = response.telemetry.requestId
-            if (attempt === 2)
+            if (attempt === judgeValidationAttempts)
               throw new ProviderBatchError(
                 'Judge reference failed validation twice',
                 retryTelemetry,
@@ -481,8 +570,10 @@ export class OpenRouterJudge extends IndependentJudge {
       this.apiKey,
       this.options,
       {
-        max_tokens: 1200,
-        temperature: 0,
+        max_tokens: 2400,
+        ...(this.model.startsWith('openai/gpt-5')
+          ? { reasoning: { effort: 'none' } }
+          : { temperature: 0 }),
         response_format: { type: 'json_schema', json_schema: judgeSchema },
         provider: { require_parameters: true },
         messages: [
@@ -657,9 +748,21 @@ function jsonSchemaInstruction(schema: unknown) {
 function judgeValidationErrorCode(error: unknown) {
   const message = error instanceof Error ? error.message : ''
   if (message.includes('invalid JSON')) return 'judge_invalid_json'
-  if (message.includes('requires category, quote, and occurrence'))
+  if (
+    message.includes('requires category, quote, and occurrence') ||
+    message.includes('invalid span decision')
+  )
     return 'judge_span_shape_invalid'
-  if (message.includes('quote occurrence is absent or ambiguous'))
+  if (message.includes('omitted proposed span decisions'))
+    return 'judge_span_decisions_incomplete'
+  if (message.includes('review ID does not match')) return 'judge_id_mismatch'
+  if (message.includes('invalid review')) return 'judge_review_shape_invalid'
+  if (message.includes('hard-negative evidence'))
+    return 'judge_hard_negative_evidence_invalid'
+  if (
+    message.includes('quote is not an exact source substring') ||
+    message.includes('quote occurrence')
+  )
     return 'judge_quote_or_occurrence_invalid'
   if (message.includes('Overlapping or nested spans'))
     return 'judge_span_overlap'
@@ -683,6 +786,7 @@ function annotationValidationErrorCode(error: unknown) {
   if (message.includes('not valid JSON')) return 'annotation_invalid_json'
   if (
     message.includes('requires category, quote, and occurrence') ||
+    message.includes('requires category and a valid token range') ||
     message.includes('must contain spans')
   )
     return 'annotation_span_shape_invalid'
@@ -823,12 +927,33 @@ async function requestOpenAi(
         body: JSON.stringify({ model, ...body }),
       },
     )
-    if (!response.ok) throw new ProviderHttpError(provider, response.status)
-    const parsed = parseOpenAICompatibleResponse(
-      await response.json(),
-      provider,
-      expectedToolName,
-    )
+    if (!response.ok) throw await providerHttpError(provider, response)
+    const responseBody: unknown = await response.json()
+    let parsed: ReturnType<typeof parseOpenAICompatibleResponse>
+    try {
+      parsed = parseOpenAICompatibleResponse(
+        responseBody,
+        provider,
+        expectedToolName,
+      )
+    } catch (error) {
+      const evidence = openAiBillingEvidence(responseBody)
+      throw new ProviderBatchError('Provider response was invalid', [
+        {
+          requestId,
+          specId,
+          role,
+          provider,
+          requestedModel: model,
+          returnedModel: evidence.returnedModel,
+          usage: evidence.usage,
+          latencyMs: Math.round(performance.now() - started),
+          status: 'error',
+          errorCode: providerErrorCode(error),
+          attempt,
+        },
+      ])
+    }
     if (parsed.model !== model) {
       throw new ProviderBatchError('Provider returned an unrequested model', [
         {
@@ -875,7 +1000,7 @@ async function requestOpenAi(
       attempt,
       errorCode:
         error instanceof ProviderHttpError
-          ? `http_${error.status}`
+          ? `http_${error.status}${error.detailCode ? `:${error.detailCode}` : ''}`
           : error instanceof Error
             ? error.name
             : 'unknown',
@@ -936,8 +1061,29 @@ async function requestAnthropicTool(
         }),
       },
     )
-    if (!response.ok) throw new ProviderHttpError(provider, response.status)
-    const parsed = parseAnthropicToolResponse(await response.json(), provider)
+    if (!response.ok) throw await providerHttpError(provider, response)
+    const responseBody: unknown = await response.json()
+    let parsed: ReturnType<typeof parseAnthropicToolResponse>
+    try {
+      parsed = parseAnthropicToolResponse(responseBody, provider)
+    } catch (error) {
+      const evidence = anthropicBillingEvidence(responseBody)
+      throw new ProviderBatchError('Provider response was invalid', [
+        {
+          requestId,
+          specId,
+          role,
+          provider,
+          requestedModel: model,
+          returnedModel: evidence.returnedModel,
+          usage: evidence.usage,
+          latencyMs: Math.round(performance.now() - started),
+          status: 'error',
+          errorCode: providerErrorCode(error),
+          attempt,
+        },
+      ])
+    }
     const telemetry = {
       requestId,
       specId,
@@ -974,7 +1120,7 @@ async function requestAnthropicTool(
         attempt,
         errorCode:
           error instanceof ProviderHttpError
-            ? `http_${error.status}`
+            ? `http_${error.status}${error.detailCode ? `:${error.detailCode}` : ''}`
             : error instanceof Error
               ? error.name
               : 'unknown',
@@ -1003,8 +1149,8 @@ function parseAnthropicToolResponse(value: unknown, provider: string) {
   if (
     !tool ||
     typeof body.model !== 'string' ||
-    typeof inputTokens !== 'number' ||
-    typeof outputTokens !== 'number'
+    !isTokenCount(inputTokens) ||
+    !isTokenCount(outputTokens)
   )
     throw new Error(
       `${provider} response omitted judge tool input, model, or usage`,
@@ -1025,6 +1171,7 @@ type OpenAICompatibleResponse = {
     output_tokens?: unknown
   }
   choices?: Array<{
+    finish_reason?: unknown
     message?: {
       content?: unknown
       tool_calls?: Array<{
@@ -1037,7 +1184,7 @@ function parseOpenAICompatibleResponse(
   value: unknown,
   provider: string,
   expectedToolName?: string,
-): { text: string; model: string; usage: Usage } {
+): { text: string; model: string; usage: Usage; finishReason?: string } {
   if (!value || typeof value !== 'object')
     throw new Error(`${provider} returned invalid JSON`)
   const body = value as OpenAICompatibleResponse
@@ -1067,9 +1214,52 @@ function parseOpenAICompatibleResponse(
   if (!text) throw providerResponseError(provider, 'missing_output')
   if (typeof body.model !== 'string')
     throw providerResponseError(provider, 'missing_model')
-  if (typeof inputTokens !== 'number' || typeof outputTokens !== 'number')
+  if (!isTokenCount(inputTokens) || !isTokenCount(outputTokens))
     throw providerResponseError(provider, 'missing_usage')
-  return { text, model: body.model, usage: { inputTokens, outputTokens } }
+  const finishReason = body.choices?.[0]?.finish_reason
+  return {
+    text,
+    model: body.model,
+    usage: { inputTokens, outputTokens },
+    finishReason: typeof finishReason === 'string' ? finishReason : undefined,
+  }
+}
+
+function openAiBillingEvidence(value: unknown) {
+  if (!value || typeof value !== 'object') return {}
+  const body = value as OpenAICompatibleResponse
+  const inputTokens = body.usage?.prompt_tokens ?? body.usage?.input_tokens
+  const outputTokens =
+    body.usage?.completion_tokens ?? body.usage?.output_tokens
+  return {
+    returnedModel: typeof body.model === 'string' ? body.model : undefined,
+    usage:
+      isTokenCount(inputTokens) && isTokenCount(outputTokens)
+        ? ({ inputTokens, outputTokens } satisfies Usage)
+        : undefined,
+  }
+}
+
+function anthropicBillingEvidence(value: unknown) {
+  if (!value || typeof value !== 'object') return {}
+  const body = value as AnthropicToolResponse
+  const inputTokens = body.usage?.input_tokens
+  const outputTokens = body.usage?.output_tokens
+  return {
+    returnedModel: typeof body.model === 'string' ? body.model : undefined,
+    usage:
+      isTokenCount(inputTokens) && isTokenCount(outputTokens)
+        ? ({ inputTokens, outputTokens } satisfies Usage)
+        : undefined,
+  }
+}
+
+function isTokenCount(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0
+}
+
+function providerErrorCode(error: unknown) {
+  return error instanceof Error ? error.name : 'unknown'
 }
 
 function providerResponseError(provider: string, reason: string) {
@@ -1117,8 +1307,7 @@ async function generateConcurrent<T extends { id: string }, Result>(
       try {
         const result = await operation(value, signal)
         output[index] = result
-        const request = resultTelemetry(result)
-        if (request) telemetry.push(request)
+        telemetry.push(...requestTelemetryFromResult(result))
         completed++
         onProgress?.({
           phase: 'completed',
@@ -1147,13 +1336,20 @@ async function generateConcurrent<T extends { id: string }, Result>(
   return output
 }
 
-function resultTelemetry(value: unknown): RequestTelemetry | undefined {
-  if (!value || typeof value !== 'object' || !('telemetry' in value))
-    return undefined
-  const telemetry = value.telemetry
-  return telemetry && typeof telemetry === 'object' && 'requestId' in telemetry
-    ? (telemetry as RequestTelemetry)
-    : undefined
+export function requestTelemetryFromResult(value: unknown): RequestTelemetry[] {
+  if (!value || typeof value !== 'object') return []
+  const result = value as { telemetry?: unknown; retryTelemetry?: unknown }
+  const retries = Array.isArray(result.retryTelemetry)
+    ? result.retryTelemetry.filter(isRequestTelemetry)
+    : []
+  return [
+    ...retries,
+    ...(isRequestTelemetry(result.telemetry) ? [result.telemetry] : []),
+  ]
+}
+
+function isRequestTelemetry(value: unknown): value is RequestTelemetry {
+  return Boolean(value && typeof value === 'object' && 'requestId' in value)
 }
 
 async function withRetries<T>(
