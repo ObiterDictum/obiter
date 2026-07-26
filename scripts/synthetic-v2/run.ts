@@ -66,6 +66,7 @@ import type {
 import {
   candidateQualityReasons,
   createAnnotatedCandidate,
+  nearDuplicateSimilarityThreshold,
   NearDuplicateIndex,
   type CandidateQualityReason,
 } from './validation'
@@ -115,6 +116,11 @@ const pricingPath =
   process.env.SYNTHETIC_V2_PRICING_PATH ??
   resolve('scripts/synthetic-v2/pricing-2026-07-21.json')
 
+export type DocumentSpend = {
+  specId: string
+  spendGbp: number
+}
+
 export class PipelineExecutionError extends Error {
   readonly name = 'PipelineExecutionError'
 
@@ -128,6 +134,8 @@ export class PipelineExecutionError extends Error {
       specId: string
       reasons: CandidateQualityReason[]
     },
+    readonly acceptedDocuments: SyntheticDocument[] = [],
+    readonly documentSpendGbp: DocumentSpend[] = [],
   ) {
     super(message)
   }
@@ -165,6 +173,7 @@ export type PipelineResult = {
   pendingAdjudications: PendingAdjudication[]
   qa: Map<string, QaEvidence>
   documentStates: DocumentProcessingState[]
+  documentSpendGbp: DocumentSpend[]
   usage: Usage
   actualGbp: number
   requestTelemetry: RequestTelemetry[]
@@ -185,6 +194,36 @@ export type PipelineOptions = {
   failFastOnTerminalState?: boolean
   humanAdjudications?: Map<string, HumanAdjudication>
   onProgress?: (progress: PipelineProgress) => void
+}
+
+export function pipelineCandidateQualityReasons(
+  candidate: SyntheticDocument,
+  spec: DocumentSpec,
+  externalHashes: ReadonlySet<string>,
+  index: NearDuplicateIndex,
+) {
+  const reasons = candidateQualityReasons(candidate, spec)
+  if (supplementMisses([candidate]).length)
+    reasons.push({ code: 'mechanical_supplement_miss' })
+  if (externalHashes.has(candidate.contentHash))
+    reasons.push({ code: 'cross_partition_duplicate' })
+  if (index.check(candidate)) reasons.push({ code: 'near_duplicate' })
+  return reasons
+}
+
+export function candidateQualityTransitionReason(
+  reason: CandidateQualityReason,
+) {
+  switch (reason.code) {
+    case 'required_category_not_evidenced':
+      return `${reason.code}:${reason.category}`
+    case 'hard_negative_contract_failed':
+      return `${reason.code}:${reason.assertionId}`
+    case 'near_duplicate':
+    case 'cross_partition_duplicate':
+    case 'mechanical_supplement_miss':
+      return reason.code
+  }
 }
 
 export async function main() {
@@ -376,7 +415,7 @@ export async function runPipeline(
   const abort = new AbortController()
   for (const manifest of externalPartitions) assertPartitionManifest(manifest)
   const index = new NearDuplicateIndex(
-    0.82,
+    nearDuplicateSimilarityThreshold,
     externalPartitions.flatMap((manifest) => manifest.nearDuplicateSignatures),
   )
   const externalHashes = new Set(
@@ -393,6 +432,19 @@ export async function runPipeline(
   const pendingAdjudications: PendingAdjudication[] = []
   const qa = new Map<string, QaEvidence>()
   const documentStates: DocumentProcessingState[] = []
+  const documentSpendGbp: DocumentSpend[] = []
+  let activeDocumentSpend:
+    { specId: string; startingActualGbp: number } | undefined
+  const recordActiveDocumentSpend = () => {
+    if (!activeDocumentSpend) return
+    documentSpendGbp.push({
+      specId: activeDocumentSpend.specId,
+      spendGbp: Number(
+        (actualGbp - activeDocumentSpend.startingActualGbp).toFixed(6),
+      ),
+    })
+    activeDocumentSpend = undefined
+  }
   const maxRegenerations = options.maxRegenerations ?? defaultMaxRegenerations
   assertConfiguredPricing(pricing, [
     writer,
@@ -448,6 +500,10 @@ export async function runPipeline(
 
   try {
     for (const [specIndex, spec] of specs.entries()) {
+      activeDocumentSpend = {
+        specId: spec.id,
+        startingActualGbp: actualGbp,
+      }
       const state: DocumentProcessingState = {
         id: spec.id,
         status: 'failed',
@@ -514,26 +570,12 @@ export async function runPipeline(
         // erase the original prediction used for hard-negative FPR.
         firstPassAnnotations.set(spec.id, label.spans)
         const candidate = createAnnotatedCandidate(spec, draft, label.spans)
-        const deterministicQualityReasons = candidateQualityReasons(
+        const deterministicQualityReasons = pipelineCandidateQualityReasons(
           candidate,
           spec,
+          externalHashes,
+          index,
         )
-        if (supplementMisses([candidate]).length)
-          deterministicQualityReasons.push({
-            code: 'hard_negative_contract_failed',
-            assertionId: 'mechanical_supplement_miss',
-          })
-        if (externalHashes.has(candidate.contentHash))
-          deterministicQualityReasons.push({
-            code: 'hard_negative_contract_failed',
-            assertionId: 'cross_partition_exact_duplicate',
-          })
-        const duplicate = index.check(candidate)
-        if (duplicate)
-          deterministicQualityReasons.push({
-            code: 'hard_negative_contract_failed',
-            assertionId: 'near_duplicate',
-          })
 
         finalPassAnnotations.set(candidate.id, candidate.spans)
         state.qaAttempts++
@@ -566,11 +608,7 @@ export async function runPipeline(
           state.transitions.push({
             phase: 'regenerate',
             reason: deterministicQualityReasons
-              .map((reason) =>
-                reason.code === 'required_category_not_evidenced'
-                  ? `${reason.code}:${reason.category}`
-                  : `${reason.code}:${reason.assertionId}`,
-              )
+              .map(candidateQualityTransitionReason)
               .join(','),
           })
           continue
@@ -679,6 +717,7 @@ export async function runPipeline(
         phase: 'complete',
         status: state.status,
       })
+      recordActiveDocumentSpend()
       if (options.failFastOnTerminalState && state.status === 'failed')
         throw new CandidateQualitySignal(spec.id, terminalQualityReasons)
     }
@@ -704,6 +743,7 @@ export async function runPipeline(
       pendingAdjudications,
       qa,
       documentStates,
+      documentSpendGbp,
       usage,
       actualGbp: Number(actualGbp.toFixed(6)),
       requestTelemetry: telemetry,
@@ -723,6 +763,7 @@ export async function runPipeline(
           actualGbp += telemetryCost(entry, pricing)
         }
       }
+    recordActiveDocumentSpend()
     throw new PipelineExecutionError(
       error instanceof Error ? error.message : 'Pipeline execution failed',
       { ...usage },
@@ -732,6 +773,8 @@ export async function runPipeline(
       error instanceof CandidateQualitySignal
         ? { specId: error.specId, reasons: error.reasons }
         : undefined,
+      structuredClone(documents),
+      structuredClone(documentSpendGbp),
     )
   }
 }
@@ -920,33 +963,11 @@ async function runTournament(pricing: PricingTable) {
             `${entry.provider ?? 'unknown'}:${entry.requestedModel}:${entry.errorCode ?? entry.status}`,
         )
         .join(', ')
-      const failedArtifact = {
-        version: 'synthetic-v2-tournament-failure:v1',
-        candidateId: candidate.id,
-        specs: specs.map(({ id, seed }) => ({ id, seed })),
-        status: 'failed',
-        error:
-          accountedError instanceof Error
-            ? accountedError.message
-            : 'Unknown candidate failure',
-        usage:
-          accountedError instanceof PipelineExecutionError
-            ? accountedError.usage
-            : undefined,
-        spendGbp:
-          accountedError instanceof PipelineExecutionError
-            ? accountedError.actualGbp
-            : undefined,
-        requestTelemetry: diagnostics,
-        documentStates:
-          accountedError instanceof PipelineExecutionError
-            ? accountedError.documentStates
-            : undefined,
-        rejection:
-          accountedError instanceof PipelineExecutionError
-            ? accountedError.candidateQualityRejection
-            : undefined,
-      }
+      const failedArtifact = tournamentFailureArtifact(
+        candidate.id,
+        specs,
+        accountedError,
+      )
       const candidateQualityRejection =
         isCandidateQualityRejection(accountedError)
       if (candidateQualityRejection) {
@@ -1326,6 +1347,34 @@ export function isCandidateQualityRejection(error: unknown) {
   )
 }
 
+export function tournamentFailureArtifact(
+  candidateId: string,
+  specs: readonly Pick<DocumentSpec, 'id' | 'seed'>[],
+  error: unknown,
+) {
+  const pipelineError =
+    error instanceof PipelineExecutionError ? error : undefined
+  const requestTelemetry = pipelineError
+    ? pipelineError.requestTelemetry
+    : error instanceof ProviderBatchError
+      ? error.telemetry
+      : undefined
+  return {
+    version: 'synthetic-v2-tournament-failure:v1' as const,
+    candidateId,
+    specs: specs.map(({ id, seed }) => ({ id, seed })),
+    status: 'failed' as const,
+    error: error instanceof Error ? error.message : 'Unknown candidate failure',
+    acceptedDocuments: pipelineError?.acceptedDocuments ?? [],
+    usage: pipelineError?.usage,
+    spendGbp: pipelineError?.actualGbp,
+    requestTelemetry,
+    documentStates: pipelineError?.documentStates ?? [],
+    documentSpendGbp: pipelineError?.documentSpendGbp ?? [],
+    rejection: pipelineError?.candidateQualityRejection,
+  }
+}
+
 function embeddedArtifactHash(value: unknown) {
   if (
     value &&
@@ -1349,6 +1398,10 @@ export function accountTournamentError(
     pipelineResult.usage,
     pipelineResult.actualGbp,
     pipelineResult.requestTelemetry,
+    pipelineResult.documentStates,
+    undefined,
+    pipelineResult.documents,
+    pipelineResult.documentSpendGbp,
   )
 }
 

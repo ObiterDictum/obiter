@@ -97,7 +97,7 @@ function requiredEnvironment(name: string) {
   return value
 }
 
-const annotationSchema = {
+export const annotationSchema = {
   name: 'synthetic_v2_annotation',
   strict: true,
   schema: {
@@ -132,7 +132,7 @@ const quoteOccurrenceSpanSchema = {
     occurrence: { type: 'integer', minimum: 1 },
   },
 } as const
-const judgeSchema = {
+export const judgeSchema = {
   name: 'synthetic_v2_structured_review',
   strict: true,
   schema: {
@@ -190,6 +190,9 @@ const judgeSchema = {
   },
 } as const
 
+export const annotationValidationAttempts = 2
+export const judgeValidationAttempts = 2
+
 export class OpenRouterGenerator implements GeneratorAdapter {
   readonly name: string
   readonly maxChargeAttempts = 1
@@ -245,7 +248,7 @@ export class OpenRouterGenerator implements GeneratorAdapter {
 
 export class OpenRouterLabeler implements LabelingAdapter {
   readonly name: string
-  readonly maxChargeAttempts = 2
+  readonly maxChargeAttempts = annotationValidationAttempts
   private readonly apiKey: string
   constructor(
     readonly model: string,
@@ -290,7 +293,11 @@ export class OpenRouterLabeler implements LabelingAdapter {
         const retryTelemetry: RequestTelemetry[] = []
         let previousRequestId: string | undefined
         let previousValidationMessage: string | undefined
-        for (let attempt = 1; attempt <= 2; attempt++) {
+        for (
+          let attempt = 1;
+          attempt <= annotationValidationAttempts;
+          attempt++
+        ) {
           const validationFeedback =
             attempt === 1
               ? feedback?.get(input.id)
@@ -354,7 +361,8 @@ export class OpenRouterLabeler implements LabelingAdapter {
                 })
                 previousRequestId = entry.requestId
               }
-            if (attempt < 2 && isRetryable(error)) continue
+            if (attempt < annotationValidationAttempts && isRetryable(error))
+              continue
             throw new ProviderBatchError(
               'Annotation request failed after bounded attempts',
               retryTelemetry,
@@ -389,7 +397,7 @@ export class OpenRouterLabeler implements LabelingAdapter {
             } satisfies RequestTelemetry
             retryTelemetry.push(failure)
             previousRequestId = response.telemetry.requestId
-            if (attempt === 2)
+            if (attempt === annotationValidationAttempts)
               throw new ProviderBatchError(
                 'Annotation response failed validation twice',
                 retryTelemetry,
@@ -428,7 +436,7 @@ const openCodeGoOpenAiModels = new Set([
 
 abstract class IndependentJudge implements JudgeAdapter {
   abstract readonly name: string
-  readonly maxChargeAttempts = 2
+  readonly maxChargeAttempts = judgeValidationAttempts
   protected abstract request(
     document: SyntheticDocument,
     signal?: AbortSignal,
@@ -460,7 +468,7 @@ abstract class IndependentJudge implements JudgeAdapter {
         const retryTelemetry: RequestTelemetry[] = []
         let previousRequestId: string | undefined
         let validationFeedback: string | undefined
-        for (let attempt = 1; attempt <= 2; attempt++) {
+        for (let attempt = 1; attempt <= judgeValidationAttempts; attempt++) {
           let response: {
             text: string
             telemetry: RequestTelemetry
@@ -482,7 +490,8 @@ abstract class IndependentJudge implements JudgeAdapter {
                 })
                 previousRequestId = entry.requestId
               }
-            if (attempt < 2 && isRetryable(error)) continue
+            if (attempt < judgeValidationAttempts && isRetryable(error))
+              continue
             throw new ProviderBatchError(
               'Judge request failed after bounded attempts',
               retryTelemetry,
@@ -523,7 +532,7 @@ abstract class IndependentJudge implements JudgeAdapter {
               retryOfRequestId: previousRequestId,
             })
             previousRequestId = response.telemetry.requestId
-            if (attempt === 2)
+            if (attempt === judgeValidationAttempts)
               throw new ProviderBatchError(
                 'Judge reference failed validation twice',
                 retryTelemetry,

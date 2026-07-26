@@ -8,6 +8,81 @@ export const tournamentCanaryVersion = 'synthetic-v2-tournament-canary:v1'
 // in a way that can alter real-model tournament qualification.
 export const tournamentCanaryContractVersion =
   'synthetic-v2-tournament-provider-contract:2026-07-22.15'
+// Comment-only or formatting changes may repin this hash without invalidating
+// paid receipts. Qualification changes require a version bump and a repin.
+export const tournamentCanaryContractSourceHash =
+  '3238a14bc2608db6dab6abfb66885a94a2cbca02db34fdc8ecac2370c432f1ab'
+
+export type CanarySmokeProfile = 'connectivity' | 'tournament-canary'
+
+export function canaryReceiptEligibility(
+  results: readonly unknown[],
+  profile: CanarySmokeProfile,
+  requestedCandidateId: string | undefined,
+) {
+  const reasons: string[] = []
+  if (profile !== 'tournament-canary')
+    reasons.push('run: profile is not tournament-canary')
+  if (requestedCandidateId !== undefined)
+    reasons.push(
+      requestedCandidateId
+        ? `run: candidate selection was limited to ${requestedCandidateId}`
+        : 'run: candidate selection used an empty candidate ID',
+    )
+  for (
+    let index = 0;
+    index < Math.max(results.length, reviewedCandidates.length);
+    index++
+  ) {
+    const value = results[index]
+    const expected = reviewedCandidates[index]
+    if (value === undefined) {
+      if (expected) reasons.push(`${expected.id}: result was not recorded`)
+      continue
+    }
+    const result =
+      value && typeof value === 'object'
+        ? (value as {
+            candidateId?: unknown
+            writer?: unknown
+            annotator?: unknown
+            status?: unknown
+            firstAttemptValid?: unknown
+          })
+        : undefined
+    const candidateId =
+      typeof result?.candidateId === 'string'
+        ? result.candidateId
+        : (expected?.id ?? `result-${index + 1}`)
+    if (!result) {
+      reasons.push(`${candidateId}: result is malformed`)
+      continue
+    }
+    if (
+      !expected ||
+      result.candidateId !== expected.id ||
+      result.writer !== expected.writer ||
+      result.annotator !== expected.annotator
+    )
+      reasons.push(
+        `${candidateId}: reviewed candidate configuration did not match`,
+      )
+    if (result.firstAttemptValid !== true)
+      reasons.push(
+        `${candidateId}: first-attempt provider contract was not valid`,
+      )
+    if (
+      result.status !== 'accepted' &&
+      result.status !== 'human_adjudication_required' &&
+      result.status !== 'candidate_quality_rejected'
+    )
+      reasons.push(
+        `${candidateId}: status ${String(result.status)} does not qualify`,
+      )
+  }
+
+  return { eligible: reasons.length === 0, reasons }
+}
 
 export type TournamentCanaryConfiguration = {
   primaryJudgeProvider: string
@@ -111,27 +186,17 @@ export async function assertMatchingTournamentCanary(
         artifact.primaryJudgeModel !== configuration.primaryJudgeModel ||
         artifact.disputeJudgeProvider !== configuration.disputeJudgeProvider ||
         artifact.disputeJudgeModel !== configuration.disputeJudgeModel ||
-        artifact.requestedCandidateId !== undefined ||
-        !Array.isArray(artifact.results) ||
-        artifact.results.length !== reviewedCandidates.length ||
-        canonicalHash(
-          artifact.results.map(
-            (result: {
-              candidateId?: string
-              writer?: string
-              annotator?: string
-            }) => ({
-              id: result.candidateId,
-              writer: result.writer,
-              annotator: result.annotator,
-              reviewed: true,
-            }),
-          ),
-        ) !== canonicalHash(reviewedCandidates) ||
+        !Array.isArray(artifact.results)
+      )
+        continue
+      if (
+        !canaryReceiptEligibility(
+          artifact.results,
+          artifact.profile,
+          artifact.requestedCandidateId,
+        ).eligible ||
         artifact.results.some(
           (result: {
-            status?: string
-            firstAttemptValid?: boolean
             requestTelemetry?: Array<{
               role?: string
               status?: string
@@ -144,7 +209,6 @@ export async function assertMatchingTournamentCanary(
               regenerationAttempts?: number
             }>
           }) =>
-            result.firstAttemptValid !== true ||
             !Array.isArray(result.requestTelemetry) ||
             ['writer', 'annotator', 'primary_judge', 'dispute_judge'].some(
               (role) =>
@@ -165,10 +229,7 @@ export async function assertMatchingTournamentCanary(
                 state.annotationAttempts !== 1 ||
                 state.repairAttempts !== 0 ||
                 state.regenerationAttempts !== 0,
-            ) ||
-            (result.status !== 'accepted' &&
-              result.status !== 'human_adjudication_required' &&
-              result.status !== 'candidate_quality_rejected'),
+            ),
         )
       )
         continue

@@ -16,14 +16,16 @@ import {
 import { PipelineExecutionError, runPipeline, terminalProgress } from './run'
 import {
   assertReviewedTournamentJudgeConfiguration,
+  canaryReceiptEligibility,
   createTournamentCanaryReceipt,
   tournamentCanarySpecificationHash,
+  type CanarySmokeProfile,
 } from './canary'
 import type { DocumentSpec, RequestTelemetry } from './types'
 
 const defaultSmokeCapGbp = 1
 const defaultGbpPerUsd = 0.79
-export type SmokeProfile = 'connectivity' | 'tournament-canary'
+export type SmokeProfile = CanarySmokeProfile
 
 export function firstAttemptContractValid(
   telemetry: RequestTelemetry[],
@@ -384,11 +386,19 @@ export async function main() {
   await writeText(outputPath, `${JSON.stringify(artifact)}\n`)
   console.log(`Synthetic v2 smoke artifact: ${outputPath}`)
   console.log(`Worst-case reserved spend: GBP ${estimatedMaxGbp.toFixed(6)}`)
-  if (failed)
-    throw new Error(
-      'Synthetic v2 smoke test recorded one or more failed candidates',
-    )
   if (profile === 'tournament-canary' && !requestedCandidateId) {
+    const receiptEligibility = canaryReceiptEligibility(
+      results,
+      profile,
+      requestedCandidateId,
+    )
+    if (!receiptEligibility.eligible) {
+      for (const reason of receiptEligibility.reasons)
+        console.error(`[synthetic-v2] tournament canary ineligible ${reason}`)
+      throw new Error(
+        'Synthetic v2 tournament canary did not qualify for a receipt',
+      )
+    }
     const receipt = createTournamentCanaryReceipt(
       {
         primaryJudgeProvider,
@@ -406,6 +416,10 @@ export async function main() {
     await writeText(receiptPath, `${JSON.stringify(receipt)}\n`)
     console.log(`Synthetic v2 tournament canary receipt: ${receiptPath}`)
   }
+  if (failed)
+    throw new Error(
+      'Synthetic v2 smoke test recorded one or more failed candidates',
+    )
 }
 
 async function loadPricing(path: string): Promise<PricingTable> {

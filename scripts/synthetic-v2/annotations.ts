@@ -91,7 +91,7 @@ export function parseAnnotationResponse(
   return canonical
 }
 
-const personCategoryPriority: Partial<
+export const personCategoryPriority: Partial<
   Record<SyntheticSpan['category'], number>
 > = {
   person_private: 1,

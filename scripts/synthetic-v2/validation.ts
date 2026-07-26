@@ -21,6 +21,8 @@ export type NearDuplicateSignature = {
   shingles: string[]
 }
 
+export const nearDuplicateSimilarityThreshold = 0.82
+
 export function normalizeGenerated(
   spec: DocumentSpec,
   generated: { text: string; generator: string },
@@ -63,6 +65,9 @@ export type CandidateQualityReason =
       category: SyntheticSpan['category']
     }
   | { code: 'hard_negative_contract_failed'; assertionId: string }
+  | { code: 'near_duplicate' }
+  | { code: 'cross_partition_duplicate' }
+  | { code: 'mechanical_supplement_miss' }
 
 export function candidateQualityReasons(
   document: SyntheticDocument,
@@ -125,9 +130,16 @@ export function assertDocumentMatchesSpec(
   assertStructuralDocumentBinding(document, spec)
   const first = candidateQualityReasons(document, spec)[0]
   if (!first) return
-  if (first.code === 'required_category_not_evidenced')
-    throw new Error(`${spec.id} omitted required category ${first.category}`)
-  throw new Error(`${first.assertionId} failed hard-negative contract`)
+  switch (first.code) {
+    case 'required_category_not_evidenced':
+      throw new Error(`${spec.id} omitted required category ${first.category}`)
+    case 'hard_negative_contract_failed':
+      throw new Error(`${first.assertionId} failed hard-negative contract`)
+    case 'near_duplicate':
+    case 'cross_partition_duplicate':
+    case 'mechanical_supplement_miss':
+      throw new Error(`${spec.id} failed candidate quality: ${first.code}`)
+  }
 }
 
 function assertStructuralDocumentBinding(
@@ -217,7 +229,7 @@ function similarity(left: Set<string>, right: Set<string>) {
 export class NearDuplicateIndex {
   private readonly entries = new Map<string, Set<string>>()
   constructor(
-    private readonly threshold = 0.82,
+    private readonly threshold = nearDuplicateSimilarityThreshold,
     signatures: NearDuplicateSignature[] = [],
   ) {
     for (const signature of signatures)

@@ -28,19 +28,26 @@ import {
   assembleTournamentCandidateRuns,
   assertConfiguredPricing,
   assertTournamentBudget,
+  candidateQualityTransitionReason,
   isCandidateQualityRejection,
   pendingAdjudicationArtifact,
+  pipelineCandidateQualityReasons,
   persistPendingAdjudications,
   PipelineExecutionError,
   resumePendingAdjudications,
   runPipeline,
   selectTournamentCandidate,
   stopFailedTournament,
+  tournamentFailureArtifact,
   type DocumentProcessingState,
   type TournamentCandidateCheckpointMetadata,
 } from './run'
 import { humanAdjudicationEvidenceHash, type QaEvidence } from './qa'
-import { contentHash } from './validation'
+import {
+  contentHash,
+  createAnnotatedCandidate,
+  NearDuplicateIndex,
+} from './validation'
 import type {
   DocumentSpec,
   GeneratorAdapter,
@@ -251,6 +258,120 @@ describe('pipeline paid fail-fast behavior', () => {
       requestTelemetry: [
         expect.objectContaining({ requestId: 'primary-paid-1' }),
       ],
+    })
+  })
+
+  it('preserves accepted evidence and per-document spend when a later near-duplicate stops the pipeline', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'synthetic-v2-ledger-'))
+    directories.push(root)
+    process.env.SYNTHETIC_V2_LEDGER = join(root, 'ledger.json')
+    const duplicateSpecs: DocumentSpec[] = ['duplicate-1', 'duplicate-2'].map(
+      (id) => ({
+        id,
+        docType: 'witness_statement',
+        requiredCategories: [],
+        register: 'formal_pleading',
+        difficulty: 'standard',
+        lengthWords: 10,
+        seed: id,
+        scenario: 'Synthetic fixture.',
+        hardNegatives: [],
+        matrixCells: [],
+      }),
+    )
+    const text =
+      'Fictional words one two three four five six seven eight nine ten.'
+    const writer: GeneratorAdapter = {
+      name: 'fake:writer',
+      model: 'writer',
+      maxChargeAttempts: 1,
+      generate: async (inputs) =>
+        inputs.map((spec) => ({
+          customId: spec.id,
+          text,
+          generator: 'writer',
+          usage: { inputTokens: 1, outputTokens: 1 },
+        })),
+    }
+    const labeler: LabelingAdapter = {
+      name: 'fake:labeler',
+      model: 'labeler',
+      maxChargeAttempts: 1,
+      label: async (inputs) =>
+        inputs.map(({ spec }) => ({
+          customId: spec.id,
+          spans: [],
+          generator: 'labeler',
+          usage: { inputTokens: 1, outputTokens: 1 },
+        })),
+      repair: async () => [],
+    }
+    const judge = (model: string): JudgeAdapter => ({
+      name: `fake:${model}`,
+      model,
+      maxChargeAttempts: 1,
+      judge: async (documents) =>
+        documents.map((entry) => ({
+          id: entry.id,
+          verdict: JSON.stringify({
+            id: entry.id,
+            proposedSpanDecisions: [],
+            missingSpans: [],
+            hardNegativeAssertions: [],
+            realismScore: 5,
+            confidence: 1,
+            rationale: 'Synthetic fixture.',
+          }),
+        })),
+    })
+    const pricing = Object.fromEntries(
+      ['fake:writer', 'fake:labeler', 'fake:primary', 'fake:dispute'].map(
+        (name) => [name, { inputUsdPerMillion: 1, outputUsdPerMillion: 1 }],
+      ),
+    )
+    let failure: unknown
+    try {
+      await runPipeline(
+        duplicateSpecs,
+        writer,
+        labeler,
+        judge('primary'),
+        judge('dispute'),
+        pricing,
+        [],
+        {
+          maxRegenerations: 0,
+          failFastOnTerminalState: true,
+          requireIndependentAdjudication: true,
+        },
+      )
+    } catch (error) {
+      failure = error
+    }
+    expect(failure).toBeInstanceOf(PipelineExecutionError)
+    if (!(failure instanceof PipelineExecutionError)) throw failure
+    expect(failure.acceptedDocuments.map((entry) => entry.id)).toEqual([
+      'duplicate-1',
+    ])
+    expect(failure.documentStates).toMatchObject([
+      { id: 'duplicate-1', status: 'accepted' },
+      { id: 'duplicate-2', status: 'failed' },
+    ])
+    expect(failure.documentSpendGbp).toHaveLength(2)
+    expect(failure.documentSpendGbp.every((entry) => entry.spendGbp > 0)).toBe(
+      true,
+    )
+
+    expect(
+      tournamentFailureArtifact('fixture-candidate', duplicateSpecs, failure),
+    ).toMatchObject({
+      candidateId: 'fixture-candidate',
+      acceptedDocuments: [{ id: 'duplicate-1' }],
+      documentStates: [
+        { id: 'duplicate-1', status: 'accepted' },
+        { id: 'duplicate-2', status: 'failed' },
+      ],
+      documentSpendGbp: failure.documentSpendGbp,
     })
   })
 
@@ -511,6 +632,53 @@ describe('tournament spend preflight', () => {
 })
 
 describe('tournament failure classification', () => {
+  it('emits distinct deterministic candidate-quality reason codes', () => {
+    const spec: DocumentSpec = {
+      id: 'quality-reasons',
+      docType: 'witness_statement',
+      requiredCategories: [],
+      register: 'formal_pleading',
+      difficulty: 'standard',
+      lengthWords: 10,
+      seed: 'quality-reasons',
+      scenario: 'Synthetic fixture.',
+      hardNegatives: [],
+      matrixCells: [],
+    }
+    const candidate = createAnnotatedCandidate(
+      spec,
+      {
+        text: 'Contact jane.smith@example.com for one two three four five six.',
+        generator: 'writer',
+      },
+      [],
+    )
+    const duplicates = new NearDuplicateIndex()
+    duplicates.add({ ...candidate, id: 'previous-document' })
+
+    expect(
+      pipelineCandidateQualityReasons(
+        candidate,
+        spec,
+        new Set([candidate.contentHash]),
+        duplicates,
+      ).map((reason) => ({
+        code: reason.code,
+        transitionReason: candidateQualityTransitionReason(reason),
+      })),
+    ).toEqual([
+      {
+        code: 'mechanical_supplement_miss',
+        transitionReason: 'mechanical_supplement_miss',
+      },
+      {
+        code: 'cross_partition_duplicate',
+        transitionReason: 'cross_partition_duplicate',
+      },
+      { code: 'near_duplicate', transitionReason: 'near_duplicate' },
+    ])
+  })
+
   it('separates candidate validation rejection from operational errors', () => {
     expect(
       isCandidateQualityRejection(
@@ -559,23 +727,26 @@ describe('tournament terminal failure handling', () => {
       status: 'success' as const,
       attempt: 1,
     }
+    const documentStates = [processingState('tournament-00001', 'accepted')]
     const accounted = accountTournamentError(new Error('scoring failed'), {
       documents: [],
       firstPassAnnotations: new Map(),
       finalPassAnnotations: new Map(),
       pendingAdjudications: [],
       qa: new Map(),
-      documentStates: [],
+      documentStates,
+      documentSpendGbp: [{ specId: 'tournament-00001', spendGbp: 1.25 }],
       usage: { inputTokens: 10, outputTokens: 5 },
-      actualGbp: 0.25,
+      actualGbp: 1.25,
       requestTelemetry: [telemetry],
     })
     expect(accounted).toBeInstanceOf(PipelineExecutionError)
     expect(accounted).toMatchObject({
       message: 'scoring failed',
       usage: { inputTokens: 10, outputTokens: 5 },
-      actualGbp: 0.25,
+      actualGbp: 1.25,
       requestTelemetry: [telemetry],
+      documentStates,
     })
   })
 
