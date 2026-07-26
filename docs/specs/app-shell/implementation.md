@@ -6,7 +6,7 @@ The frozen surface this plan delivers is [contract.md](contract.md).
 
 ## Design-token derivation
 
-**Brand signal (from `obiter-wordmark.svg`):** fill `#F5F2EB` (warm cream), Cormorant Garamond serif, wide tracking (`letter-spacing: 22`). This is an editorial, ink-on-paper identity — not a cold zinc/SaaS palette. The current shell's pure-black background is explicitly rejected (light default, FR6).
+**Brand signal (from `docs/brand/obiter-wordmark.svg`):** fill `#F5F2EB` (warm cream), Cormorant Garamond serif, wide tracking (`letter-spacing: 22`). This is an editorial, ink-on-paper identity — not a cold zinc/SaaS palette. The current shell's pure-black background is explicitly rejected (light default, FR6).
 
 **Direction:** warm-neutral "ink on paper" system. Warm off-white/cream surfaces in light; warm near-black charcoal ink (never pure `#000`); one restrained, desaturated brand accent. The design skills' neutrals/contrast/accessibility/density rules apply; their motion/flash rules (Framer, magnetic buttons, bento choreography, OLED black) are **overridden** by the PRD ("calm, dense, professional; no gratuitous motion"):
 
