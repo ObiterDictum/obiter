@@ -4,7 +4,7 @@
 
 Rebuild `packages/app-shell` from the ground up: a consistent design system on Base UI primitives, exactly one icon pack, design tokens instead of 3,200 lines of hand-rolled CSS, and — critically — real API wiring throughout. The current shell renders hardcoded Phase 0 fixture data on every surface except Search; after this rebuild, every visible screen is backed by the real API and the fixture layer (`createPhaseZeroShellSnapshot`, demo current-user) is deleted.
 
-This PRD is also a coordination document. The shell rebuild runs **in parallel** with the Redact feature track ([Redact PRD 2: Review and Output](redact-2-review-output.md)), built by separate agents. The two tracks meet at the **component contract** defined below: the shell team freezes the contract at Milestone 1, and the Redact review UI builds only against contract exports, never against shell internals.
+This PRD is also a coordination document. The shell rebuild runs **in parallel** with the Redact feature track ([Redact PRD 2: Review and Output](archive/redact-2-review-output.md)), built by separate agents. The two tracks meet at the **component contract** defined below: the shell team freezes the contract at Milestone 1, and the Redact review UI builds only against contract exports, never against shell internals.
 
 ## Problem
 
