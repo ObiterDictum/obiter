@@ -1,6 +1,6 @@
 # Obiter Docs
 
-These documents break the original [guide.md](C:\Users\karl-\Documents\source\Obiter\guide.md) into smaller, reusable references for product, engineering, and company planning.
+These documents break the original [guide.md](guide.md) into smaller, reusable references for product, engineering, and company planning.
 
 ## Documents
 

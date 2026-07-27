@@ -12,7 +12,7 @@ Before writing any code, read these files in order:
 2. `RULES.md` — coding standards
 3. `TESTING.md` — test expectations
 4. `PR.md` — PR template and style
-5. `guide.md` §8 — full data model
+5. `docs/guide.md` §8 — full data model
 6. Existing patterns:
    - `services/api/src/app.ts` — route structure, error handling, middleware
    - `services/api/src/database.ts` — DB query pattern (Pool, raw SQL)
