@@ -13,6 +13,7 @@ They complement the shorter implementation specs under `docs/specs/`.
 - [Verification Evidence](verification-evidence.md)
 - [Pi Agent Framework](pi-agent-framework.md)
 - [Redact PRD 4: Detection Integrity and Hardening](redact-4-hardening.md)
+- [Repository Split](repository-split.md)
 - [Platform Deletion](platform-deletion.md)
 
 Delivered and superseded PRDs are in [archive/](archive/README.md), kept for the decision record. Redact PRDs 1 to 3 are delivered; their outstanding items are carried forward in Redact PRD 4.
