@@ -1,6 +1,7 @@
 import type { Pool } from 'pg'
 import { appendAuditLog } from './database'
 import {
+  detectionModeSchema,
   spanCategorySchema,
   spanConfidenceSchema,
   spanDecisionSchema,
@@ -8,6 +9,7 @@ import {
   spanSuggestionSchema,
 } from '@obiter/contracts'
 import type {
+  DetectionMode,
   OutputMode,
   RedactionPolicyMode,
   RedactionRunStatus,
@@ -36,6 +38,7 @@ export interface RedactionRunRecord {
   outputArtifactId: string | null
   summary: RunSummary & { tokenMap?: TokenMap; outputMode?: OutputMode }
   detectorVersion: string | null
+  detectionMode: DetectionMode
   createdBy: string
   createdAt: string
   updatedAt: string
@@ -59,6 +62,7 @@ interface RedactionRunRow {
   output_artifact_id: string | null
   summary_json: unknown
   detector_version: string | null
+  detection_mode: unknown
   created_by: string
   created_at: Date | string
   updated_at: Date | string
@@ -75,7 +79,7 @@ interface ArtifactRecord {
 const columns = `run.id, run.organisation_id, run.matter_id, matter.name as matter_name, run.document_id,
   run.document_version_id, run.source_filename, run.source_text_object_key, run.status, run.policy_mode,
   run.spans_json, run.decisions_json, run.output_artifact_id, run.summary_json, run.detector_version,
-  run.created_by, run.created_at, run.updated_at, run.deleted_at, run.deleted_by`
+  run.detection_mode, run.created_by, run.created_at, run.updated_at, run.deleted_at, run.deleted_by`
 const fromRuns =
   'from redaction_runs run left join matters matter on matter.id = run.matter_id and matter.organisation_id = run.organisation_id'
 
@@ -173,6 +177,7 @@ function mapRun(row: RedactionRunRow): RedactionRunRecord {
     outputArtifactId: row.output_artifact_id,
     summary: summary as RedactionRunRecord['summary'],
     detectorVersion: row.detector_version,
+    detectionMode: detectionModeSchema.parse(row.detection_mode),
     createdBy: row.created_by,
     createdAt: timestamp(row.created_at),
     updatedAt: timestamp(row.updated_at),
@@ -309,6 +314,7 @@ export async function createRedactionRun(input: {
   sourceTextObjectKey: string | null
   spans: RedactionSpan[]
   detectorVersion: string
+  detectionMode: DetectionMode
   policyMode: RedactionPolicyMode
   matterId?: string
   documentId?: string
@@ -323,11 +329,11 @@ export async function createRedactionRun(input: {
       `
         insert into redaction_runs (
           id, organisation_id, matter_id, document_id, document_version_id, source_filename, source_text_object_key,
-          status, policy_mode, spans_json, decisions_json, summary_json, detector_version, created_by, created_at, updated_at
-        ) values ($1, $2, $3, $4, $5, $6, $7, 'ready_for_review', $8, $9::jsonb, '{}'::jsonb, $10::jsonb, $11, $12, now(), now())
+          status, policy_mode, spans_json, decisions_json, summary_json, detector_version, detection_mode, created_by, created_at, updated_at
+        ) values ($1, $2, $3, $4, $5, $6, $7, 'ready_for_review', $8, $9::jsonb, '{}'::jsonb, $10::jsonb, $11, $12, $13, now(), now())
         returning id, organisation_id, matter_id, null::text as matter_name, document_id, document_version_id,
           source_filename, source_text_object_key, status, policy_mode, spans_json, decisions_json, output_artifact_id,
-          summary_json, detector_version, created_by, created_at, updated_at, deleted_at, deleted_by
+          summary_json, detector_version, detection_mode, created_by, created_at, updated_at, deleted_at, deleted_by
       `,
       [
         input.id,
@@ -341,6 +347,7 @@ export async function createRedactionRun(input: {
         JSON.stringify(input.spans),
         JSON.stringify(computeSummary(input.spans, {})),
         input.detectorVersion,
+        input.detectionMode,
         input.userId,
       ],
     )
@@ -432,7 +439,7 @@ export async function recordSpanDecision(input: {
     }
     const summary = computeSummary(run.spans, decisions)
     const updated = await client.query<RedactionRunRow>(
-      `update redaction_runs set status = case when status = 'ready_for_review' then 'reviewing' else status end, decisions_json = $3::jsonb, summary_json = $4::jsonb, updated_at = now() where id = $1 and organisation_id = $2 returning id, organisation_id, matter_id, null::text as matter_name, document_id, document_version_id, source_filename, source_text_object_key, status, policy_mode, spans_json, decisions_json, output_artifact_id, summary_json, detector_version, created_by, created_at, updated_at, deleted_at, deleted_by`,
+      `update redaction_runs set status = case when status = 'ready_for_review' then 'reviewing' else status end, decisions_json = $3::jsonb, summary_json = $4::jsonb, updated_at = now() where id = $1 and organisation_id = $2 returning id, organisation_id, matter_id, null::text as matter_name, document_id, document_version_id, source_filename, source_text_object_key, status, policy_mode, spans_json, decisions_json, output_artifact_id, summary_json, detector_version, detection_mode, created_by, created_at, updated_at, deleted_at, deleted_by`,
       [
         run.id,
         run.organisationId,
@@ -457,6 +464,9 @@ export async function finalizeRedactionRun(input: {
   outputMode: OutputMode
   tokenMap: TokenMap
   artifactId: string
+  userId: string
+  requestId: string
+  degradedDetectionAcknowledged: boolean
 }) {
   const client = await input.pool.connect()
   try {
@@ -477,6 +487,13 @@ export async function finalizeRedactionRun(input: {
     if (run.status !== 'ready_for_review' && run.status !== 'reviewing') {
       await client.query('rollback')
       return { kind: 'not_reviewable' as const }
+    }
+    if (
+      run.detectionMode === 'heuristics+supplement' &&
+      !input.degradedDetectionAcknowledged
+    ) {
+      await client.query('rollback')
+      return { kind: 'acknowledgement_required' as const }
     }
     const objectKey = run.matterId
       ? `org/${run.organisationId}/matters/${run.matterId}/artifacts/${input.artifactId}`
@@ -499,13 +516,33 @@ export async function finalizeRedactionRun(input: {
       outputMode: input.outputMode,
     }
     const updated = await client.query<RedactionRunRow>(
-      `update redaction_runs set status = 'finalized', output_artifact_id = $3, summary_json = $4::jsonb, updated_at = now() where id = $1 and organisation_id = $2 returning id, organisation_id, matter_id, null::text as matter_name, document_id, document_version_id, source_filename, source_text_object_key, status, policy_mode, spans_json, decisions_json, output_artifact_id, summary_json, detector_version, created_by, created_at, updated_at, deleted_at, deleted_by`,
+      `update redaction_runs set status = 'finalized', output_artifact_id = $3, summary_json = $4::jsonb, updated_at = now() where id = $1 and organisation_id = $2 returning id, organisation_id, matter_id, null::text as matter_name, document_id, document_version_id, source_filename, source_text_object_key, status, policy_mode, spans_json, decisions_json, output_artifact_id, summary_json, detector_version, detection_mode, created_by, created_at, updated_at, deleted_at, deleted_by`,
       [run.id, run.organisationId, input.artifactId, JSON.stringify(summary)],
     )
+    const finalizedRun = mapRun(updated.rows[0])
+    await appendAuditLog(client, {
+      organisationId: input.organisationId,
+      userId: input.userId,
+      entityType: 'redaction_run',
+      entityId: finalizedRun.id,
+      action: 'redaction.finalize',
+      metadata: {
+        outputMode: input.outputMode,
+        detectionMode: finalizedRun.detectionMode,
+        degradedDetectionAcknowledged:
+          finalizedRun.detectionMode === 'heuristics+supplement' &&
+          input.degradedDetectionAcknowledged === true,
+        artifactId: artifact.rows[0].id,
+        spanCount: finalizedRun.summary.totalSpans,
+        reviewedCount: finalizedRun.summary.reviewedCount,
+        unreviewedCount: finalizedRun.summary.unreviewedCount,
+      },
+      requestId: input.requestId,
+    })
     await client.query('commit')
     return {
       kind: 'finalized' as const,
-      run: mapRun(updated.rows[0]),
+      run: finalizedRun,
       artifact: {
         id: artifact.rows[0].id,
         objectKey: artifact.rows[0].object_key,
@@ -605,7 +642,7 @@ export async function softDeleteRedactionRun(
         returning id, organisation_id, matter_id, null::text as matter_name, document_id,
           document_version_id, source_filename, source_text_object_key, status, policy_mode,
           spans_json, decisions_json, output_artifact_id, summary_json, detector_version,
-          created_by, created_at, updated_at, deleted_at, deleted_by
+          detection_mode, created_by, created_at, updated_at, deleted_at, deleted_by
       `,
       [input.runId, input.organisationId, input.userId],
     )
@@ -714,7 +751,7 @@ export async function restoreRedactionRunWithAudit(
         returning id, organisation_id, matter_id, null::text as matter_name, document_id,
           document_version_id, source_filename, source_text_object_key, status, policy_mode,
           spans_json, decisions_json, output_artifact_id, summary_json, detector_version,
-          created_by, created_at, updated_at, deleted_at, deleted_by
+          detection_mode, created_by, created_at, updated_at, deleted_at, deleted_by
       `,
       [input.runId, input.organisationId, cascadeTimestamp],
     )

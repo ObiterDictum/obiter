@@ -82,9 +82,9 @@ This matters for tuning detection recall without a deploy, and for pointing a te
 
 ### FR3: Reconcile the failure contract
 
-- **FR3.1.** The shipped degrade-rather-fail behaviour MUST be recorded as the intended contract, superseding [Redact 1](archive/redact-1-detection.md) F6, or the code MUST be changed to fail closed. The current state, where the spec says one thing and the code does another, is not acceptable in either direction.
-- **FR3.2.** Recommended resolution: keep degrading, because a partial result the reviewer can act on beats a hard failure, and record the deviation explicitly. This is contingent on FR1 and FR2 landing, which is what makes degradation safe.
-- **FR3.3.** `redaction_detection_failed` MUST remain the surface for failures that are not recoverable by degrading, such as an unreadable document.
+- **FR3.1.** Degrade rather than fail is the intended contract for model load, inference and recoverable post-inference processing failures. The detector MUST discard unusable model output, complete with heuristics and the UK supplement, persist `heuristics+supplement` as its structured mode, and require the visibility and acknowledgement controls in FR1 and FR2. This supersedes [Redact 1](archive/redact-1-detection.md) F6.
+- **FR3.2.** A partial result the reviewer can act on is preferable to a hard failure only when the degraded state is explicit. The detector version remains provenance and MUST NOT be parsed by callers to discover this state.
+- **FR3.3.** `redaction_detection_failed` remains the 500 surface for internal detection pipeline failures that are not recoverable by degrading. Corrupt or unreadable uploads are client input and remain `validation_failed` responses with status 400.
 
 ### FR4: Detection configuration
 

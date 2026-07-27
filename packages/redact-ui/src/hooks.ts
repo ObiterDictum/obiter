@@ -125,10 +125,10 @@ export function useSpanDecision(runId: string) {
 export function useFinalizeRun(runId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ outputMode }: FinalizeInput) =>
+    mutationFn: (input: FinalizeInput) =>
       apiFetch<FinalizeResponse>(`/api/redaction-runs/${runId}/finalize`, {
         method: 'POST',
-        body: JSON.stringify({ outputMode }),
+        body: JSON.stringify(input),
       }),
     onSuccess: ({ run }) => {
       // Immediate run detail update (status → finalized, outputArtifactId, summary).

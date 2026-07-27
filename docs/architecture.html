@@ -2282,7 +2282,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>9 migrations, 0001 to 0010, 0008 withdrawn</dd>
+                <dd>10 migrations, 0001 to 0011, 0008 withdrawn</dd>
               </dl>
             </article>
           </div>
@@ -3056,10 +3056,10 @@
                 <tr>
                   <td class="id">redaction_runs</td>
                   <td>
-                    Spans, decisions, summary, detector version, output
+                    Spans, decisions, summary, detector version and mode, output
                     artifact. Standalone since 0007.
                   </td>
-                  <td class="id">0005, 0006, 0007, 0010</td>
+                  <td class="id">0005, 0006, 0007, 0010, 0011</td>
                 </tr>
               </tbody>
             </table>
@@ -3921,13 +3921,13 @@
             </li>
           </ol>
           <div class="callout risk">
-            <b>Degraded detection is invisible.</b> If the model fails to load,
-            step 3 is skipped and the run completes on heuristics alone,
-            recording <code>mode=heuristics+supplement</code> inside
-            <code>detectorVersion</code>. No view renders it, so a reviewer can
-            finalize believing model detection ran. Heuristics do not find
-            names, addresses or contextual dates of birth. Tracked in Redact PRD
-            4.
+            <b>Degraded detection stays actionable and visible.</b> If the model
+            fails to load, inference fails, or model span processing cannot
+            complete, step 3 is skipped and the run completes on heuristics and
+            the UK supplement. The structured <code>detectionMode</code> records
+            <code>heuristics+supplement</code>, review and list surfaces warn
+            that names, addresses and dates of birth were not automatically
+            detected, and finalize requires explicit acknowledgement.
           </div>
           <div class="callout">
             <b>Finalize is fail-closed.</b> If a span's stored text no longer
@@ -4886,17 +4886,6 @@
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td>
-                    Degraded detection recorded only inside
-                    <code>detectorVersion</code>
-                  </td>
-                  <td>
-                    A reviewer can finalize believing model detection ran when
-                    only regular expressions did
-                  </td>
-                  <td class="id">redact-4-hardening.md</td>
-                </tr>
                 <tr>
                   <td>Search matching is substring-based</td>
                   <td>

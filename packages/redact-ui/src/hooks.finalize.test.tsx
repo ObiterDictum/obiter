@@ -47,6 +47,7 @@ const baseRun: RedactionRun = {
   },
   outputArtifactId: null,
   detectorVersion: null,
+  detectionMode: 'model+supplement',
   createdAt: '2026-07-09T00:00:00.000Z',
   updatedAt: '2026-07-09T00:00:00.000Z',
 }
@@ -98,6 +99,13 @@ describe('useFinalizeRun cache updates', () => {
       expect(client.getQueryData(['redaction-run', 'red_1'])).toEqual(finalized)
     })
 
+    expect(apiFetch).toHaveBeenCalledWith(
+      '/api/redaction-runs/red_1/finalize',
+      {
+        method: 'POST',
+        body: JSON.stringify({ outputMode: 'redacted' }),
+      },
+    )
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: ['redaction-run', 'red_1'],
     })

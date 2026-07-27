@@ -13,6 +13,7 @@ import {
   mergeSpans,
   supplementSpans,
 } from '@obiter/redaction-policy'
+import type { DetectionMode } from '@obiter/contracts'
 import type { RedactionSpan } from '@obiter/redaction-policy'
 
 const PACKAGE_VERSION = '0.1.3-vendored'
@@ -42,8 +43,20 @@ function config() {
   }
 }
 
-function version(model: string, revision: string, degraded: boolean) {
-  return `rampart-inference@${PACKAGE_VERSION};model=${model}@${revision};supplement@1;mode=${degraded ? 'heuristics+supplement' : 'model+supplement'}`
+export function detectionMode(degraded: boolean): DetectionMode {
+  return degraded ? 'heuristics+supplement' : 'model+supplement'
+}
+
+function version(model: string, revision: string, mode: DetectionMode) {
+  return `rampart-inference@${PACKAGE_VERSION};model=${model}@${revision};supplement@1;mode=${mode}`
+}
+
+function provenance(model: string, revision: string, degraded: boolean) {
+  const mode = detectionMode(degraded)
+  return {
+    detectorVersion: version(model, revision, mode),
+    degraded,
+  }
 }
 
 export function createRedactionDetector(
@@ -87,8 +100,7 @@ export function createRedactionDetector(
     if (!text)
       return {
         spans: supplement,
-        detectorVersion: version(options.model, options.revision, false),
-        degraded: false,
+        ...provenance(options.model, options.revision, false),
       }
     const started = performance.now()
     // Heuristics do not require the model and remain available when it fails.
@@ -118,8 +130,7 @@ export function createRedactionDetector(
       })
       return {
         spans,
-        detectorVersion: version(options.model, options.revision, false),
-        degraded: false,
+        ...provenance(options.model, options.revision, false),
       }
     } catch (error) {
       // A concurrent request may already have installed a newer load promise.
@@ -138,8 +149,7 @@ export function createRedactionDetector(
       })
       return {
         spans: mergeSpans(rampart, supplement),
-        detectorVersion: version(options.model, options.revision, true),
-        degraded: true,
+        ...provenance(options.model, options.revision, true),
       }
     }
   }

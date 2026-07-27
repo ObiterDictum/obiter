@@ -1,5 +1,6 @@
 import type {
-  OutputMode,
+  DetectionMode,
+  RedactionFinalizeInput,
   RedactionPolicyMode,
   RedactionRunStatus,
   SpanDecision,
@@ -24,6 +25,7 @@ export interface RedactionRun {
   summary: RunSummary
   outputArtifactId: string | null
   detectorVersion: string | null
+  detectionMode: DetectionMode
   createdAt: string
   updatedAt: string
 }
@@ -38,6 +40,4 @@ export interface SpanDecisionInput {
   spanId: string
   decision: SpanDecision
 }
-export interface FinalizeInput {
-  outputMode: OutputMode
-}
+export type FinalizeInput = RedactionFinalizeInput

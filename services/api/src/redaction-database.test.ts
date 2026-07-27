@@ -39,6 +39,7 @@ function runRow(overrides: Record<string, unknown> = {}) {
     output_artifact_id: null,
     summary_json: {},
     detector_version: 'detector-1',
+    detection_mode: 'model+supplement',
     created_by: 'usr_1',
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
@@ -115,6 +116,42 @@ describe('getDocumentRedactionSource', () => {
   })
 })
 
+describe('createRedactionRun', () => {
+  it('persists and returns the structured detection mode', async () => {
+    const queries: QueryCall[] = []
+    const pool = {
+      query: async (sql: string, params?: unknown[]) => {
+        queries.push([sql, params])
+        return {
+          rows: [
+            runRow({
+              spans_json: [],
+              detection_mode: 'heuristics+supplement',
+            }),
+          ],
+        }
+      },
+    } as unknown as Pool
+
+    const created = await createRedactionRun({
+      pool,
+      id: 'red_1',
+      organisationId: 'org_1',
+      userId: 'usr_1',
+      sourceFilename: 'source.txt',
+      sourceTextObjectKey: 'org/org_1/redaction-runs/red_1/source',
+      spans: [],
+      detectorVersion: 'detector-1;mode=heuristics+supplement',
+      detectionMode: 'heuristics+supplement',
+      policyMode: 'internal_ai_minimisation',
+    })
+
+    expect(created?.detectionMode).toBe('heuristics+supplement')
+    expect(queries[0][0]).toContain('detection_mode')
+    expect(queries[0][1]?.[11]).toBe('heuristics+supplement')
+  })
+})
+
 describe('redaction run write guards', () => {
   it('treats a soft-deleted run as not found when recording a decision', async () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
@@ -156,6 +193,9 @@ describe('redaction run write guards', () => {
         outputMode: 'redacted',
         tokenMap: {},
         artifactId: 'art_1',
+        userId: 'usr_1',
+        requestId: 'req_1',
+        degradedDetectionAcknowledged: false,
       }),
     ).resolves.toEqual({ kind: 'not_found' })
 
@@ -164,6 +204,74 @@ describe('redaction run write guards', () => {
     expect(calls.some(([sql]) => sql.includes('insert into artifacts'))).toBe(
       false,
     )
+  })
+
+  it('rechecks degraded acknowledgement under the finalization row lock', async () => {
+    const { pool, calls } = createTransactionalPool(async (sql) => {
+      if (sql === 'begin' || sql === 'rollback') return { rows: [] }
+      if (sql.includes('for update of run')) {
+        return {
+          rows: [runRow({ detection_mode: 'heuristics+supplement' })],
+        }
+      }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    await expect(
+      finalizeRedactionRun({
+        pool,
+        organisationId: 'org_1',
+        runId: 'red_1',
+        outputMode: 'redacted',
+        tokenMap: {},
+        artifactId: 'art_1',
+        userId: 'usr_1',
+        requestId: 'req_1',
+        degradedDetectionAcknowledged: false,
+      }),
+    ).resolves.toEqual({ kind: 'acknowledgement_required' })
+
+    expect(calls.some(([sql]) => sql.includes('insert into artifacts'))).toBe(
+      false,
+    )
+  })
+
+  it('rolls finalization back when its audit write fails', async () => {
+    const { pool, calls } = createTransactionalPool(async (sql) => {
+      if (sql === 'begin' || sql === 'rollback') return { rows: [] }
+      if (sql.includes('for update of run')) return { rows: [runRow()] }
+      if (sql.includes('insert into artifacts')) {
+        return {
+          rows: [{ id: 'art_1', object_key: 'org/org_1/artifacts/art_1' }],
+        }
+      }
+      if (sql.includes('update redaction_runs')) {
+        return {
+          rows: [runRow({ status: 'finalized', output_artifact_id: 'art_1' })],
+        }
+      }
+      if (sql.includes('insert into audit_logs')) {
+        throw new Error('audit unavailable')
+      }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    await expect(
+      finalizeRedactionRun({
+        pool,
+        organisationId: 'org_1',
+        runId: 'red_1',
+        outputMode: 'redacted',
+        tokenMap: {},
+        artifactId: 'art_1',
+        userId: 'usr_1',
+        requestId: 'req_1',
+        degradedDetectionAcknowledged: false,
+      }),
+    ).rejects.toThrow('audit unavailable')
+
+    expect(calls.some(([sql]) => sql === 'commit')).toBe(false)
+    expect(calls.some(([sql]) => sql === 'rollback')).toBe(true)
   })
 
   it('returns deletion columns after recording a decision', async () => {
@@ -205,6 +313,7 @@ describe('redaction run write guards', () => {
           rows: [runRow({ status: 'finalized', output_artifact_id: 'art_1' })],
         }
       }
+      if (sql.includes('insert into audit_logs')) return { rows: [] }
       throw new Error(`Unexpected SQL: ${sql}`)
     })
 
@@ -215,6 +324,9 @@ describe('redaction run write guards', () => {
       outputMode: 'redacted',
       tokenMap: {},
       artifactId: 'art_1',
+      userId: 'usr_1',
+      requestId: 'req_1',
+      degradedDetectionAcknowledged: false,
     })
 
     expect(result.kind).toBe('finalized')
@@ -243,6 +355,7 @@ describe('redaction run write guards', () => {
         sourceTextObjectKey: null,
         spans: [],
         detectorVersion: 'detector-1',
+        detectionMode: 'model+supplement',
         policyMode: 'internal_ai_minimisation',
         matterId: 'mtr_1',
         documentId: 'doc_1',
