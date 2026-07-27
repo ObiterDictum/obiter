@@ -2,7 +2,11 @@
 
 > ## Implementation status (verified against the codebase, July 2026)
 >
-> This build plan describes the **intended** Rampart model integration. The Rampart pipeline (the `@nationaldesignstudio/rampart` dependency, `services/api/src/redaction-detection.ts`, `guard.protect()`, the Effect TS pilot) is **NOT YET IMPLEMENTED** — see the banner on [Redact PRD 1](../../prds/redact-1-detection.md). Detection today runs the deterministic UK supplement only. This plan is retained as the design the model-integration track will build from; present-tense wording below ("runs in-process", "M1: Rampart running in-process") describes the design target, not the current code.
+> **Delivered (verified 2026-07-27).** This banner previously said the Rampart pipeline was not implemented. That is out of date. Model-based detection ships: `packages/rampart-inference/` vendors an ONNX NER classifier against Obiter's pinned `qarlus/rampart` mirror, and `services/api/src/redaction-detection.ts` runs it as `model+supplement`, falling back to `heuristics+supplement` when the model is unavailable.
+>
+> Two deviations from the original design: the Effect TS pilot never happened, so the module is plain TypeScript (see `docs/architecture.md`), and detection is not environment-configurable as F30 required. Outstanding work is tracked in [Redact PRD 4](../../prds/redact-4-hardening.md).
+>
+> This plan is retained as the design record. Where it disagrees with the code, the code is correct.
 
 ## Context
 

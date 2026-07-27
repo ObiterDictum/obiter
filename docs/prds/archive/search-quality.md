@@ -4,7 +4,7 @@
 >
 > This document predates the Find Case Law licence and is retained for history only. Do not build from it.
 >
-> What changed: the licence position is now settled, so the corpus can be held rather than fetched opportunistically; matching was found to be substring-based rather than word-based, which is a correctness defect this document treated as a ranking gap; semantic retrieval is now out of scope entirely rather than deferred; and Meilisearch is the sole query layer, retiring the PostgreSQL fallback tier described below.
+> What changed: the executed licence grants both copying and computational analysis, so the corpus can be held rather than fetched opportunistically and semantic retrieval is deferred by choice rather than blocked; matching was found to be substring-based rather than word-based, which is a correctness defect this document treated as a ranking gap; and Meilisearch is the sole query layer, retiring the PostgreSQL fallback tier described below.
 
 ## Summary
 

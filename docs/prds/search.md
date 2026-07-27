@@ -18,7 +18,7 @@ Recorded here so they are not relitigated in implementation.
 
 | Decision               | Choice                                                                         |
 | ---------------------- | ------------------------------------------------------------------------------ |
-| Retrieval model        | Lexical only. Semantic and vector retrieval are out of scope entirely.         |
+| Retrieval model        | Lexical first. Semantic retrieval is licensed and deferred, not prohibited.    |
 | Query layer            | Meilisearch, sole.                                                             |
 | System of record       | PostgreSQL.                                                                    |
 | Postgres tsvector tier | Retired once the benchmark validates parity or better.                         |
@@ -60,7 +60,7 @@ Public API and tool consumers are explicitly later. The internal API contract is
 
 ## Non-Goals
 
-- Semantic or vector retrieval, embeddings over judgment text, and any model training or fine-tuning on judgments. These require the computational-analysis licence, which has not been applied for. If wanted later, that is a separate PRD with the licence as a hard dependency. The product consequence is accepted: natural-language question queries will not work well, because lexical matching cannot bridge question phrasing to the paragraph answering it.
+- Semantic or vector retrieval, and embeddings over judgment text. **Deferred by choice, not by licence.** An earlier draft of this document recorded these as prohibited pending a separate computational-analysis licence. That was wrong: the executed Find Case Law licence grants the right "to undertake computational analysis of the Licensed Material for the Purpose", and the Purpose expressly covers case search and verification facilities. They are deferred because exact and lexical retrieval must be measured and stable before a similarity signal is layered on top, which is the ordering the retrieval section sets out. Until then the product consequence stands: natural-language question queries will not work well, because lexical matching cannot bridge question phrasing to the paragraph answering it.
 - Legislation, statutory instruments and provision-level retrieval. Separate PRD. Legislation needs version, commencement and `asAtDate` modelling that must not be forced through the judgment shape.
 - Public `/api/v1/legal/*` routes, SDK and MCP readiness.
 - Research answer generation and Verify proposition support.
@@ -119,14 +119,39 @@ The design accommodates this without building it: deduplication resolves to one 
 
 ## Licence And Provenance
 
-Licence class exists nowhere in the code today. The only trace is a hardcoded string in a React view. That is insufficient for a single provider and untenable for several.
+### What the executed licence grants
 
-Requirements:
+Find Case Law transactional licence, executed 15 July 2026, five-year term, worldwide, royalty-free, non-exclusive, non-transferable. The Rights are:
+
+> i) to copy, publish, distribute and transmit the Licensed Material for the Purpose;
+> ii) to undertake computational analysis of the Licensed Material for the Purpose.
+
+The Purpose is publishing the current version on obiter.dev and providing case search and verification facilities for legal professionals, academics and AI researchers.
+
+So bulk retrieval and local storage are permitted, and so is computational analysis. There is no separate machine-learning licence to obtain. The corpus decisions in this document rest on that grant.
+
+**Personal data is excluded.** The licence does not cover personal data contained in the material, and states expressly that it is neither a data sharing agreement nor a processing agreement for it. The material is licensed; the personal data inside it is not. That bounds what computational analysis may do and is an argument for applying Redact to any judgment text entering an analysis path.
+
+### Compliance obligations
+
+These are contractual, not preferences. Each is currently unimplemented.
+
+- **Prevent indexing and scraping.** Restriction (a)(ix) requires preventing search engine indexing and third-party crawling and scraping of judgment content. Nothing implements this: no `robots.txt`, no `noindex`, no `X-Robots-Tag`. **This blocks serving judgments publicly** and therefore gates the canonical case URLs this document specifies.
+- **Display the acknowledgement.** Exact wording, in a prominent location, in a form approved by the Licensor: _"Crown copyright material reproduced by permission of The National Archives. The contents of the judgment can be used under the Open Justice - Licence."_ Nothing renders it today; the only occurrence of the phrase is in a filter list that strips it from parsed source content.
+- **State partial representation.** Restriction (b)(i) requires stating prominently that the material only partially represents the activities of the courts and tribunals. This makes the coverage disclosure contractual rather than a trust choice.
+- **Stay current and honour withdrawals.** (a)(i) requires using the current version; (a)(iii) requires removing material no longer published or replaced by a revision. Freshness and withdrawal handling are therefore compliance requirements, not quality targets, and a held corpus carries a continuing sync obligation.
+- **Analysis conduct.** (a)(v) to (a)(viii) require regard to the dignity of the courts and the independence of the judiciary, that outcomes cause no direct discriminatory harm, and that algorithms and analysis are free from bias. These bind once computational analysis runs at scale.
+- **Termination.** On material or persistent breach the licence terminates and every copy must be delivered up or erased, with a certificate of erasure. A held corpus carries an erasure obligation.
+- **No sub-licensing** without prior written consent, which bears directly on any future public API exposing the corpus.
+
+### Provenance requirements
+
+Licence class exists nowhere in the code today. That is insufficient for a single provider and untenable for several.
 
 - Every stored source record carries provider, licence class, acquisition timestamp and official source URL, recorded at acquisition.
-- Licence provenance is set by the acquisition layer, which is the single chokepoint through which provider data enters the system.
-- The system can answer, in code, whether a given record may enter a given use. The immediate use of this is enforcing that no judgment text reaches a machine-learning path while only the transactional licence is held.
-- Attribution requirements are satisfied from record data, not hardcoded per view.
+- Licence provenance is set by the acquisition layer, the single chokepoint through which provider data enters the system.
+- The system can answer, in code, which uses a given record permits. Find Case Law material permits computational analysis for the Purpose; a later provider may not, which is what makes this a per-record property rather than a global setting.
+- Records carry enough to satisfy the acknowledgement from data rather than hardcoded per view.
 - Retrofitting provenance onto an ingested corpus is materially harder than recording it at acquisition, so this lands **before** the ingest campaign.
 
 ## Retrieval And Ranking
@@ -262,10 +287,13 @@ Reviewer mode exposes derived diagnostics over public legal sources only. It nev
 - Hosted data stays in the EU.
 - Object keys contain no client names, matter names, original filenames or raw legal text.
 - Source licence and computational-analysis permissions are respected per record, enforced at the acquisition boundary.
+- Judgment content is served with indexing and crawling prevented, and carries the required acknowledgement and partial-representation statement.
+- Personal data within licensed material is not covered by the licence; treat it as unlicensed content inside licensed material.
 
 ## Rollout
 
 **Gate 1: Correctness.** Word-boundary matching, index tuning, Meilisearch score used rather than discarded, benchmark harness with the objective case set running in CI.
+_Also:_ indexing and scraping prevention, the acknowledgement, and the partial-representation statement. These are licence obligations and none is implemented; serving judgments publicly without them is a breach.
 _Exit:_ precision on the short-word set is 1.0; exact citations and document ids rank first; benchmark runs record top-k and failure labels.
 
 **Gate 2: Provenance and boundaries.** Licence provenance on source records, acquisition and search-core separation, internal API contract in `packages/contracts`.
@@ -284,6 +312,8 @@ Gates 1 and 2 are ordered deliberately: provenance precedes the ingest campaign 
 - Full ingest from the start surfaces parser and relevance defects at maximum scale. The benchmark and coverage reporting must precede the campaign, not follow it.
 - Retiring the Postgres tier makes Meilisearch a single point of failure. Redundancy must land alongside retirement, not after.
 - Ranking changes that improve keyword search can silently harm exact lookup. This is precisely what the benchmark exists to catch.
+- The licence terminates on material or persistent breach, obliging erasure of every copy with a certificate. A held corpus makes that a real operational exposure rather than a clause.
+- Preventing third-party scraping is easy to state and hard to enforce. Decide what a good-faith standard looks like before launch rather than after a complaint.
 - Lexical-only retrieval will disappoint anyone expecting natural-language question answering. Positioning must be honest about what the product does.
 - The composite identity key can wrongly merge same-court, same-day judgments with similar party names. The review queue is the control, and it only works if someone actually works it.
 - A benchmark that grows from observed failures is small early, which is the point, but it means the first ingest campaign runs against thinner coverage than later work will enjoy.
