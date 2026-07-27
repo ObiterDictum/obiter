@@ -17,7 +17,7 @@ These documents break the original [guide.md](C:\Users\karl-\Documents\source\Ob
 - [Data and Compliance](C:\Users\karl-\Documents\source\Obiter\docs\data-and-compliance.md): legal data model, source handling, and external constraints
 - [Roadmap](C:\Users\karl-\Documents\source\Obiter\docs\roadmap.md): milestone-by-milestone build order for a solo-founder implementation
 - [Product Requirements](C:\Users\karl-\Documents\source\Obiter\docs\prds\README.md): PRDs for major implementation areas
-- [Search Quality PRD](C:\Users\karl-\Documents\source\Obiter\docs\prds\search-quality.md): current Search review and requirements for retrieval quality, corpus expansion, legislation, API readiness, and UI/UX
+- [Search PRD](prds/search.md): judgment search product target, corpus and acquisition, retrieval and ranking, quality benchmark, and the internal API contract
 - [Phase 1 Search](C:\Users\karl-\Documents\source\Obiter\docs\phase-1-atlas.md): legal corpus ingestion, indexing, search, and authority retrieval. The file path still uses the legacy `atlas` name until route/package cleanup is handled separately.
 - [Phase 1 Redact](C:\Users\karl-\Documents\source\Obiter\docs\phase-1-redact.md): PII handling, redaction policy, review workflow, and export rules
 - [Phase 1 Verify](C:\Users\karl-\Documents\source\Obiter\docs\phase-1-verify.md): citation resolution, quote checks, proposition checks, and reporting
