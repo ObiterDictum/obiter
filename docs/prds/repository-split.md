@@ -47,18 +47,45 @@ The rule that follows: **a fixture a product test loads stays; evaluation corpor
 
 ## Target Repositories
 
-| Repository                      | Visibility      | Holds                                                                                       |
-| ------------------------------- | --------------- | ------------------------------------------------------------------------------------------- |
-| `obiter`                        | Public, ELv2    | Product: apps, packages, services, product PRDs and specs, infra, product test fixtures     |
-| `obiter-data`                   | Private, new    | Synthetic corpus generation, evaluation harness, benchmark release contract, dataset export |
-| `obiter-ops`                    | Private, exists | Operating model, system reference and its generators, internal assessments                  |
-| `obiter-redaction-data-private` | Private, exists | Generated corpus artifacts. Unchanged by this work.                                         |
+Three repositories, not four.
 
-`obiter-data` holds generation _code_; `obiter-redaction-data-private` holds generated _artifacts_. That separation already exists in policy and this preserves it.
+| Repository      | Visibility       | Holds                                                                        |
+| --------------- | ---------------- | ---------------------------------------------------------------------------- |
+| `obiter`        | Public, ELv2     | Product: apps, packages, services, product PRDs and specs, infra, fixtures   |
+| `obiter-corpus` | Private, renamed | The corpus programme: generation code, evaluation harness, and its artifacts |
+| `obiter-ops`    | Private, exists  | Operating model, system reference and its generators, internal assessments   |
+
+### Naming
+
+`obiter-redaction-data-private` is renamed to `obiter-corpus`. Three problems with the old name:
+
+- **Visibility does not belong in a name.** Whether a repository is private is a setting, not an identity. If the benchmark is ever released the name becomes a lie, and renaming under pressure is worse than renaming now.
+- **`redaction-` scopes it too narrowly.** The programme already produces evaluation material that Search wants, and the benchmark is a general UK legal PII set rather than a Redact-only asset.
+- **It is long,** against a house style where the existing sibling is `obiter-ops`.
+
+GitHub redirects the old name after a rename, so existing clones and links keep working.
+
+### Generation code and artifacts live together
+
+An earlier draft of this document proposed a separate repository for generation code, keeping it apart from the artifacts. That was wrong. The corpus programme's evidence is hash-bound to its output: partition registries, canary receipts and manifests all reference specific artifacts by hash. Splitting the code from the artifacts it produced puts an audit trail across a repository boundary, which is exactly the trail that exists to prove a dataset was produced legitimately.
+
+They are also governed by the same rules. One repository means one place for the compliance constraints rather than two that can drift.
+
+## The Backend Question
+
+`services/api` and `services/legal-ingestor` stay in the public repository under ELv2. This is a decision rather than an omission, so the reasoning is recorded.
+
+**What was checked.** No secret value lives in any tracked file; every credential is read from the environment. The matches for "admin", "credential" and "secret" in `services/` are variable names, not values. Nothing in the backend is unpublishable on its face.
+
+**Why public.** Elastic 2.0 already blocks the actual competitive threat, which is someone running Obiter as a managed service. Beyond that, the backend is where a buyer's questions get answered: how organisation scoping is enforced, how storage keys are validated, that redaction is applied server-side rather than in a client that could be bypassed. For a product sold on evidence and reviewability, an inspectable data path is an asset. Hiding it would be obscurity rather than security, since the authentication is standard `better-auth` and the genuinely strong properties, composite foreign keys and the storage key regex, are stronger for being checkable.
+
+**The carve-out to name now.** Operational code is different from product code. When billing, tenant provisioning, admin surfaces or ops runbooks arrive, they belong in `obiter-ops`, not in `services/api`. Deciding that before the code exists is far cheaper than extracting it afterwards.
+
+**One thing to confirm before the split.** `services/legal-ingestor` and the Find Case Law client implement acquisition against a licensed source. The licence plainly governs the data; whether it says anything about publishing the acquisition code is worth confirming rather than assuming, because publication cannot be undone. The code contains no licence-restricted specifics today, only standard client and rate-limiting logic.
 
 ## Inventory
 
-### Moves to `obiter-data`
+### Moves to `obiter-corpus`
 
 - `scripts/synthetic-v2/` entire directory, 50 files
 - `scripts/generate-synthetic-data.ts`, `scripts/export-training-data.ts`, `scripts/eval-redact.ts`, `scripts/bench-guard.ts` and their tests
@@ -88,7 +115,7 @@ Generator and output move together. Separating them leaves a generated artifact 
 Each of these must be handled in the same change that moves the files.
 
 - **Root scripts.** Four `synthetic-v2:*` entries in `package.json` go. The `test` script loses its `vitest run scripts/synthetic-v2` tail and `typecheck` loses its synthetic-v2 tsconfig pass.
-- **CI.** The `checks` job currently covers synthetic-v2 through those root scripts. `obiter-data` needs its own equivalent workflow, or the programme ships untested.
+- **CI.** The `checks` job currently covers synthetic-v2 through those root scripts. `obiter-corpus` needs its own equivalent workflow, or the programme ships untested.
 - **`AGENTS.md`.** The Synthetic Redaction Corpus section and the System Reference section both point at files that will have moved. Both need cross-repository pointers, following the precedent already set for `obiter-ops`.
 - **Documentation cross-references.** `docs/prds/bench.md`, `docs/specs/redact/demo.md`, `fine-tuning.md`, `milestones.md` and `synthetic-data-plan.md` all reference `data/evals` or `data/bench` paths.
 - **Agent context.** An agent working in `obiter` loses the system reference. This is a genuine cost, weighed against the reason for moving it.
@@ -105,7 +132,7 @@ For the smaller moves, a single import commit is sufficient and simpler.
 
 **Gate 0: Decide the boundary.** Confirm the inventory above, particularly whether `redact-4-hardening.md` and the system reference are private. Blocking: nothing else should push until this is settled.
 
-**Gate 1: Extract data generation.** Create `obiter-data`, subtree-split `scripts/synthetic-v2`, move the associated scripts and evaluation data, stand up its CI, and confirm it runs standalone before removing anything from `obiter`.
+**Gate 1: Extract data generation.** Create `obiter-corpus`, subtree-split `scripts/synthetic-v2`, move the associated scripts and evaluation data, stand up its CI, and confirm it runs standalone before removing anything from `obiter`.
 _Exit:_ the corpus programme runs green in its own repository; `obiter` still passes typecheck, lint and test after removal.
 
 **Gate 2: Extract operations.** Move the system reference and its generators to `obiter-ops`, update `AGENTS.md` to point across repositories.
@@ -118,7 +145,7 @@ _Exit:_ no reference in `obiter` points at a path that has moved.
 
 - Splitting `apps/`, `packages/` or `services/`. See [What Is Not Being Split](#what-is-not-being-split).
 - Relicensing anything. The ELv2 position and any future permissive carve-out are separate decisions.
-- Moving generated corpus artifacts. They already live in `obiter-redaction-data-private`.
+- Rewriting the corpus artifacts themselves. They move only by the repository rename.
 - Retroactively removing published material, which is not achievable.
 
 ## Risks
@@ -126,11 +153,12 @@ _Exit:_ no reference in `obiter` points at a path that has moved.
 - **Cross-repository references rot faster than in-repo ones.** Nothing type-checks a link between repositories. Mitigation is to keep the number of such references small and listed in one place per repo.
 - **The corpus programme loses CI coverage in transit.** Gate 1 requires it green in the new repository before removal from the old, not after.
 - **Agents lose the system map.** If this proves costly, the fallback is a short public summary in `obiter` pointing at the full private reference.
-- **Compliance rules get orphaned.** The corpus governance rules in `AGENTS.md` protect against committing real personal data. They must land in `obiter-data` before the programme does, not after.
+- **Compliance rules get orphaned.** The corpus governance rules in `AGENTS.md` protect against committing real personal data. They must land in `obiter-corpus` before the programme does, not after.
 
 ## Open Questions
 
-- Should generation code live in `obiter-data` or inside the existing `obiter-redaction-data-private`? A separate repo keeps code and data apart; one repo keeps the programme and its output together.
-- Does `obiter-data` need the fixtures `generate-pdf-fixtures.mjs` produces, or only the product?
+- Does `obiter-corpus` need the fixtures `generate-pdf-fixtures.mjs` produces, or only the product?
+- Does the Find Case Law licence say anything about publishing acquisition code, as distinct from the data? Blocking for `services/legal-ingestor` staying public.
+- Where do billing and tenant provisioning land when they arrive: `obiter-ops`, or a fourth repository?
 - Is `redact-4-hardening.md` private permanently, or public once Gate 1 of that PRD lands?
 - Should `obiter` carry a public summary of the architecture, or nothing at all?
