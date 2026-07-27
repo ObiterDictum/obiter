@@ -2,7 +2,7 @@
 
 Phase 0 is the application foundation layer. It covers the mirrored web and Electron shells, authentication, matter management, storage, jobs, and report lifecycle.
 
-These documents are the executable Phase 0 implementation layer. If they differ from the original `guide.md`, follow these documents.
+These documents are the executable Phase 0 implementation layer. If they differ from the original `docs/guide.md`, follow these documents.
 
 ## Documents
 
