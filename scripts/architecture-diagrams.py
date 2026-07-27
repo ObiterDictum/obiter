@@ -239,6 +239,81 @@ d4.edge("mask", "degraded", sa="t", sb="l", tone="var(--danger)", dashed=True)
 d4.edge("degraded", "merge", sa="r", sb="t", tone="var(--danger)", dashed=True,
         label="unflagged", lx=40, ly=-6)
 
+# ---------------------------------------------------------------------- ERD
+d5 = Diagram(920, 430, "Entity relationships",
+             "Tenant tables and their foreign keys. Composite keys carry the "
+             "full ancestry, so the database rejects a cross-organisation "
+             "reference rather than trusting the query.")
+d5.parts.insert(0,
+    '<rect x="14" y="52" width="640" height="360" rx="4" fill="var(--surface)" '
+    'stroke="var(--brand)" stroke-dasharray="5 4"/>'
+    '<text x="26" y="72" class="b" fill="var(--brand)">ORGANISATION SCOPE</text>')
+
+d5.node("orgs", 250, 92, "organisations", "tenant root", accent="var(--brand)")
+d5.node("users", 60, 92, "users", "+ sessions, accounts", accent="var(--subtle)")
+d5.node("audit", 460, 92, "audit_logs", "org nullable", accent="var(--subtle)")
+d5.node("matters", 60, 190, "matters", "soft-deletable")
+d5.node("docs", 60, 280, "matter_documents")
+d5.node("versions", 60, 360, "document_versions", "immutable")
+d5.node("runs", 420, 280, "redaction_runs", "spans, decisions")
+d5.node("artifacts", 420, 190, "artifacts", "generated output")
+d5.node("legal", 700, 300, "legal_source_documents", "public corpus",
+        accent="var(--info)")
+
+d5.edge("matters", "orgs", sa="t", sb="l", label="organisation_id", lx=-30, ly=-4)
+d5.edge("docs", "matters", sa="t", sb="b", label="id, organisation_id", lx=78)
+d5.edge("versions", "docs", sa="t", sb="b", label="+ matter_id", lx=54)
+d5.edge("runs", "versions", sa="l", sb="r", label="4-part composite", ly=-6)
+d5.edge("runs", "artifacts", sa="t", sb="b", label="output", lx=32)
+d5.edge("artifacts", "orgs", sa="t", sb="r", label="organisation_id", lx=26, ly=-4)
+d5.edge("users", "orgs", sa="r", sb="l")
+
+d5.parts.append(
+    '<text x="700" y="368" class="e" fill="var(--info)">outside the boundary:</text>'
+    '<text x="700" y="380" class="e" fill="var(--info)">no organisation_id</text>')
+
+# ------------------------------------------------------- synthetic-v2 corpus
+d6 = Diagram(920, 400, "Synthetic corpus pipeline",
+             "Gates from provider connectivity through to a canonical "
+             "tournament dataset. Each gate refuses to spend without evidence "
+             "the previous one passed.")
+d6.band(8, 8, 904, 96, "QUALIFICATION", "var(--warning)")
+d6.band(8, 130, 904, 96, "PAID EXECUTION", "var(--danger)")
+d6.band(8, 252, 904, 96, "ASSEMBLY", "var(--success)")
+
+d6.node("smoke", 40, 42, "smoke", "connectivity only", accent="var(--warning)")
+d6.node("canary", 220, 42, "canary", "full first spec", accent="var(--warning)")
+d6.node("receipt", 420, 42, "receipt", "hash-bound", accent="var(--warning)")
+d6.node("pricing", 640, 42, "spend cap", "per candidate GBP", accent="var(--warning)")
+
+d6.node("cand", 40, 164, "candidate run", "one at a time", accent="var(--danger)")
+d6.node("judges", 250, 164, "two judges", "primary + adjudicator",
+        accent="var(--danger)")
+d6.node("human", 470, 164, "human adjudication", "on disagreement",
+        accent="var(--danger)")
+d6.node("ledger", 700, 164, "spend ledger", "shared, sequential",
+        accent="var(--danger)")
+
+d6.node("registry", 40, 286, "run registry", "names + hashes",
+        accent="var(--success)")
+d6.node("assemble", 250, 286, "assemble", "no provider calls",
+        accent="var(--success)")
+d6.node("dataset", 450, 286, "tournament dataset", "canonical",
+        accent="var(--success)")
+d6.node("private", 680, 286, "private corpus repo", "never this repo",
+        accent="var(--info)", kind="dashed")
+
+d6.edge("smoke", "canary", sa="r", sb="l")
+d6.edge("canary", "receipt", sa="r", sb="l")
+d6.edge("receipt", "pricing", sa="r", sb="l")
+d6.edge("receipt", "cand", sa="b", sb="t", label="gates", lx=-96)
+d6.edge("cand", "judges", sa="r", sb="l")
+d6.edge("judges", "human", sa="r", sb="l", label="disagree", ly=-6)
+d6.edge("cand", "registry", sa="b", sb="t")
+d6.edge("registry", "assemble", sa="r", sb="l")
+d6.edge("assemble", "dataset", sa="r", sb="l")
+d6.edge("dataset", "private", sa="r", sb="l", tone="var(--info)", dashed=True)
+
 import json
 import pathlib
 import re
@@ -249,6 +324,8 @@ DIAGRAMS = {
     "DIAGRAM_RUNTIME": d2,
     "DIAGRAM_SEARCH": d3,
     "DIAGRAM_REDACT": d4,
+    "DIAGRAM_ERD": d5,
+    "DIAGRAM_CORPUS": d6,
 }
 
 

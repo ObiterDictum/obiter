@@ -758,6 +758,107 @@
         color: var(--muted);
       }
 
+      /* ---------- heading anchors ---------- */
+
+      .anchor {
+        margin-left: 0.4rem;
+        color: var(--subtle);
+        text-decoration: none;
+        font-weight: 400;
+        font-size: 0.8em;
+        opacity: 0;
+        transition: opacity 0.12s;
+      }
+
+      h2:hover .anchor,
+      h3:hover .anchor,
+      .anchor:focus-visible {
+        opacity: 1;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .anchor {
+          transition: none;
+        }
+      }
+
+      /* ---------- nav filter ---------- */
+
+      .filter {
+        width: 100%;
+        font-family: var(--mono);
+        font-size: 0.75rem;
+        color: var(--ink);
+        background: var(--surface);
+        border: 1px solid var(--line-strong);
+        border-radius: 2px;
+        padding: 0.35rem 0.5rem;
+        margin-bottom: 1rem;
+      }
+
+      .filter::placeholder {
+        color: var(--subtle);
+      }
+
+      .toc li[hidden] {
+        display: none;
+      }
+
+      .toc .empty {
+        font-size: 0.78rem;
+        color: var(--subtle);
+        padding: 0.25rem 0.5rem;
+      }
+
+      /* ---------- print ---------- */
+
+      @media print {
+        .sidebar,
+        .filter,
+        .anchor {
+          display: none;
+        }
+
+        .shell {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        main {
+          padding: 0;
+        }
+
+        body {
+          font-size: 10pt;
+        }
+
+        section,
+        figure.diagram,
+        .module,
+        table {
+          break-inside: avoid;
+        }
+
+        h2 {
+          break-after: avoid;
+        }
+
+        .frame,
+        .scroll {
+          overflow: visible;
+        }
+
+        figure.diagram svg {
+          min-width: 0;
+        }
+
+        a[href^='http']::after {
+          content: ' (' attr(href) ')';
+          font-size: 0.7em;
+          color: #555;
+          word-break: break-all;
+        }
+      }
+
       footer {
         padding-block: 2rem 4rem;
         color: var(--subtle);
@@ -775,6 +876,13 @@
       <nav class="sidebar" aria-label="Contents">
         <p class="brandmark">Obiter</p>
         <p>System reference</p>
+        <input
+          class="filter"
+          type="search"
+          id="nav-filter"
+          placeholder="Filter sections"
+          aria-label="Filter sections"
+        />
         <ul class="toc">
           <li class="grp">Orientation</li>
           <li><a href="#overview">Overview</a></li>
@@ -785,6 +893,7 @@
           <li><a href="#clients">Clients</a></li>
           <li><a href="#services">Services</a></li>
           <li><a href="#packages">Packages</a></li>
+          <li><a href="#scripts">Tooling</a></li>
           <li class="grp">Interfaces</li>
           <li><a href="#http">HTTP surface</a></li>
           <li><a href="#lifecycle">Request lifecycle</a></li>
@@ -793,11 +902,14 @@
           <li><a href="#data">Data model</a></li>
           <li><a href="#storage">Object storage</a></li>
           <li><a href="#config">Configuration</a></li>
+          <li><a href="#infra">Deployment</a></li>
           <li class="grp">Behaviour</li>
           <li><a href="#search-flow">Search flow</a></li>
           <li><a href="#redact-flow">Redaction flow</a></li>
+          <li><a href="#corpus">Synthetic corpus</a></li>
           <li class="grp">Working here</li>
           <li><a href="#where">Where things go</a></li>
+          <li><a href="#testing">Testing</a></li>
           <li><a href="#rules">Boundary rules</a></li>
           <li><a href="#divergences">Known divergences</a></li>
           <li class="grp">Reference</li>
@@ -2172,6 +2284,71 @@
           </div>
         </section>
 
+        <section id="scripts">
+          <h2>Tooling</h2>
+          <p class="lede">
+            Repository scripts, run with <code>tsx</code> unless noted. None is
+            part of the running product.
+          </p>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Script</th>
+                  <th>Command</th>
+                  <th>Does</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="id">synthetic-v2/</td>
+                  <td class="id">pnpm synthetic-v2:*</td>
+                  <td>
+                    The corpus pipeline: smoke, canary, tournament, assemble.
+                    See <a href="#corpus">Synthetic corpus pipeline</a>.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">generate-synthetic-data.ts</td>
+                  <td class="id">tsx</td>
+                  <td>First-generation synthetic document generation</td>
+                </tr>
+                <tr>
+                  <td class="id">export-training-data.ts</td>
+                  <td class="id">tsx</td>
+                  <td>
+                    Exports finalized, reviewed runs as JSONL for training
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">eval-redact.ts</td>
+                  <td class="id">tsx</td>
+                  <td>Scores redaction detection against a labelled set</td>
+                </tr>
+                <tr>
+                  <td class="id">bench-guard.ts</td>
+                  <td class="id">pnpm bench:guard</td>
+                  <td>Guards benchmark regressions</td>
+                </tr>
+                <tr>
+                  <td class="id">generate-pdf-fixtures.mjs</td>
+                  <td class="id">node</td>
+                  <td>Builds PDF test fixtures for extraction tests</td>
+                </tr>
+                <tr>
+                  <td class="id">architecture-diagrams.py</td>
+                  <td class="id">python</td>
+                  <td>
+                    Regenerates the diagrams on this page. Computes layout and
+                    fails closed on overlapping nodes, nodes outside the
+                    viewBox, and dangling marker references.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
         <section id="http">
           <h2>HTTP surface</h2>
           <p class="lede">
@@ -2392,6 +2569,73 @@
             <code>redaction_detection_failed</code> and
             <code>redaction_span_integrity_error</code>.
           </p>
+          <h3>Status mapping</h3>
+          <p>
+            Handlers choose the status; the envelope is identical either way.
+            Clients branch on <code>error.code</code>, never on the status
+            alone, because several codes share a status.
+          </p>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Status</th>
+                  <th>Codes</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="id">400</td>
+                  <td class="id">validation_failed</td>
+                  <td>The request body or parameters did not parse.</td>
+                </tr>
+                <tr>
+                  <td class="id">401</td>
+                  <td class="id">unauthenticated</td>
+                  <td>No valid session or bearer token.</td>
+                </tr>
+                <tr>
+                  <td class="id">403</td>
+                  <td class="id">forbidden · organisation_not_found</td>
+                  <td>
+                    Authenticated but not permitted, or authenticated with no
+                    organisation. The latter is deliberately 403 rather than 401
+                    so the client shows "create an organisation" instead of a
+                    sign-in prompt.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">404</td>
+                  <td class="id">redaction_run_not_found · span_not_found</td>
+                  <td>
+                    Also returned when a row exists but belongs to another
+                    organisation, so the API never confirms the existence of
+                    another tenant's data.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">409</td>
+                  <td class="id">
+                    redaction_run_not_reviewable · redaction_already_finalized ·
+                    redaction_span_integrity_error
+                  </td>
+                  <td>
+                    The run is in the wrong state, or finalize aborted because
+                    span text no longer matches the document.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">500</td>
+                  <td class="id">redaction_detection_failed</td>
+                  <td>
+                    Detection failed unrecoverably. Note that a model load
+                    failure does <em>not</em> reach here: it degrades instead.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section id="auth">
@@ -2447,6 +2691,290 @@
             PostgreSQL 16 is the system of record. Everything else, including
             the Meilisearch index, is derived and rebuildable.
           </p>
+          <figure class="diagram">
+            <div class="frame">
+              <svg
+                viewBox="0 0 920 430"
+                role="img"
+                aria-labelledby="t-entity-relationships"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <title id="t-entity-relationships">Entity relationships</title>
+                <desc>
+                  Tenant tables and their foreign keys. Composite keys carry the
+                  full ancestry, so the database rejects a cross-organisation
+                  reference rather than trusting the query.
+                </desc>
+                <defs>
+                  <marker
+                    id="ah-t-entity-relationships"
+                    viewBox="0 0 8 8"
+                    refX="7"
+                    refY="4"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M0,1 L7,4 L0,7 z" fill="var(--line-strong)" />
+                  </marker>
+                  <marker
+                    id="ahd-t-entity-relationships"
+                    viewBox="0 0 8 8"
+                    refX="7"
+                    refY="4"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M0,1 L7,4 L0,7 z" fill="var(--danger)" />
+                  </marker>
+                </defs>
+                <rect
+                  x="14"
+                  y="52"
+                  width="640"
+                  height="360"
+                  rx="4"
+                  fill="var(--surface)"
+                  stroke="var(--brand)"
+                  stroke-dasharray="5 4"
+                />
+                <text x="26" y="72" class="b" fill="var(--brand)">
+                  ORGANISATION SCOPE
+                </text>
+                <g>
+                  <rect
+                    x="250"
+                    y="92"
+                    width="100.6"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--brand)"
+                  />
+                  <text x="300.3" y="109" text-anchor="middle" class="n">
+                    organisations
+                  </text>
+                  <text x="300.3" y="120" text-anchor="middle" class="s">
+                    tenant root
+                  </text>
+                </g>
+                <g>
+                  <rect
+                    x="60"
+                    y="92"
+                    width="128.0"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--subtle)"
+                  />
+                  <text x="124.0" y="109" text-anchor="middle" class="n">
+                    users
+                  </text>
+                  <text x="124.0" y="120" text-anchor="middle" class="s">
+                    + sessions, accounts
+                  </text>
+                </g>
+                <g>
+                  <rect
+                    x="460"
+                    y="92"
+                    width="85.6"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--subtle)"
+                  />
+                  <text x="502.8" y="109" text-anchor="middle" class="n">
+                    audit_logs
+                  </text>
+                  <text x="502.8" y="120" text-anchor="middle" class="s">
+                    org nullable
+                  </text>
+                </g>
+                <g>
+                  <rect
+                    x="60"
+                    y="190"
+                    width="96.2"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--line-strong)"
+                  />
+                  <text x="108.1" y="207" text-anchor="middle" class="n">
+                    matters
+                  </text>
+                  <text x="108.1" y="218" text-anchor="middle" class="s">
+                    soft-deletable
+                  </text>
+                </g>
+                <g>
+                  <rect
+                    x="60"
+                    y="280"
+                    width="118.8"
+                    height="30"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--line-strong)"
+                  />
+                  <text x="119.4" y="298.5" text-anchor="middle" class="n">
+                    matter_documents
+                  </text>
+                </g>
+                <g>
+                  <rect
+                    x="60"
+                    y="360"
+                    width="124.8"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--line-strong)"
+                  />
+                  <text x="122.4" y="377" text-anchor="middle" class="n">
+                    document_versions
+                  </text>
+                  <text x="122.4" y="388" text-anchor="middle" class="s">
+                    immutable
+                  </text>
+                </g>
+                <g>
+                  <rect
+                    x="420"
+                    y="280"
+                    width="106.8"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--line-strong)"
+                  />
+                  <text x="473.4" y="297" text-anchor="middle" class="n">
+                    redaction_runs
+                  </text>
+                  <text x="473.4" y="308" text-anchor="middle" class="s">
+                    spans, decisions
+                  </text>
+                </g>
+                <g>
+                  <rect
+                    x="420"
+                    y="190"
+                    width="106.8"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--line-strong)"
+                  />
+                  <text x="473.4" y="207" text-anchor="middle" class="n">
+                    artifacts
+                  </text>
+                  <text x="473.4" y="218" text-anchor="middle" class="s">
+                    generated output
+                  </text>
+                </g>
+                <g>
+                  <rect
+                    x="700"
+                    y="300"
+                    width="155.1"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--info)"
+                  />
+                  <text x="777.55" y="317" text-anchor="middle" class="n">
+                    legal_source_documents
+                  </text>
+                  <text x="777.55" y="328" text-anchor="middle" class="s">
+                    public corpus
+                  </text>
+                </g>
+                <path
+                  d="M108.1,190 L250,112.5"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-entity-relationships)"
+                />
+                <text x="149.05" y="147.25" text-anchor="middle" class="e">
+                  organisation_id
+                </text>
+                <path
+                  d="M119.4,280 L108.1,231"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-entity-relationships)"
+                />
+                <text x="191.75" y="255.5" text-anchor="middle" class="e">
+                  id, organisation_id
+                </text>
+                <path
+                  d="M122.4,360 L119.4,310"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-entity-relationships)"
+                />
+                <text x="174.9" y="335.0" text-anchor="middle" class="e">
+                  + matter_id
+                </text>
+                <path
+                  d="M420,300.5 L184.8,380.5"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-entity-relationships)"
+                />
+                <text x="302.4" y="334.5" text-anchor="middle" class="e">
+                  4-part composite
+                </text>
+                <path
+                  d="M473.4,280 L473.4,231"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-entity-relationships)"
+                />
+                <text x="505.4" y="255.5" text-anchor="middle" class="e">
+                  output
+                </text>
+                <path
+                  d="M473.4,190 L350.6,112.5"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-entity-relationships)"
+                />
+                <text x="438.0" y="147.25" text-anchor="middle" class="e">
+                  organisation_id
+                </text>
+                <path
+                  d="M188.0,112.5 L250,112.5"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-entity-relationships)"
+                />
+                <text x="700" y="368" class="e" fill="var(--info)">
+                  outside the boundary:
+                </text>
+                <text x="700" y="380" class="e" fill="var(--info)">
+                  no organisation_id
+                </text>
+              </svg>
+            </div>
+            <figcaption>
+              Composite foreign keys carry the full ancestry: a document version
+              references its document, matter and organisation together, so the
+              database refuses a cross-organisation row rather than relying on
+              the query filtering correctly. legal_source_documents sits outside
+              the boundary because the judgment corpus is public and shared.
+            </figcaption>
+          </figure>
           <div class="scroll">
             <table>
               <thead>
@@ -3326,6 +3854,563 @@
             <code>redaction_span_integrity_error</code> rather than producing
             output with a silently skipped redaction.
           </div>
+
+          <h3>Span categories</h3>
+          <p class="lede">
+            Fifteen categories, each with a default suggestion the reviewer can
+            override. The defaults encode a deliberate bias.
+          </p>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Default</th>
+                  <th>Categories</th>
+                  <th>Reasoning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="id">redact</td>
+                  <td class="id">
+                    person_name · email · phone · address · government_id ·
+                    account_number · passport · drivers_license ·
+                    national_insurance · ip_address · secret
+                  </td>
+                  <td>
+                    Direct identifiers. Removing one wrongly costs a reviewer a
+                    click; leaving one wrongly is a disclosure.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">keep</td>
+                  <td class="id">url · case_reference · organisation_name</td>
+                  <td>
+                    Usually load-bearing in legal prose and often public. The
+                    reviewer decides.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">keep, except DOB</td>
+                  <td class="id">date</td>
+                  <td>
+                    Legal documents are saturated with structural dates:
+                    hearings, filings, service, judgment. Suggesting redaction
+                    for every one would flood the reviewer with false positives
+                    and train them to click through, which is the exact
+                    review-trust failure this product exists to prevent. Dates
+                    in a date-of-birth context are genuine personal data and
+                    keep the redact default.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <code>secret</code> is schema-only: no detector emits it, but it
+            exists in the contract because downstream work depends on it.
+            Sources are <code>rampart_model</code>,
+            <code>rampart_deterministic</code> and <code>uk_supplement</code>,
+            recorded per span so a reviewer can see what found each one.
+          </p>
+        </section>
+
+        <section id="corpus">
+          <h2>Synthetic corpus pipeline</h2>
+          <p class="lede">
+            Redaction needs training and evaluation data with known personal
+            data in known positions. Real client documents cannot serve that
+            purpose, so <code>scripts/synthetic-v2/</code> generates synthetic
+            UK legal documents with ground-truth spans. Twenty-six modules, and
+            the most safety-engineered part of the codebase.
+          </p>
+
+          <figure class="diagram">
+            <div class="frame">
+              <svg
+                viewBox="0 0 920 400"
+                role="img"
+                aria-labelledby="t-synthetic-corpus-pipeline"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <title id="t-synthetic-corpus-pipeline">
+                  Synthetic corpus pipeline
+                </title>
+                <desc>
+                  Gates from provider connectivity through to a canonical
+                  tournament dataset. Each gate refuses to spend without
+                  evidence the previous one passed.
+                </desc>
+                <defs>
+                  <marker
+                    id="ah-t-synthetic-corpus-pipeline"
+                    viewBox="0 0 8 8"
+                    refX="7"
+                    refY="4"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M0,1 L7,4 L0,7 z" fill="var(--line-strong)" />
+                  </marker>
+                  <marker
+                    id="ahd-t-synthetic-corpus-pipeline"
+                    viewBox="0 0 8 8"
+                    refX="7"
+                    refY="4"
+                    markerWidth="6"
+                    markerHeight="6"
+                    orient="auto-start-reverse"
+                  >
+                    <path d="M0,1 L7,4 L0,7 z" fill="var(--danger)" />
+                  </marker>
+                </defs>
+                <rect
+                  x="8"
+                  y="252"
+                  width="904"
+                  height="96"
+                  rx="3"
+                  fill="var(--surface)"
+                  stroke="var(--line)"
+                />
+                <text x="17" y="267" class="b" fill="var(--success)">
+                  ASSEMBLY
+                </text>
+                <rect
+                  x="8"
+                  y="130"
+                  width="904"
+                  height="96"
+                  rx="3"
+                  fill="var(--surface)"
+                  stroke="var(--line)"
+                />
+                <text x="17" y="145" class="b" fill="var(--danger)">
+                  PAID EXECUTION
+                </text>
+                <rect
+                  x="8"
+                  y="8"
+                  width="904"
+                  height="96"
+                  rx="3"
+                  fill="var(--surface)"
+                  stroke="var(--line)"
+                />
+                <text x="17" y="23" class="b" fill="var(--warning)">
+                  QUALIFICATION
+                </text>
+                <g>
+                  <rect
+                    x="40"
+                    y="42"
+                    width="112.1"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--warning)"
+                  />
+                  <text x="96.05" y="59" text-anchor="middle" class="n">
+                    smoke
+                  </text>
+                  <text x="96.05" y="70" text-anchor="middle" class="s">
+                    connectivity only
+                  </text>
+                </g>
+                <g>
+                  <rect
+                    x="220"
+                    y="42"
+                    width="101.5"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--warning)"
+                  />
+                  <text x="270.75" y="59" text-anchor="middle" class="n">
+                    canary
+                  </text>
+                  <text x="270.75" y="70" text-anchor="middle" class="s">
+                    full first spec
+                  </text>
+                </g>
+                <g>
+                  <rect
+                    x="420"
+                    y="42"
+                    width="75.0"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--warning)"
+                  />
+                  <text x="457.5" y="59" text-anchor="middle" class="n">
+                    receipt
+                  </text>
+                  <text x="457.5" y="70" text-anchor="middle" class="s">
+                    hash-bound
+                  </text>
+                </g>
+                <g>
+                  <rect
+                    x="640"
+                    y="42"
+                    width="112.1"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--warning)"
+                  />
+                  <text x="696.05" y="59" text-anchor="middle" class="n">
+                    spend cap
+                  </text>
+                  <text x="696.05" y="70" text-anchor="middle" class="s">
+                    per candidate GBP
+                  </text>
+                </g>
+                <g>
+                  <rect
+                    x="40"
+                    y="164"
+                    width="100.6"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--danger)"
+                  />
+                  <text x="90.3" y="181" text-anchor="middle" class="n">
+                    candidate run
+                  </text>
+                  <text x="90.3" y="192" text-anchor="middle" class="s">
+                    one at a time
+                  </text>
+                </g>
+                <g>
+                  <rect
+                    x="250"
+                    y="164"
+                    width="133.3"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--danger)"
+                  />
+                  <text x="316.65" y="181" text-anchor="middle" class="n">
+                    two judges
+                  </text>
+                  <text x="316.65" y="192" text-anchor="middle" class="s">
+                    primary + adjudicator
+                  </text>
+                </g>
+                <g>
+                  <rect
+                    x="470"
+                    y="164"
+                    width="130.9"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--danger)"
+                  />
+                  <text x="535.45" y="181" text-anchor="middle" class="n">
+                    human adjudication
+                  </text>
+                  <text x="535.45" y="192" text-anchor="middle" class="s">
+                    on disagreement
+                  </text>
+                </g>
+                <g>
+                  <rect
+                    x="700"
+                    y="164"
+                    width="117.4"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--danger)"
+                  />
+                  <text x="758.7" y="181" text-anchor="middle" class="n">
+                    spend ledger
+                  </text>
+                  <text x="758.7" y="192" text-anchor="middle" class="s">
+                    shared, sequential
+                  </text>
+                </g>
+                <g>
+                  <rect
+                    x="40"
+                    y="286"
+                    width="96.2"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--success)"
+                  />
+                  <text x="88.1" y="303" text-anchor="middle" class="n">
+                    run registry
+                  </text>
+                  <text x="88.1" y="314" text-anchor="middle" class="s">
+                    names + hashes
+                  </text>
+                </g>
+                <g>
+                  <rect
+                    x="250"
+                    y="286"
+                    width="112.1"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--success)"
+                  />
+                  <text x="306.05" y="303" text-anchor="middle" class="n">
+                    assemble
+                  </text>
+                  <text x="306.05" y="314" text-anchor="middle" class="s">
+                    no provider calls
+                  </text>
+                </g>
+                <g>
+                  <rect
+                    x="450"
+                    y="286"
+                    width="130.9"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--success)"
+                  />
+                  <text x="515.45" y="303" text-anchor="middle" class="n">
+                    tournament dataset
+                  </text>
+                  <text x="515.45" y="314" text-anchor="middle" class="s">
+                    canonical
+                  </text>
+                </g>
+                <g>
+                  <rect
+                    x="680"
+                    y="286"
+                    width="136.9"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--info)"
+                    stroke-dasharray="3 3"
+                  />
+                  <text x="748.45" y="303" text-anchor="middle" class="n">
+                    private corpus repo
+                  </text>
+                  <text x="748.45" y="314" text-anchor="middle" class="s">
+                    never this repo
+                  </text>
+                </g>
+                <path
+                  d="M152.1,62.5 L220,62.5"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-synthetic-corpus-pipeline)"
+                />
+                <path
+                  d="M321.5,62.5 L420,62.5"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-synthetic-corpus-pipeline)"
+                />
+                <path
+                  d="M495.0,62.5 L640,62.5"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-synthetic-corpus-pipeline)"
+                />
+                <path
+                  d="M457.5,83 L90.3,164"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-synthetic-corpus-pipeline)"
+                />
+                <text
+                  x="177.89999999999998"
+                  y="123.5"
+                  text-anchor="middle"
+                  class="e"
+                >
+                  gates
+                </text>
+                <path
+                  d="M140.6,184.5 L250,184.5"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-synthetic-corpus-pipeline)"
+                />
+                <path
+                  d="M383.3,184.5 L470,184.5"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-synthetic-corpus-pipeline)"
+                />
+                <text x="426.65" y="178.5" text-anchor="middle" class="e">
+                  disagree
+                </text>
+                <path
+                  d="M90.3,205 L88.1,286"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-synthetic-corpus-pipeline)"
+                />
+                <path
+                  d="M136.2,306.5 L250,306.5"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-synthetic-corpus-pipeline)"
+                />
+                <path
+                  d="M362.1,306.5 L450,306.5"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-synthetic-corpus-pipeline)"
+                />
+                <path
+                  d="M580.9,306.5 L680,306.5"
+                  fill="none"
+                  stroke="var(--info)"
+                  stroke-width="1"
+                  stroke-dasharray="4 3"
+                  marker-end="url(#ah-t-synthetic-corpus-pipeline)"
+                />
+              </svg>
+            </div>
+            <figcaption>
+              Each gate refuses to spend money without hash-bound evidence that
+              the previous one passed. Candidate runs execute one at a time
+              against a shared spend ledger, and assembly makes no provider
+              calls at all.
+            </figcaption>
+          </figure>
+
+          <h3>Corpus stages</h3>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Stage</th>
+                  <th>Documents</th>
+                  <th>Visibility</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="id">tournament</td>
+                  <td class="id">24 per candidate</td>
+                  <td>Private</td>
+                  <td>
+                    Compare writer and annotator pairs on fixed specifications
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">training seed</td>
+                  <td class="id">600</td>
+                  <td>Private</td>
+                  <td>
+                    Initial adaptation corpus, expanded only on measured benefit
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">development challenge</td>
+                  <td class="id">100</td>
+                  <td>Private</td>
+                  <td>
+                    Regressions, hard negatives, protected people, role
+                    ambiguity
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">benchmark</td>
+                  <td class="id">280</td>
+                  <td>Public on release</td>
+                  <td>Frozen external-model comparison set</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <h3>Why it is built this way</h3>
+          <ul class="rules">
+            <li>
+              <span
+                ><b>Nothing spends without a receipt.</b> The tournament refuses
+                paid calls unless the private root holds a hash-bound canary
+                receipt matching the current specification and judge
+                configuration. A connectivity smoke test explicitly does not
+                qualify a tournament.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Two independent judges, then a human.</b> Candidate
+                annotations are never scored against themselves. Reference spans
+                must agree between a primary judge and an adjudicator;
+                disagreement escalates to recorded human adjudication.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Offsets are constructed locally.</b> Providers select
+                zero-based, end-exclusive ranges from a deterministic token
+                list. Local code builds the exact quotes and UTF-16 offsets, so
+                a model can never supply a character offset directly.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Candidates run sequentially.</b> A shared spend ledger with
+                per-candidate GBP caps means concurrent runs would corrupt
+                accounting, so they are prohibited.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Fail closed.</b> A terminal provider or validation failure
+                stops immediately, writes immutable diagnostics under
+                <code>failed-tournaments/</code>, and exits non-zero rather than
+                producing a partial dataset.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Corpus data never enters this repository.</b> Private
+                training, development, tournament and benchmark-candidate
+                artifacts live in the sibling
+                <code>obiter-redaction-data-private</code> repository. A
+                benchmark candidate is not a release: promotion needs an
+                explicit release root, a sentinel file, evidence and a new
+                immutable version.</span
+              >
+            </li>
+          </ul>
+
+          <div class="callout">
+            <b
+              >Providers are allowlisted, with terms confirmed in the
+              environment.</b
+            >
+            OpenRouter, Z.ai and OpenCode Go, each requiring an explicit
+            confirmation variable. Specific models are prohibited on recorded
+            evidence: GPT-5.4 Mini after exhausting its output budget without
+            returning a complete structured answer, and an unqualified Qwen
+            route after transport rejection.
+          </div>
         </section>
 
         <section id="where">
@@ -3391,6 +4476,121 @@
               </tbody>
             </table>
           </div>
+        </section>
+
+        <section id="testing">
+          <h2>Testing</h2>
+          <p class="lede">
+            Vitest throughout, with each workspace carrying its own config. That
+            detail matters more than it looks.
+          </p>
+          <div class="callout risk">
+            <b
+              >Run tests through the package scripts, not vitest from the
+              root.</b
+            >
+            A root-level <code>npx vitest run packages/redact-ui</code>
+            silently ignores that package's own config, so React tests fail with
+            <code>document is not defined</code> because the jsdom environment
+            was never applied. The failure looks like broken code and is not.
+            Use <code>pnpm --filter @obiter/redact-ui test</code>.
+          </div>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Command</th>
+                  <th>Runs</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="id">pnpm test</td>
+                  <td>
+                    Every workspace's own test script, then the synthetic-v2
+                    suite from the root
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">pnpm typecheck</td>
+                  <td>
+                    Every workspace, then <code>scripts/synthetic-v2</code>
+                    against its own tsconfig
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">pnpm lint</td>
+                  <td>oxlint, then eslint</td>
+                </tr>
+                <tr>
+                  <td class="id">pnpm format:check</td>
+                  <td>Prettier across the repository</td>
+                </tr>
+                <tr>
+                  <td class="id">pnpm --filter &lt;pkg&gt; test</td>
+                  <td>A single workspace with its correct environment</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            API tests need <code>TEST_DATABASE_URL</code>;
+            <code>infra/docker/init/create-test-db.sh</code> provisions it. Live
+            Find Case Law tests are skipped unless
+            <code>OBITER_RUN_LIVE_FIND_CASE_LAW_TESTS</code> is set, which is
+            why a clean run reports skipped tests rather than passing ones.
+          </p>
+        </section>
+
+        <section id="infra">
+          <h2>Deployment</h2>
+          <p class="lede">
+            Largely unbuilt. Recorded honestly because the directory structure
+            implies more than exists.
+          </p>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Path</th>
+                  <th>State</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="id">infra/docker/compose.yaml</td>
+                  <td>
+                    <span class="pill warn">Partial</span> Starts PostgreSQL 16
+                    only. Meilisearch is not in the compose file, so it does not
+                    stand up the full stack.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">infra/docker/init/create-test-db.sh</td>
+                  <td>
+                    <span class="pill live">Live</span> Provisions the test
+                    database
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">infra/nginx/</td>
+                  <td><span class="pill stubbed">README only</span></td>
+                </tr>
+                <tr>
+                  <td class="id">infra/terraform/</td>
+                  <td><span class="pill stubbed">README only</span></td>
+                </tr>
+                <tr>
+                  <td class="id">infra/monitoring/</td>
+                  <td><span class="pill stubbed">README only</span></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            There are no deployments yet. Data residency is committed to the EU,
+            which constrains hosting choices when that changes.
+          </p>
         </section>
 
         <section id="rules">
@@ -3779,6 +4979,31 @@
 
     <script>
       ;(() => {
+        // Heading anchors: every h2 in a section, plus h3s that readers are
+        // likely to deep-link to. Ids are derived from the text so they stay
+        // stable if sections are reordered.
+        const slug = (text) =>
+          text
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-|-$/g, '')
+
+        document.querySelectorAll('section[id]').forEach((section) => {
+          section.querySelectorAll('h2, h3').forEach((heading) => {
+            const id =
+              heading.tagName === 'H2'
+                ? section.id
+                : `${section.id}--${slug(heading.textContent)}`
+            if (heading.tagName === 'H3') heading.id = id
+            const link = document.createElement('a')
+            link.className = 'anchor'
+            link.href = `#${id}`
+            link.textContent = '#'
+            link.setAttribute('aria-label', `Link to ${heading.textContent}`)
+            heading.append(link)
+          })
+        })
+
         const links = [...document.querySelectorAll('.toc a')]
         const byId = new Map(
           links.map((a) => [a.getAttribute('href').slice(1), a]),
@@ -3803,6 +5028,44 @@
         document
           .querySelectorAll('section[id]')
           .forEach((section) => observer.observe(section))
+
+        // Nav filter. Group headings hide when nothing beneath them matches,
+        // so a filtered list never shows an empty category.
+        const filter = document.getElementById('nav-filter')
+        const items = [...document.querySelectorAll('.toc > li')]
+        const empty = document.createElement('li')
+        empty.className = 'empty'
+        empty.textContent = 'No matching sections'
+        empty.hidden = true
+        document.querySelector('.toc').append(empty)
+
+        filter.addEventListener('input', () => {
+          const term = filter.value.trim().toLowerCase()
+          let matches = 0
+          let group = null
+          let groupHasMatch = false
+
+          const settle = () => {
+            if (group) group.hidden = !groupHasMatch
+          }
+
+          for (const item of items) {
+            if (item.classList.contains('grp')) {
+              settle()
+              group = item
+              groupHasMatch = false
+              continue
+            }
+            const hit = !term || item.textContent.toLowerCase().includes(term)
+            item.hidden = !hit
+            if (hit) {
+              matches += 1
+              groupHasMatch = true
+            }
+          }
+          settle()
+          empty.hidden = matches > 0
+        })
       })()
     </script>
   </body>
