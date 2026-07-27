@@ -399,7 +399,7 @@ Shows:
 
 ## Dependencies
 
-- [Search](search-quality.md) evidence package.
+- [Search](search.md) evidence package.
 - [Verify](verify.md) API and findings.
 - [Verification Evidence](verification-evidence.md) claim map.
 - [Bench](bench.md) support for agent trace scoring.

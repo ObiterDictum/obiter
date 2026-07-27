@@ -1,5 +1,11 @@
 # Search Quality PRD
 
+> **Superseded by [Search](search.md).**
+>
+> This document predates the Find Case Law licence and is retained for history only. Do not build from it.
+>
+> What changed: the licence position is now settled, so the corpus can be held rather than fetched opportunistically; matching was found to be substring-based rather than word-based, which is a correctness defect this document treated as a ranking gap; semantic retrieval is now out of scope entirely rather than deferred; and Meilisearch is the sole query layer, retiring the PostgreSQL fallback tier described below.
+
 ## Summary
 
 Search is Obiter's first trust substrate. Before [Verify](verify.md), [Research](research.md), [Bench](bench.md), or [Pi](pi-agent-framework.md) can be credible, Search must retrieve legal sources accurately, expose why results appeared, and cover the source families needed for serious legal work.

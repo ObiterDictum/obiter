@@ -358,7 +358,7 @@ Exports must support sampled university review bundles. Human-readable exports c
 
 ## Dependencies
 
-- [Search](search-quality.md) source ids and evidence ids.
+- [Search](search.md) source ids and evidence ids.
 - [Verify](verify.md) finding ids.
 - [Bench](bench.md) run records.
 - [Pi](pi-agent-framework.md) step and tool-call records for agent evidence packages.

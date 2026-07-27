@@ -2,7 +2,7 @@
 
 ## Summary
 
-Bench is Obiter's evaluation product. It records repeatable tests for [Search](search-quality.md), [Verify](verify.md), [Research](research.md), [Redact](redact.md), and [Pi](pi-agent-framework.md)-backed agent workflows so quality claims can be inspected by Obiter, legal reviewers, and university partners.
+Bench is Obiter's evaluation product. It records repeatable tests for [Search](search.md), [Verify](verify.md), [Research](research.md), [Redact](redact.md), and [Pi](pi-agent-framework.md)-backed agent workflows so quality claims can be inspected by Obiter, legal reviewers, and university partners.
 
 The first release is a university verification bundle, not a public leaderboard. It must prove that Obiter can run fixed tasks, preserve the evidence path, classify failures, compare system versions, and expose enough artifacts for independent review without leaking private matter data.
 
@@ -381,7 +381,7 @@ The bundle should be inspectable without access to private matters, secrets, int
 
 ## Dependencies
 
-- [Search](search-quality.md) evidence refs for retrieval benchmarks.
+- [Search](search.md) evidence refs for retrieval benchmarks.
 - [Verify](verify.md) findings for verification benchmarks.
 - [Verification Evidence](verification-evidence.md) package schema.
 - [Pi](pi-agent-framework.md) traces before agent benchmarks can be meaningful.
