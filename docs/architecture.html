@@ -901,19 +901,20 @@
           <li class="grp">State</li>
           <li><a href="#data">Data model</a></li>
           <li><a href="#storage">Object storage</a></li>
-          <li><a href="#config">Configuration</a></li>
-          <li><a href="#infra">Deployment</a></li>
           <li><a href="#fixtures">Fixtures and benchmarks</a></li>
+          <li><a href="#config">Configuration</a></li>
           <li class="grp">Behaviour</li>
           <li><a href="#search-flow">Search flow</a></li>
           <li><a href="#redact-flow">Redaction flow</a></li>
           <li><a href="#corpus">Synthetic corpus</a></li>
-          <li class="grp">Working here</li>
-          <li><a href="#where">Where things go</a></li>
+          <li class="grp">Delivery</li>
           <li><a href="#testing">Testing</a></li>
           <li><a href="#ci">CI and release</a></li>
-          <li><a href="#agents">Agent workflow</a></li>
+          <li><a href="#infra">Deployment</a></li>
+          <li class="grp">Working here</li>
+          <li><a href="#where">Where things go</a></li>
           <li><a href="#rules">Boundary rules</a></li>
+          <li><a href="#agents">Agent workflow</a></li>
           <li><a href="#divergences">Known divergences</a></li>
           <li class="grp">Reference</li>
           <li><a href="#glossary">Glossary</a></li>
@@ -3127,6 +3128,65 @@
           </p>
         </section>
 
+        <section id="fixtures">
+          <h2>Fixtures and benchmarks</h2>
+          <p class="lede">
+            <code>data/</code> holds evaluation material and test fixtures. It
+            is excluded from Prettier deliberately: reformatting JSON or
+            Markdown there would shift the offsets that tests and evaluations
+            key off.
+          </p>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Path</th>
+                  <th>Holds</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="id">data/evals/redact/</td>
+                  <td>
+                    Demo fixture DOCX with expected spans, a custom label space,
+                    a generation manifest, and PDF fixtures covering the
+                    low-text multipage and scanned-like cases that extraction
+                    must reject
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">data/evals/search/</td>
+                  <td>Gate 1 judgment search benchmark seed artifacts</td>
+                </tr>
+                <tr>
+                  <td class="id">data/bench/uk-legal-pii/</td>
+                  <td>
+                    Release contract only: <code>LICENSE</code>,
+                    <code>DATASHEET.md</code> and an intentionally empty
+                    <code>MANIFEST.json</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">data/fixtures · data/seed · data/synthetic</td>
+                  <td>Seed and fixture placeholders</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="callout risk">
+            <b
+              >The UK Legal PII benchmark is unpublished and must not be
+              published from here.</b
+            >
+            Release is blocked pending provider terms review, adjudication and
+            maintainer approval. The frozen corpus will ship from a dedicated
+            public benchmark repository, never this one. Do not add
+            <code>documents.jsonl</code>, raw generation output or review
+            evidence to that directory. The dataset contains fictional UK legal
+            documents only and must never contain real personal data.
+          </div>
+        </section>
+
         <section id="config">
           <h2>Configuration</h2>
           <p class="lede">
@@ -4434,71 +4494,6 @@
           </div>
         </section>
 
-        <section id="where">
-          <h2>Where things go</h2>
-          <div class="scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Change</th>
-                  <th>Goes in</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td>A request or response shape</td>
-                  <td class="id">packages/contracts</td>
-                </tr>
-                <tr>
-                  <td>A new API endpoint</td>
-                  <td class="id">
-                    services/api/src/routes/, thin, delegating to a domain
-                    module
-                  </td>
-                </tr>
-                <tr>
-                  <td>Business logic</td>
-                  <td class="id">
-                    A domain module beside the route, never inside it
-                  </td>
-                </tr>
-                <tr>
-                  <td>A product screen</td>
-                  <td class="id">
-                    packages/app-shell, not apps/web or apps/desktop
-                  </td>
-                </tr>
-                <tr>
-                  <td>A presentational component</td>
-                  <td class="id">
-                    packages/ui, with no auth, storage or network
-                  </td>
-                </tr>
-                <tr>
-                  <td>A schema change</td>
-                  <td class="id">
-                    A new numbered migration; never edit an applied one
-                  </td>
-                </tr>
-                <tr>
-                  <td>Span or redaction logic</td>
-                  <td class="id">packages/redaction-policy, pure functions</td>
-                </tr>
-                <tr>
-                  <td>Ranking or index behaviour</td>
-                  <td class="id">packages/search-client</td>
-                </tr>
-                <tr>
-                  <td>Platform-specific behaviour</td>
-                  <td class="id">
-                    apps/web or apps/desktop, only where it genuinely differs
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-
         <section id="testing">
           <h2>Testing</h2>
           <p class="lede">
@@ -4563,116 +4558,6 @@
           </p>
         </section>
 
-        <section id="fixtures">
-          <h2>Fixtures and benchmarks</h2>
-          <p class="lede">
-            <code>data/</code> holds evaluation material and test fixtures. It
-            is excluded from Prettier deliberately: reformatting JSON or
-            Markdown there would shift the offsets that tests and evaluations
-            key off.
-          </p>
-          <div class="scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Path</th>
-                  <th>Holds</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td class="id">data/evals/redact/</td>
-                  <td>
-                    Demo fixture DOCX with expected spans, a custom label space,
-                    a generation manifest, and PDF fixtures covering the
-                    low-text multipage and scanned-like cases that extraction
-                    must reject
-                  </td>
-                </tr>
-                <tr>
-                  <td class="id">data/evals/search/</td>
-                  <td>Gate 1 judgment search benchmark seed artifacts</td>
-                </tr>
-                <tr>
-                  <td class="id">data/bench/uk-legal-pii/</td>
-                  <td>
-                    Release contract only: <code>LICENSE</code>,
-                    <code>DATASHEET.md</code> and an intentionally empty
-                    <code>MANIFEST.json</code>
-                  </td>
-                </tr>
-                <tr>
-                  <td class="id">data/fixtures · data/seed · data/synthetic</td>
-                  <td>Seed and fixture placeholders</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="callout risk">
-            <b
-              >The UK Legal PII benchmark is unpublished and must not be
-              published from here.</b
-            >
-            Release is blocked pending provider terms review, adjudication and
-            maintainer approval. The frozen corpus will ship from a dedicated
-            public benchmark repository, never this one. Do not add
-            <code>documents.jsonl</code>, raw generation output or review
-            evidence to that directory. The dataset contains fictional UK legal
-            documents only and must never contain real personal data.
-          </div>
-        </section>
-
-        <section id="infra">
-          <h2>Deployment</h2>
-          <p class="lede">
-            Largely unbuilt. Recorded honestly because the directory structure
-            implies more than exists.
-          </p>
-          <div class="scroll">
-            <table>
-              <thead>
-                <tr>
-                  <th>Path</th>
-                  <th>State</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td class="id">infra/docker/compose.yaml</td>
-                  <td>
-                    <span class="pill warn">Partial</span> Starts PostgreSQL 16
-                    only. Meilisearch is not in the compose file, so it does not
-                    stand up the full stack.
-                  </td>
-                </tr>
-                <tr>
-                  <td class="id">infra/docker/init/create-test-db.sh</td>
-                  <td>
-                    <span class="pill live">Live</span> Provisions the test
-                    database
-                  </td>
-                </tr>
-                <tr>
-                  <td class="id">infra/nginx/</td>
-                  <td><span class="pill stubbed">README only</span></td>
-                </tr>
-                <tr>
-                  <td class="id">infra/terraform/</td>
-                  <td><span class="pill stubbed">README only</span></td>
-                </tr>
-                <tr>
-                  <td class="id">infra/monitoring/</td>
-                  <td><span class="pill stubbed">README only</span></td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <p>
-            There are no deployments yet. Data residency is committed to the EU,
-            which constrains hosting choices when that changes.
-          </p>
-        </section>
-
         <section id="ci">
           <h2>CI and release</h2>
           <p class="lede">
@@ -4730,55 +4615,120 @@
           </div>
         </section>
 
-        <section id="agents">
-          <h2>Agent workflow</h2>
+        <section id="infra">
+          <h2>Deployment</h2>
           <p class="lede">
-            Much of this repository is written by coding agents, and the
-            conventions governing that are themselves versioned.
-            <code>.agents/skills/</code> holds six.
+            Largely unbuilt. Recorded honestly because the directory structure
+            implies more than exists.
           </p>
           <div class="scroll">
             <table>
               <thead>
                 <tr>
-                  <th>Skill</th>
-                  <th>Governs</th>
+                  <th>Path</th>
+                  <th>State</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <td class="id">production-pr-author</td>
-                  <td>How a change is prepared and described</td>
-                </tr>
-                <tr>
-                  <td class="id">production-pr-review</td>
-                  <td>How a change is reviewed before merge</td>
-                </tr>
-                <tr>
-                  <td class="id">production-pr-review-response</td>
-                  <td>How review findings are answered</td>
-                </tr>
-                <tr>
-                  <td class="id">
-                    design-taste-frontend · high-end-visual-design ·
-                    image-taste-frontend
+                  <td class="id">infra/docker/compose.yaml</td>
+                  <td>
+                    <span class="pill warn">Partial</span> Starts PostgreSQL 16
+                    only. Meilisearch is not in the compose file, so it does not
+                    stand up the full stack.
                   </td>
-                  <td>Visual and frontend judgement</td>
+                </tr>
+                <tr>
+                  <td class="id">infra/docker/init/create-test-db.sh</td>
+                  <td>
+                    <span class="pill live">Live</span> Provisions the test
+                    database
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">infra/nginx/</td>
+                  <td><span class="pill stubbed">README only</span></td>
+                </tr>
+                <tr>
+                  <td class="id">infra/terraform/</td>
+                  <td><span class="pill stubbed">README only</span></td>
+                </tr>
+                <tr>
+                  <td class="id">infra/monitoring/</td>
+                  <td><span class="pill stubbed">README only</span></td>
                 </tr>
               </tbody>
             </table>
           </div>
           <p>
-            <a href="https://github.com/ObiterDictum/obiter/blob/dev/AGENTS.md"
-              >AGENTS.md</a
-            >
-            is the entry point and is deliberately short, pointing at the
-            roadmap, rules and specs rather than restating them. The other agent
-            directories at the repository root (<code>.pi-subagents</code>,
-            <code>.synthetic-v2</code>, <code>.code-review</code>,
-            <code>.claude</code>, <code>.cursor</code>) are machine-local
-            scratch and gitignored, so a clone never sees them.
+            There are no deployments yet. Data residency is committed to the EU,
+            which constrains hosting choices when that changes.
           </p>
+        </section>
+
+        <section id="where">
+          <h2>Where things go</h2>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Change</th>
+                  <th>Goes in</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>A request or response shape</td>
+                  <td class="id">packages/contracts</td>
+                </tr>
+                <tr>
+                  <td>A new API endpoint</td>
+                  <td class="id">
+                    services/api/src/routes/, thin, delegating to a domain
+                    module
+                  </td>
+                </tr>
+                <tr>
+                  <td>Business logic</td>
+                  <td class="id">
+                    A domain module beside the route, never inside it
+                  </td>
+                </tr>
+                <tr>
+                  <td>A product screen</td>
+                  <td class="id">
+                    packages/app-shell, not apps/web or apps/desktop
+                  </td>
+                </tr>
+                <tr>
+                  <td>A presentational component</td>
+                  <td class="id">
+                    packages/ui, with no auth, storage or network
+                  </td>
+                </tr>
+                <tr>
+                  <td>A schema change</td>
+                  <td class="id">
+                    A new numbered migration; never edit an applied one
+                  </td>
+                </tr>
+                <tr>
+                  <td>Span or redaction logic</td>
+                  <td class="id">packages/redaction-policy, pure functions</td>
+                </tr>
+                <tr>
+                  <td>Ranking or index behaviour</td>
+                  <td class="id">packages/search-client</td>
+                </tr>
+                <tr>
+                  <td>Platform-specific behaviour</td>
+                  <td class="id">
+                    apps/web or apps/desktop, only where it genuinely differs
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section id="rules">
@@ -4846,6 +4796,57 @@
               >
             </li>
           </ul>
+        </section>
+
+        <section id="agents">
+          <h2>Agent workflow</h2>
+          <p class="lede">
+            Much of this repository is written by coding agents, and the
+            conventions governing that are themselves versioned.
+            <code>.agents/skills/</code> holds six.
+          </p>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Skill</th>
+                  <th>Governs</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="id">production-pr-author</td>
+                  <td>How a change is prepared and described</td>
+                </tr>
+                <tr>
+                  <td class="id">production-pr-review</td>
+                  <td>How a change is reviewed before merge</td>
+                </tr>
+                <tr>
+                  <td class="id">production-pr-review-response</td>
+                  <td>How review findings are answered</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    design-taste-frontend · high-end-visual-design ·
+                    image-taste-frontend
+                  </td>
+                  <td>Visual and frontend judgement</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <a href="https://github.com/ObiterDictum/obiter/blob/dev/AGENTS.md"
+              >AGENTS.md</a
+            >
+            is the entry point and is deliberately short, pointing at the
+            roadmap, rules and specs rather than restating them. The other agent
+            directories at the repository root (<code>.pi-subagents</code>,
+            <code>.synthetic-v2</code>, <code>.code-review</code>,
+            <code>.claude</code>, <code>.cursor</code>) are machine-local
+            scratch and gitignored, so a clone never sees them.
+          </p>
         </section>
 
         <section id="divergences">
