@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Obiter System Architecture</title>
+    <title>Obiter — System Reference</title>
     <style>
       /* Fonts inlined from packages/ui/src/fonts so this file stands alone. */
       @font-face {
@@ -49,18 +49,14 @@
         --muted: #6b5f54;
         --subtle: #948576;
         --brand: #2c6a59;
-        --brand-fg: #fbf8f1;
         --ring: rgba(44, 106, 89, 0.45);
         --info: #356a9c;
         --success: #2f6b46;
         --warning: #8a5e16;
         --danger: #9b4129;
-
         --sans: 'Satoshi', ui-sans-serif, system-ui, -apple-system, sans-serif;
         --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
-
-        --measure: 68ch;
-        --gutter: clamp(1.25rem, 4vw, 3.5rem);
+        --measure: 70ch;
       }
 
       @media (prefers-color-scheme: dark) {
@@ -74,7 +70,6 @@
           --muted: #b3a695;
           --subtle: #8a7d6c;
           --brand: #5b9d89;
-          --brand-fg: #1a1612;
           --ring: rgba(91, 157, 137, 0.55);
           --info: #6fa3d6;
           --success: #6fb384;
@@ -93,7 +88,6 @@
         --muted: #b3a695;
         --subtle: #8a7d6c;
         --brand: #5b9d89;
-        --brand-fg: #1a1612;
         --ring: rgba(91, 157, 137, 0.55);
         --info: #6fa3d6;
         --success: #6fb384;
@@ -111,7 +105,6 @@
         --muted: #6b5f54;
         --subtle: #948576;
         --brand: #2c6a59;
-        --brand-fg: #fbf8f1;
         --ring: rgba(44, 106, 89, 0.45);
         --info: #356a9c;
         --success: #2f6b46;
@@ -127,6 +120,13 @@
 
       html {
         -webkit-text-size-adjust: 100%;
+        scroll-behavior: smooth;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
       }
 
       body {
@@ -134,7 +134,7 @@
         background: var(--bg);
         color: var(--ink);
         font-family: var(--sans);
-        font-size: 16px;
+        font-size: 15.5px;
         line-height: 1.6;
         font-synthesis-weight: none;
       }
@@ -145,50 +145,162 @@
         border-radius: 2px;
       }
 
-      .wrap {
-        max-width: 1180px;
-        margin-inline: auto;
-        padding-inline: var(--gutter);
-      }
-
-      /* ---------- masthead ---------- */
-
-      .masthead {
-        border-bottom: 1px solid var(--line-strong);
-        padding-block: clamp(2.5rem, 7vw, 4.5rem) 2rem;
-      }
-
-      .eyebrow {
-        font-family: var(--mono);
-        font-size: 0.7rem;
-        letter-spacing: 0.16em;
-        text-transform: uppercase;
+      a {
         color: var(--brand);
-        margin: 0 0 1rem;
+        text-underline-offset: 0.18em;
+        text-decoration-thickness: 1px;
+      }
+
+      code {
+        font-family: var(--mono);
+        font-size: 0.85em;
+        overflow-wrap: anywhere;
+      }
+
+      /* ---------- shell ---------- */
+
+      .shell {
+        display: grid;
+        grid-template-columns: 16.5rem minmax(0, 1fr);
+        max-width: 1440px;
+        margin-inline: auto;
+      }
+
+      .sidebar {
+        position: sticky;
+        top: 0;
+        align-self: start;
+        height: 100vh;
+        overflow-y: auto;
+        border-right: 1px solid var(--line);
+        padding: 2rem 1.25rem 3rem 1.75rem;
+        background: var(--bg);
+      }
+
+      .brandmark {
+        font-weight: 700;
+        letter-spacing: -0.02em;
+        font-size: 1.15rem;
+        margin: 0 0 0.15rem;
+      }
+
+      .brandmark + p {
+        font-family: var(--mono);
+        font-size: 0.66rem;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: var(--subtle);
+        margin: 0 0 1.75rem;
+      }
+
+      .toc {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 0.1rem;
+      }
+
+      .toc .grp {
+        font-family: var(--mono);
+        font-size: 0.62rem;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: var(--subtle);
+        margin: 1.25rem 0 0.4rem;
+      }
+
+      .toc a {
+        display: block;
+        padding: 0.25rem 0.5rem;
+        border-radius: 2px;
+        color: var(--muted);
+        text-decoration: none;
+        font-size: 0.85rem;
+        border-left: 2px solid transparent;
+      }
+
+      .toc a:hover {
+        color: var(--ink);
+        background: var(--surface);
+      }
+
+      .toc a[aria-current='true'] {
+        color: var(--brand);
+        border-left-color: var(--brand);
+        background: var(--surface);
+      }
+
+      main {
+        padding: 2.5rem clamp(1.25rem, 3.5vw, 3.5rem) 6rem;
+        min-width: 0;
+      }
+
+      @media (max-width: 60rem) {
+        .shell {
+          grid-template-columns: minmax(0, 1fr);
+        }
+
+        .sidebar {
+          position: static;
+          height: auto;
+          border-right: 0;
+          border-bottom: 1px solid var(--line-strong);
+          padding: 1.5rem 1.25rem;
+        }
+
+        .toc {
+          flex-direction: row;
+          flex-wrap: wrap;
+          gap: 0.25rem;
+        }
+
+        .toc .grp {
+          width: 100%;
+          margin: 0.75rem 0 0.15rem;
+        }
+
+        .toc a {
+          border-left: 0;
+          border-bottom: 2px solid transparent;
+        }
+
+        .toc a[aria-current='true'] {
+          border-left: 0;
+          border-bottom-color: var(--brand);
+        }
+      }
+
+      /* ---------- typography ---------- */
+
+      .hero {
+        border-bottom: 1px solid var(--line-strong);
+        padding-bottom: 2rem;
       }
 
       h1 {
-        font-size: clamp(2rem, 5.5vw, 3.25rem);
-        line-height: 1.05;
+        font-size: clamp(1.9rem, 4vw, 2.6rem);
+        line-height: 1.08;
+        letter-spacing: -0.022em;
         font-weight: 700;
-        letter-spacing: -0.02em;
+        margin: 0 0 0.85rem;
         text-wrap: balance;
-        margin: 0 0 1rem;
       }
 
       .standfirst {
         max-width: var(--measure);
         color: var(--muted);
-        font-size: clamp(1rem, 2vw, 1.125rem);
-        margin: 0 0 2rem;
+        font-size: 1.03rem;
+        margin: 0 0 1.5rem;
       }
 
       .meta {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.5rem 2rem;
+        gap: 0.4rem 1.75rem;
         font-family: var(--mono);
-        font-size: 0.75rem;
+        font-size: 0.72rem;
         color: var(--subtle);
         margin: 0;
         padding: 0;
@@ -200,11 +312,10 @@
         font-weight: 500;
       }
 
-      /* ---------- sections ---------- */
-
       section {
-        padding-block: clamp(2.5rem, 6vw, 4rem);
+        padding-block: 2.75rem;
         border-bottom: 1px solid var(--line);
+        scroll-margin-top: 1.5rem;
       }
 
       section:last-of-type {
@@ -212,73 +323,69 @@
       }
 
       h2 {
-        font-size: clamp(1.35rem, 3vw, 1.75rem);
-        letter-spacing: -0.015em;
+        font-size: 1.5rem;
+        letter-spacing: -0.018em;
         font-weight: 700;
-        margin: 0 0 0.5rem;
+        margin: 0 0 0.4rem;
         text-wrap: balance;
       }
 
       h3 {
-        font-size: 1.05rem;
+        font-size: 1rem;
         font-weight: 700;
-        margin: 2rem 0 0.75rem;
+        margin: 2.25rem 0 0.6rem;
+      }
+
+      h4 {
+        font-family: var(--mono);
+        font-size: 0.82rem;
+        font-weight: 500;
+        margin: 1.5rem 0 0.4rem;
+        color: var(--ink);
       }
 
       .lede {
         max-width: var(--measure);
         color: var(--muted);
-        margin: 0 0 2rem;
+        margin: 0 0 1.75rem;
       }
 
       p {
         max-width: var(--measure);
       }
 
-      a {
-        color: var(--brand);
-        text-underline-offset: 0.2em;
-      }
-
-      code,
-      .mono {
-        font-family: var(--mono);
-        font-size: 0.85em;
-      }
-
-      /* ---------- the layer map ---------- */
+      /* ---------- layer map ---------- */
 
       .map {
         display: flex;
         flex-direction: column;
-        gap: 0.75rem;
+        gap: 0.6rem;
       }
 
       .layer {
         display: grid;
-        grid-template-columns: minmax(0, 11rem) minmax(0, 1fr);
-        gap: 1rem 1.5rem;
+        grid-template-columns: minmax(0, 10rem) minmax(0, 1fr);
+        gap: 0.85rem 1.25rem;
         align-items: start;
         background: var(--surface);
         border: 1px solid var(--line);
-        border-left: 3px solid var(--layer-accent, var(--line-strong));
+        border-left: 3px solid var(--accent, var(--line-strong));
         border-radius: 3px;
-        padding: 1.25rem 1.5rem;
+        padding: 1rem 1.25rem;
       }
 
-      @media (max-width: 40rem) {
+      @media (max-width: 44rem) {
         .layer {
           grid-template-columns: minmax(0, 1fr);
-          gap: 0.75rem;
         }
       }
 
       .layer-label {
         font-family: var(--mono);
-        font-size: 0.7rem;
-        letter-spacing: 0.12em;
+        font-size: 0.68rem;
+        letter-spacing: 0.11em;
         text-transform: uppercase;
-        color: var(--layer-accent, var(--muted));
+        color: var(--accent, var(--muted));
       }
 
       .layer-label span {
@@ -286,37 +393,41 @@
         text-transform: none;
         letter-spacing: 0;
         color: var(--subtle);
-        margin-top: 0.35rem;
-        font-size: 0.7rem;
+        margin-top: 0.3rem;
         line-height: 1.4;
       }
 
       .nodes {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.5rem;
+        gap: 0.4rem;
       }
 
       .node {
         display: flex;
         flex-direction: column;
-        gap: 0.15rem;
+        gap: 0.1rem;
         background: var(--raised);
         border: 1px solid var(--line-strong);
         border-radius: 2px;
-        padding: 0.55rem 0.75rem;
-        min-width: 8.5rem;
+        padding: 0.5rem 0.7rem;
+        min-width: 8rem;
+        text-decoration: none;
+      }
+
+      a.node:hover {
+        border-color: var(--brand);
       }
 
       .node b {
         font-family: var(--mono);
-        font-size: 0.78rem;
+        font-size: 0.76rem;
         font-weight: 500;
         color: var(--ink);
       }
 
       .node span {
-        font-size: 0.7rem;
+        font-size: 0.68rem;
         color: var(--subtle);
         line-height: 1.35;
       }
@@ -330,6 +441,69 @@
         color: var(--subtle);
       }
 
+      /* ---------- module cards ---------- */
+
+      .modules {
+        display: grid;
+        gap: 0.85rem;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 24rem), 1fr));
+      }
+
+      .module {
+        background: var(--surface);
+        border: 1px solid var(--line);
+        border-radius: 3px;
+        padding: 1.1rem 1.25rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.55rem;
+      }
+
+      .module header {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 0.5rem;
+        justify-content: space-between;
+      }
+
+      .module h4 {
+        margin: 0;
+        font-size: 0.85rem;
+      }
+
+      .module p {
+        margin: 0;
+        font-size: 0.85rem;
+        color: var(--muted);
+        max-width: none;
+      }
+
+      .kv {
+        display: grid;
+        grid-template-columns: 5.5rem minmax(0, 1fr);
+        gap: 0.2rem 0.75rem;
+        font-size: 0.76rem;
+        margin: 0;
+      }
+
+      .kv dt {
+        font-family: var(--mono);
+        font-size: 0.66rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--subtle);
+        padding-top: 0.1rem;
+      }
+
+      .kv dd {
+        margin: 0;
+        font-family: var(--mono);
+        font-size: 0.73rem;
+        color: var(--muted);
+        overflow-wrap: anywhere;
+      }
+
       /* ---------- tables ---------- */
 
       .scroll {
@@ -337,26 +511,27 @@
         border: 1px solid var(--line);
         border-radius: 3px;
         background: var(--surface);
+        margin-block: 0.5rem 1rem;
       }
 
       table {
         width: 100%;
         border-collapse: collapse;
-        font-size: 0.85rem;
-        min-width: 34rem;
+        font-size: 0.82rem;
+        min-width: 32rem;
       }
 
       th,
       td {
         text-align: left;
-        padding: 0.6rem 0.9rem;
+        padding: 0.55rem 0.85rem;
         border-bottom: 1px solid var(--line);
         vertical-align: top;
       }
 
       thead th {
         font-family: var(--mono);
-        font-size: 0.68rem;
+        font-size: 0.65rem;
         letter-spacing: 0.1em;
         text-transform: uppercase;
         color: var(--muted);
@@ -369,18 +544,10 @@
         border-bottom: 0;
       }
 
-      td.id,
-      td.num {
+      td.id {
         font-family: var(--mono);
-        font-size: 0.78rem;
-        /* Identifier lists wrap rather than forcing the table wide; the
-           .scroll container handles anything that genuinely cannot. */
+        font-size: 0.75rem;
         overflow-wrap: anywhere;
-      }
-
-      td.num {
-        font-variant-numeric: tabular-nums;
-        white-space: nowrap;
       }
 
       /* ---------- pills ---------- */
@@ -388,10 +555,10 @@
       .pill {
         display: inline-block;
         font-family: var(--mono);
-        font-size: 0.66rem;
+        font-size: 0.63rem;
         letter-spacing: 0.04em;
         text-transform: uppercase;
-        padding: 0.15rem 0.45rem;
+        padding: 0.1rem 0.4rem;
         border-radius: 2px;
         border: 1px solid currentColor;
         white-space: nowrap;
@@ -400,60 +567,89 @@
       .pill.live {
         color: var(--success);
       }
+
       .pill.stubbed {
         color: var(--subtle);
       }
+
       .pill.warn {
         color: var(--warning);
       }
+
       .pill.risk {
         color: var(--danger);
       }
 
-      /* ---------- flows ---------- */
+      /* ---------- step flows ---------- */
 
-      .flows {
-        display: grid;
-        gap: 1rem;
-        grid-template-columns: repeat(auto-fit, minmax(min(100%, 20rem), 1fr));
-      }
-
-      .flow {
-        background: var(--surface);
-        border: 1px solid var(--line);
-        border-radius: 3px;
-        padding: 1.25rem;
-      }
-
-      .flow h3 {
-        margin: 0 0 0.75rem;
-        font-size: 0.95rem;
-      }
-
-      .flow ol {
+      .steps {
+        list-style: none;
+        counter-reset: s;
         margin: 0;
-        padding-left: 1.1rem;
+        padding: 0;
+      }
+
+      .steps li {
+        counter-increment: s;
+        display: grid;
+        grid-template-columns: 1.6rem minmax(0, 1fr);
+        gap: 0.85rem;
+        padding-bottom: 1rem;
+        position: relative;
         font-size: 0.85rem;
         color: var(--muted);
-        display: flex;
-        flex-direction: column;
-        gap: 0.4rem;
       }
 
-      .flow ol code {
+      .steps li::before {
+        content: counter(s);
+        font-family: var(--mono);
+        font-size: 0.66rem;
+        color: var(--brand);
+        border: 1px solid var(--line-strong);
+        border-radius: 50%;
+        width: 1.6rem;
+        height: 1.6rem;
+        display: grid;
+        place-items: center;
+        background: var(--bg);
+        z-index: 1;
+      }
+
+      .steps li:not(:last-child)::after {
+        content: '';
+        position: absolute;
+        left: 0.8rem;
+        top: 1.6rem;
+        bottom: 0;
+        width: 1px;
+        background: var(--line-strong);
+      }
+
+      .steps b {
+        color: var(--ink);
+        font-weight: 500;
+      }
+
+      .callout {
+        border-left: 3px solid var(--warning);
+        background: var(--surface);
+        padding: 0.85rem 1.1rem;
+        margin: 1rem 0;
+        font-size: 0.85rem;
+        color: var(--muted);
+        border-radius: 0 3px 3px 0;
+        max-width: var(--measure);
+      }
+
+      .callout.risk {
+        border-left-color: var(--danger);
+      }
+
+      .callout b {
         color: var(--ink);
       }
 
-      .flow .caveat {
-        margin: 0.9rem 0 0;
-        padding-top: 0.75rem;
-        border-top: 1px solid var(--line);
-        font-size: 0.78rem;
-        color: var(--warning);
-        max-width: none;
-      }
-
-      /* ---------- rules list ---------- */
+      /* ---------- rules ---------- */
 
       .rules {
         list-style: none;
@@ -461,15 +657,15 @@
         padding: 0;
         display: flex;
         flex-direction: column;
-        gap: 0.75rem;
+        gap: 0.7rem;
         max-width: var(--measure);
       }
 
       .rules li {
         display: grid;
-        grid-template-columns: 1.5rem minmax(0, 1fr);
-        gap: 0.75rem;
-        font-size: 0.9rem;
+        grid-template-columns: 1.25rem minmax(0, 1fr);
+        gap: 0.65rem;
+        font-size: 0.88rem;
         color: var(--muted);
       }
 
@@ -477,7 +673,7 @@
         content: '§';
         font-family: var(--mono);
         color: var(--brand);
-        font-size: 0.85rem;
+        font-size: 0.82rem;
       }
 
       .rules b {
@@ -485,685 +681,1830 @@
         font-weight: 500;
       }
 
+      /* ---------- glossary ---------- */
+
+      .glossary {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(min(100%, 21rem), 1fr));
+        gap: 0 2rem;
+        margin: 0;
+      }
+
+      .glossary div {
+        padding: 0.6rem 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      .glossary dt {
+        font-weight: 700;
+        font-size: 0.87rem;
+        margin-bottom: 0.15rem;
+      }
+
+      .glossary dd {
+        margin: 0;
+        font-size: 0.83rem;
+        color: var(--muted);
+      }
+
       footer {
-        padding-block: 2.5rem 4rem;
+        padding-block: 2rem 4rem;
         color: var(--subtle);
         font-size: 0.78rem;
-        border-top: 1px solid var(--line-strong);
       }
 
       footer p {
         max-width: var(--measure);
       }
-
-      @media print {
-        body {
-          background: #fff;
-          color: #000;
-        }
-        section {
-          break-inside: avoid;
-        }
-      }
     </style>
   </head>
 
   <body>
-    <header class="masthead">
-      <div class="wrap">
-        <p class="eyebrow">Obiter Research Limited · System architecture</p>
-        <h1>What runs where, and what may depend on what</h1>
-        <p class="standfirst">
-          A map of the Obiter monorepo: the four client and service processes,
-          the eleven workspace packages beneath them, the three data stores, and
-          the external sources they draw on. Layers are ordered by dependency
-          direction. Anything in a band may depend on the bands below it, and
-          never on the bands above.
-        </p>
-        <ul class="meta">
-          <li><b>Repository</b> ObiterDictum/obiter</li>
-          <li><b>Licence</b> Elastic 2.0</li>
-          <li><b>Package manager</b> pnpm workspaces</li>
-          <li><b>Verified</b> 2026-07-27 against <code>dev</code></li>
+    <div class="shell">
+      <nav class="sidebar" aria-label="Contents">
+        <p class="brandmark">Obiter</p>
+        <p>System reference</p>
+        <ul class="toc">
+          <li class="grp">Orientation</li>
+          <li><a href="#overview">Overview</a></li>
+          <li><a href="#stack">The stack</a></li>
+          <li><a href="#graph">Dependency graph</a></li>
+          <li class="grp">Workspaces</li>
+          <li><a href="#clients">Clients</a></li>
+          <li><a href="#services">Services</a></li>
+          <li><a href="#packages">Packages</a></li>
+          <li class="grp">Interfaces</li>
+          <li><a href="#http">HTTP surface</a></li>
+          <li><a href="#lifecycle">Request lifecycle</a></li>
+          <li><a href="#auth">Auth and scoping</a></li>
+          <li class="grp">State</li>
+          <li><a href="#data">Data model</a></li>
+          <li><a href="#storage">Object storage</a></li>
+          <li><a href="#config">Configuration</a></li>
+          <li class="grp">Behaviour</li>
+          <li><a href="#search-flow">Search flow</a></li>
+          <li><a href="#redact-flow">Redaction flow</a></li>
+          <li class="grp">Working here</li>
+          <li><a href="#where">Where things go</a></li>
+          <li><a href="#rules">Boundary rules</a></li>
+          <li><a href="#divergences">Known divergences</a></li>
+          <li class="grp">Reference</li>
+          <li><a href="#glossary">Glossary</a></li>
+          <li><a href="#docs">Document index</a></li>
         </ul>
-      </div>
-    </header>
+      </nav>
 
-    <div class="wrap">
-      <section>
-        <h2>The stack</h2>
-        <p class="lede">
-          Dashed outlines are workspaces that exist in
-          <code>pnpm-workspace.yaml</code> but contain only a README. They are
-          reserved names, not running code.
-        </p>
+      <main>
+        <div class="hero">
+          <h1>Obiter system reference</h1>
+          <p class="standfirst">
+            A complete map of the monorepo: every workspace, every route, every
+            table, and the rules that hold the boundaries in place. Identifiers
+            link to source. Where this page and the code disagree, the code is
+            correct.
+          </p>
+          <ul class="meta">
+            <li><b>Repo</b> ObiterDictum/obiter</li>
+            <li><b>Branch</b> dev</li>
+            <li><b>Licence</b> Elastic 2.0</li>
+            <li><b>Verified</b> 2026-07-27</li>
+          </ul>
+        </div>
 
-        <div class="map">
-          <div class="layer" style="--layer-accent: var(--info)">
-            <div class="layer-label">
-              Clients
-              <span>User-facing applications</span>
+        <section id="overview">
+          <h2>Overview</h2>
+          <p class="lede">
+            Obiter is legal infrastructure: source-grounded search over UK
+            judgments, reviewable redaction of sensitive material, and the
+            matter workspaces those sit inside. A pnpm monorepo with four
+            running processes and eleven workspace packages.
+          </p>
+          <p>
+            Three product surfaces carry code: <b>Search</b> over Find Case Law
+            judgments, <b>Redact</b> for detecting and removing personal data,
+            and <b>Matters</b> for private document workspaces. Two more, Verify
+            and Research, are named throughout the documentation but have no
+            implementation.
+          </p>
+          <div class="callout">
+            <b>Reading the layers.</b> The stack below is ordered by dependency
+            direction. Anything in a band may depend on the bands beneath it and
+            never on the bands above. That ordering is enforced by convention
+            rather than tooling, so it is the first thing to check in review.
+          </div>
+        </section>
+
+        <section id="stack">
+          <h2>The stack</h2>
+          <p class="lede">
+            Dashed nodes are workspaces that exist in
+            <code>pnpm-workspace.yaml</code> but contain only a README. They are
+            reserved names, not running code.
+          </p>
+
+          <div class="map">
+            <div class="layer" style="--accent: var(--info)">
+              <div class="layer-label">
+                Clients<span>User-facing applications</span>
+              </div>
+              <div class="nodes">
+                <a
+                  class="node"
+                  href="https://github.com/ObiterDictum/obiter/tree/dev/apps/web"
+                  ><b>apps/web</b><span>TanStack Start · React · Vite</span></a
+                >
+                <a
+                  class="node"
+                  href="https://github.com/ObiterDictum/obiter/tree/dev/apps/desktop"
+                  ><b>apps/desktop</b><span>Electron · TanStack Router</span></a
+                >
+                <span class="node stub"
+                  ><b>apps/marketing</b><span>README only</span></span
+                >
+                <span class="node stub"
+                  ><b>apps/docs</b><span>README only</span></span
+                >
+              </div>
             </div>
-            <div class="nodes">
-              <div class="node">
-                <b>apps/web</b>
-                <span>TanStack Start · React · Vite</span>
+
+            <div class="layer" style="--accent: var(--brand)">
+              <div class="layer-label">
+                Services<span>Long-running processes</span>
               </div>
-              <div class="node">
-                <b>apps/desktop</b>
-                <span>Electron · TanStack Router</span>
+              <div class="nodes">
+                <a
+                  class="node"
+                  href="https://github.com/ObiterDictum/obiter/tree/dev/services/api"
+                  ><b>services/api</b><span>Hono · only HTTP surface</span></a
+                >
+                <a
+                  class="node"
+                  href="https://github.com/ObiterDictum/obiter/tree/dev/services/legal-ingestor"
+                  ><b>services/legal-ingestor</b
+                  ><span>Judgment acquisition</span></a
+                >
+                <span class="node stub"
+                  ><b>services/worker</b><span>README only</span></span
+                >
               </div>
-              <div class="node stub">
-                <b>apps/marketing</b>
-                <span>Reserved, README only</span>
+            </div>
+
+            <div class="layer" style="--accent: var(--warning)">
+              <div class="layer-label">
+                Feature packages<span>Composed product UI</span>
               </div>
-              <div class="node stub">
-                <b>apps/docs</b>
-                <span>Reserved, README only</span>
+              <div class="nodes">
+                <a
+                  class="node"
+                  href="https://github.com/ObiterDictum/obiter/tree/dev/packages/app-shell"
+                  ><b>@obiter/app-shell</b
+                  ><span>Shell, routes, search and case views</span></a
+                >
+                <a
+                  class="node"
+                  href="https://github.com/ObiterDictum/obiter/tree/dev/packages/redact-ui"
+                  ><b>@obiter/redact-ui</b
+                  ><span>Span review and finalize</span></a
+                >
+              </div>
+            </div>
+
+            <div class="layer" style="--accent: var(--warning)">
+              <div class="layer-label">
+                Domain packages<span>Logic, no HTTP concerns</span>
+              </div>
+              <div class="nodes">
+                <a
+                  class="node"
+                  href="https://github.com/ObiterDictum/obiter/tree/dev/packages/redaction-policy"
+                  ><b>@obiter/redaction-policy</b
+                  ><span>Merge, supplement, chunk, apply</span></a
+                >
+                <a
+                  class="node"
+                  href="https://github.com/ObiterDictum/obiter/tree/dev/packages/rampart-inference"
+                  ><b>@obiter/rampart-inference</b
+                  ><span>Vendored ONNX NER</span></a
+                >
+                <a
+                  class="node"
+                  href="https://github.com/ObiterDictum/obiter/tree/dev/packages/search-client"
+                  ><b>@obiter/search-client</b
+                  ><span>Meilisearch index and ranking</span></a
+                >
+                <span class="node stub"
+                  ><b>@obiter/verification-core</b
+                  ><span>README only</span></span
+                >
+              </div>
+            </div>
+
+            <div class="layer" style="--accent: var(--subtle)">
+              <div class="layer-label">
+                Primitives<span>Depend on nothing internal</span>
+              </div>
+              <div class="nodes">
+                <a
+                  class="node"
+                  href="https://github.com/ObiterDictum/obiter/blob/dev/packages/contracts/src/index.ts"
+                  ><b>@obiter/contracts</b
+                  ><span>Zod schemas, error codes</span></a
+                >
+                <a
+                  class="node"
+                  href="https://github.com/ObiterDictum/obiter/tree/dev/packages/legal-schema"
+                  ><b>@obiter/legal-schema</b
+                  ><span>Legal source shapes</span></a
+                >
+                <a
+                  class="node"
+                  href="https://github.com/ObiterDictum/obiter/tree/dev/packages/ui"
+                  ><b>@obiter/ui</b><span>Tokens and primitives</span></a
+                >
+                <a
+                  class="node"
+                  href="https://github.com/ObiterDictum/obiter/tree/dev/packages/database"
+                  ><b>@obiter/database</b><span>Migrations</span></a
+                >
+                <span class="node stub"
+                  ><b>@obiter/config</b><span>README only</span></span
+                >
+              </div>
+            </div>
+
+            <div class="layer" style="--accent: var(--success)">
+              <div class="layer-label">Stores<span>All self-hosted</span></div>
+              <div class="nodes">
+                <a class="node" href="#data"
+                  ><b>PostgreSQL 16</b><span>System of record</span></a
+                >
+                <a class="node" href="#search-flow"
+                  ><b>Meilisearch</b><span>Judgment query layer</span></a
+                >
+                <a class="node" href="#storage"
+                  ><b>Object storage</b
+                  ><span>Filesystem, key-validated</span></a
+                >
+              </div>
+            </div>
+
+            <div class="layer" style="--accent: var(--danger)">
+              <div class="layer-label">
+                External<span>Third parties, licence-bearing</span>
+              </div>
+              <div class="nodes">
+                <span class="node"
+                  ><b>Find Case Law</b
+                  ><span>TNA · transactional licence held</span></span
+                >
+                <span class="node"
+                  ><b>qarlus/rampart</b
+                  ><span>Pinned model · CC BY 4.0</span></span
+                >
+                <span class="node"
+                  ><b>Resend</b><span>Transactional email</span></span
+                >
               </div>
             </div>
           </div>
+        </section>
 
-          <div class="layer" style="--layer-accent: var(--brand)">
-            <div class="layer-label">
-              Services
-              <span>Long-running processes</span>
-            </div>
-            <div class="nodes">
-              <div class="node">
-                <b>services/api</b>
-                <span>Hono · better-auth · the only HTTP surface</span>
-              </div>
-              <div class="node">
-                <b>services/legal-ingestor</b>
-                <span>Judgment acquisition into Meilisearch</span>
-              </div>
-              <div class="node stub">
-                <b>services/worker</b>
-                <span>Reserved, README only</span>
-              </div>
-            </div>
+        <section id="graph">
+          <h2>Dependency graph</h2>
+          <p class="lede">
+            Read from every <code>package.json</code>. Packages depending on
+            nothing internal are leaves, which is what makes them extractable or
+            separately licensable without contamination.
+          </p>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Workspace</th>
+                  <th>Internal dependencies</th>
+                  <th>Key external</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="id">@obiter/web</td>
+                  <td class="id">app-shell · redact-ui · ui · contracts</td>
+                  <td>TanStack Start, better-auth</td>
+                </tr>
+                <tr>
+                  <td class="id">@obiter/desktop</td>
+                  <td class="id">app-shell · redact-ui · ui</td>
+                  <td>Electron</td>
+                </tr>
+                <tr>
+                  <td class="id">@obiter/api</td>
+                  <td class="id">
+                    contracts · legal-schema · rampart-inference ·
+                    redaction-policy · search-client
+                  </td>
+                  <td>Hono, better-auth, pg, mammoth, unpdf, resend</td>
+                </tr>
+                <tr>
+                  <td class="id">@obiter/legal-ingestor</td>
+                  <td class="id">legal-schema · search-client</td>
+                  <td>meilisearch</td>
+                </tr>
+                <tr>
+                  <td class="id">@obiter/redact-ui</td>
+                  <td class="id">
+                    app-shell · contracts · redaction-policy · ui
+                  </td>
+                  <td>TanStack Query</td>
+                </tr>
+                <tr>
+                  <td class="id">@obiter/app-shell</td>
+                  <td class="id">contracts · ui</td>
+                  <td>TanStack Router</td>
+                </tr>
+                <tr>
+                  <td class="id">@obiter/redaction-policy</td>
+                  <td class="id">contracts</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td class="id">@obiter/search-client</td>
+                  <td class="id">legal-schema</td>
+                  <td>meilisearch</td>
+                </tr>
+                <tr>
+                  <td class="id">@obiter/rampart-inference</td>
+                  <td class="id">none</td>
+                  <td>@huggingface/transformers</td>
+                </tr>
+                <tr>
+                  <td class="id">@obiter/contracts</td>
+                  <td class="id">none</td>
+                  <td>zod</td>
+                </tr>
+                <tr>
+                  <td class="id">@obiter/legal-schema</td>
+                  <td class="id">none</td>
+                  <td>zod</td>
+                </tr>
+                <tr>
+                  <td class="id">@obiter/ui</td>
+                  <td class="id">none</td>
+                  <td>Tailwind</td>
+                </tr>
+                <tr>
+                  <td class="id">@obiter/database</td>
+                  <td class="id">none</td>
+                  <td>—</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section id="clients">
+          <h2>Clients</h2>
+          <p class="lede">
+            Both clients are deliberately thin. Product screens live in
+            <code>@obiter/app-shell</code> so web and desktop share one
+            implementation.
+          </p>
+          <div class="modules">
+            <article class="module">
+              <header>
+                <h4>
+                  <a
+                    href="https://github.com/ObiterDictum/obiter/tree/dev/apps/web"
+                    >apps/web</a
+                  >
+                </h4>
+                <span class="pill live">Live</span>
+              </header>
+              <p>
+                Browser application. TanStack Start with SSR, proxying API calls
+                to the Hono service in development.
+              </p>
+              <dl class="kv">
+                <dt>Stack</dt>
+                <dd>TanStack Start/Router/Query, React 19, Vite</dd>
+                <dt>Auth</dt>
+                <dd>better-auth client, cookie sessions</dd>
+                <dt>Dev</dt>
+                <dd>pnpm dev:web, proxies to :8787</dd>
+              </dl>
+            </article>
+
+            <article class="module">
+              <header>
+                <h4>
+                  <a
+                    href="https://github.com/ObiterDictum/obiter/tree/dev/apps/desktop"
+                    >apps/desktop</a
+                  >
+                </h4>
+                <span class="pill live">Live</span>
+              </header>
+              <p>
+                Electron shell around the same views. The renderer has no direct
+                Node, filesystem or secret access; everything crosses an
+                explicit preload bridge.
+              </p>
+              <dl class="kv">
+                <dt>Stack</dt>
+                <dd>Electron, TanStack Router, React 19</dd>
+                <dt>Auth</dt>
+                <dd>better-auth bearer plugin, not cookies</dd>
+                <dt>Dev</dt>
+                <dd>pnpm dev:desktop:api</dd>
+              </dl>
+            </article>
+          </div>
+        </section>
+
+        <section id="services">
+          <h2>Services</h2>
+          <div class="modules">
+            <article class="module">
+              <header>
+                <h4>
+                  <a
+                    href="https://github.com/ObiterDictum/obiter/tree/dev/services/api"
+                    >services/api</a
+                  >
+                </h4>
+                <span class="pill live">Live</span>
+              </header>
+              <p>
+                The entire HTTP surface. Hono on Node, better-auth for sessions
+                and organisations, direct <code>pg</code> access through typed
+                helpers rather than an ORM.
+              </p>
+              <dl class="kv">
+                <dt>Routes</dt>
+                <dd>
+                  <a
+                    href="https://github.com/ObiterDictum/obiter/tree/dev/services/api/src/routes"
+                    >src/routes/</a
+                  >
+                </dd>
+                <dt>Domain</dt>
+                <dd>
+                  redaction-detection · redaction-database ·
+                  redaction-audit-report · document-extraction · storage · authz
+                </dd>
+                <dt>Extract</dt>
+                <dd>mammoth (DOCX) · unpdf (text-layer PDF)</dd>
+              </dl>
+            </article>
+
+            <article class="module">
+              <header>
+                <h4>
+                  <a
+                    href="https://github.com/ObiterDictum/obiter/tree/dev/services/legal-ingestor"
+                    >services/legal-ingestor</a
+                  >
+                </h4>
+                <span class="pill warn">Thin</span>
+              </header>
+              <p>
+                Acquires judgments and writes them to Meilisearch. Currently
+                minimal; the Search PRD expands this into the full ingest
+                pipeline with resumability, content-hash refresh and coverage
+                reporting.
+              </p>
+              <dl class="kv">
+                <dt>Depends</dt>
+                <dd>legal-schema · search-client</dd>
+              </dl>
+            </article>
+          </div>
+        </section>
+
+        <section id="packages">
+          <h2>Packages</h2>
+          <p class="lede">
+            Nine packages carry code. Primitives sit at the bottom of the graph
+            and import nothing internal.
+          </p>
+
+          <h3>Domain</h3>
+          <div class="modules">
+            <article class="module">
+              <header>
+                <h4>
+                  <a
+                    href="https://github.com/ObiterDictum/obiter/tree/dev/packages/redaction-policy/src"
+                    >@obiter/redaction-policy</a
+                  >
+                </h4>
+              </header>
+              <p>
+                Pure functions over spans. No IO, no model, no HTTP, which is
+                what makes redaction logic auditable in isolation.
+              </p>
+              <dl class="kv">
+                <dt>Exports</dt>
+                <dd>
+                  mergeSpans · supplementSpans · mapRampartSpans · chunkText ·
+                  applyRedacted · applyPseudonymised · createTokenMap
+                </dd>
+                <dt>Files</dt>
+                <dd>
+                  merge · supplement · rampart-map · chunk · apply · types
+                </dd>
+              </dl>
+            </article>
+
+            <article class="module">
+              <header>
+                <h4>
+                  <a
+                    href="https://github.com/ObiterDictum/obiter/tree/dev/packages/rampart-inference/src"
+                    >@obiter/rampart-inference</a
+                  >
+                </h4>
+                <span class="pill warn">Vendored</span>
+              </header>
+              <p>
+                ONNX token classification for personal data. Vendored from
+                <code>@nationaldesignstudio/rampart</code> under CC BY 4.0 and
+                kept byte-faithful, so it is excluded from Prettier and lint.
+              </p>
+              <dl class="kv">
+                <dt>Exports</dt>
+                <dd>
+                  detectNer · detectHeuristics · applyPolicy · RAMPART_MODEL_ID
+                  · RAMPART_MODEL_REVISION
+                </dd>
+                <dt>Model</dt>
+                <dd>qarlus/rampart, pinned mirror</dd>
+                <dt>Note</dt>
+                <dd>classifier.ts is 776 lines, over the 500 ceiling</dd>
+              </dl>
+            </article>
+
+            <article class="module">
+              <header>
+                <h4>
+                  <a
+                    href="https://github.com/ObiterDictum/obiter/blob/dev/packages/search-client/src/index.ts"
+                    >@obiter/search-client</a
+                  >
+                </h4>
+                <span class="pill risk">Defect</span>
+              </header>
+              <p>
+                Meilisearch index setup, querying, snippet extraction and
+                ranking. Matching is substring-based rather than word-based,
+                which is the active search defect.
+              </p>
+              <dl class="kv">
+                <dt>Exports</dt>
+                <dd>
+                  createIndex · indexDocuments · search ·
+                  extractLegalSearchSnippets · rankLegalSearchHitsByExactMatch
+                </dd>
+                <dt>Indexed</dt>
+                <dd>
+                  id · title · neutralCitation · court · jurisdiction ·
+                  paragraphs.text
+                </dd>
+              </dl>
+            </article>
           </div>
 
-          <div class="layer" style="--layer-accent: var(--warning)">
-            <div class="layer-label">
-              Feature packages
-              <span>Composed UI, depend on primitives</span>
-            </div>
-            <div class="nodes">
-              <div class="node">
-                <b>@obiter/app-shell</b>
-                <span>Sidebar, routes, search and case views</span>
-              </div>
-              <div class="node">
-                <b>@obiter/redact-ui</b>
-                <span>Span review, decisions, finalize</span>
-              </div>
-            </div>
+          <h3>Feature UI</h3>
+          <div class="modules">
+            <article class="module">
+              <header>
+                <h4>
+                  <a
+                    href="https://github.com/ObiterDictum/obiter/tree/dev/packages/app-shell/src"
+                    >@obiter/app-shell</a
+                  >
+                </h4>
+              </header>
+              <p>
+                Every product screen shared by web and desktop: shell layout,
+                routing, search, case pages, matters, documents.
+              </p>
+              <dl class="kv">
+                <dt>Views</dt>
+                <dd>
+                  LegalSearchView (644) · matters (475) · home (442) ·
+                  document-detail (325) · CaseLawDocumentView (265)
+                </dd>
+                <dt>Contract</dt>
+                <dd>
+                  <a
+                    href="https://github.com/ObiterDictum/obiter/blob/dev/docs/specs/app-shell/contract.md"
+                    >specs/app-shell/contract.md</a
+                  >, a frozen surface
+                </dd>
+              </dl>
+            </article>
+
+            <article class="module">
+              <header>
+                <h4>
+                  <a
+                    href="https://github.com/ObiterDictum/obiter/tree/dev/packages/redact-ui/src"
+                    >@obiter/redact-ui</a
+                  >
+                </h4>
+              </header>
+              <p>
+                Redaction review: document text with highlighted spans, decision
+                actions, summary and finalize. Builds only against the app-shell
+                contract, never shell internals.
+              </p>
+              <dl class="kv">
+                <dt>Exports</dt>
+                <dd>
+                  RedactionReviewView · RedactionRunsView · useFinalizeRun ·
+                  useCreateRedactionRun · useRedactionOutput
+                </dd>
+              </dl>
+            </article>
           </div>
 
-          <div class="layer" style="--layer-accent: var(--warning)">
-            <div class="layer-label">
-              Domain packages
-              <span>Logic with no HTTP concerns</span>
-            </div>
-            <div class="nodes">
-              <div class="node">
-                <b>@obiter/redaction-policy</b>
-                <span>Span merge, supplement, chunk, apply</span>
-              </div>
-              <div class="node">
-                <b>@obiter/rampart-inference</b>
-                <span>Vendored ONNX NER classifier</span>
-              </div>
-              <div class="node">
-                <b>@obiter/search-client</b>
-                <span>Meilisearch indexing and ranking</span>
-              </div>
-              <div class="node stub">
-                <b>@obiter/verification-core</b>
-                <span>Reserved, README only</span>
-              </div>
-            </div>
+          <h3>Primitives</h3>
+          <div class="modules">
+            <article class="module">
+              <header>
+                <h4>
+                  <a
+                    href="https://github.com/ObiterDictum/obiter/blob/dev/packages/contracts/src/index.ts"
+                    >@obiter/contracts</a
+                  >
+                </h4>
+              </header>
+              <p>
+                Single source of truth for request and response shapes, enums
+                and error codes. Never copy a shape between an app and a
+                service; put it here.
+              </p>
+              <dl class="kv">
+                <dt>Holds</dt>
+                <dd>
+                  apiErrorCodeSchema · apiErrorResponseSchema ·
+                  spanCategorySchema · redactionRunStatusSchema · MeResponse ·
+                  UserRole
+                </dd>
+              </dl>
+            </article>
+
+            <article class="module">
+              <header>
+                <h4>
+                  <a
+                    href="https://github.com/ObiterDictum/obiter/tree/dev/packages/legal-schema/src"
+                    >@obiter/legal-schema</a
+                  >
+                </h4>
+              </header>
+              <p>
+                Shapes for legal sources: authorities, summaries, paragraphs,
+                source types and families.
+              </p>
+              <dl class="kv">
+                <dt>Exports</dt>
+                <dd>
+                  LegalAuthoritySchema · LegalAuthoritySummarySchema ·
+                  LegalParagraphSchema · LegalSourceTypeSchema
+                </dd>
+              </dl>
+            </article>
+
+            <article class="module">
+              <header>
+                <h4>
+                  <a
+                    href="https://github.com/ObiterDictum/obiter/tree/dev/packages/ui/src"
+                    >@obiter/ui</a
+                  >
+                </h4>
+              </header>
+              <p>
+                Design tokens and presentation primitives. Knows nothing about
+                auth, storage, network or legal concepts. This page uses its
+                tokens and typefaces.
+              </p>
+              <dl class="kv">
+                <dt>Tokens</dt>
+                <dd>tokens.css, light and dark, span category colours</dd>
+                <dt>Type</dt>
+                <dd>Satoshi · JetBrains Mono, self-hosted woff2</dd>
+              </dl>
+            </article>
+
+            <article class="module">
+              <header>
+                <h4>
+                  <a
+                    href="https://github.com/ObiterDictum/obiter/tree/dev/packages/database/migrations"
+                    >@obiter/database</a
+                  >
+                </h4>
+              </header>
+              <p>
+                Plain SQL migrations, numbered and forward-only. No ORM, no
+                migration framework.
+              </p>
+              <dl class="kv">
+                <dt>Count</dt>
+                <dd>9 migrations, 0001 to 0010, 0008 withdrawn</dd>
+              </dl>
+            </article>
           </div>
+        </section>
 
-          <div class="layer" style="--layer-accent: var(--subtle)">
-            <div class="layer-label">
-              Primitives
-              <span>Depend on nothing internal</span>
-            </div>
-            <div class="nodes">
-              <div class="node">
-                <b>@obiter/contracts</b>
-                <span>Zod schemas, error codes, shared types</span>
-              </div>
-              <div class="node">
-                <b>@obiter/legal-schema</b>
-                <span>Legal source shapes</span>
-              </div>
-              <div class="node">
-                <b>@obiter/ui</b>
-                <span>Tokens, primitives, Satoshi and JetBrains Mono</span>
-              </div>
-              <div class="node">
-                <b>@obiter/database</b>
-                <span>Migrations</span>
-              </div>
-              <div class="node stub">
-                <b>@obiter/config</b>
-                <span>Reserved, README only</span>
-              </div>
-            </div>
+        <section id="http">
+          <h2>HTTP surface</h2>
+          <p class="lede">
+            Every route is served by <code>services/api</code>. All business
+            routes are organisation-scoped, and there is no public API.
+          </p>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Route</th>
+                  <th>Module</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="id">GET /api/health</td>
+                  <td class="id">app.ts</td>
+                  <td>Liveness</td>
+                </tr>
+                <tr>
+                  <td class="id">GET /api/me</td>
+                  <td class="id">app.ts</td>
+                  <td>Session user and organisation</td>
+                </tr>
+                <tr>
+                  <td class="id">POST /api/organisations</td>
+                  <td class="id">organisations.ts</td>
+                  <td>Create an organisation for an org-less user</td>
+                </tr>
+                <tr>
+                  <td class="id">GET · POST /api/matters</td>
+                  <td class="id">matters.ts</td>
+                  <td>List and create matters</td>
+                </tr>
+                <tr>
+                  <td class="id">GET · PATCH · DELETE /api/matters/:id</td>
+                  <td class="id">matters.ts</td>
+                  <td>Matter detail and soft delete</td>
+                </tr>
+                <tr>
+                  <td class="id">POST /api/matters/:id/restore</td>
+                  <td class="id">matters.ts</td>
+                  <td>Undo soft delete</td>
+                </tr>
+                <tr>
+                  <td class="id">POST /api/matters/:matterId/documents</td>
+                  <td class="id">documents.ts</td>
+                  <td>Multipart upload, up to 25 MB</td>
+                </tr>
+                <tr>
+                  <td class="id">GET /api/documents/:id</td>
+                  <td class="id">documents.ts</td>
+                  <td>Document with immutable versions</td>
+                </tr>
+                <tr>
+                  <td class="id">GET /api/search</td>
+                  <td class="id">legal-search/</td>
+                  <td>Stored judgment search</td>
+                </tr>
+                <tr>
+                  <td class="id">POST /api/search/fetch</td>
+                  <td class="id">legal-search/</td>
+                  <td>Search with Find Case Law fallback</td>
+                </tr>
+                <tr>
+                  <td class="id">GET /api/search/documents/:documentId</td>
+                  <td class="id">legal-search/</td>
+                  <td>Judgment, stored or hydrated</td>
+                </tr>
+                <tr>
+                  <td class="id">GET · POST /api/redaction-runs</td>
+                  <td class="id">redact.ts</td>
+                  <td>List runs, create a standalone run</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    POST /api/documents/:documentId/redaction-runs
+                  </td>
+                  <td class="id">redact.ts</td>
+                  <td>Create a run against a matter document</td>
+                </tr>
+                <tr>
+                  <td class="id">GET · DELETE /api/redaction-runs/:runId</td>
+                  <td class="id">redact.ts</td>
+                  <td>Run with spans, decisions and summary</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    GET /api/redaction-runs/:runId/document-text
+                  </td>
+                  <td class="id">redact.ts</td>
+                  <td>Source text for the review view</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    POST /api/redaction-runs/:runId/spans/:spanId/decision
+                  </td>
+                  <td class="id">redact.ts</td>
+                  <td>Accept, reject, override, pseudonymise</td>
+                </tr>
+                <tr>
+                  <td class="id">POST /api/redaction-runs/:runId/finalize</td>
+                  <td class="id">redact.ts</td>
+                  <td>Apply decisions, write the output artifact</td>
+                </tr>
+                <tr>
+                  <td class="id">GET /api/redaction-runs/:runId/output</td>
+                  <td class="id">redact.ts</td>
+                  <td>Finalized text</td>
+                </tr>
+                <tr>
+                  <td class="id">GET /api/redaction-runs/:runId/token-map</td>
+                  <td class="id">redact.ts</td>
+                  <td>Pseudonymisation token map</td>
+                </tr>
+                <tr>
+                  <td class="id">GET /api/redaction-runs/:runId/audit</td>
+                  <td class="id">redact.ts</td>
+                  <td>Audit report as JSON, Markdown or HTML</td>
+                </tr>
+                <tr>
+                  <td class="id">GET /api/changelog</td>
+                  <td class="id">changelog.ts</td>
+                  <td>Release notes</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
+        </section>
 
-          <div class="layer" style="--layer-accent: var(--success)">
-            <div class="layer-label">
-              Stores
-              <span>State, all self-hosted</span>
-            </div>
-            <div class="nodes">
-              <div class="node">
-                <b>PostgreSQL</b>
-                <span>System of record · 9 migrations</span>
-              </div>
-              <div class="node">
-                <b>Meilisearch</b>
-                <span>Judgment query layer</span>
-              </div>
-              <div class="node">
-                <b>Object storage</b>
-                <span>Filesystem, key-validated</span>
-              </div>
-            </div>
+        <section id="lifecycle">
+          <h2>Request lifecycle</h2>
+          <ol class="steps">
+            <li>
+              <span
+                ><b>Request id assigned.</b> Middleware sets
+                <code>requestId</code> on the context for every request. It
+                appears in logs and in every error body, so a user-reported
+                failure is traceable.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Session resolved.</b> better-auth reads a cookie (web) or
+                bearer token (desktop) and populates <code>user</code>, carrying
+                <code>organisationId</code> and <code>role</code>.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Authorisation.</b> Handlers call
+                <code>requireOrgUser</code>, which returns either an org-scoped
+                user or a ready-to-return 401/403 Response.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Validation.</b> Bodies parse through Zod schemas from
+                <code>@obiter/contracts</code>. Failures become
+                <code>validation_failed</code>.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Domain call.</b> Route handlers delegate to domain modules.
+                Business logic does not live in route files.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Errors.</b> <code>app.onError</code> catches anything
+                uncaught and emits the standard envelope. Nothing leaks a
+                stack.</span
+              >
+            </li>
+          </ol>
+
+          <h3>Error envelope</h3>
+          <p>
+            Every failure from every route has the same shape, produced in one
+            place.
+          </p>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Field</th>
+                  <th>Meaning</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="id">error.code</td>
+                  <td>
+                    Member of <code>apiErrorCodeSchema</code>. Clients branch on
+                    this, never on the message.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">error.message</td>
+                  <td>Human-readable. Not a stable interface.</td>
+                </tr>
+                <tr>
+                  <td class="id">error.requestId</td>
+                  <td>Correlates the response with server logs.</td>
+                </tr>
+              </tbody>
+            </table>
           </div>
+          <p>
+            Codes include <code>unauthenticated</code>, <code>forbidden</code>,
+            <code>validation_failed</code>, <code>organisation_not_found</code>,
+            and the redaction family: <code>redaction_run_not_found</code>,
+            <code>redaction_run_not_reviewable</code>,
+            <code>redaction_already_finalized</code>,
+            <code>redaction_detection_failed</code> and
+            <code>redaction_span_integrity_error</code>.
+          </p>
+        </section>
 
-          <div class="layer" style="--layer-accent: var(--danger)">
-            <div class="layer-label">
-              External
-              <span>Third parties, licence-bearing</span>
-            </div>
-            <div class="nodes">
-              <div class="node">
-                <b>Find Case Law</b>
-                <span>TNA · transactional licence held</span>
-              </div>
-              <div class="node">
-                <b>qarlus/rampart</b>
-                <span>Pinned model mirror · CC BY 4.0</span>
-              </div>
-              <div class="node">
-                <b>Resend</b>
-                <span>Transactional email</span>
-              </div>
-            </div>
+        <section id="auth">
+          <h2>Auth and scoping</h2>
+          <p class="lede">
+            Authentication is better-auth. Authorisation is a thin layer in
+            <code>authz.ts</code> that every business route calls.
+          </p>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Role</th>
+                  <th>Capability</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="id">owner</td>
+                  <td>Full control including destructive operations</td>
+                </tr>
+                <tr>
+                  <td class="id">admin</td>
+                  <td>Administrative operations within the organisation</td>
+                </tr>
+                <tr>
+                  <td class="id">member</td>
+                  <td>Standard product access</td>
+                </tr>
+                <tr>
+                  <td class="id">null</td>
+                  <td>
+                    Authenticated but org-less. Returns 403 so the client can
+                    distinguish "sign in" from "create an organisation".
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
-        </div>
-      </section>
+          <div class="callout">
+            <b>Organisation scoping is the security boundary.</b> Every query
+            touching tenant data filters on <code>organisation_id</code>, and
+            foreign keys are composite, so the database rejects a
+            cross-organisation reference rather than relying on the query being
+            written correctly. Web uses cookie sessions; desktop uses the bearer
+            plugin.
+          </div>
+        </section>
 
-      <section>
-        <h2>Dependency graph</h2>
-        <p class="lede">
-          Read from <code>package.json</code> across all workspaces. Every
-          package listed as depending on nothing is safe to extract, publish or
-          relicense independently.
-        </p>
+        <section id="data">
+          <h2>Data model</h2>
+          <p class="lede">
+            PostgreSQL 16 is the system of record. Everything else, including
+            the Meilisearch index, is derived and rebuildable.
+          </p>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Table</th>
+                  <th>Holds</th>
+                  <th>Migration</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="id">
+                    users · sessions · accounts · verifications
+                  </td>
+                  <td>better-auth identity tables</td>
+                  <td class="id">0001</td>
+                </tr>
+                <tr>
+                  <td class="id">organisations</td>
+                  <td>Tenant root. Every business row hangs off this.</td>
+                  <td class="id">0001</td>
+                </tr>
+                <tr>
+                  <td class="id">audit_logs</td>
+                  <td>
+                    Actioned events. Organisation nullable since 0009 so
+                    pre-organisation actions still record.
+                  </td>
+                  <td class="id">0001, 0009</td>
+                </tr>
+                <tr>
+                  <td class="id">beta_access_grants</td>
+                  <td>Early access control</td>
+                  <td class="id">0001</td>
+                </tr>
+                <tr>
+                  <td class="id">matters</td>
+                  <td>Client engagements. Soft-deletable.</td>
+                  <td class="id">0002</td>
+                </tr>
+                <tr>
+                  <td class="id">matter_documents</td>
+                  <td>Documents within a matter</td>
+                  <td class="id">0002</td>
+                </tr>
+                <tr>
+                  <td class="id">document_versions</td>
+                  <td>
+                    Immutable versions, with source and extracted-text object
+                    keys
+                  </td>
+                  <td class="id">0002</td>
+                </tr>
+                <tr>
+                  <td class="id">artifacts</td>
+                  <td>Generated outputs, including finalized redactions</td>
+                  <td class="id">0002</td>
+                </tr>
+                <tr>
+                  <td class="id">legal_source_documents</td>
+                  <td>
+                    Stored judgments, summary and document JSON, provider
+                    metadata, generated tsvector
+                  </td>
+                  <td class="id">0003, 0004</td>
+                </tr>
+                <tr>
+                  <td class="id">redaction_runs</td>
+                  <td>
+                    Spans, decisions, summary, detector version, output
+                    artifact. Standalone since 0007.
+                  </td>
+                  <td class="id">0005–0007, 0010</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="callout">
+            <b>Two search indexes exist.</b>
+            <code>legal_source_documents</code> carries a generated
+            <code>tsvector</code> with <code>setweight</code> field weighting,
+            alongside Meilisearch. They rank differently, so the same query can
+            return different results depending on which served it. The Search
+            PRD retires the Postgres tier.
+          </div>
+        </section>
 
-        <div class="scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Workspace</th>
-                <th>Depends on (internal)</th>
-                <th>Key external</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="id">@obiter/web</td>
-                <td class="id">app-shell · redact-ui · ui · contracts</td>
-                <td>TanStack Start, better-auth</td>
-              </tr>
-              <tr>
-                <td class="id">@obiter/desktop</td>
-                <td class="id">app-shell · redact-ui · ui</td>
-                <td>Electron</td>
-              </tr>
-              <tr>
-                <td class="id">@obiter/api</td>
-                <td class="id">
-                  contracts · legal-schema · rampart-inference ·
-                  redaction-policy · search-client
-                </td>
-                <td>Hono, better-auth, pg, mammoth, unpdf, resend</td>
-              </tr>
-              <tr>
-                <td class="id">@obiter/legal-ingestor</td>
-                <td class="id">legal-schema · search-client</td>
-                <td>meilisearch</td>
-              </tr>
-              <tr>
-                <td class="id">@obiter/redact-ui</td>
-                <td class="id">
-                  app-shell · contracts · redaction-policy · ui
-                </td>
-                <td>TanStack Query</td>
-              </tr>
-              <tr>
-                <td class="id">@obiter/app-shell</td>
-                <td class="id">contracts · ui</td>
-                <td>TanStack Router</td>
-              </tr>
-              <tr>
-                <td class="id">@obiter/redaction-policy</td>
-                <td class="id">contracts</td>
-                <td>—</td>
-              </tr>
-              <tr>
-                <td class="id">@obiter/search-client</td>
-                <td class="id">legal-schema</td>
-                <td>meilisearch</td>
-              </tr>
-              <tr>
-                <td class="id">@obiter/rampart-inference</td>
-                <td class="id">none</td>
-                <td>@huggingface/transformers</td>
-              </tr>
-              <tr>
-                <td class="id">@obiter/contracts</td>
-                <td class="id">none</td>
-                <td>zod</td>
-              </tr>
-              <tr>
-                <td class="id">@obiter/legal-schema</td>
-                <td class="id">none</td>
-                <td>zod</td>
-              </tr>
-              <tr>
-                <td class="id">@obiter/ui</td>
-                <td class="id">none</td>
-                <td>Tailwind</td>
-              </tr>
-              <tr>
-                <td class="id">@obiter/database</td>
-                <td class="id">none</td>
-                <td>—</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+        <section id="storage">
+          <h2>Object storage</h2>
+          <p class="lede">
+            Filesystem-backed, not S3. Every key is validated against a strict
+            pattern before any read or write, and resolved paths are checked for
+            escape outside the configured root.
+          </p>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Permitted key shape</th>
+                  <th>Contents</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="id">
+                    org/&lt;id&gt;/matters/&lt;id&gt;/documents/&lt;id&gt;/versions/&lt;id&gt;/source
+                  </td>
+                  <td>Uploaded file as received</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    org/&lt;id&gt;/matters/&lt;id&gt;/documents/&lt;id&gt;/versions/&lt;id&gt;/text
+                  </td>
+                  <td>Extracted text</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    org/&lt;id&gt;/matters/&lt;id&gt;/artifacts/&lt;id&gt;
+                  </td>
+                  <td>Generated outputs</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    org/&lt;id&gt;/redaction-runs/&lt;id&gt;/source
+                  </td>
+                  <td>Standalone run source text</td>
+                </tr>
+                <tr>
+                  <td class="id">org/&lt;id&gt;/artifacts/&lt;id&gt;</td>
+                  <td>Organisation-level artifacts</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            Keys carry only opaque identifiers. That regex is the mechanism
+            enforcing the rule that client names, matter names, original
+            filenames and raw legal text never appear in a storage path.
+          </p>
+        </section>
 
-      <section>
-        <h2>Product surfaces</h2>
-        <p class="lede">
-          Every route below is served by <code>services/api</code>. There is no
-          second HTTP surface, and no public API yet.
-        </p>
+        <section id="config">
+          <h2>Configuration</h2>
+          <p class="lede">
+            Read from the environment by <code>services/api</code>. There is no
+            config package yet; <code>@obiter/config</code> is a reserved name.
+          </p>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Variable</th>
+                  <th>Purpose</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="id">DATABASE_URL · TEST_DATABASE_URL</td>
+                  <td>PostgreSQL connection</td>
+                </tr>
+                <tr>
+                  <td class="id">BETTER_AUTH_SECRET · BETTER_AUTH_URL</td>
+                  <td>Session signing and callback origin</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    OBITER_WEB_ORIGIN · OBITER_DESKTOP_ORIGIN ·
+                    OBITER_API_ORIGIN
+                  </td>
+                  <td>CORS and redirect allowlists</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    MEILISEARCH_HOST · MEILISEARCH_ADMIN_API_KEY ·
+                    MEILISEARCH_SEARCH_API_KEY
+                  </td>
+                  <td>
+                    Index writes use the admin key, queries the search key
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">LEGAL_AUTHORITIES_INDEX</td>
+                  <td>Meilisearch index name</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    MOJ_FIND_CASE_LAW_BASE_URL · MOJ_FIND_CASE_LAW_RATE_LIMIT
+                  </td>
+                  <td>Provider endpoint and throttle</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    OBITER_RAMPART_MODEL · OBITER_RAMPART_REVISION ·
+                    OBITER_RAMPART_CACHE_DIR
+                  </td>
+                  <td>Model selection and cache location</td>
+                </tr>
+                <tr>
+                  <td class="id">OBITER_STORAGE_ROOT</td>
+                  <td>Object storage root directory</td>
+                </tr>
+                <tr>
+                  <td class="id">OBITER_RESEND_API_KEY · OBITER_EMAIL_FROM</td>
+                  <td>Transactional email</td>
+                </tr>
+                <tr>
+                  <td class="id">PORT</td>
+                  <td>API port, 8787 in development</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="callout risk">
+            <b>Detection is not configurable.</b> Redact PRD 1 requires
+            <code>REDACT_MODEL_ID</code>, <code>REDACT_MIN_SCORE</code> and
+            <code>REDACT_CHUNK_TOKENS</code>. None exists. The values are
+            hardcoded constants, so changing a confidence threshold needs a
+            deploy.
+          </div>
+        </section>
 
-        <div class="scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Surface</th>
-                <th>Route module</th>
-                <th>Stores touched</th>
-                <th>State</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>Search</td>
-                <td class="id">routes/legal-search/</td>
-                <td>Meilisearch · Postgres · Find Case Law</td>
-                <td><span class="pill warn">Being reworked</span></td>
-              </tr>
-              <tr>
-                <td>Redact</td>
-                <td class="id">routes/redact.ts</td>
-                <td>Postgres · object storage</td>
-                <td><span class="pill live">Delivered</span></td>
-              </tr>
-              <tr>
-                <td>Matters</td>
-                <td class="id">routes/matters.ts</td>
-                <td>Postgres · object storage</td>
-                <td><span class="pill live">Live</span></td>
-              </tr>
-              <tr>
-                <td>Documents</td>
-                <td class="id">routes/documents.ts</td>
-                <td>Postgres · object storage</td>
-                <td><span class="pill live">Live</span></td>
-              </tr>
-              <tr>
-                <td>Organisations</td>
-                <td class="id">routes/organisations.ts</td>
-                <td>Postgres</td>
-                <td><span class="pill live">Live</span></td>
-              </tr>
-              <tr>
-                <td>Changelog</td>
-                <td class="id">routes/changelog.ts</td>
-                <td>—</td>
-                <td><span class="pill live">Live</span></td>
-              </tr>
-              <tr>
-                <td>Verify</td>
-                <td class="id">—</td>
-                <td>—</td>
-                <td><span class="pill stubbed">Not started</span></td>
-              </tr>
-              <tr>
-                <td>Research</td>
-                <td class="id">—</td>
-                <td>—</td>
-                <td><span class="pill stubbed">Not started</span></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+        <section id="search-flow">
+          <h2>Search flow</h2>
+          <ol class="steps">
+            <li>
+              <span
+                ><b>Query arrives</b> at
+                <code>POST /api/search/fetch</code>.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Exact lookup first.</b> Document id and neutral citation
+                resolve through a stored exact-match path before any broad
+                search.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Lexical search.</b> <code>search-client</code> queries
+                Meilisearch over title, citation, court, jurisdiction and
+                paragraph text.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Re-ranking.</b> Results are re-sorted in JavaScript on a
+                four-value bucket score, discarding Meilisearch's own relevance
+                ranking.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Snippets.</b> Matching paragraphs become bounded snippets
+                with evidence ids and a match reason.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Provider fallback.</b> On a miss, Find Case Law is called in
+                the request path, then hydrated, stored and indexed.</span
+              >
+            </li>
+          </ol>
+          <div class="callout risk">
+            <b>Steps 3 to 6 are all changing.</b> Matching is substring-based,
+            so <code>test</code> matches contested, testimony, testator,
+            intestate and protest: measured precision 0.20. The index is
+            untuned. Meilisearch's score is discarded. And provider calls are to
+            leave the request path once the corpus is held locally. Tracked in
+            the Search PRD.
+          </div>
+        </section>
 
-      <section>
-        <h2>Principal flows</h2>
-        <p class="lede">
-          The two flows that define the product, and where each currently
-          departs from what the PRDs specify.
-        </p>
+        <section id="redact-flow">
+          <h2>Redaction flow</h2>
+          <ol class="steps">
+            <li>
+              <span
+                ><b>Input.</b> Text pasted directly, or DOCX, text-layer PDF or
+                TXT uploaded. <code>document-extraction.ts</code> extracts text;
+                scanned PDFs are rejected as needing OCR.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Heuristics first.</b> Deterministic patterns run and their
+                spans are masked before the model sees the text.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Model detection.</b> The Rampart classifier runs over masked
+                text; offsets project back to the original. Long documents chunk
+                at 400 tokens with overlap.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Merge.</b> Model and supplement spans merge, the model
+                winning on overlap. Suggestions default by category: names and
+                identifiers to redact, dates and citations to keep.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Review.</b> The reviewer accepts, rejects, overrides or
+                pseudonymises each span.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Finalize.</b> Span integrity is re-checked against the
+                source text, decisions apply, and the output artifact and audit
+                report are written.</span
+              >
+            </li>
+          </ol>
+          <div class="callout risk">
+            <b>Degraded detection is invisible.</b> If the model fails to load,
+            step 3 is skipped and the run completes on heuristics alone,
+            recording <code>mode=heuristics+supplement</code> inside
+            <code>detectorVersion</code>. No view renders it, so a reviewer can
+            finalize believing model detection ran. Heuristics do not find
+            names, addresses or contextual dates of birth. Tracked in Redact PRD
+            4.
+          </div>
+          <div class="callout">
+            <b>Finalize is fail-closed.</b> If a span's stored text no longer
+            matches the document at its recorded offsets, finalize aborts with
+            <code>redaction_span_integrity_error</code> rather than producing
+            output with a silently skipped redaction.
+          </div>
+        </section>
 
-        <div class="flows">
-          <article class="flow">
-            <h3>Judgment search</h3>
-            <ol>
-              <li>Client calls <code>POST /api/search/fetch</code>.</li>
-              <li>
-                Exact lookup on document id and neutral citation runs first.
-              </li>
-              <li>
-                <code>@obiter/search-client</code> queries Meilisearch; a
-                Postgres <code>tsvector</code> index exists as a second tier.
-              </li>
-              <li>
-                Ranking is re-sorted in JavaScript, discarding Meilisearch's own
-                relevance score.
-              </li>
-              <li>
-                On cache miss, Find Case Law is called in the request path and
-                results are hydrated and indexed.
-              </li>
-            </ol>
-            <p class="caveat">
-              Steps 3 to 5 are all targeted for change. Matching is
-              substring-based rather than word-based, giving precision 0.20 on
-              short queries; the Postgres tier is due for retirement; and
-              provider calls are to leave the request path entirely.
-            </p>
-          </article>
+        <section id="where">
+          <h2>Where things go</h2>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Change</th>
+                  <th>Goes in</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>A request or response shape</td>
+                  <td class="id">packages/contracts</td>
+                </tr>
+                <tr>
+                  <td>A new API endpoint</td>
+                  <td class="id">
+                    services/api/src/routes/, thin, delegating to a domain
+                    module
+                  </td>
+                </tr>
+                <tr>
+                  <td>Business logic</td>
+                  <td class="id">
+                    A domain module beside the route, never inside it
+                  </td>
+                </tr>
+                <tr>
+                  <td>A product screen</td>
+                  <td class="id">
+                    packages/app-shell, not apps/web or apps/desktop
+                  </td>
+                </tr>
+                <tr>
+                  <td>A presentational component</td>
+                  <td class="id">
+                    packages/ui, with no auth, storage or network
+                  </td>
+                </tr>
+                <tr>
+                  <td>A schema change</td>
+                  <td class="id">
+                    A new numbered migration; never edit an applied one
+                  </td>
+                </tr>
+                <tr>
+                  <td>Span or redaction logic</td>
+                  <td class="id">packages/redaction-policy, pure functions</td>
+                </tr>
+                <tr>
+                  <td>Ranking or index behaviour</td>
+                  <td class="id">packages/search-client</td>
+                </tr>
+                <tr>
+                  <td>Platform-specific behaviour</td>
+                  <td class="id">
+                    apps/web or apps/desktop, only where it genuinely differs
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
 
-          <article class="flow">
-            <h3>Redaction run</h3>
-            <ol>
-              <li>
-                Document uploaded or pasted;
-                <code>document-extraction.ts</code> handles DOCX and text-layer
-                PDF.
-              </li>
-              <li>
-                <code>redaction-detection.ts</code> runs
-                <code>@obiter/rampart-inference</code> over masked text, then
-                merges with the deterministic UK supplement.
-              </li>
-              <li>
-                Spans persist to <code>redaction_runs</code>; reviewer accepts,
-                rejects, overrides or pseudonymises each.
-              </li>
-              <li>
-                Finalize applies decisions, writes the output artifact and
-                produces an audit report in JSON, Markdown or HTML.
-              </li>
-            </ol>
-            <p class="caveat">
-              If the model fails to load, step 2 silently degrades to heuristics
-              only and records the fact inside a version string that no view
-              renders. A reviewer can finalize believing model detection ran.
-            </p>
-          </article>
-        </div>
-      </section>
+        <section id="rules">
+          <h2>Boundary rules</h2>
+          <ul class="rules">
+            <li>
+              <span
+                ><b>Primitives import nothing internal.</b>
+                <code>contracts</code>, <code>legal-schema</code>,
+                <code>ui</code> and <code>database</code> are leaves. This is
+                what would allow relicensing them permissively without
+                contamination.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Only <code>services/api</code> speaks HTTP.</b> Domain
+                packages contain no request handling, which is what makes them
+                testable in isolation.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Acquisition and ranking must separate.</b> Today the Find
+                Case Law client and its parsers sit inside a route directory,
+                giving provider integration the standing of a controller. Search
+                work splits them.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>No machine learning over Find Case Law text.</b> The
+                transactional licence covers display and lexical indexing only.
+                The computational-analysis licence has not been applied for, so
+                embeddings, semantic search and fine-tuning on judgments are
+                closed.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Private matter data never enters a public index.</b> Legal
+                source storage and matter storage are separate by
+                construction.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>The Electron renderer gets no privileges.</b> No Node,
+                filesystem or secret access except across an explicit preload
+                bridge.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Files stay under 500 lines.</b> Four currently exceed it:
+                classifier.ts (776), redact.ts (702), proxy-routes.ts (676),
+                LegalSearchView.tsx (644).</span
+              >
+            </li>
+            <li>
+              <span
+                ><b><code>effect</code> is not a dependency.</b> A contained
+                pilot was planned for Redact detection and never ran. Any future
+                adoption needs its own decision.</span
+              >
+            </li>
+          </ul>
+        </section>
 
-      <section>
-        <h2>Data stores</h2>
+        <section id="divergences">
+          <h2>Known divergences</h2>
+          <p class="lede">
+            Where the running system departs from what is written down, verified
+            2026-07-27. Recorded so this page stays honest rather than
+            aspirational.
+          </p>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Divergence</th>
+                  <th>Consequence</th>
+                  <th>Tracked in</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>
+                    Degraded detection recorded only inside
+                    <code>detectorVersion</code>
+                  </td>
+                  <td>
+                    A reviewer can finalize believing model detection ran when
+                    only regular expressions did
+                  </td>
+                  <td class="id">redact-4-hardening.md</td>
+                </tr>
+                <tr>
+                  <td>Search matching is substring-based</td>
+                  <td>
+                    <code>test</code> matches contested, testimony, testator,
+                    intestate; precision 0.20
+                  </td>
+                  <td class="id">search.md</td>
+                </tr>
+                <tr>
+                  <td>Two search engines, differently ranked</td>
+                  <td>
+                    Identical queries can return different results depending on
+                    tier
+                  </td>
+                  <td class="id">search.md</td>
+                </tr>
+                <tr>
+                  <td>Licence class exists nowhere in code</td>
+                  <td>
+                    No programmatic answer to whether a record may enter a
+                    machine-learning path
+                  </td>
+                  <td class="id">search.md</td>
+                </tr>
+                <tr>
+                  <td>Detection not environment-configurable</td>
+                  <td>
+                    Model id, threshold and chunk size need a deploy to change
+                  </td>
+                  <td class="id">redact-4-hardening.md</td>
+                </tr>
+                <tr>
+                  <td>Four files over the 500-line ceiling</td>
+                  <td>The hardest modules to review are the largest</td>
+                  <td class="id">RULES.md</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
 
-        <h3>PostgreSQL, system of record</h3>
-        <div class="scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Migration</th>
-                <th>Introduces</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="id">0001_phase_0_2_auth</td>
-                <td>Users, sessions, organisations, roles, audit</td>
-              </tr>
-              <tr>
-                <td class="id">0002_phase_0_3_matters</td>
-                <td>Matters, documents, immutable versions, artifacts</td>
-              </tr>
-              <tr>
-                <td class="id">0003_atlas_legal_source_documents</td>
-                <td>
-                  Legal source storage with a generated
-                  <code>tsvector</code> index
-                </td>
-              </tr>
-              <tr>
-                <td class="id">0004_legal_source_documents_body_search</td>
-                <td>Rebuilds that index to cover body text</td>
-              </tr>
-              <tr>
-                <td class="id">0005_redaction</td>
-                <td>Redaction runs, spans, decisions, summary</td>
-              </tr>
-              <tr>
-                <td class="id">0006_redaction_output_artifact</td>
-                <td>Links a run to its finalized output</td>
-              </tr>
-              <tr>
-                <td class="id">0007_standalone_redaction_runs</td>
-                <td>Runs detached from a matter</td>
-              </tr>
-              <tr>
-                <td class="id">0009_nullable_audit_organisation</td>
-                <td>
-                  Audit entries before an organisation exists. 0008 was created
-                  then removed during PR #28 review.
-                </td>
-              </tr>
-              <tr>
-                <td class="id">0010_soft_delete_redaction_runs</td>
-                <td>Soft delete with <code>deleted_by</code></td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <section id="glossary">
+          <h2>Glossary</h2>
+          <p class="lede">
+            Legal vocabulary the code assumes and an engineer without a law
+            background would not have.
+          </p>
+          <dl class="glossary">
+            <div>
+              <dt>Judgment</dt>
+              <dd>
+                A court's written decision. The primary unit of the search
+                corpus.
+              </dd>
+            </div>
+            <div>
+              <dt>Neutral citation</dt>
+              <dd>
+                Court-assigned reference independent of any commercial law
+                report, e.g. <code>[2024] UKSC 3</code>. Introduced in 2001, so
+                older judgments lack one, which is why identity needs a
+                fallback.
+              </dd>
+            </div>
+            <div>
+              <dt>Paragraph number</dt>
+              <dd>
+                Judgments are cited by paragraph, not page. This is why
+                paragraphs are the evidence unit.
+              </dd>
+            </div>
+            <div>
+              <dt>Court codes</dt>
+              <dd>
+                <code>UKSC</code> Supreme Court ·
+                <code>EWCA Civ/Crim</code> Court of Appeal ·
+                <code>EWHC</code> High Court · <code>EWCOP</code> Court of
+                Protection.
+              </dd>
+            </div>
+            <div>
+              <dt>Find Case Law</dt>
+              <dd>
+                The National Archives service publishing UK judgments. Obiter
+                holds a transactional licence covering display and lexical
+                indexing.
+              </dd>
+            </div>
+            <div>
+              <dt>BAILII</dt>
+              <dd>
+                Long-running free case law archive with deeper historical
+                coverage. Not yet licensed.
+              </dd>
+            </div>
+            <div>
+              <dt>Matter</dt>
+              <dd>
+                A law firm's term for a client engagement or case file. The
+                privacy boundary for uploaded documents.
+              </dd>
+            </div>
+            <div>
+              <dt>Span</dt>
+              <dd>
+                A character range identified as potentially sensitive, with a
+                category, source, confidence and suggestion.
+              </dd>
+            </div>
+            <div>
+              <dt>Redaction</dt>
+              <dd>Removing or obscuring sensitive text irreversibly.</dd>
+            </div>
+            <div>
+              <dt>Pseudonymisation</dt>
+              <dd>
+                Replacing an identifier with a consistent token so the document
+                stays readable. Reversible through the token map, which is why
+                the map is itself sensitive.
+              </dd>
+            </div>
+            <div>
+              <dt>Evidence id</dt>
+              <dd>
+                Stable reference to an exact location in a source, e.g.
+                <code>&lt;documentId&gt;:judgment_paragraph:&lt;n&gt;</code>.
+                What lets a claim be checked.
+              </dd>
+            </div>
+            <div>
+              <dt>Provenance</dt>
+              <dd>
+                Where a record came from and under what licence. Currently
+                missing from the data model.
+              </dd>
+            </div>
+            <div>
+              <dt>Hydration</dt>
+              <dd>
+                Fetching a judgment's full text from a provider on demand rather
+                than holding it locally.
+              </dd>
+            </div>
+            <div>
+              <dt>Obiter dictum</dt>
+              <dd>
+                A judge's remark not essential to the decision, and so not
+                binding. The company's namesake.
+              </dd>
+            </div>
+          </dl>
+        </section>
 
-        <h3>Object storage</h3>
-        <p>
-          Filesystem-backed, not S3. Every key is validated against a strict
-          pattern before any read or write, and paths are checked for escape
-          outside the configured root:
-        </p>
-        <div class="scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Permitted key shape</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="id">
-                  org/&lt;id&gt;/matters/&lt;id&gt;/documents/&lt;id&gt;/versions/&lt;id&gt;/{source,text}
-                </td>
-              </tr>
-              <tr>
-                <td class="id">
-                  org/&lt;id&gt;/matters/&lt;id&gt;/artifacts/&lt;id&gt;
-                </td>
-              </tr>
-              <tr>
-                <td class="id">
-                  org/&lt;id&gt;/redaction-runs/&lt;id&gt;/source
-                </td>
-              </tr>
-              <tr>
-                <td class="id">org/&lt;id&gt;/artifacts/&lt;id&gt;</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <p>
-          Keys carry only opaque identifiers. That is what enforces the rule
-          that client names, matter names, original filenames and raw legal text
-          never appear in a storage path.
-        </p>
-      </section>
+        <section id="docs">
+          <h2>Document index</h2>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Document</th>
+                  <th>Covers</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="id">
+                    <a
+                      href="https://github.com/ObiterDictum/obiter/blob/dev/AGENTS.md"
+                      >AGENTS.md</a
+                    >
+                  </td>
+                  <td>Entry point for work in the repo</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    <a
+                      href="https://github.com/ObiterDictum/obiter/blob/dev/RULES.md"
+                      >RULES.md</a
+                    >
+                  </td>
+                  <td>
+                    Coding standards, file size limits, architecture rules
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    <a
+                      href="https://github.com/ObiterDictum/obiter/blob/dev/TESTING.md"
+                      >TESTING.md</a
+                    >
+                  </td>
+                  <td>Verification expectations</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    <a
+                      href="https://github.com/ObiterDictum/obiter/blob/dev/PR.md"
+                      >PR.md</a
+                    >
+                  </td>
+                  <td>How change summaries must be written</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    <a
+                      href="https://github.com/ObiterDictum/obiter/blob/dev/docs/architecture.md"
+                      >docs/architecture.md</a
+                    >
+                  </td>
+                  <td>Stack decisions and their rationale</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    <a
+                      href="https://github.com/ObiterDictum/obiter/blob/dev/docs/current-product-scope.md"
+                      >current-product-scope.md</a
+                    >
+                  </td>
+                  <td>What is actually shipped, kept truthful</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    <a
+                      href="https://github.com/ObiterDictum/obiter/blob/dev/docs/data-and-compliance.md"
+                      >data-and-compliance.md</a
+                    >
+                  </td>
+                  <td>Security and data handling rules</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    <a
+                      href="https://github.com/ObiterDictum/obiter/blob/dev/docs/prds/search.md"
+                      >prds/search.md</a
+                    >
+                  </td>
+                  <td>Search product target and gates</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    <a
+                      href="https://github.com/ObiterDictum/obiter/blob/dev/docs/prds/redact-4-hardening.md"
+                      >prds/redact-4-hardening.md</a
+                    >
+                  </td>
+                  <td>Outstanding redaction work</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    <a
+                      href="https://github.com/ObiterDictum/obiter/blob/dev/docs/prds/archive/README.md"
+                      >prds/archive/</a
+                    >
+                  </td>
+                  <td>Delivered and superseded PRDs</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    <a
+                      href="https://github.com/ObiterDictum/obiter/blob/dev/docs/specs/app-shell/contract.md"
+                      >specs/app-shell/contract.md</a
+                    >
+                  </td>
+                  <td>Frozen component surface</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    <a
+                      href="https://github.com/ObiterDictum/obiter/blob/dev/NOTICE"
+                      >NOTICE</a
+                    >
+                  </td>
+                  <td>Vendored code attribution</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
 
-      <section>
-        <h2>Boundary rules</h2>
-        <p class="lede">
-          These are the constraints that keep the layer ordering true. Breaking
-          one is how the architecture erodes.
-        </p>
-        <ul class="rules">
-          <li>
-            <span
-              ><b>Primitives import nothing internal.</b>
-              <code>contracts</code>, <code>legal-schema</code>,
-              <code>ui</code> and <code>database</code> are leaves. This is what
-              makes a permissive relicence of those packages possible without
-              contaminating them.</span
-            >
-          </li>
-          <li>
-            <span
-              ><b>Only <code>services/api</code> speaks HTTP.</b> Domain
-              packages contain no request or response handling, which is what
-              makes them testable in isolation.</span
-            >
-          </li>
-          <li>
-            <span
-              ><b>Acquisition and ranking must separate.</b> Today the Find Case
-              Law client and its parsers live inside a route directory, giving
-              provider integration the standing of a controller. Search work
-              splits them.</span
-            >
-          </li>
-          <li>
-            <span
-              ><b>No machine learning over Find Case Law text.</b> The
-              transactional licence covers display and lexical indexing only.
-              The computational-analysis licence has not been applied for, so
-              embeddings, semantic search and fine-tuning on judgments are
-              closed.</span
-            >
-          </li>
-          <li>
-            <span
-              ><b>Private matter data never enters a public index.</b> Legal
-              source indexes and matter storage are separate by construction,
-              not by convention.</span
-            >
-          </li>
-          <li>
-            <span
-              ><b><code>effect</code> is not a dependency.</b> A contained pilot
-              was planned for the Redact detection module and never ran. The
-              module is plain TypeScript. Any future adoption needs its own
-              decision.</span
-            >
-          </li>
-        </ul>
-      </section>
-
-      <section>
-        <h2>Known divergences</h2>
-        <p class="lede">
-          Where the running system departs from what is written down, verified
-          2026-07-27. Recorded here so the map stays honest.
-        </p>
-        <div class="scroll">
-          <table>
-            <thead>
-              <tr>
-                <th>Divergence</th>
-                <th>Consequence</th>
-                <th>Tracked in</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td>
-                  Degraded detection is recorded only inside
-                  <code>detectorVersion</code>
-                </td>
-                <td>
-                  A reviewer can finalize a document believing model detection
-                  ran when only regular expressions did
-                </td>
-                <td class="id">redact-4-hardening.md</td>
-              </tr>
-              <tr>
-                <td>Search matching is substring-based</td>
-                <td>
-                  <code>test</code> matches contested, testimony, testator,
-                  intestate; precision 0.20
-                </td>
-                <td class="id">search.md</td>
-              </tr>
-              <tr>
-                <td>Two search engines, differently ranked</td>
-                <td>
-                  Identical queries can return different results depending on
-                  which tier served them
-                </td>
-                <td class="id">search.md</td>
-              </tr>
-              <tr>
-                <td>Licence class exists nowhere in code</td>
-                <td>
-                  No programmatic answer to whether a record may enter a
-                  machine-learning path
-                </td>
-                <td class="id">search.md</td>
-              </tr>
-              <tr>
-                <td>Detection is not environment-configurable</td>
-                <td>
-                  Model id, confidence threshold and chunk size need a deploy to
-                  change
-                </td>
-                <td class="id">redact-4-hardening.md</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+        <footer>
+          <p>
+            Generated from workspace manifests, migrations, route modules and
+            source on <code>dev</code>, 2026-07-27. Regenerate rather than
+            patch: a stale map is worse than none.
+          </p>
+        </footer>
+      </main>
     </div>
 
-    <footer>
-      <div class="wrap">
-        <p>
-          Generated from the workspace manifests, migrations and route modules
-          on <code>dev</code> at 2026-07-27. Where this page and the code
-          disagree, the code is correct and this page is stale. Regenerate
-          rather than patch.
-        </p>
-      </div>
-    </footer>
+    <script>
+      ;(() => {
+        const links = [...document.querySelectorAll('.toc a')]
+        const byId = new Map(
+          links.map((a) => [a.getAttribute('href').slice(1), a]),
+        )
+        const visible = new Set()
+
+        const observer = new IntersectionObserver(
+          (entries) => {
+            for (const entry of entries) {
+              if (entry.isIntersecting) visible.add(entry.target.id)
+              else visible.delete(entry.target.id)
+            }
+            const active = [...byId.keys()].find((id) => visible.has(id))
+            for (const [id, link] of byId) {
+              if (id === active) link.setAttribute('aria-current', 'true')
+              else link.removeAttribute('aria-current')
+            }
+          },
+          { rootMargin: '-8% 0px -70% 0px', threshold: 0 },
+        )
+
+        document
+          .querySelectorAll('section[id]')
+          .forEach((section) => observer.observe(section))
+      })()
+    </script>
   </body>
 </html>
