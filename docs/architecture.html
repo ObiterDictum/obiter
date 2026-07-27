@@ -903,6 +903,7 @@
           <li><a href="#storage">Object storage</a></li>
           <li><a href="#config">Configuration</a></li>
           <li><a href="#infra">Deployment</a></li>
+          <li><a href="#fixtures">Fixtures and benchmarks</a></li>
           <li class="grp">Behaviour</li>
           <li><a href="#search-flow">Search flow</a></li>
           <li><a href="#redact-flow">Redaction flow</a></li>
@@ -910,6 +911,8 @@
           <li class="grp">Working here</li>
           <li><a href="#where">Where things go</a></li>
           <li><a href="#testing">Testing</a></li>
+          <li><a href="#ci">CI and release</a></li>
+          <li><a href="#agents">Agent workflow</a></li>
           <li><a href="#rules">Boundary rules</a></li>
           <li><a href="#divergences">Known divergences</a></li>
           <li class="grp">Reference</li>
@@ -2472,6 +2475,14 @@
                   <td>Audit report as JSON, Markdown or HTML</td>
                 </tr>
                 <tr>
+                  <td class="id">POST /api/auth/sign-out</td>
+                  <td class="id">app.ts</td>
+                  <td>
+                    Ends the session. The rest of <code>/api/auth</code> is
+                    better-auth's own handler, mounted wholesale.
+                  </td>
+                </tr>
+                <tr>
                   <td class="id">GET /api/changelog</td>
                   <td class="id">changelog.ts</td>
                   <td>Release notes</td>
@@ -3047,7 +3058,7 @@
                     Spans, decisions, summary, detector version, output
                     artifact. Standalone since 0007.
                   </td>
-                  <td class="id">0005–0007, 0010</td>
+                  <td class="id">0005, 0006, 0007, 0010</td>
                 </tr>
               </tbody>
             </table>
@@ -3122,6 +3133,16 @@
             Read from the environment by <code>services/api</code>. There is no
             config package yet; <code>@obiter/config</code> is a reserved name.
           </p>
+          <div class="callout">
+            <b>Eight are required at startup.</b> <code>DATABASE_URL</code>,
+            <code>BETTER_AUTH_SECRET</code>, <code>BETTER_AUTH_URL</code>,
+            <code>OBITER_WEB_ORIGIN</code>, <code>OBITER_RESEND_API_KEY</code>,
+            <code>MEILISEARCH_HOST</code>,
+            <code>MEILISEARCH_SEARCH_API_KEY</code> and
+            <code>MEILISEARCH_ADMIN_API_KEY</code>. The API refuses to boot
+            without them, which is the right behaviour: a missing search key
+            should not surface later as empty results.
+          </div>
           <div class="scroll">
             <table>
               <thead>
@@ -4542,6 +4563,65 @@
           </p>
         </section>
 
+        <section id="fixtures">
+          <h2>Fixtures and benchmarks</h2>
+          <p class="lede">
+            <code>data/</code> holds evaluation material and test fixtures. It
+            is excluded from Prettier deliberately: reformatting JSON or
+            Markdown there would shift the offsets that tests and evaluations
+            key off.
+          </p>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Path</th>
+                  <th>Holds</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="id">data/evals/redact/</td>
+                  <td>
+                    Demo fixture DOCX with expected spans, a custom label space,
+                    a generation manifest, and PDF fixtures covering the
+                    low-text multipage and scanned-like cases that extraction
+                    must reject
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">data/evals/search/</td>
+                  <td>Gate 1 judgment search benchmark seed artifacts</td>
+                </tr>
+                <tr>
+                  <td class="id">data/bench/uk-legal-pii/</td>
+                  <td>
+                    Release contract only: <code>LICENSE</code>,
+                    <code>DATASHEET.md</code> and an intentionally empty
+                    <code>MANIFEST.json</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">data/fixtures · data/seed · data/synthetic</td>
+                  <td>Seed and fixture placeholders</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="callout risk">
+            <b
+              >The UK Legal PII benchmark is unpublished and must not be
+              published from here.</b
+            >
+            Release is blocked pending provider terms review, adjudication and
+            maintainer approval. The frozen corpus will ship from a dedicated
+            public benchmark repository, never this one. Do not add
+            <code>documents.jsonl</code>, raw generation output or review
+            evidence to that directory. The dataset contains fictional UK legal
+            documents only and must never contain real personal data.
+          </div>
+        </section>
+
         <section id="infra">
           <h2>Deployment</h2>
           <p class="lede">
@@ -4590,6 +4670,114 @@
           <p>
             There are no deployments yet. Data residency is committed to the EU,
             which constrains hosting choices when that changes.
+          </p>
+        </section>
+
+        <section id="ci">
+          <h2>CI and release</h2>
+          <p class="lede">
+            Two workflows in <code>.github/workflows/</code>. Everything gating
+            a pull request is in the first.
+          </p>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Job</th>
+                  <th>Trigger</th>
+                  <th>Does</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="id">checks</td>
+                  <td>Pull request and push</td>
+                  <td>
+                    Typecheck, format check, lint, test. This is the gate: a red
+                    check here blocks the merge.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">docker-web</td>
+                  <td>Push only</td>
+                  <td>
+                    Builds the <code>apps/web</code> image from the repository
+                    root, because the Dockerfile's COPY paths span the workspace
+                    and the root <code>.dockerignore</code> only applies at the
+                    context root. Skipped on pull requests, which is why a clean
+                    PR reports it skipped rather than passing.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">desktop-release</td>
+                  <td>windows-latest</td>
+                  <td>Builds and uploads the Windows installer artifact</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="callout">
+            <b>Branch strategy.</b> <code>dev</code> is the integration branch
+            and <code>main</code> is the release branch; promoting
+            <code>dev</code> to <code>main</code> is what cuts a deploy. Only
+            <code>apps/web</code> has a Dockerfile. The API image is deferred,
+            marketing lives in its own repository, and desktop ships as Electron
+            installers rather than server images. See
+            <a
+              href="https://github.com/ObiterDictum/obiter/blob/dev/docs/specs/deployment.md"
+              >specs/deployment.md</a
+            >.
+          </div>
+        </section>
+
+        <section id="agents">
+          <h2>Agent workflow</h2>
+          <p class="lede">
+            Much of this repository is written by coding agents, and the
+            conventions governing that are themselves versioned.
+            <code>.agents/skills/</code> holds six.
+          </p>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>Skill</th>
+                  <th>Governs</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td class="id">production-pr-author</td>
+                  <td>How a change is prepared and described</td>
+                </tr>
+                <tr>
+                  <td class="id">production-pr-review</td>
+                  <td>How a change is reviewed before merge</td>
+                </tr>
+                <tr>
+                  <td class="id">production-pr-review-response</td>
+                  <td>How review findings are answered</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    design-taste-frontend · high-end-visual-design ·
+                    image-taste-frontend
+                  </td>
+                  <td>Visual and frontend judgement</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p>
+            <a href="https://github.com/ObiterDictum/obiter/blob/dev/AGENTS.md"
+              >AGENTS.md</a
+            >
+            is the entry point and is deliberately short, pointing at the
+            roadmap, rules and specs rather than restating them. The other agent
+            directories at the repository root (<code>.pi-subagents</code>,
+            <code>.synthetic-v2</code>, <code>.code-review</code>,
+            <code>.claude</code>, <code>.cursor</code>) are machine-local
+            scratch and gitignored, so a clone never sees them.
           </p>
         </section>
 
