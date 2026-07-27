@@ -25,7 +25,6 @@ import {
 import { DocumentUploadError, readDocumentUpload } from '../document-upload'
 import { appendAuditLog } from '../database'
 import {
-  createRedactionRun,
   finalizeRedactionRun,
   getDocumentRedactionSource,
   getRedactionOutputKey,
@@ -38,7 +37,9 @@ import {
   recordSpanDecision,
   softDeleteRedactionRun,
 } from '../redaction-database'
+import { createRedactionRun } from '../redaction-run-creation'
 import type { StorageService } from '../storage'
+import { redetectRedactionRun } from '../redaction-redetect'
 import {
   buildAuditReport,
   renderAuditHtml,
@@ -61,7 +62,7 @@ function errorResponse(
   c: RouteContext,
   code: ApiErrorCode,
   message: string,
-  status: 400 | 401 | 403 | 404 | 409 | 500,
+  status: 400 | 401 | 403 | 404 | 409 | 500 | 503,
 ) {
   const body: ApiErrorResponse = {
     error: { code, message, requestId: c.get('requestId') },
@@ -358,6 +359,71 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
     return c.json({ run: publicRun(run) })
   })
 
+  routes.post('/api/redaction-runs/:runId/redetect', async (c) => {
+    const user = requireUser(c)
+    if (user instanceof Response) return user
+    const result = await redetectRedactionRun({
+      pool,
+      storage,
+      organisationId: user.organisationId,
+      userId: user.id,
+      runId: c.req.param('runId'),
+      requestId: c.get('requestId'),
+    })
+    if (result.kind === 'not_found')
+      return errorResponse(
+        c,
+        'redaction_run_not_found',
+        'Redaction run not found.',
+        404,
+      )
+    if (result.kind === 'already_model_detected')
+      return errorResponse(
+        c,
+        'conflict_detected',
+        'This run already records model detection.',
+        409,
+      )
+    if (result.kind === 'source_unavailable')
+      return errorResponse(
+        c,
+        'document_version_not_found',
+        'Document text is not available for this run.',
+        404,
+      )
+    if (result.kind === 'linked_source_unavailable')
+      return errorResponse(
+        c,
+        'document_version_not_found',
+        'The original linked document version is no longer available for re-detection.',
+        404,
+      )
+    if (result.kind === 'model_unavailable')
+      return errorResponse(
+        c,
+        'redaction_model_unavailable',
+        'Model detection is still unavailable. Try again later.',
+        503,
+      )
+    if (result.kind === 'detection_failed') {
+      console.error('redaction_detection_failed', {
+        requestId: c.get('requestId'),
+        reason: result.reason,
+      })
+      return errorResponse(
+        c,
+        'redaction_detection_failed',
+        'Redaction detection could not complete for this document.',
+        500,
+      )
+    }
+    c.header('location', `/api/redaction-runs/${result.run.id}`)
+    return c.json(
+      { run: publicRun(result.run), redetectedFromRunId: c.req.param('runId') },
+      result.kind === 'existing' ? 200 : 201,
+    )
+  })
+
   routes.delete('/api/redaction-runs/:runId', async (c) => {
     const user = requireManageRole(c)
     if (user instanceof Response) return user
@@ -517,6 +583,16 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
         'Acknowledge that model detection did not run before finalising.',
         400,
       )
+    if (
+      run.detectionMode === 'unknown' &&
+      body.data.unknownDetectionAcknowledged !== true
+    )
+      return errorResponse(
+        c,
+        'validation_failed',
+        'Acknowledge that the detection mode was not recorded before finalising.',
+        400,
+      )
     const textObjectKey = await getRunTextObjectKey(pool, run)
     if (!textObjectKey)
       return errorResponse(
@@ -562,6 +638,8 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
         requestId: c.get('requestId'),
         degradedDetectionAcknowledged:
           body.data.degradedDetectionAcknowledged === true,
+        unknownDetectionAcknowledged:
+          body.data.unknownDetectionAcknowledged === true,
       })
     } catch (error) {
       await storage.delete(objectKey)
@@ -599,7 +677,9 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
       return errorResponse(
         c,
         'validation_failed',
-        'Acknowledge that model detection did not run before finalising.',
+        run.detectionMode === 'unknown'
+          ? 'Acknowledge that the detection mode was not recorded before finalising.'
+          : 'Acknowledge that model detection did not run before finalising.',
         400,
       )
     }

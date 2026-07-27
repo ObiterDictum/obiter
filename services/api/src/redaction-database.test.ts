@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import type { Pool, PoolClient } from 'pg'
 import {
-  createRedactionRun,
   finalizeRedactionRun,
   getDocumentRedactionSource,
   listRedactionAuditLog,
   recordSpanDecision,
   restoreRedactionRunWithAudit,
 } from './redaction-database'
+import {
+  createRedactionRun,
+  createRedetectionRun,
+} from './redaction-run-creation'
 
 type QueryCall = [string, unknown[] | undefined]
 
@@ -40,6 +43,7 @@ function runRow(overrides: Record<string, unknown> = {}) {
     summary_json: {},
     detector_version: 'detector-1',
     detection_mode: 'model+supplement',
+    replaces_run_id: null,
     created_by: 'usr_1',
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
@@ -152,6 +156,208 @@ describe('createRedactionRun', () => {
   })
 })
 
+describe('createRedetectionRun', () => {
+  it('creates a fresh standalone run and links both audit histories atomically', async () => {
+    const { pool, calls } = createTransactionalPool(async (sql, params) => {
+      if (sql === 'begin' || sql === 'commit') return { rows: [] }
+      if (sql.includes('for update of run')) {
+        return {
+          rows: [runRow({ detection_mode: 'heuristics+supplement' })],
+        }
+      }
+      if (sql.includes('run.replaces_run_id')) return { rows: [] }
+      if (sql.includes('insert into redaction_runs')) {
+        return {
+          rows: [
+            runRow({
+              id: 'red_2',
+              source_text_object_key: 'org/org_1/redaction-runs/red_2/source',
+              detection_mode: 'model+supplement',
+              replaces_run_id: 'red_1',
+              spans_json: [],
+            }),
+          ],
+        }
+      }
+      if (sql.includes('insert into audit_logs')) return { rows: [] }
+      throw new Error(`Unexpected SQL: ${sql} ${String(params)}`)
+    })
+
+    const result = await createRedetectionRun({
+      pool,
+      organisationId: 'org_1',
+      userId: 'usr_1',
+      sourceRunId: 'red_1',
+      newRunId: 'red_2',
+      sourceTextObjectKey: 'org/org_1/redaction-runs/red_2/source',
+      spans: [],
+      detectorVersion: 'detector-2;mode=model+supplement',
+      detectionMode: 'model+supplement',
+      requestId: 'req_1',
+    })
+
+    expect(result).toMatchObject({
+      kind: 'created',
+      run: { id: 'red_2', replacesRunId: 'red_1' },
+    })
+    const insert = calls.find(([sql]) =>
+      sql.includes('insert into redaction_runs'),
+    )
+    expect(insert?.[1]?.[12]).toBe('red_1')
+    expect(
+      calls.filter(([sql]) => sql.includes('insert into audit_logs')),
+    ).toHaveLength(2)
+    expect(calls.at(-1)?.[0]).toBe('commit')
+  })
+
+  it.each([1, 2])(
+    'rolls the replacement and both audit events back when audit write %s fails',
+    async (failingAudit) => {
+      let auditWrites = 0
+      const { pool, calls } = createTransactionalPool(async (sql) => {
+        if (sql === 'begin' || sql === 'rollback') return { rows: [] }
+        if (sql.includes('for update of run')) {
+          return {
+            rows: [runRow({ detection_mode: 'heuristics+supplement' })],
+          }
+        }
+        if (sql.includes('run.replaces_run_id')) return { rows: [] }
+        if (sql.includes('insert into redaction_runs')) {
+          return {
+            rows: [
+              runRow({
+                id: 'red_2',
+                detection_mode: 'model+supplement',
+                replaces_run_id: 'red_1',
+              }),
+            ],
+          }
+        }
+        if (sql.includes('insert into audit_logs')) {
+          auditWrites += 1
+          if (auditWrites === failingAudit) throw new Error('audit unavailable')
+          return { rows: [] }
+        }
+        throw new Error(`Unexpected SQL: ${sql}`)
+      })
+
+      await expect(
+        createRedetectionRun({
+          pool,
+          organisationId: 'org_1',
+          userId: 'usr_1',
+          sourceRunId: 'red_1',
+          newRunId: 'red_2',
+          sourceTextObjectKey: 'org/org_1/redaction-runs/red_2/source',
+          spans: [],
+          detectorVersion: 'detector-2;mode=model+supplement',
+          detectionMode: 'model+supplement',
+          requestId: 'req_1',
+        }),
+      ).rejects.toThrow('audit unavailable')
+
+      expect(calls.some(([sql]) => sql === 'commit')).toBe(false)
+      expect(calls.at(-1)?.[0]).toBe('rollback')
+    },
+  )
+
+  it('returns an existing live replacement without inserting another run', async () => {
+    const { pool, calls } = createTransactionalPool(async (sql) => {
+      if (sql === 'begin' || sql === 'commit') return { rows: [] }
+      if (sql.includes('for update of run')) {
+        return {
+          rows: [runRow({ detection_mode: 'heuristics+supplement' })],
+        }
+      }
+      if (sql.includes('run.replaces_run_id')) {
+        return {
+          rows: [runRow({ id: 'red_2', replaces_run_id: 'red_1' })],
+        }
+      }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    const result = await createRedetectionRun({
+      pool,
+      organisationId: 'org_1',
+      userId: 'usr_1',
+      sourceRunId: 'red_1',
+      newRunId: 'red_3',
+      sourceTextObjectKey: 'org/org_1/redaction-runs/red_3/source',
+      spans: [],
+      detectorVersion: 'detector-2;mode=model+supplement',
+      detectionMode: 'model+supplement',
+      requestId: 'req_1',
+    })
+
+    expect(result).toMatchObject({ kind: 'existing', run: { id: 'red_2' } })
+    expect(
+      calls.some(([sql]) => sql.includes('insert into redaction_runs')),
+    ).toBe(false)
+    expect(calls.at(-1)?.[0]).toBe('commit')
+  })
+
+  it('validates the original linked version without requiring it to remain current', async () => {
+    const { pool, calls } = createTransactionalPool(async (sql) => {
+      if (sql === 'begin' || sql === 'commit') return { rows: [] }
+      if (sql.includes('for update of run')) {
+        return {
+          rows: [
+            runRow({
+              matter_id: 'mtr_1',
+              document_id: 'doc_1',
+              document_version_id: 'ver_old',
+              source_text_object_key: null,
+              detection_mode: 'heuristics+supplement',
+            }),
+          ],
+        }
+      }
+      if (sql.includes('run.replaces_run_id')) return { rows: [] }
+      if (sql.includes('from matter_documents document')) {
+        return { rows: [{ id: 'ver_old' }] }
+      }
+      if (sql.includes('insert into redaction_runs')) {
+        return {
+          rows: [
+            runRow({
+              id: 'red_2',
+              matter_id: 'mtr_1',
+              document_id: 'doc_1',
+              document_version_id: 'ver_old',
+              source_text_object_key: null,
+              replaces_run_id: 'red_1',
+            }),
+          ],
+        }
+      }
+      if (sql.includes('insert into audit_logs')) return { rows: [] }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    await expect(
+      createRedetectionRun({
+        pool,
+        organisationId: 'org_1',
+        userId: 'usr_1',
+        sourceRunId: 'red_1',
+        newRunId: 'red_2',
+        sourceTextObjectKey: null,
+        spans: [],
+        detectorVersion: 'detector-2;mode=model+supplement',
+        detectionMode: 'model+supplement',
+        requestId: 'req_1',
+      }),
+    ).resolves.toMatchObject({ kind: 'created' })
+
+    const parentCheck = calls.find(([sql]) =>
+      sql.includes('from matter_documents document'),
+    )
+    expect(parentCheck?.[0]).not.toContain('current_version_id')
+    expect(parentCheck?.[1]).toEqual(['doc_1', 'org_1', 'mtr_1', 'ver_old'])
+  })
+})
+
 describe('redaction run write guards', () => {
   it('treats a soft-deleted run as not found when recording a decision', async () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
@@ -196,6 +402,7 @@ describe('redaction run write guards', () => {
         userId: 'usr_1',
         requestId: 'req_1',
         degradedDetectionAcknowledged: false,
+        unknownDetectionAcknowledged: false,
       }),
     ).resolves.toEqual({ kind: 'not_found' })
 
@@ -228,6 +435,36 @@ describe('redaction run write guards', () => {
         userId: 'usr_1',
         requestId: 'req_1',
         degradedDetectionAcknowledged: false,
+        unknownDetectionAcknowledged: false,
+      }),
+    ).resolves.toEqual({ kind: 'acknowledgement_required' })
+
+    expect(calls.some(([sql]) => sql.includes('insert into artifacts'))).toBe(
+      false,
+    )
+  })
+
+  it('rechecks unknown-mode acknowledgement under the finalization row lock', async () => {
+    const { pool, calls } = createTransactionalPool(async (sql) => {
+      if (sql === 'begin' || sql === 'rollback') return { rows: [] }
+      if (sql.includes('for update of run')) {
+        return { rows: [runRow({ detection_mode: 'unknown' })] }
+      }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    await expect(
+      finalizeRedactionRun({
+        pool,
+        organisationId: 'org_1',
+        runId: 'red_1',
+        outputMode: 'redacted',
+        tokenMap: {},
+        artifactId: 'art_1',
+        userId: 'usr_1',
+        requestId: 'req_1',
+        degradedDetectionAcknowledged: false,
+        unknownDetectionAcknowledged: false,
       }),
     ).resolves.toEqual({ kind: 'acknowledgement_required' })
 
@@ -267,6 +504,7 @@ describe('redaction run write guards', () => {
         userId: 'usr_1',
         requestId: 'req_1',
         degradedDetectionAcknowledged: false,
+        unknownDetectionAcknowledged: false,
       }),
     ).rejects.toThrow('audit unavailable')
 
@@ -327,6 +565,7 @@ describe('redaction run write guards', () => {
       userId: 'usr_1',
       requestId: 'req_1',
       degradedDetectionAcknowledged: false,
+      unknownDetectionAcknowledged: false,
     })
 
     expect(result.kind).toBe('finalized')

@@ -4,6 +4,7 @@ import type {
   FinalizeInput,
   FinalizeResponse,
   RedactionRun,
+  RedetectResponse,
   SpanDecisionInput,
 } from './types'
 
@@ -119,6 +120,24 @@ export function useSpanDecision(runId: string) {
         { method: 'POST', body: JSON.stringify({ decision }) },
       ),
     onSuccess: ({ run }) => queryClient.setQueryData(runKey(runId), run),
+  })
+}
+
+export function useRedetectRun(runId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<RedetectResponse>(`/api/redaction-runs/${runId}/redetect`, {
+        method: 'POST',
+      }),
+    onSuccess: ({ run }) => {
+      queryClient.setQueryData(runKey(run.id), run)
+      void queryClient.invalidateQueries({ queryKey: runKey(runId) })
+      void queryClient.invalidateQueries({ queryKey: runsKey })
+      void queryClient.invalidateQueries({
+        queryKey: ['document-redaction-runs'],
+      })
+    },
   })
 }
 

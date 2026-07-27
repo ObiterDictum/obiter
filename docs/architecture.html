@@ -2017,7 +2017,8 @@
                 </dd>
                 <dt>Domain</dt>
                 <dd>
-                  redaction-detection · redaction-database ·
+                  redaction-detection · redaction-redetect ·
+                  redaction-run-creation · redaction-database ·
                   redaction-audit-report · document-extraction · storage · authz
                 </dd>
                 <dt>Extract</dt>
@@ -2282,7 +2283,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>10 migrations, 0001 to 0011, 0008 withdrawn</dd>
+                <dd>11 migrations, 0001 to 0012, 0008 withdrawn</dd>
               </dl>
             </article>
           </div>
@@ -2442,6 +2443,14 @@
                   <td>Run with spans, decisions and summary</td>
                 </tr>
                 <tr>
+                  <td class="id">POST /api/redaction-runs/:runId/redetect</td>
+                  <td class="id">redact.ts</td>
+                  <td>
+                    Create one linked model-detected replacement while
+                    preserving the source run
+                  </td>
+                </tr>
+                <tr>
                   <td class="id">
                     GET /api/redaction-runs/:runId/document-text
                   </td>
@@ -2578,7 +2587,8 @@
             and the redaction family: <code>redaction_run_not_found</code>,
             <code>redaction_run_not_reviewable</code>,
             <code>redaction_already_finalized</code>,
-            <code>redaction_detection_failed</code> and
+            <code>redaction_detection_failed</code>,
+            <code>redaction_model_unavailable</code> and
             <code>redaction_span_integrity_error</code>.
           </p>
           <h3>Status mapping</h3>
@@ -2629,8 +2639,8 @@
                 <tr>
                   <td class="id">409</td>
                   <td class="id">
-                    redaction_run_not_reviewable · redaction_already_finalized ·
-                    redaction_span_integrity_error
+                    conflict_detected · redaction_run_not_reviewable ·
+                    redaction_already_finalized · redaction_span_integrity_error
                   </td>
                   <td>
                     The run is in the wrong state, or finalize aborted because
@@ -2643,6 +2653,14 @@
                   <td>
                     Detection failed unrecoverably. Note that a model load
                     failure does <em>not</em> reach here: it degrades instead.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">503</td>
+                  <td class="id">redaction_model_unavailable</td>
+                  <td>
+                    A requested re-detection still could not run the model. No
+                    replacement run or source object was created.
                   </td>
                 </tr>
               </tbody>
@@ -3056,10 +3074,10 @@
                 <tr>
                   <td class="id">redaction_runs</td>
                   <td>
-                    Spans, decisions, summary, detector version and mode, output
-                    artifact. Standalone since 0007.
+                    Spans, decisions, summary, detector version and mode,
+                    replacement lineage, output artifact. Standalone since 0007.
                   </td>
-                  <td class="id">0005, 0006, 0007, 0010, 0011</td>
+                  <td class="id">0005, 0006, 0007, 0010, 0011, 0012</td>
                 </tr>
               </tbody>
             </table>
@@ -3921,13 +3939,17 @@
             </li>
           </ol>
           <div class="callout risk">
-            <b>Degraded detection stays actionable and visible.</b> If the model
-            fails to load, inference fails, or model span processing cannot
-            complete, step 3 is skipped and the run completes on heuristics and
-            the UK supplement. The structured <code>detectionMode</code> records
-            <code>heuristics+supplement</code>, review and list surfaces warn
-            that names, addresses and dates of birth were not automatically
-            detected, and finalize requires explicit acknowledgement.
+            <b>Detection limitations stay actionable and visible.</b> If the
+            model fails to load, inference fails, or model span processing
+            cannot complete, step 3 is skipped and the run completes on
+            heuristics and the UK supplement. The structured
+            <code>detectionMode</code> records
+            <code>heuristics+supplement</code>. Historical runs without recorded
+            provenance use <code>unknown</code> rather than claiming the model
+            did not run. Review and list surfaces provide mode-specific warnings
+            and finalisation acknowledgement. Model re-detection uses the exact
+            stored source, creates one linked replacement only after model
+            success, and preserves the original review history.
           </div>
           <div class="callout">
             <b>Finalize is fail-closed.</b> If a span's stored text no longer

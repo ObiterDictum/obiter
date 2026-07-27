@@ -26,8 +26,14 @@ export interface RedactionRun {
   outputArtifactId: string | null
   detectorVersion: string | null
   detectionMode: DetectionMode
+  replacesRunId: string | null
   createdAt: string
   updatedAt: string
+}
+
+export interface RedetectResponse {
+  run: RedactionRun
+  redetectedFromRunId: string
 }
 
 export interface FinalizeResponse {

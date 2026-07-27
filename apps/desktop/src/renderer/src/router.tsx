@@ -248,7 +248,18 @@ function DesktopRedactionRunsRoute() {
 
 function DesktopRedactionReviewRoute() {
   const { runId } = redactReviewRoute.useParams()
-  return <RedactionReviewView runId={runId} />
+  const navigate = useNavigate()
+  return (
+    <RedactionReviewView
+      runId={runId}
+      onOpenRun={(replacementRunId) =>
+        navigate({
+          to: '/redact/$runId',
+          params: { runId: replacementRunId },
+        })
+      }
+    />
+  )
 }
 
 const signInRoute = createRoute({

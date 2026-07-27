@@ -8,6 +8,7 @@ export {
   useRedactionOutput,
   useRedactionRun,
   useRedactionRuns,
+  useRedetectRun,
   useSpanDecision,
   useFinalizeRun,
 } from './hooks'
@@ -15,5 +16,6 @@ export type {
   FinalizeInput,
   FinalizeResponse,
   RedactionRun,
+  RedetectResponse,
   SpanDecisionInput,
 } from './types'

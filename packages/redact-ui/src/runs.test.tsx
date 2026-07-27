@@ -55,7 +55,7 @@ describe('RedactionRunsView', () => {
     expect(screen.getByText(/up to 25 MB/)).toBeTruthy()
   })
 
-  it('marks degraded runs without labelling model-detected runs', () => {
+  it('distinguishes degraded and unknown runs without labelling model-detected runs', () => {
     hooks.useRedactionRuns.mockReturnValue({
       isPending: false,
       data: {
@@ -66,6 +66,14 @@ describe('RedactionRunsView', () => {
             matterId: null,
             status: 'ready_for_review',
             detectionMode: 'heuristics+supplement',
+            createdAt: '2026-07-09T00:00:00.000Z',
+          },
+          {
+            id: 'red_unknown',
+            sourceFilename: 'unknown.txt',
+            matterId: null,
+            status: 'ready_for_review',
+            detectionMode: 'unknown',
             createdAt: '2026-07-09T00:00:00.000Z',
           },
           {
@@ -97,7 +105,9 @@ describe('RedactionRunsView', () => {
     render(<RedactionRunsView onOpenRun={vi.fn()} />)
 
     expect(screen.getByText('degraded.txt')).toBeTruthy()
+    expect(screen.getByText('unknown.txt')).toBeTruthy()
     expect(screen.getByText('model.txt')).toBeTruthy()
     expect(screen.getAllByText('Degraded detection')).toHaveLength(1)
+    expect(screen.getAllByText('Detection mode unknown')).toHaveLength(1)
   })
 })

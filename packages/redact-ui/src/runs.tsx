@@ -211,6 +211,8 @@ export function RedactionRunsView({
                     )}
                     {run.detectionMode === 'heuristics+supplement' ? (
                       <Badge tone="warning">Degraded detection</Badge>
+                    ) : run.detectionMode === 'unknown' ? (
+                      <Badge tone="warning">Detection mode unknown</Badge>
                     ) : null}
                   </div>
                 </div>

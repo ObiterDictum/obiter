@@ -23,6 +23,7 @@ const run: RedactionRunRecord = {
   outputArtifactId: 'art_1',
   detectorVersion: 'rampart-0.1.3',
   detectionMode: 'heuristics+supplement',
+  replacesRunId: null,
   createdBy: 'usr_1',
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
@@ -76,10 +77,12 @@ describe('buildAuditReport', () => {
       userId: 'usr_1',
       reviewedAt: '2026-01-01T00:02:00.000Z',
     })
-    expect(renderAuditMarkdown(report)).toContain(
-      '**Detection mode:** heuristics+supplement',
+    const markdown = renderAuditMarkdown(report)
+    expect(markdown).toContain('**Detection mode:** heuristics+supplement')
+    expect(markdown).toContain(
+      '2026-01-01T00:00:00.000Z \u2014 redaction.run_create \u2014 usr_1 \u2014 {}',
     )
-    expect(renderAuditMarkdown(report)).toContain('redaction.span_decision')
+    expect(markdown).toContain('redaction.span_decision')
     expect(renderAuditHtml(report)).toContain('<!doctype html>')
     expect(renderAuditHtml(report)).toContain(
       '**Detection mode:** heuristics+supplement',

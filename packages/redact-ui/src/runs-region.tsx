@@ -106,6 +106,8 @@ export function RedactionRunsRegion({
             <div className="flex items-center gap-2">
               {run.detectionMode === 'heuristics+supplement' ? (
                 <Badge tone="warning">Degraded detection</Badge>
+              ) : run.detectionMode === 'unknown' ? (
+                <Badge tone="warning">Detection mode unknown</Badge>
               ) : null}
               <Badge tone={run.status === 'finalized' ? 'success' : 'info'}>
                 {run.status.replaceAll('_', ' ')}

@@ -24,7 +24,7 @@ import {
   useRedactionRun,
   useSpanDecision,
 } from './hooks'
-import { DegradedDetectionWarning } from './degraded-detection-warning'
+import { DetectionRetryWarning } from './detection-retry-warning'
 import { FinalizeDialog } from './finalize-dialog'
 import type { RedactionRun } from './types'
 
@@ -181,7 +181,21 @@ function reviewEyebrow(run: RedactionRun) {
     : `Standalone · ${run.sourceFilename}`
 }
 
-export function RedactionReviewView({ runId }: { runId: string }) {
+function zeroSpanBody(run: RedactionRun) {
+  if (run.detectionMode === 'heuristics+supplement')
+    return 'The deterministic detectors did not find matching patterns. Model detection did not run, so manually check for names, addresses and dates of birth before finalising.'
+  if (run.detectionMode === 'unknown')
+    return 'No matching patterns were recorded, and the detection mode is unknown. Manually check for names, addresses and dates of birth before relying on this run.'
+  return 'Rampart and the UK supplement did not find matching patterns. You can still finalize this run without changes.'
+}
+
+export function RedactionReviewView({
+  runId,
+  onOpenRun,
+}: {
+  runId: string
+  onOpenRun: (runId: string) => void
+}) {
   const runQuery = useRedactionRun(runId)
   const textQuery = useRedactionDocumentText(runId)
   const outputQuery = useRedactionOutput(
@@ -267,19 +281,13 @@ export function RedactionReviewView({ runId }: { runId: string }) {
         }
       >
         <div className="flex flex-col gap-4">
-          {run.detectionMode === 'heuristics+supplement' ? (
-            <DegradedDetectionWarning />
-          ) : null}
+          <DetectionRetryWarning run={run} onOpenRun={onOpenRun} />
           {run.status === 'finalized' ? (
             <FinalizedOutput outputQuery={outputQuery} />
           ) : (
             <EmptyState
               title="No sensitive data was detected in this document"
-              body={
-                run.detectionMode === 'heuristics+supplement'
-                  ? 'The deterministic detectors did not find matching patterns. Model detection did not run, so manually check for names, addresses and dates of birth before finalising.'
-                  : 'Rampart and the UK supplement did not find matching patterns. You can still finalize this run without changes.'
-              }
+              body={zeroSpanBody(run)}
               icon={<ShieldCheck size={28} aria-hidden="true" />}
             />
           )}
@@ -343,9 +351,7 @@ export function RedactionReviewView({ runId }: { runId: string }) {
         )
       }
     >
-      {run.detectionMode === 'heuristics+supplement' ? (
-        <DegradedDetectionWarning />
-      ) : null}
+      <DetectionRetryWarning run={run} onOpenRun={onOpenRun} />
       <ReviewSummary run={run} />
       {run.status === 'finalized' ? (
         <FinalizedOutput outputQuery={outputQuery} />

@@ -37,6 +37,12 @@ describe('RedactionRunsRegion', () => {
             summary: { totalSpans: 0, reviewedCount: 0 },
           },
           {
+            id: 'red_unknown',
+            status: 'ready_for_review',
+            detectionMode: 'unknown',
+            summary: { totalSpans: 0, reviewedCount: 0 },
+          },
+          {
             id: 'red_model',
             status: 'ready_for_review',
             detectionMode: 'model+supplement',
@@ -49,7 +55,9 @@ describe('RedactionRunsRegion', () => {
     render(<RedactionRunsRegion documentId="doc_1" onOpenRun={vi.fn()} />)
 
     expect(screen.getByText('red_degraded')).toBeTruthy()
+    expect(screen.getByText('red_unknown')).toBeTruthy()
     expect(screen.getByText('red_model')).toBeTruthy()
     expect(screen.getAllByText('Degraded detection')).toHaveLength(1)
+    expect(screen.getAllByText('Detection mode unknown')).toHaveLength(1)
   })
 })

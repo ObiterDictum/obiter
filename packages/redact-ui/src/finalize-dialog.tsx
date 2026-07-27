@@ -9,7 +9,7 @@ import {
   DialogDescription,
   DialogTitle,
 } from '@obiter/ui'
-import { DegradedDetectionWarning } from './degraded-detection-warning'
+import { DetectionModeWarning } from './detection-mode-warning'
 import { useFinalizeRun } from './hooks'
 import type { RedactionRun } from './types'
 
@@ -17,27 +17,30 @@ export function FinalizeDialog({ run }: { run: RedactionRun }) {
   const [open, setOpen] = useState(false)
   const [outputMode, setOutputMode] = useState<OutputMode>('redacted')
   const [unreviewedConfirmed, setUnreviewedConfirmed] = useState(false)
-  const [degradedConfirmed, setDegradedConfirmed] = useState(false)
+  const [detectionConfirmed, setDetectionConfirmed] = useState(false)
   const finalize = useFinalizeRun(run.id)
   const hasUnreviewed = run.summary.unreviewedCount > 0
-  const isDegraded = run.detectionMode === 'heuristics+supplement'
+  const limitedDetectionMode =
+    run.detectionMode === 'model+supplement' ? null : run.detectionMode
   const close = () => {
     setOpen(false)
     setUnreviewedConfirmed(false)
-    setDegradedConfirmed(false)
+    setDetectionConfirmed(false)
   }
   const submit = () => {
     if (
       (hasUnreviewed && !unreviewedConfirmed) ||
-      (isDegraded && !degradedConfirmed)
+      (limitedDetectionMode && !detectionConfirmed)
     )
       return
     finalize.mutate(
       {
         outputMode,
-        ...(isDegraded
-          ? { degradedDetectionAcknowledged: degradedConfirmed }
-          : {}),
+        ...(limitedDetectionMode === 'heuristics+supplement'
+          ? { degradedDetectionAcknowledged: detectionConfirmed }
+          : limitedDetectionMode === 'unknown'
+            ? { unknownDetectionAcknowledged: detectionConfirmed }
+            : {}),
       },
       { onSuccess: close },
     )
@@ -62,7 +65,12 @@ export function FinalizeDialog({ run }: { run: RedactionRun }) {
           within each category, not entity identity.
         </DialogDescription>
         <div className="flex flex-col gap-3">
-          {isDegraded ? <DegradedDetectionWarning /> : null}
+          {limitedDetectionMode ? (
+            <DetectionModeWarning
+              detectionMode={limitedDetectionMode}
+              role="alert"
+            />
+          ) : null}
           <label className="flex gap-2 text-sm text-ink">
             <input
               type="radio"
@@ -106,16 +114,19 @@ export function FinalizeDialog({ run }: { run: RedactionRun }) {
               unchanged. I understand.
             </label>
           ) : null}
-          {isDegraded ? (
+          {limitedDetectionMode ? (
             <label className="rounded-md border border-warning p-3 text-sm text-ink">
               <input
                 className="mr-2"
                 type="checkbox"
-                checked={degradedConfirmed}
-                onChange={(event) => setDegradedConfirmed(event.target.checked)}
+                checked={detectionConfirmed}
+                onChange={(event) =>
+                  setDetectionConfirmed(event.target.checked)
+                }
               />
-              I acknowledge that model detection did not run and have manually
-              checked for names, addresses and dates of birth.
+              {limitedDetectionMode === 'heuristics+supplement'
+                ? 'I acknowledge that model detection did not run and have manually checked for names, addresses and dates of birth.'
+                : 'I acknowledge that the detection mode was not recorded and have manually checked for names, addresses and dates of birth.'}
             </label>
           ) : null}
           {finalize.error ? (
@@ -128,7 +139,7 @@ export function FinalizeDialog({ run }: { run: RedactionRun }) {
               loading={finalize.isPending}
               disabled={
                 (hasUnreviewed && !unreviewedConfirmed) ||
-                (isDegraded && !degradedConfirmed)
+                Boolean(limitedDetectionMode && !detectionConfirmed)
               }
               onClick={submit}
             >

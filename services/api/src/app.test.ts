@@ -1196,6 +1196,139 @@ describe('createApiApp', () => {
     })
   })
 
+  it('creates an auditable model-detected replacement from a finalized degraded run', async () => {
+    const stagedObjects = new Map<string, string>()
+    const transactionQueries: string[] = []
+    const sourceRun = finalizedRunRow({
+      detection_mode: 'heuristics+supplement',
+      replaces_run_id: null,
+    })
+    const app = createApiApp(
+      testEnv,
+      createHybridPool(
+        async (sql) => {
+          const text = String(sql)
+          if (text.includes('and run.replaces_run_id = $2')) return { rows: [] }
+          if (text.includes('from redaction_runs run')) {
+            return { rows: [sourceRun] }
+          }
+          return { rows: [] }
+        },
+        async (sql, params) => {
+          const text = String(sql)
+          transactionQueries.push(text)
+          if (text === 'begin' || text === 'commit') return { rows: [] }
+          if (text.includes('for update of run')) return { rows: [sourceRun] }
+          if (text.includes('run.replaces_run_id')) return { rows: [] }
+          if (text.includes('insert into redaction_runs')) {
+            const values = params as unknown[]
+            return {
+              rows: [
+                finalizedRunRow({
+                  id: values[0],
+                  status: 'ready_for_review',
+                  output_artifact_id: null,
+                  source_text_object_key: values[6],
+                  detector_version: values[10],
+                  detection_mode: values[11],
+                  replaces_run_id: values[12],
+                }),
+              ],
+            }
+          }
+          if (text.includes('insert into audit_logs')) return { rows: [] }
+          throw new Error(`Unexpected SQL: ${text}`)
+        },
+      ),
+      {
+        auth: authWithRole('member'),
+        storage: {
+          readText: async () => 'Exact stored source.',
+          writeText: async (key, text) => {
+            stagedObjects.set(key, text)
+          },
+          delete: async (key) => {
+            stagedObjects.delete(key)
+          },
+        },
+      },
+    )
+
+    const response = await app.request('/api/redaction-runs/red_1/redetect', {
+      method: 'POST',
+    })
+    const body = (await response.json()) as {
+      run: { id: string; detectionMode: string; replacesRunId: string }
+      redetectedFromRunId: string
+    }
+
+    expect(response.status).toBe(201)
+    expect(response.headers.get('location')).toBe(
+      `/api/redaction-runs/${body.run.id}`,
+    )
+    expect(body).toMatchObject({
+      run: {
+        detectionMode: 'model+supplement',
+        replacesRunId: 'red_1',
+      },
+      redetectedFromRunId: 'red_1',
+    })
+    expect([...stagedObjects.values()]).toEqual(['Exact stored source.'])
+    expect(
+      transactionQueries.filter((sql) =>
+        sql.includes('insert into audit_logs'),
+      ),
+    ).toHaveLength(2)
+    expect(
+      transactionQueries.some((sql) => sql.includes('update redaction_runs')),
+    ).toBe(false)
+  })
+
+  it('returns redaction_model_unavailable without creating a replacement when retry still degrades', async () => {
+    detectRedactionSpansMock.mockResolvedValueOnce({
+      spans: [],
+      detectorVersion:
+        'rampart-inference@0.1.3-vendored;mode=heuristics+supplement',
+      degraded: true,
+    })
+    const writes: string[] = []
+    const app = createApiApp(
+      testEnv,
+      createPool(async (sql) => {
+        const text = String(sql)
+        if (text.includes('and run.replaces_run_id = $2')) return { rows: [] }
+        if (text.includes('from redaction_runs run')) {
+          return {
+            rows: [
+              finalizedRunRow({ detection_mode: 'heuristics+supplement' }),
+            ],
+          }
+        }
+        return { rows: [] }
+      }),
+      {
+        auth: authWithRole('member'),
+        storage: {
+          readText: async () => 'Exact stored source.',
+          writeText: async (key) => {
+            writes.push(key)
+          },
+          delete: async () => undefined,
+        },
+      },
+    )
+
+    const response = await app.request('/api/redaction-runs/red_1/redetect', {
+      method: 'POST',
+    })
+
+    expect(response.status).toBe(503)
+    expect(((await response.json()) as ErrorBody).error.code).toBe(
+      'redaction_model_unavailable',
+    )
+    expect(writes).toEqual([])
+  })
+
   it('maps unrecoverable detector errors to redaction_detection_failed', async () => {
     detectRedactionSpansMock.mockRejectedValueOnce(
       new Error('unrecoverable detection failure'),
@@ -1358,6 +1491,7 @@ function finalizedRunRow(overrides: Record<string, unknown> = {}) {
     summary_json: { totalSpans: 0 },
     detector_version: null,
     detection_mode: 'model+supplement',
+    replaces_run_id: null,
     created_by: 'usr_1',
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
@@ -1369,7 +1503,7 @@ function finalizedRunRow(overrides: Record<string, unknown> = {}) {
 
 describe('createApiApp degraded finalization acknowledgement', () => {
   function appForMode(
-    detectionMode: 'model+supplement' | 'heuristics+supplement',
+    detectionMode: 'model+supplement' | 'heuristics+supplement' | 'unknown',
   ) {
     let outputWrites = 0
     let finalizeAuditMetadata: Record<string, unknown> | null = null
@@ -1475,6 +1609,41 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     })
   })
 
+  it('requires a truthful acknowledgement when detection provenance is unknown', async () => {
+    const unknown = appForMode('unknown')
+
+    const refused = await unknown.app.request(
+      '/api/redaction-runs/red_1/finalize',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ outputMode: 'redacted' }),
+      },
+    )
+    expect(refused.status).toBe(400)
+    expect(((await refused.json()) as ErrorBody).error.message).toContain(
+      'detection mode was not recorded',
+    )
+    expect(unknown.outputWrites()).toBe(0)
+
+    const permitted = await unknown.app.request(
+      '/api/redaction-runs/red_1/finalize',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          outputMode: 'redacted',
+          unknownDetectionAcknowledged: true,
+        }),
+      },
+    )
+    expect(permitted.status).toBe(200)
+    expect(unknown.finalizeAuditMetadata()).toMatchObject({
+      detectionMode: 'unknown',
+      unknownDetectionAcknowledged: true,
+    })
+  })
+
   it('does not require degraded acknowledgement for model-detected runs', async () => {
     const normal = appForMode('model+supplement')
 
@@ -1492,6 +1661,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     expect(normal.finalizeAuditMetadata()).toMatchObject({
       detectionMode: 'model+supplement',
       degradedDetectionAcknowledged: false,
+      unknownDetectionAcknowledged: false,
     })
   })
 })
