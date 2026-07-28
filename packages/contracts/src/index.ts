@@ -88,6 +88,13 @@ export const redactionRunStatusSchema = z.enum([
 ])
 export type RedactionRunStatus = z.infer<typeof redactionRunStatusSchema>
 
+export const detectionModeSchema = z.enum([
+  'model+supplement',
+  'heuristics+supplement',
+  'unknown',
+])
+export type DetectionMode = z.infer<typeof detectionModeSchema>
+
 export const redactionPolicyModeSchema = z.enum([
   'internal_ai_minimisation',
   'external_sharing',
@@ -111,6 +118,15 @@ export type SpanDecision = z.infer<typeof spanDecisionSchema>
 
 export const outputModeSchema = z.enum(['redacted', 'pseudonymised'])
 export type OutputMode = z.infer<typeof outputModeSchema>
+
+export const redactionFinalizeInputSchema = z.object({
+  outputMode: outputModeSchema,
+  degradedDetectionAcknowledged: z.boolean().optional(),
+  unknownDetectionAcknowledged: z.boolean().optional(),
+})
+export type RedactionFinalizeInput = z.infer<
+  typeof redactionFinalizeInputSchema
+>
 
 export type Tone = 'ink' | 'sage' | 'amber' | 'rust'
 
@@ -175,6 +191,7 @@ export const apiErrorCodeSchema = z.enum([
   'redaction_run_not_reviewable',
   'redaction_already_finalized',
   'redaction_detection_failed',
+  'redaction_model_unavailable',
   'redaction_span_integrity_error',
 ])
 export type ApiErrorCode = z.infer<typeof apiErrorCodeSchema>

@@ -201,15 +201,25 @@ export function RedactionRunsView({
                   <p className="text-xs text-muted">
                     Created {formatCreatedAt(run.createdAt)}
                   </p>
-                  {run.matterId ? (
-                    <Badge className="mt-2" tone="neutral">
-                      Matter {run.matterName ?? run.matterId}
-                    </Badge>
-                  ) : (
-                    <Badge className="mt-2" tone="info">
-                      Standalone
-                    </Badge>
-                  )}
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {run.matterId ? (
+                      <Badge tone="neutral">
+                        Matter {run.matterName ?? run.matterId}
+                      </Badge>
+                    ) : (
+                      <Badge tone="info">Standalone</Badge>
+                    )}
+                    {run.replacementRunId ? (
+                      <Badge tone="neutral">Replaced</Badge>
+                    ) : run.replacesRunId ? (
+                      <Badge tone="info">Re-detection</Badge>
+                    ) : null}
+                    {run.detectionMode === 'heuristics+supplement' ? (
+                      <Badge tone="warning">Degraded detection</Badge>
+                    ) : run.detectionMode === 'unknown' ? (
+                      <Badge tone="warning">Detection mode unknown</Badge>
+                    ) : null}
+                  </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <Badge tone={run.status === 'finalized' ? 'success' : 'info'}>

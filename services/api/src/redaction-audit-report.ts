@@ -28,6 +28,7 @@ export function buildAuditReport(
       decisionsBreakdown: run.summary.byDecision,
     },
     detectorVersion: run.detectorVersion,
+    detectionMode: run.detectionMode,
     policyMode: run.policyMode,
     outputArtifact: run.outputArtifactId
       ? {
@@ -70,7 +71,7 @@ function escapeHtml(value: string) {
 export function renderAuditMarkdown(
   report: ReturnType<typeof buildAuditReport>,
 ) {
-  return `# Obiter Redaction Audit Report\n\n- **Report version:** ${report.reportVersion}\n- **Run:** ${report.redactionRunId}\n- **Generated:** ${report.generatedAt}\n- **Source:** ${report.originalDocument.filename}\n- **Detector:** ${report.detectorVersion ?? 'not recorded'}\n- **Policy:** ${report.policyMode}\n\n## Summary\n\n${JSON.stringify(report.redactionRunSummary, null, 2)}\n\n## Audit log\n\n${report.auditLog.map((entry) => `- ${entry.timestamp} — ${entry.action} — ${entry.userId ?? 'system'} — ${JSON.stringify(entry.details)}`).join('\n')}\n`
+  return `# Obiter Redaction Audit Report\n\n- **Report version:** ${report.reportVersion}\n- **Run:** ${report.redactionRunId}\n- **Generated:** ${report.generatedAt}\n- **Source:** ${report.originalDocument.filename}\n- **Detector:** ${report.detectorVersion ?? 'not recorded'}\n- **Detection mode:** ${report.detectionMode}\n- **Policy:** ${report.policyMode}\n\n## Summary\n\n${JSON.stringify(report.redactionRunSummary, null, 2)}\n\n## Audit log\n\n${report.auditLog.map((entry) => `- ${entry.timestamp} \u2014 ${entry.action} \u2014 ${entry.userId ?? 'system'} \u2014 ${JSON.stringify(entry.details)}`).join('\n')}\n`
 }
 
 export function renderAuditHtml(report: ReturnType<typeof buildAuditReport>) {

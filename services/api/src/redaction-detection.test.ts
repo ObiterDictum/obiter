@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { createRedactionDetector } from './redaction-detection'
+import type { Span as RampartSpan } from '@obiter/rampart-inference'
+import { createRedactionDetector, detectionMode } from './redaction-detection'
 
 const classifier = (async () => []) as never
 
@@ -31,6 +32,7 @@ describe('redaction detection', () => {
     })
     const result = await detect('Jane Smith emailed jane@example.com.')
     expect(result.degraded).toBe(false)
+    expect(detectionMode(result.degraded)).toBe('model+supplement')
     expect(result.spans).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -57,7 +59,42 @@ describe('redaction detection', () => {
     })
     const result = await detect('Email jane@example.com.')
     expect(result.degraded).toBe(true)
+    expect(detectionMode(result.degraded)).toBe('heuristics+supplement')
     expect(result.detectorVersion).toContain('mode=heuristics+supplement')
+    expect(result.spans).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: 'email',
+          source: 'rampart_deterministic',
+        }),
+      ]),
+    )
+  })
+
+  it('degrades to heuristic spans when projection fails after inference', async () => {
+    const modelSpan: RampartSpan = {
+      start: 0,
+      end: 4,
+      label: 'GIVEN_NAME',
+      score: 0.99,
+      source: 'ner',
+      text: 'Jane',
+    }
+    Object.defineProperty(modelSpan, 'end', {
+      get: () => {
+        throw new Error('projection failed')
+      },
+    })
+    const detect = createRedactionDetector({
+      loadClassifier: async () => classifier,
+      detectNer: async () => [modelSpan],
+      log: () => undefined,
+    })
+
+    const result = await detect('Email jane@example.com.')
+
+    expect(result.degraded).toBe(true)
+    expect(detectionMode(result.degraded)).toBe('heuristics+supplement')
     expect(result.spans).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import type { Context } from 'hono'
 import type { Pool } from 'pg'
 import {
-  outputModeSchema,
+  redactionFinalizeInputSchema,
   redactionPolicyModeSchema,
   spanDecisionSchema,
 } from '@obiter/contracts'
@@ -17,7 +17,7 @@ import {
   createTokenMap,
   RedactionSpanIntegrityError,
 } from '@obiter/redaction-policy'
-import { detectRedactionSpans } from '../redaction-detection'
+import { detectionMode, detectRedactionSpans } from '../redaction-detection'
 import {
   DocumentExtractionError,
   extractDocumentText,
@@ -25,7 +25,6 @@ import {
 import { DocumentUploadError, readDocumentUpload } from '../document-upload'
 import { appendAuditLog } from '../database'
 import {
-  createRedactionRun,
   finalizeRedactionRun,
   getDocumentRedactionSource,
   getRedactionOutputKey,
@@ -36,9 +35,12 @@ import {
   listRedactionAuditLog,
   publicRun,
   recordSpanDecision,
+  restoreRedactionRunWithAudit,
   softDeleteRedactionRun,
 } from '../redaction-database'
+import { createRedactionRun } from '../redaction-run-creation'
 import type { StorageService } from '../storage'
+import { redetectRedactionRun } from '../redaction-redetect'
 import {
   buildAuditReport,
   renderAuditHtml,
@@ -61,7 +63,7 @@ function errorResponse(
   c: RouteContext,
   code: ApiErrorCode,
   message: string,
-  status: 400 | 401 | 403 | 404 | 409,
+  status: 400 | 401 | 403 | 404 | 409 | 500 | 503,
 ) {
   const body: ApiErrorResponse = {
     error: { code, message, requestId: c.get('requestId') },
@@ -108,6 +110,23 @@ function validSourceText(text: string) {
   return (
     text.trim().length > 0 && text.length <= MAX_REDACTION_SOURCE_TEXT_LENGTH
   )
+}
+
+async function detectForRoute(c: RouteContext, text: string) {
+  try {
+    return await detectRedactionSpans(text)
+  } catch (error) {
+    console.error('redaction_detection_failed', {
+      requestId: c.get('requestId'),
+      reason: error instanceof Error ? error.message : 'unknown failure',
+    })
+    return errorResponse(
+      c,
+      'redaction_detection_failed',
+      'Redaction detection could not complete for this document.',
+      500,
+    )
+  }
 }
 
 function listItem(run: ReturnType<typeof publicRun>) {
@@ -165,11 +184,15 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
         filename = upload.filename
         text = await extractDocumentText(upload.fileType, upload.contents)
       } catch (error) {
-        if (
-          error instanceof DocumentUploadError ||
-          error instanceof DocumentExtractionError
-        )
+        if (error instanceof DocumentUploadError)
           return errorResponse(c, 'validation_failed', error.message, 400)
+        if (error instanceof DocumentExtractionError)
+          return errorResponse(
+            c,
+            'validation_failed',
+            'Document text could not be read for redaction.',
+            400,
+          )
         throw error
       }
     }
@@ -194,9 +217,13 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
     const id = `red_${crypto.randomUUID()}`
     const sourceTextObjectKey = `org/${user.organisationId}/redaction-runs/${id}/source`
     await storage.writeText(sourceTextObjectKey, text)
+    const detection = await detectForRoute(c, text)
+    if (detection instanceof Response) {
+      await storage.delete(sourceTextObjectKey)
+      return detection
+    }
     let run
     try {
-      const detection = await detectRedactionSpans(text)
       run = await createRedactionRun({
         pool,
         id,
@@ -206,6 +233,7 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
         sourceTextObjectKey,
         spans: detection.spans,
         detectorVersion: detection.detectorVersion,
+        detectionMode: detectionMode(detection.degraded),
         policyMode: input.policyMode.data,
       })
     } catch (error) {
@@ -220,7 +248,11 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
       entityType: 'redaction_run',
       entityId: run.id,
       action: 'redaction.run_create',
-      metadata: { policyMode: run.policyMode, spanCount: run.spans.length },
+      metadata: {
+        policyMode: run.policyMode,
+        detectionMode: run.detectionMode,
+        spanCount: run.spans.length,
+      },
       requestId: c.get('requestId'),
     })
     return c.json({ run: publicRun(run) }, 201)
@@ -264,7 +296,8 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
           : `Extracted text must be at most ${MAX_REDACTION_SOURCE_TEXT_LENGTH} characters.`,
         400,
       )
-    const detection = await detectRedactionSpans(text)
+    const detection = await detectForRoute(c, text)
+    if (detection instanceof Response) return detection
     const run = await createRedactionRun({
       pool,
       id: `red_${crypto.randomUUID()}`,
@@ -274,6 +307,7 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
       sourceTextObjectKey: null,
       spans: detection.spans,
       detectorVersion: detection.detectorVersion,
+      detectionMode: detectionMode(detection.degraded),
       policyMode: policyMode.data,
       matterId: source.matter_id,
       documentId: c.req.param('documentId'),
@@ -287,7 +321,11 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
       entityType: 'redaction_run',
       entityId: run.id,
       action: 'redaction.run_create',
-      metadata: { policyMode: run.policyMode, spanCount: run.spans.length },
+      metadata: {
+        policyMode: run.policyMode,
+        detectionMode: run.detectionMode,
+        spanCount: run.spans.length,
+      },
       requestId: c.get('requestId'),
     })
     return c.json({ run: publicRun(run) }, 201)
@@ -322,6 +360,71 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
     return c.json({ run: publicRun(run) })
   })
 
+  routes.post('/api/redaction-runs/:runId/redetect', async (c) => {
+    const user = requireUser(c)
+    if (user instanceof Response) return user
+    const result = await redetectRedactionRun({
+      pool,
+      storage,
+      organisationId: user.organisationId,
+      userId: user.id,
+      runId: c.req.param('runId'),
+      requestId: c.get('requestId'),
+    })
+    if (result.kind === 'not_found')
+      return errorResponse(
+        c,
+        'redaction_run_not_found',
+        'Redaction run not found.',
+        404,
+      )
+    if (result.kind === 'already_model_detected')
+      return errorResponse(
+        c,
+        'conflict_detected',
+        'This run already records model detection.',
+        409,
+      )
+    if (result.kind === 'source_unavailable')
+      return errorResponse(
+        c,
+        'document_version_not_found',
+        'Document text is not available for this run.',
+        404,
+      )
+    if (result.kind === 'linked_source_unavailable')
+      return errorResponse(
+        c,
+        'document_version_not_found',
+        'The original linked document version is no longer available for re-detection.',
+        404,
+      )
+    if (result.kind === 'model_unavailable')
+      return errorResponse(
+        c,
+        'redaction_model_unavailable',
+        'Model detection is still unavailable. Try again later.',
+        503,
+      )
+    if (result.kind === 'detection_failed') {
+      console.error('redaction_detection_failed', {
+        requestId: c.get('requestId'),
+        reason: result.reason,
+      })
+      return errorResponse(
+        c,
+        'redaction_detection_failed',
+        'Redaction detection could not complete for this document.',
+        500,
+      )
+    }
+    c.header('location', `/api/redaction-runs/${result.run.id}`)
+    return c.json(
+      { run: publicRun(result.run), redetectedFromRunId: c.req.param('runId') },
+      result.kind === 'existing' ? 200 : 201,
+    )
+  })
+
   routes.delete('/api/redaction-runs/:runId', async (c) => {
     const user = requireManageRole(c)
     if (user instanceof Response) return user
@@ -339,6 +442,32 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
         404,
       )
     return c.json({ run: publicRun(run) })
+  })
+
+  routes.patch('/api/redaction-runs/:runId/restore', async (c) => {
+    const user = requireManageRole(c)
+    if (user instanceof Response) return user
+    const result = await restoreRedactionRunWithAudit(pool, {
+      organisationId: user.organisationId,
+      userId: user.id,
+      runId: c.req.param('runId'),
+      requestId: c.get('requestId'),
+    })
+    if (result.kind === 'not_found')
+      return errorResponse(
+        c,
+        'redaction_run_not_found',
+        'Deleted redaction run not found.',
+        404,
+      )
+    if (result.kind === 'replacement_exists')
+      return errorResponse(
+        c,
+        'conflict_detected',
+        `Run ${result.sourceRunId} has already been re-detected as ${result.replacementRunId}. Delete that replacement before restoring this run.`,
+        409,
+      )
+    return c.json({ run: publicRun(result.run) })
   })
 
   routes.get('/api/redaction-runs/:runId/document-text', async (c) => {
@@ -410,6 +539,13 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
           'Finalized redaction runs cannot be changed.',
           409,
         )
+      if (result.kind === 'replaced')
+        return errorResponse(
+          c,
+          'conflict_detected',
+          `This run was replaced by ${result.replacementRunId} and can no longer be changed.`,
+          409,
+        )
       if (result.kind === 'not_reviewable')
         return errorResponse(
           c,
@@ -437,13 +573,12 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
   routes.post('/api/redaction-runs/:runId/finalize', async (c) => {
     const user = requireUser(c)
     if (user instanceof Response) return user
-    const body = await jsonBody(c)
-    const outputMode = outputModeSchema.safeParse(body?.outputMode)
-    if (!outputMode.success)
+    const body = redactionFinalizeInputSchema.safeParse(await jsonBody(c))
+    if (!body.success)
       return errorResponse(
         c,
         'validation_failed',
-        'A valid output mode is required.',
+        'A valid output mode and acknowledgement value are required.',
         400,
       )
     const run = await getRedactionRun(
@@ -465,11 +600,38 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
         'This run has already been finalized.',
         409,
       )
+    if (run.replacementRunId)
+      return errorResponse(
+        c,
+        'conflict_detected',
+        `This run was replaced by ${run.replacementRunId}. Review and finalize the replacement instead.`,
+        409,
+      )
     if (run.status !== 'ready_for_review' && run.status !== 'reviewing')
       return errorResponse(
         c,
         'redaction_run_not_reviewable',
         'This run is not ready for finalization.',
+        400,
+      )
+    if (
+      run.detectionMode === 'heuristics+supplement' &&
+      body.data.degradedDetectionAcknowledged !== true
+    )
+      return errorResponse(
+        c,
+        'validation_failed',
+        'Acknowledge that model detection did not run before finalising.',
+        400,
+      )
+    if (
+      run.detectionMode === 'unknown' &&
+      body.data.unknownDetectionAcknowledged !== true
+    )
+      return errorResponse(
+        c,
+        'validation_failed',
+        'Acknowledge that the detection mode was not recorded before finalising.',
         400,
       )
     const textObjectKey = await getRunTextObjectKey(pool, run)
@@ -486,7 +648,7 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
     try {
       tokenMap = createTokenMap(text, run.spans, run.decisions)
       output =
-        outputMode.data === 'redacted'
+        body.data.outputMode === 'redacted'
           ? applyRedacted(text, run.spans, run.decisions)
           : applyPseudonymised(text, run.spans, run.decisions)
     } catch (error) {
@@ -510,9 +672,15 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
         pool,
         organisationId: user.organisationId,
         runId: run.id,
-        outputMode: outputMode.data,
+        outputMode: body.data.outputMode,
         tokenMap,
         artifactId,
+        userId: user.id,
+        requestId: c.get('requestId'),
+        degradedDetectionAcknowledged:
+          body.data.degradedDetectionAcknowledged === true,
+        unknownDetectionAcknowledged:
+          body.data.unknownDetectionAcknowledged === true,
       })
     } catch (error) {
       await storage.delete(objectKey)
@@ -536,6 +704,15 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
         409,
       )
     }
+    if (result.kind === 'replaced') {
+      await storage.delete(objectKey)
+      return errorResponse(
+        c,
+        'conflict_detected',
+        `This run was replaced by ${result.replacementRunId}. Review and finalize the replacement instead.`,
+        409,
+      )
+    }
     if (result.kind === 'not_reviewable') {
       await storage.delete(objectKey)
       return errorResponse(
@@ -545,21 +722,17 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
         400,
       )
     }
-    await appendAuditLog(pool, {
-      organisationId: user.organisationId,
-      userId: user.id,
-      entityType: 'redaction_run',
-      entityId: result.run.id,
-      action: 'redaction.finalize',
-      metadata: {
-        outputMode: outputMode.data,
-        artifactId: result.artifact.id,
-        spanCount: result.run.summary.totalSpans,
-        reviewedCount: result.run.summary.reviewedCount,
-        unreviewedCount: result.run.summary.unreviewedCount,
-      },
-      requestId: c.get('requestId'),
-    })
+    if (result.kind === 'acknowledgement_required') {
+      await storage.delete(objectKey)
+      return errorResponse(
+        c,
+        'validation_failed',
+        run.detectionMode === 'unknown'
+          ? 'Acknowledge that the detection mode was not recorded before finalising.'
+          : 'Acknowledge that model detection did not run before finalising.',
+        400,
+      )
+    }
     const unreviewedSpanIds = result.run.spans
       .filter((span) => !result.run.decisions[span.id])
       .map((span) => span.id)
@@ -613,7 +786,7 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
     // The audit report survives deletion (ruling 2): fetch with includeDeleted
     // so a deleted finalized run's report stays retrievable. A deleted run is
     // sensitive (the run itself is gone from every other surface), so only
-    // owner/admin may read it — live runs' audit access is unchanged.
+    // owner/admin may read it, while live runs' audit access is unchanged.
     const run = await getRedactionRun(
       pool,
       user.organisationId,

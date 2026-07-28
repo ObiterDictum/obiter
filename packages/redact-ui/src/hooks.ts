@@ -4,6 +4,7 @@ import type {
   FinalizeInput,
   FinalizeResponse,
   RedactionRun,
+  RedetectResponse,
   SpanDecisionInput,
 } from './types'
 
@@ -122,13 +123,31 @@ export function useSpanDecision(runId: string) {
   })
 }
 
+export function useRedetectRun(runId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () =>
+      apiFetch<RedetectResponse>(`/api/redaction-runs/${runId}/redetect`, {
+        method: 'POST',
+      }),
+    onSuccess: ({ run }) => {
+      queryClient.setQueryData(runKey(run.id), run)
+      void queryClient.invalidateQueries({ queryKey: runKey(runId) })
+      void queryClient.invalidateQueries({ queryKey: runsKey })
+      void queryClient.invalidateQueries({
+        queryKey: ['document-redaction-runs'],
+      })
+    },
+  })
+}
+
 export function useFinalizeRun(runId: string) {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: ({ outputMode }: FinalizeInput) =>
+    mutationFn: (input: FinalizeInput) =>
       apiFetch<FinalizeResponse>(`/api/redaction-runs/${runId}/finalize`, {
         method: 'POST',
-        body: JSON.stringify({ outputMode }),
+        body: JSON.stringify(input),
       }),
     onSuccess: ({ run }) => {
       // Immediate run detail update (status → finalized, outputArtifactId, summary).

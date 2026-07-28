@@ -72,19 +72,21 @@ This matters for tuning detection recall without a deploy, and for pointing a te
 - **FR1.1.** The redaction run record MUST expose detection mode as a structured field, not only as a substring of `detectorVersion`. Parsing a version string to determine whether a document was safely redacted is not an acceptable interface.
 - **FR1.2.** The field MUST be present in `packages/contracts`, persisted on the run, and returned by `GET /api/redaction-runs/:runId` and the document run list.
 - **FR1.3.** The audit report MUST record the detection mode for the run, so an exported report is self-describing about what produced its spans.
+- **FR1.4.** Historical rows without explicit model or degraded provenance MUST use `unknown`. The product MUST describe that absence of provenance truthfully rather than claiming model detection did not run.
 
 ### FR2: Degraded detection is visible in review
 
 - **FR2.1.** The review UI MUST display a persistent, non-dismissible warning when a run was produced in degraded mode, stating plainly that model-based detection did not run and that names, addresses and dates of birth were not automatically detected.
 - **FR2.2.** The warning MUST be visible at the point of finalizing, not only on entry to the run, so it cannot be scrolled past and forgotten.
 - **FR2.3.** The run list MUST mark degraded runs, so a supervisor reviewing several runs can see which are affected without opening each.
-- **FR2.4.** Finalizing a degraded run MUST require explicit acknowledgement that model detection did not run. The reviewer may proceed; they may not proceed unaware.
+- **FR2.4.** Finalizing a degraded run MUST require explicit acknowledgement that model detection did not run. A run with unknown provenance MUST require a distinct acknowledgement that its detection mode was not recorded. The reviewer may proceed; they may not proceed unaware.
+- **FR2.5.** A degraded or unknown run MUST offer model re-detection from the exact stored source. Successful re-detection creates one fresh, linked run with empty decisions and leaves the original run and its history unchanged. The source run MUST identify and link to its live replacement, and MUST no longer accept review decisions or finalization once that replacement exists. If the model is still unavailable, no replacement run or source object is created.
 
 ### FR3: Reconcile the failure contract
 
-- **FR3.1.** The shipped degrade-rather-fail behaviour MUST be recorded as the intended contract, superseding [Redact 1](archive/redact-1-detection.md) F6, or the code MUST be changed to fail closed. The current state, where the spec says one thing and the code does another, is not acceptable in either direction.
-- **FR3.2.** Recommended resolution: keep degrading, because a partial result the reviewer can act on beats a hard failure, and record the deviation explicitly. This is contingent on FR1 and FR2 landing, which is what makes degradation safe.
-- **FR3.3.** `redaction_detection_failed` MUST remain the surface for failures that are not recoverable by degrading, such as an unreadable document.
+- **FR3.1.** Degrade rather than fail is the intended contract for model load, inference and recoverable post-inference processing failures. The detector MUST discard unusable model output, complete with heuristics and the UK supplement, persist `heuristics+supplement` as its structured mode, and require the visibility and acknowledgement controls in FR1 and FR2. This supersedes [Redact 1](archive/redact-1-detection.md) F6.
+- **FR3.2.** A partial result the reviewer can act on is preferable to a hard failure only when the degraded state is explicit. The detector version remains provenance and MUST NOT be parsed by callers to discover this state.
+- **FR3.3.** `redaction_detection_failed` remains the 500 surface for internal detection pipeline failures that are not recoverable by degrading. Corrupt or unreadable uploads are client input and remain `validation_failed` responses with status 400.
 
 ### FR4: Detection configuration
 
@@ -112,18 +114,20 @@ Validation found documentation that contradicts the code. These are corrected as
 
 - No regression in detection latency. The delivered targets stand.
 - The degraded-mode warning must not require a new request; the information is already on the run record.
+- Persistent detection warnings use note semantics. The finalisation-point warning is the single assertive live region when the dialog opens.
+- Re-detection is idempotent for each source run and does not hold a database transaction open during model inference.
 - Configuration is read once at startup, not per request.
 
 ## Security And Compliance
 
-- The detection mode is part of the audit trail. A finalized document must be traceable to what detected its spans.
-- No change to what is stored, logged or exported beyond adding detection mode.
+- The detection mode and any source-to-replacement run relationship are part of the audit trail. A finalized document must be traceable to what detected its spans.
+- A standalone replacement receives its own organisation-scoped source object. A document-linked replacement continues to reference the exact immutable document version used by the source run.
 - Object keys, prompts and logs continue to exclude client names, matter names and raw legal text.
 
 ## Rollout
 
 **Gate 1: Visibility.** FR1, FR2, FR3. The trust defect closes here and this is the only part that is urgent.
-_Exit:_ a reviewer cannot finalize a degraded run without being told and acknowledging it; detection mode is a structured field on the run and in the audit report.
+_Exit:_ a reviewer cannot finalize a degraded or unknown-provenance run without truthful warning and acknowledgement; detection mode is structured on the run and in the audit report, and successful model re-detection creates a linked replacement without changing the original.
 
 **Gate 2: Configuration and confirmation.** FR4, FR5, FR6.
 _Exit:_ detection parameters are environment-configurable with startup validation; all delivered acceptance criteria are confirmed by automated checks; no specification contradicts the code.
@@ -131,6 +135,8 @@ _Exit:_ detection parameters are environment-configurable with startup validatio
 ## Risks
 
 - Degraded mode may be more common than assumed. If the model fails to load routinely, FR2 turns into a warning users learn to dismiss mentally. Worth measuring how often degradation actually occurs before deciding the warning is sufficient.
+- Re-detection can report that the model remains unavailable. The original run remains reviewable, no replacement is created, and the reviewer must try again later or continue with explicit acknowledgement.
+- Finalized degraded or unknown runs may be re-detected to create a fresh review. The finalized source remains immutable and visibly links to the new run; the replacement is not presented as changing the finalized artifact.
 - Making the model id configurable invites pointing production at an unpinned model. FR4.4's startup validation is the control; consider whether the id should be restricted to an allowlist.
 
 ## Open Questions

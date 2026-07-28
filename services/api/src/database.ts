@@ -37,6 +37,7 @@ export interface AuditRecordInput {
     | 'document.delete'
     | 'document.restore'
     | 'redaction.run_create'
+    | 'redaction.run_redetect'
     | 'redaction.span_decision'
     | 'redaction.finalize'
     | 'redaction.token_map_access'
