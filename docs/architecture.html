@@ -2432,24 +2432,24 @@
                 </tr>
                 <tr>
                   <td class="id">GET · POST /api/redaction-runs</td>
-                  <td class="id">redact.ts</td>
+                  <td class="id">redact-run-creation.ts</td>
                   <td>List runs, create a standalone run</td>
                 </tr>
                 <tr>
                   <td class="id">
                     POST /api/documents/:documentId/redaction-runs
                   </td>
-                  <td class="id">redact.ts</td>
+                  <td class="id">redact-run-creation.ts</td>
                   <td>Create a run against a matter document</td>
                 </tr>
                 <tr>
                   <td class="id">GET · DELETE /api/redaction-runs/:runId</td>
-                  <td class="id">redact.ts</td>
+                  <td class="id">redact-review.ts, redact-lifecycle.ts</td>
                   <td>Run with spans, decisions and summary</td>
                 </tr>
                 <tr>
                   <td class="id">POST /api/redaction-runs/:runId/redetect</td>
-                  <td class="id">redact.ts</td>
+                  <td class="id">redact-lifecycle.ts</td>
                   <td>
                     Create one linked model-detected replacement while
                     preserving the source run
@@ -2457,7 +2457,7 @@
                 </tr>
                 <tr>
                   <td class="id">PATCH /api/redaction-runs/:runId/restore</td>
-                  <td class="id">redact.ts</td>
+                  <td class="id">redact-lifecycle.ts</td>
                   <td>
                     Undo soft delete, refused with 409 when a competing live
                     replacement already exists
@@ -2467,34 +2467,34 @@
                   <td class="id">
                     GET /api/redaction-runs/:runId/document-text
                   </td>
-                  <td class="id">redact.ts</td>
+                  <td class="id">redact-review.ts</td>
                   <td>Source text for the review view</td>
                 </tr>
                 <tr>
                   <td class="id">
                     POST /api/redaction-runs/:runId/spans/:spanId/decision
                   </td>
-                  <td class="id">redact.ts</td>
+                  <td class="id">redact-review.ts</td>
                   <td>Accept, reject, override, pseudonymise</td>
                 </tr>
                 <tr>
                   <td class="id">POST /api/redaction-runs/:runId/finalize</td>
-                  <td class="id">redact.ts</td>
+                  <td class="id">redact-review.ts</td>
                   <td>Apply decisions, write the output artifact</td>
                 </tr>
                 <tr>
                   <td class="id">GET /api/redaction-runs/:runId/output</td>
-                  <td class="id">redact.ts</td>
+                  <td class="id">redact-review.ts</td>
                   <td>Finalized text</td>
                 </tr>
                 <tr>
                   <td class="id">GET /api/redaction-runs/:runId/token-map</td>
-                  <td class="id">redact.ts</td>
+                  <td class="id">redact-review.ts</td>
                   <td>Pseudonymisation token map</td>
                 </tr>
                 <tr>
                   <td class="id">GET /api/redaction-runs/:runId/audit</td>
-                  <td class="id">redact.ts</td>
+                  <td class="id">redact-lifecycle.ts</td>
                   <td>Audit report as JSON, Markdown or HTML</td>
                 </tr>
                 <tr>
@@ -4843,8 +4843,8 @@
             <li>
               <span
                 ><b>Files stay under 500 lines.</b> Four currently exceed it:
-                classifier.ts (776), redact.ts (702), proxy-routes.ts (676),
-                LegalSearchView.tsx (644).</span
+                classifier.ts (776), redaction-database.ts (772),
+                proxy-routes.ts (676), LegalSearchView.tsx (644).</span
               >
             </li>
             <li>
