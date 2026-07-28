@@ -16,19 +16,25 @@ alter table redaction_runs
   drop constraint if exists redaction_runs_replaces_fk,
   drop constraint if exists redaction_runs_id_organisation_unique;
 
-update redaction_runs
-set detection_mode = case
-  when detector_version like '%;mode=model+supplement%' then 'model+supplement'
-  when detector_version like '%;mode=heuristics+supplement%' then 'heuristics+supplement'
-  when detector_version like '%;mode=supplement-only%' then 'heuristics+supplement'
-  else 'unknown'
-end
-where detection_mode is distinct from case
-  when detector_version like '%;mode=model+supplement%' then 'model+supplement'
-  when detector_version like '%;mode=heuristics+supplement%' then 'heuristics+supplement'
-  when detector_version like '%;mode=supplement-only%' then 'heuristics+supplement'
-  else 'unknown'
-end;
+-- detector_version is the source of truth for this migration-time legacy
+-- normalisation. Runtime writes keep both fields aligned, so re-applying the
+-- migration preserves valid application rows and corrects inconsistent values.
+with mapped_detection_modes as (
+  select
+    id,
+    case
+      when detector_version like '%;mode=model+supplement%' then 'model+supplement'
+      when detector_version like '%;mode=heuristics+supplement%' then 'heuristics+supplement'
+      when detector_version like '%;mode=supplement-only%' then 'heuristics+supplement'
+      else 'unknown'
+    end as mode
+  from redaction_runs
+)
+update redaction_runs as run
+set detection_mode = mapping.mode
+from mapped_detection_modes as mapping
+where mapping.id = run.id
+  and run.detection_mode is distinct from mapping.mode;
 
 alter table redaction_runs
   alter column detection_mode set default 'unknown',
