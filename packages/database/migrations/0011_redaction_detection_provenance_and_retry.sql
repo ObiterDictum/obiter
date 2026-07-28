@@ -1,12 +1,13 @@
--- 0012_redaction_detection_provenance_and_retry.sql
+-- 0011_redaction_detection_provenance_and_retry.sql
 --
--- Correct the conservative 0011 legacy backfill now that the UI distinguishes
--- unknown provenance from confirmed degradation. Also link a successful model
--- re-detection run to the source run it replaces.
+-- Record structured detector provenance on every redaction run and link a
+-- successful model re-detection run to the source run it replaces. Legacy
+-- provenance is mapped conservatively, with unrecognised rows marked unknown.
 
 begin;
 
 alter table redaction_runs
+  add column if not exists detection_mode text,
   add column if not exists replaces_run_id text;
 
 alter table redaction_runs
