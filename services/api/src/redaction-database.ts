@@ -164,6 +164,8 @@ function parseDecisions(value: unknown): Decisions {
 }
 
 export function mapRedactionRun(row: RedactionRunRow): RedactionRunRecord {
+  if (row.replacement_run_id === undefined)
+    throw new Error('Stored redaction replacement lineage was not selected.')
   const summary = json(row.summary_json)
   if (typeof summary !== 'object' || summary === null || Array.isArray(summary))
     throw new Error('Stored redaction summary is invalid.')
@@ -185,7 +187,7 @@ export function mapRedactionRun(row: RedactionRunRow): RedactionRunRecord {
     detectorVersion: row.detector_version,
     detectionMode: detectionModeSchema.parse(row.detection_mode),
     replacesRunId: row.replaces_run_id ?? null,
-    replacementRunId: row.replacement_run_id ?? null,
+    replacementRunId: row.replacement_run_id,
     createdBy: row.created_by,
     createdAt: timestamp(row.created_at),
     updatedAt: timestamp(row.updated_at),
@@ -235,19 +237,33 @@ export function publicRun(run: RedactionRunRecord) {
   return { ...publicRecord, summary }
 }
 
+async function selectRedactionRun(
+  queryable: Pick<Pool, 'query'>,
+  organisationId: string,
+  runId: string,
+  includeDeleted = false,
+) {
+  const result = await queryable.query<RedactionRunRow>(
+    `select ${redactionRunColumns} ${redactionRunsFrom}
+     where run.id = $1 and run.organisation_id = $2
+       and ($3::boolean or run.deleted_at is null)`,
+    [runId, organisationId, includeDeleted],
+  )
+  return result.rows[0] ? mapRedactionRun(result.rows[0]) : null
+}
+
 export async function getRedactionRun(
   pool: Pool,
   organisationId: string,
   runId: string,
   options: { includeDeleted?: boolean } = {},
 ) {
-  const result = await pool.query<RedactionRunRow>(
-    `select ${redactionRunColumns} ${redactionRunsFrom}
-     where run.id = $1 and run.organisation_id = $2
-       and ($3::boolean or run.deleted_at is null)`,
-    [runId, organisationId, options.includeDeleted === true],
+  return selectRedactionRun(
+    pool,
+    organisationId,
+    runId,
+    options.includeDeleted === true,
   )
-  return result.rows[0] ? mapRedactionRun(result.rows[0]) : null
 }
 
 export async function listRedactionRuns(
@@ -337,6 +353,13 @@ export async function recordSpanDecision(input: {
       await client.query('rollback')
       return { kind: 'finalized' as const }
     }
+    if (run.replacementRunId) {
+      await client.query('rollback')
+      return {
+        kind: 'replaced' as const,
+        replacementRunId: run.replacementRunId,
+      }
+    }
     if (run.status !== 'ready_for_review' && run.status !== 'reviewing') {
       await client.query('rollback')
       return { kind: 'not_reviewable' as const }
@@ -355,8 +378,8 @@ export async function recordSpanDecision(input: {
       },
     }
     const summary = computeSummary(run.spans, decisions)
-    const updated = await client.query<RedactionRunRow>(
-      `update redaction_runs set status = case when status = 'ready_for_review' then 'reviewing' else status end, decisions_json = $3::jsonb, summary_json = $4::jsonb, updated_at = now() where id = $1 and organisation_id = $2 returning id, organisation_id, matter_id, null::text as matter_name, document_id, document_version_id, source_filename, source_text_object_key, status, policy_mode, spans_json, decisions_json, output_artifact_id, summary_json, detector_version, detection_mode, replaces_run_id, created_by, created_at, updated_at, deleted_at, deleted_by`,
+    await client.query(
+      `update redaction_runs set status = case when status = 'ready_for_review' then 'reviewing' else status end, decisions_json = $3::jsonb, summary_json = $4::jsonb, updated_at = now() where id = $1 and organisation_id = $2`,
       [
         run.id,
         run.organisationId,
@@ -364,12 +387,14 @@ export async function recordSpanDecision(input: {
         JSON.stringify(summary),
       ],
     )
+    const updatedRun = await selectRedactionRun(
+      client,
+      run.organisationId,
+      run.id,
+    )
+    if (!updatedRun) throw new Error('Updated redaction run could not be read.')
     await client.query('commit')
-    return {
-      kind: 'updated' as const,
-      run: mapRedactionRun(updated.rows[0]),
-      span,
-    }
+    return { kind: 'updated' as const, run: updatedRun, span }
   } catch (error) {
     await client.query('rollback')
     throw error
@@ -445,11 +470,17 @@ export async function finalizeRedactionRun(input: {
       tokenMap: input.tokenMap,
       outputMode: input.outputMode,
     }
-    const updated = await client.query<RedactionRunRow>(
-      `update redaction_runs set status = 'finalized', output_artifact_id = $3, summary_json = $4::jsonb, updated_at = now() where id = $1 and organisation_id = $2 returning id, organisation_id, matter_id, null::text as matter_name, document_id, document_version_id, source_filename, source_text_object_key, status, policy_mode, spans_json, decisions_json, output_artifact_id, summary_json, detector_version, detection_mode, replaces_run_id, created_by, created_at, updated_at, deleted_at, deleted_by`,
+    await client.query(
+      `update redaction_runs set status = 'finalized', output_artifact_id = $3, summary_json = $4::jsonb, updated_at = now() where id = $1 and organisation_id = $2`,
       [run.id, run.organisationId, input.artifactId, JSON.stringify(summary)],
     )
-    const finalizedRun = mapRedactionRun(updated.rows[0])
+    const finalizedRun = await selectRedactionRun(
+      client,
+      run.organisationId,
+      run.id,
+    )
+    if (!finalizedRun)
+      throw new Error('Finalized redaction run could not be read.')
     await appendAuditLog(client, {
       organisationId: input.organisationId,
       userId: input.userId,
@@ -567,19 +598,19 @@ export async function softDeleteRedactionRun(
       return null
     }
 
-    const result = await client.query<RedactionRunRow>(
-      `
-        update redaction_runs
-        set deleted_at = now(), deleted_by = $3, updated_at = now()
-        where id = $1 and organisation_id = $2 and deleted_at is null
-        returning id, organisation_id, matter_id, null::text as matter_name, document_id,
-          document_version_id, source_filename, source_text_object_key, status, policy_mode,
-          spans_json, decisions_json, output_artifact_id, summary_json, detector_version,
-          detection_mode, replaces_run_id, created_by, created_at, updated_at, deleted_at, deleted_by
-      `,
+    await client.query(
+      `update redaction_runs
+       set deleted_at = now(), deleted_by = $3, updated_at = now()
+       where id = $1 and organisation_id = $2 and deleted_at is null`,
       [input.runId, input.organisationId, input.userId],
     )
-    const run = mapRedactionRun(result.rows[0])
+    const run = await selectRedactionRun(
+      client,
+      input.organisationId,
+      input.runId,
+      true,
+    )
+    if (!run) throw new Error('Deleted redaction run could not be read.')
 
     await appendAuditLog(client, {
       organisationId: input.organisationId,
@@ -674,21 +705,20 @@ export async function restoreRedactionRunWithAudit(
     }
     const cascadeTimestamp = lock.rows[0].deleted_at
 
-    const result = await client.query<RedactionRunRow>(
-      `
-        update redaction_runs
-        set deleted_at = null, deleted_by = null, updated_at = now()
-        where id = $1
-          and organisation_id = $2
-          and deleted_at = $3::timestamptz
-        returning id, organisation_id, matter_id, null::text as matter_name, document_id,
-          document_version_id, source_filename, source_text_object_key, status, policy_mode,
-          spans_json, decisions_json, output_artifact_id, summary_json, detector_version,
-          detection_mode, replaces_run_id, created_by, created_at, updated_at, deleted_at, deleted_by
-      `,
+    await client.query(
+      `update redaction_runs
+       set deleted_at = null, deleted_by = null, updated_at = now()
+       where id = $1
+         and organisation_id = $2
+         and deleted_at = $3::timestamptz`,
       [input.runId, input.organisationId, cascadeTimestamp],
     )
-    const run = mapRedactionRun(result.rows[0])
+    const run = await selectRedactionRun(
+      client,
+      input.organisationId,
+      input.runId,
+    )
+    if (!run) throw new Error('Restored redaction run could not be read.')
 
     await appendAuditLog(client, {
       organisationId: input.organisationId,

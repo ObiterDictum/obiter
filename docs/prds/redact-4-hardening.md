@@ -80,7 +80,7 @@ This matters for tuning detection recall without a deploy, and for pointing a te
 - **FR2.2.** The warning MUST be visible at the point of finalizing, not only on entry to the run, so it cannot be scrolled past and forgotten.
 - **FR2.3.** The run list MUST mark degraded runs, so a supervisor reviewing several runs can see which are affected without opening each.
 - **FR2.4.** Finalizing a degraded run MUST require explicit acknowledgement that model detection did not run. A run with unknown provenance MUST require a distinct acknowledgement that its detection mode was not recorded. The reviewer may proceed; they may not proceed unaware.
-- **FR2.5.** A degraded or unknown run MUST offer model re-detection from the exact stored source. Successful re-detection creates one fresh, linked run with empty decisions and leaves the original run and its history unchanged. The source run MUST identify and link to its live replacement, and an unfinalized source run MUST no longer be finalizable once that replacement exists. If the model is still unavailable, no replacement run or source object is created.
+- **FR2.5.** A degraded or unknown run MUST offer model re-detection from the exact stored source. Successful re-detection creates one fresh, linked run with empty decisions and leaves the original run and its history unchanged. The source run MUST identify and link to its live replacement, and MUST no longer accept review decisions or finalization once that replacement exists. If the model is still unavailable, no replacement run or source object is created.
 
 ### FR3: Reconcile the failure contract
 

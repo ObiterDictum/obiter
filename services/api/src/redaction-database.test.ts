@@ -4,8 +4,10 @@ import {
   finalizeRedactionRun,
   getDocumentRedactionSource,
   listRedactionAuditLog,
+  mapRedactionRun,
   recordSpanDecision,
   restoreRedactionRunWithAudit,
+  softDeleteRedactionRun,
 } from './redaction-database'
 import {
   createRedactionRun,
@@ -68,6 +70,16 @@ function createTransactionalPool(
   const pool = { connect: async () => client } as unknown as Pool
   return { pool, calls }
 }
+
+describe('mapRedactionRun', () => {
+  it('fails closed when a query omits live replacement lineage', () => {
+    const { replacement_run_id: _replacementRunId, ...row } = runRow()
+    expect(() =>
+      // @ts-expect-error Intentionally exercise a query row missing lineage.
+      mapRedactionRun(row),
+    ).toThrow('Stored redaction replacement lineage was not selected.')
+  })
+})
 
 describe('listRedactionAuditLog', () => {
   it('scopes run audit reads by organisation, excluding nullable auth audit rows', async () => {
@@ -385,6 +397,31 @@ describe('redaction run write guards', () => {
     )
   })
 
+  it('refuses span decisions after a live replacement exists', async () => {
+    const { pool, calls } = createTransactionalPool(async (sql) => {
+      if (sql === 'begin' || sql === 'rollback') return { rows: [] }
+      if (sql.includes('for update of run')) {
+        return { rows: [runRow({ replacement_run_id: 'red_2' })] }
+      }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    await expect(
+      recordSpanDecision({
+        pool,
+        organisationId: 'org_1',
+        runId: 'red_1',
+        spanId: 'span_1',
+        decision: 'accept',
+        userId: 'usr_1',
+      }),
+    ).resolves.toEqual({ kind: 'replaced', replacementRunId: 'red_2' })
+
+    expect(calls.some(([sql]) => sql.includes('update redaction_runs'))).toBe(
+      false,
+    )
+  })
+
   it('treats a soft-deleted run as not found before finalization creates an artifact', async () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       if (sql === 'begin' || sql === 'rollback') return { rows: [] }
@@ -512,7 +549,8 @@ describe('redaction run write guards', () => {
           rows: [{ id: 'art_1', object_key: 'org/org_1/artifacts/art_1' }],
         }
       }
-      if (sql.includes('update redaction_runs')) {
+      if (sql.includes('update redaction_runs')) return { rows: [] }
+      if (sql.includes('from redaction_runs')) {
         return {
           rows: [runRow({ status: 'finalized', output_artifact_id: 'art_1' })],
         }
@@ -542,11 +580,12 @@ describe('redaction run write guards', () => {
     expect(calls.some(([sql]) => sql === 'rollback')).toBe(true)
   })
 
-  it('returns deletion columns after recording a decision', async () => {
+  it('re-reads a run through the lineage join after recording a decision', async () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       if (sql === 'begin' || sql === 'commit') return { rows: [] }
       if (sql.includes('for update of run')) return { rows: [runRow()] }
-      if (sql.includes('update redaction_runs')) {
+      if (sql.includes('update redaction_runs')) return { rows: [] }
+      if (sql.includes('from redaction_runs')) {
         return { rows: [runRow({ status: 'reviewing' })] }
       }
       throw new Error(`Unexpected SQL: ${sql}`)
@@ -561,13 +600,18 @@ describe('redaction run write guards', () => {
       userId: 'usr_1',
     })
 
-    expect(result.kind).toBe('updated')
-    const update = calls.find(([sql]) => sql.includes('update redaction_runs'))
-    expect(update?.[0]).toMatch(/returning[\s\S]*deleted_at/)
-    expect(update?.[0]).toMatch(/returning[\s\S]*deleted_by/)
+    expect(result).toMatchObject({
+      kind: 'updated',
+      run: { status: 'reviewing', replacementRunId: null },
+    })
+    const reread = calls.find(
+      ([sql]) =>
+        sql.includes('from redaction_runs') && !sql.includes('for update'),
+    )
+    expect(reread?.[0]).toContain('replacement.id as replacement_run_id')
   })
 
-  it('returns deletion columns after finalizing a run', async () => {
+  it('re-reads a run through the lineage join after finalizing it', async () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       if (sql === 'begin' || sql === 'commit') return { rows: [] }
       if (sql.includes('for update of run')) return { rows: [runRow()] }
@@ -576,7 +620,8 @@ describe('redaction run write guards', () => {
           rows: [{ id: 'art_1', object_key: 'org/org_1/artifacts/art_1' }],
         }
       }
-      if (sql.includes('update redaction_runs')) {
+      if (sql.includes('update redaction_runs')) return { rows: [] }
+      if (sql.includes('from redaction_runs')) {
         return {
           rows: [runRow({ status: 'finalized', output_artifact_id: 'art_1' })],
         }
@@ -598,10 +643,15 @@ describe('redaction run write guards', () => {
       unknownDetectionAcknowledged: false,
     })
 
-    expect(result.kind).toBe('finalized')
-    const update = calls.find(([sql]) => sql.includes('update redaction_runs'))
-    expect(update?.[0]).toMatch(/returning[\s\S]*deleted_at/)
-    expect(update?.[0]).toMatch(/returning[\s\S]*deleted_by/)
+    expect(result).toMatchObject({
+      kind: 'finalized',
+      run: { status: 'finalized', replacementRunId: null },
+    })
+    const reread = calls.find(
+      ([sql]) =>
+        sql.includes('from redaction_runs') && !sql.includes('for update'),
+    )
+    expect(reread?.[0]).toContain('replacement.id as replacement_run_id')
   })
 
   it('does not create a linked run when its document or matter is deleted', async () => {
@@ -648,6 +698,40 @@ describe('redaction run write guards', () => {
   })
 })
 
+describe('softDeleteRedactionRun', () => {
+  it('re-reads the deleted run with its live forward lineage', async () => {
+    const { pool, calls } = createTransactionalPool(async (sql, params) => {
+      const text = sql.trim()
+      if (text === 'begin' || text === 'commit') return { rows: [] }
+      if (text.startsWith('select id from redaction_runs')) {
+        return { rows: [{ id: 'red_1' }] }
+      }
+      if (text.startsWith('update redaction_runs')) return { rows: [] }
+      if (text.startsWith('select run.id')) {
+        expect(params).toEqual(['red_1', 'org_1', true])
+        return { rows: [runRow({ replacement_run_id: 'red_2' })] }
+      }
+      if (text.includes('insert into audit_logs')) return { rows: [] }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    await expect(
+      softDeleteRedactionRun(pool, {
+        organisationId: 'org_1',
+        userId: 'usr_1',
+        runId: 'red_1',
+        requestId: 'req_1',
+      }),
+    ).resolves.toMatchObject({ id: 'red_1', replacementRunId: 'red_2' })
+
+    expect(
+      calls.some(([sql]) =>
+        sql.includes('replacement.id as replacement_run_id'),
+      ),
+    ).toBe(true)
+  })
+})
+
 describe('restoreRedactionRunWithAudit', () => {
   it('uses timestamp provenance and writes the restore audit row', async () => {
     const deletedAt = '2026-02-01 00:00:00.123456+00'
@@ -660,7 +744,10 @@ describe('restoreRedactionRunWithAudit', () => {
       if (text.startsWith('select deleted_at::text')) {
         return { rows: [{ deleted_at: deletedAt }] }
       }
-      if (text.startsWith('update redaction_runs')) return { rows: [runRow()] }
+      if (text.startsWith('update redaction_runs')) return { rows: [] }
+      if (text.startsWith('select run.id')) {
+        return { rows: [runRow({ replacement_run_id: 'red_2' })] }
+      }
       if (text.includes('insert into audit_logs')) return { rows: [] }
       throw new Error(`Unexpected SQL: ${sql}`)
     })
@@ -672,7 +759,11 @@ describe('restoreRedactionRunWithAudit', () => {
         runId: 'red_1',
         requestId: 'req_1',
       }),
-    ).resolves.toMatchObject({ id: 'red_1', deletedAt: null })
+    ).resolves.toMatchObject({
+      id: 'red_1',
+      deletedAt: null,
+      replacementRunId: 'red_2',
+    })
 
     const update = calls.find(([sql]) => sql.includes('update redaction_runs'))
     expect(update?.[0]).toContain('deleted_at = $3::timestamptz')

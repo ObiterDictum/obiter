@@ -1039,6 +1039,8 @@ describe('createApiApp', () => {
                 detector_version:
                   'rampart-inference@0.1.3-vendored;mode=model+supplement',
                 detection_mode: 'model+supplement',
+                replaces_run_id: null,
+                replacement_run_id: null,
                 created_by: 'usr_1',
                 created_at: '2026-01-01T00:00:00.000Z',
                 updated_at: '2026-01-01T00:00:00.000Z',
@@ -1143,6 +1145,8 @@ describe('createApiApp', () => {
       detector_version:
         'rampart-inference@0.1.3-vendored;mode=heuristics+supplement',
       detection_mode: persistedMode,
+      replaces_run_id: null,
+      replacement_run_id: null,
       created_by: 'usr_1',
       created_at: '2026-01-01T00:00:00.000Z',
       updated_at: '2026-01-01T00:00:00.000Z',
@@ -1492,6 +1496,7 @@ function finalizedRunRow(overrides: Record<string, unknown> = {}) {
     detector_version: null,
     detection_mode: 'model+supplement',
     replaces_run_id: null,
+    replacement_run_id: null,
     created_by: 'usr_1',
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
@@ -1536,12 +1541,12 @@ describe('createApiApp degraded finalization acknowledgement', () => {
               ],
             }
           }
-          if (text.includes('update redaction_runs')) {
+          if (text.includes('update redaction_runs')) return { rows: [] }
+          if (text.includes('from redaction_runs')) {
             return {
               rows: [
                 finalizedRunRow({
                   detection_mode: detectionMode,
-                  summary_json: JSON.parse(String((params as unknown[])[3])),
                 }),
               ],
             }
@@ -1663,6 +1668,94 @@ describe('createApiApp degraded finalization acknowledgement', () => {
       degradedDetectionAcknowledged: false,
       unknownDetectionAcknowledged: false,
     })
+  })
+})
+
+describe('createApiApp replaced redaction run guards', () => {
+  it('rejects span decisions after a live replacement exists', async () => {
+    let updated = false
+    const replacedRun = finalizedRunRow({
+      status: 'ready_for_review',
+      output_artifact_id: null,
+      replacement_run_id: 'red_2',
+      spans_json: [
+        {
+          id: 'span_1',
+          start: 0,
+          end: 4,
+          text: 'Jane',
+          category: 'person_name',
+          source: 'rampart_model',
+          confidence: 'high',
+          suggestion: 'redact',
+        },
+      ],
+    })
+    const app = createApiApp(
+      testEnv,
+      createHybridPool(
+        async () => ({ rows: [] }),
+        async (sql) => {
+          const text = String(sql)
+          if (text === 'begin' || text === 'rollback') return { rows: [] }
+          if (text.includes('for update of run')) {
+            return { rows: [replacedRun] }
+          }
+          if (text.includes('update redaction_runs')) {
+            updated = true
+            return { rows: [] }
+          }
+          throw new Error(`Unexpected SQL: ${text}`)
+        },
+      ),
+      { auth: authWithRole('member') },
+    )
+
+    const response = await app.request(
+      '/api/redaction-runs/red_1/spans/span_1/decision',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ decision: 'accept' }),
+      },
+    )
+
+    expect(response.status).toBe(409)
+    expect(((await response.json()) as ErrorBody).error).toMatchObject({
+      code: 'conflict_detected',
+      message: expect.stringContaining('red_2'),
+    })
+    expect(updated).toBe(false)
+  })
+
+  it('reports an already-finalized run before its replacement lineage', async () => {
+    const run = finalizedRunRow({ replacement_run_id: 'red_2' })
+    const app = createApiApp(
+      testEnv,
+      createHybridPool(
+        async (sql) => {
+          if (String(sql).includes('from redaction_runs')) {
+            return { rows: [run] }
+          }
+          return { rows: [] }
+        },
+        async (sql) => {
+          throw new Error(`Unexpected transaction SQL: ${String(sql)}`)
+        },
+      ),
+      { auth: authWithRole('member') },
+    )
+
+    const response = await app.request('/api/redaction-runs/red_1/finalize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ outputMode: 'redacted' }),
+    })
+
+    expect(response.status).toBe(409)
+    expect(((await response.json()) as ErrorBody).error.code).toBe(
+      'redaction_already_finalized',
+    )
   })
 })
 

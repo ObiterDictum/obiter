@@ -3951,8 +3951,9 @@
             stored source, creates one linked replacement only after model
             success, and preserves the original review history. Run reads expose
             both backward and live forward lineage; source runs link reviewers
-            to the replacement and cannot be finalised after a live replacement
-            exists.
+            to the replacement and accept neither review decisions nor
+            finalisation after a live replacement exists. Transactional write
+            responses re-read through the lineage join before updating clients.
           </div>
           <div class="callout">
             <b>Finalize is fail-closed.</b> If a span's stored text no longer
