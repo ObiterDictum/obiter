@@ -2396,9 +2396,9 @@
                   <td>Matter detail and soft delete</td>
                 </tr>
                 <tr>
-                  <td class="id">POST /api/matters/:id/restore</td>
+                  <td class="id">PATCH /api/matters/:id/restore</td>
                   <td class="id">matters.ts</td>
-                  <td>Undo soft delete</td>
+                  <td>Undo soft delete, cascading to documents and runs</td>
                 </tr>
                 <tr>
                   <td class="id">POST /api/matters/:matterId/documents</td>
@@ -2409,6 +2409,11 @@
                   <td class="id">GET /api/documents/:id</td>
                   <td class="id">documents.ts</td>
                   <td>Document with immutable versions</td>
+                </tr>
+                <tr>
+                  <td class="id">PATCH /api/documents/:id/restore</td>
+                  <td class="id">documents.ts</td>
+                  <td>Undo soft delete, cascading to its runs</td>
                 </tr>
                 <tr>
                   <td class="id">GET /api/search</td>
@@ -2448,6 +2453,14 @@
                   <td>
                     Create one linked model-detected replacement while
                     preserving the source run
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">PATCH /api/redaction-runs/:runId/restore</td>
+                  <td class="id">redact.ts</td>
+                  <td>
+                    Undo soft delete, refused with 409 when a competing live
+                    replacement already exists
                   </td>
                 </tr>
                 <tr>

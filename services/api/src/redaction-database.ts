@@ -641,7 +641,7 @@ export async function restoreRedactionRunWithAudit(
     runId: string
     requestId: string
   },
-): Promise<RedactionRunRecord | null> {
+) {
   const client = await pool.connect()
 
   try {
@@ -650,17 +650,64 @@ export async function restoreRedactionRunWithAudit(
     const candidate = await client.query<{
       matter_id: string | null
       document_id: string | null
+      replaces_run_id: string | null
     }>(
-      `select matter_id, document_id from redaction_runs
+      `select matter_id, document_id, replaces_run_id from redaction_runs
        where id = $1 and organisation_id = $2 and deleted_at is not null`,
       [input.runId, input.organisationId],
     )
     if (candidate.rows.length === 0) {
       await client.query('rollback')
-      return null
+      return { kind: 'not_found' as const }
     }
 
     const parent = candidate.rows[0]
+    // Lock the run being restored, then its source run, then the matter and
+    // document. Re-detection locks the source run before the same parents, so
+    // sharing that order keeps the two paths from deadlocking on each other.
+    const lock = await client.query<{ deleted_at: string }>(
+      `select deleted_at::text from redaction_runs
+       where id = $1
+         and organisation_id = $2
+         and deleted_at is not null
+         and matter_id is not distinct from $3
+         and document_id is not distinct from $4
+       for update`,
+      [input.runId, input.organisationId, parent.matter_id, parent.document_id],
+    )
+    if (lock.rows.length === 0) {
+      await client.query('rollback')
+      return { kind: 'not_found' as const }
+    }
+    const cascadeTimestamp = lock.rows[0].deleted_at
+
+    if (parent.replaces_run_id) {
+      // Hold the source run so a concurrent re-detection cannot install a
+      // competing replacement between this check and the update below.
+      await client.query(
+        `select id from redaction_runs
+         where id = $1 and organisation_id = $2
+         for update`,
+        [parent.replaces_run_id, input.organisationId],
+      )
+      const competing = await client.query<{ id: string }>(
+        `select id from redaction_runs
+         where organisation_id = $1
+           and replaces_run_id = $2
+           and deleted_at is null
+           and id <> $3`,
+        [input.organisationId, parent.replaces_run_id, input.runId],
+      )
+      if (competing.rows[0]) {
+        await client.query('rollback')
+        return {
+          kind: 'replacement_exists' as const,
+          sourceRunId: parent.replaces_run_id,
+          replacementRunId: competing.rows[0].id,
+        }
+      }
+    }
+
     if (parent.matter_id) {
       const matter = await client.query<{ id: string }>(
         `select id from matters
@@ -670,7 +717,7 @@ export async function restoreRedactionRunWithAudit(
       )
       if (matter.rows.length === 0) {
         await client.query('rollback')
-        return null
+        return { kind: 'not_found' as const }
       }
     }
     if (parent.document_id) {
@@ -685,25 +732,9 @@ export async function restoreRedactionRunWithAudit(
       )
       if (document.rows.length === 0) {
         await client.query('rollback')
-        return null
+        return { kind: 'not_found' as const }
       }
     }
-
-    const lock = await client.query<{ deleted_at: string }>(
-      `select deleted_at::text from redaction_runs
-       where id = $1
-         and organisation_id = $2
-         and deleted_at is not null
-         and matter_id is not distinct from $3
-         and document_id is not distinct from $4
-       for update`,
-      [input.runId, input.organisationId, parent.matter_id, parent.document_id],
-    )
-    if (lock.rows.length === 0) {
-      await client.query('rollback')
-      return null
-    }
-    const cascadeTimestamp = lock.rows[0].deleted_at
 
     await client.query(
       `update redaction_runs
@@ -726,12 +757,12 @@ export async function restoreRedactionRunWithAudit(
       entityType: 'redaction_run',
       entityId: run.id,
       action: 'redaction_run.restore',
-      metadata: {},
+      metadata: { replacesRunId: run.replacesRunId },
       requestId: input.requestId,
     })
 
     await client.query('commit')
-    return run
+    return { kind: 'restored' as const, run }
   } catch (error) {
     await client.query('rollback')
     throw error

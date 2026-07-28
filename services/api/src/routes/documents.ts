@@ -14,6 +14,7 @@ import {
   updateDocumentExtraction,
   getMatter,
   listDocuments,
+  restoreDocumentWithAudit,
   softDeleteDocumentWithCascade,
 } from '../database'
 import {
@@ -329,6 +330,27 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
     })
     if (!result) {
       return errorResponse(c, 'document_not_found', 'Document not found.', 404)
+    }
+    return c.json(result)
+  })
+
+  routes.patch('/api/documents/:id/restore', async (c) => {
+    const user = requireManageRole(c)
+    if (user instanceof Response) return user
+
+    const result = await restoreDocumentWithAudit(pool, {
+      organisationId: user.organisationId,
+      userId: user.id,
+      id: c.req.param('id'),
+      requestId: c.get('requestId'),
+    })
+    if (!result) {
+      return errorResponse(
+        c,
+        'document_not_found',
+        'Deleted document not found.',
+        404,
+      )
     }
     return c.json(result)
   })

@@ -739,7 +739,9 @@ describe('restoreRedactionRunWithAudit', () => {
       const text = sql.trim()
       if (text === 'begin' || text === 'commit') return { rows: [] }
       if (text.startsWith('select matter_id, document_id')) {
-        return { rows: [{ matter_id: null, document_id: null }] }
+        return {
+          rows: [{ matter_id: null, document_id: null, replaces_run_id: null }],
+        }
       }
       if (text.startsWith('select deleted_at::text')) {
         return { rows: [{ deleted_at: deletedAt }] }
@@ -760,9 +762,8 @@ describe('restoreRedactionRunWithAudit', () => {
         requestId: 'req_1',
       }),
     ).resolves.toMatchObject({
-      id: 'red_1',
-      deletedAt: null,
-      replacementRunId: 'red_2',
+      kind: 'restored',
+      run: { id: 'red_1', deletedAt: null, replacementRunId: 'red_2' },
     })
 
     const update = calls.find(([sql]) => sql.includes('update redaction_runs'))
@@ -770,5 +771,56 @@ describe('restoreRedactionRunWithAudit', () => {
     expect(update?.[1]?.[2]).toBe(deletedAt)
     const audit = calls.find(([sql]) => sql.includes('insert into audit_logs'))
     expect(audit?.[1]?.[4]).toBe('redaction_run.restore')
+  })
+
+  it('refuses to restore a replacement while a competing one is live', async () => {
+    const { pool, calls } = createTransactionalPool(async (sql) => {
+      const text = sql.trim()
+      if (text === 'begin' || text === 'rollback') return { rows: [] }
+      if (text.startsWith('select matter_id, document_id')) {
+        return {
+          rows: [
+            { matter_id: null, document_id: null, replaces_run_id: 'red_0' },
+          ],
+        }
+      }
+      if (text.startsWith('select deleted_at::text')) {
+        return { rows: [{ deleted_at: '2026-02-01 00:00:00.123456+00' }] }
+      }
+      if (text.includes('replaces_run_id = $2')) {
+        return { rows: [{ id: 'red_2' }] }
+      }
+      if (text.startsWith('select id from redaction_runs')) {
+        return { rows: [{ id: 'red_0' }] }
+      }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    await expect(
+      restoreRedactionRunWithAudit(pool, {
+        organisationId: 'org_1',
+        userId: 'usr_1',
+        runId: 'red_1',
+        requestId: 'req_1',
+      }),
+    ).resolves.toEqual({
+      kind: 'replacement_exists',
+      sourceRunId: 'red_0',
+      replacementRunId: 'red_2',
+    })
+
+    // The source run is held for update so a concurrent re-detection cannot
+    // install a competing replacement after this check.
+    expect(
+      calls.some(
+        ([sql]) =>
+          sql.includes('select id from redaction_runs') &&
+          sql.includes('for update'),
+      ),
+    ).toBe(true)
+    expect(calls.some(([sql]) => sql.includes('update redaction_runs'))).toBe(
+      false,
+    )
+    expect(calls.some(([sql]) => sql.trim() === 'commit')).toBe(false)
   })
 })

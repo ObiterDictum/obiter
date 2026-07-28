@@ -35,6 +35,7 @@ import {
   listRedactionAuditLog,
   publicRun,
   recordSpanDecision,
+  restoreRedactionRunWithAudit,
   softDeleteRedactionRun,
 } from '../redaction-database'
 import { createRedactionRun } from '../redaction-run-creation'
@@ -441,6 +442,32 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
         404,
       )
     return c.json({ run: publicRun(run) })
+  })
+
+  routes.patch('/api/redaction-runs/:runId/restore', async (c) => {
+    const user = requireManageRole(c)
+    if (user instanceof Response) return user
+    const result = await restoreRedactionRunWithAudit(pool, {
+      organisationId: user.organisationId,
+      userId: user.id,
+      runId: c.req.param('runId'),
+      requestId: c.get('requestId'),
+    })
+    if (result.kind === 'not_found')
+      return errorResponse(
+        c,
+        'redaction_run_not_found',
+        'Deleted redaction run not found.',
+        404,
+      )
+    if (result.kind === 'replacement_exists')
+      return errorResponse(
+        c,
+        'conflict_detected',
+        `Run ${result.sourceRunId} has already been re-detected as ${result.replacementRunId}. Delete that replacement before restoring this run.`,
+        409,
+      )
+    return c.json({ run: publicRun(result.run) })
   })
 
   routes.get('/api/redaction-runs/:runId/document-text', async (c) => {

@@ -1993,6 +1993,125 @@ describe('createApiApp deletion authorization', () => {
     })
     expect(response.status).toBe(403)
   })
+
+  it('rejects document restore by a member with 403 forbidden', async () => {
+    const app = createApiApp(
+      testEnv,
+      createConnectedPool(async () => ({ rows: [] })),
+      { auth: authWithRole('member') },
+    )
+    const response = await app.request('/api/documents/doc_1/restore', {
+      method: 'PATCH',
+    })
+    expect(response.status).toBe(403)
+  })
+
+  it('rejects redaction run restore by a member with 403 forbidden', async () => {
+    const app = createApiApp(
+      testEnv,
+      createConnectedPool(async () => ({ rows: [] })),
+      { auth: authWithRole('member') },
+    )
+    const response = await app.request('/api/redaction-runs/red_1/restore', {
+      method: 'PATCH',
+    })
+    expect(response.status).toBe(403)
+  })
+})
+
+describe('createApiApp restore routes', () => {
+  it('restores a deleted redaction run', async () => {
+    const app = createApiApp(
+      testEnv,
+      createConnectedPool(async (...args) => {
+        const sql = String(args[0]).trim()
+        if (sql === 'begin' || sql === 'commit' || sql === 'rollback')
+          return { rows: [] }
+        if (sql.startsWith('select matter_id, document_id'))
+          return {
+            rows: [
+              { matter_id: null, document_id: null, replaces_run_id: null },
+            ],
+          }
+        if (sql.startsWith('select deleted_at::text'))
+          return { rows: [{ deleted_at: '2026-02-01 00:00:00.1+00' }] }
+        if (sql.startsWith('update redaction_runs')) return { rows: [] }
+        if (sql.startsWith('select run.id'))
+          return { rows: [finalizedRunRow({ deleted_at: null })] }
+        if (sql.includes('insert into audit_logs')) return { rows: [] }
+        throw new Error(`Unexpected SQL: ${sql}`)
+      }),
+      { auth: authWithRole('owner') },
+    )
+    const response = await app.request('/api/redaction-runs/red_1/restore', {
+      method: 'PATCH',
+    })
+    expect(response.status).toBe(200)
+    expect(((await response.json()) as { run: { id: string } }).run.id).toBe(
+      'red_1',
+    )
+  })
+
+  it('reports a conflict when a competing replacement is already live', async () => {
+    const app = createApiApp(
+      testEnv,
+      createConnectedPool(async (...args) => {
+        const sql = String(args[0]).trim()
+        if (sql === 'begin' || sql === 'rollback') return { rows: [] }
+        if (sql.startsWith('select matter_id, document_id'))
+          return {
+            rows: [
+              { matter_id: null, document_id: null, replaces_run_id: 'red_0' },
+            ],
+          }
+        if (sql.startsWith('select deleted_at::text'))
+          return { rows: [{ deleted_at: '2026-02-01 00:00:00.1+00' }] }
+        if (sql.includes('replaces_run_id = $2'))
+          return { rows: [{ id: 'red_2' }] }
+        if (sql.startsWith('select id from redaction_runs'))
+          return { rows: [{ id: 'red_0' }] }
+        throw new Error(`Unexpected SQL: ${sql}`)
+      }),
+      { auth: authWithRole('owner') },
+    )
+    const response = await app.request('/api/redaction-runs/red_1/restore', {
+      method: 'PATCH',
+    })
+    expect(response.status).toBe(409)
+    const body = (await response.json()) as ErrorBody
+    expect(body.error.code).toBe('conflict_detected')
+    expect(body.error.message).toContain('red_2')
+  })
+
+  it('returns 404 when the redaction run is not deleted', async () => {
+    const app = createApiApp(
+      testEnv,
+      createConnectedPool(async () => ({ rows: [] })),
+      { auth: authWithRole('owner') },
+    )
+    const response = await app.request('/api/redaction-runs/red_1/restore', {
+      method: 'PATCH',
+    })
+    expect(response.status).toBe(404)
+    expect(((await response.json()) as ErrorBody).error.code).toBe(
+      'redaction_run_not_found',
+    )
+  })
+
+  it('returns 404 when the document is not deleted', async () => {
+    const app = createApiApp(
+      testEnv,
+      createConnectedPool(async () => ({ rows: [] })),
+      { auth: authWithRole('owner') },
+    )
+    const response = await app.request('/api/documents/doc_1/restore', {
+      method: 'PATCH',
+    })
+    expect(response.status).toBe(404)
+    expect(((await response.json()) as ErrorBody).error.code).toBe(
+      'document_not_found',
+    )
+  })
 })
 
 describe('createApiApp deletion cascade and idempotence', () => {
