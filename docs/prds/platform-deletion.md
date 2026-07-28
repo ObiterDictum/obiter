@@ -170,7 +170,9 @@ users(id)`; replace the non-partial index from migration 0007 with
   soft-delete writing an audit row.
 
 Column additions and index operations are guarded so the migration can be
-re-run safely; existing migrations are never edited.
+re-run safely. Once a migration has been deployed or recorded by a migration
+runner, it is never edited. An undeployed migration may be collapsed before a
+runner exists when the replacement preserves the intended final schema.
 
 ## API surface
 
