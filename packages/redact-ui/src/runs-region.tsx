@@ -104,6 +104,11 @@ export function RedactionRunsRegion({
               </p>
             </div>
             <div className="flex items-center gap-2">
+              {run.replacementRunId ? (
+                <Badge tone="neutral">Replaced</Badge>
+              ) : run.replacesRunId ? (
+                <Badge tone="info">Re-detection</Badge>
+              ) : null}
               {run.detectionMode === 'heuristics+supplement' ? (
                 <Badge tone="warning">Degraded detection</Badge>
               ) : run.detectionMode === 'unknown' ? (

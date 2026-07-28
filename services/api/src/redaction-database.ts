@@ -40,6 +40,7 @@ export interface RedactionRunRecord {
   detectorVersion: string | null
   detectionMode: DetectionMode
   replacesRunId: string | null
+  replacementRunId: string | null
   createdBy: string
   createdAt: string
   updatedAt: string
@@ -65,6 +66,7 @@ export interface RedactionRunRow {
   detector_version: string | null
   detection_mode: unknown
   replaces_run_id: string | null
+  replacement_run_id: string | null
   created_by: string
   created_at: Date | string
   updated_at: Date | string
@@ -81,9 +83,11 @@ interface ArtifactRecord {
 export const redactionRunColumns = `run.id, run.organisation_id, run.matter_id, matter.name as matter_name, run.document_id,
   run.document_version_id, run.source_filename, run.source_text_object_key, run.status, run.policy_mode,
   run.spans_json, run.decisions_json, run.output_artifact_id, run.summary_json, run.detector_version,
-  run.detection_mode, run.replaces_run_id, run.created_by, run.created_at, run.updated_at, run.deleted_at, run.deleted_by`
-export const redactionRunsFrom =
-  'from redaction_runs run left join matters matter on matter.id = run.matter_id and matter.organisation_id = run.organisation_id'
+  run.detection_mode, run.replaces_run_id, replacement.id as replacement_run_id, run.created_by, run.created_at, run.updated_at, run.deleted_at, run.deleted_by`
+export const redactionRunsFrom = `from redaction_runs run
+  left join matters matter on matter.id = run.matter_id and matter.organisation_id = run.organisation_id
+  left join redaction_runs replacement on replacement.organisation_id = run.organisation_id
+    and replacement.replaces_run_id = run.id and replacement.deleted_at is null`
 
 function timestamp(value: Date | string) {
   return value instanceof Date ? value.toISOString() : value
@@ -181,6 +185,7 @@ export function mapRedactionRun(row: RedactionRunRow): RedactionRunRecord {
     detectorVersion: row.detector_version,
     detectionMode: detectionModeSchema.parse(row.detection_mode),
     replacesRunId: row.replaces_run_id ?? null,
+    replacementRunId: row.replacement_run_id ?? null,
     createdBy: row.created_by,
     createdAt: timestamp(row.created_at),
     updatedAt: timestamp(row.updated_at),
@@ -400,6 +405,13 @@ export async function finalizeRedactionRun(input: {
     if (run.status === 'finalized') {
       await client.query('rollback')
       return { kind: 'already_finalized' as const }
+    }
+    if (run.replacementRunId) {
+      await client.query('rollback')
+      return {
+        kind: 'replaced' as const,
+        replacementRunId: run.replacementRunId,
+      }
     }
     if (run.status !== 'ready_for_review' && run.status !== 'reviewing') {
       await client.query('rollback')

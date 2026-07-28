@@ -233,7 +233,7 @@ export async function createRedetectionRun(input: {
       sourceRun.id,
     )
     if (existing) {
-      await client.query('commit')
+      await client.query('rollback')
       return { kind: 'existing' as const, run: existing }
     }
 

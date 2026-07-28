@@ -275,6 +275,8 @@ export function RedactionReviewView({
         actions={
           run.status === 'finalized' ? (
             <Badge tone="success">Finalized</Badge>
+          ) : run.replacementRunId ? (
+            <Badge tone="neutral">Replaced</Badge>
           ) : (
             <FinalizeDialog run={run} />
           )
@@ -319,7 +321,7 @@ export function RedactionReviewView({
       )
       return
     }
-    if (!selected || run.status === 'finalized') return
+    if (!selected || run.status === 'finalized' || run.replacementRunId) return
     const key = event.key.toLowerCase()
     const shortcutDecision = event.ctrlKey
       ? key === 'r'
@@ -346,6 +348,8 @@ export function RedactionReviewView({
       actions={
         run.status === 'finalized' ? (
           <Badge tone="success">Finalized</Badge>
+        ) : run.replacementRunId ? (
+          <Badge tone="neutral">Replaced</Badge>
         ) : (
           <FinalizeDialog run={run} />
         )
@@ -432,7 +436,7 @@ export function RedactionReviewView({
               </button>
             ))}
           </div>
-          {selected && run.status !== 'finalized' ? (
+          {selected && run.status !== 'finalized' && !run.replacementRunId ? (
             <div className="border-t border-line pt-3">
               <p className="mb-2 text-sm text-muted">
                 Decision for{' '}

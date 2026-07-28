@@ -49,6 +49,7 @@ const baseRun: RedactionRun = {
   detectorVersion: null,
   detectionMode: 'model+supplement',
   replacesRunId: null,
+  replacementRunId: null,
   createdAt: '2026-07-09T00:00:00.000Z',
   updatedAt: '2026-07-09T00:00:00.000Z',
 }

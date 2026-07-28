@@ -3949,7 +3949,10 @@
             did not run. Review and list surfaces provide mode-specific warnings
             and finalisation acknowledgement. Model re-detection uses the exact
             stored source, creates one linked replacement only after model
-            success, and preserves the original review history.
+            success, and preserves the original review history. Run reads expose
+            both backward and live forward lineage; source runs link reviewers
+            to the replacement and cannot be finalised after a live replacement
+            exists.
           </div>
           <div class="callout">
             <b>Finalize is fail-closed.</b> If a span's stored text no longer

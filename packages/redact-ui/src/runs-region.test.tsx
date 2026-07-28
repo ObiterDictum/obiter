@@ -34,6 +34,7 @@ describe('RedactionRunsRegion', () => {
             id: 'red_degraded',
             status: 'ready_for_review',
             detectionMode: 'heuristics+supplement',
+            replacementRunId: 'red_model',
             summary: { totalSpans: 0, reviewedCount: 0 },
           },
           {
@@ -46,6 +47,7 @@ describe('RedactionRunsRegion', () => {
             id: 'red_model',
             status: 'ready_for_review',
             detectionMode: 'model+supplement',
+            replacesRunId: 'red_degraded',
             summary: { totalSpans: 1, reviewedCount: 1 },
           },
         ],
@@ -59,5 +61,7 @@ describe('RedactionRunsRegion', () => {
     expect(screen.getByText('red_model')).toBeTruthy()
     expect(screen.getAllByText('Degraded detection')).toHaveLength(1)
     expect(screen.getAllByText('Detection mode unknown')).toHaveLength(1)
+    expect(screen.getByText('Replaced')).toBeTruthy()
+    expect(screen.getByText('Re-detection')).toBeTruthy()
   })
 })

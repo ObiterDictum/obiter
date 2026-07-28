@@ -43,6 +43,7 @@ const run = {
   detectorVersion: null,
   detectionMode: 'model+supplement' as const,
   replacesRunId: null,
+  replacementRunId: null,
   summary: {
     totalSpans: 1,
     byCategory: { person_name: 1 },
@@ -357,6 +358,41 @@ describe('RedactionReviewView', () => {
       run: { ...run, id: 'red_2', replacesRunId: 'red_1' },
       redetectedFromRunId: 'red_1',
     })
+    expect(onOpenRun).toHaveBeenCalledWith('red_2')
+  })
+
+  it('links to a model-detected replacement and prevents finalizing the source run', () => {
+    hooks.useRedactionRun.mockReturnValue({
+      isPending: false,
+      data: {
+        ...run,
+        status: 'ready_for_review',
+        detectionMode: 'heuristics+supplement',
+        replacementRunId: 'red_2',
+      },
+    })
+    hooks.useRedactionDocumentText.mockReturnValue({
+      isPending: false,
+      data: { text: 'Jane filed.' },
+    })
+    hooks.useRedactionOutput.mockReturnValue({ isPending: false })
+    hooks.useSpanDecision.mockReturnValue({ mutate: vi.fn(), isPending: false })
+    hooks.useFinalizeRun.mockReturnValue({ mutate: vi.fn(), isPending: false })
+
+    render(<RedactionReviewView runId="red_1" />)
+
+    expect(screen.getByText('Replaced')).toBeTruthy()
+    expect(
+      screen.getByText(/newer model-detected run is available/),
+    ).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Finalize' })).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: 'Run model detection again' }),
+    ).toBeNull()
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Open replacement run' }),
+    )
     expect(onOpenRun).toHaveBeenCalledWith('red_2')
   })
 

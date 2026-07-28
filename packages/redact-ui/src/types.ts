@@ -27,6 +27,7 @@ export interface RedactionRun {
   detectorVersion: string | null
   detectionMode: DetectionMode
   replacesRunId: string | null
+  replacementRunId: string | null
   createdAt: string
   updatedAt: string
 }

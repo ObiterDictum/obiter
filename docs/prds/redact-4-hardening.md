@@ -80,7 +80,7 @@ This matters for tuning detection recall without a deploy, and for pointing a te
 - **FR2.2.** The warning MUST be visible at the point of finalizing, not only on entry to the run, so it cannot be scrolled past and forgotten.
 - **FR2.3.** The run list MUST mark degraded runs, so a supervisor reviewing several runs can see which are affected without opening each.
 - **FR2.4.** Finalizing a degraded run MUST require explicit acknowledgement that model detection did not run. A run with unknown provenance MUST require a distinct acknowledgement that its detection mode was not recorded. The reviewer may proceed; they may not proceed unaware.
-- **FR2.5.** A degraded or unknown run MUST offer model re-detection from the exact stored source. Successful re-detection creates one fresh, linked run with empty decisions and leaves the original run and its history unchanged. If the model is still unavailable, no replacement run or source object is created.
+- **FR2.5.** A degraded or unknown run MUST offer model re-detection from the exact stored source. Successful re-detection creates one fresh, linked run with empty decisions and leaves the original run and its history unchanged. The source run MUST identify and link to its live replacement, and an unfinalized source run MUST no longer be finalizable once that replacement exists. If the model is still unavailable, no replacement run or source object is created.
 
 ### FR3: Reconcile the failure contract
 
@@ -136,6 +136,7 @@ _Exit:_ detection parameters are environment-configurable with startup validatio
 
 - Degraded mode may be more common than assumed. If the model fails to load routinely, FR2 turns into a warning users learn to dismiss mentally. Worth measuring how often degradation actually occurs before deciding the warning is sufficient.
 - Re-detection can report that the model remains unavailable. The original run remains reviewable, no replacement is created, and the reviewer must try again later or continue with explicit acknowledgement.
+- Finalized degraded or unknown runs may be re-detected to create a fresh review. The finalized source remains immutable and visibly links to the new run; the replacement is not presented as changing the finalized artifact.
 - Making the model id configurable invites pointing production at an unpinned model. FR4.4's startup validation is the control; consider whether the id should be restricted to an allowlist.
 
 ## Open Questions

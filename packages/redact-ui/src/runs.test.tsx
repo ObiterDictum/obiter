@@ -66,6 +66,7 @@ describe('RedactionRunsView', () => {
             matterId: null,
             status: 'ready_for_review',
             detectionMode: 'heuristics+supplement',
+            replacementRunId: 'red_model',
             createdAt: '2026-07-09T00:00:00.000Z',
           },
           {
@@ -82,6 +83,7 @@ describe('RedactionRunsView', () => {
             matterId: null,
             status: 'ready_for_review',
             detectionMode: 'model+supplement',
+            replacesRunId: 'red_degraded',
             createdAt: '2026-07-09T00:00:00.000Z',
           },
         ],
@@ -109,5 +111,7 @@ describe('RedactionRunsView', () => {
     expect(screen.getByText('model.txt')).toBeTruthy()
     expect(screen.getAllByText('Degraded detection')).toHaveLength(1)
     expect(screen.getAllByText('Detection mode unknown')).toHaveLength(1)
+    expect(screen.getByText('Replaced')).toBeTruthy()
+    expect(screen.getByText('Re-detection')).toBeTruthy()
   })
 })

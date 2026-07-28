@@ -209,6 +209,11 @@ export function RedactionRunsView({
                     ) : (
                       <Badge tone="info">Standalone</Badge>
                     )}
+                    {run.replacementRunId ? (
+                      <Badge tone="neutral">Replaced</Badge>
+                    ) : run.replacesRunId ? (
+                      <Badge tone="info">Re-detection</Badge>
+                    ) : null}
                     {run.detectionMode === 'heuristics+supplement' ? (
                       <Badge tone="warning">Degraded detection</Badge>
                     ) : run.detectionMode === 'unknown' ? (

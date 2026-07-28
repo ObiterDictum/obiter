@@ -19,11 +19,13 @@ update redaction_runs
 set detection_mode = case
   when detector_version like '%;mode=model+supplement%' then 'model+supplement'
   when detector_version like '%;mode=heuristics+supplement%' then 'heuristics+supplement'
+  when detector_version like '%;mode=supplement-only%' then 'heuristics+supplement'
   else 'unknown'
 end
 where detection_mode is distinct from case
   when detector_version like '%;mode=model+supplement%' then 'model+supplement'
   when detector_version like '%;mode=heuristics+supplement%' then 'heuristics+supplement'
+  when detector_version like '%;mode=supplement-only%' then 'heuristics+supplement'
   else 'unknown'
 end;
 

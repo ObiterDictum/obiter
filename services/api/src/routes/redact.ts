@@ -559,6 +559,13 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
         'Redaction run not found.',
         404,
       )
+    if (run.replacementRunId)
+      return errorResponse(
+        c,
+        'conflict_detected',
+        `This run was replaced by ${run.replacementRunId}. Review and finalize the replacement instead.`,
+        409,
+      )
     if (run.status === 'finalized')
       return errorResponse(
         c,
@@ -660,6 +667,15 @@ export function createRedactRoutes(pool: Pool, storage: StorageService) {
         c,
         'redaction_already_finalized',
         'This run has already been finalized.',
+        409,
+      )
+    }
+    if (result.kind === 'replaced') {
+      await storage.delete(objectKey)
+      return errorResponse(
+        c,
+        'conflict_detected',
+        `This run was replaced by ${result.replacementRunId}. Review and finalize the replacement instead.`,
         409,
       )
     }

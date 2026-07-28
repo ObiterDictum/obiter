@@ -44,6 +44,7 @@ function runRow(overrides: Record<string, unknown> = {}) {
     detector_version: 'detector-1',
     detection_mode: 'model+supplement',
     replaces_run_id: null,
+    replacement_run_id: null,
     created_by: 'usr_1',
     created_at: '2026-01-01T00:00:00.000Z',
     updated_at: '2026-01-01T00:00:00.000Z',
@@ -263,7 +264,7 @@ describe('createRedetectionRun', () => {
 
   it('returns an existing live replacement without inserting another run', async () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
-      if (sql === 'begin' || sql === 'commit') return { rows: [] }
+      if (sql === 'begin' || sql === 'rollback') return { rows: [] }
       if (sql.includes('for update of run')) {
         return {
           rows: [runRow({ detection_mode: 'heuristics+supplement' })],
@@ -294,7 +295,7 @@ describe('createRedetectionRun', () => {
     expect(
       calls.some(([sql]) => sql.includes('insert into redaction_runs')),
     ).toBe(false)
-    expect(calls.at(-1)?.[0]).toBe('commit')
+    expect(calls.at(-1)?.[0]).toBe('rollback')
   })
 
   it('validates the original linked version without requiring it to remain current', async () => {
@@ -408,6 +409,35 @@ describe('redaction run write guards', () => {
 
     const lock = calls.find(([sql]) => sql.includes('for update of run'))
     expect(lock?.[0]).toContain('run.deleted_at is null')
+    expect(calls.some(([sql]) => sql.includes('insert into artifacts'))).toBe(
+      false,
+    )
+  })
+
+  it('refuses to finalize a run after a live replacement exists', async () => {
+    const { pool, calls } = createTransactionalPool(async (sql) => {
+      if (sql === 'begin' || sql === 'rollback') return { rows: [] }
+      if (sql.includes('for update of run')) {
+        return { rows: [runRow({ replacement_run_id: 'red_2' })] }
+      }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    await expect(
+      finalizeRedactionRun({
+        pool,
+        organisationId: 'org_1',
+        runId: 'red_1',
+        outputMode: 'redacted',
+        tokenMap: {},
+        artifactId: 'art_1',
+        userId: 'usr_1',
+        requestId: 'req_1',
+        degradedDetectionAcknowledged: false,
+        unknownDetectionAcknowledged: false,
+      }),
+    ).resolves.toEqual({ kind: 'replaced', replacementRunId: 'red_2' })
+
     expect(calls.some(([sql]) => sql.includes('insert into artifacts'))).toBe(
       false,
     )
