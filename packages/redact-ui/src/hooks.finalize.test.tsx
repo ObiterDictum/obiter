@@ -2,8 +2,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useFinalizeRun } from './hooks'
-import type { FinalizeResponse, RedactionRun } from './types'
+import { useFinalizeRun, useRedetectRun } from './hooks'
+import type { FinalizeResponse, RedactionRun, RedetectResponse } from './types'
 
 const apiFetch = vi.hoisted(() => vi.fn())
 
@@ -47,6 +47,9 @@ const baseRun: RedactionRun = {
   },
   outputArtifactId: null,
   detectorVersion: null,
+  detectionMode: 'model+supplement',
+  replacesRunId: null,
+  replacementRunId: null,
   createdAt: '2026-07-09T00:00:00.000Z',
   updatedAt: '2026-07-09T00:00:00.000Z',
 }
@@ -57,11 +60,11 @@ function createWrapper(client: QueryClient) {
   }
 }
 
-describe('useFinalizeRun cache updates', () => {
-  beforeEach(() => {
-    apiFetch.mockReset()
-  })
+beforeEach(() => {
+  apiFetch.mockReset()
+})
 
+describe('useFinalizeRun cache updates', () => {
   it('writes the finalized run into the detail cache and invalidates list/output keys', async () => {
     const client = new QueryClient()
     client.setQueryData(['redaction-run', 'red_1'], baseRun)
@@ -98,11 +101,59 @@ describe('useFinalizeRun cache updates', () => {
       expect(client.getQueryData(['redaction-run', 'red_1'])).toEqual(finalized)
     })
 
+    expect(apiFetch).toHaveBeenCalledWith(
+      '/api/redaction-runs/red_1/finalize',
+      {
+        method: 'POST',
+        body: JSON.stringify({ outputMode: 'redacted' }),
+      },
+    )
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: ['redaction-run', 'red_1'],
     })
     expect(invalidateSpy).toHaveBeenCalledWith({
       queryKey: ['redaction-run-output', 'red_1'],
+    })
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['redaction-runs'] })
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['document-redaction-runs'],
+    })
+  })
+})
+
+describe('useRedetectRun cache updates', () => {
+  it('seeds the replacement cache and invalidates the source and list keys', async () => {
+    const client = new QueryClient()
+    const replacement: RedactionRun = {
+      ...baseRun,
+      id: 'red_2',
+      replacesRunId: 'red_1',
+    }
+    const response: RedetectResponse = {
+      run: replacement,
+      redetectedFromRunId: 'red_1',
+    }
+    apiFetch.mockResolvedValueOnce(response)
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+    const { result } = renderHook(() => useRedetectRun('red_1'), {
+      wrapper: createWrapper(client),
+    })
+
+    await act(async () => {
+      result.current.mutate()
+    })
+
+    await waitFor(() => {
+      expect(client.getQueryData(['redaction-run', 'red_2'])).toEqual(
+        replacement,
+      )
+    })
+    expect(apiFetch).toHaveBeenCalledWith(
+      '/api/redaction-runs/red_1/redetect',
+      { method: 'POST' },
+    )
+    expect(invalidateSpy).toHaveBeenCalledWith({
+      queryKey: ['redaction-run', 'red_1'],
     })
     expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['redaction-runs'] })
     expect(invalidateSpy).toHaveBeenCalledWith({

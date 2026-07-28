@@ -3,25 +3,14 @@ import type { KeyboardEvent } from 'react'
 import {
   Check,
   CircleNotch,
-  DownloadSimple,
   EyeSlash,
   Funnel,
   ShieldCheck,
 } from '@phosphor-icons/react'
-import type {
-  OutputMode,
-  SpanCategory,
-  SpanDecision,
-  SpanSource,
-} from '@obiter/contracts'
+import type { SpanCategory, SpanDecision, SpanSource } from '@obiter/contracts'
 import {
   Badge,
   Button,
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
   EmptyState,
   ProgressBar,
   Select,
@@ -30,12 +19,13 @@ import {
 } from '@obiter/ui'
 import { PageScaffold } from '@obiter/app-shell'
 import {
-  useFinalizeRun,
   useRedactionDocumentText,
   useRedactionOutput,
   useRedactionRun,
   useSpanDecision,
 } from './hooks'
+import { DetectionRetryWarning } from './detection-retry-warning'
+import { FinalizeDialog } from './finalize-dialog'
 import type { RedactionRun } from './types'
 
 const categoryClasses: Record<SpanCategory, string> = {
@@ -185,103 +175,27 @@ function FinalizedOutput({
   )
 }
 
-function FinalizeDialog({ run }: { run: RedactionRun }) {
-  const [open, setOpen] = useState(false)
-  const [outputMode, setOutputMode] = useState<OutputMode>('redacted')
-  const [confirmed, setConfirmed] = useState(false)
-  const finalize = useFinalizeRun(run.id)
-  const hasUnreviewed = run.summary.unreviewedCount > 0
-  const submit = () =>
-    finalize.mutate(
-      { outputMode },
-      {
-        onSuccess: () => setOpen(false),
-      },
-    )
-  return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <Button
-        variant="primary"
-        onClick={() => setOpen(true)}
-        iconStart={<DownloadSimple size={16} aria-hidden="true" />}
-      >
-        Finalize
-      </Button>
-      <DialogContent>
-        <DialogTitle>Finalize redaction output</DialogTitle>
-        <DialogDescription>
-          Choose the output format. Pseudonymisation is keyed by exact text
-          within each category, not entity identity.
-        </DialogDescription>
-        <div className="flex flex-col gap-3">
-          <label className="flex gap-2 text-sm text-ink">
-            <input
-              type="radio"
-              checked={outputMode === 'redacted'}
-              onChange={() => setOutputMode('redacted')}
-            />{' '}
-            <span>
-              <strong>Redacted</strong>
-              <br />
-              <span className="text-muted">
-                Replaces approved spans with [REDACTED].
-              </span>
-            </span>
-          </label>
-          <label className="flex gap-2 text-sm text-ink">
-            <input
-              type="radio"
-              checked={outputMode === 'pseudonymised'}
-              onChange={() => setOutputMode('pseudonymised')}
-            />{' '}
-            <span>
-              <strong>Pseudonymised</strong>
-              <br />
-              <span className="text-muted">
-                Uses consistent category tokens; re-identification requires
-                token-map access.
-              </span>
-            </span>
-          </label>
-          {hasUnreviewed ? (
-            <label className="rounded-md border border-warning p-3 text-sm text-ink">
-              <input
-                className="mr-2"
-                type="checkbox"
-                checked={confirmed}
-                onChange={(event) => setConfirmed(event.target.checked)}
-              />
-              {run.summary.unreviewedCount} spans are unreviewed and will remain
-              unchanged. I understand.
-            </label>
-          ) : null}
-          {finalize.error ? (
-            <p className="text-sm text-danger">{finalize.error.message}</p>
-          ) : null}
-          <div className="flex justify-end gap-2">
-            <DialogClose render={<Button variant="secondary">Cancel</Button>} />
-            <Button
-              variant="primary"
-              loading={finalize.isPending}
-              disabled={hasUnreviewed && !confirmed}
-              onClick={submit}
-            >
-              Confirm finalize
-            </Button>
-          </div>
-        </div>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
 function reviewEyebrow(run: RedactionRun) {
   return run.matterId
     ? `Matter ${run.matterName ?? run.matterId} · ${run.sourceFilename}`
     : `Standalone · ${run.sourceFilename}`
 }
 
-export function RedactionReviewView({ runId }: { runId: string }) {
+function zeroSpanBody(run: RedactionRun) {
+  if (run.detectionMode === 'heuristics+supplement')
+    return 'The deterministic detectors did not find matching patterns. Model detection did not run, so manually check for names, addresses and dates of birth before finalising.'
+  if (run.detectionMode === 'unknown')
+    return 'No matching patterns were recorded, and the detection mode is unknown. Manually check for names, addresses and dates of birth before relying on this run.'
+  return 'Rampart and the UK supplement did not find matching patterns. You can still finalize this run without changes.'
+}
+
+export function RedactionReviewView({
+  runId,
+  onOpenRun,
+}: {
+  runId: string
+  onOpenRun: (runId: string) => void
+}) {
   const runQuery = useRedactionRun(runId)
   const textQuery = useRedactionDocumentText(runId)
   const outputQuery = useRedactionOutput(
@@ -361,20 +275,25 @@ export function RedactionReviewView({ runId }: { runId: string }) {
         actions={
           run.status === 'finalized' ? (
             <Badge tone="success">Finalized</Badge>
+          ) : run.replacementRunId ? (
+            <Badge tone="neutral">Replaced</Badge>
           ) : (
             <FinalizeDialog run={run} />
           )
         }
       >
-        {run.status === 'finalized' ? (
-          <FinalizedOutput outputQuery={outputQuery} />
-        ) : (
-          <EmptyState
-            title="No sensitive data was detected in this document"
-            body="Rampart and the UK supplement did not find matching patterns. You can still finalize this run without changes."
-            icon={<ShieldCheck size={28} aria-hidden="true" />}
-          />
-        )}
+        <div className="flex flex-col gap-4">
+          <DetectionRetryWarning run={run} onOpenRun={onOpenRun} />
+          {run.status === 'finalized' ? (
+            <FinalizedOutput outputQuery={outputQuery} />
+          ) : (
+            <EmptyState
+              title="No sensitive data was detected in this document"
+              body={zeroSpanBody(run)}
+              icon={<ShieldCheck size={28} aria-hidden="true" />}
+            />
+          )}
+        </div>
       </PageScaffold>
     )
   }
@@ -402,7 +321,7 @@ export function RedactionReviewView({ runId }: { runId: string }) {
       )
       return
     }
-    if (!selected || run.status === 'finalized') return
+    if (!selected || run.status === 'finalized' || run.replacementRunId) return
     const key = event.key.toLowerCase()
     const shortcutDecision = event.ctrlKey
       ? key === 'r'
@@ -429,11 +348,14 @@ export function RedactionReviewView({ runId }: { runId: string }) {
       actions={
         run.status === 'finalized' ? (
           <Badge tone="success">Finalized</Badge>
+        ) : run.replacementRunId ? (
+          <Badge tone="neutral">Replaced</Badge>
         ) : (
           <FinalizeDialog run={run} />
         )
       }
     >
+      <DetectionRetryWarning run={run} onOpenRun={onOpenRun} />
       <ReviewSummary run={run} />
       {run.status === 'finalized' ? (
         <FinalizedOutput outputQuery={outputQuery} />
@@ -514,7 +436,7 @@ export function RedactionReviewView({ runId }: { runId: string }) {
               </button>
             ))}
           </div>
-          {selected && run.status !== 'finalized' ? (
+          {selected && run.status !== 'finalized' && !run.replacementRunId ? (
             <div className="border-t border-line pt-3">
               <p className="mb-2 text-sm text-muted">
                 Decision for{' '}

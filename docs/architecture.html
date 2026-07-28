@@ -2017,7 +2017,8 @@
                 </dd>
                 <dt>Domain</dt>
                 <dd>
-                  redaction-detection · redaction-database ·
+                  redaction-detection · redaction-redetect ·
+                  redaction-run-creation · redaction-database ·
                   redaction-audit-report · document-extraction · storage · authz
                 </dd>
                 <dt>Extract</dt>
@@ -2282,7 +2283,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>9 migrations, 0001 to 0010, 0008 withdrawn</dd>
+                <dd>11 migrations, 0001 to 0012, 0008 withdrawn</dd>
               </dl>
             </article>
           </div>
@@ -2395,9 +2396,9 @@
                   <td>Matter detail and soft delete</td>
                 </tr>
                 <tr>
-                  <td class="id">POST /api/matters/:id/restore</td>
+                  <td class="id">PATCH /api/matters/:id/restore</td>
                   <td class="id">matters.ts</td>
-                  <td>Undo soft delete</td>
+                  <td>Undo soft delete, cascading to documents and runs</td>
                 </tr>
                 <tr>
                   <td class="id">POST /api/matters/:matterId/documents</td>
@@ -2408,6 +2409,11 @@
                   <td class="id">GET /api/documents/:id</td>
                   <td class="id">documents.ts</td>
                   <td>Document with immutable versions</td>
+                </tr>
+                <tr>
+                  <td class="id">PATCH /api/documents/:id/restore</td>
+                  <td class="id">documents.ts</td>
+                  <td>Undo soft delete, cascading to its runs</td>
                 </tr>
                 <tr>
                   <td class="id">GET /api/search</td>
@@ -2440,6 +2446,22 @@
                   <td class="id">GET · DELETE /api/redaction-runs/:runId</td>
                   <td class="id">redact.ts</td>
                   <td>Run with spans, decisions and summary</td>
+                </tr>
+                <tr>
+                  <td class="id">POST /api/redaction-runs/:runId/redetect</td>
+                  <td class="id">redact.ts</td>
+                  <td>
+                    Create one linked model-detected replacement while
+                    preserving the source run
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">PATCH /api/redaction-runs/:runId/restore</td>
+                  <td class="id">redact.ts</td>
+                  <td>
+                    Undo soft delete, refused with 409 when a competing live
+                    replacement already exists
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">
@@ -2578,7 +2600,8 @@
             and the redaction family: <code>redaction_run_not_found</code>,
             <code>redaction_run_not_reviewable</code>,
             <code>redaction_already_finalized</code>,
-            <code>redaction_detection_failed</code> and
+            <code>redaction_detection_failed</code>,
+            <code>redaction_model_unavailable</code> and
             <code>redaction_span_integrity_error</code>.
           </p>
           <h3>Status mapping</h3>
@@ -2629,8 +2652,8 @@
                 <tr>
                   <td class="id">409</td>
                   <td class="id">
-                    redaction_run_not_reviewable · redaction_already_finalized ·
-                    redaction_span_integrity_error
+                    conflict_detected · redaction_run_not_reviewable ·
+                    redaction_already_finalized · redaction_span_integrity_error
                   </td>
                   <td>
                     The run is in the wrong state, or finalize aborted because
@@ -2643,6 +2666,14 @@
                   <td>
                     Detection failed unrecoverably. Note that a model load
                     failure does <em>not</em> reach here: it degrades instead.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">503</td>
+                  <td class="id">redaction_model_unavailable</td>
+                  <td>
+                    A requested re-detection still could not run the model. No
+                    replacement run or source object was created.
                   </td>
                 </tr>
               </tbody>
@@ -3056,10 +3087,10 @@
                 <tr>
                   <td class="id">redaction_runs</td>
                   <td>
-                    Spans, decisions, summary, detector version, output
-                    artifact. Standalone since 0007.
+                    Spans, decisions, summary, detector version and mode,
+                    replacement lineage, output artifact. Standalone since 0007.
                   </td>
-                  <td class="id">0005, 0006, 0007, 0010</td>
+                  <td class="id">0005, 0006, 0007, 0010, 0011, 0012</td>
                 </tr>
               </tbody>
             </table>
@@ -3921,13 +3952,21 @@
             </li>
           </ol>
           <div class="callout risk">
-            <b>Degraded detection is invisible.</b> If the model fails to load,
-            step 3 is skipped and the run completes on heuristics alone,
-            recording <code>mode=heuristics+supplement</code> inside
-            <code>detectorVersion</code>. No view renders it, so a reviewer can
-            finalize believing model detection ran. Heuristics do not find
-            names, addresses or contextual dates of birth. Tracked in Redact PRD
-            4.
+            <b>Detection limitations stay actionable and visible.</b> If the
+            model fails to load, inference fails, or model span processing
+            cannot complete, step 3 is skipped and the run completes on
+            heuristics and the UK supplement. The structured
+            <code>detectionMode</code> records
+            <code>heuristics+supplement</code>. Historical runs without recorded
+            provenance use <code>unknown</code> rather than claiming the model
+            did not run. Review and list surfaces provide mode-specific warnings
+            and finalisation acknowledgement. Model re-detection uses the exact
+            stored source, creates one linked replacement only after model
+            success, and preserves the original review history. Run reads expose
+            both backward and live forward lineage; source runs link reviewers
+            to the replacement and accept neither review decisions nor
+            finalisation after a live replacement exists. Transactional write
+            responses re-read through the lineage join before updating clients.
           </div>
           <div class="callout">
             <b>Finalize is fail-closed.</b> If a span's stored text no longer
@@ -4886,17 +4925,6 @@
                 </tr>
               </thead>
               <tbody>
-                <tr>
-                  <td>
-                    Degraded detection recorded only inside
-                    <code>detectorVersion</code>
-                  </td>
-                  <td>
-                    A reviewer can finalize believing model detection ran when
-                    only regular expressions did
-                  </td>
-                  <td class="id">redact-4-hardening.md</td>
-                </tr>
                 <tr>
                   <td>Search matching is substring-based</td>
                   <td>
