@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Pool } from 'pg'
 import { createApiApp } from './app'
 import type { createAuth } from './auth'
+import { SCANNED_PDF_MESSAGE } from './document-extraction'
 import type { ApiEnv } from './env'
 import { createLocalStorage } from './storage'
 
@@ -1441,9 +1442,39 @@ describe('createApiApp', () => {
     })
 
     expect(response.status).toBe(400)
-    expect(((await response.json()) as ErrorBody).error.code).toBe(
-      'validation_failed',
+    const body = (await response.json()) as ErrorBody
+    expect(body.error.code).toBe('validation_failed')
+    // A wrapped library failure must not reach the client verbatim.
+    expect(body.error.message).toBe(
+      'Document text could not be read for redaction.',
     )
+  })
+
+  it('tells the uploader a scanned PDF needs OCR rather than a generic read failure', async () => {
+    const app = createApiApp(
+      testEnv,
+      createPool(async () => ({ rows: [] })),
+      { auth: authWithRole('member') },
+    )
+    const fixture = await readFile(
+      '../../data/evals/redact/pdf-scanned-like-fixture.pdf',
+    )
+    const form = new FormData()
+    form.set(
+      'file',
+      new File([fixture], 'scanned.pdf', { type: 'application/pdf' }),
+    )
+    form.set('fileType', 'application/pdf')
+
+    const response = await app.request('/api/redaction-runs', {
+      method: 'POST',
+      body: form,
+    })
+
+    expect(response.status).toBe(400)
+    const body = (await response.json()) as ErrorBody
+    expect(body.error.code).toBe('validation_failed')
+    expect(body.error.message).toBe(SCANNED_PDF_MESSAGE)
   })
 
   it('models future legal source query params without running judgment search', async () => {

@@ -8,15 +8,25 @@ export type SupportedDocumentType = 'docx' | 'pdf' | 'txt'
 const MAX_EXTRACTED_DOCUMENT_TEXT_LENGTH = 200_000
 const MAX_PDF_PAGE_COUNT = 1_000
 const MINIMUM_PDF_CHARS_PER_PAGE = 20
-const SCANNED_PDF_MESSAGE =
+export const SCANNED_PDF_MESSAGE =
   'This PDF appears to be scanned — text extraction requires OCR, which is not yet supported.'
-const IMAGE_ONLY_DOCX_MESSAGE =
+export const IMAGE_ONLY_DOCX_MESSAGE =
   'This DOCX appears to contain only images — text extraction requires OCR, which is not yet supported.'
+export const UNREADABLE_DOCX_MESSAGE =
+  'This DOCX could not be read. The file may be corrupt, password-protected, or not a valid Word document.'
 
 export class DocumentExtractionError extends Error {
-  constructor(message: string) {
+  /**
+   * Whether the message was written for the person uploading the document.
+   * Wrapped library failures stay false so their internals are not returned to
+   * the client; callers decide what to show in their place.
+   */
+  readonly userFacing: boolean
+
+  constructor(message: string, userFacing = false) {
     super(message)
     this.name = 'DocumentExtractionError'
+    this.userFacing = userFacing
   }
 }
 
@@ -64,6 +74,7 @@ async function extractPdfText(buffer: Buffer) {
     if (pdf.numPages > MAX_PDF_PAGE_COUNT)
       throw new DocumentExtractionError(
         `PDF documents may contain at most ${MAX_PDF_PAGE_COUNT} pages.`,
+        true,
       )
 
     const pages: string[] = []
@@ -79,6 +90,7 @@ async function extractPdfText(buffer: Buffer) {
       if (pages.join('\n\n').length > MAX_EXTRACTED_DOCUMENT_TEXT_LENGTH)
         throw new DocumentExtractionError(
           `Extracted text must be at most ${MAX_EXTRACTED_DOCUMENT_TEXT_LENGTH} characters.`,
+          true,
         )
     }
 
@@ -92,7 +104,7 @@ async function extractPdfText(buffer: Buffer) {
       (pages.length > 1 &&
         characters < pages.length * MINIMUM_PDF_CHARS_PER_PAGE)
     )
-      throw new DocumentExtractionError(SCANNED_PDF_MESSAGE)
+      throw new DocumentExtractionError(SCANNED_PDF_MESSAGE, true)
 
     return text
   } finally {
@@ -245,7 +257,14 @@ export async function extractDocumentText(
       .join('\n\n')
     if (text.trim().length === 0) {
       if (supplemental.visualContent === 'absent') return ''
-      throw new DocumentExtractionError(IMAGE_ONLY_DOCX_MESSAGE)
+      // 'unknown' means the archive could not be inspected, not that it holds
+      // images, so the two cases must not share a message.
+      throw new DocumentExtractionError(
+        supplemental.visualContent === 'present'
+          ? IMAGE_ONLY_DOCX_MESSAGE
+          : UNREADABLE_DOCX_MESSAGE,
+        true,
+      )
     }
     return text
   } catch (error) {

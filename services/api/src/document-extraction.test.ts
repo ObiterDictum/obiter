@@ -13,6 +13,8 @@ vi.mock('unpdf', async (importOriginal) => ({
 import {
   DocumentExtractionError,
   extractDocumentText,
+  IMAGE_ONLY_DOCX_MESSAGE,
+  UNREADABLE_DOCX_MESSAGE,
 } from './document-extraction'
 import { createRedactionDetector } from './redaction-detection'
 
@@ -72,7 +74,7 @@ describe('extractDocumentText', () => {
     warn.mockRestore()
   })
 
-  it('rejects an empty DOCX when optional header/footer parsing fails', async () => {
+  it('rejects an empty DOCX as unreadable, not image-only, when parsing fails', async () => {
     const fixture = await createMinimalDocx()
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 
@@ -82,9 +84,7 @@ describe('extractDocumentText', () => {
           throw new Error('supplemental parser failed')
         },
       }),
-    ).rejects.toThrow(
-      'This DOCX appears to contain only images — text extraction requires OCR, which is not yet supported.',
-    )
+    ).rejects.toThrow(UNREADABLE_DOCX_MESSAGE)
     expect(warn).toHaveBeenCalledWith('DOCX header/footer extraction warning', {
       reason: 'supplemental parser failed',
     })
@@ -95,7 +95,7 @@ describe('extractDocumentText', () => {
     const fixture = await createMinimalDocx({ imageOnly: true })
 
     await expect(extractDocumentText('docx', fixture)).rejects.toThrow(
-      'This DOCX appears to contain only images — text extraction requires OCR, which is not yet supported.',
+      IMAGE_ONLY_DOCX_MESSAGE,
     )
   })
 

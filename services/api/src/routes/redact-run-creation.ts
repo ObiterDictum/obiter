@@ -96,7 +96,11 @@ export function createRedactRunCreationRoutes(
           return errorResponse(
             c,
             'validation_failed',
-            'Document text could not be read for redaction.',
+            // Curated messages name the actual obstacle, e.g. that the document
+            // needs OCR. Wrapped library failures stay generic.
+            error.userFacing
+              ? error.message
+              : 'Document text could not be read for redaction.',
             400,
           )
         throw error
