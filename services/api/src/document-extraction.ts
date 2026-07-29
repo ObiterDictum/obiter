@@ -143,7 +143,7 @@ function xmlAttribute(tag: string, name: string) {
 interface DocxSupplementalContent {
   header: string[]
   footer: string[]
-  hasVisualContent: boolean
+  visualContent: 'present' | 'absent' | 'unknown'
 }
 
 interface DocumentExtractionDependencies {
@@ -158,17 +158,19 @@ async function extractDocxHeaderFooterText(
   const archive = await JSZip.loadAsync(buffer)
   const document = archive.file('word/document.xml')
   const relationships = archive.file('word/_rels/document.xml.rels')
-  if (!document) return { header: [], footer: [], hasVisualContent: false }
+  if (!document) return { header: [], footer: [], visualContent: 'unknown' }
 
   const [documentXml, relationshipsXml] = await Promise.all([
     document.async('text'),
     relationships?.async('text') ?? '',
   ])
-  const hasVisualContent =
+  const visualContent =
     /<w:drawing\b|<pic:pic\b/i.test(documentXml) ||
     [...relationshipsXml.matchAll(/<Relationship\b[^>]*>/gi)].some((match) =>
       /\/image$/i.test(xmlAttribute(match[0], 'Type') ?? ''),
     )
+      ? 'present'
+      : 'absent'
   const referencedIds = new Set(
     [...documentXml.matchAll(/<w:(?:header|footer)Reference\b[^>]*>/gi)]
       .map((match) => xmlAttribute(match[0], 'r:id'))
@@ -197,7 +199,7 @@ async function extractDocxHeaderFooterText(
     if (!text) continue
     ;(/^word\/header/i.test(name) ? header : footer).push(text)
   }
-  return { header, footer, hasVisualContent }
+  return { header, footer, visualContent }
 }
 
 async function readDocxSupplementalContent(
@@ -212,7 +214,7 @@ async function readDocxSupplementalContent(
     console.warn('DOCX header/footer extraction warning', {
       reason: error instanceof Error ? error.message : 'Unknown archive error.',
     })
-    return { header: [], footer: [], hasVisualContent: false }
+    return { header: [], footer: [], visualContent: 'unknown' }
   }
 }
 
@@ -242,9 +244,8 @@ export async function extractDocumentText(
       .filter((part) => part.length > 0)
       .join('\n\n')
     if (text.trim().length === 0) {
-      if (supplemental.hasVisualContent)
-        throw new DocumentExtractionError(IMAGE_ONLY_DOCX_MESSAGE)
-      return ''
+      if (supplemental.visualContent === 'absent') return ''
+      throw new DocumentExtractionError(IMAGE_ONLY_DOCX_MESSAGE)
     }
     return text
   } catch (error) {

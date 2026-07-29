@@ -72,6 +72,25 @@ describe('extractDocumentText', () => {
     warn.mockRestore()
   })
 
+  it('rejects an empty DOCX when optional header/footer parsing fails', async () => {
+    const fixture = await createMinimalDocx()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    await expect(
+      extractDocumentText('docx', fixture, {
+        extractDocxSupplementalContent: async () => {
+          throw new Error('supplemental parser failed')
+        },
+      }),
+    ).rejects.toThrow(
+      'This DOCX appears to contain only images — text extraction requires OCR, which is not yet supported.',
+    )
+    expect(warn).toHaveBeenCalledWith('DOCX header/footer extraction warning', {
+      reason: 'supplemental parser failed',
+    })
+    warn.mockRestore()
+  })
+
   it('rejects an image-only DOCX instead of presenting a clean zero-span run', async () => {
     const fixture = await createMinimalDocx({ imageOnly: true })
 
