@@ -152,6 +152,15 @@ function xmlAttribute(tag: string, name: string) {
   return new RegExp(`(?:^|\\s)${name}="([^"]+)"`, 'i').exec(tag)?.[1]
 }
 
+function hasDocxVisualContent(xml: string, relationshipsXml: string) {
+  return (
+    /<w:drawing\b|<pic:pic\b/i.test(xml) ||
+    [...relationshipsXml.matchAll(/<Relationship\b[^>]*>/gi)].some((match) =>
+      /\/image$/i.test(xmlAttribute(match[0], 'Type') ?? ''),
+    )
+  )
+}
+
 interface DocxSupplementalContent {
   header: string[]
   footer: string[]
@@ -176,13 +185,8 @@ async function extractDocxHeaderFooterText(
     document.async('text'),
     relationships?.async('text') ?? '',
   ])
-  const visualContent =
-    /<w:drawing\b|<pic:pic\b/i.test(documentXml) ||
-    [...relationshipsXml.matchAll(/<Relationship\b[^>]*>/gi)].some((match) =>
-      /\/image$/i.test(xmlAttribute(match[0], 'Type') ?? ''),
-    )
-      ? 'present'
-      : 'absent'
+  let visualContent: DocxSupplementalContent['visualContent'] =
+    hasDocxVisualContent(documentXml, relationshipsXml) ? 'present' : 'absent'
   const referencedIds = new Set(
     [...documentXml.matchAll(/<w:(?:header|footer)Reference\b[^>]*>/gi)]
       .map((match) => xmlAttribute(match[0], 'r:id'))
@@ -206,8 +210,23 @@ async function extractDocxHeaderFooterText(
   const footer: string[] = []
   for (const name of referencedParts) {
     const file = archive.file(name)
-    if (!file) continue
-    const text = extractWordXmlText(await file.async('text'))
+    if (!file) {
+      if (visualContent === 'absent') visualContent = 'unknown'
+      continue
+    }
+    const relationshipsName = posix.join(
+      posix.dirname(name),
+      '_rels',
+      `${posix.basename(name)}.rels`,
+    )
+    const relationshipsFile = archive.file(relationshipsName)
+    const [partXml, partRelationshipsXml] = await Promise.all([
+      file.async('text'),
+      relationshipsFile?.async('text') ?? '',
+    ])
+    if (hasDocxVisualContent(partXml, partRelationshipsXml))
+      visualContent = 'present'
+    const text = extractWordXmlText(partXml)
     if (!text) continue
     ;(/^word\/header/i.test(name) ? header : footer).push(text)
   }
