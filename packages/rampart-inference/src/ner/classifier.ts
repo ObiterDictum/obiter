@@ -109,8 +109,10 @@ const DEFAULT_OPTIONS: Required<Pick<NerOptions, 'device' | 'minScore'>> = {
 const MODEL_MAX_TOKENS = 512
 /** [CLS] + [SEP] the pipeline wraps every window in. */
 const SPECIAL_TOKENS = 2
-/** Per-window content-token budget: the model max less specials and a safety margin. */
+/** Largest safe per-window content-token budget. */
 export const NER_TOKEN_BUDGET = MODEL_MAX_TOKENS - SPECIAL_TOKENS - 10
+/** Default content-token budget used by every Rampart integration. */
+export const NER_DEFAULT_CHUNK_TOKENS = 400
 
 /**
  * Tokens shared by consecutive NER windows. Long input slides a window of
@@ -189,9 +191,10 @@ export async function loadNerClassifier(
  * Detect contextual PII across the whole input, regardless of length.
  *
  * The model has a fixed token budget, so input longer than one window is scanned
- * as a sliding window sized to {@link NER_TOKEN_BUDGET} *tokens* (measured by the
- * classifier's own tokenizer) that overlaps its neighbour by {@link NER_TOKEN_OVERLAP}
- * tokens. Each window's spans are shifted back into whole-text coordinates; because
+ * as configurable sliding windows (defaulting to {@link NER_DEFAULT_CHUNK_TOKENS}
+ * tokens, measured by the classifier's own tokenizer) that overlap their neighbours
+ * by {@link NER_TOKEN_OVERLAP} tokens. Each window's spans are shifted back into
+ * whole-text coordinates; because
  * windows overlap, an entity on a seam is re-detected in both, so {@link mergeSpans}
  * collapses the duplicates into the canonical disjoint set. Input that fits one
  * window — or any classifier without a tokenizer, e.g. a bare test mock — takes a
@@ -205,14 +208,17 @@ export async function detectNer(
   raw: string,
   classifier: TokenClassifier,
   minScore: number = DEFAULT_OPTIONS.minScore,
+  chunkTokens: number = NER_DEFAULT_CHUNK_TOKENS,
 ): Promise<Span[]> {
   const windows =
     classifier.countTokens === undefined
-      ? [{ start: 0, end: raw.length }]
+      ? // Without the model tokenizer, a token limit cannot be applied safely;
+        // the single-window fallback makes chunkTokens inapplicable.
+        [{ start: 0, end: raw.length }]
       : planTokenWindows(
           raw,
           classifier.countTokens,
-          NER_TOKEN_BUDGET,
+          chunkTokens,
           NER_TOKEN_OVERLAP,
         )
 

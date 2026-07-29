@@ -229,7 +229,8 @@ describe('multipart document extraction', () => {
     }
     expect(response.status).toBe(201)
     expect(body.version.documentStatus).toBe('failed')
-    expect(body.version.failureReason).toContain('extraction failed')
+    expect(body.version.failureReason).toBe('Document text could not be read.')
+    expect(body.version.failureReason).not.toContain('archive')
     await expect(readFile(join(root, body.version.objectKey))).resolves.toEqual(
       bytes,
     )

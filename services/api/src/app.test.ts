@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Pool } from 'pg'
 import { createApiApp } from './app'
 import type { createAuth } from './auth'
+import { SCANNED_PDF_MESSAGE } from './document-extraction'
 import type { ApiEnv } from './env'
 import { createLocalStorage } from './storage'
 
@@ -12,6 +13,7 @@ const searchClientMock = vi.hoisted(() => ({
   createClient: vi.fn(() => ({ id: 'meili-client' })),
   search: vi.fn(),
 }))
+const configureRedactionDetectorMock = vi.hoisted(() => vi.fn())
 const detectRedactionSpansMock = vi.hoisted(() =>
   vi.fn(async (_text: string) => ({
     spans: [],
@@ -22,6 +24,7 @@ const detectRedactionSpansMock = vi.hoisted(() =>
 
 vi.mock('@obiter/search-client', () => searchClientMock)
 vi.mock('./redaction-detection', () => ({
+  configureRedactionDetector: configureRedactionDetectorMock,
   detectionMode: (degraded: boolean) =>
     degraded ? 'heuristics+supplement' : 'model+supplement',
   detectRedactionSpans: detectRedactionSpansMock,
@@ -53,6 +56,11 @@ const testEnv: ApiEnv = {
   legalAuthoritiesIndex: 'legal_authorities',
   mojFindCaseLawBaseUrl: 'https://caselaw.nationalarchives.gov.uk',
   mojFindCaseLawRateLimit: 1000,
+  rampartModel: 'qarlus/rampart',
+  rampartRevision: 'c3221c5cd838eb69a249ab40f8b442483865f233',
+  rampartCacheDir: undefined,
+  rampartMinScore: 0.4,
+  rampartChunkTokens: 400,
   port: 8787,
   nodeEnv: 'test',
 }
@@ -83,6 +91,26 @@ function createHybridPool(query: QueryMock, transactionQuery: QueryMock): Pool {
 }
 
 describe('createApiApp', () => {
+  it('configures redaction detection from ApiEnv while building the app', () => {
+    configureRedactionDetectorMock.mockClear()
+
+    createApiApp(
+      testEnv,
+      createPool(async () => ({ rows: [] })),
+      {
+        auth: authWithRole('member'),
+      },
+    )
+
+    expect(configureRedactionDetectorMock).toHaveBeenCalledExactlyOnceWith({
+      model: testEnv.rampartModel,
+      revision: testEnv.rampartRevision,
+      cacheDir: testEnv.rampartCacheDir,
+      minScore: testEnv.rampartMinScore,
+      chunkTokens: testEnv.rampartChunkTokens,
+    })
+  })
+
   it('returns changelog entries from GitHub releases', async () => {
     const auth = {
       api: {
@@ -1112,9 +1140,38 @@ describe('createApiApp', () => {
         detectionMode: 'model+supplement',
       },
     })
+
+    const demoFixture = await readFile(
+      '../../data/evals/redact/demo-fixture.docx',
+    )
+    const demoForm = new FormData()
+    demoForm.set(
+      'file',
+      new File([demoFixture], 'demo-fixture.docx', {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      }),
+    )
+    demoForm.set('fileType', 'docx')
+
+    const demoResponse = await app.request('/api/redaction-runs', {
+      method: 'POST',
+      body: demoForm,
+    })
+
+    expect(demoResponse.status).toBe(201)
+
+    const emptyResponse = await app.request('/api/redaction-runs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ filename: 'empty.txt', text: '' }),
+    })
+
+    expect(emptyResponse.status).toBe(201)
     expect([...stored.values()]).toEqual([
       'Synthetic test text.',
       expect.stringContaining('amina.rahman@example.test'),
+      expect.stringContaining('Mr James Cartwright'),
+      '',
     ])
     await rm(root, { recursive: true, force: true })
   })
@@ -1385,9 +1442,39 @@ describe('createApiApp', () => {
     })
 
     expect(response.status).toBe(400)
-    expect(((await response.json()) as ErrorBody).error.code).toBe(
-      'validation_failed',
+    const body = (await response.json()) as ErrorBody
+    expect(body.error.code).toBe('validation_failed')
+    // A wrapped library failure must not reach the client verbatim.
+    expect(body.error.message).toBe(
+      'Document text could not be read for redaction.',
     )
+  })
+
+  it('tells the uploader a scanned PDF needs OCR rather than a generic read failure', async () => {
+    const app = createApiApp(
+      testEnv,
+      createPool(async () => ({ rows: [] })),
+      { auth: authWithRole('member') },
+    )
+    const fixture = await readFile(
+      '../../data/evals/redact/pdf-scanned-like-fixture.pdf',
+    )
+    const form = new FormData()
+    form.set(
+      'file',
+      new File([fixture], 'scanned.pdf', { type: 'application/pdf' }),
+    )
+    form.set('fileType', 'application/pdf')
+
+    const response = await app.request('/api/redaction-runs', {
+      method: 'POST',
+      body: form,
+    })
+
+    expect(response.status).toBe(400)
+    const body = (await response.json()) as ErrorBody
+    expect(body.error.code).toBe('validation_failed')
+    expect(body.error.message).toBe(SCANNED_PDF_MESSAGE)
   })
 
   it('models future legal source query params without running judgment search', async () => {

@@ -22,6 +22,8 @@ import type {
   TokenMap,
 } from '@obiter/redaction-policy'
 
+const MAX_FINALIZE_AUDIT_SPAN_IDS = 100
+
 export interface RedactionRunRecord {
   id: string
   organisationId: string
@@ -481,6 +483,9 @@ export async function finalizeRedactionRun(input: {
     )
     if (!finalizedRun)
       throw new Error('Finalized redaction run could not be read.')
+    const unreviewedSpanIds = finalizedRun.spans
+      .filter((span) => !finalizedRun.decisions[span.id])
+      .map((span) => span.id)
     await appendAuditLog(client, {
       organisationId: input.organisationId,
       userId: input.userId,
@@ -500,6 +505,12 @@ export async function finalizeRedactionRun(input: {
         spanCount: finalizedRun.summary.totalSpans,
         reviewedCount: finalizedRun.summary.reviewedCount,
         unreviewedCount: finalizedRun.summary.unreviewedCount,
+        unreviewedSpanIds: unreviewedSpanIds.slice(
+          0,
+          MAX_FINALIZE_AUDIT_SPAN_IDS,
+        ),
+        unreviewedSpanIdsTruncated:
+          unreviewedSpanIds.length > MAX_FINALIZE_AUDIT_SPAN_IDS,
       },
       requestId: input.requestId,
     })

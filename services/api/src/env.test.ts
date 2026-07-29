@@ -14,6 +14,11 @@ describe('readApiEnv', () => {
     delete process.env.BETTER_AUTH_SECRET
     delete process.env.BETTER_AUTH_URL
     delete process.env.OBITER_WEB_ORIGIN
+    delete process.env.OBITER_RAMPART_MODEL
+    delete process.env.OBITER_RAMPART_REVISION
+    delete process.env.OBITER_RAMPART_CACHE_DIR
+    delete process.env.OBITER_RAMPART_MIN_SCORE
+    delete process.env.OBITER_RAMPART_CHUNK_TOKENS
 
     const env = readApiEnv()
 
@@ -28,7 +33,66 @@ describe('readApiEnv', () => {
       'https://caselaw.nationalarchives.gov.uk',
     )
     expect(env.mojFindCaseLawRateLimit).toBe(1000)
+    expect(env.rampartModel).toBe('qarlus/rampart')
+    expect(env.rampartRevision).toBe('c3221c5cd838eb69a249ab40f8b442483865f233')
+    expect(env.rampartCacheDir).toBeUndefined()
+    expect(env.rampartMinScore).toBe(0.4)
+    expect(env.rampartChunkTokens).toBe(400)
     expect(env.nodeEnv).toBe('development')
+  })
+
+  it('reads validated Rampart configuration once with the rest of the API environment', () => {
+    process.env.NODE_ENV = 'development'
+    process.env.OBITER_RAMPART_MODEL = 'example/rampart-test'
+    process.env.OBITER_RAMPART_REVISION = 'revision-1'
+    process.env.OBITER_RAMPART_CACHE_DIR = '/tmp/rampart-cache'
+    process.env.OBITER_RAMPART_MIN_SCORE = '0.65'
+    process.env.OBITER_RAMPART_CHUNK_TOKENS = '320'
+
+    const env = readApiEnv()
+
+    expect(env).toMatchObject({
+      rampartModel: 'example/rampart-test',
+      rampartRevision: 'revision-1',
+      rampartCacheDir: '/tmp/rampart-cache',
+      rampartMinScore: 0.65,
+      rampartChunkTokens: 320,
+    })
+
+    process.env.OBITER_RAMPART_CACHE_DIR = ''
+    expect(readApiEnv().rampartCacheDir).toBeUndefined()
+  })
+
+  it.each([
+    ['OBITER_RAMPART_MODEL', '', 'must not be blank'],
+    ['OBITER_RAMPART_REVISION', ' revision ', 'must not be blank'],
+    ['OBITER_RAMPART_CACHE_DIR', ' ', 'must not be blank'],
+    [
+      'OBITER_RAMPART_MIN_SCORE',
+      'not-a-number',
+      'must be a number between 0 and 1',
+    ],
+    ['OBITER_RAMPART_MIN_SCORE', '1.1', 'must be a number between 0 and 1'],
+    [
+      'OBITER_RAMPART_CHUNK_TOKENS',
+      '64',
+      'must be an integer between 65 and 500',
+    ],
+    [
+      'OBITER_RAMPART_CHUNK_TOKENS',
+      '501',
+      'must be an integer between 65 and 500',
+    ],
+    [
+      'OBITER_RAMPART_CHUNK_TOKENS',
+      '399.5',
+      'must be an integer between 65 and 500',
+    ],
+  ])('rejects invalid %s configuration', (key, value, reason) => {
+    process.env.NODE_ENV = 'development'
+    process.env[key] = value
+
+    expect(() => readApiEnv()).toThrow(`${key} ${reason}`)
   })
 
   it('uses TEST_DATABASE_URL as the only database URL in test mode', () => {

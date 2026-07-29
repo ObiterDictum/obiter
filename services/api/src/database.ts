@@ -43,7 +43,7 @@ export interface AuditRecordInput {
     | 'redaction.token_map_access'
     | 'redaction_run.delete'
     | 'redaction_run.restore'
-  metadata: Record<string, string | number | boolean | null>
+  metadata: Record<string, string | number | boolean | null | string[]>
   requestId: string
 }
 

@@ -19,6 +19,7 @@ import { createChangelogRoutes } from './routes/changelog'
 import { createDocumentsRoutes } from './routes/documents'
 import { createMattersRoutes } from './routes/matters'
 import { createOrganisationsRoutes } from './routes/organisations'
+import { configureRedactionDetector } from './redaction-detection'
 import { createRedactRoutes } from './routes/redact'
 import { createLocalStorage, type StorageService } from './storage'
 
@@ -68,6 +69,13 @@ export function createApiApp(
   pool: Pool,
   options: ApiAppOptions = {},
 ) {
+  configureRedactionDetector({
+    model: env.rampartModel,
+    revision: env.rampartRevision,
+    cacheDir: env.rampartCacheDir,
+    minScore: env.rampartMinScore,
+    chunkTokens: env.rampartChunkTokens,
+  })
   const auth = options.auth ?? createAuth(env, pool)
   const storage = options.storage ?? createLocalStorage()
   const app = new Hono<{ Variables: AppVariables }>()

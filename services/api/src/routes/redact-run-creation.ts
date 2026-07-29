@@ -96,7 +96,11 @@ export function createRedactRunCreationRoutes(
           return errorResponse(
             c,
             'validation_failed',
-            'Document text could not be read for redaction.',
+            // Curated messages name the actual obstacle, e.g. that the document
+            // needs OCR. Wrapped library failures stay generic.
+            error.userFacing
+              ? error.message
+              : 'Document text could not be read for redaction.',
             400,
           )
         throw error
@@ -115,9 +119,7 @@ export function createRedactRunCreationRoutes(
       return errorResponse(
         c,
         'validation_failed',
-        text.trim().length === 0
-          ? 'The document contains no extractable text.'
-          : `Extracted text must be at most ${MAX_REDACTION_SOURCE_TEXT_LENGTH} characters.`,
+        `Extracted text must be at most ${MAX_REDACTION_SOURCE_TEXT_LENGTH} characters.`,
         400,
       )
     const id = `red_${crypto.randomUUID()}`
@@ -197,9 +199,7 @@ export function createRedactRunCreationRoutes(
       return errorResponse(
         c,
         'validation_failed',
-        text.trim().length === 0
-          ? 'The document contains no extractable text.'
-          : `Extracted text must be at most ${MAX_REDACTION_SOURCE_TEXT_LENGTH} characters.`,
+        `Extracted text must be at most ${MAX_REDACTION_SOURCE_TEXT_LENGTH} characters.`,
         400,
       )
     const detection = await detectForRoute(c, text)

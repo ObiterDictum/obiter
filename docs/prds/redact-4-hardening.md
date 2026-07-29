@@ -1,6 +1,6 @@
 # Redact 4: Detection Integrity and Hardening
 
-Status: active. Carries forward the outstanding items from [Redact 1](archive/redact-1-detection.md), [Redact 2](archive/redact-2-review-output.md) and [Redact 3](archive/redact-3-production.md), all now delivered and archived.
+Status: delivered. Gate 1 shipped in PR #46; Gate 2 closed on 2026-07-29. Carries forward the outstanding items from [Redact 1](archive/redact-1-detection.md), [Redact 2](archive/redact-2-review-output.md) and [Redact 3](archive/redact-3-production.md), all now delivered and archived.
 
 ## Summary
 
@@ -22,6 +22,8 @@ Verified 2026-07-27 against `dev`:
 
 Structural checks confirmed: migration `0005_redaction.sql` and successors; all eight contract schemas; all six error codes; every `redaction-policy` module; all API routes including `/spans/:spanId/decision`, `/finalize` and `/audit`; `document-extraction.ts`; `redaction-audit-report.ts` with JSON, Markdown and HTML renderers; `generate-synthetic-data.ts`, `scripts/synthetic-v2/` and `export-training-data.ts`.
 
+Gate 2 verification on 2026-07-29, compared with that baseline: `@obiter/redaction-policy` 51 passed; `@obiter/redact-ui` 15 passed; `@obiter/rampart-inference` 4 passed; `@obiter/api` 304 passed and 14 live-provider tests skipped; all four package typechecks clean. The additional deterministic synthetic-generator acceptance test passed with 300 documents across 7 types.
+
 ## Problem
 
 ### Degraded detection is invisible to the reviewer
@@ -38,11 +40,11 @@ It also contradicts two things already written down. [Redact 1](archive/redact-1
 
 The choice to degrade rather than fail is defensible on its own: a partial result a reviewer can work with may beat a hard error. The defect is that the reviewer is not told.
 
-### Detection is not configurable
+### Detection configuration bypasses startup validation
 
-[Redact 1](archive/redact-1-detection.md) F30 requires the model id, minimum confidence score and chunk size to be environment-configurable. None is. `REDACT_MODEL_ID`, `REDACT_MIN_SCORE` and `REDACT_CHUNK_TOKENS` do not exist in the codebase.
+The model integration shipped with `OBITER_RAMPART_MODEL`, `OBITER_RAMPART_REVISION` and `OBITER_RAMPART_CACHE_DIR`. Before Gate 2, `redaction-detection.ts` read those values inline for each call and silently defaulted the model and revision. Minimum confidence and chunk size were not configurable. The earlier claim that no model-id variable existed, and the `REDACT_*` names inherited from Redact 1, were stale.
 
-The values themselves are correct and deliberate: `minScore` defaults to `0.4` and `chunkText` to `400` tokens, both matching the PRD. The model id is a hardcoded `RAMPART_MODEL_ID = 'qarlus/rampart'`, which is the pinned mirror described in `NOTICE`, so the value is intentional even though it differs from the PRD's stated default.
+Gate 2 keeps the deployed `OBITER_RAMPART_*` namespace rather than renaming a live setting for documentary consistency. All five values now pass through `services/api/src/env.ts` and `ApiEnv`, are read once at startup, and fail startup on invalid input. The deliberate defaults remain `qarlus/rampart`, its pinned revision, `0.4` minimum confidence and `400` tokens per chunk.
 
 This matters for tuning detection recall without a deploy, and for pointing a test environment at a different model revision.
 
@@ -90,17 +92,18 @@ This matters for tuning detection recall without a deploy, and for pointing a te
 
 ### FR4: Detection configuration
 
-- **FR4.1.** `REDACT_MODEL_ID` MUST configure the model id, defaulting to the pinned `qarlus/rampart` mirror.
-- **FR4.2.** `REDACT_MIN_SCORE` MUST configure the minimum confidence score, defaulting to `0.4`.
-- **FR4.3.** `REDACT_CHUNK_TOKENS` MUST configure chunk size, defaulting to `400`.
-- **FR4.4.** Invalid values MUST fail at startup with a clear message rather than silently falling back to defaults. A misconfigured confidence threshold changes what is detected, so it must not fail quietly.
+- **FR4.1.** `OBITER_RAMPART_MODEL` MUST configure the model id, defaulting to the pinned `qarlus/rampart` mirror. `OBITER_RAMPART_REVISION` MUST configure the model revision, defaulting to the shipped commit pin, and `OBITER_RAMPART_CACHE_DIR` MAY configure the cache directory.
+- **FR4.2.** `OBITER_RAMPART_MIN_SCORE` MUST configure the minimum confidence score, defaulting to `0.4`.
+- **FR4.3.** `OBITER_RAMPART_CHUNK_TOKENS` MUST configure chunk size, defaulting to `400`.
+- **FR4.4.** Invalid values MUST fail at startup with a clear message naming the variable and the violated constraint rather than silently falling back to defaults. A misconfigured confidence threshold changes what is detected, so it must not fail quietly.
+- **FR4.5.** The API MUST read all detection configuration through `services/api/src/env.ts` once at startup and expose it through `ApiEnv`; detection requests MUST NOT read `process.env`.
 
 ### FR5: Confirm the unverified acceptance criteria
 
-- **FR5.1.** Confirm the synthetic data generator produces at least 200 valid, validated JSONL documents across 7 or more types.
-- **FR5.2.** Confirm the demo fixture runs end to end without errors.
-- **FR5.3.** Confirm every case in the [Redact 3](archive/redact-3-production.md) edge case table passes.
-- **FR5.4.** Where confirmation requires a manual run, add an automated check so the criterion stays true rather than being true once.
+- **FR5.1.** Confirmed: the deterministic generator produces 300 independently validated JSONL documents across 7 document types. `scripts/redact-acceptance/synthetic-generator.test.ts` regenerates into a temporary directory and revalidates count, types, fields, offsets, slices, manifest and report.
+- **FR5.2.** Confirmed: `services/api/src/redact-3-acceptance.test.ts` runs the checked-in DOCX fixture through extraction, configured detection, review decisions, finalized output and audit rendering without a model download.
+- **FR5.3.** Confirmed: every current edge-case contract from [Redact 3](archive/redact-3-production.md) has an automated check. Gate 1's explicit degraded-mode contract supersedes the archived failed-run expectation. Empty and zero-PII runs remain reviewable; all-rejected and unreviewed spans leave source text unchanged; reruns receive run-scoped span ids and empty decisions; DOCX body/table/header/footer extraction and long-window offsets are covered.
+- **FR5.4.** The checks above run under the repository and affected-package test commands, so the criteria remain release gates rather than one-time observations.
 
 ### FR6: Correct the stale specifications
 
@@ -129,7 +132,7 @@ Validation found documentation that contradicts the code. These are corrected as
 **Gate 1: Visibility.** FR1, FR2, FR3. The trust defect closes here and this is the only part that is urgent.
 _Exit:_ a reviewer cannot finalize a degraded or unknown-provenance run without truthful warning and acknowledgement; detection mode is structured on the run and in the audit report, and successful model re-detection creates a linked replacement without changing the original.
 
-**Gate 2: Configuration and confirmation.** FR4, FR5, FR6.
+**Gate 2: Configuration and confirmation.** FR4, FR5, FR6. Delivered 2026-07-29.
 _Exit:_ detection parameters are environment-configurable with startup validation; all delivered acceptance criteria are confirmed by automated checks; no specification contradicts the code.
 
 ## Risks
@@ -137,7 +140,7 @@ _Exit:_ detection parameters are environment-configurable with startup validatio
 - Degraded mode may be more common than assumed. If the model fails to load routinely, FR2 turns into a warning users learn to dismiss mentally. Worth measuring how often degradation actually occurs before deciding the warning is sufficient.
 - Re-detection can report that the model remains unavailable. The original run remains reviewable, no replacement is created, and the reviewer must try again later or continue with explicit acknowledgement.
 - Finalized degraded or unknown runs may be re-detected to create a fresh review. The finalized source remains immutable and visibly links to the new run; the replacement is not presented as changing the finalized artifact.
-- Making the model id configurable invites pointing production at an unpinned model. FR4.4's startup validation is the control; consider whether the id should be restricted to an allowlist.
+- Making the model id configurable permits production to point at a different model. This is intentional for test and controlled rollout environments. The accepted control is startup validation plus the separately configured revision recorded in detector provenance; no model allowlist is imposed. Operators remain responsible for pinning production revisions.
 
 ## Open Questions
 

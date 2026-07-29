@@ -44,9 +44,7 @@ export async function jsonBody(c: RouteContext) {
 export const MAX_REDACTION_SOURCE_TEXT_LENGTH = 200_000
 
 export function validSourceText(text: string) {
-  return (
-    text.trim().length > 0 && text.length <= MAX_REDACTION_SOURCE_TEXT_LENGTH
-  )
+  return text.length <= MAX_REDACTION_SOURCE_TEXT_LENGTH
 }
 
 export async function detectForRoute(c: RouteContext, text: string) {

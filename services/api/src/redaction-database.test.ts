@@ -142,7 +142,7 @@ describe('createRedactionRun', () => {
         return {
           rows: [
             runRow({
-              spans_json: [],
+              spans_json: JSON.parse(String(params?.[8])),
               detection_mode: 'heuristics+supplement',
             }),
           ],
@@ -157,13 +157,25 @@ describe('createRedactionRun', () => {
       userId: 'usr_1',
       sourceFilename: 'source.txt',
       sourceTextObjectKey: 'org/org_1/redaction-runs/red_1/source',
-      spans: [],
+      spans: [
+        {
+          id: 'span_detector_0_1',
+          start: 0,
+          end: 4,
+          text: 'Jane',
+          category: 'person_name',
+          source: 'rampart_model',
+          confidence: 'high',
+          suggestion: 'redact',
+        },
+      ],
       detectorVersion: 'detector-1;mode=heuristics+supplement',
       detectionMode: 'heuristics+supplement',
       policyMode: 'internal_ai_minimisation',
     })
 
     expect(created?.detectionMode).toBe('heuristics+supplement')
+    expect(created?.spans[0]?.id).toBe('span_red_1_1')
     expect(queries[0][0]).toContain('detection_mode')
     expect(queries[0][1]?.[11]).toBe('heuristics+supplement')
   })
@@ -611,10 +623,22 @@ describe('redaction run write guards', () => {
     expect(reread?.[0]).toContain('replacement.id as replacement_run_id')
   })
 
-  it('re-reads a run through the lineage join after finalizing it', async () => {
-    const { pool, calls } = createTransactionalPool(async (sql) => {
+  it('caps unreviewed span ids in the finalization audit record', async () => {
+    const unreviewedSpans = Array.from({ length: 101 }, (_, index) => ({
+      id: `span_${index + 1}`,
+      start: 0,
+      end: 4,
+      text: 'Jane',
+      category: 'person_name',
+      source: 'rampart_model',
+      confidence: 'high',
+      suggestion: 'redact',
+    }))
+    let auditMetadata: Record<string, unknown> | undefined
+    const { pool, calls } = createTransactionalPool(async (sql, params) => {
       if (sql === 'begin' || sql === 'commit') return { rows: [] }
-      if (sql.includes('for update of run')) return { rows: [runRow()] }
+      if (sql.includes('for update of run'))
+        return { rows: [runRow({ spans_json: unreviewedSpans })] }
       if (sql.includes('insert into artifacts')) {
         return {
           rows: [{ id: 'art_1', object_key: 'org/org_1/artifacts/art_1' }],
@@ -623,10 +647,22 @@ describe('redaction run write guards', () => {
       if (sql.includes('update redaction_runs')) return { rows: [] }
       if (sql.includes('from redaction_runs')) {
         return {
-          rows: [runRow({ status: 'finalized', output_artifact_id: 'art_1' })],
+          rows: [
+            runRow({
+              status: 'finalized',
+              output_artifact_id: 'art_1',
+              spans_json: unreviewedSpans,
+            }),
+          ],
         }
       }
-      if (sql.includes('insert into audit_logs')) return { rows: [] }
+      if (sql.includes('insert into audit_logs')) {
+        auditMetadata = JSON.parse(String(params?.[5])) as Record<
+          string,
+          unknown
+        >
+        return { rows: [] }
+      }
       throw new Error(`Unexpected SQL: ${sql}`)
     })
 
@@ -652,6 +688,10 @@ describe('redaction run write guards', () => {
         sql.includes('from redaction_runs') && !sql.includes('for update'),
     )
     expect(reread?.[0]).toContain('replacement.id as replacement_run_id')
+    expect(auditMetadata?.unreviewedSpanIds).toEqual(
+      unreviewedSpans.slice(0, 100).map((span) => span.id),
+    )
+    expect(auditMetadata?.unreviewedSpanIdsTruncated).toBe(true)
   })
 
   it('does not create a linked run when its document or matter is deleted', async () => {

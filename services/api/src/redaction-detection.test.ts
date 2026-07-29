@@ -49,6 +49,69 @@ describe('redaction detection', () => {
     )
   })
 
+  it('returns a successful zero-span result when text contains no detectable PII', async () => {
+    const detect = createRedactionDetector({
+      loadClassifier: async () => classifier,
+      detectNer: async () => [],
+      log: () => undefined,
+    })
+
+    const result = await detect(
+      'It is respectfully submitted that the appeal should be allowed.',
+    )
+
+    expect(result).toMatchObject({ spans: [], degraded: false })
+  })
+
+  it('passes the startup confidence and chunk configuration to NER', async () => {
+    let received: { minScore: number; chunkTokens: number } | undefined
+    const detect = createRedactionDetector(
+      {
+        loadClassifier: async () => classifier,
+        detectNer: async (_text, _classifier, minScore, chunkTokens) => {
+          received = { minScore, chunkTokens }
+          return []
+        },
+        log: () => undefined,
+      },
+      {
+        model: 'example/rampart-test',
+        revision: 'revision-1',
+        cacheDir: '/tmp/rampart-cache',
+        minScore: 0.65,
+        chunkTokens: 320,
+      },
+    )
+
+    const result = await detect('Synthetic text')
+
+    expect(received).toEqual({ minScore: 0.65, chunkTokens: 320 })
+    expect(result.detectorVersion).toContain(
+      'model=example/rampart-test@revision-1',
+    )
+  })
+
+  it('degrades to heuristic spans when the model fails to load', async () => {
+    const detect = createRedactionDetector({
+      loadClassifier: async () => {
+        throw new Error('model load failed')
+      },
+      log: () => undefined,
+    })
+
+    const result = await detect('Email jane@example.com.')
+
+    expect(result.degraded).toBe(true)
+    expect(result.spans).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: 'email',
+          source: 'rampart_deterministic',
+        }),
+      ]),
+    )
+  })
+
   it('keeps heuristic hits when NER fails after loading', async () => {
     const detect = createRedactionDetector({
       loadClassifier: async () => classifier,

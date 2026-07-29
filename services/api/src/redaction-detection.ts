@@ -3,8 +3,11 @@ import {
   detectNer,
   mergeSpans as mergeRampartSpans,
   loadNerClassifier,
+  NER_DEFAULT_CHUNK_TOKENS,
   premask,
   projectMaskedSpan,
+  RAMPART_MODEL_ID,
+  RAMPART_MODEL_REVISION,
   type Span as RampartSpan,
   type TokenClassifier,
 } from '@obiter/rampart-inference'
@@ -17,8 +20,22 @@ import type { DetectionMode } from '@obiter/contracts'
 import type { RedactionSpan } from '@obiter/redaction-policy'
 
 const PACKAGE_VERSION = '0.1.3-vendored'
-const DEFAULT_MODEL = 'qarlus/rampart'
-const DEFAULT_REVISION = 'c3221c5cd838eb69a249ab40f8b442483865f233'
+
+export interface RedactionDetectionConfig {
+  model: string
+  revision: string
+  cacheDir: string | undefined
+  minScore: number
+  chunkTokens: number
+}
+
+const DEFAULT_CONFIG: RedactionDetectionConfig = {
+  model: RAMPART_MODEL_ID,
+  revision: RAMPART_MODEL_REVISION,
+  cacheDir: undefined,
+  minScore: 0.4,
+  chunkTokens: NER_DEFAULT_CHUNK_TOKENS,
+}
 
 export interface DetectionResult {
   spans: RedactionSpan[]
@@ -31,16 +48,10 @@ export interface DetectorDependencies {
   detectNer?: (
     text: string,
     classifier: TokenClassifier,
+    minScore: number,
+    chunkTokens: number,
   ) => Promise<RampartSpan[]>
   log?: (message: string, details: Record<string, unknown>) => void
-}
-
-function config() {
-  return {
-    model: process.env.OBITER_RAMPART_MODEL ?? DEFAULT_MODEL,
-    revision: process.env.OBITER_RAMPART_REVISION ?? DEFAULT_REVISION,
-    cacheDir: process.env.OBITER_RAMPART_CACHE_DIR,
-  }
 }
 
 export function detectionMode(degraded: boolean): DetectionMode {
@@ -61,6 +72,7 @@ function provenance(model: string, revision: string, degraded: boolean) {
 
 export function createRedactionDetector(
   dependencies: DetectorDependencies = {},
+  configuration: RedactionDetectionConfig = DEFAULT_CONFIG,
 ) {
   let classifier: Promise<TokenClassifier> | undefined
   // ONNX sessions are not safe for concurrent inference. This queue is adequate
@@ -81,26 +93,23 @@ export function createRedactionDetector(
   }
   const load =
     dependencies.loadClassifier ??
-    (() => {
-      const options = config()
-      return loadNerClassifier({
-        model: options.model,
-        revision: options.revision,
-        cacheDir: options.cacheDir,
+    (() =>
+      loadNerClassifier({
+        model: configuration.model,
+        revision: configuration.revision,
+        cacheDir: configuration.cacheDir,
         device: 'cpu',
-      })
-    })
+      }))
   const runNer = dependencies.detectNer ?? detectNer
   const log =
     dependencies.log ?? ((message, details) => console.info(message, details))
 
   return async function detectSpans(text: string): Promise<DetectionResult> {
     const supplement = supplementSpans(text)
-    const options = config()
     if (!text)
       return {
         spans: supplement,
-        ...provenance(options.model, options.revision, false),
+        ...provenance(configuration.model, configuration.revision, false),
       }
     const started = performance.now()
     // Heuristics do not require the model and remain available when it fails.
@@ -111,7 +120,12 @@ export function createRedactionDetector(
       const loaded = await usedClassifier
       const masked = premask(text, heuristic)
       const model = await serializeInference(() =>
-        runNer(masked.masked, loaded),
+        runNer(
+          masked.masked,
+          loaded,
+          configuration.minScore,
+          configuration.chunkTokens,
+        ),
       )
       const projected = model.flatMap((span) => {
         const result = projectMaskedSpan(span, text, masked)
@@ -125,12 +139,12 @@ export function createRedactionDetector(
       log('redaction_detection_completed', {
         textLength: text.length,
         inferenceMs: Math.round(performance.now() - started),
-        model: options.model,
-        revision: options.revision,
+        model: configuration.model,
+        revision: configuration.revision,
       })
       return {
         spans,
-        ...provenance(options.model, options.revision, false),
+        ...provenance(configuration.model, configuration.revision, false),
       }
     } catch (error) {
       // A concurrent request may already have installed a newer load promise.
@@ -139,8 +153,8 @@ export function createRedactionDetector(
         error instanceof Error ? error.message : 'unknown model failure'
       log('redaction_detection_degraded', {
         textLength: text.length,
-        model: options.model,
-        revision: options.revision,
+        model: configuration.model,
+        revision: configuration.revision,
         reason,
       })
       const rampart = mapRampartSpans({
@@ -149,10 +163,24 @@ export function createRedactionDetector(
       })
       return {
         spans: mergeSpans(rampart, supplement),
-        ...provenance(options.model, options.revision, true),
+        ...provenance(configuration.model, configuration.revision, true),
       }
     }
   }
 }
 
-export const detectRedactionSpans = createRedactionDetector()
+let configuredDetector: ReturnType<typeof createRedactionDetector> | undefined
+
+export function configureRedactionDetector(
+  configuration: RedactionDetectionConfig,
+) {
+  configuredDetector = createRedactionDetector({}, configuration)
+}
+
+export function detectRedactionSpans(text: string) {
+  if (!configuredDetector) {
+    throw new Error('Redaction detector was not configured at API startup.')
+  }
+
+  return configuredDetector(text)
+}

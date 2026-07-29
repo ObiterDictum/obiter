@@ -11,12 +11,14 @@ const creation = vi.hoisted(() => ({
   getRedetectionRun: vi.fn(),
 }))
 const detector = vi.hoisted(() => ({
+  configureRedactionDetector: vi.fn(),
   detectRedactionSpans: vi.fn(),
 }))
 
 vi.mock('./redaction-database', () => database)
 vi.mock('./redaction-run-creation', () => creation)
 vi.mock('./redaction-detection', () => ({
+  configureRedactionDetector: detector.configureRedactionDetector,
   detectionMode: (degraded: boolean) =>
     degraded ? 'heuristics+supplement' : 'model+supplement',
   detectRedactionSpans: detector.detectRedactionSpans,

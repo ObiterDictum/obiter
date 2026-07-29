@@ -241,7 +241,9 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
             400,
           )
         }
-        await markExtractionFailed(error.message)
+        await markExtractionFailed(
+          error.userFacing ? error.message : 'Document text could not be read.',
+        )
       }
     }
     await appendAuditLog(pool, {
