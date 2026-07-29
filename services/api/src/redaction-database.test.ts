@@ -623,11 +623,22 @@ describe('redaction run write guards', () => {
     expect(reread?.[0]).toContain('replacement.id as replacement_run_id')
   })
 
-  it('re-reads a run through the lineage join and audits unreviewed span ids after finalizing it', async () => {
+  it('caps unreviewed span ids in the finalization audit record', async () => {
+    const unreviewedSpans = Array.from({ length: 101 }, (_, index) => ({
+      id: `span_${index + 1}`,
+      start: 0,
+      end: 4,
+      text: 'Jane',
+      category: 'person_name',
+      source: 'rampart_model',
+      confidence: 'high',
+      suggestion: 'redact',
+    }))
     let auditMetadata: Record<string, unknown> | undefined
     const { pool, calls } = createTransactionalPool(async (sql, params) => {
       if (sql === 'begin' || sql === 'commit') return { rows: [] }
-      if (sql.includes('for update of run')) return { rows: [runRow()] }
+      if (sql.includes('for update of run'))
+        return { rows: [runRow({ spans_json: unreviewedSpans })] }
       if (sql.includes('insert into artifacts')) {
         return {
           rows: [{ id: 'art_1', object_key: 'org/org_1/artifacts/art_1' }],
@@ -636,7 +647,13 @@ describe('redaction run write guards', () => {
       if (sql.includes('update redaction_runs')) return { rows: [] }
       if (sql.includes('from redaction_runs')) {
         return {
-          rows: [runRow({ status: 'finalized', output_artifact_id: 'art_1' })],
+          rows: [
+            runRow({
+              status: 'finalized',
+              output_artifact_id: 'art_1',
+              spans_json: unreviewedSpans,
+            }),
+          ],
         }
       }
       if (sql.includes('insert into audit_logs')) {
@@ -671,7 +688,10 @@ describe('redaction run write guards', () => {
         sql.includes('from redaction_runs') && !sql.includes('for update'),
     )
     expect(reread?.[0]).toContain('replacement.id as replacement_run_id')
-    expect(auditMetadata?.unreviewedSpanIds).toEqual(['span_1'])
+    expect(auditMetadata?.unreviewedSpanIds).toEqual(
+      unreviewedSpans.slice(0, 100).map((span) => span.id),
+    )
+    expect(auditMetadata?.unreviewedSpanIdsTruncated).toBe(true)
   })
 
   it('does not create a linked run when its document or matter is deleted', async () => {

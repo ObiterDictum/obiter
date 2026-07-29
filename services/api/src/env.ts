@@ -1,6 +1,7 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import {
+  NER_DEFAULT_CHUNK_TOKENS,
   NER_TOKEN_BUDGET,
   NER_TOKEN_OVERLAP,
   RAMPART_MODEL_ID,
@@ -269,7 +270,7 @@ function readUnpaddedValue(key: string, fallback: string) {
 
 function readOptionalUnpaddedValue(key: string) {
   const value = process.env[key]
-  if (value === undefined) return undefined
+  if (value === undefined || value === '') return undefined
   return readUnpaddedValue(key, value)
 }
 
@@ -293,7 +294,7 @@ function readRampartMinScore() {
 
 function readRampartChunkTokens() {
   const key = 'OBITER_RAMPART_CHUNK_TOKENS'
-  const value = process.env[key] ?? '400'
+  const value = process.env[key] ?? String(NER_DEFAULT_CHUNK_TOKENS)
   const parsed = Number(value)
 
   if (

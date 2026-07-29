@@ -10,6 +10,8 @@ const MAX_PDF_PAGE_COUNT = 1_000
 const MINIMUM_PDF_CHARS_PER_PAGE = 20
 const SCANNED_PDF_MESSAGE =
   'This PDF appears to be scanned — text extraction requires OCR, which is not yet supported.'
+const IMAGE_ONLY_DOCX_MESSAGE =
+  'This DOCX appears to contain only images — text extraction requires OCR, which is not yet supported.'
 
 export class DocumentExtractionError extends Error {
   constructor(message: string) {
@@ -138,16 +140,35 @@ function xmlAttribute(tag: string, name: string) {
   return new RegExp(`(?:^|\\s)${name}="([^"]+)"`, 'i').exec(tag)?.[1]
 }
 
-async function extractDocxHeaderFooterText(buffer: Buffer) {
+interface DocxSupplementalContent {
+  header: string[]
+  footer: string[]
+  hasVisualContent: boolean
+}
+
+interface DocumentExtractionDependencies {
+  extractDocxSupplementalContent?: (
+    buffer: Buffer,
+  ) => Promise<DocxSupplementalContent>
+}
+
+async function extractDocxHeaderFooterText(
+  buffer: Buffer,
+): Promise<DocxSupplementalContent> {
   const archive = await JSZip.loadAsync(buffer)
   const document = archive.file('word/document.xml')
   const relationships = archive.file('word/_rels/document.xml.rels')
-  if (!document || !relationships) return { header: [], footer: [] }
+  if (!document) return { header: [], footer: [], hasVisualContent: false }
 
   const [documentXml, relationshipsXml] = await Promise.all([
     document.async('text'),
-    relationships.async('text'),
+    relationships?.async('text') ?? '',
   ])
+  const hasVisualContent =
+    /<w:drawing\b|<pic:pic\b/i.test(documentXml) ||
+    [...relationshipsXml.matchAll(/<Relationship\b[^>]*>/gi)].some((match) =>
+      /\/image$/i.test(xmlAttribute(match[0], 'Type') ?? ''),
+    )
   const referencedIds = new Set(
     [...documentXml.matchAll(/<w:(?:header|footer)Reference\b[^>]*>/gi)]
       .map((match) => xmlAttribute(match[0], 'r:id'))
@@ -176,29 +197,56 @@ async function extractDocxHeaderFooterText(buffer: Buffer) {
     if (!text) continue
     ;(/^word\/header/i.test(name) ? header : footer).push(text)
   }
-  return { header, footer }
+  return { header, footer, hasVisualContent }
+}
+
+async function readDocxSupplementalContent(
+  buffer: Buffer,
+  extract: NonNullable<
+    DocumentExtractionDependencies['extractDocxSupplementalContent']
+  >,
+) {
+  try {
+    return await extract(buffer)
+  } catch (error) {
+    console.warn('DOCX header/footer extraction warning', {
+      reason: error instanceof Error ? error.message : 'Unknown archive error.',
+    })
+    return { header: [], footer: [], hasVisualContent: false }
+  }
 }
 
 /** Extract plain text only; formatting is intentionally not part of redaction input. */
 export async function extractDocumentText(
   fileType: SupportedDocumentType,
   buffer: Buffer,
+  dependencies: DocumentExtractionDependencies = {},
 ): Promise<string> {
   try {
     if (fileType === 'txt') return buffer.toString('utf8')
     if (fileType === 'pdf') return await extractPdfText(buffer)
-    const [result, headerFooter] = await Promise.all([
+    const [result, supplemental] = await Promise.all([
       mammoth.extractRawText({ buffer }),
-      extractDocxHeaderFooterText(buffer),
+      readDocxSupplementalContent(
+        buffer,
+        dependencies.extractDocxSupplementalContent ??
+          extractDocxHeaderFooterText,
+      ),
     ])
     if (result.messages.length > 0)
       console.warn('Mammoth extraction warnings', {
         count: result.messages.length,
         types: [...new Set(result.messages.map((message) => message.type))],
       })
-    return [...headerFooter.header, result.value, ...headerFooter.footer]
+    const text = [...supplemental.header, result.value, ...supplemental.footer]
       .filter((part) => part.length > 0)
       .join('\n\n')
+    if (text.trim().length === 0) {
+      if (supplemental.hasVisualContent)
+        throw new DocumentExtractionError(IMAGE_ONLY_DOCX_MESSAGE)
+      return ''
+    }
+    return text
   } catch (error) {
     if (error instanceof DocumentExtractionError) throw error
     const message =

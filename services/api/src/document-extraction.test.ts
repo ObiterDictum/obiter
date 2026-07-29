@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises'
+import JSZip from 'jszip'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { supplementSpans } from '@obiter/redaction-policy'
 
@@ -13,6 +14,7 @@ import {
   DocumentExtractionError,
   extractDocumentText,
 } from './document-extraction'
+import { createRedactionDetector } from './redaction-detection'
 
 beforeEach(async () => {
   const actual = await vi.importActual<typeof import('unpdf')>('unpdf')
@@ -20,12 +22,73 @@ beforeEach(async () => {
   unpdf.getDocumentProxy.mockImplementation(actual.getDocumentProxy)
 })
 
+async function createMinimalDocx(options: { imageOnly?: boolean } = {}) {
+  const archive = new JSZip()
+  archive.file(
+    '[Content_Types].xml',
+    '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>',
+  )
+  archive.file(
+    '_rels/.rels',
+    '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>',
+  )
+  archive.file(
+    'word/document.xml',
+    `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture"><w:body>${options.imageOnly ? '<w:p><w:r><w:drawing><pic:pic/></w:drawing></w:r></w:p>' : '<w:p/>'}</w:body></w:document>`,
+  )
+  archive.file(
+    'word/_rels/document.xml.rels',
+    options.imageOnly
+      ? '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rIdImage" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/image1.png"/></Relationships>'
+      : '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"/>',
+  )
+  if (options.imageOnly)
+    archive.file('word/media/image1.png', Buffer.from([0x89, 0x50, 0x4e, 0x47]))
+  return archive.generateAsync({ type: 'nodebuffer' })
+}
+
 describe('extractDocumentText', () => {
   it('extracts text from the checked-in DOCX demo fixture', async () => {
     const fixture = await readFile('../../data/evals/redact/demo-fixture.docx')
     await expect(extractDocumentText('docx', fixture)).resolves.toContain(
       'Mr James Cartwright',
     )
+  })
+
+  it('keeps readable body text when optional header/footer parsing fails', async () => {
+    const fixture = await readFile('../../data/evals/redact/demo-fixture.docx')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    const text = await extractDocumentText('docx', fixture, {
+      extractDocxSupplementalContent: async () => {
+        throw new Error('supplemental parser failed')
+      },
+    })
+
+    expect(text).toContain('Mr James Cartwright')
+    expect(warn).toHaveBeenCalledWith('DOCX header/footer extraction warning', {
+      reason: 'supplemental parser failed',
+    })
+    warn.mockRestore()
+  })
+
+  it('rejects an image-only DOCX instead of presenting a clean zero-span run', async () => {
+    const fixture = await createMinimalDocx({ imageOnly: true })
+
+    await expect(extractDocumentText('docx', fixture)).rejects.toThrow(
+      'This DOCX appears to contain only images — text extraction requires OCR, which is not yet supported.',
+    )
+  })
+
+  it('allows a genuinely empty DOCX and produces zero detection spans', async () => {
+    const fixture = await createMinimalDocx()
+    const text = await extractDocumentText('docx', fixture)
+    const detection = await createRedactionDetector({
+      log: () => undefined,
+    })(text)
+
+    expect(text).toBe('')
+    expect(detection.spans).toEqual([])
   })
 
   it('extracts DOCX body, table, header and footer text', async () => {

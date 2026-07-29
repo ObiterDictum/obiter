@@ -4,6 +4,7 @@ export { premask, projectMaskedSpan } from './premask'
 export {
   detectNer,
   loadNerClassifier,
+  NER_DEFAULT_CHUNK_TOKENS,
   NER_TOKEN_BUDGET,
   NER_TOKEN_OVERLAP,
   RAMPART_MODEL_ID,

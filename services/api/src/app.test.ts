@@ -12,6 +12,7 @@ const searchClientMock = vi.hoisted(() => ({
   createClient: vi.fn(() => ({ id: 'meili-client' })),
   search: vi.fn(),
 }))
+const configureRedactionDetectorMock = vi.hoisted(() => vi.fn())
 const detectRedactionSpansMock = vi.hoisted(() =>
   vi.fn(async (_text: string) => ({
     spans: [],
@@ -22,6 +23,7 @@ const detectRedactionSpansMock = vi.hoisted(() =>
 
 vi.mock('@obiter/search-client', () => searchClientMock)
 vi.mock('./redaction-detection', () => ({
+  configureRedactionDetector: configureRedactionDetectorMock,
   detectionMode: (degraded: boolean) =>
     degraded ? 'heuristics+supplement' : 'model+supplement',
   detectRedactionSpans: detectRedactionSpansMock,
@@ -88,6 +90,26 @@ function createHybridPool(query: QueryMock, transactionQuery: QueryMock): Pool {
 }
 
 describe('createApiApp', () => {
+  it('configures redaction detection from ApiEnv while building the app', () => {
+    configureRedactionDetectorMock.mockClear()
+
+    createApiApp(
+      testEnv,
+      createPool(async () => ({ rows: [] })),
+      {
+        auth: authWithRole('member'),
+      },
+    )
+
+    expect(configureRedactionDetectorMock).toHaveBeenCalledExactlyOnceWith({
+      model: testEnv.rampartModel,
+      revision: testEnv.rampartRevision,
+      cacheDir: testEnv.rampartCacheDir,
+      minScore: testEnv.rampartMinScore,
+      chunkTokens: testEnv.rampartChunkTokens,
+    })
+  })
+
   it('returns changelog entries from GitHub releases', async () => {
     const auth = {
       api: {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   detectNer,
-  NER_TOKEN_BUDGET,
+  NER_DEFAULT_CHUNK_TOKENS,
   type TokenClassifier,
 } from './classifier'
 
@@ -55,10 +55,10 @@ describe('detectNer', () => {
       )
   })
 
-  it('retains overlap across hard-split budget-sized segments', async () => {
+  it('retains overlap across hard-split default-sized segments', async () => {
     const entity = 'ENTITY'
-    const start = NER_TOKEN_BUDGET - 3
-    const text = `${'a'.repeat(start)}${entity}${'b'.repeat(NER_TOKEN_BUDGET)}`
+    const start = NER_DEFAULT_CHUNK_TOKENS - 3
+    const text = `${'a'.repeat(start)}${entity}${'b'.repeat(NER_DEFAULT_CHUNK_TOKENS)}`
     const classifier: TokenClassifier = async (window) => {
       const entityStart = window.indexOf(entity)
       return entityStart < 0

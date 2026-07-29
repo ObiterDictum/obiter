@@ -3,6 +3,7 @@ import {
   detectNer,
   mergeSpans as mergeRampartSpans,
   loadNerClassifier,
+  NER_DEFAULT_CHUNK_TOKENS,
   premask,
   projectMaskedSpan,
   RAMPART_MODEL_ID,
@@ -33,7 +34,7 @@ const DEFAULT_CONFIG: RedactionDetectionConfig = {
   revision: RAMPART_MODEL_REVISION,
   cacheDir: undefined,
   minScore: 0.4,
-  chunkTokens: 400,
+  chunkTokens: NER_DEFAULT_CHUNK_TOKENS,
 }
 
 export interface DetectionResult {

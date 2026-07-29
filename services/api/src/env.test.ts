@@ -58,6 +58,9 @@ describe('readApiEnv', () => {
       rampartMinScore: 0.65,
       rampartChunkTokens: 320,
     })
+
+    process.env.OBITER_RAMPART_CACHE_DIR = ''
+    expect(readApiEnv().rampartCacheDir).toBeUndefined()
   })
 
   it.each([

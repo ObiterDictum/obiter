@@ -2,16 +2,8 @@ import { serve } from '@hono/node-server'
 import { createApiApp } from './app'
 import { createPool } from './database'
 import { readApiEnv } from './env'
-import { configureRedactionDetector } from './redaction-detection'
 
 const env = readApiEnv()
-configureRedactionDetector({
-  model: env.rampartModel,
-  revision: env.rampartRevision,
-  cacheDir: env.rampartCacheDir,
-  minScore: env.rampartMinScore,
-  chunkTokens: env.rampartChunkTokens,
-})
 const pool = createPool(env)
 const app = createApiApp(env, pool)
 
