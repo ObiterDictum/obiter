@@ -28,6 +28,19 @@ describe('extractDocumentText', () => {
     )
   })
 
+  it('extracts DOCX body, table, header and footer text', async () => {
+    const fixture = await readFile(
+      '../../data/evals/redact/docx-edge-cases-fixture.docx',
+    )
+
+    const text = await extractDocumentText('docx', fixture)
+
+    expect(text).toContain('Header: Alice Example')
+    expect(text).toContain('Body: Jane Example')
+    expect(text).toContain('Table: Sarah Example')
+    expect(text).toContain('Footer: Bob Example')
+  })
+
   it('joins text-layer PDF pages and preserves known PII without detaching the source buffer', async () => {
     const fixture = await readFile(
       '../../data/evals/redact/pdf-text-layer-fixture.pdf',

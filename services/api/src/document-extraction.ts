@@ -1,3 +1,5 @@
+import { posix } from 'node:path'
+import JSZip from 'jszip'
 import mammoth from 'mammoth'
 import { getDocumentProxy } from 'unpdf'
 
@@ -96,6 +98,87 @@ async function extractPdfText(buffer: Buffer) {
   }
 }
 
+function decodeXmlText(value: string) {
+  return value.replace(
+    /&(lt|gt|amp|quot|apos|#\d+|#x[\da-f]+);/gi,
+    (entity, code: string) => {
+      const named = {
+        lt: '<',
+        gt: '>',
+        amp: '&',
+        quot: '"',
+        apos: "'",
+      } as const
+      const namedValue = named[code.toLowerCase() as keyof typeof named]
+      if (namedValue) return namedValue
+      const numeric = code.toLowerCase().startsWith('#x')
+        ? Number.parseInt(code.slice(2), 16)
+        : Number.parseInt(code.slice(1), 10)
+      return Number.isInteger(numeric) && numeric >= 0 && numeric <= 0x10ffff
+        ? String.fromCodePoint(numeric)
+        : entity
+    },
+  )
+}
+
+function extractWordXmlText(xml: string) {
+  const parts: string[] = []
+  const tokens =
+    /<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>|<w:(?:tab|br)(?:\s[^>]*)?\s*\/\s*>|<\/w:p>/gi
+  for (const match of xml.matchAll(tokens)) {
+    if (match[1] !== undefined) parts.push(decodeXmlText(match[1]))
+    else if (match[0].toLowerCase() === '</w:p>') parts.push('\n')
+    else if (match[0].toLowerCase().startsWith('<w:tab')) parts.push('\t')
+    else parts.push('\n')
+  }
+  return parts.join('').trim()
+}
+
+function xmlAttribute(tag: string, name: string) {
+  return new RegExp(`(?:^|\\s)${name}="([^"]+)"`, 'i').exec(tag)?.[1]
+}
+
+async function extractDocxHeaderFooterText(buffer: Buffer) {
+  const archive = await JSZip.loadAsync(buffer)
+  const document = archive.file('word/document.xml')
+  const relationships = archive.file('word/_rels/document.xml.rels')
+  if (!document || !relationships) return { header: [], footer: [] }
+
+  const [documentXml, relationshipsXml] = await Promise.all([
+    document.async('text'),
+    relationships.async('text'),
+  ])
+  const referencedIds = new Set(
+    [...documentXml.matchAll(/<w:(?:header|footer)Reference\b[^>]*>/gi)]
+      .map((match) => xmlAttribute(match[0], 'r:id'))
+      .filter((id): id is string => id !== undefined),
+  )
+  const referencedParts = [
+    ...relationshipsXml.matchAll(/<Relationship\b[^>]*>/gi),
+  ]
+    .flatMap((match) => {
+      const id = xmlAttribute(match[0], 'Id')
+      const target = xmlAttribute(match[0], 'Target')
+      if (!id || !target || !referencedIds.has(id)) return []
+      const name = target.startsWith('/')
+        ? target.slice(1)
+        : posix.normalize(posix.join('word', decodeXmlText(target)))
+      return /^word\/(?:header|footer)\d+\.xml$/i.test(name) ? [name] : []
+    })
+    .filter((name, index, names) => names.indexOf(name) === index)
+
+  const header: string[] = []
+  const footer: string[] = []
+  for (const name of referencedParts) {
+    const file = archive.file(name)
+    if (!file) continue
+    const text = extractWordXmlText(await file.async('text'))
+    if (!text) continue
+    ;(/^word\/header/i.test(name) ? header : footer).push(text)
+  }
+  return { header, footer }
+}
+
 /** Extract plain text only; formatting is intentionally not part of redaction input. */
 export async function extractDocumentText(
   fileType: SupportedDocumentType,
@@ -104,13 +187,18 @@ export async function extractDocumentText(
   try {
     if (fileType === 'txt') return buffer.toString('utf8')
     if (fileType === 'pdf') return await extractPdfText(buffer)
-    const result = await mammoth.extractRawText({ buffer })
+    const [result, headerFooter] = await Promise.all([
+      mammoth.extractRawText({ buffer }),
+      extractDocxHeaderFooterText(buffer),
+    ])
     if (result.messages.length > 0)
       console.warn('Mammoth extraction warnings', {
         count: result.messages.length,
         types: [...new Set(result.messages.map((message) => message.type))],
       })
-    return result.value
+    return [...headerFooter.header, result.value, ...headerFooter.footer]
+      .filter((part) => part.length > 0)
+      .join('\n\n')
   } catch (error) {
     if (error instanceof DocumentExtractionError) throw error
     const message =

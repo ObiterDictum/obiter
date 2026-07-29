@@ -19,6 +19,7 @@
     "@obiter/search-client": "workspace:*",
     "better-auth": "^1.6.8",
     "hono": "^4.12.14",
+    "jszip": "^3.10.1",
     "mammoth": "^1.12.0",
     "pg": "^8.20.0",
     "resend": "^4.0.1",

@@ -500,6 +500,9 @@ export async function finalizeRedactionRun(input: {
         spanCount: finalizedRun.summary.totalSpans,
         reviewedCount: finalizedRun.summary.reviewedCount,
         unreviewedCount: finalizedRun.summary.unreviewedCount,
+        unreviewedSpanIds: finalizedRun.spans
+          .filter((span) => !finalizedRun.decisions[span.id])
+          .map((span) => span.id),
       },
       requestId: input.requestId,
     })

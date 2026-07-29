@@ -34,6 +34,11 @@ const env: ApiEnv = {
   legalAuthoritiesIndex: 'legal_authorities',
   mojFindCaseLawBaseUrl: 'https://caselaw.nationalarchives.gov.uk',
   mojFindCaseLawRateLimit: 1000,
+  rampartModel: 'qarlus/rampart',
+  rampartRevision: 'c3221c5cd838eb69a249ab40f8b442483865f233',
+  rampartCacheDir: undefined,
+  rampartMinScore: 0.4,
+  rampartChunkTokens: 400,
   port: 8787,
   nodeEnv: 'test',
 }

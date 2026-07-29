@@ -60,6 +60,10 @@ async function insertRedactionRun(
   const documentId = input.documentId ?? null
   const documentVersionId = input.documentVersionId ?? null
   const linked = Boolean(matterId && documentId && documentVersionId)
+  const spans = input.spans.map((span, index) => ({
+    ...span,
+    id: `span_${input.id}_${index + 1}`,
+  }))
   const result = await queryable.query<RedactionRunRow>(
     `
       insert into redaction_runs (
@@ -81,8 +85,8 @@ async function insertRedactionRun(
       input.sourceFilename,
       input.sourceTextObjectKey,
       input.policyMode,
-      JSON.stringify(input.spans),
-      JSON.stringify(computeSummary(input.spans, {})),
+      JSON.stringify(spans),
+      JSON.stringify(computeSummary(spans, {})),
       input.detectorVersion,
       input.detectionMode,
       input.replacesRunId ?? null,

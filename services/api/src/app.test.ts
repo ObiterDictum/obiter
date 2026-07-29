@@ -53,6 +53,11 @@ const testEnv: ApiEnv = {
   legalAuthoritiesIndex: 'legal_authorities',
   mojFindCaseLawBaseUrl: 'https://caselaw.nationalarchives.gov.uk',
   mojFindCaseLawRateLimit: 1000,
+  rampartModel: 'qarlus/rampart',
+  rampartRevision: 'c3221c5cd838eb69a249ab40f8b442483865f233',
+  rampartCacheDir: undefined,
+  rampartMinScore: 0.4,
+  rampartChunkTokens: 400,
   port: 8787,
   nodeEnv: 'test',
 }
@@ -1112,9 +1117,38 @@ describe('createApiApp', () => {
         detectionMode: 'model+supplement',
       },
     })
+
+    const demoFixture = await readFile(
+      '../../data/evals/redact/demo-fixture.docx',
+    )
+    const demoForm = new FormData()
+    demoForm.set(
+      'file',
+      new File([demoFixture], 'demo-fixture.docx', {
+        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      }),
+    )
+    demoForm.set('fileType', 'docx')
+
+    const demoResponse = await app.request('/api/redaction-runs', {
+      method: 'POST',
+      body: demoForm,
+    })
+
+    expect(demoResponse.status).toBe(201)
+
+    const emptyResponse = await app.request('/api/redaction-runs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ filename: 'empty.txt', text: '' }),
+    })
+
+    expect(emptyResponse.status).toBe(201)
     expect([...stored.values()]).toEqual([
       'Synthetic test text.',
       expect.stringContaining('amina.rahman@example.test'),
+      expect.stringContaining('Mr James Cartwright'),
+      '',
     ])
     await rm(root, { recursive: true, force: true })
   })

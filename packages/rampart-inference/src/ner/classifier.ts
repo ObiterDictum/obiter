@@ -109,7 +109,7 @@ const DEFAULT_OPTIONS: Required<Pick<NerOptions, 'device' | 'minScore'>> = {
 const MODEL_MAX_TOKENS = 512
 /** [CLS] + [SEP] the pipeline wraps every window in. */
 const SPECIAL_TOKENS = 2
-/** Per-window content-token budget: the model max less specials and a safety margin. */
+/** Largest safe per-window content-token budget. */
 export const NER_TOKEN_BUDGET = MODEL_MAX_TOKENS - SPECIAL_TOKENS - 10
 
 /**
@@ -205,6 +205,7 @@ export async function detectNer(
   raw: string,
   classifier: TokenClassifier,
   minScore: number = DEFAULT_OPTIONS.minScore,
+  chunkTokens: number = NER_TOKEN_BUDGET,
 ): Promise<Span[]> {
   const windows =
     classifier.countTokens === undefined
@@ -212,7 +213,7 @@ export async function detectNer(
       : planTokenWindows(
           raw,
           classifier.countTokens,
-          NER_TOKEN_BUDGET,
+          chunkTokens,
           NER_TOKEN_OVERLAP,
         )
 

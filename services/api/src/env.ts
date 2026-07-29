@@ -1,5 +1,11 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
+import {
+  NER_TOKEN_BUDGET,
+  NER_TOKEN_OVERLAP,
+  RAMPART_MODEL_ID,
+  RAMPART_MODEL_REVISION,
+} from '@obiter/rampart-inference'
 
 const requiredProductionKeys = [
   'DATABASE_URL',
@@ -31,6 +37,11 @@ export interface ApiEnv {
   legalAuthoritiesIndex: string
   mojFindCaseLawBaseUrl: string
   mojFindCaseLawRateLimit: number
+  rampartModel: string
+  rampartRevision: string
+  rampartCacheDir: string | undefined
+  rampartMinScore: number
+  rampartChunkTokens: number
   port: number
   nodeEnv: 'development' | 'test' | 'production'
 }
@@ -245,6 +256,61 @@ function readPositiveInteger(key: string, fallback: string) {
   return parsed
 }
 
+function readUnpaddedValue(key: string, fallback: string) {
+  const value = process.env[key] ?? fallback
+  const trimmed = value.trim()
+
+  if (trimmed.length === 0 || trimmed.length !== value.length) {
+    throw new Error(`${key} must not be blank or padded with whitespace.`)
+  }
+
+  return trimmed
+}
+
+function readOptionalUnpaddedValue(key: string) {
+  const value = process.env[key]
+  if (value === undefined) return undefined
+  return readUnpaddedValue(key, value)
+}
+
+function readRampartMinScore() {
+  const key = 'OBITER_RAMPART_MIN_SCORE'
+  const value = process.env[key] ?? '0.4'
+  const parsed = Number(value)
+
+  if (
+    value.trim().length === 0 ||
+    value.trim() !== value ||
+    !Number.isFinite(parsed) ||
+    parsed < 0 ||
+    parsed > 1
+  ) {
+    throw new Error(`${key} must be a number between 0 and 1.`)
+  }
+
+  return parsed
+}
+
+function readRampartChunkTokens() {
+  const key = 'OBITER_RAMPART_CHUNK_TOKENS'
+  const value = process.env[key] ?? '400'
+  const parsed = Number(value)
+
+  if (
+    value.trim().length === 0 ||
+    value.trim() !== value ||
+    !Number.isInteger(parsed) ||
+    parsed <= NER_TOKEN_OVERLAP ||
+    parsed > NER_TOKEN_BUDGET
+  ) {
+    throw new Error(
+      `${key} must be an integer between ${NER_TOKEN_OVERLAP + 1} and ${NER_TOKEN_BUDGET}.`,
+    )
+  }
+
+  return parsed
+}
+
 export function readApiEnv(): ApiEnv {
   loadLocalDotEnv()
   const nodeEnv = readNodeEnv()
@@ -297,6 +363,14 @@ export function readApiEnv(): ApiEnv {
       'MOJ_FIND_CASE_LAW_RATE_LIMIT',
       '1000',
     ),
+    rampartModel: readUnpaddedValue('OBITER_RAMPART_MODEL', RAMPART_MODEL_ID),
+    rampartRevision: readUnpaddedValue(
+      'OBITER_RAMPART_REVISION',
+      RAMPART_MODEL_REVISION,
+    ),
+    rampartCacheDir: readOptionalUnpaddedValue('OBITER_RAMPART_CACHE_DIR'),
+    rampartMinScore: readRampartMinScore(),
+    rampartChunkTokens: readRampartChunkTokens(),
     port: readPort(),
     nodeEnv,
   }

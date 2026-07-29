@@ -115,9 +115,7 @@ export function createRedactRunCreationRoutes(
       return errorResponse(
         c,
         'validation_failed',
-        text.trim().length === 0
-          ? 'The document contains no extractable text.'
-          : `Extracted text must be at most ${MAX_REDACTION_SOURCE_TEXT_LENGTH} characters.`,
+        `Extracted text must be at most ${MAX_REDACTION_SOURCE_TEXT_LENGTH} characters.`,
         400,
       )
     const id = `red_${crypto.randomUUID()}`
@@ -197,9 +195,7 @@ export function createRedactRunCreationRoutes(
       return errorResponse(
         c,
         'validation_failed',
-        text.trim().length === 0
-          ? 'The document contains no extractable text.'
-          : `Extracted text must be at most ${MAX_REDACTION_SOURCE_TEXT_LENGTH} characters.`,
+        `Extracted text must be at most ${MAX_REDACTION_SOURCE_TEXT_LENGTH} characters.`,
         400,
       )
     const detection = await detectForRoute(c, text)
