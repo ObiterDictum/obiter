@@ -1506,6 +1506,282 @@ function finalizedRunRow(overrides: Record<string, unknown> = {}) {
   }
 }
 
+describe('createApiApp redaction review reads', () => {
+  function createRedactionReadApp({
+    run,
+    artifactKey = null,
+    documentTextKey = null,
+    auth = authWithRole('member'),
+  }: {
+    run: ReturnType<typeof finalizedRunRow> | null
+    artifactKey?: string | null
+    documentTextKey?: string | null
+    auth?: Auth
+  }) {
+    const auditWrites: Array<{
+      action: string
+      metadata: Record<string, unknown>
+    }> = []
+    const readText = vi.fn(async () => 'Stored redaction text.')
+    const app = createApiApp(
+      testEnv,
+      createPool(async (sql, params) => {
+        const text = String(sql)
+        const values = params as unknown[]
+        if (text.includes('from redaction_runs')) {
+          const visible =
+            run && values[0] === run.id && values[1] === run.organisation_id
+          return { rows: visible ? [run] : [] }
+        }
+        if (text.includes('from document_versions')) {
+          return {
+            rows: documentTextKey ? [{ text_object_key: documentTextKey }] : [],
+          }
+        }
+        if (text.includes('from artifacts')) {
+          return {
+            rows: artifactKey ? [{ object_key: artifactKey }] : [],
+          }
+        }
+        if (text.includes('insert into audit_logs')) {
+          auditWrites.push({
+            action: String(values[4]),
+            metadata: JSON.parse(String(values[5])) as Record<string, unknown>,
+          })
+          return { rows: [] }
+        }
+        throw new Error(`Unexpected SQL: ${text}`)
+      }),
+      {
+        auth,
+        storage: {
+          readText,
+          writeText: async () => undefined,
+          delete: async () => undefined,
+        },
+      },
+    )
+    return { app, auditWrites, readText }
+  }
+
+  it('guards document text reads for unauthenticated and organisation-less users', async () => {
+    const unauthenticatedAuth = {
+      api: { getSession: async () => null },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const organisationlessAuth = {
+      api: {
+        getSession: async () => ({
+          user: { id: 'usr_1', organisationId: null, role: null },
+          session: { id: 'ses_1' },
+        }),
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+
+    const unauthenticated = await createRedactionReadApp({
+      run: null,
+      auth: unauthenticatedAuth,
+    }).app.request('/api/redaction-runs/red_1/document-text')
+    const organisationless = await createRedactionReadApp({
+      run: null,
+      auth: organisationlessAuth,
+    }).app.request('/api/redaction-runs/red_1/document-text')
+
+    expect(unauthenticated.status).toBe(401)
+    expect(((await unauthenticated.json()) as ErrorBody).error.code).toBe(
+      'unauthenticated',
+    )
+    expect(organisationless.status).toBe(403)
+    expect(((await organisationless.json()) as ErrorBody).error.code).toBe(
+      'no_organisation',
+    )
+  })
+
+  it('returns 404 for unknown and cross-organisation document text reads', async () => {
+    const unknown = createRedactionReadApp({ run: null })
+    const crossOrganisation = createRedactionReadApp({
+      run: finalizedRunRow({
+        id: 'red_cross_org',
+        organisation_id: 'org_2',
+      }),
+    })
+
+    for (const [app, runId] of [
+      [unknown.app, 'red_unknown'],
+      [crossOrganisation.app, 'red_cross_org'],
+    ] as const) {
+      const response = await app.request(
+        `/api/redaction-runs/${runId}/document-text`,
+      )
+      expect(response.status).toBe(404)
+      expect(((await response.json()) as ErrorBody).error.code).toBe(
+        'redaction_run_not_found',
+      )
+    }
+  })
+
+  it('returns 404 when document text has no resolvable object key', async () => {
+    const { app } = createRedactionReadApp({
+      run: finalizedRunRow({
+        source_text_object_key: null,
+        document_version_id: 'ver_1',
+      }),
+    })
+
+    const response = await app.request(
+      '/api/redaction-runs/red_1/document-text',
+    )
+
+    expect(response.status).toBe(404)
+    expect(((await response.json()) as ErrorBody).error.code).toBe(
+      'document_version_not_found',
+    )
+  })
+
+  it('returns stored document text', async () => {
+    const { app, readText } = createRedactionReadApp({
+      run: finalizedRunRow(),
+    })
+
+    const response = await app.request(
+      '/api/redaction-runs/red_1/document-text',
+    )
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      text: 'Stored redaction text.',
+    })
+    expect(readText).toHaveBeenCalledWith(
+      'org/org_1/redaction-runs/red_1/source',
+    )
+  })
+
+  it('returns 404 for an unknown redaction output run', async () => {
+    const { app } = createRedactionReadApp({ run: null })
+
+    const response = await app.request('/api/redaction-runs/red_unknown/output')
+
+    expect(response.status).toBe(404)
+    expect(((await response.json()) as ErrorBody).error.code).toBe(
+      'redaction_run_not_found',
+    )
+  })
+
+  it('returns 400 when a redaction run has no output artifact', async () => {
+    const { app } = createRedactionReadApp({
+      run: finalizedRunRow({ output_artifact_id: null }),
+    })
+
+    const response = await app.request('/api/redaction-runs/red_1/output')
+    const body = (await response.json()) as ErrorBody
+
+    expect(response.status).toBe(400)
+    expect(body.error).toMatchObject({
+      code: 'redaction_run_not_reviewable',
+      message: 'This run has not been finalized.',
+    })
+  })
+
+  it('returns 404 when a redaction output object key is unavailable', async () => {
+    const { app } = createRedactionReadApp({ run: finalizedRunRow() })
+
+    const response = await app.request('/api/redaction-runs/red_1/output')
+
+    expect(response.status).toBe(404)
+    expect(((await response.json()) as ErrorBody).error.code).toBe(
+      'artifact_not_found',
+    )
+  })
+
+  it('returns stored redaction output text', async () => {
+    const { app, readText } = createRedactionReadApp({
+      run: finalizedRunRow(),
+      artifactKey: 'org/org_1/artifacts/art_1',
+    })
+
+    const response = await app.request('/api/redaction-runs/red_1/output')
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      text: 'Stored redaction text.',
+    })
+    expect(readText).toHaveBeenCalledWith('org/org_1/artifacts/art_1')
+  })
+
+  it('returns 404 for an unknown token-map run', async () => {
+    const { app } = createRedactionReadApp({ run: null })
+
+    const response = await app.request(
+      '/api/redaction-runs/red_unknown/token-map',
+    )
+
+    expect(response.status).toBe(404)
+    expect(((await response.json()) as ErrorBody).error.code).toBe(
+      'redaction_run_not_found',
+    )
+  })
+
+  it.each([
+    {
+      name: 'the run is not finalized',
+      overrides: {
+        status: 'ready_for_review',
+        summary_json: {
+          outputMode: 'pseudonymised',
+          tokenMap: { PERSON_1: 'Jane' },
+        },
+      },
+    },
+    {
+      name: 'the output is redacted',
+      overrides: {
+        summary_json: {
+          outputMode: 'redacted',
+          tokenMap: { PERSON_1: 'Jane' },
+        },
+      },
+    },
+    {
+      name: 'the token map is absent',
+      overrides: { summary_json: { outputMode: 'pseudonymised' } },
+    },
+  ])('returns 400 for a token-map read when $name', async ({ overrides }) => {
+    const { app } = createRedactionReadApp({
+      run: finalizedRunRow(overrides),
+    })
+
+    const response = await app.request('/api/redaction-runs/red_1/token-map')
+    const body = (await response.json()) as ErrorBody
+
+    expect(response.status).toBe(400)
+    expect(body.error).toMatchObject({
+      code: 'redaction_run_not_reviewable',
+      message: 'No pseudonymisation token map exists for this run.',
+    })
+  })
+
+  it('returns a pseudonymisation token map and audits access', async () => {
+    const tokenMap = { PERSON_1: 'Jane', PERSON_2: 'John' }
+    const { app, auditWrites } = createRedactionReadApp({
+      run: finalizedRunRow({
+        summary_json: { outputMode: 'pseudonymised', tokenMap },
+      }),
+    })
+
+    const response = await app.request('/api/redaction-runs/red_1/token-map')
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ tokenMap })
+    expect(auditWrites).toEqual([
+      {
+        action: 'redaction.token_map_access',
+        metadata: { tokenCount: 2 },
+      },
+    ])
+  })
+})
+
 describe('createApiApp degraded finalization acknowledgement', () => {
   function appForMode(
     detectionMode: 'model+supplement' | 'heuristics+supplement' | 'unknown',
