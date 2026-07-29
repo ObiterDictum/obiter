@@ -1,5 +1,6 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 type Label =
   | 'private_person'
@@ -16,7 +17,7 @@ type Label =
   | 'organisation_name'
 type SpanMap = Record<string, Array<[number, number]>>
 
-const output = resolve('data/evals/redact')
+const defaultOutputDirectory = resolve('data/evals/redact')
 const types = [
   'skeleton_argument',
   'witness_statement',
@@ -180,7 +181,9 @@ function validate(entry: ReturnType<typeof documentFor>, labels?: Set<string>) {
   }
 }
 
-async function main() {
+export async function generateSyntheticData(
+  outputDirectory = defaultOutputDirectory,
+) {
   const entries = Array.from({ length: 300 }, (_, index) => documentFor(index))
   const labelSpace = {
     category_version: 'obiter_legal_v1',
@@ -213,19 +216,19 @@ async function main() {
     if (!emitted.has(label))
       throw new Error(`Label-space entry ${label} is never emitted`)
   }
-  await mkdir(output, { recursive: true })
+  await mkdir(outputDirectory, { recursive: true })
   const train = entries.filter((_, index) => index % 5 !== 0)
   const validation = entries.filter((_, index) => index % 5 === 0)
   await writeFile(
-    resolve(output, 'synthetic_train.jsonl'),
+    resolve(outputDirectory, 'synthetic_train.jsonl'),
     `${train.map((entry) => JSON.stringify(entry)).join('\n')}\n`,
   )
   await writeFile(
-    resolve(output, 'synthetic_validation.jsonl'),
+    resolve(outputDirectory, 'synthetic_validation.jsonl'),
     `${validation.map((entry) => JSON.stringify(entry)).join('\n')}\n`,
   )
   await writeFile(
-    resolve(output, 'custom_label_space.json'),
+    resolve(outputDirectory, 'custom_label_space.json'),
     `${JSON.stringify(labelSpace, null, 2)}\n`,
   )
   const perType = Object.fromEntries(
@@ -235,13 +238,18 @@ async function main() {
     ]),
   )
   await writeFile(
-    resolve(output, 'generation_manifest.json'),
+    resolve(outputDirectory, 'generation_manifest.json'),
     `${JSON.stringify({ generator: 'scripts/generate-synthetic-data.ts', totalDocuments: entries.length, trainDocuments: train.length, validationDocuments: validation.length, documentTypes: perType, piiTypes: ['person', 'address', 'email', 'phone', 'date', 'national_insurance', 'passport', 'case_reference', 'account_number', 'organisation', 'url', 'secret'], edgeCases: ['zero_pii', 'case_citation_names', 'repeated_names'], validation: 'all offsets verified' }, null, 2)}\n`,
   )
   await writeFile(
-    resolve(output, 'validation_report.json'),
+    resolve(outputDirectory, 'validation_report.json'),
     `${JSON.stringify({ valid: true, documentsValidated: entries.length, failures: [] }, null, 2)}\n`,
   )
 }
 
-void main()
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(resolve(process.argv[1])).href
+) {
+  void generateSyntheticData()
+}

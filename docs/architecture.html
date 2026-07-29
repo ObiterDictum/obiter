@@ -3292,9 +3292,13 @@
                 <tr>
                   <td class="id">
                     OBITER_RAMPART_MODEL · OBITER_RAMPART_REVISION ·
-                    OBITER_RAMPART_CACHE_DIR
+                    OBITER_RAMPART_CACHE_DIR · OBITER_RAMPART_MIN_SCORE ·
+                    OBITER_RAMPART_CHUNK_TOKENS
                   </td>
-                  <td>Model selection and cache location</td>
+                  <td>
+                    Model selection, revision, cache, confidence threshold and
+                    token-window size; validated once at API startup
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">OBITER_STORAGE_ROOT</td>
@@ -3311,12 +3315,12 @@
               </tbody>
             </table>
           </div>
-          <div class="callout risk">
-            <b>Detection is not configurable.</b> Redact PRD 1 requires
-            <code>REDACT_MODEL_ID</code>, <code>REDACT_MIN_SCORE</code> and
-            <code>REDACT_CHUNK_TOKENS</code>. None exists. The values are
-            hardcoded constants, so changing a confidence threshold needs a
-            deploy.
+          <div class="callout note">
+            <b>Detection configuration is startup-scoped.</b> The API keeps the
+            deployed <code>OBITER_RAMPART_*</code> namespace. Model, revision,
+            cache directory, minimum confidence and chunk size are read through
+            <code>ApiEnv</code> once at startup; invalid values stop startup
+            rather than changing detection silently.
           </div>
         </section>
 

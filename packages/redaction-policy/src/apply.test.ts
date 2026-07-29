@@ -75,6 +75,21 @@ describe('redaction output application', () => {
     })
   })
 
+  it('leaves the output byte-identical when every span is rejected', () => {
+    const rejected = Object.fromEntries(
+      spans.map((span) => [
+        span.id,
+        {
+          decision: 'reject' as const,
+          decidedBy: 'usr_1',
+          decidedAt: '2026-07-09T00:00:00.000Z',
+        },
+      ]),
+    )
+
+    expect(applyRedacted(text, spans, rejected)).toBe(text)
+  })
+
   it('leaves undecided and keep decisions unchanged', () => {
     expect(applyRedacted(text, spans, {})).toBe(text)
     expect(

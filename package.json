@@ -16,8 +16,8 @@
     "synthetic-v2:canary": "tsx scripts/synthetic-v2/smoke.ts --profile=tournament-canary",
     "synthetic-v2:tournament": "tsx scripts/synthetic-v2/run.ts --stage=tournament",
     "synthetic-v2:tournament:assemble": "tsx scripts/synthetic-v2/run.ts --assemble-tournament",
-    "test": "pnpm -r --if-present test && vitest run scripts/synthetic-v2",
-    "typecheck": "pnpm -r --if-present typecheck && tsc --noEmit -p scripts/synthetic-v2/tsconfig.json"
+    "test": "pnpm -r --if-present test && vitest run scripts/synthetic-v2 scripts/redact-acceptance",
+    "typecheck": "pnpm -r --if-present typecheck && tsc --noEmit -p scripts/synthetic-v2/tsconfig.json && tsc --noEmit -p scripts/redact-acceptance/tsconfig.json"
   },
   "devDependencies": {
     "@types/node": "^22.15.18",
