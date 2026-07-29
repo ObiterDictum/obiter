@@ -4854,11 +4854,34 @@
             </li>
             <li>
               <span
-                ><b>Files stay under 500 lines.</b> Six currently exceed it:
-                database.ts (1236), classifier.ts (776), redaction-database.ts
-                (772), proxy-routes.ts (676), LegalSearchView.tsx (644), and
-                search-client/src/index.ts (573).</span
+                ><b>Files stay under 500 lines.</b> Ten non-test TypeScript
+                source files currently exceed it:</span
               >
+              <ul>
+                <li><code>scripts/synthetic-v2/run.ts</code> (1854)</li>
+                <li><code>scripts/synthetic-v2/providers.ts</code> (1411)</li>
+                <li><code>services/api/src/database.ts</code> (1236)</li>
+                <li>
+                  <code>packages/rampart-inference/src/ner/classifier.ts</code>
+                  (776)
+                </li>
+                <li>
+                  <code>services/api/src/redaction-database.ts</code> (772)
+                </li>
+                <li><code>scripts/synthetic-v2/governance.ts</code> (713)</li>
+                <li><code>scripts/synthetic-v2/qa.ts</code> (708)</li>
+                <li>
+                  <code
+                    >services/api/src/routes/legal-search/proxy-routes.ts</code
+                  >
+                  (676)
+                </li>
+                <li>
+                  <code>packages/app-shell/src/views/LegalSearchView.tsx</code>
+                  (644)
+                </li>
+                <li><code>packages/search-client/src/index.ts</code> (573)</li>
+              </ul>
             </li>
             <li>
               <span
