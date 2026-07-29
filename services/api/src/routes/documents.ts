@@ -24,17 +24,12 @@ import {
 } from '../document-extraction'
 import { DocumentUploadError, readDocumentUpload } from '../document-upload'
 import type { StorageService } from '../storage'
-import { requireManageRole } from '../authz'
+import { ensureOrgUser, requireManageRole } from '../authz'
 
 interface RouteUser {
   id: string
   organisationId?: string | null
   role?: UserRole | null
-}
-
-interface AuthenticatedRouteUser {
-  id: string
-  organisationId: string
 }
 
 interface RouteVariables {
@@ -54,22 +49,6 @@ function errorResponse(
     error: { code, message, requestId: c.get('requestId') },
   }
   return c.json(body, status)
-}
-
-function requireUser(c: RouteContext): AuthenticatedRouteUser | Response {
-  const user = c.get('user')
-  if (!user) {
-    return errorResponse(c, 'unauthenticated', 'Sign in is required.', 401)
-  }
-  if (!user.organisationId) {
-    return errorResponse(
-      c,
-      'no_organisation',
-      'Create an organisation to use this area.',
-      403,
-    )
-  }
-  return { id: user.id, organisationId: user.organisationId }
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -94,7 +73,7 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
   const routes = new Hono<{ Variables: RouteVariables }>()
 
   routes.post('/api/matters/:matterId/documents', async (c) => {
-    const user = requireUser(c)
+    const user = await ensureOrgUser(c, pool)
     if (user instanceof Response) return user
 
     const matter = await getMatter(
@@ -269,13 +248,13 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
   })
 
   routes.get('/api/matters/:matterId/documents', async (c) => {
-    const user = requireUser(c)
+    const user = await ensureOrgUser(c, pool)
     if (user instanceof Response) return user
 
     const includeDeleted =
       c.req.queries('includeDeleted')?.includes('true') ?? false
     if (includeDeleted) {
-      const manageUser = requireManageRole(c)
+      const manageUser = await requireManageRole(c, pool)
       if (manageUser instanceof Response) return manageUser
     }
 
@@ -298,13 +277,13 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
   })
 
   routes.get('/api/documents/:id', async (c) => {
-    const user = requireUser(c)
+    const user = await ensureOrgUser(c, pool)
     if (user instanceof Response) return user
 
     const includeDeleted =
       c.req.queries('includeDeleted')?.includes('true') ?? false
     if (includeDeleted) {
-      const manageUser = requireManageRole(c)
+      const manageUser = await requireManageRole(c, pool)
       if (manageUser instanceof Response) return manageUser
     }
 
@@ -321,7 +300,7 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
   })
 
   routes.delete('/api/documents/:id', async (c) => {
-    const user = requireManageRole(c)
+    const user = await requireManageRole(c, pool)
     if (user instanceof Response) return user
 
     const result = await softDeleteDocumentWithCascade(pool, {
@@ -337,7 +316,7 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
   })
 
   routes.patch('/api/documents/:id/restore', async (c) => {
-    const user = requireManageRole(c)
+    const user = await requireManageRole(c, pool)
     if (user instanceof Response) return user
 
     const result = await restoreDocumentWithAudit(pool, {

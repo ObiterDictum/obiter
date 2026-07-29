@@ -29,11 +29,14 @@ export function SearchCommandBar({
   query,
 }: SearchCommandBarProps) {
   return (
-    <form className="flex flex-col gap-3" onSubmit={onSubmit}>
-      <div className="flex items-center gap-2 rounded-lg border border-line bg-canvas px-3 transition-colors focus-within:border-brand">
+    <form
+      className="flex shrink-0 flex-col border-b border-line"
+      onSubmit={onSubmit}
+    >
+      <div className="flex items-center gap-2 px-4 py-2 sm:px-5">
         <MagnifyingGlass
           aria-hidden="true"
-          size={18}
+          size={16}
           className="shrink-0 text-subtle"
         />
         <label className="sr-only" htmlFor="legal-sources-search">
@@ -42,33 +45,33 @@ export function SearchCommandBar({
         <input
           ref={inputRef}
           id="legal-sources-search"
-          className="min-h-[48px] flex-1 bg-transparent text-base text-ink outline-none placeholder:text-subtle"
+          className="min-h-[36px] flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-subtle"
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
-          placeholder="Case name, neutral citation, or keyword — e.g. Potanina"
+          placeholder="Act, citation, party, or point of law"
           name="query"
           type="search"
           autoFocus
         />
         <button
-          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md bg-brand px-3.5 text-sm font-semibold text-brand-fg transition-colors hover:bg-brand-pressed disabled:cursor-progress disabled:opacity-70"
+          className="inline-flex h-8 shrink-0 items-center rounded-md px-2.5 text-xs font-medium text-muted transition-colors hover:bg-raised hover:text-ink disabled:cursor-progress disabled:opacity-70"
           type="submit"
           disabled={isSearching}
         >
-          {isSearching ? 'Searching' : 'Search'}
+          {isSearching ? 'Searching…' : 'Search'}
         </button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-2 sm:px-5">
         <button
-          className="inline-flex items-center gap-1.5 rounded-pill border border-line bg-surface px-3 py-1.5 text-xs font-semibold text-muted transition-colors hover:border-line-strong hover:text-ink"
+          className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted transition-colors hover:bg-raised hover:text-ink"
           type="button"
           onClick={onFilterClick}
         >
           <Funnel aria-hidden="true" size={13} weight="bold" />
           Filters
           {activeFilterCount > 0 ? (
-            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-pill bg-brand px-1 text-[10px] font-bold text-brand-fg">
+            <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-md bg-brand px-1 text-[10px] font-bold text-brand-fg">
               {activeFilterCount}
             </span>
           ) : null}
@@ -94,20 +97,19 @@ export function SearchCommandBar({
             onRemove={() => onRemoveFilter('dateTo')}
           />
         ) : null}
-      </div>
-
-      {isSearching ? (
-        <div
-          className="inline-flex items-center gap-2 text-sm font-medium text-muted"
-          role="status"
-        >
+        {isSearching ? (
           <span
-            aria-hidden="true"
-            className="h-1.5 w-1.5 animate-pulse rounded-pill bg-brand"
-          />
-          Searching legal sources
-        </div>
-      ) : null}
+            className="inline-flex items-center gap-2 text-xs font-medium text-muted"
+            role="status"
+          >
+            <span
+              aria-hidden="true"
+              className="h-1.5 w-1.5 animate-pulse rounded-pill bg-brand"
+            />
+            Searching legal sources
+          </span>
+        ) : null}
+      </div>
     </form>
   )
 }
@@ -122,12 +124,12 @@ function FilterChip({
   onRemove: () => void
 }) {
   return (
-    <span className="inline-flex items-center gap-1 rounded-pill border border-brand/40 bg-brand/5 px-2.5 py-1 text-xs font-semibold text-brand">
+    <span className="inline-flex items-center gap-1 rounded-md bg-raised px-2 py-1 text-xs font-medium text-ink">
       {label}
       <button
         aria-label={removeLabel}
         type="button"
-        className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-pill text-brand/70 transition-colors hover:bg-brand/10 hover:text-brand"
+        className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-sm text-muted transition-colors hover:bg-canvas hover:text-ink"
         onClick={onRemove}
       >
         <X aria-hidden="true" size={11} weight="bold" />

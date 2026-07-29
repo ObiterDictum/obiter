@@ -11,11 +11,12 @@ import type {
 const runKey = (runId: string) => ['redaction-run', runId] as const
 const runsKey = ['redaction-runs'] as const
 
-export function useRedactionRuns() {
+export function useRedactionRuns(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: runsKey,
     queryFn: () => apiFetch<{ runs: RedactionRun[] }>('/api/redaction-runs'),
     staleTime: 30_000,
+    enabled: options?.enabled ?? true,
   })
 }
 

@@ -285,7 +285,7 @@ describe('createApiApp', () => {
     })
   })
 
-  it('returns 403 no_organisation when an org-less user hits an org-scoped endpoint', async () => {
+  it('auto-provisions a personal workspace when an org-less user hits Matters', async () => {
     const auth = {
       api: {
         getSession: async () => ({
@@ -297,15 +297,42 @@ describe('createApiApp', () => {
     } as unknown as Auth
     const app = createApiApp(
       testEnv,
-      createPool(async () => ({ rows: [] })),
+      createHybridPool(
+        async (sql) => {
+          if (String(sql).includes('from matters')) {
+            return { rows: [] }
+          }
+          return { rows: [] }
+        },
+        async (...args) => {
+          const sql = String(args[0])
+          if (sql === 'begin' || sql === 'commit' || sql === 'rollback') {
+            return { rows: [] }
+          }
+          if (sql.includes('select "organisationId"')) {
+            return { rows: [{ organisationId: null, role: null }] }
+          }
+          if (sql.includes('insert into organisations')) {
+            return {
+              rows: [
+                {
+                  id: 'org_personal',
+                  name: 'Personal workspace',
+                  plan: 'private_beta',
+                },
+              ],
+            }
+          }
+          return { rows: [] }
+        },
+      ),
       { auth },
     )
 
     const response = await app.request('/api/matters')
-    const body = (await response.json()) as ErrorBody
 
-    expect(response.status).toBe(403)
-    expect(body.error.code).toBe('no_organisation')
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({ matters: [] })
   })
 
   it('creates an organisation for an org-less user via POST /api/organisations', async () => {
@@ -326,8 +353,8 @@ describe('createApiApp', () => {
         const sql = String(args[0])
         if (sql === 'begin' || sql === 'commit' || sql === 'rollback')
           return { rows: [] }
-        if (sql.includes('select "organisationId" from users')) {
-          return { rows: [{ organisationId: null }] }
+        if (sql.includes('select "organisationId"')) {
+          return { rows: [{ organisationId: null, role: null }] }
         }
         if (sql.includes('insert into organisations')) {
           return {
@@ -385,8 +412,8 @@ describe('createApiApp', () => {
       createConnectedPool(async (...args) => {
         const sql = String(args[0])
         if (sql === 'begin') return { rows: [] }
-        if (sql.includes('select "organisationId" from users')) {
-          return { rows: [{ organisationId: 'org_existing' }] }
+        if (sql.includes('select "organisationId"')) {
+          return { rows: [{ organisationId: 'org_existing', role: 'owner' }] }
         }
         return { rows: [] }
       }),
@@ -1612,33 +1639,64 @@ describe('createApiApp redaction review reads', () => {
     const readText = vi.fn(async () => 'Stored redaction text.')
     const app = createApiApp(
       testEnv,
-      createPool(async (sql, params) => {
-        const text = String(sql)
-        const values = params as unknown[]
-        if (text.includes('from redaction_runs')) {
-          const visible =
-            run && values[0] === run.id && values[1] === run.organisation_id
-          return { rows: visible ? [run] : [] }
-        }
-        if (text.includes('from document_versions')) {
-          return {
-            rows: documentTextKey ? [{ text_object_key: documentTextKey }] : [],
+      createHybridPool(
+        async (sql, params) => {
+          const text = String(sql)
+          const values = params as unknown[]
+          if (text.includes('from redaction_runs')) {
+            const visible =
+              run && values[0] === run.id && values[1] === run.organisation_id
+            return { rows: visible ? [run] : [] }
           }
-        }
-        if (text.includes('from artifacts')) {
-          return {
-            rows: artifactKey ? [{ object_key: artifactKey }] : [],
+          if (text.includes('from document_versions')) {
+            return {
+              rows: documentTextKey
+                ? [{ text_object_key: documentTextKey }]
+                : [],
+            }
           }
-        }
-        if (text.includes('insert into audit_logs')) {
-          auditWrites.push({
-            action: String(values[4]),
-            metadata: JSON.parse(String(values[5])) as Record<string, unknown>,
-          })
+          if (text.includes('from artifacts')) {
+            return {
+              rows: artifactKey ? [{ object_key: artifactKey }] : [],
+            }
+          }
+          if (text.includes('insert into audit_logs')) {
+            auditWrites.push({
+              action: String(values[4]),
+              metadata: JSON.parse(String(values[5])) as Record<
+                string,
+                unknown
+              >,
+            })
+            return { rows: [] }
+          }
           return { rows: [] }
-        }
-        throw new Error(`Unexpected SQL: ${text}`)
-      }),
+        },
+        async (...args) => {
+          const sql = String(args[0])
+          if (sql === 'begin' || sql === 'commit' || sql === 'rollback') {
+            return { rows: [] }
+          }
+          if (sql.includes('select "organisationId"')) {
+            return { rows: [{ organisationId: null, role: null }] }
+          }
+          if (sql.includes('insert into organisations')) {
+            return {
+              rows: [
+                {
+                  id: 'org_personal',
+                  name: 'Personal workspace',
+                  plan: 'private_beta',
+                },
+              ],
+            }
+          }
+          if (sql.includes('insert into audit_logs')) {
+            return { rows: [] }
+          }
+          return { rows: [] }
+        },
+      ),
       {
         auth,
         storage: {
@@ -1651,7 +1709,7 @@ describe('createApiApp redaction review reads', () => {
     return { app, auditWrites, readText }
   }
 
-  it('guards document text reads for unauthenticated and organisation-less users', async () => {
+  it('guards document text reads for unauthenticated users; org-less users are provisioned', async () => {
     const unauthenticatedAuth = {
       api: { getSession: async () => null },
       handler: async () => new Response(null, { status: 404 }),
@@ -1679,9 +1737,10 @@ describe('createApiApp redaction review reads', () => {
     expect(((await unauthenticated.json()) as ErrorBody).error.code).toBe(
       'unauthenticated',
     )
-    expect(organisationless.status).toBe(403)
+    // Auto-provisioned personal workspace, then unknown run → 404 (not 403).
+    expect(organisationless.status).toBe(404)
     expect(((await organisationless.json()) as ErrorBody).error.code).toBe(
-      'no_organisation',
+      'redaction_run_not_found',
     )
   })
 

@@ -33,8 +33,8 @@ export interface CreateOrganisationResult {
 /**
  * Creates the signed-in user's organisation via POST /api/organisations.
  * On success, the current-user cache is updated immediately with the created
- * organisation (role becomes 'owner') so the shell flips from the create-org
- * state to matters without waiting for a refetch, and the query is invalidated
+ * organisation (role becomes 'owner') so Settings flips from the create form
+ * to the organisation summary without waiting for a refetch, and the query is invalidated
  * to reconcile with the server.
  */
 export function createOrganisationMutationOptions(): MutationOptions<

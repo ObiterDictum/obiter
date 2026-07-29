@@ -18,22 +18,22 @@ export function SearchFeedbackPanel({
 }: SearchFeedbackPanelProps) {
   return (
     <section
-      className="flex items-start justify-between gap-4 rounded-lg border border-line bg-surface p-5 data-[tone=warning]:border-warning/40 data-[tone=error]:border-danger/40"
+      className="flex items-start justify-between gap-4 border-b border-line px-5 py-5 data-[tone=warning]:border-warning/30 data-[tone=error]:border-danger/30 sm:px-6"
       data-tone={tone}
       role={tone === 'error' ? 'alert' : 'status'}
     >
       <div className="min-w-0">
-        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-subtle">
+        <p className="mb-1 text-[11px] font-medium tracking-wide text-muted">
           {eyebrow}
         </p>
-        <h2 className="text-base font-semibold text-ink">{title}</h2>
+        <h2 className="text-sm font-semibold text-ink">{title}</h2>
         <p className="mt-2 max-w-prose text-sm leading-relaxed text-muted">
           {body}
         </p>
       </div>
       {action ? (
         <button
-          className="shrink-0 rounded-md border border-line px-3 py-2 text-sm font-semibold text-brand transition-colors hover:bg-canvas"
+          className="shrink-0 rounded-md px-2.5 py-1.5 text-sm font-medium text-brand transition-colors hover:bg-raised"
           type="button"
           onClick={action.onClick}
         >

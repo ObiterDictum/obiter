@@ -1,6 +1,6 @@
 import {
   MatterRouteView,
-  ensureOrganisation,
+  currentUserQueryOptions,
   guardAuth,
   matterDocumentsQueryOptions,
   matterQueryOptions,
@@ -9,7 +9,9 @@ import { createFileRoute } from '@tanstack/react-router'
 
 export const Route = createFileRoute('/matters/$matterId')({
   loader: async ({ context, params }) => {
-    await ensureOrganisation(context.queryClient)
+    await guardAuth(context.queryClient, () =>
+      context.queryClient.ensureQueryData(currentUserQueryOptions()),
+    )
     await guardAuth(context.queryClient, () =>
       context.queryClient.ensureQueryData(matterQueryOptions(params.matterId)),
     )

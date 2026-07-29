@@ -2,36 +2,154 @@
  * Obiter design tokens. Source of truth for the `--obiter-*` custom properties.
  * Consumed by Tailwind v4 via @theme inline in tailwind.css.
  *
- * Light is the default. Dark overrides live under [data-theme="dark"].
+ * Dark (night IDE) is the default product chrome, matching the marketing
+ * workspace demo. Light remains a persisted preference for FR6.
  * Token NAMES are the frozen contract (docs/specs/app-shell/contract.md §2);
  * values may tune within a theme.
  *
- * Direction: warm "ink on paper" derived from the wordmark (#F5F2EB cream +
- * editorial serif). Warm cream surfaces, warm charcoal ink (never pure #000),
- * sage as the restrained brand accent. No neon; status colors desaturated.
+ * Direction: near-black night workspace — whisper borders, steel-navy brand
+ * accent (institutional, not green), warm night ink. Not cream paper inside
+ * the signed-in product.
  */
 
 :root {
+  color-scheme: dark;
+
+  /* Surface + text — night IDE (default) */
+  --obiter-bg: #0a0a0a; /* page / shell */
+  --obiter-surface: #111111; /* panels */
+  --obiter-surface-raised: #181818; /* dialogs, menus, raised tiles */
+  --obiter-border: rgba(245, 242, 235, 0.12);
+  --obiter-border-strong: rgba(245, 242, 235, 0.22);
+  --obiter-text: #f5f2eb; /* night ink */
+  --obiter-text-muted: #9a9fa6;
+  --obiter-text-subtle: #7a8188;
+
+  /* Brand accent — muted steel navy (chambers / infrastructure) */
+  --obiter-brand: #5a6f88;
+  --obiter-brand-fg: #f2f4f7;
+  --obiter-brand-pressed: #4a5c72;
+  --obiter-ring: rgba(90, 111, 136, 0.55);
+  --obiter-overlay: rgba(0, 0, 0, 0.65);
+
+  /* Status (each with a matching -fg for text on fill) */
+  --obiter-status-info: #6fa3d6;
+  --obiter-status-info-fg: #0a0a0a;
+  --obiter-status-success: #6fb384;
+  --obiter-status-success-fg: #0a0a0a;
+  --obiter-status-warning: #d6a85a;
+  --obiter-status-warning-fg: #0a0a0a;
+  --obiter-status-danger: #c9846a;
+  --obiter-status-danger-fg: #0a0a0a;
+
+  /* Type */
+  --obiter-font-sans:
+    'Inter', 'Inter Variable', system-ui, -apple-system, 'Segoe UI Variable',
+    'Segoe UI', sans-serif;
+  --obiter-font-mono:
+    'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  --obiter-font-weight-regular: 400;
+  --obiter-font-weight-medium: 500;
+  --obiter-font-weight-semibold: 600;
+
+  /* Radius — demo interior ~0.55rem */
+  --obiter-radius-sm: 6px;
+  --obiter-radius-md: 9px;
+  --obiter-radius-lg: 14px;
+  --obiter-radius-xl: 16px;
+  --obiter-radius-pill: 9999px;
+
+  /* Elevation — deep night shadows */
+  --obiter-shadow-sm:
+    0 1px 2px rgba(0, 0, 0, 0.45), 0 1px 1px rgba(0, 0, 0, 0.3);
+  --obiter-shadow-md:
+    0 4px 12px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.35);
+  --obiter-shadow-lg:
+    0 20px 40px rgba(0, 0, 0, 0.55), 0 6px 12px rgba(0, 0, 0, 0.4);
+
+  /* Redaction span-category palette (contract §2.3).
+     Dark (default): deep saturated bg + light same-hue fg (AA contrast).
+     The bare --obiter-span-<category> alias equals the -bg value. */
+  --obiter-span-person-name-bg: hsl(352 40% 28%);
+  --obiter-span-person-name-fg: hsl(352 60% 82%);
+  --obiter-span-person-name: var(--obiter-span-person-name-bg);
+
+  --obiter-span-email-bg: hsl(38 45% 26%);
+  --obiter-span-email-fg: hsl(38 70% 80%);
+  --obiter-span-email: var(--obiter-span-email-bg);
+
+  --obiter-span-phone-bg: hsl(28 50% 28%);
+  --obiter-span-phone-fg: hsl(28 70% 80%);
+  --obiter-span-phone: var(--obiter-span-phone-bg);
+
+  --obiter-span-address-bg: hsl(48 45% 26%);
+  --obiter-span-address-fg: hsl(48 70% 82%);
+  --obiter-span-address: var(--obiter-span-address-bg);
+
+  --obiter-span-date-bg: hsl(265 40% 30%);
+  --obiter-span-date-fg: hsl(265 55% 82%);
+  --obiter-span-date: var(--obiter-span-date-bg);
+
+  --obiter-span-government-id-bg: hsl(150 40% 26%);
+  --obiter-span-government-id-fg: hsl(150 50% 80%);
+  --obiter-span-government-id: var(--obiter-span-government-id-bg);
+
+  --obiter-span-account-number-bg: hsl(330 40% 30%);
+  --obiter-span-account-number-fg: hsl(330 55% 82%);
+  --obiter-span-account-number: var(--obiter-span-account-number-bg);
+
+  --obiter-span-secret-bg: hsl(0 50% 28%);
+  --obiter-span-secret-fg: hsl(0 65% 82%);
+  --obiter-span-secret: var(--obiter-span-secret-bg);
+
+  --obiter-span-passport-bg: hsl(243 40% 30%);
+  --obiter-span-passport-fg: hsl(243 55% 82%);
+  --obiter-span-passport: var(--obiter-span-passport-bg);
+
+  --obiter-span-drivers-license-bg: hsl(78 42% 26%);
+  --obiter-span-drivers-license-fg: hsl(78 55% 80%);
+  --obiter-span-drivers-license: var(--obiter-span-drivers-license-bg);
+
+  --obiter-span-url-bg: hsl(192 45% 26%);
+  --obiter-span-url-fg: hsl(192 60% 80%);
+  --obiter-span-url: var(--obiter-span-url-bg);
+
+  --obiter-span-ip-address-bg: hsl(300 40% 30%);
+  --obiter-span-ip-address-fg: hsl(300 55% 82%);
+  --obiter-span-ip-address: var(--obiter-span-ip-address-bg);
+
+  --obiter-span-national-insurance-bg: hsl(178 42% 24%);
+  --obiter-span-national-insurance-fg: hsl(178 55% 78%);
+  --obiter-span-national-insurance: var(--obiter-span-national-insurance-bg);
+
+  --obiter-span-case-reference-bg: hsl(212 45% 28%);
+  --obiter-span-case-reference-fg: hsl(212 60% 82%);
+  --obiter-span-case-reference: var(--obiter-span-case-reference-bg);
+
+  --obiter-span-organisation-name-bg: hsl(282 40% 30%);
+  --obiter-span-organisation-name-fg: hsl(282 55% 82%);
+  --obiter-span-organisation-name: var(--obiter-span-organisation-name-bg);
+}
+
+/* Light theme — secondary preference (FR6). Warm ink-on-paper. */
+[data-theme='light'] {
   color-scheme: light;
 
-  /* Surface + text */
-  --obiter-bg: #f4efe4; /* page */
-  --obiter-surface: #fbf8f1; /* cards, panels */
-  --obiter-surface-raised: #fffdf8; /* dialogs, menus, popovers */
+  --obiter-bg: #f4efe4;
+  --obiter-surface: #fbf8f1;
+  --obiter-surface-raised: #fffdf8;
   --obiter-border: rgba(40, 33, 28, 0.12);
   --obiter-border-strong: rgba(40, 33, 28, 0.22);
-  --obiter-text: #211b16; /* warm near-black ink */
+  --obiter-text: #211b16;
   --obiter-text-muted: #6b5f54;
   --obiter-text-subtle: #948576;
 
-  /* Brand accent (sage) */
-  --obiter-brand: #2c6a59;
+  --obiter-brand: #2f4056;
   --obiter-brand-fg: #fbf8f1;
-  --obiter-brand-pressed: #245547;
-  --obiter-ring: rgba(44, 106, 89, 0.45);
+  --obiter-brand-pressed: #243348;
+  --obiter-ring: rgba(47, 64, 86, 0.45);
   --obiter-overlay: rgba(20, 16, 12, 0.5);
 
-  /* Status (each with a matching -fg for text on fill) */
   --obiter-status-info: #356a9c;
   --obiter-status-info-fg: #fbf8f1;
   --obiter-status-success: #2f6b46;
@@ -41,24 +159,6 @@
   --obiter-status-danger: #9b4129;
   --obiter-status-danger-fg: #fbf8f1;
 
-  /* Type */
-  --obiter-font-sans:
-    'Satoshi', system-ui, -apple-system, 'Segoe UI Variable', 'Segoe UI',
-    sans-serif;
-  --obiter-font-mono:
-    'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
-  --obiter-font-weight-regular: 400;
-  --obiter-font-weight-medium: 500;
-  --obiter-font-weight-semibold: 600;
-
-  /* Radius */
-  --obiter-radius-sm: 6px;
-  --obiter-radius-md: 10px;
-  --obiter-radius-lg: 16px;
-  --obiter-radius-xl: 22px;
-  --obiter-radius-pill: 9999px;
-
-  /* Elevation — tinted to the background hue, no harsh black drop-shadows */
   --obiter-shadow-sm:
     0 1px 2px rgba(40, 33, 28, 0.06), 0 1px 1px rgba(40, 33, 28, 0.04);
   --obiter-shadow-md:
@@ -66,105 +166,88 @@
   --obiter-shadow-lg:
     0 20px 40px rgba(40, 33, 28, 0.12), 0 6px 12px rgba(40, 33, 28, 0.06);
 
-  /* Redaction span-category palette (contract §2.3).
-     Light theme: soft tinted bg + deep same-hue fg (AA contrast).
-     The bare --obiter-span-<category> alias equals the -bg value. */
+  /* Span palette, light theme: soft tinted bg + deep same-hue fg. */
   --obiter-span-person-name-bg: hsl(352 55% 88%);
   --obiter-span-person-name-fg: hsl(352 45% 30%);
-  --obiter-span-person-name: var(--obiter-span-person-name-bg);
 
   --obiter-span-email-bg: hsl(38 60% 88%);
   --obiter-span-email-fg: hsl(32 55% 30%);
-  --obiter-span-email: var(--obiter-span-email-bg);
 
   --obiter-span-phone-bg: hsl(28 65% 88%);
-  --obiter-span-phone-fg: hsl(24 60% 32%);
-  --obiter-span-phone: var(--obiter-span-phone-bg);
+  --obiter-span-phone-fg: hsl(28 55% 30%);
 
-  --obiter-span-address-bg: hsl(48 60% 86%);
-  --obiter-span-address-fg: hsl(44 55% 28%);
-  --obiter-span-address: var(--obiter-span-address-bg);
+  --obiter-span-address-bg: hsl(48 55% 88%);
+  --obiter-span-address-fg: hsl(42 50% 28%);
 
-  --obiter-span-date-bg: hsl(265 50% 88%);
-  --obiter-span-date-fg: hsl(265 45% 32%);
-  --obiter-span-date: var(--obiter-span-date-bg);
+  --obiter-span-date-bg: hsl(265 45% 90%);
+  --obiter-span-date-fg: hsl(265 40% 32%);
 
-  --obiter-span-government-id-bg: hsl(145 45% 87%);
+  --obiter-span-government-id-bg: hsl(150 40% 88%);
   --obiter-span-government-id-fg: hsl(150 45% 26%);
-  --obiter-span-government-id: var(--obiter-span-government-id-bg);
 
-  --obiter-span-account-number-bg: hsl(330 55% 88%);
-  --obiter-span-account-number-fg: hsl(330 45% 32%);
-  --obiter-span-account-number: var(--obiter-span-account-number-bg);
+  --obiter-span-account-number-bg: hsl(330 45% 90%);
+  --obiter-span-account-number-fg: hsl(330 40% 32%);
 
   --obiter-span-secret-bg: hsl(0 60% 88%);
   --obiter-span-secret-fg: hsl(0 60% 30%);
-  --obiter-span-secret: var(--obiter-span-secret-bg);
 
   --obiter-span-passport-bg: hsl(243 50% 89%);
   --obiter-span-passport-fg: hsl(243 45% 34%);
-  --obiter-span-passport: var(--obiter-span-passport-bg);
 
   --obiter-span-drivers-license-bg: hsl(75 50% 86%);
   --obiter-span-drivers-license-fg: hsl(78 50% 26%);
-  --obiter-span-drivers-license: var(--obiter-span-drivers-license-bg);
 
   --obiter-span-url-bg: hsl(190 55% 86%);
   --obiter-span-url-fg: hsl(192 60% 26%);
-  --obiter-span-url: var(--obiter-span-url-bg);
 
   --obiter-span-ip-address-bg: hsl(300 50% 88%);
   --obiter-span-ip-address-fg: hsl(300 45% 32%);
-  --obiter-span-ip-address: var(--obiter-span-ip-address-bg);
 
   --obiter-span-national-insurance-bg: hsl(175 50% 85%);
   --obiter-span-national-insurance-fg: hsl(178 55% 24%);
-  --obiter-span-national-insurance: var(--obiter-span-national-insurance-bg);
 
   --obiter-span-case-reference-bg: hsl(210 60% 88%);
   --obiter-span-case-reference-fg: hsl(212 55% 30%);
-  --obiter-span-case-reference: var(--obiter-span-case-reference-bg);
 
   --obiter-span-organisation-name-bg: hsl(280 45% 89%);
   --obiter-span-organisation-name-fg: hsl(282 40% 34%);
-  --obiter-span-organisation-name: var(--obiter-span-organisation-name-bg);
 }
 
+/* Explicit dark selector — same values as :root so toggles and SSR stay aligned */
 [data-theme='dark'] {
   color-scheme: dark;
 
-  --obiter-bg: #1a1612;
-  --obiter-surface: #221d18;
-  --obiter-surface-raised: #2a241e;
-  --obiter-border: rgba(245, 240, 230, 0.12);
-  --obiter-border-strong: rgba(245, 240, 230, 0.22);
-  --obiter-text: #f1e9da;
-  --obiter-text-muted: #b3a695;
-  --obiter-text-subtle: #8a7d6c;
+  --obiter-bg: #0a0a0a;
+  --obiter-surface: #111111;
+  --obiter-surface-raised: #181818;
+  --obiter-border: rgba(245, 242, 235, 0.12);
+  --obiter-border-strong: rgba(245, 242, 235, 0.22);
+  --obiter-text: #f5f2eb;
+  --obiter-text-muted: #9a9fa6;
+  --obiter-text-subtle: #7a8188;
 
-  --obiter-brand: #5b9d89;
-  --obiter-brand-fg: #1a1612;
-  --obiter-brand-pressed: #7bb09c;
-  --obiter-ring: rgba(91, 157, 137, 0.55);
-  --obiter-overlay: rgba(0, 0, 0, 0.6);
+  --obiter-brand: #5a6f88;
+  --obiter-brand-fg: #f2f4f7;
+  --obiter-brand-pressed: #4a5c72;
+  --obiter-ring: rgba(90, 111, 136, 0.55);
+  --obiter-overlay: rgba(0, 0, 0, 0.65);
 
   --obiter-status-info: #6fa3d6;
-  --obiter-status-info-fg: #1a1612;
+  --obiter-status-info-fg: #0a0a0a;
   --obiter-status-success: #6fb384;
-  --obiter-status-success-fg: #1a1612;
+  --obiter-status-success-fg: #0a0a0a;
   --obiter-status-warning: #d6a85a;
-  --obiter-status-warning-fg: #1a1612;
-  --obiter-status-danger: #d6806a;
-  --obiter-status-danger-fg: #1a1612;
+  --obiter-status-warning-fg: #0a0a0a;
+  --obiter-status-danger: #c9846a;
+  --obiter-status-danger-fg: #0a0a0a;
 
   --obiter-shadow-sm:
-    0 1px 2px rgba(0, 0, 0, 0.4), 0 1px 1px rgba(0, 0, 0, 0.3);
+    0 1px 2px rgba(0, 0, 0, 0.45), 0 1px 1px rgba(0, 0, 0, 0.3);
   --obiter-shadow-md:
-    0 4px 12px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.3);
+    0 4px 12px rgba(0, 0, 0, 0.5), 0 2px 4px rgba(0, 0, 0, 0.35);
   --obiter-shadow-lg:
-    0 20px 40px rgba(0, 0, 0, 0.55), 0 6px 12px rgba(0, 0, 0, 0.35);
+    0 20px 40px rgba(0, 0, 0, 0.55), 0 6px 12px rgba(0, 0, 0, 0.4);
 
-  /* Span palette, dark theme: deep saturated bg + light same-hue fg. */
   --obiter-span-person-name-bg: hsl(352 40% 28%);
   --obiter-span-person-name-fg: hsl(352 60% 82%);
 

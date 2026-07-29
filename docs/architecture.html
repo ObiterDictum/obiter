@@ -2264,7 +2264,7 @@
                 <dt>Tokens</dt>
                 <dd>tokens.css, light and dark, span category colours</dd>
                 <dt>Type</dt>
-                <dd>Satoshi · JetBrains Mono, self-hosted woff2</dd>
+                <dd>Inter · IBM Plex Mono (fontsource)</dd>
               </dl>
             </article>
 
@@ -2548,8 +2548,9 @@
             <li>
               <span
                 ><b>Authorisation.</b> Handlers call
-                <code>requireOrgUser</code>, which returns either an org-scoped
-                user or a ready-to-return 401/403 Response.</span
+                <code>ensureOrgUser</code>, which returns an org-scoped user (auto-provisioning a
+                personal workspace when the caller is still org-less) or a ready-to-return 401/503
+                Response.</span
               >
             </li>
             <li>
@@ -2723,8 +2724,8 @@
                 <tr>
                   <td class="id">null</td>
                   <td>
-                    Authenticated but org-less. Returns 403 so the client can
-                    distinguish "sign in" from "create an organisation".
+                    Authenticated but org-less until Settings names an org or
+                    Matters/Redact auto-provisions a personal workspace.
                   </td>
                 </tr>
               </tbody>

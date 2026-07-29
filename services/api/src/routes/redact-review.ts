@@ -31,7 +31,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   const routes = new Hono<{ Variables: RouteVariables }>()
 
   routes.get('/api/redaction-runs/:runId', async (c) => {
-    const user = requireUser(c)
+    const user = await requireUser(c, pool)
     if (user instanceof Response) return user
     const run = await getRedactionRun(
       pool,
@@ -49,7 +49,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   })
 
   routes.get('/api/redaction-runs/:runId/document-text', async (c) => {
-    const user = requireUser(c)
+    const user = await requireUser(c, pool)
     if (user instanceof Response) return user
     const run = await getRedactionRun(
       pool,
@@ -77,7 +77,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   routes.post(
     '/api/redaction-runs/:runId/spans/:spanId/decision',
     async (c) => {
-      const user = requireUser(c)
+      const user = await requireUser(c, pool)
       if (user instanceof Response) return user
       const body = await jsonBody(c)
       const decision = spanDecisionSchema.safeParse(body?.decision)
@@ -149,7 +149,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   )
 
   routes.post('/api/redaction-runs/:runId/finalize', async (c) => {
-    const user = requireUser(c)
+    const user = await requireUser(c, pool)
     if (user instanceof Response) return user
     const body = redactionFinalizeInputSchema.safeParse(await jsonBody(c))
     if (!body.success)
@@ -322,7 +322,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   })
 
   routes.get('/api/redaction-runs/:runId/output', async (c) => {
-    const user = requireUser(c)
+    const user = await requireUser(c, pool)
     if (user instanceof Response) return user
     const run = await getRedactionRun(
       pool,
@@ -359,7 +359,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   })
 
   routes.get('/api/redaction-runs/:runId/token-map', async (c) => {
-    const user = requireUser(c)
+    const user = await requireUser(c, pool)
     if (user instanceof Response) return user
     const run = await getRedactionRun(
       pool,

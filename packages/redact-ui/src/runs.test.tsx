@@ -41,6 +41,11 @@ describe('RedactionRunsView', () => {
           name: 'Lex',
           role: 'owner',
         },
+        organisation: {
+          id: 'org_1',
+          name: 'Obiter Legal',
+          plan: 'private_beta',
+        },
       },
     })
 
@@ -100,6 +105,11 @@ describe('RedactionRunsView', () => {
           email: 'lex@obiter.dev',
           name: 'Lex',
           role: 'member',
+        },
+        organisation: {
+          id: 'org_1',
+          name: 'Obiter Legal',
+          plan: 'private_beta',
         },
       },
     })

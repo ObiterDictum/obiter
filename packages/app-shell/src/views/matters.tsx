@@ -1,5 +1,5 @@
 import { Link, useNavigate } from '@tanstack/react-router'
-import { ArrowRight, Folders, Plus, Trash } from '@phosphor-icons/react'
+import { Folders, Plus, Trash } from '@phosphor-icons/react'
 import {
   Badge,
   Button,
@@ -47,76 +47,71 @@ export function MattersRouteView({
       : null
 
   return (
-    <div className="mx-auto flex w-full max-w-[920px] flex-col gap-8">
-      <header className="flex items-start justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <p className="text-xs font-semibold uppercase tracking-wider text-subtle">
-            Matters
-          </p>
-          <h1 className="text-3xl font-semibold tracking-tight text-ink">
-            Matters
-          </h1>
-          <p className="mt-1 text-sm text-muted">
-            Private workspaces for legal documents, review state, deadlines, and
-            artifacts.
+    <div className="flex h-full min-h-[24rem] flex-col">
+      <header className="flex items-center justify-between gap-4 border-b border-line px-5 py-3 sm:px-6">
+        <div className="flex flex-col gap-0.5">
+          <h1 className="text-sm font-semibold text-ink">Matters</h1>
+          <p className="text-xs text-muted">
+            Private workspaces for documents, review, and artifacts
           </p>
         </div>
         <CreateMatterDialog />
       </header>
 
-      {showError ? (
-        <EmptyState title="Couldn’t load matters" body={showError} />
-      ) : list.isLoading ? (
-        <MattersListSkeleton />
-      ) : data.length > 0 ? (
-        <section className="flex flex-col gap-2.5" aria-label="Matters">
-          {data.map((matter) => (
-            <Link
-              key={matter.id}
-              to="/matters/$matterId"
-              params={{ matterId: matter.id }}
-              className="group grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-lg border border-line bg-surface p-4 transition-colors hover:border-line-strong"
-            >
-              <span className="flex items-center gap-3 min-w-0">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-canvas text-ink">
-                  <Folders aria-hidden="true" size={17} />
-                </span>
-                <span className="min-w-0">
-                  <strong className="block truncate text-sm font-medium text-ink">
-                    {matter.name}
-                  </strong>
-                  <small className="mt-0.5 block truncate text-xs text-muted">
-                    {matter.clientReference || 'No reference'}
-                    {matter.primaryJurisdiction
-                      ? ` · ${matter.primaryJurisdiction}`
-                      : ''}
-                  </small>
-                </span>
-              </span>
-              <span className="flex shrink-0 items-center gap-2">
-                <Badge
-                  tone={matter.status === 'active' ? 'success' : 'neutral'}
-                >
-                  {matter.status}
-                </Badge>
-                <ArrowRight
-                  aria-hidden="true"
-                  size={15}
-                  weight="bold"
-                  className="text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-ink"
-                />
-              </span>
-            </Link>
-          ))}
-        </section>
-      ) : (
-        <EmptyState
-          icon={<Folders aria-hidden="true" size={24} weight="regular" />}
-          title="No matters yet"
-          body="Create your first matter to start organising legal documents, review state, and artifacts."
-          action={<CreateMatterDialog trigger="Create your first matter" />}
-        />
-      )}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {showError ? (
+          <div className="p-6">
+            <EmptyState title="Couldn’t load matters" body={showError} />
+          </div>
+        ) : list.isLoading ? (
+          <MattersListSkeleton />
+        ) : data.length > 0 ? (
+          <section aria-label="Matters">
+            <p className="px-5 pb-1 pt-3 text-[11px] font-medium tracking-wide text-muted sm:px-6">
+              {data.length} {data.length === 1 ? 'matter' : 'matters'}
+            </p>
+            <ul className="flex flex-col gap-0.5 px-2 pb-4 sm:px-3">
+              {data.map((matter) => (
+                <li key={matter.id}>
+                  <Link
+                    to="/matters/$matterId"
+                    params={{ matterId: matter.id }}
+                    className="group flex items-center justify-between gap-4 rounded-md px-3 py-2.5 transition-colors hover:bg-raised"
+                  >
+                    <span className="min-w-0">
+                      <strong className="block truncate text-sm font-medium text-ink">
+                        {matter.name}
+                      </strong>
+                      <small className="mt-0.5 block truncate text-[11px] text-muted">
+                        {matter.clientReference || 'No reference'}
+                        {matter.primaryJurisdiction
+                          ? ` · ${matter.primaryJurisdiction}`
+                          : ''}
+                      </small>
+                    </span>
+                    <Badge
+                      tone={matter.status === 'active' ? 'success' : 'neutral'}
+                    >
+                      {matter.status}
+                    </Badge>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : (
+          <div className="p-6">
+            <EmptyState
+              icon={<Folders aria-hidden="true" size={24} weight="regular" />}
+              title="No matters yet"
+              body="Create your first matter to start organising legal documents, review state, and artifacts."
+              action={
+                <CreateMatterDialog trigger="Create your first matter" />
+              }
+            />
+          </div>
+        )}
+      </div>
     </div>
   )
 }
@@ -124,23 +119,20 @@ export function MattersRouteView({
 function MattersListSkeleton() {
   return (
     <section
-      className="flex flex-col gap-2.5"
+      className="flex flex-col gap-0.5 px-2 pt-3 sm:px-3"
       aria-busy="true"
       aria-label="Loading matters"
     >
       {[0, 1, 2].map((index) => (
         <div
           key={index}
-          className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-4 rounded-lg border border-line bg-surface p-4"
+          className="flex items-center justify-between gap-4 rounded-md px-3 py-2.5"
         >
-          <span className="flex items-center gap-3">
-            <Skeleton className="h-9 w-9 rounded-md" />
-            <span className="flex flex-col gap-1.5">
-              <Skeleton className="h-4 w-48" />
-              <Skeleton className="h-3 w-32" />
-            </span>
+          <span className="flex flex-col gap-1.5">
+            <Skeleton className="h-4 w-48" />
+            <Skeleton className="h-3 w-32" />
           </span>
-          <Skeleton className="h-6 w-16 rounded-pill" />
+          <Skeleton className="h-5 w-14 rounded-md" />
         </div>
       ))}
     </section>
@@ -195,7 +187,8 @@ function CreateMatterDialog({
         render={
           <Button
             variant="primary"
-            iconStart={<Plus size={16} weight="bold" aria-hidden="true" />}
+            size="sm"
+            iconStart={<Plus size={14} weight="bold" aria-hidden="true" />}
           >
             {trigger}
           </Button>
@@ -268,20 +261,23 @@ export function MatterRouteView({
   matterId: string
   platform: AppPlatform
 }) {
+  const { data: me } = useCurrentUser()
   const matter = useMatter(matterId)
   const documents = useMatterDocuments(matterId)
   const upload = useUploadMatterDocument(matterId)
   const deleteMatter = useDeleteMatter()
   const navigate = useNavigate()
   const { toast } = useToast()
-  const { data: me } = useCurrentUser()
   const canManage = me?.user.role === 'owner' || me?.user.role === 'admin'
   const documentCount = documents.data?.length ?? 0
   const isDocumentCountLoading = documents.isLoading
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(
+    null,
+  )
 
   if (matter.isError && !matter.isLoading) {
     return (
-      <div className="mx-auto flex w-full max-w-[760px]">
+      <div className="flex h-full min-h-[24rem] items-center justify-center p-6">
         <EmptyState
           title="Matter not found"
           body="This matter does not exist in your organisation, or your session may have expired."
@@ -300,167 +296,246 @@ export function MatterRouteView({
 
   if (matter.isLoading || !matter.data) {
     return (
-      <div className="mx-auto flex w-full max-w-[760px] flex-col gap-6">
-        <Skeleton className="h-8 w-64" />
-        <Skeleton className="h-32 w-full rounded-lg" />
-        <Skeleton className="h-40 w-full rounded-lg" />
+      <div className="flex h-full min-h-[24rem] flex-col">
+        <div className="border-b border-line px-5 py-3 sm:px-6">
+          <Skeleton className="h-5 w-48" />
+          <Skeleton className="mt-2 h-3 w-64" />
+        </div>
+        <div className="grid flex-1 grid-cols-1 lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)]">
+          <div className="border-b border-line p-4 lg:border-b-0 lg:border-r">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="mt-2 h-10 w-full" />
+          </div>
+          <div className="p-5">
+            <Skeleton className="h-32 w-full" />
+          </div>
+        </div>
       </div>
     )
   }
 
   const m = matter.data
+  const selectedDocument =
+    documents.data?.find((document) => document.id === selectedDocumentId) ??
+    null
+  const selectedVersion = selectedDocument?.currentVersion
 
   return (
-    <div className="mx-auto flex w-full max-w-[760px] flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <Link
-          to="/matters"
-          className="inline-flex w-fit items-center gap-1 text-sm text-muted transition-colors hover:text-ink"
-        >
-          ← Matters
-        </Link>
-        <p className="text-xs font-semibold uppercase tracking-wider text-subtle">
-          {m.clientReference || 'No reference'}
-        </p>
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">
-          {m.name}
-        </h1>
-        <div className="flex flex-wrap items-center gap-2 pt-1">
-          <Badge tone={m.status === 'active' ? 'success' : 'neutral'}>
+    <div className="flex h-full min-h-[24rem] flex-col">
+      <header className="flex items-start justify-between gap-4 border-b border-line px-5 py-3 sm:px-6">
+        <div className="min-w-0">
+          <Link
+            to="/matters"
+            className="text-[11px] font-medium text-muted transition-colors hover:text-ink"
+          >
+            ← Matters
+          </Link>
+          <h1 className="mt-1 truncate text-sm font-semibold tracking-tight text-ink sm:text-base">
+            {m.name}
+          </h1>
+          <p className="mt-0.5 text-xs text-muted">
             {m.status}
-          </Badge>
-          <Badge tone="neutral">{m.primaryJurisdiction}</Badge>
+            {m.clientReference ? ` · ${m.clientReference}` : ''}
+            {m.primaryJurisdiction ? ` · ${m.primaryJurisdiction}` : ''}
+          </p>
         </div>
-      </div>
-
-      {canManage ? (
-        <Dialog>
-          <DialogTrigger
-            render={
-              <Button variant="ghost" size="sm" aria-label="Delete matter">
-                <Trash aria-hidden /> Delete
-              </Button>
-            }
-          />
-          <DialogContent size="md">
-            <DialogTitle>Delete matter</DialogTitle>
-            <DialogDescription>
-              {isDocumentCountLoading ? (
-                <>Loading the document count before deletion.</>
-              ) : (
-                <>
-                  Deleting this matter also removes {documentCount}{' '}
-                  {documentCount === 1 ? 'document' : 'documents'} and their
-                  redaction runs. Removals are soft; rows persist for audit and
-                  can be restored by an operator.
-                </>
-              )}
-            </DialogDescription>
-            <div className="flex justify-end gap-2">
-              <DialogClose render={<Button variant="ghost">Cancel</Button>} />
-              <Button
-                variant="danger"
-                loading={deleteMatter.isPending}
-                disabled={isDocumentCountLoading}
-                onClick={async () => {
-                  await deleteMatter.mutateAsync(matterId)
-                  toast({ title: 'Matter deleted' })
-                  navigate({ to: '/matters' })
-                }}
-              >
-                Delete matter
-              </Button>
-            </div>
-            <DialogCloseButton />
-          </DialogContent>
-        </Dialog>
-      ) : null}
-
-      {m.description ? (
-        <div className="rounded-lg border border-line bg-surface p-5">
-          <p className="leading-relaxed text-muted">{m.description}</p>
-        </div>
-      ) : null}
-
-      <section className="flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-base font-semibold text-ink">Documents</h2>
-            <p className="text-xs text-subtle">
-              DOCX, PDF, and TXT, up to 25 MB
-            </p>
-          </div>
-          <label className="inline-flex cursor-pointer items-center rounded-md border border-line px-3 py-2 text-sm font-medium text-ink hover:bg-canvas">
-            {upload.isPending ? 'Uploading…' : 'Upload document'}
-            <input
-              type="file"
-              accept=".docx,.pdf,.txt,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-              className="sr-only"
-              disabled={upload.isPending}
-              onChange={(event) => {
-                const file = event.target.files?.[0]
-                if (file) upload.mutate(file)
-                event.target.value = ''
-              }}
-            />
-          </label>
-        </div>
-        {upload.error ? (
-          <p className="text-sm text-danger">{upload.error.message}</p>
-        ) : null}
-
-        {documents.isError ? (
-          <EmptyState
-            title="Couldn’t load documents"
-            body="Check your connection and try again."
-          />
-        ) : documents.isLoading ? (
-          <div className="flex flex-col gap-2.5" aria-busy="true">
-            {[0, 1].map((index) => (
-              <Skeleton key={index} className="h-14 w-full rounded-lg" />
-            ))}
-          </div>
-        ) : documents.data && documents.data.length > 0 ? (
-          <ul className="flex flex-col gap-2.5">
-            {documents.data.map((document) => {
-              const version = document.currentVersion
-              return (
-                <li key={document.id}>
-                  <Link
-                    to="/matters/$matterId/documents/$documentId"
-                    params={{ matterId, documentId: document.id }}
-                    className="group flex items-center justify-between gap-3 rounded-lg border border-line bg-surface p-3.5 transition-colors hover:border-line-strong"
+        <div className="flex shrink-0 items-center gap-2">
+          {canManage ? (
+            <Dialog>
+              <DialogTrigger
+                render={
+                  <Button variant="ghost" size="sm" aria-label="Delete matter">
+                    <Trash aria-hidden /> Delete
+                  </Button>
+                }
+              />
+              <DialogContent size="md">
+                <DialogTitle>Delete matter</DialogTitle>
+                <DialogDescription>
+                  {isDocumentCountLoading ? (
+                    <>Loading the document count before deletion.</>
+                  ) : (
+                    <>
+                      Deleting this matter also removes {documentCount}{' '}
+                      {documentCount === 1 ? 'document' : 'documents'} and their
+                      redaction runs. Removals are soft; rows persist for audit
+                      and can be restored by an operator.
+                    </>
+                  )}
+                </DialogDescription>
+                <div className="flex justify-end gap-2">
+                  <DialogClose
+                    render={<Button variant="ghost">Cancel</Button>}
+                  />
+                  <Button
+                    variant="danger"
+                    loading={deleteMatter.isPending}
+                    disabled={isDocumentCountLoading}
+                    onClick={async () => {
+                      await deleteMatter.mutateAsync(matterId)
+                      toast({ title: 'Matter deleted' })
+                      navigate({ to: '/matters' })
+                    }}
                   >
-                    <span className="flex min-w-0 flex-col gap-0.5">
+                    Delete matter
+                  </Button>
+                </div>
+                <DialogCloseButton />
+              </DialogContent>
+            </Dialog>
+          ) : null}
+        </div>
+      </header>
+
+      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)]">
+        <section
+          className="min-h-0 overflow-y-auto border-b border-line lg:border-b-0 lg:border-r"
+          aria-label="Documents"
+        >
+          <div className="flex items-center justify-between gap-2 px-4 pb-1 pt-3 sm:px-5">
+            <p className="text-[11px] font-medium tracking-wide text-muted">
+              Documents
+            </p>
+            <label className="inline-flex cursor-pointer items-center rounded-md px-2 py-1 text-[11px] font-medium text-ink transition-colors hover:bg-raised">
+              {upload.isPending ? 'Uploading…' : 'Upload document'}
+              <input
+                type="file"
+                accept=".docx,.pdf,.txt,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                className="sr-only"
+                disabled={upload.isPending}
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  if (file) upload.mutate(file)
+                  event.target.value = ''
+                }}
+              />
+            </label>
+          </div>
+          <p className="px-4 pb-2 text-[11px] text-subtle sm:px-5">
+            DOCX, PDF, and TXT, up to 25 MB
+          </p>
+          {upload.error ? (
+            <p className="px-4 pb-2 text-sm text-danger sm:px-5">
+              {upload.error.message}
+            </p>
+          ) : null}
+
+          {documents.isError ? (
+            <div className="p-4">
+              <EmptyState
+                title="Couldn’t load documents"
+                body="Check your connection and try again."
+              />
+            </div>
+          ) : documents.isLoading ? (
+            <div className="flex flex-col gap-1 px-2" aria-busy="true">
+              {[0, 1].map((index) => (
+                <Skeleton key={index} className="h-12 w-full rounded-md" />
+              ))}
+            </div>
+          ) : documents.data && documents.data.length > 0 ? (
+            <ul className="flex flex-col gap-0.5 px-2 pb-3 sm:px-3">
+              {documents.data.map((document) => {
+                const version = document.currentVersion
+                const selected = document.id === selectedDocumentId
+                return (
+                  <li key={document.id}>
+                    <button
+                      type="button"
+                      className={
+                        selected
+                          ? 'flex w-full flex-col gap-0.5 rounded-md bg-raised px-2.5 py-2 text-left'
+                          : 'flex w-full flex-col gap-0.5 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-raised'
+                      }
+                      onClick={() => setSelectedDocumentId(document.id)}
+                    >
                       <span className="truncate text-sm font-medium text-ink">
                         {version?.filename ?? document.logicalKey}
                       </span>
-                      <span className="truncate text-xs text-muted">
+                      <span className="truncate text-[11px] text-muted">
                         {version?.fileType ?? 'Unknown type'}
                         {version ? ` · v${version.versionNumber}` : ''}
                       </span>
-                    </span>
-                    <span className="flex shrink-0 items-center gap-2">
-                      <DocumentStatusBadge status={version?.documentStatus} />
-                      <ArrowRight
-                        aria-hidden="true"
-                        size={14}
-                        weight="bold"
-                        className="text-subtle transition-transform group-hover:translate-x-0.5 group-hover:text-ink"
-                      />
-                    </span>
-                  </Link>
-                </li>
-              )
-            })}
-          </ul>
-        ) : (
-          <EmptyState
-            title="No documents yet"
-            body="Upload a DOCX, text-layer PDF, or TXT document to extract text for Redaction."
-          />
-        )}
-      </section>
+                    </button>
+                  </li>
+                )
+              })}
+            </ul>
+          ) : (
+            <div className="p-4">
+              <EmptyState
+                title="No documents yet"
+                body="Upload a DOCX, text-layer PDF, or TXT document to extract text for Redaction."
+              />
+            </div>
+          )}
+        </section>
+
+        <section
+          className="min-h-0 overflow-y-auto p-5 sm:p-6"
+          aria-label={selectedDocument ? 'Document' : 'Matter detail'}
+        >
+          {selectedDocument ? (
+            <div className="flex flex-col gap-4">
+              <button
+                type="button"
+                className="w-fit text-xs font-medium text-muted transition-colors hover:text-ink"
+                onClick={() => setSelectedDocumentId(null)}
+              >
+                ← Matter detail
+              </button>
+              <header className="border-b border-line pb-4">
+                <h2 className="text-base font-semibold text-ink">
+                  {selectedVersion?.filename ?? selectedDocument.logicalKey}
+                </h2>
+                <p className="mt-1 text-xs text-muted">
+                  {selectedVersion?.fileType ?? 'Unknown type'}
+                  {selectedVersion
+                    ? ` · Updated v${selectedVersion.versionNumber}`
+                    : ''}
+                </p>
+                <div className="mt-2">
+                  <DocumentStatusBadge status={selectedVersion?.documentStatus} />
+                </div>
+              </header>
+              <div className="flex flex-wrap gap-2">
+                <Link
+                  to="/matters/$matterId/documents/$documentId"
+                  params={{
+                    matterId,
+                    documentId: selectedDocument.id,
+                  }}
+                  className="inline-flex h-8 items-center rounded-md bg-brand px-3 text-xs font-semibold text-brand-fg transition-colors hover:bg-brand-pressed"
+                >
+                  Open document
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-4">
+              <p className="text-[11px] font-medium tracking-wide text-muted">
+                Detail
+              </p>
+              {m.description ? (
+                <p className="max-w-prose text-sm leading-relaxed text-muted">
+                  {m.description}
+                </p>
+              ) : (
+                <p className="text-sm leading-relaxed text-muted">
+                  Select a document to inspect it, or open it for redaction and
+                  review.
+                </p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <Badge tone={m.status === 'active' ? 'success' : 'neutral'}>
+                  {m.status}
+                </Badge>
+                <Badge tone="neutral">{m.primaryJurisdiction}</Badge>
+              </div>
+            </div>
+          )}
+        </section>
+      </div>
     </div>
   )
 }

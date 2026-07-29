@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import type { KeyboardEvent } from 'react'
+import type { KeyboardEvent, ReactNode } from 'react'
 import {
   Check,
   CircleNotch,
@@ -17,7 +17,6 @@ import {
   Skeleton,
   cn,
 } from '@obiter/ui'
-import { PageScaffold } from '@obiter/app-shell'
 import {
   useRedactionDocumentText,
   useRedactionOutput,
@@ -68,18 +67,49 @@ const decisions: Array<{
   { value: 'pseudonymise', label: 'Pseudonymise', shortcut: 'P' },
 ]
 
+function ReviewDeskShell({
+  title,
+  meta,
+  actions,
+  children,
+}: {
+  title: ReactNode
+  meta?: ReactNode
+  actions?: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <div className="flex h-full min-h-[24rem] flex-col">
+      <header className="flex shrink-0 items-start justify-between gap-4 border-b border-line px-5 py-3 sm:px-6">
+        <div className="min-w-0">
+          <h1 className="text-sm font-semibold tracking-tight text-ink">
+            {title}
+          </h1>
+          {meta ? <p className="mt-0.5 text-xs text-muted">{meta}</p> : null}
+        </div>
+        {actions ? (
+          <div className="flex shrink-0 items-center gap-2">{actions}</div>
+        ) : null}
+      </header>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        {children}
+      </div>
+    </div>
+  )
+}
+
 function ReviewSummary({ run }: { run: RedactionRun }) {
   const total = run.summary.totalSpans
   const progress = total === 0 ? 100 : (run.summary.reviewedCount / total) * 100
   return (
     <section
-      className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4"
+      className="flex flex-col gap-2 border-b border-line px-5 py-3 sm:px-6"
       aria-label="Review summary"
     >
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="font-semibold text-ink">Review progress</h2>
-          <p className="text-sm text-muted">
+          <h2 className="text-sm font-semibold text-ink">Review progress</h2>
+          <p className="text-xs text-muted">
             {total} spans · {run.summary.reviewedCount} reviewed ·{' '}
             {run.summary.unreviewedCount} unreviewed
           </p>
@@ -95,7 +125,7 @@ function ReviewSummary({ run }: { run: RedactionRun }) {
         label="Reviewed spans"
         helperText={`${Math.round(progress)}% complete`}
       />
-      <p className="text-xs text-subtle">
+      <p className="text-[11px] text-subtle">
         {run.summary.bySource.rampartModel} Rampart model ·{' '}
         {run.summary.bySource.rampartDeterministic} deterministic ·{' '}
         {run.summary.bySource.ukSupplement} UK supplement
@@ -121,7 +151,7 @@ function HighlightedText({
   let position = 0
   return (
     <article
-      className="whitespace-pre-wrap rounded-lg border border-line bg-raised p-5 font-mono text-sm leading-7 text-ink"
+      className="whitespace-pre-wrap font-mono text-sm leading-7 text-ink"
       aria-label="Original document text"
     >
       {spans.map((span) => {
@@ -160,14 +190,14 @@ function FinalizedOutput({
   outputQuery: ReturnType<typeof useRedactionOutput>
 }) {
   return (
-    <section className="flex flex-col gap-2" aria-label="Redaction output">
-      <h2 className="font-semibold text-ink">Finalized output</h2>
+    <section className="flex flex-col gap-2 p-5 sm:p-6" aria-label="Redaction output">
+      <h2 className="text-sm font-semibold text-ink">Finalized output</h2>
       {outputQuery.isPending ? (
         <Skeleton className="h-32" />
       ) : outputQuery.error ? (
         <p className="text-sm text-danger">{outputQuery.error.message}</p>
       ) : (
-        <pre className="whitespace-pre-wrap rounded-lg border border-line bg-raised p-5 font-mono text-sm leading-7 text-ink">
+        <pre className="whitespace-pre-wrap font-mono text-sm leading-7 text-ink">
           {outputQuery.data?.text}
         </pre>
       )}
@@ -218,25 +248,27 @@ export function RedactionReviewView({
 
   if (runQuery.isPending || textQuery.isPending) {
     return (
-      <PageScaffold eyebrow="Redact" title="Loading review">
-        <div className="flex flex-col gap-3">
+      <ReviewDeskShell title="Loading review" meta="Redact">
+        <div className="flex flex-col gap-3 overflow-y-auto p-5">
           <Skeleton className="h-28" />
           <Skeleton className="h-96" />
         </div>
-      </PageScaffold>
+      </ReviewDeskShell>
     )
   }
   // Prefer cached data over a background refetch error (e.g. finalize
   // invalidateQueries failing) so a successful local write is not blanked out.
   if (!runQuery.data || !textQuery.data) {
     return (
-      <PageScaffold eyebrow="Redact" title="Review unavailable">
-        <EmptyState
-          title="Could not load this redaction run"
-          body={(runQuery.error ?? textQuery.error)?.message}
-          icon={<EyeSlash size={28} aria-hidden="true" />}
-        />
-      </PageScaffold>
+      <ReviewDeskShell title="Review unavailable" meta="Redact">
+        <div className="overflow-y-auto p-6">
+          <EmptyState
+            title="Could not load this redaction run"
+            body={(runQuery.error ?? textQuery.error)?.message}
+            icon={<EyeSlash size={28} aria-hidden="true" />}
+          />
+        </div>
+      </ReviewDeskShell>
     )
   }
 
@@ -245,19 +277,21 @@ export function RedactionReviewView({
 
   if (run.status === 'detecting' || run.status === 'pending') {
     return (
-      <PageScaffold eyebrow="Redact" title="Detection in progress">
-        <EmptyState
-          title="Rampart is scanning the document"
-          body="This may take a moment for a large document. This screen will update when detection is complete."
-          icon={
-            <CircleNotch
-              className="animate-spin"
-              size={28}
-              aria-hidden="true"
-            />
-          }
-        />
-      </PageScaffold>
+      <ReviewDeskShell title="Detection in progress" meta="Redact">
+        <div className="overflow-y-auto p-6">
+          <EmptyState
+            title="Rampart is scanning the document"
+            body="This may take a moment for a large document. This screen will update when detection is complete."
+            icon={
+              <CircleNotch
+                className="animate-spin"
+                size={28}
+                aria-hidden="true"
+              />
+            }
+          />
+        </div>
+      </ReviewDeskShell>
     )
   }
 
@@ -265,13 +299,13 @@ export function RedactionReviewView({
   // empty EmptyState after a successful finalize).
   if (run.spans.length === 0) {
     return (
-      <PageScaffold
-        eyebrow={eyebrow}
+      <ReviewDeskShell
         title={
           run.status === 'finalized'
             ? 'Redaction review'
             : 'No sensitive data detected'
         }
+        meta={eyebrow}
         actions={
           run.status === 'finalized' ? (
             <Badge tone="success">Finalized</Badge>
@@ -282,7 +316,7 @@ export function RedactionReviewView({
           )
         }
       >
-        <div className="flex flex-col gap-4">
+        <div className="flex flex-col gap-4 overflow-y-auto p-5 sm:p-6">
           <DetectionRetryWarning run={run} onOpenRun={onOpenRun} />
           {run.status === 'finalized' ? (
             <FinalizedOutput outputQuery={outputQuery} />
@@ -294,7 +328,7 @@ export function RedactionReviewView({
             />
           )}
         </div>
-      </PageScaffold>
+      </ReviewDeskShell>
     )
   }
 
@@ -341,10 +375,12 @@ export function RedactionReviewView({
     decision.mutate({ spanId: selected.id, decision: shortcutDecision })
   }
 
+  const pending = run.summary.unreviewedCount
+
   return (
-    <PageScaffold
-      eyebrow={eyebrow}
+    <ReviewDeskShell
       title="Redaction review"
+      meta={eyebrow}
       actions={
         run.status === 'finalized' ? (
           <Badge tone="success">Finalized</Badge>
@@ -355,27 +391,50 @@ export function RedactionReviewView({
         )
       }
     >
-      <DetectionRetryWarning run={run} onOpenRun={onOpenRun} />
-      <ReviewSummary run={run} />
+      <div className="shrink-0">
+        <DetectionRetryWarning run={run} onOpenRun={onOpenRun} />
+      </div>
+      <div className="shrink-0">
+        <ReviewSummary run={run} />
+      </div>
       {run.status === 'finalized' ? (
-        <FinalizedOutput outputQuery={outputQuery} />
+        <div className="shrink-0 border-b border-line">
+          <FinalizedOutput outputQuery={outputQuery} />
+        </div>
       ) : null}
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_22rem]">
-        <div className="flex min-w-0 flex-col gap-3">
-          <h2 className="font-semibold text-ink">Document</h2>
+      <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(16rem,22rem)]">
+        <section
+          className="min-h-0 overflow-y-auto border-b border-line p-5 xl:border-b-0 xl:border-r sm:p-6"
+          aria-label="Document"
+        >
+          <p className="mb-3 text-[11px] font-medium tracking-wide text-muted">
+            Document
+          </p>
           <HighlightedText
             text={textQuery.data.text}
             run={run}
             selectedId={selected?.id ?? null}
             onSelect={setSelectedId}
           />
-        </div>
-        <aside className="flex min-h-0 flex-col gap-3 rounded-lg border border-line bg-surface p-4 xl:max-h-[calc(100dvh-12rem)]">
-          <div className="flex items-center justify-between">
-            <h2 className="font-semibold text-ink">Detected spans</h2>
-            <Funnel size={16} className="text-muted" aria-hidden="true" />
+        </section>
+        <aside
+          className="flex min-h-0 flex-col xl:max-h-none"
+          aria-label="Review queue"
+        >
+          <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-3">
+            <div>
+              <p className="text-[11px] font-medium tracking-wide text-muted">
+                Review queue
+              </p>
+              <h2 className="text-sm font-semibold text-ink">Detected spans</h2>
+            </div>
+            <div className="flex items-center gap-2 text-[11px] text-muted">
+              <Funnel size={14} aria-hidden="true" />
+              {run.summary.totalSpans} spans
+              {pending > 0 ? ` · ${pending} pending` : ' · queue clear'}
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-2 gap-2 border-b border-line px-4 py-3">
             <Select
               value={categoryFilter}
               onValueChange={(value) => setCategoryFilter(value ?? 'all')}
@@ -413,7 +472,7 @@ export function RedactionReviewView({
                 key={span.id}
                 onClick={() => setSelectedId(span.id)}
                 className={cn(
-                  'flex w-full flex-col gap-1 border-b border-line px-2 py-3 text-left text-sm hover:bg-raised',
+                  'flex w-full flex-col gap-1 border-b border-line px-4 py-3 text-left text-sm transition-colors hover:bg-raised',
                   selected?.id === span.id && 'bg-raised',
                 )}
                 role="option"
@@ -437,12 +496,12 @@ export function RedactionReviewView({
             ))}
           </div>
           {selected && run.status !== 'finalized' && !run.replacementRunId ? (
-            <div className="border-t border-line pt-3">
-              <p className="mb-2 text-sm text-muted">
+            <div className="border-t border-line px-4 py-3">
+              <p className="mb-2 text-xs text-muted">
                 Decision for{' '}
                 <span className="font-mono text-ink">{selected.text}</span>
               </p>
-              <div className="grid grid-cols-1 gap-2">
+              <div className="grid grid-cols-1 gap-1.5">
                 {decisions.map((action) => (
                   <Button
                     key={action.value}
@@ -479,6 +538,6 @@ export function RedactionReviewView({
           ) : null}
         </aside>
       </div>
-    </PageScaffold>
+    </ReviewDeskShell>
   )
 }

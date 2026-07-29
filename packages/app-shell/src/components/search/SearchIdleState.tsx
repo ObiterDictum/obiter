@@ -26,18 +26,18 @@ export function SearchIdleState({
 }: SearchIdleStateProps) {
   return (
     <section
-      className="grid gap-5 rounded-lg border border-line bg-surface p-5"
+      className="flex flex-col gap-6 p-5 sm:p-6"
       aria-label="Search start points"
     >
-      <div className="flex flex-col gap-2.5">
-        <p className="text-xs font-semibold uppercase tracking-wider text-subtle">
+      <div className="flex flex-col gap-2">
+        <p className="text-[11px] font-medium tracking-wide text-muted">
           Recent searches
         </p>
         {recentSearches.length > 0 ? (
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {recentSearches.map((recentSearch) => (
               <button
-                className="rounded-pill border border-line bg-canvas px-3 py-1.5 text-sm font-semibold text-ink transition-colors hover:border-brand hover:text-brand"
+                className="rounded-md px-2.5 py-1.5 text-sm text-ink transition-colors hover:bg-raised"
                 type="button"
                 key={recentSearch}
                 onClick={() => onRecentSearch(recentSearch)}
@@ -53,9 +53,9 @@ export function SearchIdleState({
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
-        <div className="flex flex-col gap-2.5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-subtle">
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
+        <div className="flex flex-col gap-2">
+          <p className="text-[11px] font-medium tracking-wide text-muted">
             Search tips
           </p>
           <ul className="flex flex-col gap-2">
@@ -64,7 +64,7 @@ export function SearchIdleState({
                 <span className="w-[104px] shrink-0 text-sm text-muted">
                   {tip.label}
                 </span>
-                <strong className="text-sm font-semibold text-ink">
+                <strong className="text-sm font-medium text-ink">
                   {tip.example}
                 </strong>
               </li>
@@ -72,14 +72,14 @@ export function SearchIdleState({
           </ul>
         </div>
 
-        <div className="flex flex-col gap-2.5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-subtle">
+        <div className="flex flex-col gap-2">
+          <p className="text-[11px] font-medium tracking-wide text-muted">
             Court shortcuts
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5">
             {courtShortcuts.map((shortcut) => (
               <button
-                className="rounded-pill border border-line bg-canvas px-3 py-1.5 text-sm font-semibold text-ink transition-colors hover:border-brand hover:text-brand"
+                className="rounded-md px-2.5 py-1.5 text-sm text-ink transition-colors hover:bg-raised"
                 type="button"
                 key={shortcut.code}
                 onClick={() => onCourtShortcut(shortcut.code)}

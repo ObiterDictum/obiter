@@ -1,15 +1,14 @@
 import { Link } from '@tanstack/react-router'
 import { ArrowLeft } from '@phosphor-icons/react'
-import { Button, Card, Input } from '@obiter/ui'
+import { Button, Input } from '@obiter/ui'
 import { useState, type FormEvent } from 'react'
 import { useAuth } from '../auth'
 import { Wordmark } from '../wordmark'
+import { useForceNightTheme } from './sign-in'
 
 /**
  * Forgot-password request screen. Calls the better-auth reset request
- * endpoint, which never reveals whether the email exists (it returns the same
- * message for known and unknown addresses and runs a timing-attack
- * mitigation). The confirmation state is shown regardless of outcome.
+ * endpoint, which never reveals whether the email exists.
  */
 export function ForgotPasswordRouteView() {
   const { requestPasswordReset } = useAuth()
@@ -17,6 +16,8 @@ export function ForgotPasswordRouteView() {
   const [error, setError] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+
+  useForceNightTheme()
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -28,8 +29,6 @@ export function ForgotPasswordRouteView() {
         setError(result.message ?? 'Could not send a reset link.')
         return
       }
-      // Always reach the confirmation state — the request endpoint deliberately
-      // does not reveal whether the account exists.
       setSubmitted(true)
     } catch {
       setError(
@@ -42,15 +41,20 @@ export function ForgotPasswordRouteView() {
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 text-ink">
-      <div className="flex w-full max-w-sm flex-col gap-6">
-        <header className="flex flex-col items-center gap-3 text-center">
-          <Wordmark className="h-12 w-auto" />
-          <h1 className="text-xl font-semibold tracking-tight">
-            Reset your password
-          </h1>
+      <div className="flex w-full max-w-[28rem] flex-col gap-8">
+        <header className="flex flex-col items-center gap-4 text-center">
+          <Wordmark className="text-[1.35rem]" />
+          <div className="flex flex-col gap-1.5">
+            <h1 className="text-lg font-semibold tracking-tight text-ink">
+              Reset your password
+            </h1>
+            <p className="text-sm text-muted">
+              We will email a link if an account exists.
+            </p>
+          </div>
         </header>
 
-        <Card>
+        <div className="flex flex-col gap-5 rounded-[0.85rem] border border-line bg-surface p-6">
           {submitted ? (
             <div className="flex flex-col gap-4">
               <p className="text-sm leading-relaxed text-muted">
@@ -80,17 +84,12 @@ export function ForgotPasswordRouteView() {
                 onChange={(e) => setEmail(e.target.value)}
                 error={error ?? undefined}
               />
-              <Button
-                type="submit"
-                loading={submitting}
-                iconEnd={<ArrowLeft size={16} weight="bold" />}
-                className="w-full"
-              >
+              <Button type="submit" loading={submitting} className="w-full">
                 Send reset link
               </Button>
             </form>
           )}
-        </Card>
+        </div>
 
         <p className="text-center text-xs text-subtle">
           <Link

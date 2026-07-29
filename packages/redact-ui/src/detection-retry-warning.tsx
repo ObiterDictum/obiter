@@ -19,7 +19,7 @@ export function DetectionRetryWarning({
   const replacementRunId = run.replacementRunId
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-1 border-b border-line">
       <DetectionModeWarning
         detectionMode={limitedDetectionMode}
         action={
@@ -51,7 +51,7 @@ export function DetectionRetryWarning({
           )
         }
       />
-      <p className="text-xs text-subtle">
+      <p className="px-5 pb-3 text-xs text-subtle sm:px-6">
         {replacementRunId
           ? run.status === 'finalized'
             ? 'A newer model-detected run is available. This finalized run remains unchanged as part of the audit history.'
@@ -59,7 +59,7 @@ export function DetectionRetryWarning({
           : 'This creates a new run from the stored source text. This run and its review history remain unchanged.'}
       </p>
       {!replacementRunId && redetect.error ? (
-        <p className="text-sm text-danger" role="alert">
+        <p className="px-5 pb-3 text-sm text-danger sm:px-6" role="alert">
           {redetect.error.message}
         </p>
       ) : null}

@@ -1,5 +1,7 @@
+import type { Pool } from 'pg'
 import type { ApiErrorCode, ApiErrorResponse } from '@obiter/contracts'
 import type { AuthzContext, AuthzVariables } from '../authz'
+import { ensureOrgUser } from '../authz'
 import { detectRedactionSpans } from '../redaction-detection'
 import { publicRun } from '../redaction-database'
 
@@ -18,20 +20,8 @@ export function errorResponse(
   return c.json(body, status)
 }
 
-export function requireUser(
-  c: RouteContext,
-): { id: string; organisationId: string } | Response {
-  const user = c.get('user')
-  if (!user)
-    return errorResponse(c, 'unauthenticated', 'Sign in is required.', 401)
-  if (!user.organisationId)
-    return errorResponse(
-      c,
-      'no_organisation',
-      'Create an organisation to use this area.',
-      403,
-    )
-  return { id: user.id, organisationId: user.organisationId }
+export async function requireUser(c: RouteContext, pool: Pool) {
+  return ensureOrgUser(c, pool)
 }
 
 export async function jsonBody(c: RouteContext) {

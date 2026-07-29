@@ -1,97 +1,178 @@
-import { ArrowRight } from '@phosphor-icons/react'
 import { Link } from '@tanstack/react-router'
 import { caseResultLocation } from '../../case-navigation'
 import type {
   LegalSearchBrowseContext,
   LegalSearchFetchResponse,
+  LegalSearchResult,
 } from './searchTypes'
 
 interface SearchResultsProps {
   response: LegalSearchFetchResponse
   browse?: LegalSearchBrowseContext
   selectedIndex: number
+  onSelectIndex: (index: number) => void
 }
 
 export function SearchResults({
   response,
   browse,
   selectedIndex,
+  onSelectIndex,
 }: SearchResultsProps) {
   const storedResultsAvailable = response.cached || response.indexedCount > 0
+  const selected = response.hits[selectedIndex] ?? response.hits[0]
 
   return (
-    <section className="flex flex-col gap-2.5" aria-live="polite">
-      <p className="text-sm text-muted">
-        {formatResultMeta(response, storedResultsAvailable, browse)}
-      </p>
-      {response.hits.map((result, index) => {
-        const location = caseResultLocation(result)
-        const summary = (
-          <>
-            <span className="min-w-0">
-              <strong className="block text-base font-semibold leading-snug text-ink">
-                {result.title}
-              </strong>
-              <small className="mt-1.5 block text-xs text-muted">
-                {formatNeutralCitation(result.neutralCitation)} · {result.court}{' '}
-                · {result.dateDecided}
-              </small>
-              <small className="mt-0.5 block text-xs text-subtle">
-                {formatMatchReason(result.matchReason)}
-                {result.retrievalPath
-                  ? ` · ${formatRetrievalPath(result.retrievalPath)}`
-                  : ''}
-              </small>
-            </span>
-            <span className="flex shrink-0 items-center gap-2 self-center">
-              <span className="hidden rounded-pill border border-line bg-canvas px-2 py-1 text-xs font-semibold text-muted sm:inline">
-                {storedResultsAvailable ? 'Stored' : 'Find Case Law'}
-              </span>
-              <ArrowRight
-                aria-hidden="true"
-                size={15}
-                weight="bold"
-                className="text-subtle"
-              />
-            </span>
-          </>
-        )
+    <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)]">
+      <section
+        className="min-h-0 overflow-y-auto border-b border-line lg:border-b-0 lg:border-r"
+        aria-live="polite"
+      >
+        <p className="px-4 pb-1 pt-3 text-[11px] font-medium tracking-wide text-muted sm:px-5">
+          {formatResultMeta(response, storedResultsAvailable, browse)}
+        </p>
+        <ul className="flex flex-col gap-0.5 px-2 pb-3 sm:px-3">
+          {response.hits.map((result, index) => {
+            const location = caseResultLocation(result)
+            return (
+              <li key={result.id}>
+                <Link
+                  {...location}
+                  className="block rounded-md px-2.5 py-2 text-ink transition-colors hover:bg-raised data-[selected=true]:bg-raised"
+                  data-selected={selectedIndex === index ? 'true' : undefined}
+                  aria-current={selectedIndex === index ? 'true' : undefined}
+                  onClick={(event) => {
+                    event.preventDefault()
+                    onSelectIndex(index)
+                  }}
+                >
+                  <strong className="block text-sm font-medium leading-snug">
+                    {result.title}
+                  </strong>
+                  <small className="mt-0.5 block text-[11px] text-muted">
+                    {formatNeutralCitation(result.neutralCitation)} ·{' '}
+                    {result.court} · {result.dateDecided}
+                  </small>
+                  <small className="mt-0.5 block text-[11px] text-subtle">
+                    {formatMatchReason(result.matchReason)}
+                    {result.retrievalPath
+                      ? ` · ${formatRetrievalPath(result.retrievalPath)}`
+                      : ''}
+                  </small>
+                </Link>
+              </li>
+            )
+          })}
+        </ul>
+      </section>
 
-        return (
-          <article
-            className="overflow-hidden rounded-lg border border-line bg-surface transition-colors data-[selected=true]:border-brand data-[selected=true]:shadow-sm"
-            data-selected={selectedIndex === index ? 'true' : undefined}
-            key={result.id}
+      <JudgmentReader
+        result={selected}
+        storedResultsAvailable={storedResultsAvailable}
+      />
+    </div>
+  )
+}
+
+function JudgmentReader({
+  result,
+  storedResultsAvailable,
+}: {
+  result: LegalSearchResult | undefined
+  storedResultsAvailable: boolean
+}) {
+  if (!result) {
+    return (
+      <article className="flex min-h-[12rem] items-center justify-center p-6">
+        <p className="text-sm text-muted">Select a result to read the source.</p>
+      </article>
+    )
+  }
+
+  const location = caseResultLocation(result)
+  const paragraphs = result.paragraphs ?? []
+  const snippets = result.snippets ?? []
+
+  return (
+    <article className="min-h-0 overflow-y-auto p-5 sm:p-6" aria-label={result.title}>
+      <header className="mb-5 border-b border-line pb-4">
+        <h2 className="text-lg font-semibold leading-snug tracking-tight text-ink">
+          {result.title}
+        </h2>
+        <p className="mt-1.5 text-xs text-muted">
+          {formatNeutralCitation(result.neutralCitation)} · {result.court} ·{' '}
+          {result.dateDecided}
+        </p>
+        <div
+          className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted"
+          role="tablist"
+          aria-label="Source views"
+        >
+          <span
+            className="border-b border-ink/40 pb-0.5 font-medium text-ink"
+            role="tab"
+            aria-selected
           >
-            <Link
-              {...location}
-              className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 p-4 text-ink transition-colors hover:bg-canvas"
-              aria-current={selectedIndex === index ? 'true' : undefined}
-            >
-              {summary}
-            </Link>
-            {result.snippets && result.snippets.length > 0 ? (
-              <div
-                className="flex flex-col gap-2 border-t border-line bg-canvas/40 px-4 pb-4 pt-3"
-                aria-label="Matching judgment snippets"
-              >
-                {result.snippets.map((snippet) => (
-                  <p
-                    className="text-sm leading-relaxed text-muted"
-                    key={`${result.id}-${snippet.paragraphNumber}`}
-                  >
-                    <span className="mr-2 font-semibold text-subtle">
-                      [{snippet.paragraphNumber}]
-                    </span>
+            Judgment
+          </span>
+          <span role="tab" aria-selected={false}>
+            Cited by
+          </span>
+          <span role="tab" aria-selected={false}>
+            Cites
+          </span>
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <Link
+            {...location}
+            className="text-xs font-medium text-brand transition-colors hover:text-brand-pressed"
+          >
+            Open full judgment
+          </Link>
+          <span className="text-[11px] text-subtle">
+            {storedResultsAvailable ? 'Stored source' : 'Find Case Law'}
+          </span>
+        </div>
+      </header>
+
+      <div className="flex flex-col gap-4">
+        {paragraphs.length > 0
+          ? paragraphs.slice(0, 12).map((paragraph) => (
+              <section key={paragraph.id} className="flex flex-col gap-1.5">
+                <p className="text-sm leading-relaxed text-ink">
+                  {paragraph.text}
+                </p>
+                <footer className="flex gap-2 text-[11px] text-muted">
+                  <span className="font-semibold text-ink/80">
+                    {paragraph.paragraphNumber}
+                  </span>
+                </footer>
+              </section>
+            ))
+          : snippets.length > 0
+            ? snippets.map((snippet) => (
+                <section
+                  key={`${result.id}-${snippet.paragraphNumber}-${snippet.text.slice(0, 24)}`}
+                  className="flex flex-col gap-1.5"
+                >
+                  <p className="text-sm leading-relaxed text-ink">
                     {renderSnippetText(snippet.text, snippet.matchedTerms)}
                   </p>
-                ))}
-              </div>
-            ) : null}
-          </article>
-        )
-      })}
-    </section>
+                  <footer className="flex gap-2 text-[11px] text-muted">
+                    <span className="font-semibold text-ink/80">
+                      {snippet.paragraphNumber}
+                    </span>
+                  </footer>
+                </section>
+              ))
+            : (
+              <p className="text-sm leading-relaxed text-muted">
+                Preview text is not available for this hit. Open the full
+                judgment to read the source.
+              </p>
+            )}
+      </div>
+    </article>
   )
 }
 

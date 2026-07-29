@@ -1,6 +1,5 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Card } from '@obiter/ui'
 import { apiUrl } from '../lib/api-url'
 import { caseResultLocation } from '../case-navigation'
 import {
@@ -531,34 +530,20 @@ export function LegalSearchView() {
     state.status === 'idle' && !shouldRunLegalSearch(query)
 
   return (
-    <div className="mx-auto flex w-full max-w-[920px] flex-col gap-6">
-      <section className="flex flex-col gap-1">
-        <p className="text-xs font-semibold uppercase tracking-wider text-subtle">
-          Legal sources
-        </p>
-        <h1 className="text-3xl font-semibold tracking-tight text-ink">
-          Search
-        </h1>
-        <p className="mt-1 text-sm text-muted">
-          Stored judgments and Find Case Law across UK courts and tribunals.
-        </p>
-      </section>
-
-      <Card>
-        <SearchCommandBar
-          activeFilterCount={activeFilterCount}
-          courtLabel={courtLabel}
-          dateFrom={dateFrom}
-          dateTo={dateTo}
-          inputRef={searchInputRef}
-          isSearching={state.status === 'loading'}
-          onFilterClick={() => setFiltersOpen(true)}
-          onQueryChange={handleQueryChange}
-          onRemoveFilter={removeFilter}
-          onSubmit={handleSubmit}
-          query={query}
-        />
-      </Card>
+    <div className="flex h-full min-h-[24rem] flex-col">
+      <SearchCommandBar
+        activeFilterCount={activeFilterCount}
+        courtLabel={courtLabel}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        inputRef={searchInputRef}
+        isSearching={state.status === 'loading'}
+        onFilterClick={() => setFiltersOpen(true)}
+        onQueryChange={handleQueryChange}
+        onRemoveFilter={removeFilter}
+        onSubmit={handleSubmit}
+        query={query}
+      />
 
       {filtersOpen ? (
         <SearchFiltersDialog
@@ -575,48 +560,66 @@ export function LegalSearchView() {
         <SearchKeyboardShortcuts onClose={() => setShortcutsOpen(false)} />
       ) : null}
 
-      {shouldShowIdleState ? (
-        <SearchIdleState
-          courtLabel={courtLabel}
-          courtShortcuts={courtShortcuts}
-          recentSearches={recentSearches}
-          onCourtShortcut={handleCourtShortcut}
-          onRecentSearch={handleRecentSearch}
-        />
-      ) : null}
-
-      {state.status === 'empty' ? (
-        <SearchFeedbackPanel
-          {...getLegalSearchEmptyFeedback({
-            query: state.query,
-            outcome: state.outcome,
-            hydrationQueued: state.hydrationQueued,
-            browse: state.browse,
-          })}
-          tone="warning"
-        />
-      ) : null}
-
-      {state.status === 'error' ? (
-        <SearchFeedbackPanel
-          action={{
-            label: 'Retry search',
-            onClick: () => void runSearch(state.query),
-          }}
-          eyebrow="Search error"
-          title="Search could not complete"
-          body={state.message}
-          tone="error"
-        />
-      ) : null}
-
       {state.status === 'results' ? (
         <SearchResults
           response={state.response}
           browse={state.browse}
           selectedIndex={selectedResultIndex}
+          onSelectIndex={setSelectedResultIndex}
         />
-      ) : null}
+      ) : (
+        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)]">
+          <div className="min-h-0 overflow-y-auto border-b border-line lg:border-b-0 lg:border-r">
+            {shouldShowIdleState ? (
+              <SearchIdleState
+                courtLabel={courtLabel}
+                courtShortcuts={courtShortcuts}
+                recentSearches={recentSearches}
+                onCourtShortcut={handleCourtShortcut}
+                onRecentSearch={handleRecentSearch}
+              />
+            ) : null}
+
+            {state.status === 'loading' ? (
+              <p className="px-5 py-4 text-xs font-medium text-muted" role="status">
+                Searching…
+              </p>
+            ) : null}
+
+            {state.status === 'empty' ? (
+              <SearchFeedbackPanel
+                {...getLegalSearchEmptyFeedback({
+                  query: state.query,
+                  outcome: state.outcome,
+                  hydrationQueued: state.hydrationQueued,
+                  browse: state.browse,
+                })}
+                tone="warning"
+              />
+            ) : null}
+
+            {state.status === 'error' ? (
+              <SearchFeedbackPanel
+                action={{
+                  label: 'Retry search',
+                  onClick: () => void runSearch(state.query),
+                }}
+                eyebrow="Search error"
+                title="Search could not complete"
+                body={state.message}
+                tone="error"
+              />
+            ) : null}
+          </div>
+          <article className="flex min-h-[12rem] items-center justify-center p-6">
+            <p className="text-sm text-muted">
+              {shouldShowIdleState
+                ? 'Search stored judgments and Find Case Law across UK courts.'
+                : 'Select a result to read the source.'}
+            </p>
+          </article>
+        </div>
+      )}
     </div>
   )
 }

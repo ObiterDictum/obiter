@@ -44,14 +44,14 @@ export function createRedactRunCreationRoutes(
   const routes = new Hono<{ Variables: RouteVariables }>()
 
   routes.get('/api/redaction-runs', async (c) => {
-    const user = requireUser(c)
+    const user = await requireUser(c, pool)
     if (user instanceof Response) return user
     const runs = await listRedactionRuns(pool, user.organisationId)
     return c.json({ runs: runs.map((run) => listItem(publicRun(run))) })
   })
 
   routes.post('/api/redaction-runs', async (c) => {
-    const user = requireUser(c)
+    const user = await requireUser(c, pool)
     if (user instanceof Response) return user
 
     const isMultipart =
@@ -167,7 +167,7 @@ export function createRedactRunCreationRoutes(
   })
 
   routes.post('/api/documents/:documentId/redaction-runs', async (c) => {
-    const user = requireUser(c)
+    const user = await requireUser(c, pool)
     if (user instanceof Response) return user
     const body = await jsonBody(c)
     const policyMode = redactionPolicyModeSchema.safeParse(
@@ -238,7 +238,7 @@ export function createRedactRunCreationRoutes(
   })
 
   routes.get('/api/documents/:documentId/redaction-runs', async (c) => {
-    const user = requireUser(c)
+    const user = await requireUser(c, pool)
     if (user instanceof Response) return user
     const runs = await listRedactionRunsForDocument(
       pool,

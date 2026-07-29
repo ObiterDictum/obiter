@@ -16,17 +16,12 @@ import {
   updateMatter,
   type UpdatableMatterStatus,
 } from '../database'
-import { requireManageRole } from '../authz'
+import { ensureOrgUser, requireManageRole } from '../authz'
 
 interface RouteUser {
   id: string
   organisationId?: string | null
   role?: UserRole | null
-}
-
-interface AuthenticatedRouteUser {
-  id: string
-  organisationId: string
 }
 
 interface RouteVariables {
@@ -51,22 +46,6 @@ function errorResponse(
     error: { code, message, requestId: c.get('requestId') },
   }
   return c.json(body, status)
-}
-
-function requireUser(c: RouteContext): AuthenticatedRouteUser | Response {
-  const user = c.get('user')
-  if (!user) {
-    return errorResponse(c, 'unauthenticated', 'Sign in is required.', 401)
-  }
-  if (!user.organisationId) {
-    return errorResponse(
-      c,
-      'no_organisation',
-      'Create an organisation to use this area.',
-      403,
-    )
-  }
-  return { id: user.id, organisationId: user.organisationId }
 }
 
 function includeDeletedRequested(c: RouteContext) {
@@ -110,7 +89,7 @@ export function createMattersRoutes(pool: Pool) {
   const routes = new Hono<{ Variables: RouteVariables }>()
 
   routes.post('/api/matters', async (c) => {
-    const user = requireUser(c)
+    const user = await ensureOrgUser(c, pool)
     if (user instanceof Response) return user
 
     const body = asRecord(await c.req.json().catch(() => null))
@@ -173,12 +152,12 @@ export function createMattersRoutes(pool: Pool) {
   })
 
   routes.get('/api/matters', async (c) => {
-    const user = requireUser(c)
+    const user = await ensureOrgUser(c, pool)
     if (user instanceof Response) return user
 
     const includeDeleted = includeDeletedRequested(c)
     if (includeDeleted) {
-      const manageUser = requireManageRole(c)
+      const manageUser = await requireManageRole(c, pool)
       if (manageUser instanceof Response) return manageUser
     }
 
@@ -189,12 +168,12 @@ export function createMattersRoutes(pool: Pool) {
   })
 
   routes.get('/api/matters/:id', async (c) => {
-    const user = requireUser(c)
+    const user = await ensureOrgUser(c, pool)
     if (user instanceof Response) return user
 
     const includeDeleted = includeDeletedRequested(c)
     if (includeDeleted) {
-      const manageUser = requireManageRole(c)
+      const manageUser = await requireManageRole(c, pool)
       if (manageUser instanceof Response) return manageUser
     }
 
@@ -211,7 +190,7 @@ export function createMattersRoutes(pool: Pool) {
   })
 
   routes.patch('/api/matters/:id', async (c) => {
-    const user = requireUser(c)
+    const user = await ensureOrgUser(c, pool)
     if (user instanceof Response) return user
 
     const body = asRecord(await c.req.json().catch(() => null))
@@ -310,7 +289,7 @@ export function createMattersRoutes(pool: Pool) {
   })
 
   routes.delete('/api/matters/:id', async (c) => {
-    const user = requireManageRole(c)
+    const user = await requireManageRole(c, pool)
     if (user instanceof Response) return user
 
     const result = await softDeleteMatterWithCascade(pool, {
@@ -326,7 +305,7 @@ export function createMattersRoutes(pool: Pool) {
   })
 
   routes.patch('/api/matters/:id/restore', async (c) => {
-    const user = requireManageRole(c)
+    const user = await requireManageRole(c, pool)
     if (user instanceof Response) return user
 
     const matter = await restoreMatterWithAudit(pool, {

@@ -186,32 +186,48 @@ export async function findOrganisation(
  * If the user row is missing entirely, the function rolls back and throws so
  * the caller surfaces a 500 rather than inserting an orphan organisation +
  * audit row. Any other failure likewise throws.
+ *
+ * When the user already has an organisation, returns `{ created: false,
+ * organisationId, role }` so callers that auto-provision (matters/redact) can
+ * continue with the existing tenant without a second lookup.
  */
 export async function createOrganisationForUser(
   pool: Pool,
   input: { userId: string; name: string; requestId: string },
 ): Promise<
-  { created: false } | { created: true; organisation: CurrentOrganisation }
+  | {
+      created: false
+      organisationId: string
+      role: UserRole
+    }
+  | { created: true; organisation: CurrentOrganisation }
 > {
   const client = await pool.connect()
 
   try {
     await client.query('begin')
 
-    const existing = await client['query']<{ organisationId: string | null }>(
-      `select "organisationId" from users where id = $1 for update`,
-      [input.userId],
-    )
+    const existing = await client['query']<{
+      organisationId: string | null
+      role: UserRole | null
+    }>(`select "organisationId", role from users where id = $1 for update`, [
+      input.userId,
+    ])
     if (existing.rows.length === 0) {
       // No user row: a data-integrity failure, not the normal org-less state.
       // Fail closed rather than inserting an organisation nothing references.
       await client.query('rollback')
       throw new Error('User record not found.')
     }
-    const currentOrgId = existing.rows[0]?.organisationId
+    const current = existing.rows[0]
+    const currentOrgId = current?.organisationId
     if (currentOrgId) {
       await client.query('rollback')
-      return { created: false }
+      return {
+        created: false,
+        organisationId: currentOrgId,
+        role: current.role ?? 'member',
+      }
     }
 
     const organisation = await client['query']<{
@@ -253,8 +269,40 @@ export async function createOrganisationForUser(
   }
 }
 
+/** Default tenant name when an org-less user first hits Matters or Redact. */
+export const PERSONAL_WORKSPACE_NAME = 'Personal workspace'
+
+/**
+ * Ensures the user has an organisation for tenant-scoped product data.
+ * Creates a personal workspace when still org-less; otherwise returns the
+ * existing organisation. Used by Matters/Documents/Redact auth helpers so
+ * product surfaces work without a prior Settings visit.
+ */
+export async function ensureOrganisationForUser(
+  pool: Pool,
+  input: { userId: string; requestId: string },
+): Promise<{ organisationId: string; role: UserRole; created: boolean }> {
+  const result = await createOrganisationForUser(pool, {
+    userId: input.userId,
+    name: PERSONAL_WORKSPACE_NAME,
+    requestId: input.requestId,
+  })
+  if (result.created) {
+    return {
+      organisationId: result.organisation.id,
+      role: 'owner',
+      created: true,
+    }
+  }
+  return {
+    organisationId: result.organisationId,
+    role: result.role,
+    created: false,
+  }
+}
+
 // An org-less user has role null; /api/me returns them with organisation null
-// so the client can render the create-organisation surface.
+// so the client can offer optional organisation setup in Settings.
 export function toCurrentUser(user: SessionUserRecord): CurrentUser {
   return {
     id: user.id,

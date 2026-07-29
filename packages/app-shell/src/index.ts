@@ -22,7 +22,6 @@ export {
 export { changelogQueryOptions } from './changelog'
 export {
   guardAuth,
-  ensureOrganisation,
   prefetchHomeData,
 } from './route-loaders'
 
@@ -64,6 +63,8 @@ export { ForgotPasswordRouteView } from './views/forgot-password'
 export { ResetPasswordRouteView } from './views/reset-password'
 export { HomeRouteView } from './views/home'
 export { MattersRouteView, MatterRouteView } from './views/matters'
+export { VerifyRouteView } from './views/verify'
+export { SettingsRouteView } from './views/settings'
 export { DocumentDetailLayoutView } from './views/document-detail'
 export { caseResultLocation } from './case-navigation'
 

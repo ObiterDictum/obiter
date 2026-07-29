@@ -110,13 +110,22 @@ export function useCreateMatter(): UseMutationResult<
 }
 
 /** Matters list via TanStack Query. */
-export function useMattersList() {
-  return useQuery(mattersListQueryOptions())
+export function useMattersList(options?: { enabled?: boolean }) {
+  return useQuery({
+    ...mattersListQueryOptions(),
+    enabled: options?.enabled ?? true,
+  })
 }
 
 /** Single matter via TanStack Query. */
-export function useMatter(matterId: string) {
-  return useQuery(matterQueryOptions(matterId))
+export function useMatter(
+  matterId: string,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    ...matterQueryOptions(matterId),
+    enabled: options?.enabled ?? true,
+  })
 }
 
 /**

@@ -8,14 +8,16 @@ import {
   MattersRouteView,
   ResetPasswordRouteView,
   SignInRouteView,
+  SettingsRouteView,
+  VerifyRouteView,
   caseLawDocumentQueryOptions,
   createCanonicalCasePath,
   documentQueryOptions,
-  ensureOrganisation,
   guardAuth,
   matterDocumentsQueryOptions,
   matterQueryOptions,
   mattersListQueryOptions,
+  currentUserQueryOptions,
   prefetchHomeData,
   resolveCaseDocumentIdFromSlug,
 } from '@obiter/app-shell'
@@ -50,6 +52,8 @@ export const DESKTOP_SHARED_VIEW_PATHS = [
   '/redact',
   '/redact/$runId',
   '/search',
+  '/settings',
+  '/verify',
   '/cases/$caseId',
   '/case/$caseSlug',
   '/sign-in',
@@ -78,7 +82,7 @@ function DesktopNotFound() {
   return (
     <EmptyState
       title="Page not found"
-      body="That route is not registered in the desktop shell. Check the URL or return Home from the sidebar."
+      body="That route is not registered in the desktop shell. Check the URL or return Home from the top bar."
     />
   )
 }
@@ -108,7 +112,9 @@ const mattersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'matters',
   loader: async ({ context }) => {
-    await ensureOrganisation(context.queryClient)
+    await guardAuth(context.queryClient, () =>
+      context.queryClient.ensureQueryData(currentUserQueryOptions()),
+    )
     await guardAuth(context.queryClient, () =>
       context.queryClient.ensureQueryData(mattersListQueryOptions()),
     )
@@ -124,7 +130,9 @@ const matterDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'matters/$matterId',
   loader: async ({ context, params }) => {
-    await ensureOrganisation(context.queryClient)
+    await guardAuth(context.queryClient, () =>
+      context.queryClient.ensureQueryData(currentUserQueryOptions()),
+    )
     await guardAuth(context.queryClient, () =>
       context.queryClient.ensureQueryData(matterQueryOptions(params.matterId)),
     )
@@ -139,7 +147,9 @@ const documentDetailRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'matters/$matterId/documents/$documentId',
   loader: async ({ context, params }) => {
-    await ensureOrganisation(context.queryClient)
+    await guardAuth(context.queryClient, () =>
+      context.queryClient.ensureQueryData(currentUserQueryOptions()),
+    )
     await guardAuth(context.queryClient, () =>
       context.queryClient.prefetchQuery(
         documentQueryOptions(params.documentId),
@@ -155,14 +165,12 @@ const documentDetailRoute = createRoute({
 const redactRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'redact',
-  loader: ({ context }) => ensureOrganisation(context.queryClient),
   component: DesktopRedactionRunsRoute,
 })
 
 const redactReviewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'redact/$runId',
-  loader: ({ context }) => ensureOrganisation(context.queryClient),
   component: DesktopRedactionReviewRoute,
 })
 
@@ -171,6 +179,31 @@ const searchRoute = createRoute({
   path: 'search',
   component: DesktopSearchPage,
 })
+
+const verifyRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'verify',
+  component: DesktopVerifyRoute,
+})
+
+function DesktopVerifyRoute() {
+  return <VerifyRouteView />
+}
+
+const settingsRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'settings',
+  loader: async ({ context }) => {
+    await guardAuth(context.queryClient, () =>
+      context.queryClient.ensureQueryData(currentUserQueryOptions()),
+    )
+  },
+  component: DesktopSettingsRoute,
+})
+
+function DesktopSettingsRoute() {
+  return <SettingsRouteView />
+}
 
 const casesRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -301,6 +334,8 @@ const routeTree = rootRoute.addChildren([
   redactRoute,
   redactReviewRoute,
   searchRoute,
+  verifyRoute,
+  settingsRoute,
   casesRoute,
   caseSlugRoute,
   signInRoute,
