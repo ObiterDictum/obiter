@@ -6,8 +6,6 @@ import { createRedactReviewRoutes } from './redact-review'
 import { createRedactRunCreationRoutes } from './redact-run-creation'
 import type { RouteVariables } from './redact-shared'
 
-export { MAX_REDACTION_SOURCE_TEXT_LENGTH } from './redact-shared'
-
 export function createRedactRoutes(pool: Pool, storage: StorageService) {
   const routes = new Hono<{ Variables: RouteVariables }>()
 

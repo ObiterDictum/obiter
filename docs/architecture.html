@@ -2443,9 +2443,21 @@
                   <td>Create a run against a matter document</td>
                 </tr>
                 <tr>
-                  <td class="id">GET · DELETE /api/redaction-runs/:runId</td>
-                  <td class="id">redact-review.ts, redact-lifecycle.ts</td>
+                  <td class="id">
+                    GET /api/documents/:documentId/redaction-runs
+                  </td>
+                  <td class="id">redact-run-creation.ts</td>
+                  <td>List runs for a matter document</td>
+                </tr>
+                <tr>
+                  <td class="id">GET /api/redaction-runs/:runId</td>
+                  <td class="id">redact-review.ts</td>
                   <td>Run with spans, decisions and summary</td>
+                </tr>
+                <tr>
+                  <td class="id">DELETE /api/redaction-runs/:runId</td>
+                  <td class="id">redact-lifecycle.ts</td>
+                  <td>Soft-delete a run</td>
                 </tr>
                 <tr>
                   <td class="id">POST /api/redaction-runs/:runId/redetect</td>
@@ -4842,9 +4854,10 @@
             </li>
             <li>
               <span
-                ><b>Files stay under 500 lines.</b> Four currently exceed it:
-                classifier.ts (776), redaction-database.ts (772),
-                proxy-routes.ts (676), LegalSearchView.tsx (644).</span
+                ><b>Files stay under 500 lines.</b> Six currently exceed it:
+                database.ts (1236), classifier.ts (776), redaction-database.ts
+                (772), proxy-routes.ts (676), LegalSearchView.tsx (644), and
+                search-client/src/index.ts (573).</span
               >
             </li>
             <li>
