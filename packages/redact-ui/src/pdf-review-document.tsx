@@ -164,6 +164,9 @@ function PdfPage({
           renderTask = null
         }
 
+        // Residual: a second paint() that enters while the first is still
+        // inside pdf.getPage (before renderTask is assigned) will also render
+        // onto the same canvas. The 100ms resize debounce makes that unlikely.
         const page = await pdf.getPage(pageNumber)
         if (cancelled) return
         const base = page.getViewport({ scale: 1 })

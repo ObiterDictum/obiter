@@ -54,6 +54,10 @@ function canMergeIntoRun(previous: LaidChar, next: LaidChar) {
   if (previous.height !== next.height) return false
   if (previous.ascent !== next.ascent || previous.descent !== next.descent)
     return false
+  // coverRectsForSpan interpolates x uniformly across a multi-character
+  // segment. Unequal advances make that placement wrong and can leave the
+  // first redacted glyph outside the burned bar.
+  if (previous.width !== next.width) return false
   const gap = next.x - (previous.x + previous.width)
   return gap <= maxHorizontalMergeGap(previous, next)
 }
