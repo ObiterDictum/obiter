@@ -126,9 +126,10 @@ describe('layoutFromLaidChars', () => {
   })
 
   it('keeps cover geometry exact across adjacent items with unequal advances', () => {
-    // Two pdf.js items on one baseline, different average advances (kerning /
-    // disableCombineTextItems). Pre-fix merge collapsed both into 1 segment;
-    // width equality keeps 2 (one per item) while still merging within each.
+    // Two runs on one baseline with different average advances. Merging them
+    // once cost geometry: uniform interpolation put the cover 7.7pt out and
+    // left the first redacted glyph showing. Recorded advances let the run
+    // merge and still place every character where it was drawn.
     const prefix = 'Mr. '
     const name = 'Wilhelmina'
     const prefixAdvance = 4.5
@@ -145,13 +146,12 @@ describe('layoutFromLaidChars', () => {
     const merged = layoutFromLaidChars(chars, [{ width: 400, height: 200 }])
     const unmerged = unmergedCharSegments(chars)
 
-    expect(merged.segments.length).toBe(2)
-    expect(merged.segments[0]!.end - merged.segments[0]!.start).toBe(
-      prefix.length,
-    )
-    expect(merged.segments[1]!.end - merged.segments[1]!.start).toBe(
-      name.length,
-    )
+    // Contiguous same-baseline text collapses to one run, and that run carries
+    // one advance per character so nothing about position is inferred.
+    expect(merged.segments).toHaveLength(1)
+    const run = merged.segments[0]!
+    expect(run.end - run.start).toBe(chars.length)
+    expect(run.advances).toHaveLength(chars.length)
 
     const spanStart = prefix.length
     const spanEnd = prefix.length + name.length
@@ -182,5 +182,16 @@ describe('layoutFromLaidChars', () => {
 
     const trueFirstX = chars[spanStart]!.x
     expect(mergedCovers[0]!.x).toBeLessThanOrEqual(trueFirstX)
+
+    // The regression this guards: interpolating across the merged run put the
+    // left edge 7.7pt right of the ink, exposing the whole first glyph.
+    const interpolated = coverRectsForSpan({
+      segments: [{ ...run, advances: undefined }],
+      spanStart,
+      spanEnd,
+      spanText,
+    })
+    expect(interpolated[0]!.x).toBeGreaterThan(trueFirstX)
+    expect(mergedCovers[0]!.x).toBeLessThan(interpolated[0]!.x)
   })
 })

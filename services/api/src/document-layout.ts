@@ -16,6 +16,12 @@ export interface DocumentTextLayoutSegment {
   ascent?: number
   /** Distance below the baseline to the font descent line (PDF units). */
   descent?: number
+  /**
+   * Exact per-character advances across `start`..`end`, so a run of characters
+   * can share one segment without their individual positions being inferred.
+   * Absent when geometry came from the interpolating fallback path.
+   */
+  advances?: number[]
 }
 
 export interface DocumentTextLayout {
@@ -48,24 +54,26 @@ function maxHorizontalMergeGap(left: LaidChar, right: LaidChar) {
   return Math.max(2.5, Math.min(left.height, right.height) * 0.4)
 }
 
+/** Advances are rounded to keep layout.json small; 0.001pt is far below ink. */
+function roundAdvance(value: number) {
+  return Math.round(value * 1000) / 1000
+}
+
 function canMergeIntoRun(previous: LaidChar, next: LaidChar) {
   if (previous.pageIndex !== next.pageIndex) return false
   if (Math.abs(previous.y - next.y) > BASELINE_MERGE_TOLERANCE) return false
   if (previous.height !== next.height) return false
   if (previous.ascent !== next.ascent || previous.descent !== next.descent)
     return false
-  // coverRectsForSpan interpolates x uniformly across a multi-character
-  // segment. Unequal advances make that placement wrong and can leave the
-  // first redacted glyph outside the burned bar.
-  if (previous.width !== next.width) return false
   const gap = next.x - (previous.x + previous.width)
   return gap <= maxHorizontalMergeGap(previous, next)
 }
 
 /**
  * Build layout segments, merging contiguous glyphs on the same baseline into
- * runs. coverRectsForSpan interpolates within multi-character segments, so
- * merged and unmerged layouts stay equivalent for cover geometry.
+ * runs. Each run records its characters' real advances, so merging costs a few
+ * bytes per character instead of a whole segment and coverRectsForSpan still
+ * places every character exactly where it was drawn.
  */
 function charSegments(chars: LaidChar[]): DocumentTextLayoutSegment[] {
   const segments: DocumentTextLayoutSegment[] = []
@@ -81,6 +89,11 @@ function charSegments(chars: LaidChar[]): DocumentTextLayoutSegment[] {
     }
 
     if (run && runLast && canMergeIntoRun(runLast, current)) {
+      // The gap to the next glyph belongs to the previous character's advance,
+      // so a run's offsets stay faithful even where the producer nudged text.
+      const advances = run.advances!
+      advances[advances.length - 1] = roundAdvance(current.x - runLast.x)
+      advances.push(roundAdvance(Math.max(current.width, 0.5)))
       run.end = index + 1
       run.width = Math.max(
         current.x + Math.max(current.width, 0.5) - run.x,
@@ -100,6 +113,7 @@ function charSegments(chars: LaidChar[]): DocumentTextLayoutSegment[] {
       height: Math.max(current.height, 0.5),
       ascent: current.ascent,
       descent: current.descent,
+      advances: [roundAdvance(Math.max(current.width, 0.5))],
     }
     runLast = current
     segments.push(run)

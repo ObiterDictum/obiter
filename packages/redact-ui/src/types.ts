@@ -47,6 +47,8 @@ export interface DocumentTextLayoutSegment {
   height: number
   ascent?: number
   descent?: number
+  /** Exact per-character advances across the run, when extraction had them. */
+  advances?: number[]
 }
 
 export interface DocumentTextLayout {

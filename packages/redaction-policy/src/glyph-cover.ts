@@ -41,6 +41,13 @@ export interface LayoutSegmentLike {
   height: number
   ascent?: number
   descent?: number
+  /**
+   * Per-character advances, one entry per character in `start`..`end`. Present
+   * when extraction recovered exact glyph widths from the content stream; a
+   * run can then be merged without losing where each character sits. Absent on
+   * layouts written before exact geometry, which fall back to interpolation.
+   */
+  advances?: number[]
 }
 
 type TrackedGlyph = GlyphCoverRect & {
@@ -96,14 +103,19 @@ export function coverRectsForSpan(input: {
       index += 1
     ) {
       const local = index - segment.start
+      const exact = exactPlacement(segment, local)
       const startRatio = local / segmentLength
       const endRatio = (local + 1) / segmentLength
       const x =
-        segmentLength === 1 ? segment.x : segment.x + segment.width * startRatio
+        exact?.x ??
+        (segmentLength === 1
+          ? segment.x
+          : segment.x + segment.width * startRatio)
       const width =
-        segmentLength === 1
+        exact?.width ??
+        (segmentLength === 1
           ? segment.width
-          : Math.max(segment.width * (endRatio - startRatio), 0.5)
+          : Math.max(segment.width * (endRatio - startRatio), 0.5))
       const ink = input.spanText[index - input.spanStart] ?? ''
       if (!ink || /\s/u.test(ink)) continue
       glyphs.push({
@@ -126,6 +138,22 @@ export function coverRectsForSpan(input: {
   return unionMergeGlyphs(glyphs).map(
     ({ baseline: _baseline, ...cover }) => cover,
   )
+}
+
+/**
+ * Where a character actually sits, when extraction recorded real advances.
+ * Interpolating instead can leave part of a redacted word outside its bar.
+ */
+function exactPlacement(segment: LayoutSegmentLike, local: number) {
+  const advances = segment.advances
+  if (!advances || advances.length !== segment.end - segment.start) return null
+  const own = advances[local]
+  if (typeof own !== 'number') return null
+  let offset = 0
+  for (let index = 0; index < local; index += 1) {
+    offset += advances[index] ?? 0
+  }
+  return { x: segment.x + offset, width: Math.max(own, 0.5) }
 }
 
 function unionMergeGlyphs(glyphs: TrackedGlyph[]): TrackedGlyph[] {

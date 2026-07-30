@@ -8,6 +8,12 @@ import {
   type ExtractedDocumentContent,
   type LaidChar,
 } from './document-layout'
+import {
+  laidCharsFromOperatorList,
+  withLineBreaks,
+  type FontStyles,
+  type PdfOps,
+} from './pdf-glyph-layout'
 
 export type {
   DocumentTextLayout,
@@ -81,10 +87,21 @@ async function extractPdfContent(
       const viewport = page.getViewport({ scale: 1 })
       pages.push({ width: viewport.width, height: viewport.height })
       const pageIndex = pageNumber - 1
-      const content = await page.getTextContent({
-        // Keep runs small so per-glyph x/width stay closer to real advances.
-        disableCombineTextItems: true,
-      } as never)
+      // getTextContent still supplies the font ascent/descent ratios, keyed by
+      // the same loaded name the operator list reports for setFont.
+      const content = await page.getTextContent()
+
+      const exact = await exactPageChars(page, pageIndex, content.styles)
+      if (exact.length > 0) {
+        chars.push(...exact)
+        const last = exact.at(-1)
+        if (pageNumber < pdf.numPages && last) pushPageBreak(chars, last)
+        assertWithinLength(chars)
+        continue
+      }
+
+      // No glyph-path text on this page (Type 3 fonts, unusual generators):
+      // fall back to interpolated item geometry rather than losing content.
       let lastY = 0
       let lastX = 0
       let lastHeight = 12
@@ -116,34 +133,18 @@ async function extractPdfContent(
         }
       }
       if (pageNumber < pdf.numPages) {
-        chars.push(
-          {
-            ch: '\n',
-            pageIndex,
-            x: lastX,
-            y: lastY,
-            width: 0,
-            height: lastHeight,
-            ascent: lastAscent,
-            descent: lastDescent,
-          },
-          {
-            ch: '\n',
-            pageIndex,
-            x: lastX,
-            y: lastY,
-            width: 0,
-            height: lastHeight,
-            ascent: lastAscent,
-            descent: lastDescent,
-          },
-        )
+        pushPageBreak(chars, {
+          ch: '\n',
+          pageIndex,
+          x: lastX,
+          y: lastY,
+          width: 0,
+          height: lastHeight,
+          ascent: lastAscent,
+          descent: lastDescent,
+        })
       }
-      if (chars.length > MAX_EXTRACTED_DOCUMENT_TEXT_LENGTH)
-        throw new DocumentExtractionError(
-          `Extracted text must be at most ${MAX_EXTRACTED_DOCUMENT_TEXT_LENGTH} characters.`,
-          true,
-        )
+      assertWithinLength(chars)
     }
 
     const normalised = collapsePdfGlyphSpacingWithLayout(chars)
@@ -165,6 +166,67 @@ async function extractPdfContent(
   } finally {
     await pdf.destroy().catch(() => undefined)
   }
+}
+
+/** Two newlines separate pages, anchored on the last glyph drawn. */
+function pushPageBreak(chars: LaidChar[], anchor: LaidChar) {
+  const separator: LaidChar = { ...anchor, ch: '\n', width: 0 }
+  chars.push({ ...separator }, { ...separator })
+}
+
+function assertWithinLength(chars: LaidChar[]) {
+  if (chars.length > MAX_EXTRACTED_DOCUMENT_TEXT_LENGTH)
+    throw new DocumentExtractionError(
+      `Extracted text must be at most ${MAX_EXTRACTED_DOCUMENT_TEXT_LENGTH} characters.`,
+      true,
+    )
+}
+
+/**
+ * Per-glyph geometry replayed from the page's content stream. Returns an empty
+ * array when the operator list is unavailable or draws no glyph-path text.
+ */
+async function exactPageChars(
+  page: {
+    getOperatorList?: () => Promise<{
+      fnArray: number[] | Int32Array
+      argsArray: unknown[]
+    }>
+  },
+  pageIndex: number,
+  styles: FontStyles | undefined,
+): Promise<LaidChar[]> {
+  if (typeof page.getOperatorList !== 'function') return []
+  const ops = await loadPdfOps()
+  if (!ops) return []
+  try {
+    const operatorList = await page.getOperatorList()
+    const chars = laidCharsFromOperatorList({
+      operatorList,
+      ops,
+      pageIndex,
+      styles,
+    })
+    return chars.length > 0 ? withLineBreaks(chars) : []
+  } catch {
+    return []
+  }
+}
+
+let cachedOps: PdfOps | null | undefined
+
+/** unpdf re-exports the pdf.js `OPS` enum from its bundled build. */
+async function loadPdfOps(): Promise<PdfOps | null> {
+  if (cachedOps !== undefined) return cachedOps
+  try {
+    const module = (await import('unpdf/pdfjs')) as unknown as {
+      OPS?: PdfOps
+    }
+    cachedOps = module.OPS ?? null
+  } catch {
+    cachedOps = null
+  }
+  return cachedOps
 }
 
 function pdfItemMetrics(

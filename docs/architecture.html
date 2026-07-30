@@ -2097,7 +2097,7 @@
                   redaction-detection · redaction-redetect ·
                   redaction-run-creation · redaction-database ·
                   redaction-audit-report · document-extraction · document-layout
-                  · redaction-pdf-output · storage · authz
+                  · pdf-glyph-layout · redaction-pdf-output · storage · authz
                 </dd>
                 <dt>Extract</dt>
                 <dd>mammoth (DOCX) · unpdf (text-layer PDF)</dd>
@@ -4091,7 +4091,12 @@
                 <code>version: 1</code>). Extracted text is derived from the
                 same laid-character array, so layout offsets and detection
                 offsets are aligned by construction rather than by a second
-                pass.</span
+                pass. Positions come from replaying the page's content stream
+                (<code>pdf-glyph-layout.ts</code>), because
+                <code>getTextContent</code> reports one advance for a whole run
+                and interpolating it misplaces covers on proportional faces.
+                Each run stores its characters' real advances, so merging costs
+                a few bytes per character rather than a segment each.</span
               >
             </li>
             <li>
@@ -5197,15 +5202,15 @@
                   <td class="id">RULES.md</td>
                 </tr>
                 <tr>
-                  <td>Redaction cover geometry is estimated, not measured</td>
+                  <td>Cover geometry is exact only for glyph-path PDF text</td>
                   <td>
-                    pdf.js reports one advance width per text run, so
-                    per-character x and width are interpolated evenly across the
-                    run. In a proportional face a cover box whose span starts
-                    mid-run can be a few points off. The review overlay uses the
-                    same geometry, so the reviewer sees what will be burned.
+                    Pages whose text is not drawn through the glyph path (Type 3
+                    fonts, some generators) fall back to interpolating one
+                    advance across a whole run, which can misplace a cover by
+                    several points. The review overlay uses the same geometry,
+                    so the reviewer sees what will be burned.
                   </td>
-                  <td class="id">document-layout.ts</td>
+                  <td class="id">document-extraction.ts</td>
                 </tr>
                 <tr>
                   <td>
