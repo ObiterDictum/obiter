@@ -14,8 +14,10 @@ import {
   DocumentExtractionError,
   extractDocumentText,
   IMAGE_ONLY_DOCX_MESSAGE,
+  prepareLaidChars,
   UNREADABLE_DOCX_MESSAGE,
 } from './document-extraction'
+import { layoutFromLaidChars, type LaidChar } from './document-layout'
 import { createRedactionDetector } from './redaction-detection'
 
 beforeEach(async () => {
@@ -308,5 +310,138 @@ describe('extractDocumentText', () => {
     await expect(
       extractDocumentText('txt', Buffer.from('No PII here.')),
     ).resolves.toBe('No PII here.')
+  })
+})
+
+describe('prepareLaidChars', () => {
+  it('strips format characters and keeps layout offsets aligned with text', () => {
+    const chars: LaidChar[] = [
+      {
+        ch: 'A',
+        pageIndex: 0,
+        x: 10,
+        y: 100,
+        width: 7,
+        height: 12,
+        ascent: 10,
+        descent: 2,
+      },
+      {
+        ch: '\u00ad',
+        pageIndex: 0,
+        x: 17,
+        y: 100,
+        width: 0,
+        height: 12,
+        ascent: 10,
+        descent: 2,
+      },
+      {
+        ch: 'l',
+        pageIndex: 0,
+        x: 17,
+        y: 100,
+        width: 4,
+        height: 12,
+        ascent: 10,
+        descent: 2,
+      },
+      {
+        ch: '\u200b',
+        pageIndex: 0,
+        x: 21,
+        y: 100,
+        width: 0,
+        height: 12,
+        ascent: 10,
+        descent: 2,
+      },
+      {
+        ch: 'i',
+        pageIndex: 0,
+        x: 21,
+        y: 100,
+        width: 3,
+        height: 12,
+        ascent: 10,
+        descent: 2,
+      },
+      {
+        ch: '\u202e',
+        pageIndex: 0,
+        x: 24,
+        y: 100,
+        width: 0,
+        height: 12,
+        ascent: 10,
+        descent: 2,
+      },
+      {
+        ch: 'c',
+        pageIndex: 0,
+        x: 24,
+        y: 100,
+        width: 6,
+        height: 12,
+        ascent: 10,
+        descent: 2,
+      },
+      {
+        ch: 'e',
+        pageIndex: 0,
+        x: 30,
+        y: 100,
+        width: 7,
+        height: 12,
+        ascent: 10,
+        descent: 2,
+      },
+    ]
+
+    const prepared = prepareLaidChars(chars)
+    const text = prepared.map((item) => item.ch).join('')
+    expect(text).toBe('Alice')
+    expect(text).not.toMatch(/[\u00ad\u200b\u202e]/u)
+
+    const layout = layoutFromLaidChars(prepared, [{ width: 200, height: 200 }])
+    const surviving = prepared.filter((item) => item.ch !== '\n')
+    expect(
+      layout.segments.reduce(
+        (sum, segment) => sum + (segment.end - segment.start),
+        0,
+      ),
+    ).toBe(surviving.length)
+
+    const offset = text.indexOf('c')
+    expect(offset).toBeGreaterThanOrEqual(0)
+    expect(text[offset]).toBe(prepared[offset]!.ch)
+    const segment = layout.segments.find(
+      (item) => item.start <= offset && offset < item.end,
+    )
+    expect(segment).toBeDefined()
+    expect(segment!.pageIndex).toBe(prepared[offset]!.pageIndex)
+    expect(segment!.y).toBe(prepared[offset]!.y)
+    expect(text.slice(segment!.start, segment!.end)).toContain('c')
+  })
+
+  it('normalises carriage returns the way the old page-text path did', () => {
+    const base = {
+      pageIndex: 0,
+      x: 0,
+      y: 100,
+      width: 1,
+      height: 12,
+      ascent: 10,
+      descent: 2,
+    }
+    const prepared = prepareLaidChars([
+      { ...base, ch: 'a' },
+      { ...base, ch: '\r' },
+      { ...base, ch: '\n' },
+      { ...base, ch: 'b' },
+      { ...base, ch: '\r' },
+      { ...base, ch: 'c' },
+    ])
+    expect(prepared.map((item) => item.ch).join('')).toBe('a\nb\nc')
   })
 })

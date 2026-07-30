@@ -348,7 +348,7 @@ export async function getRunSourceFile(pool: Pool, run: RedactionRunRecord) {
   if (run.sourceFileObjectKey) {
     return {
       objectKey: run.sourceFileObjectKey,
-      mimeType: run.sourceMimeType ?? 'application/octet-stream',
+      mimeType: mimeTypeFromStoredFileType(run.sourceMimeType),
       filename: run.sourceFilename,
     }
   }
@@ -367,9 +367,31 @@ export async function getRunSourceFile(pool: Pool, run: RedactionRunRecord) {
   if (!row) return null
   return {
     objectKey: row.object_key,
-    mimeType: row.file_type || 'application/octet-stream',
+    mimeType: mimeTypeFromStoredFileType(row.file_type),
     filename: row.filename,
   }
+}
+
+/**
+ * document_versions.file_type stores short types (`pdf` / `docx` / `txt`);
+ * standalone runs already store real MIME types. Accept both.
+ */
+export function mimeTypeFromStoredFileType(
+  fileType: string | null | undefined,
+): string {
+  const value = fileType?.split(';', 1)[0]?.trim().toLowerCase() ?? ''
+  if (!value) return 'application/octet-stream'
+  if (value === 'pdf' || value === 'application/pdf') return 'application/pdf'
+  if (
+    value === 'docx' ||
+    value ===
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  ) {
+    return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  }
+  if (value === 'txt' || value === 'text/plain') return 'text/plain'
+  if (value.includes('/')) return value
+  return 'application/octet-stream'
 }
 
 export async function getRunLayoutObjectKey(

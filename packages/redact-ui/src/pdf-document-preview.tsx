@@ -86,7 +86,8 @@ function PdfPreviewPage({
   useEffect(() => {
     if (!canvas) return
     let cancelled = false
-    let renderTask: { cancel: () => void } | null = null
+    let renderTask: { cancel: () => void; promise: Promise<unknown> } | null =
+      null
     void pdf.getPage(pageNumber).then(async (page) => {
       const viewport = page.getViewport({ scale: 1.25 })
       if (cancelled) return
@@ -96,9 +97,14 @@ function PdfPreviewPage({
       canvas.style.height = `${viewport.height}px`
       const context = canvas.getContext('2d')
       if (!context) return
-      renderTask = page.render({ canvasContext: context, viewport, canvas })
+      const task = page.render({
+        canvasContext: context,
+        viewport,
+        canvas,
+      }) as { cancel: () => void; promise: Promise<unknown> }
+      renderTask = task
       try {
-        await renderTask.promise
+        await task.promise
       } catch {
         // Cancelled or superseded render.
       }

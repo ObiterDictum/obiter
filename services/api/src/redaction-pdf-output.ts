@@ -36,6 +36,23 @@ interface PageRect {
 const RENDER_SCALE = 2
 
 /**
+ * Thrown when an output-affecting span has no cover geometry. Finalize catches
+ * this and falls back to text output; the message names span ids for diagnosis
+ * but must not be logged verbatim (see redaction_pdf_burn_failed).
+ */
+export class RedactionCoverGeometryError extends Error {
+  readonly spanIds: string[]
+
+  constructor(spanIds: string[]) {
+    super(
+      `Redaction cover geometry missing for span(s): ${spanIds.join(', ')}`,
+    )
+    this.name = 'RedactionCoverGeometryError'
+    this.spanIds = spanIds
+  }
+}
+
+/**
  * Build a redacted PDF by rasterizing each page with redaction marks burned
  * into the pixels. The output has no selectable text layer, so covered
  * content cannot be copied or recovered via text extraction.
@@ -153,18 +170,24 @@ export function padGlyphRect(rect: PageRect): PageRect {
 
 function collectRedactionRects(input: RedactedPdfInput) {
   const rectsByPage = new Map<number, PageRect[]>()
+  const missingSpanIds: string[] = []
   for (const span of input.spans) {
     if (!affectsOutput(input.decisions[span.id])) continue
     const label =
       input.outputMode === 'pseudonymised'
         ? (input.tokenMap[span.id] ?? '[REDACTED]')
         : undefined
-    for (const covered of coverRectsForSpan({
+    const coveredRects = coverRectsForSpan({
       segments: input.layout.segments,
       spanStart: span.start,
       spanEnd: span.end,
       spanText: span.text,
-    })) {
+    })
+    if (coveredRects.length === 0) {
+      missingSpanIds.push(span.id)
+      continue
+    }
+    for (const covered of coveredRects) {
       const list = rectsByPage.get(covered.pageIndex) ?? []
       list.push({
         x: covered.x,
@@ -176,6 +199,11 @@ function collectRedactionRects(input: RedactedPdfInput) {
       })
       rectsByPage.set(covered.pageIndex, list)
     }
+  }
+  // Fail closed: an accepted span with no cover would publish unredacted pixels
+  // while the audit trail still records a successful redaction.
+  if (missingSpanIds.length > 0) {
+    throw new RedactionCoverGeometryError(missingSpanIds)
   }
   return rectsByPage
 }

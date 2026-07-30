@@ -80,7 +80,7 @@ async function extractPdfContent(buffer: Buffer): Promise<ExtractedDocumentConte
       const content = await page.getTextContent({
         // Keep runs small so per-glyph x/width stay closer to real advances.
         disableCombineTextItems: true,
-      })
+      } as never)
       let lastY = 0
       let lastX = 0
       let lastHeight = 12
@@ -143,7 +143,7 @@ async function extractPdfContent(buffer: Buffer): Promise<ExtractedDocumentConte
     }
 
     const normalised = collapsePdfGlyphSpacingWithLayout(chars)
-    const trimmed = trimLaidChars(normalised)
+    const trimmed = prepareLaidChars(normalised)
     const text = trimmed.map((item) => item.ch).join('')
     const characters = text.replaceAll(/[\s\p{Cf}]/gu, '').length
 
@@ -222,6 +222,26 @@ function pushPdfItemChars(
       descent,
     })
   })
+}
+
+/**
+ * Drop format controls and normalise CR before text/layout are derived so
+ * heuristic patterns see the same offsets as stored layout segments.
+ */
+export function prepareLaidChars(chars: LaidChar[]): LaidChar[] {
+  const stripped: LaidChar[] = []
+  for (let index = 0; index < chars.length; index += 1) {
+    const item = chars[index]!
+    if (/\p{Cf}/u.test(item.ch)) continue
+    if (item.ch === '\r') {
+      // Match the old page-text normaliser: \r\n? → \n.
+      if (chars[index + 1]?.ch === '\n') continue
+      stripped.push({ ...item, ch: '\n' })
+      continue
+    }
+    stripped.push(item)
+  }
+  return trimLaidChars(stripped)
 }
 
 function trimLaidChars(chars: LaidChar[]) {

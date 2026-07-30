@@ -86,6 +86,7 @@ export function PdfReviewDocument({
           spans={spans}
           selectedId={selectedId}
           onSelect={onSelect}
+          onError={setError}
           categoryClassName={categoryClassName}
         />
       ))}
@@ -111,6 +112,15 @@ function coverToOverlay(
   }
 }
 
+function isRenderingCancelled(error: unknown) {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'name' in error &&
+    (error as { name: string }).name === 'RenderingCancelledException'
+  )
+}
+
 function PdfPage({
   pdf,
   pageNumber,
@@ -119,6 +129,7 @@ function PdfPage({
   spans,
   selectedId,
   onSelect,
+  onError,
   categoryClassName,
 }: {
   pdf: PDFDocumentProxy
@@ -128,6 +139,7 @@ function PdfPage({
   spans: RedactionSpan[]
   selectedId: string | null
   onSelect: (id: string) => void
+  onError: (message: string) => void
   categoryClassName: Record<string, string>
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null)
@@ -136,33 +148,56 @@ function PdfPage({
 
   useEffect(() => {
     let cancelled = false
-    let renderTask: { cancel: () => void } | null = null
+    let renderTask: { cancel: () => void; promise: Promise<unknown> } | null =
+      null
+    let resizeTimer: ReturnType<typeof setTimeout> | null = null
 
     async function paint() {
-      const page = await pdf.getPage(pageNumber)
-      if (cancelled) return
-      const base = page.getViewport({ scale: 1 })
-      const available = hostRef.current?.clientWidth || base.width
-      const scale = Math.min(1.6, Math.max(0.75, available / base.width))
-      const nextViewport = page.getViewport({ scale })
-      const canvas = canvasRef.current
-      if (!canvas) return
-      const context = canvas.getContext('2d')
-      if (!context) return
+      try {
+        if (renderTask) {
+          renderTask.cancel()
+          try {
+            await renderTask.promise
+          } catch {
+            // Cancelled render rejects; canvas is free once settled.
+          }
+          renderTask = null
+        }
 
-      canvas.width = nextViewport.width
-      canvas.height = nextViewport.height
-      canvas.style.width = `${nextViewport.width}px`
-      canvas.style.height = `${nextViewport.height}px`
+        const page = await pdf.getPage(pageNumber)
+        if (cancelled) return
+        const base = page.getViewport({ scale: 1 })
+        const available = hostRef.current?.clientWidth || base.width
+        const scale = Math.min(1.6, Math.max(0.75, available / base.width))
+        const nextViewport = page.getViewport({ scale })
+        const canvas = canvasRef.current
+        if (!canvas) return
+        const context = canvas.getContext('2d')
+        if (!context) return
 
-      renderTask = page.render({
-        canvasContext: context,
-        viewport: nextViewport,
-        canvas,
-      })
-      await renderTask.promise
-      if (cancelled) return
-      setViewport(nextViewport)
+        canvas.width = nextViewport.width
+        canvas.height = nextViewport.height
+        canvas.style.width = `${nextViewport.width}px`
+        canvas.style.height = `${nextViewport.height}px`
+
+        const task = page.render({
+          canvasContext: context,
+          viewport: nextViewport,
+          canvas,
+        }) as { cancel: () => void; promise: Promise<unknown> }
+        renderTask = task
+        await task.promise
+        if (cancelled) return
+        setViewport(nextViewport)
+      } catch (error: unknown) {
+        if (cancelled) return
+        if (isRenderingCancelled(error)) return
+        onError(
+          error instanceof Error
+            ? error.message
+            : 'PDF page could not be rendered.',
+        )
+      }
     }
 
     void paint()
@@ -171,16 +206,20 @@ function PdfPage({
       typeof ResizeObserver === 'undefined' || !hostRef.current
         ? null
         : new ResizeObserver(() => {
-            void paint()
+            if (resizeTimer) clearTimeout(resizeTimer)
+            resizeTimer = setTimeout(() => {
+              void paint()
+            }, 100)
           })
     if (hostRef.current && observer) observer.observe(hostRef.current)
 
     return () => {
       cancelled = true
+      if (resizeTimer) clearTimeout(resizeTimer)
       renderTask?.cancel()
       observer?.disconnect()
     }
-  }, [pdf, pageNumber])
+  }, [pdf, pageNumber, onError])
 
   const pageSpans =
     viewport == null

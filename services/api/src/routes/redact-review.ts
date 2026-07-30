@@ -113,6 +113,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         'content-type': source.mimeType,
         'content-disposition': `inline; filename="${source.filename.replaceAll('"', '')}"`,
         'cache-control': 'private, max-age=60',
+        'x-content-type-options': 'nosniff',
       },
     })
   })
@@ -358,6 +359,19 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
     } catch (error) {
       if (error instanceof RedactionSpanIntegrityError) throw error
       // PDF burn failed — fall back to text output so finalize still completes.
+      // Do not log span ids, filenames, or document content (cover-geometry
+      // errors name span ids in their message).
+      const reason =
+        error instanceof Error && error.name === 'RedactionCoverGeometryError'
+          ? 'cover geometry missing for one or more spans'
+          : error instanceof Error
+            ? error.message
+            : 'unknown failure'
+      console.error('redaction_pdf_burn_failed', {
+        requestId: c.get('requestId'),
+        runId: run.id,
+        reason,
+      })
       await storage.writeText(objectKey, output)
       outputMimeType = 'text/plain'
       outputFilename = redactedTextFilename(run.sourceFilename)
@@ -552,6 +566,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
           'content-type': 'application/pdf',
           'content-disposition': `attachment; filename="${safeName}"`,
           'cache-control': 'private, max-age=60',
+          'x-content-type-options': 'nosniff',
         },
       })
     }
@@ -562,6 +577,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         'content-type': 'text/plain; charset=utf-8',
         'content-disposition': `attachment; filename="${safeName}"`,
         'cache-control': 'private, max-age=60',
+        'x-content-type-options': 'nosniff',
       },
     })
   })

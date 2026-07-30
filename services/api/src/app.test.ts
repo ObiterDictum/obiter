@@ -1197,6 +1197,7 @@ describe('createApiApp', () => {
     expect([...stored.values()]).toEqual([
       'Synthetic test text.',
       expect.stringContaining('amina.rahman@example.test'),
+      expect.stringContaining('"version":1'),
       expect.stringContaining('Mr James Cartwright'),
       '',
     ])
@@ -1242,7 +1243,7 @@ describe('createApiApp', () => {
       createPool(async (sql, params) => {
         const text = String(sql)
         if (text.includes('insert into redaction_runs')) {
-          persistedMode = (params as unknown[])[11]
+          persistedMode = (params as unknown[])[14]
           return { rows: [row()] }
         }
         if (text.includes('from redaction_runs')) return { rows: [row()] }
@@ -1317,9 +1318,9 @@ describe('createApiApp', () => {
                   status: 'ready_for_review',
                   output_artifact_id: null,
                   source_text_object_key: values[6],
-                  detector_version: values[10],
-                  detection_mode: values[11],
-                  replaces_run_id: values[12],
+                  detector_version: values[13],
+                  detection_mode: values[14],
+                  replaces_run_id: values[15],
                 }),
               ],
             }
@@ -1914,8 +1915,81 @@ describe('createApiApp redaction review reads', () => {
     expect(file.headers.get('content-disposition')).toContain(
       'brief-redacted.pdf',
     )
+    expect(file.headers.get('x-content-type-options')).toBe('nosniff')
     expect(Buffer.from(await file.arrayBuffer())).toEqual(pdfBytes)
     expect(readBinary).toHaveBeenCalledWith('org/org_1/artifacts/art_1')
+  })
+
+  it('returns matter-attached source PDF bytes with a real MIME type and nosniff', async () => {
+    const pdfBytes = Buffer.from('%PDF-1.4 source')
+    const readBinary = vi.fn(async () => pdfBytes)
+    const run = finalizedRunRow({
+      source_filename: 'brief.pdf',
+      document_version_id: 'ver_1',
+      source_file_object_key: null,
+      source_mime_type: null,
+    })
+    const app = createApiApp(
+      testEnv,
+      createHybridPool(
+        async (sql, params) => {
+          const text = String(sql)
+          const values = params as unknown[]
+          if (text.includes('from redaction_runs')) {
+            const visible =
+              values[0] === run.id && values[1] === run.organisation_id
+            return { rows: visible ? [run] : [] }
+          }
+          if (text.includes('from document_versions')) {
+            return {
+              rows: [
+                {
+                  object_key:
+                    'org/org_1/matters/mtr_1/documents/doc_1/versions/ver_1/source',
+                  filename: 'brief.pdf',
+                  file_type: 'pdf',
+                },
+              ],
+            }
+          }
+          return { rows: [] }
+        },
+        async () => ({ rows: [] }),
+      ),
+      {
+        auth: authWithRole('member'),
+        storage: {
+          readText: async () => {
+            throw new Error('text read should not be used for source PDF')
+          },
+          writeText: async () => undefined,
+          readBinary,
+          delete: async () => undefined,
+        },
+      },
+    )
+
+    const response = await app.request('/api/redaction-runs/red_1/source-file')
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toBe('application/pdf')
+    expect(response.headers.get('content-disposition')).toContain('brief.pdf')
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff')
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(pdfBytes)
+    expect(readBinary).toHaveBeenCalledWith(
+      'org/org_1/matters/mtr_1/documents/doc_1/versions/ver_1/source',
+    )
+  })
+
+  it('returns text output/file with nosniff', async () => {
+    const { app } = createRedactionReadApp({
+      run: finalizedRunRow(),
+      artifactKey: 'org/org_1/artifacts/art_1',
+    })
+
+    const file = await app.request('/api/redaction-runs/red_1/output/file')
+    expect(file.status).toBe(200)
+    expect(file.headers.get('content-type')).toBe('text/plain; charset=utf-8')
+    expect(file.headers.get('x-content-type-options')).toBe('nosniff')
   })
 
   it('returns 404 for an unknown token-map run', async () => {

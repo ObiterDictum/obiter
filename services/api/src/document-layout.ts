@@ -40,12 +40,50 @@ export interface LaidChar {
   descent: number
 }
 
+/** Same baseline slack as coverRectsForSpan union-merge. */
+const BASELINE_MERGE_TOLERANCE = 1.25
+
+function maxHorizontalMergeGap(left: LaidChar, right: LaidChar) {
+  // Keep runs tight enough that mid-span interpolation stays near real glyphs.
+  return Math.max(2.5, Math.min(left.height, right.height) * 0.4)
+}
+
+function canMergeIntoRun(previous: LaidChar, next: LaidChar) {
+  if (previous.pageIndex !== next.pageIndex) return false
+  if (Math.abs(previous.y - next.y) > BASELINE_MERGE_TOLERANCE) return false
+  if (previous.height !== next.height) return false
+  if (previous.ascent !== next.ascent || previous.descent !== next.descent)
+    return false
+  const gap = next.x - (previous.x + previous.width)
+  return gap <= maxHorizontalMergeGap(previous, next)
+}
+
+/**
+ * Build layout segments, merging contiguous glyphs on the same baseline into
+ * runs. coverRectsForSpan interpolates within multi-character segments, so
+ * merged and unmerged layouts stay equivalent for cover geometry.
+ */
 function charSegments(chars: LaidChar[]): DocumentTextLayoutSegment[] {
   const segments: DocumentTextLayoutSegment[] = []
+  let run: DocumentTextLayoutSegment | null = null
+  let runLast: LaidChar | null = null
+
   for (let index = 0; index < chars.length; index += 1) {
     const current = chars[index]
-    if (!current || current.ch === '\n') continue
-    segments.push({
+    if (!current || current.ch === '\n') {
+      run = null
+      runLast = null
+      continue
+    }
+
+    if (run && runLast && canMergeIntoRun(runLast, current)) {
+      run.end = index + 1
+      run.width = Math.max(current.x + Math.max(current.width, 0.5) - run.x, 0.5)
+      runLast = current
+      continue
+    }
+
+    run = {
       start: index,
       end: index + 1,
       pageIndex: current.pageIndex,
@@ -55,7 +93,9 @@ function charSegments(chars: LaidChar[]): DocumentTextLayoutSegment[] {
       height: Math.max(current.height, 0.5),
       ascent: current.ascent,
       descent: current.descent,
-    })
+    }
+    runLast = current
+    segments.push(run)
   }
   return segments
 }
@@ -126,9 +166,10 @@ export function collapsePdfGlyphSpacingWithLayout(chars: LaidChar[]): LaidChar[]
           collapsedIndex += 1
           continue
         }
+        // Drop the spacing glyph the collapse removed; keep any other mismatch
+        // so offsets stay aligned with the surviving characters.
         if (laid.ch === ' ') continue
         result.push(laid)
-        if (laid.ch === collapsed[collapsedIndex]) collapsedIndex += 1
       }
     }
 

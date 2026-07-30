@@ -21,5 +21,8 @@ Canonical license: <https://github.com/IBM/plex/blob/master/LICENSE.txt>
 
 ## Legacy vendored files
 
-`fonts/satoshi/` and `fonts/jetbrains-mono/` may remain on disk from earlier
-shell work; they are no longer referenced by `fonts.css`.
+`fonts/satoshi/` and `fonts/jetbrains-mono/` were removed after the move to
+fontsource. They are no longer shipped in the repository; earlier shells had
+vendored woff2 files here, but `fonts.css` no longer references them. The ITF
+Free Font License for Satoshi does not permit redistributing those font files
+standalone.

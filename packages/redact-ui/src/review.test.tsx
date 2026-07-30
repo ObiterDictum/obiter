@@ -455,4 +455,56 @@ describe('RedactionReviewView', () => {
       expect.any(Object),
     )
   })
+
+  it('defers object-URL revoke after download click', () => {
+    vi.useFakeTimers()
+    const urlApi = URL as unknown as {
+      createObjectURL?: (blob: Blob) => string
+      revokeObjectURL?: (url: string) => void
+    }
+    urlApi.createObjectURL ??= () => 'blob:missing'
+    urlApi.revokeObjectURL ??= () => undefined
+    const createObjectURL = vi
+      .spyOn(URL, 'createObjectURL')
+      .mockReturnValue('blob:download')
+    const revokeObjectURL = vi
+      .spyOn(URL, 'revokeObjectURL')
+      .mockImplementation(() => undefined)
+    const click = vi
+      .spyOn(HTMLAnchorElement.prototype, 'click')
+      .mockImplementation(() => undefined)
+
+    hooks.useRedactionRun.mockReturnValue({
+      isPending: false,
+      data: run,
+    })
+    hooks.useRedactionDocumentText.mockReturnValue({
+      isPending: false,
+      data: { text: 'Jane filed.' },
+    })
+    hooks.useRedactionOutput.mockReturnValue({
+      isPending: false,
+      data: {
+        text: '[REDACTED] filed.',
+        mimeType: 'text/plain',
+        filename: 'source-redacted.txt',
+      },
+    })
+    hooks.useSpanDecision.mockReturnValue({})
+    hooks.useFinalizeRun.mockReturnValue({})
+
+    render(<RedactionReviewView runId="red_1" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Download' }))
+
+    expect(createObjectURL).toHaveBeenCalled()
+    expect(click).toHaveBeenCalled()
+    expect(revokeObjectURL).not.toHaveBeenCalled()
+    vi.runAllTimers()
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:download')
+
+    createObjectURL.mockRestore()
+    revokeObjectURL.mockRestore()
+    click.mockRestore()
+    vi.useRealTimers()
+  })
 })

@@ -197,7 +197,10 @@ function downloadBlob(blob: Blob, filename: string) {
   anchor.href = url
   anchor.download = filename
   anchor.click()
-  URL.revokeObjectURL(url)
+  // Defer revoke past the click handler so the browser can start the download.
+  setTimeout(() => {
+    URL.revokeObjectURL(url)
+  }, 0)
 }
 
 async function shareOrDownload(blob: Blob, filename: string) {

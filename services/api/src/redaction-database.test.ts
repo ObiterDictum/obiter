@@ -5,6 +5,7 @@ import {
   getDocumentRedactionSource,
   listRedactionAuditLog,
   mapRedactionRun,
+  mimeTypeFromStoredFileType,
   recordSpanDecision,
   restoreRedactionRunWithAudit,
   softDeleteRedactionRun,
@@ -865,5 +866,25 @@ describe('restoreRedactionRunWithAudit', () => {
       false,
     )
     expect(calls.some(([sql]) => sql.trim() === 'commit')).toBe(false)
+  })
+})
+
+describe('mimeTypeFromStoredFileType', () => {
+  it('maps short document types and real MIME types', () => {
+    expect(mimeTypeFromStoredFileType('pdf')).toBe('application/pdf')
+    expect(mimeTypeFromStoredFileType('application/pdf')).toBe(
+      'application/pdf',
+    )
+    expect(mimeTypeFromStoredFileType('docx')).toBe(
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    )
+    expect(mimeTypeFromStoredFileType('txt')).toBe('text/plain')
+    expect(mimeTypeFromStoredFileType('text/plain; charset=utf-8')).toBe(
+      'text/plain',
+    )
+    expect(mimeTypeFromStoredFileType(null)).toBe('application/octet-stream')
+    expect(mimeTypeFromStoredFileType('unknown')).toBe(
+      'application/octet-stream',
+    )
   })
 })
