@@ -22,13 +22,21 @@ import { Skeleton, ToastProvider, Toaster, cn } from '@obiter/ui'
 import type { AppPlatform } from '@obiter/contracts'
 import { useEffect, useState, type ReactNode } from 'react'
 import { AgentWidget } from './agent-widget'
+import { AppSearchField } from './app-search-field'
 import { useAuth } from './auth'
 import { currentUserQueryOptions } from './current-user'
 import { useMatterDocuments } from './documents'
 import { useMattersList } from './matters'
-import { useRedactionRunsList } from './redaction-runs'
+import {
+  isAttentionRun,
+  useRedactionRunsList,
+} from './redaction-runs'
 import { THEME_STORAGE_KEY } from './use-app-theme'
 import { getRecentLegalSearches } from './views/LegalSearchView'
+import {
+  lastPlaceFromPath,
+  writeWorkspaceLastPlace,
+} from './workspace-continuity'
 import { ObiterMark, Wordmark } from './wordmark'
 
 interface ModeItem {
@@ -56,7 +64,7 @@ const MODE_NAV: ModeItem[] = [
  * App frame. Gates the shell on a real better-auth session: unauthenticated
  * users are redirected to /sign-in. Auth routes render bare (no workspace
  * chrome). Authenticated chrome matches the marketing workspace demo:
- * top modes, hover-expand rail, centered ⌘K, floating Agent.
+ * top modes (content column), hover-expand rail, app-wide search, floating Agent.
  */
 export function AppShellLayout({
   children,
@@ -108,12 +116,20 @@ function AuthenticatedFrame({
   })
   const mode = resolveMode(currentPath)
 
+  useEffect(() => {
+    const place = lastPlaceFromPath(currentPath)
+    if (!place || typeof window === 'undefined') return
+    writeWorkspaceLastPlace(window.sessionStorage, place)
+  }, [currentPath])
+
   return (
-    <div className="flex h-dvh flex-col bg-canvas text-ink">
-      <TopBar platform={platform} mode={mode} />
-      <div className="flex min-h-0 flex-1">
-        <ModeRail mode={mode} />
-        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">{children}</main>
+    <div className="flex h-dvh bg-canvas text-ink">
+      <ModeRail mode={mode} />
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <TopBar platform={platform} mode={mode} />
+        <main className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+          {children}
+        </main>
       </div>
       <AgentWidget />
     </div>
@@ -139,8 +155,6 @@ function TopBar({
   platform: AppPlatform
   mode: ModeId
 }) {
-  const navigate = useNavigate()
-
   return (
     <header className="flex h-11 shrink-0 items-center gap-3 border-b border-line bg-canvas px-3">
       <div className="flex min-w-0 flex-1 items-center gap-2">
@@ -192,19 +206,7 @@ function TopBar({
         </nav>
       </div>
 
-      <button
-        type="button"
-        onClick={() => void navigate({ to: '/search' })}
-        className="hidden h-8 w-full max-w-sm items-center gap-2 rounded-pill border border-line bg-surface px-3 text-left text-[13px] text-muted transition-[border-color,background-color] duration-200 hover:border-line-strong hover:text-ink sm:flex"
-        aria-label="Open search"
-      >
-        <MagnifyingGlass size={14} aria-hidden />
-        <span className="flex-1">Search judgments…</span>
-        <kbd className="rounded border border-line px-1.5 py-0.5 font-mono text-[10px] text-subtle">
-          ⌘K
-        </kbd>
-      </button>
-      <CommandKListener />
+      <AppSearchField />
 
       <div className="flex min-w-0 flex-1 items-center justify-end gap-1">
         <ThemeToggle />
@@ -235,32 +237,56 @@ function ModeRail({ mode }: { mode: ModeId }) {
     select: (state) => state.location.pathname,
   })
   const sections = useModeRailSections(mode, currentPath, navigate)
+  const expandable = sections.length > 0
+  const [navVisible, setNavVisible] = useState(expandable)
+
+  useEffect(() => {
+    if (!expandable) {
+      setNavVisible(false)
+      return
+    }
+    setNavVisible(false)
+    const frame = window.requestAnimationFrame(() => setNavVisible(true))
+    return () => window.cancelAnimationFrame(frame)
+  }, [mode, expandable])
 
   return (
     <aside
       className={cn(
         'group/rail relative z-10 flex h-full shrink-0 flex-col overflow-hidden border-r border-line bg-canvas',
         'w-12 transition-[width] duration-200 ease-[cubic-bezier(0.32,0.72,0,1)]',
-        'hover:w-64 focus-within:w-64',
+        expandable && 'hover:w-64 focus-within:w-64',
       )}
-      aria-label="Mode shortcuts"
+      aria-label={expandable ? 'Mode shortcuts' : 'Obiter'}
     >
       {/* Fixed inner width so icons stay left-aligned while the rail clips/expands. */}
       <div className="flex h-full w-64 flex-col">
         <div className="flex h-11 shrink-0 items-center gap-2.5 border-b border-line px-3.5">
-          <ObiterMark className="h-5 w-5 shrink-0" />
+          <Link to="/" aria-label="Home" className="shrink-0">
+            <ObiterMark className="h-5 w-5" />
+          </Link>
           <span
             className={cn(
               'truncate text-[11px] font-semibold tracking-[0.14em] text-muted uppercase',
               'opacity-0 transition-opacity duration-200',
-              'group-hover/rail:opacity-100 group-focus-within/rail:opacity-100',
+              expandable &&
+                'group-hover/rail:opacity-100 group-focus-within/rail:opacity-100',
             )}
           >
             {modeLabel(mode)}
           </span>
         </div>
 
-        <nav className="flex flex-1 flex-col gap-5 overflow-y-auto px-2 py-3">
+        <nav
+          className={cn(
+            'flex flex-1 flex-col gap-5 overflow-y-auto px-2 py-3',
+            'transition-[opacity,transform] duration-200 ease-[cubic-bezier(0.32,0.72,0,1)]',
+            navVisible
+              ? 'translate-y-0 opacity-100'
+              : 'pointer-events-none translate-y-1 opacity-0',
+          )}
+          aria-hidden={!expandable}
+        >
           {sections.map((section) => (
             <div key={section.title} className="flex flex-col gap-0.5">
               <p
@@ -385,10 +411,10 @@ function useModeRailSections(
   navigate: ReturnType<typeof useNavigate>,
 ): RailSection[] {
   const mattersQuery = useMattersList({
-    enabled: mode === 'home' || mode === 'matters',
+    enabled: mode === 'matters',
   })
   const runsQuery = useRedactionRunsList({
-    enabled: mode === 'home' || mode === 'redact',
+    enabled: mode === 'redact',
   })
   const matterId = matterIdFromPath(currentPath)
   const documentsQuery = useMatterDocuments(matterId ?? '', {
@@ -405,110 +431,14 @@ function useModeRailSections(
     (matter) => matter.status === 'archived',
   )
   const runs = runsQuery.data?.runs ?? []
-  const pendingRuns = runs.filter(
-    (run) =>
-      run.status === 'ready_for_review' || run.status === 'detecting',
-  )
+  const pendingRuns = runs.filter((run) => isAttentionRun(run.status))
   const documents = documentsQuery.data ?? []
 
   switch (mode) {
-    case 'home': {
-      const attention: RailItem[] = []
-      if (mattersQuery.isLoading || runsQuery.isLoading) {
-        attention.push({
-          id: 'attention-loading',
-          label: 'Loading…',
-          icon: Clock,
-          muted: true,
-        })
-      } else {
-        if (activeMatters.length > 0) {
-          attention.push({
-            id: 'attention-matters',
-            label: `${activeMatters.length} open matter${activeMatters.length === 1 ? '' : 's'}`,
-            note: activeMatters[0]?.name,
-            to: '/matters',
-            icon: Folders,
-          })
-        }
-        if (pendingRuns.length > 0) {
-          attention.push({
-            id: 'attention-redact',
-            label: `${pendingRuns.length} pending redaction${pendingRuns.length === 1 ? '' : 's'}`,
-            note: pendingRuns[0]?.sourceFilename,
-            to: '/redact',
-            icon: WarningCircle,
-          })
-        }
-        if (attention.length === 0) {
-          attention.push({
-            id: 'attention-empty',
-            label: 'Nothing waiting',
-            icon: Clock,
-            muted: true,
-          })
-        }
-      }
-
-      return [
-        {
-          title: 'Attention',
-          items: attention,
-        },
-        {
-          title: 'Matters',
-          items:
-            activeMatters.length > 0
-              ? activeMatters.slice(0, 6).map((matter) => ({
-                  id: `matter-${matter.id}`,
-                  label: matter.name,
-                  note: matter.clientReference || matter.primaryJurisdiction,
-                  to: `/matters/${matter.id}`,
-                  icon: Folders,
-                }))
-              : [
-                  {
-                    id: 'matters-empty',
-                    label: 'No matters yet',
-                    note: 'Create one from Matters',
-                    to: '/matters',
-                    icon: Folders,
-                    muted: true,
-                  },
-                ],
-        },
-        {
-          title: 'Shortcuts',
-          items: [
-            {
-              id: 'shortcut-home',
-              label: 'Home desk',
-              to: '/',
-              icon: House,
-            },
-            {
-              id: 'shortcut-search',
-              label: 'Search judgments',
-              to: '/search',
-              icon: MagnifyingGlass,
-            },
-            {
-              id: 'shortcut-redact',
-              label: 'Redaction runs',
-              to: '/redact',
-              icon: PencilSimple,
-            },
-            {
-              id: 'shortcut-verify',
-              label: 'Verify',
-              note: 'In development',
-              to: '/verify',
-              icon: ListChecks,
-            },
-          ],
-        },
-      ]
-    }
+    case 'home':
+      // Home has no mode rail — the desk already surfaces attention, matters,
+      // and mode entry points; shortcuts would only duplicate the top bar.
+      return []
     case 'search':
       return [
         {
@@ -760,21 +690,6 @@ function useModeRailSections(
 function matterIdFromPath(path: string): string | null {
   const match = path.match(/^\/matters\/([^/]+)/)
   return match?.[1] ?? null
-}
-
-function CommandKListener() {
-  const navigate = useNavigate()
-  useEffect(() => {
-    function onKeyDown(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
-        event.preventDefault()
-        void navigate({ to: '/search' })
-      }
-    }
-    window.addEventListener('keydown', onKeyDown)
-    return () => window.removeEventListener('keydown', onKeyDown)
-  }, [navigate])
-  return null
 }
 
 function UserMenu({ platform }: { platform: AppPlatform }) {
