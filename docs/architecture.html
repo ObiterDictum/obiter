@@ -2484,6 +2484,22 @@
                 </tr>
                 <tr>
                   <td class="id">
+                    GET /api/redaction-runs/:runId/source-file
+                  </td>
+                  <td class="id">redact-review.ts</td>
+                  <td>
+                    Original upload or matter document bytes for PDF preview
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">GET /api/redaction-runs/:runId/layout</td>
+                  <td class="id">redact-review.ts</td>
+                  <td>
+                    PDF text-layout geometry aligned to extracted text offsets
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">
                     POST /api/redaction-runs/:runId/spans/:spanId/decision
                   </td>
                   <td class="id">redact-review.ts</td>
@@ -2492,12 +2508,27 @@
                 <tr>
                   <td class="id">POST /api/redaction-runs/:runId/finalize</td>
                   <td class="id">redact-review.ts</td>
-                  <td>Apply decisions, write the output artifact</td>
+                  <td>
+                    Apply decisions; write text or rasterized redacted PDF
+                    artifact
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">GET /api/redaction-runs/:runId/output</td>
                   <td class="id">redact-review.ts</td>
-                  <td>Finalized text</td>
+                  <td>
+                    Finalized output metadata; text body when output is plain
+                    text
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    GET /api/redaction-runs/:runId/output/file
+                  </td>
+                  <td class="id">redact-review.ts</td>
+                  <td>
+                    Finalized artifact bytes (redacted PDF or text download)
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">GET /api/redaction-runs/:runId/token-map</td>
@@ -3157,6 +3188,24 @@
                     org/&lt;id&gt;/redaction-runs/&lt;id&gt;/source
                   </td>
                   <td>Standalone run source text</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    org/&lt;id&gt;/redaction-runs/&lt;id&gt;/original
+                  </td>
+                  <td>Standalone run original upload bytes</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    org/&lt;id&gt;/redaction-runs/&lt;id&gt;/layout.json
+                  </td>
+                  <td>Standalone run PDF layout geometry</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    org/&lt;id&gt;/matters/&lt;id&gt;/documents/&lt;id&gt;/versions/&lt;id&gt;/layout.json
+                  </td>
+                  <td>Matter document PDF layout geometry</td>
                 </tr>
                 <tr>
                   <td class="id">org/&lt;id&gt;/artifacts/&lt;id&gt;</td>

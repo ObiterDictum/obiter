@@ -4,7 +4,7 @@
  */
 
 // Data + auth helpers (contract §3)
-export { apiFetch, ApiError } from './api'
+export { apiFetch, apiFetchBlob, ApiError } from './api'
 export { declaredFileType } from './file-type'
 export {
   authClient,

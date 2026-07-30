@@ -6,12 +6,31 @@ const hooks = vi.hoisted(() => ({
   useRedactionRun: vi.fn(),
   useRedactionDocumentText: vi.fn(),
   useRedactionOutput: vi.fn(),
+  useRedactionOutputFile: vi.fn(() => ({
+    isPending: false,
+    data: undefined,
+    error: null,
+  })),
   useSpanDecision: vi.fn(),
   useFinalizeRun: vi.fn(),
   useRedetectRun: vi.fn(),
 }))
 
+const sourcePreviewHooks = vi.hoisted(() => ({
+  useRedactionSourceFile: vi.fn(() => ({
+    isPending: false,
+    data: undefined,
+    isError: false,
+  })),
+  useRedactionLayout: vi.fn(() => ({
+    isPending: false,
+    data: undefined,
+    isError: false,
+  })),
+}))
+
 vi.mock('./hooks', () => hooks)
+vi.mock('./source-preview-hooks', () => sourcePreviewHooks)
 
 const onOpenRun = vi.fn()
 
@@ -24,6 +43,8 @@ const run = {
   matterId: 'mtr_1',
   documentId: 'doc_1',
   documentVersionId: 'ver_1',
+  sourceFilename: 'source.txt',
+  sourcePreview: { kind: 'text' as const, available: false },
   status: 'finalized' as const,
   policyMode: 'internal_ai_minimisation' as const,
   spans: [
@@ -66,14 +87,17 @@ describe('RedactionReviewView', () => {
   })
 
   it('renders highlighted source-aware spans in the shared review screen', () => {
-    hooks.useRedactionRun.mockReturnValue({ isPending: false, data: run })
+    hooks.useRedactionRun.mockReturnValue({
+      isPending: false,
+      data: { ...run, status: 'ready_for_review' },
+    })
     hooks.useRedactionDocumentText.mockReturnValue({
       isPending: false,
       data: { text: 'Jane filed.' },
     })
     hooks.useRedactionOutput.mockReturnValue({
       isPending: false,
-      data: { text: '[REDACTED] filed.' },
+      data: { text: '[REDACTED] filed.', mimeType: 'text/plain', filename: 'source-redacted.txt' },
     })
     hooks.useSpanDecision.mockReturnValue({})
     hooks.useFinalizeRun.mockReturnValue({})
@@ -136,7 +160,7 @@ describe('RedactionReviewView', () => {
     })
     hooks.useRedactionOutput.mockReturnValue({
       isPending: false,
-      data: { text: 'Clean text.' },
+      data: { text: 'Clean text.', mimeType: 'text/plain', filename: 'source-redacted.txt' },
     })
     hooks.useSpanDecision.mockReturnValue({})
     hooks.useFinalizeRun.mockReturnValue({})
@@ -202,7 +226,7 @@ describe('RedactionReviewView', () => {
     })
     hooks.useRedactionOutput.mockReturnValue({
       isPending: false,
-      data: { text: '[REDACTED] filed.' },
+      data: { text: '[REDACTED] filed.', mimeType: 'text/plain', filename: 'source-redacted.txt' },
     })
     hooks.useSpanDecision.mockReturnValue({})
     hooks.useFinalizeRun.mockReturnValue({})

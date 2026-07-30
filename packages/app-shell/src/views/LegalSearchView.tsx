@@ -6,7 +6,7 @@ import {
   SearchCommandBar,
   SearchFeedbackPanel,
   SearchFiltersDialog,
-  SearchIdleState,
+  SearchIdleExtras,
   SearchKeyboardShortcuts,
   SearchResults,
   courtOptionGroups,
@@ -241,7 +241,7 @@ export function LegalSearchView() {
   const [court, setCourt] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
-  const [recentSearches, setRecentSearches] = useState(() =>
+  const [, setRecentSearches] = useState(() =>
     typeof window === 'undefined'
       ? []
       : getRecentLegalSearches(window.sessionStorage),
@@ -505,13 +505,6 @@ export function LegalSearchView() {
     scheduleAutoSearch(nextQuery)
   }
 
-  function handleRecentSearch(nextQuery: string) {
-    setQuery(nextQuery)
-    setState(getLegalSearchStateAfterInputChange())
-    setSelectedResultIndex(-1)
-    scheduleAutoSearch(nextQuery)
-  }
-
   function handleCourtShortcut(nextCourt: string) {
     const nextFilters = { court: nextCourt, dateFrom, dateTo }
     setCourt(nextCourt)
@@ -530,20 +523,97 @@ export function LegalSearchView() {
     state.status === 'idle' && !shouldRunLegalSearch(query)
 
   return (
-    <div className="flex h-full min-h-[24rem] flex-col">
-      <SearchCommandBar
-        activeFilterCount={activeFilterCount}
-        courtLabel={courtLabel}
-        dateFrom={dateFrom}
-        dateTo={dateTo}
-        inputRef={searchInputRef}
-        isSearching={state.status === 'loading'}
-        onFilterClick={() => setFiltersOpen(true)}
-        onQueryChange={handleQueryChange}
-        onRemoveFilter={removeFilter}
-        onSubmit={handleSubmit}
-        query={query}
-      />
+    <div
+      className={
+        shouldShowIdleState
+          ? 'flex h-full min-h-[24rem] flex-col items-center justify-center px-6 py-10'
+          : 'flex h-full min-h-[24rem] flex-col'
+      }
+    >
+      <div
+        className={
+          shouldShowIdleState
+            ? 'flex w-full max-w-2xl flex-col gap-8'
+            : 'flex min-h-0 w-full flex-1 flex-col'
+        }
+      >
+        {shouldShowIdleState ? (
+          <div className="flex flex-col gap-2 text-center">
+            <h2 className="text-lg font-semibold tracking-tight text-ink">
+              Search judgments
+            </h2>
+            <p className="text-sm leading-relaxed text-muted">
+              Search stored judgments and Find Case Law across UK courts.
+              Recent queries stay in the sidebar.
+            </p>
+          </div>
+        ) : null}
+
+        <SearchCommandBar
+          activeFilterCount={activeFilterCount}
+          courtLabel={courtLabel}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          inputRef={searchInputRef}
+          isSearching={state.status === 'loading'}
+          placement={shouldShowIdleState ? 'center' : 'top'}
+          onFilterClick={() => setFiltersOpen(true)}
+          onQueryChange={handleQueryChange}
+          onRemoveFilter={removeFilter}
+          onSubmit={handleSubmit}
+          query={query}
+        />
+
+        {shouldShowIdleState ? (
+          <SearchIdleExtras
+            courtLabel={courtLabel}
+            courtShortcuts={courtShortcuts}
+            onCourtShortcut={handleCourtShortcut}
+          />
+        ) : state.status === 'results' ? (
+          <SearchResults
+            response={state.response}
+            browse={state.browse}
+            selectedIndex={selectedResultIndex}
+            onSelectIndex={setSelectedResultIndex}
+          />
+        ) : (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="mx-auto w-full max-w-3xl px-5 py-6 sm:px-6">
+              {state.status === 'loading' ? (
+                <p className="text-sm text-muted" role="status">
+                  Searching…
+                </p>
+              ) : null}
+
+              {state.status === 'empty' ? (
+                <SearchFeedbackPanel
+                  {...getLegalSearchEmptyFeedback({
+                    query: state.query,
+                    outcome: state.outcome,
+                    hydrationQueued: state.hydrationQueued,
+                    browse: state.browse,
+                  })}
+                  tone="warning"
+                />
+              ) : null}
+
+              {state.status === 'error' ? (
+                <SearchFeedbackPanel
+                  action={{
+                    label: 'Retry search',
+                    onClick: () => void runSearch(state.query),
+                  }}
+                  eyebrow="Search error"
+                  title="Search could not complete"
+                  body={state.message}
+                  tone="error"
+                />
+              ) : null}
+            </div>
+          </div>
+        )}
+      </div>
 
       {filtersOpen ? (
         <SearchFiltersDialog
@@ -559,67 +629,6 @@ export function LegalSearchView() {
       {shortcutsOpen ? (
         <SearchKeyboardShortcuts onClose={() => setShortcutsOpen(false)} />
       ) : null}
-
-      {state.status === 'results' ? (
-        <SearchResults
-          response={state.response}
-          browse={state.browse}
-          selectedIndex={selectedResultIndex}
-          onSelectIndex={setSelectedResultIndex}
-        />
-      ) : (
-        <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(16rem,20rem)_minmax(0,1fr)]">
-          <div className="min-h-0 overflow-y-auto border-b border-line lg:border-b-0 lg:border-r">
-            {shouldShowIdleState ? (
-              <SearchIdleState
-                courtLabel={courtLabel}
-                courtShortcuts={courtShortcuts}
-                recentSearches={recentSearches}
-                onCourtShortcut={handleCourtShortcut}
-                onRecentSearch={handleRecentSearch}
-              />
-            ) : null}
-
-            {state.status === 'loading' ? (
-              <p className="px-5 py-4 text-xs font-medium text-muted" role="status">
-                Searching…
-              </p>
-            ) : null}
-
-            {state.status === 'empty' ? (
-              <SearchFeedbackPanel
-                {...getLegalSearchEmptyFeedback({
-                  query: state.query,
-                  outcome: state.outcome,
-                  hydrationQueued: state.hydrationQueued,
-                  browse: state.browse,
-                })}
-                tone="warning"
-              />
-            ) : null}
-
-            {state.status === 'error' ? (
-              <SearchFeedbackPanel
-                action={{
-                  label: 'Retry search',
-                  onClick: () => void runSearch(state.query),
-                }}
-                eyebrow="Search error"
-                title="Search could not complete"
-                body={state.message}
-                tone="error"
-              />
-            ) : null}
-          </div>
-          <article className="flex min-h-[12rem] items-center justify-center p-6">
-            <p className="text-sm text-muted">
-              {shouldShowIdleState
-                ? 'Search stored judgments and Find Case Law across UK courts.'
-                : 'Select a result to read the source.'}
-            </p>
-          </article>
-        </div>
-      )}
     </div>
   )
 }

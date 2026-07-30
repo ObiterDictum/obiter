@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.0.0",
+    "@napi-rs/canvas": "^0.1.100",
     "@obiter/contracts": "workspace:*",
     "@obiter/legal-schema": "workspace:*",
     "@obiter/rampart-inference": "workspace:*",
@@ -21,6 +22,7 @@
     "hono": "^4.12.14",
     "jszip": "^3.10.1",
     "mammoth": "^1.12.0",
+    "pdf-lib": "^1.17.1",
     "pg": "^8.20.0",
     "resend": "^4.0.1",
     "tsx": "^4.23.0",

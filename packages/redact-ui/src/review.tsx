@@ -20,9 +20,16 @@ import {
 import {
   useRedactionDocumentText,
   useRedactionOutput,
+  useRedactionOutputFile,
   useRedactionRun,
   useSpanDecision,
 } from './hooks'
+import {
+  useRedactionLayout,
+  useRedactionSourceFile,
+} from './source-preview-hooks'
+import { PdfDocumentPreview } from './pdf-document-preview'
+import { PdfReviewDocument } from './pdf-review-document'
 import { DetectionRetryWarning } from './detection-retry-warning'
 import { FinalizeDialog } from './finalize-dialog'
 import type { RedactionRun } from './types'
@@ -151,7 +158,7 @@ function HighlightedText({
   let position = 0
   return (
     <article
-      className="whitespace-pre-wrap font-mono text-sm leading-7 text-ink"
+      className="whitespace-pre-wrap text-base leading-relaxed text-ink [overflow-wrap:anywhere]"
       aria-label="Original document text"
     >
       {spans.map((span) => {
@@ -166,7 +173,7 @@ function HighlightedText({
               data-span-id={span.id}
               onClick={() => onSelect(span.id)}
               className={cn(
-                'rounded-sm border-b-2 px-0.5 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                'inline rounded-sm border-b-2 px-0.5 text-left align-baseline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                 categoryClasses[span.category],
                 sourceClasses[span.source],
                 selectedId === span.id && 'ring-2 ring-ring',
@@ -184,23 +191,136 @@ function HighlightedText({
   )
 }
 
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
+
+async function shareOrDownload(blob: Blob, filename: string) {
+  const file = new File([blob], filename, {
+    type: blob.type || 'application/octet-stream',
+  })
+  try {
+    if (navigator.canShare?.({ files: [file] })) {
+      await navigator.share({ files: [file], title: filename })
+      return
+    }
+  } catch {
+    // User cancelled share or share failed — fall through to download.
+  }
+  downloadBlob(blob, filename)
+}
+
 function FinalizedOutput({
+  run,
   outputQuery,
 }: {
+  run: RedactionRun
   outputQuery: ReturnType<typeof useRedactionOutput>
 }) {
+  const mimeType =
+    outputQuery.data?.mimeType ??
+    run.summary.outputMimeType ??
+    'text/plain'
+  const isPdf = mimeType === 'application/pdf'
+  const filename =
+    outputQuery.data?.filename ??
+    run.summary.outputFilename ??
+    run.sourceFilename
+  const fileQuery = useRedactionOutputFile(run.id, isPdf && Boolean(run.outputArtifactId))
+
   return (
-    <section className="flex flex-col gap-2 p-5 sm:p-6" aria-label="Redaction output">
-      <h2 className="text-sm font-semibold text-ink">Finalized output</h2>
-      {outputQuery.isPending ? (
-        <Skeleton className="h-32" />
-      ) : outputQuery.error ? (
-        <p className="text-sm text-danger">{outputQuery.error.message}</p>
-      ) : (
-        <pre className="whitespace-pre-wrap font-mono text-sm leading-7 text-ink">
-          {outputQuery.data?.text}
-        </pre>
-      )}
+    <section
+      className="px-4 py-4 sm:px-5"
+      aria-label="Redaction output"
+    >
+      <div className="w-full rounded-lg border border-line-strong bg-raised text-ink shadow-lg">
+        <header className="flex flex-wrap items-start justify-between gap-4 border-b border-line px-8 py-6 md:px-10">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-subtle">
+              Finalized output
+            </p>
+            <h2 className="mt-2 text-lg font-semibold leading-snug text-ink">
+              {filename}
+            </h2>
+            <p className="mt-1 text-sm text-muted">
+              {isPdf
+                ? 'Redacted PDF ready to download or share.'
+                : 'Redacted text ready to download or share.'}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="secondary"
+              disabled={
+                isPdf
+                  ? !fileQuery.data
+                  : !outputQuery.data?.text && outputQuery.data?.text !== ''
+              }
+              onClick={() => {
+                if (isPdf && fileQuery.data) {
+                  downloadBlob(fileQuery.data, filename)
+                  return
+                }
+                if (outputQuery.data?.text != null) {
+                  downloadBlob(
+                    new Blob([outputQuery.data.text], {
+                      type: 'text/plain;charset=utf-8',
+                    }),
+                    filename,
+                  )
+                }
+              }}
+            >
+              Download
+            </Button>
+            <Button
+              disabled={
+                isPdf
+                  ? !fileQuery.data
+                  : !outputQuery.data?.text && outputQuery.data?.text !== ''
+              }
+              onClick={() => {
+                void (async () => {
+                  if (isPdf && fileQuery.data) {
+                    await shareOrDownload(fileQuery.data, filename)
+                    return
+                  }
+                  if (outputQuery.data?.text != null) {
+                    await shareOrDownload(
+                      new Blob([outputQuery.data.text], {
+                        type: 'text/plain;charset=utf-8',
+                      }),
+                      filename,
+                    )
+                  }
+                })()
+              }}
+            >
+              Share
+            </Button>
+          </div>
+        </header>
+        <div className="px-4 py-4 sm:px-5 md:px-6">
+          {outputQuery.isPending || (isPdf && fileQuery.isPending) ? (
+            <Skeleton className="h-32" />
+          ) : outputQuery.error ? (
+            <p className="text-sm text-danger">{outputQuery.error.message}</p>
+          ) : isPdf && fileQuery.error ? (
+            <p className="text-sm text-danger">{fileQuery.error.message}</p>
+          ) : isPdf && fileQuery.data ? (
+            <PdfDocumentPreview file={fileQuery.data} />
+          ) : (
+            <div className="px-4 pb-4 text-base leading-relaxed text-ink [overflow-wrap:anywhere] whitespace-pre-wrap md:px-5">
+              {outputQuery.data?.text}
+            </div>
+          )}
+        </div>
+      </div>
     </section>
   )
 }
@@ -228,6 +348,9 @@ export function RedactionReviewView({
 }) {
   const runQuery = useRedactionRun(runId)
   const textQuery = useRedactionDocumentText(runId)
+  const pdfPreviewEnabled = runQuery.data?.sourcePreview?.available === true
+  const sourceFileQuery = useRedactionSourceFile(runId, pdfPreviewEnabled)
+  const layoutQuery = useRedactionLayout(runId, pdfPreviewEnabled)
   const outputQuery = useRedactionOutput(
     runId,
     runQuery.data?.status === 'finalized',
@@ -319,7 +442,7 @@ export function RedactionReviewView({
         <div className="flex flex-col gap-4 overflow-y-auto p-5 sm:p-6">
           <DetectionRetryWarning run={run} onOpenRun={onOpenRun} />
           {run.status === 'finalized' ? (
-            <FinalizedOutput outputQuery={outputQuery} />
+            <FinalizedOutput run={run} outputQuery={outputQuery} />
           ) : (
             <EmptyState
               title="No sensitive data was detected in this document"
@@ -397,25 +520,44 @@ export function RedactionReviewView({
       <div className="shrink-0">
         <ReviewSummary run={run} />
       </div>
-      {run.status === 'finalized' ? (
-        <div className="shrink-0 border-b border-line">
-          <FinalizedOutput outputQuery={outputQuery} />
-        </div>
-      ) : null}
-      <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(16rem,22rem)]">
+      <div className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(18rem,24rem)]">
         <section
-          className="min-h-0 overflow-y-auto border-b border-line p-5 xl:border-b-0 xl:border-r sm:p-6"
+          className="min-h-0 overflow-y-auto border-b border-line xl:border-b-0 xl:border-r"
           aria-label="Document"
         >
-          <p className="mb-3 text-[11px] font-medium tracking-wide text-muted">
-            Document
-          </p>
-          <HighlightedText
-            text={textQuery.data.text}
-            run={run}
-            selectedId={selected?.id ?? null}
-            onSelect={setSelectedId}
-          />
+          {run.status === 'finalized' ? (
+            <FinalizedOutput run={run} outputQuery={outputQuery} />
+          ) : pdfPreviewEnabled &&
+            sourceFileQuery.data &&
+            layoutQuery.data ? (
+            <PdfReviewDocument
+              file={sourceFileQuery.data}
+              layout={layoutQuery.data}
+              spans={run.spans}
+              selectedId={selected?.id ?? null}
+              onSelect={setSelectedId}
+              categoryClassName={categoryClasses}
+            />
+          ) : (
+            <div className="px-4 py-4 sm:px-5">
+              <div className="w-full rounded-lg border border-line-strong bg-raised p-8 text-ink shadow-lg md:p-10">
+                <header className="mb-6 border-b border-line pb-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-subtle">
+                    Source document
+                  </p>
+                  <h2 className="mt-2 text-lg font-semibold leading-snug text-ink">
+                    {run.sourceFilename}
+                  </h2>
+                </header>
+                <HighlightedText
+                  text={textQuery.data.text}
+                  run={run}
+                  selectedId={selected?.id ?? null}
+                  onSelect={setSelectedId}
+                />
+              </div>
+            </div>
+          )}
         </section>
         <aside
           className="flex min-h-0 flex-col xl:max-h-none"

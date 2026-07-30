@@ -1,5 +1,6 @@
 import { type FormEvent, type RefObject } from 'react'
 import { Funnel, MagnifyingGlass, X } from '@phosphor-icons/react'
+import { cn } from '@obiter/ui'
 
 interface SearchCommandBarProps {
   activeFilterCount: number
@@ -8,6 +9,11 @@ interface SearchCommandBarProps {
   dateTo: string
   isSearching: boolean
   inputRef?: RefObject<HTMLInputElement | null>
+  /**
+   * `center` — idle desk (field in the middle of the pane).
+   * `top` — same field chrome, pinned above results.
+   */
+  placement?: 'center' | 'top'
   onFilterClick: () => void
   onQueryChange: (query: string) => void
   onRemoveFilter: (filter: 'court' | 'dateFrom' | 'dateTo') => void
@@ -22,21 +28,32 @@ export function SearchCommandBar({
   dateTo,
   isSearching,
   inputRef,
+  placement = 'center',
   onFilterClick,
   onQueryChange,
   onRemoveFilter,
   onSubmit,
   query,
 }: SearchCommandBarProps) {
+  const atTop = placement === 'top'
+
   return (
     <form
-      className="flex shrink-0 flex-col border-b border-line"
+      className={cn(
+        'flex w-full flex-col gap-3',
+        atTop && 'shrink-0 border-b border-line px-5 py-4 sm:px-6',
+      )}
       onSubmit={onSubmit}
     >
-      <div className="flex items-center gap-2 px-4 py-2 sm:px-5">
+      <div
+        className={cn(
+          'mx-auto flex w-full items-center gap-2 rounded-lg border border-line bg-surface px-4 py-3',
+          atTop ? 'max-w-3xl' : 'max-w-2xl',
+        )}
+      >
         <MagnifyingGlass
           aria-hidden="true"
-          size={16}
+          size={18}
           className="shrink-0 text-subtle"
         />
         <label className="sr-only" htmlFor="legal-sources-search">
@@ -45,7 +62,7 @@ export function SearchCommandBar({
         <input
           ref={inputRef}
           id="legal-sources-search"
-          className="min-h-[36px] flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-subtle"
+          className="min-h-[28px] flex-1 bg-transparent text-base text-ink outline-none placeholder:text-subtle"
           value={query}
           onChange={(event) => onQueryChange(event.target.value)}
           placeholder="Act, citation, party, or point of law"
@@ -54,7 +71,7 @@ export function SearchCommandBar({
           autoFocus
         />
         <button
-          className="inline-flex h-8 shrink-0 items-center rounded-md px-2.5 text-xs font-medium text-muted transition-colors hover:bg-raised hover:text-ink disabled:cursor-progress disabled:opacity-70"
+          className="inline-flex h-9 shrink-0 items-center rounded-md bg-brand px-3 text-xs font-semibold text-brand-fg transition-colors hover:bg-brand-pressed disabled:cursor-progress disabled:opacity-70"
           type="submit"
           disabled={isSearching}
         >
@@ -62,7 +79,12 @@ export function SearchCommandBar({
         </button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 border-t border-line px-4 py-2 sm:px-5">
+      <div
+        className={cn(
+          'flex flex-wrap items-center gap-2',
+          atTop ? 'mx-auto w-full max-w-3xl' : 'justify-center',
+        )}
+      >
         <button
           className="inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted transition-colors hover:bg-raised hover:text-ink"
           type="button"

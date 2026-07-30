@@ -14,7 +14,7 @@ export type TokenMap = Record<string, string>
 
 type OutputSpan = RedactionSpan & { replacement: string }
 
-function affectsOutput(decision: Decisions[string] | undefined) {
+export function affectsOutput(decision: Decisions[string] | undefined) {
   return (
     decision?.decision === 'accept' ||
     decision?.decision === 'override_redact' ||

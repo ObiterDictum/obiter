@@ -33,12 +33,20 @@ export interface RedactionRunRecord {
   documentVersionId: string | null
   sourceFilename: string
   sourceTextObjectKey: string | null
+  sourceFileObjectKey: string | null
+  sourceLayoutObjectKey: string | null
+  sourceMimeType: string | null
   status: RedactionRunStatus
   policyMode: RedactionPolicyMode
   spans: RedactionSpan[]
   decisions: Decisions
   outputArtifactId: string | null
-  summary: RunSummary & { tokenMap?: TokenMap; outputMode?: OutputMode }
+  summary: RunSummary & {
+    tokenMap?: TokenMap
+    outputMode?: OutputMode
+    outputMimeType?: string
+    outputFilename?: string | null
+  }
   detectorVersion: string | null
   detectionMode: DetectionMode
   replacesRunId: string | null
@@ -59,6 +67,9 @@ export interface RedactionRunRow {
   document_version_id: string | null
   source_filename: string
   source_text_object_key: string | null
+  source_file_object_key: string | null
+  source_layout_object_key: string | null
+  source_mime_type: string | null
   status: RedactionRunStatus
   policy_mode: RedactionPolicyMode
   spans_json: unknown
@@ -83,7 +94,8 @@ interface ArtifactRecord {
 }
 
 export const redactionRunColumns = `run.id, run.organisation_id, run.matter_id, matter.name as matter_name, run.document_id,
-  run.document_version_id, run.source_filename, run.source_text_object_key, run.status, run.policy_mode,
+  run.document_version_id, run.source_filename, run.source_text_object_key, run.source_file_object_key,
+  run.source_layout_object_key, run.source_mime_type, run.status, run.policy_mode,
   run.spans_json, run.decisions_json, run.output_artifact_id, run.summary_json, run.detector_version,
   run.detection_mode, run.replaces_run_id, replacement.id as replacement_run_id, run.created_by, run.created_at, run.updated_at, run.deleted_at, run.deleted_by`
 export const redactionRunsFrom = `from redaction_runs run
@@ -180,6 +192,9 @@ export function mapRedactionRun(row: RedactionRunRow): RedactionRunRecord {
     documentVersionId: row.document_version_id,
     sourceFilename: row.source_filename,
     sourceTextObjectKey: row.source_text_object_key,
+    sourceFileObjectKey: row.source_file_object_key ?? null,
+    sourceLayoutObjectKey: row.source_layout_object_key ?? null,
+    sourceMimeType: row.source_mime_type ?? null,
     status: row.status,
     policyMode: row.policy_mode,
     spans: parseSpans(row.spans_json),
@@ -235,8 +250,28 @@ export function computeSummary(
 
 export function publicRun(run: RedactionRunRecord) {
   const { tokenMap: _tokenMap, ...summary } = run.summary
-  const { sourceTextObjectKey: _sourceTextObjectKey, ...publicRecord } = run
-  return { ...publicRecord, summary }
+  const {
+    sourceTextObjectKey: _sourceTextObjectKey,
+    sourceFileObjectKey: _sourceFileObjectKey,
+    sourceLayoutObjectKey: _sourceLayoutObjectKey,
+    ...publicRecord
+  } = run
+  const pdfPreview =
+    isPdfSource(run.sourceFilename, run.sourceMimeType) &&
+    Boolean(run.sourceFileObjectKey || run.documentVersionId)
+  return {
+    ...publicRecord,
+    summary,
+    sourcePreview: {
+      kind: pdfPreview ? ('pdf' as const) : ('text' as const),
+      available: pdfPreview,
+    },
+  }
+}
+
+function isPdfSource(filename: string, mimeType: string | null) {
+  if (mimeType?.toLowerCase().includes('pdf')) return true
+  return /\.pdf$/i.test(filename)
 }
 
 async function selectRedactionRun(
@@ -307,6 +342,49 @@ export async function getRunTextObjectKey(pool: Pool, run: RedactionRunRecord) {
     [run.documentVersionId, run.organisationId],
   )
   return result.rows[0]?.text_object_key ?? null
+}
+
+export async function getRunSourceFile(pool: Pool, run: RedactionRunRecord) {
+  if (run.sourceFileObjectKey) {
+    return {
+      objectKey: run.sourceFileObjectKey,
+      mimeType: run.sourceMimeType ?? 'application/octet-stream',
+      filename: run.sourceFilename,
+    }
+  }
+  if (!run.documentVersionId) return null
+  const result = await pool.query<{
+    object_key: string
+    filename: string
+    file_type: string
+  }>(
+    `select object_key, filename, file_type
+     from document_versions
+     where id = $1 and organisation_id = $2`,
+    [run.documentVersionId, run.organisationId],
+  )
+  const row = result.rows[0]
+  if (!row) return null
+  return {
+    objectKey: row.object_key,
+    mimeType: row.file_type || 'application/octet-stream',
+    filename: row.filename,
+  }
+}
+
+export async function getRunLayoutObjectKey(
+  pool: Pool,
+  run: RedactionRunRecord,
+) {
+  if (run.sourceLayoutObjectKey) return run.sourceLayoutObjectKey
+  if (!run.documentVersionId) return null
+  const result = await pool.query<{ object_key: string }>(
+    `select object_key from document_versions where id = $1 and organisation_id = $2`,
+    [run.documentVersionId, run.organisationId],
+  )
+  const objectKey = result.rows[0]?.object_key
+  if (!objectKey?.endsWith('/source')) return null
+  return objectKey.replace(/\/source$/, '/layout.json')
 }
 
 export async function getDocumentRedactionSource(
@@ -416,6 +494,8 @@ export async function finalizeRedactionRun(input: {
   requestId: string
   degradedDetectionAcknowledged: boolean
   unknownDetectionAcknowledged: boolean
+  outputMimeType?: string
+  outputFilename?: string
 }) {
   const client = await input.pool.connect()
   try {
@@ -471,6 +551,8 @@ export async function finalizeRedactionRun(input: {
       ...computeSummary(run.spans, run.decisions),
       tokenMap: input.tokenMap,
       outputMode: input.outputMode,
+      outputMimeType: input.outputMimeType ?? 'text/plain',
+      outputFilename: input.outputFilename ?? null,
     }
     await client.query(
       `update redaction_runs set status = 'finalized', output_artifact_id = $3, summary_json = $4::jsonb, updated_at = now() where id = $1 and organisation_id = $2`,
@@ -494,6 +576,8 @@ export async function finalizeRedactionRun(input: {
       action: 'redaction.finalize',
       metadata: {
         outputMode: input.outputMode,
+        outputMimeType: input.outputMimeType ?? 'text/plain',
+        outputFilename: input.outputFilename ?? null,
         detectionMode: finalizedRun.detectionMode,
         degradedDetectionAcknowledged:
           finalizedRun.detectionMode === 'heuristics+supplement' &&

@@ -19,7 +19,7 @@ import {
 } from '../database'
 import {
   DocumentExtractionError,
-  extractDocumentText,
+  extractDocumentContent,
   normaliseFileType,
 } from '../document-extraction'
 import { DocumentUploadError, readDocumentUpload } from '../document-upload'
@@ -202,8 +202,21 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
         )
       }
       try {
-        const text = await extractDocumentText(verifiedType, uploadContents)
-        await storage.writeText(textObjectKey, text)
+        const extracted = await extractDocumentContent(
+          verifiedType,
+          uploadContents,
+        )
+        await storage.writeText(textObjectKey, extracted.text)
+        if (extracted.layout) {
+          const layoutObjectKey = result.version.objectKey.replace(
+            /\/source$/,
+            '/layout.json',
+          )
+          await storage.writeText(
+            layoutObjectKey,
+            JSON.stringify(extracted.layout),
+          )
+        }
         const version = await updateDocumentExtraction(pool, {
           organisationId: user.organisationId,
           versionId: result.version.id,

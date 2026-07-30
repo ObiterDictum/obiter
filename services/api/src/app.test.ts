@@ -1850,9 +1850,72 @@ describe('createApiApp redaction review reads', () => {
 
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toEqual({
+      mimeType: 'text/plain',
+      filename: 'source-redacted.txt',
       text: 'Stored redaction text.',
     })
     expect(readText).toHaveBeenCalledWith('org/org_1/artifacts/art_1')
+  })
+
+  it('returns redacted PDF metadata and binary download bytes', async () => {
+    const pdfBytes = Buffer.from('%PDF-1.4 redacted')
+    const readBinary = vi.fn(async () => pdfBytes)
+    const run = finalizedRunRow({
+      source_filename: 'brief.pdf',
+      summary_json: {
+        totalSpans: 1,
+        outputMode: 'redacted',
+        outputMimeType: 'application/pdf',
+        outputFilename: 'brief-redacted.pdf',
+      },
+    })
+    const app = createApiApp(
+      testEnv,
+      createHybridPool(
+        async (sql, params) => {
+          const text = String(sql)
+          const values = params as unknown[]
+          if (text.includes('from redaction_runs')) {
+            const visible =
+              values[0] === run.id && values[1] === run.organisation_id
+            return { rows: visible ? [run] : [] }
+          }
+          if (text.includes('from artifacts')) {
+            return { rows: [{ object_key: 'org/org_1/artifacts/art_1' }] }
+          }
+          return { rows: [] }
+        },
+        async () => ({ rows: [] }),
+      ),
+      {
+        auth: authWithRole('member'),
+        storage: {
+          readText: async () => {
+            throw new Error('text read should not be used for PDF output')
+          },
+          writeText: async () => undefined,
+          readBinary,
+          delete: async () => undefined,
+        },
+      },
+    )
+
+    const meta = await app.request('/api/redaction-runs/red_1/output')
+    expect(meta.status).toBe(200)
+    await expect(meta.json()).resolves.toEqual({
+      mimeType: 'application/pdf',
+      filename: 'brief-redacted.pdf',
+      text: null,
+    })
+
+    const file = await app.request('/api/redaction-runs/red_1/output/file')
+    expect(file.status).toBe(200)
+    expect(file.headers.get('content-type')).toBe('application/pdf')
+    expect(file.headers.get('content-disposition')).toContain(
+      'brief-redacted.pdf',
+    )
+    expect(Buffer.from(await file.arrayBuffer())).toEqual(pdfBytes)
+    expect(readBinary).toHaveBeenCalledWith('org/org_1/artifacts/art_1')
   })
 
   it('returns 404 for an unknown token-map run', async () => {

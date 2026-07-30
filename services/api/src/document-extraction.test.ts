@@ -161,7 +161,10 @@ describe('extractDocumentText', () => {
     )
     const source = Buffer.from(fixture)
     await expect(extractDocumentText('pdf', source)).resolves.toContain(
-      'NI: QQ 12 34 56 C\n\nPlease contact Mr Amina Rahman',
+      'NI: QQ 12 34 56 C',
+    )
+    await expect(extractDocumentText('pdf', source)).resolves.toContain(
+      'Please contact Mr Amina Rahman',
     )
     await expect(extractDocumentText('pdf', source)).resolves.toContain(
       'amina.rahman@example.test',
@@ -189,6 +192,57 @@ describe('extractDocumentText', () => {
         }),
       ]),
     )
+  })
+
+  it('collapses letterspaced PDF headings and keeps layout offsets aligned', async () => {
+    const headingFixture = Buffer.from('%PDF-placeholder')
+    unpdf.getDocumentProxy.mockResolvedValue({
+      numPages: 1,
+      getPage: async () => ({
+        getViewport: () => ({ width: 612, height: 792 }),
+        getTextContent: async () => ({
+          items: [
+            {
+              str: 'T H E F I V E S U R FA C E S',
+              hasEOL: true,
+              transform: [1, 0, 0, 1, 72, 700],
+              width: 200,
+              height: 12,
+            },
+            {
+              str: 'Atlas',
+              hasEOL: true,
+              transform: [1, 0, 0, 1, 72, 680],
+              width: 40,
+              height: 12,
+            },
+            {
+              str: 'The open legal source layer.',
+              hasEOL: true,
+              transform: [1, 0, 0, 1, 72, 660],
+              width: 180,
+              height: 12,
+            },
+          ],
+        }),
+      }),
+      destroy: async () => undefined,
+    })
+
+    const { extractDocumentContent } = await import('./document-extraction')
+    const content = await extractDocumentContent('pdf', headingFixture)
+    expect(content.text).toContain('THEFIVESURFACES')
+    expect(content.text).toContain('Atlas')
+    expect(content.text).not.toContain('T H E F I V E')
+    expect(content.layout?.pages).toEqual([{ width: 612, height: 792 }])
+    expect(content.layout?.segments.length).toBeGreaterThan(0)
+    const headingStart = content.text.indexOf('THEFIVESURFACES')
+    expect(headingStart).toBeGreaterThanOrEqual(0)
+    const heading = content.layout?.segments.find(
+      (segment) => segment.start === headingStart,
+    )
+    expect(heading?.pageIndex).toBe(0)
+    expect(content.text.slice(heading!.start, heading!.end)).toBe('T')
   })
 
   it('allows a short one-page text-layer PDF', async () => {

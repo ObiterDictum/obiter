@@ -86,3 +86,49 @@ export async function apiFetch<T>(
 
   return (await response.json()) as T
 }
+
+/**
+ * Fetch a binary endpoint with the same auth as `apiFetch`.
+ */
+export async function apiFetchBlob(
+  input: string,
+  init?: RequestInit,
+): Promise<Blob> {
+  const desktopToken = readDesktopBridge() ? await getDesktopAuthToken() : null
+  const response = await fetch(apiUrl(input), {
+    credentials: 'include',
+    ...init,
+    headers: {
+      ...(desktopToken ? { Authorization: `Bearer ${desktopToken}` } : {}),
+      ...init?.headers,
+    },
+  })
+
+  if (!response.ok) {
+    let parsed: unknown = null
+    try {
+      parsed = await response.json()
+    } catch {
+      parsed = null
+    }
+
+    const result = apiErrorResponseSchema.safeParse(parsed)
+    if (result.success) {
+      throw new ApiError(
+        result.data.error.code,
+        result.data.error.message,
+        response.status,
+        result.data.error.requestId,
+      )
+    }
+
+    throw new ApiError(
+      'storage_unavailable',
+      'The API returned an unexpected error response.',
+      response.status,
+      UNKNOWN_REQUEST_ID,
+    )
+  }
+
+  return response.blob()
+}

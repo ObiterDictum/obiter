@@ -40,6 +40,9 @@ interface CreateRedactionRunInput {
   userId: string
   sourceFilename: string
   sourceTextObjectKey: string | null
+  sourceFileObjectKey?: string | null
+  sourceLayoutObjectKey?: string | null
+  sourceMimeType?: string | null
   spans: RedactionSpan[]
   detectorVersion: string
   detectionMode: DetectionMode
@@ -68,11 +71,13 @@ async function insertRedactionRun(
     `
       insert into redaction_runs (
         id, organisation_id, matter_id, document_id, document_version_id, source_filename, source_text_object_key,
+        source_file_object_key, source_layout_object_key, source_mime_type,
         status, policy_mode, spans_json, decisions_json, summary_json, detector_version, detection_mode, replaces_run_id,
         created_by, created_at, updated_at
-      ) values ($1, $2, $3, $4, $5, $6, $7, 'ready_for_review', $8, $9::jsonb, '{}'::jsonb, $10::jsonb, $11, $12, $13, $14, now(), now())
+      ) values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 'ready_for_review', $11, $12::jsonb, '{}'::jsonb, $13::jsonb, $14, $15, $16, $17, now(), now())
       returning id, organisation_id, matter_id, null::text as matter_name, document_id, document_version_id,
-        source_filename, source_text_object_key, status, policy_mode, spans_json, decisions_json, output_artifact_id,
+        source_filename, source_text_object_key, source_file_object_key, source_layout_object_key, source_mime_type,
+        status, policy_mode, spans_json, decisions_json, output_artifact_id,
         summary_json, detector_version, detection_mode, replaces_run_id, null::text as replacement_run_id,
         created_by, created_at, updated_at, deleted_at, deleted_by
     `,
@@ -84,6 +89,9 @@ async function insertRedactionRun(
       linked ? documentVersionId : null,
       input.sourceFilename,
       input.sourceTextObjectKey,
+      linked ? null : (input.sourceFileObjectKey ?? null),
+      linked ? null : (input.sourceLayoutObjectKey ?? null),
+      linked ? null : (input.sourceMimeType ?? null),
       input.policyMode,
       JSON.stringify(spans),
       JSON.stringify(computeSummary(spans, {})),
