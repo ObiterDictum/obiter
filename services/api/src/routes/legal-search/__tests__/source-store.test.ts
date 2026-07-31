@@ -44,6 +44,55 @@ describe('legal authority source store search', () => {
     expect(results).toMatchObject([{ id: 'uksc-2024-3' }])
   })
 
+  it('supports filter-only browsing in the in-memory source fallback', async () => {
+    const store = createInMemoryLegalAuthoritySourceStore()
+
+    await store.upsertDocument(storedAuthority, sourceProvider)
+
+    const results = await store.search('', { court: 'uksc' })
+
+    expect(results).toMatchObject([{ id: 'uksc-2024-3' }])
+  })
+
+  it('does not treat substrings as complete query terms in memory', async () => {
+    const store = createInMemoryLegalAuthoritySourceStore()
+    const exactDocument = {
+      ...storedAuthority,
+      id: 'benchmark-docket-101',
+      title: 'Alpha v Beta',
+      sourceUrl: 'https://example.test/judgments/benchmark-docket-101',
+      paragraphs: [
+        {
+          id: 'benchmark-docket-101-p1',
+          documentId: 'benchmark-docket-101',
+          paragraphNumber: 1,
+          text: 'The court applied the test as a complete word.',
+        },
+      ],
+    }
+    const substringDocument = {
+      ...storedAuthority,
+      id: 'benchmark-docket-102',
+      title: 'Gamma v Delta',
+      sourceUrl: 'https://example.test/judgments/benchmark-docket-102',
+      paragraphs: [
+        {
+          id: 'benchmark-docket-102-p1',
+          documentId: 'benchmark-docket-102',
+          paragraphNumber: 1,
+          text: 'Contested testimony concerned a testator and an intestate estate.',
+        },
+      ],
+    }
+
+    await store.upsertDocument(exactDocument, sourceProvider)
+    await store.upsertDocument(substringDocument, sourceProvider)
+
+    const results = await store.search('test', {})
+
+    expect(results.map(({ id }) => id)).toEqual(['benchmark-docket-101'])
+  })
+
   it('keeps Postgres fallback on an indexed paragraph-inclusive search vector', async () => {
     const queries: Array<{ text: string; values?: unknown[] }> = []
     const client = {

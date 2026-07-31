@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  containsEveryQueryTerm,
   createIndex,
   extractLegalSearchSnippets,
   getDocument,
@@ -61,6 +62,7 @@ describe('Legal search client', () => {
       updateFilterableAttributes: vi.fn(() => completedTask({ uid: 9 })),
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
+      updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
       addDocuments: vi.fn(),
       search: vi.fn(),
     }
@@ -99,6 +101,7 @@ describe('Legal search client', () => {
       'exactness',
       'sort',
     ])
+    expect(index.updatePrefixSearch).toHaveBeenCalledWith('disabled')
   })
 
   it('updates index settings when the index already exists', async () => {
@@ -107,6 +110,7 @@ describe('Legal search client', () => {
       updateFilterableAttributes: vi.fn(() => completedTask({ uid: 9 })),
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
+      updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
       addDocuments: vi.fn(),
       search: vi.fn(),
     }
@@ -131,6 +135,7 @@ describe('Legal search client', () => {
       updateFilterableAttributes: vi.fn(() => completedTask({ uid: 9 })),
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
+      updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
       addDocuments: vi.fn(),
       search: vi.fn(),
     }
@@ -171,6 +176,7 @@ describe('Legal search client', () => {
       ),
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
+      updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
       addDocuments: vi.fn(),
       search: vi.fn(),
     }
@@ -492,6 +498,34 @@ describe('Legal search client', () => {
         text: 'The court considered Potanina and the effect of prior financial remedy proceedings.',
       },
     ])
+  })
+
+  it('matches snippets on Unicode-aware word boundaries', () => {
+    const hit = authority({
+      paragraphs: [
+        {
+          id: 'uksc-2024-3-p1',
+          documentId: 'uksc-2024-3',
+          paragraphNumber: 1,
+          text: "A test was applied to José's self-incrimination evidence and the testator's intention.",
+        },
+        {
+          id: 'uksc-2024-3-p2',
+          documentId: 'uksc-2024-3',
+          paragraphNumber: 2,
+          text: 'Contested testimony from Joséphine concerned intestate protest and the latest filing.',
+        },
+      ],
+    })
+
+    expect(extractLegalSearchSnippets(hit, 'test')).toHaveLength(1)
+    expect(extractLegalSearchSnippets(hit, 'testator')).toHaveLength(1)
+    expect(extractLegalSearchSnippets(hit, 'incrimination')).toHaveLength(1)
+    expect(extractLegalSearchSnippets(hit, 'José')).toHaveLength(1)
+    expect(extractLegalSearchSnippets(hit, 'Joséphine')).toHaveLength(1)
+    expect(containsEveryQueryTerm('Joséphine contested', 'José test')).toBe(
+      false,
+    )
   })
 
   it('omits snippets when paragraph text does not match the query', () => {

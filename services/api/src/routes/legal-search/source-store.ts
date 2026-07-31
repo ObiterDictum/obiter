@@ -1,6 +1,7 @@
 import type { Pool, QueryResultRow } from 'pg'
 import { LegalAuthoritySchema, type LegalAuthority } from '@obiter/legal-schema'
 import {
+  containsEveryQueryTerm,
   rankLegalSearchHitsByExactMatch,
   type LegalSearchFilters,
 } from '@obiter/search-client'
@@ -338,16 +339,14 @@ function documentMatchesSearch(
     return false
   if (filters.dateFrom && document.dateDecided < filters.dateFrom) return false
   if (filters.dateTo && document.dateDecided > filters.dateTo) return false
+  if (!normalizedQuery) return true
 
-  const haystack = normalizeSearchText(
-    [
-      document.id,
-      document.title,
-      document.neutralCitation,
-      ...(document.paragraphs?.map((paragraph) => paragraph.text) ?? []),
-    ].join(' '),
-  )
-  const tokens = normalizedQuery.split(' ').filter(Boolean)
+  const haystack = [
+    document.id,
+    document.title,
+    document.neutralCitation,
+    ...(document.paragraphs?.map((paragraph) => paragraph.text) ?? []),
+  ].join(' ')
 
-  return tokens.every((token) => haystack.includes(token))
+  return containsEveryQueryTerm(haystack, normalizedQuery)
 }

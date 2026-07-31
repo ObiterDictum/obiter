@@ -108,6 +108,7 @@ type IndexLike = {
   updateFilterableAttributes(attributes: string[]): SearchEnqueuedTaskPromise
   updateSortableAttributes(attributes: string[]): SearchEnqueuedTaskPromise
   updateRankingRules(rules: string[]): SearchEnqueuedTaskPromise
+  updatePrefixSearch(prefixSearch: 'disabled'): SearchEnqueuedTaskPromise
   addDocuments(
     documents: LegalSearchDocument[],
     options: { primaryKey: 'id' },
@@ -220,6 +221,7 @@ export async function createIndex(
       index.updateSortableAttributes(sortableAttributes),
     )
     await waitForSucceededTask(index.updateRankingRules(rankingRules))
+    await waitForSucceededTask(index.updatePrefixSearch('disabled'))
 
     return { taskUid }
   } catch (error) {
@@ -400,10 +402,11 @@ function matchedSnippetTerms(
   tokens: string[],
 ) {
   const normalizedText = normalizeExactMatchValue(text)
-  if (normalizedQuery && normalizedText.includes(normalizedQuery))
+  if (normalizedQuery && containsWholeTerm(normalizedText, normalizedQuery)) {
     return [normalizedQuery]
+  }
 
-  return tokens.filter((token) => normalizedText.includes(token))
+  return tokens.filter((token) => containsWholeTerm(normalizedText, token))
 }
 
 function snippetMatchScore(
@@ -412,9 +415,12 @@ function snippetMatchScore(
   tokens: string[],
 ) {
   const normalizedText = normalizeExactMatchValue(text)
-  if (normalizedText.includes(normalizedQuery)) return 3
-  if (tokens.every((token) => normalizedText.includes(token))) return 2
-  if (tokens.some((token) => normalizedText.includes(token))) return 1
+  if (normalizedQuery && containsWholeTerm(normalizedText, normalizedQuery)) {
+    return 3
+  }
+  if (tokens.every((token) => containsWholeTerm(normalizedText, token)))
+    return 2
+  if (tokens.some((token) => containsWholeTerm(normalizedText, token))) return 1
   return 0
 }
 
@@ -442,18 +448,40 @@ function exactMatchScore(hit: LegalSearchHit, normalizedQuery: string) {
   if (normalizeExactMatchValue(hit.neutralCitation) === normalizedQuery)
     return 4
   if (normalizedTitle === normalizedQuery) return 3
-  if (normalizedTitle.includes(normalizedQuery)) return 2
+  if (containsWholeTerm(normalizedTitle, normalizedQuery)) return 2
   if (containsEveryQueryTerm(normalizedTitle, normalizedQuery)) return 1
   return 0
 }
 
 function normalizeExactMatchValue(value: string | null | undefined) {
-  return value?.trim().toLowerCase().replace(/\s+/g, ' ') ?? ''
+  return (
+    value
+      ?.normalize('NFKC')
+      .trim()
+      .toLocaleLowerCase('en-GB')
+      .replace(/\s+/g, ' ') ?? ''
+  )
 }
 
-function containsEveryQueryTerm(value: string, normalizedQuery: string) {
-  const terms = normalizedQuery.split(' ').filter(Boolean)
-  return terms.length > 0 && terms.every((term) => value.includes(term))
+export function containsEveryQueryTerm(value: string, query: string) {
+  const normalizedValue = normalizeExactMatchValue(value)
+  const terms = normalizeExactMatchValue(query).split(' ').filter(Boolean)
+  return (
+    terms.length > 0 &&
+    terms.every((term) => containsWholeTerm(normalizedValue, term))
+  )
+}
+
+function containsWholeTerm(value: string, term: string) {
+  if (!term) return false
+  return new RegExp(
+    `(?<![\\p{L}\\p{M}\\p{N}])${escapeRegularExpression(term)}(?![\\p{L}\\p{M}\\p{N}])`,
+    'u',
+  ).test(value)
+}
+
+function escapeRegularExpression(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function trimSnippetText(text: string, tokens: string[]) {
