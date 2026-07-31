@@ -43,12 +43,12 @@ export function rawFormPdf() {
   ])
 }
 
-export function rawType3Pdf() {
+export function rawType3Pdf(textMatrix = '1 0 0 1 60 700') {
   return rawPdf([
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
     '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
-    pdfStream('BT /F1 12 Tf 1 0 0 1 60 700 Tm (AAA) Tj ET'),
+    pdfStream(`BT /F1 12 Tf ${textMatrix} Tm (AAA) Tj ET`),
     '<< /Type /Font /Subtype /Type3 /FontBBox [0 0 100 80] /FontMatrix [0.01 0 0 0.01 0 0] /CharProcs << /A 6 0 R >> /Encoding << /Type /Encoding /Differences [65 /A] >> /FirstChar 65 /LastChar 65 /Widths [100] /Resources << >> >>',
     pdfStream('100 0 d0 0 0 100 80 re f'),
   ])

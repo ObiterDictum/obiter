@@ -3,7 +3,7 @@ import { documentTextLayoutSchema } from '@obiter/contracts'
 import { PDFDocument, StandardFonts } from 'pdf-lib'
 import { coverRectsForSpan, supplementSpans } from '@obiter/redaction-policy'
 import { createIsomorphicCanvasFactory, getDocumentProxy } from 'unpdf'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { extractDocumentContent, prepareLaidChars } from './document-extraction'
 import {
   rawFormPdf,
@@ -409,5 +409,18 @@ describe('exact glyph geometry', () => {
     await expect(extractDocumentContent('pdf', bytes)).rejects.toThrow(
       'cannot be redacted safely',
     )
+  })
+
+  it('fails closed when skewed text reaches the interpolated item path', async () => {
+    // A Type 3 font bypasses operator replay, so the skew rejection must also
+    // hold on the item fallback that pages like this one use.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      await expect(
+        extractDocumentContent('pdf', rawType3Pdf('1 0 0.4 1 60 700')),
+      ).rejects.toThrow('cannot be redacted safely')
+    } finally {
+      warn.mockRestore()
+    }
   })
 })

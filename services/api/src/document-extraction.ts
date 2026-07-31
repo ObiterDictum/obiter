@@ -377,6 +377,24 @@ function pdfItemBaseline(item: { transform?: number[] }) {
   }
 }
 
+/**
+ * Interpolated item covers extend perpendicular to the baseline, so skewed
+ * glyph axes must fail closed here exactly as they do in operator replay.
+ */
+function assertItemAxesPerpendicular(transform: number[]) {
+  const alongMagnitude = Math.hypot(transform[0] ?? 1, transform[1] ?? 0) || 1
+  const acrossMagnitude = Math.hypot(transform[2] ?? 0, transform[3] ?? 1) || 1
+  const alignment =
+    ((transform[0] ?? 1) * (transform[2] ?? 0) +
+      (transform[1] ?? 0) * (transform[3] ?? 1)) /
+    (alongMagnitude * acrossMagnitude)
+  if (Math.abs(alignment) > 0.01)
+    throw new DocumentExtractionError(
+      'This PDF uses skewed text geometry that cannot be redacted safely.',
+      true,
+    )
+}
+
 function pushPdfItemChars(
   chars: LaidChar[],
   item: {
@@ -392,6 +410,7 @@ function pushPdfItemChars(
   const value = item.str ?? ''
   if (!value) return
   const transform = item.transform ?? []
+  assertItemAxesPerpendicular(transform)
   const originX = transform[4] ?? 0
   const originY = transform[5] ?? 0
   const { fontSize, ascent, descent } = pdfItemMetrics(item, styles)
