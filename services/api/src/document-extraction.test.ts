@@ -319,6 +319,8 @@ describe('prepareLaidChars', () => {
       {
         ch: 'A',
         pageIndex: 0,
+        baselineX: 1,
+        baselineY: 0,
         x: 10,
         y: 100,
         width: 7,
@@ -329,6 +331,8 @@ describe('prepareLaidChars', () => {
       {
         ch: '\u00ad',
         pageIndex: 0,
+        baselineX: 1,
+        baselineY: 0,
         x: 17,
         y: 100,
         width: 0,
@@ -339,6 +343,8 @@ describe('prepareLaidChars', () => {
       {
         ch: 'l',
         pageIndex: 0,
+        baselineX: 1,
+        baselineY: 0,
         x: 17,
         y: 100,
         width: 4,
@@ -349,6 +355,8 @@ describe('prepareLaidChars', () => {
       {
         ch: '\u200b',
         pageIndex: 0,
+        baselineX: 1,
+        baselineY: 0,
         x: 21,
         y: 100,
         width: 0,
@@ -359,6 +367,8 @@ describe('prepareLaidChars', () => {
       {
         ch: 'i',
         pageIndex: 0,
+        baselineX: 1,
+        baselineY: 0,
         x: 21,
         y: 100,
         width: 3,
@@ -369,6 +379,8 @@ describe('prepareLaidChars', () => {
       {
         ch: '\u202e',
         pageIndex: 0,
+        baselineX: 1,
+        baselineY: 0,
         x: 24,
         y: 100,
         width: 0,
@@ -379,6 +391,8 @@ describe('prepareLaidChars', () => {
       {
         ch: 'c',
         pageIndex: 0,
+        baselineX: 1,
+        baselineY: 0,
         x: 24,
         y: 100,
         width: 6,
@@ -389,6 +403,8 @@ describe('prepareLaidChars', () => {
       {
         ch: 'e',
         pageIndex: 0,
+        baselineX: 1,
+        baselineY: 0,
         x: 30,
         y: 100,
         width: 7,
@@ -427,6 +443,8 @@ describe('prepareLaidChars', () => {
   it('normalises carriage returns the way the old page-text path did', () => {
     const base = {
       pageIndex: 0,
+      baselineX: 1,
+      baselineY: 0,
       x: 0,
       y: 100,
       width: 1,

@@ -1197,7 +1197,7 @@ describe('createApiApp', () => {
     expect([...stored.values()]).toEqual([
       'Synthetic test text.',
       expect.stringContaining('amina.rahman@example.test'),
-      expect.stringContaining('"version":1'),
+      expect.stringContaining('"version":2'),
       expect.stringContaining('Mr James Cartwright'),
       '',
     ])
@@ -1626,18 +1626,20 @@ describe('createApiApp redaction review reads', () => {
     run,
     artifactKey = null,
     documentTextKey = null,
+    storedText = 'Stored redaction text.',
     auth = authWithRole('member'),
   }: {
     run: ReturnType<typeof finalizedRunRow> | null
     artifactKey?: string | null
     documentTextKey?: string | null
+    storedText?: string
     auth?: Auth
   }) {
     const auditWrites: Array<{
       action: string
       metadata: Record<string, unknown>
     }> = []
-    const readText = vi.fn(async () => 'Stored redaction text.')
+    const readText = vi.fn(async () => storedText)
     const app = createApiApp(
       testEnv,
       createHybridPool(
@@ -1802,6 +1804,48 @@ describe('createApiApp redaction review reads', () => {
     expect(readText).toHaveBeenCalledWith(
       'org/org_1/redaction-runs/red_1/source',
     )
+  })
+
+  it('rejects and logs stored layout segments containing non-finite geometry', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const { app } = createRedactionReadApp({
+      run: finalizedRunRow({
+        source_layout_object_key: 'org/org_1/redaction-runs/red_1/layout.json',
+      }),
+      storedText: JSON.stringify({
+        version: 2,
+        pages: [{ width: 200, height: 200 }],
+        segments: [
+          {
+            start: 0,
+            end: 2,
+            pageIndex: 0,
+            x: 40,
+            y: 100,
+            width: 12,
+            height: 12,
+            advances: [Number.NaN, 6],
+            glyphWidthOverrides: {},
+          },
+        ],
+      }),
+    })
+
+    const response = await app.request('/api/redaction-runs/red_1/layout')
+    expect(response.status).toBe(404)
+    expect(((await response.json()) as ErrorBody).error.code).toBe(
+      'document_version_not_found',
+    )
+    expect(warn).toHaveBeenCalledWith(
+      'Stored document layout validation failed',
+      expect.objectContaining({
+        runId: 'red_1',
+        issues: expect.arrayContaining([
+          expect.objectContaining({ path: ['segments', 0, 'advances', 0] }),
+        ]),
+      }),
+    )
+    warn.mockRestore()
   })
 
   it('returns 404 for an unknown redaction output run', async () => {
@@ -2227,6 +2271,121 @@ describe('createApiApp degraded finalization acknowledgement', () => {
       degradedDetectionAcknowledged: false,
       unknownDetectionAcknowledged: false,
     })
+  })
+
+  it('fails closed to text output when stored PDF geometry is invalid', async () => {
+    const readyRun = finalizedRunRow({
+      status: 'ready_for_review',
+      output_artifact_id: null,
+      source_filename: 'source.pdf',
+      source_mime_type: 'application/pdf',
+      source_file_object_key: 'org/org_1/redaction-runs/red_1/original',
+      source_layout_object_key: 'org/org_1/redaction-runs/red_1/layout.json',
+      spans_json: [
+        {
+          id: 'span_1',
+          start: 0,
+          end: 5,
+          text: 'Alice',
+          category: 'person_name',
+          source: 'rampart_model',
+          confidence: 'high',
+          suggestion: 'redact',
+        },
+      ],
+      decisions_json: {
+        span_1: {
+          decision: 'accept',
+          decidedBy: 'usr_1',
+          decidedAt: '2026-07-30T00:00:00.000Z',
+        },
+      },
+    })
+    let textOutputWrites = 0
+    let binaryOutputWrites = 0
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const app = createApiApp(
+      testEnv,
+      createHybridPool(
+        async (sql) => {
+          if (String(sql).includes('from redaction_runs')) {
+            return { rows: [readyRun] }
+          }
+          return { rows: [] }
+        },
+        async (sql) => {
+          const text = String(sql)
+          if (text === 'begin' || text === 'commit') return { rows: [] }
+          if (text.includes('for update of run')) return { rows: [readyRun] }
+          if (text.includes('insert into artifacts')) {
+            return {
+              rows: [
+                {
+                  id: 'art_1',
+                  object_key: 'org/org_1/artifacts/art_1',
+                },
+              ],
+            }
+          }
+          if (text.includes('update redaction_runs')) return { rows: [] }
+          if (text.includes('from redaction_runs')) {
+            return { rows: [finalizedRunRow()] }
+          }
+          if (text.includes('insert into audit_logs')) return { rows: [] }
+          throw new Error(`Unexpected SQL: ${text}`)
+        },
+      ),
+      {
+        auth: authWithRole('member'),
+        storage: {
+          readText: async (key) =>
+            key.endsWith('/layout.json')
+              ? JSON.stringify({
+                  version: 2,
+                  pages: [{ width: 200, height: 200 }],
+                  segments: [
+                    {
+                      start: 0,
+                      end: 5,
+                      pageIndex: 0,
+                      x: 40,
+                      y: 100,
+                      width: 30,
+                      height: 12,
+                      advances: [null, 6, 6, 6, 6],
+                      glyphWidthOverrides: {},
+                    },
+                  ],
+                })
+              : 'Alice',
+          readBinary: async () => Buffer.from('%PDF-invalid'),
+          writeText: async () => {
+            textOutputWrites += 1
+          },
+          writeBinary: async () => {
+            binaryOutputWrites += 1
+          },
+          delete: async () => undefined,
+        },
+      },
+    )
+
+    const response = await app.request('/api/redaction-runs/red_1/finalize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ outputMode: 'redacted' }),
+    })
+
+    expect(response.status).toBe(200)
+    expect(textOutputWrites).toBe(1)
+    expect(binaryOutputWrites).toBe(0)
+    expect(log).toHaveBeenCalledWith(
+      'redaction_pdf_burn_failed',
+      expect.objectContaining({
+        reason: 'cover geometry missing for one or more spans',
+      }),
+    )
+    log.mockRestore()
   })
 })
 

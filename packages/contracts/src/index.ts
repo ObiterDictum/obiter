@@ -119,6 +119,140 @@ export type SpanDecision = z.infer<typeof spanDecisionSchema>
 export const outputModeSchema = z.enum(['redacted', 'pseudonymised'])
 export type OutputMode = z.infer<typeof outputModeSchema>
 
+const finiteNumberSchema = z.number().finite()
+const nonNegativeFiniteNumberSchema = finiteNumberSchema.nonnegative()
+const positiveFiniteNumberSchema = finiteNumberSchema.positive()
+
+export const documentTextLayoutSegmentSchema = z
+  .object({
+    start: z.number().int().nonnegative(),
+    end: z.number().int().positive(),
+    pageIndex: z.number().int().nonnegative(),
+    x: finiteNumberSchema,
+    y: finiteNumberSchema,
+    width: nonNegativeFiniteNumberSchema,
+    height: positiveFiniteNumberSchema,
+    ascent: nonNegativeFiniteNumberSchema.optional(),
+    descent: nonNegativeFiniteNumberSchema.optional(),
+    /** Origin-to-origin displacement in the run's writing direction. */
+    advances: z.array(nonNegativeFiniteNumberSchema).optional(),
+    /** Drawn-advance overrides where kerning makes placement differ. */
+    glyphWidthOverrides: z
+      .record(
+        z.string().regex(/^(?:0|[1-9]\d*)$/u),
+        nonNegativeFiniteNumberSchema,
+      )
+      .optional(),
+    /** Unit writing direction. Omitted for ordinary left-to-right text. */
+    baselineX: finiteNumberSchema.optional(),
+    baselineY: finiteNumberSchema.optional(),
+  })
+  .superRefine((segment, context) => {
+    const length = segment.end - segment.start
+    if (length <= 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['end'],
+        message: 'Layout segment end must be greater than start.',
+      })
+    }
+    if (segment.advances && segment.advances.length !== length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['advances'],
+        message: 'advances must contain one entry per layout character.',
+      })
+    }
+    for (const index of Object.keys(segment.glyphWidthOverrides ?? {})) {
+      if (Number(index) >= length) {
+        context.addIssue({
+          code: 'custom',
+          path: ['glyphWidthOverrides', index],
+          message: 'Glyph width override index is out of range.',
+        })
+      }
+    }
+    if (
+      (segment.baselineX === undefined) !==
+      (segment.baselineY === undefined)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['baselineX'],
+        message: 'Layout baseline direction must include both components.',
+      })
+    }
+    if (
+      segment.baselineX !== undefined &&
+      segment.baselineY !== undefined &&
+      Math.abs(Math.hypot(segment.baselineX, segment.baselineY) - 1) > 0.01
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['baselineX'],
+        message: 'Layout baseline direction must be a unit vector.',
+      })
+    }
+  })
+
+export type DocumentTextLayoutSegment = z.infer<
+  typeof documentTextLayoutSegmentSchema
+>
+
+const documentTextLayoutPageSchema = z.object({
+  width: positiveFiniteNumberSchema,
+  height: positiveFiniteNumberSchema,
+})
+
+/**
+ * Version 1 remains readable and deliberately falls back to interpolation.
+ * Version 2 separates origin placement (`advances`) from sparse drawn-extent
+ * overrides so kerning cannot shorten a redaction cover.
+ */
+export const documentTextLayoutSchema = z
+  .object({
+    version: z.union([z.literal(1), z.literal(2)]),
+    pages: z.array(documentTextLayoutPageSchema).min(1),
+    segments: z.array(documentTextLayoutSegmentSchema),
+  })
+  .superRefine((layout, context) => {
+    layout.segments.forEach((segment, index) => {
+      if (segment.pageIndex >= layout.pages.length) {
+        context.addIssue({
+          code: 'custom',
+          path: ['segments', index, 'pageIndex'],
+          message: 'Layout segment page index is out of range.',
+        })
+      }
+      if (
+        layout.version === 2 &&
+        (segment.advances === undefined ||
+          segment.glyphWidthOverrides === undefined)
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['segments', index, 'glyphWidthOverrides'],
+          message:
+            'Version 2 geometry requires placement advances and glyph width overrides.',
+        })
+      }
+      if (
+        layout.version === 1 &&
+        (segment.glyphWidthOverrides !== undefined ||
+          segment.baselineX !== undefined ||
+          segment.baselineY !== undefined)
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['segments', index],
+          message: 'Version 1 segments cannot contain version 2 geometry.',
+        })
+      }
+    })
+  })
+
+export type DocumentTextLayout = z.infer<typeof documentTextLayoutSchema>
+
 export const redactionFinalizeInputSchema = z.object({
   outputMode: outputModeSchema,
   degradedDetectionAcknowledged: z.boolean().optional(),

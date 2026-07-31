@@ -70,6 +70,54 @@ describe('coverRectsForSpan', () => {
     expect(baseline - covers[0]!.y).toBeGreaterThan(descent)
   })
 
+  it('drops non-finite segment geometry instead of returning NaN rects', () => {
+    const covers = coverRectsForSpan({
+      segments: [
+        {
+          start: 0,
+          end: 2,
+          pageIndex: 0,
+          x: 40,
+          y: 100,
+          width: 20,
+          height: 20,
+          advances: [Number.NaN, 10],
+          glyphWidthOverrides: {},
+        },
+      ],
+      spanStart: 0,
+      spanEnd: 1,
+      spanText: 'A',
+    })
+
+    expect(covers).toEqual([])
+  })
+
+  it('uses interpolation for legacy segments whose advances lack width overrides', () => {
+    const covers = coverRectsForSpan({
+      segments: [
+        {
+          start: 0,
+          end: 2,
+          pageIndex: 0,
+          x: 40,
+          y: 100,
+          width: 20,
+          height: 20,
+          // Version 1 used these values for both placement and extent. Without
+          // the v2 override marker they must not enter the exact path.
+          advances: [4, 10],
+        },
+      ],
+      spanStart: 1,
+      spanEnd: 2,
+      spanText: 'B',
+    })
+
+    expect(covers).toHaveLength(1)
+    expect(covers[0]!.x).toBeCloseTo(49.2, 5)
+  })
+
   it('does not merge a deep J into a word on its left', () => {
     const fontSize = 16
     const baseline = 100

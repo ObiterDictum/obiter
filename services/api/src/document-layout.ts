@@ -1,28 +1,14 @@
+import type {
+  DocumentTextLayout,
+  DocumentTextLayoutSegment,
+} from '@obiter/contracts'
+
 /**
  * Geometry for overlaying redaction spans on a rendered PDF page.
  * Coordinates are PDF user-space (origin bottom-left), matching pdf.js viewport
  * conversion on the client. `start`/`end` index the extracted document text.
  */
-export interface DocumentTextLayoutSegment {
-  start: number
-  end: number
-  pageIndex: number
-  x: number
-  y: number
-  width: number
-  /** Em / font size from the text matrix. */
-  height: number
-  /** Distance above the baseline to the font ascent line (PDF units). */
-  ascent?: number
-  /** Distance below the baseline to the font descent line (PDF units). */
-  descent?: number
-}
-
-export interface DocumentTextLayout {
-  version: 1
-  pages: Array<{ width: number; height: number }>
-  segments: DocumentTextLayoutSegment[]
-}
+export type { DocumentTextLayout, DocumentTextLayoutSegment }
 
 export interface ExtractedDocumentContent {
   text: string
@@ -32,40 +18,69 @@ export interface ExtractedDocumentContent {
 export interface LaidChar {
   ch: string
   pageIndex: number
+  /** Glyph origin on its baseline in PDF user space. */
   x: number
   y: number
+  /** The glyph's own drawn advance, never a kerned origin displacement. */
   width: number
   height: number
   ascent: number
   descent: number
+  /** Unit writing direction in PDF user space. */
+  baselineX: number
+  baselineY: number
+  /** True when writing and font-height axes are not perpendicular. */
+  skewed?: boolean
 }
 
 /** Same baseline slack as coverRectsForSpan union-merge. */
 const BASELINE_MERGE_TOLERANCE = 1.25
 
-function maxHorizontalMergeGap(left: LaidChar, right: LaidChar) {
-  // Keep runs tight enough that mid-span interpolation stays near real glyphs.
+function maxWritingDirectionMergeGap(left: LaidChar, right: LaidChar) {
   return Math.max(2.5, Math.min(left.height, right.height) * 0.4)
+}
+
+/** Geometry is rounded to keep layout.json small; 0.001pt is far below ink. */
+function roundGeometry(value: number) {
+  return Math.round(value * 1000) / 1000
+}
+
+function displacementAlongBaseline(from: LaidChar, to: LaidChar) {
+  return (to.x - from.x) * from.baselineX + (to.y - from.y) * from.baselineY
+}
+
+function displacementAcrossBaseline(from: LaidChar, to: LaidChar) {
+  return (to.x - from.x) * -from.baselineY + (to.y - from.y) * from.baselineX
+}
+
+function sameWritingDirection(left: LaidChar, right: LaidChar) {
+  return (
+    left.baselineX * right.baselineX + left.baselineY * right.baselineY > 0.999
+  )
 }
 
 function canMergeIntoRun(previous: LaidChar, next: LaidChar) {
   if (previous.pageIndex !== next.pageIndex) return false
-  if (Math.abs(previous.y - next.y) > BASELINE_MERGE_TOLERANCE) return false
+  if (!sameWritingDirection(previous, next)) return false
+  if (
+    Math.abs(displacementAcrossBaseline(previous, next)) >
+    BASELINE_MERGE_TOLERANCE
+  )
+    return false
   if (previous.height !== next.height) return false
   if (previous.ascent !== next.ascent || previous.descent !== next.descent)
     return false
-  // coverRectsForSpan interpolates x uniformly across a multi-character
-  // segment. Unequal advances make that placement wrong and can leave the
-  // first redacted glyph outside the burned bar.
-  if (previous.width !== next.width) return false
-  const gap = next.x - (previous.x + previous.width)
-  return gap <= maxHorizontalMergeGap(previous, next)
+  const displacement = displacementAlongBaseline(previous, next)
+  if (displacement <= 0) return false
+  const gap = displacement - previous.width
+  return gap <= maxWritingDirectionMergeGap(previous, next)
 }
 
 /**
  * Build layout segments, merging contiguous glyphs on the same baseline into
- * runs. coverRectsForSpan interpolates within multi-character segments, so
- * merged and unmerged layouts stay equivalent for cover geometry.
+ * runs. Each run records its characters' real advances, so merging costs a few
+ * bytes per character instead of a whole segment and coverRectsForSpan still
+ * places every character exactly where it was drawn.
  */
 function charSegments(chars: LaidChar[]): DocumentTextLayoutSegment[] {
   const segments: DocumentTextLayoutSegment[] = []
@@ -80,26 +95,60 @@ function charSegments(chars: LaidChar[]): DocumentTextLayoutSegment[] {
       continue
     }
 
-    if (run && runLast && canMergeIntoRun(runLast, current)) {
+    if (
+      run &&
+      runLast &&
+      run.advances &&
+      run.glyphWidthOverrides &&
+      canMergeIntoRun(runLast, current)
+    ) {
+      // Placement and drawn extent are separate: TJ kerning changes the first,
+      // but a trailing redaction still needs the glyph's full own advance.
+      const previousIndex = run.advances.length - 1
+      const placementAdvance = roundGeometry(
+        displacementAlongBaseline(runLast, current),
+      )
+      const glyphWidth = roundGeometry(Math.max(runLast.width, 0.5))
+      run.advances[previousIndex] = placementAdvance
+      if (placementAdvance !== glyphWidth) {
+        run.glyphWidthOverrides[String(previousIndex)] = glyphWidth
+      }
+      run.advances.push(roundGeometry(Math.max(current.width, 0.5)))
       run.end = index + 1
-      run.width = Math.max(
-        current.x + Math.max(current.width, 0.5) - run.x,
-        0.5,
+      const runOrigin = chars[run.start] ?? runLast
+      run.width = roundGeometry(
+        Math.max(
+          displacementAlongBaseline(runOrigin, current) +
+            Math.max(current.width, 0.5),
+          0.5,
+        ),
       )
       runLast = current
       continue
     }
 
+    const rotated =
+      Math.abs(current.baselineX - 1) > 0.001 ||
+      Math.abs(current.baselineY) > 0.001
+    const width = roundGeometry(Math.max(current.width, 0.5))
     run = {
       start: index,
       end: index + 1,
       pageIndex: current.pageIndex,
       x: current.x,
       y: current.y,
-      width: Math.max(current.width, 0.5),
+      width,
       height: Math.max(current.height, 0.5),
       ascent: current.ascent,
       descent: current.descent,
+      advances: [width],
+      glyphWidthOverrides: {},
+      ...(rotated
+        ? {
+            baselineX: roundGeometry(current.baselineX),
+            baselineY: roundGeometry(current.baselineY),
+          }
+        : {}),
     }
     runLast = current
     segments.push(run)
@@ -193,6 +242,8 @@ export function collapsePdfGlyphSpacingWithLayout(
         height: anchor?.height ?? 0,
         ascent: anchor?.ascent ?? 0,
         descent: anchor?.descent ?? 0,
+        baselineX: anchor?.baselineX ?? 1,
+        baselineY: anchor?.baselineY ?? 0,
       })
     }
   }
@@ -205,7 +256,7 @@ export function layoutFromLaidChars(
   pages: Array<{ width: number; height: number }>,
 ): DocumentTextLayout {
   return {
-    version: 1,
+    version: 2,
     pages,
     segments: charSegments(chars),
   }

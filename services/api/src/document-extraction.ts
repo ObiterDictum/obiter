@@ -1,4 +1,5 @@
 import { posix } from 'node:path'
+import { documentTextLayoutSchema } from '@obiter/contracts'
 import JSZip from 'jszip'
 import mammoth from 'mammoth'
 import { getDocumentProxy } from 'unpdf'
@@ -8,6 +9,13 @@ import {
   type ExtractedDocumentContent,
   type LaidChar,
 } from './document-layout'
+import {
+  laidCharsFromOperatorList,
+  withLineBreaks,
+  withSemanticSpaces,
+  type FontStyles,
+  type PdfOps,
+} from './pdf-glyph-layout'
 
 export type {
   DocumentTextLayout,
@@ -81,15 +89,33 @@ async function extractPdfContent(
       const viewport = page.getViewport({ scale: 1 })
       pages.push({ width: viewport.width, height: viewport.height })
       const pageIndex = pageNumber - 1
-      const content = await page.getTextContent({
-        // Keep runs small so per-glyph x/width stay closer to real advances.
-        disableCombineTextItems: true,
-      } as never)
+      // getTextContent still supplies the font ascent/descent ratios, keyed by
+      // the same loaded name the operator list reports for setFont.
+      const content = await page.getTextContent()
+
+      const exact = await exactPageChars(
+        page,
+        pageIndex,
+        content.styles,
+        textContentNeedsBidi(content.items),
+      )
+      if (exact.length > 0) {
+        chars.push(...exact)
+        const last = exact.at(-1)
+        if (pageNumber < pdf.numPages && last) pushPageBreak(chars, last)
+        assertWithinLength(chars)
+        continue
+      }
+
+      // No glyph-path text on this page (Type 3 fonts, unusual generators):
+      // fall back to interpolated item geometry rather than losing content.
       let lastY = 0
       let lastX = 0
       let lastHeight = 12
       let lastAscent = 10
       let lastDescent = 2
+      let lastBaselineX = 1
+      let lastBaselineY = 0
       for (const item of content.items) {
         if ('str' in item) {
           pushPdfItemChars(chars, item, pageIndex, content.styles)
@@ -98,9 +124,12 @@ async function extractPdfContent(
             lastY = item.transform[5] ?? lastY
           }
           const metrics = pdfItemMetrics(item, content.styles)
+          const direction = pdfItemBaseline(item)
           lastHeight = metrics.fontSize
           lastAscent = metrics.ascent
           lastDescent = metrics.descent
+          lastBaselineX = direction.x
+          lastBaselineY = direction.y
         }
         if ('hasEOL' in item && item.hasEOL) {
           chars.push({
@@ -112,38 +141,26 @@ async function extractPdfContent(
             height: lastHeight,
             ascent: lastAscent,
             descent: lastDescent,
+            baselineX: lastBaselineX,
+            baselineY: lastBaselineY,
           })
         }
       }
       if (pageNumber < pdf.numPages) {
-        chars.push(
-          {
-            ch: '\n',
-            pageIndex,
-            x: lastX,
-            y: lastY,
-            width: 0,
-            height: lastHeight,
-            ascent: lastAscent,
-            descent: lastDescent,
-          },
-          {
-            ch: '\n',
-            pageIndex,
-            x: lastX,
-            y: lastY,
-            width: 0,
-            height: lastHeight,
-            ascent: lastAscent,
-            descent: lastDescent,
-          },
-        )
+        pushPageBreak(chars, {
+          ch: '\n',
+          pageIndex,
+          x: lastX,
+          y: lastY,
+          width: 0,
+          height: lastHeight,
+          ascent: lastAscent,
+          descent: lastDescent,
+          baselineX: lastBaselineX,
+          baselineY: lastBaselineY,
+        })
       }
-      if (chars.length > MAX_EXTRACTED_DOCUMENT_TEXT_LENGTH)
-        throw new DocumentExtractionError(
-          `Extracted text must be at most ${MAX_EXTRACTED_DOCUMENT_TEXT_LENGTH} characters.`,
-          true,
-        )
+      assertWithinLength(chars)
     }
 
     const normalised = collapsePdfGlyphSpacingWithLayout(chars)
@@ -158,13 +175,166 @@ async function extractPdfContent(
     )
       throw new DocumentExtractionError(SCANNED_PDF_MESSAGE, true)
 
-    return {
-      text,
-      layout: layoutFromLaidChars(trimmed, pages),
-    }
+    const layout = documentTextLayoutSchema.safeParse(
+      layoutFromLaidChars(trimmed, pages),
+    )
+    if (!layout.success)
+      throw new DocumentExtractionError(
+        'This PDF uses text geometry that cannot be redacted safely.',
+        true,
+      )
+
+    return { text, layout: layout.data }
   } finally {
     await pdf.destroy().catch(() => undefined)
   }
+}
+
+/** Two newlines separate pages, anchored on the last glyph drawn. */
+function pushPageBreak(chars: LaidChar[], anchor: LaidChar) {
+  const separator: LaidChar = { ...anchor, ch: '\n', width: 0 }
+  chars.push({ ...separator }, { ...separator })
+}
+
+function assertWithinLength(chars: LaidChar[]) {
+  if (chars.length > MAX_EXTRACTED_DOCUMENT_TEXT_LENGTH)
+    throw new DocumentExtractionError(
+      `Extracted text must be at most ${MAX_EXTRACTED_DOCUMENT_TEXT_LENGTH} characters.`,
+      true,
+    )
+}
+
+/**
+ * Per-glyph geometry replayed from the page's content stream. Returns an empty
+ * array when the operator list is unavailable or draws no glyph-path text.
+ */
+async function exactPageChars(
+  page: {
+    getOperatorList?: () => Promise<{
+      fnArray: number[] | Int32Array
+      argsArray: unknown[]
+    }>
+    commonObjs?: {
+      has: (id: string) => boolean
+      get: (id: string) => unknown
+    }
+  },
+  pageIndex: number,
+  styles: FontStyles | undefined,
+  needsBidi: boolean,
+): Promise<LaidChar[]> {
+  if (typeof page.getOperatorList !== 'function') return []
+  const ops = await loadPdfOps()
+  if (!ops) return []
+  try {
+    const operatorList = await page.getOperatorList()
+    if (
+      Object.values(styles ?? {}).some((style) => style?.vertical === true) ||
+      operatorListHasVerticalGlyphs(operatorList)
+    )
+      throw new DocumentExtractionError(
+        'This PDF uses vertical text geometry that cannot be redacted safely.',
+        true,
+      )
+    if (needsBidi) {
+      console.warn('PDF exact glyph geometry fallback', {
+        pageNumber: pageIndex + 1,
+        reason: 'bidi_text',
+      })
+      return []
+    }
+    if (operatorListUsesType3Font(operatorList, ops, page.commonObjs)) {
+      console.warn('PDF exact glyph geometry fallback', {
+        pageNumber: pageIndex + 1,
+        reason: 'type3_font',
+      })
+      return []
+    }
+    const chars = laidCharsFromOperatorList({
+      operatorList,
+      ops,
+      pageIndex,
+      styles,
+    })
+    if (chars.some((char) => char.skewed))
+      throw new DocumentExtractionError(
+        'This PDF uses skewed text geometry that cannot be redacted safely.',
+        true,
+      )
+    return chars.length > 0 ? withSemanticSpaces(withLineBreaks(chars)) : []
+  } catch (error) {
+    if (error instanceof DocumentExtractionError) throw error
+    console.warn('PDF exact glyph geometry fallback', {
+      pageNumber: pageIndex + 1,
+      reason: 'operator_replay_failed',
+    })
+    return []
+  }
+}
+
+const STRONG_RTL_SCRIPT =
+  /[\p{Script=Arabic}\p{Script=Hebrew}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Nko}\p{Script=Adlam}]/u
+
+function textContentNeedsBidi(items: unknown[]) {
+  return items.some((item) => {
+    if (typeof item !== 'object' || item === null || !('str' in item))
+      return false
+    const text = typeof item.str === 'string' ? item.str : ''
+    return ('dir' in item && item.dir === 'rtl') || STRONG_RTL_SCRIPT.test(text)
+  })
+}
+
+function operatorListHasVerticalGlyphs(operatorList: { argsArray: unknown[] }) {
+  const hasVerticalMetric = (value: unknown): boolean => {
+    if (Array.isArray(value)) return value.some(hasVerticalMetric)
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'vmetric' in value &&
+      value.vmetric !== undefined
+    )
+  }
+  return operatorList.argsArray.some(hasVerticalMetric)
+}
+
+function operatorListUsesType3Font(
+  operatorList: { fnArray: number[] | Int32Array; argsArray: unknown[] },
+  ops: PdfOps,
+  commonObjs:
+    { has: (id: string) => boolean; get: (id: string) => unknown } | undefined,
+) {
+  if (!commonObjs) return false
+  for (let index = 0; index < operatorList.fnArray.length; index += 1) {
+    if (operatorList.fnArray[index] !== ops.setFont) continue
+    const args = operatorList.argsArray[index] as unknown[] | undefined
+    const fontName = args?.[0]
+    if (typeof fontName !== 'string' || !commonObjs.has(fontName)) continue
+    const font = commonObjs.get(fontName)
+    if (
+      typeof font === 'object' &&
+      font !== null &&
+      'isType3Font' in font &&
+      font.isType3Font === true
+    )
+      return true
+  }
+  return false
+}
+
+let cachedOps: PdfOps | null | undefined
+
+/** unpdf re-exports the pdf.js `OPS` enum from its bundled build. */
+async function loadPdfOps(): Promise<PdfOps | null> {
+  if (cachedOps !== undefined) return cachedOps
+  try {
+    const module = (await import('unpdf/pdfjs')) as unknown as {
+      OPS?: PdfOps
+    }
+    cachedOps = module.OPS ?? null
+  } catch {
+    cachedOps = null
+  }
+  return cachedOps
 }
 
 function pdfItemMetrics(
@@ -182,14 +352,47 @@ function pdfItemMetrics(
   const fontSize = Math.max(fromTransform, fromHeight) || 12
   const style = item.fontName && styles ? styles[item.fontName] : undefined
   const ascentRatio =
-    typeof style?.ascent === 'number' && style.ascent > 0 ? style.ascent : 0.8
+    typeof style?.ascent === 'number' &&
+    Number.isFinite(style.ascent) &&
+    style.ascent > 0
+      ? style.ascent
+      : 0.8
   const descentRatio =
-    typeof style?.descent === 'number' ? Math.abs(style.descent) : 0.2
+    typeof style?.descent === 'number' && Number.isFinite(style.descent)
+      ? Math.abs(style.descent)
+      : 0.2
   return {
     fontSize,
     ascent: fontSize * ascentRatio,
     descent: fontSize * descentRatio,
   }
+}
+
+function pdfItemBaseline(item: { transform?: number[] }) {
+  const transform = item.transform ?? []
+  const magnitude = Math.hypot(transform[0] ?? 1, transform[1] ?? 0) || 1
+  return {
+    x: (transform[0] ?? 1) / magnitude,
+    y: (transform[1] ?? 0) / magnitude,
+  }
+}
+
+/**
+ * Interpolated item covers extend perpendicular to the baseline, so skewed
+ * glyph axes must fail closed here exactly as they do in operator replay.
+ */
+function assertItemAxesPerpendicular(transform: number[]) {
+  const alongMagnitude = Math.hypot(transform[0] ?? 1, transform[1] ?? 0) || 1
+  const acrossMagnitude = Math.hypot(transform[2] ?? 0, transform[3] ?? 1) || 1
+  const alignment =
+    ((transform[0] ?? 1) * (transform[2] ?? 0) +
+      (transform[1] ?? 0) * (transform[3] ?? 1)) /
+    (alongMagnitude * acrossMagnitude)
+  if (Math.abs(alignment) > 0.01)
+    throw new DocumentExtractionError(
+      'This PDF uses skewed text geometry that cannot be redacted safely.',
+      true,
+    )
 }
 
 function pushPdfItemChars(
@@ -207,22 +410,26 @@ function pushPdfItemChars(
   const value = item.str ?? ''
   if (!value) return
   const transform = item.transform ?? []
+  assertItemAxesPerpendicular(transform)
   const originX = transform[4] ?? 0
   const originY = transform[5] ?? 0
   const { fontSize, ascent, descent } = pdfItemMetrics(item, styles)
   const width = typeof item.width === 'number' ? item.width : 0
   const glyphs = [...value]
   const glyphWidth = glyphs.length > 0 ? width / glyphs.length : 0
+  const baseline = pdfItemBaseline(item)
   glyphs.forEach((ch, index) => {
     chars.push({
       ch,
       pageIndex,
-      x: originX + index * glyphWidth,
-      y: originY,
+      x: originX + index * glyphWidth * baseline.x,
+      y: originY + index * glyphWidth * baseline.y,
       width: Math.max(glyphWidth, 0.5),
       height: fontSize,
       ascent,
       descent,
+      baselineX: baseline.x,
+      baselineY: baseline.y,
     })
   })
 }

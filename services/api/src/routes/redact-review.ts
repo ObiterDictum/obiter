@@ -1,8 +1,10 @@
 import { Hono } from 'hono'
 import type { Pool } from 'pg'
 import {
+  documentTextLayoutSchema,
   redactionFinalizeInputSchema,
   spanDecisionSchema,
+  type DocumentTextLayout,
 } from '@obiter/contracts'
 import {
   applyPseudonymised,
@@ -23,7 +25,6 @@ import {
 } from '../redaction-database'
 import {
   buildRedactedPdf,
-  isDocumentTextLayout,
   isPdfMimeOrFilename,
   redactedPdfFilename,
   redactedTextFilename,
@@ -141,10 +142,13 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         'Layout is not available for this run.',
         404,
       )
+    let storedLayout: unknown
     try {
-      const layout = JSON.parse(await storage.readText(layoutObjectKey))
-      return c.json({ layout })
+      storedLayout = JSON.parse(await storage.readText(layoutObjectKey))
     } catch {
+      console.warn('Stored document layout could not be read or parsed', {
+        runId: run.id,
+      })
       return errorResponse(
         c,
         'document_version_not_found',
@@ -152,6 +156,23 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         404,
       )
     }
+    const layout = documentTextLayoutSchema.safeParse(storedLayout)
+    if (!layout.success) {
+      console.warn('Stored document layout validation failed', {
+        runId: run.id,
+        issues: layout.error.issues.map((issue) => ({
+          code: issue.code,
+          path: issue.path,
+        })),
+      })
+      return errorResponse(
+        c,
+        'document_version_not_found',
+        'Layout is not available for this run.',
+        404,
+      )
+    }
+    return c.json({ layout: layout.data })
   })
 
   routes.post(
@@ -340,14 +361,23 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         )
 
       if (canWritePdf && source && layoutObjectKey) {
-        const layoutJson = JSON.parse(await storage.readText(layoutObjectKey))
-        if (!isDocumentTextLayout(layoutJson)) {
-          throw new Error('Stored document layout is invalid.')
-        }
+        const parsedLayout = documentTextLayoutSchema.safeParse(
+          JSON.parse(await storage.readText(layoutObjectKey)),
+        )
+        // Invalid stored geometry must follow the same fail-closed path as
+        // missing geometry. An empty layout makes any accepted span raise
+        // RedactionCoverGeometryError before source pixels are rasterized.
+        const layout: DocumentTextLayout = parsedLayout.success
+          ? parsedLayout.data
+          : {
+              version: 2,
+              pages: [{ width: 1, height: 1 }],
+              segments: [],
+            }
         const pdfBytes = await storage.readBinary!(source.objectKey)
         const redactedPdf = await buildRedactedPdf({
           pdfBytes,
-          layout: layoutJson,
+          layout,
           spans: run.spans,
           decisions: run.decisions,
           outputMode: body.data.outputMode,
