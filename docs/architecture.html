@@ -2097,7 +2097,7 @@
                   redaction-detection · redaction-redetect ·
                   redaction-run-creation · redaction-database ·
                   redaction-audit-report · document-extraction · document-layout
-                  · redaction-pdf-output · storage · authz
+                  · pdf-glyph-layout · redaction-pdf-output · storage · authz
                 </dd>
                 <dt>Extract</dt>
                 <dd>mammoth (DOCX) · unpdf (text-layer PDF)</dd>
@@ -4085,13 +4085,30 @@
                 scanned PDFs are rejected as needing OCR. For PDFs it also emits
                 a <code>DocumentTextLayout</code>
                 (<code>document-layout.ts</code>): laid characters carry
-                per-glyph page index, position, em size and font ascent/descent
-                in PDF user space, then contiguous glyphs on the same baseline
-                are merged into run segments (schema
-                <code>version: 1</code>). Extracted text is derived from the
-                same laid-character array, so layout offsets and detection
-                offsets are aligned by construction rather than by a second
-                pass.</span
+                per-glyph page index, position, writing direction, em size and
+                font ascent/descent in PDF user space, then contiguous glyphs on
+                the same baseline are merged into run segments (schema
+                <code>version: 2</code> in <code>@obiter/contracts</code>;
+                legacy version 1 remains readable). Extracted text is derived
+                from the same laid-character array, so layout offsets and
+                detection offsets are aligned by construction rather than by a
+                second pass. Positions normally come from replaying the page's
+                content stream (<code>pdf-glyph-layout.ts</code>), because
+                <code>getTextContent</code> reports one advance for a whole run
+                and interpolating it misplaces covers on proportional faces.
+                Replay scopes Form XObject matrices as graphics-state
+                transforms. Runs keep origin-to-origin advances separate from
+                sparse drawn glyph-width overrides, and positioned same-line
+                gaps synthesize laid spaces with real geometry before spacing
+                collapse. Rotated runs retain their writing direction so
+                extraction order and fail-safe axis-aligned cover boxes follow
+                the rendered text. Type 3 and strong RTL pages deliberately use
+                <code>getTextContent</code> item geometry instead: Type 3 width
+                units depend on its <code>FontMatrix</code>, while pdf.js
+                applies the bidi algorithm only on the item path. Vertical
+                writing and non-perpendicular skewed glyph axes are rejected
+                until their geometry is supported. Every generated layout passes
+                the shared schema before it can be returned or stored.</span
               >
             </li>
             <li>
@@ -4134,8 +4151,11 @@
                 scale, cover rects are painted opaque black over the pixels, and
                 the page is re-embedded as an image. The output has no text
                 layer at all, so nothing — redacted or not — is recoverable by
-                text extraction or copy. Anything else produces a plain-text
-                artifact.</span
+                text extraction or copy. Stored layouts are parsed with the
+                shared finite-number schema before preview or burn; invalid
+                geometry is treated as absent, which triggers the fail-closed
+                cover error and a plain-text artifact instead of emitting an
+                unburned PDF. Anything else also produces plain text.</span
               >
             </li>
           </ol>
@@ -5197,15 +5217,18 @@
                   <td class="id">RULES.md</td>
                 </tr>
                 <tr>
-                  <td>Redaction cover geometry is estimated, not measured</td>
+                  <td>Some PDF pages use interpolated item geometry</td>
                   <td>
-                    pdf.js reports one advance width per text run, so
-                    per-character x and width are interpolated evenly across the
-                    run. In a proportional face a cover box whose span starts
-                    mid-run can be a few points off. The review overlay uses the
-                    same geometry, so the reviewer sees what will be burned.
+                    Type 3 fonts do emit glyph operators, but their width units
+                    depend on <code>FontMatrix</code>; strong RTL text also
+                    needs pdf.js bidi semantics. Those pages deliberately bypass
+                    operator replay and interpolate the item path's run advance.
+                    This can misplace a partial-run cover by several points. The
+                    review overlay uses the same geometry, so the reviewer sees
+                    what will be burned. Vertical writing and skewed glyph axes
+                    fail extraction closed rather than storing unsafe geometry.
                   </td>
-                  <td class="id">document-layout.ts</td>
+                  <td class="id">document-extraction.ts</td>
                 </tr>
                 <tr>
                   <td>
