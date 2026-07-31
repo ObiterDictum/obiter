@@ -25,6 +25,7 @@ export type LegalSearchMatchReason =
 export type LegalSearchHit = LegalAuthoritySummary & {
   paragraphs?: LegalAuthority['paragraphs']
   snippets?: LegalSearchSnippet[]
+  engineRankingScore?: number
 }
 export type LegalSearchFilters = Partial<{
   court: string
@@ -131,6 +132,7 @@ type IndexLike = {
       limit?: number
       matchingStrategy?: 'all' | 'frequency'
       rankingScoreThreshold?: number
+      showRankingScore?: boolean
     },
   ): Promise<{
     hits: unknown[]
@@ -385,11 +387,13 @@ export async function search(
       limit?: number
       matchingStrategy?: 'all' | 'frequency'
       rankingScoreThreshold?: number
+      showRankingScore?: boolean
     } = {
       filter: toMeiliFilters(filters),
       sort: ['dateDecided:desc'],
       matchingStrategy:
         options.matchingStrategy ?? legalSearchIndexSettings.matchingStrategy,
+      showRankingScore: true,
       attributesToRetrieve:
         options.includeParagraphs || options.includeSnippets
           ? [...searchSummaryAttributes, 'paragraphs']
@@ -406,35 +410,39 @@ export async function search(
     const result = await client.index(indexName).search(query, searchOptions)
     const providerSearchTimeMs = performance.now() - providerSearchStartedAt
     const clientProcessingStartedAt = performance.now()
-    const hits = result.hits.map((hit) =>
-      options.includeParagraphs || options.includeSnippets
-        ? LegalAuthoritySchema.parse(hit)
-        : LegalAuthoritySummarySchema.parse(hit),
-    )
+    const hits: LegalSearchHit[] = result.hits.map((hit) => {
+      const parsedHit =
+        options.includeParagraphs || options.includeSnippets
+          ? LegalAuthoritySchema.parse(hit)
+          : LegalAuthoritySummarySchema.parse(hit)
+      const engineRankingScore = readEngineRankingScore(hit)
+      return engineRankingScore === undefined
+        ? parsedHit
+        : { ...parsedHit, engineRankingScore }
+    })
     const rankedHits = rankLegalSearchHitsByExactMatch(
-      hits.map((hit) =>
-        options.includeParagraphs
-          ? {
-              ...hit,
-              snippets: options.includeSnippets
-                ? extractLegalSearchSnippets(hit, query)
-                : undefined,
-            }
-          : {
-              id: hit.id,
-              title: hit.title,
-              neutralCitation: hit.neutralCitation,
-              court: hit.court,
-              jurisdiction: hit.jurisdiction,
-              dateDecided: hit.dateDecided,
-              sourceType: hit.sourceType,
-              sourceUrl: hit.sourceUrl,
-              snippets: options.includeSnippets
-                ? extractLegalSearchSnippets(hit, query)
-                : undefined,
-            },
-      ),
+      hits.map((hit) => ({
+        ...hit,
+        snippets: options.includeSnippets
+          ? extractLegalSearchSnippets(hit, query)
+          : undefined,
+      })),
       query,
+    ).map((hit) =>
+      options.includeParagraphs
+        ? hit
+        : {
+            id: hit.id,
+            title: hit.title,
+            neutralCitation: hit.neutralCitation,
+            court: hit.court,
+            jurisdiction: hit.jurisdiction,
+            dateDecided: hit.dateDecided,
+            sourceType: hit.sourceType,
+            sourceUrl: hit.sourceUrl,
+            snippets: hit.snippets,
+            engineRankingScore: hit.engineRankingScore,
+          },
     )
 
     return {
@@ -458,7 +466,7 @@ export function extractLegalSearchSnippets(
 ): LegalSearchSnippet[] {
   const paragraphs = hit.paragraphs ?? []
   const normalizedQuery = normalizeExactMatchValue(query)
-  const tokens = normalizedQuery.split(' ').filter((token) => token.length > 1)
+  const tokens = normalizedQuery.split(' ').filter(Boolean)
   const selectedParagraphs =
     tokens.length > 0
       ? paragraphs
@@ -534,23 +542,63 @@ export function rankLegalSearchHitsByExactMatch<T extends LegalSearchHit>(
     .map((hit, index) => ({
       hit,
       index,
-      score: exactMatchScore(hit, normalizedQuery),
+      matchTier: legalSearchMatchTier(hit, normalizedQuery),
+      engineRankingScore: validEngineRankingScore(hit.engineRankingScore) ?? 0,
     }))
-    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .sort(
+      (left, right) =>
+        right.matchTier - left.matchTier ||
+        right.engineRankingScore - left.engineRankingScore ||
+        right.hit.dateDecided.localeCompare(left.hit.dateDecided) ||
+        left.index - right.index,
+    )
     .map(({ hit }) => hit)
 }
 
-function exactMatchScore(hit: LegalSearchHit, normalizedQuery: string) {
+function legalSearchMatchTier(hit: LegalSearchHit, normalizedQuery: string) {
   const normalizedTitle = normalizeExactMatchValue(hit.title)
 
-  if (normalizeExactMatchValue(hit.id) === normalizedQuery) return 5
+  if (normalizeExactMatchValue(hit.id) === normalizedQuery) return 7
   if (normalizeExactMatchValue(hit.neutralCitation) === normalizedQuery)
+    return 6
+  if (normalizedTitle === normalizedQuery) return 5
+  if (
+    containsWholeTerm(normalizedTitle, normalizedQuery) ||
+    containsEveryNormalizedQueryTerm(normalizedTitle, normalizedQuery)
+  ) {
     return 4
-  if (normalizedTitle === normalizedQuery) return 3
-  if (containsWholeTerm(normalizedTitle, normalizedQuery)) return 2
-  if (containsEveryNormalizedQueryTerm(normalizedTitle, normalizedQuery))
-    return 1
+  }
+
+  const bodySegments =
+    hit.paragraphs?.map(({ text }) => text) ??
+    hit.snippets?.map(({ text }) => text) ??
+    []
+  if (
+    bodySegments.some((text) =>
+      containsWholeTerm(normalizeExactMatchValue(text), normalizedQuery),
+    )
+  ) {
+    return 3
+  }
+
+  const bodyText = bodySegments.join(' ')
+  if (containsEveryQueryTerm(bodyText, normalizedQuery)) return 2
+  if (containsAnyQueryTerm(bodyText, normalizedQuery)) return 1
   return 0
+}
+
+function readEngineRankingScore(hit: unknown) {
+  if (typeof hit !== 'object' || hit === null) return undefined
+  return validEngineRankingScore(Reflect.get(hit, '_rankingScore'))
+}
+
+function validEngineRankingScore(value: unknown) {
+  return typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= 0 &&
+    value <= 1
+    ? value
+    : undefined
 }
 
 export const exactMatchPunctuationFolds = [
@@ -613,6 +661,12 @@ function containsEveryNormalizedQueryTerm(
     terms.length > 0 &&
     terms.every((term) => containsWholeTerm(normalizedValue, term))
   )
+}
+
+function containsAnyQueryTerm(value: string, query: string) {
+  const normalizedValue = normalizeExactMatchValue(value)
+  const terms = normalizeExactMatchValue(query).split(' ').filter(Boolean)
+  return terms.some((term) => containsWholeTerm(normalizedValue, term))
 }
 
 /**

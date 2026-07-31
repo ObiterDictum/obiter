@@ -397,6 +397,7 @@ describe('Legal search client', () => {
       sort: ['dateDecided:desc'],
       matchingStrategy: 'all',
       rankingScoreThreshold: 0.25,
+      showRankingScore: true,
       attributesToRetrieve: [
         'id',
         'title',
@@ -514,12 +515,14 @@ describe('Legal search client', () => {
       title: 'Potanina update',
       neutralCitation: '[2026] UKSC 99',
       dateDecided: '2026-01-01',
+      _rankingScore: 0.99,
     })
     const exactCitation = authority({
       id: 'uksc-2024-3',
       title: 'Potanina v Potanin',
       neutralCitation: '[2024] UKSC 3',
       dateDecided: '2024-01-31',
+      _rankingScore: 0.1,
     })
     const exactIdentifier = authority({
       id: 'ewca-civ-2026-659',
@@ -528,6 +531,7 @@ describe('Legal search client', () => {
       court: 'ewca-civ',
       dateDecided: '2026-05-22',
       sourceUrl: 'https://caselaw.nationalarchives.gov.uk/ewca/civ/2026/659',
+      _rankingScore: 0.05,
     })
     const searchMock = vi
       .fn()
@@ -566,6 +570,136 @@ describe('Legal search client', () => {
       'ewca-civ-2026-659',
       'uksc-2026-99',
     ])
+  })
+
+  it('uses the engine score ahead of recency within a legal match tier', async () => {
+    const newerLowerScore = authority({
+      id: 'benchmark-newer',
+      title: 'Alpha v Beta',
+      neutralCitation: '[2025] EWHC 1 (KB)',
+      dateDecided: '2025-01-01',
+      paragraphs: [
+        {
+          id: 'benchmark-newer-p1',
+          documentId: 'benchmark-newer',
+          paragraphNumber: 1,
+          text: 'The duty was considered in context.',
+        },
+      ],
+      _rankingScore: 0.2,
+    })
+    const olderHigherScore = authority({
+      id: 'benchmark-older',
+      title: 'Gamma v Delta',
+      neutralCitation: '[2020] EWHC 2 (KB)',
+      dateDecided: '2020-01-01',
+      paragraphs: [
+        {
+          id: 'benchmark-older-p1',
+          documentId: 'benchmark-older',
+          paragraphNumber: 1,
+          text: 'The duty was considered in context.',
+        },
+      ],
+      _rankingScore: 0.9,
+    })
+    const searchMock = vi.fn(async () => ({
+      hits: [newerLowerScore, olderHigherScore],
+      query: 'duty',
+      estimatedTotalHits: 2,
+      processingTimeMs: 1,
+    }))
+    const client = { index: () => ({ search: searchMock }) }
+
+    const result = await search(
+      client,
+      'legal_authorities',
+      'duty',
+      {},
+      { includeSnippets: true },
+    )
+
+    expect(result.hits.map(({ id }) => id)).toEqual([
+      'benchmark-older',
+      'benchmark-newer',
+    ])
+    expect(
+      result.hits.map(({ engineRankingScore }) => engineRankingScore),
+    ).toEqual([0.9, 0.2])
+  })
+
+  it('orders phrase, all-term, and any-term body matches before recency', () => {
+    const anyTerm = authority({
+      id: 'benchmark-any',
+      title: 'Any v Term',
+      dateDecided: '2025-01-01',
+      engineRankingScore: 1,
+      paragraphs: [
+        {
+          id: 'benchmark-any-p1',
+          documentId: 'benchmark-any',
+          paragraphNumber: 1,
+          text: 'The material was reviewed.',
+        },
+      ],
+    })
+    const allTerms = authority({
+      id: 'benchmark-all',
+      title: 'All v Terms',
+      dateDecided: '2024-01-01',
+      engineRankingScore: 0.9,
+      paragraphs: [
+        {
+          id: 'benchmark-all-p1',
+          documentId: 'benchmark-all',
+          paragraphNumber: 1,
+          text: 'The material made a measurable contribution.',
+        },
+      ],
+    })
+    const phrase = authority({
+      id: 'benchmark-phrase',
+      title: 'Phrase v Match',
+      dateDecided: '2020-01-01',
+      engineRankingScore: 0.1,
+      paragraphs: [
+        {
+          id: 'benchmark-phrase-p1',
+          documentId: 'benchmark-phrase',
+          paragraphNumber: 1,
+          text: 'The court considered material contribution directly.',
+        },
+      ],
+    })
+
+    expect(
+      rankLegalSearchHitsByExactMatch(
+        [anyTerm, allTerms, phrase] as LegalSearchHit[],
+        'material contribution',
+      ).map(({ id }) => id),
+    ).toEqual(['benchmark-phrase', 'benchmark-all', 'benchmark-any'])
+  })
+
+  it('uses recency only after match tier and engine score are tied', () => {
+    const older = authority({
+      id: 'benchmark-tie-older',
+      title: 'Older v Authority',
+      dateDecided: '2020-01-01',
+      engineRankingScore: 0.7,
+    })
+    const newer = authority({
+      id: 'benchmark-tie-newer',
+      title: 'Newer v Authority',
+      dateDecided: '2025-01-01',
+      engineRankingScore: 0.7,
+    })
+
+    expect(
+      rankLegalSearchHitsByExactMatch(
+        [older, newer] as LegalSearchHit[],
+        'unmatched',
+      ).map(({ id }) => id),
+    ).toEqual(['benchmark-tie-newer', 'benchmark-tie-older'])
   })
 
   it('ranks hits without neutral citations without throwing', () => {

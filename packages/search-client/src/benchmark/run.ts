@@ -29,6 +29,7 @@ interface BenchmarkCaseResult {
   category: SearchBenchmarkCategory
   query: string
   topK: string[]
+  topKScores: Array<number | null>
   returnedHitCount: number
   relevantReturnedHitCount: number
   estimatedTotalHits: number
@@ -112,7 +113,11 @@ async function runCase(
     )
     const wallClockSearchTimeMs = performance.now() - startedAt
     const hitIds = result.hits.map((hit) => hit.id)
-    const topK = hitIds.slice(0, topKSize)
+    const topKHits = result.hits.slice(0, topKSize)
+    const topK = topKHits.map(({ id }) => id)
+    const topKScores = topKHits.map(
+      ({ engineRankingScore }) => engineRankingScore ?? null,
+    )
     const relevantHit = result.hits.find((hit) =>
       relevantIds(testCase).includes(hit.id),
     )
@@ -125,6 +130,7 @@ async function runCase(
       category: testCase.category,
       query: testCase.query,
       topK,
+      topKScores,
       returnedHitCount: hitIds.length,
       relevantReturnedHitCount: hitIds.filter((id) =>
         relevantIds(testCase).includes(id),
@@ -136,12 +142,12 @@ async function runCase(
         result.diagnostics?.clientProcessingTimeMs ?? null,
       wallClockSearchTimeMs,
       relevantHitHasEvidence,
-      failureLabels: failureLabels(
-        testCase,
-        topK,
-        hitIds,
-        relevantHitHasEvidence,
-      ),
+      failureLabels: [
+        ...failureLabels(testCase, topK, hitIds, relevantHitHasEvidence),
+        ...(topKScores.some((score) => score === null)
+          ? ['engine_ranking_score_missing']
+          : []),
+      ],
     }
   } catch (error) {
     return {
@@ -149,6 +155,7 @@ async function runCase(
       category: testCase.category,
       query: testCase.query,
       topK: [],
+      topKScores: [],
       returnedHitCount: 0,
       relevantReturnedHitCount: 0,
       estimatedTotalHits: 0,
@@ -311,6 +318,12 @@ function calculateMetrics(results: BenchmarkCaseResult[]) {
       malformedNoResultCasesWithoutSearchErrors.length,
     ),
     ambiguitySurfaced: ratio(ambiguitySuccesses, ambiguityCases.length),
+    engineRankingScoreCoverage: ratio(
+      results
+        .flatMap(({ topKScores }) => topKScores)
+        .filter((score) => score !== null).length,
+      results.flatMap(({ topKScores }) => topKScores).length,
+    ),
     searchErrorCount: results.filter(({ failureLabels }) =>
       failureLabels.includes('search_error'),
     ).length,
@@ -379,6 +392,11 @@ function regressionFailures(
       'ambiguity_surfaced',
       metrics.ambiguitySurfaced,
       searchBenchmarkBaseline.minimumAmbiguitySurfaced,
+    ],
+    [
+      'engine_ranking_score_coverage',
+      metrics.engineRankingScoreCoverage,
+      searchBenchmarkBaseline.minimumEngineRankingScoreCoverage,
     ],
   ] as const
 
