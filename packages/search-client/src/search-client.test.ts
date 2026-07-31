@@ -67,6 +67,8 @@ describe('Legal search client', () => {
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
       updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
+      updateStopWords: vi.fn(() => completedTask({ uid: 13 })),
+      updateTypoTolerance: vi.fn(() => completedTask({ uid: 14 })),
       addDocuments: vi.fn(),
       search: vi.fn(),
     }
@@ -81,14 +83,12 @@ describe('Legal search client', () => {
     expect(client.createIndex).toHaveBeenCalledWith('legal_authorities', {
       primaryKey: 'id',
     })
-    expect(index.updateSearchableAttributes).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        'id',
-        'title',
-        'neutralCitation',
-        'paragraphs.text',
-      ]),
-    )
+    expect(index.updateSearchableAttributes).toHaveBeenCalledWith([
+      'id',
+      'title',
+      'neutralCitation',
+      'paragraphs.text',
+    ])
     expect(index.updateFilterableAttributes).toHaveBeenCalledWith(
       expect.arrayContaining([
         'court',
@@ -109,6 +109,18 @@ describe('Legal search client', () => {
     expect(
       index.updatePrefixSearch.mock.results[0]?.value.waitTask,
     ).toHaveBeenCalledWith({ timeout: 600_000, interval: 100 })
+    expect(index.updateStopWords).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        'appeal',
+        'application',
+        'claimant',
+        'court',
+        'judgment',
+      ]),
+    )
+    expect(index.updateTypoTolerance).toHaveBeenCalledWith({
+      minWordSizeForTypos: { oneTypo: 8, twoTypos: 12 },
+    })
   })
 
   it('updates index settings when the index already exists', async () => {
@@ -118,6 +130,8 @@ describe('Legal search client', () => {
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
       updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
+      updateStopWords: vi.fn(() => completedTask({ uid: 13 })),
+      updateTypoTolerance: vi.fn(() => completedTask({ uid: 14 })),
       addDocuments: vi.fn(),
       search: vi.fn(),
     }
@@ -143,6 +157,8 @@ describe('Legal search client', () => {
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
       updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
+      updateStopWords: vi.fn(() => completedTask({ uid: 13 })),
+      updateTypoTolerance: vi.fn(() => completedTask({ uid: 14 })),
       addDocuments: vi.fn(),
       search: vi.fn(),
     }
@@ -184,6 +200,8 @@ describe('Legal search client', () => {
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
       updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
+      updateStopWords: vi.fn(() => completedTask({ uid: 13 })),
+      updateTypoTolerance: vi.fn(() => completedTask({ uid: 14 })),
       addDocuments: vi.fn(),
       search: vi.fn(),
     }
@@ -318,6 +336,8 @@ describe('Legal search client', () => {
         'dateDecided <= "2024-12-31"',
       ],
       sort: ['dateDecided:desc'],
+      matchingStrategy: 'frequency',
+      rankingScoreThreshold: 0.5,
       attributesToRetrieve: [
         'id',
         'title',

@@ -111,6 +111,10 @@ type IndexLike = {
   updatePrefixSearch(
     prefixSearch: 'disabled' | 'indexingTime',
   ): SearchEnqueuedTaskPromise
+  updateStopWords(stopWords: string[]): SearchEnqueuedTaskPromise
+  updateTypoTolerance(settings: {
+    minWordSizeForTypos: { oneTypo: number; twoTypos: number }
+  }): SearchEnqueuedTaskPromise
   addDocuments(
     documents: LegalSearchDocument[],
     options: { primaryKey: 'id' },
@@ -122,6 +126,8 @@ type IndexLike = {
       sort?: string[]
       attributesToRetrieve?: string[]
       limit?: number
+      matchingStrategy?: 'frequency'
+      rankingScoreThreshold?: number
     },
   ): Promise<{
     hits: unknown[]
@@ -157,8 +163,6 @@ const searchableAttributes = [
   'id',
   'title',
   'neutralCitation',
-  'court',
-  'jurisdiction',
   'paragraphs.text',
 ]
 
@@ -169,6 +173,41 @@ const filterableAttributes = [
   'dateDecided',
 ]
 const sortableAttributes = ['dateDecided']
+const legalStopWords = [
+  'a',
+  'an',
+  'and',
+  'appeal',
+  'application',
+  'are',
+  'as',
+  'at',
+  'be',
+  'been',
+  'by',
+  'case',
+  'claimant',
+  'court',
+  'decision',
+  'defendant',
+  'for',
+  'from',
+  'in',
+  'is',
+  'it',
+  'judge',
+  'judgment',
+  'of',
+  'on',
+  'or',
+  'that',
+  'the',
+  'this',
+  'to',
+  'was',
+  'were',
+  'with',
+]
 const searchSummaryAttributes = [
   'id',
   'title',
@@ -233,6 +272,16 @@ export async function createIndex(
     )
     await waitForSucceededTask(
       index.updatePrefixSearch('disabled'),
+      indexSetupTaskTimeoutMs,
+    )
+    await waitForSucceededTask(
+      index.updateStopWords(legalStopWords),
+      indexSetupTaskTimeoutMs,
+    )
+    await waitForSucceededTask(
+      index.updateTypoTolerance({
+        minWordSizeForTypos: { oneTypo: 8, twoTypos: 12 },
+      }),
       indexSetupTaskTimeoutMs,
     )
 
@@ -312,9 +361,13 @@ export async function search(
       sort?: string[]
       attributesToRetrieve?: string[]
       limit?: number
+      matchingStrategy?: 'frequency'
+      rankingScoreThreshold?: number
     } = {
       filter: toMeiliFilters(filters),
       sort: ['dateDecided:desc'],
+      matchingStrategy: 'frequency',
+      rankingScoreThreshold: 0.5,
       attributesToRetrieve:
         options.includeParagraphs || options.includeSnippets
           ? [...searchSummaryAttributes, 'paragraphs']

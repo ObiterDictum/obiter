@@ -11,7 +11,7 @@ export const searchBenchmarkBaseline = {
   minimumExactLookupTop1Success: 1,
   minimumShortWordPrecision: 1,
   minimumEvidenceUnitRecall: 1,
-  minimumNoAnswerPrecision: 0,
+  minimumNoAnswerPrecision: 1,
   minimumMalformedCitationNoResultRate: 1,
   minimumAmbiguitySurfaced: 1,
   // Meilisearch comparison operators (>=, <=) accept numeric operands only, so
