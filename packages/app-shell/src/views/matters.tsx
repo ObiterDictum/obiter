@@ -105,9 +105,7 @@ export function MattersRouteView({
               icon={<Folders aria-hidden="true" size={24} weight="regular" />}
               title="No matters yet"
               body="Create your first matter to start organising legal documents, review state, and artifacts."
-              action={
-                <CreateMatterDialog trigger="Create your first matter" />
-              }
+              action={<CreateMatterDialog trigger="Create your first matter" />}
             />
           </div>
         )}
@@ -495,7 +493,9 @@ export function MatterRouteView({
                     : ''}
                 </p>
                 <div className="mt-2">
-                  <DocumentStatusBadge status={selectedVersion?.documentStatus} />
+                  <DocumentStatusBadge
+                    status={selectedVersion?.documentStatus}
+                  />
                 </div>
               </header>
               <div className="flex flex-wrap gap-2">

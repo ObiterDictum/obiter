@@ -116,10 +116,7 @@ export function useRedactionOutput(runId: string, enabled: boolean) {
   })
 }
 
-export function useRedactionOutputFile(
-  runId: string,
-  enabled: boolean,
-) {
+export function useRedactionOutputFile(runId: string, enabled: boolean) {
   return useQuery({
     queryKey: ['redaction-run-output-file', runId],
     queryFn: () => apiFetchBlob(`/api/redaction-runs/${runId}/output/file`),

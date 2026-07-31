@@ -103,8 +103,7 @@ export function createRedactRunCreationRoutes(
           upload.contents,
         )
         text = extracted.text
-        if (extracted.layout)
-          layoutJson = JSON.stringify(extracted.layout)
+        if (extracted.layout) layoutJson = JSON.stringify(extracted.layout)
       } catch (error) {
         if (error instanceof DocumentUploadError)
           return errorResponse(c, 'validation_failed', error.message, 400)

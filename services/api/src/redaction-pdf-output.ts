@@ -1,9 +1,6 @@
 import { createCanvas, type SKRSContext2D } from '@napi-rs/canvas'
 import { PDFDocument } from 'pdf-lib'
-import {
-  createIsomorphicCanvasFactory,
-  getDocumentProxy,
-} from 'unpdf'
+import { createIsomorphicCanvasFactory, getDocumentProxy } from 'unpdf'
 import {
   affectsOutput,
   coverRectsForSpan,
@@ -44,9 +41,7 @@ export class RedactionCoverGeometryError extends Error {
   readonly spanIds: string[]
 
   constructor(spanIds: string[]) {
-    super(
-      `Redaction cover geometry missing for span(s): ${spanIds.join(', ')}`,
-    )
+    super(`Redaction cover geometry missing for span(s): ${spanIds.join(', ')}`)
     this.name = 'RedactionCoverGeometryError'
     this.spanIds = spanIds
   }
@@ -227,7 +222,9 @@ export function redactedTextFilename(sourceFilename: string) {
   return `${stem}-redacted.txt`
 }
 
-export function isDocumentTextLayout(value: unknown): value is DocumentTextLayout {
+export function isDocumentTextLayout(
+  value: unknown,
+): value is DocumentTextLayout {
   if (typeof value !== 'object' || value === null) return false
   const record = value as Record<string, unknown>
   return (

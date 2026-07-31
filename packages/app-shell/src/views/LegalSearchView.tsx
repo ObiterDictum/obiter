@@ -543,8 +543,8 @@ export function LegalSearchView() {
               Search judgments
             </h2>
             <p className="text-sm leading-relaxed text-muted">
-              Search stored judgments and Find Case Law across UK courts.
-              Recent queries stay in the sidebar.
+              Search stored judgments and Find Case Law across UK courts. Recent
+              queries stay in the sidebar.
             </p>
           </div>
         ) : null}

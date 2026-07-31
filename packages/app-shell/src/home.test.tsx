@@ -1,11 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
-import {
-  cleanup,
-  render,
-  screen,
-  waitFor,
-} from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   createMemoryHistory,
@@ -301,7 +296,9 @@ describe('HomeRouteView — matters query states', () => {
     renderHome()
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Active matters' })).toBeTruthy()
+      expect(
+        screen.getByRole('heading', { name: 'Active matters' }),
+      ).toBeTruthy()
       expect(screen.getByText('Matter mtr_0')).toBeTruthy()
     })
     expect(screen.getAllByText('3').length).toBeGreaterThan(0)
@@ -325,7 +322,9 @@ describe('HomeRouteView — organisation-less state', () => {
     renderHome()
 
     await waitFor(() => {
-      expect(screen.getByText(/Good (morning|afternoon|evening), New/i)).toBeTruthy()
+      expect(
+        screen.getByText(/Good (morning|afternoon|evening), New/i),
+      ).toBeTruthy()
     })
     expect(screen.getByText('No organisation yet')).toBeTruthy()
     expect(screen.getByText('Loading…')).toBeTruthy()
@@ -334,10 +333,10 @@ describe('HomeRouteView — organisation-less state', () => {
     // Quiet queue: no hollow Redaction column.
     expect(screen.queryByRole('region', { name: 'Redaction' })).toBeNull()
     expect(screen.queryByText(/Queue clear/i)).toBeNull()
+    expect(screen.queryByText(/Create an organisation in Settings/i)).toBeNull()
     expect(
-      screen.queryByText(/Create an organisation in Settings/i),
+      screen.queryByRole('button', { name: /create organisation/i }),
     ).toBeNull()
-    expect(screen.queryByRole('button', { name: /create organisation/i })).toBeNull()
   })
 
   it('enables the matters list query for an org-less user', async () => {
@@ -346,7 +345,9 @@ describe('HomeRouteView — organisation-less state', () => {
     renderHome()
 
     await waitFor(() => {
-      expect(screen.getByText(/Good (morning|afternoon|evening), New/i)).toBeTruthy()
+      expect(
+        screen.getByText(/Good (morning|afternoon|evening), New/i),
+      ).toBeTruthy()
     })
     expect(mocks.useMattersList).toHaveBeenCalled()
     expect(mocks.useMattersList).not.toHaveBeenCalledWith({ enabled: false })
@@ -454,7 +455,9 @@ describe('HomeRouteView — relevant density', () => {
     renderHome(client)
 
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Documents in play' })).toBeTruthy()
+      expect(
+        screen.getByRole('heading', { name: 'Documents in play' }),
+      ).toBeTruthy()
       expect(screen.getByText('brief-needs_review.pdf')).toBeTruthy()
     })
     expect(screen.queryByText('brief-ready.pdf')).toBeNull()

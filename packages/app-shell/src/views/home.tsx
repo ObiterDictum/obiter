@@ -204,9 +204,7 @@ function OrganisationHome({
   }, [documentQueries, matterSlice])
 
   const showRedactionColumn =
-    runsQuery.isLoading ||
-    attentionRuns.length > 0 ||
-    recentRuns.length > 0
+    runsQuery.isLoading || attentionRuns.length > 0 || recentRuns.length > 0
 
   const documentTotal = useMemo(() => {
     let total = 0
@@ -231,8 +229,7 @@ function OrganisationHome({
       unreviewed += summary.unreviewedCount ?? 0
       const decisions = summary.byDecision
       if (decisions) {
-        accepted +=
-          (decisions.accept ?? 0) + (decisions.override_redact ?? 0)
+        accepted += (decisions.accept ?? 0) + (decisions.override_redact ?? 0)
       }
     }
     return { spans, accepted, reviewed, unreviewed }
@@ -301,9 +298,7 @@ function OrganisationHome({
               />
               <Stat
                 label="Needs you"
-                value={
-                  runsQuery.isLoading ? '…' : String(attentionRuns.length)
-                }
+                value={runsQuery.isLoading ? '…' : String(attentionRuns.length)}
                 tone={attentionRuns.length > 0 ? 'warn' : 'neutral'}
               />
               <Stat
@@ -403,10 +398,7 @@ function OrganisationHome({
           >
             <section
               aria-label="Your work"
-              className={cn(
-                'min-w-0 py-4',
-                showRedactionColumn && 'lg:pr-8',
-              )}
+              className={cn('min-w-0 py-4', showRedactionColumn && 'lg:pr-8')}
             >
               <div className="mb-3 flex items-baseline justify-between gap-3">
                 <h2 className="text-[11px] font-medium tracking-[0.14em] text-subtle uppercase">
@@ -855,9 +847,7 @@ function ActivityIcon({ status }: { status: RedactionRunListItem['status'] }) {
       <WarningCircle size={13} className="shrink-0 text-danger" aria-hidden />
     )
   }
-  return (
-    <PencilSimple size={13} className="shrink-0 text-subtle" aria-hidden />
-  )
+  return <PencilSimple size={13} className="shrink-0 text-subtle" aria-hidden />
 }
 
 function EmptyMatters() {
@@ -870,8 +860,7 @@ function EmptyMatters() {
       >
         Create one
       </Link>
-      .
-      <span className="sr-only">Create your first matter</span>
+      .<span className="sr-only">Create your first matter</span>
     </p>
   )
 }

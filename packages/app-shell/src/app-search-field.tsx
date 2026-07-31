@@ -199,7 +199,11 @@ export function AppSearchField() {
         )}
         onSubmit={onCompactSubmit}
       >
-        <MagnifyingGlass size={14} className="shrink-0 text-subtle" aria-hidden />
+        <MagnifyingGlass
+          size={14}
+          className="shrink-0 text-subtle"
+          aria-hidden
+        />
         <input
           ref={inputRef}
           value={query}

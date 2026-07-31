@@ -118,7 +118,7 @@ to a firm handling privileged material.
 
 **Web: updates on deploy.** No user-side version control exists, so no policy needed.
 
-Forced update resolves version skew. It does *not* resolve defect detection: everyone
+Forced update resolves version skew. It does _not_ resolve defect detection: everyone
 runs the same model, but nobody sees which documents it failed on. That is handled
 by the diagnostics design below, and it is the reason that design is load-bearing
 rather than a nicety.
@@ -158,8 +158,8 @@ first-class part of the schema rather than derived later.
 
 ## Attestation by hash
 
-A usage log records that *a* run occurred with certain characteristics. It cannot
-demonstrate that *this specific file* was correctly redacted, which is the claim a
+A usage log records that _a_ run occurred with certain characteristics. It cannot
+demonstrate that _this specific file_ was correctly redacted, which is the claim a
 firm will need when asked to prove disclosure was handled properly.
 
 Resolution: hash the input and output documents client-side, sync only the hashes.
@@ -198,7 +198,7 @@ inspection that it contains nothing they cannot share.
 ### Local flagging
 
 We do not have to wait for complaints. These are computed locally and content-free,
-so the *flag* syncs as a metric while the *content* does not:
+so the _flag_ syncs as a metric while the _content_ does not:
 
 - OCR page confidence below threshold
 - Model and supplement disagreeing sharply
@@ -224,15 +224,15 @@ unavoidably.
 
 ## Retention
 
-Article 5(1)(e) sets no period. It requires that one be *defined*, or that the
+Article 5(1)(e) sets no period. It requires that one be _defined_, or that the
 criteria determining it be defined, and stated in the privacy notice. "As long as
 required" is the standard, not a policy. Three clocks, not one:
 
-| Record | Proposed | Basis |
-|---|---|---|
+| Record                                                             | Proposed         | Basis                                                                                                                                                                 |
+| ------------------------------------------------------------------ | ---------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Audit and attestation (document hashes, content-free run metadata) | 6 years from run | Aligns with the general limitation period and with the retention firms already apply to matter files. Evidential purpose. Lawful basis: contract and legal obligation |
-| User activity telemetry (who ran what, when) | 12 to 24 months | Personal data about the solicitor with weak justification for longer. Lawful basis: legitimate interests, needs an assessment |
-| Local diagnostic store | 30 days | Never leaves the device unless reported |
+| User activity telemetry (who ran what, when)                       | 12 to 24 months  | Personal data about the solicitor with weak justification for longer. Lawful basis: legitimate interests, needs an assessment                                         |
+| Local diagnostic store                                             | 30 days          | Never leaves the device unless reported                                                                                                                               |
 
 Latent damage provisions can extend professional negligence exposure well past six
 years, so the audit clock may warrant a longer period for some matter types. That is
@@ -261,7 +261,7 @@ should be enforced in the aggregation job rather than left to policy.
 **Per-organisation aggregate views are fine, and are a separate thing.** During the
 telemetry retention window an organisation can see its own users' activity; that is
 the supervision view, and its lawful basis is the firm's supervisory interest. The
-group-size threshold governs only what survives *past* the window as indefinitely
+group-size threshold governs only what survives _past_ the window as indefinitely
 retained data. The distinction matters because the personal data in question belongs
 to the solicitor, not to the firm, so an organisation cannot elect a lower threshold
 on its employees' behalf. Granularity is configurable per organisation inside the

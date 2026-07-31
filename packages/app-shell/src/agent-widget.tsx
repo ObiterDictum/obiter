@@ -35,7 +35,9 @@ export function AgentWidget() {
             </button>
           </header>
           <div className="flex flex-1 flex-col items-start justify-center gap-2 px-4 py-6">
-            <p className="text-sm font-medium text-ink">Ask across the workspace</p>
+            <p className="text-sm font-medium text-ink">
+              Ask across the workspace
+            </p>
             <p className="text-sm leading-relaxed text-muted">
               Agent will answer questions and draft against matter context when
               this surface ships. It is not available yet.

@@ -76,7 +76,9 @@ export function ResetPasswordRouteView() {
             <h1 className="text-lg font-semibold tracking-tight text-ink">
               Set a new password
             </h1>
-            <p className="text-sm text-muted">Choose a password for your account.</p>
+            <p className="text-sm text-muted">
+              Choose a password for your account.
+            </p>
           </div>
         </header>
 

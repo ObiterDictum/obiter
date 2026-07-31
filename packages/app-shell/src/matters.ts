@@ -118,10 +118,7 @@ export function useMattersList(options?: { enabled?: boolean }) {
 }
 
 /** Single matter via TanStack Query. */
-export function useMatter(
-  matterId: string,
-  options?: { enabled?: boolean },
-) {
+export function useMatter(matterId: string, options?: { enabled?: boolean }) {
   return useQuery({
     ...matterQueryOptions(matterId),
     enabled: options?.enabled ?? true,

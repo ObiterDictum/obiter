@@ -158,7 +158,9 @@ export function RedactionRunsView({
                 />
               </label>
               {upload.error ? (
-                <p className="mt-2 text-sm text-danger">{upload.error.message}</p>
+                <p className="mt-2 text-sm text-danger">
+                  {upload.error.message}
+                </p>
               ) : null}
             </div>
           </div>
@@ -212,9 +214,7 @@ export function RedactionRunsView({
                       </p>
                       <div className="mt-1.5 flex flex-wrap gap-1.5">
                         <Badge
-                          tone={
-                            run.status === 'finalized' ? 'success' : 'info'
-                          }
+                          tone={run.status === 'finalized' ? 'success' : 'info'}
                         >
                           {run.status.replaceAll('_', ' ')}
                         </Badge>
@@ -259,9 +259,7 @@ export function RedactionRunsView({
                             </DialogDescription>
                             <div className="flex justify-end gap-2">
                               <DialogClose
-                                render={
-                                  <Button variant="ghost">Cancel</Button>
-                                }
+                                render={<Button variant="ghost">Cancel</Button>}
                               />
                               <Button
                                 variant="danger"

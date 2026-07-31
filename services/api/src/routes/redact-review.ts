@@ -334,7 +334,10 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         Boolean(layoutObjectKey) &&
         Boolean(storage.readBinary) &&
         Boolean(storage.writeBinary) &&
-        isPdfMimeOrFilename(run.sourceFilename, run.sourceMimeType ?? source?.mimeType ?? null)
+        isPdfMimeOrFilename(
+          run.sourceFilename,
+          run.sourceMimeType ?? source?.mimeType ?? null,
+        )
 
       if (canWritePdf && source && layoutObjectKey) {
         const layoutJson = JSON.parse(await storage.readText(layoutObjectKey))

@@ -115,13 +115,12 @@ describe('layoutFromLaidChars', () => {
     const chars = [...left, ...right]
     const layout = layoutFromLaidChars(chars, [{ width: 400, height: 200 }])
     expect(layout.segments.length).toBeGreaterThanOrEqual(2)
-    expect(layout.segments.some((segment) => segment.end - segment.start > 1)).toBe(
-      true,
-    )
+    expect(
+      layout.segments.some((segment) => segment.end - segment.start > 1),
+    ).toBe(true)
     expect(
       layout.segments.every(
-        (segment) =>
-          segment.end <= left.length || segment.start >= left.length,
+        (segment) => segment.end <= left.length || segment.start >= left.length,
       ),
     ).toBe(true)
   })

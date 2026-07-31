@@ -9,7 +9,10 @@ import {
   type LaidChar,
 } from './document-layout'
 
-export type { DocumentTextLayout, ExtractedDocumentContent } from './document-layout'
+export type {
+  DocumentTextLayout,
+  ExtractedDocumentContent,
+} from './document-layout'
 
 export type SupportedDocumentType = 'docx' | 'pdf' | 'txt'
 
@@ -56,8 +59,9 @@ export function normaliseFileType(
   return null
 }
 
-
-async function extractPdfContent(buffer: Buffer): Promise<ExtractedDocumentContent> {
+async function extractPdfContent(
+  buffer: Buffer,
+): Promise<ExtractedDocumentContent> {
   // Copy before handing bytes to PDF.js — getDocumentProxy may transfer/
   // detach the ArrayBuffer, which would break later writes of the original.
   const bytes = Uint8Array.from(buffer)
@@ -176,8 +180,7 @@ function pdfItemMetrics(
   const fromHeight =
     typeof item.height === 'number' && item.height > 0 ? item.height : 0
   const fontSize = Math.max(fromTransform, fromHeight) || 12
-  const style =
-    item.fontName && styles ? styles[item.fontName] : undefined
+  const style = item.fontName && styles ? styles[item.fontName] : undefined
   const ascentRatio =
     typeof style?.ascent === 'number' && style.ascent > 0 ? style.ascent : 0.8
   const descentRatio =

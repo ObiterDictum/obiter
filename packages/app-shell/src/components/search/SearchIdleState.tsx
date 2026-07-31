@@ -56,7 +56,9 @@ export function SearchIdleExtras({
               key={tip.label}
             >
               <span className="text-[11px] text-muted">{tip.label}</span>
-              <span className="text-sm font-medium text-ink">{tip.example}</span>
+              <span className="text-sm font-medium text-ink">
+                {tip.example}
+              </span>
             </li>
           ))}
         </ul>

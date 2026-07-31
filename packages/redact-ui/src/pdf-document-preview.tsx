@@ -64,11 +64,7 @@ export function PdfDocumentPreview({ file }: { file: Blob }) {
       aria-label="Redacted PDF preview"
     >
       {Array.from({ length: pdf.numPages }, (_, index) => (
-        <PdfPreviewPage
-          key={index}
-          pdf={pdf}
-          pageNumber={index + 1}
-        />
+        <PdfPreviewPage key={index} pdf={pdf} pageNumber={index + 1} />
       ))}
     </div>
   )

@@ -171,9 +171,9 @@ describe('redaction-pdf-output', () => {
     ])
 
     expect(isNearBlack(coverPixel!.r, coverPixel!.g, coverPixel!.b)).toBe(true)
-    expect(
-      isNearBlack(visiblePixel!.r, visiblePixel!.g, visiblePixel!.b),
-    ).toBe(false)
+    expect(isNearBlack(visiblePixel!.r, visiblePixel!.g, visiblePixel!.b)).toBe(
+      false,
+    )
   })
 
   it('throws when an output-affecting span has no cover geometry', async () => {

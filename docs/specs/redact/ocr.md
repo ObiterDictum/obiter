@@ -14,14 +14,14 @@ text-layer PDF and TXT only. OCR is the gap that closes this.
 
 ## Selection: PP-OCRv6 via `ppu-paddle-ocr`
 
-| | |
-|---|---|
-| Models | PP-OCRv6 (Baidu), Apache 2.0 |
-| Wrapper | `ppu-paddle-ocr`, MIT |
-| Runtime | `onnxruntime-node`, runs in Electron with no Python |
-| Output | `detect()` returns `{x, y, width, height}` per text region |
-| Sizes | tiny ~6 MB, small ~30 MB, medium ~139 MB fp32 (INT8 supported, medium should reach ~35 MB) |
-| Loading | models accepted as path, URL or buffer, so weights bundle into the installer |
+|         |                                                                                            |
+| ------- | ------------------------------------------------------------------------------------------ |
+| Models  | PP-OCRv6 (Baidu), Apache 2.0                                                               |
+| Wrapper | `ppu-paddle-ocr`, MIT                                                                      |
+| Runtime | `onnxruntime-node`, runs in Electron with no Python                                        |
+| Output  | `detect()` returns `{x, y, width, height}` per text region                                 |
+| Sizes   | tiny ~6 MB, small ~30 MB, medium ~139 MB fp32 (INT8 supported, medium should reach ~35 MB) |
+| Loading | models accepted as path, URL or buffer, so weights bundle into the installer               |
 
 Both licences are compatible with AGPL, the same check that cleared Rampart's
 CC BY 4.0.
@@ -82,8 +82,8 @@ obtain real text is exposure spent for no gain in signal.
 The licence position, recorded so it is not re-argued:
 
 - The transactional licence (TNA to Obiter Research Limited, 15 July 2026) grants
-  both copying and computational analysis rights, but each is bounded *for the
-  Purpose*, and the Purpose is publishing on Obiter.dev plus "case search and
+  both copying and computational analysis rights, but each is bounded _for the
+  Purpose_, and the Purpose is publishing on Obiter.dev plus "case search and
   verification facilities". Benchmarking a redaction product is not that. The Purpose
   clause limits the scope of the grant, so keeping the corpus internal does not cure
   it, although it does reduce practical exposure considerably.
@@ -124,7 +124,7 @@ Layer a small set of real scans on top later to calibrate the degradation parame
 held privately and never released.
 
 **This corpus measures OCR only.** Judgment-register text is fine for character
-accuracy, which is largely document-agnostic. It is *not* a proxy for detection
+accuracy, which is largely document-agnostic. It is _not_ a proxy for detection
 quality, because Redact processes witness statements, attendance notes, medical
 records and correspondence, which differ in register and layout. The two benchmarks
 stay separate and measure separate things.

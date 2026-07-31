@@ -3,10 +3,7 @@ import { isRedirect } from '@tanstack/react-router'
 import { QueryClient } from '@tanstack/react-query'
 import type { MeResponse } from '@obiter/contracts'
 import { ApiError } from './api'
-import {
-  guardAuth,
-  prefetchHomeData,
-} from './route-loaders'
+import { guardAuth, prefetchHomeData } from './route-loaders'
 
 const noopQueryClient = new QueryClient()
 

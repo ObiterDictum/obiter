@@ -44,13 +44,16 @@ export function readWorkspaceLastPlace(
 }
 
 /** Derive a human last-place record from the current pathname. */
-export function lastPlaceFromPath(path: string): Omit<
-  WorkspaceLastPlace,
-  'at'
-> | null {
+export function lastPlaceFromPath(
+  path: string,
+): Omit<WorkspaceLastPlace, 'at'> | null {
   if (path === '/' || path.startsWith('/sign-')) return null
 
-  if (path === '/search' || path.startsWith('/case/') || path.startsWith('/cases/')) {
+  if (
+    path === '/search' ||
+    path.startsWith('/case/') ||
+    path.startsWith('/cases/')
+  ) {
     if (path.startsWith('/case/') || path.startsWith('/cases/')) {
       return { path, label: 'Opened judgment', kind: 'search', detail: path }
     }

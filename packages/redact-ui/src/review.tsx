@@ -226,21 +226,19 @@ function FinalizedOutput({
   outputQuery: ReturnType<typeof useRedactionOutput>
 }) {
   const mimeType =
-    outputQuery.data?.mimeType ??
-    run.summary.outputMimeType ??
-    'text/plain'
+    outputQuery.data?.mimeType ?? run.summary.outputMimeType ?? 'text/plain'
   const isPdf = mimeType === 'application/pdf'
   const filename =
     outputQuery.data?.filename ??
     run.summary.outputFilename ??
     run.sourceFilename
-  const fileQuery = useRedactionOutputFile(run.id, isPdf && Boolean(run.outputArtifactId))
+  const fileQuery = useRedactionOutputFile(
+    run.id,
+    isPdf && Boolean(run.outputArtifactId),
+  )
 
   return (
-    <section
-      className="px-4 py-4 sm:px-5"
-      aria-label="Redaction output"
-    >
+    <section className="px-4 py-4 sm:px-5" aria-label="Redaction output">
       <div className="w-full rounded-lg border border-line-strong bg-raised text-ink shadow-lg">
         <header className="flex flex-wrap items-start justify-between gap-4 border-b border-line px-8 py-6 md:px-10">
           <div>
@@ -530,9 +528,7 @@ export function RedactionReviewView({
         >
           {run.status === 'finalized' ? (
             <FinalizedOutput run={run} outputQuery={outputQuery} />
-          ) : pdfPreviewEnabled &&
-            sourceFileQuery.data &&
-            layoutQuery.data ? (
+          ) : pdfPreviewEnabled && sourceFileQuery.data && layoutQuery.data ? (
             <PdfReviewDocument
               file={sourceFileQuery.data}
               layout={layoutQuery.data}

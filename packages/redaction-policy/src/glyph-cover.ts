@@ -99,9 +99,7 @@ export function coverRectsForSpan(input: {
       const startRatio = local / segmentLength
       const endRatio = (local + 1) / segmentLength
       const x =
-        segmentLength === 1
-          ? segment.x
-          : segment.x + segment.width * startRatio
+        segmentLength === 1 ? segment.x : segment.x + segment.width * startRatio
       const width =
         segmentLength === 1
           ? segment.width
@@ -157,10 +155,7 @@ function unionMergeGlyphs(glyphs: TrackedGlyph[]): TrackedGlyph[] {
 
     if (previous && sameLine) {
       const right = Math.max(previous.x + previous.width, glyph.x + glyph.width)
-      const top = Math.max(
-        previous.y + previous.height,
-        glyph.y + glyph.height,
-      )
+      const top = Math.max(previous.y + previous.height, glyph.y + glyph.height)
       const bottom = Math.min(previous.y, glyph.y)
       previous.x = Math.min(previous.x, glyph.x)
       previous.y = bottom

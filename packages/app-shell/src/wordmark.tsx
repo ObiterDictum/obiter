@@ -46,10 +46,7 @@ export function Wordmark({
 
   return (
     <span
-      className={cn(
-        'inline-flex items-center gap-2.5 text-ink',
-        className,
-      )}
+      className={cn('inline-flex items-center gap-2.5 text-ink', className)}
       role="img"
       aria-label="Obiter"
     >

@@ -5,7 +5,7 @@ Status: design record, **not scheduled.** Separate track from
 Date: 2026-07-29
 Related: `fine-tuning.md` (mechanics), `synthetic-data-plan.md` (corpus generation)
 
-This note records *what* UK tuning should target and what it should not. The
+This note records _what_ UK tuning should target and what it should not. The
 mechanics of running a fine-tune are in `fine-tuning.md` and are not repeated here.
 
 ## The division of labour is already correct

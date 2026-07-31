@@ -82,7 +82,10 @@ function charSegments(chars: LaidChar[]): DocumentTextLayoutSegment[] {
 
     if (run && runLast && canMergeIntoRun(runLast, current)) {
       run.end = index + 1
-      run.width = Math.max(current.x + Math.max(current.width, 0.5) - run.x, 0.5)
+      run.width = Math.max(
+        current.x + Math.max(current.width, 0.5) - run.x,
+        0.5,
+      )
       runLast = current
       continue
     }
@@ -143,7 +146,9 @@ function collapseLineGlyphSpacing(line: string) {
  * Collapse PDF letter-spacing while deleting matching laid characters so
  * offsets stay aligned with stored detection text.
  */
-export function collapsePdfGlyphSpacingWithLayout(chars: LaidChar[]): LaidChar[] {
+export function collapsePdfGlyphSpacingWithLayout(
+  chars: LaidChar[],
+): LaidChar[] {
   const lines: LaidChar[][] = [[]]
   for (const laid of chars) {
     if (laid.ch === '\n') {

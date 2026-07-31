@@ -2027,8 +2027,8 @@
                     Collapsed icons are always visible and expand to labels on
                     hover or focus-within. Sections are data-driven per mode:
                     live matters, matter documents, redaction runs needing
-                    attention, recent searches from session storage. Home has
-                    no rail — the desk already carries those entry points.
+                    attention, recent searches from session storage. Home has no
+                    rail — the desk already carries those entry points.
                   </td>
                 </tr>
                 <tr>
@@ -2096,8 +2096,8 @@
                 <dd>
                   redaction-detection · redaction-redetect ·
                   redaction-run-creation · redaction-database ·
-                  redaction-audit-report · document-extraction ·
-                  document-layout · redaction-pdf-output · storage · authz
+                  redaction-audit-report · document-extraction · document-layout
+                  · redaction-pdf-output · storage · authz
                 </dd>
                 <dt>Extract</dt>
                 <dd>mammoth (DOCX) · unpdf (text-layer PDF)</dd>
@@ -2287,8 +2287,8 @@
                 </dd>
                 <dt>PDF review</dt>
                 <dd>
-                  pdf-review-document renders the original on a pdfjs canvas
-                  and overlays spans via
+                  pdf-review-document renders the original on a pdfjs canvas and
+                  overlays spans via
                   <code>coverRectsForSpan</code> from
                   <code>@obiter/redaction-policy</code>, the same geometry the
                   server burns
@@ -2582,9 +2582,7 @@
                   <td>Source text for the review view</td>
                 </tr>
                 <tr>
-                  <td class="id">
-                    GET /api/redaction-runs/:runId/source-file
-                  </td>
+                  <td class="id">GET /api/redaction-runs/:runId/source-file</td>
                   <td class="id">redact-review.ts</td>
                   <td>
                     Original upload or matter document bytes for PDF preview
@@ -2621,9 +2619,7 @@
                   </td>
                 </tr>
                 <tr>
-                  <td class="id">
-                    GET /api/redaction-runs/:runId/output/file
-                  </td>
+                  <td class="id">GET /api/redaction-runs/:runId/output/file</td>
                   <td class="id">redact-review.ts</td>
                   <td>
                     Finalized artifact bytes (redacted PDF or text download)
@@ -2677,10 +2673,10 @@
             </li>
             <li>
               <span
-                ><b>Authorisation.</b> Handlers call
-                <code>ensureOrgUser</code>, which returns an org-scoped user (auto-provisioning a
-                personal workspace when the caller is still org-less) or a ready-to-return 401/503
-                Response.</span
+                ><b>Authorisation.</b> Handlers call <code>ensureOrgUser</code>,
+                which returns an org-scoped user (auto-provisioning a personal
+                workspace when the caller is still org-less) or a
+                ready-to-return 401/503 Response.</span
               >
             </li>
             <li>
@@ -3236,9 +3232,8 @@
                     <code>source_file_object_key</code>,
                     <code>source_layout_object_key</code> and
                     <code>source_mime_type</code>, each constrained to the
-                    derived key shape and to
-                    <code>matter_id is null</code> — matter-attached runs read
-                    the same bytes through
+                    derived key shape and to <code>matter_id is null</code> —
+                    matter-attached runs read the same bytes through
                     <code>document_versions</code> instead.
                   </td>
                   <td class="id">0005, 0006, 0007, 0010, 0011, 0012</td>
@@ -4087,12 +4082,12 @@
               <span
                 ><b>Input.</b> Text pasted directly, or DOCX, text-layer PDF or
                 TXT uploaded. <code>document-extraction.ts</code> extracts text;
-                scanned PDFs are rejected as needing OCR. For PDFs it also
-                emits a <code>DocumentTextLayout</code>
+                scanned PDFs are rejected as needing OCR. For PDFs it also emits
+                a <code>DocumentTextLayout</code>
                 (<code>document-layout.ts</code>): laid characters carry
-                per-glyph page index, position, em size and font
-                ascent/descent in PDF user space, then contiguous glyphs on the
-                same baseline are merged into run segments (schema
+                per-glyph page index, position, em size and font ascent/descent
+                in PDF user space, then contiguous glyphs on the same baseline
+                are merged into run segments (schema
                 <code>version: 1</code>). Extracted text is derived from the
                 same laid-character array, so layout offsets and detection
                 offsets are aligned by construction rather than by a second
@@ -4124,21 +4119,20 @@
                 ><b>Review.</b> The reviewer accepts, rejects, overrides or
                 pseudonymises each span. Where a stored layout exists, the
                 review surface renders the original PDF on a canvas and
-                positions span boxes with
-                <code>coverRectsForSpan</code> — the same function the server
-                uses to burn the output — so the reviewer sees the actual
-                cover geometry. Runs without a layout fall back to the
-                highlighted-text view.</span
+                positions span boxes with <code>coverRectsForSpan</code> — the
+                same function the server uses to burn the output — so the
+                reviewer sees the actual cover geometry. Runs without a layout
+                fall back to the highlighted-text view.</span
               >
             </li>
             <li>
               <span
                 ><b>Finalize.</b> Span integrity is re-checked against the
                 source text, decisions apply, and the output artifact and audit
-                report are written. A PDF source with a stored layout produces
-                a <b>rasterized</b> PDF: each page is rendered to a canvas at
-                2× scale, cover rects are painted opaque black over the pixels,
-                and the page is re-embedded as an image. The output has no text
+                report are written. A PDF source with a stored layout produces a
+                <b>rasterized</b> PDF: each page is rendered to a canvas at 2×
+                scale, cover rects are painted opaque black over the pixels, and
+                the page is re-embedded as an image. The output has no text
                 layer at all, so nothing — redacted or not — is recoverable by
                 text extraction or copy. Anything else produces a plain-text
                 artifact.</span
@@ -4149,14 +4143,12 @@
             <b>Output format is recorded, not assumed.</b>
             <code>summary.outputMimeType</code> and
             <code>summary.outputFilename</code> are written on the run and into
-            the finalize audit entry, and
-            <code>GET /output</code> /
+            the finalize audit entry, and <code>GET /output</code> /
             <code>GET /output/file</code> serve from them. The PDF burn is
             best-effort: if rendering fails, finalize falls back to writing the
-            text artifact and records
-            <code>text/plain</code> rather than failing the run. The recorded
-            mime type is therefore the only reliable signal of what a caller
-            actually got.
+            text artifact and records <code>text/plain</code> rather than
+            failing the run. The recorded mime type is therefore the only
+            reliable signal of what a caller actually got.
           </div>
           <div class="callout risk">
             <b>Detection limitations stay actionable and visible.</b> If the
@@ -5205,16 +5197,13 @@
                   <td class="id">RULES.md</td>
                 </tr>
                 <tr>
-                  <td>
-                    Redaction cover geometry is estimated, not measured
-                  </td>
+                  <td>Redaction cover geometry is estimated, not measured</td>
                   <td>
                     pdf.js reports one advance width per text run, so
-                    per-character x and width are interpolated evenly across
-                    the run. In a proportional face a cover box whose span
-                    starts mid-run can be a few points off. The review overlay
-                    uses the same geometry, so the reviewer sees what will be
-                    burned.
+                    per-character x and width are interpolated evenly across the
+                    run. In a proportional face a cover box whose span starts
+                    mid-run can be a few points off. The review overlay uses the
+                    same geometry, so the reviewer sees what will be burned.
                   </td>
                   <td class="id">document-layout.ts</td>
                 </tr>

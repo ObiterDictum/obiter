@@ -40,7 +40,9 @@ export function SettingsRouteView() {
             {me.user.role ? (
               <div className="flex flex-col gap-0.5">
                 <dt className="text-muted">Role</dt>
-                <dd className="font-medium capitalize text-ink">{me.user.role}</dd>
+                <dd className="font-medium capitalize text-ink">
+                  {me.user.role}
+                </dd>
               </div>
             ) : null}
           </dl>

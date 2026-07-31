@@ -97,7 +97,11 @@ describe('RedactionReviewView', () => {
     })
     hooks.useRedactionOutput.mockReturnValue({
       isPending: false,
-      data: { text: '[REDACTED] filed.', mimeType: 'text/plain', filename: 'source-redacted.txt' },
+      data: {
+        text: '[REDACTED] filed.',
+        mimeType: 'text/plain',
+        filename: 'source-redacted.txt',
+      },
     })
     hooks.useSpanDecision.mockReturnValue({})
     hooks.useFinalizeRun.mockReturnValue({})
@@ -160,7 +164,11 @@ describe('RedactionReviewView', () => {
     })
     hooks.useRedactionOutput.mockReturnValue({
       isPending: false,
-      data: { text: 'Clean text.', mimeType: 'text/plain', filename: 'source-redacted.txt' },
+      data: {
+        text: 'Clean text.',
+        mimeType: 'text/plain',
+        filename: 'source-redacted.txt',
+      },
     })
     hooks.useSpanDecision.mockReturnValue({})
     hooks.useFinalizeRun.mockReturnValue({})
@@ -226,7 +234,11 @@ describe('RedactionReviewView', () => {
     })
     hooks.useRedactionOutput.mockReturnValue({
       isPending: false,
-      data: { text: '[REDACTED] filed.', mimeType: 'text/plain', filename: 'source-redacted.txt' },
+      data: {
+        text: '[REDACTED] filed.',
+        mimeType: 'text/plain',
+        filename: 'source-redacted.txt',
+      },
     })
     hooks.useSpanDecision.mockReturnValue({})
     hooks.useFinalizeRun.mockReturnValue({})

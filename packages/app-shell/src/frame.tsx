@@ -27,10 +27,7 @@ import { useAuth } from './auth'
 import { currentUserQueryOptions } from './current-user'
 import { useMatterDocuments } from './documents'
 import { useMattersList } from './matters'
-import {
-  isAttentionRun,
-  useRedactionRunsList,
-} from './redaction-runs'
+import { isAttentionRun, useRedactionRunsList } from './redaction-runs'
 import { THEME_STORAGE_KEY } from './use-app-theme'
 import { getRecentLegalSearches } from './views/LegalSearchView'
 import {
@@ -140,7 +137,11 @@ type ModeId = 'home' | 'search' | 'matters' | 'verify' | 'redact' | 'other'
 
 function resolveMode(path: string): ModeId {
   if (path === '/') return 'home'
-  if (path === '/search' || path.startsWith('/case/') || path.startsWith('/cases/'))
+  if (
+    path === '/search' ||
+    path.startsWith('/case/') ||
+    path.startsWith('/cases/')
+  )
     return 'search'
   if (path === '/matters' || path.startsWith('/matters/')) return 'matters'
   if (path === '/verify' || path.startsWith('/verify/')) return 'verify'
@@ -148,13 +149,7 @@ function resolveMode(path: string): ModeId {
   return 'other'
 }
 
-function TopBar({
-  platform,
-  mode,
-}: {
-  platform: AppPlatform
-  mode: ModeId
-}) {
+function TopBar({ platform, mode }: { platform: AppPlatform; mode: ModeId }) {
   return (
     <header className="flex h-11 shrink-0 items-center gap-3 border-b border-line bg-canvas px-3">
       <div className="flex min-w-0 flex-1 items-center gap-2">
