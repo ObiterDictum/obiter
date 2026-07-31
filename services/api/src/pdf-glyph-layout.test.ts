@@ -403,4 +403,11 @@ describe('exact glyph geometry', () => {
       extractDocumentContent('pdf', rawVerticalPdf()),
     ).rejects.toThrow('cannot be redacted safely')
   })
+
+  it('fails closed when a text matrix skews the glyph axes', async () => {
+    const bytes = rawType1Pdf('BT /F1 12 Tf 1 0 0.4 1 60 700 Tm (Alice) Tj ET')
+    await expect(extractDocumentContent('pdf', bytes)).rejects.toThrow(
+      'cannot be redacted safely',
+    )
+  })
 })

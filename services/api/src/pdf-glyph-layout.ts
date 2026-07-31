@@ -175,6 +175,10 @@ export function laidCharsFromOperatorList(input: {
       const baselineX = render[0] / baselineMagnitude
       const baselineY = render[1] / baselineMagnitude
       const size = Math.hypot(render[2], render[3]) || state.fontSize
+      const axisAlignment =
+        (render[0] * render[2] + render[1] * render[3]) /
+        (baselineMagnitude * (size || 1))
+      const skewed = Math.abs(axisAlignment) > 0.01
 
       const glyphAdvance = advanceWidth * state.fontSize * state.hScale
       const advance =
@@ -213,6 +217,7 @@ export function laidCharsFromOperatorList(input: {
             descent: size * descentRatio,
             baselineX,
             baselineY,
+            ...(skewed ? { skewed: true } : {}),
           })
           offset += perCharWidth
         }

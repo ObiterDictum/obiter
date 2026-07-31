@@ -256,6 +256,11 @@ async function exactPageChars(
       pageIndex,
       styles,
     })
+    if (chars.some((char) => char.skewed))
+      throw new DocumentExtractionError(
+        'This PDF uses skewed text geometry that cannot be redacted safely.',
+        true,
+      )
     return chars.length > 0 ? withSemanticSpaces(withLineBreaks(chars)) : []
   } catch (error) {
     if (error instanceof DocumentExtractionError) throw error

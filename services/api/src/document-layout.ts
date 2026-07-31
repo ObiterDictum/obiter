@@ -29,6 +29,8 @@ export interface LaidChar {
   /** Unit writing direction in PDF user space. */
   baselineX: number
   baselineY: number
+  /** True when writing and font-height axes are not perpendicular. */
+  skewed?: boolean
 }
 
 /** Same baseline slack as coverRectsForSpan union-merge. */

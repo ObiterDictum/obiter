@@ -4106,9 +4106,9 @@
                 <code>getTextContent</code> item geometry instead: Type 3 width
                 units depend on its <code>FontMatrix</code>, while pdf.js
                 applies the bidi algorithm only on the item path. Vertical
-                writing is rejected until glyph <code>vmetric</code> geometry is
-                supported. Every generated layout passes the shared schema
-                before it can be returned or stored.</span
+                writing and non-perpendicular skewed glyph axes are rejected
+                until their geometry is supported. Every generated layout passes
+                the shared schema before it can be returned or stored.</span
               >
             </li>
             <li>
@@ -5225,8 +5225,8 @@
                     operator replay and interpolate the item path's run advance.
                     This can misplace a partial-run cover by several points. The
                     review overlay uses the same geometry, so the reviewer sees
-                    what will be burned. Vertical writing fails extraction
-                    closed rather than storing horizontal geometry.
+                    what will be burned. Vertical writing and skewed glyph axes
+                    fail extraction closed rather than storing unsafe geometry.
                   </td>
                   <td class="id">document-extraction.ts</td>
                 </tr>
