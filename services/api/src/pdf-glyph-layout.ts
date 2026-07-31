@@ -32,6 +32,7 @@ interface Glyph {
   unicode?: string
   width?: number
   isSpace?: boolean
+  vmetric?: unknown
 }
 
 interface TextState {
@@ -47,7 +48,7 @@ interface TextState {
 /** Font ascent/descent ratios, keyed by the loaded name `setFont` reports. */
 export type FontStyles = Record<
   string,
-  { ascent?: number; descent?: number } | undefined
+  { ascent?: number; descent?: number; vertical?: boolean } | undefined
 >
 
 export interface OperatorListPage {
@@ -74,6 +75,8 @@ export interface PdfOps {
   showSpacedText: number
   nextLineShowText: number
   nextLineSetSpacingShowText: number
+  paintFormXObjectBegin: number
+  paintFormXObjectEnd: number
 }
 
 function multiply(left: Matrix, right: Matrix): Matrix {
@@ -181,14 +184,17 @@ export function laidCharsFromOperatorList(input: {
         state.hScale
 
       if (unicode) {
+        const styleAscent = styles?.[state.fontName ?? '']?.ascent
         const ascentRatio =
-          typeof styles?.[state.fontName ?? '']?.ascent === 'number' &&
-          styles[state.fontName ?? '']!.ascent! > 0
-            ? styles[state.fontName ?? '']!.ascent!
+          typeof styleAscent === 'number' &&
+          Number.isFinite(styleAscent) &&
+          styleAscent > 0
+            ? styleAscent
             : 0.8
+        const styleDescent = styles?.[state.fontName ?? '']?.descent
         const descentRatio =
-          typeof styles?.[state.fontName ?? '']?.descent === 'number'
-            ? Math.abs(styles[state.fontName ?? '']!.descent!)
+          typeof styleDescent === 'number' && Number.isFinite(styleDescent)
+            ? Math.abs(styleDescent)
             : 0.2
         // Positioning includes spacing and TJ adjustments, but a glyph's cover
         // width is only its own drawn advance. Ligature characters share it.
@@ -235,6 +241,17 @@ export function laidCharsFromOperatorList(input: {
         if (matrix) ctm = multiply(matrix, ctm)
         break
       }
+      case ops.paintFormXObjectBegin: {
+        ctmStack.push(ctm)
+        stateStack.push({ ...state })
+        const matrix = asMatrix(args?.[0])
+        if (matrix) ctm = multiply(matrix, ctm)
+        break
+      }
+      case ops.paintFormXObjectEnd:
+        ctm = ctmStack.pop() ?? IDENTITY
+        state = stateStack.pop() ?? initialState()
+        break
       case ops.beginText:
         textMatrix = IDENTITY
         lineMatrix = IDENTITY

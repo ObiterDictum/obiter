@@ -1806,7 +1806,8 @@ describe('createApiApp redaction review reads', () => {
     )
   })
 
-  it('rejects stored layout segments containing non-finite geometry', async () => {
+  it('rejects and logs stored layout segments containing non-finite geometry', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const { app } = createRedactionReadApp({
       run: finalizedRunRow({
         source_layout_object_key: 'org/org_1/redaction-runs/red_1/layout.json',
@@ -1835,6 +1836,16 @@ describe('createApiApp redaction review reads', () => {
     expect(((await response.json()) as ErrorBody).error.code).toBe(
       'document_version_not_found',
     )
+    expect(warn).toHaveBeenCalledWith(
+      'Stored document layout validation failed',
+      expect.objectContaining({
+        runId: 'red_1',
+        issues: expect.arrayContaining([
+          expect.objectContaining({ path: ['segments', 0, 'advances', 0] }),
+        ]),
+      }),
+    )
+    warn.mockRestore()
   })
 
   it('returns 404 for an unknown redaction output run', async () => {

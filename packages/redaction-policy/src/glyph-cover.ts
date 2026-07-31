@@ -118,6 +118,7 @@ export function coverRectsForSpan(input: {
       continue
     const segmentLength = segment.end - segment.start
     if (segmentLength <= 0) continue
+    const placementOffsets = exactPlacementOffsets(segment)
 
     for (
       let index = Math.max(segment.start, input.spanStart);
@@ -125,7 +126,7 @@ export function coverRectsForSpan(input: {
       index += 1
     ) {
       const local = index - segment.start
-      const exact = exactPlacement(segment, local)
+      const exact = exactPlacement(segment, local, placementOffsets)
       const startRatio = local / segmentLength
       const endRatio = (local + 1) / segmentLength
       const x =
@@ -206,18 +207,27 @@ function hasFiniteSegmentGeometry(segment: LayoutSegmentLike) {
  * Where a character actually sits, when extraction recorded real advances.
  * Interpolating instead can leave part of a redacted word outside its bar.
  */
-function exactPlacement(segment: LayoutSegmentLike, local: number) {
+function exactPlacementOffsets(segment: LayoutSegmentLike) {
+  const advances = segment.advances
+  if (!advances || advances.length !== segment.end - segment.start) return null
+  const offsets = [0]
+  for (const advance of advances) {
+    offsets.push((offsets.at(-1) ?? 0) + advance)
+  }
+  return offsets
+}
+
+function exactPlacement(
+  segment: LayoutSegmentLike,
+  local: number,
+  offsets: number[] | null,
+) {
   const advances = segment.advances
   const glyphWidthOverrides = segment.glyphWidthOverrides
-  const segmentLength = segment.end - segment.start
-  if (!advances || !glyphWidthOverrides || advances.length !== segmentLength)
-    return null
+  if (!advances || !glyphWidthOverrides || !offsets) return null
   const ownWidth = glyphWidthOverrides[String(local)] ?? advances[local]
-  if (typeof ownWidth !== 'number') return null
-  let offset = 0
-  for (let index = 0; index < local; index += 1) {
-    offset += advances[index] ?? 0
-  }
+  const offset = offsets[local]
+  if (typeof ownWidth !== 'number' || typeof offset !== 'number') return null
   const baselineMagnitude =
     Math.hypot(segment.baselineX ?? 1, segment.baselineY ?? 0) || 1
   const baselineX = (segment.baselineX ?? 1) / baselineMagnitude

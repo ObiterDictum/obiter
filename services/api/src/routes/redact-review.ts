@@ -142,13 +142,13 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         'Layout is not available for this run.',
         404,
       )
+    let storedLayout: unknown
     try {
-      const layout = documentTextLayoutSchema.safeParse(
-        JSON.parse(await storage.readText(layoutObjectKey)),
-      )
-      if (!layout.success) throw new Error('Stored document layout is invalid.')
-      return c.json({ layout: layout.data })
+      storedLayout = JSON.parse(await storage.readText(layoutObjectKey))
     } catch {
+      console.warn('Stored document layout could not be read or parsed', {
+        runId: run.id,
+      })
       return errorResponse(
         c,
         'document_version_not_found',
@@ -156,6 +156,23 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         404,
       )
     }
+    const layout = documentTextLayoutSchema.safeParse(storedLayout)
+    if (!layout.success) {
+      console.warn('Stored document layout validation failed', {
+        runId: run.id,
+        issues: layout.error.issues.map((issue) => ({
+          code: issue.code,
+          path: issue.path,
+        })),
+      })
+      return errorResponse(
+        c,
+        'document_version_not_found',
+        'Layout is not available for this run.',
+        404,
+      )
+    }
+    return c.json({ layout: layout.data })
   })
 
   routes.post(

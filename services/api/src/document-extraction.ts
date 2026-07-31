@@ -1,4 +1,5 @@
 import { posix } from 'node:path'
+import { documentTextLayoutSchema } from '@obiter/contracts'
 import JSZip from 'jszip'
 import mammoth from 'mammoth'
 import { getDocumentProxy } from 'unpdf'
@@ -92,7 +93,12 @@ async function extractPdfContent(
       // the same loaded name the operator list reports for setFont.
       const content = await page.getTextContent()
 
-      const exact = await exactPageChars(page, pageIndex, content.styles)
+      const exact = await exactPageChars(
+        page,
+        pageIndex,
+        content.styles,
+        textContentNeedsBidi(content.items),
+      )
       if (exact.length > 0) {
         chars.push(...exact)
         const last = exact.at(-1)
@@ -169,10 +175,16 @@ async function extractPdfContent(
     )
       throw new DocumentExtractionError(SCANNED_PDF_MESSAGE, true)
 
-    return {
-      text,
-      layout: layoutFromLaidChars(trimmed, pages),
-    }
+    const layout = documentTextLayoutSchema.safeParse(
+      layoutFromLaidChars(trimmed, pages),
+    )
+    if (!layout.success)
+      throw new DocumentExtractionError(
+        'This PDF uses text geometry that cannot be redacted safely.',
+        true,
+      )
+
+    return { text, layout: layout.data }
   } finally {
     await pdf.destroy().catch(() => undefined)
   }
@@ -202,15 +214,42 @@ async function exactPageChars(
       fnArray: number[] | Int32Array
       argsArray: unknown[]
     }>
+    commonObjs?: {
+      has: (id: string) => boolean
+      get: (id: string) => unknown
+    }
   },
   pageIndex: number,
   styles: FontStyles | undefined,
+  needsBidi: boolean,
 ): Promise<LaidChar[]> {
   if (typeof page.getOperatorList !== 'function') return []
   const ops = await loadPdfOps()
   if (!ops) return []
   try {
     const operatorList = await page.getOperatorList()
+    if (
+      Object.values(styles ?? {}).some((style) => style?.vertical === true) ||
+      operatorListHasVerticalGlyphs(operatorList)
+    )
+      throw new DocumentExtractionError(
+        'This PDF uses vertical text geometry that cannot be redacted safely.',
+        true,
+      )
+    if (needsBidi) {
+      console.warn('PDF exact glyph geometry fallback', {
+        pageNumber: pageIndex + 1,
+        reason: 'bidi_text',
+      })
+      return []
+    }
+    if (operatorListUsesType3Font(operatorList, ops, page.commonObjs)) {
+      console.warn('PDF exact glyph geometry fallback', {
+        pageNumber: pageIndex + 1,
+        reason: 'type3_font',
+      })
+      return []
+    }
     const chars = laidCharsFromOperatorList({
       operatorList,
       ops,
@@ -218,9 +257,63 @@ async function exactPageChars(
       styles,
     })
     return chars.length > 0 ? withSemanticSpaces(withLineBreaks(chars)) : []
-  } catch {
+  } catch (error) {
+    if (error instanceof DocumentExtractionError) throw error
+    console.warn('PDF exact glyph geometry fallback', {
+      pageNumber: pageIndex + 1,
+      reason: 'operator_replay_failed',
+    })
     return []
   }
+}
+
+const STRONG_RTL_SCRIPT =
+  /[\p{Script=Arabic}\p{Script=Hebrew}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Nko}\p{Script=Adlam}]/u
+
+function textContentNeedsBidi(items: unknown[]) {
+  return items.some((item) => {
+    if (typeof item !== 'object' || item === null || !('str' in item))
+      return false
+    const text = typeof item.str === 'string' ? item.str : ''
+    return ('dir' in item && item.dir === 'rtl') || STRONG_RTL_SCRIPT.test(text)
+  })
+}
+
+function operatorListHasVerticalGlyphs(operatorList: { argsArray: unknown[] }) {
+  const hasVerticalMetric = (value: unknown): boolean => {
+    if (Array.isArray(value)) return value.some(hasVerticalMetric)
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'vmetric' in value &&
+      value.vmetric !== undefined
+    )
+  }
+  return operatorList.argsArray.some(hasVerticalMetric)
+}
+
+function operatorListUsesType3Font(
+  operatorList: { fnArray: number[] | Int32Array; argsArray: unknown[] },
+  ops: PdfOps,
+  commonObjs:
+    { has: (id: string) => boolean; get: (id: string) => unknown } | undefined,
+) {
+  if (!commonObjs) return false
+  for (let index = 0; index < operatorList.fnArray.length; index += 1) {
+    if (operatorList.fnArray[index] !== ops.setFont) continue
+    const args = operatorList.argsArray[index] as unknown[] | undefined
+    const fontName = args?.[0]
+    if (typeof fontName !== 'string' || !commonObjs.has(fontName)) continue
+    const font = commonObjs.get(fontName)
+    if (
+      typeof font === 'object' &&
+      font !== null &&
+      'isType3Font' in font &&
+      font.isType3Font === true
+    )
+      return true
+  }
+  return false
 }
 
 let cachedOps: PdfOps | null | undefined
@@ -254,9 +347,15 @@ function pdfItemMetrics(
   const fontSize = Math.max(fromTransform, fromHeight) || 12
   const style = item.fontName && styles ? styles[item.fontName] : undefined
   const ascentRatio =
-    typeof style?.ascent === 'number' && style.ascent > 0 ? style.ascent : 0.8
+    typeof style?.ascent === 'number' &&
+    Number.isFinite(style.ascent) &&
+    style.ascent > 0
+      ? style.ascent
+      : 0.8
   const descentRatio =
-    typeof style?.descent === 'number' ? Math.abs(style.descent) : 0.2
+    typeof style?.descent === 'number' && Number.isFinite(style.descent)
+      ? Math.abs(style.descent)
+      : 0.2
   return {
     fontSize,
     ascent: fontSize * ascentRatio,

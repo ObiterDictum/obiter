@@ -4092,16 +4092,23 @@
                 legacy version 1 remains readable). Extracted text is derived
                 from the same laid-character array, so layout offsets and
                 detection offsets are aligned by construction rather than by a
-                second pass. Positions come from replaying the page's content
-                stream (<code>pdf-glyph-layout.ts</code>), because
+                second pass. Positions normally come from replaying the page's
+                content stream (<code>pdf-glyph-layout.ts</code>), because
                 <code>getTextContent</code> reports one advance for a whole run
                 and interpolating it misplaces covers on proportional faces.
-                Runs keep origin-to-origin advances separate from sparse drawn
-                glyph-width overrides, and positioned same-line gaps synthesize
-                laid spaces with real geometry before spacing collapse. Rotated
-                runs retain their writing direction so extraction order and
-                fail-safe axis-aligned cover boxes follow the rendered
-                text.</span
+                Replay scopes Form XObject matrices as graphics-state
+                transforms. Runs keep origin-to-origin advances separate from
+                sparse drawn glyph-width overrides, and positioned same-line
+                gaps synthesize laid spaces with real geometry before spacing
+                collapse. Rotated runs retain their writing direction so
+                extraction order and fail-safe axis-aligned cover boxes follow
+                the rendered text. Type 3 and strong RTL pages deliberately use
+                <code>getTextContent</code> item geometry instead: Type 3 width
+                units depend on its <code>FontMatrix</code>, while pdf.js
+                applies the bidi algorithm only on the item path. Vertical
+                writing is rejected until glyph <code>vmetric</code> geometry is
+                supported. Every generated layout passes the shared schema
+                before it can be returned or stored.</span
               >
             </li>
             <li>
@@ -5210,13 +5217,16 @@
                   <td class="id">RULES.md</td>
                 </tr>
                 <tr>
-                  <td>Cover geometry is exact only for glyph-path PDF text</td>
+                  <td>Some PDF pages use interpolated item geometry</td>
                   <td>
-                    Pages whose text is not drawn through the glyph path (Type 3
-                    fonts, some generators) fall back to interpolating one
-                    advance across a whole run, which can misplace a cover by
-                    several points. The review overlay uses the same geometry,
-                    so the reviewer sees what will be burned.
+                    Type 3 fonts do emit glyph operators, but their width units
+                    depend on <code>FontMatrix</code>; strong RTL text also
+                    needs pdf.js bidi semantics. Those pages deliberately bypass
+                    operator replay and interpolate the item path's run advance.
+                    This can misplace a partial-run cover by several points. The
+                    review overlay uses the same geometry, so the reviewer sees
+                    what will be burned. Vertical writing fails extraction
+                    closed rather than storing horizontal geometry.
                   </td>
                   <td class="id">document-extraction.ts</td>
                 </tr>

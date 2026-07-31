@@ -6,6 +6,13 @@ import { createIsomorphicCanvasFactory, getDocumentProxy } from 'unpdf'
 import { describe, expect, it } from 'vitest'
 import { extractDocumentContent, prepareLaidChars } from './document-extraction'
 import {
+  rawFormPdf,
+  rawRtlPdf,
+  rawType1Pdf,
+  rawType3Pdf,
+  rawVerticalPdf,
+} from './pdf-glyph-fixtures.test-helper'
+import {
   collapsePdfGlyphSpacingWithLayout,
   type LaidChar,
 } from './document-layout'
@@ -35,30 +42,6 @@ async function singleLinePdf(line: string) {
   const page = doc.addPage([595, 842])
   page.drawText(line, { x: START_X, y: BASELINE, size: SIZE, font })
   return { bytes: Buffer.from(await doc.save()), font }
-}
-
-/** Minimal one-page Type1 PDF for operators pdf-lib cannot emit. */
-function rawType1Pdf(content: string) {
-  const objects = [
-    '<< /Type /Catalog /Pages 2 0 R >>',
-    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
-    `<< /Length ${Buffer.byteLength(content, 'ascii')} >>\nstream\n${content}\nendstream`,
-    '<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding /WinAnsiEncoding >>',
-  ]
-  let pdf = '%PDF-1.4\n%\xE2\xE3\xCF\xD3\n'
-  const offsets: number[] = []
-  objects.forEach((object, index) => {
-    offsets.push(Buffer.byteLength(pdf, 'binary'))
-    pdf += `${index + 1} 0 obj\n${object}\nendobj\n`
-  })
-  const xrefOffset = Buffer.byteLength(pdf, 'binary')
-  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`
-  for (const offset of offsets) {
-    pdf += `${String(offset).padStart(10, '0')} 00000 n \n`
-  }
-  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`
-  return Buffer.from(pdf, 'binary')
 }
 
 async function itemPathText(bytes: Buffer) {
@@ -353,5 +336,71 @@ describe('exact glyph geometry', () => {
     expect(covered.right).toBeGreaterThanOrEqual(ink.right)
     expect(covered.top).toBeLessThanOrEqual(ink.top)
     expect(covered.bottom).toBeGreaterThanOrEqual(ink.bottom)
+  })
+
+  it('applies a Form XObject matrix to extracted glyph covers', async () => {
+    const bytes = rawFormPdf()
+    const extracted = await extractDocumentContent('pdf', bytes)
+    expect(extracted.text).toBe('Alice')
+
+    const covers = coverRectsForSpan({
+      segments: extracted.layout!.segments,
+      spanStart: 0,
+      spanEnd: extracted.text.length,
+      spanText: extracted.text,
+    })
+    const ink = await renderedInkBounds(bytes)
+    const covered = coverBoundsInViewport(ink.viewport, covers)
+    expect(covered.left).toBeLessThanOrEqual(ink.left)
+    expect(covered.right).toBeGreaterThanOrEqual(ink.right)
+    expect(covered.top).toBeLessThanOrEqual(ink.top)
+    expect(covered.bottom).toBeGreaterThanOrEqual(ink.bottom)
+  })
+
+  it('falls back from Type 3 replay and sanitises non-finite font metrics', async () => {
+    const bytes = rawType3Pdf()
+    const extracted = await extractDocumentContent('pdf', bytes)
+    const layout = documentTextLayoutSchema.parse(extracted.layout)
+    expect(extracted.text).toBe('AAA')
+    expect(layout.segments[0]?.width).toBeCloseTo(36, 3)
+    expect(
+      layout.segments.every(
+        (segment) =>
+          Number.isFinite(segment.ascent) && Number.isFinite(segment.descent),
+      ),
+    ).toBe(true)
+
+    const covers = coverRectsForSpan({
+      segments: layout.segments,
+      spanStart: 0,
+      spanEnd: extracted.text.length,
+      spanText: extracted.text,
+    })
+    const ink = await renderedInkBounds(bytes)
+    const covered = coverBoundsInViewport(ink.viewport, covers)
+    expect(covered.left).toBeLessThanOrEqual(ink.left)
+    expect(covered.right).toBeGreaterThanOrEqual(ink.right)
+    expect(covered.top).toBeLessThanOrEqual(ink.top)
+    expect(covered.bottom).toBeGreaterThanOrEqual(ink.bottom)
+  })
+
+  it('uses pdf.js bidi text semantics when operator glyphs are visual RTL', async () => {
+    const bytes = rawRtlPdf()
+    const [extracted, itemText] = await Promise.all([
+      extractDocumentContent('pdf', bytes),
+      itemPathText(bytes),
+    ])
+
+    expect(extracted.text).toBe('שלום')
+    expect(extracted.text).toBe(itemText)
+    expect(documentTextLayoutSchema.safeParse(extracted.layout).success).toBe(
+      true,
+    )
+  })
+
+  it('fails closed when a page uses vertical glyph metrics', async () => {
+    await expect(
+      extractDocumentContent('pdf', rawVerticalPdf()),
+    ).rejects.toThrow('cannot be redacted safely')
   })
 })
