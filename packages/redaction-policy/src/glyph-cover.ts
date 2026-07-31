@@ -61,11 +61,18 @@ export function glyphCoverRect(input: GlyphCoverInput): GlyphCoverRect {
   const descent =
     Math.max(fontDescent, DEEP_DESCENDER.test(ink) ? fontSize * 0.34 : 0) +
     slack
-  const padLeft = fontSize * (DEEP_DESCENDER.test(ink) ? 0.22 : 0.04)
-  const padRight = fontSize * 0.04
   const magnitude = Math.hypot(input.baselineX ?? 1, input.baselineY ?? 0) || 1
   const baselineX = (input.baselineX ?? 1) / magnitude
   const baselineY = (input.baselineY ?? 0) / magnitude
+  // Rasterizers disagree slightly at transformed edge pixels. Add conservative
+  // writing-direction slack so rotated covers contain anti-aliased edge ink.
+  const transformedSlack =
+    Math.abs(baselineX - 1) > 0.001 || Math.abs(baselineY) > 0.001
+      ? fontSize * 0.02
+      : 0
+  const padLeft =
+    fontSize * (DEEP_DESCENDER.test(ink) ? 0.22 : 0.04) + transformedSlack
+  const padRight = fontSize * 0.04 + transformedSlack
   const normalX = -baselineY
   const normalY = baselineX
   const alongStart = -padLeft
