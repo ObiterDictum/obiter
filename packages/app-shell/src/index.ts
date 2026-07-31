@@ -4,7 +4,7 @@
  */
 
 // Data + auth helpers (contract §3)
-export { apiFetch, ApiError } from './api'
+export { apiFetch, apiFetchBlob, ApiError } from './api'
 export { declaredFileType } from './file-type'
 export {
   authClient,
@@ -20,11 +20,7 @@ export {
   type CreateOrganisationResult,
 } from './current-user'
 export { changelogQueryOptions } from './changelog'
-export {
-  guardAuth,
-  ensureOrganisation,
-  prefetchHomeData,
-} from './route-loaders'
+export { guardAuth, prefetchHomeData } from './route-loaders'
 
 // Live-surface data (M2): real matters + documents via TanStack Query.
 export {
@@ -64,6 +60,8 @@ export { ForgotPasswordRouteView } from './views/forgot-password'
 export { ResetPasswordRouteView } from './views/reset-password'
 export { HomeRouteView } from './views/home'
 export { MattersRouteView, MatterRouteView } from './views/matters'
+export { VerifyRouteView } from './views/verify'
+export { SettingsRouteView } from './views/settings'
 export { DocumentDetailLayoutView } from './views/document-detail'
 export { caseResultLocation } from './case-navigation'
 

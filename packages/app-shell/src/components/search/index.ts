@@ -2,7 +2,11 @@ export { CourtSelect } from './CourtSelect'
 export { SearchCommandBar } from './SearchCommandBar'
 export { SearchFeedbackPanel } from './SearchFeedbackPanel'
 export { SearchFiltersDialog } from './SearchFiltersDialog'
-export { SearchIdleState, type SearchCourtShortcut } from './SearchIdleState'
+export {
+  SearchIdleExtras as SearchIdleState,
+  SearchIdleExtras,
+  type SearchCourtShortcut,
+} from './SearchIdleState'
 export { SearchKeyboardShortcuts } from './SearchKeyboardShortcuts'
 export { SearchResults } from './SearchResults'
 export {

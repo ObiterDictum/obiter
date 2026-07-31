@@ -29,6 +29,18 @@ describe('redaction policy', () => {
     expect(spans[0]?.suggestion).toBe('redact')
   })
 
+  it('drops model-brand person_name false positives', () => {
+    const spans = mapRampartSpans({
+      text: 'Kimi K3 and Claude run in the fleet.',
+      spans: [
+        { start: 0, end: 4, label: 'GIVEN_NAME', score: 0.7, text: 'Kimi' },
+        { start: 12, end: 18, label: 'GIVEN_NAME', score: 0.8, text: 'Claude' },
+        { start: 30, end: 35, label: 'GIVEN_NAME', score: 0.9, text: 'fleet' },
+      ],
+    })
+    expect(spans.map((span) => span.text)).toEqual(['fleet'])
+  })
+
   it('maps the address component labels the model actually emits', () => {
     // CITY/STATE/ZIP_CODE verified present in the model label space (spike, July 2026);
     // they fire on virtually every UK address ("Leicester", "LE4 5AB").

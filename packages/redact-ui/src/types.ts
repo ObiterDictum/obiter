@@ -18,6 +18,11 @@ export interface RedactionRun {
   documentId: string | null
   documentVersionId: string | null
   sourceFilename: string
+  sourceMimeType?: string | null
+  sourcePreview?: {
+    kind: 'pdf' | 'text'
+    available: boolean
+  }
   status: RedactionRunStatus
   policyMode: RedactionPolicyMode
   spans: RedactionSpan[]
@@ -30,6 +35,24 @@ export interface RedactionRun {
   replacementRunId: string | null
   createdAt: string
   updatedAt: string
+}
+
+export interface DocumentTextLayoutSegment {
+  start: number
+  end: number
+  pageIndex: number
+  x: number
+  y: number
+  width: number
+  height: number
+  ascent?: number
+  descent?: number
+}
+
+export interface DocumentTextLayout {
+  version: 1
+  pages: Array<{ width: number; height: number }>
+  segments: DocumentTextLayoutSegment[]
 }
 
 export interface RedetectResponse {

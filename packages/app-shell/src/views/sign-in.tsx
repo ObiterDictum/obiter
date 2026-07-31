@@ -1,18 +1,19 @@
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { ArrowRight } from '@phosphor-icons/react'
-import { Button, Card, Input } from '@obiter/ui'
+import { Button, Input } from '@obiter/ui'
 import type { AppPlatform } from '@obiter/contracts'
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { useAuth } from '../auth'
+import { THEME_STORAGE_KEY } from '../use-app-theme'
 import { Wordmark } from '../wordmark'
 
-type Mode = 'password' | 'magic-link' | 'register'
+type Mode = 'password' | 'magic-link'
 
 /**
- * Real sign-in / self-registration against the auth API (better-auth
- * email/password + magic link). The frame renders this route bare (no
- * sidebar); on success the user is sent to Home. A ?reset=success query
- * param (set after a password reset) surfaces a confirmation notice.
+ * Sign-in against the auth API (better-auth email/password + magic link).
+ * Account creation is not offered here — that lives on obiter.dev only.
+ * The frame renders this route bare; on success the user is sent to Home.
+ * Auth always forces the night aesthetic so the entry gate matches product chrome.
  */
 export function SignInRouteView({
   platform: _platform,
@@ -20,10 +21,9 @@ export function SignInRouteView({
   platform: AppPlatform
 }) {
   const navigate = useNavigate()
-  const { signInWithEmail, signUpWithEmail, requestMagicLink } = useAuth()
+  const { signInWithEmail, requestMagicLink } = useAuth()
   const search = useSearch({ strict: false }) as { reset?: string }
   const [mode, setMode] = useState<Mode>('password')
-  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -34,11 +34,9 @@ export function SignInRouteView({
   )
   const [submitting, setSubmitting] = useState(false)
 
+  useForceNightTheme()
+
   async function goToHome() {
-    // After session refetch, client-side navigation works on both platforms.
-    // Web previously used window.location.assign('/') as a session-visibility
-    // workaround; that full reload could bounce back to /sign-in and remount
-    // an empty form when the soft session/cookie handshake was still settling.
     await navigate({ to: '/' })
   }
 
@@ -56,32 +54,6 @@ export function SignInRouteView({
       await goToHome()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Sign-in failed.')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  async function handleRegister(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    setError(null)
-    setNotice(null)
-    setSubmitting(true)
-    try {
-      const result = await signUpWithEmail({ name, email, password })
-      if (!result.ok) {
-        setError(result.message ?? 'Sign-up failed.')
-        return
-      }
-      if (result.verificationRequired) {
-        setNotice(
-          result.message ??
-            'Check your email to verify your account before signing in.',
-        )
-        return
-      }
-      await goToHome()
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Sign-up failed.')
     } finally {
       setSubmitting(false)
     }
@@ -108,126 +80,106 @@ export function SignInRouteView({
     }
   }
 
-  const handleSubmit =
-    mode === 'password'
-      ? handlePassword
-      : mode === 'register'
-        ? handleRegister
-        : handleMagicLink
+  const handleSubmit = mode === 'password' ? handlePassword : handleMagicLink
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 text-ink">
-      <div className="flex w-full max-w-sm flex-col gap-6">
-        <header className="flex flex-col items-center gap-3 text-center">
-          <Wordmark className="h-12 w-auto" />
-          <h1 className="text-xl font-semibold tracking-tight">
-            {mode === 'register'
-              ? 'Create your Obiter account'
-              : 'Sign in to Obiter'}
-          </h1>
+      <div className="flex w-full max-w-[28rem] flex-col gap-8">
+        <header className="flex flex-col items-center gap-4 text-center">
+          <Wordmark className="text-[1.35rem]" />
+          <div className="flex flex-col gap-1.5">
+            <h1 className="text-lg font-semibold tracking-tight text-ink">
+              Sign in to Obiter
+            </h1>
+            <p className="text-sm text-muted">
+              Legal infrastructure for evidence-first work.
+            </p>
+          </div>
         </header>
 
-        <Card>
-          <div className="flex flex-col gap-4">
-            <form
-              onSubmit={handleSubmit}
-              className="flex flex-col gap-4"
-              noValidate
-            >
-              {mode === 'register' ? (
-                <Input
-                  label="Name"
-                  type="text"
-                  autoComplete="name"
-                  required
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                />
-              ) : null}
+        <div className="flex flex-col gap-5 rounded-[0.85rem] border border-line bg-surface p-6">
+          <form
+            onSubmit={handleSubmit}
+            className="flex flex-col gap-4"
+            noValidate
+          >
+            <Input
+              label="Email"
+              type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
 
+            {mode === 'password' ? (
               <Input
-                label="Email"
-                type="email"
-                autoComplete="email"
+                label="Password"
+                type="password"
+                autoComplete="current-password"
                 required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                error={error ?? undefined}
               />
+            ) : null}
 
-              {mode === 'password' || mode === 'register' ? (
-                <Input
-                  label="Password"
-                  type="password"
-                  autoComplete={
-                    mode === 'register' ? 'new-password' : 'current-password'
-                  }
-                  required
-                  minLength={mode === 'register' ? 8 : undefined}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  error={error ?? undefined}
-                />
-              ) : null}
+            {mode === 'password' ? (
+              <div className="flex justify-end">
+                <Link
+                  to="/forgot-password"
+                  className="text-xs font-medium text-brand hover:text-brand-pressed"
+                >
+                  Forgot password?
+                </Link>
+              </div>
+            ) : null}
 
-              {mode === 'password' ? (
-                <div className="flex justify-end">
-                  <Link
-                    to="/forgot-password"
-                    className="text-xs font-medium text-brand hover:text-brand-pressed"
-                  >
-                    Forgot password?
-                  </Link>
-                </div>
-              ) : null}
+            {mode === 'magic-link' && error ? (
+              <p className="text-sm text-danger">{error}</p>
+            ) : null}
+            {notice ? <p className="text-sm text-muted">{notice}</p> : null}
 
-              {mode === 'magic-link' && error ? (
-                <p className="text-sm text-danger">{error}</p>
-              ) : null}
-              {notice ? <p className="text-sm text-muted">{notice}</p> : null}
+            <Button
+              type="submit"
+              loading={submitting}
+              iconEnd={<ArrowRight size={16} weight="bold" />}
+              className="w-full"
+            >
+              {mode === 'password' ? 'Continue' : 'Send sign-in link'}
+            </Button>
+          </form>
 
-              <Button
-                type="submit"
-                loading={submitting}
-                iconEnd={<ArrowRight size={16} weight="bold" />}
-                className="w-full"
-              >
-                {mode === 'password'
-                  ? 'Continue'
-                  : mode === 'register'
-                    ? 'Create account'
-                    : 'Send sign-in link'}
-              </Button>
-            </form>
-
-            <div className="flex items-center justify-center gap-2 text-sm text-muted">
-              <ModeButton
-                active={mode === 'password'}
-                onClick={() => setMode('password')}
-              >
-                Password
-              </ModeButton>
-              <span aria-hidden="true">·</span>
-              <ModeButton
-                active={mode === 'magic-link'}
-                onClick={() => setMode('magic-link')}
-              >
-                Magic link
-              </ModeButton>
-              <span aria-hidden="true">·</span>
-              <ModeButton
-                active={mode === 'register'}
-                onClick={() => setMode('register')}
-              >
-                Create account
-              </ModeButton>
-            </div>
+          <div className="flex items-center justify-center gap-1 text-sm text-muted">
+            <ModeButton
+              active={mode === 'password'}
+              onClick={() => setMode('password')}
+            >
+              Password
+            </ModeButton>
+            <span aria-hidden="true" className="text-subtle">
+              ·
+            </span>
+            <ModeButton
+              active={mode === 'magic-link'}
+              onClick={() => setMode('magic-link')}
+            >
+              Magic link
+            </ModeButton>
           </div>
-        </Card>
+        </div>
 
         <p className="text-center text-xs text-subtle">
-          {mode === 'register'
-            ? 'You can create an organisation after verifying your email.'
-            : 'New here? Choose "Create account" above to self-register.'}
+          Need an account? Create one at{' '}
+          <a
+            href="https://obiter.dev"
+            className="font-medium text-brand hover:text-brand-pressed"
+            rel="noreferrer"
+            target="_blank"
+          >
+            obiter.dev
+          </a>
+          .
         </p>
       </div>
     </main>
@@ -249,11 +201,28 @@ function ModeButton({
       onClick={onClick}
       aria-pressed={active}
       className={
-        'rounded-pill px-3 py-1 transition-colors ' +
-        (active ? 'bg-surface text-ink' : 'text-muted hover:text-ink')
+        'rounded-md px-2.5 py-1 transition-[color,background-color] duration-200 ' +
+        (active
+          ? 'bg-raised font-medium text-ink'
+          : 'text-muted hover:text-ink')
       }
     >
       {children}
     </button>
   )
+}
+
+/** Auth routes always present night chrome regardless of persisted preference. */
+export function useForceNightTheme() {
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', 'dark')
+    return () => {
+      // After auth, restore an explicit light preference only; otherwise stay night.
+      const stored = window.localStorage.getItem(THEME_STORAGE_KEY)
+      document.documentElement.setAttribute(
+        'data-theme',
+        stored === 'light' ? 'light' : 'dark',
+      )
+    }
+  }, [])
 }

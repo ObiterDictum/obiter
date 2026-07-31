@@ -1,22 +1,13 @@
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { ArrowRight } from '@phosphor-icons/react'
-import { Button, Card, Input } from '@obiter/ui'
+import { Button, Input } from '@obiter/ui'
 import { useState, type FormEvent } from 'react'
 import { useAuth } from '../auth'
 import { Wordmark } from '../wordmark'
+import { useForceNightTheme } from './sign-in'
 
 /**
- * Reset-password screen. The reset email links here with ?token= (the token is
- * derived server-side and always targets the web origin). Better-auth tokens
- * are single-use and expire (default 1h). Because the link points straight at
- * this screen, the token is validated on submit.
- *
- * Only a true token failure (better-auth INVALID_TOKEN / TOKEN_EXPIRED — the
- * token is absent, expired, or already consumed) flips to the dedicated
- * "request a new link" state. Other failures (PASSWORD_TOO_LONG, a 5xx, a
- * network blip) render an inline error so the user can retry with the same
- * valid token instead of losing the form. On success the user is sent to
- * /sign-in to sign in with the new password.
+ * Reset-password screen. The reset email links here with ?token=.
  */
 export function ResetPasswordRouteView() {
   const navigate = useNavigate()
@@ -26,8 +17,6 @@ export function ResetPasswordRouteView() {
     error?: string
   }
   const token = typeof search.token === 'string' ? search.token : ''
-  // No token on the URL means the link was malformed; an explicit error is the
-  // legacy pre-validation flag. Both start in the invalid-token state.
   const [tokenFailed, setTokenFailed] = useState(
     search.error === 'INVALID_TOKEN' || !token,
   )
@@ -37,16 +26,12 @@ export function ResetPasswordRouteView() {
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
 
-  // better-auth error codes that mean the token is dead (absent, expired, or
-  // already used) — see @better-auth/core BASE_ERROR_CODES. Anything else is a
-  // retryable failure and stays on the form.
+  useForceNightTheme()
+
   const TOKEN_DEAD_CODES = new Set(['INVALID_TOKEN', 'TOKEN_EXPIRED'])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
-    // In-flight guard: a rapid double-submit (e.g. Enter while pending) would
-    // race the second call against the first and could consume the token then
-    // surface a spurious token failure.
     if (submitting) return
     setError(null)
     if (password.length < 8) {
@@ -66,20 +51,14 @@ export function ResetPasswordRouteView() {
       const result = await resetPassword(token, password)
       if (!result.ok) {
         if (result.code && TOKEN_DEAD_CODES.has(result.code)) {
-          // The token is genuinely invalid/expired/used — the only recovery
-          // is a new reset link.
           setTokenFailed(true)
         } else {
-          // Validation/server/network failure: keep the form so the user can
-          // retry with the same (still-valid) token.
           setError(result.message ?? 'Could not reset your password.')
         }
         return
       }
       await navigate({ to: '/sign-in', search: { reset: 'success' } })
     } catch {
-      // resetPassword is expected to map errors into { ok: false }; a throw
-      // here is a network-level failure — keep the form, surface a message.
       setError(
         'Could not reset your password. Check your connection and try again.',
       )
@@ -90,15 +69,20 @@ export function ResetPasswordRouteView() {
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-canvas px-4 text-ink">
-      <div className="flex w-full max-w-sm flex-col gap-6">
-        <header className="flex flex-col items-center gap-3 text-center">
-          <Wordmark className="h-12 w-auto" />
-          <h1 className="text-xl font-semibold tracking-tight">
-            Set a new password
-          </h1>
+      <div className="flex w-full max-w-[28rem] flex-col gap-8">
+        <header className="flex flex-col items-center gap-4 text-center">
+          <Wordmark className="text-[1.35rem]" />
+          <div className="flex flex-col gap-1.5">
+            <h1 className="text-lg font-semibold tracking-tight text-ink">
+              Set a new password
+            </h1>
+            <p className="text-sm text-muted">
+              Choose a password for your account.
+            </p>
+          </div>
         </header>
 
-        <Card>
+        <div className="flex flex-col gap-5 rounded-[0.85rem] border border-line bg-surface p-6">
           {tokenFailed ? (
             <div className="flex flex-col gap-4">
               <p className="text-sm leading-relaxed text-muted">
@@ -148,7 +132,7 @@ export function ResetPasswordRouteView() {
               </Button>
             </form>
           )}
-        </Card>
+        </div>
 
         <p className="text-center text-xs text-subtle">
           <Link

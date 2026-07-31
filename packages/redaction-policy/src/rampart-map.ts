@@ -53,6 +53,34 @@ function confidence(score: number | undefined): RedactionSpan['confidence'] {
   return 'low'
 }
 
+/**
+ * Model / product names the NER frequently tags as people. Exact token match
+ * only — never drop multi-word person spans.
+ */
+const PERSON_NAME_DENYLIST = new Set([
+  'kimi',
+  'gpt',
+  'chatgpt',
+  'claude',
+  'gemini',
+  'grok',
+  'qwen',
+  'deepseek',
+  'openai',
+  'anthropic',
+  'mistral',
+  'llama',
+  'copilot',
+])
+
+function isDeniedPersonName(text: string) {
+  const normalized = text.trim().toLowerCase()
+  if (PERSON_NAME_DENYLIST.has(normalized)) return true
+  // Heading-boundary glue that slipped past NER repair ("Jones\nLaw").
+  if (/\n/.test(text)) return true
+  return false
+}
+
 export function mapRampartSpans(output: RampartOutput): RedactionSpan[] {
   return output.spans
     .filter((span) => span.start < span.end)
@@ -74,5 +102,9 @@ export function mapRampartSpans(output: RampartOutput): RedactionSpan[] {
         suggestion: suggestedAction(mapping.category, mapping.dateOfBirth),
       }
     })
+    .filter(
+      (span) =>
+        span.category !== 'person_name' || !isDeniedPersonName(span.text),
+    )
     .sort((left, right) => left.start - right.start || left.end - right.end)
 }

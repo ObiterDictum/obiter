@@ -2,7 +2,7 @@
 
 Priority: `P1` — gates the Redact review UI track.
 
-This folder holds the executable planning layer for the [`packages/app-shell`](../../../packages/app-shell) rebuild defined by [App Shell Rebuild PRD](../../prds/app-shell-rebuild.md).
+This folder holds the executable planning layer for the [`packages/app-shell`](../../../packages/app-shell) rebuild defined by [App Shell Rebuild PRD](../../prds/archive/app-shell-rebuild.md).
 
 ## Files
 
@@ -15,6 +15,6 @@ M1 ends at the **contract freeze**. M2 (live surfaces + fixture deletion) and M3
 
 ## Authority order on conflict
 
-1. [App Shell Rebuild PRD](../../prds/app-shell-rebuild.md) — product principles win.
+1. [App Shell Rebuild PRD](../../prds/archive/app-shell-rebuild.md) — product principles win.
 2. This contract — stable surface for dependent tracks.
 3. The repo design skills (`.agents/skills/design-taste-frontend`, `high-end-visual-design`) — applied on neutrals, contrast, accessibility, density; **overridden** by the PRD on motion and flash ("calm, dense, professional; no gratuitous motion").

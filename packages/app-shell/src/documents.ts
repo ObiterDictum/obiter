@@ -94,12 +94,24 @@ export function documentQueryOptions(documentId: string) {
   })
 }
 
-export function useMatterDocuments(matterId: string) {
-  return useQuery(matterDocumentsQueryOptions(matterId))
+export function useMatterDocuments(
+  matterId: string,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    ...matterDocumentsQueryOptions(matterId),
+    enabled: options?.enabled ?? true,
+  })
 }
 
-export function useDocument(documentId: string) {
-  return useQuery(documentQueryOptions(documentId))
+export function useDocument(
+  documentId: string,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    ...documentQueryOptions(documentId),
+    enabled: options?.enabled ?? true,
+  })
 }
 
 export function useUploadMatterDocument(matterId: string) {

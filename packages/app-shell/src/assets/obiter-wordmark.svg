@@ -1,10 +1,5 @@
-<svg width="1200" height="240" viewBox="0 0 1200 240" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
-  <title id="title">Obiter Wordmark</title>
-  <desc id="desc">Obiter wordmark with wide tracking.</desc>
-  <rect width="1200" height="240" fill="transparent"/>
-  <text x="600" y="138" text-anchor="middle"
-        fill="currentColor"
-        font-size="86"
-        letter-spacing="22"
-        font-family="Cormorant Garamond, Garamond, Georgia, Times New Roman, serif">OBITER</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 220 40" fill="none" role="img" aria-labelledby="obiter-wordmark-title">
+  <title id="obiter-wordmark-title">Obiter</title>
+  <path fill="currentColor" d="M4 6h6.2c.9 0 1.6.7 1.6 1.6v24.8c0 .9-.7 1.6-1.6 1.6H4c-.9 0-1.6-.7-1.6-1.6V7.6C2.4 6.7 3.1 6 4 6zm13.5 7.2h7c.9 0 1.6.7 1.6 1.6v8.4c0 .9-.7 1.6-1.6 1.6h-7c-.9 0-1.6-.7-1.6-1.6v-8.4c0-.9.7-1.6 1.6-1.6z"/>
+  <text x="48" y="27" fill="currentColor" font-family="Inter, system-ui, sans-serif" font-size="22" font-weight="600" letter-spacing="0.12em">OBITER</text>
 </svg>

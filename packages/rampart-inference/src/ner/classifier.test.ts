@@ -85,4 +85,23 @@ describe('detectNer', () => {
       }),
     ])
   })
+
+  it('does not glue a surname across a newline into a heading word', async () => {
+    const text = 'Jones\nLaw and software'
+    const classifier: TokenClassifier = async () => [
+      {
+        entity_group: 'SURNAME',
+        score: 0.92,
+        start: 0,
+        end: 5,
+        word: 'Jones',
+      },
+    ]
+
+    const spans = await detectNer(text, classifier)
+
+    expect(spans).toHaveLength(1)
+    expect(spans[0]?.text).toBe('Jones')
+    expect(spans[0]?.end).toBe(5)
+  })
 })

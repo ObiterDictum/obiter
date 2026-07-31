@@ -1,13 +1,12 @@
 import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
-import { Card } from '@obiter/ui'
 import { apiUrl } from '../lib/api-url'
 import { caseResultLocation } from '../case-navigation'
 import {
   SearchCommandBar,
   SearchFeedbackPanel,
   SearchFiltersDialog,
-  SearchIdleState,
+  SearchIdleExtras,
   SearchKeyboardShortcuts,
   SearchResults,
   courtOptionGroups,
@@ -242,7 +241,7 @@ export function LegalSearchView() {
   const [court, setCourt] = useState('')
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
-  const [recentSearches, setRecentSearches] = useState(() =>
+  const [, setRecentSearches] = useState(() =>
     typeof window === 'undefined'
       ? []
       : getRecentLegalSearches(window.sessionStorage),
@@ -506,13 +505,6 @@ export function LegalSearchView() {
     scheduleAutoSearch(nextQuery)
   }
 
-  function handleRecentSearch(nextQuery: string) {
-    setQuery(nextQuery)
-    setState(getLegalSearchStateAfterInputChange())
-    setSelectedResultIndex(-1)
-    scheduleAutoSearch(nextQuery)
-  }
-
   function handleCourtShortcut(nextCourt: string) {
     const nextFilters = { court: nextCourt, dateFrom, dateTo }
     setCourt(nextCourt)
@@ -531,20 +523,32 @@ export function LegalSearchView() {
     state.status === 'idle' && !shouldRunLegalSearch(query)
 
   return (
-    <div className="mx-auto flex w-full max-w-[920px] flex-col gap-6">
-      <section className="flex flex-col gap-1">
-        <p className="text-xs font-semibold uppercase tracking-wider text-subtle">
-          Legal sources
-        </p>
-        <h1 className="text-3xl font-semibold tracking-tight text-ink">
-          Search
-        </h1>
-        <p className="mt-1 text-sm text-muted">
-          Stored judgments and Find Case Law across UK courts and tribunals.
-        </p>
-      </section>
+    <div
+      className={
+        shouldShowIdleState
+          ? 'flex h-full min-h-[24rem] flex-col items-center justify-center px-6 py-10'
+          : 'flex h-full min-h-[24rem] flex-col'
+      }
+    >
+      <div
+        className={
+          shouldShowIdleState
+            ? 'flex w-full max-w-2xl flex-col gap-8'
+            : 'flex min-h-0 w-full flex-1 flex-col'
+        }
+      >
+        {shouldShowIdleState ? (
+          <div className="flex flex-col gap-2 text-center">
+            <h2 className="text-lg font-semibold tracking-tight text-ink">
+              Search judgments
+            </h2>
+            <p className="text-sm leading-relaxed text-muted">
+              Search stored judgments and Find Case Law across UK courts. Recent
+              queries stay in the sidebar.
+            </p>
+          </div>
+        ) : null}
 
-      <Card>
         <SearchCommandBar
           activeFilterCount={activeFilterCount}
           courtLabel={courtLabel}
@@ -552,13 +556,64 @@ export function LegalSearchView() {
           dateTo={dateTo}
           inputRef={searchInputRef}
           isSearching={state.status === 'loading'}
+          placement={shouldShowIdleState ? 'center' : 'top'}
           onFilterClick={() => setFiltersOpen(true)}
           onQueryChange={handleQueryChange}
           onRemoveFilter={removeFilter}
           onSubmit={handleSubmit}
           query={query}
         />
-      </Card>
+
+        {shouldShowIdleState ? (
+          <SearchIdleExtras
+            courtLabel={courtLabel}
+            courtShortcuts={courtShortcuts}
+            onCourtShortcut={handleCourtShortcut}
+          />
+        ) : state.status === 'results' ? (
+          <SearchResults
+            response={state.response}
+            browse={state.browse}
+            selectedIndex={selectedResultIndex}
+            onSelectIndex={setSelectedResultIndex}
+          />
+        ) : (
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="mx-auto w-full max-w-3xl px-5 py-6 sm:px-6">
+              {state.status === 'loading' ? (
+                <p className="text-sm text-muted" role="status">
+                  Searching…
+                </p>
+              ) : null}
+
+              {state.status === 'empty' ? (
+                <SearchFeedbackPanel
+                  {...getLegalSearchEmptyFeedback({
+                    query: state.query,
+                    outcome: state.outcome,
+                    hydrationQueued: state.hydrationQueued,
+                    browse: state.browse,
+                  })}
+                  tone="warning"
+                />
+              ) : null}
+
+              {state.status === 'error' ? (
+                <SearchFeedbackPanel
+                  action={{
+                    label: 'Retry search',
+                    onClick: () => void runSearch(state.query),
+                  }}
+                  eyebrow="Search error"
+                  title="Search could not complete"
+                  body={state.message}
+                  tone="error"
+                />
+              ) : null}
+            </div>
+          </div>
+        )}
+      </div>
 
       {filtersOpen ? (
         <SearchFiltersDialog
@@ -573,49 +628,6 @@ export function LegalSearchView() {
 
       {shortcutsOpen ? (
         <SearchKeyboardShortcuts onClose={() => setShortcutsOpen(false)} />
-      ) : null}
-
-      {shouldShowIdleState ? (
-        <SearchIdleState
-          courtLabel={courtLabel}
-          courtShortcuts={courtShortcuts}
-          recentSearches={recentSearches}
-          onCourtShortcut={handleCourtShortcut}
-          onRecentSearch={handleRecentSearch}
-        />
-      ) : null}
-
-      {state.status === 'empty' ? (
-        <SearchFeedbackPanel
-          {...getLegalSearchEmptyFeedback({
-            query: state.query,
-            outcome: state.outcome,
-            hydrationQueued: state.hydrationQueued,
-            browse: state.browse,
-          })}
-          tone="warning"
-        />
-      ) : null}
-
-      {state.status === 'error' ? (
-        <SearchFeedbackPanel
-          action={{
-            label: 'Retry search',
-            onClick: () => void runSearch(state.query),
-          }}
-          eyebrow="Search error"
-          title="Search could not complete"
-          body={state.message}
-          tone="error"
-        />
-      ) : null}
-
-      {state.status === 'results' ? (
-        <SearchResults
-          response={state.response}
-          browse={state.browse}
-          selectedIndex={selectedResultIndex}
-        />
       ) : null}
     </div>
   )

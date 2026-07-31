@@ -3,11 +3,7 @@ import { isRedirect } from '@tanstack/react-router'
 import { QueryClient } from '@tanstack/react-query'
 import type { MeResponse } from '@obiter/contracts'
 import { ApiError } from './api'
-import {
-  ensureOrganisation,
-  guardAuth,
-  prefetchHomeData,
-} from './route-loaders'
+import { guardAuth, prefetchHomeData } from './route-loaders'
 
 const noopQueryClient = new QueryClient()
 
@@ -101,60 +97,6 @@ describe('guardAuth', () => {
   })
 })
 
-describe('ensureOrganisation', () => {
-  it('passes through when the user has an organisation', async () => {
-    const queryClient = new QueryClient()
-    queryClient.setQueryData(CURRENT_USER_QUERY_KEY, ORG_ME)
-
-    await expect(ensureOrganisation(queryClient)).resolves.toBeUndefined()
-  })
-
-  it('redirects an org-less user to Home (create-organisation)', async () => {
-    const queryClient = new QueryClient()
-    queryClient.setQueryData(CURRENT_USER_QUERY_KEY, ORGLESS_ME)
-
-    await expect(ensureOrganisation(queryClient)).rejects.toSatisfy(
-      (error: unknown) => {
-        if (!isRedirect(error)) return false
-        const opts = (error as { options?: { to?: string } }).options
-        return opts?.to === '/'
-      },
-    )
-  })
-
-  it('redirects to /sign-in on a 401 (expired session) instead of surfacing the ApiError', async () => {
-    const queryClient = new QueryClient()
-    // Force the cached /api/me fetch to reject with an unauthenticated error.
-    vi.spyOn(queryClient, 'ensureQueryData').mockRejectedValueOnce(
-      new ApiError('unauthenticated', 'Sign in is required.', 401, 'req_4'),
-    )
-
-    await expect(ensureOrganisation(queryClient)).rejects.toSatisfy(
-      (error: unknown) => {
-        if (!isRedirect(error)) return false
-        const opts = (error as { options?: { to?: string } }).options
-        return opts?.to === '/sign-in'
-      },
-    )
-  })
-
-  it('rethrows non-auth errors from the /api/me fetch', async () => {
-    const queryClient = new QueryClient()
-    vi.spyOn(queryClient, 'ensureQueryData').mockRejectedValueOnce(
-      new ApiError(
-        'storage_unavailable',
-        'The API is unavailable.',
-        500,
-        'req_5',
-      ),
-    )
-
-    await expect(ensureOrganisation(queryClient)).rejects.toMatchObject({
-      code: 'storage_unavailable',
-    })
-  })
-})
-
 describe('prefetchHomeData', () => {
   it('prefetches the matters list when the user has an organisation', async () => {
     const queryClient = new QueryClient()
@@ -170,7 +112,7 @@ describe('prefetchHomeData', () => {
     expect(prefetchSpy).toHaveBeenCalledTimes(1)
   })
 
-  it('does not prefetch the matters list for an org-less user (avoids a 403)', async () => {
+  it('prefetches the matters list for an org-less user (API provisions a workspace)', async () => {
     const queryClient = new QueryClient()
     queryClient.setQueryData(CURRENT_USER_QUERY_KEY, ORGLESS_ME)
     const prefetchSpy = vi
@@ -180,7 +122,7 @@ describe('prefetchHomeData', () => {
 
     await prefetchHomeData(queryClient)
 
-    expect(prefetchSpy).not.toHaveBeenCalled()
+    expect(prefetchSpy).toHaveBeenCalledTimes(1)
   })
 
   it('redirects to /sign-in when the current-user fetch is unauthenticated', async () => {
