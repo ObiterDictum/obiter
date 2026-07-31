@@ -1,4 +1,5 @@
 import { createCanvas, type SKRSContext2D } from '@napi-rs/canvas'
+import { documentTextLayoutSchema } from '@obiter/contracts'
 import { PDFDocument } from 'pdf-lib'
 import { createIsomorphicCanvasFactory, getDocumentProxy } from 'unpdf'
 import {
@@ -225,13 +226,7 @@ export function redactedTextFilename(sourceFilename: string) {
 export function isDocumentTextLayout(
   value: unknown,
 ): value is DocumentTextLayout {
-  if (typeof value !== 'object' || value === null) return false
-  const record = value as Record<string, unknown>
-  return (
-    record.version === 1 &&
-    Array.isArray(record.pages) &&
-    Array.isArray(record.segments)
-  )
+  return documentTextLayoutSchema.safeParse(value).success
 }
 
 export function isPdfMimeOrFilename(

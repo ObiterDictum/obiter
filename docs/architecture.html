@@ -4085,18 +4085,23 @@
                 scanned PDFs are rejected as needing OCR. For PDFs it also emits
                 a <code>DocumentTextLayout</code>
                 (<code>document-layout.ts</code>): laid characters carry
-                per-glyph page index, position, em size and font ascent/descent
-                in PDF user space, then contiguous glyphs on the same baseline
-                are merged into run segments (schema
-                <code>version: 1</code>). Extracted text is derived from the
-                same laid-character array, so layout offsets and detection
-                offsets are aligned by construction rather than by a second
-                pass. Positions come from replaying the page's content stream
-                (<code>pdf-glyph-layout.ts</code>), because
+                per-glyph page index, position, writing direction, em size and
+                font ascent/descent in PDF user space, then contiguous glyphs on
+                the same baseline are merged into run segments (schema
+                <code>version: 2</code> in <code>@obiter/contracts</code>;
+                legacy version 1 remains readable). Extracted text is derived
+                from the same laid-character array, so layout offsets and
+                detection offsets are aligned by construction rather than by a
+                second pass. Positions come from replaying the page's content
+                stream (<code>pdf-glyph-layout.ts</code>), because
                 <code>getTextContent</code> reports one advance for a whole run
                 and interpolating it misplaces covers on proportional faces.
-                Each run stores its characters' real advances, so merging costs
-                a few bytes per character rather than a segment each.</span
+                Runs keep origin-to-origin advances separate from sparse drawn
+                glyph-width overrides, and positioned same-line gaps synthesize
+                laid spaces with real geometry before spacing collapse. Rotated
+                runs retain their writing direction so extraction order and
+                fail-safe axis-aligned cover boxes follow the rendered
+                text.</span
               >
             </li>
             <li>
@@ -4139,8 +4144,11 @@
                 scale, cover rects are painted opaque black over the pixels, and
                 the page is re-embedded as an image. The output has no text
                 layer at all, so nothing — redacted or not — is recoverable by
-                text extraction or copy. Anything else produces a plain-text
-                artifact.</span
+                text extraction or copy. Stored layouts are parsed with the
+                shared finite-number schema before preview or burn; invalid
+                geometry is treated as absent, which triggers the fail-closed
+                cover error and a plain-text artifact instead of emitting an
+                unburned PDF. Anything else also produces plain text.</span
               >
             </li>
           </ol>

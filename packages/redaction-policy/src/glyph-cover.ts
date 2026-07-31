@@ -1,3 +1,5 @@
+import type { DocumentTextLayoutSegment } from '@obiter/contracts'
+
 /**
  * Map redaction spans onto PDF glyph geometry.
  *
@@ -21,6 +23,9 @@ export interface GlyphCoverInput {
   ascent?: number
   /** Font descent below baseline (PDF units, positive), from pdf.js styles. */
   descent?: number
+  /** Unit writing direction; defaults to ordinary left-to-right text. */
+  baselineX?: number
+  baselineY?: number
 }
 
 export interface GlyphCoverRect {
@@ -31,29 +36,16 @@ export interface GlyphCoverRect {
   height: number
 }
 
-export interface LayoutSegmentLike {
-  start: number
-  end: number
-  pageIndex: number
-  x: number
-  y: number
-  width: number
-  height: number
-  ascent?: number
-  descent?: number
-  /**
-   * Per-character advances, one entry per character in `start`..`end`. Present
-   * when extraction recovered exact glyph widths from the content stream; a
-   * run can then be merged without losing where each character sits. Absent on
-   * layouts written before exact geometry, which fall back to interpolation.
-   */
-  advances?: number[]
-}
+export type LayoutSegmentLike = DocumentTextLayoutSegment
 
 type TrackedGlyph = GlyphCoverRect & {
   pageIndex: number
   ink: string
   baseline: number
+  along: number
+  advanceWidth: number
+  baselineX: number
+  baselineY: number
 }
 
 /**
@@ -71,11 +63,33 @@ export function glyphCoverRect(input: GlyphCoverInput): GlyphCoverRect {
     slack
   const padLeft = fontSize * (DEEP_DESCENDER.test(ink) ? 0.22 : 0.04)
   const padRight = fontSize * 0.04
+  const magnitude = Math.hypot(input.baselineX ?? 1, input.baselineY ?? 0) || 1
+  const baselineX = (input.baselineX ?? 1) / magnitude
+  const baselineY = (input.baselineY ?? 0) / magnitude
+  const normalX = -baselineY
+  const normalY = baselineX
+  const alongStart = -padLeft
+  const alongEnd = Math.max(input.width, 0.5) + padRight
+  const acrossStart = -descent
+  const acrossEnd = ascent
+  const corners = [
+    [alongStart, acrossStart],
+    [alongStart, acrossEnd],
+    [alongEnd, acrossStart],
+    [alongEnd, acrossEnd],
+  ].map(([along = 0, across = 0]) => ({
+    x: input.x + along * baselineX + across * normalX,
+    y: input.y + along * baselineY + across * normalY,
+  }))
+  const left = Math.min(...corners.map((corner) => corner.x))
+  const right = Math.max(...corners.map((corner) => corner.x))
+  const bottom = Math.min(...corners.map((corner) => corner.y))
+  const top = Math.max(...corners.map((corner) => corner.y))
   return {
-    x: input.x - padLeft,
-    y: input.y - descent,
-    width: Math.max(input.width, 0.5) + padLeft + padRight,
-    height: ascent + descent,
+    x: left,
+    y: bottom,
+    width: right - left,
+    height: top - bottom,
   }
 }
 
@@ -92,6 +106,7 @@ export function coverRectsForSpan(input: {
   const glyphs: TrackedGlyph[] = []
 
   for (const segment of input.segments) {
+    if (!hasFiniteSegmentGeometry(segment)) continue
     if (segment.end <= input.spanStart || segment.start >= input.spanEnd)
       continue
     const segmentLength = segment.end - segment.start
@@ -111,33 +126,73 @@ export function coverRectsForSpan(input: {
         (segmentLength === 1
           ? segment.x
           : segment.x + segment.width * startRatio)
+      const y = exact?.y ?? segment.y
       const width =
         exact?.width ??
         (segmentLength === 1
           ? segment.width
           : Math.max(segment.width * (endRatio - startRatio), 0.5))
+      const rawBaselineX = exact?.baselineX ?? segment.baselineX ?? 1
+      const rawBaselineY = exact?.baselineY ?? segment.baselineY ?? 0
+      const baselineMagnitude = Math.hypot(rawBaselineX, rawBaselineY) || 1
+      const baselineX = rawBaselineX / baselineMagnitude
+      const baselineY = rawBaselineY / baselineMagnitude
+      const normalX = -baselineY
+      const normalY = baselineX
       const ink = input.spanText[index - input.spanStart] ?? ''
       if (!ink || /\s/u.test(ink)) continue
       glyphs.push({
         ...glyphCoverRect({
           x,
-          y: segment.y,
+          y,
           width,
           fontSize: segment.height,
           ink,
           ascent: segment.ascent,
           descent: segment.descent,
+          baselineX,
+          baselineY,
         }),
         pageIndex: segment.pageIndex,
         ink,
-        baseline: segment.y,
+        baseline: x * normalX + y * normalY,
+        along: x * baselineX + y * baselineY,
+        advanceWidth: width,
+        baselineX,
+        baselineY,
       })
     }
   }
 
   return unionMergeGlyphs(glyphs).map(
-    ({ baseline: _baseline, ...cover }) => cover,
+    ({
+      baseline: _baseline,
+      along: _along,
+      advanceWidth: _advanceWidth,
+      baselineX: _baselineX,
+      baselineY: _baselineY,
+      ...cover
+    }) => cover,
   )
+}
+
+function hasFiniteSegmentGeometry(segment: LayoutSegmentLike) {
+  const values = [
+    segment.start,
+    segment.end,
+    segment.pageIndex,
+    segment.x,
+    segment.y,
+    segment.width,
+    segment.height,
+    segment.ascent,
+    segment.descent,
+    segment.baselineX,
+    segment.baselineY,
+    ...(segment.advances ?? []),
+    ...Object.values(segment.glyphWidthOverrides ?? {}),
+  ]
+  return values.every((value) => value === undefined || Number.isFinite(value))
 }
 
 /**
@@ -146,14 +201,27 @@ export function coverRectsForSpan(input: {
  */
 function exactPlacement(segment: LayoutSegmentLike, local: number) {
   const advances = segment.advances
-  if (!advances || advances.length !== segment.end - segment.start) return null
-  const own = advances[local]
-  if (typeof own !== 'number') return null
+  const glyphWidthOverrides = segment.glyphWidthOverrides
+  const segmentLength = segment.end - segment.start
+  if (!advances || !glyphWidthOverrides || advances.length !== segmentLength)
+    return null
+  const ownWidth = glyphWidthOverrides[String(local)] ?? advances[local]
+  if (typeof ownWidth !== 'number') return null
   let offset = 0
   for (let index = 0; index < local; index += 1) {
     offset += advances[index] ?? 0
   }
-  return { x: segment.x + offset, width: Math.max(own, 0.5) }
+  const baselineMagnitude =
+    Math.hypot(segment.baselineX ?? 1, segment.baselineY ?? 0) || 1
+  const baselineX = (segment.baselineX ?? 1) / baselineMagnitude
+  const baselineY = (segment.baselineY ?? 0) / baselineMagnitude
+  return {
+    x: segment.x + offset * baselineX,
+    y: segment.y + offset * baselineY,
+    width: Math.max(ownWidth, 0.5),
+    baselineX,
+    baselineY,
+  }
 }
 
 function unionMergeGlyphs(glyphs: TrackedGlyph[]): TrackedGlyph[] {
@@ -162,23 +230,28 @@ function unionMergeGlyphs(glyphs: TrackedGlyph[]): TrackedGlyph[] {
     (left, right) =>
       left.pageIndex - right.pageIndex ||
       left.baseline - right.baseline ||
-      left.x - right.x,
+      left.along - right.along,
   )
   const merged: TrackedGlyph[] = []
   for (const glyph of sorted) {
     const previous = merged.at(-1)
     const gap = previous
-      ? glyph.x - (previous.x + previous.width)
+      ? glyph.along - (previous.along + previous.advanceWidth)
       : Number.POSITIVE_INFINITY
     const maxGap = Math.max(
       2.5,
       Math.min(previous?.height ?? 0, glyph.height) * 0.4,
     )
+    const directionMatch = previous
+      ? previous.baselineX * glyph.baselineX +
+        previous.baselineY * glyph.baselineY
+      : 0
     const sameLine =
       previous &&
       previous.pageIndex === glyph.pageIndex &&
+      directionMatch > 0.999 &&
       Math.abs(previous.baseline - glyph.baseline) <= 1.25 &&
-      glyph.x + glyph.width / 2 >= previous.x &&
+      glyph.along + glyph.advanceWidth / 2 >= previous.along &&
       gap <= maxGap
 
     if (previous && sameLine) {
@@ -189,6 +262,12 @@ function unionMergeGlyphs(glyphs: TrackedGlyph[]): TrackedGlyph[] {
       previous.y = bottom
       previous.width = right - previous.x
       previous.height = top - bottom
+      const advanceEnd = Math.max(
+        previous.along + previous.advanceWidth,
+        glyph.along + glyph.advanceWidth,
+      )
+      previous.along = Math.min(previous.along, glyph.along)
+      previous.advanceWidth = advanceEnd - previous.along
       previous.ink = `${previous.ink}${glyph.ink}`
       continue
     }

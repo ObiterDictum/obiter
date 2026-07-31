@@ -25,6 +25,9 @@ const FONT_UNITS = 1000
 /** Baseline shift, relative to font size, that starts a new line. */
 const LINE_BREAK_RATIO = 0.3
 
+/** A same-line positioning gap above this size carries semantic whitespace. */
+const SEMANTIC_SPACE_RATIO = 0.2
+
 interface Glyph {
   unicode?: string
   width?: number
@@ -165,8 +168,12 @@ export function laidCharsFromOperatorList(input: {
       const render = multiply(multiply(scaling, textMatrix), ctm)
       const placement = multiply(textMatrix, ctm)
       const horizontal = Math.hypot(placement[0], placement[1]) || 1
+      const baselineMagnitude = Math.hypot(render[0], render[1]) || 1
+      const baselineX = render[0] / baselineMagnitude
+      const baselineY = render[1] / baselineMagnitude
       const size = Math.hypot(render[2], render[3]) || state.fontSize
 
+      const glyphAdvance = advanceWidth * state.fontSize * state.hScale
       const advance =
         (advanceWidth * state.fontSize +
           state.charSpacing +
@@ -183,22 +190,25 @@ export function laidCharsFromOperatorList(input: {
           typeof styles?.[state.fontName ?? '']?.descent === 'number'
             ? Math.abs(styles[state.fontName ?? '']!.descent!)
             : 0.2
-        // A glyph's own advance is its width; ligatures map to several
-        // characters, which share the one advance they were drawn with.
-        const perChar = advance / Math.max([...unicode].length, 1)
+        // Positioning includes spacing and TJ adjustments, but a glyph's cover
+        // width is only its own drawn advance. Ligature characters share it.
+        const perCharWidth =
+          Math.abs(glyphAdvance * horizontal) / Math.max([...unicode].length, 1)
         let offset = 0
         for (const ch of unicode) {
           chars.push({
             ch,
             pageIndex,
-            x: render[4] + offset * horizontal,
-            y: render[5],
-            width: Math.abs(perChar * horizontal),
+            x: render[4] + offset * baselineX,
+            y: render[5] + offset * baselineY,
+            width: perCharWidth,
             height: size,
             ascent: size * ascentRatio,
             descent: size * descentRatio,
+            baselineX,
+            baselineY,
           })
-          offset += perChar
+          offset += perCharWidth
         }
       }
 
@@ -293,31 +303,91 @@ export function laidCharsFromOperatorList(input: {
 }
 
 /**
- * Insert newlines between glyphs that sit on different baselines. The operator
- * list has no end-of-line marker, so reading order comes from geometry: a
- * baseline shift, or a carriage return to the left on the same baseline.
+ * Insert newlines between glyphs that sit on different baselines. Reading
+ * order is measured in the run's own writing direction, not page x/y, so a
+ * vertical baseline does not turn every rotated glyph into a separate line.
  */
 export function withLineBreaks(chars: LaidChar[]): LaidChar[] {
   const out: LaidChar[] = []
   for (let index = 0; index < chars.length; index += 1) {
-    const current = chars[index]!
+    const current = chars[index]
+    if (!current) continue
     const previous = chars[index - 1]
     if (previous) {
+      const deltaX = current.x - previous.x
+      const deltaY = current.y - previous.y
       const threshold =
         Math.max(previous.height, current.height, 1) * LINE_BREAK_RATIO
-      const droppedLine = Math.abs(previous.y - current.y) > threshold
-      const carriageReturn =
-        !droppedLine && current.x + current.width < previous.x
+      const directionMatch =
+        previous.baselineX * current.baselineX +
+        previous.baselineY * current.baselineY
+      const perpendicular =
+        deltaX * -previous.baselineY + deltaY * previous.baselineX
+      const along = deltaX * previous.baselineX + deltaY * previous.baselineY
+      const droppedLine =
+        directionMatch < 0.95 || Math.abs(perpendicular) > threshold
+      const carriageReturn = !droppedLine && along < 0
       if (droppedLine || carriageReturn) {
         out.push({
           ch: '\n',
           pageIndex: previous.pageIndex,
-          x: previous.x + previous.width,
-          y: previous.y,
+          x: previous.x + previous.width * previous.baselineX,
+          y: previous.y + previous.width * previous.baselineY,
           width: 0,
           height: previous.height,
           ascent: previous.ascent,
           descent: previous.descent,
+          baselineX: previous.baselineX,
+          baselineY: previous.baselineY,
+        })
+      }
+    }
+    out.push(current)
+  }
+  return out
+}
+
+/**
+ * Recover spaces that PDF producers express only as text positioning. This runs
+ * after line-break injection so a page-space gap can never bridge two lines.
+ */
+export function withSemanticSpaces(chars: LaidChar[]): LaidChar[] {
+  const out: LaidChar[] = []
+  for (const current of chars) {
+    const previous = out.at(-1)
+    if (
+      previous &&
+      previous.ch !== '\n' &&
+      current.ch !== '\n' &&
+      !/\s/u.test(previous.ch) &&
+      !/\s/u.test(current.ch)
+    ) {
+      const deltaX = current.x - previous.x
+      const deltaY = current.y - previous.y
+      const directionMatch =
+        previous.baselineX * current.baselineX +
+        previous.baselineY * current.baselineY
+      const perpendicular =
+        deltaX * -previous.baselineY + deltaY * previous.baselineX
+      const along = deltaX * previous.baselineX + deltaY * previous.baselineY
+      const threshold =
+        Math.max(previous.height, current.height, 1) * SEMANTIC_SPACE_RATIO
+      const sameBaseline =
+        directionMatch > 0.95 && Math.abs(perpendicular) <= threshold
+      const gap = along - previous.width
+
+      if (sameBaseline && gap > threshold) {
+        out.push({
+          ch: ' ',
+          pageIndex: previous.pageIndex,
+          x: previous.x + previous.width * previous.baselineX,
+          y: previous.y + previous.width * previous.baselineY,
+          width: gap,
+          height: previous.height,
+          ascent: previous.ascent,
+          descent: previous.descent,
+          baselineX: previous.baselineX,
+          baselineY: previous.baselineY,
         })
       }
     }

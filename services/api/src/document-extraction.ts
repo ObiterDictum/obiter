@@ -11,6 +11,7 @@ import {
 import {
   laidCharsFromOperatorList,
   withLineBreaks,
+  withSemanticSpaces,
   type FontStyles,
   type PdfOps,
 } from './pdf-glyph-layout'
@@ -107,6 +108,8 @@ async function extractPdfContent(
       let lastHeight = 12
       let lastAscent = 10
       let lastDescent = 2
+      let lastBaselineX = 1
+      let lastBaselineY = 0
       for (const item of content.items) {
         if ('str' in item) {
           pushPdfItemChars(chars, item, pageIndex, content.styles)
@@ -115,9 +118,12 @@ async function extractPdfContent(
             lastY = item.transform[5] ?? lastY
           }
           const metrics = pdfItemMetrics(item, content.styles)
+          const direction = pdfItemBaseline(item)
           lastHeight = metrics.fontSize
           lastAscent = metrics.ascent
           lastDescent = metrics.descent
+          lastBaselineX = direction.x
+          lastBaselineY = direction.y
         }
         if ('hasEOL' in item && item.hasEOL) {
           chars.push({
@@ -129,6 +135,8 @@ async function extractPdfContent(
             height: lastHeight,
             ascent: lastAscent,
             descent: lastDescent,
+            baselineX: lastBaselineX,
+            baselineY: lastBaselineY,
           })
         }
       }
@@ -142,6 +150,8 @@ async function extractPdfContent(
           height: lastHeight,
           ascent: lastAscent,
           descent: lastDescent,
+          baselineX: lastBaselineX,
+          baselineY: lastBaselineY,
         })
       }
       assertWithinLength(chars)
@@ -207,7 +217,7 @@ async function exactPageChars(
       pageIndex,
       styles,
     })
-    return chars.length > 0 ? withLineBreaks(chars) : []
+    return chars.length > 0 ? withSemanticSpaces(withLineBreaks(chars)) : []
   } catch {
     return []
   }
@@ -254,6 +264,15 @@ function pdfItemMetrics(
   }
 }
 
+function pdfItemBaseline(item: { transform?: number[] }) {
+  const transform = item.transform ?? []
+  const magnitude = Math.hypot(transform[0] ?? 1, transform[1] ?? 0) || 1
+  return {
+    x: (transform[0] ?? 1) / magnitude,
+    y: (transform[1] ?? 0) / magnitude,
+  }
+}
+
 function pushPdfItemChars(
   chars: LaidChar[],
   item: {
@@ -275,16 +294,19 @@ function pushPdfItemChars(
   const width = typeof item.width === 'number' ? item.width : 0
   const glyphs = [...value]
   const glyphWidth = glyphs.length > 0 ? width / glyphs.length : 0
+  const baseline = pdfItemBaseline(item)
   glyphs.forEach((ch, index) => {
     chars.push({
       ch,
       pageIndex,
-      x: originX + index * glyphWidth,
-      y: originY,
+      x: originX + index * glyphWidth * baseline.x,
+      y: originY + index * glyphWidth * baseline.y,
       width: Math.max(glyphWidth, 0.5),
       height: fontSize,
       ascent,
       descent,
+      baselineX: baseline.x,
+      baselineY: baseline.y,
     })
   })
 }

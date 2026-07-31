@@ -32,6 +32,8 @@ function lineChars(text: string, startX = 40, baseline = 100): LaidChar[] {
     ch,
     pageIndex: 0,
     x: startX + index * glyphWidth,
+    baselineX: 1,
+    baselineY: 0,
     y: baseline,
     width: glyphWidth,
     height: 12,
@@ -59,6 +61,8 @@ function charsFromPdfItems(
         ch,
         pageIndex: 0,
         x: item.x + index * glyphWidth,
+        baselineX: 1,
+        baselineY: 0,
         y: baseline,
         width: Math.max(glyphWidth, 0.5),
         height,
@@ -77,7 +81,7 @@ describe('layoutFromLaidChars', () => {
     const merged = layoutFromLaidChars(chars, [{ width: 400, height: 200 }])
     const unmerged = unmergedCharSegments(chars)
 
-    expect(merged.version).toBe(1)
+    expect(merged.version).toBe(2)
     expect(merged.segments.length).toBeLessThan(8)
     expect(merged.segments.length).toBeLessThan(unmerged.length / 3)
 

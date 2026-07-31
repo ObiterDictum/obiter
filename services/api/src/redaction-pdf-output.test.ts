@@ -9,6 +9,7 @@ import { coverRectsForSpan } from '@obiter/redaction-policy'
 import { describe, expect, it } from 'vitest'
 import {
   buildRedactedPdf,
+  isDocumentTextLayout,
   padGlyphRect,
   RedactionCoverGeometryError,
   redactedPdfFilename,
@@ -120,6 +121,29 @@ describe('redaction-pdf-output', () => {
   it('names redacted PDF and text downloads from the source filename', () => {
     expect(redactedPdfFilename('brief.pdf')).toBe('brief-redacted.pdf')
     expect(redactedTextFilename('brief.docx')).toBe('brief-redacted.txt')
+  })
+
+  it('validates every stored layout number and keeps legacy layouts readable', () => {
+    expect(isDocumentTextLayout(aliceLayout())).toBe(true)
+    expect(
+      isDocumentTextLayout({
+        version: 2,
+        pages: [{ width: 200, height: 200 }],
+        segments: [
+          {
+            start: 0,
+            end: 2,
+            pageIndex: 0,
+            x: 40,
+            y: 100,
+            width: 12,
+            height: 12,
+            advances: [Number.NaN, 6],
+            glyphWidthOverrides: {},
+          },
+        ],
+      }),
+    ).toBe(false)
   })
 
   it('pads deep only when the covered ink has descenders', () => {

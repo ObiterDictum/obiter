@@ -1,5 +1,7 @@
 import type {
   DetectionMode,
+  DocumentTextLayout,
+  DocumentTextLayoutSegment,
   RedactionFinalizeInput,
   RedactionPolicyMode,
   RedactionRunStatus,
@@ -37,25 +39,7 @@ export interface RedactionRun {
   updatedAt: string
 }
 
-export interface DocumentTextLayoutSegment {
-  start: number
-  end: number
-  pageIndex: number
-  x: number
-  y: number
-  width: number
-  height: number
-  ascent?: number
-  descent?: number
-  /** Exact per-character advances across the run, when extraction had them. */
-  advances?: number[]
-}
-
-export interface DocumentTextLayout {
-  version: 1
-  pages: Array<{ width: number; height: number }>
-  segments: DocumentTextLayoutSegment[]
-}
+export type { DocumentTextLayout, DocumentTextLayoutSegment }
 
 export interface RedetectResponse {
   run: RedactionRun

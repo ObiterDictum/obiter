@@ -1,8 +1,10 @@
 import { Hono } from 'hono'
 import type { Pool } from 'pg'
 import {
+  documentTextLayoutSchema,
   redactionFinalizeInputSchema,
   spanDecisionSchema,
+  type DocumentTextLayout,
 } from '@obiter/contracts'
 import {
   applyPseudonymised,
@@ -23,7 +25,6 @@ import {
 } from '../redaction-database'
 import {
   buildRedactedPdf,
-  isDocumentTextLayout,
   isPdfMimeOrFilename,
   redactedPdfFilename,
   redactedTextFilename,
@@ -142,8 +143,11 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         404,
       )
     try {
-      const layout = JSON.parse(await storage.readText(layoutObjectKey))
-      return c.json({ layout })
+      const layout = documentTextLayoutSchema.safeParse(
+        JSON.parse(await storage.readText(layoutObjectKey)),
+      )
+      if (!layout.success) throw new Error('Stored document layout is invalid.')
+      return c.json({ layout: layout.data })
     } catch {
       return errorResponse(
         c,
@@ -340,14 +344,23 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         )
 
       if (canWritePdf && source && layoutObjectKey) {
-        const layoutJson = JSON.parse(await storage.readText(layoutObjectKey))
-        if (!isDocumentTextLayout(layoutJson)) {
-          throw new Error('Stored document layout is invalid.')
-        }
+        const parsedLayout = documentTextLayoutSchema.safeParse(
+          JSON.parse(await storage.readText(layoutObjectKey)),
+        )
+        // Invalid stored geometry must follow the same fail-closed path as
+        // missing geometry. An empty layout makes any accepted span raise
+        // RedactionCoverGeometryError before source pixels are rasterized.
+        const layout: DocumentTextLayout = parsedLayout.success
+          ? parsedLayout.data
+          : {
+              version: 2,
+              pages: [{ width: 1, height: 1 }],
+              segments: [],
+            }
         const pdfBytes = await storage.readBinary!(source.objectKey)
         const redactedPdf = await buildRedactedPdf({
           pdfBytes,
-          layout: layoutJson,
+          layout,
           spans: run.spans,
           decisions: run.decisions,
           outputMode: body.data.outputMode,
