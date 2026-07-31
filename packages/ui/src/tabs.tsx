@@ -23,7 +23,7 @@ export function TabsList(
 ) {
   return (
     <BaseTabs.List
-      className="inline-flex items-center gap-1 border-b border-line"
+      className="inline-flex items-center gap-1 rounded-md bg-canvas p-1"
       {...props}
     />
   )
@@ -36,10 +36,10 @@ export function TabsTrigger({
   return (
     <BaseTabs.Tab
       className={cn(
-        'relative -mb-px border-b-2 border-transparent px-3 py-2 text-sm font-medium text-muted',
-        'transition-[color,border-color] duration-150',
+        'relative rounded-md px-3 py-1.5 text-sm font-medium text-muted',
+        'transition-[color,background-color] duration-200',
         'hover:text-ink',
-        'data-[selected]:border-brand data-[selected]:text-ink',
+        'data-[selected]:bg-raised data-[selected]:text-ink',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand',
         className,
       )}

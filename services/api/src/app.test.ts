@@ -285,7 +285,7 @@ describe('createApiApp', () => {
     })
   })
 
-  it('returns 403 no_organisation when an org-less user hits an org-scoped endpoint', async () => {
+  it('auto-provisions a personal workspace when an org-less user hits Matters', async () => {
     const auth = {
       api: {
         getSession: async () => ({
@@ -297,15 +297,42 @@ describe('createApiApp', () => {
     } as unknown as Auth
     const app = createApiApp(
       testEnv,
-      createPool(async () => ({ rows: [] })),
+      createHybridPool(
+        async (sql) => {
+          if (String(sql).includes('from matters')) {
+            return { rows: [] }
+          }
+          return { rows: [] }
+        },
+        async (...args) => {
+          const sql = String(args[0])
+          if (sql === 'begin' || sql === 'commit' || sql === 'rollback') {
+            return { rows: [] }
+          }
+          if (sql.includes('select "organisationId"')) {
+            return { rows: [{ organisationId: null, role: null }] }
+          }
+          if (sql.includes('insert into organisations')) {
+            return {
+              rows: [
+                {
+                  id: 'org_personal',
+                  name: 'Personal workspace',
+                  plan: 'private_beta',
+                },
+              ],
+            }
+          }
+          return { rows: [] }
+        },
+      ),
       { auth },
     )
 
     const response = await app.request('/api/matters')
-    const body = (await response.json()) as ErrorBody
 
-    expect(response.status).toBe(403)
-    expect(body.error.code).toBe('no_organisation')
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toMatchObject({ matters: [] })
   })
 
   it('creates an organisation for an org-less user via POST /api/organisations', async () => {
@@ -326,8 +353,8 @@ describe('createApiApp', () => {
         const sql = String(args[0])
         if (sql === 'begin' || sql === 'commit' || sql === 'rollback')
           return { rows: [] }
-        if (sql.includes('select "organisationId" from users')) {
-          return { rows: [{ organisationId: null }] }
+        if (sql.includes('select "organisationId"')) {
+          return { rows: [{ organisationId: null, role: null }] }
         }
         if (sql.includes('insert into organisations')) {
           return {
@@ -385,8 +412,8 @@ describe('createApiApp', () => {
       createConnectedPool(async (...args) => {
         const sql = String(args[0])
         if (sql === 'begin') return { rows: [] }
-        if (sql.includes('select "organisationId" from users')) {
-          return { rows: [{ organisationId: 'org_existing' }] }
+        if (sql.includes('select "organisationId"')) {
+          return { rows: [{ organisationId: 'org_existing', role: 'owner' }] }
         }
         return { rows: [] }
       }),
@@ -1170,6 +1197,7 @@ describe('createApiApp', () => {
     expect([...stored.values()]).toEqual([
       'Synthetic test text.',
       expect.stringContaining('amina.rahman@example.test'),
+      expect.stringContaining('"version":1'),
       expect.stringContaining('Mr James Cartwright'),
       '',
     ])
@@ -1215,7 +1243,7 @@ describe('createApiApp', () => {
       createPool(async (sql, params) => {
         const text = String(sql)
         if (text.includes('insert into redaction_runs')) {
-          persistedMode = (params as unknown[])[11]
+          persistedMode = (params as unknown[])[14]
           return { rows: [row()] }
         }
         if (text.includes('from redaction_runs')) return { rows: [row()] }
@@ -1290,9 +1318,9 @@ describe('createApiApp', () => {
                   status: 'ready_for_review',
                   output_artifact_id: null,
                   source_text_object_key: values[6],
-                  detector_version: values[10],
-                  detection_mode: values[11],
-                  replaces_run_id: values[12],
+                  detector_version: values[13],
+                  detection_mode: values[14],
+                  replaces_run_id: values[15],
                 }),
               ],
             }
@@ -1612,33 +1640,64 @@ describe('createApiApp redaction review reads', () => {
     const readText = vi.fn(async () => 'Stored redaction text.')
     const app = createApiApp(
       testEnv,
-      createPool(async (sql, params) => {
-        const text = String(sql)
-        const values = params as unknown[]
-        if (text.includes('from redaction_runs')) {
-          const visible =
-            run && values[0] === run.id && values[1] === run.organisation_id
-          return { rows: visible ? [run] : [] }
-        }
-        if (text.includes('from document_versions')) {
-          return {
-            rows: documentTextKey ? [{ text_object_key: documentTextKey }] : [],
+      createHybridPool(
+        async (sql, params) => {
+          const text = String(sql)
+          const values = params as unknown[]
+          if (text.includes('from redaction_runs')) {
+            const visible =
+              run && values[0] === run.id && values[1] === run.organisation_id
+            return { rows: visible ? [run] : [] }
           }
-        }
-        if (text.includes('from artifacts')) {
-          return {
-            rows: artifactKey ? [{ object_key: artifactKey }] : [],
+          if (text.includes('from document_versions')) {
+            return {
+              rows: documentTextKey
+                ? [{ text_object_key: documentTextKey }]
+                : [],
+            }
           }
-        }
-        if (text.includes('insert into audit_logs')) {
-          auditWrites.push({
-            action: String(values[4]),
-            metadata: JSON.parse(String(values[5])) as Record<string, unknown>,
-          })
+          if (text.includes('from artifacts')) {
+            return {
+              rows: artifactKey ? [{ object_key: artifactKey }] : [],
+            }
+          }
+          if (text.includes('insert into audit_logs')) {
+            auditWrites.push({
+              action: String(values[4]),
+              metadata: JSON.parse(String(values[5])) as Record<
+                string,
+                unknown
+              >,
+            })
+            return { rows: [] }
+          }
           return { rows: [] }
-        }
-        throw new Error(`Unexpected SQL: ${text}`)
-      }),
+        },
+        async (...args) => {
+          const sql = String(args[0])
+          if (sql === 'begin' || sql === 'commit' || sql === 'rollback') {
+            return { rows: [] }
+          }
+          if (sql.includes('select "organisationId"')) {
+            return { rows: [{ organisationId: null, role: null }] }
+          }
+          if (sql.includes('insert into organisations')) {
+            return {
+              rows: [
+                {
+                  id: 'org_personal',
+                  name: 'Personal workspace',
+                  plan: 'private_beta',
+                },
+              ],
+            }
+          }
+          if (sql.includes('insert into audit_logs')) {
+            return { rows: [] }
+          }
+          return { rows: [] }
+        },
+      ),
       {
         auth,
         storage: {
@@ -1651,7 +1710,7 @@ describe('createApiApp redaction review reads', () => {
     return { app, auditWrites, readText }
   }
 
-  it('guards document text reads for unauthenticated and organisation-less users', async () => {
+  it('guards document text reads for unauthenticated users; org-less users are provisioned', async () => {
     const unauthenticatedAuth = {
       api: { getSession: async () => null },
       handler: async () => new Response(null, { status: 404 }),
@@ -1679,9 +1738,10 @@ describe('createApiApp redaction review reads', () => {
     expect(((await unauthenticated.json()) as ErrorBody).error.code).toBe(
       'unauthenticated',
     )
-    expect(organisationless.status).toBe(403)
+    // Auto-provisioned personal workspace, then unknown run → 404 (not 403).
+    expect(organisationless.status).toBe(404)
     expect(((await organisationless.json()) as ErrorBody).error.code).toBe(
-      'no_organisation',
+      'redaction_run_not_found',
     )
   })
 
@@ -1791,9 +1851,145 @@ describe('createApiApp redaction review reads', () => {
 
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toEqual({
+      mimeType: 'text/plain',
+      filename: 'source-redacted.txt',
       text: 'Stored redaction text.',
     })
     expect(readText).toHaveBeenCalledWith('org/org_1/artifacts/art_1')
+  })
+
+  it('returns redacted PDF metadata and binary download bytes', async () => {
+    const pdfBytes = Buffer.from('%PDF-1.4 redacted')
+    const readBinary = vi.fn(async () => pdfBytes)
+    const run = finalizedRunRow({
+      source_filename: 'brief.pdf',
+      summary_json: {
+        totalSpans: 1,
+        outputMode: 'redacted',
+        outputMimeType: 'application/pdf',
+        outputFilename: 'brief-redacted.pdf',
+      },
+    })
+    const app = createApiApp(
+      testEnv,
+      createHybridPool(
+        async (sql, params) => {
+          const text = String(sql)
+          const values = params as unknown[]
+          if (text.includes('from redaction_runs')) {
+            const visible =
+              values[0] === run.id && values[1] === run.organisation_id
+            return { rows: visible ? [run] : [] }
+          }
+          if (text.includes('from artifacts')) {
+            return { rows: [{ object_key: 'org/org_1/artifacts/art_1' }] }
+          }
+          return { rows: [] }
+        },
+        async () => ({ rows: [] }),
+      ),
+      {
+        auth: authWithRole('member'),
+        storage: {
+          readText: async () => {
+            throw new Error('text read should not be used for PDF output')
+          },
+          writeText: async () => undefined,
+          readBinary,
+          delete: async () => undefined,
+        },
+      },
+    )
+
+    const meta = await app.request('/api/redaction-runs/red_1/output')
+    expect(meta.status).toBe(200)
+    await expect(meta.json()).resolves.toEqual({
+      mimeType: 'application/pdf',
+      filename: 'brief-redacted.pdf',
+      text: null,
+    })
+
+    const file = await app.request('/api/redaction-runs/red_1/output/file')
+    expect(file.status).toBe(200)
+    expect(file.headers.get('content-type')).toBe('application/pdf')
+    expect(file.headers.get('content-disposition')).toContain(
+      'brief-redacted.pdf',
+    )
+    expect(file.headers.get('x-content-type-options')).toBe('nosniff')
+    expect(Buffer.from(await file.arrayBuffer())).toEqual(pdfBytes)
+    expect(readBinary).toHaveBeenCalledWith('org/org_1/artifacts/art_1')
+  })
+
+  it('returns matter-attached source PDF bytes with a real MIME type and nosniff', async () => {
+    const pdfBytes = Buffer.from('%PDF-1.4 source')
+    const readBinary = vi.fn(async () => pdfBytes)
+    const run = finalizedRunRow({
+      source_filename: 'brief.pdf',
+      document_version_id: 'ver_1',
+      source_file_object_key: null,
+      source_mime_type: null,
+    })
+    const app = createApiApp(
+      testEnv,
+      createHybridPool(
+        async (sql, params) => {
+          const text = String(sql)
+          const values = params as unknown[]
+          if (text.includes('from redaction_runs')) {
+            const visible =
+              values[0] === run.id && values[1] === run.organisation_id
+            return { rows: visible ? [run] : [] }
+          }
+          if (text.includes('from document_versions')) {
+            return {
+              rows: [
+                {
+                  object_key:
+                    'org/org_1/matters/mtr_1/documents/doc_1/versions/ver_1/source',
+                  filename: 'brief.pdf',
+                  file_type: 'pdf',
+                },
+              ],
+            }
+          }
+          return { rows: [] }
+        },
+        async () => ({ rows: [] }),
+      ),
+      {
+        auth: authWithRole('member'),
+        storage: {
+          readText: async () => {
+            throw new Error('text read should not be used for source PDF')
+          },
+          writeText: async () => undefined,
+          readBinary,
+          delete: async () => undefined,
+        },
+      },
+    )
+
+    const response = await app.request('/api/redaction-runs/red_1/source-file')
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toBe('application/pdf')
+    expect(response.headers.get('content-disposition')).toContain('brief.pdf')
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff')
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(pdfBytes)
+    expect(readBinary).toHaveBeenCalledWith(
+      'org/org_1/matters/mtr_1/documents/doc_1/versions/ver_1/source',
+    )
+  })
+
+  it('returns text output/file with nosniff', async () => {
+    const { app } = createRedactionReadApp({
+      run: finalizedRunRow(),
+      artifactKey: 'org/org_1/artifacts/art_1',
+    })
+
+    const file = await app.request('/api/redaction-runs/red_1/output/file')
+    expect(file.status).toBe(200)
+    expect(file.headers.get('content-type')).toBe('text/plain; charset=utf-8')
+    expect(file.headers.get('x-content-type-options')).toBe('nosniff')
   })
 
   it('returns 404 for an unknown token-map run', async () => {

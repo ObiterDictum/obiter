@@ -272,10 +272,11 @@ describe('LegalSearchView debounce lifecycle', () => {
     root = rendered.root
     container = rendered.container
 
-    expect(container.textContent).toContain('Recent searches')
+    expect(container.textContent).toContain('Search judgments')
     expect(container.textContent).toContain('Case name')
     expect(container.textContent).toContain('Neutral citation')
     expect(container.textContent).toContain('Keyword')
+    expect(container.textContent).toContain('Court shortcuts')
 
     await clickButton(container, 'UKSC')
     await act(async () => {

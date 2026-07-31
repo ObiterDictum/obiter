@@ -1,5 +1,5 @@
-import { ArrowRight } from '@phosphor-icons/react'
 import { Link } from '@tanstack/react-router'
+import { ArrowRight } from '@phosphor-icons/react'
 import { caseResultLocation } from '../../case-navigation'
 import type {
   LegalSearchBrowseContext,
@@ -10,87 +10,75 @@ interface SearchResultsProps {
   response: LegalSearchFetchResponse
   browse?: LegalSearchBrowseContext
   selectedIndex: number
+  onSelectIndex: (index: number) => void
 }
 
+/**
+ * Full-width result list under the search field. Opening a hit goes to the
+ * judgment route — no split reader pane.
+ */
 export function SearchResults({
   response,
   browse,
   selectedIndex,
+  onSelectIndex,
 }: SearchResultsProps) {
   const storedResultsAvailable = response.cached || response.indexedCount > 0
 
   return (
-    <section className="flex flex-col gap-2.5" aria-live="polite">
-      <p className="text-sm text-muted">
-        {formatResultMeta(response, storedResultsAvailable, browse)}
-      </p>
-      {response.hits.map((result, index) => {
-        const location = caseResultLocation(result)
-        const summary = (
-          <>
-            <span className="min-w-0">
-              <strong className="block text-base font-semibold leading-snug text-ink">
-                {result.title}
-              </strong>
-              <small className="mt-1.5 block text-xs text-muted">
-                {formatNeutralCitation(result.neutralCitation)} · {result.court}{' '}
-                · {result.dateDecided}
-              </small>
-              <small className="mt-0.5 block text-xs text-subtle">
-                {formatMatchReason(result.matchReason)}
-                {result.retrievalPath
-                  ? ` · ${formatRetrievalPath(result.retrievalPath)}`
-                  : ''}
-              </small>
-            </span>
-            <span className="flex shrink-0 items-center gap-2 self-center">
-              <span className="hidden rounded-pill border border-line bg-canvas px-2 py-1 text-xs font-semibold text-muted sm:inline">
-                {storedResultsAvailable ? 'Stored' : 'Find Case Law'}
-              </span>
-              <ArrowRight
-                aria-hidden="true"
-                size={15}
-                weight="bold"
-                className="text-subtle"
-              />
-            </span>
-          </>
-        )
-
-        return (
-          <article
-            className="overflow-hidden rounded-lg border border-line bg-surface transition-colors data-[selected=true]:border-brand data-[selected=true]:shadow-sm"
-            data-selected={selectedIndex === index ? 'true' : undefined}
-            key={result.id}
-          >
-            <Link
-              {...location}
-              className="grid grid-cols-[minmax(0,1fr)_auto] gap-4 p-4 text-ink transition-colors hover:bg-canvas"
-              aria-current={selectedIndex === index ? 'true' : undefined}
-            >
-              {summary}
-            </Link>
-            {result.snippets && result.snippets.length > 0 ? (
-              <div
-                className="flex flex-col gap-2 border-t border-line bg-canvas/40 px-4 pb-4 pt-3"
-                aria-label="Matching judgment snippets"
-              >
-                {result.snippets.map((snippet) => (
-                  <p
-                    className="text-sm leading-relaxed text-muted"
-                    key={`${result.id}-${snippet.paragraphNumber}`}
-                  >
-                    <span className="mr-2 font-semibold text-subtle">
-                      [{snippet.paragraphNumber}]
-                    </span>
-                    {renderSnippetText(snippet.text, snippet.matchedTerms)}
-                  </p>
-                ))}
-              </div>
-            ) : null}
-          </article>
-        )
-      })}
+    <section
+      className="min-h-0 flex-1 overflow-y-auto"
+      aria-live="polite"
+      aria-label="Search results"
+    >
+      <div className="mx-auto w-full max-w-3xl px-5 py-4 sm:px-6">
+        <p className="pb-3 text-[11px] font-medium tracking-wide text-muted">
+          {formatResultMeta(response, storedResultsAvailable, browse)}
+        </p>
+        <ul className="flex flex-col gap-1">
+          {response.hits.map((result, index) => {
+            const location = caseResultLocation(result)
+            const selected = selectedIndex === index
+            return (
+              <li key={result.id}>
+                <Link
+                  {...location}
+                  className={
+                    selected
+                      ? 'group flex items-start justify-between gap-4 rounded-md bg-raised px-3 py-3 text-ink transition-colors'
+                      : 'group flex items-start justify-between gap-4 rounded-md px-3 py-3 text-ink transition-colors hover:bg-raised'
+                  }
+                  data-selected={selected ? 'true' : undefined}
+                  aria-current={selected ? 'true' : undefined}
+                  onFocus={() => onSelectIndex(index)}
+                  onMouseEnter={() => onSelectIndex(index)}
+                >
+                  <span className="min-w-0 flex-1">
+                    <strong className="block text-sm font-medium leading-snug">
+                      {result.title}
+                    </strong>
+                    <small className="mt-1 block text-[12px] text-muted">
+                      {formatNeutralCitation(result.neutralCitation)} ·{' '}
+                      {result.court} · {result.dateDecided}
+                    </small>
+                    <small className="mt-1 block text-[11px] text-subtle">
+                      {formatMatchReason(result.matchReason)}
+                      {result.retrievalPath
+                        ? ` · ${formatRetrievalPath(result.retrievalPath)}`
+                        : ''}
+                    </small>
+                  </span>
+                  <ArrowRight
+                    aria-hidden
+                    size={16}
+                    className="mt-0.5 shrink-0 text-subtle transition-colors group-hover:text-ink"
+                  />
+                </Link>
+              </li>
+            )
+          })}
+        </ul>
+      </div>
     </section>
   )
 }
@@ -147,28 +135,4 @@ function formatResultMeta(
       ? 'stored legal sources'
       : 'Find Case Law'
   }`
-}
-
-function renderSnippetText(text: string, matchedTerms: string[]) {
-  const terms = Array.from(new Set(matchedTerms.filter(Boolean)))
-  if (terms.length === 0) return text
-
-  const matcher = new RegExp(`(${terms.map(escapeRegExp).join('|')})`, 'gi')
-
-  return text.split(matcher).map((part, index) =>
-    terms.some((term) => part.toLowerCase() === term.toLowerCase()) ? (
-      <mark
-        className="rounded-sm bg-brand/30 px-0.5 text-ink"
-        key={`${part}-${index}`}
-      >
-        {part}
-      </mark>
-    ) : (
-      part
-    ),
-  )
-}
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }

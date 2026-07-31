@@ -1,6 +1,6 @@
 # App Shell Component Contract
 
-> **Freeze artifact.** This document defines the stable surface the Redact review UI ([PRD 2](../../prds/archive/redact-2-review-output.md)) and every future feature UI builds against. It freezes at the end of Milestone 1 of the [App Shell Rebuild PRD](../../prds/app-shell-rebuild.md). After freeze, any change here requires updating **both** this contract and Redact PRD 2, and is owned by the plan owner.
+> **Freeze artifact.** This document defines the stable surface the Redact review UI ([PRD 2](../../prds/archive/redact-2-review-output.md)) and every future feature UI builds against. It freezes at the end of Milestone 1 of the [App Shell Rebuild PRD](../../prds/archive/app-shell-rebuild.md). After freeze, any change here requires updating **both** this contract and Redact PRD 2, and is owned by the plan owner.
 
 The Redact review UI imports only from `@obiter/ui`, `@obiter/app-shell` public exports, and `@obiter/contracts`. It never imports shell-internal modules.
 
@@ -35,7 +35,7 @@ Headless behaviour and a11y come from Base UI (`@base-ui-components/react`); `@o
 
 ## 2. Design tokens (`--obiter-*`)
 
-Source of truth is `packages/ui/src/tokens.css`, consumed by Tailwind v4 via `@theme`. **Token names are frozen; values may tune within the same theme.** Light is the default; dark is a persisted preference. Both themes must render every screen correctly (FR6).
+Source of truth is `packages/ui/src/tokens.css`, consumed by Tailwind v4 via `@theme`. **Token names are frozen; values may tune within the same theme.** Dark (night IDE) is the default product chrome; light is a persisted preference. Both themes must render every screen correctly (FR6). Auth routes always present the night aesthetic.
 
 ### 2.1 Color (semantic, defined per theme)
 
@@ -141,4 +141,4 @@ Renders the consistent page heading (eyebrow + title + actions) and a content re
 
 ## 6. App frame
 
-`<AppShellLayout>` renders the sidebar + top bar + content region + mounted `<Toaster/>`, driven by real `useCurrentUser()` data. The sidebar preserves the **live / planned split** from `docs/current-product-scope.md`: planned entries (Drafting, Research, Redaction, Verification, Review Queue, Deadlines, Uploads, Evaluation, Developer API) stay visibly marked as planned and never look like active tools. User-facing copy uses **Obiter** throughout (FR6a).
+`<AppShellLayout>` renders night workspace chrome: top mode bar (Home + Search / Matters / Verify / Redact), content-column app search, persistent icon mode rail (collapsed brand strip on Home; mode shortcuts with hover-expand on other modes), content region, floating Agent widget, and mounted `<Toaster/>`, driven by real `useCurrentUser()` data. Verify and Agent ship as honest “in development” surfaces — not fake tools. User-facing copy uses **Obiter** throughout (FR6a).

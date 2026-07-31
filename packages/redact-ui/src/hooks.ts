@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { apiFetch, declaredFileType } from '@obiter/app-shell'
+import { apiFetch, apiFetchBlob, declaredFileType } from '@obiter/app-shell'
 import type {
   FinalizeInput,
   FinalizeResponse,
@@ -11,11 +11,12 @@ import type {
 const runKey = (runId: string) => ['redaction-run', runId] as const
 const runsKey = ['redaction-runs'] as const
 
-export function useRedactionRuns() {
+export function useRedactionRuns(options?: { enabled?: boolean }) {
   return useQuery({
     queryKey: runsKey,
     queryFn: () => apiFetch<{ runs: RedactionRun[] }>('/api/redaction-runs'),
     staleTime: 30_000,
+    enabled: options?.enabled ?? true,
   })
 }
 
@@ -105,9 +106,22 @@ export function useRedactionOutput(runId: string, enabled: boolean) {
   return useQuery({
     queryKey: ['redaction-run-output', runId],
     queryFn: () =>
-      apiFetch<{ text: string }>(`/api/redaction-runs/${runId}/output`),
+      apiFetch<{
+        mimeType: string
+        filename: string
+        text: string | null
+      }>(`/api/redaction-runs/${runId}/output`),
     enabled,
     staleTime: 30_000,
+  })
+}
+
+export function useRedactionOutputFile(runId: string, enabled: boolean) {
+  return useQuery({
+    queryKey: ['redaction-run-output-file', runId],
+    queryFn: () => apiFetchBlob(`/api/redaction-runs/${runId}/output/file`),
+    enabled,
+    staleTime: 60_000,
   })
 }
 
@@ -156,6 +170,9 @@ export function useFinalizeRun(runId: string) {
       void queryClient.invalidateQueries({ queryKey: runKey(runId) })
       void queryClient.invalidateQueries({
         queryKey: ['redaction-run-output', runId],
+      })
+      void queryClient.invalidateQueries({
+        queryKey: ['redaction-run-output-file', runId],
       })
       void queryClient.invalidateQueries({ queryKey: runsKey })
       void queryClient.invalidateQueries({

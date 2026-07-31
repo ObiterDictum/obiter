@@ -57,7 +57,7 @@ export function Button({
       disabled={disabled || loading}
       className={cn(
         'inline-flex items-center justify-center rounded-md font-medium whitespace-nowrap select-none',
-        'transition-[background-color,border-color,transform,box-shadow] duration-150',
+        'transition-[background-color,border-color,transform,box-shadow] duration-200',
         'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand',
         'disabled:cursor-not-allowed disabled:opacity-60',
         'active:translate-y-px',

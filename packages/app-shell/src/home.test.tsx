@@ -1,12 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
   createMemoryHistory,
@@ -15,15 +9,17 @@ import {
   createRouter,
   RouterProvider,
 } from '@tanstack/react-router'
-import { ApiError } from './api'
+import { documentsKeys } from './documents'
+import { writeWorkspaceLastPlace } from './workspace-continuity'
+import { writeRecentLegalSearch } from './views/LegalSearchView'
 import { HomeRouteView } from './views/home'
 
-// Control the three data hooks independently.
+// Control the data hooks independently.
 const mocks = vi.hoisted(() => ({
   useMattersList: vi.fn(),
   useCurrentUser: vi.fn(),
+  useRedactionRunsList: vi.fn(),
   changelogQueryOptions: vi.fn(),
-  useCreateOrganisation: vi.fn(),
 }))
 
 vi.mock('./matters', async (importOriginal) => {
@@ -36,7 +32,14 @@ vi.mock('./current-user', async (importOriginal) => {
   return {
     ...actual,
     useCurrentUser: mocks.useCurrentUser,
-    useCreateOrganisation: mocks.useCreateOrganisation,
+  }
+})
+
+vi.mock('./redaction-runs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./redaction-runs')>()
+  return {
+    ...actual,
+    useRedactionRunsList: mocks.useRedactionRunsList,
   }
 })
 
@@ -83,6 +86,40 @@ function sampleMatter(id: string) {
   }
 }
 
+function sampleDocument(matterId: string, status: string) {
+  return {
+    id: `doc_${matterId}_${status}`,
+    organisationId: 'org_1',
+    matterId,
+    currentVersionId: 'ver_1',
+    logicalKey: 'brief.pdf',
+    createdBy: 'usr_1',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-02T00:00:00.000Z',
+    deletedAt: null,
+    deletedBy: null,
+    currentVersion: {
+      id: 'ver_1',
+      organisationId: 'org_1',
+      matterId,
+      matterDocumentId: `doc_${matterId}_${status}`,
+      filename: `brief-${status}.pdf`,
+      fileType: 'application/pdf',
+      sizeBytes: '1024',
+      objectKey: 'obj',
+      textObjectKey: null,
+      documentStatus: status,
+      failureReason: null,
+      versionNumber: 1,
+      contentSha256: 'a'.repeat(64),
+      syncState: 'synced',
+      createdBy: 'usr_1',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+    },
+  }
+}
+
 function mattersLoading() {
   return { isLoading: true, isError: false, isSuccess: false, data: undefined }
 }
@@ -94,6 +131,54 @@ function mattersSuccess(count: number) {
   return { isLoading: false, isError: false, isSuccess: true, data }
 }
 
+function runsIdle() {
+  return {
+    isLoading: false,
+    isError: false,
+    isSuccess: true,
+    data: { runs: [] },
+  }
+}
+
+function runsWithActivity() {
+  return {
+    isLoading: false,
+    isError: false,
+    isSuccess: true,
+    data: {
+      runs: [
+        {
+          id: 'run_1',
+          organisationId: 'org_1',
+          matterId: 'mtr_0',
+          matterDocumentId: null,
+          matterDocumentVersionId: null,
+          sourceFilename: 'witness.pdf',
+          sourceContentType: 'application/pdf',
+          sourceByteSize: 100,
+          status: 'ready_for_review',
+          detectionMode: 'rules',
+          errorCode: null,
+          errorMessage: null,
+          createdBy: 'usr_1',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-02T00:00:00.000Z',
+          summary: {
+            totalSpans: 12,
+            reviewedCount: 4,
+            unreviewedCount: 3,
+            byDecision: {
+              accept: 4,
+              override_redact: 1,
+              undecided: 3,
+            },
+          },
+        },
+      ],
+    },
+  }
+}
+
 function buildRouter() {
   const rootRoute = createRootRoute()
   const homeRoute = createRoute({
@@ -101,30 +186,70 @@ function buildRouter() {
     path: '/',
     component: () => <HomeRouteView platform="web" />,
   })
+  const mattersRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/matters',
+    component: () => null,
+  })
+  const matterDetailRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/matters/$matterId',
+    component: () => null,
+  })
+  const documentDetailRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/matters/$matterId/documents/$documentId',
+    component: () => null,
+  })
+  const redactRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/redact',
+    component: () => null,
+  })
+  const redactRunRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/redact/$runId',
+    component: () => null,
+  })
+  const verifyRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/verify',
+    component: () => null,
+  })
+  const searchRoute = createRoute({
+    getParentRoute: () => rootRoute,
+    path: '/search',
+    component: () => null,
+  })
   return createRouter({
-    routeTree: rootRoute.addChildren([homeRoute]),
+    routeTree: rootRoute.addChildren([
+      homeRoute,
+      mattersRoute,
+      matterDetailRoute,
+      documentDetailRoute,
+      redactRoute,
+      redactRunRoute,
+      verifyRoute,
+      searchRoute,
+    ]),
     history: createMemoryHistory({ initialEntries: ['/'] }),
   })
 }
 
-function renderHome() {
-  const client = new QueryClient()
+function renderHome(client = new QueryClient()) {
   const router = buildRouter()
-  const result = render(
+  return render(
     <QueryClientProvider client={client}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
-  return result
 }
 
 beforeEach(() => {
   vi.clearAllMocks()
+  window.sessionStorage.clear()
   mocks.useCurrentUser.mockReturnValue({ data: ME })
-  mocks.useCreateOrganisation.mockReturnValue({
-    mutateAsync: vi.fn(),
-    isPending: false,
-  })
+  mocks.useRedactionRunsList.mockReturnValue(runsIdle())
   mocks.changelogQueryOptions.mockReturnValue({
     queryKey: ['github-changelog'],
     queryFn: async () => CHANGELOG,
@@ -141,10 +266,10 @@ describe('HomeRouteView — matters query states', () => {
     renderHome()
 
     await waitFor(() => {
-      expect(screen.getByText('Loading your matters…')).toBeTruthy()
+      expect(screen.getByText('Loading…')).toBeTruthy()
     })
     // Must not show the empty-state CTA while pending.
-    expect(screen.queryByText('Create your first matter workspace.')).toBeNull()
+    expect(screen.queryByText(/Create your first matter/i)).toBeNull()
   })
 
   it('shows an error surface when matters fail to load (not the empty/create CTA)', async () => {
@@ -152,12 +277,9 @@ describe('HomeRouteView — matters query states', () => {
     renderHome()
 
     await waitFor(() => {
-      // Error appears in both the Matters card detail and the recent-matters section.
-      expect(
-        screen.getAllByText(/could not be loaded/i).length,
-      ).toBeGreaterThan(0)
+      expect(screen.getByText(/could not be loaded/i)).toBeTruthy()
     })
-    expect(screen.queryByText('Create your first matter workspace.')).toBeNull()
+    expect(screen.queryByText(/Create your first matter/i)).toBeNull()
   })
 
   it('shows the empty/create CTA only on a confirmed-empty successful response', async () => {
@@ -165,9 +287,7 @@ describe('HomeRouteView — matters query states', () => {
     renderHome()
 
     await waitFor(() => {
-      expect(
-        screen.getByText('Create your first matter workspace.'),
-      ).toBeTruthy()
+      expect(screen.getByText(/Create your first matter/i)).toBeTruthy()
     })
   })
 
@@ -176,12 +296,12 @@ describe('HomeRouteView — matters query states', () => {
     renderHome()
 
     await waitFor(() => {
-      expect(screen.getByText(/3 matters in your organisation/)).toBeTruthy()
-    })
-    // Recent matters section lists them.
-    await waitFor(() => {
+      expect(
+        screen.getByRole('heading', { name: 'Active matters' }),
+      ).toBeTruthy()
       expect(screen.getByText('Matter mtr_0')).toBeTruthy()
     })
+    expect(screen.getAllByText('3').length).toBeGreaterThan(0)
   })
 })
 
@@ -196,151 +316,177 @@ describe('HomeRouteView — organisation-less state', () => {
     organisation: null,
   }
 
-  it('renders the create-organisation surface for an org-less user', async () => {
-    mocks.useCurrentUser.mockReturnValue({ data: ORGLESS_ME })
-    renderHome()
-
-    // RouterProvider commits asynchronously; wait for the create-org surface.
-    await waitFor(() => {
-      expect(screen.getByText('Organisation name')).toBeTruthy()
-    })
-    expect(
-      await screen.findByRole('button', { name: /create organisation/i }),
-    ).toBeTruthy()
-    // Copy explaining matters/documents live inside an organisation.
-    expect(screen.getByText(/live inside an organisation/i)).toBeTruthy()
-  })
-
-  it('does not call the matters list hook for an org-less user', async () => {
+  it('renders the home desk without Settings-required gating for Matters/Redact', async () => {
     mocks.useCurrentUser.mockReturnValue({ data: ORGLESS_ME })
     mocks.useMattersList.mockReturnValue(mattersLoading())
     renderHome()
 
-    // Wait for render to commit before asserting on hook calls.
     await waitFor(() => {
-      expect(screen.getByText('Organisation name')).toBeTruthy()
+      expect(
+        screen.getByText(/Good (morning|afternoon|evening), New/i),
+      ).toBeTruthy()
     })
-    // The matters hook lives in the org-present subtree; org-less users must
-    // never trigger a GET /api/matters that would 403.
-    expect(mocks.useMattersList).not.toHaveBeenCalled()
+    expect(screen.getByText('No organisation yet')).toBeTruthy()
+    expect(screen.getByText('Loading…')).toBeTruthy()
+    expect(screen.getByText('Start redaction')).toBeTruthy()
+    expect(screen.getByText('Your work')).toBeTruthy()
+    // Quiet queue: no hollow Redaction column.
+    expect(screen.queryByRole('region', { name: 'Redaction' })).toBeNull()
+    expect(screen.queryByText(/Queue clear/i)).toBeNull()
+    expect(screen.queryByText(/Create an organisation in Settings/i)).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: /create organisation/i }),
+    ).toBeNull()
+  })
+
+  it('enables the matters list query for an org-less user', async () => {
+    mocks.useCurrentUser.mockReturnValue({ data: ORGLESS_ME })
+    mocks.useMattersList.mockReturnValue(mattersLoading())
+    renderHome()
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Good (morning|afternoon|evening), New/i),
+      ).toBeTruthy()
+    })
+    expect(mocks.useMattersList).toHaveBeenCalled()
+    expect(mocks.useMattersList).not.toHaveBeenCalledWith({ enabled: false })
+  })
+
+  it('invalidates current-user once after matters succeed while org is still null', async () => {
+    mocks.useCurrentUser.mockReturnValue({ data: ORGLESS_ME })
+    mocks.useMattersList.mockReturnValue(mattersSuccess(0))
+    const client = new QueryClient()
+    const invalidateSpy = vi.spyOn(client, 'invalidateQueries')
+    const router = buildRouter()
+    render(
+      <QueryClientProvider client={client}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    )
+
+    await waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['current-user'] })
+    })
+    expect(invalidateSpy).toHaveBeenCalledTimes(1)
   })
 })
 
-describe('HomeRouteView — create-organisation error handling', () => {
-  const ORGLESS_ME = {
-    user: {
-      id: 'usr_2',
-      email: 'new@obiter.dev',
-      name: 'New User',
-      role: null,
-    },
-    organisation: null,
-  }
-
-  function setupCreateOrg(mutateAsync: ReturnType<typeof vi.fn>) {
-    mocks.useCurrentUser.mockReturnValue({ data: ORGLESS_ME })
-    mocks.useMattersList.mockReturnValue(mattersLoading())
-    mocks.useCreateOrganisation.mockReturnValue({
-      mutateAsync,
-      isPending: false,
-    })
-    return renderHome()
-  }
-
-  async function submitWithName(name: string) {
-    const input = await screen.findByLabelText('Organisation name')
-    fireEvent.change(input, { target: { value: name } })
-    fireEvent.submit(input.closest('form')!)
-  }
-
-  it('surfaces a generic error when the API rejects with a non-conflict ApiError', async () => {
-    const mutateAsync = vi
-      .fn()
-      .mockRejectedValue(
-        new ApiError('validation_failed', 'Name is too long.', 400, 'req_1'),
-      )
-    setupCreateOrg(mutateAsync)
-
-    await submitWithName('Acme Law')
+describe('HomeRouteView — relevant density', () => {
+  it('does not render changelog tips or shortcuts in the desk body', async () => {
+    mocks.useMattersList.mockReturnValue(mattersSuccess(1))
+    renderHome()
 
     await waitFor(() => {
-      expect(
-        screen.getByText('Could not create the organisation. Try again.'),
-      ).toBeTruthy()
+      expect(screen.getByText('Matter mtr_0')).toBeTruthy()
     })
+    expect(screen.queryByText('Latest updates')).toBeNull()
+    expect(screen.queryByText('Try searching')).toBeNull()
+    expect(screen.queryByText('Shortcuts')).toBeNull()
+    expect(screen.queryByText(/No recent queries yet/i)).toBeNull()
   })
 
-  it('surfaces the distinct conflict message and refetches /api/me on a 409 (stale cache)', async () => {
-    const refetchSpy = vi
-      .spyOn(QueryClient.prototype, 'refetchQueries')
-      .mockResolvedValue({
-        refetchPage: undefined as never,
-        errors: [],
-      } as never)
-    const mutateAsync = vi
-      .fn()
-      .mockRejectedValue(
-        new ApiError(
-          'conflict_detected',
-          'You already have an organisation.',
-          409,
-          'req_2',
-        ),
-      )
-    setupCreateOrg(mutateAsync)
-
-    await submitWithName('Acme Law')
+  it('shows a full-width resume strip from last place', async () => {
+    writeWorkspaceLastPlace(window.sessionStorage, {
+      path: '/matters/mtr_0',
+      label: 'Matter',
+      kind: 'matter',
+      detail: 'mtr_0',
+    })
+    mocks.useMattersList.mockReturnValue(mattersSuccess(1))
+    renderHome()
 
     await waitFor(() => {
-      expect(
-        screen.getByText('You already have an organisation. Refreshing…'),
-      ).toBeTruthy()
+      expect(screen.getByText('Continue')).toBeTruthy()
     })
-    // The 409 means the cache is stale: /api/me is refetched to reconcile.
-    expect(refetchSpy).toHaveBeenCalledWith({ queryKey: ['current-user'] })
-    refetchSpy.mockRestore()
+    const resume = screen.getByText('Continue').closest('a')
+    expect(resume?.getAttribute('href')).toContain('/matters/mtr_0')
+    expect(resume?.textContent).toMatch(/Matter mtr_0/)
   })
 
-  it('falls back to a retryable generic error when the conflict refetch fails (no stuck "Refreshing…")', async () => {
-    const refetchSpy = vi
-      .spyOn(QueryClient.prototype, 'refetchQueries')
-      .mockRejectedValue(new Error('refetch failed'))
-    const mutateAsync = vi
-      .fn()
-      .mockRejectedValue(
-        new ApiError(
-          'conflict_detected',
-          'You already have an organisation.',
-          409,
-          'req_3',
-        ),
-      )
-    setupCreateOrg(mutateAsync)
-
-    await submitWithName('Acme Law')
+  it('shows recent search chips under the search field', async () => {
+    writeRecentLegalSearch(
+      window.sessionStorage,
+      'beneficial ownership of shares',
+    )
+    mocks.useMattersList.mockReturnValue(mattersSuccess(0))
+    renderHome()
 
     await waitFor(() => {
       expect(
-        screen.getByText('Could not refresh your account. Reload the page.'),
+        screen.getByRole('button', {
+          name: /beneficial ownership of shares/i,
+        }),
       ).toBeTruthy()
     })
-    // The stuck "Refreshing…" message is gone.
-    expect(
-      screen.queryByText('You already have an organisation. Refreshing…'),
-    ).toBeNull()
-    refetchSpy.mockRestore()
+    expect(screen.getByLabelText('Recent searches')).toBeTruthy()
   })
 
-  it('surfaces a generic error on a non-ApiError rejection (no unhandled throw)', async () => {
-    const mutateAsync = vi.fn().mockRejectedValue(new Error('network down'))
-    setupCreateOrg(mutateAsync)
+  it('hides the Redaction column when there are no runs', async () => {
+    mocks.useMattersList.mockReturnValue(mattersSuccess(1))
+    mocks.useRedactionRunsList.mockReturnValue(runsIdle())
+    renderHome()
 
-    await submitWithName('Acme Law')
+    await waitFor(() => {
+      expect(screen.getByText('Matter mtr_0')).toBeTruthy()
+    })
+    expect(screen.queryByRole('region', { name: 'Redaction' })).toBeNull()
+  })
+
+  it('shows the Redaction column when runs exist', async () => {
+    mocks.useMattersList.mockReturnValue(mattersSuccess(1))
+    mocks.useRedactionRunsList.mockReturnValue(runsWithActivity())
+    renderHome()
+
+    await waitFor(() => {
+      expect(screen.getByRole('region', { name: 'Redaction' })).toBeTruthy()
+      expect(screen.getByRole('heading', { name: 'Needs you' })).toBeTruthy()
+    })
+    expect(screen.getAllByText('witness.pdf').length).toBeGreaterThan(0)
+  })
+
+  it('lists documents in play from matter document attention statuses', async () => {
+    mocks.useMattersList.mockReturnValue(mattersSuccess(1))
+    const client = new QueryClient()
+    client.setQueryData(documentsKeys.byMatter('mtr_0'), [
+      sampleDocument('mtr_0', 'needs_review'),
+      sampleDocument('mtr_0', 'ready'),
+    ])
+    renderHome(client)
 
     await waitFor(() => {
       expect(
-        screen.getByText('Could not create the organisation. Try again.'),
+        screen.getByRole('heading', { name: 'Documents in play' }),
       ).toBeTruthy()
+      expect(screen.getByText('brief-needs_review.pdf')).toBeTruthy()
     })
+    expect(screen.queryByText('brief-ready.pdf')).toBeNull()
+  })
+
+  it('shows workspace usage totals below the work desk', async () => {
+    mocks.useMattersList.mockReturnValue(mattersSuccess(2))
+    mocks.useRedactionRunsList.mockReturnValue(runsWithActivity())
+    const client = new QueryClient()
+    client.setQueryData(documentsKeys.byMatter('mtr_0'), [
+      sampleDocument('mtr_0', 'needs_review'),
+    ])
+    client.setQueryData(documentsKeys.byMatter('mtr_1'), [])
+    renderHome(client)
+
+    await waitFor(() => {
+      expect(screen.getByLabelText('Workspace usage')).toBeTruthy()
+    })
+    const usage = screen.getByLabelText('Workspace usage')
+    expect(usage.textContent).toMatch(/Matters/)
+    expect(usage.textContent).toMatch(/Documents/)
+    expect(usage.textContent).toMatch(/Redaction runs/)
+    expect(usage.textContent).toMatch(/Finalized/)
+    expect(usage.textContent).toMatch(/Spans detected/)
+    expect(usage.textContent).toMatch(/Accepted to redact/)
+    expect(usage.textContent).toMatch(/Unreviewed spans/)
+    expect(usage.textContent).toMatch(/12/)
+    expect(usage.textContent).toMatch(/5/)
+    expect(usage.textContent).not.toMatch(/Searches/)
+    expect(usage.textContent).not.toMatch(/token/i)
   })
 })

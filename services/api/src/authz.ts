@@ -1,14 +1,17 @@
 import type { Context } from 'hono'
+import type { Pool } from 'pg'
 import type {
   ApiErrorCode,
   ApiErrorResponse,
   UserRole,
 } from '@obiter/contracts'
+import { ensureOrganisationForUser } from './database'
 
 /**
  * The session user as seen by route handlers. better-auth exposes `role`
  * (owner/admin/member) via user.additionalFields; org-less users have a null
- * role and organisationId.
+ * role and organisationId until they create one in Settings or a product
+ * surface auto-provisions a personal workspace.
  */
 export interface AuthzUser {
   id: string
@@ -30,28 +33,53 @@ export interface AuthenticatedOrgUser {
 }
 
 /**
- * Authenticates the caller and confirms they belong to an organisation. Returns
- * the org-scoped user, or a 401/403 Response for the caller to return.
+ * Authenticates the caller and ensures they have an organisation tenant.
+ * Org-less users receive a personal workspace on first Matters/Documents/Redact
+ * use so product surfaces are not gated on Settings. Returns the org-scoped
+ * user, or a 401 Response for the caller to return.
  */
-export function requireOrgUser(
+export async function ensureOrgUser(
   c: AuthzContext,
-): AuthenticatedOrgUser | Response {
+  pool: Pool,
+): Promise<AuthenticatedOrgUser | Response> {
   const user = c.get('user')
   if (!user) {
     return authzError(c, 'unauthenticated', 'Sign in is required.', 401)
   }
-  if (!user.organisationId) {
+  if (user.organisationId) {
+    return {
+      id: user.id,
+      organisationId: user.organisationId,
+      role: user.role ?? 'member',
+    }
+  }
+
+  try {
+    const ensured = await ensureOrganisationForUser(pool, {
+      userId: user.id,
+      requestId: c.get('requestId'),
+    })
+    c.set('user', {
+      ...user,
+      organisationId: ensured.organisationId,
+      role: ensured.role,
+    })
+    return {
+      id: user.id,
+      organisationId: ensured.organisationId,
+      role: ensured.role,
+    }
+  } catch (error) {
+    console.error('organisation_ensure_failed', {
+      requestId: c.get('requestId'),
+      reason: error instanceof Error ? error.message : 'unknown failure',
+    })
     return authzError(
       c,
-      'no_organisation',
-      'Create an organisation to use this area.',
-      403,
+      'storage_unavailable',
+      'Could not prepare your workspace. Try again.',
+      503,
     )
-  }
-  return {
-    id: user.id,
-    organisationId: user.organisationId,
-    role: user.role ?? 'member',
   }
 }
 
@@ -59,12 +87,13 @@ export function requireOrgUser(
  * Requires an owner or admin role. This is the first real authorization
  * distinction in the product: members may not delete, restore, or read the
  * audit report of a deleted run. Enforced server-side — UI hiding is not
- * authorization. An org-less user is rejected by requireOrgUser first.
+ * authorization. Auto-provisions a personal workspace when still org-less.
  */
-export function requireManageRole(
+export async function requireManageRole(
   c: AuthzContext,
-): AuthenticatedOrgUser | Response {
-  const user = requireOrgUser(c)
+  pool: Pool,
+): Promise<AuthenticatedOrgUser | Response> {
+  const user = await ensureOrgUser(c, pool)
   if (user instanceof Response) return user
   if (user.role !== 'owner' && user.role !== 'admin') {
     return authzError(
@@ -81,7 +110,7 @@ function authzError(
   c: AuthzContext,
   code: ApiErrorCode,
   message: string,
-  status: 401 | 403,
+  status: 401 | 403 | 503,
 ) {
   const body: ApiErrorResponse = {
     error: { code, message, requestId: c.get('requestId') },

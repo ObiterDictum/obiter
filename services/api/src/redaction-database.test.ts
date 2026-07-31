@@ -5,6 +5,7 @@ import {
   getDocumentRedactionSource,
   listRedactionAuditLog,
   mapRedactionRun,
+  mimeTypeFromStoredFileType,
   recordSpanDecision,
   restoreRedactionRunWithAudit,
   softDeleteRedactionRun,
@@ -26,6 +27,9 @@ function runRow(overrides: Record<string, unknown> = {}) {
     document_version_id: null,
     source_filename: 'source.txt',
     source_text_object_key: 'org/org_1/redaction-runs/red_1/source',
+    source_file_object_key: null,
+    source_layout_object_key: null,
+    source_mime_type: null,
     status: 'ready_for_review',
     policy_mode: 'internal_ai_minimisation',
     spans_json: [
@@ -142,7 +146,7 @@ describe('createRedactionRun', () => {
         return {
           rows: [
             runRow({
-              spans_json: JSON.parse(String(params?.[8])),
+              spans_json: JSON.parse(String(params?.[11])),
               detection_mode: 'heuristics+supplement',
             }),
           ],
@@ -177,7 +181,7 @@ describe('createRedactionRun', () => {
     expect(created?.detectionMode).toBe('heuristics+supplement')
     expect(created?.spans[0]?.id).toBe('span_red_1_1')
     expect(queries[0][0]).toContain('detection_mode')
-    expect(queries[0][1]?.[11]).toBe('heuristics+supplement')
+    expect(queries[0][1]?.[14]).toBe('heuristics+supplement')
   })
 })
 
@@ -228,7 +232,7 @@ describe('createRedetectionRun', () => {
     const insert = calls.find(([sql]) =>
       sql.includes('insert into redaction_runs'),
     )
-    expect(insert?.[1]?.[12]).toBe('red_1')
+    expect(insert?.[1]?.[15]).toBe('red_1')
     expect(
       calls.filter(([sql]) => sql.includes('insert into audit_logs')),
     ).toHaveLength(2)
@@ -862,5 +866,25 @@ describe('restoreRedactionRunWithAudit', () => {
       false,
     )
     expect(calls.some(([sql]) => sql.trim() === 'commit')).toBe(false)
+  })
+})
+
+describe('mimeTypeFromStoredFileType', () => {
+  it('maps short document types and real MIME types', () => {
+    expect(mimeTypeFromStoredFileType('pdf')).toBe('application/pdf')
+    expect(mimeTypeFromStoredFileType('application/pdf')).toBe(
+      'application/pdf',
+    )
+    expect(mimeTypeFromStoredFileType('docx')).toBe(
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    )
+    expect(mimeTypeFromStoredFileType('txt')).toBe('text/plain')
+    expect(mimeTypeFromStoredFileType('text/plain; charset=utf-8')).toBe(
+      'text/plain',
+    )
+    expect(mimeTypeFromStoredFileType(null)).toBe('application/octet-stream')
+    expect(mimeTypeFromStoredFileType('unknown')).toBe(
+      'application/octet-stream',
+    )
   })
 })

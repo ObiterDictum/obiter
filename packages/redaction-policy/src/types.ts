@@ -42,4 +42,7 @@ export interface RunSummary {
   reviewedCount: number
   unreviewedCount: number
   failureReason?: string
+  outputMode?: 'redacted' | 'pseudonymised'
+  outputMimeType?: string
+  outputFilename?: string | null
 }

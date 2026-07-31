@@ -11,7 +11,7 @@ export interface StorageService {
 
 function storagePath(root: string, objectKey: string) {
   if (
-    !/^org\/[^/]+\/(?:matters\/[^/]+\/(?:documents\/[^/]+\/versions\/[^/]+\/(?:source|text)|artifacts\/[^/]+)|redaction-runs\/[^/]+\/source|artifacts\/[^/]+)$/.test(
+    !/^org\/[^/]+\/(?:matters\/[^/]+\/(?:documents\/[^/]+\/versions\/[^/]+\/(?:source|text|layout\.json)|artifacts\/[^/]+)|redaction-runs\/[^/]+\/(?:source|original|layout\.json)|artifacts\/[^/]+)$/.test(
       objectKey,
     )
   ) {

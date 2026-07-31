@@ -1,57 +1,10 @@
 /*
  * Self-hosted Obiter typefaces.
  *
- * Satoshi and JetBrains Mono were previously loaded from the Fontshare CDN
- * via a <link> in the document head (apps/web __root, apps/desktop index.html).
- * A packaged desktop app must not depend on a CDN (broken offline, external
- * runtime dependency, future CSP problem), so the woff2 files are vendored
- * under packages/ui/src/fonts/ and served from the app bundle here.
- *
- * Licensed for self-hosting (see fonts/LICENSE.md). Both permits commercial
- * use and embedding; neither permits reselling the font files standalone.
- *
- * Weights vendored match what the CDN actually served: Satoshi has no 600 cut,
- * so the design tokens' --obiter-font-weight-semibold: 600 keeps being
- * synthesized by the browser (faux-bold from 500/700) exactly as it was under
- * the CDN <link>. See fonts/LICENSE.md for the weight note.
+ * Inter (UI) and IBM Plex Mono (IDs / meta) via fontsource packages so web and
+ * desktop bundles stay offline-capable. Weights match product UI use.
  */
 
-@font-face {
-  font-family: 'Satoshi';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('./fonts/satoshi/Satoshi-Regular.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Satoshi';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('./fonts/satoshi/Satoshi-Medium.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'Satoshi';
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-  src: url('./fonts/satoshi/Satoshi-Bold.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'JetBrains Mono';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('./fonts/jetbrains-mono/JetBrainsMono-Regular.woff2') format('woff2');
-}
-
-@font-face {
-  font-family: 'JetBrains Mono';
-  font-style: normal;
-  font-weight: 500;
-  font-display: swap;
-  src: url('./fonts/jetbrains-mono/JetBrainsMono-Medium.woff2') format('woff2');
-}
+@import '@fontsource-variable/inter/index.css';
+@import '@fontsource/ibm-plex-mono/400.css';
+@import '@fontsource/ibm-plex-mono/500.css';

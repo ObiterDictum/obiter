@@ -15,10 +15,19 @@ import {
   finalizeRedactionRun,
   getRedactionOutputKey,
   getRedactionRun,
+  getRunLayoutObjectKey,
+  getRunSourceFile,
   getRunTextObjectKey,
   publicRun,
   recordSpanDecision,
 } from '../redaction-database'
+import {
+  buildRedactedPdf,
+  isDocumentTextLayout,
+  isPdfMimeOrFilename,
+  redactedPdfFilename,
+  redactedTextFilename,
+} from '../redaction-pdf-output'
 import type { StorageService } from '../storage'
 import {
   errorResponse,
@@ -31,7 +40,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   const routes = new Hono<{ Variables: RouteVariables }>()
 
   routes.get('/api/redaction-runs/:runId', async (c) => {
-    const user = requireUser(c)
+    const user = await requireUser(c, pool)
     if (user instanceof Response) return user
     const run = await getRedactionRun(
       pool,
@@ -49,7 +58,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   })
 
   routes.get('/api/redaction-runs/:runId/document-text', async (c) => {
-    const user = requireUser(c)
+    const user = await requireUser(c, pool)
     if (user instanceof Response) return user
     const run = await getRedactionRun(
       pool,
@@ -74,10 +83,81 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
     return c.json({ text: await storage.readText(textObjectKey) })
   })
 
+  routes.get('/api/redaction-runs/:runId/source-file', async (c) => {
+    const user = await requireUser(c, pool)
+    if (user instanceof Response) return user
+    const run = await getRedactionRun(
+      pool,
+      user.organisationId,
+      c.req.param('runId'),
+    )
+    if (!run)
+      return errorResponse(
+        c,
+        'redaction_run_not_found',
+        'Redaction run not found.',
+        404,
+      )
+    const source = await getRunSourceFile(pool, run)
+    if (!source || !storage.readBinary)
+      return errorResponse(
+        c,
+        'document_version_not_found',
+        'Source file is not available for this run.',
+        404,
+      )
+    const bytes = await storage.readBinary(source.objectKey)
+    return new Response(Uint8Array.from(bytes), {
+      status: 200,
+      headers: {
+        'content-type': source.mimeType,
+        'content-disposition': `inline; filename="${source.filename.replaceAll('"', '')}"`,
+        'cache-control': 'private, max-age=60',
+        'x-content-type-options': 'nosniff',
+      },
+    })
+  })
+
+  routes.get('/api/redaction-runs/:runId/layout', async (c) => {
+    const user = await requireUser(c, pool)
+    if (user instanceof Response) return user
+    const run = await getRedactionRun(
+      pool,
+      user.organisationId,
+      c.req.param('runId'),
+    )
+    if (!run)
+      return errorResponse(
+        c,
+        'redaction_run_not_found',
+        'Redaction run not found.',
+        404,
+      )
+    const layoutObjectKey = await getRunLayoutObjectKey(pool, run)
+    if (!layoutObjectKey)
+      return errorResponse(
+        c,
+        'document_version_not_found',
+        'Layout is not available for this run.',
+        404,
+      )
+    try {
+      const layout = JSON.parse(await storage.readText(layoutObjectKey))
+      return c.json({ layout })
+    } catch {
+      return errorResponse(
+        c,
+        'document_version_not_found',
+        'Layout is not available for this run.',
+        404,
+      )
+    }
+  })
+
   routes.post(
     '/api/redaction-runs/:runId/spans/:spanId/decision',
     async (c) => {
-      const user = requireUser(c)
+      const user = await requireUser(c, pool)
       if (user instanceof Response) return user
       const body = await jsonBody(c)
       const decision = spanDecisionSchema.safeParse(body?.decision)
@@ -149,7 +229,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   )
 
   routes.post('/api/redaction-runs/:runId/finalize', async (c) => {
-    const user = requireUser(c)
+    const user = await requireUser(c, pool)
     if (user instanceof Response) return user
     const body = redactionFinalizeInputSchema.safeParse(await jsonBody(c))
     if (!body.success)
@@ -243,7 +323,63 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
     const objectKey = run.matterId
       ? `org/${run.organisationId}/matters/${run.matterId}/artifacts/${artifactId}`
       : `org/${run.organisationId}/artifacts/${artifactId}`
-    await storage.writeText(objectKey, output)
+
+    let outputMimeType = 'text/plain'
+    let outputFilename = redactedTextFilename(run.sourceFilename)
+    try {
+      const source = await getRunSourceFile(pool, run)
+      const layoutObjectKey = await getRunLayoutObjectKey(pool, run)
+      const canWritePdf =
+        Boolean(source) &&
+        Boolean(layoutObjectKey) &&
+        Boolean(storage.readBinary) &&
+        Boolean(storage.writeBinary) &&
+        isPdfMimeOrFilename(
+          run.sourceFilename,
+          run.sourceMimeType ?? source?.mimeType ?? null,
+        )
+
+      if (canWritePdf && source && layoutObjectKey) {
+        const layoutJson = JSON.parse(await storage.readText(layoutObjectKey))
+        if (!isDocumentTextLayout(layoutJson)) {
+          throw new Error('Stored document layout is invalid.')
+        }
+        const pdfBytes = await storage.readBinary!(source.objectKey)
+        const redactedPdf = await buildRedactedPdf({
+          pdfBytes,
+          layout: layoutJson,
+          spans: run.spans,
+          decisions: run.decisions,
+          outputMode: body.data.outputMode,
+          tokenMap,
+        })
+        await storage.writeBinary!(objectKey, Buffer.from(redactedPdf))
+        outputMimeType = 'application/pdf'
+        outputFilename = redactedPdfFilename(run.sourceFilename)
+      } else {
+        await storage.writeText(objectKey, output)
+      }
+    } catch (error) {
+      if (error instanceof RedactionSpanIntegrityError) throw error
+      // PDF burn failed — fall back to text output so finalize still completes.
+      // Do not log span ids, filenames, or document content (cover-geometry
+      // errors name span ids in their message).
+      const reason =
+        error instanceof Error && error.name === 'RedactionCoverGeometryError'
+          ? 'cover geometry missing for one or more spans'
+          : error instanceof Error
+            ? error.message
+            : 'unknown failure'
+      console.error('redaction_pdf_burn_failed', {
+        requestId: c.get('requestId'),
+        runId: run.id,
+        reason,
+      })
+      await storage.writeText(objectKey, output)
+      outputMimeType = 'text/plain'
+      outputFilename = redactedTextFilename(run.sourceFilename)
+    }
+
     let result
     try {
       result = await finalizeRedactionRun({
@@ -259,6 +395,8 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
           body.data.degradedDetectionAcknowledged === true,
         unknownDetectionAcknowledged:
           body.data.unknownDetectionAcknowledged === true,
+        outputMimeType,
+        outputFilename,
       })
     } catch (error) {
       await storage.delete(objectKey)
@@ -322,7 +460,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   })
 
   routes.get('/api/redaction-runs/:runId/output', async (c) => {
-    const user = requireUser(c)
+    const user = await requireUser(c, pool)
     if (user instanceof Response) return user
     const run = await getRedactionRun(
       pool,
@@ -355,11 +493,100 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         'Redaction output is not available.',
         404,
       )
-    return c.json({ text: await storage.readText(objectKey) })
+    const mimeType = run.summary.outputMimeType ?? 'text/plain'
+    const filename =
+      run.summary.outputFilename ??
+      (mimeType === 'application/pdf'
+        ? redactedPdfFilename(run.sourceFilename)
+        : redactedTextFilename(run.sourceFilename))
+    if (mimeType === 'application/pdf') {
+      return c.json({
+        mimeType,
+        filename,
+        text: null,
+      })
+    }
+    return c.json({
+      mimeType,
+      filename,
+      text: await storage.readText(objectKey),
+    })
+  })
+
+  routes.get('/api/redaction-runs/:runId/output/file', async (c) => {
+    const user = await requireUser(c, pool)
+    if (user instanceof Response) return user
+    const run = await getRedactionRun(
+      pool,
+      user.organisationId,
+      c.req.param('runId'),
+    )
+    if (!run)
+      return errorResponse(
+        c,
+        'redaction_run_not_found',
+        'Redaction run not found.',
+        404,
+      )
+    if (!run.outputArtifactId)
+      return errorResponse(
+        c,
+        'redaction_run_not_reviewable',
+        'This run has not been finalized.',
+        400,
+      )
+    const objectKey = await getRedactionOutputKey(
+      pool,
+      user.organisationId,
+      run.outputArtifactId,
+    )
+    if (!objectKey)
+      return errorResponse(
+        c,
+        'artifact_not_found',
+        'Redaction output is not available.',
+        404,
+      )
+    const mimeType = run.summary.outputMimeType ?? 'text/plain'
+    const filename =
+      run.summary.outputFilename ??
+      (mimeType === 'application/pdf'
+        ? redactedPdfFilename(run.sourceFilename)
+        : redactedTextFilename(run.sourceFilename))
+    const safeName = filename.replaceAll('"', '')
+    if (mimeType === 'application/pdf') {
+      if (!storage.readBinary)
+        return errorResponse(
+          c,
+          'artifact_not_found',
+          'Redaction output is not available.',
+          404,
+        )
+      const bytes = await storage.readBinary(objectKey)
+      return new Response(Uint8Array.from(bytes), {
+        status: 200,
+        headers: {
+          'content-type': 'application/pdf',
+          'content-disposition': `attachment; filename="${safeName}"`,
+          'cache-control': 'private, max-age=60',
+          'x-content-type-options': 'nosniff',
+        },
+      })
+    }
+    const text = await storage.readText(objectKey)
+    return new Response(text, {
+      status: 200,
+      headers: {
+        'content-type': 'text/plain; charset=utf-8',
+        'content-disposition': `attachment; filename="${safeName}"`,
+        'cache-control': 'private, max-age=60',
+        'x-content-type-options': 'nosniff',
+      },
+    })
   })
 
   routes.get('/api/redaction-runs/:runId/token-map', async (c) => {
-    const user = requireUser(c)
+    const user = await requireUser(c, pool)
     if (user instanceof Response) return user
     const run = await getRedactionRun(
       pool,

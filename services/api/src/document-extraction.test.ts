@@ -14,8 +14,10 @@ import {
   DocumentExtractionError,
   extractDocumentText,
   IMAGE_ONLY_DOCX_MESSAGE,
+  prepareLaidChars,
   UNREADABLE_DOCX_MESSAGE,
 } from './document-extraction'
+import { layoutFromLaidChars, type LaidChar } from './document-layout'
 import { createRedactionDetector } from './redaction-detection'
 
 beforeEach(async () => {
@@ -161,7 +163,10 @@ describe('extractDocumentText', () => {
     )
     const source = Buffer.from(fixture)
     await expect(extractDocumentText('pdf', source)).resolves.toContain(
-      'NI: QQ 12 34 56 C\n\nPlease contact Mr Amina Rahman',
+      'NI: QQ 12 34 56 C',
+    )
+    await expect(extractDocumentText('pdf', source)).resolves.toContain(
+      'Please contact Mr Amina Rahman',
     )
     await expect(extractDocumentText('pdf', source)).resolves.toContain(
       'amina.rahman@example.test',
@@ -189,6 +194,57 @@ describe('extractDocumentText', () => {
         }),
       ]),
     )
+  })
+
+  it('collapses letterspaced PDF headings and keeps layout offsets aligned', async () => {
+    const headingFixture = Buffer.from('%PDF-placeholder')
+    unpdf.getDocumentProxy.mockResolvedValue({
+      numPages: 1,
+      getPage: async () => ({
+        getViewport: () => ({ width: 612, height: 792 }),
+        getTextContent: async () => ({
+          items: [
+            {
+              str: 'T H E F I V E S U R FA C E S',
+              hasEOL: true,
+              transform: [1, 0, 0, 1, 72, 700],
+              width: 200,
+              height: 12,
+            },
+            {
+              str: 'Atlas',
+              hasEOL: true,
+              transform: [1, 0, 0, 1, 72, 680],
+              width: 40,
+              height: 12,
+            },
+            {
+              str: 'The open legal source layer.',
+              hasEOL: true,
+              transform: [1, 0, 0, 1, 72, 660],
+              width: 180,
+              height: 12,
+            },
+          ],
+        }),
+      }),
+      destroy: async () => undefined,
+    })
+
+    const { extractDocumentContent } = await import('./document-extraction')
+    const content = await extractDocumentContent('pdf', headingFixture)
+    expect(content.text).toContain('THEFIVESURFACES')
+    expect(content.text).toContain('Atlas')
+    expect(content.text).not.toContain('T H E F I V E')
+    expect(content.layout?.pages).toEqual([{ width: 612, height: 792 }])
+    expect(content.layout?.segments.length).toBeGreaterThan(0)
+    const headingStart = content.text.indexOf('THEFIVESURFACES')
+    expect(headingStart).toBeGreaterThanOrEqual(0)
+    const heading = content.layout?.segments.find(
+      (segment) => segment.start === headingStart,
+    )
+    expect(heading?.pageIndex).toBe(0)
+    expect(content.text.slice(heading!.start, heading!.end)).toBe('T')
   })
 
   it('allows a short one-page text-layer PDF', async () => {
@@ -254,5 +310,138 @@ describe('extractDocumentText', () => {
     await expect(
       extractDocumentText('txt', Buffer.from('No PII here.')),
     ).resolves.toBe('No PII here.')
+  })
+})
+
+describe('prepareLaidChars', () => {
+  it('strips format characters and keeps layout offsets aligned with text', () => {
+    const chars: LaidChar[] = [
+      {
+        ch: 'A',
+        pageIndex: 0,
+        x: 10,
+        y: 100,
+        width: 7,
+        height: 12,
+        ascent: 10,
+        descent: 2,
+      },
+      {
+        ch: '\u00ad',
+        pageIndex: 0,
+        x: 17,
+        y: 100,
+        width: 0,
+        height: 12,
+        ascent: 10,
+        descent: 2,
+      },
+      {
+        ch: 'l',
+        pageIndex: 0,
+        x: 17,
+        y: 100,
+        width: 4,
+        height: 12,
+        ascent: 10,
+        descent: 2,
+      },
+      {
+        ch: '\u200b',
+        pageIndex: 0,
+        x: 21,
+        y: 100,
+        width: 0,
+        height: 12,
+        ascent: 10,
+        descent: 2,
+      },
+      {
+        ch: 'i',
+        pageIndex: 0,
+        x: 21,
+        y: 100,
+        width: 3,
+        height: 12,
+        ascent: 10,
+        descent: 2,
+      },
+      {
+        ch: '\u202e',
+        pageIndex: 0,
+        x: 24,
+        y: 100,
+        width: 0,
+        height: 12,
+        ascent: 10,
+        descent: 2,
+      },
+      {
+        ch: 'c',
+        pageIndex: 0,
+        x: 24,
+        y: 100,
+        width: 6,
+        height: 12,
+        ascent: 10,
+        descent: 2,
+      },
+      {
+        ch: 'e',
+        pageIndex: 0,
+        x: 30,
+        y: 100,
+        width: 7,
+        height: 12,
+        ascent: 10,
+        descent: 2,
+      },
+    ]
+
+    const prepared = prepareLaidChars(chars)
+    const text = prepared.map((item) => item.ch).join('')
+    expect(text).toBe('Alice')
+    expect(text).not.toMatch(/[\u00ad\u200b\u202e]/u)
+
+    const layout = layoutFromLaidChars(prepared, [{ width: 200, height: 200 }])
+    const surviving = prepared.filter((item) => item.ch !== '\n')
+    expect(
+      layout.segments.reduce(
+        (sum, segment) => sum + (segment.end - segment.start),
+        0,
+      ),
+    ).toBe(surviving.length)
+
+    const offset = text.indexOf('c')
+    expect(offset).toBeGreaterThanOrEqual(0)
+    expect(text[offset]).toBe(prepared[offset]!.ch)
+    const segment = layout.segments.find(
+      (item) => item.start <= offset && offset < item.end,
+    )
+    expect(segment).toBeDefined()
+    expect(segment!.pageIndex).toBe(prepared[offset]!.pageIndex)
+    expect(segment!.y).toBe(prepared[offset]!.y)
+    expect(text.slice(segment!.start, segment!.end)).toContain('c')
+  })
+
+  it('normalises carriage returns the way the old page-text path did', () => {
+    const base = {
+      pageIndex: 0,
+      x: 0,
+      y: 100,
+      width: 1,
+      height: 12,
+      ascent: 10,
+      descent: 2,
+    }
+    const prepared = prepareLaidChars([
+      { ...base, ch: 'a' },
+      { ...base, ch: '\r' },
+      { ...base, ch: '\n' },
+      { ...base, ch: 'b' },
+      { ...base, ch: '\r' },
+      { ...base, ch: 'c' },
+    ])
+    expect(prepared.map((item) => item.ch).join('')).toBe('a\nb\nc')
   })
 })

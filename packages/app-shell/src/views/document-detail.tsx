@@ -33,11 +33,11 @@ export function DocumentDetailLayoutView({
   documentId: string
   redactionRunsRegion?: ReactNode
 }) {
-  const document = useDocument(documentId)
   const deleteDocument = useDeleteDocument()
   const navigate = useNavigate()
   const { toast } = useToast()
   const { data: me } = useCurrentUser()
+  const document = useDocument(documentId)
   const canManage = me?.user.role === 'owner' || me?.user.role === 'admin'
 
   // The document is loaded by id alone; guard against the URL's matterId not

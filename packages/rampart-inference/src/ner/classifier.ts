@@ -131,12 +131,32 @@ export const NER_TOKEN_OVERLAP = 64
 const COMBINING_MARKS_RE = /\p{M}/gu
 
 const EXTEND_SCORE = 0.15
-const CONNECTOR_RE = /^[\s'\u2019.-]*$/
+/** Horizontal name connectors only — newlines are section/heading boundaries. */
+const CONNECTOR_RE = /^[ \t'\u2019.-]*$/
 const PERSON_LABELS: ReadonlySet<PiiLabel> = new Set(['GIVEN_NAME', 'SURNAME'])
 const LEFT_PARTICLE_RE =
-  /([\p{Lu}][\p{L}\p{M}\u2019']{0,3})([\s'\u2019.-]{1,3})$/u
+  /([\p{Lu}][\p{L}\p{M}\u2019']{0,3})([ \t'\u2019.-]{1,3})$/u
 const RIGHT_PARTICLE_RE =
-  /^([\s'\u2019.-]{1,3})([\p{Lu}][\p{L}\p{M}\u2019']{0,3})/u
+  /^([ \t'\u2019.-]{1,3})([\p{Lu}][\p{L}\p{M}\u2019']{0,3})/u
+/** Short capitalized tokens that look like name particles but are titles/headings. */
+const NON_NAME_PARTICLES = new Set([
+  'law',
+  'ltd',
+  'plc',
+  'llp',
+  'llc',
+  'inc',
+  'court',
+  'and',
+  'the',
+  'for',
+  'of',
+  'to',
+  'in',
+  'on',
+  'at',
+  'by',
+])
 
 /**
  * Lazily construct the token-classification pipeline. transformers.js is a peer
@@ -759,6 +779,7 @@ function rescueCapitalizedParticles(
   if (
     left !== null &&
     CONNECTOR_RE.test(left[2]) &&
+    !NON_NAME_PARTICLES.has(left[1].toLowerCase()) &&
     (!left[2].includes('.') || left[1].length === 1) &&
     start - left[0].length >= leftBound
   ) {
@@ -768,9 +789,11 @@ function rescueCapitalizedParticles(
   const right = RIGHT_PARTICLE_RE.exec(raw.slice(end))
   // Never extend right across a period: it always crosses a sentence boundary
   // ("Garcia. I", "Chen. After"). Trailing initials are reached via space.
+  // Also skip title/heading words ("Jones\nLaw", "Smith Ltd").
   if (
     right !== null &&
     !right[1].includes('.') &&
+    !NON_NAME_PARTICLES.has(right[2].toLowerCase()) &&
     end + right[0].length <= rightBound
   ) {
     end += right[0].length

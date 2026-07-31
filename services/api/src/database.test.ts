@@ -547,7 +547,7 @@ describe('createOrganisationForUser', () => {
         return { rows: [] }
       }
       // SELECT ... FOR UPDATE returns zero rows — the user does not exist.
-      if (sql.includes('select "organisationId" from users')) {
+      if (sql.includes('select "organisationId"')) {
         return { rows: [] }
       }
       if (sql.includes('insert into organisations')) {
@@ -583,8 +583,8 @@ describe('createOrganisationForUser', () => {
       if (sql === 'begin' || sql === 'rollback') {
         return { rows: [] }
       }
-      if (sql.includes('select "organisationId" from users')) {
-        return { rows: [{ organisationId: 'org_existing' }] }
+      if (sql.includes('select "organisationId"')) {
+        return { rows: [{ organisationId: 'org_existing', role: 'member' }] }
       }
       throw new Error(`Unexpected SQL: ${sql}`)
     })
@@ -595,7 +595,11 @@ describe('createOrganisationForUser', () => {
         name: 'Acme',
         requestId: 'req_1',
       }),
-    ).resolves.toEqual({ created: false })
+    ).resolves.toEqual({
+      created: false,
+      organisationId: 'org_existing',
+      role: 'member',
+    })
 
     const sequence = calls.map(([sql]) => sql)
     expect(sequence).toContain('rollback')

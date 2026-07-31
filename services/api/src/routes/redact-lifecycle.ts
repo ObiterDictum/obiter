@@ -28,7 +28,7 @@ export function createRedactLifecycleRoutes(
   const routes = new Hono<{ Variables: RouteVariables }>()
 
   routes.post('/api/redaction-runs/:runId/redetect', async (c) => {
-    const user = requireUser(c)
+    const user = await requireUser(c, pool)
     if (user instanceof Response) return user
     const result = await redetectRedactionRun({
       pool,
@@ -93,7 +93,7 @@ export function createRedactLifecycleRoutes(
   })
 
   routes.delete('/api/redaction-runs/:runId', async (c) => {
-    const user = requireManageRole(c)
+    const user = await requireManageRole(c, pool)
     if (user instanceof Response) return user
     const run = await softDeleteRedactionRun(pool, {
       organisationId: user.organisationId,
@@ -112,7 +112,7 @@ export function createRedactLifecycleRoutes(
   })
 
   routes.patch('/api/redaction-runs/:runId/restore', async (c) => {
-    const user = requireManageRole(c)
+    const user = await requireManageRole(c, pool)
     if (user instanceof Response) return user
     const result = await restoreRedactionRunWithAudit(pool, {
       organisationId: user.organisationId,
@@ -138,7 +138,7 @@ export function createRedactLifecycleRoutes(
   })
 
   routes.get('/api/redaction-runs/:runId/audit', async (c) => {
-    const user = requireUser(c)
+    const user = await requireUser(c, pool)
     if (user instanceof Response) return user
     // The audit report survives deletion (ruling 2): fetch with includeDeleted
     // so a deleted finalized run's report stays retrievable. A deleted run is
@@ -158,7 +158,7 @@ export function createRedactLifecycleRoutes(
         404,
       )
     if (run.deletedAt) {
-      const manageUser = requireManageRole(c)
+      const manageUser = await requireManageRole(c, pool)
       if (manageUser instanceof Response) return manageUser
     }
     if (run.status !== 'finalized')

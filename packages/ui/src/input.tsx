@@ -49,7 +49,7 @@ export function Input({
           className={cn(
             'h-10 w-full rounded-md border bg-surface px-3 text-sm text-ink',
             'placeholder:text-subtle',
-            'transition-[border-color,box-shadow] duration-150',
+            'transition-[border-color,box-shadow] duration-200',
             'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand',
             'disabled:cursor-not-allowed disabled:opacity-60',
             showError

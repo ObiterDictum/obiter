@@ -35,13 +35,13 @@ export function DetectionModeWarning({
 
   return (
     <section
-      className="flex flex-wrap items-start gap-3 rounded-md border border-warning bg-surface p-4 text-sm text-ink"
+      className="flex flex-wrap items-start gap-3 border-b border-warning/40 bg-raised/40 px-5 py-3 text-sm text-ink sm:px-6"
       role={role}
       aria-labelledby={titleId}
     >
       <Warning
         className="mt-0.5 shrink-0 text-warning"
-        size={20}
+        size={18}
         aria-hidden="true"
       />
       <div className="min-w-0 flex-1">

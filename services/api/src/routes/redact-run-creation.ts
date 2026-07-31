@@ -4,7 +4,7 @@ import { redactionPolicyModeSchema } from '@obiter/contracts'
 import { appendAuditLog } from '../database'
 import {
   DocumentExtractionError,
-  extractDocumentText,
+  extractDocumentContent,
 } from '../document-extraction'
 import { DocumentUploadError, readDocumentUpload } from '../document-upload'
 import {
@@ -44,14 +44,14 @@ export function createRedactRunCreationRoutes(
   const routes = new Hono<{ Variables: RouteVariables }>()
 
   routes.get('/api/redaction-runs', async (c) => {
-    const user = requireUser(c)
+    const user = await requireUser(c, pool)
     if (user instanceof Response) return user
     const runs = await listRedactionRuns(pool, user.organisationId)
     return c.json({ runs: runs.map((run) => listItem(publicRun(run))) })
   })
 
   routes.post('/api/redaction-runs', async (c) => {
-    const user = requireUser(c)
+    const user = await requireUser(c, pool)
     if (user instanceof Response) return user
 
     const isMultipart =
@@ -72,6 +72,9 @@ export function createRedactRunCreationRoutes(
     )
     let filename = input.filename
     let text = input.text
+    let uploadContents: Buffer | null = null
+    let uploadMimeType: string | null = null
+    let layoutJson: string | null = null
 
     if (form) {
       const file = form.get('file')
@@ -88,7 +91,19 @@ export function createRedactRunCreationRoutes(
           form.get('fileType')?.toString() ?? file.type,
         )
         filename = upload.filename
-        text = await extractDocumentText(upload.fileType, upload.contents)
+        uploadContents = upload.contents
+        uploadMimeType =
+          upload.fileType === 'pdf'
+            ? 'application/pdf'
+            : upload.fileType === 'docx'
+              ? 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+              : 'text/plain'
+        const extracted = await extractDocumentContent(
+          upload.fileType,
+          upload.contents,
+        )
+        text = extracted.text
+        if (extracted.layout) layoutJson = JSON.stringify(extracted.layout)
       } catch (error) {
         if (error instanceof DocumentUploadError)
           return errorResponse(c, 'validation_failed', error.message, 400)
@@ -124,10 +139,22 @@ export function createRedactRunCreationRoutes(
       )
     const id = `red_${crypto.randomUUID()}`
     const sourceTextObjectKey = `org/${user.organisationId}/redaction-runs/${id}/source`
+    const sourceFileObjectKey = uploadContents
+      ? `org/${user.organisationId}/redaction-runs/${id}/original`
+      : null
+    const sourceLayoutObjectKey = layoutJson
+      ? `org/${user.organisationId}/redaction-runs/${id}/layout.json`
+      : null
     await storage.writeText(sourceTextObjectKey, text)
+    if (uploadContents && sourceFileObjectKey && storage.writeBinary)
+      await storage.writeBinary(sourceFileObjectKey, uploadContents)
+    if (layoutJson && sourceLayoutObjectKey)
+      await storage.writeText(sourceLayoutObjectKey, layoutJson)
     const detection = await detectForRoute(c, text)
     if (detection instanceof Response) {
       await storage.delete(sourceTextObjectKey)
+      if (sourceFileObjectKey) await storage.delete(sourceFileObjectKey)
+      if (sourceLayoutObjectKey) await storage.delete(sourceLayoutObjectKey)
       return detection
     }
     let run
@@ -139,6 +166,9 @@ export function createRedactRunCreationRoutes(
         userId: user.id,
         sourceFilename: filename,
         sourceTextObjectKey,
+        sourceFileObjectKey,
+        sourceLayoutObjectKey,
+        sourceMimeType: uploadMimeType,
         spans: detection.spans,
         detectorVersion: detection.detectorVersion,
         detectionMode: detectionMode(detection.degraded),
@@ -146,6 +176,8 @@ export function createRedactRunCreationRoutes(
       })
     } catch (error) {
       await storage.delete(sourceTextObjectKey)
+      if (sourceFileObjectKey) await storage.delete(sourceFileObjectKey)
+      if (sourceLayoutObjectKey) await storage.delete(sourceLayoutObjectKey)
       throw error
     }
     if (!run)
@@ -167,7 +199,7 @@ export function createRedactRunCreationRoutes(
   })
 
   routes.post('/api/documents/:documentId/redaction-runs', async (c) => {
-    const user = requireUser(c)
+    const user = await requireUser(c, pool)
     if (user instanceof Response) return user
     const body = await jsonBody(c)
     const policyMode = redactionPolicyModeSchema.safeParse(
@@ -238,7 +270,7 @@ export function createRedactRunCreationRoutes(
   })
 
   routes.get('/api/documents/:documentId/redaction-runs', async (c) => {
-    const user = requireUser(c)
+    const user = await requireUser(c, pool)
     if (user instanceof Response) return user
     const runs = await listRedactionRunsForDocument(
       pool,

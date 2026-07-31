@@ -81,29 +81,34 @@ export function RedactionRunsRegion({
       </div>
     )
   return (
-    <div className="flex flex-col gap-3">
-      <CreateDocumentRunButton
-        disabled={!ready}
-        pending={create.isPending}
-        onClick={createRun}
-      />
+    <div className="flex flex-col">
+      <div className="flex items-center justify-between gap-3 border-b border-line pb-3">
+        <p className="text-[11px] font-medium tracking-wide text-muted">
+          Redaction runs
+        </p>
+        <CreateDocumentRunButton
+          disabled={!ready}
+          pending={create.isPending}
+          onClick={createRun}
+        />
+      </div>
       {create.error ? (
-        <p className="text-sm text-danger">{create.error.message}</p>
+        <p className="mt-2 text-sm text-danger">{create.error.message}</p>
       ) : null}
-      <div className="flex flex-col divide-y divide-line rounded-md border border-line">
+      <ul className="flex flex-col divide-y divide-line">
         {query.data.runs.map((run) => (
-          <div
+          <li
             key={run.id}
-            className="flex items-center justify-between gap-3 p-3"
+            className="flex items-center justify-between gap-3 py-3"
           >
-            <div>
-              <p className="font-mono text-sm text-ink">{run.id}</p>
-              <p className="text-xs text-muted">
+            <div className="min-w-0">
+              <p className="font-mono text-xs text-ink">{run.id}</p>
+              <p className="text-[11px] text-muted">
                 {run.summary.totalSpans} spans · {run.summary.reviewedCount}{' '}
                 reviewed
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               {run.replacementRunId ? (
                 <Badge tone="neutral">Replaced</Badge>
               ) : run.replacesRunId ? (
@@ -125,9 +130,9 @@ export function RedactionRunsRegion({
                 Review
               </Button>
             </div>
-          </div>
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   )
 }

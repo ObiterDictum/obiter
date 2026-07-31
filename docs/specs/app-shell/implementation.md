@@ -1,18 +1,18 @@
 # App Shell Rebuild — M1 Implementation Plan
 
-Milestone 1 scope only, per [PRD](../../prds/app-shell-rebuild.md). Ends at the **contract freeze**. M2 (live surfaces + fixture deletion) and M3 (search restyle + desktop polish) resume after review.
+Milestone 1 scope only, per [PRD](../../prds/archive/app-shell-rebuild.md). Ends at the **contract freeze**. M2 (live surfaces + fixture deletion) and M3 (search restyle + desktop polish) resume after review.
 
 The frozen surface this plan delivers is [contract.md](contract.md).
 
 ## Design-token derivation
 
-**Brand signal (from `docs/brand/obiter-wordmark.svg`):** fill `#F5F2EB` (warm cream), Cormorant Garamond serif, wide tracking (`letter-spacing: 22`). This is an editorial, ink-on-paper identity — not a cold zinc/SaaS palette. The current shell's pure-black background is explicitly rejected (light default, FR6).
+**Brand signal:** Obiter mark is a compact geometric “marginal aside” (spine + offset note) with a quiet Inter wordmark — Cursor-clean, legal craft without courtroom clichés. Product chrome is a **dark night IDE** (marketing workspace demo baseline): near-black surfaces, whisper borders, night sage accent. Light theme remains a secondary preference (FR6).
 
-**Direction:** warm-neutral "ink on paper" system. Warm off-white/cream surfaces in light; warm near-black charcoal ink (never pure `#000`); one restrained, desaturated brand accent. The design skills' neutrals/contrast/accessibility/density rules apply; their motion/flash rules (Framer, magnetic buttons, bento choreography, OLED black) are **overridden** by the PRD ("calm, dense, professional; no gratuitous motion"):
+**Direction:** night workspace system. Near-black shell (`#0a0a0a` / `#111111`); night ink; one restrained sage accent. Design-skill motion/flash rules are **overridden** by calm product rules:
 
-- **Motion:** none beyond short CSS transitions on `transform`/`opacity`. No Framer Motion dependency in M1.
-- **Type:** sans-serif for all UI and body — `Satoshi` (Fontshare, warm geometric sans, pairs with the cream brand, avoids the banned Inter/Helvetica defaults). `Geist Mono` (or `JetBrains Mono`) for IDs, hashes, and tabular numbers in dense views. The brand serif stays as the wordmark **asset only** — not introduced into UI text in M1 (a theming pass can revisit).
-- **Density:** information-dense, strong hierarchy, hairline borders and spacing over boxed cards where elevation isn't earned (skill rule 4 + PRD density principle).
+- **Motion:** short CSS transitions (~0.18–0.2s) on `transform`/`opacity`/color. No Framer Motion dependency.
+- **Type:** `Inter` for UI; `IBM Plex Mono` for IDs, hashes, and tabular numbers.
+- **Density:** information-dense, strong hierarchy, hairline borders over boxed cards where elevation isn't earned.
 - **Accessibility:** visible focus (`--obiter-ring`), keyboard flow from Base UI, AA contrast everywhere; the span palette (contract §2.3) gets explicit AA verification in both themes.
 
 > Type family choice is the one aesthetic decision flagged for ratification at the M1 review; the palette and system are decided. It is not contract surface — contract is token **names**, not typeface.
