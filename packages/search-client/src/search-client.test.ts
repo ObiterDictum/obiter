@@ -1080,6 +1080,24 @@ describe('Legal search client', () => {
     expect(extractLegalSearchSnippets(hit, '[2024] UKSC 3')).toEqual([])
   })
 
+  it('reuses compiled term patterns without leaking match state', () => {
+    // The pattern cache is keyed by term, so the same term must keep giving
+    // an independent answer for each value it is tested against.
+    expect(containsEveryQueryTerm('the testator intended', 'testator')).toBe(
+      true,
+    )
+    expect(containsEveryQueryTerm('the testimony was heard', 'testator')).toBe(
+      false,
+    )
+    expect(containsEveryQueryTerm('the testator intended', 'testator')).toBe(
+      true,
+    )
+    expect(containsEveryQueryTerm('self-incrimination applies', 'self')).toBe(
+      true,
+    )
+    expect(containsEveryQueryTerm('selfless conduct', 'self')).toBe(false)
+  })
+
   it('omits snippets when paragraph text does not match the query', () => {
     const snippets = extractLegalSearchSnippets(
       authority({
