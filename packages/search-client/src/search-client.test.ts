@@ -1131,6 +1131,27 @@ describe('Legal search client', () => {
     expect(snippets[0]?.matchedTerms).toEqual(['testator'])
   })
 
+  it('centres a trimmed snippet on a whole-term match', () => {
+    const filler = 'The parties exchanged correspondence over many months. '
+    const hit = authority({
+      paragraphs: [
+        {
+          id: 'uksc-2024-3-p1',
+          documentId: 'uksc-2024-3',
+          paragraphNumber: 1,
+          text: `Contested testimony opened the hearing. ${filler.repeat(6)}The test was then applied.`,
+        },
+      ],
+    })
+
+    const [snippet] = extractLegalSearchSnippets(hit, 'test')
+
+    // "testimony" appears first, but it is not a whole-term match, so the
+    // excerpt window must land on "The test was then applied".
+    expect(snippet?.text).toContain('The test was then applied')
+    expect(snippet?.matchedTerms).toEqual(['test'])
+  })
+
   it('omits snippets when paragraph text does not match the query', () => {
     const snippets = extractLegalSearchSnippets(
       authority({

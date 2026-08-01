@@ -113,6 +113,22 @@ describe('legal authority source store search', () => {
     expect(results.map(({ id }) => id)).toEqual(['benchmark-docket-101'])
   })
 
+  it('ignores indexed stop words so the fallback is not stricter than the engine', async () => {
+    const store = createInMemoryLegalAuthoritySourceStore()
+
+    await store.upsertDocument(storedAuthority, sourceProvider)
+
+    // "the" and "of" are dropped by the index, so requiring them here would
+    // make the fallback miss a document Meilisearch would return.
+    expect(
+      (await store.search('the fiduciary appendix', {})).map(({ id }) => id),
+    ).toEqual(['uksc-2024-3'])
+
+    // A query made entirely of stop words returns nothing from the engine, so
+    // the fallback must not answer it with everything.
+    expect(await store.search('the court of appeal', {})).toEqual([])
+  })
+
   it('keeps Postgres fallback on an indexed paragraph-inclusive search vector', async () => {
     const queries: Array<{ text: string; values?: unknown[] }> = []
     const client = {
