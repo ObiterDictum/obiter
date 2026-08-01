@@ -455,32 +455,35 @@ export function extractLegalSearchSnippets(
 ): LegalSearchSnippet[] {
   const paragraphs = hit.paragraphs ?? []
   const normalizedQuery = normalizeExactMatchValue(query)
-  const tokens = normalizedQuery.split(' ').filter((token) => token.length > 1)
+  const tokens = splitSnippetTerms(normalizedQuery)
   const selectedParagraphs =
     tokens.length > 0
       ? paragraphs
-          .map((paragraph, index) => ({
-            paragraph,
-            index,
-            score: snippetMatchScore(paragraph.text, normalizedQuery, tokens),
-          }))
+          .map((paragraph, index) => {
+            const normalizedText = normalizeExactMatchValue(paragraph.text)
+            return {
+              paragraph,
+              normalizedText,
+              index,
+              score: snippetMatchScore(normalizedText, normalizedQuery, tokens),
+            }
+          })
           .filter(({ score }) => score > 0)
           .sort(
             (left, right) =>
               right.score - left.score || left.index - right.index,
           )
           .slice(0, 2)
-          .map(({ paragraph }) => paragraph)
       : []
 
-  return selectedParagraphs.map((paragraph) => ({
+  return selectedParagraphs.map(({ paragraph, normalizedText }) => ({
     evidenceId: createJudgmentParagraphEvidenceId(
       hit.id,
       paragraph.paragraphNumber,
     ),
     paragraphNumber: paragraph.paragraphNumber,
     text: trimSnippetText(paragraph.text, tokens),
-    matchedTerms: matchedSnippetTerms(paragraph.text, normalizedQuery, tokens),
+    matchedTerms: matchedSnippetTerms(normalizedText, normalizedQuery, tokens),
     matchReason: 'body_text_match',
   }))
 }
@@ -493,11 +496,10 @@ export function createJudgmentParagraphEvidenceId(
 }
 
 function matchedSnippetTerms(
-  text: string,
+  normalizedText: string,
   normalizedQuery: string,
   tokens: string[],
 ) {
-  const normalizedText = normalizeExactMatchValue(text)
   if (normalizedQuery && containsWholeTerm(normalizedText, normalizedQuery)) {
     return [normalizedQuery]
   }
@@ -506,17 +508,15 @@ function matchedSnippetTerms(
 }
 
 function snippetMatchScore(
-  text: string,
+  normalizedText: string,
   normalizedQuery: string,
   tokens: string[],
 ) {
-  const normalizedText = normalizeExactMatchValue(text)
   if (normalizedQuery && containsWholeTerm(normalizedText, normalizedQuery)) {
     return 3
   }
-  if (tokens.every((token) => containsWholeTerm(normalizedText, token)))
-    return 2
-  if (tokens.some((token) => containsWholeTerm(normalizedText, token))) return 1
+  if (everyTermPresent(normalizedText, tokens)) return 2
+  if (someTermPresent(normalizedText, tokens)) return 1
   return 0
 }
 
@@ -554,6 +554,7 @@ export function rankLegalSearchHitsByExactMatch<T extends LegalSearchHit>(
 
 function legalSearchMatchTier(hit: LegalSearchHit, normalizedQuery: string) {
   const normalizedTitle = normalizeExactMatchValue(hit.title)
+  const queryTerms = splitQueryTerms(normalizedQuery)
 
   if (normalizeExactMatchValue(hit.id) === normalizedQuery) return 7
   if (normalizeExactMatchValue(hit.neutralCitation) === normalizedQuery)
@@ -561,25 +562,29 @@ function legalSearchMatchTier(hit: LegalSearchHit, normalizedQuery: string) {
   if (normalizedTitle === normalizedQuery) return 5
   if (
     containsWholeTerm(normalizedTitle, normalizedQuery) ||
-    containsEveryNormalizedQueryTerm(normalizedTitle, normalizedQuery)
+    everyTermPresent(normalizedTitle, queryTerms)
   ) {
     return 4
   }
 
-  const bodySegments = hit.paragraphs?.length
-    ? hit.paragraphs.map(({ text }) => text)
-    : (hit.snippets?.map(({ text }) => text) ?? [])
+  // Normalizing is the expensive part on real judgments, so each body segment
+  // is normalized once and reused for the phrase, all-term, and any-term tiers.
+  const normalizedBodySegments = (
+    hit.paragraphs?.length
+      ? hit.paragraphs.map(({ text }) => text)
+      : (hit.snippets?.map(({ text }) => text) ?? [])
+  ).map((text) => normalizeExactMatchValue(text))
   if (
-    bodySegments.some((text) =>
-      containsWholeTerm(normalizeExactMatchValue(text), normalizedQuery),
+    normalizedBodySegments.some((text) =>
+      containsWholeTerm(text, normalizedQuery),
     )
   ) {
     return 3
   }
 
-  const bodyText = bodySegments.join(' ')
-  if (containsEveryQueryTerm(bodyText, normalizedQuery)) return 2
-  if (containsAnyQueryTerm(bodyText, normalizedQuery)) return 1
+  const normalizedBody = normalizedBodySegments.join(' ').replace(/\s+/g, ' ')
+  if (everyTermPresent(normalizedBody, queryTerms)) return 2
+  if (someTermPresent(normalizedBody, queryTerms)) return 1
   return 0
 }
 
@@ -643,9 +648,24 @@ export function normalizeExactMatchValue(value: string | null | undefined) {
  * query term appears as a whole term.
  */
 export function containsEveryQueryTerm(value: string, query: string) {
-  return containsEveryNormalizedQueryTerm(
+  return everyTermPresent(
     normalizeExactMatchValue(value),
-    normalizeExactMatchValue(query),
+    splitQueryTerms(normalizeExactMatchValue(query)),
+  )
+}
+
+function splitQueryTerms(normalizedQuery: string) {
+  return normalizedQuery.split(' ').filter(Boolean)
+}
+
+function splitSnippetTerms(normalizedQuery: string) {
+  return normalizedQuery.split(' ').filter((token) => token.length > 1)
+}
+
+function everyTermPresent(normalizedValue: string, terms: string[]) {
+  return (
+    terms.length > 0 &&
+    terms.every((term) => containsWholeTerm(normalizedValue, term))
   )
 }
 
@@ -654,24 +674,32 @@ export function containsEveryQueryTerm(value: string, query: string) {
  * by the index-tuning layer above this branch in the search stack.
  */
 export function containsEverySearchableQueryTerm(value: string, query: string) {
-  return containsEveryQueryTerm(value, query)
-}
-
-function containsEveryNormalizedQueryTerm(
-  normalizedValue: string,
-  normalizedQuery: string,
-) {
-  const terms = normalizedQuery.split(' ').filter(Boolean)
-  return (
-    terms.length > 0 &&
-    terms.every((term) => containsWholeTerm(normalizedValue, term))
+  return everyTermPresent(
+    normalizeExactMatchValue(value),
+    splitQueryTerms(normalizeExactMatchValue(query)),
   )
 }
 
-function containsAnyQueryTerm(value: string, query: string) {
-  const normalizedValue = normalizeExactMatchValue(value)
-  const terms = normalizeExactMatchValue(query).split(' ').filter(Boolean)
+function someTermPresent(normalizedValue: string, terms: string[]) {
   return terms.some((term) => containsWholeTerm(normalizedValue, term))
+}
+
+// Terms come from user queries, so the cache is bounded rather than unbounded.
+const wholeTermPatterns = new Map<string, RegExp>()
+const wholeTermPatternLimit = 500
+
+function wholeTermPattern(term: string) {
+  const cached = wholeTermPatterns.get(term)
+  if (cached) return cached
+
+  const pattern = new RegExp(
+    `(?<![\\p{L}\\p{M}\\p{N}_])${escapeRegularExpression(term)}(?![\\p{L}\\p{M}\\p{N}_])`,
+    'u',
+  )
+  if (wholeTermPatterns.size >= wholeTermPatternLimit) wholeTermPatterns.clear()
+  wholeTermPatterns.set(term, pattern)
+
+  return pattern
 }
 
 /**
@@ -680,10 +708,7 @@ function containsAnyQueryTerm(value: string, query: string) {
  */
 export function containsWholeTerm(value: string, term: string) {
   if (!term) return false
-  return new RegExp(
-    `(?<![\\p{L}\\p{M}\\p{N}_])${escapeRegularExpression(term)}(?![\\p{L}\\p{M}\\p{N}_])`,
-    'u',
-  ).test(value)
+  return wholeTermPattern(term).test(value)
 }
 
 function escapeRegularExpression(value: string) {
