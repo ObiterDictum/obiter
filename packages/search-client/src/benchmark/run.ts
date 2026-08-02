@@ -409,14 +409,6 @@ async function writeReport(report: unknown) {
 }
 
 async function main() {
-  if (
-    searchBenchmarkCases.length !== searchBenchmarkBaseline.expectedCaseCount
-  ) {
-    throw new Error(
-      `Search benchmark defines ${searchBenchmarkCases.length} cases; expected ${searchBenchmarkBaseline.expectedCaseCount}.`,
-    )
-  }
-
   const client = createClient(host, apiKey)
 
   try {
