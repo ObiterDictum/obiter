@@ -367,8 +367,7 @@ export async function search(
     }
     if (typeof options.limit === 'number') searchOptions.limit = options.limit
     if (query && options.rankingScoreThreshold !== null) {
-      searchOptions.rankingScoreThreshold =
-        options.rankingScoreThreshold ?? 0.5
+      searchOptions.rankingScoreThreshold = options.rankingScoreThreshold ?? 0.5
     }
 
     const providerSearchStartedAt = performance.now()
