@@ -245,13 +245,14 @@ function calculateMetrics(results: BenchmarkCaseResult[]) {
   const malformedCases = searchBenchmarkCases.filter(
     ({ category }) => category === 'malformed_citation',
   )
-  const malformedCasesWithoutSearchErrors = malformedCases.filter(
+  const malformedNoResultCasesWithoutSearchErrors = malformedCases.filter(
     (testCase) =>
+      testCase.expectedNoResults &&
       !results
         .find(({ id }) => id === testCase.id)
         ?.failureLabels.includes('search_error'),
   )
-  const malformedSuccesses = malformedCasesWithoutSearchErrors.filter(
+  const malformedSuccesses = malformedNoResultCasesWithoutSearchErrors.filter(
     (testCase) =>
       results.find(({ id }) => id === testCase.id)?.returnedHitCount === 0,
   ).length
@@ -279,7 +280,7 @@ function calculateMetrics(results: BenchmarkCaseResult[]) {
     ),
     malformedCitationNoResultRate: ratio(
       malformedSuccesses,
-      malformedCasesWithoutSearchErrors.length,
+      malformedNoResultCasesWithoutSearchErrors.length,
     ),
     ambiguitySurfaced: ratio(ambiguitySuccesses, ambiguityCases.length),
     searchErrorCount: results.filter(({ failureLabels }) =>

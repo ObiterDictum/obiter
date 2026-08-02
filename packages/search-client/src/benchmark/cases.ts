@@ -54,13 +54,13 @@ const objectiveCases: SearchBenchmarkCase[] = [
     id: 'malformed-missing-bracket',
     category: 'malformed_citation',
     query: '[2024 UKSC 3',
-    expectedNoResults: true,
+    expectedTopId: 'uksc-2024-3',
   },
   {
     id: 'malformed-reversed-brackets',
     category: 'malformed_citation',
     query: '2022] EWCA Civ 159[',
-    expectedNoResults: true,
+    expectedTopId: 'ewca-civ-2022-159',
   },
   {
     id: 'malformed-year-token',

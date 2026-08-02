@@ -37,6 +37,9 @@ steady-state latency rather than a cold-connection artefact. It has not been
 reproduced outside that CI container and may not apply to the real deployment
 topology.
 
+Malformed citations are split between recoverable forms, which assert the
+correct authority, and unresolvable forms, which assert no results.
+
 The date-filter cases `date-brown-from-1994`, `date-potanina-2024` and
 `date-smith-before-2019` are currently expected to fail with `search_error`.
 Meilisearch comparison operators accept numeric operands only, while the
