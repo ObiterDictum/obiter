@@ -64,6 +64,8 @@ export interface LegalSearchResult {
 }
 
 export interface LegalSearchOptions {
+  // With both of these false the request omits paragraphs, so ranking has no
+  // body text to read and the body match tiers cannot fire.
   includeParagraphs?: boolean
   includeSnippets?: boolean
   limit?: number
@@ -537,7 +539,10 @@ export function rankLegalSearchHitsByExactMatch<T extends LegalSearchHit>(
           validEngineRankingScore(hit.engineRankingScore) ?? 0,
       }))
       // Legal match tiers express user intent. Engine scores break ties within a
-      // tier, then ties preserve the caller's or engine's supplied order.
+      // tier, then ties preserve the caller's or engine's supplied order. An
+      // equal engine score is not equal engine relevance: it is one lossy number
+      // summarising the words, typo, proximity, attribute, exactness and sort
+      // cascade, so the supplied order still carries signal the score has lost.
       .sort(
         (left, right) =>
           right.matchTier - left.matchTier ||
