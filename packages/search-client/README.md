@@ -33,10 +33,18 @@ no display-name field exists in the source schema.
 
 Search uses Meilisearch's `all` matching strategy by default, so every query
 term must match. Callers that prefer recall can set
-`LegalSearchOptions.matchingStrategy` to `frequency`. The default 0.5 ranking
+`LegalSearchOptions.matchingStrategy` to `frequency`. The default 0.25 ranking
 score threshold is skipped for an empty-query filtered browse. Callers can
 lower it or set `LegalSearchOptions.rankingScoreThreshold` to `null` to disable
 it when recall is more important.
+
+0.25 comes from a sweep of the whole benchmark at null, 0.2, 0.25, 0.3, 0.35,
+0.4, 0.45 and 0.5. The floor turned out to be load-bearing for exactly one
+objective, the no-answer query `claimnt`, whose only candidate scores 0.0928,
+while the lowest legitimate typo match measured scores 0.3655. Anything from
+0.2 to 0.35 separates the two; 0.25 sits near the middle of the gap. The
+earlier 0.5 was set before that separation was measured and was discarding
+correct short-word typo matches to no benefit.
 
 Updating searchable attributes or stop words causes Meilisearch to re-index the
 existing index. Environments must allow that task to finish before relying on

@@ -3,17 +3,14 @@ export const searchBenchmarkBaseline = {
   // a metric tightens its floor: #53 raises short-word precision from 0.2 to 1;
   // #54 raises no-answer precision and content-word recall to 1. The three
   // court-code cases raised top-1 and top-3 exact-source success to 41/44
-  // (0.9318). The party-name typo objective brings the case count to 54 and
-  // reports 41/45 (0.9111), so top-1 and top-3 are red by design. The single
-  // miss is party-rizwan-one-typo, and it is now diagnosed: at
-  // minWordSizeForTypos 5/9 the engine does generate the right candidate for
-  // "Rizwun", but it scores 0.3655 against the default rankingScoreThreshold
-  // of 0.5, so the relevance floor drops it. Not a typo-tolerance defect.
-  // Deciding what to do about the floor is tracked separately. Both should be
-  // 1 when the date filter is fixed.
+  // (0.9318). The party-name typo objective brings the case count to 54, and
+  // lowering the default rankingScoreThreshold from 0.5 to 0.25 makes
+  // party-rizwan-one-typo pass, so top-1 and top-3 tighten to 42/45 (0.9333).
+  // The three date cases below are the only remaining misses; both metrics
+  // should be 1 when the date filter is fixed.
   expectedCaseCount: 54,
-  minimumTop1ExactSourceSuccess: 0.9318,
-  minimumTop3ExactSourceSuccess: 0.9318,
+  minimumTop1ExactSourceSuccess: 0.9333,
+  minimumTop3ExactSourceSuccess: 0.9333,
   minimumExactLookupTop1Success: 1,
   minimumShortWordPrecision: 1,
   minimumEvidenceUnitRecall: 1,

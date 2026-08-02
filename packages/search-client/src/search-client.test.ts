@@ -396,7 +396,7 @@ describe('Legal search client', () => {
       ],
       sort: ['dateDecided:desc'],
       matchingStrategy: 'all',
-      rankingScoreThreshold: 0.5,
+      rankingScoreThreshold: 0.25,
       attributesToRetrieve: [
         'id',
         'title',

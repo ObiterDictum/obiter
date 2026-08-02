@@ -100,8 +100,6 @@ function failureLabels(
 async function runCase(
   client: ReturnType<typeof createClient>,
   testCase: SearchBenchmarkCase,
-  // undefined keeps search's own default, matching an unparameterised run.
-  rankingScoreThreshold?: number | null,
 ): Promise<BenchmarkCaseResult> {
   try {
     const startedAt = performance.now()
@@ -110,7 +108,7 @@ async function runCase(
       indexName,
       testCase.query,
       testCase.filters,
-      { includeSnippets: true, limit: resultLimit, rankingScoreThreshold },
+      { includeSnippets: true, limit: resultLimit },
     )
     const wallClockSearchTimeMs = performance.now() - startedAt
     const hitIds = result.hits.map((hit) => hit.id)
@@ -414,95 +412,6 @@ function regressionFailures(
   return failures
 }
 
-// Temporary. Measures what the relevance floor is actually buying across the
-// whole objective set, then comes out again in the follow-up commit.
-const sweepThresholds = [null, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5] as const
-
-async function runRankingScoreThresholdSweep(
-  client: ReturnType<typeof createClient>,
-  baselineResults: BenchmarkCaseResult[],
-) {
-  const baselineHitCounts = new Map(
-    baselineResults.map(({ id, returnedHitCount }) => [id, returnedHitCount]),
-  )
-  const sweep = []
-
-  for (const rankingScoreThreshold of sweepThresholds) {
-    const results: BenchmarkCaseResult[] = []
-    for (const testCase of searchBenchmarkCases) {
-      results.push(await runCase(client, testCase, rankingScoreThreshold))
-    }
-
-    const metrics = calculateMetrics(results)
-    sweep.push({
-      rankingScoreThreshold,
-      metrics,
-      regressionFailures: regressionFailures(metrics, results),
-      // Named so the deltas are legible without inferring them from aggregates.
-      changedCases: results
-        .filter(
-          ({ id, returnedHitCount }) =>
-            returnedHitCount !== baselineHitCounts.get(id),
-        )
-        .map(({ id, query, returnedHitCount, topK }) => ({
-          id,
-          query,
-          returnedHitCount,
-          baselineReturnedHitCount: baselineHitCounts.get(id) ?? null,
-          topK,
-        })),
-    })
-  }
-
-  return sweep
-}
-
-// Every candidate the engine generates for the no-answer queries and the typo
-// case, with no floor applied, so the report says which document each would
-// return and at what score rather than only how many.
-const unfilteredScoreProbeQueries = [
-  'claimnt',
-  'england-and-wales',
-  'permission application zygote',
-  'material estoppel satellite',
-  'Rizwun',
-]
-
-async function runUnfilteredScoreProbe(
-  client: ReturnType<typeof createClient>,
-) {
-  return Promise.all(
-    unfilteredScoreProbeQueries.map(async (query) => {
-      const result = await client.index(indexName).search(query, {
-        matchingStrategy: legalSearchIndexSettings.matchingStrategy,
-        sort: ['dateDecided:desc'],
-        limit: resultLimit,
-        showRankingScore: true,
-      })
-
-      return {
-        query,
-        returnedHitCount: result.hits.length,
-        hits: result.hits.map((hit) => {
-          const document = hit as {
-            id?: unknown
-            title?: unknown
-            _rankingScore?: unknown
-          }
-          return {
-            id: typeof document.id === 'string' ? document.id : null,
-            title: typeof document.title === 'string' ? document.title : null,
-            engineRankingScore:
-              typeof document._rankingScore === 'number'
-                ? document._rankingScore
-                : null,
-          }
-        }),
-      }
-    }),
-  )
-}
-
 async function writeReport(report: unknown) {
   const reportPath = process.env.SEARCH_BENCHMARK_REPORT_PATH
   if (!reportPath) return
@@ -540,19 +449,12 @@ async function main() {
     }
 
     const metrics = calculateMetrics(results)
-    const rankingScoreThresholdSweep = await runRankingScoreThresholdSweep(
-      client,
-      results,
-    )
-    const unfilteredScoreProbe = await runUnfilteredScoreProbe(client)
     const regressions = regressionFailures(metrics, results)
     const report = {
       benchmark: 'search-correctness-gate-1',
       generatedAt: new Date().toISOString(),
       fixtureDocumentCount: searchBenchmarkDocuments.length,
       metrics,
-      rankingScoreThresholdSweep,
-      unfilteredScoreProbe,
       // The configuration this run applied. Reported so every artifact states
       // the settings it was measured under, and a summary that disagrees with
       // the committed value is contradicted by its own evidence.

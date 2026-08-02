@@ -230,7 +230,15 @@ export const legalSearchIndexSettings = {
   minWordSizeForTypos: { oneTypo: 5, twoTypos: 9 },
   prefixSearch: 'disabled',
   matchingStrategy: 'all',
-  rankingScoreThreshold: 0.5,
+  // Swept across the full benchmark at null, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45
+  // and 0.5. Everything from 0.2 to 0.35 beats 0.5 on top-1 and top-3 and is
+  // worse on nothing, because the only case the floor is load-bearing for is
+  // "claimnt", whose sole candidate scores 0.0928. The lowest legitimate typo
+  // match measured is "Rizwun" at 0.3655. 0.25 sits near the middle of that
+  // gap, leaving 0.157 of headroom over the junk match and 0.116 under the
+  // recall one. The other three no-answer cases return nothing even with the
+  // floor removed entirely, so they do not constrain this value.
+  rankingScoreThreshold: 0.25,
   stopWordCount: legalStopWords.length,
 } as const
 
