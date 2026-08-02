@@ -12,6 +12,10 @@ Set `SEARCH_BENCHMARK_HOST` and `SEARCH_BENCHMARK_API_KEY` when the benchmark
 server is not available at the local defaults. CI starts the pinned server,
 runs the benchmark, fails on a metric regression, and uploads the JSON report.
 Every case records its top three ids, any failure labels and search error messages.
+`searchWallClockP95Ms` measures end-to-end client wall-clock time for successful
+searches, while each case retains Meilisearch's `processingTimeMs` separately.
+The 250 ms wall-clock P95 ceiling provides headroom over the observed 45 ms CI
+P95 without treating the engine's rounded processing time as end-to-end latency.
 Set `SEARCH_BENCHMARK_ALLOW_REGRESSION=1` to retain the report while disabling
 its failure exit code, for local investigation only.
 

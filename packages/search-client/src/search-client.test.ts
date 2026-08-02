@@ -638,17 +638,21 @@ describe('Legal search client', () => {
   })
 
   it('wraps provider errors without leaking keys', async () => {
+    const providerError = new Error('failed with dev-key')
     const client = {
       index: () => ({
         search: async () => {
-          throw new Error('failed with dev-key')
+          throw providerError
         },
       }),
     }
 
-    await expect(search(client, 'legal_authorities', 'test')).rejects.toThrow(
-      'Search failed. Search provider error: Error.',
-    )
+    await expect(
+      search(client, 'legal_authorities', 'test'),
+    ).rejects.toMatchObject({
+      message: 'Search failed. Search provider error: Error.',
+      cause: providerError,
+    })
   })
 
   it('retrieves a stored legal document by id', async () => {

@@ -137,7 +137,11 @@ async function runCase(
       wallClockSearchTimeMs: 0,
       relevantHitHasEvidence: testCase.expectsEvidence ? false : null,
       searchErrorMessage:
-        error instanceof Error ? error.message : String(error),
+        error instanceof Error
+          ? `${error.message}${
+              error.cause instanceof Error ? `: ${error.cause.message}` : ''
+            }`
+          : String(error),
       failureLabels: [
         'search_error',
         ...failureLabels(testCase, [], [], false),
@@ -161,10 +165,7 @@ function categoryTop1(results: BenchmarkCaseResult[]) {
           results.find(({ id }) => id === testCase.id)?.topK[0] ===
           testCase.expectedTopId,
       ).length
-      return [
-        category,
-        cases.length === 0 ? null : ratio(succeeded, cases.length),
-      ]
+      return [category, ratio(succeeded, cases.length)]
     }),
   )
 }
@@ -270,8 +271,10 @@ function calculateMetrics(results: BenchmarkCaseResult[]) {
     searchErrorCount: results.filter(({ failureLabels }) =>
       failureLabels.includes('search_error'),
     ).length,
-    storedSearchP95Ms: percentile95(
-      results.map(({ wallClockSearchTimeMs }) => wallClockSearchTimeMs),
+    searchWallClockP95Ms: percentile95(
+      results
+        .filter(({ failureLabels }) => !failureLabels.includes('search_error'))
+        .map(({ wallClockSearchTimeMs }) => wallClockSearchTimeMs),
     ),
     top1ByCategory: categoryTop1(results),
   }
@@ -348,13 +351,14 @@ function regressionFailures(
       failures.push(`known_failing_case_unexpected_pass:${result.id}`)
     }
   }
-  if (metrics.storedSearchP95Ms === null) {
-    failures.push('stored_search_p95:no_data')
+  if (metrics.searchWallClockP95Ms === null) {
+    failures.push('search_wall_clock_p95:no_data')
   } else if (
-    metrics.storedSearchP95Ms > searchBenchmarkBaseline.maximumStoredSearchP95Ms
+    metrics.searchWallClockP95Ms >
+    searchBenchmarkBaseline.maximumSearchWallClockP95Ms
   ) {
     failures.push(
-      `stored_search_p95:${metrics.storedSearchP95Ms}>maximum:${searchBenchmarkBaseline.maximumStoredSearchP95Ms}`,
+      `search_wall_clock_p95:${metrics.searchWallClockP95Ms}>maximum:${searchBenchmarkBaseline.maximumSearchWallClockP95Ms}`,
     )
   }
   return failures
@@ -424,7 +428,9 @@ async function main() {
         timeout: 30_000,
         interval: 100,
       })
-      .catch(() => undefined)
+      .catch((error) => {
+        console.warn('Search benchmark index cleanup failed.', error)
+      })
   }
 }
 

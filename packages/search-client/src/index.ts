@@ -544,11 +544,13 @@ function quoteFilter(value: string) {
 
 function wrapSearchError(message: string, error: unknown): Error {
   if (error instanceof SearchTaskError) {
-    return new Error(`${message} ${error.message}`)
+    return new Error(`${message} ${error.message}`, { cause: error })
   }
 
   const detail = error instanceof Error ? error.name : typeof error
-  return new Error(`${message} Search provider error: ${detail}.`)
+  return new Error(`${message} Search provider error: ${detail}.`, {
+    cause: error,
+  })
 }
 
 function isIndexAlreadyExistsError(error: unknown): boolean {

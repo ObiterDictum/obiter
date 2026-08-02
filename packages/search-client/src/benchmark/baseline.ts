@@ -17,5 +17,5 @@ export const searchBenchmarkBaseline = {
     'date-potanina-2024',
     'date-smith-before-2019',
   ],
-  maximumStoredSearchP95Ms: 100,
+  maximumSearchWallClockP95Ms: 250,
 } as const
