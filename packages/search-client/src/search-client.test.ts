@@ -528,6 +528,62 @@ describe('Legal search client', () => {
     )
   })
 
+  it('folds typographic apostrophes before whole-term matching', () => {
+    expect(
+      containsEveryQueryTerm(
+        'The testator’s intention was recorded.',
+        "testator's",
+      ),
+    ).toBe(true)
+    expect(
+      containsEveryQueryTerm(
+        "The testator's intention was recorded.",
+        'testator’s',
+      ),
+    ).toBe(true)
+
+    const snippets = extractLegalSearchSnippets(
+      authority({
+        paragraphs: [
+          {
+            id: 'uksc-2024-3-p1',
+            documentId: 'uksc-2024-3',
+            paragraphNumber: 1,
+            text: 'The testator’s intention was recorded.',
+          },
+        ],
+      }),
+      "testator's",
+    )
+
+    expect(snippets).toHaveLength(1)
+    expect(snippets[0]?.matchedTerms).toEqual(["testator's"])
+  })
+
+  it('treats citation punctuation as literal whole-term text', () => {
+    const citation = '[2021] EWHC 123 (Admin)'
+    const hit = authority({
+      paragraphs: [
+        {
+          id: 'uksc-2024-3-p1',
+          documentId: 'uksc-2024-3',
+          paragraphNumber: 1,
+          text: `The court followed ${citation}.`,
+        },
+      ],
+    })
+
+    expect(containsEveryQueryTerm(hit.paragraphs[0].text, citation)).toBe(true)
+    expect(extractLegalSearchSnippets(hit, citation)).toHaveLength(1)
+    expect(
+      containsEveryQueryTerm(
+        'The court followed 2024 UKSC 3.',
+        '[2024] UKSC 3',
+      ),
+    ).toBe(false)
+    expect(extractLegalSearchSnippets(hit, '[2024] UKSC 3')).toEqual([])
+  })
+
   it('omits snippets when paragraph text does not match the query', () => {
     const snippets = extractLegalSearchSnippets(
       authority({

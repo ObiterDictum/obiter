@@ -133,6 +133,8 @@ describe('legal authority source store search', () => {
       query.text.includes('from legal_source_documents'),
     )?.text
     expect(searchSql).toContain('search_vector @@ websearch_to_tsquery')
+    expect(searchSql).toContain('normalize(coalesce(')
+    expect(searchSql).toContain('translate(normalize(')
     expect(searchSql).not.toContain('document_json::text')
     expect(searchSql).not.toContain("summary_json::text || ' '")
 
@@ -147,5 +149,32 @@ describe('legal authority source store search', () => {
       "jsonb_path_query_array(document_json, '$.paragraphs[*].text')",
     )
     expect(migration).toContain('using gin (search_vector)')
+  })
+
+  it('uses the client exact-match normalizer for Postgres query values', async () => {
+    const client = {
+      query: vi.fn(async (text: string, _values?: unknown[]) => {
+        if (text.includes('from normalized_documents')) return { rows: [] }
+        return { rows: [] }
+      }),
+      release: vi.fn(),
+    }
+    const pool = { connect: vi.fn(async () => client) }
+    const store = createPostgresLegalAuthoritySourceStore(pool as never)
+
+    await store.search('[2024]\u00a0UKSC 3', {})
+
+    const searchCall = client.query.mock.calls.find(([text]) =>
+      text.includes('from normalized_documents'),
+    )
+    expect(searchCall?.[1]).toMatchObject([
+      null,
+      null,
+      null,
+      null,
+      null,
+      '[2024] uksc 3',
+      '[2024] uksc 3',
+    ])
   })
 })

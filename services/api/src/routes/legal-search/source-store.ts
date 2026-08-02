@@ -2,6 +2,7 @@ import type { Pool, QueryResultRow } from 'pg'
 import { LegalAuthoritySchema, type LegalAuthority } from '@obiter/legal-schema'
 import {
   containsEveryQueryTerm,
+  normalizeExactMatchValue,
   rankLegalSearchHitsByExactMatch,
   type LegalSearchFilters,
 } from '@obiter/search-client'
@@ -75,7 +76,7 @@ export function createInMemoryLegalAuthoritySourceStore(): LegalAuthoritySourceS
       return records.get(documentId) ?? null
     },
     async search(query: string, filters: LegalSearchFilters) {
-      const normalizedQuery = normalizeSearchText(query)
+      const normalizedQuery = normalizeExactMatchValue(query)
       const dateOrderedMatches = Array.from(records.values())
         .map((record) => record.document ?? record.summary)
         .filter((document) =>
@@ -188,7 +189,7 @@ export function createPostgresLegalAuthoritySourceStore(
       return toStoredLegalAuthorityRecord(result.rows[0])
     },
     async search(query, filters) {
-      const normalizedQuery = normalizeSearchText(query)
+      const normalizedQuery = normalizeExactMatchValue(query)
       const client = await pool.connect()
 
       try {
@@ -200,40 +201,36 @@ export function createPostgresLegalAuthoritySourceStore(
 
         const result = await client.query<LegalAuthoritySourceRow>(
           `
+            with normalized_documents as (
+              select
+                summary_json,
+                document_json,
+                provider_json,
+                search_vector,
+                regexp_replace(lower(trim(translate(normalize(coalesce(summary_json->>'id', ''), NFKC), '‘’“”‐‑‒–—―', '''""------'))), '\\s+', ' ', 'g') as normalized_id,
+                regexp_replace(lower(trim(translate(normalize(coalesce(summary_json->>'neutralCitation', ''), NFKC), '‘’“”‐‑‒–—―', '''""------'))), '\\s+', ' ', 'g') as normalized_neutral_citation,
+                regexp_replace(lower(trim(translate(normalize(coalesce(summary_json->>'title', ''), NFKC), '‘’“”‐‑‒–—―', '''""------'))), '\\s+', ' ', 'g') as normalized_title
+              from legal_source_documents
+              where ($1::text is null or summary_json->>'court' = $1)
+                and ($2::text is null or summary_json->>'jurisdiction' = $2)
+                and ($3::text is null or summary_json->>'sourceType' = $3)
+                and ($4::text is null or summary_json->>'dateDecided' >= $4)
+                and ($5::text is null or summary_json->>'dateDecided' <= $5)
+            )
             select summary_json, document_json, provider_json
-            from legal_source_documents
-            where ($1::text is null or summary_json->>'court' = $1)
-              and ($2::text is null or summary_json->>'jurisdiction' = $2)
-              and ($3::text is null or summary_json->>'sourceType' = $3)
-              and ($4::text is null or summary_json->>'dateDecided' >= $4)
-              and ($5::text is null or summary_json->>'dateDecided' <= $5)
-              and (
-                $6::text = ''
-                or search_vector @@ websearch_to_tsquery('english', $6)
-                or regexp_replace(lower(trim(coalesce(summary_json->>'id', ''))), '\\s+', ' ', 'g') = $7
-                or regexp_replace(lower(trim(coalesce(summary_json->>'neutralCitation', ''))), '\\s+', ' ', 'g') = $7
-                or regexp_replace(lower(trim(coalesce(summary_json->>'title', ''))), '\\s+', ' ', 'g') = $7
-              )
+            from normalized_documents
+            where (
+              $6::text = ''
+              or search_vector @@ websearch_to_tsquery('english', $6)
+              or normalized_id = $7
+              or normalized_neutral_citation = $7
+              or normalized_title = $7
+            )
             order by
               case
-                when regexp_replace(
-                  lower(trim(coalesce(summary_json->>'id', ''))),
-                  '\\s+',
-                  ' ',
-                  'g'
-                ) = $7 then 3
-                when regexp_replace(
-                  lower(trim(coalesce(summary_json->>'neutralCitation', ''))),
-                  '\\s+',
-                  ' ',
-                  'g'
-                ) = $7 then 2
-                when regexp_replace(
-                  lower(trim(coalesce(summary_json->>'title', ''))),
-                  '\\s+',
-                  ' ',
-                  'g'
-                ) = $7 then 1
+                when normalized_id = $7 then 3
+                when normalized_neutral_citation = $7 then 2
+                when normalized_title = $7 then 1
                 else 0
               end desc,
               ts_rank_cd(search_vector, websearch_to_tsquery('english', $6)) desc,
@@ -321,10 +318,6 @@ export function rememberForegroundSourceRecord(
   if (records.size > foregroundSourceRecordLimit && oldestRecordId) {
     records.delete(oldestRecordId)
   }
-}
-
-function normalizeSearchText(value: string) {
-  return value.toLowerCase().replace(/\s+/g, ' ').trim()
 }
 
 function documentMatchesSearch(

@@ -108,7 +108,9 @@ type IndexLike = {
   updateFilterableAttributes(attributes: string[]): SearchEnqueuedTaskPromise
   updateSortableAttributes(attributes: string[]): SearchEnqueuedTaskPromise
   updateRankingRules(rules: string[]): SearchEnqueuedTaskPromise
-  updatePrefixSearch(prefixSearch: 'disabled'): SearchEnqueuedTaskPromise
+  updatePrefixSearch(
+    prefixSearch: 'disabled' | 'indexingTime',
+  ): SearchEnqueuedTaskPromise
   addDocuments(
     documents: LegalSearchDocument[],
     options: { primaryKey: 'id' },
@@ -449,14 +451,18 @@ function exactMatchScore(hit: LegalSearchHit, normalizedQuery: string) {
     return 4
   if (normalizedTitle === normalizedQuery) return 3
   if (containsWholeTerm(normalizedTitle, normalizedQuery)) return 2
-  if (containsEveryQueryTerm(normalizedTitle, normalizedQuery)) return 1
+  if (containsEveryNormalizedQueryTerm(normalizedTitle, normalizedQuery))
+    return 1
   return 0
 }
 
-function normalizeExactMatchValue(value: string | null | undefined) {
+export function normalizeExactMatchValue(value: string | null | undefined) {
   return (
     value
       ?.normalize('NFKC')
+      .replace(/[\u2018\u2019]/g, "'")
+      .replace(/[\u201C\u201D]/g, '"')
+      .replace(/[\u2010-\u2015]/g, '-')
       .trim()
       .toLocaleLowerCase('en-GB')
       .replace(/\s+/g, ' ') ?? ''
@@ -464,8 +470,17 @@ function normalizeExactMatchValue(value: string | null | undefined) {
 }
 
 export function containsEveryQueryTerm(value: string, query: string) {
-  const normalizedValue = normalizeExactMatchValue(value)
-  const terms = normalizeExactMatchValue(query).split(' ').filter(Boolean)
+  return containsEveryNormalizedQueryTerm(
+    normalizeExactMatchValue(value),
+    normalizeExactMatchValue(query),
+  )
+}
+
+function containsEveryNormalizedQueryTerm(
+  normalizedValue: string,
+  normalizedQuery: string,
+) {
+  const terms = normalizedQuery.split(' ').filter(Boolean)
   return (
     terms.length > 0 &&
     terms.every((term) => containsWholeTerm(normalizedValue, term))
