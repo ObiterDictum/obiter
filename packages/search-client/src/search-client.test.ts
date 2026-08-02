@@ -573,6 +573,7 @@ describe('Legal search client', () => {
   })
 
   it('uses the engine score ahead of recency within a legal match tier', async () => {
+    // Raw provider field, exercises readEngineRankingScore through search().
     const newerLowerScore = authority({
       id: 'benchmark-newer',
       title: 'Alpha v Beta',
@@ -629,6 +630,7 @@ describe('Legal search client', () => {
   })
 
   it('orders phrase, all-term, and any-term body matches before recency', () => {
+    // Post-parse field, exercises the ranker in isolation.
     const anyTerm = authority({
       id: 'benchmark-any',
       title: 'Any v Term',
@@ -678,6 +680,71 @@ describe('Legal search client', () => {
         'material contribution',
       ).map(({ id }) => id),
     ).toEqual(['benchmark-phrase', 'benchmark-all', 'benchmark-any'])
+  })
+
+  it('uses snippets when paragraphs are present but empty for body matching', () => {
+    const snippetPhrase = authority({
+      id: 'snippet-phrase',
+      title: 'Snippet v Phrase',
+      dateDecided: '2020-01-01',
+      engineRankingScore: 0.1,
+      paragraphs: [],
+      snippets: [
+        {
+          evidenceId: 'snippet-phrase:judgment_paragraph:1',
+          paragraphNumber: 1,
+          text: 'The court considered material contribution directly.',
+          matchedTerms: ['material contribution'],
+          matchReason: 'body_text_match' as const,
+        },
+      ],
+    })
+    const allTerms = authority({
+      id: 'paragraph-all-terms',
+      title: 'Paragraph v Terms',
+      dateDecided: '2025-01-01',
+      engineRankingScore: 1,
+      paragraphs: [
+        {
+          id: 'paragraph-all-terms-p1',
+          documentId: 'paragraph-all-terms',
+          paragraphNumber: 1,
+          text: 'The material made a measurable contribution.',
+        },
+      ],
+    })
+
+    expect(
+      rankLegalSearchHitsByExactMatch(
+        [snippetPhrase, allTerms],
+        'material contribution',
+      ).map(({ id }) => id),
+    ).toEqual(['snippet-phrase', 'paragraph-all-terms'])
+  })
+
+  it('sorts hits with a missing dateDecided last without throwing', () => {
+    const withoutDateDecided = authority({
+      id: 'undated',
+      title: 'Undated v Authority',
+      engineRankingScore: 0.7,
+    })
+    Reflect.deleteProperty(withoutDateDecided, 'dateDecided')
+    const dated = authority({
+      id: 'dated',
+      title: 'Dated v Authority',
+      dateDecided: '2020-01-01',
+      engineRankingScore: 0.7,
+    })
+
+    expect(() =>
+      rankLegalSearchHitsByExactMatch([withoutDateDecided, dated], 'unmatched'),
+    ).not.toThrow()
+    expect(
+      rankLegalSearchHitsByExactMatch(
+        [withoutDateDecided, dated],
+        'unmatched',
+      ).map(({ id }) => id),
+    ).toEqual(['dated', 'undated'])
   })
 
   it('uses recency only after match tier and engine score are tied', () => {
@@ -808,6 +875,24 @@ describe('Legal search client', () => {
         text: 'The court considered Potanina and the effect of prior financial remedy proceedings.',
       },
     ])
+  })
+
+  it('does not select snippets from single-character query tokens', () => {
+    const snippets = extractLegalSearchSnippets(
+      authority({
+        paragraphs: [
+          {
+            id: 'uksc-2024-3-p1',
+            documentId: 'uksc-2024-3',
+            paragraphNumber: 1,
+            text: 'A court considered the application.',
+          },
+        ],
+      }),
+      'Re A',
+    )
+
+    expect(snippets).toEqual([])
   })
 
   it('matches snippets on Unicode-aware word boundaries', () => {

@@ -428,22 +428,11 @@ export async function search(
           : undefined,
       })),
       query,
-    ).map((hit) =>
-      options.includeParagraphs
-        ? hit
-        : {
-            id: hit.id,
-            title: hit.title,
-            neutralCitation: hit.neutralCitation,
-            court: hit.court,
-            jurisdiction: hit.jurisdiction,
-            dateDecided: hit.dateDecided,
-            sourceType: hit.sourceType,
-            sourceUrl: hit.sourceUrl,
-            snippets: hit.snippets,
-            engineRankingScore: hit.engineRankingScore,
-          },
-    )
+    ).map((hit) => {
+      if (options.includeParagraphs) return hit
+      const { paragraphs: _paragraphs, ...summary } = hit
+      return summary
+    })
 
     return {
       hits: rankedHits,
@@ -466,7 +455,7 @@ export function extractLegalSearchSnippets(
 ): LegalSearchSnippet[] {
   const paragraphs = hit.paragraphs ?? []
   const normalizedQuery = normalizeExactMatchValue(query)
-  const tokens = normalizedQuery.split(' ').filter(Boolean)
+  const tokens = normalizedQuery.split(' ').filter((token) => token.length > 1)
   const selectedParagraphs =
     tokens.length > 0
       ? paragraphs
@@ -538,21 +527,29 @@ export function rankLegalSearchHitsByExactMatch<T extends LegalSearchHit>(
   const normalizedQuery = normalizeExactMatchValue(query)
   if (!normalizedQuery) return hits
 
-  return hits
-    .map((hit, index) => ({
-      hit,
-      index,
-      matchTier: legalSearchMatchTier(hit, normalizedQuery),
-      engineRankingScore: validEngineRankingScore(hit.engineRankingScore) ?? 0,
-    }))
-    .sort(
-      (left, right) =>
-        right.matchTier - left.matchTier ||
-        right.engineRankingScore - left.engineRankingScore ||
-        right.hit.dateDecided.localeCompare(left.hit.dateDecided) ||
-        left.index - right.index,
-    )
-    .map(({ hit }) => hit)
+  return (
+    hits
+      .map((hit, index) => ({
+        hit,
+        index,
+        matchTier: legalSearchMatchTier(hit, normalizedQuery),
+        engineRankingScore:
+          validEngineRankingScore(hit.engineRankingScore) ?? 0,
+      }))
+      // Legal match tiers express user intent. Engine scores break ties within a
+      // tier only, so they never outweigh a more specific legal match.
+      .sort(
+        (left, right) =>
+          right.matchTier - left.matchTier ||
+          right.engineRankingScore - left.engineRankingScore ||
+          compareLegalSearchDates(
+            left.hit.dateDecided,
+            right.hit.dateDecided,
+          ) ||
+          left.index - right.index,
+      )
+      .map(({ hit }) => hit)
+  )
 }
 
 function legalSearchMatchTier(hit: LegalSearchHit, normalizedQuery: string) {
@@ -569,10 +566,9 @@ function legalSearchMatchTier(hit: LegalSearchHit, normalizedQuery: string) {
     return 4
   }
 
-  const bodySegments =
-    hit.paragraphs?.map(({ text }) => text) ??
-    hit.snippets?.map(({ text }) => text) ??
-    []
+  const bodySegments = hit.paragraphs?.length
+    ? hit.paragraphs.map(({ text }) => text)
+    : (hit.snippets?.map(({ text }) => text) ?? [])
   if (
     bodySegments.some((text) =>
       containsWholeTerm(normalizeExactMatchValue(text), normalizedQuery),
@@ -584,6 +580,15 @@ function legalSearchMatchTier(hit: LegalSearchHit, normalizedQuery: string) {
   const bodyText = bodySegments.join(' ')
   if (containsEveryQueryTerm(bodyText, normalizedQuery)) return 2
   if (containsAnyQueryTerm(bodyText, normalizedQuery)) return 1
+  return 0
+}
+
+function compareLegalSearchDates(left: unknown, right: unknown) {
+  if (typeof left === 'string' && typeof right === 'string') {
+    return right < left ? -1 : right > left ? 1 : 0
+  }
+  if (typeof left === 'string') return -1
+  if (typeof right === 'string') return 1
   return 0
 }
 
