@@ -48,13 +48,18 @@ export interface SearchIndexDocumentsResult {
   errors: Array<{ recordId: string | null; message: string }>
 }
 
+// Optional timings for diagnostics, not product behaviour.
+export interface LegalSearchDiagnostics {
+  providerSearchTimeMs: number
+  clientProcessingTimeMs: number
+}
+
 export interface LegalSearchResult {
   hits: LegalSearchHit[]
   query: string
   estimatedTotalHits: number
   processingTimeMs: number
-  providerSearchTimeMs: number
-  clientProcessingTimeMs: number
+  diagnostics?: LegalSearchDiagnostics
 }
 
 export interface LegalSearchOptions {
@@ -336,8 +341,10 @@ export async function search(
       query: result.query ?? query,
       estimatedTotalHits: result.estimatedTotalHits ?? rankedHits.length,
       processingTimeMs: result.processingTimeMs ?? 0,
-      providerSearchTimeMs,
-      clientProcessingTimeMs: performance.now() - clientProcessingStartedAt,
+      diagnostics: {
+        providerSearchTimeMs,
+        clientProcessingTimeMs: performance.now() - clientProcessingStartedAt,
+      },
     }
   } catch (error) {
     throw wrapSearchError('Search failed.', error)

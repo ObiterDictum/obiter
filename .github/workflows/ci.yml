@@ -52,7 +52,15 @@ jobs:
           SEARCH_BENCHMARK_API_KEY: search-benchmark-key
           SEARCH_BENCHMARK_HOST: http://127.0.0.1:7700
           SEARCH_BENCHMARK_REPORT_PATH: ${{ runner.temp }}/search-benchmark.json
+          SEARCH_BENCHMARK_KEEP_INDEX: '1'
         run: pnpm benchmark:search
+
+      - name: Curl search benchmark queries
+        env:
+          SEARCH_BENCHMARK_API_KEY: search-benchmark-key
+          SEARCH_BENCHMARK_HOST: http://127.0.0.1:7700
+          SEARCH_BENCHMARK_REPORT_PATH: ${{ runner.temp }}/search-benchmark.json
+        run: pnpm tsx packages/search-client/src/benchmark/curl.ts
 
       - name: Upload search benchmark report
         if: always()

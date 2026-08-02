@@ -118,8 +118,9 @@ async function runCase(
       returnedHitCount: hitIds.length,
       estimatedTotalHits: result.estimatedTotalHits,
       processingTimeMs: result.processingTimeMs,
-      providerSearchTimeMs: result.providerSearchTimeMs,
-      clientProcessingTimeMs: result.clientProcessingTimeMs,
+      providerSearchTimeMs: result.diagnostics?.providerSearchTimeMs ?? null,
+      clientProcessingTimeMs:
+        result.diagnostics?.clientProcessingTimeMs ?? null,
       wallClockSearchTimeMs,
       relevantHitHasEvidence,
       failureLabels: failureLabels(
@@ -414,6 +415,7 @@ async function main() {
       benchmark: 'search-correctness-gate-1',
       generatedAt: new Date().toISOString(),
       fixtureDocumentCount: searchBenchmarkDocuments.length,
+      indexName,
       metrics,
       baseline: searchBenchmarkBaseline,
       cases: results,
@@ -430,15 +432,17 @@ async function main() {
       process.exitCode = 1
     }
   } finally {
-    await client
-      .deleteIndex(indexName)
-      .waitTask({
-        timeout: 30_000,
-        interval: 100,
-      })
-      .catch((error) => {
-        console.warn('Search benchmark index cleanup failed.', error)
-      })
+    if (process.env.SEARCH_BENCHMARK_KEEP_INDEX !== '1') {
+      await client
+        .deleteIndex(indexName)
+        .waitTask({
+          timeout: 30_000,
+          interval: 100,
+        })
+        .catch((error) => {
+          console.warn('Search benchmark index cleanup failed.', error)
+        })
+    }
   }
 }
 
