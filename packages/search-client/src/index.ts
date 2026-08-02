@@ -25,6 +25,7 @@ export type LegalSearchMatchReason =
 export type LegalSearchHit = LegalAuthoritySummary & {
   paragraphs?: LegalAuthority['paragraphs']
   snippets?: LegalSearchSnippet[]
+  engineRankingScore?: number
 }
 export type LegalSearchFilters = Partial<{
   court: string
@@ -63,6 +64,8 @@ export interface LegalSearchResult {
 }
 
 export interface LegalSearchOptions {
+  // With both of these false the request omits paragraphs, so ranking has no
+  // body text to read and the body match tiers cannot fire.
   includeParagraphs?: boolean
   includeSnippets?: boolean
   limit?: number
@@ -131,6 +134,7 @@ type IndexLike = {
       limit?: number
       matchingStrategy?: 'all' | 'frequency'
       rankingScoreThreshold?: number
+      showRankingScore?: boolean
     },
   ): Promise<{
     hits: unknown[]
@@ -385,11 +389,13 @@ export async function search(
       limit?: number
       matchingStrategy?: 'all' | 'frequency'
       rankingScoreThreshold?: number
+      showRankingScore?: boolean
     } = {
       filter: toMeiliFilters(filters),
       sort: ['dateDecided:desc'],
       matchingStrategy:
         options.matchingStrategy ?? legalSearchIndexSettings.matchingStrategy,
+      showRankingScore: true,
       attributesToRetrieve:
         options.includeParagraphs || options.includeSnippets
           ? [...searchSummaryAttributes, 'paragraphs']
@@ -406,36 +412,29 @@ export async function search(
     const result = await client.index(indexName).search(query, searchOptions)
     const providerSearchTimeMs = performance.now() - providerSearchStartedAt
     const clientProcessingStartedAt = performance.now()
-    const hits = result.hits.map((hit) =>
-      options.includeParagraphs || options.includeSnippets
-        ? LegalAuthoritySchema.parse(hit)
-        : LegalAuthoritySummarySchema.parse(hit),
-    )
+    const hits: LegalSearchHit[] = result.hits.map((hit) => {
+      const parsedHit =
+        options.includeParagraphs || options.includeSnippets
+          ? LegalAuthoritySchema.parse(hit)
+          : LegalAuthoritySummarySchema.parse(hit)
+      const engineRankingScore = readEngineRankingScore(hit)
+      return engineRankingScore === undefined
+        ? parsedHit
+        : { ...parsedHit, engineRankingScore }
+    })
     const rankedHits = rankLegalSearchHitsByExactMatch(
-      hits.map((hit) =>
-        options.includeParagraphs
-          ? {
-              ...hit,
-              snippets: options.includeSnippets
-                ? extractLegalSearchSnippets(hit, query)
-                : undefined,
-            }
-          : {
-              id: hit.id,
-              title: hit.title,
-              neutralCitation: hit.neutralCitation,
-              court: hit.court,
-              jurisdiction: hit.jurisdiction,
-              dateDecided: hit.dateDecided,
-              sourceType: hit.sourceType,
-              sourceUrl: hit.sourceUrl,
-              snippets: options.includeSnippets
-                ? extractLegalSearchSnippets(hit, query)
-                : undefined,
-            },
-      ),
+      hits.map((hit) => ({
+        ...hit,
+        snippets: options.includeSnippets
+          ? extractLegalSearchSnippets(hit, query)
+          : undefined,
+      })),
       query,
-    )
+    ).map((hit) => {
+      if (options.includeParagraphs) return hit
+      const { paragraphs: _paragraphs, ...summary } = hit
+      return summary
+    })
 
     return {
       hits: rankedHits,
@@ -530,27 +529,70 @@ export function rankLegalSearchHitsByExactMatch<T extends LegalSearchHit>(
   const normalizedQuery = normalizeExactMatchValue(query)
   if (!normalizedQuery) return hits
 
-  return hits
-    .map((hit, index) => ({
-      hit,
-      index,
-      score: exactMatchScore(hit, normalizedQuery),
-    }))
-    .sort((left, right) => right.score - left.score || left.index - right.index)
-    .map(({ hit }) => hit)
+  return (
+    hits
+      .map((hit, index) => ({
+        hit,
+        index,
+        matchTier: legalSearchMatchTier(hit, normalizedQuery),
+        engineRankingScore:
+          validEngineRankingScore(hit.engineRankingScore) ?? 0,
+      }))
+      // Legal match tiers express user intent. Engine scores break ties within a
+      // tier, then ties preserve the caller's or engine's supplied order. An
+      // equal engine score is not equal engine relevance: it is one lossy number
+      // summarising the words, typo, proximity, attribute, exactness and sort
+      // cascade, so the supplied order still carries signal the score has lost.
+      .sort(
+        (left, right) =>
+          right.matchTier - left.matchTier ||
+          right.engineRankingScore - left.engineRankingScore ||
+          left.index - right.index,
+      )
+      .map(({ hit }) => hit)
+  )
 }
 
-function exactMatchScore(hit: LegalSearchHit, normalizedQuery: string) {
+function legalSearchMatchTier(hit: LegalSearchHit, normalizedQuery: string) {
   const normalizedTitle = normalizeExactMatchValue(hit.title)
 
-  if (normalizeExactMatchValue(hit.id) === normalizedQuery) return 5
+  if (normalizeExactMatchValue(hit.id) === normalizedQuery) return 8
   if (normalizeExactMatchValue(hit.neutralCitation) === normalizedQuery)
-    return 4
-  if (normalizedTitle === normalizedQuery) return 3
-  if (containsWholeTerm(normalizedTitle, normalizedQuery)) return 2
+    return 7
+  if (normalizedTitle === normalizedQuery) return 6
+  if (containsWholeTerm(normalizedTitle, normalizedQuery)) return 5
   if (containsEveryNormalizedQueryTerm(normalizedTitle, normalizedQuery))
-    return 1
+    return 4
+
+  const bodySegments = hit.paragraphs?.length
+    ? hit.paragraphs.map(({ text }) => text)
+    : (hit.snippets?.map(({ text }) => text) ?? [])
+  const normalizedSegments = bodySegments.map(normalizeExactMatchValue)
+  if (
+    normalizedSegments.some((text) => containsWholeTerm(text, normalizedQuery))
+  ) {
+    return 3
+  }
+
+  const normalizedBody = normalizedSegments.join(' ')
+  if (containsEveryNormalizedQueryTerm(normalizedBody, normalizedQuery))
+    return 2
+  if (containsAnyNormalizedQueryTerm(normalizedBody, normalizedQuery)) return 1
   return 0
+}
+
+function readEngineRankingScore(hit: unknown) {
+  if (typeof hit !== 'object' || hit === null) return undefined
+  return validEngineRankingScore(Reflect.get(hit, '_rankingScore'))
+}
+
+function validEngineRankingScore(value: unknown) {
+  return typeof value === 'number' &&
+    Number.isFinite(value) &&
+    value >= 0 &&
+    value <= 1
+    ? value
+    : undefined
 }
 
 export const exactMatchPunctuationFolds = [
@@ -613,6 +655,14 @@ function containsEveryNormalizedQueryTerm(
     terms.length > 0 &&
     terms.every((term) => containsWholeTerm(normalizedValue, term))
   )
+}
+
+function containsAnyNormalizedQueryTerm(
+  normalizedValue: string,
+  normalizedQuery: string,
+) {
+  const terms = normalizedQuery.split(' ').filter(Boolean)
+  return terms.some((term) => containsWholeTerm(normalizedValue, term))
 }
 
 /**

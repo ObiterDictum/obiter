@@ -18,6 +18,7 @@ export const searchBenchmarkBaseline = {
   minimumContentWordRecall: 1,
   minimumMalformedCitationNoResultRate: 1,
   minimumAmbiguitySurfaced: 1,
+  minimumEngineRankingScoreCoverage: 1,
   // Meilisearch comparison operators (>=, <=) accept numeric operands only, so
   // toMeiliFilters emitting `dateDecided >= "2019-12-31"` is rejected. Fixing it
   // needs a numeric dateDecidedTimestamp field on the document schema, which is
