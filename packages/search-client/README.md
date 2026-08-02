@@ -74,3 +74,15 @@ numeric date timestamp field in the document schema and is tracked separately.
 
 The fixture text is synthetic. Do not replace it with raw legal or client
 matter text.
+
+Because it is synthetic, the 0.25 ranking score threshold is calibrated on
+data that is not the data. Meilisearch ranking scores depend on corpus
+statistics, so both the junk band and the recall band will move on a real
+corpus, and the 0.157 of headroom above the `claimnt` match is not guaranteed
+to survive. The 66 fixture documents also give the junk band a single
+observation to rest on. Whoever first indexes a real TNA corpus should
+re-measure the separation rather than trusting the constant: sweep the
+threshold across the objective set again, check where the lowest legitimate
+typo match and the highest junk match actually land, and move the default if
+the gap has shifted. The sweep needs no reindex, since the threshold is a
+search-time option.

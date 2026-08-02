@@ -238,6 +238,10 @@ export const legalSearchIndexSettings = {
   // gap, leaving 0.157 of headroom over the junk match and 0.116 under the
   // recall one. The other three no-answer cases return nothing even with the
   // floor removed entirely, so they do not constrain this value.
+  //
+  // Those scores come from the synthetic benchmark fixture, and ranking scores
+  // depend on corpus statistics, so re-measure this on a real corpus before
+  // trusting it. See the calibration note in the package README.
   rankingScoreThreshold: 0.25,
   stopWordCount: legalStopWords.length,
 } as const
