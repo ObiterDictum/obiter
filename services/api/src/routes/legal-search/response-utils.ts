@@ -4,8 +4,10 @@ import {
 } from '@obiter/contracts'
 import type { LegalAuthority } from '@obiter/legal-schema'
 import {
+  containsWholeTerm,
   createJudgmentParagraphEvidenceId,
   extractLegalSearchSnippets,
+  normalizeExactMatchValue,
   type LegalSearchHit,
   type LegalSearchMatchReason,
 } from '@obiter/search-client'
@@ -113,17 +115,17 @@ function getLegalSearchMatchReason(
   query: string,
   hasSnippetMatch: boolean,
 ): LegalSearchMatchReason {
-  const normalizedQuery = normalizeSearchValue(query)
+  const normalizedQuery = normalizeExactMatchValue(query)
   if (!normalizedQuery) return 'keyword_match'
-  if (normalizeSearchValue(hit.id) === normalizedQuery)
+  if (normalizeExactMatchValue(hit.id) === normalizedQuery)
     return 'exact_document_id'
-  if (normalizeSearchValue(hit.neutralCitation) === normalizedQuery)
+  if (normalizeExactMatchValue(hit.neutralCitation) === normalizedQuery)
     return 'exact_neutral_citation'
 
-  const normalizedTitle = normalizeSearchValue(hit.title)
+  const normalizedTitle = normalizeExactMatchValue(hit.title)
   if (
     normalizedTitle === normalizedQuery ||
-    normalizedTitle.includes(normalizedQuery)
+    containsWholeTerm(normalizedTitle, normalizedQuery)
   ) {
     return 'title_match'
   }
@@ -146,10 +148,6 @@ function scoreLegalSearchMatch(matchReason: LegalSearchMatchReason) {
     case 'keyword_match':
       return 0.5
   }
-}
-
-function normalizeSearchValue(value: string | null | undefined) {
-  return value?.trim().toLowerCase().replace(/\s+/g, ' ') ?? ''
 }
 
 function inferFetchOutcome(

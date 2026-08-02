@@ -9,7 +9,7 @@ export const searchBenchmarkBaseline = {
   minimumTop1ExactSourceSuccess: 0.9268,
   minimumTop3ExactSourceSuccess: 0.9268,
   minimumExactLookupTop1Success: 1,
-  minimumShortWordPrecision: 0.2,
+  minimumShortWordPrecision: 1,
   minimumEvidenceUnitRecall: 1,
   minimumNoAnswerPrecision: 0,
   minimumMalformedCitationNoResultRate: 1,

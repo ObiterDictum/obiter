@@ -108,6 +108,9 @@ type IndexLike = {
   updateFilterableAttributes(attributes: string[]): SearchEnqueuedTaskPromise
   updateSortableAttributes(attributes: string[]): SearchEnqueuedTaskPromise
   updateRankingRules(rules: string[]): SearchEnqueuedTaskPromise
+  updatePrefixSearch(
+    prefixSearch: 'disabled' | 'indexingTime',
+  ): SearchEnqueuedTaskPromise
   addDocuments(
     documents: LegalSearchDocument[],
     options: { primaryKey: 'id' },
@@ -184,6 +187,8 @@ const rankingRules = [
   'exactness',
   'sort',
 ]
+const indexSetupTaskTimeoutMs = 10 * 60_000
+const documentIndexingTaskTimeoutMs = 30 * 60_000
 
 export function createClient(host: string, apiKey: string): MeiliSearch {
   return new MeiliSearch({ host, apiKey })
@@ -201,7 +206,7 @@ export async function createIndex(
     const createTask = client.createIndex(indexName, { primaryKey })
     const task = await createTask
     taskUid = task.taskUid
-    await waitForSucceededTask(createTask)
+    await waitForSucceededTask(createTask, indexSetupTaskTimeoutMs)
   } catch (error) {
     if (!isIndexAlreadyExistsError(error)) {
       throw wrapSearchError('Search index setup failed.', error)
@@ -212,14 +217,24 @@ export async function createIndex(
     const index = client.index(indexName)
     await waitForSucceededTask(
       index.updateSearchableAttributes(searchableAttributes),
+      indexSetupTaskTimeoutMs,
     )
     await waitForSucceededTask(
       index.updateFilterableAttributes(filterableAttributes),
+      indexSetupTaskTimeoutMs,
     )
     await waitForSucceededTask(
       index.updateSortableAttributes(sortableAttributes),
+      indexSetupTaskTimeoutMs,
     )
-    await waitForSucceededTask(index.updateRankingRules(rankingRules))
+    await waitForSucceededTask(
+      index.updateRankingRules(rankingRules),
+      indexSetupTaskTimeoutMs,
+    )
+    await waitForSucceededTask(
+      index.updatePrefixSearch('disabled'),
+      indexSetupTaskTimeoutMs,
+    )
 
     return { taskUid }
   } catch (error) {
@@ -247,7 +262,7 @@ export async function indexDocuments(
       .addDocuments(parsed.data, {
         primaryKey: 'id',
       })
-      .waitTask({ timeout: 30_000, interval: 100 })
+      .waitTask({ timeout: documentIndexingTaskTimeoutMs, interval: 100 })
 
     if (task.status !== 'succeeded') {
       return indexingTaskFailure(parsed.data, task)
@@ -274,6 +289,12 @@ export async function indexDocuments(
           : [],
     }
   } catch (error) {
+    if (isTaskWaitTimeout(error)) {
+      throw new Error(
+        'Document indexing status timed out. The Meilisearch task may still be running.',
+        { cause: error },
+      )
+    }
     throw wrapSearchError('Document indexing failed.', error)
   }
 }
@@ -400,10 +421,11 @@ function matchedSnippetTerms(
   tokens: string[],
 ) {
   const normalizedText = normalizeExactMatchValue(text)
-  if (normalizedQuery && normalizedText.includes(normalizedQuery))
+  if (normalizedQuery && containsWholeTerm(normalizedText, normalizedQuery)) {
     return [normalizedQuery]
+  }
 
-  return tokens.filter((token) => normalizedText.includes(token))
+  return tokens.filter((token) => containsWholeTerm(normalizedText, token))
 }
 
 function snippetMatchScore(
@@ -412,9 +434,12 @@ function snippetMatchScore(
   tokens: string[],
 ) {
   const normalizedText = normalizeExactMatchValue(text)
-  if (normalizedText.includes(normalizedQuery)) return 3
-  if (tokens.every((token) => normalizedText.includes(token))) return 2
-  if (tokens.some((token) => normalizedText.includes(token))) return 1
+  if (normalizedQuery && containsWholeTerm(normalizedText, normalizedQuery)) {
+    return 3
+  }
+  if (tokens.every((token) => containsWholeTerm(normalizedText, token)))
+    return 2
+  if (tokens.some((token) => containsWholeTerm(normalizedText, token))) return 1
   return 0
 }
 
@@ -442,18 +467,88 @@ function exactMatchScore(hit: LegalSearchHit, normalizedQuery: string) {
   if (normalizeExactMatchValue(hit.neutralCitation) === normalizedQuery)
     return 4
   if (normalizedTitle === normalizedQuery) return 3
-  if (normalizedTitle.includes(normalizedQuery)) return 2
-  if (containsEveryQueryTerm(normalizedTitle, normalizedQuery)) return 1
+  if (containsWholeTerm(normalizedTitle, normalizedQuery)) return 2
+  if (containsEveryNormalizedQueryTerm(normalizedTitle, normalizedQuery))
+    return 1
   return 0
 }
 
-function normalizeExactMatchValue(value: string | null | undefined) {
-  return value?.trim().toLowerCase().replace(/\s+/g, ' ') ?? ''
+export const exactMatchPunctuationFolds = [
+  ['‘', "'"],
+  ['’', "'"],
+  ['“', '"'],
+  ['”', '"'],
+  ['‐', '-'],
+  ['‑', '-'],
+  ['‒', '-'],
+  ['–', '-'],
+  ['—', '-'],
+  ['―', '-'],
+] as const
+
+export const exactMatchPunctuationFrom = exactMatchPunctuationFolds
+  .map(([from]) => from)
+  .join('')
+export const exactMatchPunctuationTo = exactMatchPunctuationFolds
+  .map(([, to]) => to)
+  .join('')
+
+export function normalizeExactMatchValue(value: string | null | undefined) {
+  const punctuationFolded = exactMatchPunctuationFolds.reduce(
+    (normalized, [from, to]) => normalized.replaceAll(from, to),
+    value?.normalize('NFKC') ?? '',
+  )
+
+  return punctuationFolded
+    .trim()
+    .toLocaleLowerCase('en-GB')
+    .replace(/\s+/g, ' ')
 }
 
-function containsEveryQueryTerm(value: string, normalizedQuery: string) {
+/**
+ * Normalizes both arguments before checking that every whitespace-delimited
+ * query term appears as a whole term.
+ */
+export function containsEveryQueryTerm(value: string, query: string) {
+  return containsEveryNormalizedQueryTerm(
+    normalizeExactMatchValue(value),
+    normalizeExactMatchValue(query),
+  )
+}
+
+/**
+ * Whole-term matching for searchable query terms. Stop-word handling is added
+ * by the index-tuning layer above this branch in the search stack.
+ */
+export function containsEverySearchableQueryTerm(value: string, query: string) {
+  return containsEveryQueryTerm(value, query)
+}
+
+function containsEveryNormalizedQueryTerm(
+  normalizedValue: string,
+  normalizedQuery: string,
+) {
   const terms = normalizedQuery.split(' ').filter(Boolean)
-  return terms.length > 0 && terms.every((term) => value.includes(term))
+  return (
+    terms.length > 0 &&
+    terms.every((term) => containsWholeTerm(normalizedValue, term))
+  )
+}
+
+/**
+ * Checks normalized text and term values for a whole-term match. Normalize
+ * both inputs with `normalizeExactMatchValue` before calling this helper.
+ */
+export function containsWholeTerm(value: string, term: string) {
+  if (!term) return false
+  return new RegExp(
+    `(?<![\\p{L}\\p{M}\\p{N}_])${escapeRegularExpression(term)}(?![\\p{L}\\p{M}\\p{N}_])`,
+    'u',
+  ).test(value)
+}
+
+function escapeRegularExpression(value: string) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function trimSnippetText(text: string, tokens: string[]) {
@@ -505,10 +600,15 @@ export async function getDocument(
   }
 }
 
+function isTaskWaitTimeout(error: unknown) {
+  return error instanceof Error && /timed out|timeout/i.test(error.message)
+}
+
 async function waitForSucceededTask(
   task: SearchEnqueuedTaskPromise,
+  timeout = 30_000,
 ): Promise<SearchIndexingTask> {
-  const completed = await task.waitTask({ timeout: 30_000, interval: 100 })
+  const completed = await task.waitTask({ timeout, interval: 100 })
   if (completed.status !== 'succeeded') {
     throw new SearchTaskError(completed)
   }

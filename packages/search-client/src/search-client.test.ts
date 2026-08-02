@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  containsEveryQueryTerm,
+  containsEverySearchableQueryTerm,
   createIndex,
+  exactMatchPunctuationFolds,
+  exactMatchPunctuationFrom,
+  exactMatchPunctuationTo,
   extractLegalSearchSnippets,
   getDocument,
   indexDocuments,
@@ -61,6 +66,7 @@ describe('Legal search client', () => {
       updateFilterableAttributes: vi.fn(() => completedTask({ uid: 9 })),
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
+      updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
       addDocuments: vi.fn(),
       search: vi.fn(),
     }
@@ -99,6 +105,10 @@ describe('Legal search client', () => {
       'exactness',
       'sort',
     ])
+    expect(index.updatePrefixSearch).toHaveBeenCalledWith('disabled')
+    expect(
+      index.updatePrefixSearch.mock.results[0]?.value.waitTask,
+    ).toHaveBeenCalledWith({ timeout: 600_000, interval: 100 })
   })
 
   it('updates index settings when the index already exists', async () => {
@@ -107,6 +117,7 @@ describe('Legal search client', () => {
       updateFilterableAttributes: vi.fn(() => completedTask({ uid: 9 })),
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
+      updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
       addDocuments: vi.fn(),
       search: vi.fn(),
     }
@@ -131,6 +142,7 @@ describe('Legal search client', () => {
       updateFilterableAttributes: vi.fn(() => completedTask({ uid: 9 })),
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
+      updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
       addDocuments: vi.fn(),
       search: vi.fn(),
     }
@@ -171,6 +183,7 @@ describe('Legal search client', () => {
       ),
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
+      updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
       addDocuments: vi.fn(),
       search: vi.fn(),
     }
@@ -189,7 +202,8 @@ describe('Legal search client', () => {
   })
 
   it('validates documents before indexing', async () => {
-    const addDocuments = vi.fn(() => completedTask())
+    const indexingTask = completedTask()
+    const addDocuments = vi.fn(() => indexingTask)
     const client = {
       index: () => ({ addDocuments }),
     }
@@ -201,6 +215,10 @@ describe('Legal search client', () => {
     expect(result).toEqual({ indexedCount: 1, failedCount: 0, errors: [] })
     expect(addDocuments).toHaveBeenCalledWith([authority()], {
       primaryKey: 'id',
+    })
+    expect(indexingTask.waitTask).toHaveBeenCalledWith({
+      timeout: 1_800_000,
+      interval: 100,
     })
   })
 
@@ -238,6 +256,22 @@ describe('Legal search client', () => {
       ],
     })
     expect(result.errors[0]?.message).not.toContain('sensitive detail')
+  })
+
+  it('reports an indexing wait timeout without claiming the task failed', async () => {
+    const indexingTask = completedTask()
+    indexingTask.waitTask = vi.fn(async () => {
+      throw new Error('Task timed out after 1800000ms')
+    })
+    const client = {
+      index: () => ({ addDocuments: vi.fn(() => indexingTask) }),
+    }
+
+    await expect(
+      indexDocuments(client, 'legal_authorities', [authority()]),
+    ).rejects.toThrow(
+      'Document indexing status timed out. The Meilisearch task may still be running.',
+    )
   })
 
   it('reports validation failures without touching Meilisearch', async () => {
@@ -492,6 +526,112 @@ describe('Legal search client', () => {
         text: 'The court considered Potanina and the effect of prior financial remedy proceedings.',
       },
     ])
+  })
+
+  it('matches snippets on Unicode-aware word boundaries', () => {
+    const hit = authority({
+      paragraphs: [
+        {
+          id: 'uksc-2024-3-p1',
+          documentId: 'uksc-2024-3',
+          paragraphNumber: 1,
+          text: "A test was applied to José's self-incrimination evidence and the testator's intention.",
+        },
+        {
+          id: 'uksc-2024-3-p2',
+          documentId: 'uksc-2024-3',
+          paragraphNumber: 2,
+          text: 'Contested testimony from Joséphine concerned intestate protest and the latest filing.',
+        },
+      ],
+    })
+
+    expect(extractLegalSearchSnippets(hit, 'test')).toMatchObject([
+      { paragraphNumber: 1, matchedTerms: ['test'] },
+    ])
+    expect(extractLegalSearchSnippets(hit, 'testator')).toMatchObject([
+      { paragraphNumber: 1, matchedTerms: ['testator'] },
+    ])
+    expect(extractLegalSearchSnippets(hit, 'incrimination')).toMatchObject([
+      { paragraphNumber: 1, matchedTerms: ['incrimination'] },
+    ])
+    expect(extractLegalSearchSnippets(hit, 'José')).toMatchObject([
+      { paragraphNumber: 1, matchedTerms: ['josé'] },
+    ])
+    expect(extractLegalSearchSnippets(hit, 'Joséphine')).toMatchObject([
+      { paragraphNumber: 2, matchedTerms: ['joséphine'] },
+    ])
+    expect(containsEveryQueryTerm('Joséphine contested', 'José test')).toBe(
+      false,
+    )
+    expect(containsEverySearchableQueryTerm('test_case', 'test')).toBe(false)
+    expect(containsEverySearchableQueryTerm('_test', 'test')).toBe(false)
+  })
+
+  it('derives equal-length SQL punctuation translation arguments', () => {
+    const fromCharacters = Array.from(exactMatchPunctuationFrom)
+    const toCharacters = Array.from(exactMatchPunctuationTo)
+
+    expect(fromCharacters).toHaveLength(toCharacters.length)
+    expect(
+      fromCharacters.map((from, index) => [from, toCharacters[index]]),
+    ).toEqual(exactMatchPunctuationFolds)
+  })
+
+  it('folds typographic apostrophes before whole-term matching', () => {
+    expect(
+      containsEveryQueryTerm(
+        'The testator’s intention was recorded.',
+        "testator's",
+      ),
+    ).toBe(true)
+    expect(
+      containsEveryQueryTerm(
+        "The testator's intention was recorded.",
+        'testator’s',
+      ),
+    ).toBe(true)
+
+    const snippets = extractLegalSearchSnippets(
+      authority({
+        paragraphs: [
+          {
+            id: 'uksc-2024-3-p1',
+            documentId: 'uksc-2024-3',
+            paragraphNumber: 1,
+            text: 'The testator’s intention was recorded.',
+          },
+        ],
+      }),
+      "testator's",
+    )
+
+    expect(snippets).toHaveLength(1)
+    expect(snippets[0]?.matchedTerms).toEqual(["testator's"])
+  })
+
+  it('treats citation punctuation as literal whole-term text', () => {
+    const citation = '[2021] EWHC 123 (Admin)'
+    const hit = authority({
+      paragraphs: [
+        {
+          id: 'uksc-2024-3-p1',
+          documentId: 'uksc-2024-3',
+          paragraphNumber: 1,
+          text: `The court followed ${citation}.`,
+        },
+      ],
+    })
+
+    expect(containsEveryQueryTerm(hit.paragraphs[0].text, citation)).toBe(true)
+    expect(extractLegalSearchSnippets(hit, citation)).toHaveLength(1)
+    expect(
+      containsEveryQueryTerm(
+        'The court followed 2024 UKSC 3.',
+        '[2024] UKSC 3',
+      ),
+    ).toBe(false)
+    expect(extractLegalSearchSnippets(hit, '[2024] UKSC 3')).toEqual([])
   })
 
   it('omits snippets when paragraph text does not match the query', () => {
