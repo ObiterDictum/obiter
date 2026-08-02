@@ -66,6 +66,8 @@ export interface LegalSearchOptions {
   includeParagraphs?: boolean
   includeSnippets?: boolean
   limit?: number
+  // Set null to disable the relevance floor when recall matters more than precision.
+  rankingScoreThreshold?: number | null
 }
 
 interface SearchIndexingTask {
@@ -177,26 +179,17 @@ const legalStopWords = [
   'a',
   'an',
   'and',
-  'appeal',
-  'application',
   'are',
   'as',
   'at',
   'be',
   'been',
   'by',
-  'case',
-  'claimant',
-  'court',
-  'decision',
-  'defendant',
   'for',
   'from',
   'in',
   'is',
   'it',
-  'judge',
-  'judgment',
   'of',
   'on',
   'or',
@@ -280,7 +273,7 @@ export async function createIndex(
     )
     await waitForSucceededTask(
       index.updateTypoTolerance({
-        minWordSizeForTypos: { oneTypo: 8, twoTypos: 12 },
+        minWordSizeForTypos: { oneTypo: 5, twoTypos: 9 },
       }),
       indexSetupTaskTimeoutMs,
     )
@@ -367,13 +360,16 @@ export async function search(
       filter: toMeiliFilters(filters),
       sort: ['dateDecided:desc'],
       matchingStrategy: 'frequency',
-      rankingScoreThreshold: 0.5,
       attributesToRetrieve:
         options.includeParagraphs || options.includeSnippets
           ? [...searchSummaryAttributes, 'paragraphs']
           : searchSummaryAttributes,
     }
     if (typeof options.limit === 'number') searchOptions.limit = options.limit
+    if (query && options.rankingScoreThreshold !== null) {
+      searchOptions.rankingScoreThreshold =
+        options.rankingScoreThreshold ?? 0.5
+    }
 
     const providerSearchStartedAt = performance.now()
     const result = await client.index(indexName).search(query, searchOptions)

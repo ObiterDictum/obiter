@@ -89,14 +89,12 @@ describe('Legal search client', () => {
       'neutralCitation',
       'paragraphs.text',
     ])
-    expect(index.updateFilterableAttributes).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        'court',
-        'jurisdiction',
-        'sourceType',
-        'dateDecided',
-      ]),
-    )
+    expect(index.updateFilterableAttributes).toHaveBeenCalledWith([
+      'court',
+      'jurisdiction',
+      'sourceType',
+      'dateDecided',
+    ])
     expect(index.updateRankingRules).toHaveBeenCalledWith([
       'words',
       'typo',
@@ -109,17 +107,34 @@ describe('Legal search client', () => {
     expect(
       index.updatePrefixSearch.mock.results[0]?.value.waitTask,
     ).toHaveBeenCalledWith({ timeout: 600_000, interval: 100 })
-    expect(index.updateStopWords).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        'appeal',
-        'application',
-        'claimant',
-        'court',
-        'judgment',
-      ]),
-    )
+    expect(index.updateStopWords).toHaveBeenCalledWith([
+      'a',
+      'an',
+      'and',
+      'are',
+      'as',
+      'at',
+      'be',
+      'been',
+      'by',
+      'for',
+      'from',
+      'in',
+      'is',
+      'it',
+      'of',
+      'on',
+      'or',
+      'that',
+      'the',
+      'this',
+      'to',
+      'was',
+      'were',
+      'with',
+    ])
     expect(index.updateTypoTolerance).toHaveBeenCalledWith({
-      minWordSizeForTypos: { oneTypo: 8, twoTypos: 12 },
+      minWordSizeForTypos: { oneTypo: 5, twoTypos: 9 },
     })
   })
 
@@ -351,6 +366,44 @@ describe('Legal search client', () => {
     })
   })
 
+  it('allows callers to lower or disable the ranking-score threshold', async () => {
+    const searchMock = vi.fn(async () => ({
+      hits: [authority()],
+      query: 'test',
+      estimatedTotalHits: 1,
+      processingTimeMs: 1,
+    }))
+    const client = {
+      index: () => ({ search: searchMock }),
+    }
+
+    await search(
+      client,
+      'legal_authorities',
+      'test',
+      {},
+      { rankingScoreThreshold: 0.2 },
+    )
+    await search(
+      client,
+      'legal_authorities',
+      'test',
+      {},
+      { rankingScoreThreshold: null },
+    )
+
+    expect(searchMock).toHaveBeenNthCalledWith(
+      1,
+      'test',
+      expect.objectContaining({ rankingScoreThreshold: 0.2 }),
+    )
+    expect(searchMock).toHaveBeenNthCalledWith(
+      2,
+      'test',
+      expect.not.objectContaining({ rankingScoreThreshold: expect.anything() }),
+    )
+  })
+
   it('passes explicit result limits to the search provider', async () => {
     const searchMock = vi.fn(async () => ({
       hits: [authority()],
@@ -370,6 +423,12 @@ describe('Legal search client', () => {
       { limit: 10 },
     )
 
+    expect(searchMock).toHaveBeenCalledWith(
+      '',
+      expect.not.objectContaining({
+        rankingScoreThreshold: expect.anything(),
+      }),
+    )
     expect(searchMock).toHaveBeenCalledWith(
       '',
       expect.objectContaining({

@@ -64,6 +64,9 @@ function failureLabels(
   if (testCase.expectedNoResults && hitIds.length > 0) {
     labels.push('unexpected_results')
   }
+  if (testCase.expectedResults && hitIds.length === 0) {
+    labels.push('expected_results_missing')
+  }
   if (testCase.expectedTopId && topK[0] !== testCase.expectedTopId) {
     labels.push('top_1_miss')
   }
@@ -86,6 +89,23 @@ function failureLabels(
     labels.push('short_word_false_positive')
   }
   return labels
+}
+
+async function runCourtCodeDiagnostics(
+  client: ReturnType<typeof createClient>,
+) {
+  const queries = ['UKSC', 'EWCA Civ', 'Admin']
+  return Promise.all(
+    queries.map(async (query) => {
+      const result = await search(client, indexName, query, {}, { limit: 20 })
+      return {
+        query,
+        returnedHitCount: result.hits.length,
+        estimatedTotalHits: result.estimatedTotalHits,
+        topK: result.hits.slice(0, topKSize).map((hit) => hit.id),
+      }
+    }),
+  )
 }
 
 async function runCase(
@@ -416,12 +436,14 @@ async function main() {
     }
 
     const metrics = calculateMetrics(results)
+    const courtCodeDiagnostics = await runCourtCodeDiagnostics(client)
     const regressions = regressionFailures(metrics, results)
     const report = {
       benchmark: 'search-correctness-gate-1',
       generatedAt: new Date().toISOString(),
       fixtureDocumentCount: searchBenchmarkDocuments.length,
       metrics,
+      courtCodeDiagnostics,
       baseline: searchBenchmarkBaseline,
       cases: results,
       regressionFailures: regressions,
