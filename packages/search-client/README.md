@@ -19,7 +19,17 @@ searches, while each case retains Meilisearch's `processingTimeMs` separately.
 The 250 ms wall-clock P95 ceiling provides headroom over the observed 45 ms CI
 P95 without treating the engine's rounded processing time as end-to-end latency.
 Set `SEARCH_BENCHMARK_ALLOW_REGRESSION=1` to retain the report while disabling
-its failure exit code, for local investigation only.
+its failure exit code, for local investigation only. Set
+`SEARCH_BENCHMARK_REPORT_PATH` to write the JSON report to a file.
+
+### Known latency observation
+
+The CI Meilisearch container shows a bimodal 40.579 ms adder in the provider-call
+span. Meilisearch reports 0 ms execution time and client-side processing is below
+0.703 ms. A seeded second pass found the same 21 slow query ids at different
+ordinal positions, so the observation is request-content dependent rather than
+an artefact of the benchmark's fixed order. It has not been reproduced outside
+that CI container and may not apply to the real deployment topology.
 
 The date-filter cases `date-brown-from-1994`, `date-potanina-2024` and
 `date-smith-before-2019` are currently expected to fail with `search_error`.

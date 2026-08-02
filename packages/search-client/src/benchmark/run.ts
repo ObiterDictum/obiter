@@ -14,7 +14,6 @@ const apiKey = process.env.SEARCH_BENCHMARK_API_KEY ?? 'search-benchmark-key'
 const indexName = `legal-authorities-benchmark-${process.pid}`
 const topKSize = 3
 const resultLimit = 20
-const orderProbeSeed = 2_024_052
 const knownFailingCaseIds = new Set<string>(
   searchBenchmarkBaseline.knownFailingCaseIds,
 )
@@ -47,24 +46,6 @@ function percentile95(values: number[]) {
   if (values.length === 0) return null
   const sorted = [...values].sort((left, right) => left - right)
   return sorted[Math.ceil(sorted.length * 0.95) - 1] ?? null
-}
-
-function shuffledCases(seed: number) {
-  let state = seed
-  const random = () => {
-    state = (state * 1_664_525 + 1_013_904_223) >>> 0
-    return state / 2 ** 32
-  }
-  const cases = [...searchBenchmarkCases]
-  for (let index = cases.length - 1; index > 0; index -= 1) {
-    const replacementIndex = Math.floor(random() * (index + 1))
-    const replacement = cases[replacementIndex]
-    const current = cases[index]
-    if (!replacement || !current) continue
-    cases[replacementIndex] = current
-    cases[index] = replacement
-  }
-  return cases
 }
 
 function relevantIds(testCase: SearchBenchmarkCase) {
@@ -430,28 +411,13 @@ async function main() {
 
     const metrics = calculateMetrics(results)
     const regressions = regressionFailures(metrics, results)
-    const orderProbe = []
-    for (const [ordinal, testCase] of shuffledCases(orderProbeSeed).entries()) {
-      const result = await runCase(client, testCase)
-      orderProbe.push({
-        id: result.id,
-        ordinal,
-        providerSearchTimeMs: result.providerSearchTimeMs,
-        failureLabels: result.failureLabels,
-      })
-    }
     const report = {
       benchmark: 'search-correctness-gate-1',
       generatedAt: new Date().toISOString(),
       fixtureDocumentCount: searchBenchmarkDocuments.length,
-      indexName,
       metrics,
       baseline: searchBenchmarkBaseline,
       cases: results,
-      orderProbe: {
-        seed: orderProbeSeed,
-        cases: orderProbe,
-      },
       regressionFailures: regressions,
     }
 
@@ -465,17 +431,15 @@ async function main() {
       process.exitCode = 1
     }
   } finally {
-    if (process.env.SEARCH_BENCHMARK_KEEP_INDEX !== '1') {
-      await client
-        .deleteIndex(indexName)
-        .waitTask({
-          timeout: 30_000,
-          interval: 100,
-        })
-        .catch((error) => {
-          console.warn('Search benchmark index cleanup failed.', error)
-        })
-    }
+    await client
+      .deleteIndex(indexName)
+      .waitTask({
+        timeout: 30_000,
+        interval: 100,
+      })
+      .catch((error) => {
+        console.warn('Search benchmark index cleanup failed.', error)
+      })
   }
 }
 
