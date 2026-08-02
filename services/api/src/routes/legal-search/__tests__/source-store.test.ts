@@ -89,8 +89,24 @@ describe('legal authority source store search', () => {
       ],
     }
 
+    const underscoreDocument = {
+      ...storedAuthority,
+      id: 'benchmark_test_case',
+      title: 'Delta v Epsilon',
+      sourceUrl: 'https://example.test/judgments/benchmark_test_case',
+      paragraphs: [
+        {
+          id: 'benchmark_test_case-p1',
+          documentId: 'benchmark_test_case',
+          paragraphNumber: 1,
+          text: 'The court considered an unrelated issue.',
+        },
+      ],
+    }
+
     await store.upsertDocument(exactDocument, sourceProvider)
     await store.upsertDocument(substringDocument, sourceProvider)
+    await store.upsertDocument(underscoreDocument, sourceProvider)
 
     const results = await store.search('test', {})
 

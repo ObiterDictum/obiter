@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   containsEveryQueryTerm,
+  containsEverySearchableQueryTerm,
   createIndex,
   exactMatchPunctuationFolds,
   exactMatchPunctuationFrom,
@@ -545,14 +546,26 @@ describe('Legal search client', () => {
       ],
     })
 
-    expect(extractLegalSearchSnippets(hit, 'test')).toHaveLength(1)
-    expect(extractLegalSearchSnippets(hit, 'testator')).toHaveLength(1)
-    expect(extractLegalSearchSnippets(hit, 'incrimination')).toHaveLength(1)
-    expect(extractLegalSearchSnippets(hit, 'José')).toHaveLength(1)
-    expect(extractLegalSearchSnippets(hit, 'Joséphine')).toHaveLength(1)
+    expect(extractLegalSearchSnippets(hit, 'test')).toMatchObject([
+      { paragraphNumber: 1, matchedTerms: ['test'] },
+    ])
+    expect(extractLegalSearchSnippets(hit, 'testator')).toMatchObject([
+      { paragraphNumber: 1, matchedTerms: ['testator'] },
+    ])
+    expect(extractLegalSearchSnippets(hit, 'incrimination')).toMatchObject([
+      { paragraphNumber: 1, matchedTerms: ['incrimination'] },
+    ])
+    expect(extractLegalSearchSnippets(hit, 'José')).toMatchObject([
+      { paragraphNumber: 1, matchedTerms: ['josé'] },
+    ])
+    expect(extractLegalSearchSnippets(hit, 'Joséphine')).toMatchObject([
+      { paragraphNumber: 2, matchedTerms: ['joséphine'] },
+    ])
     expect(containsEveryQueryTerm('Joséphine contested', 'José test')).toBe(
       false,
     )
+    expect(containsEverySearchableQueryTerm('test_case', 'test')).toBe(false)
+    expect(containsEverySearchableQueryTerm('_test', 'test')).toBe(false)
   })
 
   it('derives equal-length SQL punctuation translation arguments', () => {

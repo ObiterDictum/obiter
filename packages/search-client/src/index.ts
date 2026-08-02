@@ -505,11 +505,23 @@ export function normalizeExactMatchValue(value: string | null | undefined) {
     .replace(/\s+/g, ' ')
 }
 
+/**
+ * Normalizes both arguments before checking that every whitespace-delimited
+ * query term appears as a whole term.
+ */
 export function containsEveryQueryTerm(value: string, query: string) {
   return containsEveryNormalizedQueryTerm(
     normalizeExactMatchValue(value),
     normalizeExactMatchValue(query),
   )
+}
+
+/**
+ * Whole-term matching for searchable query terms. Stop-word handling is added
+ * by the index-tuning layer above this branch in the search stack.
+ */
+export function containsEverySearchableQueryTerm(value: string, query: string) {
+  return containsEveryQueryTerm(value, query)
 }
 
 function containsEveryNormalizedQueryTerm(
@@ -523,10 +535,14 @@ function containsEveryNormalizedQueryTerm(
   )
 }
 
-function containsWholeTerm(value: string, term: string) {
+/**
+ * Checks normalized text and term values for a whole-term match. Normalize
+ * both inputs with `normalizeExactMatchValue` before calling this helper.
+ */
+export function containsWholeTerm(value: string, term: string) {
   if (!term) return false
   return new RegExp(
-    `(?<![\\p{L}\\p{M}\\p{N}])${escapeRegularExpression(term)}(?![\\p{L}\\p{M}\\p{N}])`,
+    `(?<![\\p{L}\\p{M}\\p{N}_])${escapeRegularExpression(term)}(?![\\p{L}\\p{M}\\p{N}_])`,
     'u',
   ).test(value)
 }
