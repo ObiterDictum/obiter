@@ -3,10 +3,15 @@
 ## Correctness benchmark
 
 `pnpm benchmark:search` runs the fixed Gate 1 objective case set against a
-Meilisearch 1.12 instance. The suite contains 53 synthetic queries covering
-exact citations, malformed and ambiguous citations, titles, party names,
-provider ids, body phrases, no-answer behavior, court and date filters, and
-short-word precision.
+Meilisearch 1.12 instance. The suite runs 54 synthetic queries against 66
+synthetic fixture documents, covering exact citations, malformed and ambiguous
+citations, titles, party names, provider ids, body phrases, no-answer behavior,
+court and date filters, short-word precision, and party-name typo tolerance.
+
+Both counts are asserted rather than described. The run aborts if the case
+count does not equal `expectedCaseCount` in `baseline.ts`, and every report
+records `fixtureDocumentCount`, so the artifact is the authority if this
+paragraph ever drifts.
 
 Set `SEARCH_BENCHMARK_HOST` and `SEARCH_BENCHMARK_API_KEY` when the benchmark
 server is not available at the local defaults. CI starts the pinned server,
@@ -79,9 +84,10 @@ Because it is synthetic, the 0.25 ranking score threshold is calibrated on
 data that is not the data. Meilisearch ranking scores depend on corpus
 statistics, so both the junk band and the recall band will move on a real
 corpus, and the 0.157 of headroom above the `claimnt` match is not guaranteed
-to survive. The 66 fixture documents also give the junk band a single
-observation to rest on. Whoever first indexes a real TNA corpus should
-re-measure the separation rather than trusting the constant: sweep the
+to survive. Across those 66 documents only one query produced a sub-floor
+score at all, so the junk band rests on a single observation. Whoever first
+indexes a real TNA corpus should re-measure the separation rather than
+trusting the constant: sweep the
 threshold across the objective set again, check where the lowest legitimate
 typo match and the highest junk match actually land, and move the default if
 the gap has shifted. The sweep needs no reindex, since the threshold is a
