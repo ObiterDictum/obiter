@@ -26,6 +26,8 @@ interface BenchmarkCaseResult {
   returnedHitCount: number
   estimatedTotalHits: number
   processingTimeMs: number
+  providerSearchTimeMs: number | null
+  clientProcessingTimeMs: number | null
   wallClockSearchTimeMs: number
   relevantHitHasEvidence: boolean | null
   searchErrorMessage?: string
@@ -116,6 +118,8 @@ async function runCase(
       returnedHitCount: hitIds.length,
       estimatedTotalHits: result.estimatedTotalHits,
       processingTimeMs: result.processingTimeMs,
+      providerSearchTimeMs: result.providerSearchTimeMs,
+      clientProcessingTimeMs: result.clientProcessingTimeMs,
       wallClockSearchTimeMs,
       relevantHitHasEvidence,
       failureLabels: failureLabels(
@@ -134,12 +138,16 @@ async function runCase(
       returnedHitCount: 0,
       estimatedTotalHits: 0,
       processingTimeMs: 0,
+      providerSearchTimeMs: null,
+      clientProcessingTimeMs: null,
       wallClockSearchTimeMs: 0,
       relevantHitHasEvidence: testCase.expectsEvidence ? false : null,
       searchErrorMessage:
         error instanceof Error
           ? `${error.message}${
-              error.cause instanceof Error ? `: ${error.cause.message}` : ''
+              error.cause instanceof Error
+                ? ` (cause: ${error.cause.message})`
+                : ''
             }`
           : String(error),
       failureLabels: [
