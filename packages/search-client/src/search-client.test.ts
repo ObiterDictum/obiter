@@ -629,6 +629,28 @@ describe('Legal search client', () => {
     ).toEqual([0.9, 0.2])
   })
 
+  it('ignores invalid raw engine ranking scores', async () => {
+    const invalidScores = [1.5, Number.NaN, -0.1, '0.5']
+    const searchMock = vi.fn(async () => ({
+      hits: invalidScores.map((rankingScore, index) =>
+        authority({
+          id: `invalid-score-${index}`,
+          _rankingScore: rankingScore,
+        }),
+      ),
+      query: 'Potanina',
+      estimatedTotalHits: invalidScores.length,
+      processingTimeMs: 1,
+    }))
+    const client = { index: () => ({ search: searchMock }) }
+
+    const result = await search(client, 'legal_authorities', 'Potanina')
+
+    expect(
+      result.hits.map(({ engineRankingScore }) => engineRankingScore),
+    ).toEqual([undefined, undefined, undefined, undefined])
+  })
+
   it('orders phrase, all-term, and any-term body matches before recency', () => {
     // Post-parse field, exercises the ranker in isolation.
     const anyTerm = authority({
@@ -722,7 +744,7 @@ describe('Legal search client', () => {
     ).toEqual(['snippet-phrase', 'paragraph-all-terms'])
   })
 
-  it('sorts hits with a missing dateDecided last without throwing', () => {
+  it('does not read a missing dateDecided when caller order is preserved', () => {
     const withoutDateDecided = authority({
       id: 'undated',
       title: 'Undated v Authority',
@@ -744,10 +766,10 @@ describe('Legal search client', () => {
         [withoutDateDecided, dated],
         'unmatched',
       ).map(({ id }) => id),
-    ).toEqual(['dated', 'undated'])
+    ).toEqual(['undated', 'dated'])
   })
 
-  it('uses recency only after match tier and engine score are tied', () => {
+  it('preserves caller order when match tier and engine score are tied', () => {
     const older = authority({
       id: 'benchmark-tie-older',
       title: 'Older v Authority',
@@ -766,7 +788,64 @@ describe('Legal search client', () => {
         [older, newer] as LegalSearchHit[],
         'unmatched',
       ).map(({ id }) => id),
-    ).toEqual(['benchmark-tie-newer', 'benchmark-tie-older'])
+    ).toEqual(['benchmark-tie-older', 'benchmark-tie-newer'])
+  })
+
+  it('ranks a title phrase ahead of a title containing scattered query terms', () => {
+    const scatteredTerms = authority({
+      id: 'scattered-title-terms',
+      title: 'Material v Contribution',
+      dateDecided: '2025-01-01',
+      engineRankingScore: 0.7,
+    })
+    const phrase = authority({
+      id: 'title-phrase',
+      title: 'Material Contribution Ltd',
+      dateDecided: '2020-01-01',
+      engineRankingScore: 0.7,
+    })
+
+    expect(
+      rankLegalSearchHitsByExactMatch(
+        [scatteredTerms, phrase],
+        'material contribution',
+      ).map(({ id }) => id),
+    ).toEqual(['title-phrase', 'scattered-title-terms'])
+  })
+
+  it('preserves supplied order for plain authorities without engine scores', () => {
+    const older = authority({
+      id: 'plain-older',
+      title: 'Older v Authority',
+      dateDecided: '2020-01-01',
+      paragraphs: [
+        {
+          id: 'plain-older-p1',
+          documentId: 'plain-older',
+          paragraphNumber: 1,
+          text: 'The material was considered.',
+        },
+      ],
+    })
+    const newer = authority({
+      id: 'plain-newer',
+      title: 'Newer v Authority',
+      dateDecided: '2025-01-01',
+      paragraphs: [
+        {
+          id: 'plain-newer-p1',
+          documentId: 'plain-newer',
+          paragraphNumber: 1,
+          text: 'The material was considered.',
+        },
+      ],
+    })
+
+    expect(
+      rankLegalSearchHitsByExactMatch([older, newer], 'material').map(
+        ({ id }) => id,
+      ),
+    ).toEqual(['plain-older', 'plain-newer'])
   })
 
   it('ranks hits without neutral citations without throwing', () => {

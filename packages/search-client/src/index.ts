@@ -537,15 +537,11 @@ export function rankLegalSearchHitsByExactMatch<T extends LegalSearchHit>(
           validEngineRankingScore(hit.engineRankingScore) ?? 0,
       }))
       // Legal match tiers express user intent. Engine scores break ties within a
-      // tier only, so they never outweigh a more specific legal match.
+      // tier, then ties preserve the caller's or engine's supplied order.
       .sort(
         (left, right) =>
           right.matchTier - left.matchTier ||
           right.engineRankingScore - left.engineRankingScore ||
-          compareLegalSearchDates(
-            left.hit.dateDecided,
-            right.hit.dateDecided,
-          ) ||
           left.index - right.index,
       )
       .map(({ hit }) => hit)
@@ -555,40 +551,28 @@ export function rankLegalSearchHitsByExactMatch<T extends LegalSearchHit>(
 function legalSearchMatchTier(hit: LegalSearchHit, normalizedQuery: string) {
   const normalizedTitle = normalizeExactMatchValue(hit.title)
 
-  if (normalizeExactMatchValue(hit.id) === normalizedQuery) return 7
+  if (normalizeExactMatchValue(hit.id) === normalizedQuery) return 8
   if (normalizeExactMatchValue(hit.neutralCitation) === normalizedQuery)
-    return 6
-  if (normalizedTitle === normalizedQuery) return 5
-  if (
-    containsWholeTerm(normalizedTitle, normalizedQuery) ||
-    containsEveryNormalizedQueryTerm(normalizedTitle, normalizedQuery)
-  ) {
+    return 7
+  if (normalizedTitle === normalizedQuery) return 6
+  if (containsWholeTerm(normalizedTitle, normalizedQuery)) return 5
+  if (containsEveryNormalizedQueryTerm(normalizedTitle, normalizedQuery))
     return 4
-  }
 
   const bodySegments = hit.paragraphs?.length
     ? hit.paragraphs.map(({ text }) => text)
     : (hit.snippets?.map(({ text }) => text) ?? [])
+  const normalizedSegments = bodySegments.map(normalizeExactMatchValue)
   if (
-    bodySegments.some((text) =>
-      containsWholeTerm(normalizeExactMatchValue(text), normalizedQuery),
-    )
+    normalizedSegments.some((text) => containsWholeTerm(text, normalizedQuery))
   ) {
     return 3
   }
 
-  const bodyText = bodySegments.join(' ')
-  if (containsEveryQueryTerm(bodyText, normalizedQuery)) return 2
-  if (containsAnyQueryTerm(bodyText, normalizedQuery)) return 1
-  return 0
-}
-
-function compareLegalSearchDates(left: unknown, right: unknown) {
-  if (typeof left === 'string' && typeof right === 'string') {
-    return right < left ? -1 : right > left ? 1 : 0
-  }
-  if (typeof left === 'string') return -1
-  if (typeof right === 'string') return 1
+  const normalizedBody = normalizedSegments.join(' ')
+  if (containsEveryNormalizedQueryTerm(normalizedBody, normalizedQuery))
+    return 2
+  if (containsAnyNormalizedQueryTerm(normalizedBody, normalizedQuery)) return 1
   return 0
 }
 
@@ -668,9 +652,11 @@ function containsEveryNormalizedQueryTerm(
   )
 }
 
-function containsAnyQueryTerm(value: string, query: string) {
-  const normalizedValue = normalizeExactMatchValue(value)
-  const terms = normalizeExactMatchValue(query).split(' ').filter(Boolean)
+function containsAnyNormalizedQueryTerm(
+  normalizedValue: string,
+  normalizedQuery: string,
+) {
+  const terms = normalizedQuery.split(' ').filter(Boolean)
   return terms.some((term) => containsWholeTerm(normalizedValue, term))
 }
 
