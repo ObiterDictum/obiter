@@ -4,7 +4,7 @@ export const searchBenchmarkBaseline = {
   // #54 raises no-answer precision and content-word recall to 1. The three new
   // court-code cases raise top-1 and top-3 exact-source success to 41/44
   // (0.9318). Both should be 1 when the date filter is fixed.
-  expectedCaseCount: 53,
+  expectedCaseCount: 54,
   minimumTop1ExactSourceSuccess: 0.9318,
   minimumTop3ExactSourceSuccess: 0.9318,
   minimumExactLookupTop1Success: 1,

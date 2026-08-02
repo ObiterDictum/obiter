@@ -138,6 +138,12 @@ const objectiveCases: SearchBenchmarkCase[] = [
     expectedTopId: 'ewca-civ-2022-159',
   },
   {
+    id: 'party-rizwan-one-typo',
+    category: 'party_names',
+    query: 'Rizwun',
+    expectedTopId: 'ewca-civ-2022-159',
+  },
+  {
     id: 'party-jose-alvarez',
     category: 'party_names',
     query: 'José Álvarez',

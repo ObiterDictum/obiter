@@ -243,10 +243,10 @@ function calculateMetrics(results: BenchmarkCaseResult[]) {
           ?.failureLabels.includes('search_error'),
     )
   const contentWordRecallSuccesses =
-    contentWordRecallCasesWithoutSearchErrors.filter(
-      (testCase) =>
-        results.find(({ id }) => id === testCase.id)?.returnedHitCount !== 0,
-    ).length
+    contentWordRecallCasesWithoutSearchErrors.filter((testCase) => {
+      const result = results.find(({ id }) => id === testCase.id)
+      return result !== undefined && result.returnedHitCount !== 0
+    }).length
   const noAnswerCases = searchBenchmarkCases.filter(
     ({ category }) => category === 'no_answer',
   )
@@ -414,6 +414,14 @@ async function writeReport(report: unknown) {
 }
 
 async function main() {
+  if (
+    searchBenchmarkCases.length !== searchBenchmarkBaseline.expectedCaseCount
+  ) {
+    throw new Error(
+      `Search benchmark defines ${searchBenchmarkCases.length} cases; expected ${searchBenchmarkBaseline.expectedCaseCount}.`,
+    )
+  }
+
   const client = createClient(host, apiKey)
 
   try {
