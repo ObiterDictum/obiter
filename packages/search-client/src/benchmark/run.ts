@@ -14,6 +14,9 @@ const apiKey = process.env.SEARCH_BENCHMARK_API_KEY ?? 'search-benchmark-key'
 const indexName = `legal-authorities-benchmark-${process.pid}`
 const topKSize = 3
 const resultLimit = 20
+const knownFailingCaseIds = new Set<string>(
+  searchBenchmarkBaseline.knownFailingCaseIds,
+)
 
 interface BenchmarkCaseResult {
   id: string
@@ -23,7 +26,9 @@ interface BenchmarkCaseResult {
   returnedHitCount: number
   estimatedTotalHits: number
   processingTimeMs: number
+  wallClockSearchTimeMs: number
   relevantHitHasEvidence: boolean | null
+  searchErrorMessage?: string
   failureLabels: string[]
 }
 
@@ -32,13 +37,13 @@ function roundMetric(value: number) {
 }
 
 function ratio(numerator: number, denominator: number) {
-  return denominator === 0 ? 1 : roundMetric(numerator / denominator)
+  return denominator === 0 ? null : roundMetric(numerator / denominator)
 }
 
 function percentile95(values: number[]) {
-  if (values.length === 0) return 0
+  if (values.length === 0) return null
   const sorted = [...values].sort((left, right) => left - right)
-  return sorted[Math.ceil(sorted.length * 0.95) - 1] ?? 0
+  return sorted[Math.ceil(sorted.length * 0.95) - 1] ?? null
 }
 
 function relevantIds(testCase: SearchBenchmarkCase) {
@@ -85,6 +90,7 @@ async function runCase(
   testCase: SearchBenchmarkCase,
 ): Promise<BenchmarkCaseResult> {
   try {
+    const startedAt = performance.now()
     const result = await search(
       client,
       indexName,
@@ -92,6 +98,7 @@ async function runCase(
       testCase.filters,
       { includeSnippets: true, limit: resultLimit },
     )
+    const wallClockSearchTimeMs = performance.now() - startedAt
     const hitIds = result.hits.map((hit) => hit.id)
     const topK = hitIds.slice(0, topKSize)
     const relevantHit = result.hits.find((hit) =>
@@ -109,6 +116,7 @@ async function runCase(
       returnedHitCount: hitIds.length,
       estimatedTotalHits: result.estimatedTotalHits,
       processingTimeMs: result.processingTimeMs,
+      wallClockSearchTimeMs,
       relevantHitHasEvidence,
       failureLabels: failureLabels(
         testCase,
@@ -117,7 +125,7 @@ async function runCase(
         relevantHitHasEvidence,
       ),
     }
-  } catch {
+  } catch (error) {
     return {
       id: testCase.id,
       category: testCase.category,
@@ -126,7 +134,10 @@ async function runCase(
       returnedHitCount: 0,
       estimatedTotalHits: 0,
       processingTimeMs: 0,
+      wallClockSearchTimeMs: 0,
       relevantHitHasEvidence: testCase.expectsEvidence ? false : null,
+      searchErrorMessage:
+        error instanceof Error ? error.message : String(error),
       failureLabels: [
         'search_error',
         ...failureLabels(testCase, [], [], false),
@@ -206,14 +217,26 @@ function calculateMetrics(results: BenchmarkCaseResult[]) {
   const noAnswerCases = searchBenchmarkCases.filter(
     ({ category }) => category === 'no_answer',
   )
-  const noAnswerSuccesses = noAnswerCases.filter(
+  const noAnswerCasesWithoutSearchErrors = noAnswerCases.filter(
+    (testCase) =>
+      !results
+        .find(({ id }) => id === testCase.id)
+        ?.failureLabels.includes('search_error'),
+  )
+  const noAnswerSuccesses = noAnswerCasesWithoutSearchErrors.filter(
     (testCase) =>
       results.find(({ id }) => id === testCase.id)?.returnedHitCount === 0,
   ).length
   const malformedCases = searchBenchmarkCases.filter(
     ({ category }) => category === 'malformed_citation',
   )
-  const malformedSuccesses = malformedCases.filter(
+  const malformedCasesWithoutSearchErrors = malformedCases.filter(
+    (testCase) =>
+      !results
+        .find(({ id }) => id === testCase.id)
+        ?.failureLabels.includes('search_error'),
+  )
+  const malformedSuccesses = malformedCasesWithoutSearchErrors.filter(
     (testCase) =>
       results.find(({ id }) => id === testCase.id)?.returnedHitCount === 0,
   ).length
@@ -235,27 +258,33 @@ function calculateMetrics(results: BenchmarkCaseResult[]) {
     ),
     shortWordPrecision: ratio(shortWordRelevantHits, shortWordReturnedHits),
     evidenceUnitRecall: ratio(evidenceSuccesses, evidenceCases.length),
-    noAnswerPrecision: ratio(noAnswerSuccesses, noAnswerCases.length),
+    noAnswerPrecision: ratio(
+      noAnswerSuccesses,
+      noAnswerCasesWithoutSearchErrors.length,
+    ),
     malformedCitationNoResultRate: ratio(
       malformedSuccesses,
-      malformedCases.length,
+      malformedCasesWithoutSearchErrors.length,
     ),
     ambiguitySurfaced: ratio(ambiguitySuccesses, ambiguityCases.length),
     searchErrorCount: results.filter(({ failureLabels }) =>
       failureLabels.includes('search_error'),
     ).length,
     storedSearchP95Ms: percentile95(
-      results.map(({ processingTimeMs }) => processingTimeMs),
+      results.map(({ wallClockSearchTimeMs }) => wallClockSearchTimeMs),
     ),
     top1ByCategory: categoryTop1(results),
   }
 }
 
-function regressionFailures(metrics: ReturnType<typeof calculateMetrics>) {
+function regressionFailures(
+  metrics: ReturnType<typeof calculateMetrics>,
+  results: BenchmarkCaseResult[],
+) {
   const failures: string[] = []
   if (metrics.caseCount !== searchBenchmarkBaseline.expectedCaseCount) {
     failures.push(
-      `case_count:${metrics.caseCount}<expected:${searchBenchmarkBaseline.expectedCaseCount}`,
+      `case_count:${metrics.caseCount}!=expected:${searchBenchmarkBaseline.expectedCaseCount}`,
     )
   }
 
@@ -303,14 +332,25 @@ function regressionFailures(metrics: ReturnType<typeof calculateMetrics>) {
   ] as const
 
   for (const [label, actual, minimum] of minimums) {
-    if (actual < minimum) failures.push(`${label}:${actual}<minimum:${minimum}`)
+    if (actual === null) {
+      failures.push(`${label}:no_data`)
+    } else if (actual < minimum) {
+      failures.push(`${label}:${actual}<minimum:${minimum}`)
+    }
   }
-  if (metrics.searchErrorCount > searchBenchmarkBaseline.maximumSearchErrors) {
-    failures.push(
-      `search_errors:${metrics.searchErrorCount}>maximum:${searchBenchmarkBaseline.maximumSearchErrors}`,
-    )
+  for (const result of results) {
+    const hasSearchError = result.failureLabels.includes('search_error')
+    const isKnownFailingCase = knownFailingCaseIds.has(result.id)
+    if (hasSearchError && !isKnownFailingCase) {
+      failures.push(`unexpected_search_error:${result.id}`)
+    }
+    if (!hasSearchError && isKnownFailingCase) {
+      failures.push(`known_failing_case_unexpected_pass:${result.id}`)
+    }
   }
-  if (
+  if (metrics.storedSearchP95Ms === null) {
+    failures.push('stored_search_p95:no_data')
+  } else if (
     metrics.storedSearchP95Ms > searchBenchmarkBaseline.maximumStoredSearchP95Ms
   ) {
     failures.push(
@@ -337,9 +377,9 @@ async function main() {
   }
 
   const client = createClient(host, apiKey)
-  await createIndex(client, indexName)
 
   try {
+    await createIndex(client, indexName)
     const indexed = await indexDocuments(
       client,
       indexName,
@@ -357,7 +397,7 @@ async function main() {
     }
 
     const metrics = calculateMetrics(results)
-    const regressions = regressionFailures(metrics)
+    const regressions = regressionFailures(metrics, results)
     const report = {
       benchmark: 'search-correctness-gate-1',
       generatedAt: new Date().toISOString(),
@@ -378,10 +418,13 @@ async function main() {
       process.exitCode = 1
     }
   } finally {
-    await client.deleteIndex(indexName).waitTask({
-      timeout: 30_000,
-      interval: 100,
-    })
+    await client
+      .deleteIndex(indexName)
+      .waitTask({
+        timeout: 30_000,
+        interval: 100,
+      })
+      .catch(() => undefined)
   }
 }
 
