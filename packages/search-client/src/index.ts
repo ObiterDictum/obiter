@@ -48,11 +48,18 @@ export interface SearchIndexDocumentsResult {
   errors: Array<{ recordId: string | null; message: string }>
 }
 
+// Optional timings for diagnostics, not product behaviour.
+export interface LegalSearchDiagnostics {
+  providerSearchTimeMs: number
+  clientProcessingTimeMs: number
+}
+
 export interface LegalSearchResult {
   hits: LegalSearchHit[]
   query: string
   estimatedTotalHits: number
   processingTimeMs: number
+  diagnostics?: LegalSearchDiagnostics
 }
 
 export interface LegalSearchOptions {
@@ -294,7 +301,10 @@ export async function search(
     }
     if (typeof options.limit === 'number') searchOptions.limit = options.limit
 
+    const providerSearchStartedAt = performance.now()
     const result = await client.index(indexName).search(query, searchOptions)
+    const providerSearchTimeMs = performance.now() - providerSearchStartedAt
+    const clientProcessingStartedAt = performance.now()
     const hits = result.hits.map((hit) =>
       options.includeParagraphs || options.includeSnippets
         ? LegalAuthoritySchema.parse(hit)
@@ -331,6 +341,10 @@ export async function search(
       query: result.query ?? query,
       estimatedTotalHits: result.estimatedTotalHits ?? rankedHits.length,
       processingTimeMs: result.processingTimeMs ?? 0,
+      diagnostics: {
+        providerSearchTimeMs,
+        clientProcessingTimeMs: performance.now() - clientProcessingStartedAt,
+      },
     }
   } catch (error) {
     throw wrapSearchError('Search failed.', error)
@@ -542,13 +556,17 @@ function quoteFilter(value: string) {
   return `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
 }
 
+// The cause contains the unredacted provider error for internal diagnostics such as
+// the benchmark report. Never serialise it into an API response or user-facing log.
 function wrapSearchError(message: string, error: unknown): Error {
   if (error instanceof SearchTaskError) {
-    return new Error(`${message} ${error.message}`)
+    return new Error(`${message} ${error.message}`, { cause: error })
   }
 
   const detail = error instanceof Error ? error.name : typeof error
-  return new Error(`${message} Search provider error: ${detail}.`)
+  return new Error(`${message} Search provider error: ${detail}.`, {
+    cause: error,
+  })
 }
 
 function isIndexAlreadyExistsError(error: unknown): boolean {
