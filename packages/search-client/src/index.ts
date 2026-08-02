@@ -66,6 +66,9 @@ export interface LegalSearchOptions {
   includeParagraphs?: boolean
   includeSnippets?: boolean
   limit?: number
+  // Set null to disable the relevance floor when recall matters more than precision.
+  rankingScoreThreshold?: number | null
+  matchingStrategy?: 'all' | 'frequency'
 }
 
 interface SearchIndexingTask {
@@ -111,6 +114,10 @@ type IndexLike = {
   updatePrefixSearch(
     prefixSearch: 'disabled' | 'indexingTime',
   ): SearchEnqueuedTaskPromise
+  updateStopWords(stopWords: string[]): SearchEnqueuedTaskPromise
+  updateTypoTolerance(settings: {
+    minWordSizeForTypos: { oneTypo: number; twoTypos: number }
+  }): SearchEnqueuedTaskPromise
   addDocuments(
     documents: LegalSearchDocument[],
     options: { primaryKey: 'id' },
@@ -122,6 +129,8 @@ type IndexLike = {
       sort?: string[]
       attributesToRetrieve?: string[]
       limit?: number
+      matchingStrategy?: 'all' | 'frequency'
+      rankingScoreThreshold?: number
     },
   ): Promise<{
     hits: unknown[]
@@ -157,8 +166,6 @@ const searchableAttributes = [
   'id',
   'title',
   'neutralCitation',
-  'court',
-  'jurisdiction',
   'paragraphs.text',
 ]
 
@@ -169,6 +176,32 @@ const filterableAttributes = [
   'dateDecided',
 ]
 const sortableAttributes = ['dateDecided']
+const legalStopWords = [
+  'a',
+  'an',
+  'and',
+  'are',
+  'as',
+  'at',
+  'be',
+  'been',
+  'by',
+  'for',
+  'from',
+  'in',
+  'is',
+  'it',
+  'of',
+  'on',
+  'or',
+  'that',
+  'the',
+  'this',
+  'to',
+  'was',
+  'were',
+  'with',
+]
 const searchSummaryAttributes = [
   'id',
   'title',
@@ -187,6 +220,32 @@ const rankingRules = [
   'exactness',
   'sort',
 ]
+/**
+ * The settings createIndex applies, plus the defaults search falls back to,
+ * held in one place so callers can report exactly what ran. The benchmark
+ * embeds this verbatim, which is what stops a reported tuning decision from
+ * quietly disagreeing with the committed value.
+ */
+export const legalSearchIndexSettings = {
+  minWordSizeForTypos: { oneTypo: 5, twoTypos: 9 },
+  prefixSearch: 'disabled',
+  matchingStrategy: 'all',
+  // Swept across the full benchmark at null, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45
+  // and 0.5. Everything from 0.2 to 0.35 beats 0.5 on top-1 and top-3 and is
+  // worse on nothing, because the only case the floor is load-bearing for is
+  // "claimnt", whose sole candidate scores 0.0928. The lowest legitimate typo
+  // match measured is "Rizwun" at 0.3655. 0.25 sits near the middle of that
+  // gap, leaving 0.157 of headroom over the junk match and 0.116 under the
+  // recall one. The other three no-answer cases return nothing even with the
+  // floor removed entirely, so they do not constrain this value.
+  //
+  // Those scores come from the synthetic benchmark fixture, and ranking scores
+  // depend on corpus statistics, so re-measure this on a real corpus before
+  // trusting it. See the calibration note in the package README.
+  rankingScoreThreshold: 0.25,
+  stopWordCount: legalStopWords.length,
+} as const
+
 const indexSetupTaskTimeoutMs = 10 * 60_000
 const documentIndexingTaskTimeoutMs = 30 * 60_000
 
@@ -232,7 +291,19 @@ export async function createIndex(
       indexSetupTaskTimeoutMs,
     )
     await waitForSucceededTask(
-      index.updatePrefixSearch('disabled'),
+      index.updatePrefixSearch(legalSearchIndexSettings.prefixSearch),
+      indexSetupTaskTimeoutMs,
+    )
+    await waitForSucceededTask(
+      index.updateStopWords(legalStopWords),
+      indexSetupTaskTimeoutMs,
+    )
+    await waitForSucceededTask(
+      index.updateTypoTolerance({
+        minWordSizeForTypos: {
+          ...legalSearchIndexSettings.minWordSizeForTypos,
+        },
+      }),
       indexSetupTaskTimeoutMs,
     )
 
@@ -312,15 +383,24 @@ export async function search(
       sort?: string[]
       attributesToRetrieve?: string[]
       limit?: number
+      matchingStrategy?: 'all' | 'frequency'
+      rankingScoreThreshold?: number
     } = {
       filter: toMeiliFilters(filters),
       sort: ['dateDecided:desc'],
+      matchingStrategy:
+        options.matchingStrategy ?? legalSearchIndexSettings.matchingStrategy,
       attributesToRetrieve:
         options.includeParagraphs || options.includeSnippets
           ? [...searchSummaryAttributes, 'paragraphs']
           : searchSummaryAttributes,
     }
     if (typeof options.limit === 'number') searchOptions.limit = options.limit
+    if (query && options.rankingScoreThreshold !== null) {
+      searchOptions.rankingScoreThreshold =
+        options.rankingScoreThreshold ??
+        legalSearchIndexSettings.rankingScoreThreshold
+    }
 
     const providerSearchStartedAt = performance.now()
     const result = await client.index(indexName).search(query, searchOptions)

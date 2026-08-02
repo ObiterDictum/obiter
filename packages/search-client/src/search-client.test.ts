@@ -9,6 +9,7 @@ import {
   extractLegalSearchSnippets,
   getDocument,
   indexDocuments,
+  legalSearchIndexSettings,
   rankLegalSearchHitsByExactMatch,
   search,
 } from './index'
@@ -67,6 +68,8 @@ describe('Legal search client', () => {
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
       updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
+      updateStopWords: vi.fn(() => completedTask({ uid: 13 })),
+      updateTypoTolerance: vi.fn(() => completedTask({ uid: 14 })),
       addDocuments: vi.fn(),
       search: vi.fn(),
     }
@@ -81,22 +84,18 @@ describe('Legal search client', () => {
     expect(client.createIndex).toHaveBeenCalledWith('legal_authorities', {
       primaryKey: 'id',
     })
-    expect(index.updateSearchableAttributes).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        'id',
-        'title',
-        'neutralCitation',
-        'paragraphs.text',
-      ]),
-    )
-    expect(index.updateFilterableAttributes).toHaveBeenCalledWith(
-      expect.arrayContaining([
-        'court',
-        'jurisdiction',
-        'sourceType',
-        'dateDecided',
-      ]),
-    )
+    expect(index.updateSearchableAttributes).toHaveBeenCalledWith([
+      'id',
+      'title',
+      'neutralCitation',
+      'paragraphs.text',
+    ])
+    expect(index.updateFilterableAttributes).toHaveBeenCalledWith([
+      'court',
+      'jurisdiction',
+      'sourceType',
+      'dateDecided',
+    ])
     expect(index.updateRankingRules).toHaveBeenCalledWith([
       'words',
       'typo',
@@ -109,6 +108,78 @@ describe('Legal search client', () => {
     expect(
       index.updatePrefixSearch.mock.results[0]?.value.waitTask,
     ).toHaveBeenCalledWith({ timeout: 600_000, interval: 100 })
+    expect(index.updateStopWords).toHaveBeenCalledWith([
+      'a',
+      'an',
+      'and',
+      'are',
+      'as',
+      'at',
+      'be',
+      'been',
+      'by',
+      'for',
+      'from',
+      'in',
+      'is',
+      'it',
+      'of',
+      'on',
+      'or',
+      'that',
+      'the',
+      'this',
+      'to',
+      'was',
+      'were',
+      'with',
+    ])
+    expect(index.updateTypoTolerance).toHaveBeenCalledWith({
+      minWordSizeForTypos: { oneTypo: 5, twoTypos: 9 },
+    })
+  })
+
+  // The benchmark report embeds legalSearchIndexSettings as its record of the
+  // configuration under test, so it is only trustworthy while these values are
+  // the ones createIndex and search actually apply.
+  it('reports the index settings it applies', async () => {
+    const index = {
+      updateSearchableAttributes: vi.fn(() => completedTask({ uid: 8 })),
+      updateFilterableAttributes: vi.fn(() => completedTask({ uid: 9 })),
+      updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
+      updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
+      updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
+      updateStopWords: vi.fn(() => completedTask({ uid: 13 })),
+      updateTypoTolerance: vi.fn(() => completedTask({ uid: 14 })),
+      addDocuments: vi.fn(),
+      search: vi.fn(async () => ({ hits: [] })),
+    }
+    const client = {
+      createIndex: vi.fn(() => completedTask({ uid: 7 })),
+      index: vi.fn(() => index),
+    }
+
+    await createIndex(client, 'legal_authorities')
+    await search(client, 'legal_authorities', 'permission to appeal')
+
+    expect(index.updateTypoTolerance).toHaveBeenCalledWith({
+      minWordSizeForTypos: legalSearchIndexSettings.minWordSizeForTypos,
+    })
+    expect(index.updatePrefixSearch).toHaveBeenCalledWith(
+      legalSearchIndexSettings.prefixSearch,
+    )
+    expect(index.updateStopWords).toHaveBeenCalledWith(
+      expect.objectContaining({
+        length: legalSearchIndexSettings.stopWordCount,
+      }),
+    )
+    expect(index.search).toHaveBeenCalledWith(
+      'permission to appeal',
+      expect.objectContaining({
+        matchingStrategy: legalSearchIndexSettings.matchingStrategy,
+        rankingScoreThreshold: legalSearchIndexSettings.rankingScoreThreshold,
+      }),
+    )
   })
 
   it('updates index settings when the index already exists', async () => {
@@ -118,6 +189,8 @@ describe('Legal search client', () => {
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
       updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
+      updateStopWords: vi.fn(() => completedTask({ uid: 13 })),
+      updateTypoTolerance: vi.fn(() => completedTask({ uid: 14 })),
       addDocuments: vi.fn(),
       search: vi.fn(),
     }
@@ -143,6 +216,8 @@ describe('Legal search client', () => {
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
       updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
+      updateStopWords: vi.fn(() => completedTask({ uid: 13 })),
+      updateTypoTolerance: vi.fn(() => completedTask({ uid: 14 })),
       addDocuments: vi.fn(),
       search: vi.fn(),
     }
@@ -184,6 +259,8 @@ describe('Legal search client', () => {
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
       updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
+      updateStopWords: vi.fn(() => completedTask({ uid: 13 })),
+      updateTypoTolerance: vi.fn(() => completedTask({ uid: 14 })),
       addDocuments: vi.fn(),
       search: vi.fn(),
     }
@@ -318,6 +395,8 @@ describe('Legal search client', () => {
         'dateDecided <= "2024-12-31"',
       ],
       sort: ['dateDecided:desc'],
+      matchingStrategy: 'all',
+      rankingScoreThreshold: 0.25,
       attributesToRetrieve: [
         'id',
         'title',
@@ -329,6 +408,69 @@ describe('Legal search client', () => {
         'sourceUrl',
       ],
     })
+  })
+
+  it('allows callers to lower or disable the ranking-score threshold', async () => {
+    const searchMock = vi.fn(async () => ({
+      hits: [authority()],
+      query: 'test',
+      estimatedTotalHits: 1,
+      processingTimeMs: 1,
+    }))
+    const client = {
+      index: () => ({ search: searchMock }),
+    }
+
+    await search(
+      client,
+      'legal_authorities',
+      'test',
+      {},
+      { rankingScoreThreshold: 0.2 },
+    )
+    await search(
+      client,
+      'legal_authorities',
+      'test',
+      {},
+      { rankingScoreThreshold: null },
+    )
+
+    expect(searchMock).toHaveBeenNthCalledWith(
+      1,
+      'test',
+      expect.objectContaining({ rankingScoreThreshold: 0.2 }),
+    )
+    expect(searchMock).toHaveBeenNthCalledWith(
+      2,
+      'test',
+      expect.not.objectContaining({ rankingScoreThreshold: expect.anything() }),
+    )
+  })
+
+  it('allows callers to relax all-term matching', async () => {
+    const searchMock = vi.fn(async () => ({
+      hits: [authority()],
+      query: 'test',
+      estimatedTotalHits: 1,
+      processingTimeMs: 1,
+    }))
+    const client = {
+      index: () => ({ search: searchMock }),
+    }
+
+    await search(
+      client,
+      'legal_authorities',
+      'test',
+      {},
+      { matchingStrategy: 'frequency' },
+    )
+
+    expect(searchMock).toHaveBeenCalledWith(
+      'test',
+      expect.objectContaining({ matchingStrategy: 'frequency' }),
+    )
   })
 
   it('passes explicit result limits to the search provider', async () => {
@@ -350,6 +492,12 @@ describe('Legal search client', () => {
       { limit: 10 },
     )
 
+    expect(searchMock).toHaveBeenCalledWith(
+      '',
+      expect.not.objectContaining({
+        rankingScoreThreshold: expect.anything(),
+      }),
+    )
     expect(searchMock).toHaveBeenCalledWith(
       '',
       expect.objectContaining({

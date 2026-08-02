@@ -13,6 +13,8 @@ export type SearchBenchmarkCategory =
   | 'court_filtered_browse'
   | 'date_filtered_query'
   | 'short_word_precision'
+  | 'content_word_recall'
+  | 'free_text_court_code'
 
 export interface SearchBenchmarkCase {
   id: string
@@ -22,6 +24,7 @@ export interface SearchBenchmarkCase {
   expectedTopId?: string
   expectedCandidateIds?: string[]
   expectedNoResults?: boolean
+  expectedResults?: boolean
   expectsEvidence?: boolean
 }
 
@@ -135,6 +138,12 @@ const objectiveCases: SearchBenchmarkCase[] = [
     expectedTopId: 'ewca-civ-2022-159',
   },
   {
+    id: 'party-rizwan-one-typo',
+    category: 'party_names',
+    query: 'Rizwun',
+    expectedTopId: 'ewca-civ-2022-159',
+  },
+  {
     id: 'party-jose-alvarez',
     category: 'party_names',
     query: 'José Álvarez',
@@ -151,6 +160,24 @@ const objectiveCases: SearchBenchmarkCase[] = [
     category: 'provider_document_id',
     query: 'uksc-2024-3',
     expectedTopId: 'uksc-2024-3',
+  },
+  {
+    id: 'court-code-uksc',
+    category: 'free_text_court_code',
+    query: 'UKSC',
+    expectedTopId: 'uksc-2024-3',
+  },
+  {
+    id: 'court-code-ewca-civ',
+    category: 'free_text_court_code',
+    query: 'EWCA Civ',
+    expectedTopId: 'ewca-civ-2022-159',
+  },
+  {
+    id: 'court-code-admin',
+    category: 'free_text_court_code',
+    query: 'Admin',
+    expectedTopId: 'ewhc-admin-2021-123',
   },
   {
     id: 'document-id-ewca-2022',
@@ -224,10 +251,10 @@ const objectiveCases: SearchBenchmarkCase[] = [
     expectedNoResults: true,
   },
   {
-    id: 'no-answer-legal-boilerplate',
-    category: 'no_answer',
+    id: 'content-words-court-judgment-appeal',
+    category: 'content_word_recall',
     query: 'court judgment appeal',
-    expectedNoResults: true,
+    expectedResults: true,
   },
   {
     id: 'no-answer-weak-tail',

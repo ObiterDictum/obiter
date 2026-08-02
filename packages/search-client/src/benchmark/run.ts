@@ -1,6 +1,12 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { createClient, createIndex, indexDocuments, search } from '../index'
+import {
+  createClient,
+  createIndex,
+  indexDocuments,
+  legalSearchIndexSettings,
+  search,
+} from '../index'
 import {
   searchBenchmarkCases,
   type SearchBenchmarkCase,
@@ -63,6 +69,9 @@ function failureLabels(
   const labels: string[] = []
   if (testCase.expectedNoResults && hitIds.length > 0) {
     labels.push('unexpected_results')
+  }
+  if (testCase.expectedResults && hitIds.length === 0) {
+    labels.push('expected_results_missing')
   }
   if (testCase.expectedTopId && topK[0] !== testCase.expectedTopId) {
     labels.push('top_1_miss')
@@ -229,6 +238,21 @@ function calculateMetrics(results: BenchmarkCaseResult[]) {
     (testCase) =>
       results.find(({ id }) => id === testCase.id)?.relevantHitHasEvidence,
   ).length
+  const contentWordRecallCases = searchBenchmarkCases.filter(
+    ({ expectedResults }) => expectedResults,
+  )
+  const contentWordRecallCasesWithoutSearchErrors =
+    contentWordRecallCases.filter(
+      (testCase) =>
+        !results
+          .find(({ id }) => id === testCase.id)
+          ?.failureLabels.includes('search_error'),
+    )
+  const contentWordRecallSuccesses =
+    contentWordRecallCasesWithoutSearchErrors.filter((testCase) => {
+      const result = results.find(({ id }) => id === testCase.id)
+      return result !== undefined && result.returnedHitCount !== 0
+    }).length
   const noAnswerCases = searchBenchmarkCases.filter(
     ({ category }) => category === 'no_answer',
   )
@@ -277,6 +301,10 @@ function calculateMetrics(results: BenchmarkCaseResult[]) {
     noAnswerPrecision: ratio(
       noAnswerSuccesses,
       noAnswerCasesWithoutSearchErrors.length,
+    ),
+    contentWordRecall: ratio(
+      contentWordRecallSuccesses,
+      contentWordRecallCasesWithoutSearchErrors.length,
     ),
     malformedCitationNoResultRate: ratio(
       malformedSuccesses,
@@ -336,6 +364,11 @@ function regressionFailures(
       'no_answer_precision',
       metrics.noAnswerPrecision,
       searchBenchmarkBaseline.minimumNoAnswerPrecision,
+    ],
+    [
+      'content_word_recall',
+      metrics.contentWordRecall,
+      searchBenchmarkBaseline.minimumContentWordRecall,
     ],
     [
       'malformed_citation_no_result_rate',
@@ -422,6 +455,10 @@ async function main() {
       generatedAt: new Date().toISOString(),
       fixtureDocumentCount: searchBenchmarkDocuments.length,
       metrics,
+      // The configuration this run applied. Reported so every artifact states
+      // the settings it was measured under, and a summary that disagrees with
+      // the committed value is contradicted by its own evidence.
+      indexSettings: legalSearchIndexSettings,
       baseline: searchBenchmarkBaseline,
       cases: results,
       regressionFailures: regressions,
