@@ -167,50 +167,6 @@ async function runCase(
   }
 }
 
-async function runTypoToleranceDiagnostics(
-  client: ReturnType<typeof createClient>,
-) {
-  const queries = ['Rizwun', 'Wolverhamton']
-  const options = [
-    { label: 'default', rankingScoreThreshold: 0.5 },
-    { label: 'threshold_disabled', rankingScoreThreshold: null },
-  ] as const
-
-  return Promise.all(
-    queries.flatMap((query) =>
-      options.map(async ({ label, rankingScoreThreshold }) => {
-        const result = await client.index(indexName).search(query, {
-          matchingStrategy: 'all',
-          sort: ['dateDecided:desc'],
-          limit: resultLimit,
-          showRankingScore: true,
-          ...(rankingScoreThreshold === null ? {} : { rankingScoreThreshold }),
-        })
-        const hits = result.hits.map((hit) => {
-          const document = hit as { id?: unknown; _rankingScore?: unknown }
-          return {
-            id: typeof document.id === 'string' ? document.id : null,
-            engineRankingScore:
-              typeof document._rankingScore === 'number'
-                ? document._rankingScore
-                : null,
-          }
-        })
-
-        return {
-          query,
-          optionSet: label,
-          returnedHitCount: hits.length,
-          topK: hits.slice(0, topKSize).map(({ id }) => id),
-          engineRankingScores: hits.map(
-            ({ engineRankingScore }) => engineRankingScore,
-          ),
-        }
-      }),
-    ),
-  )
-}
-
 function categoryTop1(results: BenchmarkCaseResult[]) {
   const categories = Array.from(
     new Set(searchBenchmarkCases.map(({ category }) => category)),
@@ -487,14 +443,12 @@ async function main() {
     }
 
     const metrics = calculateMetrics(results)
-    const typoToleranceDiagnostics = await runTypoToleranceDiagnostics(client)
     const regressions = regressionFailures(metrics, results)
     const report = {
       benchmark: 'search-correctness-gate-1',
       generatedAt: new Date().toISOString(),
       fixtureDocumentCount: searchBenchmarkDocuments.length,
       metrics,
-      typoToleranceDiagnostics,
       baseline: searchBenchmarkBaseline,
       cases: results,
       regressionFailures: regressions,
