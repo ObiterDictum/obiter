@@ -274,7 +274,7 @@ export async function createIndex(
     )
     await waitForSucceededTask(
       index.updateTypoTolerance({
-        minWordSizeForTypos: { oneTypo: 5, twoTypos: 9 },
+        minWordSizeForTypos: { oneTypo: 8, twoTypos: 12 },
       }),
       indexSetupTaskTimeoutMs,
     )
