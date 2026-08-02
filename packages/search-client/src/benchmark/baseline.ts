@@ -1,4 +1,11 @@
 export const searchBenchmarkBaseline = {
+  // Minimums are floors set to current observed behaviour. The PR that improves
+  // a metric tightens its floor: #53 raises short-word precision from 0.2 to 1;
+  // #54 raises no-answer precision from 0 to 1; and #55 introduces engine
+  // ranking score coverage. Top-1 and top-3 exact-source success remain
+  // 36/39 (0.9231) until the three date-filtered queries are fixed, then both
+  // should be 1. Malformed-citation no-result rate (0.3333) is not tightened
+  // anywhere in this stack.
   expectedCaseCount: 50,
   minimumTop1ExactSourceSuccess: 0.9231,
   minimumTop3ExactSourceSuccess: 0.9231,

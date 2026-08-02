@@ -24,6 +24,7 @@ interface BenchmarkCaseResult {
   query: string
   topK: string[]
   returnedHitCount: number
+  relevantReturnedHitCount: number
   estimatedTotalHits: number
   processingTimeMs: number
   providerSearchTimeMs: number | null
@@ -116,6 +117,9 @@ async function runCase(
       query: testCase.query,
       topK,
       returnedHitCount: hitIds.length,
+      relevantReturnedHitCount: hitIds.filter((id) =>
+        relevantIds(testCase).includes(id),
+      ).length,
       estimatedTotalHits: result.estimatedTotalHits,
       processingTimeMs: result.processingTimeMs,
       providerSearchTimeMs: result.diagnostics?.providerSearchTimeMs ?? null,
@@ -137,6 +141,7 @@ async function runCase(
       query: testCase.query,
       topK: [],
       returnedHitCount: 0,
+      relevantReturnedHitCount: 0,
       estimatedTotalHits: 0,
       processingTimeMs: 0,
       providerSearchTimeMs: null,
@@ -204,13 +209,13 @@ function calculateMetrics(results: BenchmarkCaseResult[]) {
   const shortWordCases = searchBenchmarkCases.filter(
     ({ category }) => category === 'short_word_precision',
   )
-  const shortWordRelevantHits = shortWordCases.reduce((total, testCase) => {
-    const result = results.find(({ id }) => id === testCase.id)
-    return (
+  const shortWordRelevantHits = shortWordCases.reduce(
+    (total, testCase) =>
       total +
-      (result?.topK.includes(testCase.expectedTopId ?? '') === true ? 1 : 0)
-    )
-  }, 0)
+      (results.find(({ id }) => id === testCase.id)?.relevantReturnedHitCount ??
+        0),
+    0,
+  )
   const shortWordReturnedHits = shortWordCases.reduce(
     (total, testCase) =>
       total +

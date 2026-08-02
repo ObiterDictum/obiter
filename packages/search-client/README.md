@@ -20,7 +20,9 @@ The 250 ms wall-clock P95 ceiling provides headroom over the observed 45 ms CI
 P95 without treating the engine's rounded processing time as end-to-end latency.
 Set `SEARCH_BENCHMARK_ALLOW_REGRESSION=1` to retain the report while disabling
 its failure exit code, for local investigation only. Set
-`SEARCH_BENCHMARK_REPORT_PATH` to write the JSON report to a file.
+`SEARCH_BENCHMARK_REPORT_PATH` to write the JSON report to a file. Benchmark
+minimums are ratcheted floors set to observed behaviour and tightened only by
+the PR that improves the corresponding metric.
 
 ### Known latency observation
 
@@ -28,8 +30,12 @@ The CI Meilisearch container shows a bimodal 40.579 ms adder in the provider-cal
 span. Meilisearch reports 0 ms execution time and client-side processing is below
 0.703 ms. A seeded second pass found the same 21 slow query ids at different
 ordinal positions, so the observation is request-content dependent rather than
-an artefact of the benchmark's fixed order. It has not been reproduced outside
-that CI container and may not apply to the real deployment topology.
+an artefact of the benchmark's fixed order. The first shuffled request was slow
+at 43.57 ms and the second was fast after the same connection had served fifty
+requests, ruling out connection warm-up: the wall-clock P95 gate measures
+steady-state latency rather than a cold-connection artefact. It has not been
+reproduced outside that CI container and may not apply to the real deployment
+topology.
 
 The date-filter cases `date-brown-from-1994`, `date-potanina-2024` and
 `date-smith-before-2019` are currently expected to fail with `search_error`.
