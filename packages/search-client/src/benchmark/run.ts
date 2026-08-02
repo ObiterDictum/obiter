@@ -91,23 +91,6 @@ function failureLabels(
   return labels
 }
 
-async function runCourtCodeDiagnostics(
-  client: ReturnType<typeof createClient>,
-) {
-  const queries = ['UKSC', 'EWCA Civ', 'Admin']
-  return Promise.all(
-    queries.map(async (query) => {
-      const result = await search(client, indexName, query, {}, { limit: 20 })
-      return {
-        query,
-        returnedHitCount: result.hits.length,
-        estimatedTotalHits: result.estimatedTotalHits,
-        topK: result.hits.slice(0, topKSize).map((hit) => hit.id),
-      }
-    }),
-  )
-}
-
 async function runCase(
   client: ReturnType<typeof createClient>,
   testCase: SearchBenchmarkCase,
@@ -249,6 +232,21 @@ function calculateMetrics(results: BenchmarkCaseResult[]) {
     (testCase) =>
       results.find(({ id }) => id === testCase.id)?.relevantHitHasEvidence,
   ).length
+  const contentWordRecallCases = searchBenchmarkCases.filter(
+    ({ expectedResults }) => expectedResults,
+  )
+  const contentWordRecallCasesWithoutSearchErrors =
+    contentWordRecallCases.filter(
+      (testCase) =>
+        !results
+          .find(({ id }) => id === testCase.id)
+          ?.failureLabels.includes('search_error'),
+    )
+  const contentWordRecallSuccesses =
+    contentWordRecallCasesWithoutSearchErrors.filter(
+      (testCase) =>
+        results.find(({ id }) => id === testCase.id)?.returnedHitCount !== 0,
+    ).length
   const noAnswerCases = searchBenchmarkCases.filter(
     ({ category }) => category === 'no_answer',
   )
@@ -297,6 +295,10 @@ function calculateMetrics(results: BenchmarkCaseResult[]) {
     noAnswerPrecision: ratio(
       noAnswerSuccesses,
       noAnswerCasesWithoutSearchErrors.length,
+    ),
+    contentWordRecall: ratio(
+      contentWordRecallSuccesses,
+      contentWordRecallCasesWithoutSearchErrors.length,
     ),
     malformedCitationNoResultRate: ratio(
       malformedSuccesses,
@@ -436,14 +438,12 @@ async function main() {
     }
 
     const metrics = calculateMetrics(results)
-    const courtCodeDiagnostics = await runCourtCodeDiagnostics(client)
     const regressions = regressionFailures(metrics, results)
     const report = {
       benchmark: 'search-correctness-gate-1',
       generatedAt: new Date().toISOString(),
       fixtureDocumentCount: searchBenchmarkDocuments.length,
       metrics,
-      courtCodeDiagnostics,
       baseline: searchBenchmarkBaseline,
       cases: results,
       regressionFailures: regressions,

@@ -351,7 +351,7 @@ describe('Legal search client', () => {
         'dateDecided <= "2024-12-31"',
       ],
       sort: ['dateDecided:desc'],
-      matchingStrategy: 'frequency',
+      matchingStrategy: 'all',
       rankingScoreThreshold: 0.5,
       attributesToRetrieve: [
         'id',
@@ -401,6 +401,31 @@ describe('Legal search client', () => {
       2,
       'test',
       expect.not.objectContaining({ rankingScoreThreshold: expect.anything() }),
+    )
+  })
+
+  it('allows callers to relax all-term matching', async () => {
+    const searchMock = vi.fn(async () => ({
+      hits: [authority()],
+      query: 'test',
+      estimatedTotalHits: 1,
+      processingTimeMs: 1,
+    }))
+    const client = {
+      index: () => ({ search: searchMock }),
+    }
+
+    await search(
+      client,
+      'legal_authorities',
+      'test',
+      {},
+      { matchingStrategy: 'frequency' },
+    )
+
+    expect(searchMock).toHaveBeenCalledWith(
+      'test',
+      expect.objectContaining({ matchingStrategy: 'frequency' }),
     )
   })
 

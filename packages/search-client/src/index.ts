@@ -68,6 +68,7 @@ export interface LegalSearchOptions {
   limit?: number
   // Set null to disable the relevance floor when recall matters more than precision.
   rankingScoreThreshold?: number | null
+  matchingStrategy?: 'all' | 'frequency'
 }
 
 interface SearchIndexingTask {
@@ -128,7 +129,7 @@ type IndexLike = {
       sort?: string[]
       attributesToRetrieve?: string[]
       limit?: number
-      matchingStrategy?: 'frequency'
+      matchingStrategy?: 'all' | 'frequency'
       rankingScoreThreshold?: number
     },
   ): Promise<{
@@ -354,12 +355,12 @@ export async function search(
       sort?: string[]
       attributesToRetrieve?: string[]
       limit?: number
-      matchingStrategy?: 'frequency'
+      matchingStrategy?: 'all' | 'frequency'
       rankingScoreThreshold?: number
     } = {
       filter: toMeiliFilters(filters),
       sort: ['dateDecided:desc'],
-      matchingStrategy: 'frequency',
+      matchingStrategy: options.matchingStrategy ?? 'all',
       attributesToRetrieve:
         options.includeParagraphs || options.includeSnippets
           ? [...searchSummaryAttributes, 'paragraphs']

@@ -150,10 +150,28 @@ const objectiveCases: SearchBenchmarkCase[] = [
     expectedTopId: 'ewhc-ch-2018-88',
   },
   {
+    id: 'document-id-uksc-2024',
+    category: 'provider_document_id',
+    query: 'uksc-2024-3',
+    expectedTopId: 'uksc-2024-3',
+  },
+  {
     id: 'court-code-uksc',
     category: 'free_text_court_code',
     query: 'UKSC',
     expectedTopId: 'uksc-2024-3',
+  },
+  {
+    id: 'court-code-ewca-civ',
+    category: 'free_text_court_code',
+    query: 'EWCA Civ',
+    expectedTopId: 'ewca-civ-2022-159',
+  },
+  {
+    id: 'court-code-admin',
+    category: 'free_text_court_code',
+    query: 'Admin',
+    expectedTopId: 'ewhc-admin-2021-123',
   },
   {
     id: 'document-id-ewca-2022',
