@@ -134,7 +134,7 @@ describe('Legal search client', () => {
       'with',
     ])
     expect(index.updateTypoTolerance).toHaveBeenCalledWith({
-      minWordSizeForTypos: { oneTypo: 8, twoTypos: 12 },
+      minWordSizeForTypos: { oneTypo: 5, twoTypos: 9 },
     })
   })
 

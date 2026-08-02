@@ -360,6 +360,11 @@ function regressionFailures(
       searchBenchmarkBaseline.minimumNoAnswerPrecision,
     ],
     [
+      'content_word_recall',
+      metrics.contentWordRecall,
+      searchBenchmarkBaseline.minimumContentWordRecall,
+    ],
+    [
       'malformed_citation_no_result_rate',
       metrics.malformedCitationNoResultRate,
       searchBenchmarkBaseline.minimumMalformedCitationNoResultRate,

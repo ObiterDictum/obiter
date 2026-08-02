@@ -3,7 +3,7 @@
 ## Correctness benchmark
 
 `pnpm benchmark:search` runs the fixed Gate 1 objective case set against a
-Meilisearch 1.12 instance. The suite contains 50 synthetic queries covering
+Meilisearch 1.12 instance. The suite contains 53 synthetic queries covering
 exact citations, malformed and ambiguous citations, titles, party names,
 provider ids, body phrases, no-answer behavior, court and date filters, and
 short-word precision.
@@ -23,6 +23,24 @@ its failure exit code, for local investigation only. Set
 `SEARCH_BENCHMARK_REPORT_PATH` to write the JSON report to a file. Benchmark
 minimums are ratcheted floors set to observed behaviour and tightened only by
 the PR that improves the corresponding metric.
+
+## Search settings
+
+The index keeps legal content words searchable and removes only function words.
+Court codes remain searchable through `neutralCitation`; the benchmark covers
+`UKSC`, `EWCA Civ`, and `Admin`. Court display names are not indexed because
+no display-name field exists in the source schema.
+
+Search uses Meilisearch's `all` matching strategy by default, so every query
+term must match. Callers that prefer recall can set
+`LegalSearchOptions.matchingStrategy` to `frequency`. The default 0.5 ranking
+score threshold is skipped for an empty-query filtered browse. Callers can
+lower it or set `LegalSearchOptions.rankingScoreThreshold` to `null` to disable
+it when recall is more important.
+
+Updating searchable attributes or stop words causes Meilisearch to re-index the
+existing index. Environments must allow that task to finish before relying on
+the revised settings.
 
 ### Known latency observation
 
