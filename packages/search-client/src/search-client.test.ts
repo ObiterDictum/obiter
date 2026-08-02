@@ -201,7 +201,8 @@ describe('Legal search client', () => {
   })
 
   it('validates documents before indexing', async () => {
-    const addDocuments = vi.fn(() => completedTask())
+    const indexingTask = completedTask()
+    const addDocuments = vi.fn(() => indexingTask)
     const client = {
       index: () => ({ addDocuments }),
     }
@@ -213,6 +214,10 @@ describe('Legal search client', () => {
     expect(result).toEqual({ indexedCount: 1, failedCount: 0, errors: [] })
     expect(addDocuments).toHaveBeenCalledWith([authority()], {
       primaryKey: 'id',
+    })
+    expect(indexingTask.waitTask).toHaveBeenCalledWith({
+      timeout: 1_800_000,
+      interval: 100,
     })
   })
 
@@ -250,6 +255,22 @@ describe('Legal search client', () => {
       ],
     })
     expect(result.errors[0]?.message).not.toContain('sensitive detail')
+  })
+
+  it('reports an indexing wait timeout without claiming the task failed', async () => {
+    const indexingTask = completedTask()
+    indexingTask.waitTask = vi.fn(async () => {
+      throw new Error('Task timed out after 1800000ms')
+    })
+    const client = {
+      index: () => ({ addDocuments: vi.fn(() => indexingTask) }),
+    }
+
+    await expect(
+      indexDocuments(client, 'legal_authorities', [authority()]),
+    ).rejects.toThrow(
+      'Document indexing status timed out. The Meilisearch task may still be running.',
+    )
   })
 
   it('reports validation failures without touching Meilisearch', async () => {

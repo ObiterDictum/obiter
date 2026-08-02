@@ -188,6 +188,7 @@ const rankingRules = [
   'sort',
 ]
 const indexSetupTaskTimeoutMs = 10 * 60_000
+const documentIndexingTaskTimeoutMs = 30 * 60_000
 
 export function createClient(host: string, apiKey: string): MeiliSearch {
   return new MeiliSearch({ host, apiKey })
@@ -261,7 +262,7 @@ export async function indexDocuments(
       .addDocuments(parsed.data, {
         primaryKey: 'id',
       })
-      .waitTask({ timeout: 30_000, interval: 100 })
+      .waitTask({ timeout: documentIndexingTaskTimeoutMs, interval: 100 })
 
     if (task.status !== 'succeeded') {
       return indexingTaskFailure(parsed.data, task)
@@ -288,6 +289,12 @@ export async function indexDocuments(
           : [],
     }
   } catch (error) {
+    if (isTaskWaitTimeout(error)) {
+      throw new Error(
+        'Document indexing status timed out. The Meilisearch task may still be running.',
+        { cause: error },
+      )
+    }
     throw wrapSearchError('Document indexing failed.', error)
   }
 }
@@ -575,6 +582,10 @@ export async function getDocument(
   } catch (error) {
     throw wrapSearchError('Document lookup failed.', error)
   }
+}
+
+function isTaskWaitTimeout(error: unknown) {
+  return error instanceof Error && /timed out|timeout/i.test(error.message)
 }
 
 async function waitForSucceededTask(

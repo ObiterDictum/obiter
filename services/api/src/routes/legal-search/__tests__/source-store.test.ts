@@ -1,6 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  exactMatchPunctuationFrom,
+  exactMatchPunctuationTo,
+} from '@obiter/search-client'
+import {
   createInMemoryLegalAuthoritySourceStore,
   createPostgresLegalAuthoritySourceStore,
 } from '../source-store'
@@ -135,8 +139,14 @@ describe('legal authority source store search', () => {
     expect(searchSql).toContain('search_vector @@ websearch_to_tsquery')
     expect(searchSql).toContain('normalize(coalesce(')
     expect(searchSql).toContain('translate(normalize(')
-    expect(searchSql).toContain('$$‘’“”‐‑‒–—―$$')
-    expect(searchSql).toContain('$$\'\'""------$$')
+    expect(searchSql).toContain('NFKC), $8, $9)')
+    const searchValues = queries.find((query) =>
+      query.text.includes('from legal_source_documents'),
+    )?.values
+    expect(searchValues?.slice(7)).toEqual([
+      exactMatchPunctuationFrom,
+      exactMatchPunctuationTo,
+    ])
     expect(searchSql).not.toContain('document_json::text')
     expect(searchSql).not.toContain("summary_json::text || ' '")
 
@@ -177,6 +187,8 @@ describe('legal authority source store search', () => {
       null,
       '[2024] uksc 3',
       '[2024] uksc 3',
+      exactMatchPunctuationFrom,
+      exactMatchPunctuationTo,
     ])
   })
 })

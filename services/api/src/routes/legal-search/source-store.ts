@@ -192,8 +192,6 @@ export function createPostgresLegalAuthoritySourceStore(
     },
     async search(query, filters) {
       const normalizedQuery = normalizeExactMatchValue(query)
-      const exactMatchPunctuationFromSql = `$$${exactMatchPunctuationFrom}$$`
-      const exactMatchPunctuationToSql = `$$${exactMatchPunctuationTo}$$`
       const client = await pool.connect()
 
       try {
@@ -211,9 +209,9 @@ export function createPostgresLegalAuthoritySourceStore(
                 document_json,
                 provider_json,
                 search_vector,
-                regexp_replace(lower(trim(translate(normalize(coalesce(summary_json->>'id', ''), NFKC), ${exactMatchPunctuationFromSql}, ${exactMatchPunctuationToSql}))), '\\s+', ' ', 'g') as normalized_id,
-                regexp_replace(lower(trim(translate(normalize(coalesce(summary_json->>'neutralCitation', ''), NFKC), ${exactMatchPunctuationFromSql}, ${exactMatchPunctuationToSql}))), '\\s+', ' ', 'g') as normalized_neutral_citation,
-                regexp_replace(lower(trim(translate(normalize(coalesce(summary_json->>'title', ''), NFKC), ${exactMatchPunctuationFromSql}, ${exactMatchPunctuationToSql}))), '\\s+', ' ', 'g') as normalized_title
+                regexp_replace(lower(trim(translate(normalize(coalesce(summary_json->>'id', ''), NFKC), $8, $9))), '\\s+', ' ', 'g') as normalized_id,
+                regexp_replace(lower(trim(translate(normalize(coalesce(summary_json->>'neutralCitation', ''), NFKC), $8, $9))), '\\s+', ' ', 'g') as normalized_neutral_citation,
+                regexp_replace(lower(trim(translate(normalize(coalesce(summary_json->>'title', ''), NFKC), $8, $9))), '\\s+', ' ', 'g') as normalized_title
               from legal_source_documents
               where ($1::text is null or summary_json->>'court' = $1)
                 and ($2::text is null or summary_json->>'jurisdiction' = $2)
@@ -249,6 +247,8 @@ export function createPostgresLegalAuthoritySourceStore(
             filters.dateTo ?? null,
             normalizedQuery,
             normalizedQuery,
+            exactMatchPunctuationFrom,
+            exactMatchPunctuationTo,
           ],
         )
         await client.query('commit')
