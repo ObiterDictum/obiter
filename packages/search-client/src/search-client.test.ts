@@ -9,6 +9,7 @@ import {
   extractLegalSearchSnippets,
   getDocument,
   indexDocuments,
+  legalSearchIndexSettings,
   rankLegalSearchHitsByExactMatch,
   search,
 } from './index'
@@ -134,8 +135,51 @@ describe('Legal search client', () => {
       'with',
     ])
     expect(index.updateTypoTolerance).toHaveBeenCalledWith({
-      minWordSizeForTypos: { oneTypo: 8, twoTypos: 12 },
+      minWordSizeForTypos: { oneTypo: 5, twoTypos: 9 },
     })
+  })
+
+  // The benchmark report embeds legalSearchIndexSettings as its record of the
+  // configuration under test, so it is only trustworthy while these values are
+  // the ones createIndex and search actually apply.
+  it('reports the index settings it applies', async () => {
+    const index = {
+      updateSearchableAttributes: vi.fn(() => completedTask({ uid: 8 })),
+      updateFilterableAttributes: vi.fn(() => completedTask({ uid: 9 })),
+      updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
+      updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
+      updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
+      updateStopWords: vi.fn(() => completedTask({ uid: 13 })),
+      updateTypoTolerance: vi.fn(() => completedTask({ uid: 14 })),
+      addDocuments: vi.fn(),
+      search: vi.fn(async () => ({ hits: [] })),
+    }
+    const client = {
+      createIndex: vi.fn(() => completedTask({ uid: 7 })),
+      index: vi.fn(() => index),
+    }
+
+    await createIndex(client, 'legal_authorities')
+    await search(client, 'legal_authorities', 'permission to appeal')
+
+    expect(index.updateTypoTolerance).toHaveBeenCalledWith({
+      minWordSizeForTypos: legalSearchIndexSettings.minWordSizeForTypos,
+    })
+    expect(index.updatePrefixSearch).toHaveBeenCalledWith(
+      legalSearchIndexSettings.prefixSearch,
+    )
+    expect(index.updateStopWords).toHaveBeenCalledWith(
+      expect.objectContaining({
+        length: legalSearchIndexSettings.stopWordCount,
+      }),
+    )
+    expect(index.search).toHaveBeenCalledWith(
+      'permission to appeal',
+      expect.objectContaining({
+        matchingStrategy: legalSearchIndexSettings.matchingStrategy,
+        rankingScoreThreshold: legalSearchIndexSettings.rankingScoreThreshold,
+      }),
+    )
   })
 
   it('updates index settings when the index already exists', async () => {

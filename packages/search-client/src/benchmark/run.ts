@@ -1,6 +1,12 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { createClient, createIndex, indexDocuments, search } from '../index'
+import {
+  createClient,
+  createIndex,
+  indexDocuments,
+  legalSearchIndexSettings,
+  search,
+} from '../index'
 import {
   searchBenchmarkCases,
   type SearchBenchmarkCase,
@@ -449,6 +455,10 @@ async function main() {
       generatedAt: new Date().toISOString(),
       fixtureDocumentCount: searchBenchmarkDocuments.length,
       metrics,
+      // The configuration this run applied. Reported so every artifact states
+      // the settings it was measured under, and a summary that disagrees with
+      // the committed value is contradicted by its own evidence.
+      indexSettings: legalSearchIndexSettings,
       baseline: searchBenchmarkBaseline,
       cases: results,
       regressionFailures: regressions,

@@ -220,6 +220,20 @@ const rankingRules = [
   'exactness',
   'sort',
 ]
+/**
+ * The settings createIndex applies, plus the defaults search falls back to,
+ * held in one place so callers can report exactly what ran. The benchmark
+ * embeds this verbatim, which is what stops a reported tuning decision from
+ * quietly disagreeing with the committed value.
+ */
+export const legalSearchIndexSettings = {
+  minWordSizeForTypos: { oneTypo: 5, twoTypos: 9 },
+  prefixSearch: 'disabled',
+  matchingStrategy: 'all',
+  rankingScoreThreshold: 0.5,
+  stopWordCount: legalStopWords.length,
+} as const
+
 const indexSetupTaskTimeoutMs = 10 * 60_000
 const documentIndexingTaskTimeoutMs = 30 * 60_000
 
@@ -265,7 +279,7 @@ export async function createIndex(
       indexSetupTaskTimeoutMs,
     )
     await waitForSucceededTask(
-      index.updatePrefixSearch('disabled'),
+      index.updatePrefixSearch(legalSearchIndexSettings.prefixSearch),
       indexSetupTaskTimeoutMs,
     )
     await waitForSucceededTask(
@@ -274,7 +288,9 @@ export async function createIndex(
     )
     await waitForSucceededTask(
       index.updateTypoTolerance({
-        minWordSizeForTypos: { oneTypo: 8, twoTypos: 12 },
+        minWordSizeForTypos: {
+          ...legalSearchIndexSettings.minWordSizeForTypos,
+        },
       }),
       indexSetupTaskTimeoutMs,
     )
@@ -360,7 +376,8 @@ export async function search(
     } = {
       filter: toMeiliFilters(filters),
       sort: ['dateDecided:desc'],
-      matchingStrategy: options.matchingStrategy ?? 'all',
+      matchingStrategy:
+        options.matchingStrategy ?? legalSearchIndexSettings.matchingStrategy,
       attributesToRetrieve:
         options.includeParagraphs || options.includeSnippets
           ? [...searchSummaryAttributes, 'paragraphs']
@@ -368,7 +385,9 @@ export async function search(
     }
     if (typeof options.limit === 'number') searchOptions.limit = options.limit
     if (query && options.rankingScoreThreshold !== null) {
-      searchOptions.rankingScoreThreshold = options.rankingScoreThreshold ?? 0.5
+      searchOptions.rankingScoreThreshold =
+        options.rankingScoreThreshold ??
+        legalSearchIndexSettings.rankingScoreThreshold
     }
 
     const providerSearchStartedAt = performance.now()
