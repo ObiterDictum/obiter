@@ -135,6 +135,8 @@ describe('legal authority source store search', () => {
     expect(searchSql).toContain('search_vector @@ websearch_to_tsquery')
     expect(searchSql).toContain('normalize(coalesce(')
     expect(searchSql).toContain('translate(normalize(')
+    expect(searchSql).toContain('$$‘’“”‐‑‒–—―$$')
+    expect(searchSql).toContain('$$\'\'""------$$')
     expect(searchSql).not.toContain('document_json::text')
     expect(searchSql).not.toContain("summary_json::text || ' '")
 

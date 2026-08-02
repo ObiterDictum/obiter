@@ -2,6 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   containsEveryQueryTerm,
   createIndex,
+  exactMatchPunctuationFolds,
+  exactMatchPunctuationFrom,
+  exactMatchPunctuationTo,
   extractLegalSearchSnippets,
   getDocument,
   indexDocuments,
@@ -102,6 +105,9 @@ describe('Legal search client', () => {
       'sort',
     ])
     expect(index.updatePrefixSearch).toHaveBeenCalledWith('disabled')
+    expect(
+      index.updatePrefixSearch.mock.results[0]?.value.waitTask,
+    ).toHaveBeenCalledWith({ timeout: 600_000, interval: 100 })
   })
 
   it('updates index settings when the index already exists', async () => {
@@ -526,6 +532,16 @@ describe('Legal search client', () => {
     expect(containsEveryQueryTerm('Joséphine contested', 'José test')).toBe(
       false,
     )
+  })
+
+  it('derives equal-length SQL punctuation translation arguments', () => {
+    const fromCharacters = Array.from(exactMatchPunctuationFrom)
+    const toCharacters = Array.from(exactMatchPunctuationTo)
+
+    expect(fromCharacters).toHaveLength(toCharacters.length)
+    expect(
+      fromCharacters.map((from, index) => [from, toCharacters[index]]),
+    ).toEqual(exactMatchPunctuationFolds)
   })
 
   it('folds typographic apostrophes before whole-term matching', () => {

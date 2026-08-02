@@ -187,6 +187,7 @@ const rankingRules = [
   'exactness',
   'sort',
 ]
+const indexSetupTaskTimeoutMs = 10 * 60_000
 
 export function createClient(host: string, apiKey: string): MeiliSearch {
   return new MeiliSearch({ host, apiKey })
@@ -204,7 +205,7 @@ export async function createIndex(
     const createTask = client.createIndex(indexName, { primaryKey })
     const task = await createTask
     taskUid = task.taskUid
-    await waitForSucceededTask(createTask)
+    await waitForSucceededTask(createTask, indexSetupTaskTimeoutMs)
   } catch (error) {
     if (!isIndexAlreadyExistsError(error)) {
       throw wrapSearchError('Search index setup failed.', error)
@@ -215,15 +216,24 @@ export async function createIndex(
     const index = client.index(indexName)
     await waitForSucceededTask(
       index.updateSearchableAttributes(searchableAttributes),
+      indexSetupTaskTimeoutMs,
     )
     await waitForSucceededTask(
       index.updateFilterableAttributes(filterableAttributes),
+      indexSetupTaskTimeoutMs,
     )
     await waitForSucceededTask(
       index.updateSortableAttributes(sortableAttributes),
+      indexSetupTaskTimeoutMs,
     )
-    await waitForSucceededTask(index.updateRankingRules(rankingRules))
-    await waitForSucceededTask(index.updatePrefixSearch('disabled'))
+    await waitForSucceededTask(
+      index.updateRankingRules(rankingRules),
+      indexSetupTaskTimeoutMs,
+    )
+    await waitForSucceededTask(
+      index.updatePrefixSearch('disabled'),
+      indexSetupTaskTimeoutMs,
+    )
 
     return { taskUid }
   } catch (error) {
@@ -456,17 +466,36 @@ function exactMatchScore(hit: LegalSearchHit, normalizedQuery: string) {
   return 0
 }
 
+export const exactMatchPunctuationFolds = [
+  ['‘', "'"],
+  ['’', "'"],
+  ['“', '"'],
+  ['”', '"'],
+  ['‐', '-'],
+  ['‑', '-'],
+  ['‒', '-'],
+  ['–', '-'],
+  ['—', '-'],
+  ['―', '-'],
+] as const
+
+export const exactMatchPunctuationFrom = exactMatchPunctuationFolds
+  .map(([from]) => from)
+  .join('')
+export const exactMatchPunctuationTo = exactMatchPunctuationFolds
+  .map(([, to]) => to)
+  .join('')
+
 export function normalizeExactMatchValue(value: string | null | undefined) {
-  return (
-    value
-      ?.normalize('NFKC')
-      .replace(/[\u2018\u2019]/g, "'")
-      .replace(/[\u201C\u201D]/g, '"')
-      .replace(/[\u2010-\u2015]/g, '-')
-      .trim()
-      .toLocaleLowerCase('en-GB')
-      .replace(/\s+/g, ' ') ?? ''
+  const punctuationFolded = exactMatchPunctuationFolds.reduce(
+    (normalized, [from, to]) => normalized.replaceAll(from, to),
+    value?.normalize('NFKC') ?? '',
   )
+
+  return punctuationFolded
+    .trim()
+    .toLocaleLowerCase('en-GB')
+    .replace(/\s+/g, ' ')
 }
 
 export function containsEveryQueryTerm(value: string, query: string) {
@@ -550,8 +579,9 @@ export async function getDocument(
 
 async function waitForSucceededTask(
   task: SearchEnqueuedTaskPromise,
+  timeout = 30_000,
 ): Promise<SearchIndexingTask> {
-  const completed = await task.waitTask({ timeout: 30_000, interval: 100 })
+  const completed = await task.waitTask({ timeout, interval: 100 })
   if (completed.status !== 'succeeded') {
     throw new SearchTaskError(completed)
   }
