@@ -1080,6 +1080,57 @@ describe('Legal search client', () => {
     expect(extractLegalSearchSnippets(hit, '[2024] UKSC 3')).toEqual([])
   })
 
+  it('reuses compiled term patterns without leaking match state', () => {
+    // The pattern cache is keyed by term, so the same term must keep giving an
+    // independent answer for each value it is tested against.
+    expect(containsEveryQueryTerm('the testator intended', 'testator')).toBe(
+      true,
+    )
+    expect(containsEveryQueryTerm('the testimony was heard', 'testator')).toBe(
+      false,
+    )
+    expect(containsEveryQueryTerm('the testator intended', 'testator')).toBe(
+      true,
+    )
+    expect(containsEveryQueryTerm('self-incrimination applies', 'self')).toBe(
+      true,
+    )
+    expect(containsEveryQueryTerm('selfless conduct', 'self')).toBe(false)
+
+    // Metacharacter terms are escaped before compiling but cached under the raw
+    // key, so the cache must keep near-identical citations distinct.
+    expect(
+      containsEveryQueryTerm('cited as [2024] uksc 3 today', '[2024] UKSC 3'),
+    ).toBe(true)
+    expect(
+      containsEveryQueryTerm('cited as [2024] uksc 33 today', '[2024] UKSC 3'),
+    ).toBe(false)
+  })
+
+  it('excerpts snippets from the raw paragraph text', () => {
+    // Matching runs on normalized text, but the returned excerpt must come from
+    // the original so casing and punctuation survive.
+    const snippets = extractLegalSearchSnippets(
+      authority({
+        paragraphs: [
+          {
+            id: 'uksc-2024-3-p1',
+            documentId: 'uksc-2024-3',
+            paragraphNumber: 1,
+            text: 'The Testator INTENDED to revoke the earlier will.',
+          },
+        ],
+      }),
+      'testator',
+    )
+
+    expect(snippets).toHaveLength(1)
+    expect(snippets[0]?.text).toBe(
+      'The Testator INTENDED to revoke the earlier will.',
+    )
+    expect(snippets[0]?.matchedTerms).toEqual(['testator'])
+  })
+
   it('omits snippets when paragraph text does not match the query', () => {
     const snippets = extractLegalSearchSnippets(
       authority({
