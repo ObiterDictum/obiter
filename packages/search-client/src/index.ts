@@ -742,15 +742,34 @@ function trimSnippetText(text: string, tokens: string[]) {
 
   // Locating the excerpt with indexOf would centre the window on a substring
   // hit such as "test" inside "testimony", which is the defect whole-term
-  // matching removed everywhere else. Case folding only, so slice indexes
-  // still line up with normalizedText.
-  const lowerText = normalizedText.toLocaleLowerCase('en-GB')
-  const matchIndex = Math.max(firstWholeTermIndex(lowerText, tokens), 0)
-  const start = Math.max(matchIndex - 80, 0)
+  // matching removed everywhere else. Use the index normalization too, then
+  // translate its offset back to the display text before slicing it.
+  const matchText = normalizeExactMatchValue(normalizedText)
+  const matchIndex = Math.max(firstWholeTermIndex(matchText, tokens), 0)
+  const start = normalizedSnippetOffset(
+    normalizedText,
+    Math.max(matchIndex - 80, 0),
+  )
   const end = Math.min(start + maxLength, normalizedText.length)
   const excerpt = normalizedText.slice(start, end).trim()
 
   return `${start > 0 ? '...' : ''}${excerpt}${end < normalizedText.length ? '...' : ''}`
+}
+
+function normalizedSnippetOffset(text: string, offset: number) {
+  let low = 0
+  let high = text.length
+
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2)
+    if (normalizeExactMatchValue(text.slice(0, middle)).length < offset) {
+      low = middle + 1
+    } else {
+      high = middle
+    }
+  }
+
+  return low
 }
 
 function validationFailure(

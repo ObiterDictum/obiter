@@ -1012,6 +1012,12 @@ describe('Legal search client', () => {
     )
     expect(containsEverySearchableQueryTerm('test_case', 'test')).toBe(false)
     expect(containsEverySearchableQueryTerm('_test', 'test')).toBe(false)
+    expect(
+      containsEverySearchableQueryTerm('The test was applied.', 'the test'),
+    ).toBe(true)
+    expect(
+      containsEverySearchableQueryTerm('The test was applied.', 'the'),
+    ).toBe(false)
   })
 
   it('derives equal-length SQL punctuation translation arguments', () => {
@@ -1054,6 +1060,22 @@ describe('Legal search client', () => {
 
     expect(snippets).toHaveLength(1)
     expect(snippets[0]?.matchedTerms).toEqual(["testator's"])
+
+    const longSnippets = extractLegalSearchSnippets(
+      authority({
+        paragraphs: [
+          {
+            id: 'uksc-2024-3-p1',
+            documentId: 'uksc-2024-3',
+            paragraphNumber: 1,
+            text: `${'Introduction. '.repeat(25)}The testator’s intention was recorded.`,
+          },
+        ],
+      }),
+      "testator's",
+    )
+
+    expect(longSnippets[0]?.text).toContain('testator’s intention')
   })
 
   it('treats citation punctuation as literal whole-term text', () => {
