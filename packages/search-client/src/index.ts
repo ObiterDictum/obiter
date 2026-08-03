@@ -458,31 +458,38 @@ export function extractLegalSearchSnippets(
   const paragraphs = hit.paragraphs ?? []
   const normalizedQuery = normalizeExactMatchValue(query)
   const tokens = normalizedQuery.split(' ').filter((token) => token.length > 1)
+  // Normalizing is the expensive part on real judgments, so each paragraph is
+  // normalized once here and the result carried through to the mapping step.
   const selectedParagraphs =
     tokens.length > 0
       ? paragraphs
-          .map((paragraph, index) => ({
-            paragraph,
-            index,
-            score: snippetMatchScore(paragraph.text, normalizedQuery, tokens),
-          }))
+          .map((paragraph, index) => {
+            const normalizedText = normalizeExactMatchValue(paragraph.text)
+            return {
+              paragraph,
+              index,
+              normalizedText,
+              score: snippetMatchScore(normalizedText, normalizedQuery, tokens),
+            }
+          })
           .filter(({ score }) => score > 0)
           .sort(
             (left, right) =>
               right.score - left.score || left.index - right.index,
           )
           .slice(0, 2)
-          .map(({ paragraph }) => paragraph)
       : []
 
-  return selectedParagraphs.map((paragraph) => ({
+  return selectedParagraphs.map(({ paragraph, normalizedText }) => ({
     evidenceId: createJudgmentParagraphEvidenceId(
       hit.id,
       paragraph.paragraphNumber,
     ),
     paragraphNumber: paragraph.paragraphNumber,
+    // Excerpting reads the raw text so the returned snippet keeps its original
+    // casing and punctuation.
     text: trimSnippetText(paragraph.text, tokens),
-    matchedTerms: matchedSnippetTerms(paragraph.text, normalizedQuery, tokens),
+    matchedTerms: matchedSnippetTerms(normalizedText, normalizedQuery, tokens),
     matchReason: 'body_text_match',
   }))
 }
@@ -495,11 +502,10 @@ export function createJudgmentParagraphEvidenceId(
 }
 
 function matchedSnippetTerms(
-  text: string,
+  normalizedText: string,
   normalizedQuery: string,
   tokens: string[],
 ) {
-  const normalizedText = normalizeExactMatchValue(text)
   if (normalizedQuery && containsWholeTerm(normalizedText, normalizedQuery)) {
     return [normalizedQuery]
   }
@@ -508,11 +514,10 @@ function matchedSnippetTerms(
 }
 
 function snippetMatchScore(
-  text: string,
+  normalizedText: string,
   normalizedQuery: string,
   tokens: string[],
 ) {
-  const normalizedText = normalizeExactMatchValue(text)
   if (normalizedQuery && containsWholeTerm(normalizedText, normalizedQuery)) {
     return 3
   }
@@ -665,16 +670,38 @@ function containsAnyNormalizedQueryTerm(
   return terms.some((term) => containsWholeTerm(normalizedValue, term))
 }
 
+// Terms come from user queries, so the key space is unbounded and the cache
+// needs an explicit ceiling.
+const wholeTermPatterns = new Map<string, RegExp>()
+const wholeTermPatternLimit = 500
+
+function wholeTermPattern(term: string) {
+  const cached = wholeTermPatterns.get(term)
+  if (cached) return cached
+
+  // No `g` or `y` flag, so the pattern holds no `lastIndex` state and stays
+  // safe to reuse across calls.
+  const pattern = new RegExp(
+    `(?<![\\p{L}\\p{M}\\p{N}_])${escapeRegularExpression(term)}(?![\\p{L}\\p{M}\\p{N}_])`,
+    'u',
+  )
+  wholeTermPatterns.set(term, pattern)
+
+  const oldestTerm = wholeTermPatterns.keys().next().value
+  if (wholeTermPatterns.size > wholeTermPatternLimit && oldestTerm) {
+    wholeTermPatterns.delete(oldestTerm)
+  }
+
+  return pattern
+}
+
 /**
  * Checks normalized text and term values for a whole-term match. Normalize
  * both inputs with `normalizeExactMatchValue` before calling this helper.
  */
 export function containsWholeTerm(value: string, term: string) {
   if (!term) return false
-  return new RegExp(
-    `(?<![\\p{L}\\p{M}\\p{N}_])${escapeRegularExpression(term)}(?![\\p{L}\\p{M}\\p{N}_])`,
-    'u',
-  ).test(value)
+  return wholeTermPattern(term).test(value)
 }
 
 function escapeRegularExpression(value: string) {
