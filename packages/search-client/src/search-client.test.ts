@@ -10,6 +10,7 @@ import {
   getDocument,
   indexDocuments,
   legalSearchIndexSettings,
+  normalizeExactMatchValue,
   rankLegalSearchHitsByExactMatch,
   search,
 } from './index'
@@ -1020,6 +1021,15 @@ describe('Legal search client', () => {
     ).toBe(false)
   })
 
+  it('normalizes raw and display snippet text equivalently', () => {
+    const rawText = '  The\n\ttestator’s   intention was\n recorded.  '
+    const displayText = rawText.replace(/\s+/g, ' ').trim()
+
+    expect(normalizeExactMatchValue(rawText)).toBe(
+      normalizeExactMatchValue(displayText),
+    )
+  })
+
   it('derives equal-length SQL punctuation translation arguments', () => {
     const fromCharacters = Array.from(exactMatchPunctuationFrom)
     const toCharacters = Array.from(exactMatchPunctuationTo)
@@ -1076,6 +1086,24 @@ describe('Legal search client', () => {
     )
 
     expect(longSnippets[0]?.text).toContain('testator’s intention')
+  })
+
+  it('maps snippet offsets when normalization changes text length', () => {
+    const snippets = extractLegalSearchSnippets(
+      authority({
+        paragraphs: [
+          {
+            id: 'uksc-2024-3-p1',
+            documentId: 'uksc-2024-3',
+            paragraphNumber: 1,
+            text: `${'İ '.repeat(150)}The test was applied to the evidence.${' Further discussion followed.'.repeat(10)}`,
+          },
+        ],
+      }),
+      'test',
+    )
+
+    expect(snippets[0]?.text).toContain('The test was applied')
   })
 
   it('treats citation punctuation as literal whole-term text', () => {

@@ -489,7 +489,7 @@ export function extractLegalSearchSnippets(
     paragraphNumber: paragraph.paragraphNumber,
     // Excerpting reads the raw text so the returned snippet keeps its original
     // casing and punctuation.
-    text: trimSnippetText(paragraph.text, tokens),
+    text: trimSnippetText(paragraph.text, normalizedText, tokens),
     matchedTerms: matchedSnippetTerms(normalizedText, normalizedQuery, tokens),
     matchReason: 'body_text_match',
   }))
@@ -735,25 +735,25 @@ function escapeRegularExpression(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-function trimSnippetText(text: string, tokens: string[]) {
-  const normalizedText = text.replace(/\s+/g, ' ').trim()
+function trimSnippetText(text: string, matchText: string, tokens: string[]) {
+  const displayText = text.replace(/\s+/g, ' ').trim()
   const maxLength = 240
-  if (normalizedText.length <= maxLength) return normalizedText
+  if (displayText.length <= maxLength) return displayText
 
   // Locating the excerpt with indexOf would centre the window on a substring
   // hit such as "test" inside "testimony", which is the defect whole-term
-  // matching removed everywhere else. Use the index normalization too, then
-  // translate its offset back to the display text before slicing it.
-  const matchText = normalizeExactMatchValue(normalizedText)
+  // matching removed everywhere else. matchText has already received the
+  // index normalization during paragraph selection.
   const matchIndex = Math.max(firstWholeTermIndex(matchText, tokens), 0)
-  const start = normalizedSnippetOffset(
-    normalizedText,
-    Math.max(matchIndex - 80, 0),
-  )
-  const end = Math.min(start + maxLength, normalizedText.length)
-  const excerpt = normalizedText.slice(start, end).trim()
+  const normalizedStart = Math.max(matchIndex - 80, 0)
+  const start =
+    matchText.length === displayText.length
+      ? normalizedStart
+      : normalizedSnippetOffset(displayText, normalizedStart)
+  const end = Math.min(start + maxLength, displayText.length)
+  const excerpt = displayText.slice(start, end).trim()
 
-  return `${start > 0 ? '...' : ''}${excerpt}${end < normalizedText.length ? '...' : ''}`
+  return `${start > 0 ? '...' : ''}${excerpt}${end < displayText.length ? '...' : ''}`
 }
 
 function normalizedSnippetOffset(text: string, offset: number) {
