@@ -1017,6 +1017,12 @@ describe('Legal search client', () => {
       true,
     )
     expect(containsEveryQueryTerm('selfless conduct', 'self')).toBe(false)
+    expect(
+      containsEveryQueryTerm('cited as [2024] uksc 3 today', '[2024] UKSC 3'),
+    ).toBe(true)
+    expect(
+      containsEveryQueryTerm('cited as [2024] uksc 33 today', '[2024] UKSC 3'),
+    ).toBe(false)
   })
 
   it('omits snippets when paragraph text does not match the query', () => {

@@ -582,7 +582,7 @@ function legalSearchMatchTier(hit: LegalSearchHit, normalizedQuery: string) {
     return 3
   }
 
-  const normalizedBody = normalizedBodySegments.join(' ').replace(/\s+/g, ' ')
+  const normalizedBody = normalizedBodySegments.join(' ')
   if (everyTermPresent(normalizedBody, queryTerms)) return 2
   if (someTermPresent(normalizedBody, queryTerms)) return 1
   return 0
@@ -684,7 +684,8 @@ function someTermPresent(normalizedValue: string, terms: string[]) {
   return terms.some((term) => containsWholeTerm(normalizedValue, term))
 }
 
-// Terms come from user queries, so the cache is bounded rather than unbounded.
+// Terms come from user queries, so the key space is unbounded and the cache
+// needs an explicit ceiling.
 const wholeTermPatterns = new Map<string, RegExp>()
 const wholeTermPatternLimit = 500
 
@@ -696,7 +697,10 @@ function wholeTermPattern(term: string) {
     `(?<![\\p{L}\\p{M}\\p{N}_])${escapeRegularExpression(term)}(?![\\p{L}\\p{M}\\p{N}_])`,
     'u',
   )
-  if (wholeTermPatterns.size >= wholeTermPatternLimit) wholeTermPatterns.clear()
+  if (wholeTermPatterns.size >= wholeTermPatternLimit) {
+    const oldestTerm = wholeTermPatterns.keys().next().value
+    if (oldestTerm !== undefined) wholeTermPatterns.delete(oldestTerm)
+  }
   wholeTermPatterns.set(term, pattern)
 
   return pattern
