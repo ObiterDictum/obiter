@@ -746,10 +746,15 @@ function trimSnippetText(text: string, matchText: string, tokens: string[]) {
   // index normalization during paragraph selection.
   const matchIndex = Math.max(firstWholeTermIndex(matchText, tokens), 0)
   const normalizedStart = Math.max(matchIndex - 80, 0)
-  const start =
-    matchText.length === displayText.length
-      ? normalizedStart
-      : normalizedSnippetOffset(displayText, normalizedStart)
+  const matchPrefix = displayText.slice(0, matchIndex)
+  // ASCII text cannot change length under this normalization. For other text,
+  // verify that the normalized prefix still maps one-to-one before slicing.
+  const offsetsAlign =
+    /^\p{ASCII}*$/u.test(matchPrefix) ||
+    normalizeExactMatchValue(matchPrefix).length === matchIndex
+  const start = offsetsAlign
+    ? normalizedStart
+    : normalizedSnippetOffset(displayText, normalizedStart)
   const end = Math.min(start + maxLength, displayText.length)
   const excerpt = displayText.slice(start, end).trim()
 

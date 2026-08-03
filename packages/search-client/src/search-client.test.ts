@@ -1106,6 +1106,26 @@ describe('Legal search client', () => {
     expect(snippets[0]?.text).toContain('The test was applied')
   })
 
+  it('maps snippet offsets when normalization shifts cancel overall', () => {
+    const decomposedAccent = '\u0065\u0301 '
+    const ligature = '\uFB01 '
+    const snippets = extractLegalSearchSnippets(
+      authority({
+        paragraphs: [
+          {
+            id: 'uksc-2024-3-p1',
+            documentId: 'uksc-2024-3',
+            paragraphNumber: 1,
+            text: `${decomposedAccent.repeat(200)}The test was applied. ${ligature.repeat(200)}`,
+          },
+        ],
+      }),
+      'test',
+    )
+
+    expect(snippets[0]?.text).toContain('The test was applied')
+  })
+
   it('treats citation punctuation as literal whole-term text', () => {
     const citation = '[2021] EWHC 123 (Admin)'
     const hit = authority({
