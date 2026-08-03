@@ -206,6 +206,7 @@ const legalStopWords = [
   'were',
   'with',
 ]
+const legalStopWordSet = new Set(legalStopWords)
 const searchSummaryAttributes = [
   'id',
   'title',
@@ -488,7 +489,7 @@ export function extractLegalSearchSnippets(
     paragraphNumber: paragraph.paragraphNumber,
     // Excerpting reads the raw text so the returned snippet keeps its original
     // casing and punctuation.
-    text: trimSnippetText(paragraph.text, tokens),
+    text: trimSnippetText(paragraph.text, normalizedText, tokens),
     matchedTerms: matchedSnippetTerms(normalizedText, normalizedQuery, tokens),
     matchReason: 'body_text_match',
   }))
@@ -527,6 +528,12 @@ function snippetMatchScore(
   return 0
 }
 
+/**
+ * Body match tiers read `paragraphs`, falling back to `snippets`. A caller that
+ * retrieves neither leaves every hit on tier 0 for body text, so ranking
+ * collapses onto the engine score. Pass `includeParagraphs` or `includeSnippets`
+ * to `search` if body tiers should participate.
+ */
 export function rankLegalSearchHitsByExactMatch<T extends LegalSearchHit>(
   hits: T[],
   query: string,
@@ -644,11 +651,21 @@ export function containsEveryQueryTerm(value: string, query: string) {
 }
 
 /**
- * Whole-term matching for searchable query terms. Stop-word handling is added
- * by the index-tuning layer above this branch in the search stack.
+ * Whole-term matching that ignores the same words the index ignores, for
+ * callers standing in for Meilisearch. Requiring a term the engine drops makes
+ * the fallback stricter than the engine it replaces. A query made entirely of
+ * stop words matches nothing, which is what the engine returns for one too.
  */
 export function containsEverySearchableQueryTerm(value: string, query: string) {
-  return containsEveryQueryTerm(value, query)
+  const normalizedValue = normalizeExactMatchValue(value)
+  const searchableTerms = normalizeExactMatchValue(query)
+    .split(' ')
+    .filter((term) => term && !legalStopWordSet.has(term))
+
+  return (
+    searchableTerms.length > 0 &&
+    searchableTerms.every((term) => containsWholeTerm(normalizedValue, term))
+  )
 }
 
 function containsEveryNormalizedQueryTerm(
@@ -704,26 +721,62 @@ export function containsWholeTerm(value: string, term: string) {
   return wholeTermPattern(term).test(value)
 }
 
+function firstWholeTermIndex(value: string, terms: string[]) {
+  const indexes = terms
+    .map((term) =>
+      term ? (wholeTermPattern(term).exec(value)?.index ?? -1) : -1,
+    )
+    .filter((index) => index >= 0)
+
+  return indexes.length > 0 ? Math.min(...indexes) : -1
+}
+
 function escapeRegularExpression(value: string) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-function trimSnippetText(text: string, tokens: string[]) {
-  const normalizedText = text.replace(/\s+/g, ' ').trim()
+function trimSnippetText(text: string, matchText: string, tokens: string[]) {
+  const displayText = text.replace(/\s+/g, ' ').trim()
   const maxLength = 240
-  if (normalizedText.length <= maxLength) return normalizedText
+  if (displayText.length <= maxLength) return displayText
 
-  const lowerText = normalizedText.toLowerCase()
-  const matchIndex =
-    tokens
-      .map((token) => lowerText.indexOf(token))
-      .filter((index) => index >= 0)
-      .sort((left, right) => left - right)[0] ?? 0
-  const start = Math.max(matchIndex - 80, 0)
-  const end = Math.min(start + maxLength, normalizedText.length)
-  const excerpt = normalizedText.slice(start, end).trim()
+  // Locating the excerpt with indexOf would centre the window on a substring
+  // hit such as "test" inside "testimony", which is the defect whole-term
+  // matching removed everywhere else. matchText has already received the
+  // index normalization during paragraph selection.
+  const matchIndex = Math.max(firstWholeTermIndex(matchText, tokens), 0)
+  const normalizedStart = Math.max(matchIndex - 80, 0)
+  const matchPrefix = displayText.slice(0, matchIndex)
+  // ASCII, precomposed Latin-1 letters, and the folded punctuation are
+  // length-preserving under this normalization. For other text, verify that
+  // the normalized prefix still maps one-to-one before slicing.
+  const offsetsAlign =
+    /^[\x20-\x7E\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u00FF‘’“”‐‑‒–—―]*$/u.test(
+      matchPrefix,
+    ) || normalizeExactMatchValue(`${matchPrefix}x`).length - 1 === matchIndex
+  const start = offsetsAlign
+    ? normalizedStart
+    : normalizedSnippetOffset(displayText, normalizedStart)
+  const end = Math.min(start + maxLength, displayText.length)
+  const excerpt = displayText.slice(start, end).trim()
 
-  return `${start > 0 ? '...' : ''}${excerpt}${end < normalizedText.length ? '...' : ''}`
+  return `${start > 0 ? '...' : ''}${excerpt}${end < displayText.length ? '...' : ''}`
+}
+
+function normalizedSnippetOffset(text: string, offset: number) {
+  let low = 0
+  let high = text.length
+
+  while (low < high) {
+    const middle = Math.floor((low + high) / 2)
+    if (normalizeExactMatchValue(text.slice(0, middle)).length < offset) {
+      low = middle + 1
+    } else {
+      high = middle
+    }
+  }
+
+  return low
 }
 
 function validationFailure(

@@ -10,6 +10,7 @@ import {
   getDocument,
   indexDocuments,
   legalSearchIndexSettings,
+  normalizeExactMatchValue,
   rankLegalSearchHitsByExactMatch,
   search,
 } from './index'
@@ -1012,6 +1013,21 @@ describe('Legal search client', () => {
     )
     expect(containsEverySearchableQueryTerm('test_case', 'test')).toBe(false)
     expect(containsEverySearchableQueryTerm('_test', 'test')).toBe(false)
+    expect(
+      containsEverySearchableQueryTerm('The test was applied.', 'the test'),
+    ).toBe(true)
+    expect(
+      containsEverySearchableQueryTerm('The test was applied.', 'the'),
+    ).toBe(false)
+  })
+
+  it('normalizes raw and display snippet text equivalently', () => {
+    const rawText = '  The\n\ttestator’s   intention was\n recorded.  '
+    const displayText = rawText.replace(/\s+/g, ' ').trim()
+
+    expect(normalizeExactMatchValue(rawText)).toBe(
+      normalizeExactMatchValue(displayText),
+    )
   })
 
   it('derives equal-length SQL punctuation translation arguments', () => {
@@ -1054,6 +1070,91 @@ describe('Legal search client', () => {
 
     expect(snippets).toHaveLength(1)
     expect(snippets[0]?.matchedTerms).toEqual(["testator's"])
+
+    const longSnippets = extractLegalSearchSnippets(
+      authority({
+        paragraphs: [
+          {
+            id: 'uksc-2024-3-p1',
+            documentId: 'uksc-2024-3',
+            paragraphNumber: 1,
+            text: `${'Introduction. '.repeat(25)}The testator’s intention was recorded.`,
+          },
+        ],
+      }),
+      "testator's",
+    )
+
+    expect(longSnippets[0]?.text).toContain('testator’s intention')
+  })
+
+  it('maps snippet offsets when normalization changes text length', () => {
+    const snippets = extractLegalSearchSnippets(
+      authority({
+        paragraphs: [
+          {
+            id: 'uksc-2024-3-p1',
+            documentId: 'uksc-2024-3',
+            paragraphNumber: 1,
+            text: `${'İ '.repeat(150)}The test was applied to the evidence.${' Further discussion followed.'.repeat(10)}`,
+          },
+        ],
+      }),
+      'test',
+    )
+
+    expect(snippets[0]?.text).toContain('The test was applied')
+  })
+
+  it('keeps aligned non-ASCII prefixes on the direct snippet path', () => {
+    const matchPrefix = `The claimant’s evidence was considered. ${'Further evidence was considered. '.repeat(10)}`
+    const text = `${matchPrefix}test was applied.${' Further evidence was considered.'.repeat(10)}`
+
+    expect(normalizeExactMatchValue(matchPrefix)).toHaveLength(
+      matchPrefix.length - 1,
+    )
+    expect(normalizeExactMatchValue(`${matchPrefix}x`).length - 1).toBe(
+      matchPrefix.length,
+    )
+
+    const [snippet] = extractLegalSearchSnippets(
+      authority({
+        paragraphs: [
+          {
+            id: 'uksc-2024-3-p1',
+            documentId: 'uksc-2024-3',
+            paragraphNumber: 1,
+            text,
+          },
+        ],
+      }),
+      'test',
+    )
+
+    expect(snippet?.text).toContain('test was applied')
+  })
+
+  it('maps snippet offsets when normalization shifts cancel overall', () => {
+    const decomposedAccent = '\u0065\u0301'
+    const ligature = '\uFB01 '
+    expect(decomposedAccent).toHaveLength(2)
+    expect(normalizeExactMatchValue(decomposedAccent)).toHaveLength(1)
+
+    const snippets = extractLegalSearchSnippets(
+      authority({
+        paragraphs: [
+          {
+            id: 'uksc-2024-3-p1',
+            documentId: 'uksc-2024-3',
+            paragraphNumber: 1,
+            text: `${`${decomposedAccent} `.repeat(200)}The test was applied. ${ligature.repeat(200)}`,
+          },
+        ],
+      }),
+      'test',
+    )
+
+    expect(snippets[0]?.text).toContain('The test was applied')
   })
 
   it('treats citation punctuation as literal whole-term text', () => {
@@ -1129,6 +1230,27 @@ describe('Legal search client', () => {
       'The Testator INTENDED to revoke the earlier will.',
     )
     expect(snippets[0]?.matchedTerms).toEqual(['testator'])
+  })
+
+  it('centres a trimmed snippet on a whole-term match', () => {
+    const filler = 'The parties exchanged correspondence over many months. '
+    const hit = authority({
+      paragraphs: [
+        {
+          id: 'uksc-2024-3-p1',
+          documentId: 'uksc-2024-3',
+          paragraphNumber: 1,
+          text: `Contested testimony opened the hearing. ${filler.repeat(6)}The test was then applied.`,
+        },
+      ],
+    })
+
+    const [snippet] = extractLegalSearchSnippets(hit, 'test')
+
+    // "testimony" appears first, but it is not a whole-term match, so the
+    // excerpt window must land on "The test was then applied".
+    expect(snippet?.text).toContain('The test was then applied')
+    expect(snippet?.matchedTerms).toEqual(['test'])
   })
 
   it('omits snippets when paragraph text does not match the query', () => {

@@ -1,7 +1,7 @@
 import type { Pool, QueryResultRow } from 'pg'
 import { LegalAuthoritySchema, type LegalAuthority } from '@obiter/legal-schema'
 import {
-  containsEveryQueryTerm,
+  containsEverySearchableQueryTerm,
   exactMatchPunctuationFrom,
   exactMatchPunctuationTo,
   normalizeExactMatchValue,
@@ -345,5 +345,5 @@ function documentMatchesSearch(
     ...(document.paragraphs?.map((paragraph) => paragraph.text) ?? []),
   ].join(' ')
 
-  return containsEveryQueryTerm(haystack, normalizedQuery)
+  return containsEverySearchableQueryTerm(haystack, normalizedQuery)
 }
