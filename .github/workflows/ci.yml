@@ -1,8 +1,10 @@
 name: CI
 
 on:
+  # Deliberately unfiltered by base branch. Stacked PRs target the branch below
+  # them rather than dev, so a `branches:` filter here silently gives every
+  # stacked PR no CI at all.
   pull_request:
-    branches: [dev, main]
   push:
     branches: [main]
 
