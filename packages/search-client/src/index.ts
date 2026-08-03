@@ -747,11 +747,13 @@ function trimSnippetText(text: string, matchText: string, tokens: string[]) {
   const matchIndex = Math.max(firstWholeTermIndex(matchText, tokens), 0)
   const normalizedStart = Math.max(matchIndex - 80, 0)
   const matchPrefix = displayText.slice(0, matchIndex)
-  // ASCII text cannot change length under this normalization. For other text,
-  // verify that the normalized prefix still maps one-to-one before slicing.
+  // ASCII, precomposed Latin-1 letters, and the folded punctuation are
+  // length-preserving under this normalization. For other text, verify that
+  // the normalized prefix still maps one-to-one before slicing.
   const offsetsAlign =
-    /^\p{ASCII}*$/u.test(matchPrefix) ||
-    normalizeExactMatchValue(matchPrefix).length === matchIndex
+    /^[\x20-\x7E\u00C0-\u00D6\u00D8-\u00F6\u00F8-\u00FF‘’“”‐‑‒–—―]*$/u.test(
+      matchPrefix,
+    ) || normalizeExactMatchValue(`${matchPrefix}x`).length - 1 === matchIndex
   const start = offsetsAlign
     ? normalizedStart
     : normalizedSnippetOffset(displayText, normalizedStart)

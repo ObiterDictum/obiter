@@ -1106,9 +1106,40 @@ describe('Legal search client', () => {
     expect(snippets[0]?.text).toContain('The test was applied')
   })
 
+  it('keeps aligned non-ASCII prefixes on the direct snippet path', () => {
+    const matchPrefix = `The claimant’s evidence was considered. ${'Further evidence was considered. '.repeat(10)}`
+    const text = `${matchPrefix}test was applied.${' Further evidence was considered.'.repeat(10)}`
+
+    expect(normalizeExactMatchValue(matchPrefix)).toHaveLength(
+      matchPrefix.length - 1,
+    )
+    expect(normalizeExactMatchValue(`${matchPrefix}x`).length - 1).toBe(
+      matchPrefix.length,
+    )
+
+    const [snippet] = extractLegalSearchSnippets(
+      authority({
+        paragraphs: [
+          {
+            id: 'uksc-2024-3-p1',
+            documentId: 'uksc-2024-3',
+            paragraphNumber: 1,
+            text,
+          },
+        ],
+      }),
+      'test',
+    )
+
+    expect(snippet?.text).toContain('test was applied')
+  })
+
   it('maps snippet offsets when normalization shifts cancel overall', () => {
-    const decomposedAccent = '\u0065\u0301 '
+    const decomposedAccent = '\u0065\u0301'
     const ligature = '\uFB01 '
+    expect(decomposedAccent).toHaveLength(2)
+    expect(normalizeExactMatchValue(decomposedAccent)).toHaveLength(1)
+
     const snippets = extractLegalSearchSnippets(
       authority({
         paragraphs: [
@@ -1116,7 +1147,7 @@ describe('Legal search client', () => {
             id: 'uksc-2024-3-p1',
             documentId: 'uksc-2024-3',
             paragraphNumber: 1,
-            text: `${decomposedAccent.repeat(200)}The test was applied. ${ligature.repeat(200)}`,
+            text: `${`${decomposedAccent} `.repeat(200)}The test was applied. ${ligature.repeat(200)}`,
           },
         ],
       }),
