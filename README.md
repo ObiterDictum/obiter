@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./docs/brand/obiter-main-lockup-clear-dark.png">
-    <img src="./docs/brand/obiter-main-lockup-clear.png" alt="Obiter" width="640">
+    <source media="(prefers-color-scheme: dark)" srcset="./docs/brand/obiter-lockup-dark.png">
+    <img src="./docs/brand/obiter-lockup-light.png" alt="Obiter" width="640">
   </picture>
 </p>
 
