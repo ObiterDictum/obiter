@@ -36,7 +36,7 @@ const env: ApiEnv = {
   mojFindCaseLawRateLimit: 1000,
   rampartModel: 'qarlus/rampart',
   rampartRevision: 'c3221c5cd838eb69a249ab40f8b442483865f233',
-  rampartCacheDir: undefined,
+  rampartCacheDir: '/tmp/rampart-cache',
   rampartMinScore: 0.4,
   rampartChunkTokens: 400,
   port: 8787,
