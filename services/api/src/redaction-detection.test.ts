@@ -236,6 +236,46 @@ describe('redaction detection', () => {
     expect(loads).toBe(2)
   })
 
+  it('loads the model on warm so the first request does not pay for the download', async () => {
+    let loads = 0
+    const detect = createRedactionDetector({
+      loadClassifier: async () => {
+        loads++
+        return classifier
+      },
+      detectNer: async () => [],
+      log: () => undefined,
+    })
+
+    await detect.warm()
+    expect(loads).toBe(1)
+
+    const result = await detect('Email jane@example.com.')
+
+    expect(result.degraded).toBe(false)
+    expect(loads).toBe(1)
+  })
+
+  it('rejects a failed warm without pinning the failure on later requests', async () => {
+    let loads = 0
+    const detect = createRedactionDetector({
+      loadClassifier: async () => {
+        loads++
+        if (loads === 1) throw new Error('offline')
+        return classifier
+      },
+      detectNer: async () => [],
+      log: () => undefined,
+    })
+
+    await expect(detect.warm()).rejects.toThrow('offline')
+
+    const result = await detect('Email jane@example.com.')
+
+    expect(result.degraded).toBe(false)
+    expect(loads).toBe(2)
+  })
+
   it('premasks heuristic hits before NER and projects offsets to the original text', async () => {
     const prefix = `jane@example.com ${'word '.repeat(600)}`
     const text = `${prefix}Jane Smith`

@@ -3449,7 +3449,9 @@
                   </td>
                   <td>
                     Model selection, revision, cache, confidence threshold and
-                    token-window size; validated once at API startup
+                    token-window size; validated once at API startup. The cache
+                    defaults to a per-user directory outside the workspace so a
+                    reinstall does not discard the download
                   </td>
                 </tr>
                 <tr>
@@ -3473,6 +3475,16 @@
             cache directory, minimum confidence and chunk size are read through
             <code>ApiEnv</code> once at startup; invalid values stop startup
             rather than changing detection silently.
+          </div>
+          <div class="callout note">
+            <b>The model is loaded at startup, not on first use.</b>
+            <code>server.ts</code> warms the detector once the port is bound, so
+            the one-off ~15 MB Hugging Face download happens where a failure is
+            visible instead of inside a user's first redaction. A failed warm is
+            logged with its cause and leaves the API serving; detection still
+            degrades per run to <code>heuristics+supplement</code>, which the
+            review UI labels. <code>pnpm prefetch:rampart</code> fills the same
+            cache without booting the API.
           </div>
         </section>
 

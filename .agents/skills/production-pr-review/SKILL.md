@@ -132,6 +132,15 @@ Use this scale:
 - **Low**: minor issue, naming clarity, localized cleanup.
 - **Nit**: optional style preference. Avoid nits unless they prevent misunderstanding.
 
+**When operating under the agent-orchestrator contract, map onto its three-level scale
+and do not under-sell risk.** The orchestrator's report contract and metrics use
+critical / important / suggestion; the mapping is Blocker+High -> critical, Medium
+-> important, Low+Nit -> suggestion. M8 filed a live-document purge risk, a cursor
+overflow that 500'd instead of 400'ing, and a check-then-act idempotency race all
+as "suggestion"; each is at least important (High-class) under these anchors. When
+a label undersells the risk, the label is wrong, not the risk: the rework loop and
+the milestone metrics key off severity.
+
 Every finding must include:
 
 - file path and line or smallest relevant location
@@ -170,6 +179,33 @@ For security, privacy, or isolation-sensitive changes, require targeted evidence
 - retry/idempotency behavior for jobs and mutations
 
 If checks cannot be run, state exactly why and do not imply they passed.
+
+## UI Review Checklist
+
+For UI changes (staff screens, viewer screens, dialogs, tables), check these
+explicitly, not just the code paths. M8's holistic review found four findings all
+of this class: native `window.confirm` instead of the repo dialog component,
+em-dashes in copy, and a confirmation sheet that stayed open after a successful
+mutation. Verify:
+
+- Destructive confirmations (purge, archive, delete, revoke) use the repo's
+  dialog component (shadcn `AlertDialog`/`FocusSheet` pattern), never native
+  `window.confirm`; the confirm button is the only submit path.
+- The mutation's `onSuccess` closes the dialog and invalidates the exact TanStack
+  query keys the screen reads; a stuck-open dialog or stale list after success is
+  a finding.
+- No em-dashes (U+2014) in prose or UI copy; plain hyphens only.
+- Nav entries and actions are role-gated against the server's capability set
+  (the UI hiding is presentation, but it must not _promise_ a capability the
+  server denies, and must not show a control the role cannot use).
+- No `dangerouslySetInnerHTML` for untrusted text; metadata rendered as text,
+  never HTML.
+- Empty, error, loading and 401/403 states are handled, not just the happy path.
+- Keyboard flow: focus, Escape/backdrop close, disabled-while-pending.
+
+For destructive flows, the server gate is the enforcement and the UI must match
+it: if the server requires a capability the UI would not show, or the UI shows an
+action the server denies, that is a P9-style mismatch and a finding.
 
 ## Vulnerability Review
 
@@ -215,7 +251,7 @@ If any answer is uncertain for sensitive code, the verdict cannot be `Approve`.
 
 Use the primary reviewer model for the actual review: code inspection, security analysis, correctness judgment, severity assignment, verdict, score, and verification decisions. Do not delegate finding discovery, score selection, or approval/request-changes judgment to a cheaper subagent.
 
-After the review is complete and the findings are locked, any delegated comment-drafting subagent must be spawned with `model: "gpt-5.4-mini"`. Do not inherit the primary review model for this post-review prose work unless the user explicitly overrides this policy. Use the mini-model subagent only for drafting or polishing:
+After the review is complete and the findings are locked, any delegated comment-drafting subagent must be spawned with `model: "opencode-go/deepseek-v4-flash"`. Do not inherit the primary review model for this post-review prose work unless the user explicitly overrides this policy. Use the mini-model subagent only for drafting or polishing:
 
 - GitHub inline comment bodies for already validated findings.
 - The overall review body using the locked verdict and `N/100` score.
@@ -236,7 +272,7 @@ Require the subagent to return only draft text, not publication commands. The pr
 Example subagent prompt:
 
 ```text
-Use `model: "gpt-5.4-mini"` for comment drafting only. Do not perform a new PR review and do not change the verdict, score, severity, finding set, file targets, or verification claims.
+Use `model: "opencode-go/deepseek-v4-flash"` for comment drafting only. Do not perform a new PR review and do not change the verdict, score, severity, finding set, file targets, or verification claims.
 
 Draft GitHub-ready inline comment bodies and one overall review body from this locked review packet:
 [verdict, score, findings, path:line targets, verification results, publication constraints]

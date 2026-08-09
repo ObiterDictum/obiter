@@ -82,6 +82,12 @@ Obiter has no seed script. To get an organisation, user, matters, and documents 
 3. Verify the email (in development the one-time verification URL is logged to the API console when no Resend key is configured).
 4. Sign in, then create matters and upload document metadata through the UI.
 
+### Redaction model
+
+Redaction detection runs a local ONNX model that is downloaded from Hugging Face on first use and cached in `~/.cache/obiter/rampart-models` (`%LOCALAPPDATA%\Obiter\rampart-models` on Windows). `pnpm dev:api` fetches it at startup and logs whether it is ready; `pnpm prefetch:rampart` does the same without booting the API, which is worth running after a clone or an install on a slow connection.
+
+Without the model, redaction still runs but only with the deterministic heuristics, and the review UI marks those runs as limited detection. If you see that, check the API startup log for the load failure.
+
 Useful product context:
 
 - [Current Product Scope](docs/current-product-scope.md)

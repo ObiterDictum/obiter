@@ -15,7 +15,7 @@ Do not write marketing copy, vague confidence language, or AI-flavored filler. B
 
 Use the primary Codex model for the substantive engineering work: inspecting the diff, reading relevant rules and docs, deciding what changed, assessing security/data/privacy impact, identifying testing gaps, and choosing the final title/body claims.
 
-After those facts are locked, any delegated PR-title or PR-body drafting subagent must be spawned with `model: "gpt-5.4-mini"`. Do not inherit the primary model for post-analysis prose drafting unless the user explicitly overrides this policy.
+After those facts are locked, any delegated PR-title or PR-body drafting subagent must be spawned with `model: "opencode-go/deepseek-v4-flash"`. Do not inherit the primary model for post-analysis prose drafting unless the user explicitly overrides this policy.
 
 Give the mini-model subagent only the minimum sanitized packet: branch/base, changed-file summary, locked implementation notes, locked security/data/privacy assessment, exact tests run, known gaps, and wording constraints. Do not give it secrets, private matter data, raw legal text, raw prompts, embeddings, sensitive logs, private screenshots, or authority to inspect unrelated code.
 

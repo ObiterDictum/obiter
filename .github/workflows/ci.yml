@@ -1,8 +1,10 @@
 name: CI
 
 on:
+  # Deliberately unfiltered by base branch. Stacked PRs target the branch below
+  # them rather than dev, so a `branches:` filter here silently gives every
+  # stacked PR no CI at all.
   pull_request:
-    branches: [dev, main]
   push:
     branches: [main]
 
@@ -10,6 +12,14 @@ jobs:
   checks:
     name: Typecheck, format, lint, test
     runs-on: ubuntu-latest
+    services:
+      meilisearch:
+        image: getmeili/meilisearch:v1.12.0
+        env:
+          MEILI_MASTER_KEY: search-benchmark-key
+          MEILI_NO_ANALYTICS: 'true'
+        ports:
+          - 7700:7700
     steps:
       - uses: actions/checkout@v4
 
@@ -38,6 +48,21 @@ jobs:
 
       - name: Test
         run: pnpm test
+
+      - name: Search correctness benchmark
+        env:
+          SEARCH_BENCHMARK_API_KEY: search-benchmark-key
+          SEARCH_BENCHMARK_HOST: http://127.0.0.1:7700
+          SEARCH_BENCHMARK_REPORT_PATH: ${{ runner.temp }}/search-benchmark.json
+        run: pnpm benchmark:search
+
+      - name: Upload search benchmark report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: search-correctness-benchmark
+          path: ${{ runner.temp }}/search-benchmark.json
+          if-no-files-found: ignore
 
   # Deployable images build only on pushes to main (the release branch).
   # dev is the integration branch; promote dev -> main to cut a deploy.
