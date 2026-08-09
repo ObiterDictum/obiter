@@ -1,6 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  exactMatchPunctuationFrom,
+  exactMatchPunctuationTo,
+} from '@obiter/search-client'
+import {
   createInMemoryLegalAuthoritySourceStore,
   createPostgresLegalAuthoritySourceStore,
 } from '../source-store'
@@ -44,6 +48,87 @@ describe('legal authority source store search', () => {
     expect(results).toMatchObject([{ id: 'uksc-2024-3' }])
   })
 
+  it('supports filter-only browsing in the in-memory source fallback', async () => {
+    const store = createInMemoryLegalAuthoritySourceStore()
+
+    await store.upsertDocument(storedAuthority, sourceProvider)
+
+    const results = await store.search('', { court: 'uksc' })
+
+    expect(results).toMatchObject([{ id: 'uksc-2024-3' }])
+  })
+
+  it('does not treat substrings as complete query terms in memory', async () => {
+    const store = createInMemoryLegalAuthoritySourceStore()
+    const exactDocument = {
+      ...storedAuthority,
+      id: 'benchmark-docket-101',
+      title: 'Alpha v Beta',
+      sourceUrl: 'https://example.test/judgments/benchmark-docket-101',
+      paragraphs: [
+        {
+          id: 'benchmark-docket-101-p1',
+          documentId: 'benchmark-docket-101',
+          paragraphNumber: 1,
+          text: 'The court applied the test as a complete word.',
+        },
+      ],
+    }
+    const substringDocument = {
+      ...storedAuthority,
+      id: 'benchmark-docket-102',
+      title: 'Gamma v Delta',
+      sourceUrl: 'https://example.test/judgments/benchmark-docket-102',
+      paragraphs: [
+        {
+          id: 'benchmark-docket-102-p1',
+          documentId: 'benchmark-docket-102',
+          paragraphNumber: 1,
+          text: 'Contested testimony concerned a testator and an intestate estate.',
+        },
+      ],
+    }
+
+    const underscoreDocument = {
+      ...storedAuthority,
+      id: 'benchmark_test_case',
+      title: 'Delta v Epsilon',
+      sourceUrl: 'https://example.test/judgments/benchmark_test_case',
+      paragraphs: [
+        {
+          id: 'benchmark_test_case-p1',
+          documentId: 'benchmark_test_case',
+          paragraphNumber: 1,
+          text: 'The court considered an unrelated issue.',
+        },
+      ],
+    }
+
+    await store.upsertDocument(exactDocument, sourceProvider)
+    await store.upsertDocument(substringDocument, sourceProvider)
+    await store.upsertDocument(underscoreDocument, sourceProvider)
+
+    const results = await store.search('test', {})
+
+    expect(results.map(({ id }) => id)).toEqual(['benchmark-docket-101'])
+  })
+
+  it('ignores indexed stop words so the fallback is not stricter than the engine', async () => {
+    const store = createInMemoryLegalAuthoritySourceStore()
+
+    await store.upsertDocument(storedAuthority, sourceProvider)
+
+    // "the" and "of" are dropped by the index, so requiring them here would
+    // make the fallback miss a document Meilisearch would return.
+    expect(
+      (await store.search('the fiduciary appendix', {})).map(({ id }) => id),
+    ).toEqual(['uksc-2024-3'])
+
+    // A query made entirely of stop words returns nothing from the engine, so
+    // the fallback must not answer it with everything.
+    expect(await store.search('the court of appeal', {})).toEqual([])
+  })
+
   it('keeps Postgres fallback on an indexed paragraph-inclusive search vector', async () => {
     const queries: Array<{ text: string; values?: unknown[] }> = []
     const client = {
@@ -84,6 +169,16 @@ describe('legal authority source store search', () => {
       query.text.includes('from legal_source_documents'),
     )?.text
     expect(searchSql).toContain('search_vector @@ websearch_to_tsquery')
+    expect(searchSql).toContain('normalize(coalesce(')
+    expect(searchSql).toContain('translate(normalize(')
+    expect(searchSql).toContain('NFKC), $8, $9)')
+    const searchValues = queries.find((query) =>
+      query.text.includes('from legal_source_documents'),
+    )?.values
+    expect(searchValues?.slice(7)).toEqual([
+      exactMatchPunctuationFrom,
+      exactMatchPunctuationTo,
+    ])
     expect(searchSql).not.toContain('document_json::text')
     expect(searchSql).not.toContain("summary_json::text || ' '")
 
@@ -98,5 +193,34 @@ describe('legal authority source store search', () => {
       "jsonb_path_query_array(document_json, '$.paragraphs[*].text')",
     )
     expect(migration).toContain('using gin (search_vector)')
+  })
+
+  it('uses the client exact-match normalizer for Postgres query values', async () => {
+    const client = {
+      query: vi.fn(async (text: string, _values?: unknown[]) => {
+        if (text.includes('from normalized_documents')) return { rows: [] }
+        return { rows: [] }
+      }),
+      release: vi.fn(),
+    }
+    const pool = { connect: vi.fn(async () => client) }
+    const store = createPostgresLegalAuthoritySourceStore(pool as never)
+
+    await store.search('[2024]\u00a0UKSC 3', {})
+
+    const searchCall = client.query.mock.calls.find(([text]) =>
+      text.includes('from normalized_documents'),
+    )
+    expect(searchCall?.[1]).toMatchObject([
+      null,
+      null,
+      null,
+      null,
+      null,
+      '[2024] uksc 3',
+      '[2024] uksc 3',
+      exactMatchPunctuationFrom,
+      exactMatchPunctuationTo,
+    ])
   })
 })
