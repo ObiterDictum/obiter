@@ -18,13 +18,14 @@ import {
 } from '@obiter/redaction-policy'
 import type { DetectionMode } from '@obiter/contracts'
 import type { RedactionSpan } from '@obiter/redaction-policy'
+import { defaultRampartCacheDir } from './rampart-cache'
 
 const PACKAGE_VERSION = '0.1.3-vendored'
 
 export interface RedactionDetectionConfig {
   model: string
   revision: string
-  cacheDir: string | undefined
+  cacheDir: string
   minScore: number
   chunkTokens: number
 }
@@ -32,7 +33,7 @@ export interface RedactionDetectionConfig {
 const DEFAULT_CONFIG: RedactionDetectionConfig = {
   model: RAMPART_MODEL_ID,
   revision: RAMPART_MODEL_REVISION,
-  cacheDir: undefined,
+  cacheDir: defaultRampartCacheDir(),
   minScore: 0.4,
   chunkTokens: NER_DEFAULT_CHUNK_TOKENS,
 }
@@ -70,10 +71,21 @@ function provenance(model: string, revision: string, degraded: boolean) {
   }
 }
 
+export interface RedactionDetector {
+  (text: string): Promise<DetectionResult>
+  /**
+   * Load the model without running detection, so the one-off download happens
+   * at a point where failing is visible instead of inside a user's first
+   * redaction. Rejects with the load failure; the next call re-attempts the
+   * load exactly as an uninitialized detector would.
+   */
+  warm: () => Promise<void>
+}
+
 export function createRedactionDetector(
   dependencies: DetectorDependencies = {},
   configuration: RedactionDetectionConfig = DEFAULT_CONFIG,
-) {
+): RedactionDetector {
   let classifier: Promise<TokenClassifier> | undefined
   // ONNX sessions are not safe for concurrent inference. This queue is adequate
   // for the current API scale; use per-request sessions or a worker pool to scale.
@@ -104,7 +116,9 @@ export function createRedactionDetector(
   const log =
     dependencies.log ?? ((message, details) => console.info(message, details))
 
-  return async function detectSpans(text: string): Promise<DetectionResult> {
+  const detectSpans = async function detectSpans(
+    text: string,
+  ): Promise<DetectionResult> {
     const supplement = supplementSpans(text)
     if (!text)
       return {
@@ -167,9 +181,23 @@ export function createRedactionDetector(
       }
     }
   }
+
+  const warm = async (): Promise<void> => {
+    const pending = (classifier ??= load())
+    try {
+      await pending
+    } catch (error) {
+      // Leave the detector exactly as it was before warming, so a failed
+      // prefetch does not pin the failure for every later request.
+      if (classifier === pending) classifier = undefined
+      throw error
+    }
+  }
+
+  return Object.assign(detectSpans, { warm })
 }
 
-let configuredDetector: ReturnType<typeof createRedactionDetector> | undefined
+let configuredDetector: RedactionDetector | undefined
 
 export function configureRedactionDetector(
   configuration: RedactionDetectionConfig,
@@ -177,10 +205,25 @@ export function configureRedactionDetector(
   configuredDetector = createRedactionDetector({}, configuration)
 }
 
-export function detectRedactionSpans(text: string) {
+function requireConfiguredDetector(): RedactionDetector {
   if (!configuredDetector) {
     throw new Error('Redaction detector was not configured at API startup.')
   }
 
-  return configuredDetector(text)
+  return configuredDetector
+}
+
+export function detectRedactionSpans(text: string) {
+  return requireConfiguredDetector()(text)
+}
+
+/**
+ * Pull the model into the cache before any request needs it. The API stays
+ * usable if this fails — detection still degrades to heuristics per run, and the
+ * review UI still labels those runs as limited — but the failure is reported
+ * once at startup with its real cause instead of surfacing as a redaction that
+ * quietly found fewer spans.
+ */
+export function warmRedactionDetector() {
+  return requireConfiguredDetector().warm()
 }

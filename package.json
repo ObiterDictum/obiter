@@ -11,6 +11,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "lint": "oxlint && eslint .",
+    "prefetch:rampart": "tsx scripts/prefetch-rampart-model.ts",
     "bench:guard": "tsx scripts/bench-guard.ts",
     "benchmark:search": "tsx packages/search-client/src/benchmark/run.ts",
     "synthetic-v2:smoke": "tsx scripts/synthetic-v2/smoke.ts",

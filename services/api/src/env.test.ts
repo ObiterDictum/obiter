@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { readApiEnv } from './env'
+import { readApiEnv, readRampartDetectionConfig } from './env'
+import { defaultRampartCacheDir } from './rampart-cache'
 
 const originalEnv = { ...process.env }
 
@@ -35,7 +36,7 @@ describe('readApiEnv', () => {
     expect(env.mojFindCaseLawRateLimit).toBe(1000)
     expect(env.rampartModel).toBe('qarlus/rampart')
     expect(env.rampartRevision).toBe('c3221c5cd838eb69a249ab40f8b442483865f233')
-    expect(env.rampartCacheDir).toBeUndefined()
+    expect(env.rampartCacheDir).toBe(defaultRampartCacheDir())
     expect(env.rampartMinScore).toBe(0.4)
     expect(env.rampartChunkTokens).toBe(400)
     expect(env.nodeEnv).toBe('development')
@@ -77,7 +78,17 @@ describe('readApiEnv', () => {
     })
 
     process.env.OBITER_RAMPART_CACHE_DIR = ''
-    expect(readApiEnv().rampartCacheDir).toBeUndefined()
+    expect(readApiEnv().rampartCacheDir).toBe(defaultRampartCacheDir())
+  })
+
+  it('defaults the model cache outside the workspace so installs do not discard it', () => {
+    process.env.NODE_ENV = 'development'
+    delete process.env.OBITER_RAMPART_CACHE_DIR
+
+    const cacheDir = readApiEnv().rampartCacheDir
+
+    expect(cacheDir).not.toContain('node_modules')
+    expect(cacheDir).toBe(defaultRampartCacheDir())
   })
 
   it.each([
@@ -296,5 +307,31 @@ describe('readApiEnv', () => {
 
     expect(env.meilisearchSearchApiKey).toBe('dev-key')
     expect(env.meilisearchAdminApiKey).toBe('dev-key')
+  })
+})
+
+describe('readRampartDetectionConfig', () => {
+  it('reads detection settings without requiring the rest of the API environment', () => {
+    process.env.NODE_ENV = 'production'
+    delete process.env.DATABASE_URL
+    delete process.env.BETTER_AUTH_SECRET
+    delete process.env.MEILISEARCH_HOST
+    delete process.env.OBITER_RESEND_API_KEY
+    delete process.env.OBITER_RAMPART_MODEL
+    delete process.env.OBITER_RAMPART_REVISION
+    delete process.env.OBITER_RAMPART_MIN_SCORE
+    delete process.env.OBITER_RAMPART_CHUNK_TOKENS
+    process.env.OBITER_RAMPART_CACHE_DIR = '/tmp/rampart-cache'
+
+    // The prefetch script runs where production secrets are absent, so it must
+    // not inherit readApiEnv's requirements.
+    expect(() => readApiEnv()).toThrow(/Missing required production/)
+    expect(readRampartDetectionConfig()).toEqual({
+      model: 'qarlus/rampart',
+      revision: 'c3221c5cd838eb69a249ab40f8b442483865f233',
+      cacheDir: '/tmp/rampart-cache',
+      minScore: 0.4,
+      chunkTokens: 400,
+    })
   })
 })

@@ -7,6 +7,8 @@ import {
   RAMPART_MODEL_ID,
   RAMPART_MODEL_REVISION,
 } from '@obiter/rampart-inference'
+import { defaultRampartCacheDir } from './rampart-cache'
+import type { RedactionDetectionConfig } from './redaction-detection'
 
 const requiredProductionKeys = [
   'DATABASE_URL',
@@ -40,7 +42,7 @@ export interface ApiEnv {
   mojFindCaseLawRateLimit: number
   rampartModel: string
   rampartRevision: string
-  rampartCacheDir: string | undefined
+  rampartCacheDir: string
   rampartMinScore: number
   rampartChunkTokens: number
   port: number
@@ -274,10 +276,11 @@ function readUnpaddedValue(key: string, fallback: string) {
   return trimmed
 }
 
-function readOptionalUnpaddedValue(key: string) {
-  const value = process.env[key]
-  if (value === undefined || value === '') return undefined
-  return readUnpaddedValue(key, value)
+function readRampartCacheDir() {
+  const value = process.env.OBITER_RAMPART_CACHE_DIR
+  if (value === undefined || value === '') return defaultRampartCacheDir()
+
+  return readUnpaddedValue('OBITER_RAMPART_CACHE_DIR', value)
 }
 
 function readRampartMinScore() {
@@ -318,6 +321,27 @@ function readRampartChunkTokens() {
   return parsed
 }
 
+/**
+ * Detection settings on their own, without the database, auth and search
+ * configuration `readApiEnv` also demands. The model prefetch script needs the
+ * same model id, revision and cache directory the API will use, but it has no
+ * business requiring production secrets to download a file.
+ */
+export function readRampartDetectionConfig(): RedactionDetectionConfig {
+  loadLocalDotEnv()
+
+  return {
+    model: readUnpaddedValue('OBITER_RAMPART_MODEL', RAMPART_MODEL_ID),
+    revision: readUnpaddedValue(
+      'OBITER_RAMPART_REVISION',
+      RAMPART_MODEL_REVISION,
+    ),
+    cacheDir: readRampartCacheDir(),
+    minScore: readRampartMinScore(),
+    chunkTokens: readRampartChunkTokens(),
+  }
+}
+
 export function readApiEnv(): ApiEnv {
   loadLocalDotEnv()
   const nodeEnv = readNodeEnv()
@@ -333,6 +357,7 @@ export function readApiEnv(): ApiEnv {
     'OBITER_WEB_ORIGIN',
     'http://localhost:3000',
   )
+  const rampart = readRampartDetectionConfig()
 
   return {
     databaseUrl: readDatabaseUrl(nodeEnv),
@@ -370,14 +395,11 @@ export function readApiEnv(): ApiEnv {
       'MOJ_FIND_CASE_LAW_RATE_LIMIT',
       '1000',
     ),
-    rampartModel: readUnpaddedValue('OBITER_RAMPART_MODEL', RAMPART_MODEL_ID),
-    rampartRevision: readUnpaddedValue(
-      'OBITER_RAMPART_REVISION',
-      RAMPART_MODEL_REVISION,
-    ),
-    rampartCacheDir: readOptionalUnpaddedValue('OBITER_RAMPART_CACHE_DIR'),
-    rampartMinScore: readRampartMinScore(),
-    rampartChunkTokens: readRampartChunkTokens(),
+    rampartModel: rampart.model,
+    rampartRevision: rampart.revision,
+    rampartCacheDir: rampart.cacheDir,
+    rampartMinScore: rampart.minScore,
+    rampartChunkTokens: rampart.chunkTokens,
     port: readPort(),
     nodeEnv,
   }

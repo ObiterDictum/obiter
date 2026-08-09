@@ -32,8 +32,9 @@ Three Dokploy applications on the existing VPS, plus the existing database:
 
 - Node 22 slim base, corepack-enabled pnpm, monorepo build via `pnpm --filter @obiter/api deploy` (or fetch + prune pattern).
 - Entrypoint: run migrations, then start the server.
-- Persistent volume for the HuggingFace model cache (the Rampart ONNX download from Redact PRD 1) so restarts don't re-download.
+- Persistent volume for the HuggingFace model cache (the Rampart ONNX download from Redact PRD 1) so restarts don't re-download. Mount it and point `OBITER_RAMPART_CACHE_DIR` at it; the default (`~/.cache/obiter/rampart-models`, `%LOCALAPPDATA%\Obiter\rampart-models` on Windows) is a per-user path chosen so developer machines keep the model across `pnpm install`, not a container-appropriate location. `pnpm prefetch:rampart` warms whichever directory is configured and is the right pre-start or image-build step.
 - Env (from `services/api/src/env.ts` + better-auth): `DATABASE_URL` (Dokploy internal network), better-auth secret/base-URL, CORS origin, and the optional detection settings `OBITER_RAMPART_MODEL`, `OBITER_RAMPART_REVISION`, `OBITER_RAMPART_CACHE_DIR`, `OBITER_RAMPART_MIN_SCORE` and `OBITER_RAMPART_CHUNK_TOKENS`. Detection settings are validated once at API startup; defaults pin the shipped model/revision, minimum confidence `0.4` and chunk size `400`.
+- The API loads the model once at startup rather than on the first redaction request. A load failure is logged with its cause and leaves the service running — detection degrades per run to `heuristics+supplement`, which the review UI already labels — so an unreachable Hugging Face does not take the whole API down.
 
 ### Web Dockerfile + Traefik routing — owned by the shell track (Milestone 3)
 
