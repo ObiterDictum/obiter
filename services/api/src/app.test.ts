@@ -7,6 +7,7 @@ import { createApiApp } from './app'
 import type { createAuth } from './auth'
 import { SCANNED_PDF_MESSAGE } from './document-extraction'
 import type { ApiEnv } from './env'
+import type { RedactionRunRow } from './redaction-database'
 import { createLocalStorage } from './storage'
 
 const searchClientMock = vi.hoisted(() => ({
@@ -1316,17 +1317,19 @@ describe('createApiApp', () => {
           if (text.includes('for update of run')) return { rows: [sourceRun] }
           if (text.includes('run.replaces_run_id')) return { rows: [] }
           if (text.includes('insert into redaction_runs')) {
+            // Reconstruct the created row from the mocked insert params; the
+            // params are unknown at this boundary, so cast to the row types.
             const values = params as unknown[]
             return {
               rows: [
                 finalizedRunRow({
-                  id: values[0],
+                  id: values[0] as string,
                   status: 'ready_for_review',
                   output_artifact_id: null,
-                  source_text_object_key: values[6],
-                  detector_version: values[13],
+                  source_text_object_key: values[6] as string,
+                  detector_version: values[13] as string | null,
                   detection_mode: values[14],
-                  replaces_run_id: values[15],
+                  replaces_run_id: values[15] as string | null,
                 }),
               ],
             }
@@ -1598,7 +1601,9 @@ const liveDocumentRow = {
   deleted_by: null,
 }
 
-function finalizedRunRow(overrides: Record<string, unknown> = {}) {
+function finalizedRunRow(
+  overrides: Partial<RedactionRunRow> = {},
+): RedactionRunRow {
   return {
     id: 'red_1',
     organisation_id: 'org_1',
@@ -1608,6 +1613,9 @@ function finalizedRunRow(overrides: Record<string, unknown> = {}) {
     document_version_id: null,
     source_filename: 'source.txt',
     source_text_object_key: 'org/org_1/redaction-runs/red_1/source',
+    source_file_object_key: null,
+    source_layout_object_key: null,
+    source_mime_type: null,
     status: 'finalized',
     policy_mode: 'internal_ai_minimisation',
     spans_json: [],
@@ -2055,7 +2063,7 @@ describe('createApiApp redaction review reads', () => {
     )
   })
 
-  it.each([
+  it.each<{ name: string; overrides: Partial<RedactionRunRow> }>([
     {
       name: 'the run is not finalized',
       overrides: {
