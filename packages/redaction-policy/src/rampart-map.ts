@@ -73,8 +73,105 @@ const PERSON_NAME_DENYLIST = new Set([
   'copilot',
 ])
 
+/**
+ * Honorifics and salutation words that sit immediately before a name and are
+ * not themselves identifying.
+ *
+ * The NER does not tag these — verified against the model directly, which
+ * returns only "Amara" for "Dear Ms Amara Okonkwo". They arrive because the
+ * vendored classifier's `rescueCapitalizedParticles` widens person spans
+ * outward across short capitalised tokens to recover genuine name particles
+ * ("van", "de", "O'", initials). A title is short and capitalised and sits
+ * exactly where a particle would, so it is swept in too.
+ *
+ * The trim lives here rather than in that denylist because
+ * `@obiter/rampart-inference` is kept byte-faithful to the upstream tarball so
+ * re-vendors produce reviewable diffs; a fix applied there would be lost on the
+ * next re-vendor.
+ *
+ * Over-capture is the safe direction (it hides nothing that should be visible),
+ * so this is a precision fix: a reviewer seeing "Dear Ms Amara" boxed as a name
+ * has less reason to trust the spans that matter.
+ */
+const PERSON_NAME_TITLES = new Set([
+  'dear',
+  'mr',
+  'mrs',
+  'ms',
+  'miss',
+  'mx',
+  'dr',
+  'prof',
+  'professor',
+  'sir',
+  'madam',
+  'lord',
+  'lady',
+  'dame',
+  'rev',
+  'hon',
+  'judge',
+  'justice',
+])
+
+/**
+ * The subset that is never itself a name, so a span consisting of nothing but
+ * this word can be discarded outright.
+ *
+ * `judge`, `justice`, `lord`, `lady` and `dame` are deliberately absent: they
+ * are real surnames. Dropping a lone "Judge" would *under*-redact, which is the
+ * unsafe direction, so those are only ever trimmed when a name follows them.
+ */
+const STANDALONE_TITLES = new Set([
+  'dear',
+  'mr',
+  'mrs',
+  'ms',
+  'miss',
+  'mx',
+  'dr',
+  'prof',
+  'professor',
+  'sir',
+  'madam',
+  'rev',
+  'hon',
+])
+
+/** A leading word plus the connector the classifier extended across. */
+const LEADING_WORD_RE = /^(\p{L}[\p{L}\p{M}]*)(\.?)([ \t'’.-]+)/u
+/** The whole remainder as a single word, with optional trailing punctuation. */
+const SOLE_WORD_RE = /^(\p{L}[\p{L}\p{M}]*)[.,]?$/u
+
+/**
+ * Advance `start` past any leading honorifics or salutations, leaving the name
+ * itself. Returns the original offset when nothing is trimmed, and never
+ * advances past `end` — a span that is *only* a title collapses to empty and is
+ * dropped by the caller rather than silently becoming a zero-width span.
+ */
+function trimLeadingTitles(text: string, start: number, end: number): number {
+  let offset = start
+  while (offset < end) {
+    const remainder = text.slice(offset, end)
+    const match = LEADING_WORD_RE.exec(remainder)
+    if (match) {
+      if (!PERSON_NAME_TITLES.has(match[1].toLowerCase())) break
+      offset += match[0].length
+      continue
+    }
+    // No connector left, so this is the final word of the span. Only collapse
+    // it when the word is never a name in its own right ("Dear Sir").
+    const sole = SOLE_WORD_RE.exec(remainder)
+    if (sole && STANDALONE_TITLES.has(sole[1].toLowerCase())) offset = end
+    break
+  }
+  return offset
+}
+
 function isDeniedPersonName(text: string) {
   const normalized = text.trim().toLowerCase()
+  // A span that was nothing but a title trims to empty and identifies no one.
+  if (normalized.length === 0) return true
   if (PERSON_NAME_DENYLIST.has(normalized)) return true
   // Heading-boundary glue that slipped past NER repair ("Jones\nLaw").
   if (/\n/.test(text)) return true
@@ -90,10 +187,19 @@ export function mapRampartSpans(output: RampartOutput): RedactionSpan[] {
         throw new Error(`Unrecognised Rampart label: ${label ?? '<missing>'}`)
       }
       const mapping = labelMap[label]
-      const text = span.text ?? output.text.slice(span.start, span.end)
+      // Trim before the offsets are baked into the id and text so a trimmed
+      // span is indistinguishable from one the model returned that way.
+      const start =
+        mapping.category === 'person_name'
+          ? trimLeadingTitles(output.text, span.start, span.end)
+          : span.start
+      const text =
+        start === span.start
+          ? (span.text ?? output.text.slice(span.start, span.end))
+          : output.text.slice(start, span.end)
       return {
-        id: `span_rampart_${span.start}_${index}`,
-        start: span.start,
+        id: `span_rampart_${start}_${index}`,
+        start,
         end: span.end,
         text,
         category: mapping.category,
