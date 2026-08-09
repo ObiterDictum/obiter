@@ -100,7 +100,13 @@ function parseUrl(key: string, value: string): string {
 }
 
 function readRequiredUrl(key: string, fallback: string): string {
-  return parseUrl(key, process.env[key] ?? fallback)
+  const value = process.env[key]
+
+  if (!value) {
+    return parseUrl(key, fallback)
+  }
+
+  return parseUrl(key, value)
 }
 
 function readDatabaseUrl(nodeEnv: ApiEnv['nodeEnv']) {
