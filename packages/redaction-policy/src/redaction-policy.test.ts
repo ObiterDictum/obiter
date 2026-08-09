@@ -41,6 +41,66 @@ describe('redaction policy', () => {
     expect(spans.map((span) => span.text)).toEqual(['fleet'])
   })
 
+  it('trims honorifics and salutations swept into person spans', () => {
+    // The classifier's particle rescue widens name spans across short
+    // capitalised tokens, so a span arrives as "Dear Ms Amara" when the model
+    // only tagged "Amara". The name must survive; the salutation must not.
+    const text = 'Dear Ms Amara Okonkwo, our client Dr Fairbairn agrees.'
+    const spans = mapRampartSpans({
+      text,
+      spans: [
+        { start: 0, end: 13, label: 'GIVEN_NAME', score: 0.99 },
+        {
+          start: text.indexOf('Dr Fairbairn'),
+          end: text.indexOf('Dr Fairbairn') + 'Dr Fairbairn'.length,
+          label: 'SURNAME',
+          score: 0.94,
+        },
+      ],
+    })
+    expect(spans.map((span) => span.text)).toEqual(['Amara', 'Fairbairn'])
+    // Offsets must still point at the name in the source text, or the cover
+    // geometry would black out the wrong characters.
+    expect(spans.map((span) => text.slice(span.start, span.end))).toEqual([
+      'Amara',
+      'Fairbairn',
+    ])
+  })
+
+  it('keeps names that merely start with title-like letters', () => {
+    const text = 'Mrs Missouri Drake and Miss Doe attended.'
+    const spans = mapRampartSpans({
+      text,
+      spans: [
+        { start: 0, end: 18, label: 'GIVEN_NAME', score: 0.9 },
+        {
+          start: text.indexOf('Miss Doe'),
+          end: text.indexOf('Miss Doe') + 'Miss Doe'.length,
+          label: 'SURNAME',
+          score: 0.9,
+        },
+      ],
+    })
+    expect(spans.map((span) => span.text)).toEqual(['Missouri Drake', 'Doe'])
+  })
+
+  it('drops a person span that was only a title', () => {
+    const spans = mapRampartSpans({
+      text: 'Dear Sir, please advise.',
+      spans: [{ start: 0, end: 8, label: 'GIVEN_NAME', score: 0.5 }],
+    })
+    expect(spans).toEqual([])
+  })
+
+  it('leaves non-person categories untrimmed', () => {
+    // "Dr" is a road abbreviation in an address, not an honorific.
+    const spans = mapRampartSpans({
+      text: 'Mount Dr, Bristol',
+      spans: [{ start: 0, end: 8, label: 'STREET_NAME', score: 0.97 }],
+    })
+    expect(spans.map((span) => span.text)).toEqual(['Mount Dr'])
+  })
+
   it('maps the address component labels the model actually emits', () => {
     // CITY/STATE/ZIP_CODE verified present in the model label space (spike, July 2026);
     // they fire on virtually every UK address ("Leicester", "LE4 5AB").
