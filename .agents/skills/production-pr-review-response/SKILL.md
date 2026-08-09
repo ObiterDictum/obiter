@@ -39,7 +39,7 @@ Use this skill when the user asks to:
 
 Use the primary Codex model for validation and engineering decisions: determining whether each reviewer finding is correct, choosing the fix, editing code, deciding tests, running verification, selecting commits, and deciding whether a thread is genuinely resolved.
 
-After fixes are implemented, pushed, and verified, any delegated response-drafting subagent must be spawned with `model: "gpt-5.4-mini"`. Do not inherit the primary model for post-fix prose drafting unless the user explicitly overrides this policy.
+After fixes are implemented, pushed, and verified, any delegated response-drafting subagent must be spawned with `model: "opencode-go/deepseek-v4-flash"`. Do not inherit the primary model for post-fix prose drafting unless the user explicitly overrides this policy.
 
 Use the mini-model subagent only to draft or polish:
 
