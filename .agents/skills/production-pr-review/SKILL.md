@@ -189,17 +189,17 @@ em-dashes in copy, and a confirmation sheet that stayed open after a successful
 mutation. Verify:
 
 - Destructive confirmations (purge, archive, delete, revoke) use the repo's
-dialog component (shadcn `AlertDialog`/`FocusSheet` pattern), never native
-`window.confirm`; the confirm button is the only submit path.
+  dialog component (shadcn `AlertDialog`/`FocusSheet` pattern), never native
+  `window.confirm`; the confirm button is the only submit path.
 - The mutation's `onSuccess` closes the dialog and invalidates the exact TanStack
-query keys the screen reads; a stuck-open dialog or stale list after success is
-a finding.
+  query keys the screen reads; a stuck-open dialog or stale list after success is
+  a finding.
 - No em-dashes (U+2014) in prose or UI copy; plain hyphens only.
 - Nav entries and actions are role-gated against the server's capability set
-(the UI hiding is presentation, but it must not *promise* a capability the
-server denies, and must not show a control the role cannot use).
+  (the UI hiding is presentation, but it must not _promise_ a capability the
+  server denies, and must not show a control the role cannot use).
 - No `dangerouslySetInnerHTML` for untrusted text; metadata rendered as text,
-never HTML.
+  never HTML.
 - Empty, error, loading and 401/403 states are handled, not just the happy path.
 - Keyboard flow: focus, Escape/backdrop close, disabled-while-pending.
 
