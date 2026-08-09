@@ -41,6 +41,23 @@ describe('readApiEnv', () => {
     expect(env.nodeEnv).toBe('development')
   })
 
+  it('treats an empty DATABASE_URL as absent in development', () => {
+    process.env.NODE_ENV = 'development'
+    process.env.DATABASE_URL = ''
+    delete process.env.BETTER_AUTH_SECRET
+    delete process.env.BETTER_AUTH_URL
+    delete process.env.OBITER_WEB_ORIGIN
+    delete process.env.OBITER_RAMPART_MODEL
+    delete process.env.OBITER_RAMPART_REVISION
+    delete process.env.OBITER_RAMPART_CACHE_DIR
+    delete process.env.OBITER_RAMPART_MIN_SCORE
+    delete process.env.OBITER_RAMPART_CHUNK_TOKENS
+
+    const env = readApiEnv()
+
+    expect(env.databaseUrl).toContain('localhost')
+  })
+
   it('reads validated Rampart configuration once with the rest of the API environment', () => {
     process.env.NODE_ENV = 'development'
     process.env.OBITER_RAMPART_MODEL = 'example/rampart-test'
