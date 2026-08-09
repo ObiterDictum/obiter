@@ -75,9 +75,15 @@ For Obiter, prioritize:
   - `references/system-map.md` for the durable mapping workflow
   - `references/coverage-map-template.md` for the per-review coverage map shape
   - `references/maps/` for agent-readable maps and human visual HTML maps
-- `C:/Users/karl-/Documents/source/OrmontLex/review/obiter/architecture/` for the durable System Map and package/data-boundary notes
-- `C:/Users/karl-/Documents/source/OrmontLex/review/obiter/review-playbooks/` for area-specific review heuristics
-- `C:/Users/karl-/Documents/source/OrmontLex/review/obiter/findings-patterns/` for recurring Obiter bug patterns
+- The review knowledge repo (`ObiterDictum/review`), checked out alongside this
+  repo as a sibling directory. Its per-product directory is still named `ormont/`
+  from before the rename:
+  - `../review/ormont/architecture/` for the durable System Map and
+    package/data-boundary notes
+  - `../review/ormont/review-playbooks/` for area-specific review heuristics
+  - `../review/ormont/findings-patterns/` for recurring Obiter bug patterns
+- `../obiter-ops/reference/obiter-defect-patterns.md` for the confirmed defect
+  patterns carried in every review packet
 - `docs/architecture.md` for package boundaries and system shape
 - `docs/data-and-compliance.md` for privacy, audit, and legal data constraints
 - `docs/roadmap.md` / active milestone docs for sequencing
@@ -90,6 +96,14 @@ Load only what is needed, but do not review without enough architecture context 
 Load `references/system-map.md` and the relevant files under `references/maps/` before judging a PR. Use Markdown maps as the agent-readable source and HTML maps as human visual companions.
 
 Validate every touched map entry against current code. Treat stale or missing map entries as review uncertainty until resolved. If the reviewer cannot explain a sensitive flow from entrypoint to persistence or external boundary, confidence cannot be high and the verdict cannot be `Approve`.
+
+**If the knowledge repo is unavailable entirely, say so and act on it.** Reporting "the durable review knowledge repository was unavailable" and then returning `Approve` breaks the rule above; it happened on PR #65 and nothing downstream caught it. When the repo cannot be read:
+
+- Say which paths you tried and that the check could not be performed.
+- Judge whether the diff touches a sensitive flow. If it does, the verdict is capped below `Approve` and the reason is the missing context, not the code.
+- If the diff touches no sensitive flow (a pure helper, a test, a config default with no data path), `Approve` is still available, but the report must record that the System Map check was skipped and why.
+
+A missing precondition is a finding about the review, not a detail to mention in passing.
 
 ## PR Coverage Map
 
