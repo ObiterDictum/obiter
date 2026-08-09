@@ -1283,6 +1283,12 @@ describe('createApiApp', () => {
     expect(await listResponse.json()).toMatchObject({
       runs: [{ detectionMode: 'heuristics+supplement' }],
     })
+
+    const genericListResponse = await app.request('/api/redaction-runs')
+    expect(genericListResponse.status).toBe(200)
+    expect(await genericListResponse.json()).toMatchObject({
+      runs: [{ detectionMode: 'heuristics+supplement' }],
+    })
   })
 
   it('creates an auditable model-detected replacement from a finalized degraded run', async () => {
@@ -3010,6 +3016,7 @@ describe('createApiApp deleted-run audit access shape', () => {
               finalizedRunRow({
                 deleted_at: '2026-02-01T00:00:00.000Z',
                 deleted_by: 'usr_1',
+                detection_mode: 'heuristics+supplement',
               }),
             ],
           }
@@ -3024,6 +3031,8 @@ describe('createApiApp deleted-run audit access shape', () => {
 
     const response = await app.request('/api/redaction-runs/red_1/audit')
     expect(response.status).toBe(200)
+    const report = (await response.json()) as { detectionMode: string }
+    expect(report.detectionMode).toBe('heuristics+supplement')
   })
 
   it('forbids a member from reading a deleted run audit report', async () => {

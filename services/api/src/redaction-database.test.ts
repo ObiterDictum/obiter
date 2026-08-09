@@ -9,6 +9,7 @@ import {
   recordSpanDecision,
   restoreRedactionRunWithAudit,
   softDeleteRedactionRun,
+  type RedactionRunRow,
 } from './redaction-database'
 import {
   createRedactionRun,
@@ -17,7 +18,7 @@ import {
 
 type QueryCall = [string, unknown[] | undefined]
 
-function runRow(overrides: Record<string, unknown> = {}) {
+function runRow(overrides: Partial<RedactionRunRow> = {}): RedactionRunRow {
   return {
     id: 'red_1',
     organisation_id: 'org_1',
@@ -76,6 +77,12 @@ function createTransactionalPool(
 }
 
 describe('mapRedactionRun', () => {
+  it('reads an unknown detection mode as unknown, never a model claim', () => {
+    expect(
+      mapRedactionRun(runRow({ detection_mode: 'unknown' })).detectionMode,
+    ).toBe('unknown')
+  })
+
   it('fails closed when a query omits live replacement lineage', () => {
     const { replacement_run_id: _replacementRunId, ...row } = runRow()
     expect(() =>
