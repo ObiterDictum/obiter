@@ -309,6 +309,17 @@ export const documentTextLayoutSchema = z
 
 export type DocumentTextLayout = z.infer<typeof documentTextLayoutSchema>
 
+export const documentPdfViewResponseSchema = z.object({
+  documentId: z.string().min(1),
+  versionId: z.string().min(1),
+  versionNumber: z.number().int().positive(),
+  text: z.string(),
+  layout: documentTextLayoutSchema,
+})
+export type DocumentPdfViewResponse = z.infer<
+  typeof documentPdfViewResponseSchema
+>
+
 export const redactionFinalizeInputSchema = z.object({
   outputMode: outputModeSchema,
   degradedDetectionAcknowledged: z.boolean().optional(),
