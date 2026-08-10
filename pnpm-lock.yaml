@@ -333,6 +333,9 @@ importers:
       '@obiter/legal-schema':
         specifier: workspace:*
         version: link:../../packages/legal-schema
+      '@obiter/ooxml':
+        specifier: workspace:*
+        version: link:../../packages/ooxml
       '@obiter/rampart-inference':
         specifier: workspace:*
         version: link:../../packages/rampart-inference

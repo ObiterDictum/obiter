@@ -1837,6 +1837,13 @@
                   marker-end="url(#ah-t-build-time-dependency-graph)"
                 />
                 <path
+                  d="M464.25,56 Q227.27499999999998,141.0 110.3,226"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-build-time-dependency-graph)"
+                />
+                <path
                   d="M464.25,56 Q408.925,141.0 413.6,226"
                   fill="none"
                   stroke="var(--line-strong)"
@@ -1895,7 +1902,7 @@
                 <tr>
                   <td class="id">@obiter/api</td>
                   <td class="id">
-                    contracts · legal-schema · rampart-inference ·
+                    contracts · legal-schema · ooxml · rampart-inference ·
                     redaction-policy · search-client
                   </td>
                   <td>
@@ -2191,8 +2198,9 @@
               <dl class="kv">
                 <dt>Exports</dt>
                 <dd>
-                  parseDocx · serialiseDocx · replaceTextRunText ·
-                  compareXmlSemantics · compareOoxmlPackages
+                  parseDocx · serialiseDocx · serialiseModelJson ·
+                  parseModelJson · replaceTextRunText · compareXmlSemantics ·
+                  compareOoxmlPackages
                 </dd>
                 <dt>Contract</dt>
                 <dd>DocumentModelWire from @obiter/contracts</dd>
@@ -2577,6 +2585,11 @@
                   <td class="id">GET /api/documents/:id</td>
                   <td class="id">documents.ts</td>
                   <td>Document with immutable versions</td>
+                </tr>
+                <tr>
+                  <td class="id">GET /api/documents/:id/model</td>
+                  <td class="id">document-model.ts</td>
+                  <td>Current ready DOCX model for read-only viewing</td>
                 </tr>
                 <tr>
                   <td class="id">PATCH /api/documents/:id/restore</td>
@@ -3401,6 +3414,12 @@
                     org/&lt;id&gt;/matters/&lt;id&gt;/documents/&lt;id&gt;/versions/&lt;id&gt;/text
                   </td>
                   <td>Extracted text</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    org/&lt;id&gt;/matters/&lt;id&gt;/documents/&lt;id&gt;/versions/&lt;id&gt;/model.json
+                  </td>
+                  <td>Validated derived OOXML wire model</td>
                 </tr>
                 <tr>
                   <td class="id">
