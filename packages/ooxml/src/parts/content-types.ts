@@ -1,4 +1,5 @@
-import { attributeValue, parseXmlElements } from './overlay'
+import { parseXmlElements } from './overlay'
+import { requiredAttribute } from './xml-elements'
 
 const CONTENT_TYPES_NAMESPACE =
   'http://schemas.openxmlformats.org/package/2006/content-types'
@@ -16,15 +17,19 @@ export function parseContentTypes(source: string): ContentTypeIndex {
     if (element.namespaceUri !== CONTENT_TYPES_NAMESPACE) continue
     if (element.localName === 'Default') {
       defaults.set(
-        requiredAttribute(element, 'Extension').toLowerCase(),
-        requiredAttribute(element, 'ContentType'),
+        requiredAttribute(element, 'Extension', 'Content type').toLowerCase(),
+        requiredAttribute(element, 'ContentType', 'Content type'),
       )
     } else if (element.localName === 'Override') {
-      const partName = requiredAttribute(element, 'PartName').replace(
-        /^\//u,
-        '',
+      const partName = requiredAttribute(
+        element,
+        'PartName',
+        'Content type',
+      ).replace(/^\//u, '')
+      overrides.set(
+        partName,
+        requiredAttribute(element, 'ContentType', 'Content type'),
       )
-      overrides.set(partName, requiredAttribute(element, 'ContentType'))
     }
   }
 
@@ -43,13 +48,4 @@ export function isXmlPart(partName: string, contentTypes: ContentTypeIndex) {
     contentType?.endsWith('+xml') === true ||
     contentType?.endsWith('/xml') === true
   )
-}
-
-function requiredAttribute(
-  element: Parameters<typeof attributeValue>[0],
-  localName: string,
-) {
-  const value = attributeValue(element, '', localName)
-  if (!value) throw new Error('Content type is missing an attribute')
-  return value
 }

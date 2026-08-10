@@ -41,6 +41,11 @@ describe('compareXmlSemantics', () => {
     expect(equivalent(expected, actual)).toBe(true)
   })
 
+  it('applies XML line-end normalisation before comparison', () => {
+    expect(equivalent('<root>a\r\nb</root>', '<root>a\nb</root>')).toBe(true)
+    expect(equivalent('<root>a\rb</root>', '<root>a\nb</root>')).toBe(true)
+  })
+
   it.each([
     ['a dropped element', '<root><a/><b/></root>', '<root><a/></root>'],
     [
@@ -119,7 +124,13 @@ describe('compareXmlSemantics', () => {
 
   it('fails closed on malformed XML, unsupported entities, and unbound prefixes', () => {
     expect(equivalent('<root>', '<root>')).toBe(false)
+    expect(equivalent('<root/> \r\n', '<root/>\t')).toBe(true)
+    expect(equivalent('<root/>garbage', '<root/>garbage')).toBe(false)
     expect(equivalent('<root>&unknown;</root>', '<root>&unknown;</root>')).toBe(
+      false,
+    )
+    expect(equivalent('<root>&#0;</root>', '<root>&#0;</root>')).toBe(false)
+    expect(equivalent('<root>&#xD800;</root>', '<root>&#xD800;</root>')).toBe(
       false,
     )
     expect(equivalent('<x:root/>', '<x:root/>')).toBe(false)

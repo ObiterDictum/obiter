@@ -34,7 +34,7 @@ A dropped or added attribute, changed namespace URI, changed local name, or chan
 
 ### Character data
 
-Character data is compared exactly, including spaces, tabs, line breaks and every empty text node exposed by the parser. No trimming, pretty-print normalisation, Unicode normalisation, whitespace collapsing or line-boundary rewriting is allowed. Adjacent character-data nodes may be coalesced before comparison.
+XML 1.0 line-end normalisation applies before comparison, so CRLF and lone CR line endings become LF. Character data is then compared exactly, including spaces, tabs, line breaks and every empty text node exposed by the parser. No trimming, pretty-print normalisation, Unicode normalisation, whitespace collapsing or further line-boundary rewriting is allowed. Adjacent character-data nodes may be coalesced before comparison.
 
 Predefined entity references and decimal or hexadecimal character references are compared by their decoded character data. CDATA and escaped text with the same character data are equivalent.
 

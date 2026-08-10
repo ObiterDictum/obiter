@@ -11,15 +11,14 @@ import type {
   TrackedChangeOverlay,
 } from '../model'
 import { decodeXmlReferences } from '../xml-lexemes'
+import { elementFragment, parseXmlElements } from './overlay'
 import {
   attributeValue,
-  elementFragment,
-  parseXmlElements,
+  isDescendantOf,
+  isWord,
+  WORD_NAMESPACE,
   type XmlElement,
-} from './overlay'
-
-const WORD_NAMESPACE =
-  'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+} from './xml-elements'
 const WORD_2010_NAMESPACE =
   'http://schemas.microsoft.com/office/word/2010/wordml'
 const TRACKED_CHANGE_NAMES = new Set([
@@ -264,19 +263,4 @@ function hasTrackedChangeAncestor(element: XmlElement) {
     parent = parent.parent
   }
   return false
-}
-
-function isDescendantOf(element: XmlElement, ancestor: XmlElement) {
-  let parent = element.parent
-  while (parent) {
-    if (parent === ancestor) return true
-    parent = parent.parent
-  }
-  return false
-}
-
-function isWord(element: XmlElement, localName: string) {
-  return (
-    element.namespaceUri === WORD_NAMESPACE && element.localName === localName
-  )
 }

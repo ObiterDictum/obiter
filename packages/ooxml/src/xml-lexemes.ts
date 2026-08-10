@@ -3,6 +3,8 @@ export type ProcessingInstruction = { target: string; data: string }
 export function inspectXmlLexemes(xml: string) {
   const instructions: ProcessingInstruction[] = []
   let cursor = 0
+  let depth = 0
+  let rootEnd: number | undefined
 
   while (cursor < xml.length) {
     const opening = xml.indexOf('<', cursor)
@@ -35,12 +37,27 @@ export function inspectXmlLexemes(xml: string) {
         })
       }
       cursor = end
+    } else if (xml.startsWith('<!', opening)) {
+      throw new Error('Unsupported XML declaration')
     } else {
-      cursor = opening + 1
+      const tagEnd = findXmlTagEnd(xml, opening + 1)
+      if (xml.startsWith('</', opening)) {
+        depth -= 1
+        if (depth === 0 && rootEnd === undefined) rootEnd = tagEnd
+      } else if (isSelfClosingTag(xml, tagEnd)) {
+        if (depth === 0 && rootEnd === undefined) rootEnd = tagEnd
+      } else {
+        depth += 1
+      }
+      cursor = tagEnd
     }
   }
 
-  return instructions
+  return {
+    instructions,
+    hasOnlyWhitespaceAfterRoot:
+      rootEnd !== undefined && hasOnlyXmlWhitespace(xml, rootEnd),
+  }
 }
 
 export function decodeXmlReferences(value: string) {
@@ -100,6 +117,34 @@ function isXmlWhitespace(value: string) {
   return value === ' ' || value === '\t' || value === '\n' || value === '\r'
 }
 
+function hasOnlyXmlWhitespace(value: string, start: number) {
+  for (let index = start; index < value.length; index += 1) {
+    if (!isXmlWhitespace(value[index])) return false
+  }
+  return true
+}
+
+export function findXmlTagEnd(xml: string, start: number) {
+  let quote = ''
+  for (let index = start; index < xml.length; index += 1) {
+    const character = xml[index]
+    if (quote) {
+      if (character === quote) quote = ''
+    } else if (character === '"' || character === "'") {
+      quote = character
+    } else if (character === '>') {
+      return index + 1
+    }
+  }
+  throw new Error('Unclosed XML tag')
+}
+
+function isSelfClosingTag(xml: string, tagEnd: number) {
+  let cursor = tagEnd - 2
+  while (cursor >= 0 && isXmlWhitespace(xml[cursor])) cursor -= 1
+  return xml[cursor] === '/'
+}
+
 function findClosing(xml: string, marker: string, start: number) {
   const index = xml.indexOf(marker, start)
   if (index === -1) throw new Error('Unclosed XML construct')
@@ -129,7 +174,14 @@ function findDoctypeEnd(xml: string, start: number) {
 }
 
 function decodeCodePoint(codePoint: number) {
-  if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff) {
+  const isXmlCharacter =
+    codePoint === 0x9 ||
+    codePoint === 0xa ||
+    codePoint === 0xd ||
+    (codePoint >= 0x20 && codePoint <= 0xd7ff) ||
+    (codePoint >= 0xe000 && codePoint <= 0xfffd) ||
+    (codePoint >= 0x10000 && codePoint <= 0x10ffff)
+  if (!Number.isInteger(codePoint) || !isXmlCharacter) {
     throw new Error('Invalid character reference')
   }
   return String.fromCodePoint(codePoint)

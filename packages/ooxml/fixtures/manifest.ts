@@ -31,6 +31,11 @@ export const ooxmlFixtureManifest = [
     hasW14Ids: false,
     covers: ['identity-without-w14-ids'],
   },
+  {
+    name: 'multi-level-list',
+    hasW14Ids: true,
+    covers: ['nested-lists'],
+  },
 ] as const
 
 export type OoxmlFixtureName = (typeof ooxmlFixtureManifest)[number]['name']

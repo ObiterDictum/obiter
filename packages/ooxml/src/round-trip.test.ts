@@ -119,9 +119,14 @@ describe('OOXML fidelity corpus', () => {
       'Alice Example',
       'Jane Example',
     ])
-    expect(changes?.every(({ date }) => date?.startsWith('2026-08-10T'))).toBe(
-      true,
-    )
+    expect(changes?.map(({ date }) => date)).toEqual([
+      '2026-08-10T10:00:00Z',
+      '2026-08-10T10:01:00Z',
+      '2026-08-10T10:02:00Z',
+      '2026-08-10T10:03:00Z',
+      '2026-08-10T10:04:00Z',
+      '2026-08-10T10:05:00Z',
+    ])
   })
 
   it('regenerates only the intentionally edited text fragment', async () => {
