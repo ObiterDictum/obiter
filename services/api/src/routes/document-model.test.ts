@@ -58,7 +58,7 @@ describe('GET /api/documents/:id/model gates', () => {
   )
 
   it('maps denied matter access to the document 404', async () => {
-    const database = new TestDatabase({ accessLevel: null })
+    const database = new TestDatabase({ access: null })
     const storage = new MemoryStorage()
     const response = await routeApp(database, storage).app.request(
       '/api/documents/doc_1/model',

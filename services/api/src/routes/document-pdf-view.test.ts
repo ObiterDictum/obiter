@@ -1,6 +1,7 @@
 import { documentPdfViewResponseSchema } from '@obiter/contracts'
 import { describe, expect, it, vi } from 'vitest'
 import {
+  expectDocument404,
   extractedText,
   layout,
   layoutObjectKey,
@@ -192,11 +193,3 @@ describe('GET /api/documents/:id/pdf-view response', () => {
     expect(errors).toEqual(['The PDF view could not be read.'])
   })
 })
-
-async function expectDocument404(response: Response) {
-  expect(response.status).toBe(404)
-  expect(response.headers.get('cache-control')).toBe('no-store')
-  await expect(response.json()).resolves.toMatchObject({
-    error: { code: 'document_not_found' },
-  })
-}

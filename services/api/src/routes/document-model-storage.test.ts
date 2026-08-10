@@ -13,7 +13,7 @@ import {
 
 describe('GET /api/documents/:id/model storage boundary', () => {
   it('serves a validated cache hit to a view grantee with only wrapper fields', async () => {
-    const database = new TestDatabase({ accessLevel: 'view' })
+    const database = new TestDatabase({ access: 'view' })
     const storage = new MemoryStorage()
     storage.text.set(modelObjectKey, cachedModelJson)
 

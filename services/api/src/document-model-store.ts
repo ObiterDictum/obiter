@@ -5,7 +5,11 @@ import {
   parseModelJson,
   serialiseModelJson,
 } from '@obiter/ooxml'
-import { createDocumentObjectKey, type DocumentVersionRecord } from './database'
+import {
+  DocumentArtifactStoreError,
+  validateAndDeriveDocumentObjectKey,
+} from './document-artifact-store'
+import type { DocumentVersionRecord } from './database'
 import type { StorageService } from './storage'
 
 type DocumentModelSource = Pick<
@@ -15,33 +19,18 @@ type DocumentModelSource = Pick<
 
 const inFlightModels = new Map<string, Promise<DocumentModelWire>>()
 
-export class DocumentModelStoreError extends Error {
+export class DocumentModelStoreError extends DocumentArtifactStoreError {
   constructor() {
     super('The document model could not be read.')
-    this.name = 'DocumentModelStoreError'
   }
 }
 
 function deriveDocumentModelObjectKey(source: DocumentModelSource) {
-  const segments = [
-    source.organisationId,
-    source.matterId,
-    source.matterDocumentId,
-    source.id,
-  ]
-  if (segments.some((segment) => segment.length === 0 || segment.includes('/')))
-    throw new DocumentModelStoreError()
-
-  const expectedSourceKey = createDocumentObjectKey({
-    organisationId: source.organisationId,
-    matterId: source.matterId,
-    documentId: source.matterDocumentId,
-    versionId: source.id,
-  })
-  if (source.objectKey !== expectedSourceKey)
-    throw new DocumentModelStoreError()
-
-  return expectedSourceKey.replace(/\/source$/u, '/model.json')
+  return validateAndDeriveDocumentObjectKey(
+    source,
+    'model.json',
+    () => new DocumentModelStoreError(),
+  )
 }
 
 export async function getDocumentModel(
