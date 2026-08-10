@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+export * from './document-model'
+
 export type AppPlatform = 'web' | 'desktop'
 
 export const userRoleSchema = z.enum(['owner', 'admin', 'member'])
