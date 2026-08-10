@@ -8,6 +8,7 @@ import {
   endnotesXml,
   fixedPngBytes,
   footnotesXml,
+  multiLevelListDocumentXml,
   numberingXml,
   opaqueXmlParts,
   relationshipsXml,
@@ -26,9 +27,13 @@ export async function buildOoxmlFixture(name: OoxmlFixtureName) {
   )
   if (!fixture) throw new Error('Unknown OOXML fixture')
   const zip = new JSZip()
+  const sourceDocumentXml =
+    fixture.name === 'multi-level-list'
+      ? multiLevelListDocumentXml
+      : documentXml
   const fixedDocumentXml = fixture.hasW14Ids
-    ? documentXml
-    : documentXml.replace(/ w14:(?:paraId|textId)="[^"]+"/gu, '')
+    ? sourceDocumentXml
+    : sourceDocumentXml.replace(/ w14:(?:paraId|textId)="[^"]+"/gu, '')
 
   const xmlParts: Readonly<Record<string, string>> = {
     '[Content_Types].xml': contentTypesXml,

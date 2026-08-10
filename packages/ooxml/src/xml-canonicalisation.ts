@@ -1,6 +1,11 @@
 import { XMLParser } from 'fast-xml-parser'
 
 import {
+  extendNamespaces,
+  resolveName,
+  type ExpandedName,
+} from './parts/xml-elements'
+import {
   decodeXmlReferences,
   inspectXmlLexemes,
   type ProcessingInstruction,
@@ -20,7 +25,6 @@ type CanonicalNode =
   | { kind: 'comment'; value: string }
   | { kind: 'processing-instruction'; target: string; data: string }
 
-type ExpandedName = { namespaceUri: string; localName: string }
 type CanonicalAttribute = ExpandedName & { value: string }
 type NamespaceBindings = ReadonlyMap<string, string>
 
@@ -39,7 +43,8 @@ const parser = new XMLParser({
 
 export function canonicaliseXml(xml: string) {
   try {
-    const instructions = inspectXmlLexemes(xml)
+    const inspection = inspectXmlLexemes(xml)
+    const instructions = inspection.instructions
     const parsed: unknown = parser.parse(xml, true)
     if (!Array.isArray(parsed)) return undefined
 
@@ -48,7 +53,9 @@ export function canonicaliseXml(xml: string) {
       new Map([['xml', XML_NAMESPACE]]),
       instructions,
     )
-    if (instructions.length !== 0) return undefined
+    if (instructions.length !== 0 || !inspection.hasOnlyWhitespaceAfterRoot) {
+      return undefined
+    }
 
     const rootElements = nodes.filter((node) => node.kind === 'element')
     return rootElements.length === 1 ? nodes : undefined
@@ -108,7 +115,10 @@ function canonicaliseNode(
   if (!Array.isArray(rawValue)) throw new Error('Invalid element children')
 
   const rawAttributes = readRawAttributes(value[':@'])
-  const namespaces = extendNamespaces(inheritedNamespaces, rawAttributes)
+  const namespaceAttributes = [...rawAttributes].map(
+    ([qualifiedName, value]) => ({ qualifiedName, value }),
+  )
+  const namespaces = extendNamespaces(inheritedNamespaces, namespaceAttributes)
   return {
     kind: 'element',
     name: resolveName(rawName, namespaces, true),
@@ -138,48 +148,6 @@ function canonicaliseAttributes(
   return attributes.sort((left, right) =>
     JSON.stringify(left).localeCompare(JSON.stringify(right)),
   )
-}
-
-function extendNamespaces(
-  inherited: NamespaceBindings,
-  rawAttributes: ReadonlyMap<string, string>,
-) {
-  const namespaces = new Map(inherited)
-
-  for (const [rawName, rawValue] of rawAttributes) {
-    if (rawName === 'xmlns') {
-      namespaces.set('', decodeXmlReferences(rawValue))
-    } else if (rawName.startsWith('xmlns:')) {
-      namespaces.set(
-        rawName.slice('xmlns:'.length),
-        decodeXmlReferences(rawValue),
-      )
-    }
-  }
-
-  return namespaces
-}
-
-function resolveName(
-  qualifiedName: string,
-  namespaces: NamespaceBindings,
-  useDefaultNamespace: boolean,
-): ExpandedName {
-  const parts = qualifiedName.split(':')
-  if (parts.length > 2 || parts.some((part) => part.length === 0)) {
-    throw new Error('Invalid qualified name')
-  }
-
-  if (parts.length === 1) {
-    return {
-      namespaceUri: useDefaultNamespace ? (namespaces.get('') ?? '') : '',
-      localName: parts[0],
-    }
-  }
-
-  const namespaceUri = namespaces.get(parts[0])
-  if (namespaceUri === undefined) throw new Error('Unbound namespace prefix')
-  return { namespaceUri, localName: parts[1] }
 }
 
 function readRawAttributes(value: unknown) {

@@ -1,25 +1,15 @@
 import { XMLParser } from 'fast-xml-parser'
 
-import { decodeXmlReferences } from '../xml-lexemes'
+import { decodeXmlReferences, findXmlTagEnd } from '../xml-lexemes'
+import {
+  extendNamespaces,
+  resolveName,
+  type QualifiedAttribute,
+  type XmlElement,
+} from './xml-elements'
 
 const XML_NAMESPACE = 'http://www.w3.org/XML/1998/namespace'
 
-export type ExpandedName = { namespaceUri: string; localName: string }
-export type XmlAttribute = ExpandedName & {
-  qualifiedName: string
-  value: string
-}
-export type XmlElement = ExpandedName & {
-  qualifiedName: string
-  start: number
-  startTagEnd: number
-  endTagStart: number
-  end: number
-  depth: number
-  selfClosing: boolean
-  parent?: XmlElement
-  attributes: XmlAttribute[]
-}
 export type OverlayReplacement = {
   start: number
   end: number
@@ -33,7 +23,7 @@ export type XmlOverlay = {
 type OpenElement = XmlElement & { namespaces: ReadonlyMap<string, string> }
 type ParsedStartTag = {
   qualifiedName: string
-  attributes: { qualifiedName: string; value: string }[]
+  attributes: QualifiedAttribute[]
   selfClosing: boolean
 }
 
@@ -77,7 +67,7 @@ export function parseXmlElements(source: string) {
       throw new Error('Unsupported XML declaration')
     }
 
-    const tagEnd = findTagEnd(source, opening + 1)
+    const tagEnd = findXmlTagEnd(source, opening + 1)
     if (source.startsWith('</', opening)) {
       const qualifiedName = source.slice(opening + 2, tagEnd - 1).trim()
       const current = stack.pop()
@@ -129,18 +119,6 @@ export function parseXmlElements(source: string) {
 
 export function elementFragment(source: string, element: XmlElement) {
   return source.slice(element.start, element.end)
-}
-
-export function attributeValue(
-  element: XmlElement,
-  namespaceUri: string,
-  localName: string,
-) {
-  return element.attributes.find(
-    (attribute) =>
-      attribute.namespaceUri === namespaceUri &&
-      attribute.localName === localName,
-  )?.value
 }
 
 export function setOverlayReplacement(
@@ -212,55 +190,8 @@ function parseStartTag(body: string): ParsedStartTag {
   return { qualifiedName, attributes, selfClosing }
 }
 
-function extendNamespaces(
-  inherited: ReadonlyMap<string, string>,
-  attributes: ParsedStartTag['attributes'],
-) {
-  const namespaces = new Map(inherited)
-  for (const attribute of attributes) {
-    if (attribute.qualifiedName === 'xmlns') namespaces.set('', attribute.value)
-    else if (attribute.qualifiedName.startsWith('xmlns:')) {
-      namespaces.set(attribute.qualifiedName.slice(6), attribute.value)
-    }
-  }
-  return namespaces
-}
-
-function resolveName(
-  qualifiedName: string,
-  namespaces: ReadonlyMap<string, string>,
-  useDefault: boolean,
-): ExpandedName {
-  const parts = qualifiedName.split(':')
-  if (parts.length > 2 || parts.some((part) => part.length === 0)) {
-    throw new Error('Invalid XML qualified name')
-  }
-  if (parts.length === 1) {
-    return {
-      namespaceUri: useDefault ? (namespaces.get('') ?? '') : '',
-      localName: parts[0],
-    }
-  }
-  const namespaceUri = namespaces.get(parts[0])
-  if (namespaceUri === undefined)
-    throw new Error('Unbound XML namespace prefix')
-  return { namespaceUri, localName: parts[1] }
-}
-
 function isNamespaceAttribute(name: string) {
   return name === 'xmlns' || name.startsWith('xmlns:')
-}
-
-function findTagEnd(source: string, start: number) {
-  let quote = ''
-  for (let index = start; index < source.length; index += 1) {
-    const character = source[index]
-    if (quote) {
-      if (character === quote) quote = ''
-    } else if (character === '"' || character === "'") quote = character
-    else if (character === '>') return index + 1
-  }
-  throw new Error('Unclosed XML tag')
 }
 
 function closingIndex(source: string, marker: string, start: number) {

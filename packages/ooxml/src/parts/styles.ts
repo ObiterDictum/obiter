@@ -1,14 +1,12 @@
 import type { DocumentStyleWire } from '@obiter/contracts'
 
+import { elementFragment, parseXmlElements } from './overlay'
 import {
   attributeValue,
-  elementFragment,
-  parseXmlElements,
-  type XmlElement,
-} from './overlay'
-
-const WORD_NAMESPACE =
-  'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+  childValue,
+  isWord,
+  WORD_NAMESPACE,
+} from './xml-elements'
 
 export function parseStyles(source: string) {
   const elements = parseXmlElements(source)
@@ -28,17 +26,4 @@ export function parseStyles(source: string) {
   }
 
   return styles
-}
-
-function childValue(elements: XmlElement[], parent: XmlElement, name: string) {
-  const child = elements.find(
-    (element) => element.parent === parent && isWord(element, name),
-  )
-  return child ? attributeValue(child, WORD_NAMESPACE, 'val') : undefined
-}
-
-function isWord(element: XmlElement, localName: string) {
-  return (
-    element.namespaceUri === WORD_NAMESPACE && element.localName === localName
-  )
 }

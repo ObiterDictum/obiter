@@ -54,11 +54,16 @@ export const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes
   </w:body>
 </w:document>`
 
+export const multiLevelListDocumentXml = documentXml.replace(
+  '<w:ilvl w:val="0"/><w:numId w:val="1"/>',
+  '<w:ilvl w:val="1"/><w:numId w:val="1"/>',
+)
+
 export const stylesXml = `<?xml version="1.0" encoding="UTF-8"?>
 <w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:style w:type="paragraph" w:styleId="Base"><w:name w:val="Base"/></w:style><w:style w:type="paragraph" w:styleId="Heading1"><w:basedOn w:val="Base"/><w:link w:val="Heading1Char"/></w:style><w:style w:type="character" w:styleId="Heading1Char"><w:link w:val="Heading1"/></w:style></w:styles>`
 
 export const numberingXml = `<?xml version="1.0" encoding="UTF-8"?>
-<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num><w:num w:numId="2"><w:abstractNumId w:val="0"/><w:lvlOverride w:ilvl="0"><w:startOverride w:val="1"/></w:lvlOverride></w:num></w:numbering>`
+<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:start w:val="1"/><w:numFmt w:val="decimal"/></w:lvl><w:lvl w:ilvl="1"><w:start w:val="1"/><w:numFmt w:val="lowerLetter"/></w:lvl></w:abstractNum><w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num><w:num w:numId="2"><w:abstractNumId w:val="0"/><w:lvlOverride w:ilvl="0"><w:startOverride w:val="1"/></w:lvlOverride></w:num></w:numbering>`
 
 export function storyXml(root: string, text: string) {
   return `<?xml version="1.0" encoding="UTF-8"?><w:${root} xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:p><w:r><w:t>${text}</w:t></w:r></w:p></w:${root}>`

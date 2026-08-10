@@ -120,7 +120,7 @@ Golden tests use the exported equivalence checker, not a second normaliser. They
 
 ## Error and data boundary
 
-Malformed or unsupported input may fail with a curated package error. Raw XML, source snippets, provider text and parser diagnostics are not model fields and must not be logged, returned, persisted in fixtures or included in durable state.
+Malformed or unsupported input may fail with a curated package error. Source-preservation fields containing XML fragments required for lossless round trips are part of the shared wire model and may be persisted as document data. Parser diagnostics, provider error text, incidental source snippets and original ZIP payload bytes are not wire fields and must never be logged, returned as diagnostics, persisted in fixtures or included in durable state.
 
 ## Stage boundary
 

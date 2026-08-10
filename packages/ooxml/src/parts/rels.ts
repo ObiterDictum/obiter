@@ -1,6 +1,7 @@
 import type { DocumentRelationshipWire } from '@obiter/contracts'
 
-import { attributeValue, elementFragment, parseXmlElements } from './overlay'
+import { elementFragment, parseXmlElements } from './overlay'
+import { attributeValue, requiredAttribute } from './xml-elements'
 
 const RELATIONSHIPS_NAMESPACE =
   'http://schemas.openxmlformats.org/package/2006/relationships'
@@ -19,9 +20,9 @@ export function parseRelationshipPart(partName: string, source: string) {
         element.localName === 'Relationship',
     )
     .map((element) => {
-      const id = requiredAttribute(element, 'Id')
-      const type = requiredAttribute(element, 'Type')
-      const target = requiredAttribute(element, 'Target')
+      const id = requiredAttribute(element, 'Id', 'Relationship')
+      const type = requiredAttribute(element, 'Type', 'Relationship')
+      const target = requiredAttribute(element, 'Target', 'Relationship')
       const targetMode = attributeValue(element, '', 'TargetMode')
       return {
         sourcePartName,
@@ -88,13 +89,4 @@ function normalisePartName(value: string) {
     } else parts.push(part)
   }
   return parts.join('/')
-}
-
-function requiredAttribute(
-  element: Parameters<typeof attributeValue>[0],
-  localName: string,
-) {
-  const value = attributeValue(element, '', localName)
-  if (!value) throw new Error('Relationship is missing an attribute')
-  return value
 }

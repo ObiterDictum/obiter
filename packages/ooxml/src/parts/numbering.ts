@@ -1,14 +1,14 @@
 import type { DocumentNumberingWire } from '@obiter/contracts'
 
+import { elementFragment, parseXmlElements } from './overlay'
 import {
   attributeValue,
-  elementFragment,
-  parseXmlElements,
+  childValue,
+  isDescendantOf,
+  isWord,
+  WORD_NAMESPACE,
   type XmlElement,
-} from './overlay'
-
-const WORD_NAMESPACE =
-  'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+} from './xml-elements'
 
 export function parseNumbering(source: string) {
   const elements = parseXmlElements(source)
@@ -32,13 +32,6 @@ export function parseNumbering(source: string) {
   return numbering
 }
 
-function childValue(elements: XmlElement[], parent: XmlElement, name: string) {
-  const child = elements.find(
-    (element) => element.parent === parent && isWord(element, name),
-  )
-  return child ? attributeValue(child, WORD_NAMESPACE, 'val') : undefined
-}
-
 function descendantValue(
   elements: XmlElement[],
   ancestor: XmlElement,
@@ -50,19 +43,4 @@ function descendantValue(
   return descendant
     ? attributeValue(descendant, WORD_NAMESPACE, 'val')
     : undefined
-}
-
-function isDescendantOf(element: XmlElement, ancestor: XmlElement) {
-  let parent = element.parent
-  while (parent) {
-    if (parent === ancestor) return true
-    parent = parent.parent
-  }
-  return false
-}
-
-function isWord(element: XmlElement, localName: string) {
-  return (
-    element.namespaceUri === WORD_NAMESPACE && element.localName === localName
-  )
 }
