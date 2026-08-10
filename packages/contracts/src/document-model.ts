@@ -80,3 +80,11 @@ export const documentModelWireSchema = z.object({
   preservedXmlFragments: z.array(preservedDocumentXmlFragmentSchema),
 })
 export type DocumentModelWire = z.infer<typeof documentModelWireSchema>
+
+export const documentModelResponseSchema = z.object({
+  documentId: z.string().min(1),
+  versionId: z.string().min(1),
+  versionNumber: z.number().int().positive(),
+  model: documentModelWireSchema,
+})
+export type DocumentModelResponse = z.infer<typeof documentModelResponseSchema>
