@@ -2896,8 +2896,10 @@
           <h2>Auth and scoping</h2>
           <p class="lede">
             Authentication is better-auth. Organisation authorisation lives in
-            <code>authz.ts</code>; M1.25 document surfaces use the single
-            per-matter resolver in <code>document-access.ts</code>.
+            <code>authz.ts</code>. M1.25 S1b ships the per-matter resolver in
+            <code>document-access.ts</code> as a forward contract for S2. The
+            share-management router retains its owner-only check so it can
+            distinguish forbidden access from a missing matter.
           </p>
           <div class="scroll">
             <table>
