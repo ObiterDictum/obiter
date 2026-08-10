@@ -4,7 +4,9 @@ import { OoxmlError, type OoxmlDocument } from './model'
 
 export function serialiseModelJson(document: OoxmlDocument) {
   try {
-    return JSON.stringify(documentModelWireSchema.parse(document.model))
+    return JSON.stringify(
+      documentModelWireSchema.strict().parse(document.model),
+    )
   } catch {
     throw new OoxmlError('serialisation-failed')
   }

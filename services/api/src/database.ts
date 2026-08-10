@@ -858,7 +858,7 @@ function createDocumentVersionId() {
   return `ver_${crypto.randomUUID()}`
 }
 
-function createDocumentObjectKey(input: {
+export function createDocumentObjectKey(input: {
   organisationId: string
   matterId: string
   documentId: string

@@ -5,7 +5,7 @@ import {
   parseModelJson,
   serialiseModelJson,
 } from '@obiter/ooxml'
-import type { DocumentVersionRecord } from './database'
+import { createDocumentObjectKey, type DocumentVersionRecord } from './database'
 import type { StorageService } from './storage'
 
 type DocumentModelSource = Pick<
@@ -22,7 +22,7 @@ export class DocumentModelStoreError extends Error {
   }
 }
 
-export function deriveDocumentModelObjectKey(source: DocumentModelSource) {
+function deriveDocumentModelObjectKey(source: DocumentModelSource) {
   const segments = [
     source.organisationId,
     source.matterId,
@@ -32,11 +32,16 @@ export function deriveDocumentModelObjectKey(source: DocumentModelSource) {
   if (segments.some((segment) => segment.length === 0 || segment.includes('/')))
     throw new DocumentModelStoreError()
 
-  const expectedSourceKey = `org/${source.organisationId}/matters/${source.matterId}/documents/${source.matterDocumentId}/versions/${source.id}/source`
+  const expectedSourceKey = createDocumentObjectKey({
+    organisationId: source.organisationId,
+    matterId: source.matterId,
+    documentId: source.matterDocumentId,
+    versionId: source.id,
+  })
   if (source.objectKey !== expectedSourceKey)
     throw new DocumentModelStoreError()
 
-  return source.objectKey.replace(/\/source$/u, '/model.json')
+  return expectedSourceKey.replace(/\/source$/u, '/model.json')
 }
 
 export async function getDocumentModel(
