@@ -127,6 +127,7 @@ describe('resolveMatterAccess', () => {
       resolveMatterAccess(pool, caller, matterId, 'view'),
     ).resolves.toBe('denied')
     expect(calls[0]?.sql).toContain('matter.deleted_at is null')
+    expect(calls[0]?.sql).toContain('matter.organisation_id = $2')
     expect(calls[0]?.parameters).toEqual([
       matterId,
       caller.organisationId,

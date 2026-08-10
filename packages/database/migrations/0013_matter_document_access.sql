@@ -6,6 +6,7 @@ create table if not exists matter_shares (
   access_level text not null,
   created_by text not null,
   created_at timestamptz not null default now(),
+  constraint matter_shares_id_prefix_check check (id like 'shr_%'),
   constraint matter_shares_access_level_check check (access_level in ('view', 'edit')),
   constraint matter_shares_matter_fk foreign key (matter_id, organisation_id)
     references matters(id, organisation_id),

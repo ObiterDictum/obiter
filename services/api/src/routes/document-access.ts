@@ -11,7 +11,6 @@ import {
   matterShareCreateResponseSchema,
   matterShareGrantSchema,
   matterShareListResponseSchema,
-  matterShareRevokeRequestSchema,
   matterShareRevokeResponseSchema,
 } from '@obiter/contracts'
 import { ensureOrgUser, type AuthzVariables } from '../authz'
@@ -220,6 +219,9 @@ async function revokeMatterShare(
 export function createDocumentAccessRoutes(pool: Pool) {
   const routes = new Hono<{ Variables: AuthzVariables }>()
 
+  // Share management deliberately keeps this owner check separate from the
+  // document access resolver. These routes distinguish a known matter's
+  // non-owner (403) from an unknown, cross-organisation, or deleted matter (404).
   routes.get('/api/matters/:matterId/shares', async (c) => {
     const user = await ensureOrgUser(c, pool)
     if (user instanceof Response) return user
@@ -333,20 +335,10 @@ export function createDocumentAccessRoutes(pool: Pool) {
         403,
       )
 
-    const request = matterShareRevokeRequestSchema.safeParse({
-      shareId: c.req.param('shareId'),
-    })
-    if (!request.success)
-      return errorResponse(
-        c,
-        'validation_failed',
-        'A share id is required.',
-        400,
-      )
-
+    const shareId = c.req.param('shareId')
     const result = await revokeMatterShare(pool, {
       matterId: matter.id,
-      shareId: request.data.shareId,
+      shareId,
       organisationId: user.organisationId,
       ownerUserId: user.id,
       requestId: c.get('requestId'),
@@ -370,7 +362,7 @@ export function createDocumentAccessRoutes(pool: Pool) {
 
     const response = matterShareRevokeResponseSchema.parse({
       revoked: true,
-      shareId: request.data.shareId,
+      shareId,
     })
     return c.json(response)
   })

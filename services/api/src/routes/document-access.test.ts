@@ -81,6 +81,11 @@ class TestDatabase {
       organisationId: 'org_1',
       ownerUserId: 'usr_owner',
     })
+    this.matters.set('mtr_other', {
+      id: 'mtr_other',
+      organisationId: 'org_1',
+      ownerUserId: 'usr_owner',
+    })
     this.matters.set('mtr_other_org', {
       id: 'mtr_other_org',
       organisationId: 'org_2',
@@ -205,6 +210,19 @@ class TestDatabase {
                   share.matterId === matterId &&
                   share.granteeUserId === granteeUserId,
               )
+              if (
+                existing &&
+                !sql.includes(
+                  'on conflict (matter_id, grantee_user_id) do update',
+                )
+              ) {
+                throw Object.assign(
+                  new Error(
+                    'duplicate key value violates matter_shares_matter_grantee_key',
+                  ),
+                  { code: '23505' },
+                )
+              }
               const share: ShareState = {
                 id: existing?.id ?? `shr_${this.nextShare++}`,
                 organisationId,
@@ -452,6 +470,12 @@ describe('document access share routes', () => {
     expect(response.status).toBe(404)
     expect(database.shares.size).toBe(0)
     expect(database.transactionCommands).toEqual(['begin', 'rollback'])
+    const matterLock = database.queries.find(
+      (query) =>
+        query.sql.includes('from matters') && query.sql.includes('for update'),
+    )
+    expect(matterLock?.sql).toContain('organisation_id = $2')
+    expect(matterLock?.sql).toContain('deleted_at is null')
   })
 
   it('upserts a level change and commits each audit with its grant', async () => {
@@ -554,6 +578,23 @@ describe('document access share routes', () => {
     await expect(response.json()).resolves.toMatchObject({
       error: { code: 'matter_share_not_found' },
     })
+    expect(database.audits).toEqual([])
+  })
+
+  it('does not revoke a share scoped to a different matter', async () => {
+    const database = new TestDatabase()
+    const otherMatterShare = database.addShare({ matterId: 'mtr_other' })
+
+    const response = await routeApp(database.pool()).request(
+      `/api/matters/mtr_1/shares/${otherMatterShare.id}`,
+      { method: 'DELETE' },
+    )
+
+    expect(response.status).toBe(404)
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'matter_share_not_found' },
+    })
+    expect(database.shares.get(otherMatterShare.id)).toEqual(otherMatterShare)
     expect(database.audits).toEqual([])
   })
 
