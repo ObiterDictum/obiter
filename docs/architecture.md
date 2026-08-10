@@ -237,3 +237,54 @@ schemas in `packages/contracts/src/index.ts`, additively, including
 layer is standalone in S1b. No existing consumer is gated until S2 and later
 M1.25 slices import `requireMatterAccess`, which avoids the P3 defect of
 separate sibling checks.
+
+### M1.25 read-only document viewer: wire model and derived serve surface (10 August 2026)
+
+Context: M1.25 S2 serves the S1 OOXML model after S1b's matter access layer.
+The existing API resolves documents and current versions in
+`services/api/src/database.ts`, while upload writes derived `layout.json`
+objects without a database column. The existing detail and extraction routes
+must remain unchanged.
+
+Decision: add `serialiseModelJson` and `parseModelJson` in
+`packages/ooxml/src/model-json.ts`, using the single
+`DocumentModelWire` schema in `packages/contracts/src/document-model.ts`.
+Serialisation accepts an `OoxmlDocument` but writes only its logical
+`document.model`. Source part bytes, overlays, anchors and dirty state never
+enter JSON. Parsing validates JSON into `DocumentModelWire`; it does not
+claim to reconstruct an `OoxmlDocument`. The guarantee is exact deep equality
+of the wire model for `parseModelJson(serialiseModelJson(document))`,
+including source-preservation fragments and stable ids, with curated errors
+for malformed input.
+
+Serve the model through a new `GET /api/documents/:id/model` router mounted
+additively in `services/api/src/app.ts`. The route uses `ensureOrgUser`, an
+organisation-scoped `getDocument`, then S1b's
+`requireMatterAccess(..., 'view')`, followed by a current-version check for
+`ready` and `docx`. It serves the current pointer only and does not accept a
+version selector in S2. A denied 404 from the access helper is mapped to the
+model route's `document_not_found` 404, so unknown, cross-organisation,
+deleted, denied, non-ready and non-DOCX cases share one HTTP and body
+contract without model storage reads. The route sets `Cache-Control:
+no-store` and leaves the existing detail, upload and extraction routes
+untouched.
+
+Use a column-free lazy derived object at the validated source key's
+`/model.json` sibling:
+`org/{org}/matters/{matter}/documents/{document}/versions/{version}/model.json`.
+`services/api/src/document-model-store.ts` owns cache reads, source parsing,
+canonical model writes and wire validation. It uses a process-local in-flight
+promise guard. Cross-process duplicate writes are safe because immutable
+source versions produce deterministic JSON. It reads only validated source or
+model keys and never the quarantine prefix. The local storage allowlist must
+be extended minimally to permit `model.json`; no migration or model key
+column is introduced.
+
+Return a contracts wrapper containing `documentId`, `versionId`,
+`versionNumber` and nested `model: DocumentModelWire`, validated before the
+response is emitted. Do not return storage keys, filenames or raw XML. The
+renderer is not in `@obiter/ooxml`: the owner-applied U2 prompt owns a React
+renderer in `packages/app-shell`, using typed nodes and safe markers with no
+HTML strings. P1, P2, P3, P4 and P7 apply to this boundary. The current wire
+schema does not yet contain typed table, image, list or section nodes, so S2
+must not invent a second model shape to satisfy those parts of the U2 prompt.

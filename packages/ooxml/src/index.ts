@@ -12,5 +12,6 @@ export {
 
 export * from './equivalence'
 export * from './model'
+export * from './model-json'
 export * from './parse'
 export * from './serialise'

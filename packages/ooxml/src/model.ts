@@ -100,6 +100,7 @@ export type OoxmlErrorCode =
   | 'invalid-xml-part'
   | 'model-node-not-found'
   | 'model-node-not-editable'
+  | 'invalid-model-json'
   | 'serialisation-failed'
 
 export class OoxmlError extends Error {
@@ -118,6 +119,9 @@ function errorMessage(code: OoxmlErrorCode) {
   if (code === 'model-node-not-found') return 'The document node was not found.'
   if (code === 'model-node-not-editable') {
     return 'The document node cannot be edited.'
+  }
+  if (code === 'invalid-model-json') {
+    return 'The document model JSON is invalid.'
   }
   return 'The document could not be serialised.'
 }
