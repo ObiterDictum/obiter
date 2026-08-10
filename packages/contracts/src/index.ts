@@ -16,6 +16,60 @@ export type DataRegion = z.infer<typeof dataRegionSchema>
 export const matterStatusSchema = z.enum(['active', 'archived', 'deleted'])
 export type MatterStatus = z.infer<typeof matterStatusSchema>
 
+export const matterAccessLevelSchema = z.enum(['view', 'edit'])
+export type MatterAccessLevel = z.infer<typeof matterAccessLevelSchema>
+
+export const matterAccessDecisionSchema = z.enum(['view', 'edit', 'denied'])
+export type MatterAccessDecision = z.infer<typeof matterAccessDecisionSchema>
+
+export const matterShareGrantSchema = z.object({
+  id: z.string().min(1),
+  matterId: z.string().min(1),
+  granteeUserId: z.string().min(1),
+  accessLevel: matterAccessLevelSchema,
+  createdBy: z.string().min(1),
+  createdAt: z.string().datetime({ offset: true }),
+})
+export type MatterShareGrant = z.infer<typeof matterShareGrantSchema>
+
+export const matterShareCreateRequestSchema = z.object({
+  granteeUserId: z.string().min(1),
+  accessLevel: matterAccessLevelSchema,
+})
+export type MatterShareCreateRequest = z.infer<
+  typeof matterShareCreateRequestSchema
+>
+
+export const matterShareListResponseSchema = z.object({
+  ownerUserId: z.string().min(1),
+  shares: z.array(matterShareGrantSchema),
+})
+export type MatterShareListResponse = z.infer<
+  typeof matterShareListResponseSchema
+>
+
+export const matterShareCreateResponseSchema = z.object({
+  share: matterShareGrantSchema,
+})
+export type MatterShareCreateResponse = z.infer<
+  typeof matterShareCreateResponseSchema
+>
+
+export const matterShareRevokeRequestSchema = z.object({
+  shareId: z.string().min(1),
+})
+export type MatterShareRevokeRequest = z.infer<
+  typeof matterShareRevokeRequestSchema
+>
+
+export const matterShareRevokeResponseSchema = z.object({
+  revoked: z.literal(true),
+  shareId: z.string().min(1),
+})
+export type MatterShareRevokeResponse = z.infer<
+  typeof matterShareRevokeResponseSchema
+>
+
 export const documentStatusSchema = z.enum([
   'queued',
   'processing',
@@ -315,6 +369,7 @@ export const apiErrorCodeSchema = z.enum([
   'no_organisation',
   'closed_beta_required',
   'matter_not_found',
+  'matter_share_not_found',
   'document_not_found',
   'document_version_not_found',
   'artifact_not_found',

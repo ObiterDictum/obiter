@@ -16,6 +16,7 @@ import {
   createPostgresLegalAuthoritySourceStore,
 } from './routes/legal-search'
 import { createChangelogRoutes } from './routes/changelog'
+import { createDocumentAccessRoutes } from './routes/document-access'
 import { createDocumentsRoutes } from './routes/documents'
 import { createMattersRoutes } from './routes/matters'
 import { createOrganisationsRoutes } from './routes/organisations'
@@ -160,6 +161,7 @@ export function createApiApp(
   )
 
   app.route('/', createMattersRoutes(pool))
+  app.route('/', createDocumentAccessRoutes(pool))
   app.route('/', createOrganisationsRoutes(pool))
   app.route('/', createDocumentsRoutes(pool, storage))
   app.route('/', createRedactRoutes(pool, storage))
