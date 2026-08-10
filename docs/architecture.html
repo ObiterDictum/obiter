@@ -1044,6 +1044,12 @@
               <div class="nodes">
                 <a
                   class="node"
+                  href="https://github.com/ObiterDictum/obiter/tree/dev/packages/ooxml"
+                  ><b>@obiter/ooxml</b
+                  ><span>Lossless DOCX package fidelity</span></a
+                >
+                <a
+                  class="node"
                   href="https://github.com/ObiterDictum/obiter/tree/dev/packages/redaction-policy"
                   ><b>@obiter/redaction-policy</b
                   ><span>Merge, supplement, chunk, apply</span></a
@@ -1636,6 +1642,20 @@
                 </g>
                 <g>
                   <rect
+                    x="60"
+                    y="226"
+                    width="100.6"
+                    height="30"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--warning)"
+                  />
+                  <text x="110.3" y="244.5" text-anchor="middle" class="n">
+                    @obiter/ooxml
+                  </text>
+                </g>
+                <g>
+                  <rect
                     x="330"
                     y="226"
                     width="167.2"
@@ -1796,6 +1816,13 @@
                   marker-end="url(#ah-t-build-time-dependency-graph)"
                 />
                 <path
+                  d="M110.3,256 L122.4,326"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-build-time-dependency-graph)"
+                />
+                <path
                   d="M413.6,256 Q208.0,291.0 122.4,326"
                   fill="none"
                   stroke="var(--line-strong)"
@@ -1892,6 +1919,11 @@
                   <td class="id">@obiter/app-shell</td>
                   <td class="id">contracts · ui</td>
                   <td>TanStack Router</td>
+                </tr>
+                <tr>
+                  <td class="id">@obiter/ooxml</td>
+                  <td class="id">contracts</td>
+                  <td>fast-xml-parser, jszip</td>
                 </tr>
                 <tr>
                   <td class="id">@obiter/redaction-policy</td>
@@ -2136,12 +2168,37 @@
         <section id="packages">
           <h2>Packages</h2>
           <p class="lede">
-            Nine packages carry code. Primitives sit at the bottom of the graph
+            Ten packages carry code. Primitives sit at the bottom of the graph
             and import nothing internal.
           </p>
 
           <h3>Domain</h3>
           <div class="modules">
+            <article class="module">
+              <header>
+                <h4>
+                  <a
+                    href="https://github.com/ObiterDictum/obiter/tree/dev/packages/ooxml/src"
+                    >@obiter/ooxml</a
+                  >
+                </h4>
+              </header>
+              <p>
+                Source-preserving DOCX package parsing and serialisation. Clean
+                parts retain their original bytes; deliberate text edits patch
+                only the owning XML part.
+              </p>
+              <dl class="kv">
+                <dt>Exports</dt>
+                <dd>
+                  parseDocx · serialiseDocx · replaceTextRunText ·
+                  compareXmlSemantics · compareOoxmlPackages
+                </dd>
+                <dt>Contract</dt>
+                <dd>DocumentModelWire from @obiter/contracts</dd>
+              </dl>
+            </article>
+
             <article class="module">
               <header>
                 <h4>
