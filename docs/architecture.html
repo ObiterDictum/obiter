@@ -2439,7 +2439,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>11 migrations, 0001 to 0012, 0008 withdrawn</dd>
+                <dd>12 migrations, 0001 to 0013, 0008 withdrawn</dd>
               </dl>
             </article>
           </div>
@@ -2555,6 +2555,18 @@
                   <td class="id">PATCH /api/matters/:id/restore</td>
                   <td class="id">matters.ts</td>
                   <td>Undo soft delete, cascading to documents and runs</td>
+                </tr>
+                <tr>
+                  <td class="id">GET · POST /api/matters/:matterId/shares</td>
+                  <td class="id">document-access.ts</td>
+                  <td>Owner-only list and upsert of matter share grants</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    DELETE /api/matters/:matterId/shares/:shareId
+                  </td>
+                  <td class="id">document-access.ts</td>
+                  <td>Owner-only revocation of a matter share grant</td>
                 </tr>
                 <tr>
                   <td class="id">POST /api/matters/:matterId/documents</td>
@@ -2838,11 +2850,14 @@
                 </tr>
                 <tr>
                   <td class="id">404</td>
-                  <td class="id">redaction_run_not_found · span_not_found</td>
+                  <td class="id">
+                    matter_not_found · matter_share_not_found ·
+                    redaction_run_not_found · span_not_found
+                  </td>
                   <td>
-                    Also returned when a row exists but belongs to another
-                    organisation, so the API never confirms the existence of
-                    another tenant's data.
+                    Matter access denial uses the same code as an unknown,
+                    deleted or cross-organisation matter, so the API never
+                    confirms the existence of inaccessible tenant data.
                   </td>
                 </tr>
                 <tr>
@@ -2880,8 +2895,11 @@
         <section id="auth">
           <h2>Auth and scoping</h2>
           <p class="lede">
-            Authentication is better-auth. Authorisation is a thin layer in
-            <code>authz.ts</code> that every business route calls.
+            Authentication is better-auth. Organisation authorisation lives in
+            <code>authz.ts</code>. M1.25 S1b ships the per-matter resolver in
+            <code>document-access.ts</code> as a forward contract for S2. The
+            share-management router retains its owner-only check so it can
+            distinguish forbidden access from a missing matter.
           </p>
           <div class="scroll">
             <table>
@@ -2915,12 +2933,14 @@
             </table>
           </div>
           <div class="callout">
-            <b>Organisation scoping is the security boundary.</b> Every query
-            touching tenant data filters on <code>organisation_id</code>, and
-            foreign keys are composite, so the database rejects a
-            cross-organisation reference rather than relying on the query being
-            written correctly. Web uses cookie sessions; desktop uses the bearer
-            plugin.
+            <b>Organisation and matter scoping are security boundaries.</b>
+            Every query touching tenant data filters on
+            <code>organisation_id</code>, and foreign keys are composite, so the
+            database rejects a cross-organisation reference rather than relying
+            on the query being written correctly. M1.25 matter document access
+            resolves the matter creator first, then an edit or view grant, with
+            no administrator override. Denial is the uniform matter 404. Web
+            uses cookie sessions; desktop uses the bearer plugin.
           </div>
         </section>
 
@@ -3051,6 +3071,23 @@
                 </g>
                 <g>
                   <rect
+                    x="230"
+                    y="190"
+                    width="100.6"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--line-strong)"
+                  />
+                  <text x="280.3" y="207" text-anchor="middle" class="n">
+                    matter_shares
+                  </text>
+                  <text x="280.3" y="218" text-anchor="middle" class="s">
+                    view · edit
+                  </text>
+                </g>
+                <g>
+                  <rect
                     x="60"
                     y="280"
                     width="118.8"
@@ -3142,6 +3179,26 @@
                   organisation_id
                 </text>
                 <path
+                  d="M230,210.5 L156.2,210.5"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-entity-relationships)"
+                />
+                <text x="193.1" y="205.5" text-anchor="middle" class="e">
+                  matter + org
+                </text>
+                <path
+                  d="M280.3,190 L124.0,133"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-entity-relationships)"
+                />
+                <text x="232.15" y="161.5" text-anchor="middle" class="e">
+                  grantee
+                </text>
+                <path
                   d="M119.4,280 L108.1,231"
                   fill="none"
                   stroke="var(--line-strong)"
@@ -3208,10 +3265,11 @@
             </div>
             <figcaption>
               Composite foreign keys carry the full ancestry: a document version
-              references its document, matter and organisation together, so the
+              references its document, matter and organisation together, and a
+              matter share references its matter with the organisation id. The
               database refuses a cross-organisation row rather than relying on
-              the query filtering correctly. legal_source_documents sits outside
-              the boundary because the judgment corpus is public and shared.
+              query filtering. legal_source_documents sits outside the boundary
+              because the judgment corpus is public and shared.
             </figcaption>
           </figure>
           <div class="scroll">
@@ -3253,6 +3311,14 @@
                   <td class="id">matters</td>
                   <td>Client engagements. Soft-deletable.</td>
                   <td class="id">0002</td>
+                </tr>
+                <tr>
+                  <td class="id">matter_shares</td>
+                  <td>
+                    Per-matter view or edit grants. Retained while a matter is
+                    soft-deleted and effective again if it is restored.
+                  </td>
+                  <td class="id">0013</td>
                 </tr>
                 <tr>
                   <td class="id">matter_documents</td>
@@ -5556,8 +5622,8 @@
         <footer>
           <p>
             Generated from workspace manifests, migrations, route modules and
-            source on <code>dev</code>, 2026-07-27. Regenerate rather than
-            patch: a stale map is worse than none.
+            source on <code>feat/m125-access</code>, 2026-08-10. Regenerate
+            rather than patch: a stale map is worse than none.
           </p>
         </footer>
       </main>

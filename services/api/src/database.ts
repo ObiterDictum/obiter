@@ -32,6 +32,8 @@ export interface AuditRecordInput {
     | 'matter.update'
     | 'matter.delete'
     | 'matter.restore'
+    | 'matter.share_grant'
+    | 'matter.share_revoke'
     | 'document.upload'
     | 'document.version_create'
     | 'document.delete'

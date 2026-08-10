@@ -188,3 +188,52 @@ as OOXML attributes. Put the model wire schema in `packages/contracts`, with
 uses JSZip and fast-xml-parser as its only new external runtime dependencies,
 with source-preserving serialisation rather than parser reserialisation. The
 workspace glob and package exports register it without a tsconfig edit.
+
+### M1.25 matter document access: per-matter ownership and shared grants (10 August 2026)
+
+Context: M1.25 S1b inserts per-matter access before the document viewer. The
+existing API in `services/api/src/authz.ts`, `services/api/src/routes/matters.ts`
+and `services/api/src/routes/documents.ts` enforces organisation isolation but
+has no matter-level membership. Owner decisions 4, 4b, 4c and 4d require
+matter ownership by the creator, sharing at matter scope, two levels, and no
+retrofit of the existing redaction, upload, extraction or detail routes.
+
+Decision: add `matter_shares` in migration 0013 with an organisation id,
+matter id, grantee user id, text access level checked as `view | edit`, creator,
+creation time and a generated share id. Scope the matter foreign key by the
+existing `(id, organisation_id)` key, enforce one grant per matter and grantee,
+and index both tenant matter access and tenant grantees. Use text plus a CHECK
+rather than a PostgreSQL enum so the migration remains additive and safe to
+reapply. Soft deletion retains grants, but active-matter queries make them
+inaccessible; restoring a matter reactivates the retained grants. A future hard
+delete must explicitly handle grants.
+
+Put all per-matter resolution in `services/api/src/document-access.ts`.
+`resolveMatterAccess` checks the active organisation-scoped matter in this
+order: `matters.created_by`, an edit grant, a view grant, then denial. The
+owner always has effective edit access. A required-level argument makes view
+and edit checks distinct, and `requireMatterAccess` composes the resolver with
+`ensureOrgUser` on every request. Denial, unknown, cross-organisation and
+soft-deleted matter ids use the uniform `matter_not_found` 404. There is no
+admin override because the current API has no `can(role, capability)` pattern;
+`requireManageRole` remains a separate action gate and does not replace matter
+access. Ownership never falls back to a document creator, admin or grantee.
+
+Manage shares only through the new `services/api/src/routes/document-access.ts`
+router: `GET /api/matters/:matterId/shares`, `POST` at the same path, and
+`DELETE /api/matters/:matterId/shares/:shareId`. The owner alone may manage
+shares. Matter resolution is organisation-scoped and returns the uniform 404
+for unknown, cross-organisation or soft-deleted matters. A grantee must be a
+current member of the same organisation and cannot be the owner. Grant and
+revoke mutations lock and recheck the active matter, mutate the share, and
+write an audit row in one transaction. Use `matter.share_grant` and
+`matter.share_revoke` on `matter_share` entities, with ids and access level only
+in metadata. Add those two action literals to the existing audit input union as
+the smallest required extension.
+
+Put the access level, access decision, share grant, request and response
+schemas in `packages/contracts/src/index.ts`, additively, including
+`matter_share_not_found` for a missing share on a known matter. The access
+layer is standalone in S1b. No existing consumer is gated until S2 and later
+M1.25 slices import `requireMatterAccess`, which avoids the P3 defect of
+separate sibling checks.
