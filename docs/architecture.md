@@ -288,3 +288,63 @@ renderer in `packages/app-shell`, using typed nodes and safe markers with no
 HTML strings. P1, P2, P3, P4 and P7 apply to this boundary. The current wire
 schema does not yet contain typed table, image, list or section nodes, so S2
 must not invent a second model shape to satisfy those parts of the U2 prompt.
+
+### M1.25 PDF import-to-view: stored extraction serve surface (10 August 2026)
+
+Context: S2b adds `GET /api/documents/:id/pdf-view` after S2. PDF is an
+import-to-view surface only. `services/api/src/routes/documents.ts` already
+extracts PDF content through `services/api/src/document-extraction.ts`, writes
+the extracted text to the version's `/text` sibling, and writes the validated
+layout to the `/layout.json` sibling. The text key is recorded in
+`document_versions.text_object_key`; the layout key is derived and has no
+column. S2 already establishes the route and store pattern in
+`services/api/src/routes/document-model.ts` and
+`services/api/src/document-model-store.ts`.
+
+Decision: add a new `services/api/src/routes/document-pdf-view.ts` router and
+one additive mount in `services/api/src/app.ts`; leave
+`services/api/src/routes/documents.ts`, `document-extraction.ts`,
+`document-upload.ts`, and `database.ts` unchanged. The route runs
+`ensureOrgUser`, an organisation-scoped `getDocument`, then
+`requireMatterAccess(..., 'view')` from `services/api/src/document-access.ts`,
+then requires the current pointer to identify a `ready` version whose
+`fileType` is exactly `pdf`. Unknown, cross-organisation, deleted, denied,
+non-ready, and non-PDF states use the uniform `document_not_found` 404. A
+matter access denial is mapped from the helper's matter 404 to the document 404. The route sets `Cache-Control: no-store` before all responses. It does
+not audit reads because the canonical gate checklist requires audit events for
+mutations, not these read-only model or PDF serve routes.
+
+Put storage key derivation, canonical key checks, text and layout reads, JSON
+parsing, and `documentTextLayoutSchema` validation in a new
+`services/api/src/document-pdf-view-store.ts`. Derive only the canonical
+`/text` and `/layout.json` siblings from the validated source key, verify the
+recorded text key matches, and never read `/source` or a quarantine prefix.
+Missing or malformed ready artifacts fail closed through a generic storage
+error without exposing provider or parser diagnostics. The route does not
+rerun PDF extraction.
+
+Put this exact additive response in `packages/contracts/src/index.ts`, using
+the existing layout schema and the S2 version wrapper pattern:
+
+```ts
+export const documentPdfViewResponseSchema = z.object({
+  documentId: z.string().min(1),
+  versionId: z.string().min(1),
+  versionNumber: z.number().int().positive(),
+  text: z.string(),
+  layout: documentTextLayoutSchema,
+})
+```
+
+The response carries `documentId`, `versionId`, `versionNumber`, the stored
+extracted `text`, and the stored `layout`. Both are required because layout
+segments refer to offsets in the extracted text. Do not return source bytes,
+storage keys, filenames, raw PDF data, parser diagnostics, or OOXML model
+fields. PDF remains outside the model, editing, comments, round-trip, and
+export paths. The U5 surface must state that the view is not editable.
+
+The implementer must add focused route and store tests for the access matrix,
+uniform 404s, ready and PDF filtering, no-store, response validation, safe
+storage failures, and the absence of source or quarantine reads. P2 and P3
+apply at this boundary. P7 applies because the wrapper is shared through
+`packages/contracts` and the stored layout is validated at the read boundary.

@@ -1,33 +1,38 @@
 import { Hono } from 'hono'
 import type { Pool } from 'pg'
-import { documentModelResponseSchema } from '@obiter/contracts'
+import { documentPdfViewResponseSchema } from '@obiter/contracts'
 import type { AuthzVariables } from '../authz'
 import {
-  DocumentModelStoreError,
-  getDocumentModel,
-} from '../document-model-store'
+  DocumentPdfViewStoreError,
+  getDocumentPdfView,
+} from '../document-pdf-view-store'
 import type { StorageService } from '../storage'
 import { resolveCurrentReadyDocumentVersion } from './document-route-shared'
 
-export function createDocumentModelRoutes(pool: Pool, storage: StorageService) {
+export function createDocumentPdfViewRoutes(
+  pool: Pool,
+  storage: StorageService,
+) {
   const routes = new Hono<{ Variables: AuthzVariables }>()
 
-  routes.get('/api/documents/:id/model', async (c) => {
+  routes.get('/api/documents/:id/pdf-view', async (c) => {
     const resolved = await resolveCurrentReadyDocumentVersion(
       c,
       pool,
       c.req.param('id'),
-      'docx',
+      'pdf',
     )
     if (resolved instanceof Response) return resolved
 
-    const response = documentModelResponseSchema.safeParse({
+    const view = await getDocumentPdfView(storage, resolved.version)
+    const response = documentPdfViewResponseSchema.safeParse({
       documentId: resolved.document.id,
       versionId: resolved.version.id,
       versionNumber: resolved.version.versionNumber,
-      model: await getDocumentModel(storage, resolved.version),
+      text: view.text,
+      layout: view.layout,
     })
-    if (!response.success) throw new DocumentModelStoreError()
+    if (!response.success) throw new DocumentPdfViewStoreError()
     return c.json(response.data)
   })
 
