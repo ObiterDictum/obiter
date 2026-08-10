@@ -52,6 +52,20 @@ describe('document model JSON', () => {
     )
   })
 
+  it('rejects unknown model fields during serialisation', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const documentWithUnknownModelField = {
+      ...document,
+      model: { ...document.model, futureField: true },
+    }
+
+    expect(() => serialiseModelJson(documentWithUnknownModelField)).toThrow(
+      OoxmlError,
+    )
+  })
+
   it.each([
     ['malformed JSON', '{not-json'],
     ['an invalid wire value', JSON.stringify({ version: 1, stories: 'no' })],
