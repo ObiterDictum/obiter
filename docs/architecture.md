@@ -160,3 +160,31 @@ Findings: FR1.1–FR1.4 are already implemented at the contract, persistence, re
 Decision: Keep detection mode as the shared Zod enum `model+supplement | heuristics+supplement | unknown`, persisted as the additive, not-null `redaction_runs.detection_mode` column introduced by migration 0011. Runtime writes keep `detection_mode` aligned with `detector_version`, while callers use only the structured field; a later migration author must not re-derive the mapping by parsing the version string. `unknown` means the provenance is unavailable, not that model detection did or did not run. Because the migration's default, not-null, and check constraint make null or malformed persisted values unreachable through supported paths, the read mapper uses `detectionModeSchema.parse` and fails loudly on integrity corruption rather than coalescing it to `unknown`. Audit artefacts remain self-describing with both `detectorVersion` and `detectionMode`, including a human-readable "Detection mode:" line in Markdown/HTML.
 
 Outcome: No production architecture or runtime change is required for FR1. The existing contracts, migration, mapper, runtime writes, endpoints, and audit renderers remain the pattern; this record closes the seam without adding a fallback, duplicate schema, migration, or new abstraction.
+
+### OOXML fidelity layer: lossless overlays and shared model identity (10 August 2026)
+
+Context: M1.25 S1 adds `@obiter/ooxml` for DOCX parsing and serialisation. The
+slice must preserve unknown OOXML, tracked changes, and every part that the
+parser does not modify, while later viewer, comments and editing slices need a
+shared model and stable anchors. Considered typed overlays with preserved
+subtrees, whole-part modification replay, and a generic DOM; considered a
+package-local wire schema versus the shared contracts package; considered
+serialised derived IDs versus a non-serialised identity side map.
+
+Decision: use typed overlays with source-preserved nodes for editable and
+content-bearing XML parts, and opaque whole-part preservation for binary and
+currently uneditable parts. A clean part is emitted from its original payload;
+a dirty part patches only the changed model nodes. The exact golden guarantee
+is that touched parts regenerate under semantic XML equivalence and every
+untouched part is byte-identical. Preserve `w:ins`, `w:del`, `w:moveFrom`,
+`w:moveTo`, `w:pPrChange` and `w:rPrChange` as opaque subtrees in S1, including
+author and timestamp attributes. Define semantic XML equivalence in the
+sibling `docs/specs/documents/semantic-xml-equivalence.md` and implement it in
+`packages/ooxml/src/equivalence.ts`. Pass through `w14:paraId` and `w14:textId`
+when present, allocate model-internal IDs otherwise, and never emit derived IDs
+as OOXML attributes. Put the model wire schema in `packages/contracts`, with
+`@obiter/ooxml` consuming it. Keep the conformance corpus in
+`packages/ooxml/fixtures/`, preferring deterministic builders. The package
+uses JSZip and fast-xml-parser as its only new external runtime dependencies,
+with source-preserving serialisation rather than parser reserialisation. The
+workspace glob and package exports register it without a tsconfig edit.
