@@ -6,7 +6,7 @@ export const DOCUMENT_EDIT_ID_MAX_LENGTH = 255
 export const DOCUMENT_EDIT_TEXT_MAX_LENGTH = 1_000_000
 export const DOCUMENT_EDIT_OPERATION_MAX_COUNT = 100
 
-const editIdSchema = z
+export const editIdSchema = z
   .string()
   .min(1)
   .max(DOCUMENT_EDIT_ID_MAX_LENGTH)
@@ -71,6 +71,7 @@ export const documentEditRequestSchema = z
   .object({
     baseVersionId: editIdSchema,
     operations: documentEditOperationsSchema,
+    trackChanges: z.boolean().optional().default(false),
   })
   .strict()
 export type DocumentEditRequest = z.infer<typeof documentEditRequestSchema>

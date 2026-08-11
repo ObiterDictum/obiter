@@ -7,6 +7,7 @@ import {
   type OoxmlDocument,
   type ParseDocxOptions,
   type SourcePart,
+  type TrackedChangeNode,
 } from './model'
 import { parseContentTypes, isXmlPart } from './parts/content-types'
 import { parseNumbering } from './parts/numbering'
@@ -82,14 +83,21 @@ function parseParts(
   }
 
   const typedParts = discoverTypedParts(relationships)
+  let changeSequence = 1
   const identity: IdentityContext = {
     allocator: options.idAllocator ?? createSequentialModelIdAllocator(),
     usedIds: new Set(),
+    nextChangeId() {
+      const id = `change-${String(changeSequence).padStart(6, '0')}`
+      changeSequence += 1
+      return id
+    },
   }
   const stories: DocumentModelWire['stories'] = []
   const textRunAnchors: OoxmlDocument['textRunAnchors'] = new Map()
   const paragraphAnchors: OoxmlDocument['paragraphAnchors'] = new Map()
   const preservedXmlFragments: DocumentModelWire['preservedXmlFragments'] = []
+  const trackedChanges: OoxmlDocument['trackedChanges'] = new Map()
 
   for (const [partName, kind] of typedParts.stories) {
     const part = sourceParts.get(partName)
@@ -99,18 +107,17 @@ function parseParts(
     part.role = 'story'
     part.overlay = createXmlOverlay(source)
     part.trackedChanges = parsed.trackedChanges
+    for (const change of parsed.trackedChanges) {
+      trackedChanges.set(change.wire.id, change)
+    }
     stories.push(parsed.story)
     for (const anchor of parsed.anchors)
       textRunAnchors.set(anchor.wire.id, anchor)
     for (const anchor of parsed.paragraphAnchors)
       paragraphAnchors.set(anchor.wire.id, anchor)
-    preservedXmlFragments.push(
-      ...parsed.trackedChanges.map(({ sourceFragment }) => ({
-        partName,
-        xml: sourceFragment,
-      })),
-    )
   }
+
+  matchMovePairs([...trackedChanges.values()])
 
   const styles = parseOptionalTypedPart(
     sourceParts,
@@ -133,10 +140,40 @@ function parseParts(
       numbering,
       relationships,
       preservedXmlFragments,
+      changes: [...trackedChanges.values()].map(({ wire }) => wire),
     },
     sourceParts,
     textRunAnchors,
     paragraphAnchors,
+    trackedChanges,
+  }
+}
+
+function matchMovePairs(changes: TrackedChangeNode[]) {
+  const moves = new Map<string, typeof changes>()
+  for (const change of changes) {
+    if (
+      (change.wire.elementName !== 'moveFrom' &&
+        change.wire.elementName !== 'moveTo') ||
+      change.wire.ooxmlId === undefined
+    ) {
+      continue
+    }
+    const matches = moves.get(change.wire.ooxmlId) ?? []
+    matches.push(change)
+    moves.set(change.wire.ooxmlId, matches)
+  }
+  for (const matches of moves.values()) {
+    const from = matches.filter(({ wire }) => wire.elementName === 'moveFrom')
+    const to = matches.filter(({ wire }) => wire.elementName === 'moveTo')
+    if (matches.length !== 2 || from.length !== 1 || to.length !== 1) continue
+    const fromNode = from[0]
+    const toNode = to[0]
+    if (!fromNode || !toNode) continue
+    fromNode.validMoveCounterpart = true
+    toNode.validMoveCounterpart = true
+    fromNode.wire.pairId = toNode.wire.id
+    toNode.wire.pairId = fromNode.wire.id
   }
 }
 
