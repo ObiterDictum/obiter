@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+export * from './document-comments'
 export * from './document-model'
 
 export type AppPlatform = 'web' | 'desktop'

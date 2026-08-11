@@ -348,3 +348,80 @@ uniform 404s, ready and PDF filtering, no-store, response validation, safe
 storage failures, and the absence of source or quarantine reads. P2 and P3
 apply at this boundary. P7 applies because the wrapper is shared through
 `packages/contracts` and the stored layout is validated at the read boundary.
+
+### M1.25 comments and DOCX export: stable anchors and product comment placement (10 August 2026)
+
+Context: S3 adds product comments after the S1 OOXML identity model, S1b
+matter access layer, and S2 current-model route. The owner has settled that
+comments are stored in the database and embedded in exported DOCX files. The
+current API has no export route, so this decision keeps export package-only
+and testable in `packages/ooxml`.
+
+Decision: represent an anchor as `{ paragraphId, startOffset, endOffset }`,
+where the id is the S1 paragraph identity and the offsets are zero-based,
+half-open UTF-16 offsets into the concatenated model run text. Paragraph and
+run indexes, screen coordinates, and raw XML offsets are prohibited. The
+comment create request carries the body and anchor; the server binds the
+comment to the current ready DOCX version as `anchorVersionId`. Comments are
+document-scoped, with that version id retained as nullable provenance so a
+stable paragraph can survive an S4 version change. If the paragraph or range
+is absent after an edit, the comment remains stored as an orphan and export
+fails closed. It is never silently re-anchored, deleted, or moved.
+
+Create `packages/contracts/src/document-comments.ts` and re-export it. The
+shared schemas cover the anchor, create request, list response, create
+response, resolve request, and resolve response. Comment body is bounded
+plain text. The shared comment record includes the document id, nullable
+anchor version id, anchor, body, author display identity, resolution fields,
+and timestamps. Raw XML, provider diagnostics, email addresses, and tokens
+are not contract fields.
+
+Create `packages/database/migrations/0014_document_comments.sql` as a new
+organisation and matter scoped table. Store the anchor fields separately
+from opaque JSON, together with document and nullable anchor-version
+composite foreign keys, author identity and display-name snapshot, body,
+resolution fields, and timestamps. Required identity fields are not nullable
+because the table is new and empty; lifecycle and purge-tolerant provenance
+fields are nullable. The migration is idempotent and additive, changes no
+existing rows, and does not reuse 0013.
+
+Keep comment SQL in `services/api/src/comments-db.ts`. List, create, and
+resolve use the existing store pattern. Create and resolve each write their
+comment mutation and one audit event in the same transaction. The only
+permitted `database.ts` change is the two typed audit action literals
+`document.comment_create` and `document.comment_resolve`; comment queries do
+not belong there. Audit metadata contains ids only, never comment text or
+model text.
+
+Add `services/api/src/routes/comments.ts`, mounted additively in
+`services/api/src/app.ts`, with GET and POST at
+`/api/documents/:id/comments` and PATCH at
+`/api/documents/:id/comments/:commentId/resolve`. Extend
+`services/api/src/routes/document-route-shared.ts` to accept a required
+matter access level while retaining its view default. List requires view;
+create and resolve require edit. All routes use the shared authentication,
+organisation, document, ready-DOCX, and S1b access sequence, return the
+uniform document 404, and set `Cache-Control: no-store`. There is no delete
+or unresolve route in S3.
+
+Add a pure `serialiseDocxWithComments(document, comments)` package function.
+It resolves each stable paragraph id, verifies the range, splits runs when
+needed, and emits `w:commentRangeStart`, `w:commentRangeEnd`, the reference,
+and a valid `w:comment` with escaped author, timestamp, and plain-text body.
+Ids are deterministic numeric ids allocated above foreign comment ids. An
+existing foreign `word/comments.xml` part is preserved and product comments
+are appended. Missing comments relationships and content types are added
+only when required. Invalid or unresolved anchors return a curated error and
+no partial output; the input model is not mutated. With no product comments,
+S1 clean-part byte identity remains unchanged.
+
+Amend `docs/specs/documents/semantic-xml-equivalence.md` in the S3
+implementation so the intentional product additions are allowed only at the
+expected anchor and comments part. Foreign comments and every unrelated part
+must still satisfy the S1 relation. Package tests pin model JSON anchor
+stability, single-run, cross-run and empty ranges, foreign comment
+preservation, relationship creation, id collisions, escaping, unresolved
+anchors, no input mutation, and untouched-part byte identity. Route tests pin
+view/edit access, organisation and document 404s, deleted and non-ready
+states, no-store, schema validation, and same-transaction audits. P1, P2,
+P3, P4, and P7 apply at this boundary.

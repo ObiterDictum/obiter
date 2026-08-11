@@ -14,6 +14,19 @@ Two OOXML packages are semantically equivalent when all of the following hold:
 
 ZIP entry order, directory entries, compression method, compression level, ZIP timestamps and other ZIP layout details are excluded.
 
+## Product-comment export relation
+
+A clean parse and serialise still uses the ordinary package relation without any exclusions. An export supplied with product-authored comments uses an intentional extension of that relation:
+
+1. Start with the source package and apply only the canonical additions for the supplied comment list: the exact story range markers and reference runs, required run splits at model offsets, appended `w:comment` elements, and, when absent, the comments part, document relationship and content-type override.
+2. Compare that expected package with the exported package under the existing namespace-aware package and XML relations below.
+3. Every foreign comment and every pre-existing relationship and content-type fragment remains in its original order. No unrelated element, attribute, character data, whitespace, relationship or content type may change.
+4. Every untouched source part remains byte-identical. The new comments part and story, relationship, content-type or comments parts touched by canonical additions are compared semantically.
+
+Equivalently, after removing only those canonical product additions, including recombining only the run splits introduced at their marker positions, every source part must satisfy the ordinary relation and every foreign comment must remain in its original order.
+
+`compareOoxmlProductCommentExport` applies this relation from a source package plus the complete expected XML for only the intentionally touched parts. It delegates to the same canonicalisation as `compareOoxmlPackages`; it does not weaken the ordinary relation globally and therefore fails when foreign content is dropped or reordered. Anchor-placement tests independently pin the canonical additions to the supplied stable model ranges.
+
 ## XML relation
 
 An XML part is converted to a namespace-resolved node sequence. Two XML parts are equivalent when those sequences are equal under all of these rules.
