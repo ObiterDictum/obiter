@@ -10,6 +10,7 @@ import {
 import {
   appendAuditLog,
   createDocumentObjectKey,
+  insertDocumentVersion,
   type DocumentVersionRecord,
 } from './database'
 import type { StorageService } from './storage'
@@ -68,6 +69,7 @@ export async function createEditedVersion(
     throw new DocumentEditStoreError()
   }
   let candidateKey: string | null = null
+  let commitIssued = false
 
   try {
     await client.query('begin')
@@ -102,32 +104,23 @@ export async function createEditedVersion(
     })
     await writeCandidate(storage, candidateKey, editedBytes)
 
-    await client.query(
-      `
-        insert into document_versions (
-          id, organisation_id, matter_id, matter_document_id, filename, file_type,
-          size_bytes, object_key, text_object_key, document_status, failure_reason,
-          version_number, content_sha256, sync_state, created_by, created_at, updated_at
-        )
-        values (
-          $1, $2, $3, $4, $5, $6, $7, $8, null, 'ready', null,
-          $9, $10, 'synced', $11, now(), now()
-        )
-      `,
-      [
-        versionId,
-        input.organisationId,
-        input.matterId,
-        input.documentId,
-        lock.filename,
-        lock.file_type,
-        editedBytes.byteLength,
-        candidateKey,
-        versionNumber,
-        contentSha256,
-        input.userId,
-      ],
-    )
+    await insertDocumentVersion(client, {
+      id: versionId,
+      organisationId: input.organisationId,
+      matterId: input.matterId,
+      documentId: input.documentId,
+      filename: lock.filename,
+      fileType: lock.file_type,
+      sizeBytes: editedBytes.byteLength,
+      objectKey: candidateKey,
+      textObjectKey: null,
+      documentStatus: 'ready',
+      failureReason: null,
+      versionNumber,
+      contentSha256,
+      syncState: 'synced',
+      createdBy: input.userId,
+    })
 
     const pointer = await client.query<{ id: string }>(
       `
@@ -182,12 +175,18 @@ export async function createEditedVersion(
       requestId: input.requestId,
     })
 
+    commitIssued = true
     await client.query('commit')
     candidateKey = null
     return { status: 'created', versionId, versionNumber }
   } catch {
-    await rollback(client)
-    if (candidateKey) await cleanupCandidate(storage, candidateKey)
+    if (!commitIssued) {
+      await rollback(client)
+      if (candidateKey) await cleanupCandidate(storage, candidateKey)
+    }
+    // Once COMMIT is sent, its response can fail after PostgreSQL has committed.
+    // Keep the candidate object in that uncertain state and accept an orphan if
+    // the commit did not land, rather than delete an object a committed row needs.
     throw new DocumentEditStoreError()
   } finally {
     client.release()

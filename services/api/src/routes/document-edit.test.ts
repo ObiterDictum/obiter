@@ -5,6 +5,7 @@ import {
   EditDatabase,
   EditStorage,
   editRequest,
+  expectDocument404,
   routeApp,
   sourceBytes,
   sourceKey,
@@ -27,25 +28,24 @@ describe('POST /api/documents/:id/edit', () => {
   })
 
   it('provisions an organisation for an org-less editor before saving', async () => {
-    const database = new EditDatabase({ access: 'owner' })
-    const { app } = routeApp(database, new EditStorage(), {
+    const database = new EditDatabase()
+    const route = routeApp(database, new EditStorage(), {
       id: 'usr_editor',
       organisationId: null,
       role: null,
     })
 
-    const response = await app.request(
+    const response = await route.app.request(
       '/api/documents/doc_1/edit',
       editRequest(),
     )
 
     expect(response.status).toBe(201)
-    expect(database.transactionCommands).toEqual([
-      'begin',
-      'commit',
-      'begin',
-      'commit',
-    ])
+    expect(
+      database.transactionCommands.filter(
+        (command) => command === 'begin' || command === 'commit',
+      ),
+    ).toEqual(['begin', 'commit', 'begin', 'commit'])
   })
 
   it.each(['doc_unknown', 'doc_cross', 'doc_deleted'])(
@@ -79,7 +79,7 @@ describe('POST /api/documents/:id/edit', () => {
     ['a processing version', { status: 'processing' }],
     ['a PDF version', { fileType: 'pdf' }],
     ['an absent current pointer', { currentVersionId: null }],
-  ])('returns the uniform 404 for %s', async (_label, options) => {
+  ] as const)('returns the uniform 404 for %s', async (_label, options) => {
     const { app, storage } = routeApp(new EditDatabase(options))
     const response = await app.request(
       '/api/documents/doc_1/edit',
@@ -240,6 +240,25 @@ describe('POST /api/documents/:id/edit', () => {
     ).toHaveLength(1)
   })
 
+  it('pins the locked recheck before the conditional current-pointer update', async () => {
+    const database = new EditDatabase()
+    const response = await routeApp(database).app.request(
+      '/api/documents/doc_1/edit',
+      editRequest(),
+    )
+
+    expect(response.status).toBe(201)
+    const lockIndex = database.queries.findIndex((sql) =>
+      sql.includes('for update of document'),
+    )
+    const pointerIndex = database.queries.findIndex((sql) =>
+      sql.includes('update matter_documents'),
+    )
+    expect(lockIndex).toBeGreaterThan(-1)
+    expect(pointerIndex).toBeGreaterThan(lockIndex)
+    expect(database.queries[pointerIndex]).toContain('current_version_id = $4')
+  })
+
   it('rolls back rows and removes the candidate object when audit insertion fails', async () => {
     const database = new EditDatabase({ auditFailure: true })
     const { app, storage, errors } = routeApp(database)
@@ -257,6 +276,25 @@ describe('POST /api/documents/:id/edit', () => {
     expect(storage.writes).toHaveLength(1)
     expect(storage.deletes).toEqual(storage.writes)
     expect(storage.binary.size).toBe(1)
+    expect(errors).toEqual(['The edited document could not be stored.'])
+  })
+
+  it('keeps the candidate after a client-side commit-response failure', async () => {
+    const database = new EditDatabase({ commitResponseFailure: true })
+    const { app, storage, errors } = routeApp(database)
+    const response = await app.request(
+      '/api/documents/doc_1/edit',
+      editRequest(),
+    )
+
+    expect(response.status).toBe(500)
+    expect(database.currentVersionId).not.toBe('ver_1')
+    expect(database.versions.size).toBe(2)
+    expect(database.audits).toHaveLength(2)
+    expect(database.transactionCommands).toEqual(['begin', 'commit'])
+    expect(storage.writes).toHaveLength(1)
+    expect(storage.deletes).toEqual([])
+    expect(storage.binary.has(storage.writes[0] ?? '')).toBe(true)
     expect(errors).toEqual(['The edited document could not be stored.'])
   })
 
@@ -305,14 +343,6 @@ describe('POST /api/documents/:id/edit', () => {
     expect(JSON.stringify(errors)).not.toContain('private write diagnostic')
   })
 })
-
-async function expectDocument404(response: Response) {
-  expect(response.status).toBe(404)
-  expect(response.headers.get('cache-control')).toBe('no-store')
-  await expect(response.json()).resolves.toMatchObject({
-    error: { code: 'document_not_found' },
-  })
-}
 
 async function waitFor(condition: () => boolean) {
   for (let attempt = 0; attempt < 100; attempt += 1) {

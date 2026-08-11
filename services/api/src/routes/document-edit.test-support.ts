@@ -1,21 +1,20 @@
 import { readFile } from 'node:fs/promises'
-import { Hono } from 'hono'
-import type { Pool } from 'pg'
-import type { AuthzUser, AuthzVariables } from '../authz'
-import { createDocumentObjectKey } from '../database'
+import type { Pool, PoolClient } from 'pg'
+import type { AuthzUser } from '../authz'
 import { parseDocx } from '@obiter/ooxml'
 import { createDocumentEditRoutes } from './document-edit'
-import type { StorageService } from '../storage'
+import {
+  createRouteApp,
+  expectDocument404,
+  MemoryStorage as SharedMemoryStorage,
+  sourceObjectKey as sourceKey,
+  TestDatabase as SharedTestDatabase,
+  type TestDatabaseOptions as SharedTestDatabaseOptions,
+} from './document-route.test-support'
 
 export const sourceBytes = await readFile(
   '../../data/evals/redact/demo-fixture.docx',
 )
-export const sourceKey = createDocumentObjectKey({
-  organisationId: 'org_1',
-  matterId: 'mtr_1',
-  documentId: 'doc_1',
-  versionId: 'ver_1',
-})
 const sourceModel = await parseDocx(sourceBytes)
 export const editableRunId = sourceModel.model.stories.find(
   ({ kind }) => kind === 'document',
@@ -30,44 +29,48 @@ type Audit = {
   metadata: Record<string, unknown>
 }
 
-export type EditDatabaseOptions = {
-  access?: 'owner' | 'view' | 'edit' | null
-  status?: string
-  fileType?: string
-  currentVersionId?: string | null
+export interface EditDatabaseOptions extends SharedTestDatabaseOptions {
   transactionDocumentMissing?: boolean
   auditFailure?: boolean
+  commitResponseFailure?: boolean
 }
 
-export class EditDatabase {
-  readonly queries: string[] = []
-  readonly transactionCommands: string[] = []
+export { expectDocument404, sourceKey }
+
+export class EditDatabase extends SharedTestDatabase {
   readonly versions = new Map<string, VersionRow>()
   readonly audits: Audit[] = []
   currentVersionId: string | null
   private lockTail = Promise.resolve()
 
-  constructor(readonly options: EditDatabaseOptions = {}) {
+  constructor(private readonly editOptions: EditDatabaseOptions = {}) {
+    super({
+      access: 'edit',
+      objectKey: sourceKey,
+      textObjectKey: 'source-text-key',
+      filename: 'synthetic.docx',
+      sizeBytes: String(sourceBytes.byteLength),
+      ...editOptions,
+    })
     this.currentVersionId =
-      options.currentVersionId === undefined
+      editOptions.currentVersionId === undefined
         ? 'ver_1'
-        : options.currentVersionId
+        : editOptions.currentVersionId
     this.versions.set(
       'ver_1',
       versionRow('ver_1', {
-        status: options.status,
-        fileType: options.fileType,
+        status: editOptions.status,
+        fileType: editOptions.fileType,
       }),
     )
   }
 
-  pool() {
-    const pool = {
-      query: async (sql: string, parameters: unknown[] = []) =>
-        this.routeQuery(sql, parameters),
-      connect: async () => new EditTransaction(this),
-    }
-    return pool as unknown as Pool
+  override pool() {
+    const sharedPool = super.pool()
+    return {
+      query: sharedPool.query.bind(sharedPool),
+      connect: async () => this.client(await sharedPool.connect()),
+    } as unknown as Pool
   }
 
   async acquireLock() {
@@ -81,44 +84,8 @@ export class EditDatabase {
     return release
   }
 
-  private routeQuery(sql: string, parameters: unknown[]) {
-    this.queries.push(sql)
-    if (sql.includes('from matter_documents')) {
-      const [id, organisationId] = parameters
-      const available = id === 'doc_1' && organisationId === 'org_1'
-      return {
-        rows: available ? [documentRow(this.currentVersionId)] : [],
-      }
-    }
-    if (
-      sql.includes('from document_versions') &&
-      sql.includes('matter_document_id = $2')
-    ) {
-      return {
-        rows: [...this.versions.values()].filter(
-          ({ organisation_id, matter_document_id }) =>
-            organisation_id === parameters[0] &&
-            matter_document_id === parameters[1],
-        ),
-      }
-    }
-    if (sql.includes('from document_versions')) {
-      const row = this.versions.get(String(parameters[0]))
-      return { rows: row ? [row] : [] }
-    }
-    if (sql.includes('left join matter_shares')) {
-      return {
-        rows: [
-          {
-            created_by:
-              this.options.access === 'owner' ? 'usr_editor' : 'usr_owner',
-            access_level:
-              this.options.access === undefined ? 'edit' : this.options.access,
-          },
-        ],
-      }
-    }
-    throw new Error('Unexpected route query.')
+  private client(sharedClient: PoolClient) {
+    return new EditTransaction(this, sharedClient, this.editOptions)
   }
 }
 
@@ -127,8 +94,13 @@ class EditTransaction {
   private stagedVersion: VersionRow | null = null
   private stagedPointer: string | null = null
   private readonly stagedAudits: Audit[] = []
+  private lockChecked = false
 
-  constructor(private readonly database: EditDatabase) {}
+  constructor(
+    private readonly database: EditDatabase,
+    private readonly sharedClient: PoolClient,
+    private readonly options: EditDatabaseOptions,
+  ) {}
 
   async query(sql: string, parameters: unknown[] = []) {
     const command = sql.trim()
@@ -146,6 +118,9 @@ class EditTransaction {
       this.database.audits.push(...this.stagedAudits)
       this.database.transactionCommands.push('commit')
       this.unlock()
+      if (this.options.commitResponseFailure) {
+        throw new Error('private commit response diagnostic')
+      }
       return { rows: [] }
     }
     if (command === 'rollback') {
@@ -153,25 +128,23 @@ class EditTransaction {
       this.unlock()
       return { rows: [] }
     }
-    this.database.queries.push(sql)
-    if (sql.includes('select "organisationId", role from users')) {
-      return { rows: [{ organisationId: null, role: null }] }
-    }
-    if (sql.includes('insert into organisations')) {
-      return {
-        rows: [
-          {
-            id: 'org_1',
-            name: 'Personal workspace',
-            plan: 'private_beta',
-          },
-        ],
+
+    if (sql.includes('from matter_documents document')) {
+      this.recordQuery(sql)
+      requireSql(sql, 'document.current_version_id')
+      requireSql(sql, 'base.id = $4')
+      requireSql(sql, 'for update of document')
+      if (
+        this.lockChecked ||
+        this.stagedVersion ||
+        this.stagedPointer ||
+        this.stagedAudits.length > 0
+      ) {
+        throw new Error('The base version must be rechecked before writes.')
       }
-    }
-    if (sql.includes('update users')) return { rows: [] }
-    if (sql.includes('for update of document')) {
       this.releaseLock = await this.database.acquireLock()
-      if (this.database.options.transactionDocumentMissing) return { rows: [] }
+      this.lockChecked = true
+      if (this.options.transactionDocumentMissing) return { rows: [] }
       const base = this.database.versions.get(String(parameters[3]))
       return {
         rows: [
@@ -187,25 +160,44 @@ class EditTransaction {
       }
     }
     if (sql.includes('insert into document_versions')) {
+      this.requireLockedWrite()
+      this.recordQuery(sql)
       this.stagedVersion = versionRow(String(parameters[0]), {
-        versionNumber: Number(parameters[8]),
+        versionNumber: Number(parameters[11]),
         filename: String(parameters[4]),
         fileType: String(parameters[5]),
         sizeBytes: String(parameters[6]),
         objectKey: String(parameters[7]),
-        contentSha256: String(parameters[9]),
-        createdBy: String(parameters[10]),
-        textObjectKey: null,
+        textObjectKey: parameters[8] === null ? null : String(parameters[8]),
+        status: String(parameters[9]),
+        failureReason: parameters[10] === null ? null : String(parameters[10]),
+        contentSha256: String(parameters[12]),
+        syncState: String(parameters[13]),
+        createdBy: String(parameters[14]),
       })
-      return { rows: [] }
+      return { rows: [this.stagedVersion] }
     }
     if (sql.includes('update matter_documents')) {
+      this.requireLockedWrite()
+      if (!this.stagedVersion) {
+        throw new Error(
+          'The version must be inserted before its pointer moves.',
+        )
+      }
+      this.recordQuery(sql)
+      requireSql(sql, 'current_version_id = $4')
       if (this.database.currentVersionId !== parameters[3]) return { rows: [] }
       this.stagedPointer = String(parameters[4])
       return { rows: [{ id: 'doc_1' }] }
     }
-    if (sql.includes('insert into audit_logs')) {
-      if (this.database.options.auditFailure) {
+    if (
+      sql.includes('insert into audit_logs') &&
+      (parameters[4] === 'document.version_create' ||
+        parameters[4] === 'document.edit')
+    ) {
+      this.requireLockedWrite()
+      this.recordQuery(sql)
+      if (this.options.auditFailure) {
         throw new Error('private audit diagnostic')
       }
       this.stagedAudits.push({
@@ -216,11 +208,22 @@ class EditTransaction {
       })
       return { rows: [] }
     }
-    throw new Error('Unexpected transaction query.')
+    return this.sharedClient.query(sql, parameters)
   }
 
   release() {
     this.unlock()
+    this.sharedClient.release()
+  }
+
+  private requireLockedWrite() {
+    if (!this.lockChecked || !this.releaseLock) {
+      throw new Error('Transaction writes require the locked base recheck.')
+    }
+  }
+
+  private recordQuery(sql: string) {
+    this.database.queries.push(sql)
   }
 
   private unlock() {
@@ -229,41 +232,36 @@ class EditTransaction {
   }
 }
 
-export class EditStorage implements StorageService {
-  readonly binary = new Map<string, Buffer>([[sourceKey, sourceBytes]])
-  readonly reads: string[] = []
+export class EditStorage extends SharedMemoryStorage {
   readonly writes: string[] = []
-  readonly deletes: string[] = []
   writeFailure = false
   deleteFailure = false
-  readGate: Promise<void> | null = null
 
-  async readText(_key: string): Promise<string> {
-    throw new Error('Text storage is not used by document editing.')
+  get reads() {
+    return this.binaryReads
   }
 
-  async writeText(_key: string, _text: string) {
-    throw new Error('Text storage is not used by document editing.')
+  get readGate() {
+    return this.binaryGate
   }
 
-  async readBinary(key: string) {
-    this.reads.push(key)
-    await this.readGate
-    const value = this.binary.get(key)
-    if (!value) throw new Error('private missing-object diagnostic')
-    return value
+  set readGate(gate: Promise<void> | null) {
+    this.binaryGate = gate
   }
 
-  async writeBinary(key: string, contents: Buffer) {
+  constructor() {
+    super({ binary: [[sourceKey, sourceBytes]] })
+  }
+
+  override async writeBinary(key: string, contents: Buffer) {
     this.writes.push(key)
-    this.binary.set(key, contents)
+    await super.writeBinary(key, contents)
     if (this.writeFailure) throw new Error('private write diagnostic')
   }
 
-  async delete(key: string) {
-    this.deletes.push(key)
+  override async delete(key: string) {
     if (this.deleteFailure) throw new Error('private cleanup diagnostic')
-    this.binary.delete(key)
+    await super.delete(key)
   }
 }
 
@@ -276,28 +274,16 @@ export function routeApp(
     role: 'member',
   },
 ) {
-  const errors: string[] = []
-  const app = new Hono<{ Variables: AuthzVariables }>()
-  app.onError((error, c) => {
-    errors.push(error.message)
-    return c.json(
-      {
-        error: {
-          code: 'storage_unavailable',
-          message: 'The API could not complete the request.',
-          requestId: c.get('requestId'),
-        },
-      },
-      500,
-    )
-  })
-  app.use('*', async (c, next) => {
-    c.set('requestId', 'req_edit')
-    c.set('user', user)
-    await next()
-  })
-  app.route('/', createDocumentEditRoutes(database.pool(), storage))
-  return { app, storage, errors }
+  return {
+    ...createRouteApp({
+      database,
+      storage,
+      user,
+      requestId: 'req_edit',
+      createRoutes: createDocumentEditRoutes,
+    }),
+    storage,
+  }
 }
 
 export function editRequest(baseVersionId = 'ver_1', text = 'Revised text') {
@@ -311,18 +297,9 @@ export function editRequest(baseVersionId = 'ver_1', text = 'Revised text') {
   }
 }
 
-function documentRow(currentVersionId: string | null) {
-  return {
-    id: 'doc_1',
-    organisation_id: 'org_1',
-    matter_id: 'mtr_1',
-    current_version_id: currentVersionId,
-    logical_key: 'logical',
-    created_by: 'usr_owner',
-    created_at: '2026-08-10T10:00:00.000Z',
-    updated_at: '2026-08-10T10:00:00.000Z',
-    deleted_at: null,
-    deleted_by: null,
+function requireSql(sql: string, fragment: string) {
+  if (!sql.includes(fragment)) {
+    throw new Error(`Expected transaction SQL to contain ${fragment}.`)
   }
 }
 
@@ -335,9 +312,11 @@ function versionRow(
     fileType?: string
     sizeBytes?: string
     objectKey?: string
-    contentSha256?: string
-    createdBy?: string
     textObjectKey?: string | null
+    failureReason?: string | null
+    contentSha256?: string
+    syncState?: string
+    createdBy?: string
   } = {},
 ) {
   return {
@@ -354,10 +333,10 @@ function versionRow(
         ? 'source-text-key'
         : options.textObjectKey,
     document_status: options.status ?? 'ready',
-    failure_reason: null,
+    failure_reason: options.failureReason ?? null,
     version_number: options.versionNumber ?? 1,
     content_sha256: options.contentSha256 ?? '0'.repeat(64),
-    sync_state: 'synced',
+    sync_state: options.syncState ?? 'synced',
     created_by: options.createdBy ?? 'usr_owner',
     created_at: '2026-08-10T10:00:00.000Z',
     updated_at: '2026-08-10T10:00:00.000Z',
