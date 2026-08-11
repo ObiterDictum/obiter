@@ -1,6 +1,6 @@
 import type { Context } from 'hono'
 import type { Pool } from 'pg'
-import type { ApiErrorResponse } from '@obiter/contracts'
+import type { ApiErrorResponse, MatterAccessLevel } from '@obiter/contracts'
 import { ensureOrgUser, type AuthzVariables } from '../authz'
 import { getDocument } from '../database'
 import { requireMatterAccess } from '../document-access'
@@ -12,6 +12,7 @@ export async function resolveCurrentReadyDocumentVersion(
   pool: Pool,
   documentId: string,
   fileType: string,
+  requiredAccess: MatterAccessLevel = 'view',
 ) {
   c.header('Cache-Control', 'no-store')
 
@@ -25,7 +26,7 @@ export async function resolveCurrentReadyDocumentVersion(
     c,
     pool,
     result.document.matterId,
-    'view',
+    requiredAccess,
   )
   if (access instanceof Response) {
     return access.status === 404 ? documentNotFound(c) : access
@@ -44,7 +45,7 @@ export async function resolveCurrentReadyDocumentVersion(
     return documentNotFound(c)
   }
 
-  return { document: result.document, version }
+  return { document: result.document, version, user: access }
 }
 
 export function documentNotFound(c: RouteContext) {

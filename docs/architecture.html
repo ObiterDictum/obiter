@@ -2136,7 +2136,8 @@
                   redaction-detection · redaction-redetect ·
                   redaction-run-creation · redaction-database ·
                   redaction-audit-report · document-extraction · document-layout
-                  · pdf-glyph-layout · redaction-pdf-output · storage · authz
+                  · comments-db · pdf-glyph-layout · redaction-pdf-output ·
+                  storage · authz
                 </dd>
                 <dt>Extract</dt>
                 <dd>mammoth (DOCX) · unpdf (text-layer PDF)</dd>
@@ -2192,15 +2193,17 @@
               </header>
               <p>
                 Source-preserving DOCX package parsing and serialisation. Clean
-                parts retain their original bytes; deliberate text edits patch
-                only the owning XML part.
+                parts retain their original bytes; deliberate text edits and
+                product-authored comment exports patch only the required XML
+                parts.
               </p>
               <dl class="kv">
                 <dt>Exports</dt>
                 <dd>
-                  parseDocx · serialiseDocx · serialiseModelJson ·
-                  parseModelJson · replaceTextRunText · compareXmlSemantics ·
-                  compareOoxmlPackages
+                  parseDocx · serialiseDocx · serialiseDocxWithComments ·
+                  serialiseModelJson · parseModelJson · replaceTextRunText ·
+                  compareXmlSemantics · compareOoxmlPackages ·
+                  compareOoxmlProductCommentExport
                 </dd>
                 <dt>Contract</dt>
                 <dd>DocumentModelWire from @obiter/contracts</dd>
@@ -2447,7 +2450,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>12 migrations, 0001 to 0013, 0008 withdrawn</dd>
+                <dd>13 migrations, 0001 to 0014, 0008 withdrawn</dd>
               </dl>
             </article>
           </div>
@@ -2597,6 +2600,18 @@
                   <td>
                     Current ready PDF extracted view for read-only viewing
                   </td>
+                </tr>
+                <tr>
+                  <td class="id">GET · POST /api/documents/:id/comments</td>
+                  <td class="id">comments.ts</td>
+                  <td>View-gated list and edit-gated comment creation</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    PATCH /api/documents/:id/comments/:commentId/resolve
+                  </td>
+                  <td class="id">comments.ts</td>
+                  <td>Edit-gated, audited comment resolution</td>
                 </tr>
                 <tr>
                   <td class="id">PATCH /api/documents/:id/restore</td>
@@ -3139,6 +3154,23 @@
                 </g>
                 <g>
                   <rect
+                    x="240"
+                    y="300"
+                    width="124.8"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--line-strong)"
+                  />
+                  <text x="302.4" y="317" text-anchor="middle" class="n">
+                    document_comments
+                  </text>
+                  <text x="302.4" y="328" text-anchor="middle" class="s">
+                    stable anchor
+                  </text>
+                </g>
+                <g>
+                  <rect
                     x="420"
                     y="280"
                     width="106.8"
@@ -3237,6 +3269,26 @@
                 />
                 <text x="174.9" y="335.0" text-anchor="middle" class="e">
                   + matter_id
+                </text>
+                <path
+                  d="M240,320.5 L178.8,295.0"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-entity-relationships)"
+                />
+                <text x="209.4" y="299.75" text-anchor="middle" class="e">
+                  doc + matter + org
+                </text>
+                <path
+                  d="M302.4,341 L184.8,380.5"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-entity-relationships)"
+                />
+                <text x="278.6" y="366.75" text-anchor="middle" class="e">
+                  nullable provenance
                 </text>
                 <path
                   d="M420,300.5 L184.8,380.5"
@@ -3352,6 +3404,14 @@
                     keys
                   </td>
                   <td class="id">0002</td>
+                </tr>
+                <tr>
+                  <td class="id">document_comments</td>
+                  <td>
+                    Document-scoped plain-text comments with stable paragraph
+                    ranges, version provenance and resolution lifecycle
+                  </td>
+                  <td class="id">0014</td>
                 </tr>
                 <tr>
                   <td class="id">artifacts</td>

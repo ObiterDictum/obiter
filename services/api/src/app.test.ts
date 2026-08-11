@@ -221,6 +221,28 @@ describe('createApiApp', () => {
     })
   })
 
+  it('mounts the document comments router behind session authentication', async () => {
+    const auth = {
+      api: { getSession: async () => null },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const app = createApiApp(
+      testEnv,
+      createPool(async () => {
+        throw new Error('Comments must authenticate before database access.')
+      }),
+      { auth },
+    )
+
+    const response = await app.request('/api/documents/doc_1/comments')
+
+    expect(response.status).toBe(401)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'unauthenticated' },
+    })
+  })
+
   it('returns the active organisation for a real session at /api/me', async () => {
     const auth = {
       api: {

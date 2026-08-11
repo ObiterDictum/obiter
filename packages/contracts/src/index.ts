@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+export * from './document-comments'
 export * from './document-model'
 
 export type AppPlatform = 'web' | 'desktop'
@@ -383,6 +384,7 @@ export const apiErrorCodeSchema = z.enum([
   'matter_share_not_found',
   'document_not_found',
   'document_version_not_found',
+  'comment_anchor_unresolved',
   'artifact_not_found',
   'upload_failed',
   'storage_unavailable',

@@ -1,4 +1,8 @@
-import type { DocumentModelWire, DocumentTextRunWire } from '@obiter/contracts'
+import type {
+  DocumentModelWire,
+  DocumentParagraphWire,
+  DocumentTextRunWire,
+} from '@obiter/contracts'
 
 import {
   escapeXmlText,
@@ -42,16 +46,30 @@ export type ParseDocxOptions = {
 }
 
 type TextRange = { start: number; end: number }
+export type XmlElementRange = TextRange & {
+  startTagEnd: number
+  endTagStart: number
+}
 export type TextRunAnchor = {
   partName: string
   wire: DocumentTextRunWire
+  runRange: XmlElementRange
   textRanges: TextRange[]
+  textElements: XmlElementRange[]
+  runProperties: string[]
+}
+export type ParagraphAnchor = {
+  partName: string
+  wire: DocumentParagraphWire
+  paragraphRange: XmlElementRange
+  runs: TextRunAnchor[]
 }
 
 export type OoxmlDocument = {
   model: DocumentModelWire
   sourceParts: Map<string, SourcePart>
   textRunAnchors: Map<string, TextRunAnchor>
+  paragraphAnchors: Map<string, ParagraphAnchor>
 }
 
 export function createSequentialModelIdAllocator(start = 1): ModelIdAllocator {
@@ -101,6 +119,8 @@ export type OoxmlErrorCode =
   | 'model-node-not-found'
   | 'model-node-not-editable'
   | 'invalid-model-json'
+  | 'comment-anchor-unresolved'
+  | 'comment-export-failed'
   | 'serialisation-failed'
 
 export class OoxmlError extends Error {
@@ -122,6 +142,12 @@ function errorMessage(code: OoxmlErrorCode) {
   }
   if (code === 'invalid-model-json') {
     return 'The document model JSON is invalid.'
+  }
+  if (code === 'comment-anchor-unresolved') {
+    return 'A document comment anchor could not be resolved.'
+  }
+  if (code === 'comment-export-failed') {
+    return 'The document comments could not be exported.'
   }
   return 'The document could not be serialised.'
 }

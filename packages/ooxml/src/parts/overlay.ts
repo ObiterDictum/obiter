@@ -155,6 +155,12 @@ export function escapeXmlText(value: string) {
     .replaceAll('>', '&gt;')
 }
 
+export function escapeXmlAttribute(value: string) {
+  return escapeXmlText(value)
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;')
+}
+
 function parseStartTag(body: string): ParsedStartTag {
   const selfClosing = /\/\s*$/u.test(body)
   const content = selfClosing ? body.replace(/\/\s*$/u, '') : body

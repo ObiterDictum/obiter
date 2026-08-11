@@ -73,6 +73,22 @@ export function compareOoxmlPackages(
   return { equivalent: true }
 }
 
+export function compareOoxmlProductCommentExport(
+  source: ComparableOoxmlPackage,
+  exported: ComparableOoxmlPackage,
+  expectedTouchedXmlParts: ReadonlyMap<string, string>,
+): SemanticEquivalenceResult {
+  const expected = new Map(source)
+  for (const [partName, xml] of expectedTouchedXmlParts) {
+    const sourcePart = source.get(partName)
+    if (sourcePart && sourcePart.kind !== 'xml') {
+      return { equivalent: false, reason: 'part-kind-mismatch', partName }
+    }
+    expected.set(partName, { kind: 'xml', xml })
+  }
+  return compareOoxmlPackages(expected, exported)
+}
+
 function sameStrings(left: string[], right: string[]) {
   return (
     left.length === right.length &&
