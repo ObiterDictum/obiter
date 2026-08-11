@@ -26,7 +26,7 @@ function isValidXmlText(value: string) {
 
 export const documentCommentAnchorSchema = z
   .object({
-    paragraphId: z.string().trim().min(1),
+    paragraphId: z.string().trim().min(1).max(255),
     startOffset: z.number().int().nonnegative().max(2_147_483_647),
     endOffset: z.number().int().nonnegative().max(2_147_483_647),
   })

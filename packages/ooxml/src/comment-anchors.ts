@@ -1,4 +1,8 @@
-import type { DocumentComment } from '@obiter/contracts'
+import type {
+  DocumentComment,
+  DocumentCommentAnchor,
+  DocumentModelWire,
+} from '@obiter/contracts'
 
 import {
   OoxmlError,
@@ -21,11 +25,17 @@ type Marker = {
   ooxmlId: number
   zeroLength: boolean
 }
-type SplitPoint = {
+type RunSplitPoint = {
+  kind: 'run'
   run: TextRunAnchor
   textElement?: XmlElementRange
   position: 'content' | 'before-element' | 'after-element'
 }
+type EmptyParagraphSplitPoint = {
+  kind: 'empty-paragraph'
+  paragraph: XmlElementRange
+}
+type SplitPoint = RunSplitPoint | EmptyParagraphSplitPoint
 type InsertionPoint = {
   sourceOffset: number
   split?: SplitPoint
@@ -71,45 +81,61 @@ export function placeCommentAnchors(
     if (!part?.overlay || part.kind !== 'xml' || part.dirty) {
       throw new OoxmlError('comment-anchor-unresolved')
     }
-    for (const insertion of insertions.values()) {
+    const rewrittenTextElements = new Set<number>()
+    const orderedInsertions = [...insertions.values()].sort(
+      (left, right) => left.sourceOffset - right.sourceOffset,
+    )
+    for (const insertion of orderedInsertions) {
+      const textElementStart =
+        insertion.split?.kind === 'run' &&
+        insertion.split.position === 'content'
+          ? insertion.split.textElement?.start
+          : undefined
+      const rewriteFirstHalf =
+        textElementStart !== undefined &&
+        !rewrittenTextElements.has(textElementStart)
+      if (rewriteFirstHalf) rewrittenTextElements.add(textElementStart)
       setOverlayReplacement(
         part.overlay,
         `comment-anchor:${insertion.sourceOffset}`,
-        {
-          start: insertion.sourceOffset,
-          end: insertion.sourceOffset,
-          value: insertionXml(part.overlay.source, insertion),
-        },
+        insertionXml(part.overlay.source, insertion, rewriteFirstHalf),
       )
     }
     part.dirty = true
   }
 }
 
-function resolveParagraph(document: OoxmlDocument, comment: DocumentComment) {
-  const matches = document.model.stories.flatMap((story) =>
-    story.paragraphs.filter(
-      (paragraph) => paragraph.id === comment.anchor.paragraphId,
-    ),
+export function validateCommentAnchor(
+  model: DocumentModelWire,
+  anchor: DocumentCommentAnchor,
+) {
+  const matches = model.stories.flatMap((story) =>
+    story.paragraphs.filter((paragraph) => paragraph.id === anchor.paragraphId),
   )
   if (matches.length !== 1) {
     throw new OoxmlError('comment-anchor-unresolved')
   }
-  const modelParagraph = matches[0]
+
+  const paragraph = matches[0]
+  const text = paragraph.runs.map((run) => run.text).join('')
+  if (
+    anchor.startOffset > anchor.endOffset ||
+    anchor.endOffset > text.length ||
+    splitsSurrogate(text, anchor.startOffset) ||
+    splitsSurrogate(text, anchor.endOffset)
+  ) {
+    throw new OoxmlError('comment-anchor-unresolved')
+  }
+  return paragraph
+}
+
+function resolveParagraph(document: OoxmlDocument, comment: DocumentComment) {
+  const modelParagraph = validateCommentAnchor(document.model, comment.anchor)
   const paragraph = document.paragraphAnchors.get(modelParagraph.id)
   if (!paragraph || !sameParagraphModel(paragraph, modelParagraph)) {
     throw new OoxmlError('comment-anchor-unresolved')
   }
 
-  const text = modelParagraph.runs.map((run) => run.text).join('')
-  const { startOffset, endOffset } = comment.anchor
-  if (
-    endOffset > text.length ||
-    splitsSurrogate(text, startOffset) ||
-    splitsSurrogate(text, endOffset)
-  ) {
-    throw new OoxmlError('comment-anchor-unresolved')
-  }
   validateSourceText(document, paragraph)
   return paragraph
 }
@@ -185,7 +211,18 @@ function locateOffset(
     0,
   )
   if (offset === totalLength) {
-    return { sourceOffset: paragraph.paragraphRange.endTagStart }
+    const { paragraphRange } = paragraph
+    if (
+      totalLength === 0 &&
+      paragraphRange.startTagEnd === paragraphRange.endTagStart &&
+      paragraphRange.startTagEnd === paragraphRange.end
+    ) {
+      return {
+        sourceOffset: paragraphRange.start,
+        split: { kind: 'empty-paragraph', paragraph: paragraphRange },
+      }
+    }
+    return { sourceOffset: paragraphRange.endTagStart }
   }
 
   let runStart = 0
@@ -215,7 +252,12 @@ function locateInsideRun(
     if (localOffset === textStart) {
       return {
         sourceOffset: textElement.start,
-        split: { run, textElement, position: 'before-element' },
+        split: {
+          kind: 'run',
+          run,
+          textElement,
+          position: 'before-element',
+        },
       }
     }
     if (localOffset > textStart && localOffset < textEnd) {
@@ -223,13 +265,13 @@ function locateInsideRun(
         sourceOffset:
           textElement.startTagEnd +
           rawOffsetAtDecodedBoundary(raw, localOffset - textStart),
-        split: { run, textElement, position: 'content' },
+        split: { kind: 'run', run, textElement, position: 'content' },
       }
     }
     if (localOffset === textEnd) {
       return {
         sourceOffset: textElement.end,
-        split: { run, textElement, position: 'after-element' },
+        split: { kind: 'run', run, textElement, position: 'after-element' },
       }
     }
     textStart = textEnd
@@ -258,20 +300,63 @@ function rawOffsetAtDecodedBoundary(raw: string, boundary: number) {
   return rawOffset
 }
 
-function insertionXml(source: string, insertion: PendingInsertion) {
+function insertionXml(
+  source: string,
+  insertion: PendingInsertion,
+  rewriteFirstHalf: boolean,
+) {
   const markers = insertion.markers.sort(compareMarkers).map(markerXml).join('')
-  if (!insertion.split) return markers
+  if (!insertion.split) {
+    return {
+      start: insertion.sourceOffset,
+      end: insertion.sourceOffset,
+      value: markers,
+    }
+  }
+
+  if (insertion.split.kind === 'empty-paragraph') {
+    const { paragraph } = insertion.split
+    const opening = source
+      .slice(paragraph.start, paragraph.startTagEnd)
+      .replace(/\/\s*>$/u, '>')
+    return {
+      start: paragraph.start,
+      end: paragraph.end,
+      value: `${opening}${markers}</w:p>`,
+    }
+  }
 
   const { run, textElement, position } = insertion.split
   const closeRun = source.slice(run.runRange.endTagStart, run.runRange.end)
   const openRun = source.slice(run.runRange.start, run.runRange.startTagEnd)
   const properties = run.runProperties.join('')
+  let start = insertion.sourceOffset
+  let value: string
   if (position === 'content' && textElement) {
     const closeText = source.slice(textElement.endTagStart, textElement.end)
-    const openText = source.slice(textElement.start, textElement.startTagEnd)
-    return `${closeText}${closeRun}${markers}${openRun}${properties}${openText}`
+    const openText = preserveTextOpeningTag(
+      source.slice(textElement.start, textElement.startTagEnd),
+    )
+    const firstHalf = rewriteFirstHalf
+      ? `${openText}${source.slice(
+          textElement.startTagEnd,
+          insertion.sourceOffset,
+        )}`
+      : ''
+    if (rewriteFirstHalf) start = textElement.start
+    value = `${firstHalf}${closeText}${closeRun}${markers}${openRun}${properties}${openText}`
+  } else {
+    value = `${closeRun}${markers}${openRun}${properties}`
   }
-  return `${closeRun}${markers}${openRun}${properties}`
+  return { start, end: insertion.sourceOffset, value }
+}
+
+function preserveTextOpeningTag(opening: string) {
+  const xmlSpace = /\s+xml:space\s*=\s*(["'])[^"']*\1/u
+  if (xmlSpace.test(opening)) {
+    return opening.replace(xmlSpace, ' xml:space="preserve"')
+  }
+  return opening.replace(/>$/u, ' xml:space="preserve">')
 }
 
 function markerXml(marker: Marker) {
@@ -305,6 +390,11 @@ function sameSplit(
   right: SplitPoint | undefined,
 ) {
   if (!left || !right) return left === right
+  if (left.kind !== right.kind) return false
+  if (left.kind === 'empty-paragraph' && right.kind === 'empty-paragraph') {
+    return left.paragraph.start === right.paragraph.start
+  }
+  if (left.kind !== 'run' || right.kind !== 'run') return false
   return (
     left.run.wire.id === right.run.wire.id &&
     left.position === right.position &&
