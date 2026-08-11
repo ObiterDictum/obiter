@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   compareOoxmlPackages,
+  compareOoxmlProductCommentExport,
   compareXmlSemantics,
   type ComparableOoxmlPart,
 } from './equivalence'
@@ -199,6 +200,41 @@ describe('compareOoxmlPackages', () => {
       equivalent: false,
       reason: 'binary-payload-mismatch',
       partName: 'word/media/image.png',
+    })
+  })
+
+  it('applies intentional product comment additions without weakening foreign content checks', () => {
+    const source = packageWith([
+      'word/comments.xml',
+      {
+        kind: 'xml',
+        xml: '<w:comments xmlns:w="urn:word"><w:comment w:id="0">foreign one</w:comment><w:comment w:id="4">foreign two</w:comment></w:comments>',
+      },
+    ])
+    const expectedXml =
+      '<w:comments xmlns:w="urn:word"><w:comment w:id="0">foreign one</w:comment><w:comment w:id="4">foreign two</w:comment><w:comment w:id="5">product</w:comment></w:comments>'
+    const exported = packageWith([
+      'word/comments.xml',
+      { kind: 'xml', xml: expectedXml },
+    ])
+    const reorderedForeign = packageWith([
+      'word/comments.xml',
+      {
+        kind: 'xml',
+        xml: '<w:comments xmlns:w="urn:word"><w:comment w:id="4">foreign two</w:comment><w:comment w:id="0">foreign one</w:comment><w:comment w:id="5">product</w:comment></w:comments>',
+      },
+    ])
+    const additions = new Map([['word/comments.xml', expectedXml]])
+
+    expect(
+      compareOoxmlProductCommentExport(source, exported, additions),
+    ).toEqual({ equivalent: true })
+    expect(
+      compareOoxmlProductCommentExport(source, reorderedForeign, additions),
+    ).toEqual({
+      equivalent: false,
+      reason: 'xml-node-sequence-mismatch',
+      partName: 'word/comments.xml',
     })
   })
 })

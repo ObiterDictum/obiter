@@ -7,6 +7,7 @@ import type {
 
 import type {
   ModelIdAllocator,
+  ParagraphAnchor,
   TextRunAnchor,
   TrackedChangeOverlay,
 } from '../model'
@@ -38,6 +39,7 @@ export type IdentityContext = {
 export type ParsedStory = {
   story: DocumentStoryWire
   anchors: TextRunAnchor[]
+  paragraphAnchors: ParagraphAnchor[]
   trackedChanges: TrackedChangeOverlay[]
 }
 
@@ -50,6 +52,7 @@ export function parseStory(
   const elements = parseXmlElements(source)
   const paragraphs: DocumentParagraphWire[] = []
   const anchors: TextRunAnchor[] = []
+  const paragraphAnchors: ParagraphAnchor[] = []
   const trackedChanges = elements
     .filter(isTrackedChange)
     .filter((element) => !hasTrackedChangeAncestor(element))
@@ -67,6 +70,7 @@ export function parseStory(
     )
     paragraphs.push(parsed.paragraph)
     anchors.push(...parsed.anchors)
+    paragraphAnchors.push(parsed.anchor)
   }
 
   return {
@@ -80,6 +84,7 @@ export function parseStory(
       ],
     },
     anchors,
+    paragraphAnchors,
     trackedChanges,
   }
 }
@@ -129,20 +134,27 @@ function parseParagraph(
     anchors.push(parsed.anchor)
   })
 
+  const paragraph: DocumentParagraphWire = {
+    id,
+    ...(sourceParaId ? { sourceParaId } : {}),
+    ...(sourceTextId ? { sourceTextId } : {}),
+    runs,
+    preservedXmlFragments: elements
+      .filter(
+        (element) =>
+          element.parent === paragraphElement && !isWord(element, 'r'),
+      )
+      .map((element) => elementFragment(source, element)),
+  }
   return {
-    paragraph: {
-      id,
-      ...(sourceParaId ? { sourceParaId } : {}),
-      ...(sourceTextId ? { sourceTextId } : {}),
-      runs,
-      preservedXmlFragments: elements
-        .filter(
-          (element) =>
-            element.parent === paragraphElement && !isWord(element, 'r'),
-        )
-        .map((element) => elementFragment(source, element)),
-    },
+    paragraph,
     anchors,
+    anchor: {
+      partName,
+      wire: paragraph,
+      paragraphRange: elementRange(paragraphElement),
+      runs: anchors,
+    } satisfies ParagraphAnchor,
   }
 }
 
@@ -168,12 +180,13 @@ function parseRun(
       isDescendantOf(element, runElement) &&
       !hasTrackedChangeAncestor(element),
   )
-  const textRanges = textElements
+  const anchoredTextElements = textElements
     .filter((element) => !element.selfClosing)
-    .map((element) => ({
-      start: element.startTagEnd,
-      end: element.endTagStart,
-    }))
+    .map(elementRange)
+  const textRanges = anchoredTextElements.map((element) => ({
+    start: element.startTagEnd,
+    end: element.endTagStart,
+  }))
   const wire: DocumentTextRunWire = {
     id,
     ...(sourceTextId ? { sourceTextId } : {}),
@@ -188,7 +201,27 @@ function parseRun(
   }
   return {
     wire,
-    anchor: { partName, wire, textRanges },
+    anchor: {
+      partName,
+      wire,
+      runRange: elementRange(runElement),
+      textRanges,
+      textElements: anchoredTextElements,
+      runProperties: elements
+        .filter(
+          (element) => element.parent === runElement && isWord(element, 'rPr'),
+        )
+        .map((element) => elementFragment(source, element)),
+    },
+  }
+}
+
+function elementRange(element: XmlElement) {
+  return {
+    start: element.start,
+    startTagEnd: element.startTagEnd,
+    endTagStart: element.endTagStart,
+    end: element.end,
   }
 }
 
