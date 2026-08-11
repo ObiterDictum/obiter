@@ -1,5 +1,7 @@
 import { z } from 'zod'
 
+export * from './api-error'
+export * from './document-collaboration'
 export * from './document-comments'
 export * from './document-edit'
 export * from './document-model'
@@ -373,44 +375,6 @@ export const createOrganisationInputSchema = z.object({
 export type CreateOrganisationInput = z.infer<
   typeof createOrganisationInputSchema
 >
-
-export const apiErrorCodeSchema = z.enum([
-  'unauthenticated',
-  'forbidden',
-  'validation_failed',
-  'organisation_not_found',
-  // An authenticated user with no organisation tried an org-scoped endpoint.
-  // Returned as 403 so the client can distinguish "sign in" from "create org".
-  'no_organisation',
-  'closed_beta_required',
-  'matter_not_found',
-  'matter_share_not_found',
-  'document_not_found',
-  'document_version_not_found',
-  'comment_anchor_unresolved',
-  'artifact_not_found',
-  'upload_failed',
-  'storage_unavailable',
-  'job_unavailable',
-  'conflict_detected',
-  'redaction_run_not_found',
-  'span_not_found',
-  'redaction_run_not_reviewable',
-  'redaction_already_finalized',
-  'redaction_detection_failed',
-  'redaction_model_unavailable',
-  'redaction_span_integrity_error',
-])
-export type ApiErrorCode = z.infer<typeof apiErrorCodeSchema>
-
-export const apiErrorResponseSchema = z.object({
-  error: z.object({
-    code: apiErrorCodeSchema,
-    message: z.string().min(1),
-    requestId: z.string().min(1),
-  }),
-})
-export type ApiErrorResponse = z.infer<typeof apiErrorResponseSchema>
 
 export type AuthViewState =
   | { status: 'authenticated'; me: MeResponse }

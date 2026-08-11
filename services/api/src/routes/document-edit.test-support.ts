@@ -23,6 +23,7 @@ if (!editableRunId) throw new Error('Edit fixture has no ordinary text run.')
 
 type VersionRow = ReturnType<typeof versionRow>
 type Audit = {
+  userId?: string
   entityType: string
   entityId: string
   action: string
@@ -67,8 +68,49 @@ export class EditDatabase extends SharedTestDatabase {
 
   override pool() {
     const sharedPool = super.pool()
+    const query = async (sql: string, parameters: unknown[] = []) => {
+      if (
+        sql.includes('from matter_documents') &&
+        String(parameters[0]) === 'doc_1'
+      ) {
+        this.queries.push(sql)
+        return {
+          rows: [
+            {
+              id: 'doc_1',
+              organisation_id: 'org_1',
+              matter_id: 'mtr_1',
+              current_version_id: this.currentVersionId,
+              logical_key: 'logical',
+              created_by: 'usr_owner',
+              created_at: '2026-08-10T10:00:00.000Z',
+              updated_at: '2026-08-10T10:00:00.000Z',
+              deleted_at: null,
+              deleted_by: null,
+            },
+          ],
+        }
+      }
+      if (
+        sql.includes('from document_versions') &&
+        sql.includes('matter_document_id = $2')
+      ) {
+        this.queries.push(sql)
+        return {
+          rows: [...this.versions.values()].sort(
+            (left, right) => right.version_number - left.version_number,
+          ),
+        }
+      }
+      if (sql.includes('from document_versions')) {
+        this.queries.push(sql)
+        const version = this.versions.get(String(parameters[0]))
+        return { rows: version ? [version] : [] }
+      }
+      return sharedPool.query(sql, parameters)
+    }
     return {
-      query: sharedPool.query.bind(sharedPool),
+      query,
       connect: async () => this.client(await sharedPool.connect()),
     } as unknown as Pool
   }
@@ -129,6 +171,49 @@ class EditTransaction {
       return { rows: [] }
     }
 
+    if (sql.includes('left join document_versions current')) {
+      this.recordQuery(sql)
+      requireSql(sql, 'for update of document')
+      if (
+        this.lockChecked ||
+        this.stagedVersion ||
+        this.stagedPointer ||
+        this.stagedAudits.length > 0
+      ) {
+        throw new Error('The current version must be rechecked before writes.')
+      }
+      this.releaseLock = await this.database.acquireLock()
+      this.lockChecked = true
+      if (this.options.transactionDocumentMissing) return { rows: [] }
+      const current = this.database.currentVersionId
+        ? this.database.versions.get(this.database.currentVersionId)
+        : undefined
+      const base = this.database.versions.get(String(parameters[3]))
+      return {
+        rows: [
+          {
+            current_id: current?.id ?? null,
+            current_organisation_id: current?.organisation_id ?? null,
+            current_matter_id: current?.matter_id ?? null,
+            current_document_id: current?.matter_document_id ?? null,
+            current_filename: current?.filename ?? null,
+            current_file_type: current?.file_type ?? null,
+            current_object_key: current?.object_key ?? null,
+            current_status: current?.document_status ?? null,
+            current_version_number: current?.version_number ?? null,
+            base_id: base?.id ?? null,
+            base_organisation_id: base?.organisation_id ?? null,
+            base_matter_id: base?.matter_id ?? null,
+            base_document_id: base?.matter_document_id ?? null,
+            base_filename: base?.filename ?? null,
+            base_file_type: base?.file_type ?? null,
+            base_object_key: base?.object_key ?? null,
+            base_status: base?.document_status ?? null,
+            base_version_number: base?.version_number ?? null,
+          },
+        ],
+      }
+    }
     if (sql.includes('from matter_documents document')) {
       this.recordQuery(sql)
       requireSql(sql, 'document.current_version_id')
@@ -157,6 +242,35 @@ class EditTransaction {
             file_type: base?.file_type ?? null,
           },
         ],
+      }
+    }
+    if (sql.includes('from audit_logs audit')) {
+      this.recordQuery(sql)
+      const existing = this.database.audits.find(
+        (audit) =>
+          audit.userId === parameters[2] &&
+          audit.entityId === parameters[1] &&
+          audit.action === 'document.collaboration_merge' &&
+          audit.metadata.syncId === parameters[3] &&
+          audit.metadata.outcome === 'merged',
+      )
+      const versionId = existing?.metadata.newVersionId
+      const version =
+        typeof versionId === 'string'
+          ? this.database.versions.get(versionId)
+          : undefined
+      return {
+        rows:
+          existing && version
+            ? [
+                {
+                  base_version_id: existing.metadata.baseVersionId,
+                  operations_sha256: existing.metadata.operationsSha256 ?? null,
+                  version_id: version.id,
+                  version_number: version.version_number,
+                },
+              ]
+            : [],
       }
     }
     if (sql.includes('insert into document_versions')) {
@@ -194,6 +308,7 @@ class EditTransaction {
       sql.includes('insert into audit_logs') &&
       (parameters[4] === 'document.version_create' ||
         parameters[4] === 'document.edit' ||
+        parameters[4] === 'document.collaboration_merge' ||
         parameters[4] === 'document.tracked_change_accept' ||
         parameters[4] === 'document.tracked_change_reject')
     ) {
@@ -202,12 +317,16 @@ class EditTransaction {
       if (this.options.auditFailure) {
         throw new Error('private audit diagnostic')
       }
-      this.stagedAudits.push({
+      const audit: Audit = {
         entityType: String(parameters[2]),
         entityId: String(parameters[3]),
         action: String(parameters[4]),
         metadata: JSON.parse(String(parameters[5])) as Record<string, unknown>,
+      }
+      Object.defineProperty(audit, 'userId', {
+        value: String(parameters[1]),
       })
+      this.stagedAudits.push(audit)
       return { rows: [] }
     }
     return this.sharedClient.query(sql, parameters)

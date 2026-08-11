@@ -1,5 +1,4 @@
-import { createHash } from 'node:crypto'
-import type { Pool, PoolClient } from 'pg'
+import type { Pool } from 'pg'
 import type {
   DocumentEditOperation,
   DocumentTrackedChangeDecisionRequest,
@@ -11,14 +10,17 @@ import {
   parseDocx,
   serialiseDocx,
 } from '@obiter/ooxml'
+import type { AuditRecordInput, DocumentVersionRecord } from './database'
 import {
-  appendAuditLog,
-  createDocumentObjectKey,
-  insertDocumentVersion,
-  type AuditRecordInput,
-  type DocumentVersionRecord,
-} from './database'
+  commitPreparedVersion,
+  DocumentEditStoreError,
+  isCanonicalReadyDocxVersion,
+  lockCurrentAndBaseVersions,
+  rollback,
+} from './document-version-commit'
 import type { StorageService } from './storage'
+
+export { DocumentEditStoreError } from './document-version-commit'
 
 type VersionMutationInput = {
   organisationId: string
@@ -42,15 +44,6 @@ type TrackedChangeDecisionVersionInput = VersionMutationInput & {
   changeIds: readonly string[]
 }
 
-type LockedBaseRow = {
-  current_version_id: string | null
-  matter_id: string
-  base_id: string | null
-  version_number: number | null
-  filename: string | null
-  file_type: string | null
-}
-
 type MutationAudit = {
   action: Extract<
     AuditRecordInput['action'],
@@ -69,13 +62,6 @@ export type CreateEditedVersionResult =
 export class DocumentEditInvalidError extends Error {
   constructor() {
     super('The document edit is invalid.')
-    this.name = new.target.name
-  }
-}
-
-export class DocumentEditStoreError extends Error {
-  constructor() {
-    super('The edited document could not be stored.')
     this.name = new.target.name
   }
 }
@@ -182,9 +168,9 @@ async function prepareSource(
   }
 }
 
-async function readSourceDocument(
+export async function readSourceDocument(
   storage: StorageService,
-  version: DocumentVersionRecord,
+  version: Pick<DocumentVersionRecord, 'objectKey'>,
 ) {
   if (!storage.readBinary) throw new DocumentEditStoreError()
   let source: Buffer
@@ -207,128 +193,51 @@ async function createPreparedVersion(
   editedBytes: Uint8Array,
   audit: MutationAudit,
 ): Promise<CreateEditedVersionResult> {
-  const contentSha256 = createHash('sha256').update(editedBytes).digest('hex')
-  let client: PoolClient
+  let client
   try {
     client = await pool.connect()
   } catch {
     throw new DocumentEditStoreError()
   }
-  let candidateKey: string | null = null
-  let commitIssued = false
+  let commitStarted = false
 
   try {
     await client.query('begin')
-    const lock = await lockBaseVersion(client, input)
-    if (!lock) {
+    const locked = await lockCurrentAndBaseVersions(client, input)
+    if (!locked) {
       await client.query('rollback')
       return { status: 'not_found' }
     }
     if (
-      lock.current_version_id !== input.baseVersionId ||
-      lock.base_id !== input.baseVersionId
+      locked.current?.id !== input.baseVersionId ||
+      locked.base?.id !== input.baseVersionId
     ) {
       await client.query('rollback')
       return { status: 'stale' }
     }
     if (
-      lock.version_number === null ||
-      lock.filename === null ||
-      lock.file_type !== 'docx'
+      !isCanonicalReadyDocxVersion(locked.current, input) ||
+      !isCanonicalReadyDocxVersion(locked.base, input)
     ) {
       await client.query('rollback')
       return { status: 'not_found' }
     }
 
-    const versionId = `ver_${crypto.randomUUID()}`
-    const versionNumber = lock.version_number + 1
-    candidateKey = createDocumentObjectKey({
+    commitStarted = true
+    return await commitPreparedVersion(client, storage, {
       organisationId: input.organisationId,
       matterId: input.matterId,
       documentId: input.documentId,
-      versionId,
-    })
-    await writeCandidate(storage, candidateKey, editedBytes)
-
-    await insertDocumentVersion(client, {
-      id: versionId,
-      organisationId: input.organisationId,
-      matterId: input.matterId,
-      documentId: input.documentId,
-      filename: lock.filename,
-      fileType: lock.file_type,
-      sizeBytes: editedBytes.byteLength,
-      objectKey: candidateKey,
-      textObjectKey: null,
-      documentStatus: 'ready',
-      failureReason: null,
-      versionNumber,
-      contentSha256,
-      syncState: 'synced',
-      createdBy: input.userId,
-    })
-
-    const pointer = await client.query<{ id: string }>(
-      `
-        update matter_documents
-        set current_version_id = $5, updated_at = now()
-        where id = $1
-          and organisation_id = $2
-          and matter_id = $3
-          and current_version_id = $4
-          and deleted_at is null
-        returning id
-      `,
-      [
-        input.documentId,
-        input.organisationId,
-        input.matterId,
-        input.baseVersionId,
-        versionId,
-      ],
-    )
-    if (pointer.rows.length !== 1) {
-      await client.query('rollback')
-      await cleanupCandidate(storage, candidateKey)
-      candidateKey = null
-      return { status: 'stale' }
-    }
-
-    await appendAuditLog(client, {
-      organisationId: input.organisationId,
       userId: input.userId,
-      entityType: 'document_version',
-      entityId: versionId,
-      action: 'document.version_create',
-      metadata: {
-        documentId: input.documentId,
-        baseVersionId: input.baseVersionId,
-        versionNumber,
-      },
       requestId: input.requestId,
+      expectedCurrentVersionId: locked.current.id,
+      parentVersion: locked.current,
+      preparedBytes: editedBytes,
+      audit,
     })
-    await appendAuditLog(client, {
-      organisationId: input.organisationId,
-      userId: input.userId,
-      entityType: 'document',
-      entityId: input.documentId,
-      action: audit.action,
-      metadata: audit.metadata(versionId),
-      requestId: input.requestId,
-    })
-
-    commitIssued = true
-    await client.query('commit')
-    candidateKey = null
-    return { status: 'created', versionId, versionNumber }
-  } catch {
-    if (!commitIssued) {
-      await rollback(client)
-      if (candidateKey) await cleanupCandidate(storage, candidateKey)
-    }
-    // Once COMMIT is sent, its response can fail after PostgreSQL has committed.
-    // Keep the candidate object in that uncertain state rather than deleting an
-    // object that a committed immutable version may require.
+  } catch (error) {
+    if (!commitStarted) await rollback(client)
+    if (error instanceof DocumentEditStoreError) throw error
     throw new DocumentEditStoreError()
   } finally {
     client.release()
@@ -345,79 +254,10 @@ function validateBaseVersion(
     | 'baseVersion'
   >,
 ) {
-  const expectedKey = createDocumentObjectKey({
-    organisationId: input.organisationId,
-    matterId: input.matterId,
-    documentId: input.documentId,
-    versionId: input.baseVersionId,
-  })
-  const valid =
-    input.baseVersion.id === input.baseVersionId &&
-    input.baseVersion.organisationId === input.organisationId &&
-    input.baseVersion.matterId === input.matterId &&
-    input.baseVersion.matterDocumentId === input.documentId &&
-    input.baseVersion.fileType === 'docx' &&
-    input.baseVersion.documentStatus === 'ready' &&
-    input.baseVersion.objectKey === expectedKey
-  if (!valid) throw new DocumentEditStoreError()
-}
-
-async function lockBaseVersion(
-  client: PoolClient,
-  input: VersionMutationInput,
-) {
-  const result = await client.query<LockedBaseRow>(
-    `
-      select
-        document.current_version_id,
-        document.matter_id,
-        base.id as base_id,
-        base.version_number,
-        base.filename,
-        base.file_type
-      from matter_documents document
-      left join document_versions base
-        on base.id = $4
-        and base.organisation_id = document.organisation_id
-        and base.matter_id = document.matter_id
-        and base.matter_document_id = document.id
-      where document.id = $1
-        and document.organisation_id = $2
-        and document.matter_id = $3
-        and document.deleted_at is null
-      for update of document
-    `,
-    [
-      input.documentId,
-      input.organisationId,
-      input.matterId,
-      input.baseVersionId,
-    ],
-  )
-  return result.rows[0] ?? null
-}
-
-async function writeCandidate(
-  storage: StorageService,
-  objectKey: string,
-  bytes: Uint8Array,
-) {
-  if (!storage.writeBinary) throw new DocumentEditStoreError()
-  await storage.writeBinary(objectKey, Buffer.from(bytes))
-}
-
-async function rollback(client: PoolClient) {
-  try {
-    await client.query('rollback')
-  } catch {
-    // The public failure remains curated when rollback cannot be confirmed.
-  }
-}
-
-async function cleanupCandidate(storage: StorageService, objectKey: string) {
-  try {
-    await storage.delete(objectKey)
-  } catch {
+  if (
+    input.baseVersion.id !== input.baseVersionId ||
+    !isCanonicalReadyDocxVersion(input.baseVersion, input)
+  ) {
     throw new DocumentEditStoreError()
   }
 }

@@ -65,7 +65,12 @@ export async function resolveReadyDocumentVersion(
     return documentNotFound(c)
   }
 
-  return { document: result.document, version, user: access }
+  return {
+    document: result.document,
+    version,
+    versions: result.versions,
+    user: access,
+  }
 }
 
 export function documentNotFound(c: RouteContext) {
