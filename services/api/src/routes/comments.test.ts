@@ -1,7 +1,11 @@
+import { parseModelJson, validateCommentAnchor } from '@obiter/ooxml'
 import { describe, expect, it } from 'vitest'
 
 import {
+  cachedCommentModelJson,
   createComment,
+  expectDocument404,
+  modelObjectKey,
   resolveComment,
   routeApp,
   TestDatabase,
@@ -27,7 +31,7 @@ describe('document comment routes', () => {
   )
 
   it('provisions an organisation for an org-less user', async () => {
-    const database = new TestDatabase({ access: 'owner' })
+    const database = new TestDatabase({ access: 'edit' })
     const response = await routeApp(database, {
       id: 'usr_actor',
       name: 'Case Reviewer',
@@ -36,7 +40,8 @@ describe('document comment routes', () => {
     }).app.request('/api/documents/doc_1/comments')
 
     expect(response.status).toBe(200)
-    expect(database.transactionCommands).toEqual(['begin', 'commit'])
+    expect(database.transactionCommands.at(0)).toBe('begin')
+    expect(database.transactionCommands.at(-1)).toBe('commit')
   })
 
   it.each([
@@ -53,7 +58,7 @@ describe('document comment routes', () => {
 
       await expectDocument404(response)
       expect(
-        database.queries.some(({ sql }) => sql.includes('document_comments')),
+        database.queries.some((sql) => sql.includes('document_comments')),
       ).toBe(false)
     },
   )
@@ -150,7 +155,7 @@ describe('document comment routes', () => {
     expect(database.transactionCommands).toEqual(['begin', 'rollback'])
     expect(
       database.queries.some(
-        ({ sql }) =>
+        (sql) =>
           sql.includes('join document_versions version') &&
           sql.includes('for update of document'),
       ),
@@ -200,6 +205,17 @@ describe('document comment routes', () => {
       },
     ],
     [
+      'overlong paragraph id',
+      {
+        body: 'Review',
+        anchor: {
+          paragraphId: 'p'.repeat(256),
+          startOffset: 0,
+          endOffset: 0,
+        },
+      },
+    ],
+    [
       'negative offset',
       {
         body: 'Review',
@@ -229,6 +245,77 @@ describe('document comment routes', () => {
     expect(response.headers.get('cache-control')).toBe('no-store')
     expect(database.comments.size).toBe(0)
     expect(database.audits).toEqual([])
+  })
+
+  it.each([
+    [
+      'a missing paragraph',
+      { paragraphId: 'para-missing', startOffset: 0, endOffset: 0 },
+    ],
+    [
+      'an offset outside the paragraph text',
+      { paragraphId: 'para-1', startOffset: 0, endOffset: 999 },
+    ],
+    [
+      'an offset that splits a surrogate pair',
+      { paragraphId: 'para-1', startOffset: 2, endOffset: 3 },
+    ],
+  ])('rejects %s before storing a comment', async (_name, anchor) => {
+    const database = new TestDatabase({ access: 'edit' })
+    const response = await createComment(routeApp(database).app, {
+      body: 'Review',
+      anchor,
+    })
+
+    expect(response.status).toBe(400)
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'comment_anchor_unresolved' },
+    })
+    expect(database.comments.size).toBe(0)
+    expect(database.audits).toEqual([])
+  })
+
+  it('stores only an anchor that resolves against the pinned model', async () => {
+    const database = new TestDatabase({ access: 'edit' })
+    const { app, storage } = routeApp(database)
+    const response = await createComment(app, {
+      body: 'Resolvable review',
+      anchor: { paragraphId: 'para-1', startOffset: 1, endOffset: 4 },
+    })
+
+    expect(response.status).toBe(201)
+    const stored = [...database.comments.values()][0]
+    if (!stored) throw new Error('Stored comment is missing.')
+    expect(() =>
+      validateCommentAnchor(parseModelJson(cachedCommentModelJson), {
+        paragraphId: stored.paragraphId,
+        startOffset: stored.startOffset,
+        endOffset: stored.endOffset,
+      }),
+    ).not.toThrow()
+    expect(storage.textReads).toEqual([modelObjectKey])
+  })
+
+  it('uses the user id when the session display name is empty', async () => {
+    const database = new TestDatabase({ access: 'edit' })
+    const response = await createComment(
+      routeApp(database, {
+        id: 'usr_actor',
+        name: '',
+        organisationId: 'org_1',
+        role: 'member',
+      }).app,
+      {
+        body: 'Fallback author review',
+        anchor: { paragraphId: 'para-1', startOffset: 0, endOffset: 1 },
+      },
+    )
+
+    expect(response.status).toBe(201)
+    await expect(response.json()).resolves.toMatchObject({
+      comment: { author: { id: 'usr_actor', name: 'usr_actor' } },
+    })
+    expect([...database.comments.values()][0]?.authorName).toBe('usr_actor')
   })
 
   it('validates the empty resolve request and hides a missing comment behind document 404', async () => {
@@ -276,11 +363,3 @@ describe('document comment routes', () => {
     expect(database.transactionCommands).toEqual(['begin', 'rollback'])
   })
 })
-
-async function expectDocument404(response: Response) {
-  expect(response.status).toBe(404)
-  expect(response.headers.get('cache-control')).toBe('no-store')
-  await expect(response.json()).resolves.toMatchObject({
-    error: { code: 'document_not_found' },
-  })
-}

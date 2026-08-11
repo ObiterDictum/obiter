@@ -164,7 +164,7 @@ export function createApiApp(
   )
 
   app.route('/', createMattersRoutes(pool))
-  app.route('/', createCommentsRoutes(pool))
+  app.route('/', createCommentsRoutes(pool, storage))
   app.route('/', createDocumentAccessRoutes(pool))
   app.route('/', createOrganisationsRoutes(pool))
   app.route('/', createDocumentsRoutes(pool, storage))

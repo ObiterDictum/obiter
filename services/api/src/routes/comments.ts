@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import type { Context } from 'hono'
 import type { Pool } from 'pg'
+import { OoxmlError, validateCommentAnchor } from '@obiter/ooxml'
 import {
   documentCommentCreateRequestSchema,
   documentCommentCreateResponseSchema,
@@ -11,11 +12,12 @@ import {
 } from '@obiter/contracts'
 import type { AuthzVariables } from '../authz'
 import {
-  CommentsDatabaseError,
   createDocumentComment,
   listDocumentComments,
   resolveDocumentComment,
 } from '../comments-db'
+import { getDocumentModel } from '../document-model-store'
+import type { StorageService } from '../storage'
 import {
   documentNotFound,
   resolveCurrentReadyDocumentVersion,
@@ -23,7 +25,7 @@ import {
 
 type RouteContext = Context<{ Variables: AuthzVariables }>
 
-export function createCommentsRoutes(pool: Pool) {
+export function createCommentsRoutes(pool: Pool, storage: StorageService) {
   const routes = new Hono<{ Variables: AuthzVariables }>()
 
   routes.get('/api/documents/:id/comments', async (c) => {
@@ -59,8 +61,19 @@ export function createCommentsRoutes(pool: Pool) {
       await c.req.json().catch(() => null),
     )
     if (!request.success) return validationFailed(c)
-    const authorName = resolved.user.name?.trim()
-    if (!authorName) throw new CommentsDatabaseError()
+    const model = await getDocumentModel(storage, resolved.version)
+    try {
+      validateCommentAnchor(model, request.data.anchor)
+    } catch (error) {
+      if (
+        error instanceof OoxmlError &&
+        error.code === 'comment-anchor-unresolved'
+      ) {
+        return anchorUnresolved(c)
+      }
+      throw error
+    }
+    const authorName = resolved.user.name?.trim() || resolved.user.id
 
     const comment = await createDocumentComment(pool, {
       organisationId: resolved.user.organisationId,
@@ -106,6 +119,17 @@ export function createCommentsRoutes(pool: Pool) {
   })
 
   return routes
+}
+
+function anchorUnresolved(c: RouteContext) {
+  const body: ApiErrorResponse = {
+    error: {
+      code: 'comment_anchor_unresolved',
+      message: 'The comment anchor does not resolve in this document version.',
+      requestId: c.get('requestId'),
+    },
+  }
+  return c.json(body, 400)
 }
 
 function validationFailed(c: RouteContext) {
