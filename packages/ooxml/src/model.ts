@@ -1,5 +1,6 @@
 import {
   documentEditOperationSchema,
+  type DocumentChangeWire,
   type DocumentModelWire,
   type DocumentParagraphWire,
   type DocumentTextRunWire,
@@ -17,11 +18,16 @@ export type SourcePartRole =
   | 'content-types'
   | 'opaque'
 
-export type TrackedChangeOverlay = {
-  elementName: 'ins' | 'del' | 'moveFrom' | 'moveTo' | 'pPrChange' | 'rPrChange'
-  author?: string
-  date?: string
+export type TrackedChangeNode = {
+  wire: DocumentChangeWire
+  partName: string
+  range: XmlElementRange
+  parentRange?: XmlElementRange
   sourceFragment: string
+  innerFragment: string
+  previousPropertiesFragment?: string
+  validMoveCounterpart: boolean
+  deletedTextElements: { range: XmlElementRange; qualifiedName: string }[]
 }
 
 export type SourcePart = {
@@ -31,7 +37,7 @@ export type SourcePart = {
   originalPayload: Uint8Array
   dirty: boolean
   overlay?: XmlOverlay
-  trackedChanges: TrackedChangeOverlay[]
+  trackedChanges: TrackedChangeNode[]
 }
 
 export type ModelIdAllocator = {
@@ -73,6 +79,7 @@ export type OoxmlDocument = {
   sourceParts: Map<string, SourcePart>
   textRunAnchors: Map<string, TextRunAnchor>
   paragraphAnchors: Map<string, ParagraphAnchor>
+  trackedChanges: Map<string, TrackedChangeNode>
 }
 
 export function createSequentialModelIdAllocator(start = 1): ModelIdAllocator {
@@ -110,7 +117,7 @@ export function replaceTextRunText(
   }
 }
 
-export { applyDocumentEdits } from './model-edits'
+export { applyDocumentEdits, type TrackedEditContext } from './model-edits'
 
 export type OoxmlErrorCode =
   | 'invalid-package'
@@ -118,6 +125,7 @@ export type OoxmlErrorCode =
   | 'model-node-not-found'
   | 'model-node-not-editable'
   | 'invalid-document-edit'
+  | 'invalid-tracked-change-decision'
   | 'invalid-model-json'
   | 'comment-anchor-unresolved'
   | 'comment-export-failed'
@@ -142,6 +150,9 @@ function errorMessage(code: OoxmlErrorCode) {
   }
   if (code === 'invalid-document-edit') {
     return 'The document edit is invalid.'
+  }
+  if (code === 'invalid-tracked-change-decision') {
+    return 'The tracked change decision is invalid.'
   }
   if (code === 'invalid-model-json') {
     return 'The document model JSON is invalid.'

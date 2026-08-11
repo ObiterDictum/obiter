@@ -1,9 +1,13 @@
 import { createHash } from 'node:crypto'
 import type { Pool, PoolClient } from 'pg'
-import type { DocumentEditOperation } from '@obiter/contracts'
+import type {
+  DocumentEditOperation,
+  DocumentTrackedChangeDecisionRequest,
+} from '@obiter/contracts'
 import {
   OoxmlError,
   applyDocumentEdits,
+  applyTrackedChangeDecisions,
   parseDocx,
   serialiseDocx,
 } from '@obiter/ooxml'
@@ -11,19 +15,31 @@ import {
   appendAuditLog,
   createDocumentObjectKey,
   insertDocumentVersion,
+  type AuditRecordInput,
   type DocumentVersionRecord,
 } from './database'
 import type { StorageService } from './storage'
 
-type EditedVersionInput = {
+type VersionMutationInput = {
   organisationId: string
   matterId: string
   documentId: string
   baseVersionId: string
   baseVersion: DocumentVersionRecord
-  operations: readonly DocumentEditOperation[]
   userId: string
   requestId: string
+}
+
+type EditedVersionInput = VersionMutationInput & {
+  operations: readonly DocumentEditOperation[]
+  trackChanges: boolean
+  userName?: string
+  now?: () => Date
+}
+
+type TrackedChangeDecisionVersionInput = VersionMutationInput & {
+  action: DocumentTrackedChangeDecisionRequest['action']
+  changeIds: readonly string[]
 }
 
 type LockedBaseRow = {
@@ -33,6 +49,16 @@ type LockedBaseRow = {
   version_number: number | null
   filename: string | null
   file_type: string | null
+}
+
+type MutationAudit = {
+  action: Extract<
+    AuditRecordInput['action'],
+    | 'document.edit'
+    | 'document.tracked_change_accept'
+    | 'document.tracked_change_reject'
+  >
+  metadata: (versionId: string) => AuditRecordInput['metadata']
 }
 
 export type CreateEditedVersionResult =
@@ -59,8 +85,112 @@ export async function createEditedVersion(
   storage: StorageService,
   input: EditedVersionInput,
 ): Promise<CreateEditedVersionResult> {
+  const editedBytes = await prepareSource(storage, input, (document) => {
+    applyDocumentEdits(
+      document,
+      input.operations,
+      input.trackChanges
+        ? {
+            author: input.userName?.trim() || input.userId,
+            date: (input.now?.() ?? new Date()).toISOString(),
+          }
+        : undefined,
+    )
+  })
+  return createPreparedVersion(pool, storage, input, editedBytes, {
+    action: 'document.edit',
+    metadata: (versionId) => ({
+      baseVersionId: input.baseVersionId,
+      newVersionId: versionId,
+      operationCount: input.operations.length,
+    }),
+  })
+}
+
+export async function createTrackedChangeDecisionVersion(
+  pool: Pool,
+  storage: StorageService,
+  input: TrackedChangeDecisionVersionInput,
+): Promise<CreateEditedVersionResult> {
+  const editedBytes = await prepareSource(storage, input, (document) => {
+    applyTrackedChangeDecisions(document, input.changeIds, input.action)
+  })
+  return createPreparedVersion(pool, storage, input, editedBytes, {
+    action:
+      input.action === 'accept'
+        ? 'document.tracked_change_accept'
+        : 'document.tracked_change_reject',
+    metadata: (versionId) => ({
+      documentId: input.documentId,
+      baseVersionId: input.baseVersionId,
+      newVersionId: versionId,
+      action: input.action,
+      changeIds: [...input.changeIds],
+    }),
+  })
+}
+
+export async function readDocumentTrackedChanges(
+  storage: StorageService,
+  input: Pick<
+    VersionMutationInput,
+    | 'organisationId'
+    | 'matterId'
+    | 'documentId'
+    | 'baseVersionId'
+    | 'baseVersion'
+  >,
+) {
   validateBaseVersion(input)
-  const editedBytes = await prepareEditedSource(storage, input)
+  const document = await readSourceDocument(storage, input.baseVersion)
+  return document.model.changes
+}
+
+async function prepareSource(
+  storage: StorageService,
+  input: VersionMutationInput,
+  mutate: (document: Awaited<ReturnType<typeof parseDocx>>) => void,
+) {
+  validateBaseVersion(input)
+  const document = await readSourceDocument(storage, input.baseVersion)
+  try {
+    mutate(document)
+  } catch (error) {
+    if (error instanceof OoxmlError) throw new DocumentEditInvalidError()
+    throw new DocumentEditStoreError()
+  }
+  try {
+    return await serialiseDocx(document)
+  } catch {
+    throw new DocumentEditStoreError()
+  }
+}
+
+async function readSourceDocument(
+  storage: StorageService,
+  version: DocumentVersionRecord,
+) {
+  if (!storage.readBinary) throw new DocumentEditStoreError()
+  let source: Buffer
+  try {
+    source = await storage.readBinary(version.objectKey)
+  } catch {
+    throw new DocumentEditStoreError()
+  }
+  try {
+    return await parseDocx(source)
+  } catch {
+    throw new DocumentEditStoreError()
+  }
+}
+
+async function createPreparedVersion(
+  pool: Pool,
+  storage: StorageService,
+  input: VersionMutationInput,
+  editedBytes: Uint8Array,
+  audit: MutationAudit,
+): Promise<CreateEditedVersionResult> {
   const contentSha256 = createHash('sha256').update(editedBytes).digest('hex')
   let client: PoolClient
   try {
@@ -166,12 +296,8 @@ export async function createEditedVersion(
       userId: input.userId,
       entityType: 'document',
       entityId: input.documentId,
-      action: 'document.edit',
-      metadata: {
-        baseVersionId: input.baseVersionId,
-        newVersionId: versionId,
-        operationCount: input.operations.length,
-      },
+      action: audit.action,
+      metadata: audit.metadata(versionId),
       requestId: input.requestId,
     })
 
@@ -185,15 +311,24 @@ export async function createEditedVersion(
       if (candidateKey) await cleanupCandidate(storage, candidateKey)
     }
     // Once COMMIT is sent, its response can fail after PostgreSQL has committed.
-    // Keep the candidate object in that uncertain state and accept an orphan if
-    // the commit did not land, rather than delete an object a committed row needs.
+    // Keep the candidate object in that uncertain state rather than deleting an
+    // object that a committed immutable version may require.
     throw new DocumentEditStoreError()
   } finally {
     client.release()
   }
 }
 
-function validateBaseVersion(input: EditedVersionInput) {
+function validateBaseVersion(
+  input: Pick<
+    VersionMutationInput,
+    | 'organisationId'
+    | 'matterId'
+    | 'documentId'
+    | 'baseVersionId'
+    | 'baseVersion'
+  >,
+) {
   const expectedKey = createDocumentObjectKey({
     organisationId: input.organisationId,
     matterId: input.matterId,
@@ -211,38 +346,10 @@ function validateBaseVersion(input: EditedVersionInput) {
   if (!valid) throw new DocumentEditStoreError()
 }
 
-async function prepareEditedSource(
-  storage: StorageService,
-  input: EditedVersionInput,
+async function lockBaseVersion(
+  client: PoolClient,
+  input: VersionMutationInput,
 ) {
-  if (!storage.readBinary) throw new DocumentEditStoreError()
-  let source: Buffer
-  try {
-    source = await storage.readBinary(input.baseVersion.objectKey)
-  } catch {
-    throw new DocumentEditStoreError()
-  }
-
-  let document
-  try {
-    document = await parseDocx(source)
-  } catch {
-    throw new DocumentEditStoreError()
-  }
-  try {
-    applyDocumentEdits(document, input.operations)
-  } catch (error) {
-    if (error instanceof OoxmlError) throw new DocumentEditInvalidError()
-    throw new DocumentEditStoreError()
-  }
-  try {
-    return await serialiseDocx(document)
-  } catch {
-    throw new DocumentEditStoreError()
-  }
-}
-
-async function lockBaseVersion(client: PoolClient, input: EditedVersionInput) {
   const result = await client.query<LockedBaseRow>(
     `
       select
@@ -287,8 +394,7 @@ async function rollback(client: PoolClient) {
   try {
     await client.query('rollback')
   } catch {
-    // The public failure remains curated even when the failed transaction
-    // cannot confirm its rollback state.
+    // The public failure remains curated when rollback cannot be confirmed.
   }
 }
 

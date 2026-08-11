@@ -73,6 +73,7 @@ function cloneDocument(document: OoxmlDocument): OoxmlDocument {
     ),
     textRunAnchors: new Map(document.textRunAnchors),
     paragraphAnchors: new Map(document.paragraphAnchors),
+    trackedChanges: new Map(document.trackedChanges),
   }
 }
 

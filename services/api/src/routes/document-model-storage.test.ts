@@ -70,6 +70,10 @@ describe('GET /api/documents/:id/model storage boundary', () => {
   it.each([
     ['malformed JSON', '{malformed cache'],
     ['an invalid wire value', JSON.stringify({ version: 1, stories: 'no' })],
+    [
+      'a legacy value without its own changes field',
+      cachedModelJson.replace(/,"changes":\[\]\}$/u, '}'),
+    ],
   ])(
     'regenerates and replaces cached model JSON containing %s',
     async (_name, cachedJson) => {

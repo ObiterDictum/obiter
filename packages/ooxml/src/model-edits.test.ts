@@ -154,9 +154,10 @@ describe('OOXML document edits', () => {
       ({ kind }) => kind === 'header',
     )?.paragraphs[0]?.runs[0]
     const paragraphs = mainParagraphs(document)
-    const tracked = paragraphs.find((paragraph) =>
-      paragraph.preservedXmlFragments.some((xml) => xml.includes('pPrChange')),
-    )
+    const trackedParagraphId = document.model.changes.find(
+      ({ elementName }) => elementName === 'pPrChange',
+    )?.paragraphId
+    const tracked = paragraphs.find(({ id }) => id === trackedParagraphId)
     if (!headerRun || !tracked) throw new Error('Fixture model is missing.')
 
     expect(() =>
@@ -194,8 +195,12 @@ describe('OOXML document edits', () => {
     const document = await parseDocx(input)
     const run = mainParagraphs(document)[0]?.runs[0]
     if (!run) throw new Error('Fixture run is missing.')
-    const tracked =
-      document.sourceParts.get('word/document.xml')?.trackedChanges
+    const tracked = document.sourceParts
+      .get('word/document.xml')
+      ?.trackedChanges.map(({ sourceFragment, wire }) => ({
+        sourceFragment,
+        wire,
+      }))
 
     applyDocumentEdits(document, [
       { type: 'replace_run_text', runId: run.id, text: 'Revised overview' },
@@ -212,7 +217,12 @@ describe('OOXML document edits', () => {
     expect(outputXml).toContain('w:tag w:val="fixed-control"')
     const reparsed = await parseDocx(output)
     expect(
-      reparsed.sourceParts.get('word/document.xml')?.trackedChanges,
+      reparsed.sourceParts
+        .get('word/document.xml')
+        ?.trackedChanges.map(({ sourceFragment, wire }) => ({
+          sourceFragment,
+          wire,
+        })),
     ).toEqual(tracked)
   })
 

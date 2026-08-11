@@ -2,27 +2,60 @@ import { Hono } from 'hono'
 import type { Context } from 'hono'
 import type { Pool } from 'pg'
 import {
-  documentEditRequestSchema,
   documentEditResponseSchema,
+  documentTrackedChangeDecisionRequestSchema,
+  documentTrackedChangeListResponseSchema,
   type ApiErrorResponse,
 } from '@obiter/contracts'
 import type { AuthzVariables } from '../authz'
 import {
-  createEditedVersion,
+  createTrackedChangeDecisionVersion,
   DocumentEditInvalidError,
+  readDocumentTrackedChanges,
 } from '../document-versions'
 import type { StorageService } from '../storage'
 import {
   documentNotFound,
   resolveCurrentReadyDocumentVersion,
+  resolveReadyDocumentVersion,
 } from './document-route-shared'
 
 type RouteContext = Context<{ Variables: AuthzVariables }>
 
-export function createDocumentEditRoutes(pool: Pool, storage: StorageService) {
+export function createTrackedChangeRoutes(pool: Pool, storage: StorageService) {
   const routes = new Hono<{ Variables: AuthzVariables }>()
 
-  routes.post('/api/documents/:id/edit', async (c) => {
+  routes.get('/api/documents/:id/tracked-changes', async (c) => {
+    c.header('Cache-Control', 'no-store')
+    const versionId = c.req.query('versionId')
+    const resolved = await resolveReadyDocumentVersion(
+      c,
+      pool,
+      c.req.param('id'),
+      'docx',
+      'view',
+      versionId === undefined ? {} : { versionId },
+    )
+    if (resolved instanceof Response) return resolved
+
+    const response = documentTrackedChangeListResponseSchema.safeParse({
+      documentId: resolved.document.id,
+      versionId: resolved.version.id,
+      versionNumber: resolved.version.versionNumber,
+      changes: await readDocumentTrackedChanges(storage, {
+        organisationId: resolved.user.organisationId,
+        matterId: resolved.document.matterId,
+        documentId: resolved.document.id,
+        baseVersionId: resolved.version.id,
+        baseVersion: resolved.version,
+      }),
+    })
+    if (!response.success) throw new Error('Invalid tracked change response.')
+    return c.json(response.data)
+  })
+
+  routes.post('/api/documents/:id/tracked-changes/decision', async (c) => {
+    c.header('Cache-Control', 'no-store')
     const resolved = await resolveCurrentReadyDocumentVersion(
       c,
       pool,
@@ -32,7 +65,7 @@ export function createDocumentEditRoutes(pool: Pool, storage: StorageService) {
     )
     if (resolved instanceof Response) return resolved
 
-    const request = documentEditRequestSchema.safeParse(
+    const request = documentTrackedChangeDecisionRequestSchema.safeParse(
       await c.req.json().catch(() => null),
     )
     if (!request.success) return validationFailed(c)
@@ -42,15 +75,14 @@ export function createDocumentEditRoutes(pool: Pool, storage: StorageService) {
 
     let result
     try {
-      result = await createEditedVersion(pool, storage, {
+      result = await createTrackedChangeDecisionVersion(pool, storage, {
         organisationId: resolved.user.organisationId,
         matterId: resolved.document.matterId,
         documentId: resolved.document.id,
         baseVersionId: request.data.baseVersionId,
         baseVersion: resolved.version,
-        operations: request.data.operations,
-        trackChanges: request.data.trackChanges,
-        userName: resolved.user.name,
+        action: request.data.action,
+        changeIds: request.data.changeIds,
         userId: resolved.user.id,
         requestId: c.get('requestId'),
       })
@@ -80,7 +112,7 @@ function validationFailed(c: RouteContext) {
   const body: ApiErrorResponse = {
     error: {
       code: 'validation_failed',
-      message: 'The document edit request is invalid.',
+      message: 'The tracked change request is invalid.',
       requestId: c.get('requestId'),
     },
   }
@@ -91,7 +123,7 @@ function conflictDetected(c: RouteContext) {
   const body: ApiErrorResponse = {
     error: {
       code: 'conflict_detected',
-      message: 'The document has changed since editing began.',
+      message: 'The document has changed since review began.',
       requestId: c.get('requestId'),
     },
   }

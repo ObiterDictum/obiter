@@ -34,7 +34,14 @@ describe('document edit contracts', () => {
           { type: 'delete_paragraph', paragraphId: 'para_2' },
         ],
       }),
-    ).toBeDefined()
+    ).toMatchObject({ trackChanges: false })
+    expect(
+      documentEditRequestSchema.parse({
+        baseVersionId: 'ver_1',
+        operations: [operation],
+        trackChanges: true,
+      }),
+    ).toMatchObject({ trackChanges: true })
     expect(
       documentEditResponseSchema.parse({
         documentId: 'doc_1',

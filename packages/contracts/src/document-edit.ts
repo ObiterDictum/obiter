@@ -71,6 +71,7 @@ export const documentEditRequestSchema = z
   .object({
     baseVersionId: editIdSchema,
     operations: documentEditOperationsSchema,
+    trackChanges: z.boolean().optional().default(false),
   })
   .strict()
 export type DocumentEditRequest = z.infer<typeof documentEditRequestSchema>

@@ -193,7 +193,9 @@ class EditTransaction {
     if (
       sql.includes('insert into audit_logs') &&
       (parameters[4] === 'document.version_create' ||
-        parameters[4] === 'document.edit')
+        parameters[4] === 'document.edit' ||
+        parameters[4] === 'document.tracked_change_accept' ||
+        parameters[4] === 'document.tracked_change_reject')
     ) {
       this.requireLockedWrite()
       this.recordQuery(sql)
@@ -286,13 +288,18 @@ export function routeApp(
   }
 }
 
-export function editRequest(baseVersionId = 'ver_1', text = 'Revised text') {
+export function editRequest(
+  baseVersionId = 'ver_1',
+  text = 'Revised text',
+  trackChanges = false,
+) {
   return {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       baseVersionId,
       operations: [{ type: 'replace_run_text', runId: editableRunId, text }],
+      ...(trackChanges ? { trackChanges: true } : {}),
     }),
   }
 }

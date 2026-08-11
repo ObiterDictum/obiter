@@ -60,6 +60,7 @@ const commentModel = {
   numbering: [],
   relationships: [],
   preservedXmlFragments: [],
+  changes: [],
 } satisfies DocumentModelWire
 
 export const cachedCommentModelJson = JSON.stringify(commentModel)

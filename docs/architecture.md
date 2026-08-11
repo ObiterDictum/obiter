@@ -495,3 +495,79 @@ The applicable defect patterns are P1, P2, P3, P4, P7, and P10. The plan's
 integration-head text is stale relative to the S4 task: `8dcea28` is the
 post-S3 base used here. The U4 prompt's request for a version selector on the
 S2 model route is a separate S2 amendment and is not included in S4.
+
+### M1.25 tracked changes: typed nodes and immutable decisions (11 August 2026)
+
+Context: M1.25 S5 extends the S1 source-preserving OOXML overlays and the S4
+custom model edit path. The relevant package surfaces are
+`packages/ooxml/src/model.ts`, `packages/ooxml/src/serialise.ts`,
+`packages/ooxml/src/parts/overlay.ts`, `packages/ooxml/src/model-edits.ts`,
+`packages/ooxml/src/text-run-edit.ts`, and `packages/ooxml/src/comment-anchors.ts`.
+The relevant API surfaces are `packages/contracts/src/document-model.ts`,
+`packages/contracts/src/document-edit.ts`,
+`services/api/src/document-versions.ts`,
+`services/api/src/routes/document-edit.ts`, and
+`services/api/src/routes/document-route-shared.ts`.
+
+Decision: add a typed `DocumentChangeWire` summary to the shared contracts
+model and a top-level `changes` array to `DocumentModelWire`. The summary
+maps `w:ins` to insert, `w:del` to delete, `w:moveFrom` and `w:moveTo` to paired
+move nodes, and `w:rPrChange` and `w:pPrChange` to run and paragraph property
+nodes. It carries a document-model id, source part and model location,
+semantic text, direction or scope where applicable, the original lexical
+OOXML id, and optional author and date. Source ranges and raw fragments stay
+inside the OOXML runtime model. The field is additive with an empty default
+for old model JSON, but the model store must regenerate a cached object that
+has no own `changes` field, so an old S2 cache cannot hide foreign changes.
+The change list route parses the source directly rather than trusting that
+cache. This keeps P7 at the model, storage, API and UI boundary.
+
+Decision: change recording is an additive `trackChanges` boolean on the S4
+`DocumentEditRequest`, default false, not a second route. The server supplies
+the trimmed session name with the S4 fallback to the session user id, one ISO
+timestamp, and a document-unique decimal `w:id`; clients cannot supply any of
+these values. In tracking mode, text replacement emits `w:del` with
+`w:delText` for the old text and `w:ins` with `w:t` for the new text, paragraph
+insertion wraps its new run in `w:ins`, paragraph deletion wraps ordinary runs
+in `w:del`, and direct style changes add `w:rPrChange` or `w:pPrChange` with
+the previous direct property state. The display name is used only as
+`w:author`; it is not copied into audit metadata, errors, logs, or a database
+field. The existing S4 path is unchanged when the flag is false.
+
+Decision: new move recording is deferred because S4 has no move operation and
+inventing one would expand the editor surface. S5 still decodes and lists
+foreign move markup and accepts or rejects a valid `w:moveFrom` and
+`w:moveTo` pair atomically. Accept removes move-from and unwraps move-to;
+reject unwraps move-from and removes move-to. Orphan or ambiguous pairs fail
+closed. Foreign changes remain source-preserved until an explicit decision.
+
+Decision: add `GET /api/documents/:id/tracked-changes` with an optional
+`versionId` query for view-level access, and
+`POST /api/documents/:id/tracked-changes/decision` for edit-level access. The
+shared route resolver selects a ready DOCX version for listing and enforces
+the current pointer for mutation. The decision request is
+`{ baseVersionId, action: 'accept' | 'reject', changeIds }`, with a non-empty
+unique list capped at 100. The list response is
+`{ documentId, versionId, versionNumber, changes }`; the decision response
+reuses the S4 version response shape. Both routes set `no-store`, use the
+uniform document 404, and apply the existing session, organisation,
+document, and S1b matter-access gates without a per-route access copy.
+
+Decision: accept or reject is an all-or-nothing package operation. Accepting
+an insertion unwraps it and accepting a deletion removes it. Rejecting an
+insertion removes it and rejecting a deletion unwraps it while converting
+`w:delText` to `w:t`. Property accept removes the change marker and property
+reject restores its saved property subtree. Every decision creates immutable
+version N plus 1 through the S4 `FOR UPDATE`, exact current-pointer check,
+source-key, compensation, and audit discipline. The path writes
+`document.version_create` and a tracked-change accept or reject audit row in
+the same transaction, with ids only in metadata and no display author name,
+change text, XML, or diagnostics.
+
+New generated wrappers and accept or reject transformations are intentional
+exceptions at the requested source ranges in the semantic XML equivalence
+document. Clean foreign changes and all untouched parts retain the S1
+byte-identity guarantee. The applicable defect patterns are P1, P2, P3, P4,
+P7, and P10. Move creation is explicitly deferred, and the U6 instruction
+that foreign origin is visibly distinguishable is stale because OOXML carries
+no reliable Obiter-origin marker without adding forbidden durable metadata.
