@@ -580,8 +580,12 @@ and the S5 tracked-change path. The relevant package surfaces are
 `packages/ooxml/src/tracked-edits.ts`, `packages/ooxml/src/comment-anchors.ts`,
 and `packages/ooxml/src/serialise.ts`. The relevant API surfaces are
 `packages/contracts/src/document-edit.ts`,
+`packages/contracts/src/document-collaboration.ts`,
 `services/api/src/document-versions.ts`,
+`services/api/src/document-collaboration-versions.ts`,
+`services/api/src/document-presence.ts`,
 `services/api/src/routes/document-edit.ts`,
+`services/api/src/routes/document-collaboration.ts`,
 `services/api/src/routes/document-route-shared.ts`,
 `services/api/src/document-access.ts`, and `services/api/src/app.ts`.
 
@@ -651,13 +655,16 @@ access, ready-DOCX, and no-store order. The merge service validates the base
 version and repeats the exact current-pointer check under `FOR UPDATE`.
 There is no change to `documents.ts`, extraction, upload, or legacy routes.
 
-Successful merges belong in `services/api/src/document-versions.ts` and use
+Successful merges belong in
+`services/api/src/document-collaboration-versions.ts` and use
 the S4/S5 source-key, immutable version, compensation, and audit discipline.
 A successful merge writes one ready DOCX version with a null text artifact,
 then `document.version_create` and `document.collaboration_merge` in the same
-transaction. The latter stores only ids, operation count, and outcome. The
-`syncId` is checked under the document lock against the durable collaboration
-audit event, so a retry returns the original version without a second write.
+transaction. The latter stores only ids, operation count, a canonical
+operations SHA-256, and outcome. The `syncId` and operations hash are checked
+under the document lock against the durable collaboration audit event, so a
+retry of the same batch returns the original version without a second write,
+while reuse for different operations returns 409.
 Conflicts and presence are not audited. No version N is mutated.
 
 The applicable defect patterns are P1, P2, P3, P4, P7, P10, P13, and P14.

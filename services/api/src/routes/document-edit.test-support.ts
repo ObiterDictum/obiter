@@ -265,6 +265,7 @@ class EditTransaction {
             ? [
                 {
                   base_version_id: existing.metadata.baseVersionId,
+                  operations_sha256: existing.metadata.operationsSha256 ?? null,
                   version_id: version.id,
                   version_number: version.version_number,
                 },

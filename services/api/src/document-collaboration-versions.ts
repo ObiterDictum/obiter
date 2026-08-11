@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { Pool, PoolClient } from 'pg'
+import type { Pool } from 'pg'
 import type { DocumentEditOperation } from '@obiter/contracts'
 import {
   OoxmlError,
@@ -7,23 +7,17 @@ import {
   reconcileDocumentEdits,
   serialiseDocx,
 } from '@obiter/ooxml'
+import { findExistingCollaborationMerge } from './document-collaboration-db'
 import {
-  findExistingCollaborationMerge,
-  lockCollaborationVersions,
-  type CollaborationLockedVersion,
-} from './document-collaboration-db'
-import {
-  appendAuditLog,
-  createDocumentObjectKey,
-  insertDocumentVersion,
-} from './database'
-import {
-  cleanupCandidate,
-  DocumentEditInvalidError,
+  commitPreparedVersion,
   DocumentEditStoreError,
-  readSourceDocument,
+  isCanonicalReadyDocxVersion,
+  lockCurrentAndBaseVersions,
   rollback,
-  writeCandidate,
+} from './document-version-commit'
+import {
+  DocumentEditInvalidError,
+  readSourceDocument,
 } from './document-versions'
 import type { StorageService } from './storage'
 
@@ -48,6 +42,7 @@ export type CollaborationMergeResult =
       versionId: string
       versionNumber: number
     }
+  | { status: 'sync_id_conflict' }
   | {
       status: 'conflict'
       currentVersionId: string
@@ -61,26 +56,29 @@ export async function createCollaborationMergeVersion(
   storage: StorageService,
   input: CollaborationMergeInput,
 ): Promise<CollaborationMergeResult> {
-  let client: PoolClient
+  let client
   try {
     client = await pool.connect()
   } catch {
     throw new DocumentEditStoreError()
   }
+  let commitStarted = false
 
-  let candidateKey: string | null = null
-  let commitIssued = false
   try {
     await client.query('begin')
-    const locked = await lockCollaborationVersions(client, input)
+    const locked = await lockCurrentAndBaseVersions(client, input)
     if (!locked) {
       await client.query('rollback')
       return { status: 'not_found' }
     }
 
+    const operationsSha256 = hashOperations(input.operations)
     const existing = await findExistingCollaborationMerge(client, input)
     if (existing) {
       await client.query('rollback')
+      if (existing.operations_sha256 !== operationsSha256) {
+        return { status: 'sync_id_conflict' }
+      }
       return {
         status: 'already_applied',
         baseVersionId: existing.base_version_id,
@@ -93,8 +91,8 @@ export async function createCollaborationMergeVersion(
     if (
       !current ||
       !base ||
-      !validLockedVersion(current, input) ||
-      !validLockedVersion(base, input)
+      !isCanonicalReadyDocxVersion(current, input) ||
+      !isCanonicalReadyDocxVersion(base, input)
     ) {
       await client.query('rollback')
       return { status: 'not_found' }
@@ -143,56 +141,29 @@ export async function createCollaborationMergeVersion(
       throw new DocumentEditStoreError()
     }
 
-    const versionId = `ver_${crypto.randomUUID()}`
-    const versionNumber = current.versionNumber + 1
-    candidateKey = createDocumentObjectKey({
+    commitStarted = true
+    const committed = await commitPreparedVersion(client, storage, {
       organisationId: input.organisationId,
       matterId: input.matterId,
       documentId: input.documentId,
-      versionId,
+      userId: input.userId,
+      requestId: input.requestId,
+      expectedCurrentVersionId: current.id,
+      parentVersion: current,
+      preparedBytes: mergedBytes,
+      audit: {
+        action: 'document.collaboration_merge',
+        metadata: (versionId) => ({
+          syncId: input.syncId,
+          baseVersionId: input.baseVersionId,
+          newVersionId: versionId,
+          operationCount: input.operations.length,
+          operationsSha256,
+          outcome: 'merged',
+        }),
+      },
     })
-    await writeCandidate(storage, candidateKey, mergedBytes)
-    await insertDocumentVersion(client, {
-      id: versionId,
-      organisationId: input.organisationId,
-      matterId: input.matterId,
-      documentId: input.documentId,
-      filename: current.filename,
-      fileType: current.fileType,
-      sizeBytes: mergedBytes.byteLength,
-      objectKey: candidateKey,
-      textObjectKey: null,
-      documentStatus: 'ready',
-      failureReason: null,
-      versionNumber,
-      contentSha256: createHash('sha256').update(mergedBytes).digest('hex'),
-      syncState: 'synced',
-      createdBy: input.userId,
-    })
-
-    const pointer = await client.query<{ id: string }>(
-      `
-        update matter_documents
-        set current_version_id = $5, updated_at = now()
-        where id = $1
-          and organisation_id = $2
-          and matter_id = $3
-          and current_version_id = $4
-          and deleted_at is null
-        returning id
-      `,
-      [
-        input.documentId,
-        input.organisationId,
-        input.matterId,
-        current.id,
-        versionId,
-      ],
-    )
-    if (pointer.rows.length !== 1) {
-      await client.query('rollback')
-      await cleanupCandidate(storage, candidateKey)
-      candidateKey = null
+    if (committed.status === 'stale') {
       return {
         status: 'conflict',
         currentVersionId: current.id,
@@ -200,50 +171,14 @@ export async function createCollaborationMergeVersion(
         operationIndexes: input.operations.map((_, index) => index),
       }
     }
-
-    await appendAuditLog(client, {
-      organisationId: input.organisationId,
-      userId: input.userId,
-      entityType: 'document_version',
-      entityId: versionId,
-      action: 'document.version_create',
-      metadata: {
-        documentId: input.documentId,
-        baseVersionId: current.id,
-        versionNumber,
-      },
-      requestId: input.requestId,
-    })
-    await appendAuditLog(client, {
-      organisationId: input.organisationId,
-      userId: input.userId,
-      entityType: 'document',
-      entityId: input.documentId,
-      action: 'document.collaboration_merge',
-      metadata: {
-        syncId: input.syncId,
-        baseVersionId: input.baseVersionId,
-        newVersionId: versionId,
-        operationCount: input.operations.length,
-        outcome: 'merged',
-      },
-      requestId: input.requestId,
-    })
-
-    commitIssued = true
-    await client.query('commit')
-    candidateKey = null
     return {
       status: 'merged',
       baseVersionId: input.baseVersionId,
-      versionId,
-      versionNumber,
+      versionId: committed.versionId,
+      versionNumber: committed.versionNumber,
     }
   } catch (error) {
-    if (!commitIssued) {
-      await rollback(client)
-      if (candidateKey) await cleanupCandidate(storage, candidateKey)
-    }
+    if (!commitStarted) await rollback(client)
     if (
       error instanceof DocumentEditInvalidError ||
       error instanceof DocumentEditStoreError
@@ -256,22 +191,23 @@ export async function createCollaborationMergeVersion(
   }
 }
 
-function validLockedVersion(
-  version: CollaborationLockedVersion,
-  input: CollaborationMergeInput,
-) {
-  return (
-    version.organisationId === input.organisationId &&
-    version.matterId === input.matterId &&
-    version.matterDocumentId === input.documentId &&
-    version.fileType === 'docx' &&
-    version.documentStatus === 'ready' &&
-    version.objectKey ===
-      createDocumentObjectKey({
-        organisationId: input.organisationId,
-        matterId: input.matterId,
-        documentId: input.documentId,
-        versionId: version.id,
-      })
-  )
+function hashOperations(operations: readonly DocumentEditOperation[]) {
+  return createHash('sha256').update(canonicalJson(operations)).digest('hex')
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) {
+    return `[${value.map(canonicalJson).join(',')}]`
+  }
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.entries(value).sort(([left], [right]) =>
+      left.localeCompare(right),
+    )
+    return `{${entries
+      .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
+      .join(',')}}`
+  }
+  const serialised = JSON.stringify(value)
+  if (serialised === undefined) throw new DocumentEditInvalidError()
+  return serialised
 }

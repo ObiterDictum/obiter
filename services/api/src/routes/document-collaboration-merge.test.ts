@@ -73,6 +73,7 @@ describe('collaboration merges', () => {
       baseVersionId: 'ver_1',
       newVersionId: createdBody.versionId,
       operationCount: 1,
+      operationsSha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
       outcome: 'merged',
     })
     expect(database.transactionCommands).toEqual([
@@ -91,6 +92,49 @@ describe('collaboration merges', () => {
     expect(
       database.queries.some((sql) => sql.includes('for update of document')),
     ).toBe(true)
+  })
+
+  it('returns 409 when a sync id is replayed with different operations', async () => {
+    const database = new EditDatabase()
+    const route = collaborationApp(database)
+    const created = await route.app.request(
+      '/api/documents/doc_1/collaboration/merge',
+      mergeRequest('ver_1', 'sync_reused', firstRun.id, 'First revision'),
+    )
+    const createdBody = documentCollaborationMergeResponseSchema.parse(
+      await created.json(),
+    )
+    const writes = route.storage.writes.length
+    const replay = await route.app.request(
+      '/api/documents/doc_1/collaboration/merge',
+      mergeRequest('ver_1', 'sync_reused', secondRun.id, 'Dropped revision'),
+    )
+
+    expect(created.status).toBe(201)
+    expect(replay.status).toBe(409)
+    await expect(replay.json()).resolves.toMatchObject({
+      error: {
+        code: 'conflict_detected',
+        message: 'The sync id has already been used for different edits.',
+      },
+    })
+    expect(database.versions.size).toBe(2)
+    expect(database.audits).toHaveLength(2)
+    expect(route.storage.writes).toHaveLength(writes)
+
+    const version = database.versions.get(createdBody.versionId)
+    const bytes = route.storage.binary.get(version?.object_key ?? '')
+    if (!bytes) throw new Error('Merged source is missing.')
+    const merged = await parseDocx(bytes)
+    const runs = merged.model.stories
+      .find(({ kind }) => kind === 'document')
+      ?.paragraphs.flatMap(({ runs: paragraphRuns }) => paragraphRuns)
+    expect(runs?.find(({ id }) => id === firstRun.id)?.text).toBe(
+      'First revision',
+    )
+    expect(runs?.find(({ id }) => id === secondRun.id)?.text).not.toBe(
+      'Dropped revision',
+    )
   })
 
   it('scopes a sync id to the authenticated user', async () => {

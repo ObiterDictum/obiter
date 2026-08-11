@@ -16,10 +16,7 @@ import {
   DocumentPresenceRegistry,
   validateDocumentCursor,
 } from '../document-presence'
-import {
-  createDocumentObjectKey,
-  type DocumentVersionRecord,
-} from '../database'
+import { isCanonicalReadyDocxVersion } from '../document-version-commit'
 import { DocumentEditInvalidError } from '../document-versions'
 import type { StorageService } from '../storage'
 import {
@@ -117,7 +114,14 @@ export function createDocumentCollaborationRoutes(
     const baseVersion = resolved.versions.find(
       ({ id }) => id === request.data.baseVersionId,
     )
-    if (!baseVersion || !validBaseVersion(baseVersion, resolved.document.id)) {
+    if (
+      !baseVersion ||
+      !isCanonicalReadyDocxVersion(baseVersion, {
+        organisationId: resolved.user.organisationId,
+        matterId: resolved.document.matterId,
+        documentId: resolved.document.id,
+      })
+    ) {
       return documentNotFound(c)
     }
 
@@ -146,6 +150,16 @@ export function createDocumentCollaborationRoutes(
     }
 
     if (result.status === 'not_found') return documentNotFound(c)
+    if (result.status === 'sync_id_conflict') {
+      const body: ApiErrorResponse = {
+        error: {
+          code: 'conflict_detected',
+          message: 'The sync id has already been used for different edits.',
+          requestId: c.get('requestId'),
+        },
+      }
+      return c.json(body, 409)
+    }
     if (result.status === 'conflict') {
       if (
         result.operationIndexes.some(
@@ -192,21 +206,6 @@ function resolveCollaborationDocument(
   documentId: string,
 ) {
   return resolveCurrentReadyDocumentVersion(c, pool, documentId, 'docx', 'edit')
-}
-
-function validBaseVersion(version: DocumentVersionRecord, documentId: string) {
-  return (
-    version.matterDocumentId === documentId &&
-    version.fileType === 'docx' &&
-    version.documentStatus === 'ready' &&
-    version.objectKey ===
-      createDocumentObjectKey({
-        organisationId: version.organisationId,
-        matterId: version.matterId,
-        documentId,
-        versionId: version.id,
-      })
-  )
 }
 
 function validationFailed(c: RouteContext, message: string) {
