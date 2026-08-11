@@ -1,0 +1,344 @@
+import JSZip from 'jszip'
+import { describe, expect, it } from 'vitest'
+import type { DocumentEditOperation } from '@obiter/contracts'
+
+import { buildOoxmlFixture } from '../fixtures/builder'
+import {
+  applyDocumentEdits,
+  compareXmlSemantics,
+  parseDocx,
+  reconcileDocumentEdits,
+  serialiseDocx,
+} from './index'
+
+const source = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+
+describe('bounded collaboration reconciliation', () => {
+  it('allows current-base structural edits without mutating either input', async () => {
+    const base = await parseDocx(source)
+    const current = await parseDocx(source)
+    const beforeBase = structuredClone(base.model)
+    const beforeCurrent = structuredClone(current.model)
+    const paragraphId = mainParagraphs(base)[0]?.id
+    if (!paragraphId) throw new Error('Fixture paragraph is missing.')
+
+    expect(
+      reconcileDocumentEdits(
+        base,
+        current,
+        [{ type: 'delete_paragraph', paragraphId }],
+        true,
+      ),
+    ).toEqual({ mergeable: true })
+    expect(base.model).toEqual(beforeBase)
+    expect(current.model).toEqual(beforeCurrent)
+    expect([...base.sourceParts.values()].every(({ dirty }) => !dirty)).toBe(
+      true,
+    )
+    expect([...current.sourceParts.values()].every(({ dirty }) => !dirty)).toBe(
+      true,
+    )
+  })
+
+  it('merges disjoint run edits over a stable skeleton', async () => {
+    const base = await parseDocx(source)
+    const [first, second] = firstTwoRuns(base)
+    const current = await editedSource([
+      { type: 'replace_run_text', runId: first.id, text: 'First revision' },
+    ])
+
+    expect(
+      reconcileDocumentEdits(
+        base,
+        current,
+        [
+          {
+            type: 'replace_run_text',
+            runId: second.id,
+            text: 'Second revision',
+          },
+        ],
+        false,
+      ),
+    ).toEqual({ mergeable: true })
+  })
+
+  it('treats text and direct style on one run as independent footprints', async () => {
+    const textBase = await parseDocx(source)
+    const [textRun] = firstTwoRuns(textBase)
+    const textCurrent = await editedSource([
+      { type: 'replace_run_text', runId: textRun.id, text: 'Text revision' },
+    ])
+    expect(
+      reconcileDocumentEdits(
+        textBase,
+        textCurrent,
+        [
+          {
+            type: 'set_run_style',
+            runId: textRun.id,
+            styleId: 'Heading1Char',
+          },
+        ],
+        false,
+      ),
+    ).toEqual({ mergeable: true })
+
+    const styleBase = await parseDocx(source)
+    const [styleRun] = firstTwoRuns(styleBase)
+    const styleCurrent = await editedSource([
+      {
+        type: 'set_run_style',
+        runId: styleRun.id,
+        styleId: 'Heading1Char',
+      },
+    ])
+    expect(
+      reconcileDocumentEdits(
+        styleBase,
+        styleCurrent,
+        [
+          {
+            type: 'replace_run_text',
+            runId: styleRun.id,
+            text: 'Text after style',
+          },
+        ],
+        false,
+      ),
+    ).toEqual({ mergeable: true })
+  })
+
+  it('keeps paragraph style independent from contained run text', async () => {
+    const textBase = await parseDocx(source)
+    const paragraph = mainParagraphs(textBase)[0]
+    const run = paragraph?.runs[0]
+    if (!paragraph || !run) throw new Error('Fixture region is missing.')
+    const textCurrent = await editedSource([
+      { type: 'replace_run_text', runId: run.id, text: 'Text revision' },
+    ])
+    expect(
+      reconcileDocumentEdits(
+        textBase,
+        textCurrent,
+        [
+          {
+            type: 'set_paragraph_style',
+            paragraphId: paragraph.id,
+            styleId: 'Base',
+          },
+        ],
+        false,
+      ),
+    ).toEqual({ mergeable: true })
+
+    const styleBase = await parseDocx(source)
+    const styleCurrent = await editedSource([
+      {
+        type: 'set_paragraph_style',
+        paragraphId: paragraph.id,
+        styleId: 'Base',
+      },
+    ])
+    expect(
+      reconcileDocumentEdits(
+        styleBase,
+        styleCurrent,
+        [{ type: 'replace_run_text', runId: run.id, text: 'Text revision' }],
+        false,
+      ),
+    ).toEqual({ mergeable: true })
+    expect(
+      reconcileDocumentEdits(
+        styleBase,
+        styleCurrent,
+        [
+          {
+            type: 'set_paragraph_style',
+            paragraphId: paragraph.id,
+            styleId: null,
+          },
+        ],
+        false,
+      ),
+    ).toEqual({ mergeable: false, operationIndexes: [0] })
+  })
+
+  it('reports only overlapping operation indexes', async () => {
+    const base = await parseDocx(source)
+    const [first, second] = firstTwoRuns(base)
+    const current = await editedSource([
+      { type: 'replace_run_text', runId: first.id, text: 'Winning revision' },
+    ])
+
+    expect(
+      reconcileDocumentEdits(
+        base,
+        current,
+        [
+          {
+            type: 'replace_run_text',
+            runId: second.id,
+            text: 'Disjoint revision',
+          },
+          {
+            type: 'replace_run_text',
+            runId: first.id,
+            text: 'Overlapping revision',
+          },
+        ],
+        false,
+      ),
+    ).toEqual({ mergeable: false, operationIndexes: [1] })
+  })
+
+  it('treats changed opaque run fragments as atomic conflicts', async () => {
+    const base = await parseDocx(source)
+    const [run] = firstTwoRuns(base)
+    const zip = await JSZip.loadAsync(source)
+    const entry = zip.file('word/document.xml')
+    if (!entry) throw new Error('Fixture story is missing.')
+    const xml = await entry.async('string')
+    zip.file(
+      'word/document.xml',
+      xml.replace(
+        '<w:r><w:t>Alice Example overview</w:t></w:r>',
+        '<w:r><w:tab/><w:t>Alice Example overview</w:t></w:r>',
+      ),
+    )
+    const current = await parseDocx(
+      await zip.generateAsync({ type: 'uint8array' }),
+    )
+
+    expect(
+      reconcileDocumentEdits(
+        base,
+        current,
+        [{ type: 'replace_run_text', runId: run.id, text: 'Unsafe' }],
+        false,
+      ),
+    ).toEqual({ mergeable: false, operationIndexes: [0] })
+  })
+
+  it('refuses stale structural operations and any changed skeleton', async () => {
+    const base = await parseDocx(source)
+    const paragraphId = mainParagraphs(base)[0]?.id
+    const [first] = firstTwoRuns(base)
+    if (!paragraphId) throw new Error('Fixture paragraph is missing.')
+
+    expect(
+      reconcileDocumentEdits(
+        base,
+        await parseDocx(source),
+        [
+          {
+            type: 'insert_paragraph_after',
+            paragraphId,
+            text: 'Structure',
+          },
+        ],
+        false,
+      ),
+    ).toEqual({ mergeable: false, operationIndexes: [0] })
+
+    const current = await editedSource([
+      {
+        type: 'insert_paragraph_after',
+        paragraphId,
+        text: 'Concurrent structure',
+      },
+    ])
+    expect(
+      reconcileDocumentEdits(
+        base,
+        current,
+        [{ type: 'replace_run_text', runId: first.id, text: 'Unsafe' }],
+        false,
+      ),
+    ).toEqual({ mergeable: false, operationIndexes: [0] })
+  })
+
+  it('preserves tracked changes and remains semantically stable after a merge', async () => {
+    const base = await parseDocx(source)
+    const [first, second] = firstTwoRuns(base)
+    const current = await editedSource([
+      { type: 'replace_run_text', runId: first.id, text: 'Current revision' },
+    ])
+    const foreignChanges = current.model.changes.map((change) => ({
+      ...change,
+    }))
+    const operation: DocumentEditOperation = {
+      type: 'replace_run_text',
+      runId: second.id,
+      text: 'Merged revision',
+    }
+    const reconciliation = reconcileDocumentEdits(
+      base,
+      current,
+      [operation],
+      false,
+    )
+    expect(reconciliation).toEqual({ mergeable: true })
+
+    applyDocumentEdits(current, [operation])
+    const merged = await serialiseDocx(current)
+    const reparsed = await parseDocx(merged)
+    expect(reparsed.model.changes).toEqual(foreignChanges)
+    expect(mainParagraphs(reparsed)[1]?.runs[0]?.text).toBe('Merged revision')
+
+    const secondRoundTrip = await serialiseDocx(reparsed)
+    expect(
+      compareXmlSemantics(
+        await zipText(merged, 'word/document.xml'),
+        await zipText(secondRoundTrip, 'word/document.xml'),
+      ),
+    ).toEqual({ equivalent: true })
+    const beforeParts = await zipParts(source)
+    const afterParts = await zipParts(merged)
+    for (const [name, bytes] of beforeParts) {
+      if (name !== 'word/document.xml')
+        expect(afterParts.get(name)).toEqual(bytes)
+    }
+  })
+})
+
+async function editedSource(operations: readonly DocumentEditOperation[]) {
+  const document = await parseDocx(source)
+  applyDocumentEdits(document, operations)
+  return parseDocx(await serialiseDocx(document))
+}
+
+function firstTwoRuns(document: Awaited<ReturnType<typeof parseDocx>>) {
+  const first = mainParagraphs(document)[0]?.runs[0]
+  const second = mainParagraphs(document)[1]?.runs[0]
+  if (!first || !second) throw new Error('Fixture runs are missing.')
+  return [first, second] as const
+}
+
+function mainParagraphs(document: Awaited<ReturnType<typeof parseDocx>>) {
+  return (
+    document.model.stories.find(({ kind }) => kind === 'document')
+      ?.paragraphs ?? []
+  )
+}
+
+async function zipText(bytes: Uint8Array, name: string) {
+  const zip = await JSZip.loadAsync(bytes)
+  const entry = zip.file(name)
+  if (!entry) throw new Error('Fixture part is missing.')
+  return entry.async('string')
+}
+
+async function zipParts(bytes: Uint8Array) {
+  const zip = await JSZip.loadAsync(bytes)
+  return new Map(
+    await Promise.all(
+      Object.values(zip.files)
+        .filter((entry) => !entry.dir)
+        .map(
+          async (entry) =>
+            [entry.name, await entry.async('uint8array')] as const,
+        ),
+    ),
+  )
+}

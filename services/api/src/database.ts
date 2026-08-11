@@ -37,6 +37,7 @@ export interface AuditRecordInput {
     | 'document.upload'
     | 'document.version_create'
     | 'document.edit'
+    | 'document.collaboration_merge'
     | 'document.tracked_change_accept'
     | 'document.tracked_change_reject'
     | 'document.delete'

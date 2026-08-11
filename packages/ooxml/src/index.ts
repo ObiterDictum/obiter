@@ -11,6 +11,7 @@ export {
 } from '@obiter/contracts'
 
 export { validateCommentAnchor } from './comment-anchors'
+export * from './collaboration-merge'
 export * from './equivalence'
 export * from './model'
 export * from './model-json'

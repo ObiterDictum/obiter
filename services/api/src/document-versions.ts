@@ -182,9 +182,9 @@ async function prepareSource(
   }
 }
 
-async function readSourceDocument(
+export async function readSourceDocument(
   storage: StorageService,
-  version: DocumentVersionRecord,
+  version: Pick<DocumentVersionRecord, 'objectKey'>,
 ) {
   if (!storage.readBinary) throw new DocumentEditStoreError()
   let source: Buffer
@@ -397,7 +397,7 @@ async function lockBaseVersion(
   return result.rows[0] ?? null
 }
 
-async function writeCandidate(
+export async function writeCandidate(
   storage: StorageService,
   objectKey: string,
   bytes: Uint8Array,
@@ -406,7 +406,7 @@ async function writeCandidate(
   await storage.writeBinary(objectKey, Buffer.from(bytes))
 }
 
-async function rollback(client: PoolClient) {
+export async function rollback(client: PoolClient) {
   try {
     await client.query('rollback')
   } catch {
@@ -414,7 +414,10 @@ async function rollback(client: PoolClient) {
   }
 }
 
-async function cleanupCandidate(storage: StorageService, objectKey: string) {
+export async function cleanupCandidate(
+  storage: StorageService,
+  objectKey: string,
+) {
   try {
     await storage.delete(objectKey)
   } catch {
