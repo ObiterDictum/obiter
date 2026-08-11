@@ -1,5 +1,13 @@
 import { z } from 'zod'
 
+export * from './api-error'
+export * from './document-collaboration'
+export * from './document-comments'
+export * from './document-edit'
+export * from './document-model'
+export * from './document-tracked-changes'
+export * from './xml-text'
+
 export type AppPlatform = 'web' | 'desktop'
 
 export const userRoleSchema = z.enum(['owner', 'admin', 'member'])
@@ -13,6 +21,60 @@ export type DataRegion = z.infer<typeof dataRegionSchema>
 
 export const matterStatusSchema = z.enum(['active', 'archived', 'deleted'])
 export type MatterStatus = z.infer<typeof matterStatusSchema>
+
+export const matterAccessLevelSchema = z.enum(['view', 'edit'])
+export type MatterAccessLevel = z.infer<typeof matterAccessLevelSchema>
+
+export const matterAccessDecisionSchema = z.enum(['view', 'edit', 'denied'])
+export type MatterAccessDecision = z.infer<typeof matterAccessDecisionSchema>
+
+export const matterShareGrantSchema = z.object({
+  id: z.string().min(1),
+  matterId: z.string().min(1),
+  granteeUserId: z.string().min(1),
+  accessLevel: matterAccessLevelSchema,
+  createdBy: z.string().min(1),
+  createdAt: z.string().datetime({ offset: true }),
+})
+export type MatterShareGrant = z.infer<typeof matterShareGrantSchema>
+
+export const matterShareCreateRequestSchema = z.object({
+  granteeUserId: z.string().min(1),
+  accessLevel: matterAccessLevelSchema,
+})
+export type MatterShareCreateRequest = z.infer<
+  typeof matterShareCreateRequestSchema
+>
+
+export const matterShareListResponseSchema = z.object({
+  ownerUserId: z.string().min(1),
+  shares: z.array(matterShareGrantSchema),
+})
+export type MatterShareListResponse = z.infer<
+  typeof matterShareListResponseSchema
+>
+
+export const matterShareCreateResponseSchema = z.object({
+  share: matterShareGrantSchema,
+})
+export type MatterShareCreateResponse = z.infer<
+  typeof matterShareCreateResponseSchema
+>
+
+export const matterShareRevokeRequestSchema = z.object({
+  shareId: z.string().min(1),
+})
+export type MatterShareRevokeRequest = z.infer<
+  typeof matterShareRevokeRequestSchema
+>
+
+export const matterShareRevokeResponseSchema = z.object({
+  revoked: z.literal(true),
+  shareId: z.string().min(1),
+})
+export type MatterShareRevokeResponse = z.infer<
+  typeof matterShareRevokeResponseSchema
+>
 
 export const documentStatusSchema = z.enum([
   'queued',
@@ -253,6 +315,17 @@ export const documentTextLayoutSchema = z
 
 export type DocumentTextLayout = z.infer<typeof documentTextLayoutSchema>
 
+export const documentPdfViewResponseSchema = z.object({
+  documentId: z.string().min(1),
+  versionId: z.string().min(1),
+  versionNumber: z.number().int().positive(),
+  text: z.string(),
+  layout: documentTextLayoutSchema,
+})
+export type DocumentPdfViewResponse = z.infer<
+  typeof documentPdfViewResponseSchema
+>
+
 export const redactionFinalizeInputSchema = z.object({
   outputMode: outputModeSchema,
   degradedDetectionAcknowledged: z.boolean().optional(),
@@ -302,42 +375,6 @@ export const createOrganisationInputSchema = z.object({
 export type CreateOrganisationInput = z.infer<
   typeof createOrganisationInputSchema
 >
-
-export const apiErrorCodeSchema = z.enum([
-  'unauthenticated',
-  'forbidden',
-  'validation_failed',
-  'organisation_not_found',
-  // An authenticated user with no organisation tried an org-scoped endpoint.
-  // Returned as 403 so the client can distinguish "sign in" from "create org".
-  'no_organisation',
-  'closed_beta_required',
-  'matter_not_found',
-  'document_not_found',
-  'document_version_not_found',
-  'artifact_not_found',
-  'upload_failed',
-  'storage_unavailable',
-  'job_unavailable',
-  'conflict_detected',
-  'redaction_run_not_found',
-  'span_not_found',
-  'redaction_run_not_reviewable',
-  'redaction_already_finalized',
-  'redaction_detection_failed',
-  'redaction_model_unavailable',
-  'redaction_span_integrity_error',
-])
-export type ApiErrorCode = z.infer<typeof apiErrorCodeSchema>
-
-export const apiErrorResponseSchema = z.object({
-  error: z.object({
-    code: apiErrorCodeSchema,
-    message: z.string().min(1),
-    requestId: z.string().min(1),
-  }),
-})
-export type ApiErrorResponse = z.infer<typeof apiErrorResponseSchema>
 
 export type AuthViewState =
   | { status: 'authenticated'; me: MeResponse }

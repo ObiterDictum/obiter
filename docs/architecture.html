@@ -1044,6 +1044,12 @@
               <div class="nodes">
                 <a
                   class="node"
+                  href="https://github.com/ObiterDictum/obiter/tree/dev/packages/ooxml"
+                  ><b>@obiter/ooxml</b
+                  ><span>Lossless DOCX package fidelity</span></a
+                >
+                <a
+                  class="node"
                   href="https://github.com/ObiterDictum/obiter/tree/dev/packages/redaction-policy"
                   ><b>@obiter/redaction-policy</b
                   ><span>Merge, supplement, chunk, apply</span></a
@@ -1636,6 +1642,20 @@
                 </g>
                 <g>
                   <rect
+                    x="60"
+                    y="226"
+                    width="100.6"
+                    height="30"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--warning)"
+                  />
+                  <text x="110.3" y="244.5" text-anchor="middle" class="n">
+                    @obiter/ooxml
+                  </text>
+                </g>
+                <g>
+                  <rect
                     x="330"
                     y="226"
                     width="167.2"
@@ -1796,6 +1816,13 @@
                   marker-end="url(#ah-t-build-time-dependency-graph)"
                 />
                 <path
+                  d="M110.3,256 L122.4,326"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-build-time-dependency-graph)"
+                />
+                <path
                   d="M413.6,256 Q208.0,291.0 122.4,326"
                   fill="none"
                   stroke="var(--line-strong)"
@@ -1804,6 +1831,13 @@
                 />
                 <path
                   d="M634.55,256 Q533.025,291.0 491.5,326"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-build-time-dependency-graph)"
+                />
+                <path
+                  d="M464.25,56 Q227.27499999999998,141.0 110.3,226"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
@@ -1868,7 +1902,7 @@
                 <tr>
                   <td class="id">@obiter/api</td>
                   <td class="id">
-                    contracts · legal-schema · rampart-inference ·
+                    contracts · legal-schema · ooxml · rampart-inference ·
                     redaction-policy · search-client
                   </td>
                   <td>
@@ -1892,6 +1926,11 @@
                   <td class="id">@obiter/app-shell</td>
                   <td class="id">contracts · ui</td>
                   <td>TanStack Router</td>
+                </tr>
+                <tr>
+                  <td class="id">@obiter/ooxml</td>
+                  <td class="id">contracts</td>
+                  <td>fast-xml-parser, jszip</td>
                 </tr>
                 <tr>
                   <td class="id">@obiter/redaction-policy</td>
@@ -2097,7 +2136,8 @@
                   redaction-detection · redaction-redetect ·
                   redaction-run-creation · redaction-database ·
                   redaction-audit-report · document-extraction · document-layout
-                  · pdf-glyph-layout · redaction-pdf-output · storage · authz
+                  · comments-db · pdf-glyph-layout · redaction-pdf-output ·
+                  storage · authz
                 </dd>
                 <dt>Extract</dt>
                 <dd>mammoth (DOCX) · unpdf (text-layer PDF)</dd>
@@ -2136,12 +2176,40 @@
         <section id="packages">
           <h2>Packages</h2>
           <p class="lede">
-            Nine packages carry code. Primitives sit at the bottom of the graph
+            Ten packages carry code. Primitives sit at the bottom of the graph
             and import nothing internal.
           </p>
 
           <h3>Domain</h3>
           <div class="modules">
+            <article class="module">
+              <header>
+                <h4>
+                  <a
+                    href="https://github.com/ObiterDictum/obiter/tree/dev/packages/ooxml/src"
+                    >@obiter/ooxml</a
+                  >
+                </h4>
+              </header>
+              <p>
+                Source-preserving DOCX package parsing and serialisation. Clean
+                parts retain their original bytes; deliberate text edits and
+                product-authored comment exports patch only the required XML
+                parts.
+              </p>
+              <dl class="kv">
+                <dt>Exports</dt>
+                <dd>
+                  parseDocx · serialiseDocx · serialiseDocxWithComments ·
+                  serialiseModelJson · parseModelJson · replaceTextRunText ·
+                  compareXmlSemantics · compareOoxmlPackages ·
+                  compareOoxmlProductCommentExport
+                </dd>
+                <dt>Contract</dt>
+                <dd>DocumentModelWire from @obiter/contracts</dd>
+              </dl>
+            </article>
+
             <article class="module">
               <header>
                 <h4>
@@ -2382,7 +2450,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>11 migrations, 0001 to 0012, 0008 withdrawn</dd>
+                <dd>13 migrations, 0001 to 0014, 0008 withdrawn</dd>
               </dl>
             </article>
           </div>
@@ -2500,6 +2568,18 @@
                   <td>Undo soft delete, cascading to documents and runs</td>
                 </tr>
                 <tr>
+                  <td class="id">GET · POST /api/matters/:matterId/shares</td>
+                  <td class="id">document-access.ts</td>
+                  <td>Owner-only list and upsert of matter share grants</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    DELETE /api/matters/:matterId/shares/:shareId
+                  </td>
+                  <td class="id">document-access.ts</td>
+                  <td>Owner-only revocation of a matter share grant</td>
+                </tr>
+                <tr>
                   <td class="id">POST /api/matters/:matterId/documents</td>
                   <td class="id">documents.ts</td>
                   <td>Multipart upload, up to 25 MB</td>
@@ -2508,6 +2588,68 @@
                   <td class="id">GET /api/documents/:id</td>
                   <td class="id">documents.ts</td>
                   <td>Document with immutable versions</td>
+                </tr>
+                <tr>
+                  <td class="id">GET /api/documents/:id/model</td>
+                  <td class="id">document-model.ts</td>
+                  <td>Current ready DOCX model for read-only viewing</td>
+                </tr>
+                <tr>
+                  <td class="id">POST /api/documents/:id/edit</td>
+                  <td class="id">document-edit.ts</td>
+                  <td>
+                    Typed edits, optionally recorded as tracked changes, saved
+                    as a locked immutable version N+1
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    GET /api/documents/:id/collaboration/sync<br />
+                    PUT /api/documents/:id/collaboration/presence<br />
+                    POST /api/documents/:id/collaboration/merge
+                  </td>
+                  <td class="id">document-collaboration.ts</td>
+                  <td>
+                    No-store polling, ephemeral typed cursors, and bounded OT
+                    merges into locked immutable versions
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">GET /api/documents/:id/tracked-changes</td>
+                  <td class="id">tracked-changes.ts</td>
+                  <td>
+                    View-level typed change list for a selected ready DOCX
+                    version
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    POST /api/documents/:id/tracked-changes/decision
+                  </td>
+                  <td class="id">tracked-changes.ts</td>
+                  <td>
+                    Edit-level accept or reject saved as a locked immutable
+                    version N+1
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">GET /api/documents/:id/pdf-view</td>
+                  <td class="id">document-pdf-view.ts</td>
+                  <td>
+                    Current ready PDF extracted view for read-only viewing
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">GET · POST /api/documents/:id/comments</td>
+                  <td class="id">comments.ts</td>
+                  <td>View-gated list and edit-gated comment creation</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    PATCH /api/documents/:id/comments/:commentId/resolve
+                  </td>
+                  <td class="id">comments.ts</td>
+                  <td>Edit-gated, audited comment resolution</td>
                 </tr>
                 <tr>
                   <td class="id">PATCH /api/documents/:id/restore</td>
@@ -2781,11 +2923,14 @@
                 </tr>
                 <tr>
                   <td class="id">404</td>
-                  <td class="id">redaction_run_not_found · span_not_found</td>
+                  <td class="id">
+                    matter_not_found · matter_share_not_found ·
+                    redaction_run_not_found · span_not_found
+                  </td>
                   <td>
-                    Also returned when a row exists but belongs to another
-                    organisation, so the API never confirms the existence of
-                    another tenant's data.
+                    Matter access denial uses the same code as an unknown,
+                    deleted or cross-organisation matter, so the API never
+                    confirms the existence of inaccessible tenant data.
                   </td>
                 </tr>
                 <tr>
@@ -2823,8 +2968,11 @@
         <section id="auth">
           <h2>Auth and scoping</h2>
           <p class="lede">
-            Authentication is better-auth. Authorisation is a thin layer in
-            <code>authz.ts</code> that every business route calls.
+            Authentication is better-auth. Organisation authorisation lives in
+            <code>authz.ts</code>. M1.25 S1b ships the per-matter resolver in
+            <code>document-access.ts</code> as a forward contract for S2. The
+            share-management router retains its owner-only check so it can
+            distinguish forbidden access from a missing matter.
           </p>
           <div class="scroll">
             <table>
@@ -2858,12 +3006,14 @@
             </table>
           </div>
           <div class="callout">
-            <b>Organisation scoping is the security boundary.</b> Every query
-            touching tenant data filters on <code>organisation_id</code>, and
-            foreign keys are composite, so the database rejects a
-            cross-organisation reference rather than relying on the query being
-            written correctly. Web uses cookie sessions; desktop uses the bearer
-            plugin.
+            <b>Organisation and matter scoping are security boundaries.</b>
+            Every query touching tenant data filters on
+            <code>organisation_id</code>, and foreign keys are composite, so the
+            database rejects a cross-organisation reference rather than relying
+            on the query being written correctly. M1.25 matter document access
+            resolves the matter creator first, then an edit or view grant, with
+            no administrator override. Denial is the uniform matter 404. Web
+            uses cookie sessions; desktop uses the bearer plugin.
           </div>
         </section>
 
@@ -2994,6 +3144,23 @@
                 </g>
                 <g>
                   <rect
+                    x="230"
+                    y="190"
+                    width="100.6"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--line-strong)"
+                  />
+                  <text x="280.3" y="207" text-anchor="middle" class="n">
+                    matter_shares
+                  </text>
+                  <text x="280.3" y="218" text-anchor="middle" class="s">
+                    view · edit
+                  </text>
+                </g>
+                <g>
+                  <rect
                     x="60"
                     y="280"
                     width="118.8"
@@ -3021,6 +3188,23 @@
                   </text>
                   <text x="122.4" y="388" text-anchor="middle" class="s">
                     immutable
+                  </text>
+                </g>
+                <g>
+                  <rect
+                    x="240"
+                    y="300"
+                    width="124.8"
+                    height="41"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--line-strong)"
+                  />
+                  <text x="302.4" y="317" text-anchor="middle" class="n">
+                    document_comments
+                  </text>
+                  <text x="302.4" y="328" text-anchor="middle" class="s">
+                    stable anchor
                   </text>
                 </g>
                 <g>
@@ -3085,6 +3269,26 @@
                   organisation_id
                 </text>
                 <path
+                  d="M230,210.5 L156.2,210.5"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-entity-relationships)"
+                />
+                <text x="193.1" y="205.5" text-anchor="middle" class="e">
+                  matter + org
+                </text>
+                <path
+                  d="M280.3,190 L124.0,133"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-entity-relationships)"
+                />
+                <text x="232.15" y="161.5" text-anchor="middle" class="e">
+                  grantee
+                </text>
+                <path
                   d="M119.4,280 L108.1,231"
                   fill="none"
                   stroke="var(--line-strong)"
@@ -3103,6 +3307,26 @@
                 />
                 <text x="174.9" y="335.0" text-anchor="middle" class="e">
                   + matter_id
+                </text>
+                <path
+                  d="M240,320.5 L178.8,295.0"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-entity-relationships)"
+                />
+                <text x="209.4" y="299.75" text-anchor="middle" class="e">
+                  doc + matter + org
+                </text>
+                <path
+                  d="M302.4,341 L184.8,380.5"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-entity-relationships)"
+                />
+                <text x="278.6" y="366.75" text-anchor="middle" class="e">
+                  nullable provenance
                 </text>
                 <path
                   d="M420,300.5 L184.8,380.5"
@@ -3151,10 +3375,11 @@
             </div>
             <figcaption>
               Composite foreign keys carry the full ancestry: a document version
-              references its document, matter and organisation together, so the
+              references its document, matter and organisation together, and a
+              matter share references its matter with the organisation id. The
               database refuses a cross-organisation row rather than relying on
-              the query filtering correctly. legal_source_documents sits outside
-              the boundary because the judgment corpus is public and shared.
+              query filtering. legal_source_documents sits outside the boundary
+              because the judgment corpus is public and shared.
             </figcaption>
           </figure>
           <div class="scroll">
@@ -3198,6 +3423,14 @@
                   <td class="id">0002</td>
                 </tr>
                 <tr>
+                  <td class="id">matter_shares</td>
+                  <td>
+                    Per-matter view or edit grants. Retained while a matter is
+                    soft-deleted and effective again if it is restored.
+                  </td>
+                  <td class="id">0013</td>
+                </tr>
+                <tr>
                   <td class="id">matter_documents</td>
                   <td>Documents within a matter</td>
                   <td class="id">0002</td>
@@ -3209,6 +3442,14 @@
                     keys
                   </td>
                   <td class="id">0002</td>
+                </tr>
+                <tr>
+                  <td class="id">document_comments</td>
+                  <td>
+                    Document-scoped plain-text comments with stable paragraph
+                    ranges, version provenance and resolution lifecycle
+                  </td>
+                  <td class="id">0014</td>
                 </tr>
                 <tr>
                   <td class="id">artifacts</td>
@@ -3278,6 +3519,12 @@
                     org/&lt;id&gt;/matters/&lt;id&gt;/documents/&lt;id&gt;/versions/&lt;id&gt;/text
                   </td>
                   <td>Extracted text</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    org/&lt;id&gt;/matters/&lt;id&gt;/documents/&lt;id&gt;/versions/&lt;id&gt;/model.json
+                  </td>
+                  <td>Validated derived OOXML wire model</td>
                 </tr>
                 <tr>
                   <td class="id">
@@ -5499,8 +5746,8 @@
         <footer>
           <p>
             Generated from workspace manifests, migrations, route modules and
-            source on <code>dev</code>, 2026-07-27. Regenerate rather than
-            patch: a stale map is worse than none.
+            source on <code>feat/m125-access</code>, 2026-08-10. Regenerate
+            rather than patch: a stale map is worse than none.
           </p>
         </footer>
       </main>

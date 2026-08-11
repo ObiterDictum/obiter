@@ -8,6 +8,7 @@ These folders hold the executable planning layer for Phase 0, Search, and Phase 
 - [App Shell Rebuild](app-shell/README.md) — M1 foundation + the component contract that gates Redact
 - [Search](search/README.md)
 - [Atlas](atlas/README.md)
+- [Documents](documents/README.md)
 - [Verify](verify/README.md)
 - [Redact](redact/README.md)
 - [Research](research/README.md)
