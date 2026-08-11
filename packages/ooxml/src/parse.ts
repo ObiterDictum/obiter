@@ -88,6 +88,7 @@ function parseParts(
   }
   const stories: DocumentModelWire['stories'] = []
   const textRunAnchors: OoxmlDocument['textRunAnchors'] = new Map()
+  const paragraphAnchors: OoxmlDocument['paragraphAnchors'] = new Map()
   const preservedXmlFragments: DocumentModelWire['preservedXmlFragments'] = []
 
   for (const [partName, kind] of typedParts.stories) {
@@ -101,6 +102,8 @@ function parseParts(
     stories.push(parsed.story)
     for (const anchor of parsed.anchors)
       textRunAnchors.set(anchor.wire.id, anchor)
+    for (const anchor of parsed.paragraphAnchors)
+      paragraphAnchors.set(anchor.wire.id, anchor)
     preservedXmlFragments.push(
       ...parsed.trackedChanges.map(({ sourceFragment }) => ({
         partName,
@@ -133,6 +136,7 @@ function parseParts(
     },
     sourceParts,
     textRunAnchors,
+    paragraphAnchors,
   }
 }
 

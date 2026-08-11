@@ -38,6 +38,8 @@ export interface AuditRecordInput {
     | 'document.version_create'
     | 'document.delete'
     | 'document.restore'
+    | 'document.comment_create'
+    | 'document.comment_resolve'
     | 'redaction.run_create'
     | 'redaction.run_redetect'
     | 'redaction.span_decision'
