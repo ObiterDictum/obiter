@@ -112,6 +112,18 @@ function parseParagraph(
       : identity.allocator.nextParagraphId(),
     identity,
   )
+  const propertiesElement = elements.find(
+    (element) => element.parent === paragraphElement && isWord(element, 'pPr'),
+  )
+  const styleElement = propertiesElement
+    ? elements.find(
+        (element) =>
+          element.parent === propertiesElement && isWord(element, 'pStyle'),
+      )
+    : undefined
+  const styleId = styleElement
+    ? attributeValue(styleElement, WORD_NAMESPACE, 'val')
+    : undefined
   const runs: DocumentTextRunWire[] = []
   const anchors: TextRunAnchor[] = []
   const runElements = elements.filter(
@@ -138,6 +150,7 @@ function parseParagraph(
     id,
     ...(sourceParaId ? { sourceParaId } : {}),
     ...(sourceTextId ? { sourceTextId } : {}),
+    ...(styleId ? { styleId } : {}),
     runs,
     preservedXmlFragments: elements
       .filter(
@@ -153,6 +166,16 @@ function parseParagraph(
       partName,
       wire: paragraph,
       paragraphRange: elementRange(paragraphElement),
+      ...(propertiesElement
+        ? { paragraphPropertiesRange: elementRange(propertiesElement) }
+        : {}),
+      ...(styleElement
+        ? { paragraphStyleRange: elementRange(styleElement) }
+        : {}),
+      hasTrackedChanges: elements.some(
+        (element) =>
+          isTrackedChange(element) && isDescendantOf(element, paragraphElement),
+      ),
       runs: anchors,
     } satisfies ParagraphAnchor,
   }
@@ -180,6 +203,19 @@ function parseRun(
       isDescendantOf(element, runElement) &&
       !hasTrackedChangeAncestor(element),
   )
+  const propertiesElements = elements.filter(
+    (element) => element.parent === runElement && isWord(element, 'rPr'),
+  )
+  const propertiesElement = propertiesElements[0]
+  const styleElement = propertiesElement
+    ? elements.find(
+        (element) =>
+          element.parent === propertiesElement && isWord(element, 'rStyle'),
+      )
+    : undefined
+  const styleId = styleElement
+    ? attributeValue(styleElement, WORD_NAMESPACE, 'val')
+    : undefined
   const anchoredTextElements = textElements
     .filter((element) => !element.selfClosing)
     .map(elementRange)
@@ -190,6 +226,7 @@ function parseRun(
   const wire: DocumentTextRunWire = {
     id,
     ...(sourceTextId ? { sourceTextId } : {}),
+    ...(styleId ? { styleId } : {}),
     text: textRanges
       .map(({ start, end }) => decodeXmlReferences(source.slice(start, end)))
       .join(''),
@@ -207,11 +244,13 @@ function parseRun(
       runRange: elementRange(runElement),
       textRanges,
       textElements: anchoredTextElements,
-      runProperties: elements
-        .filter(
-          (element) => element.parent === runElement && isWord(element, 'rPr'),
-        )
-        .map((element) => elementFragment(source, element)),
+      runProperties: propertiesElements.map((element) =>
+        elementFragment(source, element),
+      ),
+      ...(propertiesElement
+        ? { runPropertiesRange: elementRange(propertiesElement) }
+        : {}),
+      ...(styleElement ? { runStyleRange: elementRange(styleElement) } : {}),
     },
   }
 }
