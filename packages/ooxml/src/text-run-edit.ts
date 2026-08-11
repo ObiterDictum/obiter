@@ -1,6 +1,9 @@
 import type { OoxmlDocument, TextRunAnchor } from './model'
 import { escapeXmlText, setOverlayReplacement } from './parts/overlay'
 
+// P10: extracting replaceTextRunText changed overlay keys to the run-scoped
+// `:text:` namespace, added xml:space for whitespace-bounded replacements, and
+// changed an unavailable target from model-node-not-found to model-node-not-editable.
 export function replaceTextRunAtAnchor(
   document: OoxmlDocument,
   anchor: TextRunAnchor,
