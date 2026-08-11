@@ -2597,7 +2597,28 @@
                 <tr>
                   <td class="id">POST /api/documents/:id/edit</td>
                   <td class="id">document-edit.ts</td>
-                  <td>Typed edits saved as a locked immutable version N+1</td>
+                  <td>
+                    Typed edits, optionally recorded as tracked changes, saved
+                    as a locked immutable version N+1
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">GET /api/documents/:id/tracked-changes</td>
+                  <td class="id">tracked-changes.ts</td>
+                  <td>
+                    View-level typed change list for a selected ready DOCX
+                    version
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    POST /api/documents/:id/tracked-changes/decision
+                  </td>
+                  <td class="id">tracked-changes.ts</td>
+                  <td>
+                    Edit-level accept or reject saved as a locked immutable
+                    version N+1
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">GET /api/documents/:id/pdf-view</td>

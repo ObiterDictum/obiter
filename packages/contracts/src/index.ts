@@ -3,6 +3,8 @@ import { z } from 'zod'
 export * from './document-comments'
 export * from './document-edit'
 export * from './document-model'
+export * from './document-tracked-changes'
+export * from './xml-text'
 
 export type AppPlatform = 'web' | 'desktop'
 

@@ -103,7 +103,7 @@ describe('OOXML fidelity corpus', () => {
     const document = await parseFixture('full-fidelity-with-w14-ids')
     const changes =
       document.sourceParts.get('word/document.xml')?.trackedChanges
-    expect(changes?.map(({ elementName }) => elementName)).toEqual([
+    expect(changes?.map(({ wire }) => wire.elementName)).toEqual([
       'ins',
       'del',
       'moveFrom',
@@ -111,7 +111,7 @@ describe('OOXML fidelity corpus', () => {
       'pPrChange',
       'rPrChange',
     ])
-    expect(changes?.map(({ author }) => author)).toEqual([
+    expect(changes?.map(({ wire }) => wire.author)).toEqual([
       'Alice Example',
       'Jane Example',
       'Alice Example',
@@ -119,7 +119,7 @@ describe('OOXML fidelity corpus', () => {
       'Alice Example',
       'Jane Example',
     ])
-    expect(changes?.map(({ date }) => date)).toEqual([
+    expect(changes?.map(({ wire }) => wire.date)).toEqual([
       '2026-08-10T10:00:00Z',
       '2026-08-10T10:01:00Z',
       '2026-08-10T10:02:00Z',
@@ -173,8 +173,20 @@ describe('OOXML fidelity corpus', () => {
 
     const reparsed = await parseDocx(output)
     expect(
-      reparsed.sourceParts.get('word/document.xml')?.trackedChanges,
-    ).toEqual(document.sourceParts.get('word/document.xml')?.trackedChanges)
+      reparsed.sourceParts
+        .get('word/document.xml')
+        ?.trackedChanges.map(({ sourceFragment, wire }) => ({
+          sourceFragment,
+          wire,
+        })),
+    ).toEqual(
+      document.sourceParts
+        .get('word/document.xml')
+        ?.trackedChanges.map(({ sourceFragment, wire }) => ({
+          sourceFragment,
+          wire,
+        })),
+    )
     expect(reparsed.model.stories[0]?.paragraphs[0]).toMatchObject({
       sourceParaId: 'A1B2C3D4',
       sourceTextId: '01020304',
