@@ -571,3 +571,105 @@ byte-identity guarantee. The applicable defect patterns are P1, P2, P3, P4,
 P7, and P10. Move creation is explicitly deferred, and the U6 instruction
 that foreign origin is visibly distinguishable is stale because OOXML carries
 no reliable Obiter-origin marker without adding forbidden durable metadata.
+
+### M1.25 multiplayer editing: bounded typed-operation reconciliation and polling (11 August 2026)
+
+Context: M1.25 S6 adds multiplayer editing after the S4 immutable edit path
+and the S5 tracked-change path. The relevant package surfaces are
+`packages/ooxml/src/model.ts`, `packages/ooxml/src/model-edits.ts`,
+`packages/ooxml/src/tracked-edits.ts`, `packages/ooxml/src/comment-anchors.ts`,
+and `packages/ooxml/src/serialise.ts`. The relevant API surfaces are
+`packages/contracts/src/document-edit.ts`,
+`services/api/src/document-versions.ts`,
+`services/api/src/routes/document-edit.ts`,
+`services/api/src/routes/document-route-shared.ts`,
+`services/api/src/document-access.ts`, and `services/api/src/app.ts`.
+
+Decision: use HTTP polling through the existing Hono API, with no websocket
+or Redis dependency in S6. The new collaboration sync route reports the
+organisation-scoped current version and ephemeral cursors. A presence update
+route writes to a bounded process-local registry only. The registry expires
+entries after 15 seconds, caps each document at 50 users and the process at
+1,000 document buckets, binds user ids from the authenticated session, and
+carries only a typed main-story cursor. It never stores document content,
+comment text, display names, or audit rows. The editor polls the sync route
+and reloads the existing model route when the current version id changes.
+
+The actual branch does not contain a worker implementation or Redis runtime:
+`services/worker/README.md` is a placeholder, `infra/docker/compose.yaml`
+starts PostgreSQL only, and `services/api/package.json` has no Redis or
+websocket client. Redis remains a future adapter seam, not an S6 prerequisite.
+A multi-process deployment may omit presence from a poll that lands on a
+different process, but this cannot affect document versions or content.
+
+Decision: use a bounded server-side operation reconciliation algorithm over
+the typed S4/S5 operations. It is OT-shaped but not a general OT framework,
+and it is not a CRDT. The pure logic belongs in a focused `@obiter/ooxml`
+module and receives parsed base and current documents plus the existing typed
+operation list. Verbatim subtrees are opaque atoms and are never merged by
+raw XML replacement.
+
+If the request base is current, existing S4 operations apply normally. If it
+is stale, only non-structural operations over an unchanged typed skeleton are
+automatically reconciled. Text, direct run style, and direct paragraph style
+fields have separate semantic footprints. Different runs, and independent
+text and style fields, can merge. Opaque changes at a containing region,
+missing targets, changed run or paragraph skeletons, insertions, deletions,
+and overlapping footprints return a 409 conflict response with the current
+version id and operation indexes. The current concurrent version is the
+surfaced immutable conflict version; S6 does not create an empty duplicate.
+The losing operation never silently overwrites it. A disjoint stale request
+creates the next immutable version.
+
+This restriction follows the identity choices in the S1 and S4 decisions.
+`w14:paraId` and `w14:textId` are passed through, but absent ids and newly
+inserted nodes use non-serialised model ids. S6 therefore does not claim to
+merge stale structural edits where identity cannot be proved. This is a
+conservative extension of the existing model rather than a speculative CRDT.
+
+Decision: add `packages/contracts/src/document-collaboration.ts`, re-exported
+from `packages/contracts/src/index.ts`. The contracts are strict and
+additive. They cover a cursor `{ paragraphId, runId, offset }`, a presence
+update `{ cursor: Cursor | null }`, a sync response containing
+`documentId`, `currentVersionId`, `currentVersionNumber`, `changed`, and up
+to 50 `{ userId, cursor }` participants, a merge request containing
+`baseVersionId`, bounded client-generated `syncId`, existing typed edit
+operations, and optional `trackChanges`, and a merge response containing the
+version ids, number, sync id, and `outcome: merged | already_applied`. A
+conflict response adds `currentVersionId`, `currentVersionNumber`, and unique
+operation indexes to the existing `conflict_detected` error. No contract
+contains source text, raw XML, comments, storage keys, filenames, display
+names, or diagnostics.
+
+Decision: add `services/api/src/routes/document-collaboration.ts` with
+`GET /api/documents/:id/collaboration/sync`,
+`PUT /api/documents/:id/collaboration/presence`, and
+`POST /api/documents/:id/collaboration/merge`. Every route uses
+`resolveCurrentReadyDocumentVersion` with required edit access, preserving
+the session, organisation, organisation-scoped document, shared matter
+access, ready-DOCX, and no-store order. The merge service validates the base
+version and repeats the exact current-pointer check under `FOR UPDATE`.
+There is no change to `documents.ts`, extraction, upload, or legacy routes.
+
+Successful merges belong in `services/api/src/document-versions.ts` and use
+the S4/S5 source-key, immutable version, compensation, and audit discipline.
+A successful merge writes one ready DOCX version with a null text artifact,
+then `document.version_create` and `document.collaboration_merge` in the same
+transaction. The latter stores only ids, operation count, and outcome. The
+`syncId` is checked under the document lock against the durable collaboration
+audit event, so a retry returns the original version without a second write.
+Conflicts and presence are not audited. No version N is mutated.
+
+The applicable defect patterns are P1, P2, P3, P4, P7, P10, P13, and P14.
+P1 requires the existing all-part preservation tests around every merge. P2
+requires curated conflict and storage errors with no raw content in durable
+state. P3 requires the shared route gates for sync, presence, and merge. P4
+requires typed semantic footprints. P7 requires one contracts module. P10
+makes the narrow OT and structural-conflict semantics explicit. P13 requires
+allowing disjoint stale edits rather than rejecting every stale base. P14
+requires no ratio or metric with an unguarded empty denominator.
+
+The plan's Redis wording is stale relative to the checked-out runtime, and
+its phrase that a conflicting edit creates a new version is under-specified.
+This decision records that the concurrent winner is the surfaced new version,
+while the losing same-region request returns 409 and creates no duplicate.

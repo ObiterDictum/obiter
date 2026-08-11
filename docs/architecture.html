@@ -2603,6 +2603,18 @@
                   </td>
                 </tr>
                 <tr>
+                  <td class="id">
+                    GET /api/documents/:id/collaboration/sync<br />
+                    PUT /api/documents/:id/collaboration/presence<br />
+                    POST /api/documents/:id/collaboration/merge
+                  </td>
+                  <td class="id">document-collaboration.ts</td>
+                  <td>
+                    No-store polling, ephemeral typed cursors, and bounded OT
+                    merges into locked immutable versions
+                  </td>
+                </tr>
+                <tr>
                   <td class="id">GET /api/documents/:id/tracked-changes</td>
                   <td class="id">tracked-changes.ts</td>
                   <td>
