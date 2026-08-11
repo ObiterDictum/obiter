@@ -32,10 +32,18 @@ export interface AuditRecordInput {
     | 'matter.update'
     | 'matter.delete'
     | 'matter.restore'
+    | 'matter.share_grant'
+    | 'matter.share_revoke'
     | 'document.upload'
     | 'document.version_create'
+    | 'document.edit'
+    | 'document.collaboration_merge'
+    | 'document.tracked_change_accept'
+    | 'document.tracked_change_reject'
     | 'document.delete'
     | 'document.restore'
+    | 'document.comment_create'
+    | 'document.comment_resolve'
     | 'redaction.run_create'
     | 'redaction.run_redetect'
     | 'redaction.span_decision'
@@ -142,6 +150,24 @@ export interface CreateDocumentInput {
   sizeBytes: number
   contentSha256: string
   syncState?: SyncState
+}
+
+export interface InsertDocumentVersionInput {
+  id: string
+  organisationId: string
+  matterId: string
+  documentId: string
+  filename: string
+  fileType: string
+  sizeBytes: number
+  objectKey: string
+  textObjectKey: string | null
+  documentStatus: DocumentStatus
+  failureReason: string | null
+  versionNumber: number
+  contentSha256: string
+  syncState: SyncState
+  createdBy: string
 }
 
 export function createPool(env: ApiEnv) {
@@ -856,13 +882,51 @@ function createDocumentVersionId() {
   return `ver_${crypto.randomUUID()}`
 }
 
-function createDocumentObjectKey(input: {
+export function createDocumentObjectKey(input: {
   organisationId: string
   matterId: string
   documentId: string
   versionId: string
 }) {
   return `org/${input.organisationId}/matters/${input.matterId}/documents/${input.documentId}/versions/${input.versionId}/source`
+}
+
+export async function insertDocumentVersion(
+  client: PoolClient,
+  input: InsertDocumentVersionInput,
+) {
+  const result = await client.query<DocumentVersionRow>(
+    `
+      insert into document_versions (
+        id, organisation_id, matter_id, matter_document_id, filename, file_type,
+        size_bytes, object_key, text_object_key, document_status, failure_reason,
+        version_number, content_sha256, sync_state, created_by, created_at, updated_at
+      )
+      values (
+        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11,
+        $12, $13, $14, $15, now(), now()
+      )
+      returning ${versionColumns}
+    `,
+    [
+      input.id,
+      input.organisationId,
+      input.matterId,
+      input.documentId,
+      input.filename,
+      input.fileType,
+      input.sizeBytes,
+      input.objectKey,
+      input.textObjectKey,
+      input.documentStatus,
+      input.failureReason,
+      input.versionNumber,
+      input.contentSha256,
+      input.syncState,
+      input.createdBy,
+    ],
+  )
+  return mapVersion(result.rows[0])
 }
 
 async function getDocumentVersion(
@@ -926,31 +990,23 @@ export async function createDocument(
       versionId,
     })
 
-    const versionResult = await client.query<DocumentVersionRow>(
-      `
-        insert into document_versions (
-          id, organisation_id, matter_id, matter_document_id, filename, file_type,
-          size_bytes, object_key, document_status, version_number,
-          content_sha256, sync_state, created_by, created_at, updated_at
-        )
-        values ($1, $2, $3, $4, $5, $6, $7, $8, 'queued', 1, $9, $10, $11, now(), now())
-        returning ${versionColumns}
-      `,
-      [
-        versionId,
-        input.organisationId,
-        input.matterId,
-        document.id,
-        input.filename,
-        input.fileType,
-        input.sizeBytes,
-        objectKey,
-        input.contentSha256,
-        input.syncState ?? 'synced',
-        input.userId,
-      ],
-    )
-    const version = mapVersion(versionResult.rows[0])
+    const version = await insertDocumentVersion(client, {
+      id: versionId,
+      organisationId: input.organisationId,
+      matterId: input.matterId,
+      documentId: document.id,
+      filename: input.filename,
+      fileType: input.fileType,
+      sizeBytes: input.sizeBytes,
+      objectKey,
+      textObjectKey: null,
+      documentStatus: 'queued',
+      failureReason: null,
+      versionNumber: 1,
+      contentSha256: input.contentSha256,
+      syncState: input.syncState ?? 'synced',
+      createdBy: input.userId,
+    })
 
     const updatedDocumentResult = await client.query<MatterDocumentRow>(
       `

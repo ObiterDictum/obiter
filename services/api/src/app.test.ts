@@ -221,6 +221,28 @@ describe('createApiApp', () => {
     })
   })
 
+  it('mounts the document comments router behind session authentication', async () => {
+    const auth = {
+      api: { getSession: async () => null },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const app = createApiApp(
+      testEnv,
+      createPool(async () => {
+        throw new Error('Comments must authenticate before database access.')
+      }),
+      { auth },
+    )
+
+    const response = await app.request('/api/documents/doc_1/comments')
+
+    expect(response.status).toBe(401)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'unauthenticated' },
+    })
+  })
+
   it('returns the active organisation for a real session at /api/me', async () => {
     const auth = {
       api: {
@@ -334,6 +356,97 @@ describe('createApiApp', () => {
 
     expect(response.status).toBe(200)
     await expect(response.json()).resolves.toMatchObject({ matters: [] })
+  })
+
+  it('mounts share routes and provisions an org-less session user', async () => {
+    const getSession = vi.fn(async () => ({
+      user: { id: 'usr_2', organisationId: null },
+      session: { id: 'ses_2' },
+    }))
+    const auth = {
+      api: { getSession },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const directQueries: unknown[][] = []
+    const provisioningQueries: string[] = []
+    const app = createApiApp(
+      testEnv,
+      createHybridPool(
+        async (...args) => {
+          directQueries.push(args)
+          const sql = String(args[0])
+          if (sql.includes('from matters')) {
+            return {
+              rows: [
+                {
+                  id: 'mtr_1',
+                  organisation_id: 'org_personal',
+                  name: 'Personal matter',
+                  description: null,
+                  primary_jurisdiction: 'england_and_wales',
+                  secondary_jurisdictions: [],
+                  legal_domains: [],
+                  client_reference: '',
+                  status: 'active',
+                  created_by: 'usr_2',
+                  created_at: '2026-08-10T10:00:00.000Z',
+                  updated_at: '2026-08-10T10:00:00.000Z',
+                  deleted_at: null,
+                  deleted_by: null,
+                },
+              ],
+            }
+          }
+          if (sql.includes('from matter_shares')) return { rows: [] }
+          return { rows: [] }
+        },
+        async (...args) => {
+          const sql = String(args[0])
+          provisioningQueries.push(sql)
+          if (sql === 'begin' || sql === 'commit' || sql === 'rollback') {
+            return { rows: [] }
+          }
+          if (sql.includes('select "organisationId"')) {
+            return { rows: [{ organisationId: null, role: null }] }
+          }
+          if (sql.includes('insert into organisations')) {
+            return {
+              rows: [
+                {
+                  id: 'org_personal',
+                  name: 'Personal workspace',
+                  plan: 'private_beta',
+                },
+              ],
+            }
+          }
+          return { rows: [] }
+        },
+      ),
+      { auth },
+    )
+
+    const response = await app.request('/api/matters/mtr_1/shares')
+
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({
+      ownerUserId: 'usr_2',
+      shares: [],
+    })
+    expect(getSession).toHaveBeenCalledTimes(1)
+    expect(provisioningQueries).toContainEqual(
+      expect.stringContaining('insert into organisations'),
+    )
+    expect(directQueries).toEqual([
+      [
+        expect.stringContaining('from matters'),
+        ['mtr_1', 'org_personal', false],
+      ],
+      [
+        expect.stringContaining('from matter_shares'),
+        ['org_personal', 'mtr_1'],
+      ],
+    ])
   })
 
   it('creates an organisation for an org-less user via POST /api/organisations', async () => {

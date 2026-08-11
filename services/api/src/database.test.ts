@@ -167,6 +167,10 @@ describe('matter workspace database operations', () => {
       expect.stringMatching(
         /^org\/org_1\/matters\/mtr_1\/documents\/doc_1\/versions\/ver_.+\/source$/,
       ),
+      null,
+      'queued',
+      null,
+      1,
       'a'.repeat(64),
       'synced',
       'usr_1',

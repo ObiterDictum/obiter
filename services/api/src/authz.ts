@@ -15,6 +15,7 @@ import { ensureOrganisationForUser } from './database'
  */
 export interface AuthzUser {
   id: string
+  name?: string
   organisationId?: string | null
   role?: UserRole | null
 }
@@ -28,6 +29,7 @@ export type AuthzContext = Context<{ Variables: AuthzVariables }>
 
 export interface AuthenticatedOrgUser {
   id: string
+  name?: string
   organisationId: string
   role: UserRole
 }
@@ -49,6 +51,7 @@ export async function ensureOrgUser(
   if (user.organisationId) {
     return {
       id: user.id,
+      ...(user.name ? { name: user.name } : {}),
       organisationId: user.organisationId,
       role: user.role ?? 'member',
     }
@@ -66,6 +69,7 @@ export async function ensureOrgUser(
     })
     return {
       id: user.id,
+      ...(user.name ? { name: user.name } : {}),
       organisationId: ensured.organisationId,
       role: ensured.role,
     }

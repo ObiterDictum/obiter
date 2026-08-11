@@ -16,11 +16,19 @@ import {
   createPostgresLegalAuthoritySourceStore,
 } from './routes/legal-search'
 import { createChangelogRoutes } from './routes/changelog'
+import { createCommentsRoutes } from './routes/comments'
+import { createDocumentAccessRoutes } from './routes/document-access'
+import { createDocumentCollaborationRoutes } from './routes/document-collaboration'
+import { createDocumentEditRoutes } from './routes/document-edit'
+import { createDocumentModelRoutes } from './routes/document-model'
+import { createDocumentPdfViewRoutes } from './routes/document-pdf-view'
 import { createDocumentsRoutes } from './routes/documents'
 import { createMattersRoutes } from './routes/matters'
 import { createOrganisationsRoutes } from './routes/organisations'
 import { configureRedactionDetector } from './redaction-detection'
 import { createRedactRoutes } from './routes/redact'
+import { createTrackedChangeRoutes } from './routes/tracked-changes'
+import { DocumentPresenceRegistry } from './document-presence'
 import { createLocalStorage, type StorageService } from './storage'
 
 type Auth = ReturnType<typeof createAuth>
@@ -78,6 +86,7 @@ export function createApiApp(
   })
   const auth = options.auth ?? createAuth(env, pool)
   const storage = options.storage ?? createLocalStorage()
+  const presence = new DocumentPresenceRegistry()
   const app = new Hono<{ Variables: AppVariables }>()
 
   app.onError((error, c) => {
@@ -103,7 +112,7 @@ export function createApiApp(
     cors({
       origin: (origin) => corsAllowedOrigin(env, origin),
       allowHeaders: ['Content-Type', 'Authorization'],
-      allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+      allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
       credentials: true,
     }),
   )
@@ -160,8 +169,15 @@ export function createApiApp(
   )
 
   app.route('/', createMattersRoutes(pool))
+  app.route('/', createCommentsRoutes(pool, storage))
+  app.route('/', createDocumentAccessRoutes(pool))
   app.route('/', createOrganisationsRoutes(pool))
   app.route('/', createDocumentsRoutes(pool, storage))
+  app.route('/', createDocumentCollaborationRoutes(pool, storage, presence))
+  app.route('/', createDocumentEditRoutes(pool, storage))
+  app.route('/', createDocumentModelRoutes(pool, storage))
+  app.route('/', createDocumentPdfViewRoutes(pool, storage))
+  app.route('/', createTrackedChangeRoutes(pool, storage))
   app.route('/', createRedactRoutes(pool, storage))
   app.route('/', createLegalSearchRoutes(env))
   app.route(
