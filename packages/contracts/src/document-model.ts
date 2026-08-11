@@ -13,6 +13,7 @@ export type DocumentStoryKind = z.infer<typeof documentStoryKindSchema>
 export const documentTextRunWireSchema = z.object({
   id: z.string().min(1),
   sourceTextId: z.string().min(1).optional(),
+  styleId: z.string().min(1).optional(),
   text: z.string(),
   preservedXmlFragments: z.array(z.string()),
 })
@@ -22,6 +23,7 @@ export const documentParagraphWireSchema = z.object({
   id: z.string().min(1),
   sourceParaId: z.string().min(1).optional(),
   sourceTextId: z.string().min(1).optional(),
+  styleId: z.string().min(1).optional(),
   runs: z.array(documentTextRunWireSchema),
   preservedXmlFragments: z.array(z.string()),
 })

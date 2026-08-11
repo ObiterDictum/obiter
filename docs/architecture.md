@@ -425,3 +425,73 @@ anchors, no input mutation, and untouched-part byte identity. Route tests pin
 view/edit access, organisation and document 404s, deleted and non-ready
 states, no-store, schema validation, and same-transaction audits. P1, P2,
 P3, P4, and P7 apply at this boundary.
+
+### M1.25 single-author editing: typed model commands and locked immutable versions (11 August 2026)
+
+Context: M1.25 S4 adds editing after the S1 OOXML preservation layer, the
+S1b matter access gate, the S2 model route, and S3 comment anchors. The
+relevant mutation and preservation surfaces are
+`packages/ooxml/src/model.ts`, `packages/ooxml/src/parts/overlay.ts`,
+`packages/ooxml/src/serialise.ts`, and `packages/ooxml/src/comment-anchors.ts`.
+The API keeps document SQL in `services/api/src/database.ts`, while new domain
+work belongs in `services/api/src/document-versions.ts` and the shared route
+gates belong in `services/api/src/routes/document-route-shared.ts`.
+
+Decision: use a small custom model-driven editor over the S2 typed renderer.
+Do not add ProseMirror, Tiptap, Lexical, or another rich-text framework. The
+client sends one additive `DocumentEditRequest` contract from
+`packages/contracts/src/document-edit.ts`, containing `baseVersionId` and a
+bounded non-empty ordered list of typed operations: `replace_run_text`,
+`set_run_style`, `set_paragraph_style`, `insert_paragraph_after`, and
+`delete_paragraph`. The request carries no serialised model, raw XML, storage
+key, tenant id, or author identity. The main document story is the S4 edit
+surface. The OOXML package exposes one command application entry point that
+uses the existing source-preserving overlays and the existing serializer.
+Style changes patch only direct `w:pStyle` or `w:rStyle` values. New nodes get
+non-serialised model ids, and all invalid or partially applicable operation
+lists fail without output.
+
+Decision: apply edits server-side. The API reads the immutable base source,
+parses it with `@obiter/ooxml`, applies the typed commands, and serialises
+from that model. Clean parts remain byte-identical, untouched parts after an
+edit remain byte-identical, and unknown XML plus foreign tracked-change
+markup survive unless an explicit operation removes their containing node.
+Tracked-change paragraphs cannot be structurally deleted, and the package
+never edits inside opaque tracked-change subtrees. This prevents a client
+model from silently dropping the source-preserving overlays required by S1.
+
+Decision: `POST /api/documents/:id/edit` uses the shared resolver with edit
+access. It sets `Cache-Control: no-store`, then follows session, organisation,
+organisation-scoped document, edit-level matter access, ready-DOCX, request
+validation, and base-current checks. Unknown, cross-organisation, deleted,
+denied, non-ready, and non-DOCX states use the uniform document 404. A stale
+base is an exact mismatch between the request `baseVersionId` and the
+organisation-scoped document's `current_version_id`, returned as the existing
+`conflict_detected` 409. The route is member-allowable for owners and
+edit-level grantees, not restricted to `requireManageRole`.
+
+Decision: `createEditedVersion` locks the active document row with `FOR UPDATE`
+inside its transaction and repeats the base-current comparison under that
+lock. It writes the new source object at the existing source-key CHECK shape,
+then inserts immutable version N+1, updates `current_version_id`, and writes
+`document.version_create` plus `document.edit` before commit. The response
+contract is `{ documentId, versionId, versionNumber }`. The content SHA-256 is
+computed from the final DOCX bytes. The edited version is `ready` for the
+model surface with a null `text_object_key`; stale extracted text is never
+copied and S4 does not add a second extraction path. Storage is compensated by
+cleanup on a database rollback, while no committed database pointer can refer
+to an unwritten object.
+
+Decision: preserve the S3 anchor contract of stable paragraph id plus
+half-open UTF-16 offsets. S4 does not re-resolve anchors by content or rewrite
+stored offsets. The new model is the authority: an anchor that remains in
+range resolves at its model location, while a removed paragraph or invalid
+range remains an explicit unresolved comment for the S3 UI and export path.
+S4 does not mutate the comments table or add comment data to its response.
+This avoids a second anchor policy and makes paragraph deletion, text changes,
+and comment orphaning explicit.
+
+The applicable defect patterns are P1, P2, P3, P4, P7, and P10. The plan's
+integration-head text is stale relative to the S4 task: `8dcea28` is the
+post-S3 base used here. The U4 prompt's request for a version selector on the
+S2 model route is a separate S2 amendment and is not included in S4.
