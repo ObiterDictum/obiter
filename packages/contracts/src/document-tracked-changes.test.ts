@@ -62,5 +62,12 @@ describe('tracked change contracts', () => {
         author: 'client-controlled',
       }).success,
     ).toBe(false)
+    expect(
+      documentTrackedChangeDecisionRequestSchema.safeParse({
+        baseVersionId: ' ',
+        action: 'accept',
+        changeIds: ['change-1'],
+      }).success,
+    ).toBe(false)
   })
 })

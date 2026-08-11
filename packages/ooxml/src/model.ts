@@ -22,7 +22,7 @@ export type TrackedChangeNode = {
   wire: DocumentChangeWire
   partName: string
   range: XmlElementRange
-  parentRange?: XmlElementRange
+  propertiesRange?: XmlElementRange
   sourceFragment: string
   innerFragment: string
   previousPropertiesFragment?: string

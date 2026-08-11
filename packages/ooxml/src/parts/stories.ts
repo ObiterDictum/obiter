@@ -346,19 +346,32 @@ function trackedChange(
       )
       .join(''),
   })
-  const previousProperties =
-    wire.kind === 'property'
-      ? elements.find(
-          (candidate) =>
-            candidate.parent === element &&
-            isWord(candidate, elementName === 'rPrChange' ? 'rPr' : 'pPr'),
-        )
+  const expectedPropertiesName =
+    elementName === 'rPrChange'
+      ? 'rPr'
+      : elementName === 'pPrChange'
+        ? 'pPr'
+        : undefined
+  const propertiesParent =
+    expectedPropertiesName &&
+    element.parent &&
+    isWord(element.parent, expectedPropertiesName)
+      ? element.parent
       : undefined
+  const previousProperties = expectedPropertiesName
+    ? elements.find(
+        (candidate) =>
+          candidate.parent === element &&
+          isWord(candidate, expectedPropertiesName),
+      )
+    : undefined
   return {
     wire,
     partName,
     range: elementRange(element),
-    ...(element.parent ? { parentRange: elementRange(element.parent) } : {}),
+    ...(propertiesParent
+      ? { propertiesRange: elementRange(propertiesParent) }
+      : {}),
     sourceFragment: elementFragment(source, element),
     innerFragment: source.slice(element.startTagEnd, element.endTagStart),
     ...(previousProperties

@@ -2,7 +2,7 @@ import type { DocumentTrackedChangeDecisionRequest } from '@obiter/contracts'
 
 import { OoxmlError, type OoxmlDocument, type TrackedChangeNode } from './model'
 import { requireEditablePart } from './model-edit-overlay'
-import { setOverlayReplacement } from './parts/overlay'
+import { renameFragmentElements, setOverlayReplacement } from './parts/overlay'
 
 export function applyTrackedChangeDecisions(
   document: OoxmlDocument,
@@ -16,7 +16,7 @@ export function applyTrackedChangeDecisions(
     const part = requireEditablePart(document, target.partName)
     const range =
       target.wire.kind === 'property' && action === 'reject'
-        ? target.parentRange
+        ? target.propertiesRange
         : target.range
     if (!range) throw invalidDecision()
     setOverlayReplacement(part.overlay, `tracked-change:${target.wire.id}`, {
@@ -26,6 +26,7 @@ export function applyTrackedChangeDecisions(
     })
     part.dirty = true
   }
+  return targets.map(({ wire }) => wire.id)
 }
 
 function resolveTargets(document: OoxmlDocument, changeIds: readonly string[]) {
@@ -58,7 +59,7 @@ function validateTargets(targets: readonly TrackedChangeNode[]) {
   for (const target of targets) {
     if (
       target.wire.kind === 'property' &&
-      (!target.parentRange || !target.previousPropertiesFragment)
+      (!target.propertiesRange || !target.previousPropertiesFragment)
     ) {
       throw invalidDecision()
     }
@@ -103,44 +104,14 @@ function decisionReplacement(
 }
 
 function restoreDeletedText(target: TrackedChangeNode) {
-  const replacements = target.deletedTextElements
-    .map(({ range, qualifiedName }) => {
-      const prefix = qualifiedName.includes(':')
-        ? `${qualifiedName.slice(0, qualifiedName.indexOf(':'))}:`
-        : ''
-      return [
-        {
-          start: range.start - target.range.startTagEnd,
-          end: range.startTagEnd - target.range.startTagEnd,
-          value: target.innerFragment
-            .slice(
-              range.start - target.range.startTagEnd,
-              range.startTagEnd - target.range.startTagEnd,
-            )
-            .replace(qualifiedName, `${prefix}t`),
-        },
-        ...(range.endTagStart < range.end
-          ? [
-              {
-                start: range.endTagStart - target.range.startTagEnd,
-                end: range.end - target.range.startTagEnd,
-                value: `</${prefix}t>`,
-              },
-            ]
-          : []),
-      ]
-    })
-    .flat()
-    .sort((left, right) => left.start - right.start)
-
-  let cursor = 0
-  let result = ''
-  for (const replacement of replacements) {
-    result += target.innerFragment.slice(cursor, replacement.start)
-    result += replacement.value
-    cursor = replacement.end
-  }
-  return result + target.innerFragment.slice(cursor)
+  const restored = renameFragmentElements(
+    target.innerFragment,
+    target.range.startTagEnd,
+    target.deletedTextElements,
+    't',
+  )
+  if (restored === undefined) throw invalidDecision()
+  return restored
 }
 
 function invalidDecision() {
