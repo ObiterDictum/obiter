@@ -20,23 +20,38 @@ export function replaceTextRunAtAnchor(
     })
   })
   const firstTextElement = anchor.textElements[0]
-  if (firstTextElement && /^\s|\s$/u.test(text)) {
+  if (firstTextElement) {
     const opening = overlay.source.slice(
       firstTextElement.start,
       firstTextElement.startTagEnd,
     )
-    const xmlSpace = /\s+xml:space\s*=\s*(["'])[^"']*\1/u
-    if (!/\s+xml:space\s*=\s*(["'])preserve\1/u.test(opening)) {
+    const preservedOpening = preserveTextElementXmlSpace(opening, text)
+    if (preservedOpening !== opening) {
       setOverlayReplacement(overlay, `${anchor.wire.id}:xml-space`, {
         start: firstTextElement.start,
         end: firstTextElement.startTagEnd,
-        value: xmlSpace.test(opening)
-          ? opening.replace(xmlSpace, ' xml:space="preserve"')
-          : opening.replace(/>$/u, ' xml:space="preserve">'),
+        value: preservedOpening,
       })
     }
   }
   anchor.wire.text = text
   part.dirty = true
   return true
+}
+
+export function textElementXmlSpaceAttribute(text: string) {
+  return requiresPreservedXmlSpace(text) ? ' xml:space="preserve"' : ''
+}
+
+export function preserveTextElementXmlSpace(opening: string, text: string) {
+  if (!requiresPreservedXmlSpace(text)) return opening
+  if (/\s+xml:space\s*=\s*(["'])preserve\1/u.test(opening)) return opening
+  const xmlSpace = /\s+xml:space\s*=\s*(["'])[^"']*\1/u
+  return xmlSpace.test(opening)
+    ? opening.replace(xmlSpace, ' xml:space="preserve"')
+    : opening.replace(/>$/u, ' xml:space="preserve">')
+}
+
+function requiresPreservedXmlSpace(text: string) {
+  return /^\s|\s$/u.test(text)
 }

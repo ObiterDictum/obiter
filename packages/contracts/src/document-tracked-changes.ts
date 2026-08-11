@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+import { editIdSchema } from './document-edit'
 import { documentChangeWireSchema } from './document-model'
 
 export const documentTrackedChangeListResponseSchema = z
@@ -16,7 +17,7 @@ export type DocumentTrackedChangeListResponse = z.infer<
 
 export const documentTrackedChangeDecisionRequestSchema = z
   .object({
-    baseVersionId: z.string().min(1),
+    baseVersionId: editIdSchema,
     action: z.enum(['accept', 'reject']),
     changeIds: z.array(z.string().min(1)).min(1).max(100),
   })

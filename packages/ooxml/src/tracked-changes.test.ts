@@ -69,6 +69,14 @@ describe('typed tracked changes', () => {
         expect.objectContaining({ scope: 'run', text: '' }),
       ]),
     )
+    const moveFrom = decoded.find(
+      ({ elementName }) => elementName === 'moveFrom',
+    )
+    const moveTo = decoded.find(({ elementName }) => elementName === 'moveTo')
+    expect(moveFrom?.storyPartName).toBe('word/footer1.xml')
+    expect(moveTo?.storyPartName).toBe('word/footnotes.xml')
+    expect(moveFrom?.pairId).toBe(moveTo?.id)
+    expect(moveTo?.pairId).toBe(moveFrom?.id)
     expect(parseModelJson(serialiseModelJson(document))).toEqual(document.model)
     const modelJson = JSON.stringify(document.model)
     expect(modelJson).not.toContain('custom=')
@@ -234,6 +242,56 @@ describe('tracked change decisions', () => {
     },
   )
 
+  it('decides a move pair whose nodes are in different story parts', async () => {
+    const document = await parseDocx(
+      await fixtureWithStoryChanges([
+        [
+          'word/footer1.xml',
+          '<w:moveFrom w:id="7"><w:r><w:delText>from</w:delText></w:r></w:moveFrom>',
+        ],
+        [
+          'word/footnotes.xml',
+          '<w:moveTo w:id="7"><w:r><w:t>to</w:t></w:r></w:moveTo>',
+        ],
+      ]),
+    )
+    const moveFrom = document.model.changes.find(
+      ({ elementName, ooxmlId }) =>
+        elementName === 'moveFrom' && ooxmlId === '7',
+    )
+    if (!moveFrom) throw new Error('Cross-part move is missing.')
+
+    applyTrackedChangeDecisions(document, [moveFrom.id], 'accept')
+    const output = await serialiseDocx(document)
+    const footer = await zipText(output, 'word/footer1.xml')
+    const footnotes = await zipText(output, 'word/footnotes.xml')
+
+    expect(footer).not.toContain('moveFrom')
+    expect(footer).not.toContain('>from<')
+    expect(footnotes).not.toContain('moveTo')
+    expect(footnotes).toContain('<w:t>to</w:t>')
+  })
+
+  it('fails closed when a property change is not inside its properties element', async () => {
+    const document = await directChildPropertyFixture()
+    const change = document.model.changes.find(
+      ({ elementName }) => elementName === 'pPrChange',
+    )
+    if (!change) throw new Error('Direct-child property change is missing.')
+
+    expect(() =>
+      applyTrackedChangeDecisions(document, [change.id], 'reject'),
+    ).toThrowError(
+      expect.objectContaining({ code: 'invalid-tracked-change-decision' }),
+    )
+    expect(
+      [...document.sourceParts.values()].every(({ dirty }) => !dirty),
+    ).toBe(true)
+    expect(mainParagraphs(document)[0]?.runs[0]?.text).toBe(
+      'Text that must survive',
+    )
+  })
+
   it('fails closed for malformed property history', async () => {
     const document = await parseDocx(
       await replaceDocumentXml(
@@ -275,6 +333,14 @@ describe('tracked change decisions', () => {
     ).toBe(true)
   })
 })
+
+async function directChildPropertyFixture() {
+  return parseDocx(
+    await replaceDocumentXml(
+      '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPrChange w:id="1"><w:pPr><w:pStyle w:val="old"/></w:pPr></w:pPrChange><w:r><w:t>Text that must survive</w:t></w:r></w:p></w:body></w:document>',
+    ),
+  )
+}
 
 async function decisionFixture() {
   const xml = `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:pStyle w:val="new"/><w:pPrChange w:id="4"><w:pPr><w:pStyle w:val="old"/></w:pPr></w:pPrChange></w:pPr><w:ins w:id="1"><w:r><w:t>Inserted</w:t></w:r></w:ins><w:del w:id="2"><w:r><w:delText>Deleted</w:delText></w:r></w:del><w:moveFrom w:id="3"><w:r><w:delText>Moved from</w:delText></w:r></w:moveFrom><w:moveTo w:id="3"><w:r><w:t>Moved to</w:t></w:r></w:moveTo><w:r><w:rPr><w:rStyle w:val="newChar"/><w:rPrChange w:id="5"><w:rPr><w:rStyle w:val="oldChar"/></w:rPr></w:rPrChange></w:rPr><w:t>Styled</w:t></w:r></w:p></w:body></w:document>`

@@ -16,6 +16,10 @@ import {
 import { createRouteApp } from './document-route.test-support'
 
 const trackedSourceBytes = await addTrackedChanges(sourceBytes)
+const directChildPropertySourceBytes = await replaceDocumentXml(
+  sourceBytes,
+  '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPrChange w:id="91"><w:pPr><w:pStyle w:val="old"/></w:pPr></w:pPrChange><w:r><w:t>Text that must survive</w:t></w:r></w:p></w:body></w:document>',
+)
 const sourceDocument = await parseDocx(trackedSourceBytes)
 const insertion = sourceDocument.model.changes.find(
   ({ elementName }) => elementName === 'ins',
@@ -23,7 +27,10 @@ const insertion = sourceDocument.model.changes.find(
 const deletion = sourceDocument.model.changes.find(
   ({ elementName }) => elementName === 'del',
 )
-if (!insertion || !deletion)
+const moveFrom = sourceDocument.model.changes.find(
+  ({ elementName }) => elementName === 'moveFrom',
+)
+if (!insertion || !deletion || !moveFrom?.pairId)
   throw new Error('Tracked test changes are missing.')
 
 describe('tracked change routes', () => {
@@ -90,7 +97,40 @@ describe('tracked change routes', () => {
     expect(response.status).toBe(500)
     expect(response.headers.get('cache-control')).toBe('no-store')
     expect(await response.text()).not.toContain('private tracked-change')
-    expect(route.errors).toEqual(['The edited document could not be stored.'])
+    expect(route.errors).toEqual(['The tracked changes could not be read.'])
+  })
+
+  it('fails closed before creating a version for a direct-child property change', async () => {
+    const database = new EditDatabase()
+    const route = trackedRouteApp(
+      database,
+      undefined,
+      undefined,
+      directChildPropertySourceBytes,
+    )
+    const crafted = await parseDocx(directChildPropertySourceBytes)
+    const change = crafted.model.changes.find(
+      ({ elementName }) => elementName === 'pPrChange',
+    )
+    if (!change) throw new Error('Crafted property change is missing.')
+
+    const response = await route.app.request(
+      '/api/documents/doc_1/tracked-changes/decision',
+      decisionRequest('reject', change.id),
+    )
+
+    expect(response.status).toBe(400)
+    expect(database.currentVersionId).toBe('ver_1')
+    expect(database.versions.size).toBe(1)
+    expect(database.audits).toEqual([])
+    expect(route.storage.writes).toEqual([])
+    const unchanged = route.storage.binary.get(sourceKey)
+    if (!unchanged) throw new Error('Crafted source was not retained.')
+    expect(
+      (await parseDocx(unchanged)).model.stories.find(
+        ({ kind }) => kind === 'document',
+      )?.paragraphs[0]?.runs[0]?.text,
+    ).toBe('Text that must survive')
   })
 
   it('returns the uniform 404 for an unknown selected version', async () => {
@@ -107,6 +147,7 @@ describe('tracked change routes', () => {
     for (const [action, selected] of [
       ['accept', insertion],
       ['reject', deletion],
+      ['accept', moveFrom],
     ] as const) {
       const changeId = selected.id
       const database = new EditDatabase()
@@ -146,7 +187,8 @@ describe('tracked change routes', () => {
         baseVersionId: 'ver_1',
         newVersionId: body.versionId,
         action,
-        changeIds: [changeId],
+        changeIds:
+          selected.kind === 'move' ? [changeId, selected.pairId] : [changeId],
       })
       expect(JSON.stringify(database.audits)).not.toContain(insertion.author)
       expect(JSON.stringify(database.audits)).not.toContain(insertion.text)
@@ -249,8 +291,9 @@ function trackedRouteApp(
     role: 'member',
   },
   storage = new EditStorage(),
+  source = trackedSourceBytes,
 ) {
-  storage.binary.set(sourceKey, trackedSourceBytes)
+  storage.binary.set(sourceKey, source)
   return {
     ...createRouteApp({
       database,
@@ -283,6 +326,12 @@ async function addTrackedChanges(source: Uint8Array) {
     'word/document.xml',
     xml.replace(/(<w:p(?:\s[^>]*)?>)/u, `$1${changes}`),
   )
+  return Buffer.from(await zip.generateAsync({ type: 'uint8array' }))
+}
+
+async function replaceDocumentXml(source: Uint8Array, xml: string) {
+  const zip = await JSZip.loadAsync(source)
+  zip.file('word/document.xml', xml)
   return Buffer.from(await zip.generateAsync({ type: 'uint8array' }))
 }
 

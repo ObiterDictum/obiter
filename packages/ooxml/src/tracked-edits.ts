@@ -1,9 +1,4 @@
-import {
-  isValidXmlText,
-  type DocumentModelWire,
-  type DocumentParagraphWire,
-  type DocumentTextRunWire,
-} from '@obiter/contracts'
+import { isValidXmlText, type DocumentModelWire } from '@obiter/contracts'
 
 import {
   OoxmlError,
@@ -13,11 +8,19 @@ import {
   type XmlElementRange,
 } from './model'
 import { requireEditablePart } from './model-edit-overlay'
+import { insertParagraphAfter } from './model-paragraph-edits'
 import {
+  expandSelfClosingProperties,
+  patchStyleValue,
+} from './model-style-edits'
+import {
+  applyFragmentReplacements,
   escapeXmlAttribute,
   escapeXmlText,
+  renameFragmentElements,
   setOverlayReplacement,
 } from './parts/overlay'
+import { preserveTextElementXmlSpace } from './text-run-edit'
 
 export type TrackedEditContext = {
   author: string
@@ -48,6 +51,9 @@ export function createTrackedEditWriter(
       const part = requireEditablePart(document, anchor.partName)
       const source = part.overlay.source
       const prefix = wordPrefix(source, anchor.runRange, 'r')
+      // Both tracked branches retain the complete run, so unique-identity
+      // children such as bookmark and comment range markers are duplicated.
+      // Hoisting those children needs a separate identity-preservation design.
       const oldRun = renameTextElements(
         source.slice(anchor.runRange.start, anchor.runRange.end),
         anchor,
@@ -72,31 +78,11 @@ export function createTrackedEditWriter(
     ) {
       const part = requireEditablePart(document, anchor.partName)
       const prefix = wordPrefix(part.overlay.source, anchor.paragraphRange, 'p')
-      const paragraphId = allocateModelId(document, 'para-edit')
-      const runId = allocateModelId(document, 'text-edit')
-      const run: DocumentTextRunWire = {
-        id: runId,
-        text,
-        preservedXmlFragments: [],
-      }
-      const paragraph: DocumentParagraphWire = {
-        id: paragraphId,
-        ...(styleId ? { styleId } : {}),
-        runs: [run],
-        preservedXmlFragments: [],
-      }
-      const index = story.paragraphs.indexOf(anchor.wire)
-      story.paragraphs.splice(index + 1 + offset, 0, paragraph)
-      const properties = styleId
-        ? `<${prefix}:pPr><${prefix}:pStyle ${prefix}:val="${escapeXmlAttribute(styleId)}"/></${prefix}:pPr>`
-        : ''
-      const xmlSpace = /^\s|\s$/u.test(text) ? ' xml:space="preserve"' : ''
-      setOverlayReplacement(part.overlay, `${paragraphId}:insert`, {
-        start: anchor.paragraphRange.end,
-        end: anchor.paragraphRange.end,
-        value: `<${prefix}:p>${properties}<${prefix}:ins ${attributes(prefix)}><${prefix}:r><${prefix}:t${xmlSpace}>${escapeXmlText(text)}</${prefix}:t></${prefix}:r></${prefix}:ins></${prefix}:p>`,
+      insertParagraphAfter(document, story, anchor, text, styleId, offset, {
+        prefix,
+        wrapRun: (run) =>
+          `<${prefix}:ins ${attributes(prefix)}>${run}</${prefix}:ins>`,
       })
-      part.dirty = true
     },
 
     deleteParagraph(anchor: ParagraphAnchor) {
@@ -209,8 +195,8 @@ function patchPropertiesStyle(
   propertiesRange: XmlElementRange,
   styleRange: XmlElementRange | undefined,
   prefix: string,
-  propertiesName: string,
-  styleName: string,
+  propertiesName: 'pPr' | 'rPr',
+  styleName: 'pStyle' | 'rStyle',
   styleId: string | null,
 ) {
   const fragment = source.slice(propertiesRange.start, propertiesRange.end)
@@ -226,7 +212,12 @@ function patchPropertiesStyle(
   if (styleId === null) return fragment
   const instruction = styleInstruction(prefix, styleName, styleId)
   if (/\/\s*>$/u.test(fragment)) {
-    return `${fragment.replace(/\/\s*>$/u, '>')}${instruction}</${prefix}:${propertiesName}>`
+    return expandSelfClosingProperties(
+      fragment,
+      prefix,
+      propertiesName,
+      instruction,
+    )
   }
   return fragment.replace(/(<\/[^>]+>)$/u, `${instruction}$1`)
 }
@@ -234,26 +225,24 @@ function patchPropertiesStyle(
 function appendPropertyChange(
   properties: string,
   prefix: string,
-  propertiesName: string,
+  propertiesName: 'pPr' | 'rPr',
   attributes: string,
   previous: string,
 ) {
   const marker = `<${prefix}:${propertiesName}Change ${attributes}>${previous}</${prefix}:${propertiesName}Change>`
   if (/\/\s*>$/u.test(properties)) {
-    return `${properties.replace(/\/\s*>$/u, '>')}${marker}</${prefix}:${propertiesName}>`
+    return expandSelfClosingProperties(
+      properties,
+      prefix,
+      propertiesName,
+      marker,
+    )
   }
   return properties.replace(/(<\/[^>]+>)$/u, `${marker}$1`)
 }
 
 function styleInstruction(prefix: string, name: string, styleId: string) {
   return `<${prefix}:${name} ${prefix}:val="${escapeXmlAttribute(styleId)}"/>`
-}
-
-function patchStyleValue(fragment: string, prefix: string, styleId: string) {
-  const escaped = escapeXmlAttribute(styleId)
-  const value = /(\s+(?:[^\s:>]+:)?val\s*=\s*)(["'])([^"']*)\2/u
-  if (value.test(fragment)) return fragment.replace(value, `$1$2${escaped}$2`)
-  return fragment.replace(/(\/\s*>|>)$/u, ` ${prefix}:val="${escaped}"$1`)
 }
 
 function replaceRunText(source: string, anchor: TextRunAnchor, text: string) {
@@ -263,23 +252,23 @@ function replaceRunText(source: string, anchor: TextRunAnchor, text: string) {
     value: index === 0 ? escapeXmlText(text) : '',
   }))
   const first = anchor.textElements[0]
-  if (first && /^\s|\s$/u.test(text)) {
+  if (first) {
     const opening = source.slice(first.start, first.startTagEnd)
-    if (!/\s+xml:space\s*=\s*(["'])preserve\1/u.test(opening)) {
-      const xmlSpace = /\s+xml:space\s*=\s*(["'])[^"']*\1/u
+    const preservedOpening = preserveTextElementXmlSpace(opening, text)
+    if (preservedOpening !== opening) {
       replacements.push({
         start: first.start - anchor.runRange.start,
         end: first.startTagEnd - anchor.runRange.start,
-        value: xmlSpace.test(opening)
-          ? opening.replace(xmlSpace, ' xml:space="preserve"')
-          : opening.replace(/>$/u, ' xml:space="preserve">'),
+        value: preservedOpening,
       })
     }
   }
-  return applyFragmentReplacements(
+  const fragment = applyFragmentReplacements(
     source.slice(anchor.runRange.start, anchor.runRange.end),
     replacements,
   )
+  if (fragment === undefined) throw new OoxmlError('model-node-not-editable')
+  return fragment
 }
 
 function renameTextElements(
@@ -287,52 +276,14 @@ function renameTextElements(
   anchor: TextRunAnchor,
   localName: 'delText',
 ) {
-  const replacements = anchor.textElements.flatMap((range) => {
-    const openingStart = range.start - anchor.runRange.start
-    const openingEnd = range.startTagEnd - anchor.runRange.start
-    const opening = fragment.slice(openingStart, openingEnd)
-    const qualified = opening.match(/^<([^\s/>]+)/u)?.[1]
-    if (!qualified) throw new OoxmlError('model-node-not-editable')
-    const prefix = qualified.includes(':')
-      ? `${qualified.slice(0, qualified.indexOf(':'))}:`
-      : ''
-    return [
-      {
-        start: openingStart,
-        end: openingEnd,
-        value: opening.replace(qualified, `${prefix}${localName}`),
-      },
-      ...(range.endTagStart < range.end
-        ? [
-            {
-              start: range.endTagStart - anchor.runRange.start,
-              end: range.end - anchor.runRange.start,
-              value: `</${prefix}${localName}>`,
-            },
-          ]
-        : []),
-    ]
-  })
-  return applyFragmentReplacements(fragment, replacements)
-}
-
-function applyFragmentReplacements(
-  fragment: string,
-  replacements: { start: number; end: number; value: string }[],
-) {
-  const ordered = [...replacements].sort(
-    (left, right) => left.start - right.start,
+  const renamed = renameFragmentElements(
+    fragment,
+    anchor.runRange.start,
+    anchor.textElements.map((range) => ({ range })),
+    localName,
   )
-  let result = ''
-  let cursor = 0
-  for (const replacement of ordered) {
-    if (replacement.start < cursor)
-      throw new OoxmlError('model-node-not-editable')
-    result += fragment.slice(cursor, replacement.start)
-    result += replacement.value
-    cursor = replacement.end
-  }
-  return result + fragment.slice(cursor)
+  if (renamed === undefined) throw new OoxmlError('model-node-not-editable')
+  return renamed
 }
 
 function wordPrefix(
@@ -363,19 +314,4 @@ function allocateFirstChangeId(document: OoxmlDocument) {
   let candidate = 0
   while (used.has(String(candidate))) candidate += 1
   return candidate
-}
-
-function allocateModelId(document: OoxmlDocument, prefix: string) {
-  const used = new Set(
-    document.model.stories.flatMap((story) =>
-      story.paragraphs.flatMap((paragraph) => [
-        paragraph.id,
-        ...paragraph.runs.map(({ id }) => id),
-      ]),
-    ),
-  )
-  let sequence = 1
-  while (used.has(`${prefix}-${String(sequence).padStart(6, '0')}`))
-    sequence += 1
-  return `${prefix}-${String(sequence).padStart(6, '0')}`
 }

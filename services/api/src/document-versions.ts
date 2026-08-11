@@ -80,6 +80,13 @@ export class DocumentEditStoreError extends Error {
   }
 }
 
+export class DocumentTrackedChangeReadError extends Error {
+  constructor() {
+    super('The tracked changes could not be read.')
+    this.name = new.target.name
+  }
+}
+
 export async function createEditedVersion(
   pool: Pool,
   storage: StorageService,
@@ -112,8 +119,13 @@ export async function createTrackedChangeDecisionVersion(
   storage: StorageService,
   input: TrackedChangeDecisionVersionInput,
 ): Promise<CreateEditedVersionResult> {
+  let resolvedChangeIds: string[] = []
   const editedBytes = await prepareSource(storage, input, (document) => {
-    applyTrackedChangeDecisions(document, input.changeIds, input.action)
+    resolvedChangeIds = applyTrackedChangeDecisions(
+      document,
+      input.changeIds,
+      input.action,
+    )
   })
   return createPreparedVersion(pool, storage, input, editedBytes, {
     action:
@@ -125,7 +137,7 @@ export async function createTrackedChangeDecisionVersion(
       baseVersionId: input.baseVersionId,
       newVersionId: versionId,
       action: input.action,
-      changeIds: [...input.changeIds],
+      changeIds: resolvedChangeIds,
     }),
   })
 }
@@ -141,9 +153,13 @@ export async function readDocumentTrackedChanges(
     | 'baseVersion'
   >,
 ) {
-  validateBaseVersion(input)
-  const document = await readSourceDocument(storage, input.baseVersion)
-  return document.model.changes
+  try {
+    validateBaseVersion(input)
+    const document = await readSourceDocument(storage, input.baseVersion)
+    return document.model.changes
+  } catch {
+    throw new DocumentTrackedChangeReadError()
+  }
 }
 
 async function prepareSource(

@@ -65,7 +65,7 @@ async function readOrGenerateModel(
 
   if (cachedJson !== null) {
     try {
-      if (!cachedModelHasChanges(cachedJson)) {
+      if (cachedModelLacksChangesField(cachedJson)) {
         throw new OoxmlError('invalid-model-json')
       }
       return parseModelJson(cachedJson)
@@ -90,16 +90,17 @@ async function readOrGenerateModel(
   }
 }
 
-function cachedModelHasChanges(json: string) {
+function cachedModelLacksChangesField(json: string) {
   try {
     const value: unknown = JSON.parse(json)
-    return (
+    return !(
       typeof value === 'object' &&
       value !== null &&
       Object.hasOwn(value, 'changes')
     )
   } catch {
-    return true
+    // Defer malformed JSON to parseModelJson and its curated invalid-model path.
+    return false
   }
 }
 
