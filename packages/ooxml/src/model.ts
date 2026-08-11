@@ -1,14 +1,12 @@
-import type {
-  DocumentModelWire,
-  DocumentParagraphWire,
-  DocumentTextRunWire,
+import {
+  documentEditOperationSchema,
+  type DocumentModelWire,
+  type DocumentParagraphWire,
+  type DocumentTextRunWire,
 } from '@obiter/contracts'
 
-import {
-  escapeXmlText,
-  setOverlayReplacement,
-  type XmlOverlay,
-} from './parts/overlay'
+import type { XmlOverlay } from './parts/overlay'
+import { replaceTextRunAtAnchor } from './text-run-edit'
 
 export type SourcePartKind = 'xml' | 'binary'
 export type SourcePartRole =
@@ -57,11 +55,16 @@ export type TextRunAnchor = {
   textRanges: TextRange[]
   textElements: XmlElementRange[]
   runProperties: string[]
+  runPropertiesRange?: XmlElementRange
+  runStyleRange?: XmlElementRange
 }
 export type ParagraphAnchor = {
   partName: string
   wire: DocumentParagraphWire
   paragraphRange: XmlElementRange
+  paragraphPropertiesRange?: XmlElementRange
+  paragraphStyleRange?: XmlElementRange
+  hasTrackedChanges: boolean
   runs: TextRunAnchor[]
 }
 
@@ -94,30 +97,27 @@ export function replaceTextRunText(
   textRunId: string,
   text: string,
 ) {
+  const operation = documentEditOperationSchema.safeParse({
+    type: 'replace_run_text',
+    runId: textRunId,
+    text,
+  })
+  if (!operation.success) throw new OoxmlError('invalid-document-edit')
   const anchor = document.textRunAnchors.get(textRunId)
   if (!anchor) throw new OoxmlError('model-node-not-found')
-  const part = document.sourceParts.get(anchor.partName)
-  const overlay = part?.overlay
-  if (!part || !overlay) throw new OoxmlError('model-node-not-found')
-  if (anchor.textRanges.length === 0) {
+  if (!replaceTextRunAtAnchor(document, anchor, text)) {
     throw new OoxmlError('model-node-not-editable')
   }
-
-  anchor.textRanges.forEach((range, index) => {
-    setOverlayReplacement(overlay, `${textRunId}:${index}`, {
-      ...range,
-      value: index === 0 ? escapeXmlText(text) : '',
-    })
-  })
-  anchor.wire.text = text
-  part.dirty = true
 }
+
+export { applyDocumentEdits } from './model-edits'
 
 export type OoxmlErrorCode =
   | 'invalid-package'
   | 'invalid-xml-part'
   | 'model-node-not-found'
   | 'model-node-not-editable'
+  | 'invalid-document-edit'
   | 'invalid-model-json'
   | 'comment-anchor-unresolved'
   | 'comment-export-failed'
@@ -139,6 +139,9 @@ function errorMessage(code: OoxmlErrorCode) {
   if (code === 'model-node-not-found') return 'The document node was not found.'
   if (code === 'model-node-not-editable') {
     return 'The document node cannot be edited.'
+  }
+  if (code === 'invalid-document-edit') {
+    return 'The document edit is invalid.'
   }
   if (code === 'invalid-model-json') {
     return 'The document model JSON is invalid.'

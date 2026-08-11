@@ -18,6 +18,7 @@ import {
 import { createChangelogRoutes } from './routes/changelog'
 import { createCommentsRoutes } from './routes/comments'
 import { createDocumentAccessRoutes } from './routes/document-access'
+import { createDocumentEditRoutes } from './routes/document-edit'
 import { createDocumentModelRoutes } from './routes/document-model'
 import { createDocumentPdfViewRoutes } from './routes/document-pdf-view'
 import { createDocumentsRoutes } from './routes/documents'
@@ -168,6 +169,7 @@ export function createApiApp(
   app.route('/', createDocumentAccessRoutes(pool))
   app.route('/', createOrganisationsRoutes(pool))
   app.route('/', createDocumentsRoutes(pool, storage))
+  app.route('/', createDocumentEditRoutes(pool, storage))
   app.route('/', createDocumentModelRoutes(pool, storage))
   app.route('/', createDocumentPdfViewRoutes(pool, storage))
   app.route('/', createRedactRoutes(pool, storage))
