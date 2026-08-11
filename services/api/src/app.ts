@@ -26,6 +26,7 @@ import { createMattersRoutes } from './routes/matters'
 import { createOrganisationsRoutes } from './routes/organisations'
 import { configureRedactionDetector } from './redaction-detection'
 import { createRedactRoutes } from './routes/redact'
+import { createTrackedChangeRoutes } from './routes/tracked-changes'
 import { createLocalStorage, type StorageService } from './storage'
 
 type Auth = ReturnType<typeof createAuth>
@@ -172,6 +173,7 @@ export function createApiApp(
   app.route('/', createDocumentEditRoutes(pool, storage))
   app.route('/', createDocumentModelRoutes(pool, storage))
   app.route('/', createDocumentPdfViewRoutes(pool, storage))
+  app.route('/', createTrackedChangeRoutes(pool, storage))
   app.route('/', createRedactRoutes(pool, storage))
   app.route('/', createLegalSearchRoutes(env))
   app.route(

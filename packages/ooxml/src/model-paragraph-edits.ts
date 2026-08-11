@@ -11,6 +11,7 @@ import {
   escapeXmlText,
   setOverlayReplacement,
 } from './parts/overlay'
+import { textElementXmlSpaceAttribute } from './text-run-edit'
 
 export function insertParagraphAfter(
   document: OoxmlDocument,
@@ -19,6 +20,10 @@ export function insertParagraphAfter(
   text: string,
   styleId: string | null | undefined,
   offset: number,
+  xml: {
+    prefix: string
+    wrapRun?: (run: string) => string
+  } = { prefix: 'w' },
 ) {
   const part = requireEditablePart(document, anchor.partName)
   const paragraphId = allocateModelId(document, 'para-edit')
@@ -37,13 +42,13 @@ export function insertParagraphAfter(
   const index = story.paragraphs.indexOf(anchor.wire)
   story.paragraphs.splice(index + 1 + offset, 0, paragraph)
   const properties = styleId
-    ? `<w:pPr><w:pStyle w:val="${escapeXmlAttribute(styleId)}"/></w:pPr>`
+    ? `<${xml.prefix}:pPr><${xml.prefix}:pStyle ${xml.prefix}:val="${escapeXmlAttribute(styleId)}"/></${xml.prefix}:pPr>`
     : ''
-  const xmlSpace = /^\s|\s$/u.test(text) ? ' xml:space="preserve"' : ''
+  const runFragment = `<${xml.prefix}:r><${xml.prefix}:t${textElementXmlSpaceAttribute(text)}>${escapeXmlText(text)}</${xml.prefix}:t></${xml.prefix}:r>`
   setOverlayReplacement(part.overlay, `${paragraphId}:insert`, {
     start: anchor.paragraphRange.end,
     end: anchor.paragraphRange.end,
-    value: `<w:p>${properties}<w:r><w:t${xmlSpace}>${escapeXmlText(text)}</w:t></w:r></w:p>`,
+    value: `<${xml.prefix}:p>${properties}${xml.wrapRun?.(runFragment) ?? runFragment}</${xml.prefix}:p>`,
   })
   part.dirty = true
 }

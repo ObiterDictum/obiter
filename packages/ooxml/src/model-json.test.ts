@@ -52,6 +52,19 @@ describe('document model JSON', () => {
     )
   })
 
+  it('defaults an older cached model value to an empty change list', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const legacy: unknown = JSON.parse(serialiseModelJson(document))
+    if (typeof legacy !== 'object' || legacy === null) {
+      throw new Error('Serialised fixture model is invalid.')
+    }
+    Reflect.deleteProperty(legacy, 'changes')
+
+    expect(parseModelJson(JSON.stringify(legacy)).changes).toEqual([])
+  })
+
   it('rejects unknown model fields during serialisation', async () => {
     const document = await parseDocx(
       await buildOoxmlFixture('full-fidelity-with-w14-ids'),

@@ -14,6 +14,24 @@ export async function resolveCurrentReadyDocumentVersion(
   fileType: string,
   requiredAccess: MatterAccessLevel = 'view',
 ) {
+  return resolveReadyDocumentVersion(
+    c,
+    pool,
+    documentId,
+    fileType,
+    requiredAccess,
+    { requireCurrent: true },
+  )
+}
+
+export async function resolveReadyDocumentVersion(
+  c: RouteContext,
+  pool: Pool,
+  documentId: string,
+  fileType: string,
+  requiredAccess: MatterAccessLevel,
+  selection: { versionId?: string; requireCurrent?: boolean } = {},
+) {
   c.header('Cache-Control', 'no-store')
 
   const user = await ensureOrgUser(c, pool)
@@ -32,10 +50,12 @@ export async function resolveCurrentReadyDocumentVersion(
     return access.status === 404 ? documentNotFound(c) : access
   }
 
-  const version = result.document.currentVersion
+  const selectedId = selection.versionId ?? result.document.currentVersionId
+  const version = result.versions.find(({ id }) => id === selectedId)
   if (
     !version ||
-    version.id !== result.document.currentVersionId ||
+    (selection.requireCurrent &&
+      version.id !== result.document.currentVersionId) ||
     version.organisationId !== user.organisationId ||
     version.matterId !== result.document.matterId ||
     version.matterDocumentId !== result.document.id ||

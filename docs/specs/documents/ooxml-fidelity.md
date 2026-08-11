@@ -4,7 +4,7 @@ Status: owner-approved and normative for the Stage B package core.
 
 ## Purpose
 
-`@obiter/ooxml` provides a lossless-by-construction DOCX fidelity layer. It preserves the package and its semantic XML structure so later document features can make narrow edits without silently discarding Word content. It does not render documents, define editing semantics for tracked changes, integrate with routes or Redact, or handle PDF.
+`@obiter/ooxml` provides a lossless-by-construction DOCX fidelity layer. It preserves the package and its semantic XML structure so later document features can make narrow edits without silently discarding Word content. It models tracked change nodes and provides narrow recording and accept or reject operations. It does not render documents, integrate with routes or Redact, or handle PDF.
 
 ## Public package API
 

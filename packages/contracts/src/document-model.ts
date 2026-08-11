@@ -73,6 +73,56 @@ export type PreservedDocumentXmlFragment = z.infer<
   typeof preservedDocumentXmlFragmentSchema
 >
 
+const documentChangeWireBaseSchema = z.object({
+  id: z.string().min(1),
+  ooxmlId: z.string().optional(),
+  pairId: z.string().min(1).optional(),
+  author: z.string().optional(),
+  date: z.string().optional(),
+  storyPartName: z.string().min(1),
+  paragraphId: z.string().min(1).optional(),
+  runId: z.string().min(1).optional(),
+  text: z.string(),
+})
+
+export const documentChangeWireSchema = z.discriminatedUnion('elementName', [
+  documentChangeWireBaseSchema
+    .extend({ kind: z.literal('insert'), elementName: z.literal('ins') })
+    .strict(),
+  documentChangeWireBaseSchema
+    .extend({ kind: z.literal('delete'), elementName: z.literal('del') })
+    .strict(),
+  documentChangeWireBaseSchema
+    .extend({
+      kind: z.literal('move'),
+      elementName: z.literal('moveFrom'),
+      direction: z.literal('from'),
+    })
+    .strict(),
+  documentChangeWireBaseSchema
+    .extend({
+      kind: z.literal('move'),
+      elementName: z.literal('moveTo'),
+      direction: z.literal('to'),
+    })
+    .strict(),
+  documentChangeWireBaseSchema
+    .extend({
+      kind: z.literal('property'),
+      elementName: z.literal('rPrChange'),
+      scope: z.literal('run'),
+    })
+    .strict(),
+  documentChangeWireBaseSchema
+    .extend({
+      kind: z.literal('property'),
+      elementName: z.literal('pPrChange'),
+      scope: z.literal('paragraph'),
+    })
+    .strict(),
+])
+export type DocumentChangeWire = z.infer<typeof documentChangeWireSchema>
+
 export const documentModelWireSchema = z.object({
   version: z.literal(1),
   stories: z.array(documentStoryWireSchema),
@@ -80,6 +130,7 @@ export const documentModelWireSchema = z.object({
   numbering: z.array(documentNumberingWireSchema),
   relationships: z.array(documentRelationshipWireSchema),
   preservedXmlFragments: z.array(preservedDocumentXmlFragmentSchema),
+  changes: z.array(documentChangeWireSchema).default([]),
 })
 export type DocumentModelWire = z.infer<typeof documentModelWireSchema>
 

@@ -127,6 +127,55 @@ describe('POST /api/documents/:id/edit', () => {
     expect(storage.writes).toEqual([])
   })
 
+  it.each([
+    [
+      'uses the trimmed session name',
+      '  Session Reviewer  ',
+      'Session Reviewer',
+    ],
+    [
+      'falls back to the session user id for an empty name',
+      '   ',
+      'usr_editor',
+    ],
+  ])(
+    '%s when recording tracked edits',
+    async (_label, name, expectedAuthor) => {
+      const database = new EditDatabase()
+      const { app, storage, errors } = routeApp(database, new EditStorage(), {
+        id: 'usr_editor',
+        name,
+        organisationId: 'org_1',
+        role: 'member',
+      })
+      const response = await app.request(
+        '/api/documents/doc_1/edit',
+        editRequest('ver_1', 'Tracked synthetic revision', true),
+      )
+
+      expect(response.status).toBe(201)
+      const body = (await response.json()) as { versionId: string }
+      const version = database.versions.get(body.versionId)
+      const source = storage.binary.get(version?.object_key ?? '')
+      if (!source) throw new Error('Tracked source was not stored.')
+      const changes = (await parseDocx(source)).model.changes.filter(
+        ({ author }) => author === expectedAuthor,
+      )
+      expect(changes.map(({ elementName }) => elementName)).toEqual([
+        'del',
+        'ins',
+      ])
+      expect(
+        changes.every(({ date }) =>
+          /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u.test(date ?? ''),
+        ),
+      ).toBe(true)
+      expect(JSON.stringify(body)).not.toContain(expectedAuthor)
+      expect(JSON.stringify(database.audits)).not.toContain(expectedAuthor)
+      expect(JSON.stringify(errors)).not.toContain(expectedAuthor)
+    },
+  )
+
   it('creates immutable version N+1 with a model-ready null text artifact and same-transaction audits', async () => {
     const database = new EditDatabase()
     const original = Buffer.from(sourceBytes)

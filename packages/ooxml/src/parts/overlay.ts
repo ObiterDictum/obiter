@@ -15,6 +15,15 @@ export type OverlayReplacement = {
   end: number
   value: string
 }
+type FragmentElement = {
+  range: {
+    start: number
+    startTagEnd: number
+    endTagStart: number
+    end: number
+  }
+  qualifiedName?: string
+}
 export type XmlOverlay = {
   source: string
   replacements: Map<string, OverlayReplacement>
@@ -127,6 +136,64 @@ export function setOverlayReplacement(
   replacement: OverlayReplacement,
 ) {
   overlay.replacements.set(key, replacement)
+}
+
+export function renameFragmentElements(
+  fragment: string,
+  fragmentStart: number,
+  elements: readonly FragmentElement[],
+  localName: string,
+) {
+  const replacementGroups = elements.map(({ range, qualifiedName }) => {
+    const openingStart = range.start - fragmentStart
+    const openingEnd = range.startTagEnd - fragmentStart
+    const opening = fragment.slice(openingStart, openingEnd)
+    const sourceName = qualifiedName ?? opening.match(/^<([^\s/>]+)/u)?.[1]
+    if (!sourceName || !opening.includes(sourceName)) return undefined
+    const separator = sourceName.indexOf(':')
+    const prefix = separator === -1 ? '' : `${sourceName.slice(0, separator)}:`
+    return [
+      {
+        start: openingStart,
+        end: openingEnd,
+        value: opening.replace(sourceName, `${prefix}${localName}`),
+      },
+      ...(range.endTagStart < range.end
+        ? [
+            {
+              start: range.endTagStart - fragmentStart,
+              end: range.end - fragmentStart,
+              value: `</${prefix}${localName}>`,
+            },
+          ]
+        : []),
+    ]
+  })
+  if (replacementGroups.some((group) => group === undefined)) return undefined
+  return applyFragmentReplacements(
+    fragment,
+    replacementGroups.flatMap((group) => group ?? []),
+  )
+}
+
+export function applyFragmentReplacements(
+  fragment: string,
+  replacements: readonly OverlayReplacement[],
+) {
+  const ordered = [...replacements].sort(
+    (left, right) => left.start - right.start,
+  )
+  let result = ''
+  let cursor = 0
+  for (const replacement of ordered) {
+    if (replacement.start < cursor || replacement.end < replacement.start) {
+      return undefined
+    }
+    result += fragment.slice(cursor, replacement.start)
+    result += replacement.value
+    cursor = replacement.end
+  }
+  return result + fragment.slice(cursor)
 }
 
 export function serialiseOverlay(overlay: XmlOverlay) {

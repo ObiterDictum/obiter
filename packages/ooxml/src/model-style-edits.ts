@@ -78,6 +78,7 @@ function setStyleInstruction(
                 input.styleRange.start,
                 input.styleRange.end,
               ),
+              'w',
               input.styleId,
             ),
     })
@@ -105,7 +106,12 @@ function setStyleInstruction(
     setOverlayReplacement(overlay, input.key, {
       start: input.propertiesRange.start,
       end: input.propertiesRange.end,
-      value: `${opening.replace(/\/\s*>$/u, '>')}${instruction}</w:${input.propertiesName}>`,
+      value: expandSelfClosingProperties(
+        opening,
+        'w',
+        input.propertiesName,
+        instruction,
+      ),
     })
     return
   }
@@ -116,11 +122,24 @@ function setStyleInstruction(
   })
 }
 
-function patchStyleValue(fragment: string, styleId: string) {
+export function patchStyleValue(
+  fragment: string,
+  prefix: string,
+  styleId: string,
+) {
   const escaped = escapeXmlAttribute(styleId)
-  const value = /(\s+w:val\s*=\s*)(["'])([^"']*)\2/u
+  const value = /(\s+(?:[^\s:>]+:)?val\s*=\s*)(["'])([^"']*)\2/u
   if (value.test(fragment)) return fragment.replace(value, `$1$2${escaped}$2`)
-  return fragment.replace(/(\/\s*>|>)$/u, ` w:val="${escaped}"$1`)
+  return fragment.replace(/(\/\s*>|>)$/u, ` ${prefix}:val="${escaped}"$1`)
+}
+
+export function expandSelfClosingProperties(
+  fragment: string,
+  prefix: string,
+  propertiesName: 'pPr' | 'rPr',
+  content: string,
+) {
+  return `${fragment.replace(/\/\s*>$/u, '>')}${content}</${prefix}:${propertiesName}>`
 }
 
 function updateWireStyle(

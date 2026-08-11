@@ -27,6 +27,14 @@ Equivalently, after removing only those canonical product additions, including r
 
 `compareOoxmlProductCommentExport` applies this relation from a source package plus the complete expected XML for only the intentionally touched parts. It delegates to the same canonicalisation as `compareOoxmlPackages`; it does not weaken the ordinary relation globally and therefore fails when foreign content is dropped or reordered. Anchor-placement tests independently pin the canonical additions to the supplied stable model ranges.
 
+## Tracked-change edit relation
+
+A clean parse and serialise, and an ordinary edit outside a tracked-change range, retain every foreign tracked-change fragment byte-for-byte. This includes unknown attributes and descendants, whitespace, namespace spelling, and the lexical forms of author, date and id values. Every untouched part remains byte-identical under the ordinary package relation.
+
+A tracked edit may add only the requested `w:ins`, `w:del`, `w:rPrChange` or `w:pPrChange` wrappers and their server-generated `w:author`, `w:date` and decimal `w:id` attributes at the requested source ranges. The generated markup must be namespace-valid OOXML and preserve the semantic run, paragraph and property content outside the requested instruction. S5 does not generate move wrappers.
+
+An accept or reject decision may intentionally remove or unwrap only the selected change ranges, restore `w:delText` as `w:t`, restore the selected prior direct-property subtree, or transform both members of a selected valid move pair. The resulting dirty parts are compared under the XML relation after accounting for those exact transformations. Foreign changes not selected for a decision and all content outside the selected ranges remain under the ordinary S1 byte-identity guarantee. These permissions do not weaken equivalence for unrelated source ranges.
+
 ## XML relation
 
 An XML part is converted to a namespace-resolved node sequence. Two XML parts are equivalent when those sequences are equal under all of these rules.
