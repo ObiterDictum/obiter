@@ -289,6 +289,37 @@ describe('layoutDocument', () => {
     ).toBe(true)
   })
 
+  it('moves an Enter paragraph onto the next page when the current page is full', () => {
+    const base = modelWithParagraphs(
+      80,
+      'A short line of body text for pagination.',
+      SHORT_PAGE,
+    )
+    const first = layoutDocument(base)
+    const last = [...(first[0]?.blocks ?? [])]
+      .reverse()
+      .find((block) => block.type === 'paragraph')
+    if (!last || last.type !== 'paragraph') {
+      throw new Error('expected a paragraph on the first page')
+    }
+    const pages = layoutDocument(base, {}, [
+      { clientId: 'ins1', afterParagraphId: last.paragraph.id, text: '' },
+    ])
+    expect(
+      pages[0]?.blocks.some(
+        (block) => block.type === 'paragraph' && block.paragraph.id === 'ins1',
+      ),
+    ).toBe(false)
+    expect(
+      pages.some((page) =>
+        page.blocks.some(
+          (block) =>
+            block.type === 'paragraph' && block.paragraph.id === 'ins1',
+        ),
+      ),
+    ).toBe(true)
+  })
+
   it('treats newline characters as extra lines', () => {
     const pages = layoutDocument(
       modelOf(

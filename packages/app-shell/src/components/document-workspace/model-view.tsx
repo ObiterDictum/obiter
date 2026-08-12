@@ -94,8 +94,9 @@ export function DocumentModelPage({
 
   return (
     <div
-      className="relative flex flex-col overflow-hidden"
+      className="relative flex flex-col overflow-clip"
       style={{ height: page.heightPx }}
+      data-document-page
       onClick={(event) => {
         if (!editing) return
         if (!(event.target instanceof Element)) return
@@ -124,7 +125,7 @@ export function DocumentModelPage({
       />
       <div
         aria-label="Document body"
-        className="relative flex min-h-0 overflow-hidden"
+        className="relative flex min-h-0 overflow-clip"
         style={{
           height: frame.heightPx,
           marginLeft: frame.left,
@@ -135,7 +136,7 @@ export function DocumentModelPage({
         {columns.map((column, columnIndex) => (
           <div
             key={`col-${columnIndex}`}
-            className="flex min-h-0 flex-col"
+            className="flex min-h-0 flex-col overflow-clip"
             style={{ width: column.widthPx }}
           >
             {blocks

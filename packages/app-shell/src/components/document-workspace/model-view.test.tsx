@@ -123,7 +123,7 @@ describe('DocumentModelPage', () => {
     const body = screen.getByLabelText('Document body')
     const header = screen.getByLabelText('Document header')
     const footer = screen.getByLabelText('Document footer')
-    expect(body.className).toContain('overflow-hidden')
+    expect(body.className).toContain('overflow-clip')
     expect(Number.parseFloat(body.style.height)).toBeGreaterThan(0)
     expect(Number.parseFloat(header.style.height)).toBeGreaterThan(0)
     expect(Number.parseFloat(footer.style.height)).toBeGreaterThan(0)
