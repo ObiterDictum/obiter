@@ -79,11 +79,11 @@ export function ParagraphEditor({
       }}
       className={cn(
         'block w-full resize-none overflow-hidden bg-transparent p-0 text-inherit',
-        'border-0 outline-none focus-visible:ring-0',
+        'caret-black border-0 outline-none focus-visible:ring-0',
         style?.height == null && 'field-sizing-content',
         className,
       )}
-      style={{ caretColor: '#111', ...style }}
+      style={style}
     />
   )
 }
