@@ -8,7 +8,10 @@ import {
   type XmlElementRange,
 } from './model'
 import { requireEditablePart } from './model-edit-overlay'
-import { insertParagraphAfter } from './model-paragraph-edits'
+import {
+  insertParagraphAfter,
+  deleteParagraph as removeParagraph,
+} from './model-paragraph-edits'
 import {
   expandSelfClosingProperties,
   patchStyleValue,
@@ -87,7 +90,12 @@ export function createTrackedEditWriter(
 
     deleteParagraph(anchor: ParagraphAnchor) {
       if (anchor.runs.length === 0) {
-        throw new OoxmlError('model-node-not-editable')
+        const story = document.model.stories.find(
+          (item) => item.kind === 'document',
+        )
+        if (!story) throw new OoxmlError('model-node-not-editable')
+        removeParagraph(document, story, anchor)
+        return
       }
       const part = requireEditablePart(document, anchor.partName)
       const source = part.overlay.source

@@ -82,4 +82,45 @@ describe('useDocumentImageUrls', () => {
     })
     expect(createObjectURL).toHaveBeenCalled()
   })
+
+  it('revokes only blob URLs whose part is no longer present', async () => {
+    const createObjectURL = vi
+      .fn()
+      .mockReturnValueOnce('blob:http://obiter.test/logo')
+      .mockReturnValueOnce('blob:http://obiter.test/mark')
+    const revokeObjectURL = vi.fn()
+    Object.assign(URL, { createObjectURL, revokeObjectURL })
+    api.apiFetchBlob.mockResolvedValue(
+      new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' }),
+    )
+
+    const { result, rerender } = renderHook(
+      ({ parts }: { parts: string[] }) => useDocumentImageUrls('doc_1', parts),
+      {
+        wrapper,
+        initialProps: {
+          parts: ['word/media/logo.png', 'word/media/mark.png'],
+        },
+      },
+    )
+
+    await waitFor(() => {
+      expect(result.current['word/media/logo.png']).toBe(
+        'blob:http://obiter.test/logo',
+      )
+      expect(result.current['word/media/mark.png']).toBe(
+        'blob:http://obiter.test/mark',
+      )
+    })
+
+    rerender({ parts: ['word/media/logo.png'] })
+    await waitFor(() => {
+      expect(revokeObjectURL).toHaveBeenCalledWith(
+        'blob:http://obiter.test/mark',
+      )
+    })
+    expect(revokeObjectURL).not.toHaveBeenCalledWith(
+      'blob:http://obiter.test/logo',
+    )
+  })
 })

@@ -102,6 +102,7 @@ export function collectEditOperations(
           type: 'insert_paragraph_after',
           paragraphId: paragraph.id,
           text: extraText,
+          ...(paragraph.styleId ? { styleId: paragraph.styleId } : {}),
         })
         emptyReplacements.push(paragraph.id)
       }
