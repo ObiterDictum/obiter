@@ -124,10 +124,16 @@ export function collectEditOperations(
     }
   }
 
-  for (const insert of inserts) {
+  const realIds = new Set(
+    (story?.paragraphs ?? []).map((paragraph) => paragraph.id),
+  )
+  const insertById = new Map(inserts.map((item) => [item.clientId, item]))
+  for (const id of flowParagraphIds(model, inserts, deletedParagraphIds)) {
+    const insert = insertById.get(id)
+    if (!insert) continue
     operations.push({
       type: 'insert_paragraph_after',
-      paragraphId: insert.afterParagraphId,
+      paragraphId: resolveInsertAnchor(insert, insertById, realIds),
       text: insertPlainText(insert),
     })
   }
@@ -140,6 +146,23 @@ export function collectEditOperations(
   }
 
   return operations
+}
+
+function resolveInsertAnchor(
+  insert: LocalInsert,
+  insertById: ReadonlyMap<string, LocalInsert>,
+  realIds: ReadonlySet<string>,
+): string {
+  let id = insert.afterParagraphId
+  const seen = new Set<string>()
+  while (!realIds.has(id)) {
+    if (seen.has(id)) return insert.afterParagraphId
+    seen.add(id)
+    const parent = insertById.get(id)
+    if (!parent) return insert.afterParagraphId
+    id = parent.afterParagraphId
+  }
+  return id
 }
 
 export function isDraftDirty(

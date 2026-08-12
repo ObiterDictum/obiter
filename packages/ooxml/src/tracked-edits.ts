@@ -23,7 +23,10 @@ import {
   renameFragmentElements,
   setOverlayReplacement,
 } from './parts/overlay'
-import { preserveTextElementXmlSpace } from './text-run-edit'
+import {
+  lineBreakElementReplacement,
+  preserveTextElementXmlSpace,
+} from './text-run-edit'
 
 export type TrackedEditContext = {
   author: string
@@ -254,6 +257,20 @@ function styleInstruction(prefix: string, name: string, styleId: string) {
 }
 
 function replaceRunText(source: string, anchor: TextRunAnchor, text: string) {
+  const breakReplacement = lineBreakElementReplacement(
+    anchor,
+    text,
+    source,
+    anchor.runRange.start,
+  )
+  if (breakReplacement) {
+    const broken = applyFragmentReplacements(
+      source.slice(anchor.runRange.start, anchor.runRange.end),
+      [breakReplacement],
+    )
+    if (broken === undefined) throw new OoxmlError('model-node-not-editable')
+    return broken
+  }
   const replacements = anchor.textRanges.map((range, index) => ({
     start: range.start - anchor.runRange.start,
     end: range.end - anchor.runRange.start,

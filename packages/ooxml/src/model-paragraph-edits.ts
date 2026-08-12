@@ -6,12 +6,8 @@ import type {
 
 import type { OoxmlDocument, ParagraphAnchor } from './model'
 import { requireEditablePart } from './model-edit-overlay'
-import {
-  escapeXmlAttribute,
-  escapeXmlText,
-  setOverlayReplacement,
-} from './parts/overlay'
-import { textElementXmlSpaceAttribute } from './text-run-edit'
+import { escapeXmlAttribute, setOverlayReplacement } from './parts/overlay'
+import { wordRunInnerTextXml } from './text-run-edit'
 
 export function insertParagraphAfter(
   document: OoxmlDocument,
@@ -44,7 +40,7 @@ export function insertParagraphAfter(
   const properties = styleId
     ? `<${xml.prefix}:pPr><${xml.prefix}:pStyle ${xml.prefix}:val="${escapeXmlAttribute(styleId)}"/></${xml.prefix}:pPr>`
     : ''
-  const runFragment = `<${xml.prefix}:r><${xml.prefix}:t${textElementXmlSpaceAttribute(text)}>${escapeXmlText(text)}</${xml.prefix}:t></${xml.prefix}:r>`
+  const runFragment = `<${xml.prefix}:r>${wordRunInnerTextXml(xml.prefix, text)}</${xml.prefix}:r>`
   setOverlayReplacement(part.overlay, `${paragraphId}:insert`, {
     start: anchor.paragraphRange.end,
     end: anchor.paragraphRange.end,

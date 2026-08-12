@@ -148,6 +148,85 @@ describe('OOXML document edits', () => {
     )
   })
 
+  it('inserts chained paragraphs after the same model anchor in visual order', async () => {
+    const document = await parseSingleParagraphFixture()
+    const firstId = mainParagraphs(document)[0]?.id
+    if (!firstId) throw new Error('Fixture paragraph is missing.')
+
+    applyDocumentEdits(document, [
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: firstId,
+        text: 'First',
+      },
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: firstId,
+        text: 'Second',
+      },
+    ])
+
+    expect(
+      mainParagraphs(document).map((paragraph) => paragraph.runs[0]?.text),
+    ).toEqual(['Only', 'First', 'Second'])
+  })
+
+  it('serialises in-paragraph line breaks as w:br and reparses them', async () => {
+    const document = await parseSingleParagraphFixture()
+    const run = mainParagraphs(document)[0]?.runs[0]
+    if (!run) throw new Error('Fixture run is missing.')
+
+    applyDocumentEdits(document, [
+      { type: 'replace_run_text', runId: run.id, text: 'First\nSecond' },
+    ])
+    const output = await serialiseDocx(document)
+    const xml = await zipText(output, 'word/document.xml')
+    const reparsed = await parseDocx(output)
+
+    expect(xml).toContain('</w:t><w:br/><w:t>Second</w:t>')
+    expect(xml).not.toContain('First\nSecond')
+    expect(mainParagraphs(reparsed)[0]?.runs[0]?.text).toBe('First\nSecond')
+  })
+
+  it('inserts a paragraph with a line break as w:br', async () => {
+    const document = await parseSingleParagraphFixture()
+    const firstId = mainParagraphs(document)[0]?.id
+    if (!firstId) throw new Error('Fixture paragraph is missing.')
+
+    applyDocumentEdits(document, [
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: firstId,
+        text: 'First\nSecond',
+      },
+    ])
+    const output = await serialiseDocx(document)
+    const xml = await zipText(output, 'word/document.xml')
+    const reparsed = await parseDocx(output)
+
+    expect(xml).toContain('</w:t><w:br/><w:t>Second</w:t>')
+    expect(mainParagraphs(reparsed)[1]?.runs[0]?.text).toBe('First\nSecond')
+  })
+
+  it('parses existing wrapping breaks without treating page breaks as newlines', async () => {
+    const input = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+    const zip = await JSZip.loadAsync(input)
+    zip.file(
+      'word/document.xml',
+      '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>First</w:t><w:br/><w:t>Second</w:t></w:r></w:p><w:p><w:r><w:t>Keep</w:t><w:br w:type="page"/><w:t>Together</w:t></w:r></w:p></w:body></w:document>',
+    )
+    const document = await parseDocx(
+      await zip.generateAsync({ type: 'uint8array' }),
+    )
+    const paragraphs = mainParagraphs(document)
+
+    expect(paragraphs[0]?.runs[0]?.text).toBe('First\nSecond')
+    expect(paragraphs[1]?.runs[0]?.text).toBe('KeepTogether')
+    expect(paragraphs[1]?.runs[0]?.preservedXmlFragments).toContain(
+      '<w:br w:type="page"/>',
+    )
+  })
+
   it('rejects non-main stories, missing styles, tracked paragraphs, and deleting the only paragraph', async () => {
     const document = await parseFixture()
     const headerRun = document.model.stories.find(
