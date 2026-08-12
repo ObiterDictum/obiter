@@ -13,7 +13,10 @@ export function PageTable({
     <table className="w-full table-fixed border-collapse">
       <tbody>
         {table.rows.map((row, rowIndex) => (
-          <tr key={rowIndex} style={row.heightPx ? { height: row.heightPx } : undefined}>
+          <tr
+            key={rowIndex}
+            style={row.heightPx ? { height: row.heightPx } : undefined}
+          >
             {row.cells.map((cell, cellIndex) => (
               <td
                 key={cellIndex}
@@ -34,7 +37,9 @@ export function PageTable({
                     cell.fill && 'min-h-12',
                   )}
                   style={
-                    cell.minHeightPx ? { minHeight: cell.minHeightPx } : undefined
+                    cell.minHeightPx
+                      ? { minHeight: cell.minHeightPx }
+                      : undefined
                   }
                 >
                   {renderCell(cell)}
