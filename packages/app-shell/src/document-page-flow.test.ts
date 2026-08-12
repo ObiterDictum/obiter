@@ -19,6 +19,12 @@ describe('takeLine', () => {
     const taken = takeLine(`${word} next`, 0, 16, 10)
     expect(taken).toBe(word.length + 1)
   })
+
+  it('wraps a long unbroken token without scanning every prefix', () => {
+    const token = 'A'.repeat(4000)
+    expect(takeLine(`${token} tail`, 0, 16, 80)).toBe(4000 + 1)
+    expect(takeLine(token, 0, 16, 50_000)).toBe(4000)
+  })
 })
 
 describe('countLines', () => {

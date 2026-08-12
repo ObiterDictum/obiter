@@ -152,16 +152,36 @@ export function takeLine(
   const rest = text.slice(offset)
   if (!rest) return 0
   if (rest.startsWith('\n')) return 1
+  const newline = rest.indexOf('\n')
+  const haystack = newline === -1 ? rest : rest.slice(0, newline)
+  if (textWidthPx(haystack, fontSizePx, fontFamily) <= widthPx) {
+    return newline === -1 ? rest.length : newline + 1
+  }
+  const first = haystack[0]
+  if (first && textWidthPx(first, fontSizePx, fontFamily) > widthPx) return 1
+  let lo = 1
+  let hi = haystack.length
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1
+    if (
+      textWidthPx(haystack.slice(0, mid), fontSizePx, fontFamily) <= widthPx
+    ) {
+      lo = mid
+    } else {
+      hi = mid - 1
+    }
+  }
   let lastBreak = 0
-  for (let index = 0; index < rest.length; index += 1) {
-    const char = rest[index]
-    if (char === '\n') return index + 1
-    const next = textWidthPx(rest.slice(0, index + 1), fontSizePx, fontFamily)
-    if (next > widthPx && lastBreak > 0) return lastBreak
-    if (next > widthPx && index === 0) return 1
+  for (let index = 0; index < lo; index += 1) {
+    const char = haystack[index]
     if (char === ' ' || char === '-') lastBreak = index + 1
   }
-  return rest.length
+  if (lastBreak > 0) return lastBreak
+  for (let index = lo; index < haystack.length; index += 1) {
+    const char = haystack[index]
+    if (char === ' ' || char === '-') return index + 1
+  }
+  return newline === -1 ? rest.length : newline + 1
 }
 
 function textWidthPx(

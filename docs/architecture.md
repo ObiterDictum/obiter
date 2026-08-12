@@ -707,5 +707,5 @@ Columns come from `w:cols`. Floating wrap uses the drawing's wrap kind:
 skips the drawing's vertical band, and `wrapNone` does not affect text flow.
 Body text boxes (`w:txbxContent` in an anchor) are painted in the drawing and
 kept out of the body flow. Long paragraphs split across columns and pages at
-estimated line boundaries. Tight/through wrap is approximated as square; table
+measured line boundaries. Tight/through wrap is approximated as square; table
 row splits and CSS exclusions are out of scope.

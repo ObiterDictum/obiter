@@ -1,16 +1,44 @@
-import { describe, expect, it, vi } from 'vitest'
+// @vitest-environment jsdom
+import { createElement, type PropsWithChildren } from 'react'
+import { renderHook, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   documentCommentsQueryOptions,
   documentModelQueryOptions,
   documentPdfViewQueryOptions,
   documentTrackedChangesQueryOptions,
+  useDocumentImageUrls,
 } from './document-workspace-api'
 
-const api = vi.hoisted(() => ({ apiFetch: vi.fn() }))
+const api = vi.hoisted(() => ({
+  apiFetch: vi.fn(),
+  apiFetchBlob: vi.fn(),
+}))
 
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
-  return { ...actual, apiFetch: api.apiFetch }
+  return {
+    ...actual,
+    apiFetch: api.apiFetch,
+    apiFetchBlob: api.apiFetchBlob,
+  }
+})
+
+function wrapper({ children }: PropsWithChildren) {
+  return createElement(
+    QueryClientProvider,
+    {
+      client: new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      }),
+    },
+    children,
+  )
+}
+
+afterEach(() => {
+  vi.clearAllMocks()
 })
 
 describe('document workspace query options', () => {
@@ -28,5 +56,30 @@ describe('document workspace query options', () => {
       '/api/documents/doc_1/comments',
       '/api/documents/doc_1/tracked-changes',
     ])
+  })
+})
+
+describe('useDocumentImageUrls', () => {
+  it('returns a blob object URL instead of a base64 data URL', async () => {
+    const createObjectURL = vi.fn(() => 'blob:http://obiter.test/logo')
+    Object.assign(URL, {
+      createObjectURL,
+      revokeObjectURL: vi.fn(),
+    })
+    api.apiFetchBlob.mockResolvedValue(
+      new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' }),
+    )
+
+    const { result } = renderHook(
+      () => useDocumentImageUrls('doc_1', ['word/media/logo.png']),
+      { wrapper },
+    )
+
+    await waitFor(() => {
+      expect(result.current['word/media/logo.png']).toBe(
+        'blob:http://obiter.test/logo',
+      )
+    })
+    expect(createObjectURL).toHaveBeenCalled()
   })
 })

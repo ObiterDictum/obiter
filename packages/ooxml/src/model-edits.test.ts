@@ -190,6 +190,25 @@ describe('OOXML document edits', () => {
     ).toThrowError(expect.objectContaining({ code: 'model-node-not-editable' }))
   })
 
+  it('replaces the only paragraph when an insert lands before the delete', async () => {
+    const single = await parseSingleParagraphFixture()
+    const onlyId = mainParagraphs(single)[0]?.id
+    if (!onlyId) throw new Error('Single paragraph is missing.')
+
+    applyDocumentEdits(single, [
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: onlyId,
+        text: 'Typed line',
+      },
+      { type: 'delete_paragraph', paragraphId: onlyId },
+    ])
+
+    expect(mainParagraphs(single)).toMatchObject([
+      { runs: [{ text: 'Typed line' }] },
+    ])
+  })
+
   it('changes only the main story fragment and preserves every other part byte-for-byte', async () => {
     const input = await buildOoxmlFixture('full-fidelity-with-w14-ids')
     const document = await parseDocx(input)
