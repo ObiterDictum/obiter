@@ -1,12 +1,23 @@
 import { describe, expect, it } from 'vitest'
 import type { DocumentModelWire } from '@obiter/contracts'
 import {
+  applyDocumentEdits,
+  createBlankDocx,
+  parseDocx,
+  serialiseDocx,
+} from '@obiter/ooxml'
+import {
   collectEditOperations,
   insertPlainText,
   isDraftDirty,
   removeInsert,
 } from './document-edits'
-import { applyReplaceRange, emptyEditorState } from './document-word-edits'
+import { documentStory } from './document-model-text'
+import {
+  applyReplaceRange,
+  applySplitParagraph,
+  emptyEditorState,
+} from './document-word-edits'
 
 const model: DocumentModelWire = {
   version: 1,
@@ -141,6 +152,105 @@ describe('collectEditOperations', () => {
       },
       { type: 'delete_paragraph', paragraphId: 'p1' },
     ])
+  })
+
+  it('re-anchors a chain of inserts onto the nearest model paragraph', () => {
+    expect(
+      collectEditOperations(
+        model,
+        {},
+        [
+          { clientId: 'I1', afterParagraphId: 'p1', text: 'First' },
+          { clientId: 'I2', afterParagraphId: 'I1', text: 'Second' },
+        ],
+        [],
+      ),
+    ).toEqual([
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: 'p1',
+        text: 'First',
+      },
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: 'p1',
+        text: 'Second',
+      },
+    ])
+  })
+
+  it('saves a double-split through applyDocumentEdits in visual order', async () => {
+    const document = await parseDocx(await createBlankDocx())
+    const paragraph = documentStory(document.model)?.paragraphs[0]
+    if (!paragraph) throw new Error('expected a body paragraph')
+    const typed = applyReplaceRange(
+      document.model,
+      emptyEditorState(),
+      paragraph.id,
+      0,
+      0,
+      'Hello',
+    )
+    if (!typed) throw new Error('expected type')
+    const firstSplit = applySplitParagraph(
+      document.model,
+      typed.state,
+      { paragraphId: paragraph.id, offset: 5 },
+      'I1',
+    )
+    if (!firstSplit) throw new Error('expected first split')
+    const firstLine = applyReplaceRange(
+      document.model,
+      firstSplit.state,
+      'I1',
+      0,
+      0,
+      'First',
+    )
+    if (!firstLine) throw new Error('expected first insert text')
+    const secondSplit = applySplitParagraph(
+      document.model,
+      firstLine.state,
+      { paragraphId: 'I1', offset: 5 },
+      'I2',
+    )
+    if (!secondSplit) throw new Error('expected second split')
+    const secondLine = applyReplaceRange(
+      document.model,
+      secondSplit.state,
+      'I2',
+      0,
+      0,
+      'Second',
+    )
+    if (!secondLine) throw new Error('expected second insert text')
+    const operations = collectEditOperations(
+      document.model,
+      secondLine.state.drafts,
+      secondLine.state.inserts,
+      secondLine.state.deletedParagraphIds,
+      secondLine.state.extraRuns,
+    )
+    expect(operations).toEqual([
+      { type: 'replace_run_text', runId: paragraph.runs[0]?.id, text: 'Hello' },
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: paragraph.id,
+        text: 'First',
+      },
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: paragraph.id,
+        text: 'Second',
+      },
+    ])
+    applyDocumentEdits(document, operations)
+    const saved = await parseDocx(await serialiseDocx(document))
+    expect(
+      documentStory(saved.model)?.paragraphs.map((item) =>
+        item.runs.map((run) => run.text).join(''),
+      ),
+    ).toEqual(['Hello', 'First', 'Second'])
   })
 
   it('keeps later inserts after a zero-run replacement, then deletes the blank', () => {

@@ -243,14 +243,13 @@ function parseRun(
     id,
     ...(sourceTextId ? { sourceTextId } : {}),
     ...(styleId ? { styleId } : {}),
-    text: textRanges
-      .map(({ start, end }) => decodeXmlReferences(source.slice(start, end)))
-      .join(''),
+    text: runPlainText(source, elements, runElement, textElements),
     preservedXmlFragments: elements
       .filter(
         (element) =>
           element.parent === runElement &&
           !isWord(element, 't') &&
+          !isTextWrappingBreak(element) &&
           !containsTrackedChange(element, elements),
       )
       .map((element) => elementFragment(source, element)),
@@ -281,6 +280,38 @@ function elementRange(element: XmlElement) {
     endTagStart: element.endTagStart,
     end: element.end,
   }
+}
+
+function isTextWrappingBreak(element: XmlElement) {
+  if (!isWord(element, 'br')) return false
+  const type = attributeValue(element, WORD_NAMESPACE, 'type')
+  return type === undefined || type === 'textWrapping'
+}
+
+function runPlainText(
+  source: string,
+  elements: readonly XmlElement[],
+  runElement: XmlElement,
+  textElements: readonly XmlElement[],
+) {
+  const textNodes = new Set(
+    textElements.filter((element) => !element.selfClosing),
+  )
+  const parts: string[] = []
+  for (const element of elements) {
+    if (nearestWordAncestor(element, 'r') !== runElement) continue
+    if (hasTrackedChangeAncestor(element) || isInsideFallback(element)) continue
+    if (textNodes.has(element)) {
+      parts.push(
+        decodeXmlReferences(
+          source.slice(element.startTagEnd, element.endTagStart),
+        ),
+      )
+      continue
+    }
+    if (isTextWrappingBreak(element)) parts.push('\n')
+  }
+  return parts.join('')
 }
 
 function storyStructureFragments(
