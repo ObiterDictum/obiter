@@ -245,10 +245,12 @@ function layoutParagraph(
   while (offset < text.length || text.length === 0) {
     const pageStart = session.y === 0 && session.broken && !continuation
     const before = continuation || pageStart ? 0 : face.marginTopPx
+    const remaining = frame.heightPx - session.y
+    const needed =
+      before + linePx + (text.length === 0 ? face.marginBottomPx : 0)
     if (
       session.y > 0 &&
-      before + linePx + (text.length === 0 ? face.marginBottomPx : 0) >
-        frame.heightPx - session.y
+      (continuation ? needed > remaining : needed >= remaining)
     ) {
       advance()
       continue
@@ -296,7 +298,12 @@ function layoutParagraph(
     const to = text.length === 0 ? 0 : offset + fragment.consumed
     const continues = to < text.length
     const used = fragment.heightPx + (continues ? 0 : face.marginBottomPx)
-    if (session.y > 0 && startY + used > frame.heightPx) {
+    if (
+      session.y > 0 &&
+      (continuation
+        ? startY + used > frame.heightPx
+        : startY + used >= frame.heightPx)
+    ) {
       advance()
       placed = false
       continue

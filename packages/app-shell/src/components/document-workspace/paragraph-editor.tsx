@@ -89,6 +89,13 @@ export function ParagraphEditor({
 }
 
 export function revealTypingLine(node: HTMLElement) {
+  const page = node.closest('[data-document-page]')
+  if (page instanceof HTMLElement) {
+    page.scrollTop = 0
+    for (const slot of page.querySelectorAll('[aria-label="Document body"]')) {
+      if (slot instanceof HTMLElement) slot.scrollTop = 0
+    }
+  }
   const desk = node.closest('[data-document-desk]')
   if (!(desk instanceof HTMLElement)) return
   const deskBox = desk.getBoundingClientRect()
