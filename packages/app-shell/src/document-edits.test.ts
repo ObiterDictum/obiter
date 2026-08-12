@@ -6,6 +6,7 @@ import {
   isDraftDirty,
   removeInsert,
 } from './document-edits'
+import { applyReplaceRange, emptyEditorState } from './document-word-edits'
 
 const model: DocumentModelWire = {
   version: 1,
@@ -28,6 +29,26 @@ const model: DocumentModelWire = {
   relationships: [],
   preservedXmlFragments: [],
   changes: [],
+}
+
+function blankParagraphModel(): DocumentModelWire {
+  return {
+    ...model,
+    stories: [
+      {
+        partName: 'word/document.xml',
+        kind: 'document',
+        paragraphs: [
+          {
+            id: 'p1',
+            runs: [],
+            preservedXmlFragments: [],
+          },
+        ],
+        preservedXmlFragments: [],
+      },
+    ],
+  }
 }
 
 describe('collectEditOperations', () => {
@@ -64,6 +85,71 @@ describe('collectEditOperations', () => {
         p1: [{ id: 'r2', text: 'World', preservedXmlFragments: [] }],
       }),
     ).toEqual([{ type: 'replace_run_text', runId: 'r1', text: 'HelloWorld' }])
+  })
+
+  it('emits insert then delete for text typed into a zero-run paragraph', () => {
+    const blank = blankParagraphModel()
+    const typed = applyReplaceRange(
+      blank,
+      emptyEditorState(),
+      'p1',
+      0,
+      0,
+      'Typed line',
+    )
+    if (!typed) throw new Error('expected replace')
+    expect(
+      isDraftDirty(
+        blank,
+        typed.state.drafts,
+        typed.state.inserts,
+        typed.state.deletedParagraphIds,
+        typed.state.extraRuns,
+      ),
+    ).toBe(true)
+    expect(
+      collectEditOperations(
+        blank,
+        typed.state.drafts,
+        typed.state.inserts,
+        typed.state.deletedParagraphIds,
+        typed.state.extraRuns,
+      ),
+    ).toEqual([
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: 'p1',
+        text: 'Typed line',
+      },
+      { type: 'delete_paragraph', paragraphId: 'p1' },
+    ])
+  })
+
+  it('keeps later inserts after a zero-run replacement, then deletes the blank', () => {
+    const blank = blankParagraphModel()
+    expect(
+      collectEditOperations(
+        blank,
+        {},
+        [{ clientId: 'local_1', afterParagraphId: 'p1', text: 'Next' }],
+        [],
+        {
+          p1: [{ id: 'p1-r0', text: 'Typed', preservedXmlFragments: [] }],
+        },
+      ),
+    ).toEqual([
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: 'p1',
+        text: 'Typed',
+      },
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: 'p1',
+        text: 'Next',
+      },
+      { type: 'delete_paragraph', paragraphId: 'p1' },
+    ])
   })
 })
 

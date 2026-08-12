@@ -89,12 +89,24 @@ export function collectEditOperations(
   const operations: DocumentEditOperation[] = []
   const story = documentStory(model)
   const deleted = new Set(deletedParagraphIds)
+  const emptyReplacements: string[] = []
 
   for (const paragraph of story?.paragraphs ?? []) {
     if (deleted.has(paragraph.id)) continue
     const extraText = (extraRuns[paragraph.id] ?? [])
       .map((run) => drafts[run.id] ?? run.text)
       .join('')
+    if (paragraph.runs.length === 0) {
+      if (extraText) {
+        operations.push({
+          type: 'insert_paragraph_after',
+          paragraphId: paragraph.id,
+          text: extraText,
+        })
+        emptyReplacements.push(paragraph.id)
+      }
+      continue
+    }
     for (const [index, run] of paragraph.runs.entries()) {
       const last = index === paragraph.runs.length - 1
       const draft =
@@ -120,6 +132,9 @@ export function collectEditOperations(
   }
 
   for (const paragraphId of deletedParagraphIds) {
+    operations.push({ type: 'delete_paragraph', paragraphId })
+  }
+  for (const paragraphId of emptyReplacements) {
     operations.push({ type: 'delete_paragraph', paragraphId })
   }
 

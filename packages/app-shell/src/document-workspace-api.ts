@@ -5,6 +5,7 @@ import {
   useQueries,
 } from '@tanstack/react-query'
 import { queryOptions } from '@tanstack/react-query'
+import { useEffect } from 'react'
 import type {
   DocumentCollaborationMergeRequest,
   DocumentCollaborationMergeResponse,
@@ -103,6 +104,7 @@ export function useDocumentImageUrls(documentId: string, partNames: string[]) {
     queries: partNames.map((partName) => ({
       queryKey: [...workspaceKeys.media(documentId), partName],
       queryFn: () => loadDocumentImage(documentId, partName),
+      gcTime: 0,
     })),
   })
   const urls: Record<string, string> = {}
@@ -110,6 +112,14 @@ export function useDocumentImageUrls(documentId: string, partNames: string[]) {
     const url = queries[index]?.data
     if (url) urls[partName] = url
   })
+  const urlValues = Object.values(urls).join('|')
+  // Blob URLs must be revoked when the query data is replaced or the workspace unmounts.
+  useEffect(() => {
+    const created = urlValues.split('|').filter(Boolean)
+    return () => {
+      for (const url of created) URL.revokeObjectURL(url)
+    }
+  }, [urlValues])
   return urls
 }
 
@@ -120,10 +130,7 @@ async function loadDocumentImage(documentId: string, partName: string) {
     `/api/documents/${documentId}/media?part=${encodeURIComponent(partName)}`,
   )
   if (!BROWSER_IMAGE.test(blob.type)) return null
-  const bytes = new Uint8Array(await blob.arrayBuffer())
-  let binary = ''
-  for (const byte of bytes) binary += String.fromCharCode(byte)
-  return `data:${blob.type};base64,${btoa(binary)}`
+  return URL.createObjectURL(blob)
 }
 
 export function useDocumentModel(
@@ -179,23 +186,9 @@ export function useDocumentCollaborationSync(
 
 function invalidateWorkspace(
   queryClient: ReturnType<typeof useQueryClient>,
-  documentId: string,
+  _documentId: string,
 ) {
-  return Promise.all([
-    queryClient.invalidateQueries({
-      queryKey: documentsKeys.detail(documentId),
-    }),
-    queryClient.invalidateQueries({
-      queryKey: workspaceKeys.model(documentId),
-    }),
-    queryClient.invalidateQueries({
-      queryKey: workspaceKeys.comments(documentId),
-    }),
-    queryClient.invalidateQueries({
-      queryKey: workspaceKeys.trackedChanges(documentId),
-    }),
-    queryClient.invalidateQueries({ queryKey: workspaceKeys.sync(documentId) }),
-  ])
+  return queryClient.invalidateQueries({ queryKey: documentsKeys.all })
 }
 
 export function useCreateDocumentComment(documentId: string) {

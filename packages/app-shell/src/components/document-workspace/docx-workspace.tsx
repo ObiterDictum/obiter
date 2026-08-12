@@ -71,7 +71,15 @@ export function DocxWorkspace({
   const modelQuery = useDocumentModel(documentId)
   const commentsQuery = useDocumentComments(documentId)
   const changesQuery = useDocumentTrackedChanges(documentId)
-  const syncQuery = useDocumentCollaborationSync(documentId, versionId)
+  const [savedVersion, setSavedVersion] = useState<{
+    documentId: string
+    versionId: string
+  } | null>(null)
+  const baseVersionId =
+    savedVersion?.documentId === documentId
+      ? savedVersion.versionId
+      : (modelQuery.data?.versionId ?? versionId)
+  const syncQuery = useDocumentCollaborationSync(documentId, baseVersionId)
   const createComment = useCreateDocumentComment(documentId)
   const resolveComment = useResolveDocumentComment(documentId)
   const editDocument = useEditDocument(documentId)
@@ -122,6 +130,7 @@ export function DocxWorkspace({
     setExtraRuns({})
     setStale(false)
     setBanner(null)
+    setSavedVersion(null)
     await queryClient.invalidateQueries({
       queryKey: workspaceKeys.model(documentId),
     })
@@ -140,31 +149,55 @@ export function DocxWorkspace({
       extraRuns,
     )
     const collaborators = presence.some((item) => item.userId !== me?.user.id)
+    const merge = collaborators || remoteChange
     try {
-      if (collaborators || remoteChange) {
-        await mergeDocument.mutateAsync({
-          baseVersionId: versionId,
+      let versionIdAfterSave: string
+      let mergedToAvoidOverwrite = false
+      if (merge) {
+        const saved = await mergeDocument.mutateAsync({
+          baseVersionId,
           syncId: crypto.randomUUID(),
           operations,
           trackChanges,
         })
-        if (remoteChange) {
-          setBanner(
-            "Your changes were saved as a new version to avoid overwriting a colleague's work",
-          )
-        }
+        versionIdAfterSave = saved.versionId
+        mergedToAvoidOverwrite = remoteChange
       } else {
-        await editDocument.mutateAsync({
-          baseVersionId: versionId,
-          operations,
-          trackChanges,
-        })
+        try {
+          const saved = await editDocument.mutateAsync({
+            baseVersionId,
+            operations,
+            trackChanges,
+          })
+          versionIdAfterSave = saved.versionId
+        } catch (error) {
+          if (
+            !(error instanceof ApiError) ||
+            error.code !== 'conflict_detected'
+          ) {
+            throw error
+          }
+          const saved = await mergeDocument.mutateAsync({
+            baseVersionId,
+            syncId: crypto.randomUUID(),
+            operations,
+            trackChanges,
+          })
+          versionIdAfterSave = saved.versionId
+          mergedToAvoidOverwrite = true
+        }
       }
+      setSavedVersion({ documentId, versionId: versionIdAfterSave })
       setDrafts({})
       setInserts([])
       setDeletedParagraphIds([])
       setExtraRuns({})
       setStale(false)
+      if (mergedToAvoidOverwrite) {
+        setBanner(
+          "Your changes were saved as a new version to avoid overwriting a colleague's work",
+        )
+      }
     } catch (error) {
       if (error instanceof ApiError && error.code === 'conflict_detected') {
         setStale(true)
@@ -404,7 +437,7 @@ export function DocxWorkspace({
                   error={mutationError(decideChange.error)}
                   onDecide={(action, changeId) => {
                     decideChange.mutate({
-                      baseVersionId: versionId,
+                      baseVersionId,
                       action,
                       changeIds: [changeId],
                     })

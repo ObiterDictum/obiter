@@ -73,6 +73,13 @@ const model: DocumentModelWire = {
   changes: [],
 }
 
+const staleConflict = new ApiError(
+  'conflict_detected',
+  'The document has changed since editing began.',
+  409,
+  'req_1',
+)
+
 function wrapper({ children }: PropsWithChildren) {
   return createElement(
     QueryClientProvider,
@@ -95,69 +102,99 @@ function idleMutation(overrides: Record<string, unknown> = {}) {
   }
 }
 
+function mountWorkspace(options: {
+  editAsync?: ReturnType<typeof vi.fn>
+  mergeAsync?: ReturnType<typeof vi.fn>
+}) {
+  hooks.useCurrentUser.mockReturnValue({
+    data: {
+      user: {
+        id: 'usr_1',
+        name: 'Lex',
+        email: 'lex@obiter.dev',
+        role: 'owner',
+      },
+    },
+  })
+  hooks.useDocumentModel.mockReturnValue({
+    isLoading: false,
+    isError: false,
+    data: {
+      documentId: 'doc_1',
+      versionId: 'ver_1',
+      versionNumber: 1,
+      model,
+    },
+  })
+  hooks.useDocumentComments.mockReturnValue({ data: { comments: [] } })
+  hooks.useDocumentTrackedChanges.mockReturnValue({ data: { changes: [] } })
+  hooks.useDocumentCollaborationSync.mockReturnValue({
+    data: { changed: false, participants: [], currentVersionId: 'ver_1' },
+  })
+  hooks.useCreateDocumentComment.mockReturnValue(idleMutation())
+  hooks.useResolveDocumentComment.mockReturnValue(idleMutation())
+  hooks.useEditDocument.mockReturnValue(
+    idleMutation({ mutateAsync: options.editAsync ?? vi.fn() }),
+  )
+  hooks.useCollaborationMerge.mockReturnValue(
+    idleMutation({ mutateAsync: options.mergeAsync ?? vi.fn() }),
+  )
+  hooks.useTrackedChangeDecision.mockReturnValue(idleMutation())
+  hooks.usePresenceUpdate.mockReturnValue(idleMutation())
+
+  return render(
+    <DocxWorkspace
+      documentId="doc_1"
+      versionId="ver_1"
+      filename="brief.docx"
+    />,
+    { wrapper },
+  )
+}
+
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
 })
 
 describe('DocxWorkspace save', () => {
-  it('surfaces a reload banner when save hits a stale-base 409', async () => {
-    const mutateAsync = vi
-      .fn()
-      .mockRejectedValue(
-        new ApiError(
-          'conflict_detected',
-          'The document has changed since editing began.',
-          409,
-          'req_1',
+  it('merges a stale-base 409 so typed edits are not discarded', async () => {
+    const editAsync = vi.fn().mockRejectedValue(staleConflict)
+    const mergeAsync = vi.fn().mockResolvedValue({
+      documentId: 'doc_1',
+      syncId: 'sync_1',
+      baseVersionId: 'ver_1',
+      versionId: 'ver_2',
+      versionNumber: 2,
+      outcome: 'merged',
+    })
+    mountWorkspace({ editAsync, mergeAsync })
+
+    fireEvent.change(screen.getByLabelText('Paragraph text'), {
+      target: { value: 'Hello world' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(
+          "Your changes were saved as a new version to avoid overwriting a colleague's work",
         ),
-      )
-    hooks.useCurrentUser.mockReturnValue({
-      data: {
-        user: {
-          id: 'usr_1',
-          name: 'Lex',
-          email: 'lex@obiter.dev',
-          role: 'owner',
-        },
-      },
+      ).toBeTruthy()
     })
-    hooks.useDocumentModel.mockReturnValue({
-      isLoading: false,
-      isError: false,
-      data: {
-        documentId: 'doc_1',
-        versionId: 'ver_1',
-        versionNumber: 1,
-        model,
-      },
-    })
-    hooks.useDocumentComments.mockReturnValue({ data: { comments: [] } })
-    hooks.useDocumentTrackedChanges.mockReturnValue({ data: { changes: [] } })
-    hooks.useDocumentCollaborationSync.mockReturnValue({
-      data: { changed: false, participants: [], currentVersionId: 'ver_1' },
-    })
-    hooks.useCreateDocumentComment.mockReturnValue(idleMutation())
-    hooks.useResolveDocumentComment.mockReturnValue(idleMutation())
-    hooks.useEditDocument.mockReturnValue(idleMutation({ mutateAsync }))
-    hooks.useCollaborationMerge.mockReturnValue(idleMutation())
-    hooks.useTrackedChangeDecision.mockReturnValue(idleMutation())
-    hooks.usePresenceUpdate.mockReturnValue(idleMutation())
+    expect(screen.queryByRole('button', { name: 'Reload' })).toBeNull()
+    expect(editAsync).toHaveBeenCalled()
+    expect(mergeAsync).toHaveBeenCalled()
+  })
 
-    render(
-      <DocxWorkspace
-        documentId="doc_1"
-        versionId="ver_1"
-        filename="brief.docx"
-      />,
-      {
-        wrapper,
-      },
-    )
+  it('surfaces a reload banner when merge also hits a 409', async () => {
+    const editAsync = vi.fn().mockRejectedValue(staleConflict)
+    const mergeAsync = vi.fn().mockRejectedValue(staleConflict)
+    mountWorkspace({ editAsync, mergeAsync })
 
-    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull()
-    const input = screen.getByLabelText('Paragraph text')
-    fireEvent.change(input, { target: { value: 'Hello world' } })
+    fireEvent.change(screen.getByLabelText('Paragraph text'), {
+      target: { value: 'Hello world' },
+    })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => {
@@ -166,6 +203,42 @@ describe('DocxWorkspace save', () => {
       ).toBeTruthy()
     })
     expect(screen.getByRole('button', { name: 'Reload' })).toBeTruthy()
-    expect(mutateAsync).toHaveBeenCalled()
+  })
+
+  it('advances the save base to the version returned by the previous save', async () => {
+    const editAsync = vi
+      .fn()
+      .mockResolvedValueOnce({
+        documentId: 'doc_1',
+        versionId: 'ver_2',
+        versionNumber: 2,
+      })
+      .mockResolvedValueOnce({
+        documentId: 'doc_1',
+        versionId: 'ver_3',
+        versionNumber: 3,
+      })
+    mountWorkspace({ editAsync })
+
+    const input = screen.getByLabelText('Paragraph text')
+    fireEvent.change(input, { target: { value: 'Hello world' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => {
+      expect(editAsync).toHaveBeenCalledTimes(1)
+    })
+    expect(editAsync.mock.calls[0]?.[0]).toMatchObject({
+      baseVersionId: 'ver_1',
+    })
+
+    fireEvent.change(screen.getByLabelText('Paragraph text'), {
+      target: { value: 'Hello again' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => {
+      expect(editAsync).toHaveBeenCalledTimes(2)
+    })
+    expect(editAsync.mock.calls[1]?.[0]).toMatchObject({
+      baseVersionId: 'ver_2',
+    })
   })
 })

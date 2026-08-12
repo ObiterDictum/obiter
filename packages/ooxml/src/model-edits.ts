@@ -144,7 +144,10 @@ function validatePlannedOperations(
     }
     deletedIds.add(operation.paragraph.wire.id)
   }
-  if (!tracking && paragraphCount - deletedIds.size < 1) {
+  const insertCount = planned.filter(
+    (operation) => operation.type === 'insert_paragraph_after',
+  ).length
+  if (!tracking && paragraphCount - deletedIds.size + insertCount < 1) {
     throw new OoxmlError('model-node-not-editable')
   }
 
