@@ -47,14 +47,16 @@ describe('paragraph alignment while editing', () => {
       )
 
     view('right')
-    expect(screen.getByLabelText('Run text').style.textAlign).toBe('right')
+    expect(screen.getByLabelText('Paragraph text').style.textAlign).toBe('right')
     cleanup()
 
     view('center')
-    expect(screen.getByLabelText('Run text').style.textAlign).toBe('center')
+    expect(screen.getByLabelText('Paragraph text').style.textAlign).toBe(
+      'center',
+    )
     cleanup()
 
     view('left')
-    expect(screen.getByLabelText('Run text').style.textAlign).toBe('left')
+    expect(screen.getByLabelText('Paragraph text').style.textAlign).toBe('left')
   })
 })

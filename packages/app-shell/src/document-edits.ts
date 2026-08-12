@@ -1,6 +1,7 @@
 import type {
   DocumentEditOperation,
   DocumentModelWire,
+  DocumentTextRunWire,
 } from '@obiter/contracts'
 import { documentStory, paragraphPlainText } from './document-model-text'
 
@@ -8,6 +9,74 @@ export type LocalInsert = {
   clientId: string
   afterParagraphId: string
   text: string
+  runs?: DocumentTextRunWire[]
+}
+
+export function insertPlainText(insert: LocalInsert): string {
+  if (insert.runs && insert.runs.length > 0) {
+    const joined = insert.runs.map((run) => run.text).join('')
+    return joined.length > 0 ? joined : insert.text
+  }
+  return insert.text
+}
+
+export function insertRuns(insert: LocalInsert): DocumentTextRunWire[] {
+  if (insert.runs && insert.runs.length > 0) {
+    const joined = insert.runs.map((run) => run.text).join('')
+    if (joined.length > 0 || !insert.text) return insert.runs
+    return [{ ...insert.runs[0], text: insert.text }]
+  }
+  return [
+    {
+      id: insert.clientId,
+      text: insert.text,
+      preservedXmlFragments: [],
+    },
+  ]
+}
+
+export function removeInsert(
+  inserts: LocalInsert[],
+  clientId: string,
+): { inserts: LocalInsert[]; selectId: string } | undefined {
+  const removed = inserts.find((item) => item.clientId === clientId)
+  if (!removed) return undefined
+  return {
+    inserts: inserts
+      .filter((item) => item.clientId !== clientId)
+      .map((item) =>
+        item.afterParagraphId === clientId
+          ? { ...item, afterParagraphId: removed.afterParagraphId }
+          : item,
+      ),
+    selectId: removed.afterParagraphId,
+  }
+}
+
+export function flowParagraphIds(
+  model: DocumentModelWire,
+  inserts: LocalInsert[],
+  deletedParagraphIds: string[],
+): string[] {
+  const deleted = new Set(deletedParagraphIds)
+  const byAfter = new Map<string, LocalInsert[]>()
+  for (const insert of inserts) {
+    const list = byAfter.get(insert.afterParagraphId) ?? []
+    list.push(insert)
+    byAfter.set(insert.afterParagraphId, list)
+  }
+  const ids: string[] = []
+  const appendInserts = (id: string) => {
+    for (const insert of byAfter.get(id) ?? []) {
+      ids.push(insert.clientId)
+      appendInserts(insert.clientId)
+    }
+  }
+  for (const paragraph of documentStory(model)?.paragraphs ?? []) {
+    if (!deleted.has(paragraph.id)) ids.push(paragraph.id)
+    appendInserts(paragraph.id)
+  }
+  return ids
 }
 
 export function collectEditOperations(
@@ -15,6 +84,7 @@ export function collectEditOperations(
   drafts: Record<string, string>,
   inserts: LocalInsert[],
   deletedParagraphIds: string[],
+  extraRuns: Record<string, DocumentTextRunWire[]> = {},
 ): DocumentEditOperation[] {
   const operations: DocumentEditOperation[] = []
   const story = documentStory(model)
@@ -22,8 +92,15 @@ export function collectEditOperations(
 
   for (const paragraph of story?.paragraphs ?? []) {
     if (deleted.has(paragraph.id)) continue
-    for (const run of paragraph.runs) {
-      const draft = drafts[run.id]
+    const extraText = (extraRuns[paragraph.id] ?? [])
+      .map((run) => drafts[run.id] ?? run.text)
+      .join('')
+    for (const [index, run] of paragraph.runs.entries()) {
+      const last = index === paragraph.runs.length - 1
+      const draft =
+        last && extraText
+          ? `${drafts[run.id] ?? run.text}${extraText}`
+          : drafts[run.id]
       if (draft !== undefined && draft !== run.text) {
         operations.push({
           type: 'replace_run_text',
@@ -38,7 +115,7 @@ export function collectEditOperations(
     operations.push({
       type: 'insert_paragraph_after',
       paragraphId: insert.afterParagraphId,
-      text: insert.text,
+      text: insertPlainText(insert),
     })
   }
 
@@ -54,10 +131,16 @@ export function isDraftDirty(
   drafts: Record<string, string>,
   inserts: LocalInsert[],
   deletedParagraphIds: string[],
+  extraRuns: Record<string, DocumentTextRunWire[]> = {},
 ) {
   return (
-    collectEditOperations(model, drafts, inserts, deletedParagraphIds).length >
-    0
+    collectEditOperations(
+      model,
+      drafts,
+      inserts,
+      deletedParagraphIds,
+      extraRuns,
+    ).length > 0
   )
 }
 

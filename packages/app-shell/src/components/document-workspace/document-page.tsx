@@ -3,7 +3,9 @@ import { A4_HEIGHT_PX, A4_WIDTH_PX } from '../../document-page-units'
 
 export function DocumentDesk({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-0 flex-1 overflow-auto px-4 py-8">{children}</div>
+    <div data-document-desk className="min-h-0 flex-1 overflow-auto px-4 py-8">
+      {children}
+    </div>
   )
 }
 

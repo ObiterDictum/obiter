@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
-import { storyBlocks, storyTables } from './document-page-tables'
+import {
+  storyBlocks,
+  storyTables,
+  tablePaintHeight,
+} from './document-page-tables'
 
 const tableXml = `<w:tbl><w:tblPr><w:tblBorders><w:top w:val="single"/></w:tblBorders></w:tblPr><w:tr><w:tc><w:tcPr><w:shd w:fill="1F4E79"/><w:gridSpan w:val="1"/></w:tcPr><w:p w14:paraId="AABBCCDD"><w:r><w:t>Particulars</w:t></w:r></w:p></w:tc><w:tc><w:p w14:paraId="EEFF0011"><w:r><w:t>Details</w:t></w:r></w:p></w:tc></w:tr></w:tbl>`
 
@@ -70,9 +74,7 @@ describe('storyBlocks', () => {
         },
         {
           id: 'para-header-note',
-          runs: [
-            { id: 'r2', text: 'Confidential', preservedXmlFragments: [] },
-          ],
+          runs: [{ id: 'r2', text: 'Confidential', preservedXmlFragments: [] }],
           preservedXmlFragments: [],
         },
       ],
@@ -86,11 +88,9 @@ describe('storyBlocks', () => {
       undefined,
       '#A6A6A6',
     ])
-    expect(table.table.rows[0]?.cells.map((cell) => cell.paragraphIds)).toEqual([
-      [],
-      ['para-header-logo'],
-      [],
-    ])
+    expect(table.table.rows[0]?.cells.map((cell) => cell.paragraphIds)).toEqual(
+      [[], ['para-header-logo'], []],
+    )
   })
 
   it('still centres a header logo when empty side-cell para ids exist in the story', () => {
@@ -126,11 +126,9 @@ describe('storyBlocks', () => {
       undefined,
       '#A6A6A6',
     ])
-    expect(table.table.rows[0]?.cells.map((cell) => cell.paragraphIds)).toEqual([
-      [],
-      ['para-header-logo'],
-      [],
-    ])
+    expect(table.table.rows[0]?.cells.map((cell) => cell.paragraphIds)).toEqual(
+      [[], ['para-header-logo'], []],
+    )
   })
 
   it('puts unmatched footer text into table cells and uses a leftover shape as fill', () => {
@@ -158,7 +156,9 @@ describe('storyBlocks', () => {
         },
         {
           id: 'right',
-          runs: [{ id: 't3', text: 'www.example.com', preservedXmlFragments: [] }],
+          runs: [
+            { id: 't3', text: 'www.example.com', preservedXmlFragments: [] },
+          ],
           preservedXmlFragments: [],
         },
       ],
@@ -167,14 +167,12 @@ describe('storyBlocks', () => {
     expect(blocks.map((block) => block.type)).toEqual(['table'])
     const table = blocks[0]
     if (table?.type !== 'table') throw new Error('expected table')
-    expect(table.table.rows[0]?.cells.map((cell) => cell.paragraphIds)).toEqual([
-      ['left'],
-      ['mid'],
-      ['right'],
-    ])
-    expect(table.table.rows[0]?.cells.every((cell) => cell.fill === '#3A3A3A')).toBe(
-      true,
+    expect(table.table.rows[0]?.cells.map((cell) => cell.paragraphIds)).toEqual(
+      [['left'], ['mid'], ['right']],
     )
+    expect(
+      table.table.rows[0]?.cells.every((cell) => cell.fill === '#3A3A3A'),
+    ).toBe(true)
   })
 
   it('paints empty header side cells when the greys are shapes not cell shade', () => {
@@ -207,11 +205,9 @@ describe('storyBlocks', () => {
       undefined,
       '#A6A6A6',
     ])
-    expect(table.table.rows[0]?.cells.map((cell) => cell.paragraphIds)).toEqual([
-      [],
-      ['para-header-logo'],
-      [],
-    ])
+    expect(table.table.rows[0]?.cells.map((cell) => cell.paragraphIds)).toEqual(
+      [[], ['para-header-logo'], []],
+    )
   })
 })
 
@@ -231,5 +227,24 @@ describe('storyTables with drawings', () => {
     expect(tables[0]?.rows[0]?.cells[0]?.paragraphIds).toEqual([
       'para-w14-AABBCCDD',
     ])
+  })
+})
+
+describe('tablePaintHeight', () => {
+  it('counts a filled row at the painted min-height, not the 28px fallback', () => {
+    expect(
+      tablePaintHeight({
+        bordered: false,
+        paragraphIds: ['a'],
+        rows: [
+          {
+            cells: [{ span: 1, fill: '#1F4E79', paragraphIds: ['a'] }],
+          },
+          {
+            cells: [{ span: 1, paragraphIds: ['b'] }],
+          },
+        ],
+      }),
+    ).toBe(76)
   })
 })

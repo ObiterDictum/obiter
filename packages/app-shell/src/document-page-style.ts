@@ -30,6 +30,9 @@ export type ParagraphFace = {
   indentLeftPx?: number
   indentRightPx?: number
   indentFirstPx?: number
+  keepNext?: boolean
+  keepLines?: boolean
+  widowControl?: boolean
   run: RunFace
 }
 
@@ -62,6 +65,9 @@ export function paragraphFace(
     ...merged,
     marginTopPx: merged.marginTopPx,
     marginBottomPx: merged.marginBottomPx,
+    keepNext: merged.keepNext ?? false,
+    keepLines: merged.keepLines ?? false,
+    widowControl: merged.widowControl ?? true,
     run: {
       fontFamily: merged.run.fontFamily ?? DEFAULT_FONT,
       fontSizePx: merged.run.fontSizePx ?? DEFAULT_SIZE_PX,
@@ -104,7 +110,7 @@ export function paragraphCss(face: ParagraphFace): CSSProperties {
   return omitUndefined({
     fontFamily: face.run.fontFamily,
     fontSize: face.run.fontSizePx,
-    lineHeight: face.lineHeight,
+    lineHeight: `${paragraphLineHeightPx(face)}px`,
     marginTop: face.marginTopPx,
     marginBottom: face.marginBottomPx,
     textAlign: face.align,
@@ -176,6 +182,9 @@ function faceFromXml(xml: string): ParagraphFace {
     indentLeftPx: twipPx(xmlNumber(ind, 'left')),
     indentRightPx: twipPx(xmlNumber(ind, 'right')),
     indentFirstPx: twipPx(xmlNumber(ind, 'firstLine')),
+    keepNext: wordFlag(pPr, 'keepNext'),
+    keepLines: wordFlag(pPr, 'keepLines'),
+    widowControl: wordFlag(pPr, 'widowControl'),
     run: runFromXml(rPr),
   }
 }
@@ -199,8 +208,8 @@ function runFromXml(xml: string): RunFace {
       color && /^[0-9A-Fa-f]{6}$/.test(color) && color.toLowerCase() !== 'auto'
         ? `#${color}`
         : undefined,
-    bold: wordToggle(xml, 'b'),
-    italic: wordToggle(xml, 'i'),
+    bold: wordFlag(xml, 'b'),
+    italic: wordFlag(xml, 'i'),
     underline: wordUnderline(xml),
   })
 }
@@ -223,9 +232,19 @@ function mergeParagraph(...faces: ParagraphFace[]): ParagraphFace {
       indentLeftPx: next.indentLeftPx ?? current.indentLeftPx,
       indentRightPx: next.indentRightPx ?? current.indentRightPx,
       indentFirstPx: next.indentFirstPx ?? current.indentFirstPx,
+      keepNext: next.keepNext ?? current.keepNext,
+      keepLines: next.keepLines ?? current.keepLines,
+      widowControl: next.widowControl ?? current.widowControl,
       run: mergeRun(current.run, next.run),
     }),
-    { marginTopPx: 0, marginBottomPx: 0, run: {} },
+    {
+      marginTopPx: 0,
+      marginBottomPx: 0,
+      keepNext: false,
+      keepLines: false,
+      widowControl: true,
+      run: {},
+    },
   )
 }
 
@@ -249,7 +268,7 @@ function twipPx(value: number | undefined): number {
   return value === undefined ? 0 : twipToPx(value)
 }
 
-function wordToggle(xml: string, name: 'b' | 'i'): boolean | undefined {
+function wordFlag(xml: string, name: string): boolean | undefined {
   const attrs = xmlTagAttrs(xml, name)
   if (attrs === undefined && !new RegExp(`<w:${name}\\b`, 'i').test(xml)) {
     return undefined

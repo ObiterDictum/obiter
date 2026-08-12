@@ -56,6 +56,10 @@ function wordGroupParts(xml: string): DrawingScene | undefined {
     if (drawingIsTextBox(block)) continue
     const box = xfrmBox(block)
     if (!box) continue
+    if (drawingHasPicture(block)) {
+      parts.push({ kind: 'picture', ...box, xml: block })
+      continue
+    }
     const fill = resolved ?? drawingShapeFill(block)
     if (!fill) continue
     parts.push({ kind: 'rect', ...box, fill, xml: block })
@@ -101,14 +105,30 @@ function vmlGroupParts(xml: string): DrawingScene | undefined {
   return { widthPx, heightPx, parts }
 }
 
-export function drawingAnchor(
-  xml: string,
-): { leftPx: number; topPx: number } | undefined {
+export function drawingAnchor(xml: string):
+  | {
+      leftPx: number
+      topPx: number
+      relativeFromV: 'page' | 'margin' | 'paragraph' | 'line'
+    }
+  | undefined {
   if (!/<wp:anchor\b/i.test(xml)) return undefined
   return {
     leftPx: axisOffset(xml, 'positionH'),
     topPx: axisOffset(xml, 'positionV'),
+    relativeFromV: axisRelativeFromV(xml),
   }
+}
+
+function axisRelativeFromV(
+  xml: string,
+): 'page' | 'margin' | 'paragraph' | 'line' {
+  const block = xml.match(/<wp:positionV\b[\s\S]*?<\/wp:positionV>/i)?.[0]
+  const value = block?.match(/relativeFrom="([^"]+)"/i)?.[1]?.toLowerCase()
+  if (value === 'margin' || value === 'paragraph' || value === 'line') {
+    return value
+  }
+  return 'page'
 }
 
 function axisOffset(xml: string, tag: 'positionH' | 'positionV'): number {
