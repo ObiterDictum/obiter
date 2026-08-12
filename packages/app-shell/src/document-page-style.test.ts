@@ -65,9 +65,7 @@ describe('paragraphFace', () => {
       {
         id: 'p1',
         runs: [],
-        preservedXmlFragments: [
-          '<w:pPr><w:keepNext/><w:keepLines/></w:pPr>',
-        ],
+        preservedXmlFragments: ['<w:pPr><w:keepNext/><w:keepLines/></w:pPr>'],
       },
       [],
     )

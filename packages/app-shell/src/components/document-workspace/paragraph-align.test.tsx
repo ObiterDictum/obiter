@@ -47,7 +47,9 @@ describe('paragraph alignment while editing', () => {
       )
 
     view('right')
-    expect(screen.getByLabelText('Paragraph text').style.textAlign).toBe('right')
+    expect(screen.getByLabelText('Paragraph text').style.textAlign).toBe(
+      'right',
+    )
     cleanup()
 
     view('center')
