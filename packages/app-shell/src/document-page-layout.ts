@@ -17,11 +17,72 @@ export type PageBox = {
   footerPx: number
 }
 
+export type ContentFrame = {
+  top: number
+  right: number
+  bottom: number
+  left: number
+  widthPx: number
+  heightPx: number
+}
+
+export type ColumnFrame = {
+  left: number
+  widthPx: number
+}
+
 const DEFAULT_MARGIN_PX = 96
 const DEFAULT_HEADER_PX = 48
 
+export function contentFrame(box: PageBox): ContentFrame {
+  const widthPx = Math.max(1, box.widthPx - box.margin.left - box.margin.right)
+  const heightPx = Math.max(
+    1,
+    box.heightPx - box.margin.top - box.margin.bottom,
+  )
+  return {
+    top: box.margin.top,
+    right: box.margin.right,
+    bottom: box.margin.bottom,
+    left: box.margin.left,
+    widthPx,
+    heightPx,
+  }
+}
+
+export function sectionColumns(box: PageBox, sectXml: string): ColumnFrame[] {
+  const frame = contentFrame(box)
+  const attrs = xmlTagAttrs(sectXml, 'cols')
+  const num = Math.max(1, Math.round(xmlNumber(attrs, 'num') ?? 1))
+  const space = Math.round(twipToPx(xmlNumber(attrs, 'space') ?? 720))
+  const explicit = [...sectXml.matchAll(/<w:col\b([^>]*)\/?>/gi)].map(
+    (match) => ({
+      widthPx: Math.max(1, Math.round(twipToPx(xmlNumber(match[1], 'w') ?? 0))),
+      spacePx: Math.round(twipToPx(xmlNumber(match[1], 'space') ?? 0)),
+    }),
+  )
+  if (explicit.length === num && explicit.every((col) => col.widthPx > 1)) {
+    let left = 0
+    return explicit.map((col, index) => {
+      const frameCol = { left, widthPx: col.widthPx }
+      left += col.widthPx + (index < num - 1 ? col.spacePx || space : 0)
+      return frameCol
+    })
+  }
+  if (num === 1) return [{ left: 0, widthPx: frame.widthPx }]
+  const gap = space * (num - 1)
+  const width = Math.max(1, Math.floor((frame.widthPx - gap) / num))
+  return Array.from({ length: num }, (_, index) => ({
+    left: index * (width + space),
+    widthPx:
+      index === num - 1
+        ? Math.max(1, frame.widthPx - index * (width + space))
+        : width,
+  }))
+}
+
 export function documentPageBox(model: DocumentModelWire): PageBox {
-  const sect = sectionXml(model)
+  const sect = documentSectionXml(model)
   const size = xmlTagAttrs(sect, 'pgSz')
   const margin = xmlTagAttrs(sect, 'pgMar')
   return {
@@ -63,7 +124,7 @@ export function marginStories(
   return matched.length > 0 ? matched : all.slice(0, 1)
 }
 
-function sectionXml(model: DocumentModelWire): string {
+export function documentSectionXml(model: DocumentModelWire): string {
   const story = model.stories.find((item) => item.kind === 'document')
   const xml = [
     ...(story?.preservedXmlFragments ?? []),
@@ -82,7 +143,7 @@ function sectionReferenceIds(
   model: DocumentModelWire,
   kind: 'header' | 'footer',
 ): string[] {
-  const sect = sectionXml(model)
+  const sect = documentSectionXml(model)
   const tag = kind === 'header' ? 'headerReference' : 'footerReference'
   const refs = [...sect.matchAll(new RegExp(`<w:${tag}\\b([^>]*)\\/?>`, 'gi'))]
   const ofType = (type: string) =>

@@ -1,21 +1,45 @@
+import { Image as ImageIcon } from '@phosphor-icons/react'
+import type { ReactNode } from 'react'
+import { drawingAnchor, drawingScene } from '../../document-page-drawings'
 import {
   drawingBoxSize,
   drawingHasPicture,
   drawingShapeFill,
 } from '../../document-page-media'
-import { drawingScene } from '../../document-page-drawings'
-import { Image as ImageIcon } from '@phosphor-icons/react'
 
 export function PageDrawing({
   xml,
   imageUrl,
   fallbackLabel,
+  ignoreAnchor = false,
 }: {
   xml: string
   imageUrl?: string
   fallbackLabel: string
+  ignoreAnchor?: boolean
 }) {
   const scene = drawingScene(xml)
+  const node = drawingNode(xml, scene, imageUrl, fallbackLabel)
+  if (!node) return null
+  if (ignoreAnchor) return node
+  const anchor = drawingAnchor(xml)
+  if (!anchor || (anchor.leftPx === 0 && anchor.topPx === 0)) return node
+  return (
+    <div
+      className="relative"
+      style={{ marginLeft: anchor.leftPx, marginTop: anchor.topPx }}
+    >
+      {node}
+    </div>
+  )
+}
+
+function drawingNode(
+  xml: string,
+  scene: ReturnType<typeof drawingScene>,
+  imageUrl: string | undefined,
+  fallbackLabel: string,
+): ReactNode {
   if (scene.parts.length > 1) {
     return (
       <div

@@ -3,7 +3,9 @@ import type { DocumentModelWire } from '@obiter/contracts'
 import {
   modelPlainText,
   paragraphHasUnmodelled,
+  paragraphPlainText,
   runChangeKinds,
+  sliceParagraphRuns,
 } from './document-model-text'
 
 function sampleModel(
@@ -57,6 +59,26 @@ describe('paragraphHasUnmodelled', () => {
         preservedXmlFragments: ['<w:bookmarkStart w:id="1"/>'],
       }),
     ).toBe(true)
+  })
+})
+
+describe('sliceParagraphRuns', () => {
+  it('slices across runs using draft text when present', () => {
+    const paragraph = {
+      id: 'p1',
+      runs: [
+        { id: 'r1', text: 'Hello ', preservedXmlFragments: [] },
+        { id: 'r2', text: 'world', preservedXmlFragments: [] },
+      ],
+      preservedXmlFragments: [],
+    }
+    expect(paragraphPlainText(paragraph, { r2: 'there' })).toBe('Hello there')
+    expect(sliceParagraphRuns(paragraph, 6, 11, { r2: 'there' })).toEqual([
+      {
+        run: paragraph.runs[1],
+        text: 'there',
+      },
+    ])
   })
 })
 

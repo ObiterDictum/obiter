@@ -31,9 +31,10 @@ export function DocumentPage({
     >
       <article
         aria-label="Document page"
-        className="absolute top-0 left-0 flex flex-col bg-white text-black shadow-[0_12px_40px_rgba(0,0,0,0.38)] ring-1 ring-black/10"
+        className="absolute top-0 left-0 flex flex-col overflow-hidden bg-white text-black shadow-[0_12px_40px_rgba(0,0,0,0.38)] ring-1 ring-black/10"
         style={{
           width,
+          height,
           minHeight: height,
           transform: `scale(${scale})`,
           transformOrigin: 'top left',

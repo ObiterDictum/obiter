@@ -1,29 +1,22 @@
 import type {
-  DocumentChangeWire,
   DocumentModelWire,
   DocumentParagraphWire,
   DocumentPresence,
-  DocumentRelationshipWire,
-  DocumentStyleWire,
-  DocumentTextRunWire,
 } from '@obiter/contracts'
-import { cn } from '@obiter/ui'
 import type { LocalInsert } from '../../document-edits'
-import { runChangeKinds } from '../../document-model-text'
 import {
+  contrastFillText,
   imagePartNameForDrawing,
-  paragraphImageXml,
-  readableRunColor,
 } from '../../document-page-media'
-import { documentPageBox, marginStories } from '../../document-page-layout'
 import {
-  paragraphCss,
-  paragraphFace,
-  runCss,
-  runFace,
-  type RunFace,
-} from '../../document-page-style'
+  documentPageBox,
+  marginStories,
+  contentFrame,
+} from '../../document-page-layout'
 import { storyBlocks } from '../../document-page-tables'
+import type { LaidOutBlock } from '../../document-page-engine'
+import type { PageFloat, PageTextBox } from '../../document-page-floats'
+import { ModelParagraph, PendingInsert } from './model-paragraph'
 import { PageDrawing } from './page-drawing'
 import { PageMarginBand } from './page-margin-band'
 import { PageTable } from './page-table'
@@ -41,6 +34,10 @@ export function DocumentModelPage({
   deletedParagraphIds = [],
   onInsertTextChange,
   imageUrls = {},
+  pageBlocks,
+  pageFloats = [],
+  pageTextBoxes = [],
+  pageColumns,
 }: {
   model: DocumentModelWire
   selectedParagraphId: string | null
@@ -54,6 +51,10 @@ export function DocumentModelPage({
   deletedParagraphIds?: string[]
   onInsertTextChange?: (clientId: string, text: string) => void
   imageUrls?: Record<string, string>
+  pageBlocks?: LaidOutBlock[]
+  pageFloats?: PageFloat[]
+  pageTextBoxes?: PageTextBox[]
+  pageColumns?: Array<{ left: number; widthPx: number }>
 }) {
   const story = model.stories.find((item) => item.kind === 'document')
   const headers = marginStories(model, 'header')
@@ -67,10 +68,19 @@ export function DocumentModelPage({
     )
   }
 
+  const blocks: LaidOutBlock[] = pageBlocks ?? storyBlocks(story)
+  const columns = pageColumns ?? [
+    { left: 0, widthPx: contentFrame(page).widthPx },
+  ]
+  const firstColumn = columns[0]
+  const nextColumn = columns[1]
+  const gap =
+    firstColumn && nextColumn ? nextColumn.left - firstColumn.widthPx : 0
+
   return (
     <div
       className="relative flex flex-1 flex-col"
-      style={{ minHeight: page.heightPx }}
+      style={{ height: page.heightPx, minHeight: page.heightPx }}
     >
       <PageMarginBand
         stories={headers}
@@ -87,106 +97,43 @@ export function DocumentModelPage({
         }}
       />
       <div
-        className="flex flex-1 flex-col"
+        className="relative z-[1] flex flex-1"
         style={{
           paddingLeft: page.margin.left,
           paddingRight: page.margin.right,
           paddingTop: page.margin.top,
           paddingBottom: page.margin.bottom,
+          gap,
         }}
       >
-        {storyBlocks(story).flatMap((block, index) => {
-          if (block.type === 'table') {
-            const nodes = [
-              <PageTable
-                key={`tbl-${index}`}
-                table={block.table}
-                renderCell={(cell) =>
-                  cell.paragraphIds.flatMap((id) => {
-                    const paragraph = story.paragraphs.find(
-                      (item) => item.id === id,
-                    )
-                    if (
-                      !paragraph ||
-                      deletedParagraphIds.includes(paragraph.id)
-                    ) {
-                      return []
-                    }
-                    return [
-                      <ModelParagraph
-                        key={paragraph.id}
-                        paragraph={paragraph}
-                        changes={model.changes}
-                        selected={selectedParagraphId === paragraph.id}
-                        onSelect={() => onSelectParagraph(paragraph.id)}
-                        drafts={drafts}
-                        onRunTextChange={onRunTextChange}
-                        editing={editing}
-                        presence={presence}
-                        currentUserId={currentUserId}
-                        storyPartName={story.partName}
-                        relationships={model.relationships}
-                        imageUrls={imageUrls}
-                        styles={model.styles}
-                      />,
-                    ]
-                  })
-                }
-              />,
-            ]
-            for (const paragraphId of block.table.paragraphIds) {
-              for (const insert of inserts.filter(
-                (item) => item.afterParagraphId === paragraphId,
-              )) {
-                nodes.push(
-                  <PendingInsert
-                    key={insert.clientId}
-                    insert={insert}
-                    selected={selectedParagraphId === insert.clientId}
-                    onSelect={() => onSelectParagraph(insert.clientId)}
-                    onTextChange={onInsertTextChange}
-                  />,
-                )
-              }
-            }
-            return nodes
-          }
-
-          const paragraph = block.paragraph
-          if (deletedParagraphIds.includes(paragraph.id)) return []
-          const nodes = [
-            <ModelParagraph
-              key={paragraph.id}
-              paragraph={paragraph}
-              changes={model.changes}
-              selected={selectedParagraphId === paragraph.id}
-              onSelect={() => onSelectParagraph(paragraph.id)}
-              drafts={drafts}
-              onRunTextChange={onRunTextChange}
-              editing={editing}
-              presence={presence}
-              currentUserId={currentUserId}
-              storyPartName={story.partName}
-              relationships={model.relationships}
-              imageUrls={imageUrls}
-              styles={model.styles}
-            />,
-          ]
-          for (const insert of inserts.filter(
-            (item) => item.afterParagraphId === paragraph.id,
-          )) {
-            nodes.push(
-              <PendingInsert
-                key={insert.clientId}
-                insert={insert}
-                selected={selectedParagraphId === insert.clientId}
-                onSelect={() => onSelectParagraph(insert.clientId)}
-                onTextChange={onInsertTextChange}
-              />,
-            )
-          }
-          return nodes
-        })}
+        {columns.map((column, columnIndex) => (
+          <div
+            key={`col-${columnIndex}`}
+            className="flex flex-col"
+            style={{ width: column.widthPx }}
+          >
+            {blocks
+              .filter((block) => (block.column ?? 0) === columnIndex)
+              .flatMap((block, index) =>
+                renderBlock(block, index, {
+                  model,
+                  storyPartName: story.partName,
+                  selectedParagraphId,
+                  onSelectParagraph,
+                  drafts,
+                  onRunTextChange,
+                  editing,
+                  presence,
+                  currentUserId,
+                  inserts,
+                  deletedParagraphIds,
+                  onInsertTextChange,
+                  imageUrls,
+                  paragraphs: story.paragraphs,
+                }),
+              )}
+          </div>
+        ))}
       </div>
       <PageMarginBand
         stories={footers}
@@ -202,208 +149,180 @@ export function DocumentModelPage({
           edge: page.footerPx,
         }}
       />
-    </div>
-  )
-}
-
-function ModelParagraph({
-  paragraph,
-  changes,
-  selected,
-  onSelect,
-  drafts,
-  onRunTextChange,
-  editing,
-  presence,
-  currentUserId,
-  storyPartName,
-  relationships,
-  imageUrls,
-  styles,
-}: {
-  paragraph: DocumentParagraphWire
-  changes: DocumentChangeWire[]
-  selected: boolean
-  onSelect: () => void
-  drafts?: Record<string, string>
-  onRunTextChange?: (runId: string, text: string) => void
-  editing?: boolean
-  presence?: DocumentPresence[]
-  currentUserId?: string
-  storyPartName: string
-  relationships: DocumentRelationshipWire[]
-  imageUrls: Record<string, string>
-  styles: DocumentStyleWire[]
-}) {
-  const carets = (presence ?? []).filter(
-    (item) =>
-      item.userId !== currentUserId &&
-      item.cursor?.paragraphId === paragraph.id,
-  )
-  const face = paragraphFace(paragraph, styles)
-  const fullWidth = paragraph.runs.length <= 1
-  const images = paragraphImageXml(paragraph)
-
-  return (
-    <div
-      aria-current={selected ? 'true' : undefined}
-      aria-label={`Paragraph ${paragraph.id}`}
-      onClick={onSelect}
-      className={cn(
-        'relative w-full',
-        face.align === 'left' && 'text-left',
-        face.align === 'right' && 'text-right',
-        face.align === 'center' && 'text-center',
-        face.align === 'justify' && 'text-justify',
-        selected && 'shadow-[inset_2px_0_0_#5a6f88]',
-      )}
-      style={paragraphCss(face)}
-    >
-      {images.map((xml, index) => {
+      {pageFloats.map((item, index) => {
         const partName = imagePartNameForDrawing(
-          xml,
-          storyPartName,
-          relationships,
+          item.xml,
+          story.partName,
+          model.relationships,
         )
         return (
-          <PageDrawing
-            key={`${paragraph.id}-img-${index}`}
-            xml={xml}
-            imageUrl={partName ? imageUrls[partName] : undefined}
-            fallbackLabel="Document image"
-          />
+          <div
+            key={`float-${index}`}
+            className="pointer-events-none absolute"
+            style={{
+              left: item.leftPx,
+              top: item.topPx,
+              zIndex: item.behind ? 0 : 2,
+            }}
+          >
+            <PageDrawing
+              xml={item.xml}
+              ignoreAnchor
+              imageUrl={partName ? imageUrls[partName] : undefined}
+              fallbackLabel="Document image"
+            />
+          </div>
         )
       })}
-      <p
-        className="min-h-[1em] w-full"
-        style={{ textAlign: face.align ?? 'left' }}
-      >
-        {paragraph.runs.length === 0 ? (
-          <span>&nbsp;</span>
-        ) : (
-          paragraph.runs.map((run) => (
-            <ModelRun
-              key={run.id}
-              run={run}
-              face={runFace(run, face, styles)}
-              kinds={runChangeKinds(changes, run.id)}
-              draft={drafts?.[run.id]}
-              editing={editing}
-              fullWidth={fullWidth}
-              align={face.align}
-              onTextChange={onRunTextChange}
-              caret={carets.find((item) => item.cursor?.runId === run.id)}
-            />
-          ))
-        )}
-      </p>
+      {pageTextBoxes.map((box, index) => (
+        <div
+          key={`txbx-${index}`}
+          className="pointer-events-none absolute overflow-hidden"
+          style={{
+            left: box.leftPx,
+            top: box.topPx,
+            width: box.widthPx,
+            height: box.heightPx,
+            backgroundColor: box.fill,
+            color: contrastFillText(box.fill),
+            zIndex: box.behind ? 0 : 2,
+          }}
+        >
+          {box.paragraphIds.flatMap((id) => {
+            const paragraph = story.paragraphs.find((item) => item.id === id)
+            if (!paragraph) return []
+            return [
+              <ModelParagraph
+                key={paragraph.id}
+                paragraph={paragraph}
+                changes={model.changes}
+                selected={false}
+                onSelect={() => undefined}
+                drafts={drafts}
+                editing={false}
+                storyPartName={story.partName}
+                relationships={model.relationships}
+                imageUrls={imageUrls}
+                styles={model.styles}
+              />,
+            ]
+          })}
+        </div>
+      ))}
     </div>
   )
 }
 
-function ModelRun({
-  run,
-  face,
-  kinds,
-  draft,
-  editing,
-  fullWidth,
-  align,
-  onTextChange,
-  caret,
-}: {
-  run: DocumentTextRunWire
-  face: RunFace
-  kinds: Set<DocumentChangeWire['kind']>
-  draft?: string
-  editing?: boolean
-  fullWidth: boolean
-  align?: 'left' | 'center' | 'right' | 'justify'
-  onTextChange?: (runId: string, text: string) => void
-  caret?: DocumentPresence
-}) {
-  const text = draft ?? run.text
-  const color = readableRunColor(face.color)
-  const className = cn(
-    kinds.has('insert') && 'underline decoration-[#3d7a52] underline-offset-4',
-    kinds.has('delete') && 'text-[#9a4f3c] line-through decoration-[#9a4f3c]',
-    kinds.has('move') && 'underline decoration-dotted decoration-[#4a6f8a]',
-    kinds.has('property') && 'underline decoration-dotted decoration-[#8a6a2a]',
-  )
-  const textAlign = align ?? 'left'
-  const style = { ...runCss({ ...face, color }), textAlign }
-
-  if (editing && onTextChange) {
-    return (
-      <span className={cn('relative', fullWidth && 'w-full')} style={{ textAlign }}>
-        {caret ? <PresenceCaret userId={caret.userId} /> : null}
-        <textarea
-          aria-label="Run text"
-          value={text}
-          rows={1}
-          onChange={(event) => onTextChange(run.id, event.target.value)}
-          onClick={(event) => event.stopPropagation()}
-          className={cn(
-            'resize-none overflow-hidden bg-transparent p-0 text-inherit',
-            'field-sizing-content border-0 outline-none focus-visible:ring-0',
-            fullWidth ? 'block w-full' : 'inline align-baseline',
-            className,
-          )}
-          style={style}
-        />
-      </span>
-    )
+function renderBlock(
+  block: LaidOutBlock,
+  index: number,
+  ctx: {
+    model: DocumentModelWire
+    storyPartName: string
+    selectedParagraphId: string | null
+    onSelectParagraph: (paragraphId: string) => void
+    drafts?: Record<string, string>
+    onRunTextChange?: (runId: string, text: string) => void
+    editing?: boolean
+    presence?: DocumentPresence[]
+    currentUserId?: string
+    inserts: LocalInsert[]
+    deletedParagraphIds: string[]
+    onInsertTextChange?: (clientId: string, text: string) => void
+    imageUrls: Record<string, string>
+    paragraphs: DocumentParagraphWire[]
+  },
+) {
+  if (block.type === 'table') {
+    const nodes = [
+      <PageTable
+        key={`tbl-${index}`}
+        table={block.table}
+        renderCell={(cell) =>
+          cell.paragraphIds.flatMap((id) => {
+            const paragraph = ctx.paragraphs.find((item) => item.id === id)
+            if (!paragraph || ctx.deletedParagraphIds.includes(paragraph.id)) {
+              return []
+            }
+            return [
+              <ModelParagraph
+                key={paragraph.id}
+                paragraph={paragraph}
+                changes={ctx.model.changes}
+                selected={ctx.selectedParagraphId === paragraph.id}
+                onSelect={() => ctx.onSelectParagraph(paragraph.id)}
+                drafts={ctx.drafts}
+                onRunTextChange={ctx.onRunTextChange}
+                editing={ctx.editing}
+                presence={ctx.presence}
+                currentUserId={ctx.currentUserId}
+                storyPartName={ctx.storyPartName}
+                relationships={ctx.model.relationships}
+                imageUrls={ctx.imageUrls}
+                styles={ctx.model.styles}
+              />,
+            ]
+          })
+        }
+      />,
+    ]
+    for (const paragraphId of block.table.paragraphIds) {
+      for (const insert of ctx.inserts.filter(
+        (item) => item.afterParagraphId === paragraphId,
+      )) {
+        nodes.push(
+          <PendingInsert
+            key={insert.clientId}
+            insert={insert}
+            selected={ctx.selectedParagraphId === insert.clientId}
+            onSelect={() => ctx.onSelectParagraph(insert.clientId)}
+            onTextChange={ctx.onInsertTextChange}
+          />,
+        )
+      }
+    }
+    return nodes
   }
 
-  return (
-    <span className={cn('relative', className)} style={style}>
-      {caret ? <PresenceCaret userId={caret.userId} /> : null}
-      {text}
-    </span>
-  )
-}
-
-function PresenceCaret({ userId }: { userId: string }) {
-  return (
-    <span
-      className="absolute top-0 -left-px h-full w-px bg-[#4a6f8a]"
-      title={userId}
-      aria-hidden="true"
-    />
-  )
-}
-
-function PendingInsert({
-  insert,
-  selected,
-  onSelect,
-  onTextChange,
-}: {
-  insert: LocalInsert
-  selected: boolean
-  onSelect: () => void
-  onTextChange?: (clientId: string, text: string) => void
-}) {
-  return (
-    <div
-      aria-current={selected ? 'true' : undefined}
-      aria-label="Pending paragraph"
-      onClick={onSelect}
-      className={cn(
-        'relative',
-        selected ? 'shadow-[inset_2px_0_0_#5a6f88]' : 'shadow-[inset_2px_0_0_#c5c1b8]',
-      )}
-    >
-      <textarea
-        aria-label="Pending paragraph text"
-        value={insert.text}
-        rows={1}
-        onChange={(event) =>
-          onTextChange?.(insert.clientId, event.target.value)
-        }
-        onClick={(event) => event.stopPropagation()}
-        className="field-sizing-content block w-full resize-none overflow-hidden bg-transparent p-0 text-inherit outline-none"
-      />
-    </div>
-  )
+  const paragraph = block.paragraph
+  if (ctx.deletedParagraphIds.includes(paragraph.id)) return []
+  const nodes = [
+    <ModelParagraph
+      key={`${paragraph.id}-${block.from ?? 0}`}
+      paragraph={paragraph}
+      changes={ctx.model.changes}
+      selected={ctx.selectedParagraphId === paragraph.id}
+      onSelect={() => ctx.onSelectParagraph(paragraph.id)}
+      drafts={ctx.drafts}
+      onRunTextChange={ctx.onRunTextChange}
+      editing={ctx.editing}
+      presence={ctx.presence}
+      currentUserId={ctx.currentUserId}
+      storyPartName={ctx.storyPartName}
+      relationships={ctx.model.relationships}
+      imageUrls={ctx.imageUrls}
+      styles={ctx.model.styles}
+      from={block.from}
+      to={block.to}
+      padLeftPx={block.padLeftPx}
+      padRightPx={block.padRightPx}
+      continuation={block.continuation}
+    />,
+  ]
+  if (!block.continuation) {
+    for (const insert of ctx.inserts.filter(
+      (item) => item.afterParagraphId === paragraph.id,
+    )) {
+      nodes.push(
+        <PendingInsert
+          key={insert.clientId}
+          insert={insert}
+          selected={ctx.selectedParagraphId === insert.clientId}
+          onSelect={() => ctx.onSelectParagraph(insert.clientId)}
+          onTextChange={ctx.onInsertTextChange}
+        />,
+      )
+    }
+  }
+  return nodes
 }

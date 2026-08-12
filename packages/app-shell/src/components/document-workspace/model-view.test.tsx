@@ -448,7 +448,9 @@ describe('DocumentModelPage', () => {
           paragraphs: [
             {
               id: 'f1',
-              runs: [{ id: 'a', text: 'Alpha footer', preservedXmlFragments: [] }],
+              runs: [
+                { id: 'a', text: 'Alpha footer', preservedXmlFragments: [] },
+              ],
               preservedXmlFragments: [],
             },
           ],
@@ -460,7 +462,9 @@ describe('DocumentModelPage', () => {
           paragraphs: [
             {
               id: 'f2',
-              runs: [{ id: 'b', text: 'Beta footer', preservedXmlFragments: [] }],
+              runs: [
+                { id: 'b', text: 'Beta footer', preservedXmlFragments: [] },
+              ],
               preservedXmlFragments: [],
             },
           ],
@@ -525,7 +529,9 @@ describe('DocumentModelPage', () => {
     expect(footer.textContent).toContain('phone')
     expect(footer.textContent).toContain('1')
     expect(footer.textContent).toContain('www.example.com')
-    expect(footer.querySelector('[style*="translateX"]')?.parentElement?.children).toHaveLength(3)
+    expect(
+      footer.querySelector('[style*="translateX"]')?.parentElement?.children,
+    ).toHaveLength(3)
   })
 
   it('paints header grey flanks around a logo when the table is missing', () => {
@@ -610,5 +616,50 @@ describe('DocumentModelPage', () => {
     expect(footer.textContent).toContain('www.arthaum.com')
     expect(screen.queryByText('Footer image')).toBeNull()
     expect(footer.innerHTML).toMatch(/rgb\(58, 58, 58\)|#3A3A3A/i)
+  })
+
+  it('renders only the supplied page blocks', () => {
+    const first = model.stories[0]
+    if (!first) throw new Error('expected document story')
+    const second = {
+      id: 'p2',
+      runs: [
+        {
+          id: 'r2',
+          text: 'Second page body',
+          preservedXmlFragments: [],
+        },
+      ],
+      preservedXmlFragments: [],
+    }
+    const paged: DocumentModelWire = {
+      ...model,
+      stories: [{ ...first, paragraphs: [...first.paragraphs, second] }],
+    }
+    render(
+      <DocumentModelPage
+        model={paged}
+        pageBlocks={[{ type: 'paragraph', paragraph: second }]}
+        selectedParagraphId={null}
+        onSelectParagraph={() => undefined}
+      />,
+    )
+    expect(screen.getByText('Second page body')).toBeTruthy()
+    expect(screen.queryByText('Alice Example overview')).toBeNull()
+  })
+
+  it('renders a paragraph slice when the layout splits a page', () => {
+    const first = model.stories[0]?.paragraphs[0]
+    if (!first) throw new Error('expected paragraph')
+    render(
+      <DocumentModelPage
+        model={model}
+        pageBlocks={[{ type: 'paragraph', paragraph: first, from: 0, to: 5 }]}
+        selectedParagraphId={null}
+        onSelectParagraph={() => undefined}
+      />,
+    )
+    expect(screen.getByText('Alice')).toBeTruthy()
+    expect(screen.queryByText('Alice Example overview')).toBeNull()
   })
 })
