@@ -1,0 +1,81 @@
+import { describe, expect, it } from 'vitest'
+import {
+  expectDocument404,
+  MemoryStorage,
+  mediaUrl,
+  packageWithImage,
+  pngBytes,
+  routeApp,
+  sourceObjectKey,
+  TestDatabase,
+} from './document-media.test-support'
+
+describe('GET /api/documents/:id/media gates', () => {
+  it('returns unauthenticated before database or storage access', async () => {
+    const database = new TestDatabase()
+    const storage = new MemoryStorage()
+    const response = await routeApp(database, storage, null).app.request(
+      mediaUrl,
+    )
+
+    expect(response.status).toBe(401)
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    expect(database.queries).toEqual([])
+    expect(storage.binaryReads).toEqual([])
+  })
+
+  it.each([
+    ['unknown', 'doc_unknown'],
+    ['cross-organisation', 'doc_cross'],
+    ['soft-deleted', 'doc_deleted'],
+  ])(
+    'returns the uniform 404 for a %s document without storage access',
+    async (_name, id) => {
+      const database = new TestDatabase()
+      const storage = new MemoryStorage()
+      const response = await routeApp(database, storage).app.request(
+        `/api/documents/${id}/media?part=word/media/image1.png`,
+      )
+
+      await expectDocument404(response)
+      expect(storage.binaryReads).toEqual([])
+    },
+  )
+
+  it('maps denied matter access to the document 404', async () => {
+    const database = new TestDatabase({ access: null })
+    const storage = new MemoryStorage()
+    const response = await routeApp(database, storage).app.request(mediaUrl)
+
+    await expectDocument404(response)
+    expect(storage.binaryReads).toEqual([])
+  })
+})
+
+describe('GET /api/documents/:id/media response', () => {
+  it('serves the image bytes from the current ready package', async () => {
+    const database = new TestDatabase({ access: 'view' })
+    const storage = new MemoryStorage(await packageWithImage())
+    const response = await routeApp(database, storage).app.request(mediaUrl)
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toBe('image/png')
+    expect(response.headers.get('cache-control')).toBe('no-store')
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(pngBytes)
+    expect(storage.binaryReads).toEqual([sourceObjectKey])
+  })
+
+  it('returns the uniform 404 for xml parts and missing images', async () => {
+    const database = new TestDatabase()
+    const storage = new MemoryStorage(await packageWithImage())
+    const xml = await routeApp(database, storage).app.request(
+      '/api/documents/doc_1/media?part=word/document.xml',
+    )
+    const missing = await routeApp(database, storage).app.request(
+      '/api/documents/doc_1/media?part=word/media/missing.png',
+    )
+
+    await expectDocument404(xml)
+    await expectDocument404(missing)
+  })
+})

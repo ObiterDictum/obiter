@@ -33,6 +33,7 @@ const UNKNOWN_REQUEST_ID = 'req_unknown'
  * Fetch a JSON endpoint with auth credentials and normalised errors.
  *
  * - Sends `credentials: 'include'` so the better-auth session cookie travels.
+ * - On HTTP 204/205, returns `undefined` (presence heartbeats have no body).
  * - On a non-2xx response, parses the body through `apiErrorResponseSchema` and
  *   throws an `ApiError` carrying the typed `code`. A response that is not the
  *   expected envelope is treated as a storage-level failure (no silent success).
@@ -55,6 +56,10 @@ export async function apiFetch<T>(
       ...init?.headers,
     },
   })
+
+  if (response.ok && (response.status === 204 || response.status === 205)) {
+    return undefined as T
+  }
 
   if (!response.ok) {
     let parsed: unknown = null

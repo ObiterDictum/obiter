@@ -1,6 +1,12 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react'
 import {
   createMemoryHistory,
   createRootRoute,
@@ -8,8 +14,9 @@ import {
   createRouter,
   RouterProvider,
 } from '@tanstack/react-router'
-import { MatterRouteView } from './views/matters'
+import { MatterRouteView } from './views/matter-detail'
 import type { MatterRecord } from './matters'
+import type { MatterDocumentRecord } from './documents'
 
 const mocks = vi.hoisted(() => ({
   useMatter: vi.fn(),
@@ -19,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   useCurrentUser: vi.fn(),
   useNavigate: vi.fn(),
   useToast: vi.fn(),
+  blankDocumentFile: vi.fn(),
 }))
 
 vi.mock('./matters', async (importOriginal) => {
@@ -43,6 +51,16 @@ vi.mock('./current-user', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./current-user')>()
   return { ...actual, useCurrentUser: mocks.useCurrentUser }
 })
+
+vi.mock('./document-blank', () => ({
+  blankDocumentFile: mocks.blankDocumentFile,
+}))
+
+vi.mock('./components/document-workspace/workspace', () => ({
+  DocumentWorkspace: ({ documentId }: { documentId: string }) => (
+    <div>Workspace for {documentId}</div>
+  ),
+}))
 
 vi.mock('@tanstack/react-router', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@tanstack/react-router')>()
@@ -97,8 +115,48 @@ function successMatter() {
   }
 }
 
+function sampleDocument(): MatterDocumentRecord {
+  return {
+    id: 'doc_1',
+    organisationId: 'org_1',
+    matterId: 'mtr_1',
+    currentVersionId: 'ver_1',
+    logicalKey: 'brief.pdf',
+    createdBy: 'usr_1',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    deletedAt: null,
+    deletedBy: null,
+    currentVersion: {
+      id: 'ver_1',
+      organisationId: 'org_1',
+      matterId: 'mtr_1',
+      matterDocumentId: 'doc_1',
+      filename: 'brief.pdf',
+      fileType: 'pdf',
+      sizeBytes: '1024',
+      objectKey:
+        'org/org_1/matters/mtr_1/documents/doc_1/versions/ver_1/source',
+      textObjectKey: null,
+      documentStatus: 'ready',
+      failureReason: null,
+      versionNumber: 1,
+      contentSha256: 'a'.repeat(64),
+      syncState: 'synced',
+      createdBy: 'usr_1',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    },
+  }
+}
+
 function noDocuments() {
   return { isLoading: false, isError: false, data: [] }
+}
+
+function uploadMutationSpy() {
+  const mutate = vi.fn()
+  return { mutate, isPending: false, error: null }
 }
 
 function loadingDocuments() {
@@ -128,7 +186,12 @@ function buildRouter(matterId: string) {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.useMatterDocuments.mockReturnValue(noDocuments())
-  mocks.useUploadMatterDocument.mockReturnValue({ mutate: vi.fn() })
+  mocks.useUploadMatterDocument.mockReturnValue(uploadMutationSpy())
+  mocks.blankDocumentFile.mockResolvedValue(
+    new File(['x'], 'Untitled.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    }),
+  )
   mocks.useNavigate.mockReturnValue(vi.fn())
   mocks.useToast.mockReturnValue({ toast: vi.fn() })
 })
@@ -215,5 +278,49 @@ describe('MatterRouteView delete affordance', () => {
       expect(screen.getByText('Share purchase')).toBeTruthy()
     })
     expect(screen.queryByRole('button', { name: 'Delete matter' })).toBeNull()
+  })
+})
+
+describe('MatterRouteView document pane', () => {
+  it('opens the selected document in the workspace instead of a separate page', async () => {
+    mocks.useMatter.mockReturnValue(successMatter())
+    mocks.useCurrentUser.mockReturnValue({ data: OWNER })
+    mocks.useDeleteMatter.mockReturnValue(deleteMutationSpy())
+    mocks.useMatterDocuments.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: [sampleDocument()],
+    })
+
+    render(<RouterProvider router={buildRouter('mtr_1')} />)
+
+    await waitFor(() => {
+      expect(screen.getByText('brief.pdf')).toBeTruthy()
+    })
+    expect(screen.queryByRole('button', { name: 'Open document' })).toBeNull()
+    expect(screen.queryByText('Workspace for doc_1')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: /brief\.pdf/ }))
+    expect(screen.getByText('Workspace for doc_1')).toBeTruthy()
+  })
+
+  it('uploads a blank Word document from New', async () => {
+    mocks.useMatter.mockReturnValue(successMatter())
+    mocks.useCurrentUser.mockReturnValue({ data: OWNER })
+    mocks.useDeleteMatter.mockReturnValue(deleteMutationSpy())
+    const upload = uploadMutationSpy()
+    mocks.useUploadMatterDocument.mockReturnValue(upload)
+
+    render(<RouterProvider router={buildRouter('mtr_1')} />)
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'New' })).toBeTruthy()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'New' }))
+
+    await waitFor(() => {
+      expect(mocks.blankDocumentFile).toHaveBeenCalled()
+      expect(upload.mutate).toHaveBeenCalled()
+    })
   })
 })

@@ -72,6 +72,17 @@ export const documentsKeys = {
     [...documentsKeys.all, 'detail', documentId] as const,
 }
 
+export function documentsNeedStatusPoll(
+  documents: MatterDocumentRecord[] | undefined,
+): boolean {
+  return Boolean(
+    documents?.some((document) => {
+      const status = document.currentVersion?.documentStatus
+      return status === 'queued' || status === 'processing'
+    }),
+  )
+}
+
 /** Documents list for a matter (metadata only). */
 export function matterDocumentsQueryOptions(matterId: string) {
   return queryOptions({
@@ -82,6 +93,8 @@ export function matterDocumentsQueryOptions(matterId: string) {
       )
       return response.documents
     },
+    refetchInterval: (query) =>
+      documentsNeedStatusPoll(query.state.data) ? 2_000 : false,
   })
 }
 

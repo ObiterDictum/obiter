@@ -7,8 +7,11 @@ import { ApiError } from './api'
 import {
   documentsKeys,
   documentQueryOptions,
+  documentsNeedStatusPoll,
   matterDocumentsQueryOptions,
   useDeleteDocument,
+  type DocumentVersionRecord,
+  type MatterDocumentRecord,
 } from './documents'
 
 const api = vi.hoisted(() => ({ apiFetch: vi.fn() }))
@@ -18,7 +21,9 @@ vi.mock('./api', async (importOriginal) => {
   return { ...actual, apiFetch: api.apiFetch }
 })
 
-function sampleVersion(overrides: Record<string, unknown> = {}) {
+function sampleVersion(
+  overrides: Partial<DocumentVersionRecord> = {},
+): DocumentVersionRecord {
   return {
     id: 'ver_1',
     organisationId: 'org_1',
@@ -110,6 +115,44 @@ describe('useDeleteDocument', () => {
     expect(invalidate).toHaveBeenCalledWith({
       queryKey: ['document-redaction-runs'],
     })
+  })
+})
+
+function sampleDocument(
+  overrides: Partial<MatterDocumentRecord> = {},
+): MatterDocumentRecord {
+  return {
+    id: 'doc_1',
+    organisationId: 'org_1',
+    matterId: 'mtr_1',
+    currentVersionId: 'ver_1',
+    logicalKey: 'brief.pdf',
+    createdBy: 'usr_1',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    deletedAt: null,
+    deletedBy: null,
+    currentVersion: sampleVersion(),
+    ...overrides,
+  }
+}
+
+describe('documentsNeedStatusPoll', () => {
+  it('polls while a version is still queued or processing', () => {
+    expect(
+      documentsNeedStatusPoll([
+        sampleDocument({
+          currentVersion: sampleVersion({ documentStatus: 'processing' }),
+        }),
+      ]),
+    ).toBe(true)
+    expect(
+      documentsNeedStatusPoll([
+        sampleDocument({
+          currentVersion: sampleVersion({ documentStatus: 'ready' }),
+        }),
+      ]),
+    ).toBe(false)
   })
 })
 

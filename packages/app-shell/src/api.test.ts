@@ -28,6 +28,17 @@ describe('apiFetch', () => {
     expect(init?.credentials).toBe('include')
   })
 
+  it('returns undefined for a 204 success with no body', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(mockResponse(null, 204))
+
+    await expect(
+      apiFetch('/api/documents/doc_1/collaboration/presence', {
+        method: 'PUT',
+        body: JSON.stringify({ cursor: null }),
+      }),
+    ).resolves.toBeUndefined()
+  })
+
   it('does not override multipart content type with JSON', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')

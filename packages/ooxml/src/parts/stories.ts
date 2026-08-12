@@ -57,7 +57,10 @@ export function parseStory(
   const paragraphAnchors: ParagraphAnchor[] = []
 
   for (const paragraph of elements.filter(
-    (element) => isWord(element, 'p') && !hasTrackedChangeAncestor(element),
+    (element) =>
+      isWord(element, 'p') &&
+      !hasTrackedChangeAncestor(element) &&
+      !isInsideFallback(element),
   )) {
     const parsed = parseParagraph(
       partName,
@@ -138,8 +141,9 @@ function parseParagraph(
   const runElements = elements.filter(
     (element) =>
       isWord(element, 'r') &&
-      isDescendantOf(element, paragraphElement) &&
-      !hasTrackedChangeAncestor(element),
+      nearestWordAncestor(element, 'p') === paragraphElement &&
+      !hasTrackedChangeAncestor(element) &&
+      !isInsideFallback(element),
   )
 
   runElements.forEach((runElement, index) => {
@@ -211,8 +215,9 @@ function parseRun(
   const textElements = elements.filter(
     (element) =>
       isWord(element, 't') &&
-      isDescendantOf(element, runElement) &&
-      !hasTrackedChangeAncestor(element),
+      nearestWordAncestor(element, 'r') === runElement &&
+      !hasTrackedChangeAncestor(element) &&
+      !isInsideFallback(element),
   )
   const propertiesElements = elements.filter(
     (element) => element.parent === runElement && isWord(element, 'rPr'),
@@ -494,6 +499,24 @@ function hasTrackedChangeAncestor(element: XmlElement) {
   let parent = element.parent
   while (parent) {
     if (isTrackedChange(parent)) return true
+    parent = parent.parent
+  }
+  return false
+}
+
+function nearestWordAncestor(element: XmlElement, localName: string) {
+  let parent = element.parent
+  while (parent) {
+    if (isWord(parent, localName)) return parent
+    parent = parent.parent
+  }
+  return undefined
+}
+
+function isInsideFallback(element: XmlElement) {
+  let parent = element.parent
+  while (parent) {
+    if (parent.localName === 'Fallback') return true
     parent = parent.parent
   }
   return false
