@@ -209,6 +209,49 @@ describe('OOXML document edits', () => {
     ])
   })
 
+  it('tracks a zero-run replacement as an insert and removes the blank paragraph', async () => {
+    const rejected = await parseEmptyParagraphFixture()
+    const rejectedId = mainParagraphs(rejected)[0]?.id
+    if (!rejectedId) throw new Error('Empty paragraph is missing.')
+    expect(() =>
+      applyDocumentEdits(
+        rejected,
+        [{ type: 'delete_paragraph', paragraphId: rejectedId }],
+        { author: 'Review Author', date: '2026-08-12T12:00:00.000Z' },
+      ),
+    ).toThrowError(expect.objectContaining({ code: 'model-node-not-editable' }))
+
+    const document = await parseEmptyParagraphFixture()
+    const onlyId = mainParagraphs(document)[0]?.id
+    if (!onlyId) throw new Error('Empty paragraph is missing.')
+
+    applyDocumentEdits(
+      document,
+      [
+        {
+          type: 'insert_paragraph_after',
+          paragraphId: onlyId,
+          text: 'Typed line',
+          styleId: 'Heading1',
+        },
+        { type: 'delete_paragraph', paragraphId: onlyId },
+      ],
+      { author: 'Review Author', date: '2026-08-12T12:00:00.000Z' },
+    )
+
+    const remaining = mainParagraphs(document)
+    expect(remaining).toMatchObject([
+      { styleId: 'Heading1', runs: [{ text: 'Typed line' }] },
+    ])
+    expect(remaining.some(({ id }) => id === onlyId)).toBe(false)
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    expect(xml).toContain('<w:ins ')
+    expect(xml).toContain('Typed line')
+  })
+
   it('changes only the main story fragment and preserves every other part byte-for-byte', async () => {
     const input = await buildOoxmlFixture('full-fidelity-with-w14-ids')
     const document = await parseDocx(input)
@@ -305,6 +348,16 @@ async function parseSingleParagraphFixture() {
   zip.file(
     'word/document.xml',
     '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Only</w:t></w:r></w:p></w:body></w:document>',
+  )
+  return parseDocx(await zip.generateAsync({ type: 'uint8array' }))
+}
+
+async function parseEmptyParagraphFixture() {
+  const input = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+  const zip = await JSZip.loadAsync(input)
+  zip.file(
+    'word/document.xml',
+    '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr></w:p></w:body></w:document>',
   )
   return parseDocx(await zip.generateAsync({ type: 'uint8array' }))
 }

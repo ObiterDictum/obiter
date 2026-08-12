@@ -31,7 +31,7 @@ const model: DocumentModelWire = {
   changes: [],
 }
 
-function blankParagraphModel(): DocumentModelWire {
+function blankParagraphModel(styleId?: string): DocumentModelWire {
   return {
     ...model,
     stories: [
@@ -41,6 +41,7 @@ function blankParagraphModel(): DocumentModelWire {
         paragraphs: [
           {
             id: 'p1',
+            ...(styleId ? { styleId } : {}),
             runs: [],
             preservedXmlFragments: [],
           },
@@ -120,6 +121,23 @@ describe('collectEditOperations', () => {
         type: 'insert_paragraph_after',
         paragraphId: 'p1',
         text: 'Typed line',
+      },
+      { type: 'delete_paragraph', paragraphId: 'p1' },
+    ])
+  })
+
+  it('carries the blank paragraph style onto the replacement insert', () => {
+    const blank = blankParagraphModel('Heading1')
+    expect(
+      collectEditOperations(blank, {}, [], [], {
+        p1: [{ id: 'p1-r0', text: 'Typed', preservedXmlFragments: [] }],
+      }),
+    ).toEqual([
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: 'p1',
+        text: 'Typed',
+        styleId: 'Heading1',
       },
       { type: 'delete_paragraph', paragraphId: 'p1' },
     ])

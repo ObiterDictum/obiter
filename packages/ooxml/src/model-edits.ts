@@ -178,7 +178,12 @@ function validateTrackedOperations(
       operation.type === 'delete_paragraph' &&
       operation.paragraph.runs.length === 0
     ) {
-      throw new OoxmlError('model-node-not-editable')
+      const replaced = planned.some(
+        (item) =>
+          item.type === 'insert_paragraph_after' &&
+          item.paragraphId === operation.paragraph.wire.id,
+      )
+      if (!replaced) throw new OoxmlError('model-node-not-editable')
     }
     if (deletedIds.has(operation.paragraph.wire.id)) continue
     if (
