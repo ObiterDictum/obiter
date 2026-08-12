@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { documentPageBox, marginStories } from './document-page-layout'
+import {
+  documentPageBox,
+  marginStories,
+  sectionColumns,
+} from './document-page-layout'
 import type { DocumentModelWire } from '@obiter/contracts'
 
 const emptyModel: DocumentModelWire = {
@@ -92,8 +96,28 @@ describe('marginStories', () => {
         },
       ],
     }
-    expect(marginStories(model, 'footer').map((story) => story.partName)).toEqual(
-      ['word/footer1.xml'],
+    expect(
+      marginStories(model, 'footer').map((story) => story.partName),
+    ).toEqual(['word/footer1.xml'])
+  })
+})
+
+describe('sectionColumns', () => {
+  it('treats cols without num as a single column', () => {
+    const box = documentPageBox(emptyModel)
+    expect(
+      sectionColumns(box, '<w:sectPr><w:cols w:space="708"/></w:sectPr>'),
+    ).toEqual([{ left: 0, widthPx: 602 }])
+  })
+
+  it('splits the content frame into equal columns', () => {
+    const box = documentPageBox(emptyModel)
+    const columns = sectionColumns(
+      box,
+      '<w:sectPr><w:cols w:num="2" w:space="720"/></w:sectPr>',
     )
+    expect(columns).toHaveLength(2)
+    expect(columns[0]?.left).toBe(0)
+    expect(columns[1]?.left).toBeGreaterThan(columns[0]?.widthPx ?? 0)
   })
 })

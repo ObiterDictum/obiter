@@ -13,14 +13,41 @@ export function documentStory(
   return model.stories.find((story) => story.kind === kind)
 }
 
-export function paragraphPlainText(paragraph: DocumentParagraphWire): string {
-  return paragraph.runs.map((run) => run.text).join('')
+export function paragraphPlainText(
+  paragraph: DocumentParagraphWire,
+  drafts?: Record<string, string>,
+): string {
+  return paragraph.runs.map((run) => drafts?.[run.id] ?? run.text).join('')
+}
+
+export function sliceParagraphRuns(
+  paragraph: DocumentParagraphWire,
+  from: number,
+  to: number,
+  drafts?: Record<string, string>,
+): Array<{ run: DocumentTextRunWire; text: string }> {
+  const slices: Array<{ run: DocumentTextRunWire; text: string }> = []
+  let cursor = 0
+  for (const run of paragraph.runs) {
+    const text = drafts?.[run.id] ?? run.text
+    const start = cursor
+    const end = cursor + text.length
+    cursor = end
+    if (end <= from || start >= to) continue
+    slices.push({
+      run,
+      text: text.slice(Math.max(0, from - start), Math.max(0, to - start)),
+    })
+  }
+  return slices
 }
 
 export function modelPlainText(model: DocumentModelWire): string {
   const story = documentStory(model)
   if (!story) return ''
-  return story.paragraphs.map(paragraphPlainText).join('\n')
+  return story.paragraphs
+    .map((paragraph) => paragraphPlainText(paragraph))
+    .join('\n')
 }
 
 export function runChangeKinds(

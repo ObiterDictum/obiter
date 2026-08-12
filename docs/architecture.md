@@ -699,5 +699,13 @@ bottom) rather than stacked in the body flow; letterhead bars come from a
 shaded three-cell table or from flanking shapes around a logo, and footer text
 sits on the shape fill. Header letterhead groups (navy bars plus a logo) are
 laid out from DrawingML/VML coordinates rather than a synthetic grey table.
-This is still not a Word layout engine: floating wrap, columns, text boxes in
-the body, and true pagination remain out of scope.
+This is a block-flow layout engine: section page size and margins define a
+content frame, body blocks paginate into that frame, and `wp:anchor` offsets
+position floating drawings. Header and footer stories repeat on each page.
+Columns come from `w:cols`. Floating wrap uses the drawing's wrap kind:
+`wrapSquare` / `wrapTight` / `wrapThrough` inset the line, `wrapTopAndBottom`
+skips the drawing's vertical band, and `wrapNone` does not affect text flow.
+Body text boxes (`w:txbxContent` in an anchor) are painted in the drawing and
+kept out of the body flow. Long paragraphs split across columns and pages at
+estimated line boundaries. Tight/through wrap is approximated as square; table
+row splits and CSS exclusions are out of scope.

@@ -35,12 +35,11 @@ export function storyTables(story: DocumentStoryWire): DisplayTable[] {
     .filter((table): table is DisplayTable => table !== undefined)
 }
 
-export function storyBlocks(
-  story: DocumentStoryWire,
-): Array<
+export type StoryBlock =
   | { type: 'paragraph'; paragraph: DocumentParagraphWire }
   | { type: 'table'; table: DisplayTable }
-> {
+
+export function storyBlocks(story: DocumentStoryWire): StoryBlock[] {
   const tables = storyTables(story).map((table) =>
     story.kind === 'header' || story.kind === 'footer'
       ? bindMarginTable(table, story.paragraphs, story.kind)
@@ -48,10 +47,7 @@ export function storyBlocks(
   )
   const used = new Set<string>()
   const placed = new Set<DisplayTable>()
-  const blocks: Array<
-    | { type: 'paragraph'; paragraph: DocumentParagraphWire }
-    | { type: 'table'; table: DisplayTable }
-  > = []
+  const blocks: StoryBlock[] = []
 
   if (story.kind === 'header' || story.kind === 'footer') {
     for (const table of tables) {
@@ -263,7 +259,8 @@ function paintTableFromShapes(
   table: DisplayTable,
   paragraphs: DocumentParagraphWire[],
 ): DisplayTable {
-  if (table.rows.some((row) => row.cells.some((cell) => cell.fill))) return table
+  if (table.rows.some((row) => row.cells.some((cell) => cell.fill)))
+    return table
   const fill = paragraphs
     .flatMap((paragraph) =>
       paragraph.runs.flatMap((run) => run.preservedXmlFragments),

@@ -103,19 +103,27 @@ export function drawingHasPicture(xml: string): boolean {
 
 export function drawingShapeFill(xml: string): string | undefined {
   if (drawingIsTextBox(xml)) return undefined
+  return drawingSolidFill(xml)
+}
+
+export function drawingSolidFill(xml: string): string | undefined {
   const srgb = xml.match(/<a:srgbClr\b[^>]*val="([0-9A-Fa-f]{6})"/i)?.[1]
   if (srgb) return `#${srgb}`
   const vml =
     xml.match(/\bfillcolor="#?([0-9A-Fa-f]{6})\b/i)?.[1] ??
     xml.match(/<v:fill\b[^>]*\bcolor="#?([0-9A-Fa-f]{6})\b/i)?.[1]
   if (vml) return `#${vml}`
-  const scheme = xml.match(/<a:schemeClr\b[^>]*val="([^"]+)"/i)?.[1]?.toLowerCase()
+  const scheme = xml
+    .match(/<a:schemeClr\b[^>]*val="([^"]+)"/i)?.[1]
+    ?.toLowerCase()
   if (scheme === 'dk1' || scheme === 'tx1') return '#000000'
   if (scheme === 'dk2' || scheme === 'tx2') return '#44546A'
   if (scheme === 'bg1' || scheme === 'lt1') return '#FFFFFF'
   if (scheme === 'bg2' || scheme === 'lt2') return '#E7E6E6'
   if (scheme === 'accent1') return '#4472C4'
-  const named = xml.match(/\bfillcolor="(gray|grey|silver|darkgray|darkgrey)"/i)?.[1]
+  const named = xml.match(
+    /\bfillcolor="(gray|grey|silver|darkgray|darkgrey)"/i,
+  )?.[1]
   if (named) {
     const value = named.toLowerCase()
     if (value === 'silver') return '#C0C0C0'
@@ -161,18 +169,23 @@ export function drawingBoxSize(xml: string): { width: number; height: number } {
   return { width: 180, height: 48 }
 }
 
-function vmlBoxSize(xml: string): { width: number; height: number } | undefined {
+function vmlBoxSize(
+  xml: string,
+): { width: number; height: number } | undefined {
   const style = xml.match(/\bstyle="([^"]*)"/i)?.[1]
   if (!style) return undefined
   const width = cssLengthToPx(style.match(/\bwidth:\s*([\d.]+)(pt|in|px|mm)/i))
-  const height = cssLengthToPx(style.match(/\bheight:\s*([\d.]+)(pt|in|px|mm)/i))
+  const height = cssLengthToPx(
+    style.match(/\bheight:\s*([\d.]+)(pt|in|px|mm)/i),
+  )
   if (width === undefined || height === undefined) return undefined
-  return { width: Math.max(1, Math.round(width)), height: Math.max(1, Math.round(height)) }
+  return {
+    width: Math.max(1, Math.round(width)),
+    height: Math.max(1, Math.round(height)),
+  }
 }
 
-function cssLengthToPx(
-  match: RegExpMatchArray | null,
-): number | undefined {
+function cssLengthToPx(match: RegExpMatchArray | null): number | undefined {
   if (!match?.[1] || !match[2]) return undefined
   const value = Number(match[1])
   if (!Number.isFinite(value)) return undefined
@@ -198,7 +211,10 @@ export function tabColumns(
       continue
     }
     sawTab = true
-    if (run.text.trim() || run.preservedXmlFragments.some((xml) => /<w:instrText\b/i.test(xml))) {
+    if (
+      run.text.trim() ||
+      run.preservedXmlFragments.some((xml) => /<w:instrText\b/i.test(xml))
+    ) {
       groups[groups.length - 1]?.push({
         ...run,
         preservedXmlFragments: run.preservedXmlFragments.filter(

@@ -88,6 +88,18 @@ export function runFace(
   }
 }
 
+export function paragraphLineHeightPx(face: ParagraphFace): number {
+  const size = face.run.fontSizePx ?? DEFAULT_SIZE_PX
+  const line = face.lineHeight
+  if (!line) return size * 1.15
+  if (line.endsWith('px')) {
+    const value = Number.parseFloat(line)
+    return Number.isFinite(value) ? value : size * 1.15
+  }
+  const ratio = Number(line)
+  return Number.isFinite(ratio) ? size * ratio : size * 1.15
+}
+
 export function paragraphCss(face: ParagraphFace): CSSProperties {
   return omitUndefined({
     fontFamily: face.run.fontFamily,
@@ -99,7 +111,8 @@ export function paragraphCss(face: ParagraphFace): CSSProperties {
     paddingLeft: face.indentLeftPx,
     paddingRight: face.indentRightPx,
     textIndent: face.indentFirstPx,
-    fontWeight: face.run.bold === undefined ? undefined : face.run.bold ? 700 : 400,
+    fontWeight:
+      face.run.bold === undefined ? undefined : face.run.bold ? 700 : 400,
     fontStyle:
       face.run.italic === undefined
         ? undefined

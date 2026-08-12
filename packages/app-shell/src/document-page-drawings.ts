@@ -83,7 +83,8 @@ function vmlGroupParts(xml: string): DrawingScene | undefined {
   const body = group[2] ?? ''
   const resolved = drawingShapeFill(xml)
   const parts: DrawingPart[] = []
-  for (const block of body.match(/<v:rect\b[\s\S]*?(?:\/>|<\/v:rect>)/gi) ?? []) {
+  for (const block of body.match(/<v:rect\b[\s\S]*?(?:\/>|<\/v:rect>)/gi) ??
+    []) {
     const box = vmlChildBox(block, widthPx, heightPx, coordW, coordH)
     if (!box) continue
     const fill = resolved ?? drawingShapeFill(block)
@@ -100,6 +101,27 @@ function vmlGroupParts(xml: string): DrawingScene | undefined {
   return { widthPx, heightPx, parts }
 }
 
+export function drawingAnchor(
+  xml: string,
+): { leftPx: number; topPx: number } | undefined {
+  if (!/<wp:anchor\b/i.test(xml)) return undefined
+  return {
+    leftPx: axisOffset(xml, 'positionH'),
+    topPx: axisOffset(xml, 'positionV'),
+  }
+}
+
+function axisOffset(xml: string, tag: 'positionH' | 'positionV'): number {
+  const block = xml.match(
+    new RegExp(`<wp:${tag}\\b[\\s\\S]*?</wp:${tag}>`, 'i'),
+  )?.[0]
+  if (!block) return 0
+  const offset = block.match(/<wp:posOffset>([-\d]+)<\/wp:posOffset>/i)?.[1]
+  if (offset === undefined) return 0
+  const emu = Number(offset)
+  return Number.isFinite(emu) ? Math.round(emuToPx(emu)) : 0
+}
+
 function taggedBlock(xml: string, localName: string): string | undefined {
   return taggedBlocks(xml, localName)[0]
 }
@@ -107,17 +129,22 @@ function taggedBlock(xml: string, localName: string): string | undefined {
 function taggedBlocks(xml: string, localName: string): string[] {
   return [
     ...xml.matchAll(
-      new RegExp(`<(?:\\w+:)?${localName}\\b[\\s\\S]*?</(?:\\w+:)?${localName}>`, 'gi'),
+      new RegExp(
+        `<(?:\\w+:)?${localName}\\b[\\s\\S]*?</(?:\\w+:)?${localName}>`,
+        'gi',
+      ),
     ),
   ].map((match) => match[0])
 }
 
-function xfrmBox(xml: string): {
-  leftPx: number
-  topPx: number
-  widthPx: number
-  heightPx: number
-} | undefined {
+function xfrmBox(xml: string):
+  | {
+      leftPx: number
+      topPx: number
+      widthPx: number
+      heightPx: number
+    }
+  | undefined {
   const off = xml.match(
     /<a:off\b[^>]*x="(\d+)"[^>]*y="(\d+)"|<a:off\b[^>]*y="(\d+)"[^>]*x="(\d+)"/i,
   )
@@ -140,7 +167,9 @@ function xfrmBox(xml: string): {
   }
 }
 
-function extentBox(xml: string): { widthPx: number; heightPx: number } | undefined {
+function extentBox(
+  xml: string,
+): { widthPx: number; heightPx: number } | undefined {
   const box = xfrmBox(xml)
   if (box) return { widthPx: box.widthPx, heightPx: box.heightPx }
   const extent = xml.match(
@@ -167,7 +196,12 @@ function vmlChildBox(
   const top = Number(style.match(/\btop:\s*([\d.]+)/i)?.[1] ?? 0)
   const width = Number(style.match(/\bwidth:\s*([\d.]+)/i)?.[1])
   const height = Number(style.match(/\bheight:\s*([\d.]+)/i)?.[1])
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+  if (
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width <= 0 ||
+    height <= 0
+  ) {
     return undefined
   }
   return {
@@ -185,7 +219,10 @@ function cssPtPx(style: string, name: string): number | undefined {
   return Math.max(1, Math.round((value * 96) / 72))
 }
 
-function sceneBounds(parts: DrawingPart[]): { widthPx: number; heightPx: number } {
+function sceneBounds(parts: DrawingPart[]): {
+  widthPx: number
+  heightPx: number
+} {
   return {
     widthPx: Math.max(1, ...parts.map((part) => part.leftPx + part.widthPx)),
     heightPx: Math.max(1, ...parts.map((part) => part.topPx + part.heightPx)),

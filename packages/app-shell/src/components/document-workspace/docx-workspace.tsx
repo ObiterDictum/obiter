@@ -11,7 +11,7 @@ import {
   type LocalInsert,
 } from '../../document-edits'
 import { documentStory, modelPlainText } from '../../document-model-text'
-import { documentPageBox } from '../../document-page-layout'
+import { layoutDocument } from '../../document-page-engine'
 import { documentImagePartNames } from '../../document-page-media'
 import { documentDefaultFace } from '../../document-page-style'
 import {
@@ -80,7 +80,7 @@ export function DocxWorkspace({
   const [stale, setStale] = useState(false)
 
   const model = modelQuery.data?.model
-  const page = model ? documentPageBox(model) : undefined
+  const pages = model ? layoutDocument(model, drafts) : []
   const imageUrls = useDocumentImageUrls(
     documentId,
     model ? documentImagePartNames(model) : [],
@@ -248,35 +248,44 @@ export function DocxWorkspace({
       ) : model ? (
         <DocumentDesk>
           <div className="mx-auto flex w-max max-w-full flex-col items-start gap-6 lg:flex-row">
-            <DocumentPage
-              zoom={zoom}
-              width={page?.widthPx}
-              height={page?.heightPx}
-              fontFamily={documentDefaultFace(model.styles).fontFamily}
-            >
-              <DocumentModelPage
-                model={model}
-                selectedParagraphId={selectedParagraphId}
-                onSelectParagraph={setSelectedParagraphId}
-                drafts={drafts}
-                onRunTextChange={(runId, text) =>
-                  setDrafts((current) => ({ ...current, [runId]: text }))
-                }
-                editing
-                presence={presence}
-                currentUserId={me?.user.id}
-                inserts={inserts}
-                deletedParagraphIds={deletedParagraphIds}
-                imageUrls={imageUrls}
-                onInsertTextChange={(clientId, text) =>
-                  setInserts((current) =>
-                    current.map((item) =>
-                      item.clientId === clientId ? { ...item, text } : item,
-                    ),
-                  )
-                }
-              />
-            </DocumentPage>
+            <div className="flex flex-col gap-6">
+              {pages.map((laid, index) => (
+                <DocumentPage
+                  key={`page-${index + 1}`}
+                  zoom={zoom}
+                  width={laid.box.widthPx}
+                  height={laid.box.heightPx}
+                  fontFamily={documentDefaultFace(model.styles).fontFamily}
+                >
+                  <DocumentModelPage
+                    model={model}
+                    pageBlocks={laid.blocks}
+                    pageFloats={laid.floats}
+                    pageTextBoxes={laid.textBoxes}
+                    pageColumns={laid.columns}
+                    selectedParagraphId={selectedParagraphId}
+                    onSelectParagraph={setSelectedParagraphId}
+                    drafts={drafts}
+                    onRunTextChange={(runId, text) =>
+                      setDrafts((current) => ({ ...current, [runId]: text }))
+                    }
+                    editing
+                    presence={presence}
+                    currentUserId={me?.user.id}
+                    inserts={inserts}
+                    deletedParagraphIds={deletedParagraphIds}
+                    imageUrls={imageUrls}
+                    onInsertTextChange={(clientId, text) =>
+                      setInserts((current) =>
+                        current.map((item) =>
+                          item.clientId === clientId ? { ...item, text } : item,
+                        ),
+                      )
+                    }
+                  />
+                </DocumentPage>
+              ))}
+            </div>
             {commentsOpen ? (
               <div className="w-full rounded-md bg-surface p-4 lg:w-80">
                 <DocumentCommentsPanel
