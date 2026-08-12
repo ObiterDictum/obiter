@@ -146,7 +146,8 @@ for a, b in [("web", "shell"), ("desktop", "shell"), ("web", "redactui"),
              ("desktop", "redactui")]:
     d1.edge(a, b)
 d1.edge("redactui", "shell", sa="l", sb="r")
-d1.edge("shell", "contracts")
+d1.edge("shell", "ooxml")
+d1.edge("shell", "contracts", curve=50)
 d1.edge("shell", "ui", curve=30)
 d1.edge("redactui", "policy")
 d1.edge("redactui", "ui", curve=-20)

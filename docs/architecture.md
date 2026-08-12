@@ -680,3 +680,24 @@ The plan's Redis wording is stale relative to the checked-out runtime, and
 its phrase that a conflicting edit creates a new version is under-specified.
 This decision records that the concurrent winner is the surfaced new version,
 while the losing same-region request returns 409 and creates no duplicate.
+
+### M1.25 page rendering: package images and table display (12 August 2026)
+
+Context: the S2 wire model still has no typed table or image nodes. Letterhead
+headers and footers are often a drawing plus a shaded table, so a text-only
+margin band looks like the Word formatting was stripped.
+
+Decision: keep the wire schema unchanged. Serve current-version image parts
+through `GET /api/documents/:id/media?part=`, gated like the model route, and
+restricted to image package paths. The React page interprets preserved `w:tbl`
+fragments and drawing extents for display only: React tables and `<img>`, never
+HTML strings of OOXML. Binary media stays out of `model.json`. Page size,
+margins, fonts, run size, paragraph spacing, and drawing boxes come from the
+document's own twip and EMU values (plus `styles.xml` inheritance), not from a
+product type scale. Header and footer stories are painted on the page (top and
+bottom) rather than stacked in the body flow; letterhead bars come from a
+shaded three-cell table or from flanking shapes around a logo, and footer text
+sits on the shape fill. Header letterhead groups (navy bars plus a logo) are
+laid out from DrawingML/VML coordinates rather than a synthetic grey table.
+This is still not a Word layout engine: floating wrap, columns, text boxes in
+the body, and true pagination remain out of scope.

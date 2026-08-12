@@ -28,6 +28,10 @@ vi.mock('./documents', async (importOriginal) => {
   }
 })
 
+vi.mock('./components/document-workspace/workspace', () => ({
+  DocumentWorkspace: () => null,
+}))
+
 vi.mock('./current-user', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./current-user')>()
   return { ...actual, useCurrentUser: currentUser.useCurrentUser }
