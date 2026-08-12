@@ -1,6 +1,15 @@
-import type { DocumentParagraphWire, DocumentStoryWire } from '@obiter/contracts'
+import type {
+  DocumentModelWire,
+  DocumentParagraphWire,
+  DocumentStoryWire,
+} from '@obiter/contracts'
+import {
+  marginStories,
+  documentPageBox,
+  type PageBox,
+} from './document-page-layout'
 import { paragraphPlainText } from './document-model-text'
-import { drawingScene } from './document-page-drawings'
+import { drawingAnchor, drawingScene } from './document-page-drawings'
 import {
   drawingBoxSize,
   drawingHasPicture,
@@ -8,7 +17,11 @@ import {
   paragraphImageXml,
 } from './document-page-media'
 import { twipToPx, xmlNumber } from './document-page-units'
-import type { DisplayTable } from './document-page-tables'
+import {
+  storyBlocks,
+  tablePaintHeight,
+  type DisplayTable,
+} from './document-page-tables'
 
 export type HeaderLetterhead = {
   pictures: string[]
@@ -60,15 +73,17 @@ export function headerLetterhead(
   const left = drawingShapeFill(shapes[0] ?? '') ?? LETTERHEAD_GREY
   const right =
     drawingShapeFill(shapes[shapes.length - 1] ?? '') ?? LETTERHEAD_GREY
+  const bars = shapes.length > 0 ? shapes : pictures
   const heightPx = Math.max(
     40,
-    ...[...shapes, ...pictures].map((xml) => drawingBoxSize(xml).height),
+    ...bars.map((xml) => drawingBoxSize(xml).height),
   )
   return { pictures, leftFill: left, rightFill: right, heightPx }
 }
 
 export function footerLetterhead(
   story: DocumentStoryWire,
+  pageNumber = 1,
 ): FooterLetterhead | undefined {
   if (story.kind !== 'footer') return undefined
   const xmls = story.paragraphs.flatMap(paragraphImageXml)
@@ -86,18 +101,57 @@ export function footerLetterhead(
   return {
     fill: rect?.fill ?? '#212934',
     heightPx: Math.max(rect?.heightPx ?? 0, 72),
-    page: footerPageNumber(story) ?? '1',
+    page: String(pageNumber),
     rows,
   }
 }
 
-function textboxColumns(
-  xml: string,
-): Array<{ left: string; right: string }> {
-  const choiceOnly = xml.replace(
-    /<mc:Fallback\b[\s\S]*?<\/mc:Fallback>/gi,
-    '',
+export function marginBandHeights(model: DocumentModelWire): {
+  headerPx: number
+  footerPx: number
+} {
+  const box = documentPageBox(model)
+  let headerPx = 0
+  let footerPx = 0
+  for (const story of marginStories(model, 'header')) {
+    headerPx = Math.max(headerPx, storyBandHeight(story, box))
+  }
+  for (const story of marginStories(model, 'footer')) {
+    footerPx = Math.max(footerPx, storyBandHeight(story, box))
+  }
+  return { headerPx, footerPx }
+}
+
+function storyBandHeight(story: DocumentStoryWire, box: PageBox): number {
+  const tables = storyBlocks(story)
+    .filter((block) => block.type === 'table')
+    .map((block) => block.table)
+  const edgePx = story.kind === 'header' ? box.headerPx : 0
+  return Math.max(
+    0,
+    headerLetterhead(story, tables)?.heightPx ?? 0,
+    footerLetterhead(story)?.heightPx ?? 0,
+    ...tables.map(tablePaintHeight),
+    ...story.paragraphs.flatMap(paragraphImageXml).map((xml) => {
+      const anchor = drawingAnchor(xml)
+      const top = anchor?.topPx ?? 0
+      const origin =
+        !anchor ||
+        anchor.relativeFromV === 'paragraph' ||
+        anchor.relativeFromV === 'line'
+          ? edgePx
+          : anchor.relativeFromV === 'margin'
+            ? story.kind === 'header'
+              ? box.margin.top
+              : 0
+            : 0
+      return Math.max(0, origin + top + drawingScene(xml).heightPx)
+    }),
   )
+}
+
+function textboxColumns(xml: string): Array<{ left: string; right: string }> {
+  const choiceOnly = xml.replace(/<mc:Fallback\b[\s\S]*?<\/mc:Fallback>/gi, '')
   return [...choiceOnly.matchAll(/<w:txbxContent\b[\s\S]*?<\/w:txbxContent>/gi)]
     .flatMap((block) =>
       [...block[0].matchAll(/<w:p\b[\s\S]*?<\/w:p>/gi)].map((match) =>
@@ -160,19 +214,6 @@ function paddedColumns(
   return { left: line, right: '' }
 }
 
-function footerPageNumber(story: DocumentStoryWire): string | undefined {
-  const numbered = story.paragraphs.some(
-    (paragraph) =>
-      paragraph.preservedXmlFragments.some((xml) =>
-        /Page Numbers/i.test(xml),
-      ) ||
-      paragraph.runs.some((run) =>
-        /\bPAGE\b/i.test(run.preservedXmlFragments.join('')),
-      ),
-  )
-  return numbered ? '1' : undefined
-}
-
 export function footerBandFill(
   story: DocumentStoryWire,
   tables: DisplayTable[],
@@ -211,18 +252,15 @@ export function paragraphIsShapeOnly(
   )
 }
 
-export function paragraphTabStops(
-  paragraph: DocumentParagraphWire,
-): TabStop[] {
+export function paragraphTabStops(paragraph: DocumentParagraphWire): TabStop[] {
   const xml = paragraph.preservedXmlFragments.join('')
   return [...xml.matchAll(/<w:tab\b([^>]*)\/?>/gi)]
     .map((match) => {
       const pos = xmlNumber(match[1], 'pos')
-      const val = match[1]
-        ?.match(/(?:w:)?val="([^"]+)"/i)?.[1]
-        ?.toLowerCase()
+      const val = match[1]?.match(/(?:w:)?val="([^"]+)"/i)?.[1]?.toLowerCase()
       if (pos === undefined) return undefined
-      if (val === 'center') return { val: 'center' as const, posPx: Math.round(twipToPx(pos)) }
+      if (val === 'center')
+        return { val: 'center' as const, posPx: Math.round(twipToPx(pos)) }
       if (val === 'right' || val === 'end') {
         return { val: 'right' as const, posPx: Math.round(twipToPx(pos)) }
       }

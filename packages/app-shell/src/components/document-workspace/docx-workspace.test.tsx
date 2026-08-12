@@ -156,7 +156,7 @@ describe('DocxWorkspace save', () => {
     )
 
     expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull()
-    const input = screen.getByLabelText('Run text')
+    const input = screen.getByLabelText('Paragraph text')
     fireEvent.change(input, { target: { value: 'Hello world' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 

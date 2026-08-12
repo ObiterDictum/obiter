@@ -1,11 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import type { DocumentModelWire } from '@obiter/contracts'
 import {
+  deleteCharBeforeOffset,
   modelPlainText,
   paragraphHasUnmodelled,
   paragraphPlainText,
+  paragraphRunStart,
   runChangeKinds,
+  sliceContainsOffset,
   sliceParagraphRuns,
+  spliceRunSlice,
+  textDiff,
 } from './document-model-text'
 
 function sampleModel(
@@ -79,6 +84,47 @@ describe('sliceParagraphRuns', () => {
         text: 'there',
       },
     ])
+  })
+})
+
+describe('paragraph text edits', () => {
+  const paragraph = {
+    id: 'p1',
+    runs: [
+      { id: 'r1', text: 'with ', preservedXmlFragments: [] },
+      { id: 'r2', text: 'Acme', preservedXmlFragments: [] },
+    ],
+    preservedXmlFragments: [],
+  }
+
+  it('reports the start offset of each run', () => {
+    expect(paragraphRunStart(paragraph, 'r1')).toBe(0)
+    expect(paragraphRunStart(paragraph, 'r2')).toBe(5)
+  })
+
+  it('deletes the character before a caret at a run boundary', () => {
+    expect(deleteCharBeforeOffset(paragraph, undefined, 5)).toEqual({
+      runId: 'r1',
+      text: 'with',
+    })
+  })
+
+  it('splices a slice edit back into the full run text', () => {
+    expect(spliceRunSlice('Hello world', 0, 6, 11, 'there')).toBe('Hello there')
+  })
+
+  it('diffs typed text as a single replace range', () => {
+    expect(textDiff('with Acme', 'withAcme')).toEqual({
+      from: 4,
+      to: 5,
+      insert: '',
+    })
+  })
+
+  it('treats the end of the last slice as inside that slice', () => {
+    expect(sliceContainsOffset(5, 0, 5, 5)).toBe(true)
+    expect(sliceContainsOffset(5, 0, 5, 11)).toBe(false)
+    expect(sliceContainsOffset(5, 5, 11, 11)).toBe(true)
   })
 })
 

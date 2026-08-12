@@ -29,15 +29,29 @@ export type DisplayTable = {
   paragraphIds: string[]
 }
 
+export type StoryBlock =
+  | { type: 'paragraph'; paragraph: DocumentParagraphWire }
+  | { type: 'table'; table: DisplayTable }
+
 export function storyTables(story: DocumentStoryWire): DisplayTable[] {
   return story.preservedXmlFragments
     .map(parseWordTable)
     .filter((table): table is DisplayTable => table !== undefined)
 }
 
-export type StoryBlock =
-  | { type: 'paragraph'; paragraph: DocumentParagraphWire }
-  | { type: 'table'; table: DisplayTable }
+export function rowPaintHeight(row: DisplayTable['rows'][number]): number {
+  const filled = row.cells.some((cell) => cell.fill)
+  const minCell = Math.max(0, ...row.cells.map((cell) => cell.minHeightPx ?? 0))
+  const lines = Math.max(
+    1,
+    ...row.cells.map((cell) => Math.max(1, cell.paragraphIds.length)),
+  )
+  return Math.max(row.heightPx ?? 0, minCell, lines * 22, filled ? 48 : 28)
+}
+
+export function tablePaintHeight(table: DisplayTable): number {
+  return table.rows.reduce((sum, row) => sum + rowPaintHeight(row), 0)
+}
 
 export function storyBlocks(story: DocumentStoryWire): StoryBlock[] {
   const tables = storyTables(story).map((table) =>

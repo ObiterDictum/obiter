@@ -33,7 +33,7 @@ describe('drawingAnchor', () => {
       drawingAnchor(
         '<w:drawing><wp:anchor><wp:positionH relativeFrom="page"><wp:align>left</wp:align></wp:positionH><wp:positionV relativeFrom="paragraph"><wp:posOffset>-280035</wp:posOffset></wp:positionV></wp:anchor></w:drawing>',
       ),
-    ).toEqual({ leftPx: 0, topPx: -29 })
+    ).toEqual({ leftPx: 0, topPx: -29, relativeFromV: 'paragraph' })
   })
 
   it('ignores inline drawings', () => {

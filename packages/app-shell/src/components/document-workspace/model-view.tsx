@@ -3,7 +3,8 @@ import type {
   DocumentParagraphWire,
   DocumentPresence,
 } from '@obiter/contracts'
-import type { LocalInsert } from '../../document-edits'
+import { insertPlainText, type LocalInsert } from '../../document-edits'
+import { paragraphPlainText } from '../../document-model-text'
 import {
   contrastFillText,
   imagePartNameForDrawing,
@@ -13,10 +14,12 @@ import {
   marginStories,
   contentFrame,
 } from '../../document-page-layout'
+import { marginBandHeights } from '../../document-page-margin'
 import { storyBlocks } from '../../document-page-tables'
 import type { LaidOutBlock } from '../../document-page-engine'
 import type { PageFloat, PageTextBox } from '../../document-page-floats'
 import { ModelParagraph, PendingInsert } from './model-paragraph'
+import type { ParagraphWordEdit } from './model-paragraph'
 import { PageDrawing } from './page-drawing'
 import { PageMarginBand } from './page-margin-band'
 import { PageTable } from './page-table'
@@ -33,15 +36,21 @@ export function DocumentModelPage({
   inserts = [],
   deletedParagraphIds = [],
   onInsertTextChange,
+  onInsertParagraph,
+  onDeleteParagraph,
+  onJoinPrevious,
+  onWordEdit,
+  restoreCaret,
   imageUrls = {},
   pageBlocks,
   pageFloats = [],
   pageTextBoxes = [],
   pageColumns,
+  pageNumber = 1,
 }: {
   model: DocumentModelWire
   selectedParagraphId: string | null
-  onSelectParagraph: (paragraphId: string) => void
+  onSelectParagraph: (paragraphId: string, offset?: number) => void
   drafts?: Record<string, string>
   onRunTextChange?: (runId: string, text: string) => void
   editing?: boolean
@@ -50,11 +59,17 @@ export function DocumentModelPage({
   inserts?: LocalInsert[]
   deletedParagraphIds?: string[]
   onInsertTextChange?: (clientId: string, text: string) => void
+  onInsertParagraph?: (afterParagraphId: string) => void
+  onDeleteParagraph?: (paragraphId: string) => void
+  onJoinPrevious?: (paragraphId: string) => boolean | void
+  onWordEdit?: (edit: ParagraphWordEdit) => void
+  restoreCaret?: { paragraphId: string; offset: number } | null
   imageUrls?: Record<string, string>
   pageBlocks?: LaidOutBlock[]
   pageFloats?: PageFloat[]
   pageTextBoxes?: PageTextBox[]
   pageColumns?: Array<{ left: number; widthPx: number }>
+  pageNumber?: number
 }) {
   const story = model.stories.find((item) => item.kind === 'document')
   const headers = marginStories(model, 'header')
@@ -69,9 +84,9 @@ export function DocumentModelPage({
   }
 
   const blocks: LaidOutBlock[] = pageBlocks ?? storyBlocks(story)
-  const columns = pageColumns ?? [
-    { left: 0, widthPx: contentFrame(page).widthPx },
-  ]
+  const bands = marginBandHeights(model)
+  const frame = contentFrame(page, bands)
+  const columns = pageColumns ?? [{ left: 0, widthPx: frame.widthPx }]
   const firstColumn = columns[0]
   const nextColumn = columns[1]
   const gap =
@@ -79,17 +94,28 @@ export function DocumentModelPage({
 
   return (
     <div
-      className="relative flex flex-1 flex-col"
-      style={{ height: page.heightPx, minHeight: page.heightPx }}
+      className="relative flex flex-col overflow-hidden"
+      style={{ height: page.heightPx }}
+      onClick={(event) => {
+        if (!editing) return
+        if (!(event.target instanceof Element)) return
+        if (event.target.closest('[data-paragraph-id]')) return
+        const caret = pageClickCaret(event.currentTarget, event.clientY, (id) =>
+          blockEndOffset(id, story.paragraphs, drafts, inserts),
+        )
+        if (caret) onSelectParagraph(caret.paragraphId, caret.offset)
+      }}
     >
       <PageMarginBand
         stories={headers}
         label="Document header"
         edge="top"
-        className="pointer-events-none absolute inset-x-0 top-0 z-[1]"
+        className="pointer-events-none shrink-0 overflow-hidden"
+        heightPx={frame.top}
         relationships={model.relationships}
         imageUrls={imageUrls}
         styles={model.styles}
+        pageNumber={pageNumber}
         padding={{
           left: page.margin.left,
           right: page.margin.right,
@@ -97,19 +123,19 @@ export function DocumentModelPage({
         }}
       />
       <div
-        className="relative z-[1] flex flex-1"
+        aria-label="Document body"
+        className="relative flex min-h-0 overflow-hidden"
         style={{
-          paddingLeft: page.margin.left,
-          paddingRight: page.margin.right,
-          paddingTop: page.margin.top,
-          paddingBottom: page.margin.bottom,
+          height: frame.heightPx,
+          marginLeft: frame.left,
+          width: frame.widthPx,
           gap,
         }}
       >
         {columns.map((column, columnIndex) => (
           <div
             key={`col-${columnIndex}`}
-            className="flex flex-col"
+            className="flex min-h-0 flex-col"
             style={{ width: column.widthPx }}
           >
             {blocks
@@ -128,10 +154,75 @@ export function DocumentModelPage({
                   inserts,
                   deletedParagraphIds,
                   onInsertTextChange,
+                  onInsertParagraph,
+                  onDeleteParagraph,
+                  onJoinPrevious,
+                  onWordEdit,
+                  restoreCaret,
                   imageUrls,
                   paragraphs: story.paragraphs,
                 }),
               )}
+          </div>
+        ))}
+        {pageFloats.map((item, index) => {
+          const partName = imagePartNameForDrawing(
+            item.xml,
+            story.partName,
+            model.relationships,
+          )
+          return (
+            <div
+              key={`float-${index}`}
+              className="pointer-events-none absolute"
+              style={{
+                left: item.leftPx - frame.left,
+                top: item.topPx - frame.top,
+                zIndex: item.behind ? 0 : 2,
+              }}
+            >
+              <PageDrawing
+                xml={item.xml}
+                ignoreAnchor
+                imageUrl={partName ? imageUrls[partName] : undefined}
+                fallbackLabel="Document image"
+              />
+            </div>
+          )
+        })}
+        {pageTextBoxes.map((box, index) => (
+          <div
+            key={`txbx-${index}`}
+            className="pointer-events-none absolute overflow-hidden"
+            style={{
+              left: box.leftPx - frame.left,
+              top: box.topPx - frame.top,
+              width: box.widthPx,
+              height: box.heightPx,
+              backgroundColor: box.fill,
+              color: contrastFillText(box.fill),
+              zIndex: box.behind ? 0 : 2,
+            }}
+          >
+            {box.paragraphIds.flatMap((id) => {
+              const paragraph = story.paragraphs.find((item) => item.id === id)
+              if (!paragraph) return []
+              return [
+                <ModelParagraph
+                  key={paragraph.id}
+                  paragraph={paragraph}
+                  changes={model.changes}
+                  selected={false}
+                  onSelect={() => undefined}
+                  drafts={drafts}
+                  editing={false}
+                  storyPartName={story.partName}
+                  relationships={model.relationships}
+                  imageUrls={imageUrls}
+                  styles={model.styles}
+                />,
+              ]
+            })}
           </div>
         ))}
       </div>
@@ -139,76 +230,18 @@ export function DocumentModelPage({
         stories={footers}
         label="Document footer"
         edge="bottom"
-        className="pointer-events-none absolute inset-x-0 bottom-0 z-[1]"
+        className="pointer-events-none mt-auto flex shrink-0 flex-col justify-end overflow-hidden"
+        heightPx={frame.bottom}
         relationships={model.relationships}
         imageUrls={imageUrls}
         styles={model.styles}
+        pageNumber={pageNumber}
         padding={{
           left: page.margin.left,
           right: page.margin.right,
           edge: page.footerPx,
         }}
       />
-      {pageFloats.map((item, index) => {
-        const partName = imagePartNameForDrawing(
-          item.xml,
-          story.partName,
-          model.relationships,
-        )
-        return (
-          <div
-            key={`float-${index}`}
-            className="pointer-events-none absolute"
-            style={{
-              left: item.leftPx,
-              top: item.topPx,
-              zIndex: item.behind ? 0 : 2,
-            }}
-          >
-            <PageDrawing
-              xml={item.xml}
-              ignoreAnchor
-              imageUrl={partName ? imageUrls[partName] : undefined}
-              fallbackLabel="Document image"
-            />
-          </div>
-        )
-      })}
-      {pageTextBoxes.map((box, index) => (
-        <div
-          key={`txbx-${index}`}
-          className="pointer-events-none absolute overflow-hidden"
-          style={{
-            left: box.leftPx,
-            top: box.topPx,
-            width: box.widthPx,
-            height: box.heightPx,
-            backgroundColor: box.fill,
-            color: contrastFillText(box.fill),
-            zIndex: box.behind ? 0 : 2,
-          }}
-        >
-          {box.paragraphIds.flatMap((id) => {
-            const paragraph = story.paragraphs.find((item) => item.id === id)
-            if (!paragraph) return []
-            return [
-              <ModelParagraph
-                key={paragraph.id}
-                paragraph={paragraph}
-                changes={model.changes}
-                selected={false}
-                onSelect={() => undefined}
-                drafts={drafts}
-                editing={false}
-                storyPartName={story.partName}
-                relationships={model.relationships}
-                imageUrls={imageUrls}
-                styles={model.styles}
-              />,
-            ]
-          })}
-        </div>
-      ))}
     </div>
   )
 }
@@ -220,7 +253,7 @@ function renderBlock(
     model: DocumentModelWire
     storyPartName: string
     selectedParagraphId: string | null
-    onSelectParagraph: (paragraphId: string) => void
+    onSelectParagraph: (paragraphId: string, offset?: number) => void
     drafts?: Record<string, string>
     onRunTextChange?: (runId: string, text: string) => void
     editing?: boolean
@@ -229,6 +262,11 @@ function renderBlock(
     inserts: LocalInsert[]
     deletedParagraphIds: string[]
     onInsertTextChange?: (clientId: string, text: string) => void
+    onInsertParagraph?: (afterParagraphId: string) => void
+    onDeleteParagraph?: (paragraphId: string) => void
+    onJoinPrevious?: (paragraphId: string) => boolean | void
+    onWordEdit?: (edit: ParagraphWordEdit) => void
+    restoreCaret?: { paragraphId: string; offset: number } | null
     imageUrls: Record<string, string>
     paragraphs: DocumentParagraphWire[]
   },
@@ -253,6 +291,11 @@ function renderBlock(
                 onSelect={() => ctx.onSelectParagraph(paragraph.id)}
                 drafts={ctx.drafts}
                 onRunTextChange={ctx.onRunTextChange}
+                onInsertParagraph={ctx.onInsertParagraph}
+                onDeleteParagraph={ctx.onDeleteParagraph}
+                onJoinPrevious={ctx.onJoinPrevious}
+                onWordEdit={ctx.onWordEdit}
+                restoreCaret={ctx.restoreCaret}
                 editing={ctx.editing}
                 presence={ctx.presence}
                 currentUserId={ctx.currentUserId}
@@ -266,27 +309,29 @@ function renderBlock(
         }
       />,
     ]
-    for (const paragraphId of block.table.paragraphIds) {
-      for (const insert of ctx.inserts.filter(
-        (item) => item.afterParagraphId === paragraphId,
-      )) {
-        nodes.push(
-          <PendingInsert
-            key={insert.clientId}
-            insert={insert}
-            selected={ctx.selectedParagraphId === insert.clientId}
-            onSelect={() => ctx.onSelectParagraph(insert.clientId)}
-            onTextChange={ctx.onInsertTextChange}
-          />,
-        )
-      }
-    }
     return nodes
   }
 
   const paragraph = block.paragraph
   if (ctx.deletedParagraphIds.includes(paragraph.id)) return []
-  const nodes = [
+  const insert = ctx.inserts.find((item) => item.clientId === paragraph.id)
+  if (insert) {
+    return [
+      <PendingInsert
+        key={insert.clientId}
+        insert={insert}
+        selected={ctx.selectedParagraphId === insert.clientId}
+        onSelect={() => ctx.onSelectParagraph(insert.clientId)}
+        onTextChange={ctx.onInsertTextChange}
+        onInsertParagraph={ctx.onInsertParagraph}
+        onDeleteParagraph={ctx.onDeleteParagraph}
+        onJoinPrevious={ctx.onJoinPrevious}
+        onWordEdit={ctx.onWordEdit}
+        restoreCaret={ctx.restoreCaret}
+      />,
+    ]
+  }
+  return [
     <ModelParagraph
       key={`${paragraph.id}-${block.from ?? 0}`}
       paragraph={paragraph}
@@ -295,6 +340,11 @@ function renderBlock(
       onSelect={() => ctx.onSelectParagraph(paragraph.id)}
       drafts={ctx.drafts}
       onRunTextChange={ctx.onRunTextChange}
+      onInsertParagraph={ctx.onInsertParagraph}
+      onDeleteParagraph={ctx.onDeleteParagraph}
+      onJoinPrevious={ctx.onJoinPrevious}
+      onWordEdit={ctx.onWordEdit}
+      restoreCaret={ctx.restoreCaret}
       editing={ctx.editing}
       presence={ctx.presence}
       currentUserId={ctx.currentUserId}
@@ -306,23 +356,45 @@ function renderBlock(
       to={block.to}
       padLeftPx={block.padLeftPx}
       padRightPx={block.padRightPx}
+      wrapWidthPx={block.wrapWidthPx}
       continuation={block.continuation}
+      pageStart={block.pageStart}
     />,
   ]
-  if (!block.continuation) {
-    for (const insert of ctx.inserts.filter(
-      (item) => item.afterParagraphId === paragraph.id,
-    )) {
-      nodes.push(
-        <PendingInsert
-          key={insert.clientId}
-          insert={insert}
-          selected={ctx.selectedParagraphId === insert.clientId}
-          onSelect={() => ctx.onSelectParagraph(insert.clientId)}
-          onTextChange={ctx.onInsertTextChange}
-        />,
-      )
-    }
+}
+
+function pageClickCaret(
+  root: HTMLElement,
+  clientY: number,
+  endOffset: (paragraphId: string) => number,
+): { paragraphId: string; offset: number } | undefined {
+  const nodes = [...root.querySelectorAll<HTMLElement>('[data-paragraph-id]')]
+  let best: { paragraphId: string; offset: number; dist: number } | undefined
+  for (const node of nodes) {
+    const paragraphId = node.dataset.paragraphId
+    if (!paragraphId) continue
+    const box = node.getBoundingClientRect()
+    const dist =
+      clientY < box.top
+        ? box.top - clientY
+        : clientY > box.bottom
+          ? clientY - box.bottom
+          : 0
+    const offset =
+      clientY < box.top + box.height / 2 ? 0 : endOffset(paragraphId)
+    if (!best || dist < best.dist) best = { paragraphId, offset, dist }
   }
-  return nodes
+  return best
+}
+
+function blockEndOffset(
+  paragraphId: string,
+  paragraphs: DocumentParagraphWire[],
+  drafts: Record<string, string> | undefined,
+  inserts: LocalInsert[],
+): number {
+  const insert = inserts.find((item) => item.clientId === paragraphId)
+  if (insert) return insertPlainText(insert).length
+  const paragraph = paragraphs.find((item) => item.id === paragraphId)
+  return paragraph ? paragraphPlainText(paragraph, drafts).length : 0
 }

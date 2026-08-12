@@ -1,6 +1,13 @@
 import type { CSSProperties, ReactNode } from 'react'
-import type { DocumentParagraphWire, DocumentRelationshipWire } from '@obiter/contracts'
-import type { HeaderLetterhead, FooterLetterhead, TabStop } from '../../document-page-margin'
+import type {
+  DocumentParagraphWire,
+  DocumentRelationshipWire,
+} from '@obiter/contracts'
+import type {
+  HeaderLetterhead,
+  FooterLetterhead,
+  TabStop,
+} from '../../document-page-margin'
 import { imagePartNameForDrawing } from '../../document-page-media'
 import { PageDrawing } from './page-drawing'
 

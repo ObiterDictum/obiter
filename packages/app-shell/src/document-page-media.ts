@@ -227,10 +227,15 @@ export function tabColumns(
   return sawTab ? groups : undefined
 }
 
-export function runDisplayText(run: DocumentTextRunWire): string {
-  if (run.text) return run.text
+export function runDisplayText(
+  run: DocumentTextRunWire,
+  pageNumber = 1,
+): string {
   const xml = run.preservedXmlFragments.join('')
-  if (/<w:instrText\b/i.test(xml) && /\bPAGE\b/i.test(xml)) return '1'
+  if (/<w:instrText\b/i.test(xml) && /\bPAGE\b/i.test(xml)) {
+    return String(pageNumber)
+  }
+  if (run.text) return run.text
   return ''
 }
 

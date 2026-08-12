@@ -3,6 +3,7 @@ import {
   documentPageBox,
   marginStories,
   sectionColumns,
+  contentFrame,
 } from './document-page-layout'
 import type { DocumentModelWire } from '@obiter/contracts'
 
@@ -119,5 +120,26 @@ describe('sectionColumns', () => {
     expect(columns).toHaveLength(2)
     expect(columns[0]?.left).toBe(0)
     expect(columns[1]?.left).toBeGreaterThan(columns[0]?.widthPx ?? 0)
+  })
+})
+
+describe('contentFrame', () => {
+  it('keeps body below a header band that is taller than the top margin', () => {
+    const box = documentPageBox(emptyModel)
+    const frame = contentFrame(box, { headerPx: 180, footerPx: 120 })
+    expect(frame.top).toBe(180)
+    expect(frame.bottom).toBe(120)
+    expect(frame.heightPx).toBe(box.heightPx - 180 - 120)
+    expect(frame.top + frame.heightPx + frame.bottom).toBe(box.heightPx)
+  })
+
+  it('never lets the body enter the Word top or bottom margin', () => {
+    const box = documentPageBox(emptyModel)
+    const frame = contentFrame(box, { headerPx: 48, footerPx: 72 })
+    expect(frame.top).toBe(box.margin.top)
+    expect(frame.bottom).toBe(box.margin.bottom)
+    expect(frame.heightPx).toBe(
+      box.heightPx - box.margin.top - box.margin.bottom,
+    )
   })
 })

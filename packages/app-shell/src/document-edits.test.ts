@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { DocumentModelWire } from '@obiter/contracts'
-import { collectEditOperations, isDraftDirty } from './document-edits'
+import {
+  collectEditOperations,
+  insertPlainText,
+  isDraftDirty,
+  removeInsert,
+} from './document-edits'
 
 const model: DocumentModelWire = {
   version: 1,
@@ -51,5 +56,47 @@ describe('collectEditOperations', () => {
     expect(collectEditOperations(model, { r1: 'Hello' }, [], [])).toEqual([])
     expect(isDraftDirty(model, { r1: 'Hello' }, [], [])).toBe(false)
     expect(isDraftDirty(model, { r1: 'Hello world' }, [], [])).toBe(true)
+  })
+
+  it('flattens joined extra runs onto the last original run for save', () => {
+    expect(
+      collectEditOperations(model, {}, [], [], {
+        p1: [{ id: 'r2', text: 'World', preservedXmlFragments: [] }],
+      }),
+    ).toEqual([{ type: 'replace_run_text', runId: 'r1', text: 'HelloWorld' }])
+  })
+})
+
+describe('insertPlainText', () => {
+  it('uses the typed text when split runs are still empty', () => {
+    expect(
+      insertPlainText({
+        clientId: 'ins1',
+        afterParagraphId: 'p1',
+        text: 'Signed',
+        runs: [{ id: 'ins1-r0', text: '', preservedXmlFragments: [] }],
+      }),
+    ).toBe('Signed')
+  })
+})
+
+describe('removeInsert', () => {
+  it('reparents later inserts and selects the previous paragraph', () => {
+    expect(
+      removeInsert(
+        [
+          { clientId: 'a', afterParagraphId: 'p1', text: '' },
+          { clientId: 'b', afterParagraphId: 'a', text: '' },
+          { clientId: 'c', afterParagraphId: 'b', text: '' },
+        ],
+        'b',
+      ),
+    ).toEqual({
+      inserts: [
+        { clientId: 'a', afterParagraphId: 'p1', text: '' },
+        { clientId: 'c', afterParagraphId: 'a', text: '' },
+      ],
+      selectId: 'a',
+    })
   })
 })

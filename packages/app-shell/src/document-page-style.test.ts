@@ -24,6 +24,8 @@ describe('paragraphFace', () => {
     expect(face.marginBottomPx).toBeCloseTo(13.333, 2)
     expect(face.run.fontFamily).toContain('Times New Roman')
     expect(face.run.fontSizePx).toBe(16)
+    expect(face.widowControl).toBe(true)
+    expect(face.keepNext).toBe(false)
   })
 
   it('maps left, centre, right and justify from w:jc', () => {
@@ -56,6 +58,21 @@ describe('paragraphFace', () => {
       [],
     )
     expect(face.align).toBeUndefined()
+  })
+
+  it('reads keep-with-next and keep-lines from pPr', () => {
+    const face = paragraphFace(
+      {
+        id: 'p1',
+        runs: [],
+        preservedXmlFragments: [
+          '<w:pPr><w:keepNext/><w:keepLines/></w:pPr>',
+        ],
+      },
+      [],
+    )
+    expect(face.keepNext).toBe(true)
+    expect(face.keepLines).toBe(true)
   })
 })
 

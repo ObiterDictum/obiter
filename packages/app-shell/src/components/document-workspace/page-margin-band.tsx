@@ -45,6 +45,8 @@ export function PageMarginBand({
   styles = [],
   padding,
   className,
+  pageNumber = 1,
+  heightPx,
 }: {
   stories: DocumentStoryWire[]
   label: string
@@ -54,14 +56,29 @@ export function PageMarginBand({
   styles?: DocumentStyleWire[]
   padding: { left: number; right: number; edge: number }
   className?: string
+  pageNumber?: number
+  heightPx?: number
 }) {
   const visible = stories.filter(marginStoryVisible)
-  if (visible.length === 0) return null
-
   const Tag = edge === 'top' ? 'header' : 'footer'
+  if (visible.length === 0) {
+    if (!heightPx) return null
+    return (
+      <Tag
+        aria-label={label}
+        className={cn('shrink-0 overflow-hidden', className)}
+        style={{ height: heightPx }}
+      />
+    )
+  }
+
   const imageLabel = edge === 'top' ? 'Header image' : 'Footer image'
   return (
-    <Tag aria-label={label} className={cn('shrink-0', className)}>
+    <Tag
+      aria-label={label}
+      className={cn('shrink-0 overflow-hidden', className)}
+      style={heightPx ? { height: heightPx } : undefined}
+    >
       {visible.map((story) => (
         <MarginStory
           key={story.partName}
@@ -71,6 +88,7 @@ export function PageMarginBand({
           imageUrls={imageUrls}
           styles={styles}
           inset={padding}
+          pageNumber={pageNumber}
         />
       ))}
     </Tag>
@@ -84,6 +102,7 @@ function MarginStory({
   imageUrls,
   styles,
   inset,
+  pageNumber,
 }: {
   story: DocumentStoryWire
   imageLabel: string
@@ -91,6 +110,7 @@ function MarginStory({
   imageUrls: Record<string, string>
   styles: DocumentStyleWire[]
   inset: { left: number; right: number; edge: number }
+  pageNumber: number
 }) {
   const paragraphs = new Map(
     story.paragraphs.map((paragraph) => [paragraph.id, paragraph]),
@@ -100,7 +120,7 @@ function MarginStory({
     .filter((block) => block.type === 'table')
     .map((block) => block.table)
   const letterhead = headerLetterhead(story, tables)
-  const footer = footerLetterhead(story)
+  const footer = footerLetterhead(story, pageNumber)
   const bandFill = footer?.fill ?? footerBandFill(story, tables)
   const painted =
     Boolean(bandFill) ||
@@ -131,12 +151,14 @@ function MarginStory({
     return (
       paragraphPlainText(block.paragraph).trim().length > 0 ||
       paragraphImageXml(block.paragraph).length > 0 ||
-      block.paragraph.runs.some((run) => runDisplayText(run))
+      block.paragraph.runs.some((run) => runDisplayText(run, pageNumber))
     )
   })
 
   return (
-    <div style={bandFill && !footer ? { backgroundColor: bandFill } : undefined}>
+    <div
+      style={bandFill && !footer ? { backgroundColor: bandFill } : undefined}
+    >
       {letterhead ? (
         <LetterheadBar
           letterhead={letterhead}
@@ -165,6 +187,7 @@ function MarginStory({
                     imageUrls={imageUrls}
                     styles={styles}
                     background={cell.fill ?? bandFill}
+                    pageNumber={pageNumber}
                   />
                 ) : null
               })
@@ -191,6 +214,7 @@ function MarginStory({
               imageUrls={imageUrls}
               styles={styles}
               background={bandFill}
+              pageNumber={pageNumber}
             />
           </div>
         ),
@@ -207,6 +231,7 @@ function MarginParagraph({
   imageUrls,
   styles,
   background,
+  pageNumber,
 }: {
   paragraph: DocumentParagraphWire
   imageLabel: string
@@ -215,6 +240,7 @@ function MarginParagraph({
   imageUrls: Record<string, string>
   styles: DocumentStyleWire[]
   background?: string
+  pageNumber: number
 }) {
   const face = paragraphFace(paragraph, styles)
   const images = paragraphImageXml(paragraph).filter(
@@ -227,7 +253,7 @@ function MarginParagraph({
   const fill = background ?? paragraphFill(paragraph)
   const runs = (items: typeof paragraph.runs) =>
     items.map((run) => {
-      const text = runDisplayText(run)
+      const text = runDisplayText(run, pageNumber)
       if (!text) return null
       const faceRun = runFace(run, face, styles)
       const color =
@@ -243,7 +269,9 @@ function MarginParagraph({
     <div
       className={cn(
         'flex min-h-[1em] self-start',
-        images.length > 1 ? 'flex-row items-center justify-between' : 'flex-col',
+        images.length > 1
+          ? 'flex-row items-center justify-between'
+          : 'flex-col',
         face.align === 'center' && 'items-center',
         face.align === 'right' && 'items-end',
       )}
@@ -269,7 +297,7 @@ function MarginParagraph({
       })}
       {columns && columns.length > 1 ? (
         <TabLine columns={columns} stops={stops} render={runs} />
-      ) : paragraph.runs.some((run) => runDisplayText(run)) ? (
+      ) : paragraph.runs.some((run) => runDisplayText(run, pageNumber)) ? (
         <p>{runs(paragraph.runs)}</p>
       ) : null}
     </div>

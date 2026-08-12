@@ -7,9 +7,20 @@ import {
   collectEditOperations,
   downloadPlainText,
   isDraftDirty,
+  removeInsert,
   selectedParagraphLength,
   type LocalInsert,
 } from '../../document-edits'
+import {
+  applyDeleteBackward,
+  applyDeleteForward,
+  applyLineBreak,
+  applyReplaceRange,
+  applySplitParagraph,
+  type EditorResult,
+  type EditorState,
+  type ExtraRuns,
+} from '../../document-word-edits'
 import { documentStory, modelPlainText } from '../../document-model-text'
 import { layoutDocument } from '../../document-page-engine'
 import { documentImagePartNames } from '../../document-page-media'
@@ -30,6 +41,7 @@ import {
 import { DocumentChangesPanel } from './changes-panel'
 import { DocumentCommentsPanel } from './comments-panel'
 import { DocumentModelPage } from './model-view'
+import type { ParagraphWordEdit } from './model-paragraph'
 import { DocumentWorkspaceToolbar } from './toolbar'
 import { useDocumentPresenceHeartbeat } from './use-presence-heartbeat'
 import { DocumentDesk, DocumentPage } from './document-page'
@@ -76,17 +88,22 @@ export function DocxWorkspace({
   const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [inserts, setInserts] = useState<LocalInsert[]>([])
   const [deletedParagraphIds, setDeletedParagraphIds] = useState<string[]>([])
+  const [extraRuns, setExtraRuns] = useState<ExtraRuns>({})
+  const [restoreCaret, setRestoreCaret] = useState<{
+    paragraphId: string
+    offset: number
+  } | null>(null)
   const [banner, setBanner] = useState<string | null>(null)
   const [stale, setStale] = useState(false)
 
   const model = modelQuery.data?.model
-  const pages = model ? layoutDocument(model, drafts) : []
+  const pages = model ? layoutDocument(model, drafts, inserts, extraRuns) : []
   const imageUrls = useDocumentImageUrls(
     documentId,
     model ? documentImagePartNames(model) : [],
   )
   const dirty = model
-    ? isDraftDirty(model, drafts, inserts, deletedParagraphIds)
+    ? isDraftDirty(model, drafts, inserts, deletedParagraphIds, extraRuns)
     : false
   const saving = editDocument.isPending || mergeDocument.isPending
   const cursor =
@@ -102,6 +119,7 @@ export function DocxWorkspace({
     setDrafts({})
     setInserts([])
     setDeletedParagraphIds([])
+    setExtraRuns({})
     setStale(false)
     setBanner(null)
     await queryClient.invalidateQueries({
@@ -119,6 +137,7 @@ export function DocxWorkspace({
       drafts,
       inserts,
       deletedParagraphIds,
+      extraRuns,
     )
     const collaborators = presence.some((item) => item.userId !== me?.user.id)
     try {
@@ -144,6 +163,7 @@ export function DocxWorkspace({
       setDrafts({})
       setInserts([])
       setDeletedParagraphIds([])
+      setExtraRuns({})
       setStale(false)
     } catch (error) {
       if (error instanceof ApiError && error.code === 'conflict_detected') {
@@ -152,6 +172,59 @@ export function DocxWorkspace({
       }
       setBanner(error instanceof Error ? error.message : 'Save failed.')
     }
+  }
+
+  function selectParagraph(paragraphId: string, offset?: number) {
+    setSelectedParagraphId(paragraphId)
+    setRestoreCaret(offset == null ? null : { paragraphId, offset })
+  }
+
+  function deleteParagraph(paragraphId: string) {
+    const removed = removeInsert(inserts, paragraphId)
+    if (removed) {
+      setInserts(removed.inserts)
+      selectParagraph(removed.selectId)
+      return
+    }
+    setDeletedParagraphIds((current) =>
+      current.includes(paragraphId) ? current : [...current, paragraphId],
+    )
+  }
+
+  function editorState(): EditorState {
+    return { drafts, inserts, deletedParagraphIds, extraRuns }
+  }
+
+  function commitEditor(result: EditorResult) {
+    setDrafts(result.state.drafts)
+    setInserts(result.state.inserts)
+    setDeletedParagraphIds(result.state.deletedParagraphIds)
+    setExtraRuns(result.state.extraRuns)
+    selectParagraph(result.caret.paragraphId, result.caret.offset)
+  }
+
+  function handleWordEdit(edit: ParagraphWordEdit) {
+    if (!model) return
+    const state = editorState()
+    const caret = { paragraphId: edit.paragraphId, offset: edit.offset }
+    const result =
+      edit.type === 'replace'
+        ? applyReplaceRange(
+            model,
+            state,
+            edit.paragraphId,
+            edit.from ?? edit.offset,
+            edit.to ?? edit.offset,
+            edit.insert ?? '',
+          )
+        : edit.type === 'deleteBackward'
+          ? applyDeleteBackward(model, state, caret)
+          : edit.type === 'deleteForward'
+            ? applyDeleteForward(model, state, caret)
+            : edit.type === 'split'
+              ? applySplitParagraph(model, state, caret, crypto.randomUUID())
+              : applyLineBreak(model, state, caret)
+    if (result) commitEditor(result)
   }
 
   return (
@@ -191,31 +264,20 @@ export function DocxWorkspace({
           onSave={() => void save()}
           onInsertParagraph={() => {
             if (!selectedParagraphId || !model) return
-            if (inserts.some((item) => item.clientId === selectedParagraphId)) {
-              return
-            }
+            const clientId = crypto.randomUUID()
             setInserts((current) => [
               ...current,
               {
-                clientId: crypto.randomUUID(),
+                clientId,
                 afterParagraphId: selectedParagraphId,
                 text: '',
               },
             ])
+            selectParagraph(clientId, 0)
           }}
           onDeleteParagraph={() => {
             if (!selectedParagraphId) return
-            if (inserts.some((item) => item.clientId === selectedParagraphId)) {
-              setInserts((current) =>
-                current.filter((item) => item.clientId !== selectedParagraphId),
-              )
-              return
-            }
-            setDeletedParagraphIds((current) =>
-              current.includes(selectedParagraphId)
-                ? current
-                : [...current, selectedParagraphId],
-            )
+            deleteParagraph(selectedParagraphId)
           }}
         />
         {stale ? (
@@ -259,12 +321,15 @@ export function DocxWorkspace({
                 >
                   <DocumentModelPage
                     model={model}
+                    pageNumber={index + 1}
                     pageBlocks={laid.blocks}
                     pageFloats={laid.floats}
                     pageTextBoxes={laid.textBoxes}
                     pageColumns={laid.columns}
                     selectedParagraphId={selectedParagraphId}
-                    onSelectParagraph={setSelectedParagraphId}
+                    onSelectParagraph={(paragraphId, offset) =>
+                      selectParagraph(paragraphId, offset)
+                    }
                     drafts={drafts}
                     onRunTextChange={(runId, text) =>
                       setDrafts((current) => ({ ...current, [runId]: text }))
@@ -282,6 +347,17 @@ export function DocxWorkspace({
                         ),
                       )
                     }
+                    onInsertParagraph={(afterParagraphId) => {
+                      const clientId = crypto.randomUUID()
+                      setInserts((current) => [
+                        ...current,
+                        { clientId, afterParagraphId, text: '' },
+                      ])
+                      selectParagraph(clientId, 0)
+                    }}
+                    onDeleteParagraph={deleteParagraph}
+                    onWordEdit={handleWordEdit}
+                    restoreCaret={restoreCaret}
                   />
                 </DocumentPage>
               ))}

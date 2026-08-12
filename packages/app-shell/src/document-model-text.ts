@@ -20,6 +20,81 @@ export function paragraphPlainText(
   return paragraph.runs.map((run) => drafts?.[run.id] ?? run.text).join('')
 }
 
+export function paragraphRunStart(
+  paragraph: DocumentParagraphWire,
+  runId: string,
+  drafts?: Record<string, string>,
+): number {
+  let cursor = 0
+  for (const run of paragraph.runs) {
+    if (run.id === runId) return cursor
+    cursor += (drafts?.[run.id] ?? run.text).length
+  }
+  return 0
+}
+
+export function deleteCharBeforeOffset(
+  paragraph: DocumentParagraphWire,
+  drafts: Record<string, string> | undefined,
+  offset: number,
+): { runId: string; text: string } | undefined {
+  if (offset <= 0) return undefined
+  const index = offset - 1
+  let cursor = 0
+  for (const run of paragraph.runs) {
+    const text = drafts?.[run.id] ?? run.text
+    if (index < cursor + text.length) {
+      const at = index - cursor
+      return { runId: run.id, text: text.slice(0, at) + text.slice(at + 1) }
+    }
+    cursor += text.length
+  }
+  return undefined
+}
+
+export function spliceRunSlice(
+  runText: string,
+  runStart: number,
+  from: number,
+  to: number,
+  slice: string,
+): string {
+  const fromInRun = Math.max(0, from - runStart)
+  const toInRun = Math.min(runText.length, Math.max(0, to - runStart))
+  return runText.slice(0, fromInRun) + slice + runText.slice(toInRun)
+}
+
+export function textDiff(
+  previous: string,
+  next: string,
+): { from: number; to: number; insert: string } {
+  let start = 0
+  const limit = Math.min(previous.length, next.length)
+  while (start < limit && previous[start] === next[start]) start += 1
+  let endPrev = previous.length
+  let endNext = next.length
+  while (
+    endPrev > start &&
+    endNext > start &&
+    previous[endPrev - 1] === next[endNext - 1]
+  ) {
+    endPrev -= 1
+    endNext -= 1
+  }
+  return { from: start, to: endPrev, insert: next.slice(start, endNext) }
+}
+
+export function sliceContainsOffset(
+  offset: number,
+  from: number,
+  to: number,
+  fullLength: number,
+): boolean {
+  if (offset < from) return false
+  if (offset < to) return true
+  return offset === to && to === fullLength
+}
+
 export function sliceParagraphRuns(
   paragraph: DocumentParagraphWire,
   from: number,

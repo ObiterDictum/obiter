@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react'
+import { useState } from 'react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { DocumentModelWire } from '@obiter/contracts'
 import { DocumentModelPage } from './model-view'
@@ -119,6 +120,18 @@ describe('DocumentModelPage', () => {
     expect(screen.getByLabelText('Document footer').textContent).toContain(
       'Confidential',
     )
+    const body = screen.getByLabelText('Document body')
+    const header = screen.getByLabelText('Document header')
+    const footer = screen.getByLabelText('Document footer')
+    expect(body.className).toContain('overflow-hidden')
+    expect(Number.parseFloat(body.style.height)).toBeGreaterThan(0)
+    expect(Number.parseFloat(header.style.height)).toBeGreaterThan(0)
+    expect(Number.parseFloat(footer.style.height)).toBeGreaterThan(0)
+    expect(
+      Number.parseFloat(header.style.height) +
+        Number.parseFloat(body.style.height) +
+        Number.parseFloat(footer.style.height),
+    ).toBe(Number.parseFloat(body.parentElement?.style.height ?? ''))
   })
 
   it('shows a labelled image slot for image-only headers', () => {
@@ -273,6 +286,58 @@ describe('DocumentModelPage', () => {
     expect(cells[2]?.style.backgroundColor).toMatch(/a6a6a6|166/i)
     expect(cells[1]?.querySelector('img')?.style.width).toBe('180px')
     expect(cells[1]?.querySelector('img')?.style.height).toBe('180px')
+  })
+
+  it('keeps body text below the header exclusion zone', () => {
+    const group =
+      '<w:drawing><wp:anchor><wp:positionV relativeFrom="paragraph"><wp:posOffset>-280035</wp:posOffset></wp:positionV></wp:anchor><wpg:wgp><a:xfrm><a:off x="0" y="0"/><a:ext cx="9129802" cy="1314450"/></a:xfrm><wps:wsp><wps:spPr><a:xfrm><a:off x="0" y="276045"/><a:ext cx="1238250" cy="704850"/></a:xfrm><a:solidFill><a:schemeClr val="tx2"/></a:solidFill></wps:spPr></wps:wsp><wps:wsp><wps:spPr><a:xfrm><a:off x="3062377" y="276045"/><a:ext cx="6067425" cy="704850"/></a:xfrm><a:solidFill><a:schemeClr val="tx2"/></a:solidFill></wps:spPr></wps:wsp><pic:pic><a:blip r:embed="rId1"/><a:xfrm><a:off x="1371600" y="0"/><a:ext cx="1454785" cy="1314450"/></a:xfrm></pic:pic></wpg:wgp></w:drawing>'
+    const document = model.stories[0]
+    if (!document) throw new Error('expected document story')
+    const paged: DocumentModelWire = {
+      ...model,
+      stories: [
+        {
+          ...document,
+          preservedXmlFragments: [
+            '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="2325" w:right="1797" w:bottom="2041" w:left="1797" w:header="708" w:footer="708"/></w:sectPr>',
+          ],
+        },
+        {
+          partName: 'word/header1.xml',
+          kind: 'header',
+          paragraphs: [
+            {
+              id: 'h1',
+              runs: [{ id: 'r1', text: '', preservedXmlFragments: [group] }],
+              preservedXmlFragments: [],
+            },
+          ],
+          preservedXmlFragments: [],
+        },
+      ],
+    }
+    render(
+      <DocumentModelPage
+        model={paged}
+        selectedParagraphId={null}
+        onSelectParagraph={() => undefined}
+      />,
+    )
+    const header = screen.getByLabelText('Document header')
+    const body = screen.getByLabelText('Document body')
+    const footer = screen.getByLabelText('Document footer')
+    const headerPx = Number.parseFloat(header.style.height)
+    expect(headerPx).toBe(156)
+    expect(header.compareDocumentPosition(body)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    )
+    expect(
+      headerPx +
+        Number.parseFloat(body.style.height) +
+        Number.parseFloat(footer.style.height),
+    ).toBe(1123)
+    expect(header.style.backgroundColor).toBe('')
+    expect(header.querySelectorAll('[aria-hidden="true"]').length).toBe(2)
   })
 
   it('keeps table cell text in a table instead of a flat list', () => {
@@ -521,13 +586,14 @@ describe('DocumentModelPage', () => {
     render(
       <DocumentModelPage
         model={footed}
+        pageNumber={2}
         selectedParagraphId={null}
         onSelectParagraph={() => undefined}
       />,
     )
     const footer = screen.getByLabelText('Document footer')
     expect(footer.textContent).toContain('phone')
-    expect(footer.textContent).toContain('1')
+    expect(footer.textContent).toContain('2')
     expect(footer.textContent).toContain('www.example.com')
     expect(
       footer.querySelector('[style*="translateX"]')?.parentElement?.children,
@@ -608,12 +674,14 @@ describe('DocumentModelPage', () => {
     render(
       <DocumentModelPage
         model={footed}
+        pageNumber={2}
         selectedParagraphId={null}
         onSelectParagraph={() => undefined}
       />,
     )
     const footer = screen.getByLabelText('Document footer')
     expect(footer.textContent).toContain('www.arthaum.com')
+    expect(footer.textContent).toContain('2')
     expect(screen.queryByText('Footer image')).toBeNull()
     expect(footer.innerHTML).toMatch(/rgb\(58, 58, 58\)|#3A3A3A/i)
   })
@@ -661,5 +729,350 @@ describe('DocumentModelPage', () => {
     )
     expect(screen.getByText('Alice')).toBeTruthy()
     expect(screen.queryByText('Alice Example overview')).toBeNull()
+  })
+
+  it('keeps the typing caret on the page slice that can hold it', () => {
+    const first = model.stories[0]?.paragraphs[0]
+    if (!first) throw new Error('expected paragraph')
+    render(
+      <DocumentModelPage
+        model={model}
+        pageBlocks={[
+          { type: 'paragraph', paragraph: first, from: 0, to: 5 },
+          { type: 'paragraph', paragraph: first, from: 5, to: 22 },
+        ]}
+        selectedParagraphId="p1"
+        restoreCaret={{ paragraphId: 'p1', offset: 5 }}
+        onSelectParagraph={() => undefined}
+        editing
+        onRunTextChange={() => undefined}
+      />,
+    )
+    const fields = screen.getAllByLabelText(
+      'Paragraph text',
+    ) as HTMLTextAreaElement[]
+    expect(fields).toHaveLength(1)
+    expect(fields[0]?.value).toBe(' Example overview')
+  })
+
+  it('inserts a new paragraph when Enter is pressed in a run', () => {
+    const inserted: string[] = []
+    render(
+      <DocumentModelPage
+        model={model}
+        selectedParagraphId="p1"
+        onSelectParagraph={() => undefined}
+        editing
+        onRunTextChange={() => undefined}
+        onInsertParagraph={(id) => inserted.push(id)}
+      />,
+    )
+    fireEvent.keyDown(screen.getByLabelText('Paragraph text'), { key: 'Enter' })
+    expect(inserted).toEqual(['p1'])
+  })
+
+  it('places a caret on the first page click so Enter can insert a paragraph', () => {
+    const inserted: string[] = []
+    function Harness() {
+      const [selected, setSelected] = useState<string | null>(null)
+      const [caret, setCaret] = useState<{
+        paragraphId: string
+        offset: number
+      } | null>(null)
+      return (
+        <DocumentModelPage
+          model={model}
+          selectedParagraphId={selected}
+          restoreCaret={caret}
+          onSelectParagraph={(id, offset) => {
+            setSelected(id)
+            setCaret(offset == null ? null : { paragraphId: id, offset })
+          }}
+          editing
+          onRunTextChange={() => undefined}
+          onInsertParagraph={(id) => inserted.push(id)}
+        />
+      )
+    }
+    render(<Harness />)
+    fireEvent.click(screen.getByLabelText('Document body'))
+    const field = screen.getByLabelText('Paragraph text')
+    expect(document.activeElement).toBe(field)
+    fireEvent.keyDown(field, { key: 'Enter' })
+    expect(inserted).toEqual(['p1'])
+  })
+
+  it('selects a paragraph when its run is focused', () => {
+    const selected: string[] = []
+    render(
+      <DocumentModelPage
+        model={model}
+        selectedParagraphId={null}
+        onSelectParagraph={(id) => selected.push(id)}
+        editing
+        onRunTextChange={() => undefined}
+      />,
+    )
+    fireEvent.focus(screen.getByLabelText('Paragraph text'))
+    expect(selected).toEqual(['p1'])
+  })
+
+  it('deletes an empty run paragraph on Backspace', () => {
+    const deleted: string[] = []
+    const story = model.stories[0]
+    if (!story) throw new Error('expected story')
+    const empty: DocumentModelWire = {
+      ...model,
+      stories: [
+        {
+          ...story,
+          paragraphs: [
+            {
+              id: 'p1',
+              runs: [{ id: 'r1', text: '', preservedXmlFragments: [] }],
+              preservedXmlFragments: [],
+            },
+          ],
+        },
+      ],
+    }
+    render(
+      <DocumentModelPage
+        model={empty}
+        selectedParagraphId="p1"
+        onSelectParagraph={() => undefined}
+        editing
+        onRunTextChange={() => undefined}
+        onDeleteParagraph={(id) => deleted.push(id)}
+      />,
+    )
+    fireEvent.keyDown(screen.getByLabelText('Paragraph text'), {
+      key: 'Backspace',
+    })
+    expect(deleted).toEqual(['p1'])
+  })
+
+  it('deletes an empty pending paragraph on Backspace and does not paint a side bar', () => {
+    const deleted: string[] = []
+    const insert = { clientId: 'ins1', afterParagraphId: 'p1', text: '' }
+    render(
+      <DocumentModelPage
+        model={model}
+        pageBlocks={[
+          {
+            type: 'paragraph',
+            paragraph: {
+              id: 'ins1',
+              runs: [{ id: 'ins1', text: '', preservedXmlFragments: [] }],
+              preservedXmlFragments: [],
+            },
+          },
+        ]}
+        inserts={[insert]}
+        selectedParagraphId="ins1"
+        onSelectParagraph={() => undefined}
+        onDeleteParagraph={(id) => deleted.push(id)}
+      />,
+    )
+    const pending = screen.getByLabelText('Pending paragraph')
+    expect(pending.className).not.toMatch(/shadow/)
+    fireEvent.keyDown(screen.getByLabelText('Pending paragraph text'), {
+      key: 'Backspace',
+    })
+    expect(deleted).toEqual(['ins1'])
+  })
+
+  it('leaves a pending paragraph with text in place on Backspace away from the start', () => {
+    const deleted: string[] = []
+    const joined: string[] = []
+    render(
+      <DocumentModelPage
+        model={model}
+        pageBlocks={[
+          {
+            type: 'paragraph',
+            paragraph: {
+              id: 'ins1',
+              runs: [{ id: 'ins1', text: 'Hello', preservedXmlFragments: [] }],
+              preservedXmlFragments: [],
+            },
+          },
+        ]}
+        inserts={[{ clientId: 'ins1', afterParagraphId: 'p1', text: 'Hello' }]}
+        selectedParagraphId="ins1"
+        onSelectParagraph={() => undefined}
+        onDeleteParagraph={(id) => deleted.push(id)}
+        onJoinPrevious={(id) => {
+          joined.push(id)
+        }}
+      />,
+    )
+    const field = screen.getByLabelText(
+      'Pending paragraph text',
+    ) as HTMLTextAreaElement
+    field.setSelectionRange(5, 5)
+    fireEvent.keyDown(field, { key: 'Backspace' })
+    expect(deleted).toEqual([])
+    expect(joined).toEqual([])
+  })
+
+  it('joins a pending paragraph into the previous one on Backspace at the start', () => {
+    const joined: string[] = []
+    render(
+      <DocumentModelPage
+        model={model}
+        pageBlocks={[
+          {
+            type: 'paragraph',
+            paragraph: {
+              id: 'ins1',
+              runs: [{ id: 'ins1', text: 'Hello', preservedXmlFragments: [] }],
+              preservedXmlFragments: [],
+            },
+          },
+        ]}
+        inserts={[{ clientId: 'ins1', afterParagraphId: 'p1', text: 'Hello' }]}
+        selectedParagraphId="ins1"
+        onSelectParagraph={() => undefined}
+        onJoinPrevious={(id) => {
+          joined.push(id)
+        }}
+      />,
+    )
+    const field = screen.getByLabelText(
+      'Pending paragraph text',
+    ) as HTMLTextAreaElement
+    field.setSelectionRange(0, 0)
+    fireEvent.keyDown(field, { key: 'Backspace' })
+    expect(joined).toEqual(['ins1'])
+  })
+
+  it('joins a paragraph into the previous one on Backspace at the start', () => {
+    const story = model.stories[0]
+    if (!story) throw new Error('expected story')
+    const joined: string[] = []
+    const two: DocumentModelWire = {
+      ...model,
+      stories: [
+        {
+          ...story,
+          paragraphs: [
+            {
+              id: 'p1',
+              runs: [{ id: 'r1', text: 'Hello', preservedXmlFragments: [] }],
+              preservedXmlFragments: [],
+            },
+            {
+              id: 'p2',
+              runs: [{ id: 'r2', text: 'World', preservedXmlFragments: [] }],
+              preservedXmlFragments: [],
+            },
+          ],
+        },
+      ],
+    }
+    render(
+      <DocumentModelPage
+        model={two}
+        selectedParagraphId="p2"
+        onSelectParagraph={() => undefined}
+        editing
+        onRunTextChange={() => undefined}
+        onJoinPrevious={(id) => {
+          joined.push(id)
+        }}
+      />,
+    )
+    const fields = screen.getAllByLabelText(
+      'Paragraph text',
+    ) as HTMLTextAreaElement[]
+    const field = fields[1]
+    if (!field) throw new Error('expected second paragraph')
+    field.setSelectionRange(0, 0)
+    fireEvent.keyDown(field, { key: 'Backspace' })
+    expect(joined).toEqual(['p2'])
+  })
+
+  it('deletes the previous run character on Backspace at the start of a later run', () => {
+    const story = model.stories[0]
+    if (!story) throw new Error('expected story')
+    const drafts: Record<string, string> = {}
+    const linked: DocumentModelWire = {
+      ...model,
+      stories: [
+        {
+          ...story,
+          paragraphs: [
+            {
+              id: 'p1',
+              runs: [
+                { id: 'r1', text: 'with ', preservedXmlFragments: [] },
+                { id: 'r2', text: 'Acme', preservedXmlFragments: [] },
+              ],
+              preservedXmlFragments: [],
+            },
+          ],
+        },
+      ],
+    }
+    render(
+      <DocumentModelPage
+        model={linked}
+        selectedParagraphId="p1"
+        onSelectParagraph={() => undefined}
+        editing
+        onRunTextChange={(runId, text) => {
+          drafts[runId] = text
+        }}
+      />,
+    )
+    const field = screen.getByLabelText('Paragraph text') as HTMLTextAreaElement
+    field.setSelectionRange(5, 5)
+    fireEvent.keyDown(field, { key: 'Backspace' })
+    expect(drafts).toEqual({ r1: 'with' })
+  })
+
+  it('keeps a page-split fragment editable and splices the slice back into the run', () => {
+    const first = model.stories[0]?.paragraphs[0]
+    if (!first) throw new Error('expected paragraph')
+    const drafts: Record<string, string> = {}
+    render(
+      <DocumentModelPage
+        model={model}
+        pageBlocks={[{ type: 'paragraph', paragraph: first, from: 6, to: 22 }]}
+        selectedParagraphId="p1"
+        onSelectParagraph={() => undefined}
+        editing
+        onRunTextChange={(runId, text) => {
+          drafts[runId] = text
+        }}
+      />,
+    )
+    const field = screen.getByLabelText('Paragraph text') as HTMLTextAreaElement
+    expect(field.value).toBe('Example overview')
+    fireEvent.change(field, { target: { value: 'Example note' } })
+    expect(drafts).toEqual({ r1: 'Alice Example note' })
+  })
+
+  it('deletes the character before a continuation slice on Backspace at the start', () => {
+    const first = model.stories[0]?.paragraphs[0]
+    if (!first) throw new Error('expected paragraph')
+    const drafts: Record<string, string> = {}
+    render(
+      <DocumentModelPage
+        model={model}
+        pageBlocks={[{ type: 'paragraph', paragraph: first, from: 6, to: 22 }]}
+        selectedParagraphId="p1"
+        onSelectParagraph={() => undefined}
+        editing
+        onRunTextChange={(runId, text) => {
+          drafts[runId] = text
+        }}
+      />,
+    )
+    const field = screen.getByLabelText('Paragraph text') as HTMLTextAreaElement
+    field.setSelectionRange(0, 0)
+    fireEvent.keyDown(field, { key: 'Backspace' })
+    expect(drafts).toEqual({ r1: 'AliceExample overview' })
   })
 })

@@ -34,16 +34,18 @@ export type ColumnFrame = {
 const DEFAULT_MARGIN_PX = 96
 const DEFAULT_HEADER_PX = 48
 
-export function contentFrame(box: PageBox): ContentFrame {
+export function contentFrame(
+  box: PageBox,
+  bands?: { headerPx?: number; footerPx?: number },
+): ContentFrame {
+  const top = Math.max(box.margin.top, bands?.headerPx ?? 0)
+  const bottom = Math.max(box.margin.bottom, bands?.footerPx ?? 0)
   const widthPx = Math.max(1, box.widthPx - box.margin.left - box.margin.right)
-  const heightPx = Math.max(
-    1,
-    box.heightPx - box.margin.top - box.margin.bottom,
-  )
+  const heightPx = Math.max(1, box.heightPx - top - bottom)
   return {
-    top: box.margin.top,
+    top,
     right: box.margin.right,
-    bottom: box.margin.bottom,
+    bottom,
     left: box.margin.left,
     widthPx,
     heightPx,

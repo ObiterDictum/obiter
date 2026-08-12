@@ -172,13 +172,15 @@ describe('tabColumns', () => {
 })
 
 describe('runDisplayText', () => {
-  it('shows 1 for an empty PAGE field', () => {
-    expect(
-      runDisplayText({
-        id: 'r1',
-        text: '',
-        preservedXmlFragments: ['<w:instrText xml:space="preserve"> PAGE </w:instrText>'],
-      }),
-    ).toBe('1')
+  it('shows the current page for an empty PAGE field', () => {
+    const run = {
+      id: 'r1',
+      text: '',
+      preservedXmlFragments: [
+        '<w:instrText xml:space="preserve"> PAGE </w:instrText>',
+      ],
+    }
+    expect(runDisplayText(run)).toBe('1')
+    expect(runDisplayText(run, 3)).toBe('3')
   })
 })
