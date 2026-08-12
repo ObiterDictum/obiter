@@ -481,8 +481,8 @@ export function PendingInsert({
           event.stopPropagation()
           onSelect()
         }}
-        className="field-sizing-content block w-full resize-none overflow-hidden bg-transparent p-0 text-inherit outline-none"
-        style={{ caretColor: '#111', lineHeight: '1.15', minHeight: '1.15em' }}
+        className="field-sizing-content caret-black block w-full resize-none overflow-hidden bg-transparent p-0 text-inherit outline-none"
+        style={{ lineHeight: '1.15', minHeight: '1.15em' }}
       />
     </div>
   )
