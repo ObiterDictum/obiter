@@ -44,6 +44,7 @@ export interface AuditRecordInput {
     | 'document.restore'
     | 'document.comment_create'
     | 'document.comment_resolve'
+    | 'document.export'
     | 'redaction.run_create'
     | 'redaction.run_redetect'
     | 'redaction.span_decision'

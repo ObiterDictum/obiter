@@ -726,3 +726,16 @@ footnote or endnote marks from `w:footnoteReference` / `w:endnoteReference`.
 Note bodies are laid out after the main story on the page. Note paragraphs
 are read-only. Creating list operations and editing headers, footers, or
 notes remains out of scope.
+
+### M1.25 DOCX export: source bytes plus product comments (13 August 2026)
+
+Context: the editor Export control downloaded reconstructed plain text. Word
+comments already had a package writer (`serialiseDocxWithComments`) but no
+authenticated download route.
+
+Decision: add view-gated `GET /api/documents/:id/export` with optional
+`versionId`. Ready DOCX only. When the document has no comments, return the
+immutable source bytes unchanged. When it has comments, parse that version and
+embed them with the existing OOXML writer. Audit `document.export` with
+matter, version, and `commentCount` only: no filename, object key, or comment
+bodies. The toolbar downloads that package instead of a `.txt` reconstruction.

@@ -143,6 +143,15 @@ async function loadDocumentImage(documentId: string, partName: string) {
   return URL.createObjectURL(blob)
 }
 
+export async function fetchDocumentExport(
+  documentId: string,
+  versionId?: string,
+) {
+  const search =
+    versionId === undefined ? '' : `?versionId=${encodeURIComponent(versionId)}`
+  return apiFetchBlob(`/api/documents/${documentId}/export${search}`)
+}
+
 export function useDocumentModel(
   documentId: string,
   options?: { enabled?: boolean },

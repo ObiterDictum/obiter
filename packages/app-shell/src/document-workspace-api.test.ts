@@ -8,6 +8,7 @@ import {
   documentModelQueryOptions,
   documentPdfViewQueryOptions,
   documentTrackedChangesQueryOptions,
+  fetchDocumentExport,
   useDocumentImageUrls,
 } from './document-workspace-api'
 
@@ -55,6 +56,18 @@ describe('document workspace query options', () => {
       '/api/documents/doc_1/pdf-view',
       '/api/documents/doc_1/comments',
       '/api/documents/doc_1/tracked-changes',
+    ])
+  })
+
+  it('downloads the DOCX export for the selected version', async () => {
+    api.apiFetchBlob.mockResolvedValue(new Blob())
+
+    await fetchDocumentExport('doc_1')
+    await fetchDocumentExport('doc_1', 'ver_2')
+
+    expect(api.apiFetchBlob.mock.calls.map((call) => call[0])).toEqual([
+      '/api/documents/doc_1/export',
+      '/api/documents/doc_1/export?versionId=ver_2',
     ])
   })
 })

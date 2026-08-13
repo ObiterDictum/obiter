@@ -2658,6 +2658,17 @@
                   </td>
                 </tr>
                 <tr>
+                  <td class="id">GET /api/documents/:id/export</td>
+                  <td class="id">document-export.ts</td>
+                  <td>
+                    View-gated ready DOCX download. Optional
+                    <code>versionId</code>. Empty comments return the stored
+                    source bytes unchanged; otherwise product comments are
+                    embedded. Audit records ids and
+                    <code>commentCount</code> only.
+                  </td>
+                </tr>
+                <tr>
                   <td class="id">GET · POST /api/documents/:id/comments</td>
                   <td class="id">comments.ts</td>
                   <td>View-gated list and edit-gated comment creation</td>
