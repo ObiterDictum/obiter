@@ -62,6 +62,7 @@ export function DocumentWorkspace({
     <DocxWorkspace
       documentId={documentId}
       versionId={version.id}
+      matterId={version.matterId}
       filename={version.filename}
       layout={layout}
     />

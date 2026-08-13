@@ -8,10 +8,7 @@ import {
   type XmlElementRange,
 } from './model'
 import { requireEditablePart } from './model-edit-overlay'
-import {
-  insertParagraphAfter,
-  deleteParagraph as removeParagraph,
-} from './model-paragraph-edits'
+import { insertParagraphAfter } from './model-paragraph-edits'
 import {
   expandSelfClosingProperties,
   patchStyleValue,
@@ -24,7 +21,7 @@ import {
   setOverlayReplacement,
 } from './parts/overlay'
 import {
-  lineBreakElementReplacement,
+  lineBreakRunReplacements,
   preserveTextElementXmlSpace,
 } from './text-run-edit'
 
@@ -92,16 +89,27 @@ export function createTrackedEditWriter(
     },
 
     deleteParagraph(anchor: ParagraphAnchor) {
+      const part = requireEditablePart(document, anchor.partName)
+      const source = part.overlay.source
       if (anchor.runs.length === 0) {
         const story = document.model.stories.find(
           (item) => item.kind === 'document',
         )
         if (!story) throw new OoxmlError('model-node-not-editable')
-        removeParagraph(document, story, anchor)
+        const prefix = wordPrefix(source, anchor.paragraphRange, 'p')
+        setOverlayReplacement(
+          part.overlay,
+          `${anchor.wire.id}:tracked-delete`,
+          {
+            start: anchor.paragraphRange.start,
+            end: anchor.paragraphRange.end,
+            value: `<${prefix}:del ${attributes(prefix)}>${source.slice(anchor.paragraphRange.start, anchor.paragraphRange.end)}</${prefix}:del>`,
+          },
+        )
+        story.paragraphs.splice(story.paragraphs.indexOf(anchor.wire), 1)
+        part.dirty = true
         return
       }
-      const part = requireEditablePart(document, anchor.partName)
-      const source = part.overlay.source
       for (const run of anchor.runs) {
         const prefix = wordPrefix(source, run.runRange, 'r')
         const deletedRun = renameTextElements(
@@ -257,16 +265,16 @@ function styleInstruction(prefix: string, name: string, styleId: string) {
 }
 
 function replaceRunText(source: string, anchor: TextRunAnchor, text: string) {
-  const breakReplacement = lineBreakElementReplacement(
+  const breakReplacements = lineBreakRunReplacements(
     anchor,
     text,
     source,
     anchor.runRange.start,
   )
-  if (breakReplacement) {
+  if (breakReplacements) {
     const broken = applyFragmentReplacements(
       source.slice(anchor.runRange.start, anchor.runRange.end),
-      [breakReplacement],
+      breakReplacements,
     )
     if (broken === undefined) throw new OoxmlError('model-node-not-editable')
     return broken

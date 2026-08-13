@@ -197,13 +197,14 @@ export function useDocumentCollaborationSync(
 function invalidateWorkspace(
   queryClient: ReturnType<typeof useQueryClient>,
   documentId: string,
+  matterId: string,
 ) {
   return Promise.all([
     queryClient.invalidateQueries({
       queryKey: documentsKeys.detail(documentId),
     }),
     queryClient.invalidateQueries({
-      queryKey: [...documentsKeys.all, 'matter'],
+      queryKey: documentsKeys.byMatter(matterId),
     }),
     queryClient.invalidateQueries({
       queryKey: workspaceKeys.model(documentId),
@@ -248,7 +249,7 @@ export function useResolveDocumentComment(documentId: string) {
   })
 }
 
-export function useEditDocument(documentId: string) {
+export function useEditDocument(documentId: string, matterId: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: DocumentEditRequest) =>
@@ -256,11 +257,11 @@ export function useEditDocument(documentId: string) {
         method: 'POST',
         body: JSON.stringify(input),
       }),
-    onSuccess: () => invalidateWorkspace(queryClient, documentId),
+    onSuccess: () => invalidateWorkspace(queryClient, documentId, matterId),
   })
 }
 
-export function useTrackedChangeDecision(documentId: string) {
+export function useTrackedChangeDecision(documentId: string, matterId: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: DocumentTrackedChangeDecisionRequest) =>
@@ -268,11 +269,11 @@ export function useTrackedChangeDecision(documentId: string) {
         `/api/documents/${documentId}/tracked-changes/decision`,
         { method: 'POST', body: JSON.stringify(input) },
       ),
-    onSuccess: () => invalidateWorkspace(queryClient, documentId),
+    onSuccess: () => invalidateWorkspace(queryClient, documentId, matterId),
   })
 }
 
-export function useCollaborationMerge(documentId: string) {
+export function useCollaborationMerge(documentId: string, matterId: string) {
   const queryClient = useQueryClient()
   return useMutation({
     mutationFn: (input: DocumentCollaborationMergeRequest) =>
@@ -280,7 +281,7 @@ export function useCollaborationMerge(documentId: string) {
         `/api/documents/${documentId}/collaboration/merge`,
         { method: 'POST', body: JSON.stringify(input) },
       ),
-    onSuccess: () => invalidateWorkspace(queryClient, documentId),
+    onSuccess: () => invalidateWorkspace(queryClient, documentId, matterId),
   })
 }
 

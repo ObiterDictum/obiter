@@ -58,11 +58,13 @@ import {
 export function DocxWorkspace({
   documentId,
   versionId,
+  matterId,
   filename,
   layout = 'page',
 }: {
   documentId: string
   versionId: string
+  matterId: string
   filename: string
   layout?: DocumentWorkspaceLayout
 }) {
@@ -82,9 +84,9 @@ export function DocxWorkspace({
   const syncQuery = useDocumentCollaborationSync(documentId, baseVersionId)
   const createComment = useCreateDocumentComment(documentId)
   const resolveComment = useResolveDocumentComment(documentId)
-  const editDocument = useEditDocument(documentId)
-  const mergeDocument = useCollaborationMerge(documentId)
-  const decideChange = useTrackedChangeDecision(documentId)
+  const editDocument = useEditDocument(documentId, matterId)
+  const mergeDocument = useCollaborationMerge(documentId, matterId)
+  const decideChange = useTrackedChangeDecision(documentId, matterId)
 
   const [zoom, setZoom] = useState(100)
   const [commentsOpen, setCommentsOpen] = useState(false)
