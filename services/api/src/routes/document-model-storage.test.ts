@@ -74,6 +74,10 @@ describe('GET /api/documents/:id/model storage boundary', () => {
       'a legacy value without its own changes field',
       cachedModelJson.replace(/,"changes":\[\]\}$/u, '}'),
     ],
+    [
+      'a numbering instance without levels',
+      numberingWithoutLevels(cachedModelJson),
+    ],
   ])(
     'regenerates and replaces cached model JSON containing %s',
     async (_name, cachedJson) => {
@@ -186,3 +190,14 @@ describe('GET /api/documents/:id/model storage boundary', () => {
     expect(errors.join(' ')).not.toContain('quarantine')
   })
 })
+
+function numberingWithoutLevels(json: string) {
+  const value: unknown = JSON.parse(json)
+  if (typeof value !== 'object' || value === null) {
+    throw new Error('Cached model JSON is invalid.')
+  }
+  Reflect.set(value, 'numbering', [
+    { numberingId: '1', sourceFragment: '<w:num w:numId="1"/>' },
+  ])
+  return JSON.stringify(value)
+}

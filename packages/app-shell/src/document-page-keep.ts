@@ -6,6 +6,7 @@ import { paragraphPlainText } from './document-model-text'
 import type { ExtraRuns } from './document-word-edits'
 import { countLines } from './document-page-flow'
 import type { ColumnFrame, ContentFrame } from './document-page-layout'
+import { paragraphListIndent } from './document-page-lists'
 import { paragraphFace, paragraphLineHeightPx } from './document-page-style'
 import type { StoryBlock } from './document-page-tables'
 
@@ -107,7 +108,9 @@ export function paragraphMetrics(
   const face = paragraphFace(resolved, model.styles)
   const linePx = paragraphLineHeightPx(face)
   const fontSize = face.run.fontSizePx ?? linePx
-  const indent = (face.indentLeftPx ?? 0) + (face.indentRightPx ?? 0)
+  const list = paragraphListIndent(resolved, model)
+  const indent =
+    (list?.leftPx ?? face.indentLeftPx ?? 0) + (face.indentRightPx ?? 0)
   const lineCount = countLines(
     text,
     fontSize,

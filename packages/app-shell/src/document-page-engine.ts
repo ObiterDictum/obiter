@@ -27,6 +27,8 @@ import {
 } from './document-page-layout'
 import { drawingSolidFill } from './document-page-media'
 import { marginBandHeights } from './document-page-margin'
+import { paragraphListIndent } from './document-page-lists'
+import { documentNotes } from './document-page-notes'
 import { paragraphFace, paragraphLineHeightPx } from './document-page-style'
 import {
   storyBlocks,
@@ -175,6 +177,18 @@ export function layoutDocument(
     )
   }
 
+  layoutNotes(
+    model,
+    drafts,
+    extraRuns,
+    hosts,
+    box,
+    frame,
+    session,
+    column,
+    advance,
+  )
+
   if (
     session.page.blocks.length > 0 ||
     session.page.floats.length > 0 ||
@@ -184,6 +198,40 @@ export function layoutDocument(
     pages.push(session.page)
   }
   return pages
+}
+
+function layoutNotes(
+  model: DocumentModelWire,
+  drafts: Record<string, string> | undefined,
+  extraRuns: ExtraRuns,
+  hosts: Set<string>,
+  box: PageBox,
+  frame: ContentFrame,
+  session: Session,
+  column: () => ColumnFrame,
+  advance: () => void,
+): void {
+  const notes = documentNotes(model)
+  if (notes.length === 0) return
+  if (session.y > 0) {
+    session.y += 12
+  }
+  for (const note of notes) {
+    for (const paragraph of note.paragraphs) {
+      layoutParagraph(
+        { type: 'paragraph', paragraph },
+        model,
+        drafts,
+        extraRuns,
+        hosts,
+        box,
+        frame,
+        session,
+        column,
+        advance,
+      )
+    }
+  }
 }
 
 function layoutParagraph(
@@ -211,7 +259,9 @@ function layoutParagraph(
   const face = paragraphFace(paragraph, model.styles)
   const linePx = paragraphLineHeightPx(face)
   const fontSize = face.run.fontSizePx ?? linePx
-  const indent = (face.indentLeftPx ?? 0) + (face.indentRightPx ?? 0)
+  const list = paragraphListIndent(paragraph, model)
+  const indent =
+    (list?.leftPx ?? face.indentLeftPx ?? 0) + (face.indentRightPx ?? 0)
   const imagePx = Math.max(
     0,
     ...paragraphInlineXml(paragraph).map((xml) => drawingScene(xml).heightPx),
