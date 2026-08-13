@@ -771,3 +771,14 @@ the hit caret. Undo pops a local snapshot of drafts, inserts, deletions,
 extra runs, and formatting. Checkpoints are taken before typed edits,
 insert, delete, and formatting. Saved versions are unchanged. Redo and
 in-run highlight painting are out of scope.
+
+### M1.25 table cells: wrap and edit with body paragraphs (13 August 2026)
+
+Context: table cells already painted `ModelParagraph`, but wrapping used the
+full column width and there was no proof that cell typing used the body
+edit path.
+
+Decision: wrap each cell to its width percentage (or an equal share of the
+column) minus cell padding. Typing in a cell emits the same `onWordEdit`
+operations as body text. A typed table model and row splits stay out of
+scope.

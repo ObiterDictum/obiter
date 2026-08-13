@@ -15,7 +15,7 @@ import {
   contentFrame,
 } from '../../document-page-layout'
 import { marginBandHeights } from '../../document-page-margin'
-import { storyBlocks } from '../../document-page-tables'
+import { cellWrapWidthPx, storyBlocks } from '../../document-page-tables'
 import type { LaidOutBlock } from '../../document-page-engine'
 import type { PageFloat, PageTextBox } from '../../document-page-floats'
 import { documentListMarkers } from '../../document-page-lists'
@@ -181,6 +181,7 @@ export function DocumentModelPage({
                   listMarkers,
                   noteMarks,
                   noteParagraphIds,
+                  columnWidthPx: column.widthPx,
                 }),
               )}
           </div>
@@ -292,6 +293,7 @@ function renderBlock(
     listMarkers: ReturnType<typeof documentListMarkers>
     noteMarks: Map<string, { mark: string; kind: NoteKind }>
     noteParagraphIds: Set<string>
+    columnWidthPx: number
   },
 ) {
   if (block.type === 'table') {
@@ -305,6 +307,9 @@ function renderBlock(
             if (!paragraph || ctx.deletedParagraphIds.includes(paragraph.id)) {
               return []
             }
+            const row = block.table.rows.find((item) =>
+              item.cells.includes(cell),
+            )
             return [
               <ModelParagraph
                 key={paragraph.id}
@@ -327,6 +332,11 @@ function renderBlock(
                 imageUrls={ctx.imageUrls}
                 styles={ctx.model.styles}
                 listMarker={ctx.listMarkers.get(paragraph.id)}
+                wrapWidthPx={cellWrapWidthPx(
+                  cell,
+                  ctx.columnWidthPx,
+                  row?.cells.length ?? 1,
+                )}
                 noteMark={ctx.noteMarks.get(paragraph.id)?.mark}
                 noteKind={ctx.noteMarks.get(paragraph.id)?.kind}
               />,

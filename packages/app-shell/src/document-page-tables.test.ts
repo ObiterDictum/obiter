@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
 import {
+  cellWrapWidthPx,
   storyBlocks,
   storyTables,
   tablePaintHeight,
@@ -246,5 +247,14 @@ describe('tablePaintHeight', () => {
         ],
       }),
     ).toBe(76)
+  })
+})
+
+describe('cellWrapWidthPx', () => {
+  it('uses the cell width percentage minus horizontal padding', () => {
+    expect(
+      cellWrapWidthPx({ span: 1, paragraphIds: [], widthPct: 50 }, 400),
+    ).toBe(192)
+    expect(cellWrapWidthPx({ span: 1, paragraphIds: [] }, 400, 2)).toBe(192)
   })
 })
