@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { DocumentModelWire } from '@obiter/contracts'
+import { layoutDocument } from '../../document-page-engine'
 import { DocumentModelPage } from './model-view'
 
 const model: DocumentModelWire = {
@@ -1074,5 +1075,82 @@ describe('DocumentModelPage', () => {
     field.setSelectionRange(0, 0)
     fireEvent.keyDown(field, { key: 'Backspace' })
     expect(drafts).toEqual({ r1: 'AliceExample overview' })
+  })
+
+  it('paints list markers and footnote marks from the model', () => {
+    const listed: DocumentModelWire = {
+      ...model,
+      numbering: [
+        {
+          numberingId: '1',
+          sourceFragment: '<w:num w:numId="1"/>',
+          levels: [
+            {
+              ilvl: 0,
+              start: 1,
+              numFmt: 'decimal',
+              lvlText: '%1.',
+              indentLeftTwips: 720,
+              hangingTwips: 360,
+            },
+          ],
+        },
+      ],
+      stories: [
+        {
+          partName: 'word/document.xml',
+          kind: 'document',
+          paragraphs: [
+            {
+              id: 'p1',
+              runs: [
+                {
+                  id: 'r1',
+                  text: 'Alice Example overview',
+                  preservedXmlFragments: ['<w:footnoteReference w:id="1"/>'],
+                },
+              ],
+              preservedXmlFragments: [
+                '<w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>',
+              ],
+            },
+          ],
+          preservedXmlFragments: [],
+        },
+        {
+          partName: 'word/footnotes.xml',
+          kind: 'footnotes',
+          paragraphs: [
+            {
+              id: 'fn1',
+              runs: [
+                {
+                  id: 'fnr1',
+                  text: 'Alice Example footnote',
+                  preservedXmlFragments: [],
+                },
+              ],
+              preservedXmlFragments: [],
+            },
+          ],
+          preservedXmlFragments: [
+            '<w:footnote w:id="1"><w:p><w:r><w:t>Alice Example footnote</w:t></w:r></w:p></w:footnote>',
+          ],
+        },
+      ],
+    }
+    const pages = layoutDocument(listed)
+    render(
+      <DocumentModelPage
+        model={listed}
+        pageBlocks={pages[0]?.blocks}
+        selectedParagraphId={null}
+        onSelectParagraph={() => undefined}
+      />,
+    )
+    expect(screen.getByText('1.')).toBeTruthy()
+    expect(screen.getByText('1.').getAttribute('aria-hidden')).toBeNull()
+    expect(screen.getByLabelText('Footnote 1')).toBeTruthy()
+    expect(screen.getByText('Alice Example footnote')).toBeTruthy()
   })
 })

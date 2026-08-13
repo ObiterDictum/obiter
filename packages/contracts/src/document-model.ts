@@ -45,11 +45,24 @@ export const documentStyleWireSchema = z.object({
 })
 export type DocumentStyleWire = z.infer<typeof documentStyleWireSchema>
 
+export const documentNumberingLevelWireSchema = z.object({
+  ilvl: z.number().int().nonnegative().max(8),
+  start: z.number().int().positive().optional(),
+  numFmt: z.string().min(1).max(64),
+  lvlText: z.string().max(64).optional(),
+  indentLeftTwips: z.number().int().optional(),
+  hangingTwips: z.number().int().optional(),
+})
+export type DocumentNumberingLevelWire = z.infer<
+  typeof documentNumberingLevelWireSchema
+>
+
 export const documentNumberingWireSchema = z.object({
   numberingId: z.string().min(1),
   abstractNumberingId: z.string().min(1).optional(),
   startOverride: z.number().int().optional(),
   sourceFragment: z.string().min(1),
+  levels: z.array(documentNumberingLevelWireSchema).optional(),
 })
 export type DocumentNumberingWire = z.infer<typeof documentNumberingWireSchema>
 

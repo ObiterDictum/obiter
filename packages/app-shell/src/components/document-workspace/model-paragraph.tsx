@@ -1,4 +1,3 @@
-import { useEffect, useRef } from 'react'
 import type {
   DocumentChangeWire,
   DocumentParagraphWire,
@@ -7,7 +6,6 @@ import type {
   DocumentStyleWire,
 } from '@obiter/contracts'
 import { cn } from '@obiter/ui'
-import { insertPlainText, type LocalInsert } from '../../document-edits'
 import {
   deleteCharBeforeOffset,
   paragraphPlainText,
@@ -18,10 +16,12 @@ import {
 } from '../../document-model-text'
 import { paragraphInlineXml } from '../../document-page-floats'
 import { wrapLines } from '../../document-page-flow'
+import type { ListMarker } from '../../document-page-lists'
 import {
   imagePartNameForDrawing,
   readableRunColor,
 } from '../../document-page-media'
+import { runNoteRefs, type NoteKind } from '../../document-page-notes'
 import {
   paragraphCss,
   paragraphFace,
@@ -31,7 +31,7 @@ import {
   type RunFace,
 } from '../../document-page-style'
 import { PageDrawing } from './page-drawing'
-import { ParagraphEditor, revealTypingLine } from './paragraph-editor'
+import { ParagraphEditor } from './paragraph-editor'
 
 export type ParagraphWordEdit = {
   type: 'replace' | 'deleteBackward' | 'deleteForward' | 'split' | 'lineBreak'
@@ -68,6 +68,9 @@ export function ModelParagraph({
   wrapWidthPx,
   continuation = false,
   pageStart = false,
+  listMarker,
+  noteMark,
+  noteKind,
 }: {
   paragraph: DocumentParagraphWire
   changes: DocumentChangeWire[]
@@ -94,6 +97,9 @@ export function ModelParagraph({
   wrapWidthPx?: number
   continuation?: boolean
   pageStart?: boolean
+  listMarker?: ListMarker
+  noteMark?: string
+  noteKind?: NoteKind
 }) {
   const carets = (presence ?? []).filter(
     (item) =>
@@ -135,6 +141,10 @@ export function ModelParagraph({
     (restore !== undefined ||
       restoreCaret == null ||
       restoreCaret.paragraphId !== paragraph.id)
+  const indentLeftPx = listMarker
+    ? Math.max(0, listMarker.leftPx - listMarker.hangingPx)
+    : (face.indentLeftPx ?? 0)
+  const markerWidth = listMarker?.hangingPx ?? 0
 
   return (
     <div
@@ -153,7 +163,7 @@ export function ModelParagraph({
         ...paragraphCss(face),
         lineHeight: `${linePx}px`,
         marginTop: continuation || pageStart ? 0 : face.marginTopPx,
-        paddingLeft: (face.indentLeftPx ?? 0) + padLeftPx,
+        paddingLeft: indentLeftPx + padLeftPx,
         paddingRight: (face.indentRightPx ?? 0) + padRightPx,
       }}
     >
@@ -173,145 +183,177 @@ export function ModelParagraph({
         )
       })}
       <div
-        className="min-h-[1em] w-full"
+        className="flex min-h-[1em] w-full"
         style={{ textAlign: face.align ?? 'left', lineHeight: `${linePx}px` }}
       >
-        {editing && (!selected || holdsCaret) ? (
-          <ParagraphEditor
-            text={sliceText}
-            selected={holdsCaret}
-            restoreCaret={restore}
+        {listMarker ? (
+          <span
+            className="shrink-0"
             style={{
-              ...paragraphCss(face),
-              marginTop: 0,
-              marginBottom: 0,
-              height: editorHeight,
+              width: markerWidth,
+              fontFamily: face.run.fontFamily,
+              fontSize: face.run.fontSizePx,
               lineHeight: `${linePx}px`,
-              whiteSpace: 'pre-wrap',
-              overflowWrap: 'normal',
-              wordBreak: 'normal',
-              textAlign: face.align ?? 'left',
             }}
-            onSelect={onSelect}
-            onChangeText={(next) => {
-              const diff = textDiff(sliceText, next)
-              if (onWordEdit) {
-                onWordEdit({
-                  type: 'replace',
-                  paragraphId: paragraph.id,
-                  offset: start + diff.from,
-                  from: start + diff.from,
-                  to: start + diff.to,
-                  insert: diff.insert,
-                })
-                return
-              }
-              const first = paragraph.runs[0]
-              if (first) {
-                onRunTextChange?.(
-                  first.id,
-                  fullText.slice(0, start) + next + fullText.slice(end),
-                )
-              }
-            }}
-            onBackspace={(local) => {
-              const offset = start + local
-              if (onWordEdit) {
-                onWordEdit({
-                  type: 'deleteBackward',
-                  paragraphId: paragraph.id,
-                  offset,
-                })
-                return
-              }
-              if (offset > 0) {
-                const next = deleteCharBeforeOffset(paragraph, drafts, offset)
-                if (next) onRunTextChange?.(next.runId, next.text)
-                return
-              }
-              if (onJoinPrevious?.(paragraph.id)) return
-              if (fullText.length === 0) onDeleteParagraph?.(paragraph.id)
-            }}
-            onDelete={(local) => {
-              const offset = start + local
-              if (onWordEdit) {
-                onWordEdit({
-                  type: 'deleteForward',
-                  paragraphId: paragraph.id,
-                  offset,
-                })
-                return
-              }
-              if (offset < fullText.length) {
-                const next = deleteCharBeforeOffset(
-                  paragraph,
-                  drafts,
-                  offset + 1,
-                )
-                if (next) onRunTextChange?.(next.runId, next.text)
-              }
-            }}
-            onEnter={(local) => {
-              if (onWordEdit) {
-                onWordEdit({
-                  type: 'split',
-                  paragraphId: paragraph.id,
-                  offset: start + local,
-                })
-                return
-              }
-              onInsertParagraph?.(paragraph.id)
-            }}
-            onLineBreak={(local) => {
-              if (onWordEdit) {
-                onWordEdit({
-                  type: 'lineBreak',
-                  paragraphId: paragraph.id,
-                  offset: start + local,
-                })
-              }
-            }}
-          />
-        ) : runs.length === 0 ? (
-          <span>&nbsp;</span>
-        ) : wrapWidthPx && wrapWidthPx > 0 ? (
-          lines.map((line, index) => (
-            <div
-              key={`${paragraph.id}-${start}-${line.from}-${index}`}
-              className="whitespace-pre"
-              style={{ height: linePx, lineHeight: `${linePx}px` }}
-            >
-              {line.text ? (
-                sliceParagraphRuns(
-                  paragraph,
-                  start + line.from,
-                  start + line.to,
-                  drafts,
-                ).map(({ run, text }) => (
-                  <ModelRun
-                    key={`${run.id}-${start}-${line.from}`}
-                    text={text}
-                    face={runFace(run, face, styles)}
-                    kinds={runChangeKinds(changes, run.id)}
-                    caret={carets.find((item) => item.cursor?.runId === run.id)}
-                  />
-                ))
-              ) : (
-                <span>&nbsp;</span>
-              )}
-            </div>
-          ))
-        ) : (
-          runs.map(({ run, text }) => (
-            <ModelRun
-              key={`${run.id}-${start}`}
-              text={text}
-              face={runFace(run, face, styles)}
-              kinds={runChangeKinds(changes, run.id)}
-              caret={carets.find((item) => item.cursor?.runId === run.id)}
+          >
+            {continuation
+              ? ''
+              : (noteMark ? `${noteMark} ` : '') + listMarker.text}
+          </span>
+        ) : noteMark && !continuation ? (
+          <span
+            className="shrink-0 pr-1 align-super text-[0.75em]"
+            aria-label={
+              noteKind === 'endnote'
+                ? `Endnote ${noteMark}`
+                : `Footnote ${noteMark}`
+            }
+          >
+            <span aria-hidden="true">{noteMark}</span>
+          </span>
+        ) : null}
+        <div className="min-h-[1em] min-w-0 flex-1">
+          {editing && (!selected || holdsCaret) ? (
+            <ParagraphEditor
+              text={sliceText}
+              selected={holdsCaret}
+              restoreCaret={restore}
+              style={{
+                ...paragraphCss(face),
+                marginTop: 0,
+                marginBottom: 0,
+                height: editorHeight,
+                lineHeight: `${linePx}px`,
+                whiteSpace: 'pre-wrap',
+                overflowWrap: 'normal',
+                wordBreak: 'normal',
+                textAlign: face.align ?? 'left',
+              }}
+              onSelect={onSelect}
+              onChangeText={(next) => {
+                const diff = textDiff(sliceText, next)
+                if (onWordEdit) {
+                  onWordEdit({
+                    type: 'replace',
+                    paragraphId: paragraph.id,
+                    offset: start + diff.from,
+                    from: start + diff.from,
+                    to: start + diff.to,
+                    insert: diff.insert,
+                  })
+                  return
+                }
+                const first = paragraph.runs[0]
+                if (first) {
+                  onRunTextChange?.(
+                    first.id,
+                    fullText.slice(0, start) + next + fullText.slice(end),
+                  )
+                }
+              }}
+              onBackspace={(local) => {
+                const offset = start + local
+                if (onWordEdit) {
+                  onWordEdit({
+                    type: 'deleteBackward',
+                    paragraphId: paragraph.id,
+                    offset,
+                  })
+                  return
+                }
+                if (offset > 0) {
+                  const next = deleteCharBeforeOffset(paragraph, drafts, offset)
+                  if (next) onRunTextChange?.(next.runId, next.text)
+                  return
+                }
+                if (onJoinPrevious?.(paragraph.id)) return
+                if (fullText.length === 0) onDeleteParagraph?.(paragraph.id)
+              }}
+              onDelete={(local) => {
+                const offset = start + local
+                if (onWordEdit) {
+                  onWordEdit({
+                    type: 'deleteForward',
+                    paragraphId: paragraph.id,
+                    offset,
+                  })
+                  return
+                }
+                if (offset < fullText.length) {
+                  const next = deleteCharBeforeOffset(
+                    paragraph,
+                    drafts,
+                    offset + 1,
+                  )
+                  if (next) onRunTextChange?.(next.runId, next.text)
+                }
+              }}
+              onEnter={(local) => {
+                if (onWordEdit) {
+                  onWordEdit({
+                    type: 'split',
+                    paragraphId: paragraph.id,
+                    offset: start + local,
+                  })
+                  return
+                }
+                onInsertParagraph?.(paragraph.id)
+              }}
+              onLineBreak={(local) => {
+                if (onWordEdit) {
+                  onWordEdit({
+                    type: 'lineBreak',
+                    paragraphId: paragraph.id,
+                    offset: start + local,
+                  })
+                }
+              }}
             />
-          ))
-        )}
+          ) : runs.length === 0 ? (
+            <span>&nbsp;</span>
+          ) : wrapWidthPx && wrapWidthPx > 0 ? (
+            lines.map((line, index) => (
+              <div
+                key={`${paragraph.id}-${start}-${line.from}-${index}`}
+                className="whitespace-pre"
+                style={{ height: linePx, lineHeight: `${linePx}px` }}
+              >
+                {line.text ? (
+                  sliceParagraphRuns(
+                    paragraph,
+                    start + line.from,
+                    start + line.to,
+                    drafts,
+                  ).map(({ run, text }) => (
+                    <ModelRun
+                      key={`${run.id}-${start}-${line.from}`}
+                      text={text}
+                      face={runFace(run, face, styles)}
+                      kinds={runChangeKinds(changes, run.id)}
+                      caret={carets.find(
+                        (item) => item.cursor?.runId === run.id,
+                      )}
+                      notes={runEndNotes(run, text, drafts)}
+                    />
+                  ))
+                ) : (
+                  <span>&nbsp;</span>
+                )}
+              </div>
+            ))
+          ) : (
+            runs.map(({ run, text }) => (
+              <ModelRun
+                key={`${run.id}-${start}`}
+                text={text}
+                face={runFace(run, face, styles)}
+                kinds={runChangeKinds(changes, run.id)}
+                caret={carets.find((item) => item.cursor?.runId === run.id)}
+                notes={runEndNotes(run, text, drafts)}
+              />
+            ))
+          )}
+        </div>
       </div>
     </div>
   )
@@ -322,11 +364,13 @@ function ModelRun({
   face,
   kinds,
   caret,
+  notes = [],
 }: {
   text: string
   face: RunFace
   kinds: Set<DocumentChangeWire['kind']>
   caret?: DocumentPresence
+  notes?: ReturnType<typeof runNoteRefs>
 }) {
   const color = readableRunColor(face.color)
   return (
@@ -345,6 +389,14 @@ function ModelRun({
     >
       {caret ? <PresenceCaret userId={caret.userId} /> : null}
       {text}
+      {notes.map((note) => (
+        <sup
+          key={`${note.kind}-${note.noteId}-${note.runId}`}
+          className="text-[0.75em] leading-none"
+        >
+          {note.mark}
+        </sup>
+      ))}
     </span>
   )
 }
@@ -359,131 +411,12 @@ function PresenceCaret({ userId }: { userId: string }) {
   )
 }
 
-export function PendingInsert({
-  insert,
-  selected,
-  onSelect,
-  onTextChange,
-  onInsertParagraph,
-  onDeleteParagraph,
-  onJoinPrevious,
-  onWordEdit,
-  restoreCaret,
-}: {
-  insert: LocalInsert
-  selected: boolean
-  onSelect: () => void
-  onTextChange?: (clientId: string, text: string) => void
-  onInsertParagraph?: (afterParagraphId: string) => void
-  onDeleteParagraph?: (paragraphId: string) => void
-  onJoinPrevious?: (paragraphId: string) => boolean | void
-  onWordEdit?: (edit: ParagraphWordEdit) => void
-  restoreCaret?: { paragraphId: string; offset: number } | null
-}) {
-  const field = useRef<HTMLTextAreaElement>(null)
-  const text = insertPlainText(insert)
-  const restore =
-    restoreCaret?.paragraphId === insert.clientId
-      ? restoreCaret.offset
-      : undefined
-  // Keep the caret after Enter (DOM selection).
-  useEffect(() => {
-    if (!selected) return
-    const node = field.current
-    if (!node) return
-    node.focus({ preventScroll: true })
-    if (restore != null) {
-      const offset = Math.min(restore, node.value.length)
-      node.setSelectionRange(offset, offset)
-    }
-    revealTypingLine(node)
-  }, [selected, restore])
-
-  return (
-    <div
-      data-paragraph-id={insert.clientId}
-      aria-current={selected ? 'true' : undefined}
-      aria-label="Pending paragraph"
-      onClick={onSelect}
-      className="relative min-h-[1.15em]"
-    >
-      <textarea
-        ref={field}
-        aria-label="Pending paragraph text"
-        value={text}
-        rows={1}
-        onChange={(event) => {
-          const next = event.target.value
-          if (onWordEdit) {
-            const diff = textDiff(text, next)
-            onWordEdit({
-              type: 'replace',
-              paragraphId: insert.clientId,
-              offset: diff.from,
-              from: diff.from,
-              to: diff.to,
-              insert: diff.insert,
-            })
-            return
-          }
-          onTextChange?.(insert.clientId, next)
-        }}
-        onFocus={onSelect}
-        onKeyDown={(event) => {
-          const start = event.currentTarget.selectionStart
-          const end = event.currentTarget.selectionEnd
-          if (event.key === 'Enter' && !event.shiftKey) {
-            event.preventDefault()
-            if (onWordEdit) {
-              onWordEdit({
-                type: 'split',
-                paragraphId: insert.clientId,
-                offset: start,
-              })
-              return
-            }
-            onInsertParagraph?.(insert.clientId)
-            return
-          }
-          if (event.key === 'Backspace' && start === end) {
-            if (onWordEdit) {
-              event.preventDefault()
-              onWordEdit({
-                type: 'deleteBackward',
-                paragraphId: insert.clientId,
-                offset: start,
-              })
-              return
-            }
-            if (start === 0) {
-              event.preventDefault()
-              if (onJoinPrevious?.(insert.clientId)) return
-              if (text.length === 0) {
-                onDeleteParagraph?.(insert.clientId)
-              }
-            }
-            return
-          }
-          if (
-            event.key === 'Delete' &&
-            start === end &&
-            start === text.length
-          ) {
-            event.preventDefault()
-            onWordEdit?.({
-              type: 'deleteForward',
-              paragraphId: insert.clientId,
-              offset: start,
-            })
-          }
-        }}
-        onClick={(event) => {
-          event.stopPropagation()
-          onSelect()
-        }}
-        className="field-sizing-content caret-black block w-full resize-none overflow-hidden bg-transparent p-0 text-inherit outline-none"
-        style={{ lineHeight: '1.15', minHeight: '1.15em' }}
-      />
-    </div>
-  )
+function runEndNotes(
+  run: { id: string; text: string; preservedXmlFragments: string[] },
+  visible: string,
+  drafts?: Record<string, string>,
+) {
+  const full = drafts?.[run.id] ?? run.text
+  if (full.length > 0 && !full.endsWith(visible)) return []
+  return runNoteRefs(run.preservedXmlFragments.join(''), run.id)
 }
