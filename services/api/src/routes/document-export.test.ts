@@ -24,6 +24,7 @@ describe('documentExportFilename', () => {
     expect(documentExportFilename('a/../evil"name')).toBe('evilname.docx')
     expect(documentExportFilename('report.txt')).toBe('report.txt.docx')
     expect(documentExportFilename('')).toBe('document.docx')
+    expect(documentExportFilename('bad\u0000name.docx')).toBe('badname.docx')
   })
 })
 

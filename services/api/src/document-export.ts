@@ -94,7 +94,7 @@ export async function exportDocumentDocx(
 export function documentExportFilename(filename: string) {
   const slash = Math.max(filename.lastIndexOf('/'), filename.lastIndexOf('\\'))
   const leaf = slash === -1 ? filename : filename.slice(slash + 1)
-  const cleaned = leaf.replace(/[\u0000-\u001f\u007f"/\\]/gu, '').trim()
+  const cleaned = stripUnsafeDownloadChars(leaf)
   const base = cleaned.length > 0 ? cleaned : 'document'
   const withExt = /\.docx$/iu.test(base) ? base : `${base}.docx`
   return withExt.length <= 200 ? withExt : `${withExt.slice(0, 196)}.docx`
@@ -127,4 +127,16 @@ async function embedComments(
   } catch {
     throw new DocumentExportError()
   }
+}
+
+function stripUnsafeDownloadChars(value: string) {
+  let next = ''
+  for (const ch of value) {
+    const code = ch.charCodeAt(0)
+    if (code < 32 || code === 127 || ch === '"' || ch === '/' || ch === '\\') {
+      continue
+    }
+    next += ch
+  }
+  return next.trim()
 }
