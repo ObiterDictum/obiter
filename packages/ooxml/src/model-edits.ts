@@ -10,6 +10,7 @@ import {
   type TextRunAnchor,
 } from './model'
 import { deleteParagraph, insertParagraphAfter } from './model-paragraph-edits'
+import { setParagraphNumbering, setRunEmphasis } from './model-property-edits'
 import { setParagraphStyle, setRunStyle } from './model-style-edits'
 import { replaceTextRunAtAnchor } from './text-run-edit'
 import {
@@ -22,13 +23,16 @@ export type { TrackedEditContext } from './tracked-edits'
 type PlannedOperation =
   | (Extract<
       DocumentEditOperation,
-      { type: 'replace_run_text' | 'set_run_style' }
+      { type: 'replace_run_text' | 'set_run_style' | 'set_run_emphasis' }
     > & { run: TextRunAnchor; paragraph: ParagraphAnchor })
   | (Extract<
       DocumentEditOperation,
       {
         type:
-          'set_paragraph_style' | 'insert_paragraph_after' | 'delete_paragraph'
+          | 'set_paragraph_style'
+          | 'set_paragraph_numbering'
+          | 'insert_paragraph_after'
+          | 'delete_paragraph'
       }
     > & { paragraph: ParagraphAnchor })
 
@@ -50,13 +54,16 @@ export function applyDocumentEdits(
   }
 
   const styleIds = new Set(document.model.styles.map(({ styleId }) => styleId))
+  const numberingIds = new Set(
+    document.model.numbering.map(({ numberingId }) => numberingId),
+  )
   const runParagraphs = new Map(
     [...document.paragraphAnchors.values()].flatMap((paragraph) =>
       paragraph.runs.map((run) => [run.wire.id, paragraph] as const),
     ),
   )
   const planned = parsed.data.map((operation) =>
-    planOperation(document, runParagraphs, operation, styleIds),
+    planOperation(document, runParagraphs, operation, styleIds, numberingIds),
   )
   const deletedIds = validatePlannedOperations(
     mainStory.paragraphs.length,
@@ -99,6 +106,22 @@ export function applyDocumentEdits(
           setParagraphStyle(document, operation.paragraph, operation.styleId)
         }
       }
+    } else if (operation.type === 'set_run_emphasis') {
+      if (!deletedLater) {
+        if (trackedWriter) {
+          trackedWriter.setRunEmphasis(operation.run, operation)
+        } else {
+          setRunEmphasis(document, operation.run, operation)
+        }
+      }
+    } else if (operation.type === 'set_paragraph_numbering') {
+      if (!deletedLater) {
+        if (trackedWriter) {
+          trackedWriter.setParagraphNumbering(operation.paragraph, operation)
+        } else {
+          setParagraphNumbering(document, operation.paragraph, operation)
+        }
+      }
     } else if (operation.type === 'insert_paragraph_after') {
       const count = insertionCounts.get(operation.paragraphId) ?? 0
       if (trackedWriter) {
@@ -120,10 +143,14 @@ export function applyDocumentEdits(
         )
       }
       insertionCounts.set(operation.paragraphId, count + 1)
-    } else if (trackedWriter) {
-      trackedWriter.deleteParagraph(operation.paragraph)
+    } else if (operation.type === 'delete_paragraph') {
+      if (trackedWriter) {
+        trackedWriter.deleteParagraph(operation.paragraph)
+      } else {
+        deleteParagraph(document, mainStory, operation.paragraph)
+      }
     } else {
-      deleteParagraph(document, mainStory, operation.paragraph)
+      throw new OoxmlError('invalid-document-edit')
     }
   }
 }
@@ -173,11 +200,13 @@ function validateTrackedOperations(
 ) {
   const runTargets = new Set<string>()
   const paragraphStyleTargets = new Set<string>()
+  const paragraphNumberingTargets = new Set<string>()
   for (const operation of planned) {
     if (deletedIds.has(operation.paragraph.wire.id)) continue
     if (
       operation.type === 'replace_run_text' ||
-      operation.type === 'set_run_style'
+      operation.type === 'set_run_style' ||
+      operation.type === 'set_run_emphasis'
     ) {
       if (
         containsTrackedChange(
@@ -202,6 +231,18 @@ function validateTrackedOperations(
         throw new OoxmlError('invalid-document-edit')
       }
       paragraphStyleTargets.add(operation.paragraphId)
+    } else if (operation.type === 'set_paragraph_numbering') {
+      if (
+        containsTrackedChange(
+          document,
+          operation.paragraph.partName,
+          operation.paragraph.paragraphRange,
+        ) ||
+        paragraphNumberingTargets.has(operation.paragraphId)
+      ) {
+        throw new OoxmlError('invalid-document-edit')
+      }
+      paragraphNumberingTargets.add(operation.paragraphId)
     }
   }
 }
@@ -224,11 +265,15 @@ function planOperation(
   runParagraphs: ReadonlyMap<string, ParagraphAnchor>,
   operation: DocumentEditOperation,
   styleIds: ReadonlySet<string>,
+  numberingIds: ReadonlySet<string>,
 ): PlannedOperation {
   validateStyle(operation, styleIds)
+  validateEmphasis(operation)
+  validateNumbering(operation, numberingIds)
   if (
     operation.type === 'replace_run_text' ||
-    operation.type === 'set_run_style'
+    operation.type === 'set_run_style' ||
+    operation.type === 'set_run_emphasis'
   ) {
     const run = requireMainRun(
       document,
@@ -243,6 +288,29 @@ function planOperation(
   return {
     ...operation,
     paragraph: requireMainParagraph(document, operation.paragraphId),
+  }
+}
+
+function validateEmphasis(operation: DocumentEditOperation) {
+  if (operation.type !== 'set_run_emphasis') return
+  if (
+    operation.bold === undefined &&
+    operation.italic === undefined &&
+    operation.underline === undefined
+  ) {
+    throw new OoxmlError('invalid-document-edit')
+  }
+}
+
+function validateNumbering(
+  operation: DocumentEditOperation,
+  numberingIds: ReadonlySet<string>,
+) {
+  if (operation.type !== 'set_paragraph_numbering') return
+  if (operation.numId !== null) {
+    if (!numberingIds.has(operation.numId) || operation.ilvl === undefined) {
+      throw new OoxmlError('invalid-document-edit')
+    }
   }
 }
 

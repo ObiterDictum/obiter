@@ -27,6 +27,17 @@ describe('document edit contracts', () => {
             styleId: 'Heading1',
           },
           {
+            type: 'set_run_emphasis',
+            runId: 'run_1',
+            bold: true,
+          },
+          {
+            type: 'set_paragraph_numbering',
+            paragraphId: 'para_1',
+            numId: '1',
+            ilvl: 1,
+          },
+          {
             type: 'insert_paragraph_after',
             paragraphId: 'para_1',
             text: 'Next',

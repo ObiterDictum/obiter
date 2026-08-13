@@ -7,9 +7,32 @@ import {
   MagnifyingGlassMinus,
   MagnifyingGlassPlus,
   Plus,
+  TextB,
+  TextIndent,
+  TextItalic,
+  TextOutdent,
+  TextUnderline,
   Trash,
 } from '@phosphor-icons/react'
 import type { DocumentPresence } from '@obiter/contracts'
+
+export type DocumentFormatToolbar = {
+  paragraphStyleId: string
+  paragraphStyles: ReadonlyArray<{ styleId: string; name: string }>
+  bold: boolean
+  italic: boolean
+  underline: boolean
+  canIndent: boolean
+  canOutdent: boolean
+  canContinue: boolean
+  onParagraphStyle: (styleId: string | null) => void
+  onToggleBold: () => void
+  onToggleItalic: () => void
+  onToggleUnderline: () => void
+  onIndent: () => void
+  onOutdent: () => void
+  onContinueList: () => void
+}
 
 export function DocumentWorkspaceToolbar({
   kind,
@@ -32,6 +55,7 @@ export function DocumentWorkspaceToolbar({
   onInsertParagraph,
   onDeleteParagraph,
   canEdit,
+  format,
 }: {
   kind: 'docx' | 'pdf'
   dirty: boolean
@@ -53,6 +77,7 @@ export function DocumentWorkspaceToolbar({
   onInsertParagraph: () => void
   onDeleteParagraph: () => void
   canEdit: boolean
+  format?: DocumentFormatToolbar
 }) {
   const others = presence.filter((item) => item.userId !== currentUserId)
 
@@ -111,6 +136,7 @@ export function DocumentWorkspaceToolbar({
         ) : null}
         {kind === 'docx' && canEdit ? (
           <>
+            {format ? <FormatControls format={format} /> : null}
             <Button
               variant="ghost"
               size="sm"
@@ -163,6 +189,80 @@ export function DocumentWorkspaceToolbar({
         </div>
       ) : null}
     </div>
+  )
+}
+
+function FormatControls({ format }: { format: DocumentFormatToolbar }) {
+  return (
+    <>
+      {format.paragraphStyles.length > 0 ? (
+        <select
+          aria-label="Paragraph style"
+          className="h-8 max-w-40 rounded-md border border-line bg-canvas px-2 text-sm text-ink"
+          value={format.paragraphStyleId}
+          onChange={(event) =>
+            format.onParagraphStyle(
+              event.target.value === '' ? null : event.target.value,
+            )
+          }
+        >
+          <option value="">No direct style</option>
+          {format.paragraphStyles.map((style) => (
+            <option key={style.styleId} value={style.styleId}>
+              {style.name}
+            </option>
+          ))}
+        </select>
+      ) : null}
+      <Button
+        variant={format.bold ? 'secondary' : 'ghost'}
+        size="sm"
+        aria-label="Bold"
+        aria-pressed={format.bold}
+        onClick={format.onToggleBold}
+        iconStart={<TextB size={16} aria-hidden />}
+      />
+      <Button
+        variant={format.italic ? 'secondary' : 'ghost'}
+        size="sm"
+        aria-label="Italic"
+        aria-pressed={format.italic}
+        onClick={format.onToggleItalic}
+        iconStart={<TextItalic size={16} aria-hidden />}
+      />
+      <Button
+        variant={format.underline ? 'secondary' : 'ghost'}
+        size="sm"
+        aria-label="Underline"
+        aria-pressed={format.underline}
+        onClick={format.onToggleUnderline}
+        iconStart={<TextUnderline size={16} aria-hidden />}
+      />
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-label="Increase list indent"
+        disabled={!format.canIndent}
+        onClick={format.onIndent}
+        iconStart={<TextIndent size={16} aria-hidden />}
+      />
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-label="Decrease list indent"
+        disabled={!format.canOutdent}
+        onClick={format.onOutdent}
+        iconStart={<TextOutdent size={16} aria-hidden />}
+      />
+      <Button
+        variant="ghost"
+        size="sm"
+        disabled={!format.canContinue}
+        onClick={format.onContinueList}
+      >
+        Continue list
+      </Button>
+    </>
   )
 }
 

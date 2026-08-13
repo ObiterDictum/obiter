@@ -75,7 +75,7 @@ export function paragraphListMarker(
   }
 }
 
-function paragraphNumPr(
+export function paragraphNumPr(
   paragraph: DocumentParagraphWire,
   styles: DocumentStyleWire[],
 ): { numId: string; ilvl: number } | undefined {
