@@ -1149,7 +1149,8 @@ describe('DocumentModelPage', () => {
       />,
     )
     expect(screen.getByText('1.')).toBeTruthy()
-    expect(screen.getAllByText('1').length).toBeGreaterThan(0)
+    expect(screen.getByText('1.').getAttribute('aria-hidden')).toBeNull()
+    expect(screen.getByLabelText('Footnote 1')).toBeTruthy()
     expect(screen.getByText('Alice Example footnote')).toBeTruthy()
   })
 })

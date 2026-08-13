@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+import { footnotesXml } from '../../fixtures/fixture-parts'
 import { createSequentialModelIdAllocator } from '../model'
 import { parseStory } from './stories'
 
@@ -24,5 +25,22 @@ describe('parseStory nested drawings', () => {
         paragraph.runs.map((run) => run.text).join(''),
       ),
     ).toEqual(['Outer', 'Inside'])
+  })
+})
+
+describe('parseStory footnotes', () => {
+  it('keeps separator footnote paragraphs in the story', () => {
+    const parsed = parseStory(
+      'word/footnotes.xml',
+      'footnotes',
+      footnotesXml,
+      identity(),
+    )
+    expect(parsed.story.paragraphs).toHaveLength(2)
+    expect(
+      parsed.story.preservedXmlFragments.some((xml) =>
+        xml.includes('w:id="-1"'),
+      ),
+    ).toBe(true)
   })
 })
