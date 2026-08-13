@@ -60,6 +60,7 @@ export function parseStory(
     (element) =>
       isWord(element, 'p') &&
       !hasTrackedChangeAncestor(element) &&
+      !hasDeletedParagraphMark(element, elements) &&
       !isInsideFallback(element),
   )) {
     const parsed = parseParagraph(
@@ -353,6 +354,9 @@ function trackedChange(
   const date = attributeValue(element, WORD_NAMESPACE, 'date')
   const ooxmlId = attributeValue(element, WORD_NAMESPACE, 'id')
   const paragraph = smallestContainingParagraph(paragraphs, element)
+  const paragraphMark = isParagraphMarkDeletion(element)
+    ? nearestWordAncestor(element, 'p')
+    : undefined
   const run = paragraph?.runs.find(
     ({ runRange }) =>
       runRange.start <= element.start && runRange.end >= element.end,
@@ -423,6 +427,9 @@ function trackedChange(
       range: elementRange(candidate),
       qualifiedName: candidate.qualifiedName,
     })),
+    ...(paragraphMark
+      ? { paragraphMarkRange: elementRange(paragraphMark) }
+      : {}),
   }
 }
 
@@ -533,6 +540,33 @@ function hasTrackedChangeAncestor(element: XmlElement) {
     parent = parent.parent
   }
   return false
+}
+
+function hasDeletedParagraphMark(
+  paragraph: XmlElement,
+  elements: readonly XmlElement[],
+) {
+  const properties = elements.find(
+    (element) => element.parent === paragraph && isWord(element, 'pPr'),
+  )
+  if (!properties) return false
+  const markProperties = elements.find(
+    (element) => element.parent === properties && isWord(element, 'rPr'),
+  )
+  if (!markProperties) return false
+  return elements.some(
+    (element) => element.parent === markProperties && isWord(element, 'del'),
+  )
+}
+
+function isParagraphMarkDeletion(element: XmlElement) {
+  return (
+    isWord(element, 'del') &&
+    !!element.parent &&
+    isWord(element.parent, 'rPr') &&
+    !!element.parent.parent &&
+    isWord(element.parent.parent, 'pPr')
+  )
 }
 
 function nearestWordAncestor(element: XmlElement, localName: string) {

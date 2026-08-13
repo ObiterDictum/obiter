@@ -2608,7 +2608,8 @@
                     Current ready DOCX image part for page rendering. Query
                     <code>part</code> is a package path such as
                     <code>word/media/image1.png</code>. Image parts are unzipped
-                    once per immutable version in the API process.
+                    once per immutable version, kept in an LRU cache of 16
+                    versions per API process.
                   </td>
                 </tr>
                 <tr>

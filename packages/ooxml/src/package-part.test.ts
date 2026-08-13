@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildOoxmlFixture } from '../fixtures/builder'
 import { fixedPngBytes } from '../fixtures/fixture-parts'
-import { isPackageImagePartName, readPackageImagePart } from './package-part'
+import { isPackageImagePartName, readPackageImageParts } from './package-part'
 
 describe('isPackageImagePartName', () => {
   it('accepts media images and rejects traversal and xml parts', () => {
@@ -11,23 +11,15 @@ describe('isPackageImagePartName', () => {
   })
 })
 
-describe('readPackageImagePart', () => {
-  it('returns the image bytes from the package', async () => {
+describe('readPackageImageParts', () => {
+  it('returns image bytes and omits xml and missing names', async () => {
     const source = await buildOoxmlFixture('full-fidelity-with-w14-ids')
-    const part = await readPackageImagePart(source, 'word/media/image1.png')
-    expect(part).toEqual({
+    const parts = await readPackageImageParts(source)
+    expect(parts.get('word/media/image1.png')).toEqual({
       bytes: fixedPngBytes,
       contentType: 'image/png',
     })
-  })
-
-  it('refuses xml parts and missing names', async () => {
-    const source = await buildOoxmlFixture('full-fidelity-with-w14-ids')
-    expect(
-      await readPackageImagePart(source, 'word/document.xml'),
-    ).toBeUndefined()
-    expect(
-      await readPackageImagePart(source, 'word/media/missing.png'),
-    ).toBeUndefined()
+    expect(parts.has('word/document.xml')).toBe(false)
+    expect(parts.has('word/media/missing.png')).toBe(false)
   })
 })

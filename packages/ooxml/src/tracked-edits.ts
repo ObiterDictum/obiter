@@ -100,11 +100,12 @@ export function createTrackedEditWriter(
         setOverlayReplacement(
           part.overlay,
           `${anchor.wire.id}:tracked-delete`,
-          {
-            start: anchor.paragraphRange.start,
-            end: anchor.paragraphRange.end,
-            value: `<${prefix}:del ${attributes(prefix)}>${source.slice(anchor.paragraphRange.start, anchor.paragraphRange.end)}</${prefix}:del>`,
-          },
+          paragraphMarkDeletionReplacement(
+            source,
+            anchor,
+            prefix,
+            attributes(prefix),
+          ),
         )
         story.paragraphs.splice(story.paragraphs.indexOf(anchor.wire), 1)
         part.dirty = true
@@ -317,6 +318,58 @@ function renameTextElements(
   )
   if (renamed === undefined) throw new OoxmlError('model-node-not-editable')
   return renamed
+}
+
+function paragraphMarkDeletionReplacement(
+  source: string,
+  anchor: ParagraphAnchor,
+  prefix: string,
+  changeAttributes: string,
+) {
+  const del = `<${prefix}:del ${changeAttributes}/>`
+  const mark = `<${prefix}:rPr>${del}</${prefix}:rPr>`
+  const properties = anchor.paragraphPropertiesRange
+  if (!properties) {
+    return {
+      start: anchor.paragraphRange.startTagEnd,
+      end: anchor.paragraphRange.startTagEnd,
+      value: `<${prefix}:pPr>${mark}</${prefix}:pPr>`,
+    }
+  }
+  return {
+    start: properties.start,
+    end: properties.end,
+    value: insertParagraphMarkDeletion(
+      source.slice(properties.start, properties.end),
+      prefix,
+      del,
+      mark,
+    ),
+  }
+}
+
+function insertParagraphMarkDeletion(
+  fragment: string,
+  prefix: string,
+  del: string,
+  mark: string,
+) {
+  const closeRunProperties = `</${prefix}:rPr>`
+  const closeIndex = fragment.lastIndexOf(closeRunProperties)
+  if (closeIndex !== -1) {
+    return fragment.slice(0, closeIndex) + del + fragment.slice(closeIndex)
+  }
+  const selfClosingRun = new RegExp(`<${prefix}:rPr([^>]*?)/\\s*>`, 'u')
+  if (selfClosingRun.test(fragment)) {
+    return fragment.replace(
+      selfClosingRun,
+      `<${prefix}:rPr$1>${del}</${prefix}:rPr>`,
+    )
+  }
+  if (/\/\s*>$/u.test(fragment)) {
+    return expandSelfClosingProperties(fragment, prefix, 'pPr', mark)
+  }
+  return fragment.replace(/(<\/[^>]+>)$/u, `${mark}$1`)
 }
 
 function wordPrefix(

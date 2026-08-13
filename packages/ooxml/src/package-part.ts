@@ -41,15 +41,6 @@ export async function readPackageImageParts(input: Uint8Array) {
   return parts
 }
 
-export async function readPackageImagePart(
-  input: Uint8Array,
-  partName: string,
-) {
-  const name = normaliseRequestedPart(partName)
-  if (!name) return undefined
-  return (await readPackageImageParts(input)).get(name)
-}
-
 function imageContentType(partName: string | undefined) {
   if (!partName) return undefined
   const extension = partName.slice(partName.lastIndexOf('.') + 1).toLowerCase()

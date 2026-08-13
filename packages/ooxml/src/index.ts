@@ -14,7 +14,6 @@ export { createBlankDocx } from './blank'
 export { validateCommentAnchor } from './comment-anchors'
 export {
   isPackageImagePartName,
-  readPackageImagePart,
   readPackageImageParts,
   requestedImagePartName,
 } from './package-part'
