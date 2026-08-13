@@ -9,15 +9,17 @@ export function applyTrackedChangeDecisions(
   changeIds: readonly string[],
   action: DocumentTrackedChangeDecisionRequest['action'],
 ) {
-  const targets = resolveTargets(document, changeIds)
-  validateTargets(targets)
+  const requested = resolveTargets(document, changeIds)
+  const absorbed =
+    action === 'accept' ? absorbParagraphMarkSiblings(document, requested) : []
+  const pending = uniqueChanges([...requested, ...absorbed]).filter(
+    (target) => !target.absorbed,
+  )
+  validateTargets(pending, action)
 
-  for (const target of targets) {
+  for (const target of pending) {
     const part = requireEditablePart(document, target.partName)
-    const range =
-      target.wire.kind === 'property' && action === 'reject'
-        ? target.propertiesRange
-        : target.range
+    const range = decisionRange(target, action)
     if (!range) throw invalidDecision()
     setOverlayReplacement(part.overlay, `tracked-change:${target.wire.id}`, {
       start: range.start,
@@ -26,7 +28,7 @@ export function applyTrackedChangeDecisions(
     })
     part.dirty = true
   }
-  return targets.map(({ wire }) => wire.id)
+  return uniqueChanges([...requested, ...absorbed]).map(({ wire }) => wire.id)
 }
 
 function resolveTargets(document: OoxmlDocument, changeIds: readonly string[]) {
@@ -55,7 +57,10 @@ function resolveTargets(document: OoxmlDocument, changeIds: readonly string[]) {
   return [...targets.values()]
 }
 
-function validateTargets(targets: readonly TrackedChangeNode[]) {
+function validateTargets(
+  targets: readonly TrackedChangeNode[],
+  action: DocumentTrackedChangeDecisionRequest['action'],
+) {
   for (const target of targets) {
     if (
       target.wire.kind === 'property' &&
@@ -65,23 +70,43 @@ function validateTargets(targets: readonly TrackedChangeNode[]) {
     }
   }
 
-  const ordered = [...targets].sort(
-    (left, right) =>
+  const ordered = [...targets].sort((left, right) => {
+    const leftRange = decisionRange(left, action)
+    const rightRange = decisionRange(right, action)
+    return (
       left.partName.localeCompare(right.partName) ||
-      left.range.start - right.range.start,
-  )
+      (leftRange?.start ?? 0) - (rightRange?.start ?? 0)
+    )
+  })
   for (let index = 1; index < ordered.length; index += 1) {
     const previous = ordered[index - 1]
     const current = ordered[index]
+    const previousRange = previous ? decisionRange(previous, action) : undefined
+    const currentRange = current ? decisionRange(current, action) : undefined
     if (
       previous &&
       current &&
+      previousRange &&
+      currentRange &&
       previous.partName === current.partName &&
-      current.range.start < previous.range.end
+      currentRange.start < previousRange.end
     ) {
       throw invalidDecision()
     }
   }
+}
+
+function decisionRange(
+  target: TrackedChangeNode,
+  action: DocumentTrackedChangeDecisionRequest['action'],
+) {
+  if (target.wire.kind === 'property' && action === 'reject') {
+    return target.propertiesRange
+  }
+  if (action === 'accept' && target.paragraphMarkRange) {
+    return target.paragraphMarkRange
+  }
+  return target.range
 }
 
 function decisionReplacement(
@@ -112,6 +137,36 @@ function restoreDeletedText(target: TrackedChangeNode) {
   )
   if (restored === undefined) throw invalidDecision()
   return restored
+}
+
+function absorbParagraphMarkSiblings(
+  document: OoxmlDocument,
+  accepted: readonly TrackedChangeNode[],
+) {
+  const absorbed: TrackedChangeNode[] = []
+  for (const mark of accepted) {
+    const range = mark.paragraphMarkRange
+    if (!range) continue
+    const part = requireEditablePart(document, mark.partName)
+    for (const change of document.trackedChanges.values()) {
+      if (change.wire.id === mark.wire.id) continue
+      if (change.partName !== mark.partName) continue
+      if (change.absorbed) continue
+      if (change.range.start < range.start || change.range.end > range.end) {
+        continue
+      }
+      change.absorbed = true
+      part.overlay.replacements.delete(`tracked-change:${change.wire.id}`)
+      absorbed.push(change)
+    }
+  }
+  return absorbed
+}
+
+function uniqueChanges(changes: readonly TrackedChangeNode[]) {
+  return [
+    ...new Map(changes.map((change) => [change.wire.id, change])).values(),
+  ]
 }
 
 function invalidDecision() {

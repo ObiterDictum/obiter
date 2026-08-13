@@ -10,7 +10,14 @@ export {
   type PreservedDocumentXmlFragment,
 } from '@obiter/contracts'
 
+export { createBlankDocx } from './blank'
 export { validateCommentAnchor } from './comment-anchors'
+export {
+  isPackageImagePartName,
+  readPackageImageParts,
+  requestedImagePartName,
+} from './package-part'
+export { resolveRelationshipTarget } from './parts/rels'
 export * from './collaboration-merge'
 export * from './equivalence'
 export * from './model'

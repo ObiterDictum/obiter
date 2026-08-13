@@ -57,7 +57,11 @@ export function parseStory(
   const paragraphAnchors: ParagraphAnchor[] = []
 
   for (const paragraph of elements.filter(
-    (element) => isWord(element, 'p') && !hasTrackedChangeAncestor(element),
+    (element) =>
+      isWord(element, 'p') &&
+      !hasTrackedChangeAncestor(element) &&
+      !hasDeletedParagraphMark(element, elements) &&
+      !isInsideFallback(element),
   )) {
     const parsed = parseParagraph(
       partName,
@@ -138,8 +142,9 @@ function parseParagraph(
   const runElements = elements.filter(
     (element) =>
       isWord(element, 'r') &&
-      isDescendantOf(element, paragraphElement) &&
-      !hasTrackedChangeAncestor(element),
+      nearestWordAncestor(element, 'p') === paragraphElement &&
+      !hasTrackedChangeAncestor(element) &&
+      !isInsideFallback(element),
   )
 
   runElements.forEach((runElement, index) => {
@@ -211,8 +216,9 @@ function parseRun(
   const textElements = elements.filter(
     (element) =>
       isWord(element, 't') &&
-      isDescendantOf(element, runElement) &&
-      !hasTrackedChangeAncestor(element),
+      nearestWordAncestor(element, 'r') === runElement &&
+      !hasTrackedChangeAncestor(element) &&
+      !isInsideFallback(element),
   )
   const propertiesElements = elements.filter(
     (element) => element.parent === runElement && isWord(element, 'rPr'),
@@ -238,14 +244,13 @@ function parseRun(
     id,
     ...(sourceTextId ? { sourceTextId } : {}),
     ...(styleId ? { styleId } : {}),
-    text: textRanges
-      .map(({ start, end }) => decodeXmlReferences(source.slice(start, end)))
-      .join(''),
+    text: runPlainText(source, elements, runElement, textElements),
     preservedXmlFragments: elements
       .filter(
         (element) =>
           element.parent === runElement &&
           !isWord(element, 't') &&
+          !isTextWrappingBreak(element) &&
           !containsTrackedChange(element, elements),
       )
       .map((element) => elementFragment(source, element)),
@@ -276,6 +281,38 @@ function elementRange(element: XmlElement) {
     endTagStart: element.endTagStart,
     end: element.end,
   }
+}
+
+function isTextWrappingBreak(element: XmlElement) {
+  if (!isWord(element, 'br')) return false
+  const type = attributeValue(element, WORD_NAMESPACE, 'type')
+  return type === undefined || type === 'textWrapping'
+}
+
+function runPlainText(
+  source: string,
+  elements: readonly XmlElement[],
+  runElement: XmlElement,
+  textElements: readonly XmlElement[],
+) {
+  const textNodes = new Set(
+    textElements.filter((element) => !element.selfClosing),
+  )
+  const parts: string[] = []
+  for (const element of elements) {
+    if (nearestWordAncestor(element, 'r') !== runElement) continue
+    if (hasTrackedChangeAncestor(element) || isInsideFallback(element)) continue
+    if (textNodes.has(element)) {
+      parts.push(
+        decodeXmlReferences(
+          source.slice(element.startTagEnd, element.endTagStart),
+        ),
+      )
+      continue
+    }
+    if (isTextWrappingBreak(element)) parts.push('\n')
+  }
+  return parts.join('')
 }
 
 function storyStructureFragments(
@@ -317,6 +354,9 @@ function trackedChange(
   const date = attributeValue(element, WORD_NAMESPACE, 'date')
   const ooxmlId = attributeValue(element, WORD_NAMESPACE, 'id')
   const paragraph = smallestContainingParagraph(paragraphs, element)
+  const paragraphMark = isParagraphMarkDeletion(element)
+    ? nearestWordAncestor(element, 'p')
+    : undefined
   const run = paragraph?.runs.find(
     ({ runRange }) =>
       runRange.start <= element.start && runRange.end >= element.end,
@@ -387,6 +427,9 @@ function trackedChange(
       range: elementRange(candidate),
       qualifiedName: candidate.qualifiedName,
     })),
+    ...(paragraphMark
+      ? { paragraphMarkRange: elementRange(paragraphMark) }
+      : {}),
   }
 }
 
@@ -494,6 +537,51 @@ function hasTrackedChangeAncestor(element: XmlElement) {
   let parent = element.parent
   while (parent) {
     if (isTrackedChange(parent)) return true
+    parent = parent.parent
+  }
+  return false
+}
+
+function hasDeletedParagraphMark(
+  paragraph: XmlElement,
+  elements: readonly XmlElement[],
+) {
+  const properties = elements.find(
+    (element) => element.parent === paragraph && isWord(element, 'pPr'),
+  )
+  if (!properties) return false
+  const markProperties = elements.find(
+    (element) => element.parent === properties && isWord(element, 'rPr'),
+  )
+  if (!markProperties) return false
+  return elements.some(
+    (element) => element.parent === markProperties && isWord(element, 'del'),
+  )
+}
+
+function isParagraphMarkDeletion(element: XmlElement) {
+  return (
+    isWord(element, 'del') &&
+    !!element.parent &&
+    isWord(element.parent, 'rPr') &&
+    !!element.parent.parent &&
+    isWord(element.parent.parent, 'pPr')
+  )
+}
+
+function nearestWordAncestor(element: XmlElement, localName: string) {
+  let parent = element.parent
+  while (parent) {
+    if (isWord(parent, localName)) return parent
+    parent = parent.parent
+  }
+  return undefined
+}
+
+function isInsideFallback(element: XmlElement) {
+  let parent = element.parent
+  while (parent) {
+    if (parent.localName === 'Fallback') return true
     parent = parent.parent
   }
   return false
