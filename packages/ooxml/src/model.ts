@@ -29,6 +29,7 @@ export type TrackedChangeNode = {
   validMoveCounterpart: boolean
   deletedTextElements: { range: XmlElementRange; qualifiedName: string }[]
   paragraphMarkRange?: XmlElementRange
+  absorbed?: boolean
 }
 
 export type SourcePart = {

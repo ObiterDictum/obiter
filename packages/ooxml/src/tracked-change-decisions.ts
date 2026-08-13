@@ -9,10 +9,17 @@ export function applyTrackedChangeDecisions(
   changeIds: readonly string[],
   action: DocumentTrackedChangeDecisionRequest['action'],
 ) {
-  const targets = resolveTargets(document, changeIds)
-  validateTargets(targets, action)
+  const requested = resolveTargets(document, changeIds)
+  const absorbed =
+    action === 'accept'
+      ? absorbParagraphMarkSiblings(document, requested)
+      : []
+  const pending = uniqueChanges([...requested, ...absorbed]).filter(
+    (target) => !target.absorbed,
+  )
+  validateTargets(pending, action)
 
-  for (const target of targets) {
+  for (const target of pending) {
     const part = requireEditablePart(document, target.partName)
     const range = decisionRange(target, action)
     if (!range) throw invalidDecision()
@@ -23,7 +30,7 @@ export function applyTrackedChangeDecisions(
     })
     part.dirty = true
   }
-  return targets.map(({ wire }) => wire.id)
+  return uniqueChanges([...requested, ...absorbed]).map(({ wire }) => wire.id)
 }
 
 function resolveTargets(document: OoxmlDocument, changeIds: readonly string[]) {
@@ -132,6 +139,34 @@ function restoreDeletedText(target: TrackedChangeNode) {
   )
   if (restored === undefined) throw invalidDecision()
   return restored
+}
+
+function absorbParagraphMarkSiblings(
+  document: OoxmlDocument,
+  accepted: readonly TrackedChangeNode[],
+) {
+  const absorbed: TrackedChangeNode[] = []
+  for (const mark of accepted) {
+    const range = mark.paragraphMarkRange
+    if (!range) continue
+    const part = requireEditablePart(document, mark.partName)
+    for (const change of document.trackedChanges.values()) {
+      if (change.wire.id === mark.wire.id) continue
+      if (change.partName !== mark.partName) continue
+      if (change.absorbed) continue
+      if (change.range.start < range.start || change.range.end > range.end) {
+        continue
+      }
+      change.absorbed = true
+      part.overlay.replacements.delete(`tracked-change:${change.wire.id}`)
+      absorbed.push(change)
+    }
+  }
+  return absorbed
+}
+
+function uniqueChanges(changes: readonly TrackedChangeNode[]) {
+  return [...new Map(changes.map((change) => [change.wire.id, change])).values()]
 }
 
 function invalidDecision() {
