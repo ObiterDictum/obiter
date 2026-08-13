@@ -66,7 +66,7 @@ export function wordRunInnerTextXml(prefix: string, text: string) {
   return text
     .split(/\r\n|\r|\n/u)
     .map((line, index) => {
-      const element = `<${prefix}:t${textElementXmlSpaceAttribute(line)}>${escapeXmlText(line)}</${prefix}:t>`
+      const element = textElementXml(prefix, line)
       return index === 0 ? element : `<${prefix}:br/>${element}`
     })
     .join('')
@@ -79,22 +79,41 @@ export function lineBreakRunReplacements(
   origin: number,
 ): OverlayReplacement[] | undefined {
   if (!/[\r\n]/u.test(text)) return undefined
-  const first = anchor.textElements[0]
+  const elements = anchor.textElements
+  const first = elements[0]
   if (!first) return undefined
   const opening = source.slice(first.start, first.startTagEnd)
   const prefix = opening.match(/^<([^:>\s]+):/u)?.[1] ?? 'w'
-  return [
-    {
-      start: first.start - origin,
-      end: first.end - origin,
-      value: wordRunInnerTextXml(prefix, text),
-    },
-    ...anchor.textRanges.slice(1).map((range) => ({
-      start: range.start - origin,
-      end: range.end - origin,
-      value: '',
-    })),
-  ]
+  const lines = text.split(/\r\n|\r|\n/u)
+  const assigned = Math.min(lines.length, elements.length)
+  return elements.map((element, index) => {
+    if (index >= assigned) {
+      return {
+        start: element.start - origin,
+        end: element.end - origin,
+        value: '',
+      }
+    }
+    const line = lines[index] ?? ''
+    const extra =
+      index === assigned - 1 && lines.length > elements.length
+        ? lines
+            .slice(elements.length)
+            .map((rest) => `<${prefix}:br/>${textElementXml(prefix, rest)}`)
+            .join('')
+        : index < lines.length - 1
+          ? `<${prefix}:br/>`
+          : ''
+    return {
+      start: element.start - origin,
+      end: element.end - origin,
+      value: `${textElementXml(prefix, line)}${extra}`,
+    }
+  })
+}
+
+function textElementXml(prefix: string, text: string) {
+  return `<${prefix}:t${textElementXmlSpaceAttribute(text)}>${escapeXmlText(text)}</${prefix}:t>`
 }
 
 export function textElementXmlSpaceAttribute(text: string) {

@@ -8,11 +8,15 @@ type DocumentMediaSource = Pick<
   'id' | 'organisationId' | 'matterId' | 'matterDocumentId' | 'objectKey'
 >
 type ImagePart = { bytes: Uint8Array; contentType: string }
+type ImagePartMap = ReadonlyMap<string, ImagePart>
 
-export type DocumentImagePartCache = Map<
-  string,
-  Promise<ReadonlyMap<string, ImagePart>>
->
+export const DOCUMENT_IMAGE_PART_CACHE_LIMIT = 16
+
+export type DocumentImagePartCache = {
+  get(key: string): Promise<ImagePartMap> | undefined
+  set(key: string, value: Promise<ImagePartMap>): void
+  delete(key: string): boolean
+}
 
 export class DocumentMediaStoreError extends DocumentArtifactStoreError {
   constructor() {
@@ -20,8 +24,32 @@ export class DocumentMediaStoreError extends DocumentArtifactStoreError {
   }
 }
 
-export function createDocumentImagePartCache(): DocumentImagePartCache {
-  return new Map()
+export function createDocumentImagePartCache(
+  limit = DOCUMENT_IMAGE_PART_CACHE_LIMIT,
+): DocumentImagePartCache {
+  const entries = new Map<string, Promise<ImagePartMap>>()
+  const cap = Math.max(1, limit)
+  return {
+    get(key) {
+      const pending = entries.get(key)
+      if (!pending) return undefined
+      entries.delete(key)
+      entries.set(key, pending)
+      return pending
+    },
+    set(key, value) {
+      entries.delete(key)
+      entries.set(key, value)
+      while (entries.size > cap) {
+        const oldest = entries.keys().next().value
+        if (oldest === undefined) break
+        entries.delete(oldest)
+      }
+    },
+    delete(key) {
+      return entries.delete(key)
+    },
+  }
 }
 
 export async function getDocumentImagePart(

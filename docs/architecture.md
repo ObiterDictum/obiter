@@ -689,8 +689,9 @@ margin band looks like the Word formatting was stripped.
 
 Decision: keep the wire schema unchanged. Serve current-version image parts
 through `GET /api/documents/:id/media?part=`, gated like the model route, and
-restricted to image package paths. The route unzips each immutable version
-package once per API process and serves later image requests from that cache. The React page interprets preserved `w:tbl`
+restricted to image package paths. The route keeps an LRU cache of unzipped
+image parts for at most 16 immutable versions per API process and serves later
+image requests from that cache. The React page interprets preserved `w:tbl`
 fragments and drawing extents for display only: React tables and `<img>`, never
 HTML strings of OOXML. Binary media stays out of `model.json`. Page size,
 margins, fonts, run size, paragraph spacing, and drawing boxes come from the

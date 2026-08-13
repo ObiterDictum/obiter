@@ -10,14 +10,11 @@ export function applyTrackedChangeDecisions(
   action: DocumentTrackedChangeDecisionRequest['action'],
 ) {
   const targets = resolveTargets(document, changeIds)
-  validateTargets(targets)
+  validateTargets(targets, action)
 
   for (const target of targets) {
     const part = requireEditablePart(document, target.partName)
-    const range =
-      target.wire.kind === 'property' && action === 'reject'
-        ? target.propertiesRange
-        : target.range
+    const range = decisionRange(target, action)
     if (!range) throw invalidDecision()
     setOverlayReplacement(part.overlay, `tracked-change:${target.wire.id}`, {
       start: range.start,
@@ -55,7 +52,10 @@ function resolveTargets(document: OoxmlDocument, changeIds: readonly string[]) {
   return [...targets.values()]
 }
 
-function validateTargets(targets: readonly TrackedChangeNode[]) {
+function validateTargets(
+  targets: readonly TrackedChangeNode[],
+  action: DocumentTrackedChangeDecisionRequest['action'],
+) {
   for (const target of targets) {
     if (
       target.wire.kind === 'property' &&
@@ -65,23 +65,43 @@ function validateTargets(targets: readonly TrackedChangeNode[]) {
     }
   }
 
-  const ordered = [...targets].sort(
-    (left, right) =>
+  const ordered = [...targets].sort((left, right) => {
+    const leftRange = decisionRange(left, action)
+    const rightRange = decisionRange(right, action)
+    return (
       left.partName.localeCompare(right.partName) ||
-      left.range.start - right.range.start,
-  )
+      (leftRange?.start ?? 0) - (rightRange?.start ?? 0)
+    )
+  })
   for (let index = 1; index < ordered.length; index += 1) {
     const previous = ordered[index - 1]
     const current = ordered[index]
+    const previousRange = previous ? decisionRange(previous, action) : undefined
+    const currentRange = current ? decisionRange(current, action) : undefined
     if (
       previous &&
       current &&
+      previousRange &&
+      currentRange &&
       previous.partName === current.partName &&
-      current.range.start < previous.range.end
+      currentRange.start < previousRange.end
     ) {
       throw invalidDecision()
     }
   }
+}
+
+function decisionRange(
+  target: TrackedChangeNode,
+  action: DocumentTrackedChangeDecisionRequest['action'],
+) {
+  if (target.wire.kind === 'property' && action === 'reject') {
+    return target.propertiesRange
+  }
+  if (action === 'accept' && target.paragraphMarkRange) {
+    return target.paragraphMarkRange
+  }
+  return target.range
 }
 
 function decisionReplacement(
