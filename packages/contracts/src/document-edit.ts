@@ -47,6 +47,23 @@ export const documentEditOperationSchema = z.discriminatedUnion('type', [
     .strict(),
   z
     .object({
+      type: z.literal('set_run_emphasis'),
+      runId: editIdSchema,
+      bold: z.boolean().nullable().optional(),
+      italic: z.boolean().nullable().optional(),
+      underline: z.boolean().nullable().optional(),
+    })
+    .strict(),
+  z
+    .object({
+      type: z.literal('set_paragraph_numbering'),
+      paragraphId: editIdSchema,
+      numId: editIdSchema.nullable(),
+      ilvl: z.number().int().min(0).max(8).optional(),
+    })
+    .strict(),
+  z
+    .object({
       type: z.literal('insert_paragraph_after'),
       paragraphId: editIdSchema,
       text: editTextSchema,

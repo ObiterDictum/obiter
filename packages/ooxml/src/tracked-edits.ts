@@ -14,6 +14,12 @@ import {
   patchStyleValue,
 } from './model-style-edits'
 import {
+  patchParagraphNumberingXml,
+  patchRunEmphasisXml,
+  type ParagraphNumbering,
+  type RunEmphasis,
+} from './model-property-edits'
+import {
   applyFragmentReplacements,
   escapeXmlAttribute,
   escapeXmlText,
@@ -158,7 +164,75 @@ export function createTrackedEditWriter(
         attributes: attributes(prefix),
       })
     },
+
+    setRunEmphasis(anchor: TextRunAnchor, emphasis: RunEmphasis) {
+      const part = requireEditablePart(document, anchor.partName)
+      const prefix = wordPrefix(part.overlay.source, anchor.runRange, 'r')
+      setTrackedProperties(document, {
+        id: anchor.wire.id,
+        partName: anchor.partName,
+        nodeRange: anchor.runRange,
+        propertiesRange: anchor.runPropertiesRange,
+        propertiesName: 'rPr',
+        prefix,
+        attributes: attributes(prefix),
+        patch: (current) => patchRunEmphasisXml(current, emphasis),
+      })
+    },
+
+    setParagraphNumbering(
+      anchor: ParagraphAnchor,
+      numbering: ParagraphNumbering,
+    ) {
+      const part = requireEditablePart(document, anchor.partName)
+      const prefix = wordPrefix(part.overlay.source, anchor.paragraphRange, 'p')
+      setTrackedProperties(document, {
+        id: anchor.wire.id,
+        partName: anchor.partName,
+        nodeRange: anchor.paragraphRange,
+        propertiesRange: anchor.paragraphPropertiesRange,
+        propertiesName: 'pPr',
+        prefix,
+        attributes: attributes(prefix),
+        patch: (current) => patchParagraphNumberingXml(current, numbering),
+      })
+    },
   }
+}
+
+function setTrackedProperties(
+  document: OoxmlDocument,
+  input: {
+    id: string
+    partName: string
+    nodeRange: XmlElementRange
+    propertiesRange?: XmlElementRange
+    propertiesName: 'rPr' | 'pPr'
+    prefix: string
+    attributes: string
+    patch: (current: string) => string
+  },
+) {
+  const part = requireEditablePart(document, input.partName)
+  const previous = input.propertiesRange
+    ? part.overlay.source.slice(
+        input.propertiesRange.start,
+        input.propertiesRange.end,
+      )
+    : `<${input.prefix}:${input.propertiesName}/>`
+  const current = appendPropertyChange(
+    input.patch(previous),
+    input.prefix,
+    input.propertiesName,
+    input.attributes,
+    previous,
+  )
+  setOverlayReplacement(part.overlay, `${input.id}:tracked-properties`, {
+    start: input.propertiesRange?.start ?? input.nodeRange.startTagEnd,
+    end: input.propertiesRange?.end ?? input.nodeRange.startTagEnd,
+    value: current,
+  })
+  part.dirty = true
 }
 
 function setTrackedStyle(
