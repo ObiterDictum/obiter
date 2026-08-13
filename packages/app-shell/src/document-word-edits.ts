@@ -406,3 +406,41 @@ function omitKey(record: ExtraRuns, key: string): ExtraRuns {
   delete next[key]
   return next
 }
+
+export type WordEdit = {
+  type: 'replace' | 'deleteBackward' | 'deleteForward' | 'split' | 'lineBreak'
+  paragraphId: string
+  offset: number
+  from?: number
+  to?: number
+  insert?: string
+}
+
+export function applyWordEdit(
+  model: DocumentModelWire,
+  state: EditorState,
+  edit: WordEdit,
+  newParagraphId: string,
+): EditorResult | undefined {
+  const caret = { paragraphId: edit.paragraphId, offset: edit.offset }
+  if (edit.type === 'replace') {
+    return applyReplaceRange(
+      model,
+      state,
+      edit.paragraphId,
+      edit.from ?? edit.offset,
+      edit.to ?? edit.offset,
+      edit.insert ?? '',
+    )
+  }
+  if (edit.type === 'deleteBackward') {
+    return applyDeleteBackward(model, state, caret)
+  }
+  if (edit.type === 'deleteForward') {
+    return applyDeleteForward(model, state, caret)
+  }
+  if (edit.type === 'split') {
+    return applySplitParagraph(model, state, caret, newParagraphId)
+  }
+  return applyLineBreak(model, state, caret)
+}

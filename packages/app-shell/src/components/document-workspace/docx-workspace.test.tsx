@@ -314,3 +314,28 @@ describe('DocxWorkspace save', () => {
     })
   })
 })
+
+describe('DocxWorkspace find and undo', () => {
+  it('counts matches and restores the previous draft on undo', () => {
+    mountWorkspace({})
+
+    fireEvent.change(screen.getByLabelText('Find in document'), {
+      target: { value: 'hello' },
+    })
+    expect(screen.getByText('1 found')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: 'Next match' }))
+    expect(screen.getByText('1/1')).toBeTruthy()
+
+    const undo = screen.getByRole('button', { name: 'Undo' })
+    expect(undo).toHaveProperty('disabled', true)
+    fireEvent.change(screen.getByLabelText('Paragraph text'), {
+      target: { value: 'Hello world' },
+    })
+    expect(undo).toHaveProperty('disabled', false)
+    fireEvent.click(undo)
+    expect(screen.getByLabelText('Paragraph text')).toHaveProperty(
+      'value',
+      'Hello',
+    )
+  })
+})

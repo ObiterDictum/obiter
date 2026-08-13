@@ -4,6 +4,7 @@ import {
   applyDeleteBackward,
   applyDeleteForward,
   applySplitParagraph,
+  applyWordEdit,
   emptyEditorState,
 } from './document-word-edits'
 
@@ -155,5 +156,25 @@ describe('applySplitParagraph', () => {
     )
     expect(result?.caret).toEqual({ paragraphId: 'ins1', offset: 0 })
     expect(result?.state.inserts).toHaveLength(1)
+  })
+})
+
+describe('applyWordEdit', () => {
+  it('dispatches replace onto the current paragraph', () => {
+    const result = applyWordEdit(
+      twoParagraphs,
+      emptyEditorState(),
+      {
+        type: 'replace',
+        paragraphId: 'p1',
+        offset: 5,
+        from: 5,
+        to: 5,
+        insert: ' there',
+      },
+      'ins1',
+    )
+    expect(result?.caret).toEqual({ paragraphId: 'p1', offset: 11 })
+    expect(result?.state.drafts.r1).toBe('Hello there')
   })
 })
