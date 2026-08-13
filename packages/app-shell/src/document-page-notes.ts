@@ -77,10 +77,10 @@ function noteStoryBodies(
   let cursor = 0
   for (const fragment of story.preservedXmlFragments) {
     const noteId = xmlAttr(xmlTagAttrs(fragment, elementName), 'id')
-    if (!noteId || noteId === '-1' || noteId === '0') continue
     const count = Math.max(1, (fragment.match(/<w:p\b/gi) ?? []).length)
     const paragraphs = story.paragraphs.slice(cursor, cursor + count)
     cursor += count
+    if (!noteId || noteId === '-1' || noteId === '0') continue
     bodies.set(noteId, {
       kind: storyKind === 'footnotes' ? 'footnote' : 'endnote',
       noteId,

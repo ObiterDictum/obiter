@@ -115,6 +115,20 @@ describe('GET /api/documents/:id/model storage boundary', () => {
     expect(storage.textWrites).toHaveLength(1)
   })
 
+  it('serves a cache hit when numbering levels are present and empty', async () => {
+    const database = new TestDatabase()
+    const storage = new MemoryStorage()
+    storage.text.set(modelObjectKey, numberingWithEmptyLevels(cachedModelJson))
+
+    const response = await routeApp(database, storage).app.request(
+      '/api/documents/doc_1/model',
+    )
+
+    expect(response.status).toBe(200)
+    expect(storage.binaryReads).toEqual([])
+    expect(storage.textWrites).toEqual([])
+  })
+
   it('retries the miss path after a derived cache write fails', async () => {
     const database = new TestDatabase()
     const storage = new MemoryStorage()
@@ -190,6 +204,21 @@ describe('GET /api/documents/:id/model storage boundary', () => {
     expect(errors.join(' ')).not.toContain('quarantine')
   })
 })
+
+function numberingWithEmptyLevels(json: string) {
+  const value: unknown = JSON.parse(json)
+  if (typeof value !== 'object' || value === null) {
+    throw new Error('Cached model JSON is invalid.')
+  }
+  Reflect.set(value, 'numbering', [
+    {
+      numberingId: '1',
+      sourceFragment: '<w:num w:numId="1"/>',
+      levels: [],
+    },
+  ])
+  return JSON.stringify(value)
+}
 
 function numberingWithoutLevels(json: string) {
   const value: unknown = JSON.parse(json)

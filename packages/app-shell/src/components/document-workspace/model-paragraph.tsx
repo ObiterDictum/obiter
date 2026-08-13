@@ -21,7 +21,7 @@ import {
   imagePartNameForDrawing,
   readableRunColor,
 } from '../../document-page-media'
-import { runNoteRefs } from '../../document-page-notes'
+import { runNoteRefs, type NoteKind } from '../../document-page-notes'
 import {
   paragraphCss,
   paragraphFace,
@@ -70,6 +70,7 @@ export function ModelParagraph({
   pageStart = false,
   listMarker,
   noteMark,
+  noteKind,
 }: {
   paragraph: DocumentParagraphWire
   changes: DocumentChangeWire[]
@@ -98,6 +99,7 @@ export function ModelParagraph({
   pageStart?: boolean
   listMarker?: ListMarker
   noteMark?: string
+  noteKind?: NoteKind
 }) {
   const carets = (presence ?? []).filter(
     (item) =>
@@ -186,7 +188,6 @@ export function ModelParagraph({
       >
         {listMarker ? (
           <span
-            aria-hidden={noteMark ? undefined : true}
             className="shrink-0"
             style={{
               width: markerWidth,
@@ -202,9 +203,13 @@ export function ModelParagraph({
         ) : noteMark && !continuation ? (
           <span
             className="shrink-0 pr-1 align-super text-[0.75em]"
-            aria-hidden="true"
+            aria-label={
+              noteKind === 'endnote'
+                ? `Endnote ${noteMark}`
+                : `Footnote ${noteMark}`
+            }
           >
-            {noteMark}
+            <span aria-hidden="true">{noteMark}</span>
           </span>
         ) : null}
         <div className="min-h-[1em] min-w-0 flex-1">

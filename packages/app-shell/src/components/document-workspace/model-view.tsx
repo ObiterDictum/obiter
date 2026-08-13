@@ -19,7 +19,7 @@ import { storyBlocks } from '../../document-page-tables'
 import type { LaidOutBlock } from '../../document-page-engine'
 import type { PageFloat, PageTextBox } from '../../document-page-floats'
 import { documentListMarkers } from '../../document-page-lists'
-import { documentNotes } from '../../document-page-notes'
+import { documentNotes, type NoteKind } from '../../document-page-notes'
 import { ModelParagraph } from './model-paragraph'
 import type { ParagraphWordEdit } from './model-paragraph'
 import { PendingInsert } from './pending-insert'
@@ -95,10 +95,17 @@ export function DocumentModelPage({
   const gap =
     firstColumn && nextColumn ? nextColumn.left - firstColumn.widthPx : 0
   const listMarkers = documentListMarkers(model)
+  const notes = documentNotes(model)
+  const noteParagraphIds = new Set(
+    notes.flatMap((note) => note.paragraphs.map((paragraph) => paragraph.id)),
+  )
   const noteMarks = new Map(
-    documentNotes(model).flatMap((note) =>
-      note.paragraphs.map((paragraph) => [paragraph.id, note.mark] as const),
-    ),
+    notes.flatMap((note) => {
+      const first = note.paragraphs[0]
+      return first
+        ? [[first.id, { mark: note.mark, kind: note.kind }] as const]
+        : []
+    }),
   )
 
   return (
@@ -173,6 +180,7 @@ export function DocumentModelPage({
                   paragraphs: story.paragraphs,
                   listMarkers,
                   noteMarks,
+                  noteParagraphIds,
                 }),
               )}
           </div>
@@ -282,7 +290,8 @@ function renderBlock(
     imageUrls: Record<string, string>
     paragraphs: DocumentParagraphWire[]
     listMarkers: ReturnType<typeof documentListMarkers>
-    noteMarks: Map<string, string>
+    noteMarks: Map<string, { mark: string; kind: NoteKind }>
+    noteParagraphIds: Set<string>
   },
 ) {
   if (block.type === 'table') {
@@ -318,6 +327,8 @@ function renderBlock(
                 imageUrls={ctx.imageUrls}
                 styles={ctx.model.styles}
                 listMarker={ctx.listMarkers.get(paragraph.id)}
+                noteMark={ctx.noteMarks.get(paragraph.id)?.mark}
+                noteKind={ctx.noteMarks.get(paragraph.id)?.kind}
               />,
             ]
           })
@@ -360,7 +371,7 @@ function renderBlock(
       onJoinPrevious={ctx.onJoinPrevious}
       onWordEdit={ctx.onWordEdit}
       restoreCaret={ctx.restoreCaret}
-      editing={ctx.editing && !ctx.noteMarks.has(paragraph.id)}
+      editing={ctx.editing && !ctx.noteParagraphIds.has(paragraph.id)}
       presence={ctx.presence}
       currentUserId={ctx.currentUserId}
       storyPartName={ctx.storyPartName}
@@ -375,7 +386,8 @@ function renderBlock(
       continuation={block.continuation}
       pageStart={block.pageStart}
       listMarker={ctx.listMarkers.get(paragraph.id)}
-      noteMark={ctx.noteMarks.get(paragraph.id)}
+      noteMark={ctx.noteMarks.get(paragraph.id)?.mark}
+      noteKind={ctx.noteMarks.get(paragraph.id)?.kind}
     />,
   ]
 }

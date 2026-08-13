@@ -38,16 +38,15 @@ export function parseNumbering(source: string) {
     const startValue = descendantValue(elements, instance, 'startOverride')
     const startOverride =
       startValue === undefined ? undefined : Number(startValue)
-    const levels = applyLevelOverrides(
-      elements,
-      instance,
-      abstractNumberingId ? (abstracts.get(abstractNumberingId) ?? []) : [],
-    )
     numbering.push({
       numberingId,
       ...(abstractNumberingId ? { abstractNumberingId } : {}),
       ...(Number.isInteger(startOverride) ? { startOverride } : {}),
-      ...(levels.length > 0 ? { levels } : {}),
+      levels: applyLevelOverrides(
+        elements,
+        instance,
+        abstractNumberingId ? (abstracts.get(abstractNumberingId) ?? []) : [],
+      ),
       sourceFragment: elementFragment(source, instance),
     })
   }
@@ -57,30 +56,45 @@ export function parseNumbering(source: string) {
 
 function parseLevels(
   elements: XmlElement[],
-  abstract: XmlElement,
+  ancestor: XmlElement,
 ): DocumentNumberingLevelWire[] {
   const levels: DocumentNumberingLevelWire[] = []
   for (const level of elements.filter(
-    (element) => isWord(element, 'lvl') && isDescendantOf(element, abstract),
+    (element) => isWord(element, 'lvl') && isDescendantOf(element, ancestor),
   )) {
-    const ilvl = Number(attributeValue(level, WORD_NAMESPACE, 'ilvl'))
-    if (!Number.isInteger(ilvl) || ilvl < 0 || ilvl > 8) continue
-    const startValue = descendantValue(elements, level, 'start')
-    const start = startValue === undefined ? undefined : Number(startValue)
-    const numFmt = descendantValue(elements, level, 'numFmt') ?? 'decimal'
-    const lvlText = descendantValue(elements, level, 'lvlText')
-    const indent = indentFromLevel(elements, level)
-    levels.push({
-      ilvl,
-      ...(Number.isInteger(start) && start !== undefined && start > 0
-        ? { start }
-        : {}),
-      numFmt,
-      ...(lvlText ? { lvlText } : {}),
-      ...indent,
-    })
+    const parsed = parseLevel(elements, level)
+    if (parsed) levels.push(parsed)
   }
   return levels
+}
+
+function parseLevel(
+  elements: XmlElement[],
+  level: XmlElement,
+): DocumentNumberingLevelWire | undefined {
+  const ilvl = Number(attributeValue(level, WORD_NAMESPACE, 'ilvl'))
+  if (!Number.isInteger(ilvl) || ilvl < 0 || ilvl > 8) return undefined
+  const startValue = descendantValue(elements, level, 'start')
+  const start = startValue === undefined ? undefined : Number(startValue)
+  const rawFmt = descendantValue(elements, level, 'numFmt') ?? 'decimal'
+  const numFmt = rawFmt.length > 0 && rawFmt.length <= 64 ? rawFmt : 'decimal'
+  const rawText = descendantValue(elements, level, 'lvlText')
+  const lvlText =
+    rawText && rawText.length > 0
+      ? rawText.length <= 64
+        ? rawText
+        : rawText.slice(0, 64)
+      : undefined
+  const indent = indentFromLevel(elements, level)
+  return {
+    ilvl,
+    ...(Number.isInteger(start) && start !== undefined && start > 0
+      ? { start }
+      : {}),
+    numFmt,
+    ...(lvlText ? { lvlText } : {}),
+    ...indent,
+  }
 }
 
 function applyLevelOverrides(
@@ -88,21 +102,26 @@ function applyLevelOverrides(
   instance: XmlElement,
   base: DocumentNumberingLevelWire[],
 ): DocumentNumberingLevelWire[] {
-  if (base.length === 0) return []
   const levels = base.map((level) => ({ ...level }))
   for (const override of elements.filter(
     (element) =>
       isWord(element, 'lvlOverride') && isDescendantOf(element, instance),
   )) {
     const ilvl = Number(attributeValue(override, WORD_NAMESPACE, 'ilvl'))
+    if (!Number.isInteger(ilvl) || ilvl < 0 || ilvl > 8) continue
+    const nested = elements.find(
+      (element) => isWord(element, 'lvl') && isDescendantOf(element, override),
+    )
+    const parsed = nested ? parseLevel(elements, nested) : undefined
+    if (parsed) {
+      const level = { ...parsed, ilvl }
+      const index = levels.findIndex((item) => item.ilvl === ilvl)
+      if (index === -1) levels.push(level)
+      else levels[index] = level
+    }
     const startValue = descendantValue(elements, override, 'startOverride')
     const start = startValue === undefined ? undefined : Number(startValue)
-    if (
-      !Number.isInteger(ilvl) ||
-      !Number.isInteger(start) ||
-      start === undefined
-    )
-      continue
+    if (!Number.isInteger(start) || start === undefined || start <= 0) continue
     const target = levels.find((level) => level.ilvl === ilvl)
     if (target) target.start = start
   }
