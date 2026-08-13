@@ -37,24 +37,9 @@ describe('document image part cache', () => {
     storage.binary.set(second.objectKey, packageBytes)
     const cache = createDocumentImagePartCache(1)
 
-    await getDocumentImagePart(
-      storage,
-      first,
-      'word/media/image1.png',
-      cache,
-    )
-    await getDocumentImagePart(
-      storage,
-      second,
-      'word/media/image1.png',
-      cache,
-    )
-    await getDocumentImagePart(
-      storage,
-      first,
-      'word/media/image1.png',
-      cache,
-    )
+    await getDocumentImagePart(storage, first, 'word/media/image1.png', cache)
+    await getDocumentImagePart(storage, second, 'word/media/image1.png', cache)
+    await getDocumentImagePart(storage, first, 'word/media/image1.png', cache)
 
     expect(storage.binaryReads).toEqual([
       first.objectKey,
