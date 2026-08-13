@@ -146,6 +146,7 @@ function mountWorkspace(options: {
     <DocxWorkspace
       documentId="doc_1"
       versionId="ver_1"
+      matterId="mtr_1"
       filename="brief.docx"
     />,
     { wrapper },

@@ -37,6 +37,7 @@ export class MemoryStorage extends SharedMemoryStorage {
 export async function packageWithImage() {
   const zip = new JSZip()
   zip.file(imagePartName, pngBytes, { binary: true })
+  zip.file('word/media/image2.png', pngBytes, { binary: true })
   return Buffer.from(await zip.generateAsync({ type: 'uint8array' }))
 }
 

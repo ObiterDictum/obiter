@@ -17,14 +17,20 @@ export function replaceTextRunAtAnchor(
   const overlay = part?.overlay
   if (!part || !overlay || anchor.textRanges.length === 0) return false
 
-  const breakReplacement = lineBreakElementReplacement(
+  const breakReplacements = lineBreakRunReplacements(
     anchor,
     text,
     overlay.source,
     0,
   )
-  if (breakReplacement) {
-    setOverlayReplacement(overlay, `${anchor.wire.id}:text:0`, breakReplacement)
+  if (breakReplacements) {
+    breakReplacements.forEach((replacement, index) => {
+      setOverlayReplacement(
+        overlay,
+        `${anchor.wire.id}:text:${index}`,
+        replacement,
+      )
+    })
     anchor.wire.text = text
     part.dirty = true
     return true
@@ -66,23 +72,29 @@ export function wordRunInnerTextXml(prefix: string, text: string) {
     .join('')
 }
 
-export function lineBreakElementReplacement(
+export function lineBreakRunReplacements(
   anchor: TextRunAnchor,
   text: string,
   source: string,
   origin: number,
-): OverlayReplacement | undefined {
+): OverlayReplacement[] | undefined {
   if (!/[\r\n]/u.test(text)) return undefined
   const first = anchor.textElements[0]
-  const last = anchor.textElements.at(-1)
-  if (!first || !last) return undefined
+  if (!first) return undefined
   const opening = source.slice(first.start, first.startTagEnd)
   const prefix = opening.match(/^<([^:>\s]+):/u)?.[1] ?? 'w'
-  return {
-    start: first.start - origin,
-    end: last.end - origin,
-    value: wordRunInnerTextXml(prefix, text),
-  }
+  return [
+    {
+      start: first.start - origin,
+      end: first.end - origin,
+      value: wordRunInnerTextXml(prefix, text),
+    },
+    ...anchor.textRanges.slice(1).map((range) => ({
+      start: range.start - origin,
+      end: range.end - origin,
+      value: '',
+    })),
+  ]
 }
 
 export function textElementXmlSpaceAttribute(text: string) {

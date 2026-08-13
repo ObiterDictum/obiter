@@ -65,6 +65,23 @@ describe('GET /api/documents/:id/media response', () => {
     expect(storage.binaryReads).toEqual([sourceObjectKey])
   })
 
+  it('unzips the immutable package once for later image requests', async () => {
+    const database = new TestDatabase({ access: 'view' })
+    const storage = new MemoryStorage(await packageWithImage())
+    const { app } = routeApp(database, storage)
+
+    const first = await app.request(mediaUrl)
+    const second = await app.request(
+      '/api/documents/doc_1/media?part=word/media/image2.png',
+    )
+    const again = await app.request(mediaUrl)
+
+    expect(first.status).toBe(200)
+    expect(second.status).toBe(200)
+    expect(again.status).toBe(200)
+    expect(storage.binaryReads).toEqual([sourceObjectKey])
+  })
+
   it('returns the uniform 404 for xml parts and missing images', async () => {
     const database = new TestDatabase()
     const storage = new MemoryStorage(await packageWithImage())

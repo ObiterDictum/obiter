@@ -14,7 +14,31 @@ const IMAGE_CONTENT_TYPES: Readonly<Record<string, string>> = {
 }
 
 export function isPackageImagePartName(partName: string) {
-  return imageContentType(normaliseRequestedPart(partName)) !== undefined
+  return requestedImagePartName(partName) !== undefined
+}
+
+export function requestedImagePartName(partName: string) {
+  const name = normaliseRequestedPart(partName)
+  return imageContentType(name) ? name : undefined
+}
+
+export async function readPackageImageParts(input: Uint8Array) {
+  let zip: JSZip
+  try {
+    zip = await JSZip.loadAsync(input)
+  } catch {
+    return new Map<string, { bytes: Uint8Array; contentType: string }>()
+  }
+
+  const parts = new Map<string, { bytes: Uint8Array; contentType: string }>()
+  for (const [rawName, entry] of Object.entries(zip.files)) {
+    if (entry.dir) continue
+    const name = normaliseRequestedPart(rawName)
+    const contentType = imageContentType(name)
+    if (!name || !contentType) continue
+    parts.set(name, { bytes: await entry.async('uint8array'), contentType })
+  }
+  return parts
 }
 
 export async function readPackageImagePart(
@@ -22,19 +46,8 @@ export async function readPackageImagePart(
   partName: string,
 ) {
   const name = normaliseRequestedPart(partName)
-  const contentType = imageContentType(name)
-  if (!name || !contentType) return undefined
-
-  let zip: JSZip
-  try {
-    zip = await JSZip.loadAsync(input)
-  } catch {
-    return undefined
-  }
-
-  const entry = zip.file(name)
-  if (!entry || entry.dir) return undefined
-  return { bytes: await entry.async('uint8array'), contentType }
+  if (!name) return undefined
+  return (await readPackageImageParts(input)).get(name)
 }
 
 function imageContentType(partName: string | undefined) {

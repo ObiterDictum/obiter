@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import { buildOoxmlFixture } from '../fixtures/builder'
 import {
   applyDocumentEdits,
+  applyTrackedChangeDecisions,
   parseDocx,
   serialiseDocx,
   validateCommentAnchor,
@@ -227,6 +228,31 @@ describe('OOXML document edits', () => {
     )
   })
 
+  it('keeps interleaved run elements when a newline is introduced', async () => {
+    const input = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+    const zip = await JSZip.loadAsync(input)
+    zip.file(
+      'word/document.xml',
+      '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>First</w:t><w:tab/><w:t>Second</w:t></w:r></w:p></w:body></w:document>',
+    )
+    const document = await parseDocx(
+      await zip.generateAsync({ type: 'uint8array' }),
+    )
+    const run = mainParagraphs(document)[0]?.runs[0]
+    if (!run) throw new Error('Fixture run is missing.')
+
+    applyDocumentEdits(document, [
+      { type: 'replace_run_text', runId: run.id, text: 'First\nSecond' },
+    ])
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+
+    expect(xml).toContain('<w:tab/>')
+    expect(xml).toContain('</w:t><w:br/><w:t>Second</w:t>')
+  })
+
   it('rejects non-main stories, missing styles, tracked paragraphs, and deleting the only paragraph', async () => {
     const document = await parseFixture()
     const headerRun = document.model.stories.find(
@@ -288,18 +314,7 @@ describe('OOXML document edits', () => {
     ])
   })
 
-  it('tracks a zero-run replacement as an insert and removes the blank paragraph', async () => {
-    const rejected = await parseEmptyParagraphFixture()
-    const rejectedId = mainParagraphs(rejected)[0]?.id
-    if (!rejectedId) throw new Error('Empty paragraph is missing.')
-    expect(() =>
-      applyDocumentEdits(
-        rejected,
-        [{ type: 'delete_paragraph', paragraphId: rejectedId }],
-        { author: 'Review Author', date: '2026-08-12T12:00:00.000Z' },
-      ),
-    ).toThrowError(expect.objectContaining({ code: 'model-node-not-editable' }))
-
+  it('tracks a zero-run replacement as an insert and a tracked blank deletion', async () => {
     const document = await parseEmptyParagraphFixture()
     const onlyId = mainParagraphs(document)[0]?.id
     if (!onlyId) throw new Error('Empty paragraph is missing.')
@@ -328,7 +343,66 @@ describe('OOXML document edits', () => {
       'word/document.xml',
     )
     expect(xml).toContain('<w:ins ')
+    expect(xml).toContain('<w:del ')
     expect(xml).toContain('Typed line')
+  })
+
+  it('tracks a blank-line deletion so rejecting it restores the paragraph', async () => {
+    const document = await parseEmptyParagraphFixture()
+    const onlyId = mainParagraphs(document)[0]?.id
+    if (!onlyId) throw new Error('Empty paragraph is missing.')
+
+    applyDocumentEdits(
+      document,
+      [{ type: 'delete_paragraph', paragraphId: onlyId }],
+      { author: 'Review Author', date: '2026-08-12T12:00:00.000Z' },
+    )
+    const reparsed = await parseDocx(await serialiseDocx(document))
+    const deletion = reparsed.model.changes.find(
+      ({ kind, author }) => kind === 'delete' && author === 'Review Author',
+    )
+    if (!deletion) throw new Error('Tracked blank deletion is missing.')
+
+    applyTrackedChangeDecisions(reparsed, [deletion.id], 'reject')
+    const restored = mainParagraphs(
+      await parseDocx(await serialiseDocx(reparsed)),
+    )
+    expect(restored).toMatchObject([{ styleId: 'Heading1', runs: [] }])
+  })
+
+  it('restores the blank paragraph when a tracked replacement is rejected', async () => {
+    const document = await parseEmptyParagraphFixture()
+    const onlyId = mainParagraphs(document)[0]?.id
+    if (!onlyId) throw new Error('Empty paragraph is missing.')
+
+    applyDocumentEdits(
+      document,
+      [
+        {
+          type: 'insert_paragraph_after',
+          paragraphId: onlyId,
+          text: 'Typed line',
+          styleId: 'Heading1',
+        },
+        { type: 'delete_paragraph', paragraphId: onlyId },
+      ],
+      { author: 'Review Author', date: '2026-08-12T12:00:00.000Z' },
+    )
+    const reparsed = await parseDocx(await serialiseDocx(document))
+    const deletion = reparsed.model.changes.find(
+      ({ kind, author }) => kind === 'delete' && author === 'Review Author',
+    )
+    if (!deletion) throw new Error('Tracked blank deletion is missing.')
+    applyTrackedChangeDecisions(reparsed, [deletion.id], 'reject')
+    const restored = mainParagraphs(
+      await parseDocx(await serialiseDocx(reparsed)),
+    )
+    expect(
+      restored.some(
+        (paragraph) =>
+          paragraph.styleId === 'Heading1' && paragraph.runs.length === 0,
+      ),
+    ).toBe(true)
   })
 
   it('changes only the main story fragment and preserves every other part byte-for-byte', async () => {

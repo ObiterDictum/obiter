@@ -174,17 +174,6 @@ function validateTrackedOperations(
   const runTargets = new Set<string>()
   const paragraphStyleTargets = new Set<string>()
   for (const operation of planned) {
-    if (
-      operation.type === 'delete_paragraph' &&
-      operation.paragraph.runs.length === 0
-    ) {
-      const replaced = planned.some(
-        (item) =>
-          item.type === 'insert_paragraph_after' &&
-          item.paragraphId === operation.paragraph.wire.id,
-      )
-      if (!replaced) throw new OoxmlError('model-node-not-editable')
-    }
     if (deletedIds.has(operation.paragraph.wire.id)) continue
     if (
       operation.type === 'replace_run_text' ||
