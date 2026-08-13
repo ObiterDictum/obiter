@@ -20,7 +20,10 @@ import {
   renameFragmentElements,
   setOverlayReplacement,
 } from './parts/overlay'
-import { preserveTextElementXmlSpace } from './text-run-edit'
+import {
+  lineBreakRunReplacements,
+  preserveTextElementXmlSpace,
+} from './text-run-edit'
 
 export type TrackedEditContext = {
   author: string
@@ -86,11 +89,28 @@ export function createTrackedEditWriter(
     },
 
     deleteParagraph(anchor: ParagraphAnchor) {
-      if (anchor.runs.length === 0) {
-        throw new OoxmlError('model-node-not-editable')
-      }
       const part = requireEditablePart(document, anchor.partName)
       const source = part.overlay.source
+      if (anchor.runs.length === 0) {
+        const story = document.model.stories.find(
+          (item) => item.kind === 'document',
+        )
+        if (!story) throw new OoxmlError('model-node-not-editable')
+        const prefix = wordPrefix(source, anchor.paragraphRange, 'p')
+        setOverlayReplacement(
+          part.overlay,
+          `${anchor.wire.id}:tracked-delete`,
+          paragraphMarkDeletionReplacement(
+            source,
+            anchor,
+            prefix,
+            attributes(prefix),
+          ),
+        )
+        story.paragraphs.splice(story.paragraphs.indexOf(anchor.wire), 1)
+        part.dirty = true
+        return
+      }
       for (const run of anchor.runs) {
         const prefix = wordPrefix(source, run.runRange, 'r')
         const deletedRun = renameTextElements(
@@ -246,6 +266,20 @@ function styleInstruction(prefix: string, name: string, styleId: string) {
 }
 
 function replaceRunText(source: string, anchor: TextRunAnchor, text: string) {
+  const breakReplacements = lineBreakRunReplacements(
+    anchor,
+    text,
+    source,
+    anchor.runRange.start,
+  )
+  if (breakReplacements) {
+    const broken = applyFragmentReplacements(
+      source.slice(anchor.runRange.start, anchor.runRange.end),
+      breakReplacements,
+    )
+    if (broken === undefined) throw new OoxmlError('model-node-not-editable')
+    return broken
+  }
   const replacements = anchor.textRanges.map((range, index) => ({
     start: range.start - anchor.runRange.start,
     end: range.end - anchor.runRange.start,
@@ -284,6 +318,58 @@ function renameTextElements(
   )
   if (renamed === undefined) throw new OoxmlError('model-node-not-editable')
   return renamed
+}
+
+function paragraphMarkDeletionReplacement(
+  source: string,
+  anchor: ParagraphAnchor,
+  prefix: string,
+  changeAttributes: string,
+) {
+  const del = `<${prefix}:del ${changeAttributes}/>`
+  const mark = `<${prefix}:rPr>${del}</${prefix}:rPr>`
+  const properties = anchor.paragraphPropertiesRange
+  if (!properties) {
+    return {
+      start: anchor.paragraphRange.startTagEnd,
+      end: anchor.paragraphRange.startTagEnd,
+      value: `<${prefix}:pPr>${mark}</${prefix}:pPr>`,
+    }
+  }
+  return {
+    start: properties.start,
+    end: properties.end,
+    value: insertParagraphMarkDeletion(
+      source.slice(properties.start, properties.end),
+      prefix,
+      del,
+      mark,
+    ),
+  }
+}
+
+function insertParagraphMarkDeletion(
+  fragment: string,
+  prefix: string,
+  del: string,
+  mark: string,
+) {
+  const closeRunProperties = `</${prefix}:rPr>`
+  const closeIndex = fragment.lastIndexOf(closeRunProperties)
+  if (closeIndex !== -1) {
+    return fragment.slice(0, closeIndex) + del + fragment.slice(closeIndex)
+  }
+  const selfClosingRun = new RegExp(`<${prefix}:rPr([^>]*?)/\\s*>`, 'u')
+  if (selfClosingRun.test(fragment)) {
+    return fragment.replace(
+      selfClosingRun,
+      `<${prefix}:rPr$1>${del}</${prefix}:rPr>`,
+    )
+  }
+  if (/\/\s*>$/u.test(fragment)) {
+    return expandSelfClosingProperties(fragment, prefix, 'pPr', mark)
+  }
+  return fragment.replace(/(<\/[^>]+>)$/u, `${mark}$1`)
 }
 
 function wordPrefix(

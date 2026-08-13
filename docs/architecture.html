@@ -1788,7 +1788,14 @@
                   marker-end="url(#ah-t-build-time-dependency-graph)"
                 />
                 <path
-                  d="M122.4,156 L122.4,326"
+                  d="M122.4,156 L110.3,226"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-build-time-dependency-graph)"
+                />
+                <path
+                  d="M122.4,156 Q172.4,241.0 122.4,326"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
@@ -1924,7 +1931,7 @@
                 </tr>
                 <tr>
                   <td class="id">@obiter/app-shell</td>
-                  <td class="id">contracts · ui</td>
+                  <td class="id">contracts · ooxml · ui</td>
                   <td>TanStack Router</td>
                 </tr>
                 <tr>
@@ -2593,6 +2600,17 @@
                   <td class="id">GET /api/documents/:id/model</td>
                   <td class="id">document-model.ts</td>
                   <td>Current ready DOCX model for read-only viewing</td>
+                </tr>
+                <tr>
+                  <td class="id">GET /api/documents/:id/media</td>
+                  <td class="id">document-media.ts</td>
+                  <td>
+                    Current ready DOCX image part for page rendering. Query
+                    <code>part</code> is a package path such as
+                    <code>word/media/image1.png</code>. Image parts are unzipped
+                    once per immutable version, kept in an LRU cache of 16
+                    versions per API process.
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">POST /api/documents/:id/edit</td>

@@ -17,6 +17,7 @@ import {
 } from '@obiter/ui'
 import { useCurrentUser } from '../current-user'
 import { useDeleteDocument, useDocument } from '../documents'
+import { DocumentWorkspace } from '../components/document-workspace/workspace'
 
 /**
  * Document detail — the contract route (PRD FR4). Receives route params as
@@ -165,10 +166,16 @@ export function DocumentDetailLayoutView({
           <Skeleton className="h-24 w-full rounded-lg" />
         </div>
       ) : loaded ? (
-        <DocumentMetadata
-          document={loaded.document}
-          versions={loaded.versions}
-        />
+        <>
+          <DocumentMetadata
+            document={loaded.document}
+            versions={loaded.versions}
+          />
+          <DocumentWorkspace
+            documentId={documentId}
+            version={loaded.document.currentVersion}
+          />
+        </>
       ) : null}
 
       <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
@@ -253,17 +260,27 @@ function DocumentMetadata({
                     {formatBytes(Number(version.sizeBytes))}
                   </span>
                 </div>
-                <Badge
-                  tone={
-                    version.documentStatus === 'ready'
-                      ? 'success'
-                      : version.documentStatus === 'failed'
-                        ? 'danger'
-                        : 'info'
-                  }
-                >
-                  {version.documentStatus}
-                </Badge>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Badge
+                    tone={
+                      version.documentStatus === 'ready'
+                        ? 'success'
+                        : version.documentStatus === 'failed'
+                          ? 'danger'
+                          : 'info'
+                    }
+                  >
+                    {version.documentStatus}
+                  </Badge>
+                  {version.id === document.currentVersionId ? (
+                    <a
+                      href="#document-workspace"
+                      className="text-sm font-medium text-brand hover:text-brand-pressed"
+                    >
+                      View
+                    </a>
+                  ) : null}
+                </div>
               </li>
             ))}
           </ul>

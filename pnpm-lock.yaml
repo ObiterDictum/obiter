@@ -142,6 +142,9 @@ importers:
       '@obiter/contracts':
         specifier: workspace:*
         version: link:../contracts
+      '@obiter/ooxml':
+        specifier: workspace:*
+        version: link:../ooxml
       '@obiter/ui':
         specifier: workspace:*
         version: link:../ui
