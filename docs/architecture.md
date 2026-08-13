@@ -711,3 +711,18 @@ Body text boxes (`w:txbxContent` in an anchor) are painted in the drawing and
 kept out of the body flow. Long paragraphs split across columns and pages at
 measured line boundaries. Tight/through wrap is approximated as square; table
 row splits and CSS exclusions are out of scope.
+
+### M1.25 list markers and notes: numbering levels on the wire (13 August 2026)
+
+Context: the S2 wire model stored numbering instances (`w:num`) without their
+abstract levels, so the page renderer could not paint `1.`, `(a)`, or bullets.
+Footnote and endnote stories were parsed but never shown.
+
+Decision: parse `w:lvl` values onto each numbering instance as an optional
+additive `levels` array. Missing `levels` on a cached `model.json` forces
+regeneration, matching the S5 `changes` cache rule. The React page paints
+markers from those levels and from paragraph or style `w:numPr`, and paints
+footnote or endnote marks from `w:footnoteReference` / `w:endnoteReference`.
+Note bodies are laid out after the main story on the page. Note paragraphs
+are read-only. Creating list operations and editing headers, footers, or
+notes remains out of scope.
