@@ -11,9 +11,7 @@ export function applyTrackedChangeDecisions(
 ) {
   const requested = resolveTargets(document, changeIds)
   const absorbed =
-    action === 'accept'
-      ? absorbParagraphMarkSiblings(document, requested)
-      : []
+    action === 'accept' ? absorbParagraphMarkSiblings(document, requested) : []
   const pending = uniqueChanges([...requested, ...absorbed]).filter(
     (target) => !target.absorbed,
   )
@@ -166,7 +164,9 @@ function absorbParagraphMarkSiblings(
 }
 
 function uniqueChanges(changes: readonly TrackedChangeNode[]) {
-  return [...new Map(changes.map((change) => [change.wire.id, change])).values()]
+  return [
+    ...new Map(changes.map((change) => [change.wire.id, change])).values(),
+  ]
 }
 
 function invalidDecision() {
