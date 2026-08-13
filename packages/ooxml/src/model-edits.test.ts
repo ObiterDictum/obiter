@@ -461,6 +461,37 @@ describe('OOXML document edits', () => {
     ])
   })
 
+  it.each([
+    ['accepts the mark then the run', ['mark', 'run'] as const],
+    ['accepts the run then the mark', ['run', 'mark'] as const],
+    ['accepts both in one decision', ['both'] as const],
+  ])(
+    '%s on a Word paragraph with mark and run deletions',
+    async (_name, order) => {
+      const document = await parseFullyDeletedParagraphFixture()
+      const mark = document.model.changes.find(
+        ({ kind, text }) => kind === 'delete' && text === '',
+      )
+      const run = document.model.changes.find(
+        ({ kind, text }) => kind === 'delete' && text === 'Deleted',
+      )
+      if (!mark || !run) throw new Error('Expected mark and run deletions.')
+
+      const batches =
+        order[0] === 'both'
+          ? [[mark.id, run.id]]
+          : order.map((which) => [which === 'mark' ? mark.id : run.id])
+      for (const ids of batches) {
+        applyTrackedChangeDecisions(document, ids, 'accept')
+      }
+
+      const remaining = mainParagraphs(
+        await parseDocx(await serialiseDocx(document)),
+      )
+      expect(remaining).toMatchObject([{ runs: [{ text: 'Kept' }] }])
+    },
+  )
+
   it('changes only the main story fragment and preserves every other part byte-for-byte', async () => {
     const input = await buildOoxmlFixture('full-fidelity-with-w14-ids')
     const document = await parseDocx(input)
@@ -567,6 +598,16 @@ async function parseEmptyParagraphFixture() {
   zip.file(
     'word/document.xml',
     '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr></w:p></w:body></w:document>',
+  )
+  return parseDocx(await zip.generateAsync({ type: 'uint8array' }))
+}
+
+async function parseFullyDeletedParagraphFixture() {
+  const input = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+  const zip = await JSZip.loadAsync(input)
+  zip.file(
+    'word/document.xml',
+    '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:pStyle w:val="Heading1"/><w:rPr><w:del w:id="0" w:author="Review Author" w:date="2026-08-12T12:00:00.000Z"/></w:rPr></w:pPr><w:del w:id="1" w:author="Review Author" w:date="2026-08-12T12:00:00.000Z"><w:r><w:delText>Deleted</w:delText></w:r></w:del></w:p><w:p><w:r><w:t>Kept</w:t></w:r></w:p></w:body></w:document>',
   )
   return parseDocx(await zip.generateAsync({ type: 'uint8array' }))
 }
