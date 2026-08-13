@@ -18,8 +18,11 @@ import { marginBandHeights } from '../../document-page-margin'
 import { storyBlocks } from '../../document-page-tables'
 import type { LaidOutBlock } from '../../document-page-engine'
 import type { PageFloat, PageTextBox } from '../../document-page-floats'
-import { ModelParagraph, PendingInsert } from './model-paragraph'
+import { documentListMarkers } from '../../document-page-lists'
+import { documentNotes } from '../../document-page-notes'
+import { ModelParagraph } from './model-paragraph'
 import type { ParagraphWordEdit } from './model-paragraph'
+import { PendingInsert } from './pending-insert'
 import { PageDrawing } from './page-drawing'
 import { PageMarginBand } from './page-margin-band'
 import { PageTable } from './page-table'
@@ -91,6 +94,12 @@ export function DocumentModelPage({
   const nextColumn = columns[1]
   const gap =
     firstColumn && nextColumn ? nextColumn.left - firstColumn.widthPx : 0
+  const listMarkers = documentListMarkers(model)
+  const noteMarks = new Map(
+    documentNotes(model).flatMap((note) =>
+      note.paragraphs.map((paragraph) => [paragraph.id, note.mark] as const),
+    ),
+  )
 
   return (
     <div
@@ -162,6 +171,8 @@ export function DocumentModelPage({
                   restoreCaret,
                   imageUrls,
                   paragraphs: story.paragraphs,
+                  listMarkers,
+                  noteMarks,
                 }),
               )}
           </div>
@@ -270,6 +281,8 @@ function renderBlock(
     restoreCaret?: { paragraphId: string; offset: number } | null
     imageUrls: Record<string, string>
     paragraphs: DocumentParagraphWire[]
+    listMarkers: ReturnType<typeof documentListMarkers>
+    noteMarks: Map<string, string>
   },
 ) {
   if (block.type === 'table') {
@@ -304,6 +317,7 @@ function renderBlock(
                 relationships={ctx.model.relationships}
                 imageUrls={ctx.imageUrls}
                 styles={ctx.model.styles}
+                listMarker={ctx.listMarkers.get(paragraph.id)}
               />,
             ]
           })
@@ -346,7 +360,7 @@ function renderBlock(
       onJoinPrevious={ctx.onJoinPrevious}
       onWordEdit={ctx.onWordEdit}
       restoreCaret={ctx.restoreCaret}
-      editing={ctx.editing}
+      editing={ctx.editing && !ctx.noteMarks.has(paragraph.id)}
       presence={ctx.presence}
       currentUserId={ctx.currentUserId}
       storyPartName={ctx.storyPartName}
@@ -360,6 +374,8 @@ function renderBlock(
       wrapWidthPx={block.wrapWidthPx}
       continuation={block.continuation}
       pageStart={block.pageStart}
+      listMarker={ctx.listMarkers.get(paragraph.id)}
+      noteMark={ctx.noteMarks.get(paragraph.id)}
     />,
   ]
 }

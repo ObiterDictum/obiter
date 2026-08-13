@@ -1,6 +1,7 @@
 export {
   documentModelWireSchema,
   type DocumentModelWire,
+  type DocumentNumberingLevelWire,
   type DocumentNumberingWire,
   type DocumentParagraphWire,
   type DocumentRelationshipWire,
