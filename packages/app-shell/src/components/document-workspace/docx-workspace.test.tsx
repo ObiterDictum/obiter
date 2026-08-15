@@ -25,6 +25,7 @@ const hooks = vi.hoisted(() => ({
   useTrackedChangeDecision: vi.fn(),
   usePresenceUpdate: vi.fn(),
   useCurrentUser: vi.fn(),
+  fetchDocumentExport: vi.fn(),
 }))
 
 vi.mock('../../document-workspace-api', async (importOriginal) => {
@@ -42,7 +43,17 @@ vi.mock('../../document-workspace-api', async (importOriginal) => {
     useCollaborationMerge: hooks.useCollaborationMerge,
     useTrackedChangeDecision: hooks.useTrackedChangeDecision,
     usePresenceUpdate: hooks.usePresenceUpdate,
+    fetchDocumentExport: hooks.fetchDocumentExport,
   }
+})
+
+const edits = vi.hoisted(() => ({
+  downloadBlob: vi.fn(),
+}))
+
+vi.mock('../../document-edits', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../document-edits')>()
+  return { ...actual, downloadBlob: edits.downloadBlob }
 })
 
 vi.mock('../../current-user', async (importOriginal) => {
@@ -156,6 +167,66 @@ function mountWorkspace(options: {
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+})
+
+describe('DocxWorkspace export', () => {
+  it('downloads the DOCX with the expected filename', async () => {
+    const blob = new Blob()
+    hooks.fetchDocumentExport.mockResolvedValue({
+      blob,
+      skippedCommentCount: 0,
+    })
+    mountWorkspace({})
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+
+    await waitFor(() => {
+      expect(hooks.fetchDocumentExport).toHaveBeenCalledWith('doc_1')
+    })
+    expect(edits.downloadBlob).toHaveBeenCalledWith('brief.docx', blob)
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
+  it('surfaces an ApiError via the banner when the export fails', async () => {
+    hooks.fetchDocumentExport.mockRejectedValue(
+      new ApiError(
+        'storage_unavailable',
+        'The API could not complete the request.',
+        500,
+        'req_export',
+      ),
+    )
+    mountWorkspace({})
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('The API could not complete the request.'),
+      ).toBeTruthy()
+    })
+    expect(edits.downloadBlob).not.toHaveBeenCalled()
+  })
+
+  it('downloads anyway and reports comments that were skipped', async () => {
+    const blob = new Blob()
+    hooks.fetchDocumentExport.mockResolvedValue({
+      blob,
+      skippedCommentCount: 2,
+    })
+    mountWorkspace({})
+
+    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+
+    await waitFor(() => {
+      expect(edits.downloadBlob).toHaveBeenCalledWith('brief.docx', blob)
+    })
+    expect(
+      screen.getByText(
+        '2 comments could not be placed in the exported document and were skipped.',
+      ),
+    ).toBeTruthy()
+  })
 })
 
 describe('DocxWorkspace save', () => {

@@ -195,11 +195,17 @@ export function selectedParagraphLength(
 }
 
 export function downloadPlainText(filename: string, text: string) {
-  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' })
+  downloadBlob(
+    `${filename.replace(/\.[^.]+$/u, '')}.txt`,
+    new Blob([text], { type: 'text/plain;charset=utf-8' }),
+  )
+}
+
+export function downloadBlob(filename: string, blob: Blob) {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
-  anchor.download = `${filename.replace(/\.[^.]+$/u, '')}.txt`
+  anchor.download = filename
   anchor.click()
   URL.revokeObjectURL(url)
 }
