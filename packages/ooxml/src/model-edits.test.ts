@@ -315,6 +315,63 @@ describe('OOXML document edits', () => {
     ])
   })
 
+  it('folds a tracked type-then-bold batch into the inserted run', async () => {
+    const document = await parseFixture()
+    const run = mainParagraphs(document)[1]?.runs[0]
+    if (!run) throw new Error('Fixture run is missing.')
+
+    applyDocumentEdits(
+      document,
+      [
+        { type: 'replace_run_text', runId: run.id, text: 'Typed' },
+        { type: 'set_run_emphasis', runId: run.id, bold: true },
+      ],
+      { author: 'Review Author', date: '2026-08-12T12:00:00.000Z' },
+    )
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const insStart = xml.indexOf('<w:ins ')
+    const insEnd = xml.indexOf('</w:ins>', insStart)
+    expect(insStart).toBeGreaterThan(-1)
+    expect(insEnd).toBeGreaterThan(insStart)
+    const insRun = xml.slice(insStart, insEnd)
+    const delRun = xml.slice(0, insStart)
+    expect(insRun).toContain('<w:b/>')
+    expect(insRun).toContain('<w:t>Typed</w:t>')
+    expect(insRun).toContain('<w:rPrChange ')
+    expect(delRun).toContain('<w:delText>')
+    // the deleted run keeps the original formatting
+    const delRunRpr = delRun.slice(delRun.lastIndexOf('<w:rPr'))
+    expect(delRunRpr).not.toContain('<w:b/>')
+  })
+
+  it('folds a tracked emphasis-before-text batch into the inserted run', async () => {
+    const document = await parseFixture()
+    const run = mainParagraphs(document)[1]?.runs[0]
+    if (!run) throw new Error('Fixture run is missing.')
+
+    applyDocumentEdits(
+      document,
+      [
+        { type: 'set_run_emphasis', runId: run.id, bold: true },
+        { type: 'replace_run_text', runId: run.id, text: 'Typed' },
+      ],
+      { author: 'Review Author', date: '2026-08-12T12:00:00.000Z' },
+    )
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const insStart = xml.indexOf('<w:ins ')
+    const insEnd = xml.indexOf('</w:ins>', insStart)
+    expect(insStart).toBeGreaterThan(-1)
+    const insRun = xml.slice(insStart, insEnd)
+    expect(insRun).toContain('<w:b/>')
+    expect(insRun).toContain('<w:t>Typed</w:t>')
+  })
+
   it('tracks a zero-run replacement as an insert and a tracked blank deletion', async () => {
     const document = await parseEmptyParagraphFixture()
     const onlyId = mainParagraphs(document)[0]?.id

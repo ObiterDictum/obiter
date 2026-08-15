@@ -105,7 +105,35 @@ describe('document edit contracts', () => {
         model: { version: 1 },
       },
     ],
+    [
+      'numbering without an ilvl',
+      {
+        baseVersionId: 'ver_1',
+        operations: [
+          {
+            type: 'set_paragraph_numbering',
+            paragraphId: 'para_1',
+            numId: '1',
+          },
+        ],
+      },
+    ],
   ])('rejects %s', (_label, request) => {
     expect(documentEditRequestSchema.safeParse(request).success).toBe(false)
+  })
+
+  it('accepts numbering without an ilvl when the numbering is cleared', () => {
+    expect(
+      documentEditRequestSchema.safeParse({
+        baseVersionId: 'ver_1',
+        operations: [
+          {
+            type: 'set_paragraph_numbering',
+            paragraphId: 'para_1',
+            numId: null,
+          },
+        ],
+      }).success,
+    ).toBe(true)
   })
 })

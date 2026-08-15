@@ -118,4 +118,35 @@ describe('document format drafts', () => {
       }),
     ).toEqual([{ runId: 'r1', bold: true, italic: true }])
   })
+
+  it('keeps direct paragraph formatting when a numbering draft is painted', () => {
+    const styled: DocumentModelWire = {
+      ...model,
+      stories: [
+        {
+          ...model.stories[0],
+          paragraphs: [
+            {
+              ...model.stories[0]?.paragraphs[0],
+              preservedXmlFragments: [
+                '<w:pPr><w:pStyle w:val="Heading1"/><w:shd w:val="clear" w:fill="F2F2F2"/></w:pPr>',
+              ],
+            },
+          ],
+        },
+      ],
+    }
+    const painted = formattedModel(styled, {
+      emphasis: [],
+      paragraphStyles: {},
+      numbering: { p1: { numId: '1', ilvl: 1 } },
+    })
+    const fragments =
+      painted.stories[0]?.paragraphs[0]?.preservedXmlFragments ?? []
+    expect(fragments.join('')).toContain('<w:pStyle w:val="Heading1"/>')
+    expect(fragments.join('')).toContain(
+      '<w:shd w:val="clear" w:fill="F2F2F2"/>',
+    )
+    expect(fragments.join('')).toContain('<w:ilvl w:val="1"/>')
+  })
 })

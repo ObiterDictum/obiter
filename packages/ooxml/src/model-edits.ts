@@ -198,27 +198,55 @@ function validateTrackedOperations(
   planned: readonly PlannedOperation[],
   deletedIds: ReadonlySet<string>,
 ) {
-  const runTargets = new Set<string>()
+  // Tracked writers touch disjoint or foldable ranges per op class:
+  // tracked-text replaces the whole run, tracked-properties merges into the
+  // run's rPr/pPr, and the tracked style and emphasis writers share the
+  // tracked-properties replacement. A run may therefore carry a text change
+  // and a properties change (or style plus emphasis) in one batch, but only
+  // one op per class.
+  const runTextTargets = new Set<string>()
+  const runStyleTargets = new Set<string>()
+  const runEmphasisTargets = new Set<string>()
   const paragraphStyleTargets = new Set<string>()
   const paragraphNumberingTargets = new Set<string>()
   for (const operation of planned) {
     if (deletedIds.has(operation.paragraph.wire.id)) continue
-    if (
-      operation.type === 'replace_run_text' ||
-      operation.type === 'set_run_style' ||
-      operation.type === 'set_run_emphasis'
-    ) {
+    if (operation.type === 'replace_run_text') {
       if (
         containsTrackedChange(
           document,
           operation.run.partName,
           operation.run.runRange,
         ) ||
-        runTargets.has(operation.runId)
+        runTextTargets.has(operation.runId)
       ) {
         throw new OoxmlError('invalid-document-edit')
       }
-      runTargets.add(operation.runId)
+      runTextTargets.add(operation.runId)
+    } else if (operation.type === 'set_run_style') {
+      if (
+        containsTrackedChange(
+          document,
+          operation.run.partName,
+          operation.run.runRange,
+        ) ||
+        runStyleTargets.has(operation.runId)
+      ) {
+        throw new OoxmlError('invalid-document-edit')
+      }
+      runStyleTargets.add(operation.runId)
+    } else if (operation.type === 'set_run_emphasis') {
+      if (
+        containsTrackedChange(
+          document,
+          operation.run.partName,
+          operation.run.runRange,
+        ) ||
+        runEmphasisTargets.has(operation.runId)
+      ) {
+        throw new OoxmlError('invalid-document-edit')
+      }
+      runEmphasisTargets.add(operation.runId)
     } else if (operation.type === 'set_paragraph_style') {
       if (
         containsTrackedChange(
