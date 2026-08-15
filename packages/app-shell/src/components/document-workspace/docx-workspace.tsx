@@ -144,11 +144,15 @@ export function DocxWorkspace({
 
   async function exportDocx() {
     try {
-      const blob = await fetchDocumentExport(documentId)
+      const { blob, skippedCommentCount } =
+        await fetchDocumentExport(documentId)
       downloadBlob(
         /\.docx$/iu.test(filename) ? filename : `${filename}.docx`,
         blob,
       )
+      if (skippedCommentCount > 0) {
+        setBanner(skippedCommentsMessage(skippedCommentCount))
+      }
     } catch (error) {
       setBanner(mutationError(error))
     }
@@ -477,4 +481,10 @@ function cursorForSelection(
   const run = paragraph?.runs[0]
   if (!paragraph || !run) return null
   return { paragraphId: paragraph.id, runId: run.id, offset: 0 }
+}
+
+function skippedCommentsMessage(count: number) {
+  return count === 1
+    ? '1 comment could not be placed in the exported document and was skipped.'
+    : `${count} comments could not be placed in the exported document and were skipped.`
 }

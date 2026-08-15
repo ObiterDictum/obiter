@@ -22,7 +22,7 @@ import type {
   DocumentTrackedChangeDecisionRequest,
   DocumentTrackedChangeListResponse,
 } from '@obiter/contracts'
-import { apiFetch, apiFetchBlob } from './api'
+import { apiFetch, apiFetchBlob, apiFetchBlobResult } from './api'
 import { documentsKeys } from './documents'
 
 export const workspaceKeys = {
@@ -146,10 +146,14 @@ async function loadDocumentImage(documentId: string, partName: string) {
 export async function fetchDocumentExport(
   documentId: string,
   versionId?: string,
-) {
+): Promise<{ blob: Blob; skippedCommentCount: number }> {
   const search =
     versionId === undefined ? '' : `?versionId=${encodeURIComponent(versionId)}`
-  return apiFetchBlob(`/api/documents/${documentId}/export${search}`)
+  const { blob, headers } = await apiFetchBlobResult(
+    `/api/documents/${documentId}/export${search}`,
+  )
+  const skipped = Number(headers.get('x-obiter-comments-skipped') ?? '0')
+  return { blob, skippedCommentCount: Number.isFinite(skipped) ? skipped : 0 }
 }
 
 export function useDocumentModel(

@@ -2663,9 +2663,12 @@
                   <td>
                     View-gated ready DOCX download. Optional
                     <code>versionId</code>. Empty comments return the stored
-                    source bytes unchanged; otherwise product comments are
-                    embedded. Audit records ids and
-                    <code>commentCount</code> only.
+                    source bytes unchanged; otherwise comments whose anchors
+                    resolve in the exported version are embedded, and the rest
+                    are skipped with the count in
+                    <code>x-obiter-comments-skipped</code>. Audit records ids,
+                    <code>commentCount</code>, and
+                    <code>skippedCommentCount</code> only.
                   </td>
                 </tr>
                 <tr>
