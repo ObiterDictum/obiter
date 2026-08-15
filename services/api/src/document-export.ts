@@ -1,5 +1,11 @@
 import type { Pool } from 'pg'
-import { parseDocx, serialiseDocxWithComments } from '@obiter/ooxml'
+import type { DocumentComment } from '@obiter/contracts'
+import {
+  OoxmlError,
+  parseDocx,
+  serialiseDocxWithComments,
+  validateCommentAnchor,
+} from '@obiter/ooxml'
 import { CommentsDatabaseError, listDocumentComments } from './comments-db'
 import {
   appendAuditLog,
@@ -30,7 +36,12 @@ export class DocumentExportError extends DocumentArtifactStoreError {
 
 export type DocumentExportResult =
   | { status: 'not_found' }
-  | { status: 'ok'; bytes: Uint8Array; filename: string }
+  | {
+      status: 'ok'
+      bytes: Uint8Array
+      filename: string
+      skippedCommentCount: number
+    }
 
 export async function exportDocumentDocx(
   pool: Pool,
@@ -65,9 +76,9 @@ export async function exportDocumentDocx(
     throw new DocumentExportError()
   }
 
-  const bytes =
+  const embedded =
     comments.length === 0
-      ? Uint8Array.from(source)
+      ? { bytes: Uint8Array.from(source), skippedCommentCount: 0 }
       : await embedComments(source, comments)
 
   await appendAuditLog(pool, {
@@ -80,14 +91,16 @@ export async function exportDocumentDocx(
       matterId: input.matterId,
       versionId: input.version.id,
       commentCount: comments.length,
+      skippedCommentCount: embedded.skippedCommentCount,
     },
     requestId: input.requestId,
   })
 
   return {
     status: 'ok',
-    bytes,
+    bytes: embedded.bytes,
     filename: documentExportFilename(input.version.filename),
+    skippedCommentCount: embedded.skippedCommentCount,
   }
 }
 
@@ -120,10 +133,31 @@ async function listComments(
 async function embedComments(
   source: Buffer,
   comments: NonNullable<Awaited<ReturnType<typeof listDocumentComments>>>,
-) {
+): Promise<{ bytes: Uint8Array; skippedCommentCount: number }> {
   try {
     const document = await parseDocx(Uint8Array.from(source))
-    return await serialiseDocxWithComments(document, comments)
+    const resolvable: DocumentComment[] = []
+    let skippedCommentCount = 0
+    for (const comment of comments) {
+      try {
+        validateCommentAnchor(document.model, comment.anchor)
+        resolvable.push(comment)
+      } catch (error) {
+        if (
+          error instanceof OoxmlError &&
+          error.code === 'comment-anchor-unresolved'
+        ) {
+          skippedCommentCount += 1
+        } else {
+          throw error
+        }
+      }
+    }
+    const bytes =
+      resolvable.length === 0
+        ? Uint8Array.from(source)
+        : await serialiseDocxWithComments(document, resolvable)
+    return { bytes, skippedCommentCount }
   } catch {
     throw new DocumentExportError()
   }

@@ -145,6 +145,7 @@ describe('GET /api/documents/:id/export response', () => {
     expect(response.headers.get('content-disposition')).toBe(
       'attachment; filename="private.docx"',
     )
+    expect(response.headers.get('x-obiter-comments-skipped')).toBeNull()
     expect(bytes.equals(sourceBytes)).toBe(true)
     expect(storage.binaryReads).toEqual([sourceObjectKey])
     expect(database.audits).toEqual([
@@ -156,6 +157,7 @@ describe('GET /api/documents/:id/export response', () => {
           matterId: 'mtr_1',
           versionId: 'ver_1',
           commentCount: 0,
+          skippedCommentCount: 0,
         },
       },
     ])
@@ -200,12 +202,52 @@ describe('GET /api/documents/:id/export response', () => {
           matterId: 'mtr_1',
           versionId: 'ver_1',
           commentCount: 1,
+          skippedCommentCount: 0,
         },
       },
     ])
     expect(JSON.stringify(database.audits)).not.toContain(
       'Synthetic review note',
     )
+  })
+
+  it('skips comments whose anchors do not resolve and surfaces the count', async () => {
+    const database = new TestDatabase({ access: 'view' })
+    database.seedComment({
+      paragraphId: fixtureParagraphId,
+      body: 'Resolvable review note',
+    })
+    database.seedComment({
+      paragraphId: 'para-gone',
+      body: 'Stale review note',
+    })
+    const storage = new MemoryStorage()
+    const response = await routeApp(database, storage).app.request(
+      '/api/documents/doc_1/export',
+    )
+    const bytes = Buffer.from(await response.arrayBuffer())
+    const exported = await parseDocx(bytes)
+    const commentsXml = new TextDecoder().decode(
+      exported.sourceParts.get('word/comments.xml')?.originalPayload,
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('x-obiter-comments-skipped')).toBe('1')
+    expect(commentsXml).toContain('Resolvable review note')
+    expect(commentsXml).not.toContain('Stale review note')
+    expect(database.audits).toEqual([
+      {
+        entityType: 'document',
+        entityId: 'doc_1',
+        action: 'document.export',
+        metadata: {
+          matterId: 'mtr_1',
+          versionId: 'ver_1',
+          commentCount: 2,
+          skippedCommentCount: 1,
+        },
+      },
+    ])
   })
 
   it('does not read storage when the comments query no longer sees the document', async () => {

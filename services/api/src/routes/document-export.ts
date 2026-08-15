@@ -40,16 +40,23 @@ export function createDocumentExportRoutes(
     })
     if (exported.status === 'not_found') return documentNotFound(c)
 
+    const headers = new Headers({
+      'content-type': DOCUMENT_EXPORT_CONTENT_TYPE,
+      'content-disposition': documentExportContentDisposition(
+        exported.filename,
+      ),
+      'cache-control': 'no-store',
+      'x-content-type-options': 'nosniff',
+    })
+    if (exported.skippedCommentCount > 0) {
+      headers.set(
+        'x-obiter-comments-skipped',
+        String(exported.skippedCommentCount),
+      )
+    }
     return new Response(Uint8Array.from(exported.bytes), {
       status: 200,
-      headers: {
-        'content-type': DOCUMENT_EXPORT_CONTENT_TYPE,
-        'content-disposition': documentExportContentDisposition(
-          exported.filename,
-        ),
-        'cache-control': 'no-store',
-        'x-content-type-options': 'nosniff',
-      },
+      headers,
     })
   })
 
