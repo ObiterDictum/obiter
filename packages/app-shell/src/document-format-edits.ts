@@ -133,7 +133,7 @@ function formattedParagraph(
     preservedXmlFragments: numbering
       ? patchFragments(
           paragraph.preservedXmlFragments,
-          numberingXml(numbering),
+          numberingXml(paragraph.preservedXmlFragments, numbering),
           /<w:pPr\b/u,
         )
       : paragraph.preservedXmlFragments,
@@ -152,9 +152,19 @@ function formattedParagraph(
   }
 }
 
-function numberingXml(numbering: NumberingDraft) {
-  if (numbering.numId === null) return '<w:pPr/>'
-  return `<w:pPr><w:numPr><w:ilvl w:val="${String(numbering.ilvl ?? 0)}"/><w:numId w:val="${numbering.numId}"/></w:numPr></w:pPr>`
+function numberingXml(fragments: readonly string[], numbering: NumberingDraft) {
+  const current =
+    fragments.find((fragment) => /<w:pPr\b/u.test(fragment)) ?? '<w:pPr/>'
+  const base =
+    current.trim() === '' || /\/\s*>$/u.test(current)
+      ? '<w:pPr/>'
+      : strip(current, 'numPr')
+  if (numbering.numId === null) return base
+  const numPr = `<w:numPr><w:ilvl w:val="${String(numbering.ilvl ?? 0)}"/><w:numId w:val="${numbering.numId}"/></w:numPr>`
+  if (/\/\s*>$/u.test(base)) {
+    return `${base.replace(/\/\s*>$/u, '>')}${numPr}</w:pPr>`
+  }
+  return base.replace(/(<\/[^>]+>)$/u, `${numPr}$1`)
 }
 
 function emphasisXml(fragments: readonly string[], emphasis: PendingEmphasis) {

@@ -97,7 +97,218 @@ describe('run emphasis and paragraph numbering edits', () => {
       [...document.sourceParts.values()].every(({ dirty }) => !dirty),
     ).toBe(true)
   })
+
+  it('merges style and numbering in one batch into a single pPr for every pPr shape', async () => {
+    const fixture = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+    const cases: Array<{
+      name: string
+      bytes: Uint8Array
+      paragraphId: string
+    }> = []
+    const base = await zipText(fixture, 'word/document.xml')
+    const plain = mainParagraphs(await parseDocx(fixture)).find((paragraph) =>
+      paragraph.preservedXmlFragments.some((fragment) =>
+        /<w:pPr\b/u.test(fragment),
+      ),
+    )
+    if (!plain) throw new Error('Fixture paragraph is missing.')
+    cases.push({ name: 'rich pPr', bytes: fixture, paragraphId: plain.id })
+    cases.push({
+      name: 'no pPr',
+      bytes: await withDocumentXml(
+        fixture,
+        base.replace(
+          '<w:pPr><w:pStyle w:val="Heading1"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>',
+          '',
+        ),
+      ),
+      paragraphId: plain.id,
+    })
+    cases.push({
+      name: 'self-closing pPr',
+      bytes: await withDocumentXml(
+        fixture,
+        base.replace(
+          '<w:pPr><w:pStyle w:val="Heading1"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>',
+          '<w:pPr/>',
+        ),
+      ),
+      paragraphId: plain.id,
+    })
+
+    for (const { name, bytes, paragraphId } of cases) {
+      for (const tracking of [false, true]) {
+        const document = await parseDocx(bytes)
+        const paragraph = mainParagraphs(document).find(
+          (candidate) => candidate.id === paragraphId,
+        )
+        if (!paragraph) throw new Error('Paragraph is missing.')
+        applyDocumentEdits(
+          document,
+          [
+            {
+              type: 'set_paragraph_style',
+              paragraphId,
+              styleId: 'Base',
+            },
+            {
+              type: 'set_paragraph_numbering',
+              paragraphId,
+              numId: '1',
+              ilvl: 1,
+            },
+          ],
+          tracking
+            ? { author: 'Review Author', date: '2026-08-12T12:00:00.000Z' }
+            : undefined,
+        )
+        const xml = await zipText(
+          await serialiseDocx(document),
+          'word/document.xml',
+        )
+        const start = xml.indexOf('<w:p w14:paraId="A1B2C3D4"')
+        const para = xml.slice(start, xml.indexOf('</w:p>', start) + 6)
+        const label = `${name} tracked=${String(tracking)}`
+        expect(para, label).toContain('<w:pStyle w:val="Base"/>')
+        expect(para, label).toContain('<w:numPr>')
+        // never two sibling properties elements
+        expect(para, label).not.toContain('</w:pPr><w:pPr>')
+        if (tracking) {
+          expect(para, label).toMatch(
+            /<w:pPrChange[^>]*>[\s\S]*?<\/w:pPrChange>/u,
+          )
+          const reparsed = await parseDocx(await serialiseDocx(document))
+          const edited = mainParagraphs(reparsed).find(
+            (candidate) => candidate.id === paragraphId,
+          )
+          expect(edited?.styleId, label).toBe('Base')
+        } else {
+          const reparsed = await parseDocx(await serialiseDocx(document))
+          const edited = mainParagraphs(reparsed).find(
+            (candidate) => candidate.id === paragraphId,
+          )
+          expect(
+            edited?.preservedXmlFragments.filter((fragment) =>
+              /<w:pPr\b/u.test(fragment),
+            ),
+            label,
+          ).toHaveLength(1)
+          expect(edited?.styleId, label).toBe('Base')
+        }
+      }
+    }
+  })
+
+  it('keeps pStyle before numPr when numbering is written first', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const paragraph = mainParagraphs(document).find(
+      (candidate) =>
+        !candidate.preservedXmlFragments.some((fragment) =>
+          /<w:pPr\b/u.test(fragment),
+        ),
+    )
+    if (!paragraph) throw new Error('No pPr-less paragraph.')
+
+    applyDocumentEdits(document, [
+      {
+        type: 'set_paragraph_numbering',
+        paragraphId: paragraph.id,
+        numId: '1',
+        ilvl: 0,
+      },
+      {
+        type: 'set_paragraph_style',
+        paragraphId: paragraph.id,
+        styleId: 'Heading1',
+      },
+    ])
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const start = xml.indexOf('<w:p>')
+    const para = xml.slice(start, xml.indexOf('</w:p>', start) + 6)
+    expect(para.indexOf('<w:pStyle w:val="Heading1"/>')).toBeLessThan(
+      para.indexOf('<w:numPr>'),
+    )
+  })
+
+  it('merges run style and emphasis in one batch into a single rPr', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const run = mainParagraphs(document)[1]?.runs[0]
+    if (!run) throw new Error('Fixture run is missing.')
+
+    applyDocumentEdits(document, [
+      { type: 'set_run_style', runId: run.id, styleId: 'Heading1Char' },
+      { type: 'set_run_emphasis', runId: run.id, bold: true },
+    ])
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const reparsed = await parseDocx(await serialiseDocx(document))
+    const edited = mainParagraphs(reparsed)[1]?.runs[0]
+    const rPrs =
+      edited?.preservedXmlFragments.filter((fragment) =>
+        /<w:rPr\b/u.test(fragment),
+      ) ?? []
+    expect(rPrs).toHaveLength(1)
+    expect(rPrs.join('')).toContain('Heading1Char')
+    expect(rPrs.join('')).toContain('<w:b/>')
+    expect(xml).toContain('<w:b/>')
+  })
+
+  it('merges paragraph style and numbering into one tracked change when tracking', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const first = mainParagraphs(document)[0]
+    if (!first) throw new Error('Fixture paragraph is missing.')
+
+    applyDocumentEdits(
+      document,
+      [
+        { type: 'set_paragraph_style', paragraphId: first.id, styleId: 'Base' },
+        {
+          type: 'set_paragraph_numbering',
+          paragraphId: first.id,
+          numId: '1',
+          ilvl: 1,
+        },
+      ],
+      { author: 'Review Author', date: '2026-08-12T12:00:00.000Z' },
+    )
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const start = xml.indexOf('<w:p w14:paraId="A1B2C3D4"')
+    const para = xml.slice(start, xml.indexOf('</w:p>', start) + 6)
+    // one outer pPr carrying both edits, one pPr inside the pPrChange
+    // holding the original, never two sibling pPr elements
+    expect(para).not.toContain('</w:pPr><w:pPr>')
+    expect(para.match(/<w:pPrChange/g) ?? []).toHaveLength(1)
+    expect(para).toContain('<w:pStyle w:val="Base"/>')
+    expect(para).toContain('<w:numPr>')
+  })
 })
+
+async function zipText(input: Uint8Array, partName: string) {
+  const zip = await JSZip.loadAsync(input)
+  const part = zip.file(partName)
+  if (!part) throw new Error(`${partName} is missing.`)
+  return part.async('string')
+}
+
+async function withDocumentXml(input: Uint8Array, documentXml: string) {
+  const zip = await JSZip.loadAsync(input)
+  zip.file('word/document.xml', documentXml)
+  return zip.generateAsync({ type: 'uint8array' })
+}
 
 function mainParagraphs(document: Awaited<ReturnType<typeof parseDocx>>) {
   return (

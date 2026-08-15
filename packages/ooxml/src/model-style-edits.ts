@@ -10,6 +10,7 @@ import type {
   XmlElementRange,
 } from './model'
 import { requireEditablePart } from './model-edit-overlay'
+import { writePropertyChildren } from './model-properties'
 import {
   escapeXmlAttribute,
   setOverlayReplacement,
@@ -23,7 +24,7 @@ export function setRunStyle(
 ) {
   const part = requireEditablePart(document, anchor.partName)
   setStyleInstruction(part.overlay, {
-    key: `${anchor.wire.id}:style`,
+    id: anchor.wire.id,
     nodeRange: anchor.runRange,
     propertiesRange: anchor.runPropertiesRange,
     styleRange: anchor.runStyleRange,
@@ -42,7 +43,7 @@ export function setParagraphStyle(
 ) {
   const part = requireEditablePart(document, anchor.partName)
   setStyleInstruction(part.overlay, {
-    key: `${anchor.wire.id}:style`,
+    id: anchor.wire.id,
     nodeRange: anchor.paragraphRange,
     propertiesRange: anchor.paragraphPropertiesRange,
     styleRange: anchor.paragraphStyleRange,
@@ -57,7 +58,7 @@ export function setParagraphStyle(
 function setStyleInstruction(
   overlay: XmlOverlay,
   input: {
-    key: string
+    id: string
     nodeRange: XmlElementRange
     propertiesRange?: XmlElementRange
     styleRange?: XmlElementRange
@@ -67,7 +68,7 @@ function setStyleInstruction(
   },
 ) {
   if (input.styleRange) {
-    setOverlayReplacement(overlay, input.key, {
+    setOverlayReplacement(overlay, `${input.id}:${input.styleName}`, {
       start: input.styleRange.start,
       end: input.styleRange.end,
       value:
@@ -85,40 +86,37 @@ function setStyleInstruction(
     return
   }
   if (input.styleId === null) {
-    overlay.replacements.delete(input.key)
-    return
-  }
-
-  const instruction = `<w:${input.styleName} w:val="${escapeXmlAttribute(input.styleId)}"/>`
-  if (!input.propertiesRange) {
-    setOverlayReplacement(overlay, input.key, {
-      start: input.nodeRange.startTagEnd,
-      end: input.nodeRange.startTagEnd,
-      value: `<w:${input.propertiesName}>${instruction}</w:${input.propertiesName}>`,
-    })
-    return
-  }
-  if (input.propertiesRange.endTagStart === input.propertiesRange.end) {
-    const opening = overlay.source.slice(
-      input.propertiesRange.start,
-      input.propertiesRange.end,
+    overlay.replacements.delete(`${input.id}:${input.styleName}`)
+    const created = overlay.replacements.get(
+      `${input.id}:${input.propertiesName}`,
     )
-    setOverlayReplacement(overlay, input.key, {
-      start: input.propertiesRange.start,
-      end: input.propertiesRange.end,
-      value: expandSelfClosingProperties(
-        opening,
-        'w',
-        input.propertiesName,
-        instruction,
-      ),
-    })
+    if (created) {
+      const withoutStyle = created.value.replace(
+        new RegExp(
+          `<w:${input.styleName}\\b[^>]*?(?:/>|>[\\s\\S]*?</w:${input.styleName}>)`,
+          'u',
+        ),
+        '',
+      )
+      overlay.replacements.set(`${input.id}:${input.propertiesName}`, {
+        ...created,
+        value: withoutStyle,
+      })
+    }
     return
   }
-  setOverlayReplacement(overlay, input.key, {
-    start: input.propertiesRange.startTagEnd,
-    end: input.propertiesRange.startTagEnd,
-    value: instruction,
+  writePropertyChildren(overlay, {
+    id: input.id,
+    nodeRange: input.nodeRange,
+    propertiesRange: input.propertiesRange,
+    propertiesName: input.propertiesName,
+    children: [
+      {
+        localName: input.styleName,
+        instruction: `<w:${input.styleName} w:val="${escapeXmlAttribute(input.styleId)}"/>`,
+        apply: true,
+      },
+    ],
   })
 }
 
@@ -131,15 +129,6 @@ export function patchStyleValue(
   const value = /(\s+(?:[^\s:>]+:)?val\s*=\s*)(["'])([^"']*)\2/u
   if (value.test(fragment)) return fragment.replace(value, `$1$2${escaped}$2`)
   return fragment.replace(/(\/\s*>|>)$/u, ` ${prefix}:val="${escaped}"$1`)
-}
-
-export function expandSelfClosingProperties(
-  fragment: string,
-  prefix: string,
-  propertiesName: 'pPr' | 'rPr',
-  content: string,
-) {
-  return `${fragment.replace(/\/\s*>$/u, '>')}${content}</${prefix}:${propertiesName}>`
 }
 
 function updateWireStyle(

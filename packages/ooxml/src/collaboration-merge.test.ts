@@ -300,6 +300,94 @@ describe('bounded collaboration reconciliation', () => {
         expect(afterParts.get(name)).toEqual(bytes)
     }
   })
+  it('merges emphasis over a concurrent text change on the same run', async () => {
+    const base = await parseDocx(source)
+    const [first, second] = firstTwoRuns(base)
+    const current = await editedSource([
+      { type: 'replace_run_text', runId: first.id, text: 'Typed elsewhere' },
+    ])
+
+    expect(
+      reconcileDocumentEdits(
+        base,
+        current,
+        [{ type: 'set_run_emphasis', runId: second.id, bold: true }],
+        false,
+      ),
+    ).toEqual({ mergeable: true })
+  })
+
+  it('conflicts emphasis with a concurrent style change on the same run', async () => {
+    const base = await parseDocx(source)
+    const [, second] = firstTwoRuns(base)
+    const current = await editedSource([
+      { type: 'set_run_style', runId: second.id, styleId: 'Heading1Char' },
+    ])
+
+    expect(
+      reconcileDocumentEdits(
+        base,
+        current,
+        [{ type: 'set_run_emphasis', runId: second.id, bold: true }],
+        false,
+      ),
+    ).toEqual({ mergeable: false, operationIndexes: [0] })
+  })
+
+  it('merges numbering over a concurrent paragraph style change', async () => {
+    const base = await parseDocx(source)
+    const first = mainParagraphs(base)[0]
+    if (!first) throw new Error('Fixture paragraph is missing.')
+    const current = await editedSource([
+      { type: 'set_paragraph_style', paragraphId: first.id, styleId: 'Base' },
+    ])
+
+    expect(
+      reconcileDocumentEdits(
+        base,
+        current,
+        [
+          {
+            type: 'set_paragraph_numbering',
+            paragraphId: first.id,
+            numId: '1',
+            ilvl: 1,
+          },
+        ],
+        false,
+      ),
+    ).toEqual({ mergeable: true })
+  })
+
+  it('conflicts numbering with a concurrent numbering change on the same paragraph', async () => {
+    const base = await parseDocx(source)
+    const first = mainParagraphs(base)[0]
+    if (!first) throw new Error('Fixture paragraph is missing.')
+    const current = await editedSource([
+      {
+        type: 'set_paragraph_numbering',
+        paragraphId: first.id,
+        numId: '1',
+        ilvl: 1,
+      },
+    ])
+
+    expect(
+      reconcileDocumentEdits(
+        base,
+        current,
+        [
+          {
+            type: 'set_paragraph_numbering',
+            paragraphId: first.id,
+            numId: '1',
+            ilvl: 2,
+          },
+        ],
+        false,
+      ),
+    ).toEqual({ mergeable: false, operationIndexes: [0] })
+  })
 })
 
 async function editedSource(operations: readonly DocumentEditOperation[]) {

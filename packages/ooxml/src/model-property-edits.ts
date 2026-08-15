@@ -1,16 +1,10 @@
-import type {
-  OoxmlDocument,
-  ParagraphAnchor,
-  TextRunAnchor,
-  XmlElementRange,
-} from './model'
+import type { OoxmlDocument, ParagraphAnchor, TextRunAnchor } from './model'
 import { requireEditablePart } from './model-edit-overlay'
-import { expandSelfClosingProperties } from './model-style-edits'
 import {
-  escapeXmlAttribute,
-  setOverlayReplacement,
-  type XmlOverlay,
-} from './parts/overlay'
+  expandSelfClosingProperties,
+  writePropertyChildren,
+} from './model-properties'
+import { escapeXmlAttribute } from './parts/overlay'
 
 export type RunEmphasis = {
   bold?: boolean | null
@@ -35,17 +29,21 @@ export function setRunEmphasis(
     propertiesRange: anchor.runPropertiesRange,
     propertiesName: 'rPr',
     children: [
-      ['b', flagInstruction('b', emphasis.bold), emphasis.bold !== undefined],
-      [
-        'i',
-        flagInstruction('i', emphasis.italic),
-        emphasis.italic !== undefined,
-      ],
-      [
-        'u',
-        underlineInstruction(emphasis.underline),
-        emphasis.underline !== undefined,
-      ],
+      {
+        localName: 'b',
+        instruction: flagInstruction('b', emphasis.bold),
+        apply: emphasis.bold !== undefined,
+      },
+      {
+        localName: 'i',
+        instruction: flagInstruction('i', emphasis.italic),
+        apply: emphasis.italic !== undefined,
+      },
+      {
+        localName: 'u',
+        instruction: underlineInstruction(emphasis.underline),
+        apply: emphasis.underline !== undefined,
+      },
     ],
   })
   patchWireFragments(
@@ -71,7 +69,7 @@ export function setParagraphNumbering(
     nodeRange: anchor.paragraphRange,
     propertiesRange: anchor.paragraphPropertiesRange,
     propertiesName: 'pPr',
-    children: [['numPr', instruction, true]],
+    children: [{ localName: 'numPr', instruction, apply: true }],
   })
   patchWireFragments(
     anchor.wire,
@@ -103,88 +101,6 @@ export function patchParagraphNumberingXml(
     base,
     `<w:numPr><w:ilvl w:val="${String(ilvl)}"/><w:numId w:val="${escapeXmlAttribute(numbering.numId)}"/></w:numPr>`,
   )
-}
-
-function writePropertyChildren(
-  overlay: XmlOverlay,
-  input: {
-    id: string
-    nodeRange: XmlElementRange
-    propertiesRange?: XmlElementRange
-    propertiesName: 'pPr' | 'rPr'
-    children: ReadonlyArray<[string, string, boolean]>
-  },
-) {
-  const range = input.propertiesRange
-  if (!range) {
-    const inner = input.children
-      .filter(([, instruction, apply]) => apply && instruction)
-      .map(([, instruction]) => instruction)
-      .join('')
-    if (!inner) return
-    setOverlayReplacement(overlay, `${input.id}:${input.propertiesName}`, {
-      start: input.nodeRange.startTagEnd,
-      end: input.nodeRange.startTagEnd,
-      value: `<w:${input.propertiesName}>${inner}</w:${input.propertiesName}>`,
-    })
-    return
-  }
-  const fragment = overlay.source.slice(range.start, range.end)
-  if (/\/\s*>$/u.test(fragment)) {
-    const inner = input.children
-      .filter(([, instruction, apply]) => apply && instruction)
-      .map(([, instruction]) => instruction)
-      .join('')
-    setOverlayReplacement(overlay, `${input.id}:${input.propertiesName}`, {
-      start: range.start,
-      end: range.end,
-      value: expandSelfClosingProperties(
-        fragment,
-        'w',
-        input.propertiesName,
-        inner,
-      ),
-    })
-    return
-  }
-  for (const [localName, instruction, apply] of input.children) {
-    if (!apply) continue
-    const child = findChildRange(overlay.source, range, localName)
-    if (child) {
-      setOverlayReplacement(overlay, `${input.id}:${localName}`, {
-        start: child.start,
-        end: child.end,
-        value: instruction,
-      })
-      continue
-    }
-    if (!instruction) continue
-    setOverlayReplacement(overlay, `${input.id}:${localName}`, {
-      start: range.startTagEnd,
-      end: range.startTagEnd,
-      value: instruction,
-    })
-  }
-}
-
-function findChildRange(
-  source: string,
-  propertiesRange: XmlElementRange,
-  localName: string,
-) {
-  const inner = source.slice(
-    propertiesRange.startTagEnd,
-    propertiesRange.endTagStart,
-  )
-  const match = inner.match(
-    new RegExp(
-      `<w:${localName}\\b[^>]*?(?:/>|>[\\s\\S]*?</w:${localName}>)`,
-      'u',
-    ),
-  )
-  if (!match || match.index === undefined) return undefined
-  const start = propertiesRange.startTagEnd + match.index
-  return { start, end: start + match[0].length }
 }
 
 function flagInstruction(

@@ -9,10 +9,7 @@ import {
 } from './model'
 import { requireEditablePart } from './model-edit-overlay'
 import { insertParagraphAfter } from './model-paragraph-edits'
-import {
-  expandSelfClosingProperties,
-  patchStyleValue,
-} from './model-style-edits'
+import { expandSelfClosingProperties } from './model-properties'
 import {
   patchParagraphNumberingXml,
   patchRunEmphasisXml,
@@ -68,7 +65,14 @@ export function createTrackedEditWriter(
         anchor,
         'delText',
       )
-      const newRun = replaceRunText(source, anchor, text)
+      let newRun = replaceRunText(source, anchor, text)
+      const trackedProperties = part.overlay.replacements.get(
+        `${anchor.wire.id}:tracked-properties`,
+      )
+      if (trackedProperties) {
+        part.overlay.replacements.delete(`${anchor.wire.id}:tracked-properties`)
+        newRun = foldRprIntoRun(newRun, trackedProperties.value, prefix, 'rPr')
+      }
       setOverlayReplacement(part.overlay, `${anchor.wire.id}:tracked-text`, {
         start: anchor.runRange.start,
         end: anchor.runRange.end,
@@ -136,32 +140,34 @@ export function createTrackedEditWriter(
     setRunStyle(anchor: TextRunAnchor, styleId: string | null) {
       const part = requireEditablePart(document, anchor.partName)
       const prefix = wordPrefix(part.overlay.source, anchor.runRange, 'r')
-      setTrackedStyle(document, {
-        anchor,
+      setTrackedStyleProperties(document, {
+        id: anchor.wire.id,
+        partName: anchor.partName,
         nodeRange: anchor.runRange,
         propertiesRange: anchor.runPropertiesRange,
-        styleRange: anchor.runStyleRange,
         propertiesName: 'rPr',
         styleName: 'rStyle',
         prefix,
         styleId,
         attributes: attributes(prefix),
+        wire: anchor.wire,
       })
     },
 
     setParagraphStyle(anchor: ParagraphAnchor, styleId: string | null) {
       const part = requireEditablePart(document, anchor.partName)
       const prefix = wordPrefix(part.overlay.source, anchor.paragraphRange, 'p')
-      setTrackedStyle(document, {
-        anchor,
+      setTrackedStyleProperties(document, {
+        id: anchor.wire.id,
+        partName: anchor.partName,
         nodeRange: anchor.paragraphRange,
         propertiesRange: anchor.paragraphPropertiesRange,
-        styleRange: anchor.paragraphStyleRange,
         propertiesName: 'pPr',
         styleName: 'pStyle',
         prefix,
         styleId,
         attributes: attributes(prefix),
+        wire: anchor.wire,
       })
     },
 
@@ -220,6 +226,56 @@ function setTrackedProperties(
         input.propertiesRange.end,
       )
     : `<${input.prefix}:${input.propertiesName}/>`
+
+  // A tracked text replacement on the same node covers the whole run,
+  // including the properties element. When both fire in one batch, fold the
+  // property change into the inserted run instead of writing an overlapping
+  // full-range replacement.
+  const trackedText = part.overlay.replacements.get(`${input.id}:tracked-text`)
+  if (trackedText) {
+    const currentRpr = extractInsertedRunRpr(
+      trackedText.value,
+      input.prefix,
+      input.propertiesName,
+    )
+    const patched = appendPropertyChange(
+      input.patch(
+        stripPropertyChange(currentRpr, input.prefix, input.propertiesName),
+      ),
+      input.prefix,
+      input.propertiesName,
+      input.attributes,
+      previous,
+    )
+    part.overlay.replacements.set(`${input.id}:tracked-text`, {
+      ...trackedText,
+      value: foldRprIntoInsertedRun(
+        trackedText.value,
+        patched,
+        input.prefix,
+        input.propertiesName,
+      ),
+    })
+    part.dirty = true
+    return
+  }
+
+  const key = `${input.id}:tracked-properties`
+  const existing = part.overlay.replacements.get(key)
+  if (existing) {
+    part.overlay.replacements.set(key, {
+      ...existing,
+      value: mergeTrackedProperties(
+        existing.value,
+        input.prefix,
+        input.propertiesName,
+        input.patch,
+      ),
+    })
+    part.dirty = true
+    return
+  }
+
   const current = appendPropertyChange(
     input.patch(previous),
     input.prefix,
@@ -227,7 +283,7 @@ function setTrackedProperties(
     input.attributes,
     previous,
   )
-  setOverlayReplacement(part.overlay, `${input.id}:tracked-properties`, {
+  setOverlayReplacement(part.overlay, key, {
     start: input.propertiesRange?.start ?? input.nodeRange.startTagEnd,
     end: input.propertiesRange?.end ?? input.nodeRange.startTagEnd,
     value: current,
@@ -235,73 +291,59 @@ function setTrackedProperties(
   part.dirty = true
 }
 
-function setTrackedStyle(
+function setTrackedStyleProperties(
   document: OoxmlDocument,
   input: {
-    anchor: Pick<TextRunAnchor | ParagraphAnchor, 'partName' | 'wire'>
+    id: string
+    partName: string
     nodeRange: XmlElementRange
     propertiesRange?: XmlElementRange
-    styleRange?: XmlElementRange
     propertiesName: 'rPr' | 'pPr'
-    styleName: 'rStyle' | 'pStyle'
+    styleName: 'pStyle' | 'rStyle'
     prefix: string
     styleId: string | null
     attributes: string
+    wire: { styleId?: string }
   },
 ) {
-  const part = requireEditablePart(document, input.anchor.partName)
-  const previous = input.propertiesRange
-    ? part.overlay.source.slice(
-        input.propertiesRange.start,
-        input.propertiesRange.end,
-      )
-    : `<${input.prefix}:${input.propertiesName}/>`
-  let current = input.propertiesRange
-    ? patchPropertiesStyle(
-        part.overlay.source,
-        input.propertiesRange,
-        input.styleRange,
+  setTrackedProperties(document, {
+    id: input.id,
+    partName: input.partName,
+    nodeRange: input.nodeRange,
+    propertiesRange: input.propertiesRange,
+    propertiesName: input.propertiesName,
+    prefix: input.prefix,
+    attributes: input.attributes,
+    patch: (current) =>
+      patchStyleChild(
+        current,
         input.prefix,
         input.propertiesName,
         input.styleName,
         input.styleId,
-      )
-    : `<${input.prefix}:${input.propertiesName}>${input.styleId === null ? '' : styleInstruction(input.prefix, input.styleName, input.styleId)}</${input.prefix}:${input.propertiesName}>`
-  current = appendPropertyChange(
-    current,
-    input.prefix,
-    input.propertiesName,
-    input.attributes,
-    previous,
-  )
-  setOverlayReplacement(part.overlay, `${input.anchor.wire.id}:tracked-style`, {
-    start: input.propertiesRange?.start ?? input.nodeRange.startTagEnd,
-    end: input.propertiesRange?.end ?? input.nodeRange.startTagEnd,
-    value: current,
+      ),
   })
-  if (input.styleId === null) delete input.anchor.wire.styleId
-  else input.anchor.wire.styleId = input.styleId
-  part.dirty = true
+  if (input.styleId === null) delete input.wire.styleId
+  else input.wire.styleId = input.styleId
 }
 
-function patchPropertiesStyle(
-  source: string,
-  propertiesRange: XmlElementRange,
-  styleRange: XmlElementRange | undefined,
+function patchStyleChild(
+  fragment: string,
   prefix: string,
   propertiesName: 'pPr' | 'rPr',
   styleName: 'pStyle' | 'rStyle',
   styleId: string | null,
 ) {
-  const fragment = source.slice(propertiesRange.start, propertiesRange.end)
-  if (styleRange) {
-    const start = styleRange.start - propertiesRange.start
-    const end = styleRange.end - propertiesRange.start
-    const replacement =
-      styleId === null
-        ? ''
-        : patchStyleValue(fragment.slice(start, end), prefix, styleId)
-    return fragment.slice(0, start) + replacement + fragment.slice(end)
+  const styleElement = fragment.match(
+    new RegExp(`<${prefix}:${styleName}\\b[^>]*?/>`, 'u'),
+  )?.[0]
+  if (styleElement) {
+    if (styleId === null) return fragment.replace(styleElement, '')
+    const patched = styleElement.replace(
+      /(\s+(?:[^\s:>]+:)?val\s*=\s*)(["'])([^"']*)\2/u,
+      `$1$2${escapeXmlAttribute(styleId)}$2`,
+    )
+    return fragment.replace(styleElement, patched)
   }
   if (styleId === null) return fragment
   const instruction = styleInstruction(prefix, styleName, styleId)
@@ -314,6 +356,102 @@ function patchPropertiesStyle(
     )
   }
   return fragment.replace(/(<\/[^>]+>)$/u, `${instruction}$1`)
+}
+
+function mergeTrackedProperties(
+  value: string,
+  prefix: string,
+  propertiesName: 'pPr' | 'rPr',
+  patch: (current: string) => string,
+) {
+  const changeTag = `<${prefix}:${propertiesName}Change`
+  const changeIndex = value.indexOf(changeTag)
+  if (changeIndex === -1) return patch(value)
+  const closing = `</${prefix}:${propertiesName}>`
+  const children = value.slice(0, changeIndex)
+  const tail = value.slice(changeIndex)
+  const patched = patch(`${children}${closing}`)
+  return patched.endsWith(closing)
+    ? `${patched.slice(0, patched.length - closing.length)}${tail}`
+    : `${patched}${tail}`
+}
+
+function foldRprIntoInsertedRun(
+  value: string,
+  rprXml: string,
+  prefix: string,
+  propertiesName: 'rPr' | 'pPr',
+) {
+  const run = insertedRunFragment(value, prefix)
+  if (!run) return value
+  const folded = foldRprIntoRun(run.runXml, rprXml, prefix, propertiesName)
+  return `${value.slice(0, run.runStart)}${folded}${value.slice(run.runEnd)}`
+}
+
+function foldRprIntoRun(
+  runXml: string,
+  rprXml: string,
+  prefix: string,
+  propertiesName: 'rPr' | 'pPr',
+) {
+  const existing = runXml.match(
+    new RegExp(
+      `<${prefix}:${propertiesName}\\b[^>]*>[\\s\\S]*?</${prefix}:${propertiesName}>|<${prefix}:${propertiesName}\\b[^>]*/>`,
+      'u',
+    ),
+  )
+  if (existing?.index !== undefined) {
+    return (
+      runXml.slice(0, existing.index) +
+      rprXml +
+      runXml.slice(existing.index + existing[0].length)
+    )
+  }
+  const openingEnd = runXml.indexOf('>') + 1
+  return `${runXml.slice(0, openingEnd)}${rprXml}${runXml.slice(openingEnd)}`
+}
+
+function extractInsertedRunRpr(
+  value: string,
+  prefix: string,
+  propertiesName: 'rPr' | 'pPr',
+) {
+  const run = insertedRunFragment(value, prefix)
+  if (!run) return `<${prefix}:${propertiesName}/>`
+  const match = run.runXml.match(
+    new RegExp(
+      `<${prefix}:${propertiesName}\\b[^>]*>[\\s\\S]*?</${prefix}:${propertiesName}>|<${prefix}:${propertiesName}\\b[^>]*/>`,
+      'u',
+    ),
+  )
+  return match?.[0] ?? `<${prefix}:${propertiesName}/>`
+}
+
+function insertedRunFragment(value: string, prefix: string) {
+  const insStart = value.indexOf(`<${prefix}:ins`)
+  if (insStart === -1) return undefined
+  const insOpenEnd = value.indexOf('>', insStart)
+  if (insOpenEnd === -1) return undefined
+  const runStart = value.indexOf(`<${prefix}:r`, insOpenEnd)
+  if (runStart === -1) return undefined
+  const runEnd = value.indexOf(`</${prefix}:r>`, runStart)
+  if (runEnd === -1) return undefined
+  const end = runEnd + `</${prefix}:r>`.length
+  return { runStart, runEnd: end, runXml: value.slice(runStart, end) }
+}
+
+function stripPropertyChange(
+  properties: string,
+  prefix: string,
+  propertiesName: 'pPr' | 'rPr',
+) {
+  return properties.replace(
+    new RegExp(
+      `<${prefix}:${propertiesName}Change[\\s\\S]*?</${prefix}:${propertiesName}Change>`,
+      'u',
+    ),
+    '',
+  )
 }
 
 function appendPropertyChange(

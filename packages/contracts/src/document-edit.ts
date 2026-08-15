@@ -61,7 +61,16 @@ export const documentEditOperationSchema = z.discriminatedUnion('type', [
       numId: editIdSchema.nullable(),
       ilvl: z.number().int().min(0).max(8).optional(),
     })
-    .strict(),
+    .strict()
+    .superRefine((operation, context) => {
+      if (operation.numId !== null && operation.ilvl === undefined) {
+        context.addIssue({
+          code: 'custom',
+          path: ['ilvl'],
+          message: 'ilvl is required when numId is set.',
+        })
+      }
+    }),
   z
     .object({
       type: z.literal('insert_paragraph_after'),
