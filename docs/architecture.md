@@ -365,8 +365,10 @@ comment create request carries the body and anchor; the server binds the
 comment to the current ready DOCX version as `anchorVersionId`. Comments are
 document-scoped, with that version id retained as nullable provenance so a
 stable paragraph can survive an S4 version change. If the paragraph or range
-is absent after an edit, the comment remains stored as an orphan and export
-fails closed. It is never silently re-anchored, deleted, or moved.
+is absent after an edit, the comment remains stored as an orphan and is never
+silently re-anchored, deleted, or moved. The export route (see the M1.25 DOCX
+export decision below) skips such comments rather than failing the download;
+the 10 August "fails closed" wording is superseded by that decision.
 
 Create `packages/contracts/src/document-comments.ts` and re-export it. The
 shared schemas cover the anchor, create request, list response, create
@@ -726,3 +728,21 @@ footnote or endnote marks from `w:footnoteReference` / `w:endnoteReference`.
 Note bodies are laid out after the main story on the page. Note paragraphs
 are read-only. Creating list operations and editing headers, footers, or
 notes remains out of scope.
+
+### M1.25 DOCX export: source bytes plus product comments (13 August 2026)
+
+Context: the editor Export control downloaded reconstructed plain text. Word
+comments already had a package writer (`serialiseDocxWithComments`) but no
+authenticated download route.
+
+Decision: add view-gated `GET /api/documents/:id/export` with optional
+`versionId`. Ready DOCX only. When the document has no comments, return the
+immutable source bytes unchanged. When it has comments, parse that version,
+validate each comment anchor against that version's model, and embed only the
+comments whose anchors resolve; unresolvable anchors are skipped, never a
+blanket 500. The skipped count is surfaced in the
+`x-obiter-comments-skipped` response header and in the audit row, and the
+editor shows a banner when comments were skipped. Audit `document.export`
+with matter, version, `commentCount`, and `skippedCommentCount` only: no
+filename, object key, or comment bodies. The toolbar downloads that package
+instead of a `.txt` reconstruction.

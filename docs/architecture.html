@@ -2658,6 +2658,20 @@
                   </td>
                 </tr>
                 <tr>
+                  <td class="id">GET /api/documents/:id/export</td>
+                  <td class="id">document-export.ts</td>
+                  <td>
+                    View-gated ready DOCX download. Optional
+                    <code>versionId</code>. Empty comments return the stored
+                    source bytes unchanged; otherwise comments whose anchors
+                    resolve in the exported version are embedded, and the rest
+                    are skipped with the count in
+                    <code>x-obiter-comments-skipped</code>. Audit records ids,
+                    <code>commentCount</code>, and
+                    <code>skippedCommentCount</code> only.
+                  </td>
+                </tr>
+                <tr>
                   <td class="id">GET · POST /api/documents/:id/comments</td>
                   <td class="id">comments.ts</td>
                   <td>View-gated list and edit-gated comment creation</td>

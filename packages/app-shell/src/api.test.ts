@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, apiFetch } from './api'
+import { ApiError, apiFetch, apiFetchBlobResult } from './api'
 
 function mockResponse(body: unknown, status = 200): Response {
   return {
@@ -109,5 +109,20 @@ describe('apiFetch', () => {
       status: 404,
       requestId: 'req_456',
     })
+  })
+
+  it('apiFetchBlobResult returns the blob with its response headers', async () => {
+    const headers = new Headers({ 'x-obiter-comments-skipped': '1' })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      status: 200,
+      headers,
+      blob: async () => new Blob(),
+    } as Response)
+
+    const result = await apiFetchBlobResult('/api/documents/doc_1/export')
+
+    expect(result.blob).toBeInstanceOf(Blob)
+    expect(result.headers.get('x-obiter-comments-skipped')).toBe('1')
   })
 })

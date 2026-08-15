@@ -243,6 +243,8 @@ export async function expectDocument404(response: Response) {
 }
 
 export function queryKind(sql: string) {
+  if (sql.includes('left join document_comments')) return 'comments'
+  if (sql.includes('insert into audit_logs')) return 'audit'
   if (sql.includes('from matter_documents')) return 'document'
   if (sql.includes('matter_document_id = $2')) return 'versions'
   if (sql.includes('from document_versions')) return 'current-version'

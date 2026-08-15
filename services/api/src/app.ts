@@ -20,6 +20,7 @@ import { createCommentsRoutes } from './routes/comments'
 import { createDocumentAccessRoutes } from './routes/document-access'
 import { createDocumentCollaborationRoutes } from './routes/document-collaboration'
 import { createDocumentEditRoutes } from './routes/document-edit'
+import { createDocumentExportRoutes } from './routes/document-export'
 import { createDocumentMediaRoutes } from './routes/document-media'
 import { createDocumentModelRoutes } from './routes/document-model'
 import { createDocumentPdfViewRoutes } from './routes/document-pdf-view'
@@ -177,6 +178,7 @@ export function createApiApp(
   app.route('/', createDocumentCollaborationRoutes(pool, storage, presence))
   app.route('/', createDocumentEditRoutes(pool, storage))
   app.route('/', createDocumentModelRoutes(pool, storage))
+  app.route('/', createDocumentExportRoutes(pool, storage))
   app.route('/', createDocumentMediaRoutes(pool, storage))
   app.route('/', createDocumentPdfViewRoutes(pool, storage))
   app.route('/', createTrackedChangeRoutes(pool, storage))

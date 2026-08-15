@@ -93,12 +93,14 @@ export async function apiFetch<T>(
 }
 
 /**
- * Fetch a binary endpoint with the same auth as `apiFetch`.
+ * Fetch a binary endpoint with the same auth as `apiFetch`, returning the
+ * blob together with its response headers so callers can read out-of-band
+ * metadata such as `x-obiter-comments-skipped`.
  */
-export async function apiFetchBlob(
+export async function apiFetchBlobResult(
   input: string,
   init?: RequestInit,
-): Promise<Blob> {
+): Promise<{ blob: Blob; headers: Headers }> {
   const desktopToken = readDesktopBridge() ? await getDesktopAuthToken() : null
   const response = await fetch(apiUrl(input), {
     credentials: 'include',
@@ -135,5 +137,16 @@ export async function apiFetchBlob(
     )
   }
 
-  return response.blob()
+  return { blob: await response.blob(), headers: response.headers }
+}
+
+/**
+ * Fetch a binary endpoint with the same auth as `apiFetch`.
+ */
+export async function apiFetchBlob(
+  input: string,
+  init?: RequestInit,
+): Promise<Blob> {
+  const { blob } = await apiFetchBlobResult(input, init)
+  return blob
 }

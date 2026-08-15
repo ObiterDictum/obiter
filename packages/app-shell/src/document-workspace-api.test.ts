@@ -8,12 +8,14 @@ import {
   documentModelQueryOptions,
   documentPdfViewQueryOptions,
   documentTrackedChangesQueryOptions,
+  fetchDocumentExport,
   useDocumentImageUrls,
 } from './document-workspace-api'
 
 const api = vi.hoisted(() => ({
   apiFetch: vi.fn(),
   apiFetchBlob: vi.fn(),
+  apiFetchBlobResult: vi.fn(),
 }))
 
 vi.mock('./api', async (importOriginal) => {
@@ -22,6 +24,7 @@ vi.mock('./api', async (importOriginal) => {
     ...actual,
     apiFetch: api.apiFetch,
     apiFetchBlob: api.apiFetchBlob,
+    apiFetchBlobResult: api.apiFetchBlobResult,
   }
 })
 
@@ -56,6 +59,24 @@ describe('document workspace query options', () => {
       '/api/documents/doc_1/comments',
       '/api/documents/doc_1/tracked-changes',
     ])
+  })
+
+  it('downloads the DOCX export and surfaces the skipped comment count', async () => {
+    api.apiFetchBlobResult.mockResolvedValue({
+      blob: new Blob(),
+      headers: new Headers({ 'x-obiter-comments-skipped': '2' }),
+    })
+
+    await fetchDocumentExport('doc_1')
+    await fetchDocumentExport('doc_1', 'ver_2')
+
+    expect(api.apiFetchBlobResult.mock.calls.map((call) => call[0])).toEqual([
+      '/api/documents/doc_1/export',
+      '/api/documents/doc_1/export?versionId=ver_2',
+    ])
+    await expect(fetchDocumentExport('doc_1')).resolves.toMatchObject({
+      skippedCommentCount: 2,
+    })
   })
 })
 

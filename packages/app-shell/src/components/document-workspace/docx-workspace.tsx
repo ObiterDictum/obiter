@@ -5,7 +5,7 @@ import { ApiError } from '../../api'
 import { useCurrentUser } from '../../current-user'
 import {
   collectEditOperations,
-  downloadPlainText,
+  downloadBlob,
   isDraftDirty,
   removeInsert,
   selectedParagraphLength,
@@ -21,7 +21,7 @@ import {
   type EditorState,
   type ExtraRuns,
 } from '../../document-word-edits'
-import { documentStory, modelPlainText } from '../../document-model-text'
+import { documentStory } from '../../document-model-text'
 import { layoutDocument } from '../../document-page-engine'
 import { documentImagePartNames } from '../../document-page-media'
 import { documentDefaultFace } from '../../document-page-style'
@@ -36,6 +36,7 @@ import {
   useDocumentImageUrls,
   useResolveDocumentComment,
   useTrackedChangeDecision,
+  fetchDocumentExport,
   workspaceKeys,
 } from '../../document-workspace-api'
 import { DocumentChangesPanel } from './changes-panel'
@@ -139,6 +140,22 @@ export function DocxWorkspace({
     await queryClient.invalidateQueries({
       queryKey: workspaceKeys.sync(documentId),
     })
+  }
+
+  async function exportDocx() {
+    try {
+      const { blob, skippedCommentCount } =
+        await fetchDocumentExport(documentId)
+      downloadBlob(
+        /\.docx$/iu.test(filename) ? filename : `${filename}.docx`,
+        blob,
+      )
+      if (skippedCommentCount > 0) {
+        setBanner(skippedCommentsMessage(skippedCommentCount))
+      }
+    } catch (error) {
+      setBanner(mutationError(error))
+    }
   }
 
   async function save() {
@@ -294,7 +311,7 @@ export function DocxWorkspace({
           onToggleTrackChanges={() => setTrackChanges((value) => !value)}
           onZoom={setZoom}
           onExportText={() => {
-            if (model) downloadPlainText(filename, modelPlainText(model))
+            void exportDocx()
           }}
           onSave={() => void save()}
           onInsertParagraph={() => {
@@ -464,4 +481,10 @@ function cursorForSelection(
   const run = paragraph?.runs[0]
   if (!paragraph || !run) return null
   return { paragraphId: paragraph.id, runId: run.id, offset: 0 }
+}
+
+function skippedCommentsMessage(count: number) {
+  return count === 1
+    ? '1 comment could not be placed in the exported document and was skipped.'
+    : `${count} comments could not be placed in the exported document and were skipped.`
 }
