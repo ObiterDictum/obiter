@@ -6,6 +6,7 @@ import {
   indentList,
   mergeEmphasis,
   outdentList,
+  toggleListKind,
 } from './document-format-edits'
 
 const model: DocumentModelWire = {
@@ -148,5 +149,37 @@ describe('document format drafts', () => {
       '<w:shd w:val="clear" w:fill="F2F2F2"/>',
     )
     expect(fragments.join('')).toContain('<w:ilvl w:val="1"/>')
+  })
+
+  it('applies and removes a numbering kind from available numbering instances', () => {
+    const withBullets: DocumentModelWire = {
+      ...model,
+      numbering: [
+        ...model.numbering,
+        {
+          numberingId: '2',
+          sourceFragment: '<w:num w:numId="2"/>',
+          levels: [{ ilvl: 0, numFmt: 'bullet' }],
+        },
+      ],
+    }
+    const paragraph = { id: 'p1', runs: [], preservedXmlFragments: [] }
+    const bulleted = toggleListKind(
+      { emphasis: [], paragraphStyles: {}, numbering: {} },
+      withBullets,
+      paragraph,
+      'bullet',
+    )
+    expect(bulleted.numbering.p1).toEqual({ numId: '2', ilvl: 0 })
+    const cleared = toggleListKind(bulleted, withBullets, paragraph, 'bullet')
+    expect(cleared.numbering.p1).toEqual({ numId: null })
+    expect(
+      toggleListKind(
+        { emphasis: [], paragraphStyles: {}, numbering: {} },
+        model,
+        paragraph,
+        'bullet',
+      ),
+    ).toEqual({ emphasis: [], paragraphStyles: {}, numbering: {} })
   })
 })

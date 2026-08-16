@@ -178,7 +178,8 @@ describe('DocxWorkspace export', () => {
     })
     mountWorkspace({})
 
-    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'View' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Export document' }))
 
     await waitFor(() => {
       expect(hooks.fetchDocumentExport).toHaveBeenCalledWith('doc_1')
@@ -198,7 +199,8 @@ describe('DocxWorkspace export', () => {
     )
     mountWorkspace({})
 
-    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'View' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Export document' }))
 
     await waitFor(() => {
       expect(
@@ -216,7 +218,8 @@ describe('DocxWorkspace export', () => {
     })
     mountWorkspace({})
 
-    fireEvent.click(screen.getByRole('button', { name: 'Export' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'View' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Export document' }))
 
     await waitFor(() => {
       expect(edits.downloadBlob).toHaveBeenCalledWith('brief.docx', blob)

@@ -42,7 +42,7 @@ import {
 import { DocumentChangesPanel } from './changes-panel'
 import { DocumentCommentsPanel } from './comments-panel'
 import { DocumentModelPage } from './model-view'
-import { DocumentWorkspaceToolbar } from './toolbar'
+import { DocumentRibbon } from './ribbon'
 import { useDocumentPresenceHeartbeat } from './use-presence-heartbeat'
 import { useWorkspaceDrafts } from './use-workspace-drafts'
 import { DocumentDesk, DocumentPage } from './document-page'
@@ -289,8 +289,7 @@ export function DocxWorkspace({
       }
     >
       <WorkspaceRibbon>
-        <DocumentWorkspaceToolbar
-          kind="docx"
+        <DocumentRibbon
           dirty={dirty}
           saving={saving}
           trackChanges={trackChanges}
@@ -303,6 +302,15 @@ export function DocxWorkspace({
           currentUserId={me?.user.id}
           canEdit
           canUndo={drafts.canUndo}
+          fontFace={
+            model ? documentDefaultFace(model.styles).fontFamily : undefined
+          }
+          fontSizePt={
+            model
+              ? (documentDefaultFace(model.styles).fontSizePx ?? 0) * 0.75 ||
+                undefined
+              : undefined
+          }
           onToggleComments={() => setCommentsOpen((value) => !value)}
           onToggleChanges={() => setChangesOpen((value) => !value)}
           onToggleTrackChanges={() => setTrackChanges((value) => !value)}

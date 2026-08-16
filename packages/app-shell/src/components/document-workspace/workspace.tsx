@@ -7,7 +7,7 @@ import type { DocumentVersionRecord } from '../../documents'
 import { DocxWorkspace } from './docx-workspace'
 import { DocumentDesk } from './document-page'
 import { DocumentPdfPages } from './pdf-view'
-import { DocumentWorkspaceToolbar } from './toolbar'
+import { PdfRibbon } from './ribbon'
 import {
   LoadingBlock,
   QueryError,
@@ -85,28 +85,12 @@ function PdfWorkspace({
   return (
     <WorkspaceShell layout={layout}>
       <WorkspaceRibbon>
-        <DocumentWorkspaceToolbar
-          kind="pdf"
-          dirty={false}
-          saving={false}
-          trackChanges={false}
+        <PdfRibbon
           zoom={zoom}
-          commentsOpen={false}
-          changesOpen={false}
-          commentCount={0}
-          changeCount={0}
-          presence={[]}
-          onToggleComments={() => undefined}
-          onToggleChanges={() => undefined}
-          onToggleTrackChanges={() => undefined}
           onZoom={setZoom}
           onExportText={() => {
             if (view.data) downloadPlainText(filename, view.data.text)
           }}
-          onSave={() => undefined}
-          onInsertParagraph={() => undefined}
-          onDeleteParagraph={() => undefined}
-          canEdit={false}
         />
       </WorkspaceRibbon>
       {view.isLoading ? (
