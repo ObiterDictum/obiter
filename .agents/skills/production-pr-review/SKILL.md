@@ -1,6 +1,6 @@
 ---
 name: production-pr-review
-description: Production-grade pull request review for Obiter. Use whenever asked to review a PR, branch, diff, refactor, or change for correctness, security, architecture, data safety, tests, and release readiness. Builds repository context before reviewing and records durable architecture knowledge when a review knowledge repo is available.
+description: Production-grade pull request review for Obiter. Use whenever asked to review a PR, branch, diff, refactor, or change for correctness, security, architecture, data safety, tests, and release readiness. Pullfrog auto-reviews PRs first; this skill validates Pullfrog's findings and extends the review. Builds repository context before reviewing and records durable architecture knowledge when a review knowledge repo is available.
 ---
 
 # Production PR Review
@@ -14,19 +14,58 @@ Do not rubber-stamp. Do not say a PR is ready unless the evidence supports it. S
 ## Review Order
 
 1. Establish repository and branch state.
-2. Identify the PR's trust boundaries, data classes, and tenant/organisation isolation impact.
-3. Load the minimum authoritative context for the touched area.
-4. Build a change map from the base branch to the review branch.
-5. Load the relevant durable System Map from the review knowledge repo and validate the touched portions against current code.
-6. Build a written PR Coverage Map that overlays the diff onto the System Map before judging code.
-7. Inspect changed files and all directly coupled files.
-8. Review tests and run appropriate verification where possible.
-9. Prepare inline review comments for every actionable bug/security issue that has a stable diff location.
-10. Finalize the verdict, score, findings, inline targets, and verification evidence before any comment-drafting delegation.
-11. Prepare a standalone overall review comment that explains the verdict, score, findings, impact, fix direction, verification, system coverage, and remaining risk clearly enough to understand without opening inline threads.
-12. Prepare a final review summary that groups all findings by severity and category and includes a numeric review score.
-13. Publish review comments to GitHub through the API when explicitly asked or when operating on a real PR with GitHub access.
-14. Record durable internal workings, invariants, and recurring review knowledge in the review knowledge repo if safe to store.
+2. Load any Pullfrog review already posted on the PR (auto-review fires on PR open and on new commits) and record its findings for validation.
+3. Identify the PR's trust boundaries, data classes, and tenant/organisation isolation impact.
+4. Load the minimum authoritative context for the touched area.
+5. Build a change map from the base branch to the review branch.
+6. Load the relevant durable System Map from the review knowledge repo and validate the touched portions against current code.
+7. Build a written PR Coverage Map that overlays the diff onto the System Map before judging code.
+8. Inspect changed files and all directly coupled files.
+9. Review tests and run appropriate verification where possible.
+10. Prepare inline review comments for every actionable bug/security issue that has a stable diff location.
+11. Finalize the verdict, score, findings, inline targets, and verification evidence before any comment-drafting delegation.
+12. Prepare a standalone overall review comment that explains the verdict, score, findings, impact, fix direction, verification, system coverage, and remaining risk clearly enough to understand without opening inline threads.
+13. Prepare a final review summary that groups all findings by severity and category and includes a numeric review score.
+14. Publish review comments to GitHub through the API when explicitly asked or when operating on a real PR with GitHub access.
+15. Record durable internal workings, invariants, and recurring review knowledge in the review knowledge repo if safe to store.
+
+## Pullfrog Co-Review
+
+Pullfrog auto-reviews every PR when it opens and re-reviews when new commits
+land, before the human review runs. Our review validates Pullfrog's review and
+extends it: we confirm what Pullfrog found, correct what it got wrong, and find
+issues it missed. Pullfrog works first; we work second and own the final
+verdict.
+
+Load Pullfrog's review before judging the diff:
+
+```bash
+gh pr view <n> --json reviews --jq '.reviews[] | select(.author.login | test("pullfrog"; "i"))'
+gh api repos/<owner>/<repo>/pulls/<n>/comments --jq '.[] | select(.user.login | test("pullfrog"; "i")) | {path, line, body}'
+```
+
+Also check the `pullfrog` status check on the head commit; a still-running check
+means Pullfrog's review may be incomplete or about to change.
+
+Rules:
+
+- Pullfrog's review is input, not ground truth. Validate every Pullfrog finding
+  against the code: reproduce behavioral claims (throwaway test where needed),
+  confirm severities, and drop false positives. A Pullfrog finding we did not
+  check carries no weight in our verdict.
+- Pullfrog's coverage does not cap our scope. The System Map validation,
+  security/data gate, and full finding discovery still apply; the most valuable
+  part of the human review is what Pullfrog missed.
+- Our verdict and score derive from OUR validated finding set: confirmed
+  Pullfrog findings count toward the score at their confirmed severity;
+  disputed and false-positive Pullfrog findings do not.
+- In the published review, state which Pullfrog findings we confirmed and which
+  we dispute, with a reason for each dispute. Add our own inline comments only
+  for findings Pullfrog missed or that we dispute. Do not duplicate confirmed
+  Pullfrog comments verbatim.
+- Do not assume Pullfrog's review body is complete just because it exists;
+  verify against the diff, the System Map, and the security gate as if
+  reviewing from scratch, using Pullfrog's findings as a cross-check.
 
 ## Required Setup Commands
 

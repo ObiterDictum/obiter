@@ -9,6 +9,11 @@ description: Production-grade workflow for responding to Obiter PR reviews. Use 
 
 Turn PR review feedback into verified fixes without losing review context, hiding risk, or contaminating the PR with unrelated work. Validate every finding, implement the minimum correct change, add or update tests first where practical, push the fix, update the PR, reply clearly, and resolve review threads only when the issue is actually addressed.
 
+Review feedback arrives from two sources: Pullfrog's automated review and the
+human review. Validate findings from both equally - a Pullfrog finding is not
+automatically correct, and neither is a human finding; each is verified against
+the code before it becomes a fix.
+
 This skill complements `production-pr-review` and `production-pr-author`:
 
 - Use `production-pr-review` thinking to validate whether feedback is correct and whether additional related issues exist.
