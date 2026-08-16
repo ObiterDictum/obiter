@@ -53,7 +53,20 @@ export const documentEditOperationSchema = z.discriminatedUnion('type', [
       italic: z.boolean().nullable().optional(),
       underline: z.boolean().nullable().optional(),
     })
-    .strict(),
+    .strict()
+    .superRefine((operation, context) => {
+      if (
+        operation.bold == null &&
+        operation.italic == null &&
+        operation.underline == null
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['bold'],
+          message: 'At least one emphasis flag must be set.',
+        })
+      }
+    }),
   z
     .object({
       type: z.literal('set_paragraph_numbering'),

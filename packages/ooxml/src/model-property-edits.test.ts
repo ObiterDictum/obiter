@@ -85,6 +85,11 @@ describe('run emphasis and paragraph numbering edits', () => {
     ).toThrowError(expect.objectContaining({ code: 'invalid-document-edit' }))
     expect(() =>
       applyDocumentEdits(document, [
+        { type: 'set_run_emphasis', runId: run.id, bold: null },
+      ]),
+    ).toThrowError(expect.objectContaining({ code: 'invalid-document-edit' }))
+    expect(() =>
+      applyDocumentEdits(document, [
         {
           type: 'set_paragraph_numbering',
           paragraphId: first.id,
@@ -197,6 +202,99 @@ describe('run emphasis and paragraph numbering edits', () => {
         }
       }
     }
+  })
+
+  it('keeps pStyle first when numbering inserts into a rich pPr', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const first = mainParagraphs(document)[0]
+    if (!first) throw new Error('Fixture paragraph is missing.')
+    const story = document.model.stories.find((s) => s.kind === 'document')
+    const overlay = document.sourceParts.get(story?.partName ?? '')?.overlay
+    const anchor = document.paragraphAnchors.get(first.id)
+    if (!overlay || !anchor?.paragraphPropertiesRange) {
+      throw new Error('Fixture pPr is missing.')
+    }
+    const range = anchor.paragraphPropertiesRange
+    overlay.source =
+      overlay.source.slice(0, range.start) +
+      '<w:pPr><w:pStyle w:val="Heading1"/></w:pPr>' +
+      overlay.source.slice(range.end)
+
+    applyDocumentEdits(document, [
+      {
+        type: 'set_paragraph_numbering',
+        paragraphId: first.id,
+        numId: '1',
+        ilvl: 0,
+      },
+    ])
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const start = xml.indexOf('<w:p w14:paraId="A1B2C3D4"')
+    const para = xml.slice(start, xml.indexOf('</w:p>', start) + 6)
+    expect(para.indexOf('<w:pStyle w:val="Heading1"/>')).toBeLessThan(
+      para.indexOf('<w:numPr>'),
+    )
+  })
+
+  it('keeps rStyle first when emphasis inserts into a rich rPr', async () => {
+    const fixture = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+    const base = await zipText(fixture, 'word/document.xml')
+    const document = await parseDocx(
+      await withDocumentXml(
+        fixture,
+        base.replace(
+          '<w:r><w:t>Alice Example overview</w:t></w:r>',
+          '<w:r><w:rPr><w:rStyle w:val="Heading1Char"/></w:rPr><w:t>Alice Example overview</w:t></w:r>',
+        ),
+      ),
+    )
+    const run = mainParagraphs(document)[0]?.runs[0]
+    if (!run) throw new Error('Fixture run is missing.')
+
+    applyDocumentEdits(document, [
+      { type: 'set_run_emphasis', runId: run.id, bold: true },
+    ])
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const start = xml.indexOf('<w:r><w:rPr>')
+    const runXml = xml.slice(start, xml.indexOf('</w:r>', start) + 6)
+    expect(runXml.indexOf('Heading1Char')).toBeLessThan(
+      runXml.indexOf('<w:b/>'),
+    )
+  })
+
+  it('keeps rStyle first when a tracked style merges after emphasis', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const run = mainParagraphs(document)[1]?.runs[0]
+    if (!run) throw new Error('Fixture run is missing.')
+
+    applyDocumentEdits(
+      document,
+      [
+        { type: 'set_run_emphasis', runId: run.id, bold: true },
+        { type: 'set_run_style', runId: run.id, styleId: 'Heading1Char' },
+      ],
+      { author: 'Review Author', date: '2026-08-12T12:00:00.000Z' },
+    )
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const rPrs = xml.match(/<w:rPr>[\s\S]*?<\/w:rPr>/gu) ?? []
+    const edited = rPrs.find((fragment) => fragment.includes('Heading1Char'))
+    if (!edited) throw new Error('Edited rPr is missing.')
+    expect(edited.indexOf('Heading1Char')).toBeLessThan(
+      edited.indexOf('<w:b/>'),
+    )
   })
 
   it('keeps pStyle before numPr when numbering is written first', async () => {

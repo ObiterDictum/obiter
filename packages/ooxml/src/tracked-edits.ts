@@ -355,7 +355,11 @@ function patchStyleChild(
       instruction,
     )
   }
-  return fragment.replace(/(<\/[^>]+>)$/u, `${instruction}$1`)
+  // CT_RPr/CT_PPr require rStyle/pStyle to be the first child, so a missing
+  // style element lands right after the open tag, before existing children
+  // and before any emphasis already merged into the same replacement.
+  const openingEnd = fragment.indexOf('>') + 1
+  return `${fragment.slice(0, openingEnd)}${instruction}${fragment.slice(openingEnd)}`
 }
 
 function mergeTrackedProperties(

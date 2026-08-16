@@ -322,9 +322,9 @@ function planOperation(
 function validateEmphasis(operation: DocumentEditOperation) {
   if (operation.type !== 'set_run_emphasis') return
   if (
-    operation.bold === undefined &&
-    operation.italic === undefined &&
-    operation.underline === undefined
+    operation.bold == null &&
+    operation.italic == null &&
+    operation.underline == null
   ) {
     throw new OoxmlError('invalid-document-edit')
   }
