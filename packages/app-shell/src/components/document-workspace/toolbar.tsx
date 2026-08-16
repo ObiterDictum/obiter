@@ -1,9 +1,13 @@
 import { Badge, Button, cn } from '@obiter/ui'
 import {
+  ArrowCounterClockwise,
+  CaretDown,
+  CaretUp,
   ChatText,
   DownloadSimple,
   FloppyDisk,
   ListChecks,
+  MagnifyingGlass,
   MagnifyingGlassMinus,
   MagnifyingGlassPlus,
   Plus,
@@ -34,6 +38,14 @@ export type DocumentFormatToolbar = {
   onContinueList: () => void
 }
 
+export type DocumentFindToolbar = {
+  query: string
+  matchLabel: string
+  onQuery: (query: string) => void
+  onNext: () => void
+  onPrevious: () => void
+}
+
 export function DocumentWorkspaceToolbar({
   kind,
   dirty,
@@ -52,10 +64,13 @@ export function DocumentWorkspaceToolbar({
   onZoom,
   onExportText,
   onSave,
+  onUndo,
   onInsertParagraph,
   onDeleteParagraph,
   canEdit,
+  canUndo,
   format,
+  find,
 }: {
   kind: 'docx' | 'pdf'
   dirty: boolean
@@ -74,10 +89,13 @@ export function DocumentWorkspaceToolbar({
   onZoom: (next: number) => void
   onExportText: () => void
   onSave: () => void
+  onUndo?: () => void
   onInsertParagraph: () => void
   onDeleteParagraph: () => void
   canEdit: boolean
+  canUndo?: boolean
   format?: DocumentFormatToolbar
+  find?: DocumentFindToolbar
 }) {
   const others = presence.filter((item) => item.userId !== currentUserId)
 
@@ -109,6 +127,7 @@ export function DocumentWorkspaceToolbar({
         >
           Export
         </Button>
+        {find ? <FindControls find={find} /> : null}
         {kind === 'pdf' ? (
           <span className="pl-2 text-xs text-muted">
             View only, not editable
@@ -165,6 +184,14 @@ export function DocumentWorkspaceToolbar({
               Track changes {trackChanges ? 'on' : 'off'}
             </button>
             <Button
+              variant="ghost"
+              size="sm"
+              aria-label="Undo"
+              disabled={!canUndo}
+              onClick={onUndo}
+              iconStart={<ArrowCounterClockwise size={16} aria-hidden />}
+            />
+            <Button
               size="sm"
               disabled={!dirty || saving}
               loading={saving}
@@ -188,6 +215,36 @@ export function DocumentWorkspaceToolbar({
           ))}
         </div>
       ) : null}
+    </div>
+  )
+}
+
+function FindControls({ find }: { find: DocumentFindToolbar }) {
+  return (
+    <div className="flex items-center gap-1">
+      <MagnifyingGlass size={16} className="text-muted" aria-hidden />
+      <input
+        id="document-find"
+        aria-label="Find in document"
+        className="h-8 w-36 rounded-md border border-line bg-surface px-2 text-sm text-ink"
+        value={find.query}
+        onChange={(event) => find.onQuery(event.target.value)}
+      />
+      <span className="font-mono text-xs text-muted">{find.matchLabel}</span>
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-label="Previous match"
+        onClick={find.onPrevious}
+        iconStart={<CaretUp size={16} aria-hidden />}
+      />
+      <Button
+        variant="ghost"
+        size="sm"
+        aria-label="Next match"
+        onClick={find.onNext}
+        iconStart={<CaretDown size={16} aria-hidden />}
+      />
     </div>
   )
 }

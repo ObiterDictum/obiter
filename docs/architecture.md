@@ -750,6 +750,7 @@ authenticated download route.
 
 Decision: add view-gated `GET /api/documents/:id/export` with optional
 `versionId`. Ready DOCX only. When the document has no comments, return the
+
 immutable source bytes unchanged. When it has comments, parse that version,
 validate each comment anchor against that version's model, and embed only the
 comments whose anchors resolve; unresolvable anchors are skipped, never a
@@ -759,3 +760,14 @@ editor shows a banner when comments were skipped. Audit `document.export`
 with matter, version, `commentCount`, and `skippedCommentCount` only: no
 filename, object key, or comment bodies. The toolbar downloads that package
 instead of a `.txt` reconstruction.
+
+### M1.25 find and undo: local draft history (13 August 2026)
+
+Context: the editor could not search the open document or reverse unsaved
+edits. Server versions stay immutable; undo does not rewrite history.
+
+Decision: find walks current main-story and insert draft text and jumps to
+the hit caret. Undo pops a local snapshot of drafts, inserts, deletions,
+extra runs, and formatting. Checkpoints are taken before typed edits,
+insert, delete, and formatting. Saved versions are unchanged. Redo and
+in-run highlight painting are out of scope.

@@ -1,5 +1,6 @@
 import type {
   DocumentChangeWire,
+  DocumentCursor,
   DocumentModelWire,
   DocumentParagraphWire,
   DocumentStoryWire,
@@ -92,7 +93,7 @@ export function sliceContainsOffset(
 ): boolean {
   if (offset < from) return false
   if (offset < to) return true
-  return offset === to && to === fullLength
+  return to === fullLength && offset >= to
 }
 
 export function sliceParagraphRuns(
@@ -154,4 +155,16 @@ export function storyHasUnmodelled(story: DocumentStoryWire): boolean {
 
 export function runDraftKey(run: DocumentTextRunWire): string {
   return run.id
+}
+
+export function cursorForSelection(
+  model: DocumentModelWire,
+  paragraphId: string,
+): DocumentCursor | null {
+  const paragraph = documentStory(model)?.paragraphs.find(
+    (item) => item.id === paragraphId,
+  )
+  const run = paragraph?.runs[0]
+  if (!paragraph || !run) return null
+  return { paragraphId: paragraph.id, runId: run.id, offset: 0 }
 }

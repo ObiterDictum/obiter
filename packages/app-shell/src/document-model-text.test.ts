@@ -125,6 +125,7 @@ describe('paragraph text edits', () => {
     expect(sliceContainsOffset(5, 0, 5, 5)).toBe(true)
     expect(sliceContainsOffset(5, 0, 5, 11)).toBe(false)
     expect(sliceContainsOffset(5, 5, 11, 11)).toBe(true)
+    expect(sliceContainsOffset(11, 0, 5, 5)).toBe(true)
   })
 })
 

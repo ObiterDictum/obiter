@@ -1,36 +1,30 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import type { DocumentCursor, DocumentModelWire } from '@obiter/contracts'
 import { ApiError } from '../../api'
 import { useCurrentUser } from '../../current-user'
 import {
   collectEditOperations,
   downloadBlob,
   isDraftDirty,
-  removeInsert,
   selectedParagraphLength,
-  type LocalInsert,
 } from '../../document-edits'
 import {
   documentFormatToolbar,
-  emptyFormatDrafts,
   formattedModel,
-  type FormatDrafts,
 } from '../../document-format-edits'
 import {
-  applyDeleteBackward,
-  applyDeleteForward,
-  applyLineBreak,
-  applyReplaceRange,
-  applySplitParagraph,
-  type EditorResult,
-  type EditorState,
-  type ExtraRuns,
-} from '../../document-word-edits'
-import { documentStory } from '../../document-model-text'
+  clampFindIndex,
+  findInDocument,
+  findMatchLabel,
+  nextFindIndex,
+  previousFindIndex,
+} from '../../document-find'
+import { cursorForSelection, documentStory } from '../../document-model-text'
 import { layoutDocument } from '../../document-page-engine'
 import { documentImagePartNames } from '../../document-page-media'
 import { documentDefaultFace } from '../../document-page-style'
+import { blockText } from '../../document-word-edits'
+import { handleDocumentWorkspaceKeys } from '../../document-workspace-keys'
 import {
   useCollaborationMerge,
   useCreateDocumentComment,
@@ -48,9 +42,9 @@ import {
 import { DocumentChangesPanel } from './changes-panel'
 import { DocumentCommentsPanel } from './comments-panel'
 import { DocumentModelPage } from './model-view'
-import type { ParagraphWordEdit } from './model-paragraph'
 import { DocumentWorkspaceToolbar } from './toolbar'
 import { useDocumentPresenceHeartbeat } from './use-presence-heartbeat'
+import { useWorkspaceDrafts } from './use-workspace-drafts'
 import { DocumentDesk, DocumentPage } from './document-page'
 import {
   ConflictBanner,
@@ -94,6 +88,7 @@ export function DocxWorkspace({
   const editDocument = useEditDocument(documentId, matterId)
   const mergeDocument = useCollaborationMerge(documentId, matterId)
   const decideChange = useTrackedChangeDecision(documentId, matterId)
+  const drafts = useWorkspaceDrafts()
 
   const [zoom, setZoom] = useState(100)
   const [commentsOpen, setCommentsOpen] = useState(false)
@@ -102,22 +97,19 @@ export function DocxWorkspace({
   const [selectedParagraphId, setSelectedParagraphId] = useState<string | null>(
     null,
   )
-  const [drafts, setDrafts] = useState<Record<string, string>>({})
-  const [inserts, setInserts] = useState<LocalInsert[]>([])
-  const [deletedParagraphIds, setDeletedParagraphIds] = useState<string[]>([])
-  const [extraRuns, setExtraRuns] = useState<ExtraRuns>({})
   const [restoreCaret, setRestoreCaret] = useState<{
     paragraphId: string
     offset: number
   } | null>(null)
   const [banner, setBanner] = useState<string | null>(null)
   const [stale, setStale] = useState(false)
-  const [format, setFormat] = useState<FormatDrafts>(emptyFormatDrafts)
+  const [findQuery, setFindQuery] = useState('')
+  const [findIndex, setFindIndex] = useState(-1)
 
   const model = modelQuery.data?.model
-  const painted = model ? formattedModel(model, format) : undefined
+  const painted = model ? formattedModel(model, drafts.format) : undefined
   const pages = painted
-    ? layoutDocument(painted, drafts, inserts, extraRuns)
+    ? layoutDocument(painted, drafts.drafts, drafts.inserts, drafts.extraRuns)
     : []
   const imageUrls = useDocumentImageUrls(
     documentId,
@@ -126,11 +118,11 @@ export function DocxWorkspace({
   const dirty = model
     ? isDraftDirty(
         model,
-        drafts,
-        inserts,
-        deletedParagraphIds,
-        extraRuns,
-        format,
+        drafts.drafts,
+        drafts.inserts,
+        drafts.deletedParagraphIds,
+        drafts.extraRuns,
+        drafts.format,
       )
     : false
   const saving = editDocument.isPending || mergeDocument.isPending
@@ -142,13 +134,56 @@ export function DocxWorkspace({
   useDocumentPresenceHeartbeat(documentId, cursor, true)
   const presence = syncQuery.data?.participants ?? []
   const remoteChange = syncQuery.data?.changed === true
+  const findHits = model
+    ? findInDocument(
+        model,
+        drafts.drafts,
+        drafts.inserts,
+        drafts.deletedParagraphIds,
+        drafts.extraRuns,
+        findQuery,
+      )
+    : []
+  // Clamp the stored index to the current hit set so edits that shrink the
+  // hits cannot leave the label or navigation on a stale position.
+  const activeFindIndex = clampFindIndex(findIndex, findHits.length)
+
+  function selectParagraph(paragraphId: string, offset?: number) {
+    setSelectedParagraphId(paragraphId)
+    setRestoreCaret(offset == null ? null : { paragraphId, offset })
+  }
+
+  function jumpToHit(index: number) {
+    const hit = findHits[index]
+    if (!hit) return
+    setFindIndex(index)
+    selectParagraph(hit.paragraphId, hit.start)
+  }
+
+  function undoDocument() {
+    const beforeInserts = drafts.inserts
+    const restored = drafts.undoDraft()
+    if (!restored || !model) return
+    // Undoing a split/insert removes the paragraph the caret was on. Move
+    // selection back to the paragraph the removed insert was anchored after
+    // so the user is not left with nothing selected.
+    const target = restoreCaret?.paragraphId ?? selectedParagraphId
+    if (!target) return
+    const removed = beforeInserts.find((item) => item.clientId === target)
+    // Only redirect when the insert the caret was on is actually gone after
+    // the undo. An insert that survived (e.g. undoing a text edit inside
+    // it) must keep the caret; the editor clamps the offset to its text.
+    if (!removed || restored.inserts.some((item) => item.clientId === target)) {
+      return
+    }
+    selectParagraph(
+      removed.afterParagraphId,
+      blockText(model, restored, removed.afterParagraphId).length,
+    )
+  }
 
   async function reload() {
-    setDrafts({})
-    setInserts([])
-    setDeletedParagraphIds([])
-    setExtraRuns({})
-    setFormat(emptyFormatDrafts)
+    drafts.resetDrafts()
     setStale(false)
     setBanner(null)
     setSavedVersion(null)
@@ -180,11 +215,11 @@ export function DocxWorkspace({
     if (!model || !dirty) return
     const operations = collectEditOperations(
       model,
-      drafts,
-      inserts,
-      deletedParagraphIds,
-      extraRuns,
-      format,
+      drafts.drafts,
+      drafts.inserts,
+      drafts.deletedParagraphIds,
+      drafts.extraRuns,
+      drafts.format,
     )
     const collaborators = presence.some((item) => item.userId !== me?.user.id)
     const merge = collaborators || remoteChange
@@ -226,11 +261,7 @@ export function DocxWorkspace({
         }
       }
       setSavedVersion({ documentId, versionId: versionIdAfterSave })
-      setDrafts({})
-      setInserts([])
-      setDeletedParagraphIds([])
-      setExtraRuns({})
-      setFormat(emptyFormatDrafts)
+      drafts.resetDrafts()
       setStale(false)
       if (mergedToAvoidOverwrite) {
         setBanner(
@@ -246,71 +277,16 @@ export function DocxWorkspace({
     }
   }
 
-  function selectParagraph(paragraphId: string, offset?: number) {
-    setSelectedParagraphId(paragraphId)
-    setRestoreCaret(offset == null ? null : { paragraphId, offset })
-  }
-
-  function deleteParagraph(paragraphId: string) {
-    const removed = removeInsert(inserts, paragraphId)
-    if (removed) {
-      setInserts(removed.inserts)
-      selectParagraph(removed.selectId)
-      return
-    }
-    setDeletedParagraphIds((current) =>
-      current.includes(paragraphId) ? current : [...current, paragraphId],
-    )
-  }
-
-  function editorState(): EditorState {
-    return { drafts, inserts, deletedParagraphIds, extraRuns }
-  }
-
-  function commitEditor(result: EditorResult) {
-    setDrafts(result.state.drafts)
-    setInserts(result.state.inserts)
-    setDeletedParagraphIds(result.state.deletedParagraphIds)
-    setExtraRuns(result.state.extraRuns)
-    selectParagraph(result.caret.paragraphId, result.caret.offset)
-  }
-
-  function handleWordEdit(edit: ParagraphWordEdit) {
-    if (!model) return
-    const state = editorState()
-    const caret = { paragraphId: edit.paragraphId, offset: edit.offset }
-    const result =
-      edit.type === 'replace'
-        ? applyReplaceRange(
-            model,
-            state,
-            edit.paragraphId,
-            edit.from ?? edit.offset,
-            edit.to ?? edit.offset,
-            edit.insert ?? '',
-          )
-        : edit.type === 'deleteBackward'
-          ? applyDeleteBackward(model, state, caret)
-          : edit.type === 'deleteForward'
-            ? applyDeleteForward(model, state, caret)
-            : edit.type === 'split'
-              ? applySplitParagraph(model, state, caret, crypto.randomUUID())
-              : applyLineBreak(model, state, caret)
-    if (result) commitEditor(result)
-  }
-
   return (
     <WorkspaceShell
       layout={layout}
-      onKeyDown={(event) => {
-        if (
-          (event.metaKey || event.ctrlKey) &&
-          event.key.toLowerCase() === 's'
-        ) {
-          event.preventDefault()
-          void save()
-        }
-      }}
+      onKeyDown={(event) =>
+        handleDocumentWorkspaceKeys(event, {
+          save: () => void save(),
+          undo: undoDocument,
+          focusFind: () => document.getElementById('document-find')?.focus(),
+        })
+      }
     >
       <WorkspaceRibbon>
         <DocumentWorkspaceToolbar
@@ -326,6 +302,7 @@ export function DocxWorkspace({
           presence={presence}
           currentUserId={me?.user.id}
           canEdit
+          canUndo={drafts.canUndo}
           onToggleComments={() => setCommentsOpen((value) => !value)}
           onToggleChanges={() => setChangesOpen((value) => !value)}
           onToggleTrackChanges={() => setTrackChanges((value) => !value)}
@@ -334,33 +311,37 @@ export function DocxWorkspace({
             void exportDocx()
           }}
           onSave={() => void save()}
+          onUndo={undoDocument}
           onInsertParagraph={() => {
-            if (!selectedParagraphId || !model) return
-            const clientId = crypto.randomUUID()
-            setInserts((current) => [
-              ...current,
-              {
-                clientId,
-                afterParagraphId: selectedParagraphId,
-                text: '',
-              },
-            ])
-            selectParagraph(clientId, 0)
+            if (!selectedParagraphId) return
+            selectParagraph(drafts.insertAfter(selectedParagraphId), 0)
           }}
           onDeleteParagraph={() => {
             if (!selectedParagraphId) return
-            deleteParagraph(selectedParagraphId)
+            const selectId = drafts.deleteParagraph(selectedParagraphId)
+            if (selectId) selectParagraph(selectId)
           }}
           format={
             painted
               ? documentFormatToolbar(
                   painted,
-                  format,
+                  drafts.format,
                   selectedParagraphId,
-                  setFormat,
+                  drafts.setFormat,
                 )
               : undefined
           }
+          find={{
+            query: findQuery,
+            matchLabel: findMatchLabel(activeFindIndex, findHits.length),
+            onQuery: (query) => {
+              setFindQuery(query)
+              setFindIndex(-1)
+            },
+            onNext: () => jumpToHit(nextFindIndex(findHits, activeFindIndex)),
+            onPrevious: () =>
+              jumpToHit(previousFindIndex(findHits, activeFindIndex)),
+          }}
         />
         {stale ? (
           <ConflictBanner
@@ -412,33 +393,39 @@ export function DocxWorkspace({
                     onSelectParagraph={(paragraphId, offset) =>
                       selectParagraph(paragraphId, offset)
                     }
-                    drafts={drafts}
+                    drafts={drafts.drafts}
                     onRunTextChange={(runId, text) =>
-                      setDrafts((current) => ({ ...current, [runId]: text }))
+                      drafts.setDrafts((current) => ({
+                        ...current,
+                        [runId]: text,
+                      }))
                     }
                     editing
                     presence={presence}
                     currentUserId={me?.user.id}
-                    inserts={inserts}
-                    deletedParagraphIds={deletedParagraphIds}
+                    inserts={drafts.inserts}
+                    deletedParagraphIds={drafts.deletedParagraphIds}
                     imageUrls={imageUrls}
                     onInsertTextChange={(clientId, text) =>
-                      setInserts((current) =>
+                      drafts.setInserts((current) =>
                         current.map((item) =>
                           item.clientId === clientId ? { ...item, text } : item,
                         ),
                       )
                     }
-                    onInsertParagraph={(afterParagraphId) => {
-                      const clientId = crypto.randomUUID()
-                      setInserts((current) => [
-                        ...current,
-                        { clientId, afterParagraphId, text: '' },
-                      ])
-                      selectParagraph(clientId, 0)
+                    onInsertParagraph={(afterParagraphId) =>
+                      selectParagraph(drafts.insertAfter(afterParagraphId), 0)
+                    }
+                    onDeleteParagraph={(paragraphId) => {
+                      const selectId = drafts.deleteParagraph(paragraphId)
+                      if (selectId) selectParagraph(selectId)
                     }}
-                    onDeleteParagraph={deleteParagraph}
-                    onWordEdit={handleWordEdit}
+                    onWordEdit={(edit) => {
+                      const caret = drafts.handleWordEdit(model, edit)
+                      if (caret) {
+                        selectParagraph(caret.paragraphId, caret.offset)
+                      }
+                    }}
                     restoreCaret={restoreCaret}
                   />
                 </DocumentPage>
@@ -499,18 +486,6 @@ export function DocxWorkspace({
       ) : null}
     </WorkspaceShell>
   )
-}
-
-function cursorForSelection(
-  model: DocumentModelWire,
-  paragraphId: string,
-): DocumentCursor | null {
-  const paragraph = documentStory(model)?.paragraphs.find(
-    (item) => item.id === paragraphId,
-  )
-  const run = paragraph?.runs[0]
-  if (!paragraph || !run) return null
-  return { paragraphId: paragraph.id, runId: run.id, offset: 0 }
 }
 
 function skippedCommentsMessage(count: number) {
