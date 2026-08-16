@@ -12,6 +12,12 @@ import {
   type LocalInsert,
 } from '../../document-edits'
 import {
+  documentFormatToolbar,
+  emptyFormatDrafts,
+  formattedModel,
+  type FormatDrafts,
+} from '../../document-format-edits'
+import {
   applyDeleteBackward,
   applyDeleteForward,
   applyLineBreak,
@@ -106,15 +112,26 @@ export function DocxWorkspace({
   } | null>(null)
   const [banner, setBanner] = useState<string | null>(null)
   const [stale, setStale] = useState(false)
+  const [format, setFormat] = useState<FormatDrafts>(emptyFormatDrafts)
 
   const model = modelQuery.data?.model
-  const pages = model ? layoutDocument(model, drafts, inserts, extraRuns) : []
+  const painted = model ? formattedModel(model, format) : undefined
+  const pages = painted
+    ? layoutDocument(painted, drafts, inserts, extraRuns)
+    : []
   const imageUrls = useDocumentImageUrls(
     documentId,
     model ? documentImagePartNames(model) : [],
   )
   const dirty = model
-    ? isDraftDirty(model, drafts, inserts, deletedParagraphIds, extraRuns)
+    ? isDraftDirty(
+        model,
+        drafts,
+        inserts,
+        deletedParagraphIds,
+        extraRuns,
+        format,
+      )
     : false
   const saving = editDocument.isPending || mergeDocument.isPending
   const cursor =
@@ -131,6 +148,7 @@ export function DocxWorkspace({
     setInserts([])
     setDeletedParagraphIds([])
     setExtraRuns({})
+    setFormat(emptyFormatDrafts)
     setStale(false)
     setBanner(null)
     setSavedVersion(null)
@@ -166,6 +184,7 @@ export function DocxWorkspace({
       inserts,
       deletedParagraphIds,
       extraRuns,
+      format,
     )
     const collaborators = presence.some((item) => item.userId !== me?.user.id)
     const merge = collaborators || remoteChange
@@ -211,6 +230,7 @@ export function DocxWorkspace({
       setInserts([])
       setDeletedParagraphIds([])
       setExtraRuns({})
+      setFormat(emptyFormatDrafts)
       setStale(false)
       if (mergedToAvoidOverwrite) {
         setBanner(
@@ -331,6 +351,16 @@ export function DocxWorkspace({
             if (!selectedParagraphId) return
             deleteParagraph(selectedParagraphId)
           }}
+          format={
+            painted
+              ? documentFormatToolbar(
+                  painted,
+                  format,
+                  selectedParagraphId,
+                  setFormat,
+                )
+              : undefined
+          }
         />
         {stale ? (
           <ConflictBanner

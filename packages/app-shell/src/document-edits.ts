@@ -4,6 +4,11 @@ import type {
   DocumentTextRunWire,
 } from '@obiter/contracts'
 import { documentStory, paragraphPlainText } from './document-model-text'
+import {
+  collectFormatOperations,
+  emptyFormatDrafts,
+  type FormatDrafts,
+} from './document-format-edits'
 
 export type LocalInsert = {
   clientId: string
@@ -85,6 +90,7 @@ export function collectEditOperations(
   inserts: LocalInsert[],
   deletedParagraphIds: string[],
   extraRuns: Record<string, DocumentTextRunWire[]> = {},
+  format: FormatDrafts = emptyFormatDrafts,
 ): DocumentEditOperation[] {
   const operations: DocumentEditOperation[] = []
   const story = documentStory(model)
@@ -144,6 +150,9 @@ export function collectEditOperations(
   for (const paragraphId of emptyReplacements) {
     operations.push({ type: 'delete_paragraph', paragraphId })
   }
+  operations.push(
+    ...collectFormatOperations(model, format, deletedParagraphIds),
+  )
 
   return operations
 }
@@ -171,6 +180,7 @@ export function isDraftDirty(
   inserts: LocalInsert[],
   deletedParagraphIds: string[],
   extraRuns: Record<string, DocumentTextRunWire[]> = {},
+  format: FormatDrafts = emptyFormatDrafts,
 ) {
   return (
     collectEditOperations(
@@ -179,6 +189,7 @@ export function isDraftDirty(
       inserts,
       deletedParagraphIds,
       extraRuns,
+      format,
     ).length > 0
   )
 }

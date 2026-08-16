@@ -27,6 +27,17 @@ describe('document edit contracts', () => {
             styleId: 'Heading1',
           },
           {
+            type: 'set_run_emphasis',
+            runId: 'run_1',
+            bold: true,
+          },
+          {
+            type: 'set_paragraph_numbering',
+            paragraphId: 'para_1',
+            numId: '1',
+            ilvl: 1,
+          },
+          {
             type: 'insert_paragraph_after',
             paragraphId: 'para_1',
             text: 'Next',
@@ -94,7 +105,42 @@ describe('document edit contracts', () => {
         model: { version: 1 },
       },
     ],
+    [
+      'numbering without an ilvl',
+      {
+        baseVersionId: 'ver_1',
+        operations: [
+          {
+            type: 'set_paragraph_numbering',
+            paragraphId: 'para_1',
+            numId: '1',
+          },
+        ],
+      },
+    ],
+    [
+      'emphasis with no set flag',
+      {
+        baseVersionId: 'ver_1',
+        operations: [{ type: 'set_run_emphasis', runId: 'run_1', bold: null }],
+      },
+    ],
   ])('rejects %s', (_label, request) => {
     expect(documentEditRequestSchema.safeParse(request).success).toBe(false)
+  })
+
+  it('accepts numbering without an ilvl when the numbering is cleared', () => {
+    expect(
+      documentEditRequestSchema.safeParse({
+        baseVersionId: 'ver_1',
+        operations: [
+          {
+            type: 'set_paragraph_numbering',
+            paragraphId: 'para_1',
+            numId: null,
+          },
+        ],
+      }).success,
+    ).toBe(true)
   })
 })
