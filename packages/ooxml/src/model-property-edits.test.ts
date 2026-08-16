@@ -204,6 +204,70 @@ describe('run emphasis and paragraph numbering edits', () => {
     }
   })
 
+  it('edits the active rPr without touching an existing rPrChange record', async () => {
+    const fixture = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+    const document = await parseDocx(fixture)
+    const run = mainParagraphs(document)
+      .flatMap((paragraph) => paragraph.runs)
+      .find((candidate) => candidate.text.includes('Tracked formatting'))
+    if (!run) throw new Error('Tracked-formatting run is missing.')
+
+    applyDocumentEdits(document, [
+      { type: 'set_run_emphasis', runId: run.id, bold: false },
+    ])
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const rPrs = xml.match(/<w:rPr>[\s\S]*?<\/w:rPr>/gu) ?? []
+    const edited = rPrs.find((fragment) =>
+      fragment.includes('rPrChange w:id="15"'),
+    )
+    if (!edited) throw new Error('Edited rPr is missing.')
+    const active = edited.slice(0, edited.indexOf('<w:rPrChange'))
+    const change = edited.slice(edited.indexOf('<w:rPrChange'))
+    // toggle-off lands in the active rPr, before the change record
+    expect(active).toContain('<w:b w:val="0"/>')
+    // the recorded pre-change state is untouched
+    expect(change).toContain('<w:b/>')
+    expect(change).not.toContain('w:val="0"')
+  })
+
+  it('inserts emphasis into the active rPr before an existing rPrChange', async () => {
+    const fixture = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+    const zip = await JSZip.loadAsync(fixture)
+    const base = (await zip.file('word/document.xml')?.async('string')) ?? ''
+    zip.file(
+      'word/document.xml',
+      base.replace(
+        '<w:r><w:rPr><w:rPrChange w:id="15"',
+        '<w:r><w:rPr><w:rFonts w:ascii="Calibri"/><w:rPrChange w:id="15"',
+      ),
+    )
+    const document = await parseDocx(
+      await zip.generateAsync({ type: 'uint8array' }),
+    )
+    const run = mainParagraphs(document)
+      .flatMap((paragraph) => paragraph.runs)
+      .find((candidate) => candidate.text.includes('Tracked formatting'))
+    if (!run) throw new Error('Tracked-formatting run is missing.')
+
+    applyDocumentEdits(document, [
+      { type: 'set_run_emphasis', runId: run.id, bold: true },
+    ])
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const rPrs = xml.match(/<w:rPr>[\s\S]*?<\/w:rPr>/gu) ?? []
+    const edited = rPrs.find((fragment) =>
+      fragment.includes('rPrChange w:id="15"'),
+    )
+    if (!edited) throw new Error('Edited rPr is missing.')
+    const active = edited.slice(0, edited.indexOf('<w:rPrChange'))
+    expect(active.indexOf('Calibri')).toBeLessThan(active.indexOf('<w:b/>'))
+  })
+
   it('keeps pStyle first when numbering inserts into a rich pPr', async () => {
     const document = await parseDocx(
       await buildOoxmlFixture('full-fidelity-with-w14-ids'),

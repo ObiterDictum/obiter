@@ -151,17 +151,29 @@ export const PROPERTY_CHILD_PREDECESSORS: Record<string, readonly string[]> = {
   ],
 }
 
+// The *Change element (rPrChange/pPrChange) is the last child of its
+// properties element and records the pre-change state. Child matching and
+// insert positions must only consider the active part before it, so
+// untracked edits on nodes that already carry tracked changes cannot
+// falsify the recorded history or write into it.
+export function activePropertiesContent(content: string) {
+  const changeStart = content.search(/<w:(?:pPr|rPr)Change\b/u)
+  return changeStart === -1 ? content : content.slice(0, changeStart)
+}
+
 // Computes the offset inside a properties element fragment (for example
 // '<w:rPr><w:rFonts/></w:rPr>') where a missing child should be inserted,
-// directly after the last present predecessor.
+// directly after the last present predecessor and before any *Change
+// element.
 export function propertyChildInsertPosition(
   fragment: string,
   localName: string,
 ) {
+  const active = activePropertiesContent(fragment)
   const predecessors = PROPERTY_CHILD_PREDECESSORS[localName] ?? []
-  let position = fragment.indexOf('>') + 1
+  let position = active.indexOf('>') + 1
   for (const name of predecessors) {
-    const match = fragment.match(
+    const match = active.match(
       new RegExp(`<w:${name}\\b[^>]*?(?:/>|>[\\s\\S]*?</w:${name}>)`, 'u'),
     )
     if (match?.index !== undefined) {
@@ -209,7 +221,7 @@ export function findChildRange(
     propertiesRange.startTagEnd,
     propertiesRange.endTagStart,
   )
-  const match = inner.match(
+  const match = activePropertiesContent(inner).match(
     new RegExp(
       `<w:${localName}\\b[^>]*?(?:/>|>[\\s\\S]*?</w:${localName}>)`,
       'u',
