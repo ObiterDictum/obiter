@@ -170,7 +170,12 @@ export function DocxWorkspace({
     const target = restoreCaret?.paragraphId ?? selectedParagraphId
     if (!target) return
     const removed = beforeInserts.find((item) => item.clientId === target)
-    if (!removed) return
+    // Only redirect when the insert the caret was on is actually gone after
+    // the undo. An insert that survived (e.g. undoing a text edit inside
+    // it) must keep the caret; the editor clamps the offset to its text.
+    if (!removed || restored.inserts.some((item) => item.clientId === target)) {
+      return
+    }
     selectParagraph(
       removed.afterParagraphId,
       blockText(model, restored, removed.afterParagraphId).length,
