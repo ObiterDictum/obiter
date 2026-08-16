@@ -2,6 +2,7 @@ import type { OoxmlDocument, ParagraphAnchor, TextRunAnchor } from './model'
 import { requireEditablePart } from './model-edit-overlay'
 import {
   expandSelfClosingProperties,
+  propertyChildInsertPosition,
   writePropertyChildren,
 } from './model-properties'
 import { escapeXmlAttribute } from './parts/overlay'
@@ -99,6 +100,7 @@ export function patchParagraphNumberingXml(
   const ilvl = numbering.ilvl ?? 0
   return insertChild(
     base,
+    'numPr',
     `<w:numPr><w:ilvl w:val="${String(ilvl)}"/><w:numId w:val="${escapeXmlAttribute(numbering.numId)}"/></w:numPr>`,
   )
 }
@@ -125,6 +127,7 @@ function upsertFlag(
   if (value === null) return without
   return insertChild(
     without,
+    localName,
     value ? `<w:${localName}/>` : `<w:${localName} w:val="0"/>`,
   )
 }
@@ -134,6 +137,7 @@ function upsertUnderline(fragment: string, value: boolean | null) {
   if (value === null) return without
   return insertChild(
     without,
+    'u',
     value ? '<w:u w:val="single"/>' : '<w:u w:val="none"/>',
   )
 }
@@ -148,14 +152,15 @@ function stripChild(fragment: string, localName: string) {
   )
 }
 
-function insertChild(fragment: string, instruction: string) {
+function insertChild(fragment: string, localName: string, instruction: string) {
   if (/\/\s*>$/u.test(fragment)) {
     const name = /<w:(pPr|rPr)\b/u.exec(fragment)?.[1]
     if (name === 'pPr' || name === 'rPr') {
       return expandSelfClosingProperties(fragment, 'w', name, instruction)
     }
   }
-  return fragment.replace(/(<\/[^>]+>)$/u, `${instruction}$1`)
+  const position = propertyChildInsertPosition(fragment, localName)
+  return `${fragment.slice(0, position)}${instruction}${fragment.slice(position)}`
 }
 
 function patchWireFragments(

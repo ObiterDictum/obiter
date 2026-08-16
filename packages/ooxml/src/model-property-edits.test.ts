@@ -241,6 +241,132 @@ describe('run emphasis and paragraph numbering edits', () => {
     )
   })
 
+  it('inserts emphasis after rFonts and before sz in the untracked path', async () => {
+    const fixture = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+    const base = await zipText(fixture, 'word/document.xml')
+    const document = await parseDocx(
+      await withDocumentXml(
+        fixture,
+        base.replace(
+          '<w:r><w:t>Alice Example overview</w:t></w:r>',
+          '<w:r><w:rPr><w:rFonts w:ascii="Calibri" w:hAnsi="Calibri"/></w:rPr><w:t>Alice Example overview</w:t></w:r>',
+        ),
+      ),
+    )
+    const run = mainParagraphs(document)[0]?.runs[0]
+    if (!run) throw new Error('Fixture run is missing.')
+
+    applyDocumentEdits(document, [
+      { type: 'set_run_emphasis', runId: run.id, bold: true },
+    ])
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const start = xml.indexOf('<w:r><w:rPr>')
+    const runXml = xml.slice(start, xml.indexOf('</w:r>', start) + 6)
+    expect(runXml.indexOf('Calibri')).toBeLessThan(runXml.indexOf('<w:b/>'))
+  })
+
+  it('inserts numbering after keepNext in the untracked path', async () => {
+    const fixture = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+    const base = await zipText(fixture, 'word/document.xml')
+    const document = await parseDocx(
+      await withDocumentXml(
+        fixture,
+        base.replace(
+          '<w:pPr><w:pStyle w:val="Heading1"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>',
+          '<w:pPr><w:keepNext/></w:pPr>',
+        ),
+      ),
+    )
+    const first = mainParagraphs(document)[0]
+    if (!first) throw new Error('Fixture paragraph is missing.')
+
+    applyDocumentEdits(document, [
+      {
+        type: 'set_paragraph_numbering',
+        paragraphId: first.id,
+        numId: '1',
+        ilvl: 0,
+      },
+    ])
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const start = xml.indexOf('<w:p w14:paraId="A1B2C3D4"')
+    const para = xml.slice(start, xml.indexOf('</w:p>', start) + 6)
+    expect(para.indexOf('<w:keepNext/>')).toBeLessThan(
+      para.indexOf('<w:numPr>'),
+    )
+  })
+
+  it('inserts emphasis before sz in the tracked path', async () => {
+    const fixture = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+    const base = await zipText(fixture, 'word/document.xml')
+    const document = await parseDocx(
+      await withDocumentXml(
+        fixture,
+        base.replace(
+          '<w:r><w:t>Alice Example overview</w:t></w:r>',
+          '<w:r><w:rPr><w:sz w:val="28"/></w:rPr><w:t>Alice Example overview</w:t></w:r>',
+        ),
+      ),
+    )
+    const run = mainParagraphs(document)[0]?.runs[0]
+    if (!run) throw new Error('Fixture run is missing.')
+
+    applyDocumentEdits(
+      document,
+      [{ type: 'set_run_emphasis', runId: run.id, bold: true }],
+      { author: 'Review Author', date: '2026-08-12T12:00:00.000Z' },
+    )
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const start = xml.indexOf('<w:r><w:rPr>')
+    const runXml = xml.slice(start, xml.indexOf('</w:r>', start) + 6)
+    expect(runXml.indexOf('<w:b/>')).toBeLessThan(runXml.indexOf('<w:sz'))
+  })
+
+  it('inserts numbering before spacing in the tracked path', async () => {
+    const fixture = await buildOoxmlFixture('full-fidelity-with-w14-ids')
+    const base = await zipText(fixture, 'word/document.xml')
+    const document = await parseDocx(
+      await withDocumentXml(
+        fixture,
+        base.replace(
+          '<w:pPr><w:pStyle w:val="Heading1"/><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>',
+          '<w:pPr><w:spacing w:before="240" w:after="120"/></w:pPr>',
+        ),
+      ),
+    )
+    const first = mainParagraphs(document)[0]
+    if (!first) throw new Error('Fixture paragraph is missing.')
+
+    applyDocumentEdits(
+      document,
+      [
+        {
+          type: 'set_paragraph_numbering',
+          paragraphId: first.id,
+          numId: '1',
+          ilvl: 0,
+        },
+      ],
+      { author: 'Review Author', date: '2026-08-12T12:00:00.000Z' },
+    )
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    const start = xml.indexOf('<w:p w14:paraId="A1B2C3D4"')
+    const para = xml.slice(start, xml.indexOf('</w:p>', start) + 6)
+    expect(para.indexOf('<w:numPr>')).toBeLessThan(para.indexOf('<w:spacing'))
+  })
+
   it('keeps rStyle first when emphasis inserts into a rich rPr', async () => {
     const fixture = await buildOoxmlFixture('full-fidelity-with-w14-ids')
     const base = await zipText(fixture, 'word/document.xml')

@@ -106,9 +106,75 @@ export function writePropertyChildren(
   }
 }
 
+// CT_PPr/CT_RPr (ECMA-376) element sequences. A missing numPr must land
+// after the last of its pPr predecessors, and a missing b/i/u after the
+// last of its rPr predecessors, so both the untracked overlay writes and
+// the tracked patch functions share one ordering policy.
+export const PROPERTY_CHILD_PREDECESSORS: Record<string, readonly string[]> = {
+  numPr: [
+    'pStyle',
+    'keepNext',
+    'keepLines',
+    'pageBreakBefore',
+    'framePr',
+    'widowControl',
+  ],
+  b: ['rStyle', 'rFonts'],
+  i: ['rStyle', 'rFonts', 'b', 'bCs'],
+  u: [
+    'rStyle',
+    'rFonts',
+    'b',
+    'bCs',
+    'i',
+    'iCs',
+    'caps',
+    'smallCaps',
+    'strike',
+    'dstrike',
+    'outline',
+    'shadow',
+    'emboss',
+    'imprint',
+    'noProof',
+    'snapToGrid',
+    'vanish',
+    'webHidden',
+    'color',
+    'spacing',
+    'w',
+    'kern',
+    'position',
+    'sz',
+    'szCs',
+    'highlight',
+  ],
+}
+
+// Computes the offset inside a properties element fragment (for example
+// '<w:rPr><w:rFonts/></w:rPr>') where a missing child should be inserted,
+// directly after the last present predecessor.
+export function propertyChildInsertPosition(
+  fragment: string,
+  localName: string,
+) {
+  const predecessors = PROPERTY_CHILD_PREDECESSORS[localName] ?? []
+  let position = fragment.indexOf('>') + 1
+  for (const name of predecessors) {
+    const match = fragment.match(
+      new RegExp(`<w:${name}\\b[^>]*?(?:/>|>[\\s\\S]*?</w:${name}>)`, 'u'),
+    )
+    if (match?.index !== undefined) {
+      const end = match.index + match[0].length
+      if (end > position) position = end
+    }
+  }
+  return position
+}
+
 // CT_PPr/CT_RPr sequence requires pStyle/rStyle to be the first child. A
-// missing numPr/b/i/u must therefore land after an existing style element
-// rather than immediately after the properties open tag.
+// missing numPr/b/i/u must therefore land after the last present
+// predecessor instead of immediately after the properties open tag.
 function missingChildInsertPosition(
   source: string,
   propertiesRange: XmlElementRange,
@@ -117,12 +183,12 @@ function missingChildInsertPosition(
   if (localName === 'pStyle' || localName === 'rStyle') {
     return propertiesRange.startTagEnd
   }
-  const styleChild = findChildRange(
-    source,
-    propertiesRange,
-    localName === 'numPr' ? 'pStyle' : 'rStyle',
-  )
-  return styleChild ? styleChild.end : propertiesRange.startTagEnd
+  let position = propertiesRange.startTagEnd
+  for (const name of PROPERTY_CHILD_PREDECESSORS[localName] ?? []) {
+    const child = findChildRange(source, propertiesRange, name)
+    if (child && child.end > position) position = child.end
+  }
+  return position
 }
 
 export function expandSelfClosingProperties(
