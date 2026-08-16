@@ -70,6 +70,38 @@ const tabledModel: DocumentModelWire = {
   ],
 }
 
+const longCellText =
+  'This particular must wrap inside the narrow column, so it is long enough to overflow even the wide cell on its own.'
+
+const narrowTableModel: DocumentModelWire = {
+  ...model,
+  stories: [
+    {
+      partName: 'word/document.xml',
+      kind: 'document',
+      paragraphs: [
+        {
+          id: 'para-w14-NARROW001',
+          runs: [{ id: 'r1', text: longCellText, preservedXmlFragments: [] }],
+          preservedXmlFragments: [],
+        },
+        {
+          id: 'para-w14-WIDE00001',
+          runs: [{ id: 'r2', text: longCellText, preservedXmlFragments: [] }],
+          preservedXmlFragments: [],
+        },
+      ],
+      preservedXmlFragments: [
+        '<w:tbl><w:tblGrid><w:gridCol w:w="20"/><w:gridCol w:w="3980"/></w:tblGrid><w:tr><w:tc><w:p w14:paraId="NARROW001"><w:r><w:t>' +
+          longCellText +
+          '</w:t></w:r></w:p></w:tc><w:tc><w:p w14:paraId="WIDE00001"><w:r><w:t>' +
+          longCellText +
+          '</w:t></w:r></w:p></w:tc></w:tr></w:tbl>',
+      ],
+    },
+  ],
+}
+
 afterEach(() => {
   cleanup()
 })
@@ -402,6 +434,23 @@ describe('DocumentModelPage', () => {
       type: 'replace',
       paragraphId: 'para-w14-AABBCCDD',
     })
+  })
+
+  it('wraps cell paragraphs to the cell grid share, not the full column width', () => {
+    render(
+      <DocumentModelPage
+        model={narrowTableModel}
+        selectedParagraphId={null}
+        onSelectParagraph={() => undefined}
+      />,
+    )
+    const cells = screen.getAllByRole('cell')
+    expect(cells).toHaveLength(2)
+    const [narrow, wide] = cells
+    const narrowLines = narrow.querySelectorAll('.whitespace-pre').length
+    const wideLines = wide.querySelectorAll('.whitespace-pre').length
+    expect(narrowLines).toBeGreaterThan(1)
+    expect(narrowLines).toBeGreaterThan(wideLines)
   })
 
   it('keeps white footer text readable when the dark bar is missing', () => {

@@ -37,10 +37,8 @@ export function cellWrapWidthPx(
   columnCount = 1,
 ) {
   const pct = cell.widthPct ?? (columnCount > 0 ? 100 / columnCount : 100)
-  return Math.max(
-    0,
-    Math.round((tableWidthPx * pct) / 100) - TABLE_CELL_PAD_X_PX,
-  )
+  const pad = cell.fill ? 0 : TABLE_CELL_PAD_X_PX
+  return Math.max(1, Math.round((tableWidthPx * pct) / 100) - pad)
 }
 
 export type StoryBlock =
