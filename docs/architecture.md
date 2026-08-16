@@ -729,6 +729,19 @@ Note bodies are laid out after the main story on the page. Note paragraphs
 are read-only. Creating list operations and editing headers, footers, or
 notes remains out of scope.
 
+### M1.25 editor formatting: direct emphasis and list indent (13 August 2026)
+
+Context: `set_run_style` / `set_paragraph_style` only patch style ids.
+Bold, italic, and underline already painted from preserved `w:rPr`, but
+the editor could not persist toggles. List markers painted from numbering
+levels, but indent/outdent/continue had no write path.
+
+Decision: add `set_run_emphasis` (`w:b` / `w:i` / `w:u`) and
+`set_paragraph_numbering` (`w:numPr`) overlay ops. Style picker uses the
+existing `set_paragraph_style` op. List creation and restart remain out of
+scope. Emphasis applies to every run in the selected paragraph; intra-run
+splitting is out of scope.
+
 ### M1.25 DOCX export: source bytes plus product comments (13 August 2026)
 
 Context: the editor Export control downloaded reconstructed plain text. Word

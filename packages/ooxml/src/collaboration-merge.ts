@@ -177,6 +177,19 @@ function operationConflicts(
       changes.paragraphOpaque.has(operation.paragraphId)
     )
   }
+  if (operation.type === 'set_paragraph_numbering') {
+    return (
+      !changes.paragraphIds.has(operation.paragraphId) ||
+      changes.paragraphOpaque.has(operation.paragraphId)
+    )
+  }
+  if (operation.type === 'set_run_emphasis') {
+    return (
+      !changes.runIds.has(operation.runId) ||
+      changes.runOpaque.has(operation.runId) ||
+      changes.runStyles.has(operation.runId)
+    )
+  }
   if (!changes.runIds.has(operation.runId)) return true
   if (changes.runOpaque.has(operation.runId)) return true
   return operation.type === 'replace_run_text'
