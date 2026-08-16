@@ -338,4 +338,56 @@ describe('DocxWorkspace find and undo', () => {
       'Hello',
     )
   })
+
+  it('keeps selection on the anchor paragraph after undoing a split', () => {
+    mountWorkspace({})
+
+    const editor = screen.getByLabelText('Paragraph text')
+    editor.focus()
+    fireEvent.keyDown(editor, { key: 'Enter' })
+
+    const undo = screen.getByRole('button', { name: 'Undo' })
+    expect(undo).toHaveProperty('disabled', false)
+    fireEvent.click(undo)
+
+    // The removed insert is gone, so selection must fall back to the
+    // paragraph it was split from instead of pointing at nothing.
+    expect(screen.getByLabelText('Paragraph text')).toHaveProperty(
+      'value',
+      'Hello',
+    )
+    expect(
+      document
+        .querySelector('[aria-current="true"]')
+        ?.getAttribute('data-paragraph-id'),
+    ).toBe('p1')
+  })
+
+  it('keeps the caret inside a pending insert when undo only rewinds text', () => {
+    mountWorkspace({})
+
+    const editor = screen.getByLabelText('Paragraph text')
+    editor.focus()
+    fireEvent.keyDown(editor, { key: 'Enter' })
+
+    const insert = screen.getByLabelText<HTMLTextAreaElement>(
+      'Pending paragraph text',
+    )
+    const before = insert.value
+    fireEvent.change(insert, { target: { value: `${before} extra` } })
+
+    const undo = screen.getByRole('button', { name: 'Undo' })
+    expect(undo).toHaveProperty('disabled', false)
+    fireEvent.click(undo)
+
+    // The insert survived the undo (only its text was rewound), so the
+    // caret must stay inside it instead of jumping to the anchor paragraph.
+    expect(screen.getByLabelText('Pending paragraph text')).toHaveProperty(
+      'value',
+      before,
+    )
+    expect(
+      screen.getByLabelText('Pending paragraph').getAttribute('aria-current'),
+    ).toBe('true')
+  })
 })
