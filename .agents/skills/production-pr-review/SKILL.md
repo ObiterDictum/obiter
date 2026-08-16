@@ -194,6 +194,11 @@ For security, privacy, or isolation-sensitive changes, require targeted evidence
 
 If checks cannot be run, state exactly why and do not imply they passed.
 
+When a finding depends on runtime behavior, reproduce it with a throwaway test
+(e.g. a vitest or component test), report the reproduction and its result in
+the review's `Verification` section, then delete the throwaway. A reproduced
+debug finding is far more actionable than a hypothesis.
+
 ## UI Review Checklist
 
 For UI changes (staff screens, viewer screens, dialogs, tables), check these
@@ -325,6 +330,37 @@ Do not make the verdict generic, diplomatic, or a teaser such as "there are two 
 
 For a full request-changes body example, see `references/review-comment-example.md`.
 
+## Follow-Up Reviews
+
+A follow-up review of the same PR is a fresh review, not "round two". Each
+submission stands alone: it re-reads the current branch, re-runs verification,
+and produces its own verdict, score, and merge readiness from the branch state
+at that moment. A previously high score never carries forward automatically.
+
+Use review language, not round language:
+
+- Refer to earlier submissions as "the previous review", "the first review", or
+  "this review".
+- Never call them "round 1", "round 2", or "the previous rounds" in review
+  bodies, inline comments, the final summary, or knowledge-repo commit
+  messages. Knowledge-repo recordings use `Record PR N review:` for the first
+  review and `Record PR N re-review:` for follow-ups.
+
+Before re-judging, verify the previous review's findings are actually resolved:
+
+- Check each earlier finding against the new commits: the fix must follow the
+  stated fix direction, not just claim it.
+- Re-run the author's regression tests; where a fix is subtle, reproduce it
+  with a throwaway test and report the reproduction in `Verification` (remove
+  the throwaway after use).
+- Findings still open after the fix stay in `Must Fix` / `Findings` at their
+  established severity; do not re-grade them just because other code changed.
+
+Follow-up review bodies add a `Fixed and Verified (previous review)` section
+right after `Findings` that enumerates each earlier finding and states in one
+line each how it was resolved and what verifies it. This shows the author the
+delta without re-reading older review bodies.
+
 ## GitHub Inline Review Comments
 
 When reviewing an actual GitHub PR, produce inline comments for findings that map to changed lines. Inline comments should be thorough enough for the author to fix without guessing, but still focused on one issue.
@@ -425,7 +461,7 @@ If requesting changes, make clear which issues must be fixed before approval.
 
 The canonical local review knowledge repo for Obiter is:
 
-- `C:/Users/karl-/Documents/source/OrmontLex/review`
+- `C:/Users/karl-/Documents/source/Obiter/review`
 
 Use that path for durable review knowledge. Do not create parallel knowledge bases under `../review`, `../obiter-review`, or inside the product repo unless explicitly instructed.
 

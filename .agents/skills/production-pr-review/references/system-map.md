@@ -7,8 +7,8 @@ Use System Maps to make Obiter internals known and reviewable instead of guessed
 - Skill-local map operating model: `references/system-map.md`.
 - Skill-local agent-readable maps: `references/maps/*.md`.
 - Skill-local human visual maps: `references/maps/*.html`.
-- Current durable Obiter project knowledge: `C:/Users/karl-/Documents/source/OrmontLex/review/obiter/architecture/`.
-- Recurring Obiter patterns: `C:/Users/karl-/Documents/source/OrmontLex/review/obiter/findings-patterns/`.
+- Current durable Obiter project knowledge: `C:/Users/karl-/Documents/source/Obiter/review/obiter/architecture/`.
+- Recurring Obiter patterns: `C:/Users/karl-/Documents/source/Obiter/review/obiter/findings-patterns/`.
 
 Markdown maps are the canonical agent-readable source. HTML maps are visual companions for humans and should not be the only source of a review fact.
 
