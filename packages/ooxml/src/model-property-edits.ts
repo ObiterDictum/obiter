@@ -1,6 +1,7 @@
 import type { OoxmlDocument, ParagraphAnchor, TextRunAnchor } from './model'
 import { requireEditablePart } from './model-edit-overlay'
 import {
+  activePropertiesContent,
   expandSelfClosingProperties,
   propertyChildInsertPosition,
   writePropertyChildren,
@@ -143,13 +144,17 @@ function upsertUnderline(fragment: string, value: boolean | null) {
 }
 
 function stripChild(fragment: string, localName: string) {
-  return fragment.replace(
+  const changeStart = fragment.search(/<w:(?:pPr|rPr)Change\b/u)
+  const active =
+    changeStart === -1 ? fragment : activePropertiesContent(fragment)
+  const tail = changeStart === -1 ? '' : fragment.slice(changeStart)
+  return `${active.replace(
     new RegExp(
       `<w:${localName}\\b[^>]*?(?:/>|>[\\s\\S]*?</w:${localName}>)`,
       'u',
     ),
     '',
-  )
+  )}${tail}`
 }
 
 function insertChild(fragment: string, localName: string, instruction: string) {
