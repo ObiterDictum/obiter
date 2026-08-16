@@ -29,6 +29,18 @@ export type DisplayTable = {
   paragraphIds: string[]
 }
 
+const TABLE_CELL_PAD_X_PX = 8
+
+export function cellWrapWidthPx(
+  cell: DisplayTableCell,
+  tableWidthPx: number,
+  columnCount = 1,
+) {
+  const pct = cell.widthPct ?? (columnCount > 0 ? 100 / columnCount : 100)
+  const pad = cell.fill ? 0 : TABLE_CELL_PAD_X_PX
+  return Math.max(1, Math.round((tableWidthPx * pct) / 100) - pad)
+}
+
 export type StoryBlock =
   | { type: 'paragraph'; paragraph: DocumentParagraphWire }
   | { type: 'table'; table: DisplayTable }
