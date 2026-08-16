@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
 import {
+  cellWrapWidthPx,
   storyBlocks,
   storyTables,
   tablePaintHeight,
@@ -246,5 +247,35 @@ describe('tablePaintHeight', () => {
         ],
       }),
     ).toBe(76)
+  })
+})
+
+describe('cellWrapWidthPx', () => {
+  it('uses the cell width percentage minus horizontal padding', () => {
+    expect(
+      cellWrapWidthPx({ span: 1, paragraphIds: [], widthPct: 50 }, 400),
+    ).toBe(192)
+    expect(cellWrapWidthPx({ span: 1, paragraphIds: [] }, 400, 2)).toBe(192)
+  })
+
+  it('floors the wrap width at 1 so narrow cells still wrap per character', () => {
+    expect(
+      cellWrapWidthPx({ span: 1, paragraphIds: [], widthPct: 1 }, 400),
+    ).toBe(1)
+    expect(
+      cellWrapWidthPx({ span: 1, paragraphIds: [], widthPct: 0.5 }, 100),
+    ).toBe(1)
+  })
+
+  it('does not subtract horizontal padding for filled cells, which paint with p-0', () => {
+    expect(
+      cellWrapWidthPx(
+        { span: 1, paragraphIds: [], widthPct: 50, fill: '#1F4E79' },
+        400,
+      ),
+    ).toBe(200)
+    expect(
+      cellWrapWidthPx({ span: 1, paragraphIds: [], fill: '#A6A6A6' }, 400, 2),
+    ).toBe(200)
   })
 })

@@ -15,7 +15,11 @@ import {
   contentFrame,
 } from '../../document-page-layout'
 import { marginBandHeights } from '../../document-page-margin'
-import { storyBlocks } from '../../document-page-tables'
+import {
+  cellWrapWidthPx,
+  storyBlocks,
+  type DisplayTableCell,
+} from '../../document-page-tables'
 import type { LaidOutBlock } from '../../document-page-engine'
 import type { PageFloat, PageTextBox } from '../../document-page-floats'
 import { documentListMarkers } from '../../document-page-lists'
@@ -181,6 +185,7 @@ export function DocumentModelPage({
                   listMarkers,
                   noteMarks,
                   noteParagraphIds,
+                  columnWidthPx: column.widthPx,
                 }),
               )}
           </div>
@@ -292,9 +297,16 @@ function renderBlock(
     listMarkers: ReturnType<typeof documentListMarkers>
     noteMarks: Map<string, { mark: string; kind: NoteKind }>
     noteParagraphIds: Set<string>
+    columnWidthPx: number
   },
 ) {
   if (block.type === 'table') {
+    const cellColumnCounts = new Map<DisplayTableCell, number>()
+    for (const row of block.table.rows) {
+      for (const cell of row.cells) {
+        cellColumnCounts.set(cell, row.cells.length)
+      }
+    }
     const nodes = [
       <PageTable
         key={`tbl-${index}`}
@@ -327,6 +339,11 @@ function renderBlock(
                 imageUrls={ctx.imageUrls}
                 styles={ctx.model.styles}
                 listMarker={ctx.listMarkers.get(paragraph.id)}
+                wrapWidthPx={cellWrapWidthPx(
+                  cell,
+                  ctx.columnWidthPx,
+                  cellColumnCounts.get(cell) ?? 1,
+                )}
                 noteMark={ctx.noteMarks.get(paragraph.id)?.mark}
                 noteKind={ctx.noteMarks.get(paragraph.id)?.kind}
               />,
