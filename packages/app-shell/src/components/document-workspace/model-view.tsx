@@ -15,7 +15,11 @@ import {
   contentFrame,
 } from '../../document-page-layout'
 import { marginBandHeights } from '../../document-page-margin'
-import { cellWrapWidthPx, storyBlocks } from '../../document-page-tables'
+import {
+  cellWrapWidthPx,
+  storyBlocks,
+  type DisplayTableCell,
+} from '../../document-page-tables'
 import type { LaidOutBlock } from '../../document-page-engine'
 import type { PageFloat, PageTextBox } from '../../document-page-floats'
 import { documentListMarkers } from '../../document-page-lists'
@@ -297,6 +301,12 @@ function renderBlock(
   },
 ) {
   if (block.type === 'table') {
+    const cellColumnCounts = new Map<DisplayTableCell, number>()
+    for (const row of block.table.rows) {
+      for (const cell of row.cells) {
+        cellColumnCounts.set(cell, row.cells.length)
+      }
+    }
     const nodes = [
       <PageTable
         key={`tbl-${index}`}
@@ -307,9 +317,6 @@ function renderBlock(
             if (!paragraph || ctx.deletedParagraphIds.includes(paragraph.id)) {
               return []
             }
-            const row = block.table.rows.find((item) =>
-              item.cells.includes(cell),
-            )
             return [
               <ModelParagraph
                 key={paragraph.id}
@@ -335,7 +342,7 @@ function renderBlock(
                 wrapWidthPx={cellWrapWidthPx(
                   cell,
                   ctx.columnWidthPx,
-                  row?.cells.length ?? 1,
+                  cellColumnCounts.get(cell) ?? 1,
                 )}
                 noteMark={ctx.noteMarks.get(paragraph.id)?.mark}
                 noteKind={ctx.noteMarks.get(paragraph.id)?.kind}
