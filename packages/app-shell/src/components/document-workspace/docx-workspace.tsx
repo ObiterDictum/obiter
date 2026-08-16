@@ -13,6 +13,7 @@ import {
   formattedModel,
 } from '../../document-format-edits'
 import {
+  clampFindIndex,
   findInDocument,
   findMatchLabel,
   nextFindIndex,
@@ -22,6 +23,7 @@ import { cursorForSelection, documentStory } from '../../document-model-text'
 import { layoutDocument } from '../../document-page-engine'
 import { documentImagePartNames } from '../../document-page-media'
 import { documentDefaultFace } from '../../document-page-style'
+import { blockText } from '../../document-word-edits'
 import { handleDocumentWorkspaceKeys } from '../../document-workspace-keys'
 import {
   useCollaborationMerge,
@@ -138,9 +140,13 @@ export function DocxWorkspace({
         drafts.drafts,
         drafts.inserts,
         drafts.deletedParagraphIds,
+        drafts.extraRuns,
         findQuery,
       )
     : []
+  // Clamp the stored index to the current hit set so edits that shrink the
+  // hits cannot leave the label or navigation on a stale position.
+  const activeFindIndex = clampFindIndex(findIndex, findHits.length)
 
   function selectParagraph(paragraphId: string, offset?: number) {
     setSelectedParagraphId(paragraphId)
@@ -152,6 +158,28 @@ export function DocxWorkspace({
     if (!hit) return
     setFindIndex(index)
     selectParagraph(hit.paragraphId, hit.start)
+  }
+
+  function undoDocument() {
+    const beforeInserts = drafts.inserts
+    const restored = drafts.undoDraft()
+    if (!restored || !model) return
+    // Undoing a split/insert removes the paragraph the caret was on. Move
+    // selection back to the paragraph the removed insert was anchored after
+    // so the user is not left with nothing selected.
+    const target = restoreCaret?.paragraphId ?? selectedParagraphId
+    if (!target) return
+    const removed = beforeInserts.find((item) => item.clientId === target)
+    // Only redirect when the insert the caret was on is actually gone after
+    // the undo. An insert that survived (e.g. undoing a text edit inside
+    // it) must keep the caret; the editor clamps the offset to its text.
+    if (!removed || restored.inserts.some((item) => item.clientId === target)) {
+      return
+    }
+    selectParagraph(
+      removed.afterParagraphId,
+      blockText(model, restored, removed.afterParagraphId).length,
+    )
   }
 
   async function reload() {
@@ -255,7 +283,7 @@ export function DocxWorkspace({
       onKeyDown={(event) =>
         handleDocumentWorkspaceKeys(event, {
           save: () => void save(),
-          undo: drafts.undoDraft,
+          undo: undoDocument,
           focusFind: () => document.getElementById('document-find')?.focus(),
         })
       }
@@ -283,7 +311,7 @@ export function DocxWorkspace({
             void exportDocx()
           }}
           onSave={() => void save()}
-          onUndo={drafts.undoDraft}
+          onUndo={undoDocument}
           onInsertParagraph={() => {
             if (!selectedParagraphId) return
             selectParagraph(drafts.insertAfter(selectedParagraphId), 0)
@@ -305,13 +333,14 @@ export function DocxWorkspace({
           }
           find={{
             query: findQuery,
-            matchLabel: findMatchLabel(findIndex, findHits.length),
+            matchLabel: findMatchLabel(activeFindIndex, findHits.length),
             onQuery: (query) => {
               setFindQuery(query)
               setFindIndex(-1)
             },
-            onNext: () => jumpToHit(nextFindIndex(findHits, findIndex)),
-            onPrevious: () => jumpToHit(previousFindIndex(findHits, findIndex)),
+            onNext: () => jumpToHit(nextFindIndex(findHits, activeFindIndex)),
+            onPrevious: () =>
+              jumpToHit(previousFindIndex(findHits, activeFindIndex)),
           }}
         />
         {stale ? (
