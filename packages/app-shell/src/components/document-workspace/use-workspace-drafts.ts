@@ -44,13 +44,14 @@ export function useWorkspaceDrafts() {
 
   function undoDraft() {
     const popped = popWorkspaceDraft(past)
-    if (!popped) return
+    if (!popped) return null
     setPast(popped.history)
     setDrafts(popped.snapshot.drafts)
     setInserts(popped.snapshot.inserts)
     setDeletedParagraphIds(popped.snapshot.deletedParagraphIds)
     setExtraRuns(popped.snapshot.extraRuns)
     setFormatState(popped.snapshot.format)
+    return popped.snapshot
   }
 
   function commitEditor(result: EditorResult) {
@@ -87,21 +88,28 @@ export function useWorkspaceDrafts() {
   }
 
   function deleteParagraph(paragraphId: string) {
-    checkpoint()
     const removed = removeInsert(inserts, paragraphId)
     if (removed) {
+      checkpoint()
       setInserts(removed.inserts)
       return removed.selectId
     }
-    setDeletedParagraphIds((current) =>
-      current.includes(paragraphId) ? current : [...current, paragraphId],
-    )
+    // Deleting an already-deleted paragraph is a no-op; do not pollute
+    // history with a checkpoint that matches its successor.
+    if (deletedParagraphIds.includes(paragraphId)) return null
+    checkpoint()
+    setDeletedParagraphIds((current) => [...current, paragraphId])
     return null
   }
 
   function setFormat(update: (current: FormatDrafts) => FormatDrafts) {
+    const next = update(format)
+    // Updaters that return the same instance mean a no-op (e.g. indent on a
+    // non-list paragraph); do not checkpoint a state identical to its
+    // successor.
+    if (next === format) return
     checkpoint()
-    setFormatState(update)
+    setFormatState(next)
   }
 
   return {

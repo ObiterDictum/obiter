@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { DocumentModelWire } from '@obiter/contracts'
 import {
+  clampFindIndex,
   findInDocument,
   findMatchLabel,
   nextFindIndex,
@@ -42,12 +43,12 @@ const model: DocumentModelWire = {
 
 describe('find in document', () => {
   it('finds case-insensitive hits across paragraphs, drafts, and inserts', () => {
-    expect(findInDocument(model, {}, [], [], 'hello')).toEqual([
+    expect(findInDocument(model, {}, [], [], {}, 'hello')).toEqual([
       { paragraphId: 'p1', start: 0, end: 5 },
       { paragraphId: 'p2', start: 0, end: 5 },
     ])
     expect(
-      findInDocument(model, { r1: 'Changed World' }, [], [], 'world'),
+      findInDocument(model, { r1: 'Changed World' }, [], [], {}, 'world'),
     ).toEqual([{ paragraphId: 'p1', start: 8, end: 13 }])
     expect(
       findInDocument(
@@ -55,17 +56,18 @@ describe('find in document', () => {
         {},
         [{ clientId: 'ins1', afterParagraphId: 'p1', text: 'Hello insert' }],
         [],
+        {},
         'insert',
       ),
     ).toEqual([{ paragraphId: 'ins1', start: 6, end: 12 }])
-    expect(findInDocument(model, {}, [], ['p1'], 'hello')).toEqual([
+    expect(findInDocument(model, {}, [], ['p1'], {}, 'hello')).toEqual([
       { paragraphId: 'p2', start: 0, end: 5 },
     ])
-    expect(findInDocument(model, {}, [], [], '  ')).toEqual([])
+    expect(findInDocument(model, {}, [], [], {}, '  ')).toEqual([])
   })
 
   it('wraps next and previous hit indexes', () => {
-    const hits = findInDocument(model, {}, [], [], 'hello')
+    const hits = findInDocument(model, {}, [], [], {}, 'hello')
     expect(nextFindIndex(hits, -1)).toBe(0)
     expect(nextFindIndex(hits, 0)).toBe(1)
     expect(nextFindIndex(hits, 1)).toBe(0)
@@ -74,6 +76,70 @@ describe('find in document', () => {
     expect(findMatchLabel(-1, 0)).toBe('0 found')
     expect(findMatchLabel(-1, 2)).toBe('2 found')
     expect(findMatchLabel(0, 2)).toBe('1/2')
+  })
+
+  it('finds text stored in extraRuns for zero-run and joined paragraphs', () => {
+    const zeroRunModel: DocumentModelWire = {
+      ...model,
+      stories: [
+        {
+          partName: 'word/document.xml',
+          kind: 'document',
+          paragraphs: [{ id: 'p1', runs: [], preservedXmlFragments: [] }],
+          preservedXmlFragments: [],
+        },
+      ],
+    }
+    expect(
+      findInDocument(
+        zeroRunModel,
+        {},
+        [],
+        [],
+        {
+          p1: [{ id: 'x1', text: 'Drafted text', preservedXmlFragments: [] }],
+        },
+        'drafted',
+      ),
+    ).toEqual([{ paragraphId: 'p1', start: 0, end: 7 }])
+
+    // Backspace-join moves the lower paragraph's run into the upper
+    // paragraph's extraRuns; its text must be findable with the offset the
+    // editor renders at.
+    expect(
+      findInDocument(
+        model,
+        {},
+        [],
+        ['p2'],
+        {
+          p1: [{ id: 'r2', text: 'Hello again', preservedXmlFragments: [] }],
+        },
+        'again',
+      ),
+    ).toEqual([{ paragraphId: 'p1', start: 17, end: 22 }])
+
+    // extraRuns text also honours drafts on the extra run.
+    expect(
+      findInDocument(
+        model,
+        { r2: 'anew' },
+        [],
+        ['p2'],
+        {
+          p1: [{ id: 'r2', text: 'Hello again', preservedXmlFragments: [] }],
+        },
+        'anew',
+      ),
+    ).toEqual([{ paragraphId: 'p1', start: 11, end: 15 }])
+  })
+
+  it('clamps a stale find index to the current hit set', () => {
+    expect(clampFindIndex(3, 2)).toBe(-1)
+    expect(clampFindIndex(3, 5)).toBe(3)
+    expect(clampFindIndex(2, 2)).toBe(-1)
+    expect(clampFindIndex(-1, 0)).toBe(-1)
+    expect(clampFindIndex(-1, 4)).toBe(-1)
   })
 })
 

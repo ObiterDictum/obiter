@@ -338,4 +338,28 @@ describe('DocxWorkspace find and undo', () => {
       'Hello',
     )
   })
+
+  it('keeps selection on the anchor paragraph after undoing a split', () => {
+    mountWorkspace({})
+
+    const editor = screen.getByLabelText('Paragraph text')
+    editor.focus()
+    fireEvent.keyDown(editor, { key: 'Enter' })
+
+    const undo = screen.getByRole('button', { name: 'Undo' })
+    expect(undo).toHaveProperty('disabled', false)
+    fireEvent.click(undo)
+
+    // The removed insert is gone, so selection must fall back to the
+    // paragraph it was split from instead of pointing at nothing.
+    expect(screen.getByLabelText('Paragraph text')).toHaveProperty(
+      'value',
+      'Hello',
+    )
+    expect(
+      document
+        .querySelector('[aria-current="true"]')
+        ?.getAttribute('data-paragraph-id'),
+    ).toBe('p1')
+  })
 })
