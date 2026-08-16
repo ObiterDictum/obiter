@@ -46,4 +46,4 @@ review repo
 
 ## Map Update Rule
 
-When a review validates a concrete internal flow, record durable details in `C:/Users/karl-/Documents/source/OrmontLex/review/obiter/architecture/` or the relevant findings-pattern file. Keep examples synthetic and do not store secrets, private matter data, raw legal text, prompts, embeddings, sensitive logs, screenshots, customer data, or object keys containing sensitive names.
+When a review validates a concrete internal flow, record durable details in `C:/Users/karl-/Documents/source/Obiter/review/obiter/architecture/` or the relevant findings-pattern file. Keep examples synthetic and do not store secrets, private matter data, raw legal text, prompts, embeddings, sensitive logs, screenshots, customer data, or object keys containing sensitive names.
