@@ -1,10 +1,14 @@
-import type { DocumentModelWire } from '@obiter/contracts'
+import type {
+  DocumentModelWire,
+  DocumentParagraphWire,
+} from '@obiter/contracts'
 import {
   flowParagraphIds,
   insertPlainText,
   type LocalInsert,
 } from './document-edits'
 import { documentStory, paragraphPlainText } from './document-model-text'
+import type { ExtraRuns } from './document-word-edits'
 
 export type FindHit = {
   paragraphId: string
@@ -17,22 +21,27 @@ export function findInDocument(
   drafts: Record<string, string>,
   inserts: LocalInsert[],
   deletedParagraphIds: readonly string[],
+  extraRuns: ExtraRuns = {},
   query: string,
 ): FindHit[] {
   const needle = query.trim().toLocaleLowerCase()
   if (!needle) return []
   const hits: FindHit[] = []
   const insertById = new Map(inserts.map((item) => [item.clientId, item]))
+  const paragraphsById = new Map(
+    documentStory(model)?.paragraphs.map((item) => [item.id, item]) ?? [],
+  )
   for (const id of flowParagraphIds(model, inserts, [...deletedParagraphIds])) {
     const insert = insertById.get(id)
-    const paragraph = documentStory(model)?.paragraphs.find(
-      (item) => item.id === id,
-    )
+    const paragraph = paragraphsById.get(id)
+    // Mirror what the editor renders (blockText): original runs + drafts,
+    // then extraRuns for text typed into a zero-run paragraph or joined from
+    // the paragraph below.
     const haystack = (
       insert
         ? insertPlainText(insert)
         : paragraph
-          ? paragraphPlainText(paragraph, drafts)
+          ? paragraphTextWithExtra(paragraph, drafts, extraRuns)
           : ''
     ).toLocaleLowerCase()
     let from = 0
@@ -44,6 +53,22 @@ export function findInDocument(
     }
   }
   return hits
+}
+
+function paragraphTextWithExtra(
+  paragraph: DocumentParagraphWire,
+  drafts: Record<string, string>,
+  extraRuns: ExtraRuns,
+): string {
+  const extra = (extraRuns[paragraph.id] ?? [])
+    .map((run) => drafts[run.id] ?? run.text)
+    .join('')
+  return `${paragraphPlainText(paragraph, drafts)}${extra}`
+}
+
+export function clampFindIndex(index: number, count: number): number {
+  if (index < 0 || count === 0 || index >= count) return -1
+  return index
 }
 
 export function nextFindIndex(hits: readonly FindHit[], current: number) {
