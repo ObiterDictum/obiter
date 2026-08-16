@@ -169,6 +169,39 @@ export function applyReplaceRange(
   }
 }
 
+export function replaceFindHits(
+  model: DocumentModelWire,
+  state: EditorState,
+  hits: ReadonlyArray<{ paragraphId: string; start: number; end: number }>,
+  replacement: string,
+  which: number | 'all',
+): EditorResult | undefined {
+  if (hits.length === 0) return undefined
+  const selected =
+    which === 'all' ? [...hits].reverse() : hits[which] ? [hits[which]] : []
+  if (selected.length === 0) return undefined
+  let current = state
+  let caret = {
+    paragraphId: selected[0]?.paragraphId ?? '',
+    offset: selected[0]?.start ?? 0,
+  }
+  for (const hit of selected) {
+    if (!hit) continue
+    const result = applyReplaceRange(
+      model,
+      current,
+      hit.paragraphId,
+      hit.start,
+      hit.end,
+      replacement,
+    )
+    if (!result) continue
+    current = result.state
+    caret = result.caret
+  }
+  return { state: current, caret }
+}
+
 export function applySplitParagraph(
   model: DocumentModelWire,
   state: EditorState,

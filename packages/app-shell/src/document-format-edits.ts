@@ -6,8 +6,15 @@ import type {
 import { documentStory } from './document-model-text'
 import { paragraphNumPr } from './document-page-lists'
 import { xmlAttr, xmlTagAttrs } from './document-page-units'
+import {
+  paragraphListKind,
+  pickNumberingId,
+  toggleParagraphList,
+  type ListKind,
+} from './document-list-toggle'
 
 export { paragraphNumPr } from './document-page-lists'
+export type { ListKind } from './document-list-toggle'
 
 export type PendingEmphasis = {
   runId: string
@@ -290,49 +297,6 @@ export function outdentList(
   }
 }
 
-export type ListKind = 'bullet' | 'number'
-
-export function listKindOf(
-  model: DocumentModelWire,
-  numId: string | null,
-): ListKind | null {
-  if (!numId) return null
-  const numFmt = model.numbering
-    .find((item) => item.numberingId === numId)
-    ?.levels?.find((level) => level.ilvl === 0)?.numFmt
-  if (numFmt === 'bullet') return 'bullet'
-  if (numFmt && numFmt !== 'none') return 'number'
-  return null
-}
-
-export function toggleListKind(
-  format: FormatDrafts,
-  model: DocumentModelWire,
-  paragraph: DocumentParagraphWire,
-  kind: ListKind,
-): FormatDrafts {
-  const current =
-    format.numbering[paragraph.id] ?? paragraphNumPr(paragraph, model.styles)
-  const activeKind = current?.numId ? listKindOf(model, current.numId) : null
-  if (activeKind === kind) {
-    return {
-      ...format,
-      numbering: { ...format.numbering, [paragraph.id]: { numId: null } },
-    }
-  }
-  const target = model.numbering.find(
-    (item) => listKindOf(model, item.numberingId) === kind,
-  )
-  if (!target) return format
-  return {
-    ...format,
-    numbering: {
-      ...format.numbering,
-      [paragraph.id]: { numId: target.numberingId, ilvl: 0 },
-    },
-  }
-}
-
 export function continueList(
   format: FormatDrafts,
   model: DocumentModelWire,
@@ -409,15 +373,10 @@ export function formatControlState(
     canIndent,
     canOutdent: Boolean(numPr?.numId),
     canContinue: Boolean(previousNum?.numId),
-    bulletList: numPr?.numId
-      ? listKindOf(model, numPr.numId) === 'bullet'
-      : false,
-    numberList: numPr?.numId
-      ? listKindOf(model, numPr.numId) === 'number'
-      : false,
-    canToggleLists: model.numbering.some(
-      (item) => listKindOf(model, item.numberingId) !== null,
-    ),
+    listKind: paragraphListKind(model, format, paragraph),
+    canApplyBullet: Boolean(pickNumberingId(model, 'bullet')),
+    canApplyNumber: Boolean(pickNumberingId(model, 'number')),
+    canApplyMultilevel: Boolean(pickNumberingId(model, 'multilevel')),
   }
 }
 
@@ -438,9 +397,10 @@ export function documentFormatToolbar(
     canIndent: controls.canIndent,
     canOutdent: controls.canOutdent,
     canContinue: controls.canContinue,
-    bulletList: controls.bulletList,
-    numberList: controls.numberList,
-    canToggleLists: controls.canToggleLists,
+    listKind: controls.listKind,
+    canApplyBullet: controls.canApplyBullet,
+    canApplyNumber: controls.canApplyNumber,
+    canApplyMultilevel: controls.canApplyMultilevel,
     onParagraphStyle: (styleId: string | null) => {
       if (!paragraphId) return
       setFormat((current) =>
@@ -487,16 +447,10 @@ export function documentFormatToolbar(
       if (!paragraph) return
       setFormat((current) => continueList(current, model, paragraph))
     },
-    onToggleBullets: () => {
+    onToggleList: (kind: ListKind) => {
       if (!paragraph) return
       setFormat((current) =>
-        toggleListKind(current, model, paragraph, 'bullet'),
-      )
-    },
-    onToggleNumbers: () => {
-      if (!paragraph) return
-      setFormat((current) =>
-        toggleListKind(current, model, paragraph, 'number'),
+        toggleParagraphList(current, model, paragraph, kind),
       )
     },
   }
