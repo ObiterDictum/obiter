@@ -118,6 +118,13 @@ describe('document edit contracts', () => {
         ],
       },
     ],
+    [
+      'emphasis with no set flag',
+      {
+        baseVersionId: 'ver_1',
+        operations: [{ type: 'set_run_emphasis', runId: 'run_1', bold: null }],
+      },
+    ],
   ])('rejects %s', (_label, request) => {
     expect(documentEditRequestSchema.safeParse(request).success).toBe(false)
   })

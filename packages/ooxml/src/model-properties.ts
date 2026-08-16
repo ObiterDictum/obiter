@@ -93,12 +93,36 @@ export function writePropertyChildren(
       continue
     }
     if (!child.instruction) continue
+    const insertAt = missingChildInsertPosition(
+      overlay.source,
+      range,
+      child.localName,
+    )
     setOverlayReplacement(overlay, `${input.id}:${child.localName}`, {
-      start: range.startTagEnd,
-      end: range.startTagEnd,
+      start: insertAt,
+      end: insertAt,
       value: child.instruction,
     })
   }
+}
+
+// CT_PPr/CT_RPr sequence requires pStyle/rStyle to be the first child. A
+// missing numPr/b/i/u must therefore land after an existing style element
+// rather than immediately after the properties open tag.
+function missingChildInsertPosition(
+  source: string,
+  propertiesRange: XmlElementRange,
+  localName: string,
+) {
+  if (localName === 'pStyle' || localName === 'rStyle') {
+    return propertiesRange.startTagEnd
+  }
+  const styleChild = findChildRange(
+    source,
+    propertiesRange,
+    localName === 'numPr' ? 'pStyle' : 'rStyle',
+  )
+  return styleChild ? styleChild.end : propertiesRange.startTagEnd
 }
 
 export function expandSelfClosingProperties(
