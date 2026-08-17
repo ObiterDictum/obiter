@@ -6,14 +6,14 @@ import {
   type LegalSearchFilters,
 } from '@obiter/search-client'
 import type { ApiEnv } from '../../env'
-import { isSupportedFindCaseLawRequest } from './atom-parser'
-import { createMojRateLimiter } from './rate-limiter'
 import {
+  isSupportedFindCaseLawRequest,
+  createMojRateLimiter,
   legalDocumentIdSchema,
   legalFetchRequestSchema,
   type LegalFetchRequest,
-} from './fetch-schema'
-import { extractNeutralCitation } from './document-utils'
+  extractNeutralCitation,
+} from '@obiter/legal-source-provider'
 import {
   apiError,
   toFetchResponse,
@@ -670,7 +670,7 @@ function toSearchFilters(request: LegalFetchRequest): LegalSearchFilters {
   }
 }
 
-export { parseFindCaseLawAtom } from './atom-parser'
-export { parseJudgmentParagraphs } from './html-parser'
+export { parseFindCaseLawAtom } from '@obiter/legal-source-provider'
+export { parseJudgmentParagraphs } from '@obiter/legal-source-provider'
 export { createPostgresLegalAuthoritySourceStore } from './source-store'
 export type { LegalFetchSearchHit } from './response-utils'
