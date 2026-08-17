@@ -38,12 +38,22 @@ export function readIdentifier(xml: string) {
   )?.[1]
 }
 
+/**
+ * Attribute values in an Atom feed are XML-escaped, so a paged feed's next link
+ * arrives as `...&amp;page=2`. Handed to `new URL` undecoded it parses as a
+ * parameter literally named `amp;page`, which silently drops both the page
+ * number and every filter after the first ampersand: the request then returns
+ * page one again. Decoding here keeps that from reaching any caller.
+ */
 function readLink(xml: string, predicate: (attributes: string) => boolean) {
   const attributes = Array.from(xml.matchAll(/<link\b([^>]*?)\/?>/gi))
     .map((match) => match[1])
     .find(predicate)
 
-  return attributes ? readLinkAttribute(attributes, 'href') : undefined
+  if (!attributes) return undefined
+
+  const href = readLinkAttribute(attributes, 'href')
+  return href === undefined ? undefined : decodeXml(href)
 }
 
 function hasLinkRel(attributes: string, rel: string) {
