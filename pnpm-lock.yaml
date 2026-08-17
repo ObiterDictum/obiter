@@ -197,6 +197,15 @@ importers:
         specifier: ^4.3.6
         version: 4.3.6
 
+  packages/legal-source-provider:
+    dependencies:
+      '@obiter/legal-schema':
+        specifier: workspace:*
+        version: link:../legal-schema
+      zod:
+        specifier: ^4.3.6
+        version: 4.3.6
+
   packages/ooxml:
     dependencies:
       '@obiter/contracts':
@@ -336,6 +345,9 @@ importers:
       '@obiter/legal-schema':
         specifier: workspace:*
         version: link:../../packages/legal-schema
+      '@obiter/legal-source-provider':
+        specifier: workspace:*
+        version: link:../../packages/legal-source-provider
       '@obiter/ooxml':
         specifier: workspace:*
         version: link:../../packages/ooxml

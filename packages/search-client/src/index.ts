@@ -173,11 +173,54 @@ const searchableAttributes = [
   'paragraphs.text',
 ]
 
+/**
+ * Meilisearch comparison operators take numeric operands only, so a range
+ * filter cannot read the ISO `dateDecided` string. The index carries this
+ * derived companion field for range filtering; `dateDecided` remains the
+ * authority and the only date the domain schema and callers ever see.
+ */
+const dateDecidedTimestampField = 'dateDecidedTimestamp'
+
+/**
+ * Midnight UTC for an ISO `YYYY-MM-DD` date. Every indexed value lands on a day
+ * boundary, so an inclusive `dateTo` needs no end-of-day adjustment: a document
+ * decided on the boundary day compares equal, not greater.
+ */
+function toDateDecidedTimestamp(isoDate: string): number | null {
+  const match = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return null
+
+  const timestamp = Date.UTC(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+  )
+  return Number.isNaN(timestamp) ? null : timestamp
+}
+
+/**
+ * Projects a validated authority into the shape sent to the engine. The schema
+ * has already guaranteed `dateDecided` is an ISO date, so a null here means the
+ * two have drifted apart rather than that a caller passed something odd.
+ */
+function toIndexedLegalAuthority(document: LegalAuthority) {
+  const timestamp = toDateDecidedTimestamp(document.dateDecided)
+
+  if (timestamp === null) {
+    throw new Error(
+      `Cannot derive ${dateDecidedTimestampField} for document ${document.id}: dateDecided "${document.dateDecided}" passed schema validation but is not an ISO date.`,
+    )
+  }
+
+  return { ...document, [dateDecidedTimestampField]: timestamp }
+}
+
 const filterableAttributes = [
   'court',
   'jurisdiction',
   'sourceType',
   'dateDecided',
+  dateDecidedTimestampField,
 ]
 const sortableAttributes = ['dateDecided']
 const legalStopWords = [
@@ -332,10 +375,12 @@ export async function indexDocuments(
     )
   }
 
+  const indexable = parsed.data.map(toIndexedLegalAuthority)
+
   try {
     const task = await client
       .index(indexName)
-      .addDocuments(parsed.data, {
+      .addDocuments(indexable, {
         primaryKey: 'id',
       })
       .waitTask({ timeout: documentIndexingTaskTimeoutMs, interval: 100 })
@@ -382,6 +427,11 @@ export async function search(
   filters: LegalSearchFilters = {},
   options: LegalSearchOptions = {},
 ): Promise<LegalSearchResult> {
+  // Built before the try: a malformed filter is the caller's input error, and
+  // wrapping it as a provider failure would hide which filter was wrong behind
+  // a generic "Search failed."
+  const filter = toMeiliFilters(filters)
+
   try {
     const searchOptions: {
       filter?: string[]
@@ -392,7 +442,7 @@ export async function search(
       rankingScoreThreshold?: number
       showRankingScore?: boolean
     } = {
-      filter: toMeiliFilters(filters),
+      filter,
       sort: ['dateDecided:desc'],
       matchingStrategy:
         options.matchingStrategy ?? legalSearchIndexSettings.matchingStrategy,
@@ -855,11 +905,33 @@ function toMeiliFilters(filters: LegalSearchFilters): string[] | undefined {
   if (filters.sourceType)
     clauses.push(`sourceType = ${quoteFilter(filters.sourceType)}`)
   if (filters.dateFrom)
-    clauses.push(`dateDecided >= ${quoteFilter(filters.dateFrom)}`)
+    clauses.push(
+      `${dateDecidedTimestampField} >= ${toFilterTimestamp('dateFrom', filters.dateFrom)}`,
+    )
   if (filters.dateTo)
-    clauses.push(`dateDecided <= ${quoteFilter(filters.dateTo)}`)
+    clauses.push(
+      `${dateDecidedTimestampField} <= ${toFilterTimestamp('dateTo', filters.dateTo)}`,
+    )
 
   return clauses.length > 0 ? clauses : undefined
+}
+
+/**
+ * A malformed bound is rejected rather than dropped. Dropping it would widen the
+ * result set past what the caller asked for and return dates outside the
+ * requested range as though they belonged.
+ */
+function toFilterTimestamp(
+  field: 'dateFrom' | 'dateTo',
+  value: string,
+): number {
+  const timestamp = toDateDecidedTimestamp(value)
+
+  if (timestamp === null) {
+    throw new Error(`Search filter ${field} must be an ISO date (YYYY-MM-DD).`)
+  }
+
+  return timestamp
 }
 
 function quoteFilter(value: string) {

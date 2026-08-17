@@ -9,15 +9,10 @@ import {
   type LegalSearchFilters,
 } from '@obiter/search-client'
 
-export interface ProviderSourceMetadata {
-  documentUri: string
-  sourceUri: string
-  xmlUri: string | null
-  pdfUri: string | null
-  contentHash: string
-  rawAtomEntry: string
-  rawDocumentHtml?: string
-}
+// Defined alongside the provider that produces it, and re-exported here so
+// storage callers keep importing it from the store they already use.
+export type { ProviderSourceMetadata } from '@obiter/legal-source-provider'
+import type { ProviderSourceMetadata } from '@obiter/legal-source-provider'
 
 export interface StoredLegalAuthorityRecord {
   summary: LegalAuthority

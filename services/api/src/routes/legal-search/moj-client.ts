@@ -1,34 +1,32 @@
-import { LegalAuthoritySchema, type LegalAuthority } from '@obiter/legal-schema'
+import type { LegalAuthority } from '@obiter/legal-schema'
 import { getDocument, indexDocuments } from '@obiter/search-client'
-import type { ApiEnv } from '../../env'
-import { parseFindCaseLawAtom, type AtomEntry } from './atom-parser'
 import {
-  courtFromCitation,
-  findCaseLawJurisdiction,
-  toFindCaseLawCourtParam,
-} from './court-utils'
-import {
-  addFindCaseLawDateParams,
-  courtFromDocumentId,
-  dateFromDocumentId,
-  documentIdFromUri,
-  documentUriFromId,
-  hashText,
-  readRelLink,
-} from './document-utils'
-import {
-  extractJudgmentDateFromHtml,
-  extractJudgmentTitleFromHtml,
-  extractNeutralCitationFromHtml,
-  parseJudgmentParagraphs,
-} from './html-parser'
-import { createMojRateLimiter } from './rate-limiter'
-import {
-  type LegalAuthoritySourceStore,
+  atomEntryToAuthoritySummary,
+  fetchMojAuthorityDetail,
+  fetchMojAuthoritySummaries,
+  providerMetadataFromAtomEntry,
+  type AtomEntry,
+  type MojRateLimiter,
   type ProviderSourceMetadata,
-  type StoredLegalAuthorityRecord,
-} from './source-store'
-import type { LegalFetchRequest } from './fetch-schema'
+} from '@obiter/legal-source-provider'
+import type { ApiEnv } from '../../env'
+import type { LegalFetchRequest } from '@obiter/legal-source-provider'
+import { type LegalAuthoritySourceStore } from './source-store'
+
+/**
+ * Storage and index hydration for provider results. Retrieval and parsing live
+ * in `@obiter/legal-source-provider`, which bulk ingestion shares.
+ */
+
+// Re-exported so the proxy routes and their tests keep one import site for the
+// provider surface they use.
+export {
+  atomEntryToAuthoritySummary,
+  fetchMojAuthorityDocumentById,
+  fetchMojAuthorityDocumentFromRecord,
+  fetchMojAuthoritySummaries,
+  providerMetadataFromAtomEntry,
+} from '@obiter/legal-source-provider'
 
 const storedSearchTimeoutMs = 350
 
@@ -99,86 +97,13 @@ export async function indexFetchedAuthorities(
   }
 }
 
-export async function fetchMojAuthoritySummaries(
-  env: ApiEnv,
-  request: LegalFetchRequest,
-  rateLimiter: ReturnType<typeof createMojRateLimiter>,
-): Promise<
-  | {
-      status: 'ok'
-      entries: AtomEntry[]
-      documents: LegalAuthority[]
-      skippedCount: number
-    }
-  | { status: 'rate_limited'; retryAfter: string | null }
-  | { status: 'unavailable' }
-> {
-  const atomUrl = new URL('/atom.xml', env.mojFindCaseLawBaseUrl)
-  atomUrl.searchParams.set('query', request.query)
-  if (request.court)
-    atomUrl.searchParams.set('court', toFindCaseLawCourtParam(request.court))
-  addFindCaseLawDateParams(atomUrl, request)
-
-  const entries: AtomEntry[] = []
-  const visitedUrls = new Set<string>()
-  let nextUrl: URL | null = atomUrl
-  let pageCount = 0
-
-  while (nextUrl && entries.length < 10 && pageCount < 10) {
-    const pageUrl = nextUrl.toString()
-    if (visitedUrls.has(pageUrl)) break
-    visitedUrls.add(pageUrl)
-    pageCount += 1
-
-    const atomLimit = rateLimiter.take()
-    if (!atomLimit.allowed) {
-      return {
-        status: 'rate_limited',
-        retryAfter: atomLimit.retryAfterSeconds.toString(),
-      }
-    }
-
-    let atomResponse: Response
-    try {
-      atomResponse = await fetch(nextUrl)
-    } catch {
-      return { status: 'unavailable' }
-    }
-    if (atomResponse.status === 429) {
-      return {
-        status: 'rate_limited',
-        retryAfter: atomResponse.headers.get('retry-after'),
-      }
-    }
-    if (!atomResponse.ok) {
-      return { status: 'unavailable' }
-    }
-
-    const xml = await atomResponse.text()
-    entries.push(...parseFindCaseLawAtom(xml, request))
-    const nextHref = entries.length < 10 ? readRelLink(xml, 'next') : null
-    nextUrl = nextHref ? new URL(nextHref, nextUrl) : null
-  }
-
-  const documents = entries
-    .slice(0, 10)
-    .map((entry) => atomEntryToAuthoritySummary(env, entry))
-
-  return {
-    status: 'ok',
-    entries: entries.slice(0, 10),
-    documents,
-    skippedCount: Math.max(entries.length - documents.length, 0),
-  }
-}
-
 export async function hydrateMojAuthoritiesFromSearch(
   env: ApiEnv,
   legalAuthorityStore: LegalAuthoritySourceStore,
   indexClient: Parameters<typeof indexDocuments>[0],
   indexName: string,
   request: LegalFetchRequest,
-  rateLimiter: ReturnType<typeof createMojRateLimiter>,
+  rateLimiter: MojRateLimiter,
 ) {
   try {
     const mojResult = await fetchMojAuthoritySummaries(
@@ -215,7 +140,7 @@ export async function hydrateAndIndexMojAuthorities(
   indexClient: Parameters<typeof indexDocuments>[0],
   indexName: string,
   entries: AtomEntry[],
-  rateLimiter: ReturnType<typeof createMojRateLimiter>,
+  rateLimiter: MojRateLimiter,
 ) {
   if (entries.length === 0) return
 
@@ -243,257 +168,4 @@ export async function hydrateAndIndexMojAuthorities(
   } catch {
     // Provider data has already been captured when possible; indexing is best-effort cache hydration.
   }
-}
-
-export function atomEntryToAuthoritySummary(
-  env: ApiEnv,
-  entry: AtomEntry,
-): LegalAuthority {
-  return {
-    id: documentIdFromUri(entry.uri),
-    title: entry.title,
-    neutralCitation: entry.neutralCitation,
-    court: entry.court,
-    jurisdiction: findCaseLawJurisdiction,
-    dateDecided: entry.dateDecided,
-    sourceType: 'judgment',
-    sourceUrl: new URL(entry.sourceUri, env.mojFindCaseLawBaseUrl).toString(),
-  }
-}
-
-export function providerMetadataFromAtomEntry(
-  entry: AtomEntry,
-): ProviderSourceMetadata {
-  return {
-    documentUri: entry.uri,
-    sourceUri: entry.sourceUri,
-    xmlUri: entry.xmlUri,
-    pdfUri: entry.pdfUri,
-    contentHash: entry.contentHash,
-    rawAtomEntry: entry.rawXml,
-  }
-}
-
-async function fetchMojAuthorityDetail(
-  env: ApiEnv,
-  entry: AtomEntry,
-  rateLimiter: ReturnType<typeof createMojRateLimiter>,
-): Promise<
-  | { status: 'ok'; document: LegalAuthority; provider: ProviderSourceMetadata }
-  | { status: 'skipped' }
-  | { status: 'rate_limited'; retryAfter: string | null }
-  | { status: 'unavailable' }
-> {
-  const detailUrl = new URL(entry.sourceUri, env.mojFindCaseLawBaseUrl)
-  const detailLimit = rateLimiter.take()
-
-  if (!detailLimit.allowed) {
-    return {
-      status: 'rate_limited',
-      retryAfter: detailLimit.retryAfterSeconds.toString(),
-    }
-  }
-
-  const detailResponse = await fetch(detailUrl)
-
-  const detailFailure = detailFailureFromResponse(detailResponse)
-  if (detailFailure) return detailFailure
-
-  if (!detailResponse.ok) {
-    return { status: 'skipped' }
-  }
-
-  const html = await detailResponse.text()
-  const paragraphs = parseJudgmentParagraphs(html, documentIdFromUri(entry.uri))
-  const document = LegalAuthoritySchema.safeParse({
-    id: documentIdFromUri(entry.uri),
-    title: entry.title,
-    neutralCitation: entry.neutralCitation,
-    court: entry.court,
-    jurisdiction: findCaseLawJurisdiction,
-    dateDecided: entry.dateDecided,
-    sourceType: 'judgment',
-    sourceUrl: detailUrl.toString(),
-    paragraphs,
-  })
-
-  if (!document.success) {
-    return { status: 'skipped' }
-  }
-
-  return {
-    status: 'ok',
-    document: document.data,
-    provider: {
-      ...providerMetadataFromAtomEntry(entry),
-      rawDocumentHtml: html,
-    },
-  }
-}
-
-export async function fetchMojAuthorityDocumentFromRecord(
-  env: ApiEnv,
-  record: StoredLegalAuthorityRecord,
-  rateLimiter: ReturnType<typeof createMojRateLimiter>,
-): Promise<
-  | { status: 'ok'; document: LegalAuthority; provider: ProviderSourceMetadata }
-  | { status: 'skipped' }
-  | { status: 'rate_limited'; retryAfter: string | null }
-  | { status: 'unavailable' }
-> {
-  const sourceUris = [record.provider.sourceUri, record.provider.xmlUri].filter(
-    (uri): uri is string => Boolean(uri),
-  )
-
-  for (const sourceUri of sourceUris) {
-    const limit = rateLimiter.take()
-    if (!limit.allowed) {
-      return {
-        status: 'rate_limited',
-        retryAfter: limit.retryAfterSeconds.toString(),
-      }
-    }
-
-    const detailUrl = new URL(sourceUri, env.mojFindCaseLawBaseUrl)
-    const detailResponse = await fetch(detailUrl)
-    const detailFailure = detailFailureFromResponse(detailResponse)
-    if (detailFailure) return detailFailure
-
-    if (!detailResponse.ok) continue
-
-    const html = await detailResponse.text()
-    const document = parseMojAuthorityDocument(
-      record.summary.id,
-      html,
-      detailUrl.toString(),
-      record.summary,
-    )
-
-    if (!document) continue
-
-    return {
-      status: 'ok',
-      document,
-      provider: {
-        ...record.provider,
-        rawDocumentHtml: html,
-      },
-    }
-  }
-
-  return { status: 'skipped' }
-}
-
-export async function fetchMojAuthorityDocumentById(
-  env: ApiEnv,
-  documentId: string,
-  rateLimiter: ReturnType<typeof createMojRateLimiter>,
-): Promise<
-  | { status: 'ok'; document: LegalAuthority; provider: ProviderSourceMetadata }
-  | { status: 'skipped' }
-  | { status: 'rate_limited'; retryAfter: string | null }
-  | { status: 'unavailable' }
-> {
-  const uri = documentUriFromId(documentId)
-  if (!uri) return { status: 'skipped' }
-
-  const limit = rateLimiter.take()
-  if (!limit.allowed) {
-    return {
-      status: 'rate_limited',
-      retryAfter: limit.retryAfterSeconds.toString(),
-    }
-  }
-
-  const detailUrl = new URL(uri, env.mojFindCaseLawBaseUrl)
-  const detailResponse = await fetch(detailUrl)
-  const detailFailure = detailFailureFromResponse(detailResponse)
-  if (detailFailure) return detailFailure
-
-  if (!detailResponse.ok) return { status: 'skipped' }
-
-  const html = await detailResponse.text()
-  const document = parseMojAuthorityDocument(
-    documentId,
-    html,
-    detailUrl.toString(),
-    {
-      id: documentId,
-      title: documentId,
-      neutralCitation: extractNeutralCitationFromHtml(html) ?? null,
-      court: courtFromDocumentId(documentId) ?? '',
-      jurisdiction: findCaseLawJurisdiction,
-      dateDecided: dateFromDocumentId(documentId) ?? '',
-      sourceType: 'judgment',
-      sourceUrl: detailUrl.toString(),
-    },
-  )
-
-  if (!document) return { status: 'skipped' }
-
-  return {
-    status: 'ok',
-    document,
-    provider: {
-      documentUri: uri,
-      sourceUri: uri,
-      xmlUri: null,
-      pdfUri: null,
-      contentHash: hashText(html),
-      rawAtomEntry: '',
-      rawDocumentHtml: html,
-    },
-  }
-}
-
-function detailFailureFromResponse(response: Response) {
-  if (response.status === 429) {
-    return {
-      status: 'rate_limited' as const,
-      retryAfter: response.headers.get('retry-after'),
-    }
-  }
-
-  if (response.status >= 500) {
-    return { status: 'unavailable' as const }
-  }
-
-  return null
-}
-
-function parseMojAuthorityDocument(
-  documentId: string,
-  html: string,
-  sourceUrl: string,
-  fallback: LegalAuthority,
-) {
-  const neutralCitation =
-    extractNeutralCitationFromHtml(html) ?? fallback.neutralCitation ?? null
-  const court =
-    (neutralCitation ? courtFromCitation(neutralCitation) : null) ??
-    fallback.court
-  const dateDecided = extractJudgmentDateFromHtml(html) ?? fallback.dateDecided
-  const title =
-    extractJudgmentTitleFromHtml(html) ??
-    fallback.title ??
-    neutralCitation ??
-    documentId
-
-  if (!court || !dateDecided) {
-    return null
-  }
-
-  const document = LegalAuthoritySchema.safeParse({
-    id: documentId,
-    title,
-    neutralCitation,
-    court,
-    jurisdiction: findCaseLawJurisdiction,
-    dateDecided,
-    sourceType: 'judgment',
-    sourceUrl,
-    paragraphs: parseJudgmentParagraphs(html, documentId),
-  })
-
-  return document.success ? document.data : null
 }

@@ -96,6 +96,7 @@ describe('Legal search client', () => {
       'jurisdiction',
       'sourceType',
       'dateDecided',
+      'dateDecidedTimestamp',
     ])
     expect(index.updateRankingRules).toHaveBeenCalledWith([
       'words',
@@ -291,9 +292,13 @@ describe('Legal search client', () => {
     ])
 
     expect(result).toEqual({ indexedCount: 1, failedCount: 0, errors: [] })
-    expect(addDocuments).toHaveBeenCalledWith([authority()], {
-      primaryKey: 'id',
-    })
+    // The engine receives the document plus the derived numeric date. The
+    // domain document itself is unchanged; the field exists only in the index,
+    // so that range filters have a numeric operand to compare against.
+    expect(addDocuments).toHaveBeenCalledWith(
+      [{ ...authority(), dateDecidedTimestamp: Date.UTC(2024, 0, 31) }],
+      { primaryKey: 'id' },
+    )
     expect(indexingTask.waitTask).toHaveBeenCalledWith({
       timeout: 1_800_000,
       interval: 100,
@@ -368,6 +373,26 @@ describe('Legal search client', () => {
     expect(addDocuments).not.toHaveBeenCalled()
   })
 
+  it('rejects a malformed date bound instead of widening the search', async () => {
+    const searchMock = vi.fn(async () => ({
+      hits: [],
+      query: 'test',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    }))
+    const client = {
+      index: () => ({ search: searchMock }),
+    }
+
+    // Dropping an unparseable bound would return judgments outside the
+    // requested range as though they belonged in it, which is a wrong answer
+    // rather than a missing one.
+    await expect(
+      search(client, 'legal_authorities', 'test', { dateFrom: '01/01/2024' }),
+    ).rejects.toThrow(/dateFrom must be an ISO date/)
+    expect(searchMock).not.toHaveBeenCalled()
+  })
+
   it('returns typed search results and filter shape', async () => {
     const searchMock = vi.fn(async () => ({
       hits: [authority()],
@@ -392,8 +417,10 @@ describe('Legal search client', () => {
       filter: [
         'court = "uksc"',
         'jurisdiction = "england-and-wales"',
-        'dateDecided >= "2024-01-01"',
-        'dateDecided <= "2024-12-31"',
+        // Numeric operands. Meilisearch comparison operators reject a quoted
+        // date string, which is what made the three date benchmark cases error.
+        `dateDecidedTimestamp >= ${Date.UTC(2024, 0, 1)}`,
+        `dateDecidedTimestamp <= ${Date.UTC(2024, 11, 31)}`,
       ],
       sort: ['dateDecided:desc'],
       matchingStrategy: 'all',

@@ -15,6 +15,7 @@
     "@napi-rs/canvas": "^0.1.100",
     "@obiter/contracts": "workspace:*",
     "@obiter/legal-schema": "workspace:*",
+    "@obiter/legal-source-provider": "workspace:*",
     "@obiter/ooxml": "workspace:*",
     "@obiter/rampart-inference": "workspace:*",
     "@obiter/redaction-policy": "workspace:*",

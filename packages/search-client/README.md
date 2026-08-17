@@ -71,11 +71,18 @@ topology.
 Malformed citations are split between recoverable forms, which assert the
 correct authority, and unresolvable forms, which assert no results.
 
-The date-filter cases `date-brown-from-1994`, `date-potanina-2024` and
-`date-smith-before-2019` are currently expected to fail with `search_error`.
-Meilisearch comparison operators accept numeric operands only, while the
-current date filter emits a string date comparison. Fixing this requires a
-numeric date timestamp field in the document schema and is tracked separately.
+Date range filters compare against `dateDecidedTimestamp`, a numeric field
+derived from `dateDecided` at index time. Meilisearch comparison operators
+accept numeric operands only, so the earlier quoted-date comparison was
+rejected outright and the three cases `date-brown-from-1994`,
+`date-potanina-2024` and `date-smith-before-2019` errored. They now pass and
+`knownFailingCaseIds` is empty.
+
+`dateDecided` stays the authority and the only date callers see: the derived
+field lives in the index and is returned by neither search nor `getDocument`.
+A `dateFrom` or `dateTo` that is not an ISO date is rejected rather than
+dropped, because dropping a bound returns judgments from outside the requested
+range as though they belonged in it.
 
 The fixture text is synthetic. Do not replace it with raw legal or client
 matter text.
