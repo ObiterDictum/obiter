@@ -1,4 +1,8 @@
-import { LegalAuthoritySchema, type LegalAuthority } from '@obiter/legal-schema'
+import {
+  LegalAuthoritySchema,
+  type LegalAuthority,
+  type LegalParagraph,
+} from '@obiter/legal-schema'
 import { parseFindCaseLawAtom, type AtomEntry } from './atom-parser'
 import {
   courtFromCitation,
@@ -22,6 +26,12 @@ import {
 } from './html-parser'
 import type { createMojRateLimiter } from './rate-limiter'
 import type { LegalFetchRequest } from './fetch-schema'
+import {
+  htmlParser,
+  legalDocMlParser,
+  parseLegalDocMlParagraphs,
+  type ParserIdentity,
+} from './legaldocml-parser'
 
 /**
  * Retrieval against Find Case Law. Fetches and parses; it does not store or
@@ -58,10 +68,42 @@ export interface ProviderDocumentSource {
 }
 
 export type ProviderDocumentResult =
-  | { status: 'ok'; document: LegalAuthority; provider: ProviderSourceMetadata }
+  | {
+      status: 'ok'
+      document: LegalAuthority
+      provider: ProviderSourceMetadata
+      /**
+       * Which parser produced the paragraphs. A corpus that mixes parsers
+       * without recording which is which makes later drift undiagnosable: a
+       * changed document could be the provider's doing or ours.
+       */
+      parser: ParserIdentity
+      /** Set when LegalDocML was wanted but the HTML path had to be used. */
+      fallbackReason?: LegalDocMlFallbackReason
+    }
   | { status: 'skipped' }
   | { status: 'rate_limited'; retryAfter: string | null }
   | { status: 'unavailable' }
+
+/**
+ * Why a judgment was read from HTML rather than from LegalDocML. Recorded and
+ * reported rather than swallowed: a rise in any of these is the signal that the
+ * provider's XML coverage has changed.
+ */
+export type LegalDocMlFallbackReason =
+  'no_xml_uri' | 'xml_unavailable' | 'xml_unparsable'
+
+export interface DetailFetchOptions {
+  /**
+   * Read the judgment from LegalDocML `data.xml` instead of the HTML page.
+   *
+   * Defaults to false so that the search request path keeps the behaviour it
+   * shipped with. Bulk ingestion opts in, because paragraph boundaries are the
+   * unit its evidence model is built on and the HTML path numbers them by
+   * position among extracted blocks rather than by the court's own numbering.
+   */
+  preferLegalDocMl?: boolean
+}
 
 /**
  * Search hydration takes the first page or so. A collection walk takes
@@ -183,12 +225,104 @@ export function providerMetadataFromAtomEntry(
   }
 }
 
+/**
+ * Reads a judgment from LegalDocML. Returns the reason it could not, so the
+ * caller can fall back to HTML and report why rather than silently degrading.
+ */
+async function fetchLegalDocMlParagraphs(
+  env: FindCaseLawEnv,
+  entry: AtomEntry,
+  documentId: string,
+): Promise<
+  | { status: 'ok'; paragraphs: LegalParagraph[] }
+  | { status: 'fallback'; reason: LegalDocMlFallbackReason }
+  | { status: 'rate_limited'; retryAfter: string | null }
+> {
+  if (!entry.xmlUri) return { status: 'fallback', reason: 'no_xml_uri' }
+
+  const xmlUrl = new URL(entry.xmlUri, env.mojFindCaseLawBaseUrl)
+
+  let response: Response
+  try {
+    response = await fetch(xmlUrl)
+  } catch {
+    return { status: 'fallback', reason: 'xml_unavailable' }
+  }
+
+  if (response.status === 429) {
+    return {
+      status: 'rate_limited',
+      retryAfter: response.headers.get('retry-after'),
+    }
+  }
+
+  if (!response.ok) return { status: 'fallback', reason: 'xml_unavailable' }
+
+  const paragraphs = parseLegalDocMlParagraphs(
+    await response.text(),
+    documentId,
+  )
+  if (!paragraphs) return { status: 'fallback', reason: 'xml_unparsable' }
+
+  return { status: 'ok', paragraphs }
+}
+
 export async function fetchMojAuthorityDetail(
   env: FindCaseLawEnv,
   entry: AtomEntry,
   rateLimiter: MojRateLimiter,
+  options: DetailFetchOptions = {},
 ): Promise<ProviderDocumentResult> {
+  const documentId = documentIdFromUri(entry.uri)
+  let parser: ParserIdentity = htmlParser
+  let fallbackReason: LegalDocMlFallbackReason | undefined
+  let legalDocMlParagraphs: LegalParagraph[] | undefined
+
+  if (options.preferLegalDocMl) {
+    const xmlLimit = rateLimiter.take()
+    if (!xmlLimit.allowed) {
+      return {
+        status: 'rate_limited',
+        retryAfter: xmlLimit.retryAfterSeconds.toString(),
+      }
+    }
+
+    const xmlResult = await fetchLegalDocMlParagraphs(env, entry, documentId)
+    if (xmlResult.status === 'rate_limited') return xmlResult
+    if (xmlResult.status === 'ok') {
+      legalDocMlParagraphs = xmlResult.paragraphs
+      parser = legalDocMlParser
+    } else {
+      fallbackReason = xmlResult.reason
+    }
+  }
+
   const detailUrl = new URL(entry.sourceUri, env.mojFindCaseLawBaseUrl)
+
+  // LegalDocML supplied the paragraphs, so the HTML page is not fetched at all.
+  if (legalDocMlParagraphs) {
+    const document = LegalAuthoritySchema.safeParse({
+      id: documentId,
+      title: entry.title,
+      neutralCitation: entry.neutralCitation,
+      court: entry.court,
+      jurisdiction: findCaseLawJurisdiction,
+      dateDecided: entry.dateDecided,
+      sourceType: 'judgment',
+      sourceUrl: detailUrl.toString(),
+      paragraphs: legalDocMlParagraphs,
+    })
+
+    if (!document.success) return { status: 'skipped' }
+
+    return {
+      status: 'ok',
+      document: document.data,
+      provider: providerMetadataFromAtomEntry(entry),
+      parser,
+    }
+  }
+
   const detailLimit = rateLimiter.take()
 
   if (!detailLimit.allowed) {
@@ -208,7 +342,7 @@ export async function fetchMojAuthorityDetail(
   }
 
   const html = await detailResponse.text()
-  const paragraphs = parseJudgmentParagraphs(html, documentIdFromUri(entry.uri))
+  const paragraphs = parseJudgmentParagraphs(html, documentId)
   const document = LegalAuthoritySchema.safeParse({
     id: documentIdFromUri(entry.uri),
     title: entry.title,
@@ -232,6 +366,8 @@ export async function fetchMojAuthorityDetail(
       ...providerMetadataFromAtomEntry(entry),
       rawDocumentHtml: html,
     },
+    parser,
+    ...(fallbackReason ? { fallbackReason } : {}),
   }
 }
 
@@ -277,6 +413,7 @@ export async function fetchMojAuthorityDocumentFromRecord(
         ...record.provider,
         rawDocumentHtml: html,
       },
+      parser: htmlParser,
     }
   }
 
@@ -337,6 +474,7 @@ export async function fetchMojAuthorityDocumentById(
       rawAtomEntry: '',
       rawDocumentHtml: html,
     },
+    parser: htmlParser,
   }
 }
 

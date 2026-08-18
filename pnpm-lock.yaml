@@ -202,6 +202,9 @@ importers:
       '@obiter/legal-schema':
         specifier: workspace:*
         version: link:../legal-schema
+      fast-xml-parser:
+        specifier: ^5.10.1
+        version: 5.10.1
       zod:
         specifier: ^4.3.6
         version: 4.3.6

@@ -60,6 +60,8 @@ export {
 export { createMojRateLimiter } from './rate-limiter'
 
 export type {
+  DetailFetchOptions,
+  LegalDocMlFallbackReason,
   AtomFetchLimits,
   FindCaseLawEnv,
   MojRateLimiter,
@@ -76,3 +78,11 @@ export {
   parseMojAuthorityDocument,
   providerMetadataFromAtomEntry,
 } from './moj-provider'
+
+export type { ParserIdentity } from './legaldocml-parser'
+export {
+  htmlParser,
+  legalDocMlParser,
+  parseLegalDocMlParagraphs,
+  extractLegalDocMlMetadata,
+} from './legaldocml-parser'
