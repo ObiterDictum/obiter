@@ -144,49 +144,69 @@ export function parseLegalDocMlParagraphs(
   const decision = findFirst(body, 'decision') ?? body
   const paragraphs: LegalParagraph[] = []
 
-  for (const node of decision) {
-    const tag = Object.keys(node).find(
-      (key) => !key.startsWith('@') && key !== '#text',
-    )
-    if (!tag) continue
-
-    const children = childrenOf(node, tag)
-
-    if (tag === 'paragraph') {
-      // The paragraph's own `<num>`, not a nested list item's. A recursive
-      // search would find `(a)` or `ii)` inside a subparagraph and number the
-      // paragraph from that.
-      const numText = normalise(
-        collectText(directChild(children, 'num'), skipNothing),
-      )
-      const text = normalise(collectText(children, skipNum))
-      if (!text) continue
-
-      const attributes = (node[attributeKey] ?? {}) as Record<string, string>
-      paragraphs.push({
-        id: `${documentId}-p${paragraphs.length + 1}`,
-        documentId,
-        paragraphNumber: paragraphNumberFrom(
-          numText,
-          attributes['@eId'],
-          paragraphs.length + 1,
-        ),
-        text,
-      })
-      continue
-    }
-
-    // Unnumbered content between paragraphs: headings, and block quotes of
-    // authority that the preceding paragraph introduces. Appending it to that
-    // paragraph keeps the text searchable without inventing a paragraph number
-    // a reader could not cite. Content before the first paragraph is the cover
-    // matter — judge name, "JUDGMENT" — and is dropped.
-    const text = normalise(collectText(children, skipNothing))
-    if (!text) continue
-
+  /** Unnumbered text belongs to the paragraph that introduced it. */
+  function appendToPrevious(text: string) {
     const previous = paragraphs.at(-1)
     if (previous) previous.text = `${previous.text} ${text}`
   }
+
+  /**
+   * Walks the body in document order.
+   *
+   * Judgments are structured two ways. Most list paragraphs directly under
+   * `<decision>`. Others group them under `<level>` elements with headings, and
+   * a traversal that only looked at direct children found no paragraphs at all
+   * in those and fell back to HTML — which is the parse this exists to avoid.
+   */
+  function visit(nodes: OrderedNode[]) {
+    for (const node of nodes) {
+      const tag = Object.keys(node).find(
+        (key) => key !== attributeKey && key !== '#text',
+      )
+      if (!tag) continue
+
+      const children = childrenOf(node, tag)
+
+      if (tag === 'paragraph') {
+        // The paragraph's own `<num>`, not a nested list item's. A recursive
+        // search would find `(a)` or `ii)` inside a subparagraph and number the
+        // paragraph from that.
+        const numText = normalise(
+          collectText(directChild(children, 'num'), skipNothing),
+        )
+        const text = normalise(collectText(children, skipNum))
+        if (!text) continue
+
+        const attributes = (node[attributeKey] ?? {}) as Record<string, string>
+        paragraphs.push({
+          id: `${documentId}-p${paragraphs.length + 1}`,
+          documentId,
+          paragraphNumber: paragraphNumberFrom(
+            numText,
+            attributes['@eId'],
+            paragraphs.length + 1,
+          ),
+          text,
+        })
+        continue
+      }
+
+      // A grouping element: its heading is unnumbered text, and the paragraphs
+      // inside it are paragraphs of the judgment like any other.
+      if (tag === 'level') {
+        visit(children)
+        continue
+      }
+
+      // Headings and block-quoted authority between paragraphs. Content before
+      // the first paragraph is the cover matter — judge name, "JUDGMENT" — and
+      // is dropped, because there is nothing for it to belong to.
+      const text = normalise(collectText(children, skipNothing))
+      if (text) appendToPrevious(text)
+    }
+  }
+
+  visit(decision)
 
   return paragraphs.length > 0 ? paragraphs : null
 }

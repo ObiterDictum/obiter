@@ -192,6 +192,59 @@ describe('parseLegalDocMlParagraphs', () => {
   })
 })
 
+describe('judgments grouped under levels', () => {
+  // Some judgments nest their paragraphs inside <level> groupings with
+  // headings instead of listing them under <decision>. A traversal that only
+  // read direct children found no paragraphs in those and fell back to HTML,
+  // which is the parse this parser exists to avoid.
+  it('reads paragraphs nested inside a level', () => {
+    const paragraphs = parseLegalDocMlParagraphs(
+      judgment(`
+        <level eId="lvl_1">
+          <heading>Writing Credits</heading>
+          ${paragraph('para_1', '1.', 'The first issue is authorship.')}
+          ${paragraph('para_2', '2.', 'The second issue is credit.')}
+        </level>`),
+      'doc',
+    )
+
+    expect(paragraphs).toHaveLength(2)
+    expect(paragraphs?.map((p) => p.paragraphNumber)).toEqual([1, 2])
+    expect(paragraphs?.[0]?.text).toBe('The first issue is authorship.')
+  })
+
+  it('keeps document order across mixed nesting', () => {
+    const paragraphs = parseLegalDocMlParagraphs(
+      judgment(
+        paragraph('para_1', '1.', 'Top level.') +
+          `<level eId="lvl_1">${paragraph('para_2', '2.', 'Nested.')}</level>` +
+          paragraph('para_3', '3.', 'Top level again.'),
+      ),
+      'doc',
+    )
+
+    expect(paragraphs?.map((p) => p.text)).toEqual([
+      'Top level.',
+      'Nested.',
+      'Top level again.',
+    ])
+  })
+
+  it('treats a level heading as unnumbered text', () => {
+    const paragraphs = parseLegalDocMlParagraphs(
+      judgment(
+        paragraph('para_1', '1.', 'Introductory paragraph.') +
+          `<level eId="lvl_1"><heading>The law</heading>${paragraph('para_2', '2.', 'The statute provides.')}</level>`,
+      ),
+      'doc',
+    )
+
+    expect(paragraphs).toHaveLength(2)
+    expect(paragraphs?.[0]?.text).toContain('The law')
+    expect(paragraphs?.[1]?.text).toBe('The statute provides.')
+  })
+})
+
 describe('falling back to HTML', () => {
   // Returning null is the signal to use the HTML path. Returning an empty
   // document instead would store a judgment with no text and look like success.
