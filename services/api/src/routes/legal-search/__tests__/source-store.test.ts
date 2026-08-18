@@ -178,6 +178,9 @@ describe('legal authority source store search', () => {
     expect(searchValues?.slice(7)).toEqual([
       exactMatchPunctuationFrom,
       exactMatchPunctuationTo,
+      // $10: the citation-normalized query, compared against the citation
+      // column so a zero-padded tribunal citation matches the unpadded form.
+      'fiduciary appendix',
     ])
     expect(searchSql).not.toContain('document_json::text')
     expect(searchSql).not.toContain("summary_json::text || ' '")
@@ -221,6 +224,7 @@ describe('legal authority source store search', () => {
       '[2024] uksc 3',
       exactMatchPunctuationFrom,
       exactMatchPunctuationTo,
+      '[2024] uksc 3',
     ])
   })
 })

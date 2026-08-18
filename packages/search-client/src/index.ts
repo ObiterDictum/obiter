@@ -531,11 +531,8 @@ export function extractLegalSearchSnippets(
           .slice(0, 2)
       : []
 
-  return selectedParagraphs.map(({ paragraph, normalizedText }) => ({
-    evidenceId: createJudgmentParagraphEvidenceId(
-      hit.id,
-      paragraph.paragraphNumber,
-    ),
+  return selectedParagraphs.map(({ paragraph, index, normalizedText }) => ({
+    evidenceId: createJudgmentParagraphEvidenceId(hit.id, index + 1),
     paragraphNumber: paragraph.paragraphNumber,
     // Excerpting reads the raw text so the returned snippet keeps its original
     // casing and punctuation.
@@ -545,11 +542,27 @@ export function extractLegalSearchSnippets(
   }))
 }
 
+/**
+ * Anchors evidence to a paragraph's position in the document, not to the number
+ * the judgment prints beside it.
+ *
+ * Those are not the same thing. LegalDocML marks block-quoted paragraphs from a
+ * cited judgment as paragraphs in their own right, carrying the quoted case's
+ * numbering, and appendices restart at 1. Both put duplicate `paragraphNumber`
+ * values in one document — measured at 22 duplicates in a 159-paragraph UKSC
+ * judgment, and in 6 of 15 sampled documents across courts. Keying evidence on
+ * that number gives two different paragraphs the same evidence id, so a
+ * citation cannot identify what it cites.
+ *
+ * `ordinal` is 1-based position in the document's paragraph array, which the
+ * parsers already assign uniquely. `paragraphNumber` is unchanged and remains
+ * what a reader is shown, because "at [42]" has to say what the judgment says.
+ */
 export function createJudgmentParagraphEvidenceId(
   documentId: string,
-  paragraphNumber: number,
+  ordinal: number,
 ) {
-  return `${documentId}:judgment_paragraph:${paragraphNumber}`
+  return `${documentId}:judgment_paragraph:${ordinal}`
 }
 
 function matchedSnippetTerms(
@@ -619,7 +632,10 @@ function legalSearchMatchTier(hit: LegalSearchHit, normalizedQuery: string) {
   const normalizedTitle = normalizeExactMatchValue(hit.title)
 
   if (normalizeExactMatchValue(hit.id) === normalizedQuery) return 8
-  if (normalizeExactMatchValue(hit.neutralCitation) === normalizedQuery)
+  if (
+    normalizeCitationValue(hit.neutralCitation) ===
+    normalizeCitationValue(normalizedQuery)
+  )
     return 7
   if (normalizedTitle === normalizedQuery) return 6
   if (containsWholeTerm(normalizedTitle, normalizedQuery)) return 5
@@ -687,6 +703,27 @@ export function normalizeExactMatchValue(value: string | null | undefined) {
     .trim()
     .toLocaleLowerCase('en-GB')
     .replace(/\s+/g, ' ')
+}
+
+/**
+ * Citation-strength normalization: everything `normalizeExactMatchValue` does,
+ * plus dropping leading zeros from digit runs.
+ *
+ * Tribunals pad the number in a neutral citation and the senior courts do not.
+ * Find Case Law returns `[2024] UKUT 00236 (IAC)` and `[2024] UKFTT 001074 (TC)`
+ * alongside `[2024] UKSC 22`. A reader types the unpadded form, because that is
+ * what the tribunal's own headnote and every citing judgment print, so exact
+ * citation matching missed every padded citation and quietly degraded to
+ * keyword search across UKUT and UKFTT.
+ *
+ * Applied to both sides of a citation comparison, never to titles: a title may
+ * legitimately contain a zero-padded number that is part of a name.
+ */
+export function normalizeCitationValue(value: string | null | undefined) {
+  return normalizeExactMatchValue(value).replace(
+    /(?<![\p{L}\p{M}\p{N}_])0+(\d)/gu,
+    '$1',
+  )
 }
 
 /**

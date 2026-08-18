@@ -10,6 +10,7 @@ import {
   getDocument,
   indexDocuments,
   legalSearchIndexSettings,
+  normalizeCitationValue,
   normalizeExactMatchValue,
   rankLegalSearchHitsByExactMatch,
   search,
@@ -1380,7 +1381,9 @@ describe('Legal search client', () => {
       id: 'uksc-2024-3',
       snippets: [
         {
-          evidenceId: 'uksc-2024-3:judgment_paragraph:7',
+          // Position in the document, not the number the judgment prints.
+          // The fixture's only matching paragraph is the first one retained.
+          evidenceId: 'uksc-2024-3:judgment_paragraph:1',
           matchReason: 'body_text_match',
           paragraphNumber: 7,
           text: 'Potanina appears in this indexed paragraph.',
@@ -1451,5 +1454,66 @@ describe('Legal search client', () => {
 
     expect(result.paragraphs).toEqual(authority().paragraphs)
     expect(getDocumentMock).toHaveBeenCalledWith('uksc-2024-3')
+  })
+
+  it('keys evidence ids on position when a document repeats a paragraph number', () => {
+    // LegalDocML marks block-quoted paragraphs from a cited judgment as
+    // paragraphs carrying that judgment's numbering, and appendices restart at
+    // 1. Both produce duplicate paragraphNumbers in one document.
+    const hit = {
+      ...authority(),
+      paragraphs: [
+        {
+          id: 'p1',
+          documentId: 'uksc-2024-3',
+          paragraphNumber: 7,
+          text: 'The appellant relied on the duty of care owed to visitors.',
+        },
+        {
+          id: 'p2',
+          documentId: 'uksc-2024-3',
+          paragraphNumber: 2,
+          text: 'Quoted: the duty of care question was settled in Caparo.',
+        },
+      ],
+    } as unknown as LegalSearchHit
+
+    const snippets = extractLegalSearchSnippets(hit, 'duty of care')
+
+    expect(snippets).toHaveLength(2)
+    expect(new Set(snippets.map((snippet) => snippet.evidenceId)).size).toBe(2)
+    // The number the judgment prints is preserved for display, duplicates and all.
+    expect(snippets.map((snippet) => snippet.paragraphNumber)).toEqual([7, 2])
+  })
+
+  it('matches a zero-padded tribunal citation against the unpadded form', () => {
+    // Find Case Law returns `[2024] UKUT 00236 (IAC)`; a reader types the form
+    // the tribunal's own headnote prints.
+    expect(normalizeCitationValue('[2024] UKUT 00236 (IAC)')).toBe(
+      normalizeCitationValue('[2024] UKUT 236 (IAC)'),
+    )
+    expect(normalizeCitationValue('[2024] UKFTT 001074 (TC)')).toBe(
+      '[2024] ukftt 1074 (tc)',
+    )
+    // Senior court citations are unaffected.
+    expect(normalizeCitationValue('[2024] UKSC 22')).toBe('[2024] uksc 22')
+
+    const padded = {
+      ...authority(),
+      id: 'ukut-iac-2024-236',
+      neutralCitation: '[2024] UKUT 00236 (IAC)',
+    } as unknown as LegalSearchHit
+    const other = {
+      ...authority(),
+      id: 'uksc-2024-3',
+      neutralCitation: '[2024] UKSC 3',
+    } as unknown as LegalSearchHit
+
+    const ranked = rankLegalSearchHitsByExactMatch(
+      [other, padded],
+      '[2024] UKUT 236 (IAC)',
+    )
+
+    expect(ranked[0]?.id).toBe('ukut-iac-2024-236')
   })
 })
