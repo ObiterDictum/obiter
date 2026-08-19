@@ -70,6 +70,7 @@ describe('Legal search client', () => {
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
       updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
+      getPrefixSearch: vi.fn(async () => 'disabled'),
       updateStopWords: vi.fn(() => completedTask({ uid: 13 })),
       updateTypoTolerance: vi.fn(() => completedTask({ uid: 14 })),
       addDocuments: vi.fn(),
@@ -165,6 +166,7 @@ describe('Legal search client', () => {
         updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
         updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
         updatePrefixSearch: vi.fn(unsupportedPrefixSearch()),
+        getPrefixSearch: vi.fn(unsupportedPrefixSearch()),
         updateStopWords: vi.fn(() => completedTask({ uid: 13 })),
         updateTypoTolerance: vi.fn(() => completedTask({ uid: 14 })),
         addDocuments: vi.fn(),
@@ -202,10 +204,30 @@ describe('Legal search client', () => {
       expect(index.updateTypoTolerance).toHaveBeenCalled()
     })
 
+    /**
+     * The reason support is established by reading. Writing to a settings route
+     * Meilisearch 1.8.3 does not have returns 404 and then wedges the index:
+     * measured with curl, a stop-words write succeeds 5 of 5 on its own and
+     * times out 4 of 5 when it follows a write to the absent prefix-search
+     * route. Catching the 404 is not enough — issuing it is what does the
+     * damage, and it lands on whatever request comes next.
+     */
+    it('never issues the write for a setting the server does not have', async () => {
+      const index = indexWithout404PrefixSearch()
+
+      await createIndex(clientFor(index), 'legal_authorities', {
+        allowUnsupportedSettings: true,
+      })
+
+      expect(index.getPrefixSearch).toHaveBeenCalled()
+      expect(index.updatePrefixSearch).not.toHaveBeenCalled()
+    })
+
     it('reports nothing unsupported when every setting applies', async () => {
       const index = {
         ...indexWithout404PrefixSearch(),
         updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
+        getPrefixSearch: vi.fn(async () => 'disabled'),
       }
 
       const result = await createIndex(clientFor(index), 'legal_authorities', {
@@ -216,13 +238,15 @@ describe('Legal search client', () => {
     })
 
     // A 400 means the value was wrong, which is a bug here. Opting in to old
-    // servers must not turn a real error into a skipped setting.
+    // servers must not turn a real error into a skipped setting. The probe
+    // succeeds, so the route exists and the write is genuinely at fault.
     it('still fails on a rejected value, not only a missing route', async () => {
       const index = indexWithout404PrefixSearch()
       const badRequest = new Error('400: Bad Request')
       Object.assign(badRequest, {
         response: new Response(null, { status: 400 }),
       })
+      index.getPrefixSearch = vi.fn(async () => 'disabled')
       index.updatePrefixSearch = vi.fn(() => {
         throw badRequest
       })
@@ -245,6 +269,7 @@ describe('Legal search client', () => {
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
       updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
+      getPrefixSearch: vi.fn(async () => 'disabled'),
       updateStopWords: vi.fn(() => completedTask({ uid: 13 })),
       updateTypoTolerance: vi.fn(() => completedTask({ uid: 14 })),
       addDocuments: vi.fn(),
@@ -285,6 +310,7 @@ describe('Legal search client', () => {
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
       updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
+      getPrefixSearch: vi.fn(async () => 'disabled'),
       updateStopWords: vi.fn(() => completedTask({ uid: 13 })),
       updateTypoTolerance: vi.fn(() => completedTask({ uid: 14 })),
       addDocuments: vi.fn(),
@@ -312,6 +338,7 @@ describe('Legal search client', () => {
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
       updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
+      getPrefixSearch: vi.fn(async () => 'disabled'),
       updateStopWords: vi.fn(() => completedTask({ uid: 13 })),
       updateTypoTolerance: vi.fn(() => completedTask({ uid: 14 })),
       addDocuments: vi.fn(),
@@ -355,6 +382,7 @@ describe('Legal search client', () => {
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
       updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
+      getPrefixSearch: vi.fn(async () => 'disabled'),
       updateStopWords: vi.fn(() => completedTask({ uid: 13 })),
       updateTypoTolerance: vi.fn(() => completedTask({ uid: 14 })),
       addDocuments: vi.fn(),

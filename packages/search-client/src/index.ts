@@ -137,6 +137,8 @@ type IndexLike = {
   updatePrefixSearch(
     prefixSearch: 'disabled' | 'indexingTime',
   ): SearchEnqueuedTaskPromise
+  /** Read-only support probe. See `applyOptionalSetting`. */
+  getPrefixSearch(): Promise<unknown>
   updateStopWords(stopWords: string[]): SearchEnqueuedTaskPromise
   updateTypoTolerance(settings: {
     minWordSizeForTypos: { oneTypo: number; twoTypos: number }
@@ -321,6 +323,41 @@ export function createClient(host: string, apiKey: string): MeiliSearch {
   return new MeiliSearch({ host, apiKey })
 }
 
+/**
+ * Search-time parameters this server rejects as unknown.
+ *
+ * `createIndex` can only discover what an old server cannot be *configured*
+ * with. This finds what it cannot be *asked* for, which is a separate gap and
+ * was the larger one: Meilisearch added `rankingScoreThreshold` in 1.9, and a
+ * 1.8 server answers "Unknown field `rankingScoreThreshold`" to every non-empty
+ * query. Left undetected that is 51 of 54 benchmark cases failing as search
+ * errors, which looks like a broken index rather than an old server.
+ *
+ * One probe query, run once, rather than a per-search retry: a retry loop would
+ * hide the gap inside every call site and make the numbers depend on which
+ * queries happened to be tried.
+ */
+export async function detectUnsupportedSearchFeatures(
+  client: SearchClient,
+  indexName: string,
+): Promise<string[]> {
+  try {
+    await client.index(indexName).search('', {
+      limit: 1,
+      rankingScoreThreshold: legalSearchIndexSettings.rankingScoreThreshold,
+    })
+    return []
+  } catch (error) {
+    // MeiliSearchApiError puts the provider's message on `message` itself; the
+    // `cause` is the parsed error body, not a string.
+    const message = error instanceof Error ? error.message : ''
+    if (message.includes('rankingScoreThreshold')) {
+      return ['rankingScoreThreshold']
+    }
+    throw wrapSearchError('Search feature probe failed.', error)
+  }
+}
+
 export async function createIndex(
   client: IndexSetupClient,
   indexName: string,
@@ -364,6 +401,7 @@ export async function createIndex(
     // benchmark baseline rests on prefix search being off.
     await applyOptionalSetting(
       'prefixSearch',
+      () => index.getPrefixSearch(),
       () => index.updatePrefixSearch(legalSearchIndexSettings.prefixSearch),
       options.allowUnsupportedSettings ?? false,
       unsupportedSettings,
@@ -939,18 +977,38 @@ function isUnsupportedSettingError(error: unknown) {
   )
 }
 
+/**
+ * Applies a setting the server may not have, checking with a read first.
+ *
+ * The read is not politeness. Writing to a settings route Meilisearch 1.8.3 does
+ * not have returns 404 and then wedges the index: measured with plain curl, a
+ * `stop-words` write succeeds 5 times out of 5 on its own at 67ms, and times out
+ * 4 times out of 5 when it follows a `prefix-search` write to the absent route.
+ * A read of the same absent route is harmless — 5 out of 5, same 67ms — so
+ * support is established by reading and the unsupported write is never sent.
+ *
+ * Catching the write's 404 is therefore not enough. The damage is done by
+ * issuing it, and it lands on whatever request comes next, which makes it look
+ * like an unrelated flake somewhere downstream.
+ */
 async function applyOptionalSetting(
   name: string,
+  probe: () => Promise<unknown>,
   task: () => SearchEnqueuedTaskPromise,
   allowUnsupported: boolean,
   unsupported: string[],
 ) {
-  try {
-    await waitForSucceededTask(task(), indexSetupTaskTimeoutMs)
-  } catch (error) {
-    if (!allowUnsupported || !isUnsupportedSettingError(error)) throw error
-    unsupported.push(name)
+  if (allowUnsupported) {
+    try {
+      await probe()
+    } catch (error) {
+      if (!isUnsupportedSettingError(error)) throw error
+      unsupported.push(name)
+      return
+    }
   }
+
+  await waitForSucceededTask(task(), indexSetupTaskTimeoutMs)
 }
 
 function isTaskWaitTimeout(error: unknown) {

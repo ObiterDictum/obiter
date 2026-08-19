@@ -3,6 +3,7 @@ import { dirname } from 'node:path'
 import {
   createClient,
   createIndex,
+  detectUnsupportedSearchFeatures,
   indexDocuments,
   legalSearchIndexSettings,
   search,
@@ -114,6 +115,7 @@ function failureLabels(
 async function runCase(
   client: ReturnType<typeof createClient>,
   testCase: SearchBenchmarkCase,
+  disableRankingScoreThreshold: boolean,
 ): Promise<BenchmarkCaseResult> {
   try {
     const startedAt = performance.now()
@@ -122,7 +124,15 @@ async function runCase(
       indexName,
       testCase.query,
       testCase.filters,
-      { includeSnippets: true, limit: resultLimit },
+      {
+        includeSnippets: true,
+        limit: resultLimit,
+        // null disables the floor. Only reached on a server too old to accept
+        // the parameter at all, and named in the report when it is.
+        ...(disableRankingScoreThreshold
+          ? { rankingScoreThreshold: null }
+          : {}),
+      },
     )
     const wallClockSearchTimeMs = performance.now() - startedAt
     const hitIds = result.hits.map((hit) => hit.id)
@@ -476,9 +486,18 @@ async function main() {
       )
     }
 
+    const unsupportedSearchFeatures = allowUnsupportedSettings
+      ? await detectUnsupportedSearchFeatures(client, indexName)
+      : []
+    const disableRankingScoreThreshold = unsupportedSearchFeatures.includes(
+      'rankingScoreThreshold',
+    )
+
     const results: BenchmarkCaseResult[] = []
     for (const testCase of searchBenchmarkCases) {
-      results.push(await runCase(client, testCase))
+      results.push(
+        await runCase(client, testCase, disableRankingScoreThreshold),
+      )
     }
 
     const metrics = calculateMetrics(results)
@@ -496,14 +515,22 @@ async function main() {
       // here means the run measured a configuration this package does not
       // define, and the numbers are not comparable with a run where it did.
       unsupportedIndexSettings: indexSetup.unsupportedSettings,
+      // Search parameters the server rejected outright. Separate from the index
+      // settings above because they are a different kind of gap: one changes how
+      // the index was built, the other changes what could be asked of it.
+      unsupportedSearchFeatures,
       baseline: searchBenchmarkBaseline,
       cases: results,
       regressionFailures: regressions,
     }
 
-    if (indexSetup.unsupportedSettings.length > 0) {
+    const unsupported = [
+      ...indexSetup.unsupportedSettings,
+      ...unsupportedSearchFeatures,
+    ]
+    if (unsupported.length > 0) {
       console.error(
-        `WARNING: the server could not apply ${indexSetup.unsupportedSettings.join(', ')}. These numbers were measured under a different search configuration from the one this package defines.`,
+        `WARNING: this server does not support ${unsupported.join(', ')}. These numbers were measured under a different search configuration from the one this package defines, and are not comparable with a run where it did.`,
       )
     }
 
