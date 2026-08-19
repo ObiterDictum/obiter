@@ -20,6 +20,19 @@ const apiKey = process.env.SEARCH_BENCHMARK_API_KEY ?? 'search-benchmark-key'
 const indexName = `legal-authorities-benchmark-${process.pid}`
 const topKSize = 3
 const resultLimit = 20
+/**
+ * Allow the run to continue against a Meilisearch too old for one of the index
+ * settings, naming what it could not apply in the report.
+ *
+ * Off by default so CI, which pins 1.12.0, cannot drift into measuring a
+ * configuration it did not intend. Set it locally when the only server
+ * available is older, and read the reported `unsupportedSettings` before
+ * comparing the numbers with anything: a 1.8 server cannot disable prefix
+ * search, and `minimumShortWordPrecision` rests on prefix search being off.
+ */
+const allowUnsupportedSettings =
+  process.env.SEARCH_BENCHMARK_ALLOW_UNSUPPORTED_SETTINGS === '1'
+
 const knownFailingCaseIds = new Set<string>(
   searchBenchmarkBaseline.knownFailingCaseIds,
 )
@@ -449,7 +462,9 @@ async function main() {
   const client = createClient(host, apiKey)
 
   try {
-    await createIndex(client, indexName)
+    const indexSetup = await createIndex(client, indexName, {
+      allowUnsupportedSettings,
+    })
     const indexed = await indexDocuments(
       client,
       indexName,
@@ -477,9 +492,19 @@ async function main() {
       // the settings it was measured under, and a summary that disagrees with
       // the committed value is contradicted by its own evidence.
       indexSettings: legalSearchIndexSettings,
+      // What the server actually applied. Empty is the expected state; anything
+      // here means the run measured a configuration this package does not
+      // define, and the numbers are not comparable with a run where it did.
+      unsupportedIndexSettings: indexSetup.unsupportedSettings,
       baseline: searchBenchmarkBaseline,
       cases: results,
       regressionFailures: regressions,
+    }
+
+    if (indexSetup.unsupportedSettings.length > 0) {
+      console.error(
+        `WARNING: the server could not apply ${indexSetup.unsupportedSettings.join(', ')}. These numbers were measured under a different search configuration from the one this package defines.`,
+      )
     }
 
     console.log(JSON.stringify(report, null, 2))

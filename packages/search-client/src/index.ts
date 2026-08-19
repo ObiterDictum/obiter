@@ -37,10 +37,30 @@ export type LegalSearchFilters = Partial<{
 
 export interface SearchIndexOptions {
   primaryKey?: 'id'
+  /**
+   * Continue when the server does not support one of the index settings, and
+   * report which. Off by default: a Meilisearch that cannot apply a setting is
+   * not running the configuration this package defines, and a caller that has
+   * not said it can live with that should be told rather than served silently.
+   *
+   * The one real case is `prefixSearch`, which Meilisearch added in 1.12.
+   * A 1.8 server has no `settings/prefix-search` route and answers 404, so
+   * prefix search stays on and short queries match on prefixes. That materially
+   * changes short-word precision, which is why this is opt-in and reported
+   * rather than assumed harmless.
+   */
+  allowUnsupportedSettings?: boolean
 }
 
 export interface SearchIndexResult {
   taskUid?: number
+  /**
+   * Settings the server could not apply, empty when everything applied. A run
+   * that measures anything must put this in its report: a number measured under
+   * a configuration the report does not name cannot be compared with one that
+   * was.
+   */
+  unsupportedSettings: string[]
 }
 
 export interface SearchIndexDocumentsResult {
@@ -307,6 +327,7 @@ export async function createIndex(
   options: SearchIndexOptions = {},
 ): Promise<SearchIndexResult> {
   let taskUid: number | undefined
+  const unsupportedSettings: string[] = []
 
   try {
     const primaryKey = options.primaryKey ?? 'id'
@@ -338,9 +359,14 @@ export async function createIndex(
       index.updateRankingRules(rankingRules),
       indexSetupTaskTimeoutMs,
     )
-    await waitForSucceededTask(
-      index.updatePrefixSearch(legalSearchIndexSettings.prefixSearch),
-      indexSetupTaskTimeoutMs,
+    // Optional only in the sense that an older server cannot be given it. It is
+    // load-bearing where it applies: `minimumShortWordPrecision` in the
+    // benchmark baseline rests on prefix search being off.
+    await applyOptionalSetting(
+      'prefixSearch',
+      () => index.updatePrefixSearch(legalSearchIndexSettings.prefixSearch),
+      options.allowUnsupportedSettings ?? false,
+      unsupportedSettings,
     )
     await waitForSucceededTask(
       index.updateStopWords(legalStopWords),
@@ -355,7 +381,7 @@ export async function createIndex(
       indexSetupTaskTimeoutMs,
     )
 
-    return { taskUid }
+    return { taskUid, unsupportedSettings }
   } catch (error) {
     throw wrapSearchError('Search index setup failed.', error)
   }
@@ -894,6 +920,36 @@ export async function getDocument(
     return LegalAuthoritySchema.parse(document)
   } catch (error) {
     throw wrapSearchError('Document lookup failed.', error)
+  }
+}
+
+/**
+ * A settings route the server does not have, as opposed to a request it
+ * rejected. Meilisearch answers 404 for a route that does not exist in its
+ * version, and that is the only shape treated as "unsupported": a 400 means the
+ * value was wrong, which is a bug here rather than an old server.
+ */
+function isUnsupportedSettingError(error: unknown) {
+  // MeiliSearchApiError carries the raw Response. A 404 from a settings route
+  // means the route is absent from this server's version.
+  return (
+    error instanceof Error &&
+    'response' in error &&
+    (error.response as Response | undefined)?.status === 404
+  )
+}
+
+async function applyOptionalSetting(
+  name: string,
+  task: () => SearchEnqueuedTaskPromise,
+  allowUnsupported: boolean,
+  unsupported: string[],
+) {
+  try {
+    await waitForSucceededTask(task(), indexSetupTaskTimeoutMs)
+  } catch (error) {
+    if (!allowUnsupported || !isUnsupportedSettingError(error)) throw error
+    unsupported.push(name)
   }
 }
 
