@@ -45,6 +45,15 @@ const findCaseLawCourtParamByCourt = new Map<string, string>(
   ),
 )
 const findCaseLawCourtPathAliases = new Map<string, string>([
+  // Find Case Law still serves judgments under the paths these courts used
+  // before they were renamed, so a document retrieved from one collection can
+  // carry another collection's path. Measured against the live feed:
+  // `court=ewhc-kb` returns `ewhc/qb/2021/3026`, and `court=ewhc-scco` returns
+  // `ewhc/costs/2019/1`. Without these the court derived from a document's own
+  // path disagrees with the court it was retrieved under, so a court filter and
+  // the stored court can disagree about the same judgment.
+  ['ewhc/qb', 'ewhc-kb'],
+  ['ewhc/costs', 'ewhc-scco'],
   ['ukftt/claims', 'ftt-claims'],
   ['ukftt/pc', 'ftt-pc'],
   ['ukftt/phl', 'ftt-phl'],

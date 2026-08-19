@@ -4,6 +4,7 @@ import {
   containsEverySearchableQueryTerm,
   exactMatchPunctuationFrom,
   exactMatchPunctuationTo,
+  normalizeCitationValue,
   normalizeExactMatchValue,
   rankLegalSearchHitsByExactMatch,
   type LegalSearchFilters,
@@ -205,7 +206,7 @@ export function createPostgresLegalAuthoritySourceStore(
                 provider_json,
                 search_vector,
                 regexp_replace(lower(trim(translate(normalize(coalesce(summary_json->>'id', ''), NFKC), $8, $9))), '\\s+', ' ', 'g') as normalized_id,
-                regexp_replace(lower(trim(translate(normalize(coalesce(summary_json->>'neutralCitation', ''), NFKC), $8, $9))), '\\s+', ' ', 'g') as normalized_neutral_citation,
+                regexp_replace(regexp_replace(lower(trim(translate(normalize(coalesce(summary_json->>'neutralCitation', ''), NFKC), $8, $9))), '\\s+', ' ', 'g'), '\\m0+(\\d)', '\\1', 'g') as normalized_neutral_citation,
                 regexp_replace(lower(trim(translate(normalize(coalesce(summary_json->>'title', ''), NFKC), $8, $9))), '\\s+', ' ', 'g') as normalized_title
               from legal_source_documents
               where ($1::text is null or summary_json->>'court' = $1)
@@ -220,13 +221,13 @@ export function createPostgresLegalAuthoritySourceStore(
               $6::text = ''
               or search_vector @@ websearch_to_tsquery('english', $6)
               or normalized_id = $7
-              or normalized_neutral_citation = $7
+              or normalized_neutral_citation = $10
               or normalized_title = $7
             )
             order by
               case
                 when normalized_id = $7 then 3
-                when normalized_neutral_citation = $7 then 2
+                when normalized_neutral_citation = $10 then 2
                 when normalized_title = $7 then 1
                 else 0
               end desc,
@@ -244,6 +245,7 @@ export function createPostgresLegalAuthoritySourceStore(
             normalizedQuery,
             exactMatchPunctuationFrom,
             exactMatchPunctuationTo,
+            normalizeCitationValue(query),
           ],
         )
         await client.query('commit')
