@@ -3,6 +3,7 @@ import { dirname } from 'node:path'
 import {
   createClient,
   createIndex,
+  detectUnsupportedSearchFeatures,
   indexDocuments,
   legalSearchIndexSettings,
   search,
@@ -20,6 +21,19 @@ const apiKey = process.env.SEARCH_BENCHMARK_API_KEY ?? 'search-benchmark-key'
 const indexName = `legal-authorities-benchmark-${process.pid}`
 const topKSize = 3
 const resultLimit = 20
+/**
+ * Allow the run to continue against a Meilisearch too old for one of the index
+ * settings, naming what it could not apply in the report.
+ *
+ * Off by default so CI, which pins 1.12.0, cannot drift into measuring a
+ * configuration it did not intend. Set it locally when the only server
+ * available is older, and read the reported `unsupportedSettings` before
+ * comparing the numbers with anything: a 1.8 server cannot disable prefix
+ * search, and `minimumShortWordPrecision` rests on prefix search being off.
+ */
+const allowUnsupportedSettings =
+  process.env.SEARCH_BENCHMARK_ALLOW_UNSUPPORTED_SETTINGS === '1'
+
 const knownFailingCaseIds = new Set<string>(
   searchBenchmarkBaseline.knownFailingCaseIds,
 )
@@ -101,6 +115,7 @@ function failureLabels(
 async function runCase(
   client: ReturnType<typeof createClient>,
   testCase: SearchBenchmarkCase,
+  disableRankingScoreThreshold: boolean,
 ): Promise<BenchmarkCaseResult> {
   try {
     const startedAt = performance.now()
@@ -109,7 +124,15 @@ async function runCase(
       indexName,
       testCase.query,
       testCase.filters,
-      { includeSnippets: true, limit: resultLimit },
+      {
+        includeSnippets: true,
+        limit: resultLimit,
+        // null disables the floor. Only reached on a server too old to accept
+        // the parameter at all, and named in the report when it is.
+        ...(disableRankingScoreThreshold
+          ? { rankingScoreThreshold: null }
+          : {}),
+      },
     )
     const wallClockSearchTimeMs = performance.now() - startedAt
     const hitIds = result.hits.map((hit) => hit.id)
@@ -449,7 +472,9 @@ async function main() {
   const client = createClient(host, apiKey)
 
   try {
-    await createIndex(client, indexName)
+    const indexSetup = await createIndex(client, indexName, {
+      allowUnsupportedSettings,
+    })
     const indexed = await indexDocuments(
       client,
       indexName,
@@ -461,9 +486,18 @@ async function main() {
       )
     }
 
+    const unsupportedSearchFeatures = allowUnsupportedSettings
+      ? await detectUnsupportedSearchFeatures(client, indexName)
+      : []
+    const disableRankingScoreThreshold = unsupportedSearchFeatures.includes(
+      'rankingScoreThreshold',
+    )
+
     const results: BenchmarkCaseResult[] = []
     for (const testCase of searchBenchmarkCases) {
-      results.push(await runCase(client, testCase))
+      results.push(
+        await runCase(client, testCase, disableRankingScoreThreshold),
+      )
     }
 
     const metrics = calculateMetrics(results)
@@ -477,9 +511,27 @@ async function main() {
       // the settings it was measured under, and a summary that disagrees with
       // the committed value is contradicted by its own evidence.
       indexSettings: legalSearchIndexSettings,
+      // What the server actually applied. Empty is the expected state; anything
+      // here means the run measured a configuration this package does not
+      // define, and the numbers are not comparable with a run where it did.
+      unsupportedIndexSettings: indexSetup.unsupportedSettings,
+      // Search parameters the server rejected outright. Separate from the index
+      // settings above because they are a different kind of gap: one changes how
+      // the index was built, the other changes what could be asked of it.
+      unsupportedSearchFeatures,
       baseline: searchBenchmarkBaseline,
       cases: results,
       regressionFailures: regressions,
+    }
+
+    const unsupported = [
+      ...indexSetup.unsupportedSettings,
+      ...unsupportedSearchFeatures,
+    ]
+    if (unsupported.length > 0) {
+      console.error(
+        `WARNING: this server does not support ${unsupported.join(', ')}. These numbers were measured under a different search configuration from the one this package defines, and are not comparable with a run where it did.`,
+      )
     }
 
     console.log(JSON.stringify(report, null, 2))
