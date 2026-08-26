@@ -73,7 +73,7 @@ jobs:
   # installers, not server images.
   docker-web:
     name: Build web image
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
