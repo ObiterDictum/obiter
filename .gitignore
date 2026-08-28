@@ -73,7 +73,8 @@ scripts/diagrams.json
 docs/brand/kit/
 scripts/brand/
 
-# Security assessments — this repo is PUBLIC, so unremediated vulnerability
-# details must not be committed here. Assessments live in the private
-# obiter-ops repository (security/).
+# Security assessments and pentest harnesses live in obiter-ops because
+# this repo is public; a harness moves here as ordinary negative permission
+# tests only once its findings are closed.
 docs/security/
+services/api/src/pentest-*.test.ts
