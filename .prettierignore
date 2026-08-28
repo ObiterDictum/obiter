@@ -31,6 +31,7 @@ data/
 # oxlint, and ESLint so the vendored source stays byte-faithful. The
 # .git-blame-ignore-revs entry covers the whole-repo format commit.
 packages/rampart-inference/
+tools/oxlint/anti-slop/
 
 # Machine-local tooling scratch (also in .gitignore).
 .claude/
