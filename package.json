@@ -21,13 +21,17 @@
     "test": "pnpm -r --if-present test && vitest run scripts/synthetic-v2 scripts/redact-acceptance",
     "typecheck": "pnpm -r --if-present typecheck && tsc --noEmit -p scripts/synthetic-v2/tsconfig.json && tsc --noEmit -p scripts/redact-acceptance/tsconfig.json"
   },
+  "_comment:oxlint-coupled": "oxlint and @oxlint/plugins must be on the same exact version (1.73.0) — update together; pnpm update would otherwise break the plugin",
+  "_comment:oxlint": "1.73.0 must match @oxlint/plugins — see _comment:oxlint-coupled",
+  "_comment:@oxlint/plugins": "1.73.0 must match oxlint — see _comment:oxlint-coupled",
   "devDependencies": {
+    "@oxlint/plugins": "1.73.0",
     "@types/node": "^22.15.18",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
     "@typescript-eslint/parser": "^8.32.0",
     "eslint": "^9.30.0",
-    "oxlint": "^1.73.0",
+    "oxlint": "1.73.0",
     "prettier": "^3.9.5",
     "tsx": "^4.23.0",
     "typescript": "^5.7.2",
