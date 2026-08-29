@@ -1,4 +1,5 @@
 import type { Pool } from 'pg'
+import { matterAccessPredicate } from './matter-access-boundary'
 import type { DetectionMode, RedactionPolicyMode } from '@obiter/contracts'
 import type { RedactionSpan } from '@obiter/redaction-policy'
 import { appendAuditLog } from './database'
@@ -108,16 +109,20 @@ async function lockLinkedRunParents(
   queryable: RedactionRunQueryable,
   input: {
     organisationId: string
+    userId: string
     matterId: string
     documentId: string
     documentVersionId: string
   },
 ) {
   const matter = await queryable.query<{ id: string }>(
-    `select id from matters
-     where id = $1 and organisation_id = $2 and deleted_at is null
+    `select matter.id from matters matter
+     where matter.id = $1
+       and matter.organisation_id = $2
+       and matter.deleted_at is null
+       and ${matterAccessPredicate('$3', "'edit'")}
      for update`,
-    [input.matterId, input.organisationId],
+    [input.matterId, input.organisationId, input.userId],
   )
   if (matter.rows.length === 0) return false
 
@@ -192,6 +197,7 @@ export async function createRedactionRun(input: CreateRedactionRunInput) {
     await client.query('begin')
     const parentsExist = await lockLinkedRunParents(client, {
       organisationId: input.organisationId,
+      userId: input.userId,
       ...linkedSource,
     })
     if (!parentsExist) {
@@ -228,8 +234,12 @@ export async function createRedetectionRun(input: {
     const locked = await client.query<RedactionRunRow>(
       `select ${redactionRunColumns} ${redactionRunsFrom}
        where run.id = $1 and run.organisation_id = $2 and run.deleted_at is null
+         and (
+           run.matter_id is null
+           or ${matterAccessPredicate('$3', "'edit'")}
+         )
        for update of run`,
-      [input.sourceRunId, input.organisationId],
+      [input.sourceRunId, input.organisationId, input.userId],
     )
     if (!locked.rows[0]) {
       await client.query('rollback')

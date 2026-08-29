@@ -136,11 +136,15 @@ describe('getDocumentRedactionSource', () => {
     } as never
 
     await expect(
-      getDocumentRedactionSource(pool, 'org_1', 'doc_from_org_2'),
+      getDocumentRedactionSource(
+        pool,
+        { id: 'usr_1', organisationId: 'org_1', role: 'member' },
+        'doc_from_org_2',
+      ),
     ).resolves.toBeNull()
 
     expect(String(queries[0][0])).toContain('document.organisation_id = $2')
-    expect(queries[0][1]).toEqual(['doc_from_org_2', 'org_1'])
+    expect(queries[0][1]).toEqual(['doc_from_org_2', 'org_1', 'usr_1'])
   })
 })
 
@@ -708,7 +712,7 @@ describe('redaction run write guards', () => {
   it('does not create a linked run when its document or matter is deleted', async () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       if (sql === 'begin' || sql === 'rollback') return { rows: [] }
-      if (sql.includes('select id from matters')) {
+      if (sql.includes('select matter.id from matters')) {
         return { rows: [{ id: 'mtr_1' }] }
       }
       if (sql.includes('select id from matter_documents')) return { rows: [] }
@@ -734,7 +738,7 @@ describe('redaction run write guards', () => {
     ).resolves.toBeNull()
 
     const matterLock = calls.find(([sql]) =>
-      sql.includes('select id from matters'),
+      sql.includes('select matter.id from matters'),
     )
     const documentLock = calls.find(([sql]) =>
       sql.includes('select id from matter_documents'),
@@ -754,12 +758,12 @@ describe('softDeleteRedactionRun', () => {
     const { pool, calls } = createTransactionalPool(async (sql, params) => {
       const text = sql.trim()
       if (text === 'begin' || text === 'commit') return { rows: [] }
-      if (text.startsWith('select id from redaction_runs')) {
+      if (text.startsWith('select run.id') && text.includes('for update')) {
         return { rows: [{ id: 'red_1' }] }
       }
       if (text.startsWith('update redaction_runs')) return { rows: [] }
       if (text.startsWith('select run.id')) {
-        expect(params).toEqual(['red_1', 'org_1', true])
+        expect(params).toEqual(['red_1', 'org_1', true, 'usr_1', 'edit'])
         return { rows: [runRow({ replacement_run_id: 'red_2' })] }
       }
       if (text.includes('insert into audit_logs')) return { rows: [] }
@@ -789,7 +793,7 @@ describe('restoreRedactionRunWithAudit', () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       const text = sql.trim()
       if (text === 'begin' || text === 'commit') return { rows: [] }
-      if (text.startsWith('select matter_id, document_id')) {
+      if (text.startsWith('select run.matter_id, run.document_id')) {
         return {
           rows: [{ matter_id: null, document_id: null, replaces_run_id: null }],
         }
@@ -828,7 +832,7 @@ describe('restoreRedactionRunWithAudit', () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       const text = sql.trim()
       if (text === 'begin' || text === 'rollback') return { rows: [] }
-      if (text.startsWith('select matter_id, document_id')) {
+      if (text.startsWith('select run.matter_id, run.document_id')) {
         return {
           rows: [
             { matter_id: null, document_id: null, replaces_run_id: 'red_0' },

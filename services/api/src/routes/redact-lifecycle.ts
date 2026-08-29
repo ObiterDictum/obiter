@@ -146,9 +146,12 @@ export function createRedactLifecycleRoutes(
     // owner/admin may read it, while live runs' audit access is unchanged.
     const run = await getRedactionRun(
       pool,
-      user.organisationId,
+      user,
       c.req.param('runId'),
-      { includeDeleted: true },
+      'view',
+      {
+        includeDeleted: true,
+      },
     )
     if (!run)
       return errorResponse(

@@ -43,11 +43,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   routes.get('/api/redaction-runs/:runId', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
-    const run = await getRedactionRun(
-      pool,
-      user.organisationId,
-      c.req.param('runId'),
-    )
+    const run = await getRedactionRun(pool, user, c.req.param('runId'), 'view')
     if (!run)
       return errorResponse(
         c,
@@ -61,11 +57,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   routes.get('/api/redaction-runs/:runId/document-text', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
-    const run = await getRedactionRun(
-      pool,
-      user.organisationId,
-      c.req.param('runId'),
-    )
+    const run = await getRedactionRun(pool, user, c.req.param('runId'), 'view')
     if (!run)
       return errorResponse(
         c,
@@ -87,11 +79,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   routes.get('/api/redaction-runs/:runId/source-file', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
-    const run = await getRedactionRun(
-      pool,
-      user.organisationId,
-      c.req.param('runId'),
-    )
+    const run = await getRedactionRun(pool, user, c.req.param('runId'), 'view')
     if (!run)
       return errorResponse(
         c,
@@ -122,11 +110,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   routes.get('/api/redaction-runs/:runId/layout', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
-    const run = await getRedactionRun(
-      pool,
-      user.organisationId,
-      c.req.param('runId'),
-    )
+    const run = await getRedactionRun(pool, user, c.req.param('runId'), 'view')
     if (!run)
       return errorResponse(
         c,
@@ -260,11 +244,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         'A valid output mode and acknowledgement value are required.',
         400,
       )
-    const run = await getRedactionRun(
-      pool,
-      user.organisationId,
-      c.req.param('runId'),
-    )
+    const run = await getRedactionRun(pool, user, c.req.param('runId'), 'edit')
     if (!run)
       return errorResponse(
         c,
@@ -492,11 +472,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   routes.get('/api/redaction-runs/:runId/output', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
-    const run = await getRedactionRun(
-      pool,
-      user.organisationId,
-      c.req.param('runId'),
-    )
+    const run = await getRedactionRun(pool, user, c.req.param('runId'), 'view')
     if (!run)
       return errorResponse(
         c,
@@ -546,11 +522,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   routes.get('/api/redaction-runs/:runId/output/file', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
-    const run = await getRedactionRun(
-      pool,
-      user.organisationId,
-      c.req.param('runId'),
-    )
+    const run = await getRedactionRun(pool, user, c.req.param('runId'), 'view')
     if (!run)
       return errorResponse(
         c,
@@ -618,11 +590,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   routes.get('/api/redaction-runs/:runId/token-map', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
-    const run = await getRedactionRun(
-      pool,
-      user.organisationId,
-      c.req.param('runId'),
-    )
+    const run = await getRedactionRun(pool, user, c.req.param('runId'), 'view')
     if (!run)
       return errorResponse(
         c,

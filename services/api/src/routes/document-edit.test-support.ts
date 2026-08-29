@@ -74,21 +74,30 @@ export class EditDatabase extends SharedTestDatabase {
         String(parameters[0]) === 'doc_1'
       ) {
         this.queries.push(sql)
+        const access =
+          this.options.access === undefined ? 'view' : this.options.access
+        const requiredLevel = parameters[4]
+        const allowed =
+          access === 'owner' ||
+          access === 'edit' ||
+          (access === 'view' && requiredLevel === 'view')
         return {
-          rows: [
-            {
-              id: 'doc_1',
-              organisation_id: 'org_1',
-              matter_id: 'mtr_1',
-              current_version_id: this.currentVersionId,
-              logical_key: 'logical',
-              created_by: 'usr_owner',
-              created_at: '2026-08-10T10:00:00.000Z',
-              updated_at: '2026-08-10T10:00:00.000Z',
-              deleted_at: null,
-              deleted_by: null,
-            },
-          ],
+          rows: allowed
+            ? [
+                {
+                  id: 'doc_1',
+                  organisation_id: 'org_1',
+                  matter_id: 'mtr_1',
+                  current_version_id: this.currentVersionId,
+                  logical_key: 'logical',
+                  created_by: 'usr_owner',
+                  created_at: '2026-08-10T10:00:00.000Z',
+                  updated_at: '2026-08-10T10:00:00.000Z',
+                  deleted_at: null,
+                  deleted_by: null,
+                },
+              ]
+            : [],
         }
       }
       if (
