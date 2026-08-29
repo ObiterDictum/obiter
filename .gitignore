@@ -72,3 +72,9 @@ scripts/diagrams.json
 # them are large binaries or local tooling and stay out of the repo.
 docs/brand/kit/
 scripts/brand/
+
+# Security assessments and pentest harnesses live in obiter-ops because
+# this repo is public; a harness moves here as ordinary negative permission
+# tests only once its findings are closed.
+docs/security/
+services/api/src/pentest-*.test.ts
