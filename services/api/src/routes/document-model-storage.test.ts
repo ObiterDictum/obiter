@@ -41,10 +41,9 @@ describe('GET /api/documents/:id/model storage boundary', () => {
     expect(storage.textReads).toEqual([modelObjectKey])
     expect(storage.binaryReads).toEqual([])
     expect(database.queries.map(queryKind)).toEqual([
-      'document',
+      'document-access',
       'versions',
       'current-version',
-      'matter-access',
     ])
   })
 

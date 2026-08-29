@@ -3,7 +3,6 @@ import type { Pool } from 'pg'
 import type { ApiErrorResponse, MatterAccessLevel } from '@obiter/contracts'
 import { ensureOrgUser, type AuthzVariables } from '../authz'
 import { getDocument } from '../database'
-import { requireMatterAccess } from '../document-access'
 
 type RouteContext = Context<{ Variables: AuthzVariables }>
 
@@ -37,18 +36,8 @@ export async function resolveReadyDocumentVersion(
   const user = await ensureOrgUser(c, pool)
   if (user instanceof Response) return user
 
-  const result = await getDocument(pool, user.organisationId, documentId)
+  const result = await getDocument(pool, user, documentId, requiredAccess)
   if (!result) return documentNotFound(c)
-
-  const access = await requireMatterAccess(
-    c,
-    pool,
-    result.document.matterId,
-    requiredAccess,
-  )
-  if (access instanceof Response) {
-    return access.status === 404 ? documentNotFound(c) : access
-  }
 
   const selectedId = selection.versionId ?? result.document.currentVersionId
   const version = result.versions.find(({ id }) => id === selectedId)
@@ -69,7 +58,7 @@ export async function resolveReadyDocumentVersion(
     document: result.document,
     version,
     versions: result.versions,
-    user: access,
+    user,
   }
 }
 

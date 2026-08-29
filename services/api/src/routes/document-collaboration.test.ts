@@ -66,7 +66,9 @@ describe('document collaboration route gates', () => {
 
       await expectDocument404(response)
       expect(route.storage.binaryReads).toEqual([])
-      expect(route.database.queries.at(-1)).toContain('left join matter_shares')
+      expect(
+        route.database.queries.some((sql) => sql.includes('matter_shares')),
+      ).toBe(true)
     },
   )
 

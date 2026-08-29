@@ -226,11 +226,7 @@ export function createDocumentAccessRoutes(pool: Pool) {
     const user = await ensureOrgUser(c, pool)
     if (user instanceof Response) return user
 
-    const matter = await getMatter(
-      pool,
-      user.organisationId,
-      c.req.param('matterId'),
-    )
+    const matter = await getMatter(pool, user, c.req.param('matterId'), 'edit')
     if (!matter)
       return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
     if (matter.createdBy !== user.id)
@@ -259,11 +255,7 @@ export function createDocumentAccessRoutes(pool: Pool) {
     const user = await ensureOrgUser(c, pool)
     if (user instanceof Response) return user
 
-    const matter = await getMatter(
-      pool,
-      user.organisationId,
-      c.req.param('matterId'),
-    )
+    const matter = await getMatter(pool, user, c.req.param('matterId'), 'edit')
     if (!matter)
       return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
     if (matter.createdBy !== user.id)
@@ -320,11 +312,7 @@ export function createDocumentAccessRoutes(pool: Pool) {
     const user = await ensureOrgUser(c, pool)
     if (user instanceof Response) return user
 
-    const matter = await getMatter(
-      pool,
-      user.organisationId,
-      c.req.param('matterId'),
-    )
+    const matter = await getMatter(pool, user, c.req.param('matterId'), 'edit')
     if (!matter)
       return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
     if (matter.createdBy !== user.id)

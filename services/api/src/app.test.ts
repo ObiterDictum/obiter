@@ -440,7 +440,7 @@ describe('createApiApp', () => {
     expect(directQueries).toEqual([
       [
         expect.stringContaining('from matters'),
-        ['mtr_1', 'org_personal', false],
+        ['mtr_1', 'org_personal', false, 'usr_2', 'edit'],
       ],
       [
         expect.stringContaining('from matter_shares'),
@@ -764,7 +764,7 @@ describe('createApiApp', () => {
     expect(response.status).toBe(200)
     expect(queries[0]).toEqual([
       expect.stringContaining('from matters'),
-      ['org_1', false],
+      ['org_1', false, 'usr_1'],
     ])
   })
 
@@ -894,7 +894,7 @@ describe('createApiApp', () => {
       ),
     ).toEqual([
       'begin',
-      'select deleted_at::text from',
+      'select matter.deleted_at::text from',
       'update matters set',
       'update matter_documents set',
       'update redaction_runs set',
@@ -2709,7 +2709,8 @@ describe('createApiApp soft-delete write races', () => {
         async (sql) => {
           const text = String(sql)
           if (text === 'begin' || text === 'rollback') return { rows: [] }
-          if (text.includes('select id from matters')) return { rows: [] }
+          if (text.includes('select matter.id from matters'))
+            return { rows: [] }
           throw new Error(`Unexpected SQL: ${text}`)
         },
       ),
@@ -2760,7 +2761,8 @@ describe('createApiApp soft-delete write races', () => {
           const text = String(sql)
           transactionQueries.push(text)
           if (text === 'begin' || text === 'rollback') return { rows: [] }
-          if (text.includes('select id from matters')) return { rows: [] }
+          if (text.includes('select matter.id from matters'))
+            return { rows: [] }
           throw new Error(`Unexpected SQL: ${text}`)
         },
       ),
@@ -2872,7 +2874,7 @@ describe('createApiApp restore routes', () => {
         const sql = String(args[0]).trim()
         if (sql === 'begin' || sql === 'commit' || sql === 'rollback')
           return { rows: [] }
-        if (sql.startsWith('select matter_id, document_id'))
+        if (sql.startsWith('select run.matter_id, run.document_id'))
           return {
             rows: [
               { matter_id: null, document_id: null, replaces_run_id: null },
@@ -2903,7 +2905,7 @@ describe('createApiApp restore routes', () => {
       createConnectedPool(async (...args) => {
         const sql = String(args[0]).trim()
         if (sql === 'begin' || sql === 'rollback') return { rows: [] }
-        if (sql.startsWith('select matter_id, document_id'))
+        if (sql.startsWith('select run.matter_id, run.document_id'))
           return {
             rows: [
               { matter_id: null, document_id: null, replaces_run_id: 'red_0' },
@@ -3069,7 +3071,10 @@ describe('createApiApp includeDeleted authorization', () => {
         const values = Array.isArray(parameters) ? parameters : []
         const includeDeleted = values.includes(true)
 
-        if (text.includes('from matter_documents d')) {
+        if (
+          text.includes('from matter_documents d\n') &&
+          text.includes('order by d.created_at')
+        ) {
           return { rows: includeDeleted ? [deletedDocumentRow] : [] }
         }
         if (text.includes('from matter_documents')) {
@@ -3078,7 +3083,7 @@ describe('createApiApp includeDeleted authorization', () => {
           }
         }
         if (text.includes('from matters')) {
-          if (values.length === 2)
+          if (!text.includes('matter.id = $1'))
             return { rows: includeDeleted ? [deletedMatterRow] : [] }
           return {
             rows: includeDeleted ? [deletedMatterRow] : [liveMatterRow],

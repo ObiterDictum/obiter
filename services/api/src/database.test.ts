@@ -94,7 +94,7 @@ describe('matter workspace database operations', () => {
       if (sql === 'begin' || sql === 'commit' || sql === 'rollback') {
         return { rows: [] }
       }
-      if (sql.includes('select id from matters')) {
+      if (sql.includes('select matter.id from matters')) {
         return { rows: [{ id: 'mtr_1' }] }
       }
       if (sql.includes('insert into matter_documents')) {
@@ -133,7 +133,7 @@ describe('matter workspace database operations', () => {
       calls.map(([sql]) => sql.trim().split(/\s+/).slice(0, 3).join(' ')),
     ).toEqual([
       'begin',
-      'select id from',
+      'select matter.id from',
       'insert into matter_documents',
       'insert into document_versions',
       'update matter_documents set',
@@ -154,7 +154,7 @@ describe('matter workspace database operations', () => {
     const parentLock = calls[1]
     expect(parentLock[0]).toContain('deleted_at is null')
     expect(parentLock[0]).toContain('for update')
-    expect(parentLock[1]).toEqual(['mtr_1', 'org_1'])
+    expect(parentLock[1]).toEqual(['mtr_1', 'org_1', 'usr_1'])
     const versionParams = calls[3][1]
     expect(versionParams).toEqual([
       expect.stringMatching(/^ver_/),
@@ -183,7 +183,7 @@ describe('matter workspace database operations', () => {
   it('returns null before inserting when the parent matter is deleted', async () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       if (sql === 'begin' || sql === 'rollback') return { rows: [] }
-      if (sql.includes('select id from matters')) return { rows: [] }
+      if (sql.includes('select matter.id from matters')) return { rows: [] }
       throw new Error(`Unexpected SQL: ${sql}`)
     })
 
@@ -208,7 +208,7 @@ describe('matter workspace database operations', () => {
       if (sql === 'begin' || sql === 'rollback') {
         return { rows: [] }
       }
-      if (sql.includes('select id from matters')) {
+      if (sql.includes('select matter.id from matters')) {
         return { rows: [{ id: 'mtr_1' }] }
       }
       if (sql.includes('insert into matter_documents')) {
@@ -290,7 +290,7 @@ describe('matter workspace database operations', () => {
       calls.map(([sql]) => sql.trim().split(/\s+/).slice(0, 3).join(' ')),
     ).toEqual([
       'begin',
-      'select id from',
+      'select matter.id from',
       'update matters set',
       'update matter_documents set',
       'update redaction_runs set',
@@ -382,7 +382,7 @@ describe('matter workspace database operations', () => {
       calls.map(([sql]) => sql.trim().split(/\s+/).slice(0, 3).join(' ')),
     ).toEqual([
       'begin',
-      'select deleted_at::text from',
+      'select matter.deleted_at::text from',
       'update matters set',
       'update matter_documents set',
       'update redaction_runs set',
@@ -497,7 +497,7 @@ describe('matter workspace database operations', () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       const text = sql.trim()
       if (text === 'begin' || text === 'commit') return { rows: [] }
-      if (text.startsWith('select matter_id from matter_documents')) {
+      if (text.startsWith('select document.matter_id')) {
         return { rows: [{ matter_id: 'mtr_1' }] }
       }
       if (text.startsWith('select id from matters')) {

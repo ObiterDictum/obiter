@@ -17,8 +17,13 @@ export async function redetectRedactionRun(input: {
 }) {
   const sourceRun = await getRedactionRun(
     input.pool,
-    input.organisationId,
+    {
+      id: input.userId,
+      organisationId: input.organisationId,
+      role: 'member',
+    },
     input.runId,
+    'edit',
   )
   if (!sourceRun) return { kind: 'not_found' as const }
   if (sourceRun.detectionMode === 'model+supplement')

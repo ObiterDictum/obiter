@@ -46,7 +46,7 @@ export function createRedactRunCreationRoutes(
   routes.get('/api/redaction-runs', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
-    const runs = await listRedactionRuns(pool, user.organisationId)
+    const runs = await listRedactionRuns(pool, user)
     return c.json({ runs: runs.map((run) => listItem(publicRun(run))) })
   })
 
@@ -214,7 +214,7 @@ export function createRedactRunCreationRoutes(
       )
     const source = await getDocumentRedactionSource(
       pool,
-      user.organisationId,
+      user,
       c.req.param('documentId'),
     )
     if (!source)
@@ -274,7 +274,7 @@ export function createRedactRunCreationRoutes(
     if (user instanceof Response) return user
     const runs = await listRedactionRunsForDocument(
       pool,
-      user.organisationId,
+      user,
       c.req.param('documentId'),
     )
     return c.json({ runs: runs.map((run) => listItem(publicRun(run))) })

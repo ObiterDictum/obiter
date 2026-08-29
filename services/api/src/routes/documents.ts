@@ -76,14 +76,10 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
     const user = await ensureOrgUser(c, pool)
     if (user instanceof Response) return user
 
-    const matter = await getMatter(
-      pool,
-      user.organisationId,
-      c.req.param('matterId'),
-    )
-    if (!matter) {
+    const matterId = c.req.param('matterId')
+    const matter = await getMatter(pool, user, matterId, 'edit')
+    if (!matter)
       return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
-    }
 
     const isMultipart =
       c.req
@@ -162,7 +158,7 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
 
     const result = await createDocument(pool, {
       organisationId: user.organisationId,
-      matterId: matter.id,
+      matterId,
       userId: user.id,
       filename,
       fileType: verifiedType ?? fileType,
@@ -271,21 +267,14 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
       if (manageUser instanceof Response) return manageUser
     }
 
-    const matter = await getMatter(
-      pool,
-      user.organisationId,
-      c.req.param('matterId'),
-    )
-    if (!matter) {
+    const matterId = c.req.param('matterId')
+    const matter = await getMatter(pool, user, matterId, 'view')
+    if (!matter)
       return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
-    }
 
-    const documents = await listDocuments(
-      pool,
-      user.organisationId,
-      matter.id,
-      { includeDeleted },
-    )
+    const documents = await listDocuments(pool, user, matterId, {
+      includeDeleted,
+    })
     return c.json({ documents })
   })
 
@@ -300,12 +289,9 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
       if (manageUser instanceof Response) return manageUser
     }
 
-    const result = await getDocument(
-      pool,
-      user.organisationId,
-      c.req.param('id'),
-      { includeDeleted },
-    )
+    const result = await getDocument(pool, user, c.req.param('id'), 'view', {
+      includeDeleted,
+    })
     if (!result) {
       return errorResponse(c, 'document_not_found', 'Document not found.', 404)
     }

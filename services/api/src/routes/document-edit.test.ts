@@ -72,7 +72,9 @@ describe('POST /api/documents/:id/edit', () => {
 
     await expectDocument404(response)
     expect(storage.reads).toEqual([])
-    expect(database.queries.at(-1)).toContain('left join matter_shares')
+    expect(database.queries.some((sql) => sql.includes('matter_shares'))).toBe(
+      true,
+    )
   })
 
   it.each([
