@@ -29,7 +29,7 @@
 # apps/web/serve.mjs host it starts has been exercised against a local
 # `vite build` output and serves SSR routes and static assets correctly.
 
-ARG NODE_VERSION=22.14.0
+ARG NODE_VERSION=24.19.0
 
 # --- Build stage -------------------------------------------------------------
 FROM node:${NODE_VERSION}-slim AS build
