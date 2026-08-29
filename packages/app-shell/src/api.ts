@@ -3,6 +3,7 @@ import { apiErrorResponseSchema } from '@obiter/contracts'
 import { apiUrl } from './lib/api-url'
 import { getDesktopAuthToken } from './lib/auth-token'
 import { readDesktopBridge } from './lib/desktop-bridge'
+import { getServerRequest } from './lib/server-request'
 
 /**
  * Typed error thrown by `apiFetch` when the API returns a non-2xx response that
@@ -41,20 +42,33 @@ const UNKNOWN_REQUEST_ID = 'req_unknown'
  */
 async function serverCookieHeader(): Promise<Record<string, string>> {
   if (typeof window !== 'undefined') return {}
+  // The host app (web) provides the SSR request via
+  // setServerRequestGetter(getRequest) where getRequest is imported
+  // from '@tanstack/react-start/server'. This indirection keeps
+  // app-shell free of a direct import that would otherwise need Vite
+  // static-analysis workarounds (prefix+suffix dynamic import,
+  // @ts-ignore, double cast) in tests. See
+  // packages/app-shell/src/lib/server-request.ts and
+  // apps/web/src/lib/init-server-request.ts.
   try {
-    // Construct specifier dynamically so Vite's static import analysis
-    // doesn't try to resolve it at build time (vitest doesn't have the
-    // module). Only present when running inside web SSR.
-    const prefix = '@tanstack'
-    const suffix = '/react-start/server'
-    // @ts-ignore — optional SSR dependency
-    const mod = (await import((prefix + suffix) as unknown as string)) as {
-      getRequest?: () => Request
-    }
-    const req = mod.getRequest?.()
-    const cookie = req?.headers.get('cookie')
+    const req = getServerRequest()
+    if (!req) return {}
+    const cookie = req.headers.get('cookie')
     if (cookie) return { Cookie: cookie }
-  } catch {}
+  } catch (error) {
+    // Only the "not in SSR / no request" case is expected and may be
+    // silently ignored (e.g., vitest, client-side). Any other failure
+    // (e.g., getRequest throwing unexpectedly inside SSR) must surface
+    // so SSR does not silently degrade to an unauthenticated fetch and
+    // redirect to /sign-in without diagnostics.
+    const message = error instanceof Error ? error.message : String(error)
+    const isExpectedNotInRequest =
+      message.includes('No StartEvent') ||
+      message.includes('not in a request') ||
+      message.includes('No request')
+    if (isExpectedNotInRequest) return {}
+    throw error
+  }
   return {}
 }
 
