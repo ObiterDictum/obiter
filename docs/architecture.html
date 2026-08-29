@@ -3058,13 +3058,15 @@
             predicate while locking the resource. Route modules are prohibited
             from querying matter-derived tables directly, so a new route must
             use an access-enforcing resolver. Denial is a uniform 404. Web uses
-            cookie sessions; desktop uses the bearer plugin. Redaction runs
-            inherit matter access; standalone runs use their creator.
-            Transactional run mutations lock the matter first, re-check edit
-            access, then lock the run, matching share revocation. Deleted runs
-            stay out of direct reads and lists; only the known-id audit route
-            uses an organisation-scoped deleted-run resolver after an
-            owner/admin role check.
+            cookie sessions; desktop uses the bearer plugin. Linked redaction
+            runs inherit live matter view/edit access; standalone runs use their
+            creator for ordinary access, with no administrator override.
+            Transactional linked lifecycle mutations lock matter, document, and
+            redaction run lineage in deterministic id order, matching the
+            matter-first share-revocation prefix. Deleted runs stay out of
+            direct reads and lists; only the known-id audit route uses an
+            organisation-scoped deleted-run resolver after an owner/admin role
+            check, while members are gated before the deleted lookup.
           </div>
         </section>
 
