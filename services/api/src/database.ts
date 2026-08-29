@@ -1337,10 +1337,10 @@ export async function restoreDocumentWithAudit(
     }
 
     const matter = await client.query<{ id: string }>(
-      `select id from matters
-       where id = $1
-         and organisation_id = $2
-         and deleted_at is null
+      `select id from matters matter
+       where matter.id = $1
+         and matter.organisation_id = $2
+         and matter.deleted_at is null
          and ${matterAccessPredicate('$3', "'edit'")}
        for update`,
       [matterId, input.organisationId, input.userId],

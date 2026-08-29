@@ -151,50 +151,6 @@ async function lockLinkedRunParents(
   return document.rows.length > 0
 }
 
-async function lockRedetectionParents(
-  queryable: RedactionRunQueryable,
-  input: {
-    organisationId: string
-    matterId: string
-    documentId: string
-    documentVersionId: string
-  },
-) {
-  const matter = await queryable.query<{ id: string }>(
-    `select id from matters
-     where id = $1 and organisation_id = $2 and deleted_at is null
-     for update`,
-    [input.matterId, input.organisationId],
-  )
-  if (!matter.rows[0]) return false
-
-  const document = await queryable.query<{ id: string }>(
-    `select id from matter_documents
-     where id = $1
-       and organisation_id = $2
-       and matter_id = $3
-       and deleted_at is null
-     for update`,
-    [input.documentId, input.organisationId, input.matterId],
-  )
-  if (!document.rows[0]) return false
-
-  const version = await queryable.query<{ id: string }>(
-    `select id from document_versions
-     where id = $1
-       and organisation_id = $2
-       and matter_id = $3
-       and matter_document_id = $4`,
-    [
-      input.documentVersionId,
-      input.organisationId,
-      input.matterId,
-      input.documentId,
-    ],
-  )
-  return version.rows.length > 0
-}
-
 export async function createRedactionRun(input: CreateRedactionRunInput) {
   const matterId = input.matterId ?? null
   const documentId = input.documentId ?? null
@@ -280,11 +236,20 @@ export async function createRedetectionRun(input: {
           }
         : null
     if (linkedSource) {
-      const parentsExist = await lockRedetectionParents(client, {
-        organisationId: sourceRun.organisationId,
-        ...linkedSource,
-      })
-      if (!parentsExist) {
+      const version = await client.query<{ id: string }>(
+        `select id from document_versions
+         where id = $1
+           and organisation_id = $2
+           and matter_id = $3
+           and matter_document_id = $4`,
+        [
+          linkedSource.documentVersionId,
+          sourceRun.organisationId,
+          linkedSource.matterId,
+          linkedSource.documentId,
+        ],
+      )
+      if (!version.rows[0]) {
         await client.query('rollback')
         return { kind: 'linked_source_unavailable' as const }
       }

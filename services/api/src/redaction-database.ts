@@ -108,6 +108,10 @@ export const redactionRunsFrom = `from redaction_runs run
   left join matters matter on matter.id = run.matter_id and matter.organisation_id = run.organisation_id
   left join redaction_runs replacement on replacement.organisation_id = run.organisation_id
     and replacement.replaces_run_id = run.id and replacement.deleted_at is null`
+const redactionRunLockColumns = redactionRunColumns.replace(
+  'run.deleted_at,',
+  'run.deleted_at::text as deleted_at,',
+)
 
 function timestamp(value: Date | string) {
   return value instanceof Date ? value.toISOString() : value
@@ -373,7 +377,7 @@ export async function selectMutationRun(
   for (const runId of runIds) {
     if (runId === input.runId) {
       const result = await queryable.query<RedactionRunRow>(
-        `select ${redactionRunColumns} ${redactionRunsFrom}
+        `select ${redactionRunLockColumns} ${redactionRunsFrom}
          where run.id = $1 and run.organisation_id = $2
            and ${input.includeDeleted ? 'run.deleted_at is not null' : 'run.deleted_at is null'}
            and ${redactionRunAccessPredicate('$3', "'edit'")}
@@ -810,10 +814,10 @@ export async function getRedactionOutputKey(
 }
 
 /**
- * Soft-deletes a standalone redaction run and writes the audit event in one
- * transaction. Returns null when the run is missing, cross-org, or already
- * deleted (caller surfaces 404 without auditing). Cascade deletes from a
- * matter or document use the same columns via database.ts and do not call this.
+ * Soft-deletes a redaction run and writes the audit event in one transaction.
+ * Returns null when the run is missing, cross-org, or already deleted (caller
+ * surfaces 404 without auditing). Cascade deletes from a matter or document
+ * are handled by database.ts and do not call this.
  */
 export async function softDeleteRedactionRun(
   pool: Pool,
@@ -881,7 +885,7 @@ export async function softDeleteRedactionRun(
 
 /** Restores one run after parent-liveness checks. */
 export async function restoreRedactionRunWithAudit(
-  pool: Pool,
+  pool: Pick<Pool, 'connect'>,
   input: {
     organisationId: string
     userId: string

@@ -417,6 +417,12 @@ describe('createRedetectionRun', () => {
       sql.includes('select id from document_versions'),
     )
     expect(parentCheck?.[1]).toEqual(['ver_old', 'org_1', 'mtr_1', 'doc_1'])
+    expect(
+      calls.filter(([sql]) => sql.includes('select matter.id from matters')),
+    ).toHaveLength(1)
+    expect(
+      calls.filter(([sql]) => sql.includes('select id from matter_documents')),
+    ).toHaveLength(1)
   })
 })
 
@@ -905,9 +911,7 @@ describe('softDeleteRedactionRun', () => {
 
 describe('restoreRedactionRunWithAudit', () => {
   it('does not restore after a share revocation wins the matter lock', async () => {
-    const calls: string[] = []
-    const query = async (sql: string) => {
-      calls.push(sql)
+    const { pool, calls } = createTransactionalPool(async (sql) => {
       const text = sql.trim()
       if (text === 'begin' || text === 'rollback') return { rows: [] }
       if (text.startsWith('select matter_id, document_id, replaces_run_id'))
@@ -918,26 +922,18 @@ describe('restoreRedactionRunWithAudit', () => {
         }
       if (text.includes('select matter.id from matters')) return { rows: [] }
       throw new Error(`Unexpected SQL: ${sql}`)
-    }
+    })
 
     await expect(
-      restoreRedactionRunWithAudit(
-        {
-          connect: async () => ({
-            query,
-            release: () => undefined,
-          }),
-        } as unknown as Pool,
-        {
-          organisationId: 'org_1',
-          userId: 'usr_grantee',
-          runId: 'red_1',
-          requestId: 'req_1',
-        },
-      ),
+      restoreRedactionRunWithAudit(pool, {
+        organisationId: 'org_1',
+        userId: 'usr_grantee',
+        runId: 'red_1',
+        requestId: 'req_1',
+      }),
     ).resolves.toEqual({ kind: 'not_found' })
-    expect(calls.some((sql) => sql.includes('for update of run'))).toBe(false)
-    expect(calls.some((sql) => sql.startsWith('update redaction_runs'))).toBe(
+    expect(calls.some(([sql]) => sql.includes('for update of run'))).toBe(false)
+    expect(calls.some(([sql]) => sql.startsWith('update redaction_runs'))).toBe(
       false,
     )
   })
@@ -1012,17 +1008,22 @@ describe('restoreRedactionRunWithAudit', () => {
         }
       }
       if (text.startsWith('update redaction_runs')) return { rows: [] }
-      if (text.startsWith('select run.id')) {
+      if (text.startsWith('select run.id') && text.includes('for update')) {
         return {
           rows: [
             runRow({
-              deleted_at: text.includes('run.deleted_at is not null')
+              // node-postgres returns Date for an uncast timestamptz, losing
+              // the six-digit fraction that the restore must match exactly.
+              deleted_at: text.includes('run.deleted_at::text')
                 ? deletedAt
-                : null,
+                : new Date('2026-02-01T00:00:00.123Z'),
               replacement_run_id: 'red_2',
             }),
           ],
         }
+      }
+      if (text.startsWith('select run.id')) {
+        return { rows: [runRow({ replacement_run_id: 'red_2' })] }
       }
       if (text.includes('insert into audit_logs')) return { rows: [] }
       throw new Error(`Unexpected SQL: ${sql}`)
@@ -1040,6 +1041,10 @@ describe('restoreRedactionRunWithAudit', () => {
       run: { id: 'red_1', deletedAt: null, replacementRunId: 'red_2' },
     })
 
+    const lock = calls.find(
+      ([sql]) => sql.startsWith('select run.id') && sql.includes('for update'),
+    )
+    expect(lock?.[0]).toContain('run.deleted_at::text as deleted_at')
     const update = calls.find(([sql]) => sql.includes('update redaction_runs'))
     expect(update?.[0]).toContain('deleted_at = $3::timestamptz')
     expect(update?.[1]?.[2]).toBe(deletedAt)

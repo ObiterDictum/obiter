@@ -587,6 +587,11 @@ describe('matter workspace database operations', () => {
     const runRestore = calls.find(([sql]) =>
       sql.includes('update redaction_runs'),
     )
+    const matterLockQuery = calls.find(([sql]) =>
+      sql.startsWith('select id from matters'),
+    )
+    expect(matterLockQuery?.[0]).toMatch(/from matters\s+matter/)
+    expect(matterLockQuery?.[0]).toContain('matter.created_by')
     expect(documentRestore?.[0]).toContain('deleted_at = $3::timestamptz')
     expect(documentRestore?.[1]?.[2]).toBe(deletedAt)
     expect(runRestore?.[0]).toContain('deleted_at = $3::timestamptz')
