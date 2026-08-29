@@ -41,7 +41,12 @@ fi
 # PDF glyph cover tests in services/api fail by fractions of a point when
 # fontconfig or fonts-liberation are missing (pdf.js substitutes a system font
 # for base-14 fonts and the cover geometry is measured against rendered ink).
-if ! command -v fc-list >/dev/null 2>&1 || ! fc-list 2>/dev/null | grep -qi liberation; then
+# Use grep -c (counts, consumes all input) rather than grep -q: under
+# set -o pipefail, grep -q closes the pipe early, fc-list dies of SIGPIPE
+# (exit 141), and pipefail propagates 141 — so the check reports missing
+# fonts on a machine that has them.
+LIBERATION=$(fc-list 2>/dev/null | grep -ci liberation || true)
+if ! command -v fc-list >/dev/null 2>&1 || [ "${LIBERATION:-0}" -eq 0 ]; then
   echo "Missing Liberation fonts (fontconfig / fonts-liberation)" >&2
   echo "Without them the PDF glyph cover tests in services/api fail by fractions of a point because" >&2
   echo "pdf.js substitutes a system font when rendering base-14 fonts. Install with:" >&2
