@@ -12,11 +12,13 @@ export default defineConfig({
     correctness: 'error',
   },
   rules: {
-    // Stage 1: exactly one anti-slop rule to prove wiring, chosen for fewest
-    // violations (0 in this codebase). See tools/oxlint/anti-slop/ for the
-    // vendored source. The remaining 14 generic rules are disabled until stage 2.
-    // Effect-specific rules are intentionally omitted (we do not use Effect).
+    // Stage 1 wiring + Pass A (zero-violation) rules. Remaining 11 generic
+    // rules are disabled until Pass B / Pass C triage. Effect-specific rules
+    // are intentionally omitted (we do not use Effect).
     'anti-slop/no-reflect-apply': 'error',
+    'anti-slop/no-object-parameters': 'error',
+    'anti-slop/no-unknown-type-aliases': 'error',
+    'anti-slop/no-widen-then-assert': 'error',
   },
   env: {
     builtin: true,
