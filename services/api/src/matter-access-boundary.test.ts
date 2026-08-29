@@ -1,5 +1,4 @@
 import { readdir, readFile } from 'node:fs/promises'
-import { basename } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const protectedTables =
@@ -12,8 +11,9 @@ describe('matter resource architecture boundary', () => {
       (file) =>
         file.endsWith('.ts') &&
         !file.includes('.test') &&
-        // document-access.ts is the one module allowed to query matter-derived tables directly.
-        basename(file) !== 'document-access.ts',
+        // Only the top-level document-access module may query these tables;
+        // matching the complete relative path prevents a nested bypass.
+        file !== 'document-access.ts',
     )
     const bypasses: string[] = []
 

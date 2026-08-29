@@ -8,6 +8,7 @@ import {
   mimeTypeFromStoredFileType,
   recordSpanDecision,
   restoreRedactionRunWithAudit,
+  selectMutationRun,
   softDeleteRedactionRun,
   type RedactionRunRow,
 } from './redaction-database'
@@ -68,6 +69,8 @@ function createTransactionalPool(
   const client = {
     query: async (sql: string, params?: unknown[]) => {
       calls.push([sql, params])
+      if (sql.trim().startsWith('select matter_id from redaction_runs'))
+        return { rows: [{ matter_id: null }] }
       return query(sql, params)
     },
     release: () => undefined,
@@ -399,6 +402,36 @@ describe('createRedetectionRun', () => {
 })
 
 describe('redaction run write guards', () => {
+  it('locks a linked matter before the run and rechecks edit access', async () => {
+    const queries: string[] = []
+    const query = async (sql: string) => {
+      queries.push(sql)
+      if (sql.trim().startsWith('select matter_id from redaction_runs'))
+        return { rows: [{ matter_id: 'mtr_1' }] }
+      if (sql.includes('select matter.id from matters'))
+        return { rows: [{ id: 'mtr_1' }] }
+      if (sql.includes('for update of run'))
+        return { rows: [runRow({ matter_id: 'mtr_1' })] }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    }
+
+    const run = await selectMutationRun({ query } as unknown as Pool, {
+      organisationId: 'org_1',
+      userId: 'usr_1',
+      runId: 'red_1',
+      includeDeleted: false,
+    })
+
+    expect(run?.matterId).toBe('mtr_1')
+    expect(
+      queries.findIndex((sql) => sql.includes('select matter.id')),
+    ).toBeLessThan(
+      queries.findIndex((sql) => sql.includes('for update of run')),
+    )
+    expect(queries[1]).toContain('matter_shares')
+    expect(queries[1]).toContain('for update')
+  })
+
   it('treats a soft-deleted run as not found when recording a decision', async () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       if (sql === 'begin' || sql === 'rollback') return { rows: [] }
@@ -633,7 +666,9 @@ describe('redaction run write guards', () => {
     })
     const reread = calls.find(
       ([sql]) =>
-        sql.includes('from redaction_runs') && !sql.includes('for update'),
+        sql.includes('from redaction_runs') &&
+        !sql.includes('for update') &&
+        !sql.includes('select matter_id from redaction_runs'),
     )
     expect(reread?.[0]).toContain('replacement.id as replacement_run_id')
   })
@@ -700,7 +735,9 @@ describe('redaction run write guards', () => {
     })
     const reread = calls.find(
       ([sql]) =>
-        sql.includes('from redaction_runs') && !sql.includes('for update'),
+        sql.includes('from redaction_runs') &&
+        !sql.includes('for update') &&
+        !sql.includes('select matter_id from redaction_runs'),
     )
     expect(reread?.[0]).toContain('replacement.id as replacement_run_id')
     expect(auditMetadata?.unreviewedSpanIds).toEqual(
@@ -759,7 +796,15 @@ describe('softDeleteRedactionRun', () => {
       const text = sql.trim()
       if (text === 'begin' || text === 'commit') return { rows: [] }
       if (text.startsWith('select run.id') && text.includes('for update')) {
-        return { rows: [{ id: 'red_1' }] }
+        return {
+          rows: [
+            runRow({
+              deleted_at: text.includes('run.deleted_at is not null')
+                ? '2026-02-01T00:00:00.000Z'
+                : null,
+            }),
+          ],
+        }
       }
       if (text.startsWith('update redaction_runs')) return { rows: [] }
       if (text.startsWith('select run.id')) {
@@ -788,6 +833,40 @@ describe('softDeleteRedactionRun', () => {
 })
 
 describe('restoreRedactionRunWithAudit', () => {
+  it('does not restore after a share revocation wins the matter lock', async () => {
+    const calls: string[] = []
+    const query = async (sql: string) => {
+      calls.push(sql)
+      const text = sql.trim()
+      if (text === 'begin' || text === 'rollback') return { rows: [] }
+      if (text.startsWith('select matter_id from redaction_runs'))
+        return { rows: [{ matter_id: 'mtr_1' }] }
+      if (text.includes('select matter.id from matters')) return { rows: [] }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    }
+
+    await expect(
+      restoreRedactionRunWithAudit(
+        {
+          connect: async () => ({
+            query,
+            release: () => undefined,
+          }),
+        } as unknown as Pool,
+        {
+          organisationId: 'org_1',
+          userId: 'usr_grantee',
+          runId: 'red_1',
+          requestId: 'req_1',
+        },
+      ),
+    ).resolves.toEqual({ kind: 'not_found' })
+    expect(calls.some((sql) => sql.includes('for update of run'))).toBe(false)
+    expect(calls.some((sql) => sql.startsWith('update redaction_runs'))).toBe(
+      false,
+    )
+  })
+
   it('uses timestamp provenance and writes the restore audit row', async () => {
     const deletedAt = '2026-02-01 00:00:00.123456+00'
     const { pool, calls } = createTransactionalPool(async (sql) => {
@@ -803,7 +882,16 @@ describe('restoreRedactionRunWithAudit', () => {
       }
       if (text.startsWith('update redaction_runs')) return { rows: [] }
       if (text.startsWith('select run.id')) {
-        return { rows: [runRow({ replacement_run_id: 'red_2' })] }
+        return {
+          rows: [
+            runRow({
+              deleted_at: text.includes('run.deleted_at is not null')
+                ? deletedAt
+                : null,
+              replacement_run_id: 'red_2',
+            }),
+          ],
+        }
       }
       if (text.includes('insert into audit_logs')) return { rows: [] }
       throw new Error(`Unexpected SQL: ${sql}`)
@@ -841,6 +929,16 @@ describe('restoreRedactionRunWithAudit', () => {
       }
       if (text.startsWith('select deleted_at::text')) {
         return { rows: [{ deleted_at: '2026-02-01 00:00:00.123456+00' }] }
+      }
+      if (text.startsWith('select run.id') && text.includes('for update')) {
+        return {
+          rows: [
+            runRow({
+              deleted_at: '2026-02-01 00:00:00.123456+00',
+              replaces_run_id: 'red_0',
+            }),
+          ],
+        }
       }
       if (text.includes('replaces_run_id = $2')) {
         return { rows: [{ id: 'red_2' }] }

@@ -7,7 +7,9 @@ import {
   renderAuditMarkdown,
 } from '../redaction-audit-report'
 import {
+  getDeletedRedactionRunForAudit,
   getRedactionRun,
+  hasDeletedRedactionRunForAudit,
   listRedactionAuditLog,
   publicRun,
   restoreRedactionRunWithAudit,
@@ -140,19 +142,32 @@ export function createRedactLifecycleRoutes(
   routes.get('/api/redaction-runs/:runId/audit', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
-    // The audit report survives deletion (ruling 2): fetch with includeDeleted
-    // so a deleted finalized run's report stays retrievable. A deleted run is
-    // sensitive (the run itself is gone from every other surface), so only
-    // owner/admin may read it, while live runs' audit access is unchanged.
-    const run = await getRedactionRun(
-      pool,
-      user,
-      c.req.param('runId'),
-      'view',
-      {
-        includeDeleted: true,
-      },
-    )
+    // Live audits retain ordinary view access. Deleted audits use a separate
+    // owner/admin-gated resolver so deleted matters and non-creator standalone
+    // runs do not enter the live access predicate.
+    let run = await getRedactionRun(pool, user, c.req.param('runId'), 'view')
+    if (!run) {
+      if (
+        !(await hasDeletedRedactionRunForAudit(
+          pool,
+          user,
+          c.req.param('runId'),
+        ))
+      )
+        return errorResponse(
+          c,
+          'redaction_run_not_found',
+          'Redaction run not found.',
+          404,
+        )
+      const manageUser = await requireManageRole(c, pool)
+      if (manageUser instanceof Response) return manageUser
+      run = await getDeletedRedactionRunForAudit(
+        pool,
+        manageUser,
+        c.req.param('runId'),
+      )
+    }
     if (!run)
       return errorResponse(
         c,
@@ -160,10 +175,6 @@ export function createRedactLifecycleRoutes(
         'Redaction run not found.',
         404,
       )
-    if (run.deletedAt) {
-      const manageUser = await requireManageRole(c, pool)
-      if (manageUser instanceof Response) return manageUser
-    }
     if (run.status !== 'finalized')
       return errorResponse(
         c,

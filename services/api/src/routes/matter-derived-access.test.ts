@@ -100,15 +100,40 @@ const standaloneRun: RedactionRunRow = {
   deleted_by: null,
 }
 
-function standalonePool(run = standaloneRun) {
+function standalonePool(
+  run = standaloneRun,
+  options: {
+    userId?: string
+    matterOwnerId?: string
+    sharedUserId?: string
+  } = {},
+) {
+  const userId = options.userId ?? 'usr_unshared'
   const query = async (sql: string, parameters: unknown[] = []) => {
     queries.push(sql)
     if (!sql.toLowerCase().includes('from redaction_runs')) return { rows: [] }
-    const userParameter = parameters.find((value) => value === 'usr_unshared')
-    if (userParameter && sql.includes('run.created_by')) return { rows: [] }
+    const checksAccess = parameters.includes(userId)
+    if (checksAccess) {
+      const allowed = run.matter_id
+        ? userId === (options.matterOwnerId ?? run.created_by) ||
+          userId === options.sharedUserId
+        : userId === run.created_by
+      if (!allowed) return { rows: [] }
+    }
+    if (sql.includes('deleted_at is not null')) {
+      if (sql.trim().startsWith('select id from redaction_runs'))
+        return run.deleted_at ? { rows: [{ id: run.id }] } : { rows: [] }
+      return run.deleted_at ? { rows: [run] } : { rows: [] }
+    }
     if (sql.includes('select run.matter_id, run.document_id')) {
       return {
-        rows: [{ matter_id: null, document_id: null, replaces_run_id: null }],
+        rows: [
+          {
+            matter_id: run.matter_id,
+            document_id: run.document_id,
+            replaces_run_id: run.replaces_run_id,
+          },
+        ],
       }
     }
     if (sql.includes('select deleted_at::text'))
@@ -124,18 +149,20 @@ function standalonePool(run = standaloneRun) {
 function standaloneApp(
   role: 'member' | 'admin' = 'member',
   run = standaloneRun,
+  userId = 'usr_unshared',
+  access: { matterOwnerId?: string; sharedUserId?: string } = {},
 ) {
   const routes = new Hono<{ Variables: AuthzVariables }>()
   routes.use('*', async (context, next) => {
     context.set('requestId', 'req_standalone_access')
     context.set('user', {
-      id: 'usr_unshared',
+      id: userId,
       organisationId: 'org_1',
       role,
     })
     await next()
   })
-  const pool = standalonePool(run)
+  const pool = standalonePool(run, { userId, ...access })
   routes.route('/', createRedactRunCreationRoutes(pool, storage))
   routes.route('/', createRedactReviewRoutes(pool, storage))
   routes.route('/', createRedactLifecycleRoutes(pool, storage))
@@ -244,6 +271,15 @@ describe('mandatory matter-derived access boundary', () => {
     expect(storageReads).toEqual([])
   })
 
+  it('rejects invalid standalone creation before writing storage', async () => {
+    const response = await app().request(
+      '/api/redaction-runs',
+      json({ filename: '', text: '' }),
+    )
+    expect(response.status).toBe(400)
+    expect(storageReads).toEqual([])
+  })
+
   const redactionReadRoutes = [
     '/api/redaction-runs/red_private',
     '/api/redaction-runs/red_private/document-text',
@@ -344,6 +380,27 @@ describe('mandatory matter-derived access boundary', () => {
     },
   )
 
+  it('allows the standalone run creator to read the run', async () => {
+    const response = await standaloneApp(
+      'member',
+      standaloneRun,
+      'usr_creator',
+    ).request('/api/redaction-runs/red_standalone')
+    expect(response.status).toBe(200)
+    expect(storageReads).toEqual([])
+  })
+
+  it('allows a matter share grantee to read a linked run', async () => {
+    const response = await standaloneApp(
+      'member',
+      { ...standaloneRun, matter_id: 'mtr_1' },
+      'usr_grantee',
+      { matterOwnerId: 'usr_owner', sharedUserId: 'usr_grantee' },
+    ).request('/api/redaction-runs/red_standalone')
+    expect(response.status).toBe(200)
+    expect(storageReads).toEqual([])
+  })
+
   it('filters a non-creator from the generic standalone run list', async () => {
     const response = await standaloneApp().request('/api/redaction-runs')
     expect(response.status).toBe(200)
@@ -351,12 +408,13 @@ describe('mandatory matter-derived access boundary', () => {
     expect(storageReads).toEqual([])
   })
 
-  it('does not give an admin access to a deleted standalone audit', async () => {
+  it('gives an admin access to a deleted standalone audit', async () => {
     const response = await standaloneApp('admin', {
       ...standaloneRun,
+      status: 'finalized',
       deleted_at: '2026-02-01T00:00:00.000Z',
     }).request('/api/redaction-runs/red_standalone/audit')
-    await expectHidden(response)
+    expect(response.status).toBe(200)
     expect(storageReads).toEqual([])
   })
 })

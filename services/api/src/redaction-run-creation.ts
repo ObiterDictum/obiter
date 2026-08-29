@@ -8,6 +8,7 @@ import type { RedactionSpan } from '@obiter/redaction-policy'
 import { appendAuditLog } from './database'
 import {
   computeSummary,
+  selectMutationRun,
   mapRedactionRun,
   redactionRunColumns,
   redactionRunsFrom,
@@ -237,18 +238,16 @@ export async function createRedetectionRun(input: {
   const client = await input.pool.connect()
   try {
     await client.query('begin')
-    const locked = await client.query<RedactionRunRow>(
-      `select ${redactionRunColumns} ${redactionRunsFrom}
-       where run.id = $1 and run.organisation_id = $2 and run.deleted_at is null
-         and ${redactionRunAccessPredicate('$3', "'edit'")}
-       for update of run`,
-      [input.sourceRunId, input.organisationId, input.userId],
-    )
-    if (!locked.rows[0]) {
+    const sourceRun = await selectMutationRun(client, {
+      organisationId: input.organisationId,
+      userId: input.userId,
+      runId: input.sourceRunId,
+      includeDeleted: false,
+    })
+    if (!sourceRun) {
       await client.query('rollback')
       return { kind: 'not_found' as const }
     }
-    const sourceRun = mapRedactionRun(locked.rows[0])
     if (sourceRun.detectionMode === 'model+supplement') {
       await client.query('rollback')
       return { kind: 'already_model_detected' as const }
