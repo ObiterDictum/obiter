@@ -39,16 +39,30 @@ const UNKNOWN_REQUEST_ID = 'req_unknown'
  *   expected envelope is treated as a storage-level failure (no silent success).
  * - Network-level failures (fetch itself rejects) propagate as native Errors.
  */
+async function serverCookieHeader(): Promise<Record<string, string>> {
+  if (typeof window !== 'undefined') return {}
+  try {
+    // @ts-ignore — optional SSR dependency, only present in the web app
+    const mod = await import('@tanstack/react-start/server')
+    const req = (mod as { getRequest?: () => Request }).getRequest?.()
+    const cookie = req?.headers.get('cookie')
+    if (cookie) return { Cookie: cookie }
+  } catch {}
+  return {}
+}
+
 export async function apiFetch<T>(
   input: string,
   init?: RequestInit,
 ): Promise<T> {
   const desktopToken = readDesktopBridge() ? await getDesktopAuthToken() : null
+  const serverCookie = await serverCookieHeader()
   const response = await fetch(apiUrl(input), {
     credentials: 'include',
     ...init,
     headers: {
       Accept: 'application/json',
+      ...serverCookie,
       ...(desktopToken ? { Authorization: `Bearer ${desktopToken}` } : {}),
       ...(init?.body && !(init.body instanceof FormData)
         ? { 'Content-Type': 'application/json' }
@@ -102,10 +116,12 @@ export async function apiFetchBlobResult(
   init?: RequestInit,
 ): Promise<{ blob: Blob; headers: Headers }> {
   const desktopToken = readDesktopBridge() ? await getDesktopAuthToken() : null
+  const serverCookie = await serverCookieHeader()
   const response = await fetch(apiUrl(input), {
     credentials: 'include',
     ...init,
     headers: {
+      ...serverCookie,
       ...(desktopToken ? { Authorization: `Bearer ${desktopToken}` } : {}),
       ...init?.headers,
     },
