@@ -78,3 +78,9 @@ scripts/brand/
 # tests only once its findings are closed.
 docs/security/
 services/api/src/pentest-*.test.ts
+
+# Playwright e2e artifacts (one-click webServer run writes these under apps/web)
+playwright-report/
+test-results/
+apps/web/playwright-report/
+apps/web/test-results/

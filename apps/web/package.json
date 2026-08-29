@@ -8,6 +8,7 @@
     "preview": "vite preview",
     "start": "node serve.mjs",
     "test": "node --test serve.test.mjs",
+    "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
