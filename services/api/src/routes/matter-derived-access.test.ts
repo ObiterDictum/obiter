@@ -14,6 +14,19 @@ import { createRedactRunCreationRoutes } from './redact-run-creation'
 const queries: string[] = []
 const query = async (sql: string) => {
   queries.push(sql)
+  const text = sql.trim()
+  if (text.startsWith('select matter_id from matter_documents'))
+    return { rows: [{ matter_id: 'mtr_private' }] }
+  if (text.startsWith('select matter_id, document_id, replaces_run_id'))
+    return {
+      rows: [
+        {
+          matter_id: 'mtr_private',
+          document_id: 'doc_private',
+          replaces_run_id: null,
+        },
+      ],
+    }
   return { rows: [] }
 }
 const pool = {
@@ -66,9 +79,10 @@ const json = (body: unknown, method: 'POST' | 'PATCH' = 'POST') => ({
   body: JSON.stringify(body),
 })
 
-async function expectHidden(response: Response) {
-  expect(response.status).toBe(404)
-  expect(queries.some((sql) => sql.includes('matter_shares'))).toBe(true)
+async function expectHidden(response: Response, status = 404) {
+  expect(response.status).toBe(status)
+  if (status === 404)
+    expect(queries.some((sql) => sql.includes('matter_shares'))).toBe(true)
 }
 
 const standaloneRun: RedactionRunRow = {
@@ -106,26 +120,21 @@ function standalonePool(
     userId?: string
     matterOwnerId?: string
     sharedUserId?: string
+    matterDeleted?: boolean
+    sharedAccessLevel?: 'view' | 'edit'
   } = {},
 ) {
   const userId = options.userId ?? 'usr_unshared'
   const query = async (sql: string, parameters: unknown[] = []) => {
     queries.push(sql)
-    if (!sql.toLowerCase().includes('from redaction_runs')) return { rows: [] }
-    const checksAccess = parameters.includes(userId)
-    if (checksAccess) {
-      const allowed = run.matter_id
-        ? userId === (options.matterOwnerId ?? run.created_by) ||
-          userId === options.sharedUserId
-        : userId === run.created_by
-      if (!allowed) return { rows: [] }
-    }
-    if (sql.includes('deleted_at is not null')) {
-      if (sql.trim().startsWith('select id from redaction_runs'))
-        return run.deleted_at ? { rows: [{ id: run.id }] } : { rows: [] }
-      return run.deleted_at ? { rows: [run] } : { rows: [] }
-    }
-    if (sql.includes('select run.matter_id, run.document_id')) {
+    const text = sql.toLowerCase()
+    if (!text.includes('from redaction_runs')) return { rows: [] }
+    if (
+      (text.includes('where id = $1') || text.includes('where run.id = $1')) &&
+      parameters[0] !== run.id
+    )
+      return { rows: [] }
+    if (text.startsWith('select matter_id, document_id, replaces_run_id')) {
       return {
         rows: [
           {
@@ -136,8 +145,47 @@ function standalonePool(
         ],
       }
     }
-    if (sql.includes('select deleted_at::text'))
-      return { rows: [{ deleted_at: '2026-02-01T00:00:00.000Z' }] }
+    const creatorParameter = text.match(/run\.created_by = \$(\d+)/)?.[1]
+    const shareParameter = text.match(/share\.grantee_user_id = \$(\d+)/)?.[1]
+    const checksAccess =
+      creatorParameter !== undefined || shareParameter !== undefined
+    if (checksAccess) {
+      const creatorBinding = creatorParameter
+        ? parameters[Number(creatorParameter) - 1]
+        : undefined
+      const shareBinding = shareParameter
+        ? parameters[Number(shareParameter) - 1]
+        : undefined
+      const predicateMatchesBindings =
+        creatorBinding === userId && shareBinding === userId
+      const editRequested = text.includes(
+        "'edit' = 'view' or share.access_level = 'edit'",
+      )
+      const isMatterOwner = userId === (options.matterOwnerId ?? run.created_by)
+      const linkedPredicate =
+        text.includes('run.matter_id is not null') &&
+        text.includes('matter.deleted_at is null') &&
+        !options.matterDeleted &&
+        text.includes('share.organisation_id = matter.organisation_id') &&
+        text.includes('share.access_level') &&
+        (!editRequested ||
+          options.sharedAccessLevel === 'edit' ||
+          isMatterOwner) &&
+        predicateMatchesBindings
+      const standalonePredicate =
+        text.includes('run.matter_id is null') && creatorBinding === userId
+      if (run.matter_id ? !linkedPredicate : !standalonePredicate)
+        return { rows: [] }
+      const allowed = run.matter_id
+        ? isMatterOwner || userId === options.sharedUserId
+        : userId === run.created_by
+      if (!allowed) return { rows: [] }
+    }
+    if (sql.includes('deleted_at is not null')) {
+      if (sql.trim().startsWith('select id from redaction_runs'))
+        return run.deleted_at ? { rows: [{ id: run.id }] } : { rows: [] }
+      return run.deleted_at ? { rows: [run] } : { rows: [] }
+    }
     return { rows: [run] }
   }
   return {
@@ -294,7 +342,10 @@ describe('mandatory matter-derived access boundary', () => {
   it.each(redactionReadRoutes)(
     'hides matter-derived redaction data at %s',
     async (path) => {
-      await expectHidden(await app().request(path))
+      await expectHidden(
+        await app().request(path),
+        path.endsWith('/audit') ? 403 : 404,
+      )
       expect(storageReads).toEqual([])
     },
   )
@@ -375,7 +426,10 @@ describe('mandatory matter-derived access boundary', () => {
   it.each(standaloneRunRoutes)(
     'denies a non-creator on %s without reading storage',
     async (path, init, role) => {
-      await expectHidden(await standaloneApp(role).request(path, init))
+      await expectHidden(
+        await standaloneApp(role).request(path, init),
+        path.endsWith('/audit') ? 403 : 404,
+      )
       expect(storageReads).toEqual([])
     },
   )
@@ -416,5 +470,33 @@ describe('mandatory matter-derived access boundary', () => {
     }).request('/api/redaction-runs/red_standalone/audit')
     expect(response.status).toBe(200)
     expect(storageReads).toEqual([])
+  })
+
+  it('gives a member the same 403 for deleted and unknown audit ids', async () => {
+    const deletedRun = {
+      ...standaloneRun,
+      status: 'finalized' as const,
+      deleted_at: '2026-02-01T00:00:00.000Z',
+    }
+    const app = standaloneApp('member', deletedRun)
+    const deleted = await app.request(
+      '/api/redaction-runs/red_standalone/audit',
+    )
+    expect(deleted.status).toBe(403)
+    expect(queries.some((sql) => sql.includes('deleted_at is not null'))).toBe(
+      false,
+    )
+
+    queries.length = 0
+    const unknown = await app.request('/api/redaction-runs/red_unknown/audit')
+    expect(unknown.status).toBe(403)
+    expect(queries.some((sql) => sql.includes('deleted_at is not null'))).toBe(
+      false,
+    )
+
+    const unknownAdmin = await standaloneApp('admin', deletedRun).request(
+      '/api/redaction-runs/red_unknown/audit',
+    )
+    expect(unknownAdmin.status).toBe(404)
   })
 })

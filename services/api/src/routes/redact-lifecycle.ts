@@ -9,7 +9,6 @@ import {
 import {
   getDeletedRedactionRunForAudit,
   getRedactionRun,
-  hasDeletedRedactionRunForAudit,
   listRedactionAuditLog,
   publicRun,
   restoreRedactionRunWithAudit,
@@ -147,24 +146,11 @@ export function createRedactLifecycleRoutes(
     // runs do not enter the live access predicate.
     let run = await getRedactionRun(pool, user, c.req.param('runId'), 'view')
     if (!run) {
-      if (
-        !(await hasDeletedRedactionRunForAudit(
-          pool,
-          user,
-          c.req.param('runId'),
-        ))
-      )
-        return errorResponse(
-          c,
-          'redaction_run_not_found',
-          'Redaction run not found.',
-          404,
-        )
       const manageUser = await requireManageRole(c, pool)
       if (manageUser instanceof Response) return manageUser
       run = await getDeletedRedactionRunForAudit(
         pool,
-        manageUser,
+        manageUser.organisationId,
         c.req.param('runId'),
       )
     }

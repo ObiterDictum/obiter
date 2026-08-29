@@ -160,31 +160,39 @@ async function lockRedetectionParents(
     documentVersionId: string
   },
 ) {
-  const result = await queryable.query<{ id: string }>(
-    `select version.id
-     from matter_documents document
-     join matters matter
-       on matter.id = document.matter_id
-      and matter.organisation_id = document.organisation_id
-     join document_versions version
-       on version.id = $4
-      and version.matter_document_id = document.id
-      and version.matter_id = document.matter_id
-      and version.organisation_id = document.organisation_id
-     where document.id = $1
-       and document.organisation_id = $2
-       and document.matter_id = $3
-       and document.deleted_at is null
-       and matter.deleted_at is null
-     for update of document, matter`,
+  const matter = await queryable.query<{ id: string }>(
+    `select id from matters
+     where id = $1 and organisation_id = $2 and deleted_at is null
+     for update`,
+    [input.matterId, input.organisationId],
+  )
+  if (!matter.rows[0]) return false
+
+  const document = await queryable.query<{ id: string }>(
+    `select id from matter_documents
+     where id = $1
+       and organisation_id = $2
+       and matter_id = $3
+       and deleted_at is null
+     for update`,
+    [input.documentId, input.organisationId, input.matterId],
+  )
+  if (!document.rows[0]) return false
+
+  const version = await queryable.query<{ id: string }>(
+    `select id from document_versions
+     where id = $1
+       and organisation_id = $2
+       and matter_id = $3
+       and matter_document_id = $4`,
     [
-      input.documentId,
+      input.documentVersionId,
       input.organisationId,
       input.matterId,
-      input.documentVersionId,
+      input.documentId,
     ],
   )
-  return result.rows.length > 0
+  return version.rows.length > 0
 }
 
 export async function createRedactionRun(input: CreateRedactionRunInput) {

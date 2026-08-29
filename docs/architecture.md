@@ -243,10 +243,12 @@ separate sibling checks.
 Redaction runs inherit access from their matter: standalone runs are owned by
 `created_by`, while linked runs require the matter owner or an active share at
 the requested level. No administrator override exists for live run access.
-Every transactional run mutation locks the linked matter first, re-evaluates
-the edit predicate after that lock, and only then locks the run. Matter-share
-revocation uses the same order, so a revocation that wins the matter lock cannot
-be bypassed by a stale pre-lock authorization decision.
+Every linked lifecycle mutation uses one lock order: matter, document,
+redaction run(s), then matter share, with ids sorted within each group. It probes
+ids without locks, then locks and revalidates each live parent before locking the
+run. Joined `FOR UPDATE` across tables is avoided. Matter-share revocation uses
+the matter-first prefix, so a revocation that wins the matter lock cannot be
+bypassed by a stale pre-lock authorization decision.
 
 Direct reads and lists exclude deleted runs. The sole deleted-run exception is
 `GET /api/redaction-runs/:runId/audit`: after the live resolver misses, the route
@@ -254,7 +256,8 @@ uses a narrow organisation-scoped deleted-row resolver available only to
 `owner`/`admin`, and it never resolves deleted matter access or object-storage
 keys through the live boundary. Deleted-run audit access is by known id; there is
 no listing path for deleted runs. Restore and redetection preserve the same
-matter-first lock order and re-check parent/lineage state before updating.
+order, including deterministic redaction-run lineage locking, and re-check
+parent/lineage state before updating.
 
 ### M1.25 read-only document viewer: wire model and derived serve surface (10 August 2026)
 

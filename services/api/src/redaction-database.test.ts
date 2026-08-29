@@ -69,8 +69,6 @@ function createTransactionalPool(
   const client = {
     query: async (sql: string, params?: unknown[]) => {
       calls.push([sql, params])
-      if (sql.trim().startsWith('select matter_id from redaction_runs'))
-        return { rows: [{ matter_id: null }] }
       return query(sql, params)
     },
     release: () => undefined,
@@ -203,7 +201,10 @@ describe('createRedetectionRun', () => {
   it('creates a fresh standalone run and links both audit histories atomically', async () => {
     const { pool, calls } = createTransactionalPool(async (sql, params) => {
       if (sql === 'begin' || sql === 'commit') return { rows: [] }
-      if (sql.includes('for update of run')) {
+      if (
+        sql.includes('for update of run') ||
+        sql.includes('select matter_id, document_id, replaces_run_id')
+      ) {
         return {
           rows: [runRow({ detection_mode: 'heuristics+supplement' })],
         }
@@ -259,7 +260,10 @@ describe('createRedetectionRun', () => {
       let auditWrites = 0
       const { pool, calls } = createTransactionalPool(async (sql) => {
         if (sql === 'begin' || sql === 'rollback') return { rows: [] }
-        if (sql.includes('for update of run')) {
+        if (
+          sql.includes('for update of run') ||
+          sql.includes('select matter_id, document_id, replaces_run_id')
+        ) {
           return {
             rows: [runRow({ detection_mode: 'heuristics+supplement' })],
           }
@@ -307,7 +311,10 @@ describe('createRedetectionRun', () => {
   it('returns an existing live replacement without inserting another run', async () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       if (sql === 'begin' || sql === 'rollback') return { rows: [] }
-      if (sql.includes('for update of run')) {
+      if (
+        sql.includes('for update of run') ||
+        sql.includes('select matter_id, document_id, replaces_run_id')
+      ) {
         return {
           rows: [runRow({ detection_mode: 'heuristics+supplement' })],
         }
@@ -342,8 +349,12 @@ describe('createRedetectionRun', () => {
 
   it('validates the original linked version without requiring it to remain current', async () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
-      if (sql === 'begin' || sql === 'commit') return { rows: [] }
-      if (sql.includes('for update of run')) {
+      if (sql === 'begin' || sql === 'commit' || sql === 'rollback')
+        return { rows: [] }
+      if (
+        sql.includes('for update of run') ||
+        sql.includes('select matter_id, document_id, replaces_run_id')
+      ) {
         return {
           rows: [
             runRow({
@@ -356,8 +367,17 @@ describe('createRedetectionRun', () => {
           ],
         }
       }
+      if (
+        sql.includes('select matter.id from matters') ||
+        sql.includes('select id from matters')
+      ) {
+        return { rows: [{ id: 'mtr_1' }] }
+      }
       if (sql.includes('run.replaces_run_id')) return { rows: [] }
-      if (sql.includes('from matter_documents document')) {
+      if (sql.includes('select id from matter_documents')) {
+        return { rows: [{ id: 'doc_1' }] }
+      }
+      if (sql.includes('from document_versions')) {
         return { rows: [{ id: 'ver_old' }] }
       }
       if (sql.includes('insert into redaction_runs')) {
@@ -394,10 +414,9 @@ describe('createRedetectionRun', () => {
     ).resolves.toMatchObject({ kind: 'created' })
 
     const parentCheck = calls.find(([sql]) =>
-      sql.includes('from matter_documents document'),
+      sql.includes('select id from document_versions'),
     )
-    expect(parentCheck?.[0]).not.toContain('current_version_id')
-    expect(parentCheck?.[1]).toEqual(['doc_1', 'org_1', 'mtr_1', 'ver_old'])
+    expect(parentCheck?.[1]).toEqual(['ver_old', 'org_1', 'mtr_1', 'doc_1'])
   })
 })
 
@@ -406,12 +425,24 @@ describe('redaction run write guards', () => {
     const queries: string[] = []
     const query = async (sql: string) => {
       queries.push(sql)
-      if (sql.trim().startsWith('select matter_id from redaction_runs'))
-        return { rows: [{ matter_id: 'mtr_1' }] }
+      if (
+        sql
+          .trim()
+          .startsWith(
+            'select matter_id, document_id, replaces_run_id from redaction_runs',
+          )
+      )
+        return {
+          rows: [
+            { matter_id: 'mtr_1', document_id: 'doc_1', replaces_run_id: null },
+          ],
+        }
       if (sql.includes('select matter.id from matters'))
         return { rows: [{ id: 'mtr_1' }] }
+      if (sql.includes('select id from matter_documents'))
+        return { rows: [{ id: 'doc_1' }] }
       if (sql.includes('for update of run'))
-        return { rows: [runRow({ matter_id: 'mtr_1' })] }
+        return { rows: [runRow({ matter_id: 'mtr_1', document_id: 'doc_1' })] }
       throw new Error(`Unexpected SQL: ${sql}`)
     }
 
@@ -426,6 +457,15 @@ describe('redaction run write guards', () => {
     expect(
       queries.findIndex((sql) => sql.includes('select matter.id')),
     ).toBeLessThan(
+      queries.findIndex((sql) =>
+        sql.includes('select id from matter_documents'),
+      ),
+    )
+    expect(
+      queries.findIndex((sql) =>
+        sql.includes('select id from matter_documents'),
+      ),
+    ).toBeLessThan(
       queries.findIndex((sql) => sql.includes('for update of run')),
     )
     expect(queries[1]).toContain('matter_shares')
@@ -435,7 +475,11 @@ describe('redaction run write guards', () => {
   it('treats a soft-deleted run as not found when recording a decision', async () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       if (sql === 'begin' || sql === 'rollback') return { rows: [] }
-      if (sql.includes('for update of run')) return { rows: [] }
+      if (
+        sql.includes('for update of run') ||
+        sql.includes('select matter_id, document_id, replaces_run_id')
+      )
+        return { rows: [] }
       throw new Error(`Unexpected SQL: ${sql}`)
     })
 
@@ -450,8 +494,12 @@ describe('redaction run write guards', () => {
       }),
     ).resolves.toEqual({ kind: 'not_found' })
 
-    const lock = calls.find(([sql]) => sql.includes('for update of run'))
-    expect(lock?.[0]).toContain('run.deleted_at is null')
+    expect(
+      calls.some(([sql]) =>
+        sql.includes('select matter_id, document_id, replaces_run_id'),
+      ),
+    ).toBe(true)
+    expect(calls.some(([sql]) => sql.includes('for update of run'))).toBe(false)
     expect(calls.some(([sql]) => sql.includes('update redaction_runs'))).toBe(
       false,
     )
@@ -460,7 +508,10 @@ describe('redaction run write guards', () => {
   it('refuses span decisions after a live replacement exists', async () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       if (sql === 'begin' || sql === 'rollback') return { rows: [] }
-      if (sql.includes('for update of run')) {
+      if (
+        sql.includes('for update of run') ||
+        sql.includes('select matter_id, document_id, replaces_run_id')
+      ) {
         return { rows: [runRow({ replacement_run_id: 'red_2' })] }
       }
       throw new Error(`Unexpected SQL: ${sql}`)
@@ -485,7 +536,11 @@ describe('redaction run write guards', () => {
   it('treats a soft-deleted run as not found before finalization creates an artifact', async () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       if (sql === 'begin' || sql === 'rollback') return { rows: [] }
-      if (sql.includes('for update of run')) return { rows: [] }
+      if (
+        sql.includes('for update of run') ||
+        sql.includes('select matter_id, document_id, replaces_run_id')
+      )
+        return { rows: [] }
       throw new Error(`Unexpected SQL: ${sql}`)
     })
 
@@ -504,8 +559,12 @@ describe('redaction run write guards', () => {
       }),
     ).resolves.toEqual({ kind: 'not_found' })
 
-    const lock = calls.find(([sql]) => sql.includes('for update of run'))
-    expect(lock?.[0]).toContain('run.deleted_at is null')
+    expect(
+      calls.some(([sql]) =>
+        sql.includes('select matter_id, document_id, replaces_run_id'),
+      ),
+    ).toBe(true)
+    expect(calls.some(([sql]) => sql.includes('for update of run'))).toBe(false)
     expect(calls.some(([sql]) => sql.includes('insert into artifacts'))).toBe(
       false,
     )
@@ -514,7 +573,10 @@ describe('redaction run write guards', () => {
   it('refuses to finalize a run after a live replacement exists', async () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       if (sql === 'begin' || sql === 'rollback') return { rows: [] }
-      if (sql.includes('for update of run')) {
+      if (
+        sql.includes('for update of run') ||
+        sql.includes('select matter_id, document_id, replaces_run_id')
+      ) {
         return { rows: [runRow({ replacement_run_id: 'red_2' })] }
       }
       throw new Error(`Unexpected SQL: ${sql}`)
@@ -543,7 +605,10 @@ describe('redaction run write guards', () => {
   it('rechecks degraded acknowledgement under the finalization row lock', async () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       if (sql === 'begin' || sql === 'rollback') return { rows: [] }
-      if (sql.includes('for update of run')) {
+      if (
+        sql.includes('for update of run') ||
+        sql.includes('select matter_id, document_id, replaces_run_id')
+      ) {
         return {
           rows: [runRow({ detection_mode: 'heuristics+supplement' })],
         }
@@ -574,7 +639,10 @@ describe('redaction run write guards', () => {
   it('rechecks unknown-mode acknowledgement under the finalization row lock', async () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       if (sql === 'begin' || sql === 'rollback') return { rows: [] }
-      if (sql.includes('for update of run')) {
+      if (
+        sql.includes('for update of run') ||
+        sql.includes('select matter_id, document_id, replaces_run_id')
+      ) {
         return { rows: [runRow({ detection_mode: 'unknown' })] }
       }
       throw new Error(`Unexpected SQL: ${sql}`)
@@ -668,7 +736,7 @@ describe('redaction run write guards', () => {
       ([sql]) =>
         sql.includes('from redaction_runs') &&
         !sql.includes('for update') &&
-        !sql.includes('select matter_id from redaction_runs'),
+        !sql.includes('select matter_id, document_id, replaces_run_id'),
     )
     expect(reread?.[0]).toContain('replacement.id as replacement_run_id')
   })
@@ -737,7 +805,7 @@ describe('redaction run write guards', () => {
       ([sql]) =>
         sql.includes('from redaction_runs') &&
         !sql.includes('for update') &&
-        !sql.includes('select matter_id from redaction_runs'),
+        !sql.includes('select matter_id, document_id, replaces_run_id'),
     )
     expect(reread?.[0]).toContain('replacement.id as replacement_run_id')
     expect(auditMetadata?.unreviewedSpanIds).toEqual(
@@ -795,7 +863,10 @@ describe('softDeleteRedactionRun', () => {
     const { pool, calls } = createTransactionalPool(async (sql, params) => {
       const text = sql.trim()
       if (text === 'begin' || text === 'commit') return { rows: [] }
-      if (text.startsWith('select run.id') && text.includes('for update')) {
+      if (
+        (text.startsWith('select run.id') && text.includes('for update')) ||
+        text.startsWith('select matter_id, document_id, replaces_run_id')
+      ) {
         return {
           rows: [
             runRow({
@@ -839,8 +910,12 @@ describe('restoreRedactionRunWithAudit', () => {
       calls.push(sql)
       const text = sql.trim()
       if (text === 'begin' || text === 'rollback') return { rows: [] }
-      if (text.startsWith('select matter_id from redaction_runs'))
-        return { rows: [{ matter_id: 'mtr_1' }] }
+      if (text.startsWith('select matter_id, document_id, replaces_run_id'))
+        return {
+          rows: [
+            { matter_id: 'mtr_1', document_id: 'doc_1', replaces_run_id: null },
+          ],
+        }
       if (text.includes('select matter.id from matters')) return { rows: [] }
       throw new Error(`Unexpected SQL: ${sql}`)
     }
@@ -867,18 +942,74 @@ describe('restoreRedactionRunWithAudit', () => {
     )
   })
 
+  // The repository has no committed live-Postgres test harness; this exact
+  // query-order regression test protects the lock protocol at the transactional seam.
+  it('locks linked restore parents before the run', async () => {
+    const { pool, calls } = createTransactionalPool(async (sql) => {
+      const text = sql.trim()
+      if (text === 'begin' || text === 'commit' || text === 'rollback')
+        return { rows: [] }
+      if (text.startsWith('select matter_id, document_id, replaces_run_id'))
+        return {
+          rows: [
+            { matter_id: 'mtr_1', document_id: 'doc_1', replaces_run_id: null },
+          ],
+        }
+      if (text.includes('select matter.id from matters'))
+        return { rows: [{ id: 'mtr_1' }] }
+      if (text.startsWith('select id from matter_documents'))
+        return { rows: [{ id: 'doc_1' }] }
+      if (text.startsWith('select run.id') && text.includes('for update'))
+        return {
+          rows: [
+            runRow({
+              matter_id: 'mtr_1',
+              document_id: 'doc_1',
+              deleted_at: '2026-02-01T00:00:00.000Z',
+            }),
+          ],
+        }
+      if (text.startsWith('update redaction_runs')) return { rows: [] }
+      if (text.startsWith('select run.id'))
+        return { rows: [runRow({ matter_id: 'mtr_1', document_id: 'doc_1' })] }
+      if (text.includes('insert into audit_logs')) return { rows: [] }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    await expect(
+      restoreRedactionRunWithAudit(pool, {
+        organisationId: 'org_1',
+        userId: 'usr_1',
+        runId: 'red_1',
+        requestId: 'req_1',
+      }),
+    ).resolves.toMatchObject({ kind: 'restored' })
+
+    const matterLock = calls.findIndex(([sql]) =>
+      sql.includes('select matter.id from matters'),
+    )
+    const documentLock = calls.findIndex(([sql]) =>
+      sql.startsWith('select id from matter_documents'),
+    )
+    const runLock = calls.findIndex(
+      ([sql]) => sql.startsWith('select run.id') && sql.includes('for update'),
+    )
+    expect(matterLock).toBeLessThan(documentLock)
+    expect(documentLock).toBeLessThan(runLock)
+    expect(
+      calls.some(([sql]) => sql.includes('for update of run, document')),
+    ).toBe(false)
+  })
+
   it('uses timestamp provenance and writes the restore audit row', async () => {
     const deletedAt = '2026-02-01 00:00:00.123456+00'
     const { pool, calls } = createTransactionalPool(async (sql) => {
       const text = sql.trim()
       if (text === 'begin' || text === 'commit') return { rows: [] }
-      if (text.startsWith('select run.matter_id, run.document_id')) {
+      if (text.startsWith('select matter_id, document_id, replaces_run_id')) {
         return {
           rows: [{ matter_id: null, document_id: null, replaces_run_id: null }],
         }
-      }
-      if (text.startsWith('select deleted_at::text')) {
-        return { rows: [{ deleted_at: deletedAt }] }
       }
       if (text.startsWith('update redaction_runs')) return { rows: [] }
       if (text.startsWith('select run.id')) {
@@ -920,15 +1051,12 @@ describe('restoreRedactionRunWithAudit', () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       const text = sql.trim()
       if (text === 'begin' || text === 'rollback') return { rows: [] }
-      if (text.startsWith('select run.matter_id, run.document_id')) {
+      if (text.startsWith('select matter_id, document_id, replaces_run_id')) {
         return {
           rows: [
             { matter_id: null, document_id: null, replaces_run_id: 'red_0' },
           ],
         }
-      }
-      if (text.startsWith('select deleted_at::text')) {
-        return { rows: [{ deleted_at: '2026-02-01 00:00:00.123456+00' }] }
       }
       if (text.startsWith('select run.id') && text.includes('for update')) {
         return {
