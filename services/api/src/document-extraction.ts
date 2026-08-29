@@ -17,6 +17,10 @@ import {
   type PdfOps,
 } from './pdf-glyph-layout'
 
+interface PdfFont {
+  isType3Font?: boolean
+}
+
 export type {
   DocumentTextLayout,
   ExtractedDocumentContent,
@@ -216,7 +220,7 @@ async function exactPageChars(
     }>
     commonObjs?: {
       has: (id: string) => boolean
-      get: (id: string) => unknown
+      get: (id: string) => PdfFont | undefined
     }
   },
   pageIndex: number,
@@ -301,7 +305,8 @@ function operatorListUsesType3Font(
   operatorList: { fnArray: number[] | Int32Array; argsArray: unknown[] },
   ops: PdfOps,
   commonObjs:
-    { has: (id: string) => boolean; get: (id: string) => unknown } | undefined,
+    | { has: (id: string) => boolean; get: (id: string) => PdfFont | undefined }
+    | undefined,
 ) {
   if (!commonObjs) return false
   for (let index = 0; index < operatorList.fnArray.length; index += 1) {

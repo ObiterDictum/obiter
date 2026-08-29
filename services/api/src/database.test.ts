@@ -70,7 +70,7 @@ function matterRow(overrides: Record<string, unknown> = {}) {
 }
 
 function createTransactionalPool(
-  query: (sql: string, params?: unknown[]) => Promise<unknown>,
+  query: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }>,
 ) {
   const calls: QueryCall[] = []
   const client = {

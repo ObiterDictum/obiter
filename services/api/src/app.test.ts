@@ -32,7 +32,7 @@ vi.mock('./redaction-detection', () => ({
 }))
 
 type Auth = ReturnType<typeof createAuth>
-type QueryMock = (...args: unknown[]) => Promise<unknown>
+type QueryMock = (...args: unknown[]) => Promise<{ rows: unknown[] }>
 
 interface ErrorBody {
   error: {

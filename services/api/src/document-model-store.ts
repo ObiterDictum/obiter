@@ -1,4 +1,7 @@
-import type { DocumentModelWire } from '@obiter/contracts'
+import type {
+  DocumentModelWire,
+  DocumentNumberingWire,
+} from '@obiter/contracts'
 import {
   OoxmlError,
   parseDocx,
@@ -90,14 +93,19 @@ async function readOrGenerateModel(
   }
 }
 
+interface CachedModelProbe {
+  changes?: unknown
+  numbering?: DocumentNumberingWire[]
+}
+
 function cachedModelNeedsRegeneration(json: string) {
   try {
     const value: unknown = JSON.parse(json)
     if (typeof value !== 'object' || value === null) return false
     if (!Object.hasOwn(value, 'changes')) return true
-    const numbering = Object.hasOwn(value, 'numbering')
-      ? Reflect.get(value, 'numbering')
-      : undefined
+    // SAFETY: storage JSON is DocumentModelWire from our own serialization; probe numbering via named CachedModelProbe interface, outside Zod schema, validated by subsequent array check
+    const probe = value as CachedModelProbe
+    const numbering = probe.numbering
     if (!Array.isArray(numbering)) return false
     return numbering.some(
       (item) =>

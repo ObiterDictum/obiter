@@ -12,13 +12,15 @@ export default defineConfig({
     correctness: 'error',
   },
   rules: {
-    // Stage 1 wiring + Pass A (zero-violation) rules. Remaining 11 generic
-    // rules are disabled until Pass B / Pass C triage. Effect-specific rules
-    // are intentionally omitted (we do not use Effect).
+    // Stage 1 wiring + Pass A + Pass B rules. Remaining 9 generic rules are
+    // disabled until Pass C triage. Effect-specific rules are intentionally
+    // omitted (we do not use Effect).
     'anti-slop/no-reflect-apply': 'error',
     'anti-slop/no-object-parameters': 'error',
     'anti-slop/no-unknown-type-aliases': 'error',
     'anti-slop/no-widen-then-assert': 'error',
+    'anti-slop/no-reflect-get': 'error',
+    'anti-slop/no-unknown-returns': 'error',
   },
   env: {
     builtin: true,
