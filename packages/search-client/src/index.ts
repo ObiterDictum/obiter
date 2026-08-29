@@ -8,6 +8,10 @@ import {
   type LegalSourceType,
 } from '@obiter/legal-schema'
 
+interface EngineRankingHit {
+  _rankingScore?: number
+}
+
 export type LegalSearchDocument = LegalAuthority
 export interface LegalSearchSnippet {
   evidenceId: string
@@ -138,7 +142,7 @@ type IndexLike = {
     prefixSearch: 'disabled' | 'indexingTime',
   ): SearchEnqueuedTaskPromise
   /** Read-only support probe. See `applyOptionalSetting`. */
-  getPrefixSearch(): Promise<unknown>
+  getPrefixSearch(): Promise<string>
   updateStopWords(stopWords: string[]): SearchEnqueuedTaskPromise
   updateTypoTolerance(settings: {
     minWordSizeForTypos: { oneTypo: number; twoTypos: number }
@@ -180,7 +184,7 @@ type DocumentIndexClient = {
 
 type DocumentReadClient = {
   index(indexName: string): {
-    getDocument(documentId: string): Promise<unknown>
+    getDocument(documentId: string): Promise<LegalAuthority>
   }
 }
 
@@ -532,7 +536,8 @@ export async function search(
         options.includeParagraphs || options.includeSnippets
           ? LegalAuthoritySchema.parse(hit)
           : LegalAuthoritySummarySchema.parse(hit)
-      const engineRankingScore = readEngineRankingScore(hit)
+      // SAFETY: Meilisearch hit is external JSON; _rankingScore is engine metadata outside LegalAuthority schema, read via named EngineRankingHit interface after schema parse
+      const engineRankingScore = readEngineRankingScore(hit as EngineRankingHit)
       return engineRankingScore === undefined
         ? parsedHit
         : { ...parsedHit, engineRankingScore }
@@ -723,9 +728,8 @@ function legalSearchMatchTier(hit: LegalSearchHit, normalizedQuery: string) {
   return 0
 }
 
-function readEngineRankingScore(hit: unknown) {
-  if (typeof hit !== 'object' || hit === null) return undefined
-  return validEngineRankingScore(Reflect.get(hit, '_rankingScore'))
+function readEngineRankingScore(hit: EngineRankingHit) {
+  return validEngineRankingScore(hit._rankingScore)
 }
 
 function validEngineRankingScore(value: unknown) {
@@ -993,7 +997,7 @@ function isUnsupportedSettingError(error: unknown) {
  */
 async function applyOptionalSetting(
   name: string,
-  probe: () => Promise<unknown>,
+  probe: () => Promise<string>,
   task: () => SearchEnqueuedTaskPromise,
   allowUnsupported: boolean,
   unsupported: string[],

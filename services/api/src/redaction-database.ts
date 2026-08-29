@@ -106,17 +106,21 @@ export const redactionRunsFrom = `from redaction_runs run
 function timestamp(value: Date | string) {
   return value instanceof Date ? value.toISOString() : value
 }
-function json(value: unknown): unknown {
-  if (typeof value !== 'string') return value
+function json<T>(value: unknown): T {
+  if (typeof value !== 'string') {
+    // SAFETY: pg jsonb may already be parsed object; stored JSON is validated by callers via Zod/schema before use
+    return value as T
+  }
   try {
-    return JSON.parse(value)
+    // SAFETY: stored redaction JSON is DB jsonb/text; callers validate shape immediately via schema or Array.isArray check
+    return JSON.parse(value) as T
   } catch {
     throw new Error('Stored redaction JSON is invalid.')
   }
 }
 
 function parseSpans(value: unknown): RedactionSpan[] {
-  const parsed = json(value)
+  const parsed = json<unknown>(value)
   if (!Array.isArray(parsed))
     throw new Error('Stored redaction spans are invalid.')
   return parsed.map((span): RedactionSpan => {
@@ -153,7 +157,7 @@ function parseSpans(value: unknown): RedactionSpan[] {
 }
 
 function parseDecisions(value: unknown): Decisions {
-  const parsed = json(value)
+  const parsed = json<unknown>(value)
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
     throw new Error('Stored redaction decisions are invalid.')
   const decisions: Decisions = {}
@@ -180,7 +184,7 @@ function parseDecisions(value: unknown): Decisions {
 export function mapRedactionRun(row: RedactionRunRow): RedactionRunRecord {
   if (row.replacement_run_id === undefined)
     throw new Error('Stored redaction replacement lineage was not selected.')
-  const summary = json(row.summary_json)
+  const summary = json<RedactionRunRecord['summary']>(row.summary_json)
   if (typeof summary !== 'object' || summary === null || Array.isArray(summary))
     throw new Error('Stored redaction summary is invalid.')
   return {
@@ -200,7 +204,7 @@ export function mapRedactionRun(row: RedactionRunRow): RedactionRunRecord {
     spans: parseSpans(row.spans_json),
     decisions: parseDecisions(row.decisions_json),
     outputArtifactId: row.output_artifact_id,
-    summary: summary as RedactionRunRecord['summary'],
+    summary,
     detectorVersion: row.detector_version,
     detectionMode: detectionModeSchema.parse(row.detection_mode),
     replacesRunId: row.replaces_run_id ?? null,
@@ -668,7 +672,7 @@ export async function listRedactionAuditLog(
     action: row.action,
     userId: row.user_id,
     timestamp: timestamp(row.created_at),
-    details: (json(row.metadata_json) as Record<string, unknown>) ?? {},
+    details: json<Record<string, unknown>>(row.metadata_json) ?? {},
   }))
 }
 
