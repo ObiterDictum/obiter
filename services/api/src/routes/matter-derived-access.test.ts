@@ -3,6 +3,7 @@ import type { Pool } from 'pg'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { AuthzVariables } from '../authz'
 import type { StorageService } from '../storage'
+import type { RedactionRunRow } from '../redaction-database'
 import { createDocumentAccessRoutes } from './document-access'
 import { createDocumentsRoutes } from './documents'
 import { createMattersRoutes } from './matters'
@@ -68,6 +69,77 @@ const json = (body: unknown, method: 'POST' | 'PATCH' = 'POST') => ({
 async function expectHidden(response: Response) {
   expect(response.status).toBe(404)
   expect(queries.some((sql) => sql.includes('matter_shares'))).toBe(true)
+}
+
+const standaloneRun: RedactionRunRow = {
+  id: 'red_standalone',
+  organisation_id: 'org_1',
+  matter_id: null,
+  matter_name: null,
+  document_id: null,
+  document_version_id: null,
+  source_filename: 'standalone.txt',
+  source_text_object_key: 'org/org_1/redaction-runs/red_standalone/source',
+  source_file_object_key: null,
+  source_layout_object_key: null,
+  source_mime_type: 'text/plain',
+  status: 'ready_for_review',
+  policy_mode: 'internal_ai_minimisation',
+  spans_json: [],
+  decisions_json: {},
+  output_artifact_id: null,
+  summary_json: {},
+  detector_version: 'detector-1',
+  detection_mode: 'model+supplement',
+  replaces_run_id: null,
+  replacement_run_id: null,
+  created_by: 'usr_creator',
+  created_at: '2026-01-01T00:00:00.000Z',
+  updated_at: '2026-01-01T00:00:00.000Z',
+  deleted_at: null,
+  deleted_by: null,
+}
+
+function standalonePool(run = standaloneRun) {
+  const query = async (sql: string, parameters: unknown[] = []) => {
+    queries.push(sql)
+    if (!sql.toLowerCase().includes('from redaction_runs')) return { rows: [] }
+    const userParameter = parameters.find((value) => value === 'usr_unshared')
+    if (userParameter && sql.includes('run.created_by')) return { rows: [] }
+    if (sql.includes('select run.matter_id, run.document_id')) {
+      return {
+        rows: [{ matter_id: null, document_id: null, replaces_run_id: null }],
+      }
+    }
+    if (sql.includes('select deleted_at::text'))
+      return { rows: [{ deleted_at: '2026-02-01T00:00:00.000Z' }] }
+    return { rows: [run] }
+  }
+  return {
+    query,
+    connect: async () => ({ query, release: () => undefined }),
+  } as unknown as Pool
+}
+
+function standaloneApp(
+  role: 'member' | 'admin' = 'member',
+  run = standaloneRun,
+) {
+  const routes = new Hono<{ Variables: AuthzVariables }>()
+  routes.use('*', async (context, next) => {
+    context.set('requestId', 'req_standalone_access')
+    context.set('user', {
+      id: 'usr_unshared',
+      organisationId: 'org_1',
+      role,
+    })
+    await next()
+  })
+  const pool = standalonePool(run)
+  routes.route('/', createRedactRunCreationRoutes(pool, storage))
+  routes.route('/', createRedactReviewRoutes(pool, storage))
+  routes.route('/', createRedactLifecycleRoutes(pool, storage))
+  return routes
 }
 
 describe('mandatory matter-derived access boundary', () => {
@@ -229,4 +301,62 @@ describe('mandatory matter-derived access boundary', () => {
       expect(queries.at(-1)).toContain('matter_shares')
     },
   )
+
+  const standaloneRunRoutes: Array<
+    [string, RequestInit | undefined, 'member' | 'admin']
+  > = [
+    ['/api/redaction-runs/red_standalone', undefined, 'member'],
+    ['/api/redaction-runs/red_standalone/document-text', undefined, 'member'],
+    ['/api/redaction-runs/red_standalone/source-file', undefined, 'member'],
+    ['/api/redaction-runs/red_standalone/layout', undefined, 'member'],
+    ['/api/redaction-runs/red_standalone/output', undefined, 'member'],
+    ['/api/redaction-runs/red_standalone/output/file', undefined, 'member'],
+    ['/api/redaction-runs/red_standalone/token-map', undefined, 'member'],
+    ['/api/redaction-runs/red_standalone/audit', undefined, 'member'],
+    [
+      '/api/redaction-runs/red_standalone/spans/span_1/decision',
+      json({ decision: 'accept' }),
+      'member',
+    ],
+    [
+      '/api/redaction-runs/red_standalone/finalize',
+      json({ outputMode: 'redacted' }),
+      'member',
+    ],
+    [
+      '/api/redaction-runs/red_standalone/redetect',
+      { method: 'POST' },
+      'member',
+    ],
+    ['/api/redaction-runs/red_standalone', { method: 'DELETE' }, 'admin'],
+    [
+      '/api/redaction-runs/red_standalone/restore',
+      { method: 'PATCH' },
+      'admin',
+    ],
+  ]
+
+  it.each(standaloneRunRoutes)(
+    'denies a non-creator on %s without reading storage',
+    async (path, init, role) => {
+      await expectHidden(await standaloneApp(role).request(path, init))
+      expect(storageReads).toEqual([])
+    },
+  )
+
+  it('filters a non-creator from the generic standalone run list', async () => {
+    const response = await standaloneApp().request('/api/redaction-runs')
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ runs: [] })
+    expect(storageReads).toEqual([])
+  })
+
+  it('does not give an admin access to a deleted standalone audit', async () => {
+    const response = await standaloneApp('admin', {
+      ...standaloneRun,
+      deleted_at: '2026-02-01T00:00:00.000Z',
+    }).request('/api/redaction-runs/red_standalone/audit')
+    await expectHidden(response)
+    expect(storageReads).toEqual([])
+  })
 })

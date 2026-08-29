@@ -487,11 +487,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         'This run has not been finalized.',
         400,
       )
-    const objectKey = await getRedactionOutputKey(
-      pool,
-      user.organisationId,
-      run.outputArtifactId,
-    )
+    const objectKey = await getRedactionOutputKey(pool, run)
     if (!objectKey)
       return errorResponse(
         c,
@@ -537,11 +533,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         'This run has not been finalized.',
         400,
       )
-    const objectKey = await getRedactionOutputKey(
-      pool,
-      user.organisationId,
-      run.outputArtifactId,
-    )
+    const objectKey = await getRedactionOutputKey(pool, run)
     if (!objectKey)
       return errorResponse(
         c,

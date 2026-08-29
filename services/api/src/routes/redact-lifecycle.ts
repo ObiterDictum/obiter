@@ -171,10 +171,7 @@ export function createRedactLifecycleRoutes(
         'An audit report is available after finalization.',
         400,
       )
-    const report = buildAuditReport(
-      run,
-      await listRedactionAuditLog(pool, user.organisationId, run.id),
-    )
+    const report = buildAuditReport(run, await listRedactionAuditLog(pool, run))
     const format = c.req.query('format') ?? 'json'
     if (format === 'json') return c.json(report)
     if (format === 'markdown')

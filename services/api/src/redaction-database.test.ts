@@ -111,7 +111,7 @@ describe('listRedactionAuditLog', () => {
       },
     } as never
     await expect(
-      listRedactionAuditLog(pool, 'org_1', 'red_1'),
+      listRedactionAuditLog(pool, mapRedactionRun(runRow())),
     ).resolves.toEqual([
       {
         action: 'redaction.finalize',

@@ -2,8 +2,8 @@ import { readdir, readFile } from 'node:fs/promises'
 import { basename } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const matterTables =
-  /\b(?:from|join|update|into)\s+(?:[a-z_]\w*\.)?(?:matters|matter_shares|matter_documents|document_versions|redaction_runs)\b/i
+const protectedTables =
+  /\b(?:from|join|update|into)\s+(?:[a-z_]\w*\.)?(?:matters|matter_shares|matter_documents|document_versions|redaction_runs|artifacts|audit_logs)\b/i
 
 describe('matter resource architecture boundary', () => {
   it('prevents route modules from resolving matter-derived rows directly', async () => {
@@ -19,7 +19,7 @@ describe('matter resource architecture boundary', () => {
 
     for (const file of files) {
       const source = await readFile(new URL(file, routeDirectory), 'utf8')
-      if (matterTables.test(source)) bypasses.push(file)
+      if (protectedTables.test(source)) bypasses.push(file)
     }
 
     expect(bypasses).toEqual([])

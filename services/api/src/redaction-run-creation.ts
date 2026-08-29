@@ -1,5 +1,8 @@
 import type { Pool } from 'pg'
-import { matterAccessPredicate } from './matter-access-boundary'
+import {
+  matterAccessPredicate,
+  redactionRunAccessPredicate,
+} from './matter-access-boundary'
 import type { DetectionMode, RedactionPolicyMode } from '@obiter/contracts'
 import type { RedactionSpan } from '@obiter/redaction-policy'
 import { appendAuditLog } from './database'
@@ -15,13 +18,15 @@ async function findLiveRedetectionRun(
   queryable: RedactionRunQueryable,
   organisationId: string,
   sourceRunId: string,
+  userId: string,
 ) {
   const result = await queryable.query<RedactionRunRow>(
     `select ${redactionRunColumns} ${redactionRunsFrom}
      where run.organisation_id = $1
        and run.replaces_run_id = $2
-       and run.deleted_at is null`,
-    [organisationId, sourceRunId],
+       and run.deleted_at is null
+       and ${redactionRunAccessPredicate('$3', "'view'")}`,
+    [organisationId, sourceRunId, userId],
   )
   return result.rows[0] ? mapRedactionRun(result.rows[0]) : null
 }
@@ -29,9 +34,10 @@ async function findLiveRedetectionRun(
 export async function getRedetectionRun(
   pool: Pool,
   organisationId: string,
+  userId: string,
   sourceRunId: string,
 ) {
-  return findLiveRedetectionRun(pool, organisationId, sourceRunId)
+  return findLiveRedetectionRun(pool, organisationId, sourceRunId, userId)
 }
 
 interface CreateRedactionRunInput {
@@ -234,10 +240,7 @@ export async function createRedetectionRun(input: {
     const locked = await client.query<RedactionRunRow>(
       `select ${redactionRunColumns} ${redactionRunsFrom}
        where run.id = $1 and run.organisation_id = $2 and run.deleted_at is null
-         and (
-           run.matter_id is null
-           or ${matterAccessPredicate('$3', "'edit'")}
-         )
+         and ${redactionRunAccessPredicate('$3', "'edit'")}
        for update of run`,
       [input.sourceRunId, input.organisationId, input.userId],
     )
@@ -254,6 +257,7 @@ export async function createRedetectionRun(input: {
       client,
       input.organisationId,
       sourceRun.id,
+      input.userId,
     )
     if (existing) {
       await client.query('rollback')

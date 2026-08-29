@@ -1,5 +1,8 @@
 import type { Pool } from 'pg'
-import { matterAccessPredicate } from './matter-access-boundary'
+import {
+  matterAccessPredicate,
+  redactionRunAccessPredicate,
+} from './matter-access-boundary'
 import { appendAuditLog } from './database'
 import {
   detectionModeSchema,
@@ -292,10 +295,7 @@ async function selectRedactionRun(
     `select ${redactionRunColumns} ${redactionRunsFrom}
      where run.id = $1 and run.organisation_id = $2
        and ($3::boolean or run.deleted_at is null)
-       and (
-         run.matter_id is null
-         or ${matterAccessPredicate('$4', '$5')}
-       )`,
+       and ${redactionRunAccessPredicate('$4', '$5')}`,
     [runId, user.organisationId, includeDeleted, user.id, requiredLevel],
   )
   return result.rows[0] ? mapRedactionRun(result.rows[0]) : null
@@ -326,10 +326,7 @@ export async function listRedactionRuns(
     `select ${redactionRunColumns} ${redactionRunsFrom}
      where run.organisation_id = $1
        and ($2::boolean or run.deleted_at is null)
-       and (
-         run.matter_id is null
-         or ${matterAccessPredicate('$3', "'view'")}
-       )
+       and ${redactionRunAccessPredicate('$3', "'view'")}
      order by run.created_at desc`,
     [user.organisationId, options.includeDeleted === true, user.id],
   )
@@ -346,9 +343,7 @@ export async function listRedactionRunsForDocument(
     `select ${redactionRunColumns} ${redactionRunsFrom}
      where run.document_id = $1 and run.organisation_id = $2
        and ($3::boolean or run.deleted_at is null)
-       and (
-         ${matterAccessPredicate('$4', "'view'")}
-       )
+       and ${redactionRunAccessPredicate('$4', "'view'")}
      order by run.created_at desc`,
     [documentId, user.organisationId, options.includeDeleted === true, user.id],
   )
@@ -449,6 +444,7 @@ export async function getDocumentRedactionSource(
     where document.id = $1
       and document.organisation_id = $2
       and document.deleted_at is null
+      and matter.deleted_at is null
       and ${matterAccessPredicate('$3', "'edit'")}
   `,
     [documentId, user.organisationId, user.id],
@@ -470,10 +466,7 @@ export async function recordSpanDecision(input: {
     const locked = await client.query<RedactionRunRow>(
       `select ${redactionRunColumns} ${redactionRunsFrom}
        where run.id = $1 and run.organisation_id = $2 and run.deleted_at is null
-         and (
-           run.matter_id is null
-           or ${matterAccessPredicate('$3', "'edit'")}
-         )
+         and ${redactionRunAccessPredicate('$3', "'edit'")}
        for update of run`,
       [input.runId, input.organisationId, input.userId],
     )
@@ -561,10 +554,7 @@ export async function finalizeRedactionRun(input: {
     const locked = await client.query<RedactionRunRow>(
       `select ${redactionRunColumns} ${redactionRunsFrom}
        where run.id = $1 and run.organisation_id = $2 and run.deleted_at is null
-         and (
-           run.matter_id is null
-           or ${matterAccessPredicate('$3', "'edit'")}
-         )
+         and ${redactionRunAccessPredicate('$3', "'edit'")}
        for update of run`,
       [input.runId, input.organisationId, input.userId],
     )
@@ -694,8 +684,7 @@ export interface RedactionAuditLogEntry {
 
 export async function listRedactionAuditLog(
   pool: Pool,
-  organisationId: string,
-  runId: string,
+  run: RedactionRunRecord,
 ): Promise<RedactionAuditLogEntry[]> {
   // organisation_id is deliberately part of the predicate: nullable auth rows
   // (migration 0009) cannot leak into an organisation-scoped run report.
@@ -709,7 +698,7 @@ export async function listRedactionAuditLog(
      from audit_logs
      where organisation_id = $1 and entity_type = 'redaction_run' and entity_id = $2
      order by created_at asc`,
-    [organisationId, runId],
+    [run.organisationId, run.id],
   )
   return result.rows.map((row) => ({
     action: row.action,
@@ -721,12 +710,12 @@ export async function listRedactionAuditLog(
 
 export async function getRedactionOutputKey(
   pool: Pool,
-  organisationId: string,
-  artifactId: string,
+  run: RedactionRunRecord,
 ) {
+  if (!run.outputArtifactId) return null
   const result = await pool.query<{ object_key: string }>(
-    "select object_key from artifacts where id = $1 and organisation_id = $2 and artifact_type = 'redaction_output' and status = 'ready'",
-    [artifactId, organisationId],
+    "select object_key from artifacts where id = $1 and organisation_id = $2 and matter_id is not distinct from $3 and artifact_type = 'redaction_output' and status = 'ready'",
+    [run.outputArtifactId, run.organisationId, run.matterId],
   )
   return result.rows[0]?.object_key ?? null
 }
@@ -758,10 +747,7 @@ export async function softDeleteRedactionRun(
          on matter.id = run.matter_id
         and matter.organisation_id = run.organisation_id
        where run.id = $1 and run.organisation_id = $2 and run.deleted_at is null
-         and (
-           run.matter_id is null
-           or ${matterAccessPredicate('$3', "'edit'")}
-         )
+         and ${redactionRunAccessPredicate('$3', "'edit'")}
        for update of run`,
       [input.runId, input.organisationId, input.userId],
     )
@@ -835,10 +821,7 @@ export async function restoreRedactionRunWithAudit(
          on matter.id = run.matter_id
         and matter.organisation_id = run.organisation_id
        where run.id = $1 and run.organisation_id = $2 and run.deleted_at is not null
-         and (
-           run.matter_id is null
-           or ${matterAccessPredicate('$3', "'edit'")}
-         )`,
+         and ${redactionRunAccessPredicate('$3', "'edit'")}`,
       [input.runId, input.organisationId, input.userId],
     )
     if (candidate.rows.length === 0) {
