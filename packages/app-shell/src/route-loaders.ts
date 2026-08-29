@@ -26,9 +26,9 @@ import { mattersListQueryOptions } from './matters'
  *     context.queryClient.ensureQueryData(currentUserQueryOptions()),
  *   )
  */
-export async function guardAuth(
+export async function guardAuth<T>(
   _queryClient: QueryClient,
-  run: () => Promise<unknown>,
+  run: () => Promise<T>,
 ): Promise<void> {
   try {
     await run()

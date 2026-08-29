@@ -192,7 +192,9 @@ describe('DesktopAuthTokenStore', () => {
  * factory returns undefined for untouched exports (the real impl) and a vi.fn
  * override for the named ones. Returns the store class from that graph.
  */
-async function mockFs(override: (name: string) => unknown | undefined) {
+async function mockFs(
+  override: (name: string) => ((...args: unknown[]) => void) | undefined,
+) {
   const real = await import('node:fs/promises')
   vi.resetModules()
   vi.doMock('node:fs/promises', () => {
