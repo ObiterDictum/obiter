@@ -5,6 +5,11 @@
 
 // Data + auth helpers (contract §3)
 export { apiFetch, apiFetchBlob, ApiError } from './api'
+export {
+  setServerRequestGetter,
+  getServerRequest,
+  clearServerRequestGetter,
+} from './lib/server-request'
 export { declaredFileType } from './file-type'
 export {
   authClient,
