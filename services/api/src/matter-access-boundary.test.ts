@@ -2,12 +2,12 @@ import { readdir, readFile } from 'node:fs/promises'
 import { describe, expect, it } from 'vitest'
 
 const matterTables =
-  /\b(?:from|join|update|into)\s+(?:matters|matter_documents|document_versions|redaction_runs)\b/i
+  /\b(?:from|join|update|into)\s+(?:[a-z_]\w*\.)?(?:matters|matter_shares|matter_documents|document_versions|redaction_runs)\b/i
 
 describe('matter resource architecture boundary', () => {
   it('prevents route modules from resolving matter-derived rows directly', async () => {
     const routeDirectory = new URL('./routes/', import.meta.url)
-    const files = (await readdir(routeDirectory)).filter(
+    const files = (await readdir(routeDirectory, { recursive: true })).filter(
       (file) =>
         file.endsWith('.ts') &&
         !file.includes('.test') &&
