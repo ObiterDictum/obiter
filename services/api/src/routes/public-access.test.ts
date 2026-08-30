@@ -3,6 +3,7 @@ import type { Pool } from 'pg'
 import { createApiApp } from '../app'
 import type { createAuth } from '../auth'
 import type { ApiEnv } from '../env'
+import { createTestApiEnv } from '../test-api-env'
 
 const searchClientMock = vi.hoisted(() => ({
   createClient: vi.fn(() => ({ id: 'meili-client' })),
@@ -23,29 +24,7 @@ vi.mock('../redaction-detection', () => ({
 
 type Auth = ReturnType<typeof createAuth>
 
-const testEnv: ApiEnv = {
-  databaseUrl: 'postgres://obiter:obiter@localhost:5432/obiter',
-  authSecret: 'dev-only-better-auth-secret',
-  authBaseUrl: 'http://localhost:8787',
-  webOrigin: 'http://localhost:3000',
-  marketingOrigin: null,
-  desktopOrigin: 'obiter://desktop-auth',
-  resendApiKey: null,
-  emailFrom: 'onboarding@resend.dev',
-  meilisearchHost: 'http://localhost:7700',
-  meilisearchSearchApiKey: 'dev-key',
-  meilisearchAdminApiKey: 'dev-key',
-  legalAuthoritiesIndex: 'legal_authorities',
-  mojFindCaseLawBaseUrl: 'https://caselaw.nationalarchives.gov.uk',
-  mojFindCaseLawRateLimit: 1000,
-  rampartModel: 'qarlus/rampart',
-  rampartRevision: 'c3221c5cd838eb69a249ab40f8b442483865f233',
-  rampartCacheDir: '/tmp/rampart-cache',
-  rampartMinScore: 0.4,
-  rampartChunkTokens: 400,
-  port: 8787,
-  nodeEnv: 'test',
-}
+const testEnv: ApiEnv = createTestApiEnv()
 
 const publicHit = {
   id: 'uksc-2024-3',

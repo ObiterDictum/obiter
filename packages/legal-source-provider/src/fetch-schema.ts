@@ -13,7 +13,7 @@ const legalSlugSchema = z
   .transform(normalizeCourtCode)
 
 export const legalFetchRequestSchema = z.object({
-  query: z.string().trim(),
+  query: z.string().trim().max(2048),
   sourceType: LegalSourceTypeSchema.optional(),
   sourceFamily: LegalSourceFamilySchema.optional(),
   court: legalSlugSchema.optional(),

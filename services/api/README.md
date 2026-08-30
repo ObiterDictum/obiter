@@ -33,6 +33,10 @@ Production may also provide:
 - `OBITER_DESKTOP_ORIGIN` when the desktop app uses a non-default auth callback origin
 - `MOJ_FIND_CASE_LAW_BASE_URL` to override the public Find Case Law upstream
 - `MOJ_FIND_CASE_LAW_RATE_LIMIT` to tune the public upstream fetch limiter
+- `JSON_BODY_MAX_BYTES` to cap JSON request bodies (default 48 KiB)
+- `DOCUMENT_UPLOAD_MAX_BYTES` to cap multipart document and redact uploads (default 25 MiB)
+- `OOXML_MAX_ENTRIES`, `OOXML_MAX_UNCOMPRESSED_BYTES`, `OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES`, `OOXML_MAX_COMPRESSION_RATIO`, and `OOXML_INFLATE_CONCURRENCY` to bound DOCX/ZIP expansion
+- `LEGAL_SEARCH_HYDRATION_QUEUE_MAX`, `LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX`, and `LEGAL_SEARCH_HYDRATION_WINDOW_MS` to bound authenticated search hydration (per API process; replica count multiplies the allowance until the counters are shared)
 
 Development requires `BETTER_AUTH_SECRET` in the environment (for example via a local `.env` file). There is no shipped fallback secret. Set `NODE_ENV=development`, or set `OBITER_LOCAL_DEVELOPMENT=1` when `NODE_ENV` is unset. Other local defaults remain so the service can boot before hosted infrastructure is provisioned. With the web Vite proxy, the development default for `BETTER_AUTH_URL` is `http://localhost:3000`, matching `OBITER_WEB_ORIGIN`; override both deliberately when using another local origin. In development the API also trusts electron-vite renderer Origins on loopback http only (`http://localhost` and `http://127.0.0.1`, ports `5173`–`5199`) for both CORS and better-auth — the same `isDevDesktopRendererOrigin` gate, no port wildcards — so `pnpm dev:desktop` can sign in through the renderer `/api` proxy. Production still only trusts configured web/desktop/marketing origins. If `OBITER_RESEND_API_KEY` is not configured in development, the API logs the complete magic-link URL with a `[dev-only]` marker instead of sending an email. Never rely on that fallback in production.
 

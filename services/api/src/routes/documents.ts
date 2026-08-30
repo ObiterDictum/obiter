@@ -23,6 +23,14 @@ import {
   normaliseFileType,
 } from '../document-extraction'
 import { DocumentUploadError, readDocumentUpload } from '../document-upload'
+import {
+  readLimitedFormData,
+  readLimitedJsonBody,
+} from '../limited-request-body'
+import {
+  DEFAULT_API_REQUEST_LIMITS,
+  type ApiRequestLimits,
+} from '../request-limits'
 import type { StorageService } from '../storage'
 import { ensureOrgUser, requireManageRole } from '../authz'
 
@@ -43,7 +51,7 @@ function errorResponse(
   c: RouteContext,
   code: ApiErrorCode,
   message: string,
-  status: 400 | 401 | 403 | 404,
+  status: 400 | 401 | 403 | 404 | 413,
 ) {
   const body: ApiErrorResponse = {
     error: { code, message, requestId: c.get('requestId') },
@@ -69,7 +77,11 @@ function requiredInteger(value: unknown): number | null {
 
 export { MAX_DOCUMENT_UPLOAD_BYTES } from '../document-upload'
 
-export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
+export function createDocumentsRoutes(
+  pool: Pool,
+  storage?: StorageService,
+  limits: ApiRequestLimits = DEFAULT_API_REQUEST_LIMITS,
+) {
   const routes = new Hono<{ Variables: RouteVariables }>()
 
   routes.post('/api/matters/:matterId/documents', async (c) => {
@@ -86,26 +98,38 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
         .header('content-type')
         ?.toLowerCase()
         .startsWith('multipart/form-data') ?? false
-    const form = isMultipart ? await c.req.formData().catch(() => null) : null
-    const body = form ? null : asRecord(await c.req.json().catch(() => null))
+    let form: FormData | null = null
+    if (isMultipart) {
+      const formResult = await readLimitedFormData(
+        c,
+        limits.documentUploadMaxBytes,
+      )
+      if (!formResult.ok) return formResult.response
+      form = formResult.form
+    }
+    const body = form
+      ? null
+      : await readLimitedJsonBody(c, limits.jsonBodyMaxBytes)
+    if (body instanceof Response) return body
     const upload = form?.get('file')
     const file = upload instanceof File ? upload : null
+    const bodyRecord = body ? asRecord(body) : null
     const filename =
       file?.name ||
       requiredString(form?.get('filename')) ||
-      requiredString(body?.filename)
+      requiredString(bodyRecord?.filename)
     const fileType =
       requiredString(form?.get('fileType')) ||
-      requiredString(body?.fileType) ||
+      requiredString(bodyRecord?.fileType) ||
       file?.type ||
       null
     const contentSha256 =
       requiredString(form?.get('contentSha256')) ||
-      requiredString(body?.contentSha256)
+      requiredString(bodyRecord?.contentSha256)
     const sizeBytes =
       file?.size ??
       requiredInteger(form?.get('sizeBytes')) ??
-      requiredInteger(body?.sizeBytes)
+      requiredInteger(bodyRecord?.sizeBytes)
 
     if (
       !filename ||
@@ -135,7 +159,11 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
     if (file) {
       let upload: Awaited<ReturnType<typeof readDocumentUpload>>
       try {
-        upload = await readDocumentUpload(file, fileType)
+        upload = await readDocumentUpload(
+          file,
+          fileType,
+          limits.documentUploadMaxBytes,
+        )
       } catch (error) {
         if (error instanceof DocumentUploadError)
           return errorResponse(c, 'validation_failed', error.message, 400)
@@ -201,6 +229,7 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
         const extracted = await extractDocumentContent(
           verifiedType,
           uploadContents,
+          { ooxmlLimits: limits.ooxmlLimits },
         )
         await storage.writeText(textObjectKey, extracted.text)
         if (extracted.layout) {
@@ -220,7 +249,20 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
         })
         if (version) result.version = version
       } catch (error) {
-        if (!(error instanceof DocumentExtractionError)) {
+        if (error instanceof DocumentExtractionError) {
+          if (
+            error.userFacing &&
+            error.message.startsWith('The document package')
+          ) {
+            await markExtractionFailed(error.message)
+            return errorResponse(c, 'ooxml_limits_exceeded', error.message, 413)
+          }
+          await markExtractionFailed(
+            error.userFacing
+              ? error.message
+              : 'Document text could not be read.',
+          )
+        } else {
           await markExtractionFailed('Document storage write failed.')
           return errorResponse(
             c,
@@ -229,9 +271,6 @@ export function createDocumentsRoutes(pool: Pool, storage?: StorageService) {
             400,
           )
         }
-        await markExtractionFailed(
-          error.userFacing ? error.message : 'Document text could not be read.',
-        )
       }
     }
     await appendAuditLog(pool, {

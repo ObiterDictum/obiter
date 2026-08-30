@@ -1,4 +1,9 @@
-import JSZip from 'jszip'
+import { OoxmlError } from './model'
+import {
+  DEFAULT_OOXML_PACKAGE_LIMITS,
+  type OoxmlPackageLimits,
+} from './package-limits-defaults'
+import { loadOoxmlZipEntries } from './package-loader'
 
 const IMAGE_CONTENT_TYPES: Readonly<Record<string, string>> = {
   png: 'image/png',
@@ -22,21 +27,29 @@ export function requestedImagePartName(partName: string) {
   return imageContentType(name) ? name : undefined
 }
 
-export async function readPackageImageParts(input: Uint8Array) {
-  let zip: JSZip
+export async function readPackageImageParts(
+  input: Uint8Array,
+  limits: OoxmlPackageLimits = DEFAULT_OOXML_PACKAGE_LIMITS,
+) {
+  let payloads: Map<string, Uint8Array>
   try {
-    zip = await JSZip.loadAsync(input)
-  } catch {
+    payloads = await loadOoxmlZipEntries(input, limits)
+  } catch (error) {
+    if (
+      error instanceof OoxmlError &&
+      error.code === 'package-limits-exceeded'
+    ) {
+      throw error
+    }
     return new Map<string, { bytes: Uint8Array; contentType: string }>()
   }
 
   const parts = new Map<string, { bytes: Uint8Array; contentType: string }>()
-  for (const [rawName, entry] of Object.entries(zip.files)) {
-    if (entry.dir) continue
+  for (const [rawName, bytes] of payloads) {
     const name = normaliseRequestedPart(rawName)
     const contentType = imageContentType(name)
     if (!name || !contentType) continue
-    parts.set(name, { bytes: await entry.async('uint8array'), contentType })
+    parts.set(name, { bytes, contentType })
   }
   return parts
 }

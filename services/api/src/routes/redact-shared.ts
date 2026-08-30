@@ -2,6 +2,8 @@ import type { Pool } from 'pg'
 import type { ApiErrorCode, ApiErrorResponse } from '@obiter/contracts'
 import type { AuthzContext, AuthzVariables } from '../authz'
 import { ensureOrgUser } from '../authz'
+import { readLimitedJsonBody } from '../limited-request-body'
+import { DEFAULT_JSON_BODY_MAX_BYTES } from '../request-limit-defaults'
 import { detectRedactionSpans } from '../redaction-detection'
 import { publicRun } from '../redaction-database'
 
@@ -12,7 +14,7 @@ export function errorResponse(
   c: RouteContext,
   code: ApiErrorCode,
   message: string,
-  status: 400 | 401 | 403 | 404 | 409 | 500 | 503,
+  status: 400 | 401 | 403 | 404 | 409 | 413 | 429 | 500 | 503,
 ) {
   const body: ApiErrorResponse = {
     error: { code, message, requestId: c.get('requestId') },
@@ -24,11 +26,13 @@ export async function requireUser(c: RouteContext, pool: Pool) {
   return ensureOrgUser(c, pool)
 }
 
-export async function jsonBody(c: RouteContext) {
-  const value: unknown = await c.req.json().catch(() => null)
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : null
+export async function jsonBody(
+  c: RouteContext,
+  maxBytes: number = DEFAULT_JSON_BODY_MAX_BYTES,
+) {
+  const value = await readLimitedJsonBody(c, maxBytes)
+  if (value instanceof Response) return value
+  return value
 }
 
 export const MAX_REDACTION_SOURCE_TEXT_LENGTH = 200_000

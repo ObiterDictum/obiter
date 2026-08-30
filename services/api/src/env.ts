@@ -9,6 +9,20 @@ import {
 } from '@obiter/rampart-inference'
 import { defaultRampartCacheDir } from './rampart-cache'
 import type { RedactionDetectionConfig } from './redaction-detection'
+import {
+  DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES,
+  DEFAULT_JSON_BODY_MAX_BYTES,
+  DEFAULT_LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX,
+  DEFAULT_LEGAL_SEARCH_HYDRATION_QUEUE_MAX,
+  DEFAULT_LEGAL_SEARCH_HYDRATION_WINDOW_MS,
+} from './request-limit-defaults'
+import {
+  OOXML_INFLATE_CONCURRENCY,
+  OOXML_MAX_COMPRESSION_RATIO,
+  OOXML_MAX_ENTRIES,
+  OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES,
+  OOXML_MAX_UNCOMPRESSED_BYTES,
+} from '@obiter/ooxml'
 
 const requiredProductionKeys = [
   'DATABASE_URL',
@@ -45,6 +59,16 @@ export interface ApiEnv {
   rampartCacheDir: string
   rampartMinScore: number
   rampartChunkTokens: number
+  jsonBodyMaxBytes: number
+  documentUploadMaxBytes: number
+  ooxmlMaxEntries: number
+  ooxmlMaxUncompressedBytes: number
+  ooxmlMaxEntryUncompressedBytes: number
+  ooxmlMaxCompressionRatio: number
+  ooxmlInflateConcurrency: number
+  legalSearchHydrationQueueMax: number
+  legalSearchHydrationPerClientMax: number
+  legalSearchHydrationWindowMs: number
   port: number
   nodeEnv: 'development' | 'test' | 'production'
 }
@@ -294,6 +318,17 @@ function readPositiveInteger(key: string, fallback: string) {
   return parsed
 }
 
+function readCompressionRatio(key: string, fallback: string) {
+  const value = process.env[key] ?? fallback
+  const parsed = Number(value)
+
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error(`${key} must be a positive integer compression ratio.`)
+  }
+
+  return parsed
+}
+
 function readUnpaddedValue(key: string, fallback: string) {
   const value = process.env[key] ?? fallback
   const trimmed = value.trim()
@@ -425,6 +460,46 @@ export function readApiEnv(): ApiEnv {
     rampartCacheDir: rampart.cacheDir,
     rampartMinScore: rampart.minScore,
     rampartChunkTokens: rampart.chunkTokens,
+    jsonBodyMaxBytes: readPositiveInteger(
+      'JSON_BODY_MAX_BYTES',
+      String(DEFAULT_JSON_BODY_MAX_BYTES),
+    ),
+    documentUploadMaxBytes: readPositiveInteger(
+      'DOCUMENT_UPLOAD_MAX_BYTES',
+      String(DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES),
+    ),
+    ooxmlMaxEntries: readPositiveInteger(
+      'OOXML_MAX_ENTRIES',
+      String(OOXML_MAX_ENTRIES),
+    ),
+    ooxmlMaxUncompressedBytes: readPositiveInteger(
+      'OOXML_MAX_UNCOMPRESSED_BYTES',
+      String(OOXML_MAX_UNCOMPRESSED_BYTES),
+    ),
+    ooxmlMaxEntryUncompressedBytes: readPositiveInteger(
+      'OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES',
+      String(OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES),
+    ),
+    ooxmlMaxCompressionRatio: readCompressionRatio(
+      'OOXML_MAX_COMPRESSION_RATIO',
+      String(OOXML_MAX_COMPRESSION_RATIO),
+    ),
+    ooxmlInflateConcurrency: readPositiveInteger(
+      'OOXML_INFLATE_CONCURRENCY',
+      String(OOXML_INFLATE_CONCURRENCY),
+    ),
+    legalSearchHydrationQueueMax: readPositiveInteger(
+      'LEGAL_SEARCH_HYDRATION_QUEUE_MAX',
+      String(DEFAULT_LEGAL_SEARCH_HYDRATION_QUEUE_MAX),
+    ),
+    legalSearchHydrationPerClientMax: readPositiveInteger(
+      'LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX',
+      String(DEFAULT_LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX),
+    ),
+    legalSearchHydrationWindowMs: readPositiveInteger(
+      'LEGAL_SEARCH_HYDRATION_WINDOW_MS',
+      String(DEFAULT_LEGAL_SEARCH_HYDRATION_WINDOW_MS),
+    ),
     port: readPort(),
     nodeEnv,
   }
