@@ -30,6 +30,7 @@ import { createOrganisationsRoutes } from './routes/organisations'
 import { configureRedactionDetector } from './redaction-detection'
 import { createRedactRoutes } from './routes/redact'
 import { apiRequestLimitsFromEnv } from './request-limits'
+import { createRequestBodyLimitMiddleware } from './request-body-limit'
 import { createTrackedChangeRoutes } from './routes/tracked-changes'
 import { DocumentPresenceRegistry } from './document-presence'
 import { createLocalStorage, type StorageService } from './storage'
@@ -123,7 +124,11 @@ export function createApiApp(
 
   app.use('*', async (c, next) => {
     c.set('requestId', createRequestId())
+    await next()
+  })
 
+  app.use('*', createRequestBodyLimitMiddleware(requestLimits))
+  app.use('*', async (c, next) => {
     const session = await auth.api.getSession({
       headers: c.req.raw.headers,
     })
