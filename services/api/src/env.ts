@@ -50,14 +50,29 @@ export interface ApiEnv {
 }
 
 function readNodeEnv(): ApiEnv['nodeEnv'] {
-  if (
-    process.env.NODE_ENV === 'production' ||
-    process.env.NODE_ENV === 'test'
-  ) {
-    return process.env.NODE_ENV
+  const raw = process.env.NODE_ENV
+
+  if (raw === 'production' || raw === 'test') {
+    return raw
   }
 
-  return 'development'
+  if (raw === 'development') {
+    return 'development'
+  }
+
+  if (raw === undefined || raw === '') {
+    if (process.env.OBITER_LOCAL_DEVELOPMENT === '1') {
+      return 'development'
+    }
+
+    throw new Error(
+      'NODE_ENV must be production, test, or development. For local development with an unset NODE_ENV, set OBITER_LOCAL_DEVELOPMENT=1.',
+    )
+  }
+
+  throw new Error(
+    `NODE_ENV must be production, test, or development; got "${raw}".`,
+  )
 }
 
 function requireProductionEnv(nodeEnv: ApiEnv['nodeEnv']) {
@@ -198,6 +213,20 @@ function readOptionalSecret(key: string, nodeEnv: ApiEnv['nodeEnv']) {
   }
 
   return readSecret(key, value, nodeEnv)
+}
+
+function readConfiguredSecret(key: string, nodeEnv: ApiEnv['nodeEnv']) {
+  const value = process.env[key]
+
+  if (!value) {
+    throw new Error(`${key} must be configured.`)
+  }
+
+  return readSecret(key, value, nodeEnv)
+}
+
+function readAuthSecret(nodeEnv: ApiEnv['nodeEnv']) {
+  return readConfiguredSecret('BETTER_AUTH_SECRET', nodeEnv)
 }
 
 function readPort() {
@@ -361,11 +390,7 @@ export function readApiEnv(): ApiEnv {
 
   return {
     databaseUrl: readDatabaseUrl(nodeEnv),
-    authSecret: readSecret(
-      'BETTER_AUTH_SECRET',
-      'dev-only-better-auth-secret',
-      nodeEnv,
-    ),
+    authSecret: readAuthSecret(nodeEnv),
     authBaseUrl: readRequiredUrl(
       'BETTER_AUTH_URL',
       nodeEnv === 'development' ? webOrigin : 'http://localhost:8787',
