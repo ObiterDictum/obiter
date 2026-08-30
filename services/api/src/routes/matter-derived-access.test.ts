@@ -7,6 +7,7 @@ import type { RedactionRunRow } from '../redaction-database'
 import { createDocumentAccessRoutes } from './document-access'
 import { createDocumentsRoutes } from './documents'
 import { createMattersRoutes } from './matters'
+import { createOrganisationsRoutes } from './organisations'
 import { createRedactLifecycleRoutes } from './redact-lifecycle'
 import { createRedactReviewRoutes } from './redact-review'
 import { createRedactRunCreationRoutes } from './redact-run-creation'
@@ -53,6 +54,18 @@ const storage: StorageService = {
   delete: async () => undefined,
 }
 
+function unauthenticatedApp() {
+  const routes = new Hono<{ Variables: AuthzVariables }>()
+  routes.use('*', async (context, next) => {
+    context.set('requestId', 'req_unauthenticated')
+    context.set('user', null)
+    await next()
+  })
+  routes.route('/', createMattersRoutes(pool))
+  routes.route('/', createOrganisationsRoutes(pool))
+  return routes
+}
+
 function app(role: 'member' | 'admin' = 'member') {
   const routes = new Hono<{ Variables: AuthzVariables }>()
   routes.use('*', async (context, next) => {
@@ -65,6 +78,7 @@ function app(role: 'member' | 'admin' = 'member') {
     await next()
   })
   routes.route('/', createMattersRoutes(pool))
+  routes.route('/', createOrganisationsRoutes(pool))
   routes.route('/', createDocumentAccessRoutes(pool))
   routes.route('/', createDocumentsRoutes(pool, storage))
   routes.route('/', createRedactRunCreationRoutes(pool, storage))
@@ -221,6 +235,96 @@ describe('mandatory matter-derived access boundary', () => {
   beforeEach(() => {
     queries.length = 0
     storageReads.length = 0
+  })
+
+  it('rejects unauthenticated matter creation before insert', async () => {
+    const response = await unauthenticatedApp().request(
+      '/api/matters',
+      json({
+        name: 'Unauthorised matter',
+        primaryJurisdiction: 'england_and_wales',
+      }),
+    )
+    expect(response.status).toBe(401)
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'unauthenticated' },
+    })
+    expect(queries.some((sql) => sql.includes('insert into matters'))).toBe(
+      false,
+    )
+  })
+
+  it('creates a matter in the caller organisation even when the body names another', async () => {
+    const query = async (sql: string, parameters: unknown[] = []) => {
+      queries.push(sql)
+      if (sql.includes('insert into matters')) {
+        expect(parameters[0]).toBe('org_1')
+        return {
+          rows: [
+            {
+              id: 'mtr_created',
+              organisation_id: 'org_1',
+              name: 'Caller matter',
+              description: null,
+              primary_jurisdiction: 'england_and_wales',
+              secondary_jurisdictions: [],
+              legal_domains: [],
+              client_reference: '',
+              status: 'active',
+              created_by: 'usr_unshared',
+              created_at: '2026-01-01T00:00:00.000Z',
+              updated_at: '2026-01-01T00:00:00.000Z',
+              deleted_at: null,
+              deleted_by: null,
+            },
+          ],
+        }
+      }
+      if (sql.includes('insert into audit_logs')) return { rows: [] }
+      return { rows: [] }
+    }
+    const createPool = {
+      query,
+      connect: async () => ({ query, release: () => undefined }),
+    } as unknown as Pool
+    const routes = new Hono<{ Variables: AuthzVariables }>()
+    routes.use('*', async (context, next) => {
+      context.set('requestId', 'req_matter_create')
+      context.set('user', {
+        id: 'usr_unshared',
+        organisationId: 'org_1',
+        role: 'member',
+      })
+      await next()
+    })
+    routes.route('/', createMattersRoutes(createPool))
+
+    const response = await routes.request(
+      '/api/matters',
+      json({
+        name: 'Caller matter',
+        primaryJurisdiction: 'england_and_wales',
+        organisationId: 'org_2',
+      }),
+    )
+    expect(response.status).toBe(201)
+    await expect(response.json()).resolves.toMatchObject({
+      matter: { organisationId: 'org_1', name: 'Caller matter' },
+    })
+  })
+
+  it('rejects unauthenticated organisation creation before insert', async () => {
+    const response = await unauthenticatedApp().request(
+      '/api/organisations',
+      json({ name: 'Unauthorised org' }),
+    )
+    expect(response.status).toBe(401)
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'unauthenticated' },
+    })
+    expect(
+      queries.some((sql) => sql.includes('insert into organisations')),
+    ).toBe(false)
   })
 
   it('filters matter enumeration for an unshared organisation member', async () => {
@@ -470,6 +574,61 @@ describe('mandatory matter-derived access boundary', () => {
     }).request('/api/redaction-runs/red_standalone/audit')
     expect(response.status).toBe(200)
     expect(storageReads).toEqual([])
+  })
+
+  it('returns 404 for source-file when the caller organisation does not own the run', async () => {
+    const run: RedactionRunRow = {
+      ...standaloneRun,
+      id: 'red_cross_org_probe',
+      source_file_object_key:
+        'org/org_1/redaction-runs/red_cross_org_probe/source.pdf',
+      source_mime_type: 'application/pdf',
+    }
+    const crossOrgPool = {
+      query: async (sql: string, parameters: unknown[] = []) => {
+        queries.push(sql)
+        if (!sql.includes('from redaction_runs run')) return { rows: [] }
+        if (parameters[0] !== run.id) return { rows: [] }
+        if (sql.includes('run.organisation_id = $2')) {
+          return parameters[1] === run.organisation_id
+            ? { rows: [run] }
+            : { rows: [] }
+        }
+        return { rows: [run] }
+      },
+      connect: async () => ({
+        query: crossOrgPool.query,
+        release: () => undefined,
+      }),
+    } as unknown as Pool
+    const crossOrganisation = new Hono<{ Variables: AuthzVariables }>()
+    crossOrganisation.use('*', async (context, next) => {
+      context.set('requestId', 'req_cross_org_source_file')
+      context.set('user', {
+        id: 'usr_attacker',
+        organisationId: 'org_other',
+        role: 'member',
+      })
+      await next()
+    })
+    crossOrganisation.route(
+      '/',
+      createRedactReviewRoutes(crossOrgPool, storage),
+    )
+
+    const response = await crossOrganisation.request(
+      `/api/redaction-runs/${run.id}/source-file`,
+    )
+
+    expect(response.status).toBe(404)
+    expect(storageReads).toEqual([])
+    expect(
+      queries.some(
+        (sql) =>
+          sql.includes('from redaction_runs run') &&
+          sql.includes('run.organisation_id = $2'),
+      ),
+    ).toBe(true)
   })
 
   it('gives a member the same 403 for deleted and unknown audit ids', async () => {

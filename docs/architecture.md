@@ -803,3 +803,23 @@ Decision: wrap each cell to its width percentage (or an equal share of the
 column) minus cell padding. Typing in a cell emits the same `onWordEdit`
 operations as body text. A typed table model and row splits stay out of
 scope.
+
+### Public search, changelog, and health: no user authorization (30 August 2026)
+
+Context: `GET /api/search`, `POST /api/search/fetch`,
+`GET /api/search/documents/:documentId`, `GET /api/changelog`, and
+`GET /api/health` resolve a session when one exists but do not require one.
+That is a product policy for published legal authorities, the product
+changelog, and API liveness, not an omitted gate. The only place it was
+visible was the handlers.
+
+Decision: keep these five routes anonymous. They exist to serve public
+judgment search, stored-or-hydrated judgment documents, GitHub-backed release
+notes, and a minimal liveness probe. Search and changelog must never return
+matter data, client documents, redaction source or output, session or
+organisation records, auth secrets, or Meilisearch admin keys. Health must
+return only `{ status: 'ok', service: 'obiter-api' }` and must never expose
+environment, version, port, database or Meilisearch configuration, Rampart
+settings, matter data, or secrets. Adding an auth requirement is a product
+change and must fail `allows anonymous callers on deliberately public routes`
+in `services/api/src/routes/public-access.test.ts` rather than landing silently.
