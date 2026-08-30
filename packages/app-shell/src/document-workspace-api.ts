@@ -135,6 +135,18 @@ export function useDocumentImageUrls(documentId: string, partNames: string[]) {
 
 const BROWSER_IMAGE = /^image\/(png|jpeg|gif|bmp|webp|svg\+xml)$/
 
+/**
+ * Media parts are fetched as bytes and rendered from a blob URL, never by
+ * pointing an element at the API URL. The media endpoint serves stored
+ * document parts as `Content-Disposition: attachment` under a `sandbox` CSP,
+ * so navigating that URL downloads rather than renders. Keeping the fetch here
+ * preserves display; setting `src` to the API path directly would break the
+ * image, and reverting the endpoint to inline would re-open stored XSS.
+ *
+ * SVG is allowed through because an `<img>` never executes script in an SVG it
+ * loads. Do not move these bytes into an `<object>`, `<embed>`, `<iframe>` or
+ * `innerHTML`, all of which do.
+ */
 async function loadDocumentImage(documentId: string, partName: string) {
   const blob = await apiFetchBlob(
     `/api/documents/${documentId}/media?part=${encodeURIComponent(partName)}`,
