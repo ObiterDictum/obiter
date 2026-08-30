@@ -2697,17 +2697,26 @@
                 <tr>
                   <td class="id">GET /api/search</td>
                   <td class="id">legal-search/</td>
-                  <td>Stored judgment search</td>
+                  <td>
+                    Public stored judgment search. No session required. Must not
+                    expose matter or client data.
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">POST /api/search/fetch</td>
                   <td class="id">legal-search/</td>
-                  <td>Search with Find Case Law fallback</td>
+                  <td>
+                    Public search with Find Case Law fallback. No session
+                    required. Must not expose matter or client data.
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">GET /api/search/documents/:documentId</td>
                   <td class="id">legal-search/</td>
-                  <td>Judgment, stored or hydrated</td>
+                  <td>
+                    Public judgment, stored or hydrated. No session required.
+                    Must not expose matter or client data.
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">GET · POST /api/redaction-runs</td>
@@ -2829,7 +2838,10 @@
                 <tr>
                   <td class="id">GET /api/changelog</td>
                   <td class="id">changelog.ts</td>
-                  <td>Release notes</td>
+                  <td>
+                    Public GitHub release notes. No session required. Must not
+                    expose matter or client data.
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -3067,6 +3079,11 @@
             direct reads and lists; only the known-id audit route uses an
             organisation-scoped deleted-run resolver after an owner/admin role
             check, while members are gated before the deleted lookup.
+            <code>GET /api/search</code>, <code>POST /api/search/fetch</code>,
+            <code>GET /api/search/documents/:documentId</code>, and
+            <code>GET /api/changelog</code> are deliberately public: they serve
+            published authorities and release notes only, and must never return
+            matter, client, redaction, or session data.
           </div>
         </section>
 
