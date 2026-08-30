@@ -165,6 +165,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
       const user = await requireUser(c, pool)
       if (user instanceof Response) return user
       const body = await jsonBody(c)
+      if (body instanceof Response) return body
       const decision = spanDecisionSchema.safeParse(body?.decision)
       if (!decision.success)
         return errorResponse(
@@ -236,7 +237,9 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   routes.post('/api/redaction-runs/:runId/finalize', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
-    const body = redactionFinalizeInputSchema.safeParse(await jsonBody(c))
+    const rawBody = await jsonBody(c)
+    if (rawBody instanceof Response) return rawBody
+    const body = redactionFinalizeInputSchema.safeParse(rawBody)
     if (!body.success)
       return errorResponse(
         c,

@@ -3087,10 +3087,11 @@
             <code>GET /api/search/documents/:documentId</code>,
             <code>GET /api/changelog</code>, and <code>GET /api/health</code>
             are deliberately public: search and changelog serve published
-            authorities and release notes only; health is a minimal liveness
-            probe. They must never return matter, client, redaction, or session
-            data, and health must never expose environment, version, or
-            configuration detail.
+            authorities and release notes only; anonymous
+            <code>POST /api/search/fetch</code> is stored-only and does not
+            hydrate the provider; health is a minimal liveness probe. They must
+            never return matter, client, redaction, or session data, and health
+            must never expose environment, version, or configuration detail.
           </div>
         </section>
 
@@ -3778,6 +3779,34 @@
                     MOJ_FIND_CASE_LAW_BASE_URL · MOJ_FIND_CASE_LAW_RATE_LIMIT
                   </td>
                   <td>Provider endpoint and throttle</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    JSON_BODY_MAX_BYTES · DOCUMENT_UPLOAD_MAX_BYTES
+                  </td>
+                  <td>
+                    Request body caps for JSON routes and multipart document or
+                    redact uploads
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    OOXML_MAX_ENTRIES · OOXML_MAX_UNCOMPRESSED_BYTES ·
+                    OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES ·
+                    OOXML_MAX_COMPRESSION_RATIO · OOXML_INFLATE_CONCURRENCY
+                  </td>
+                  <td>DOCX/ZIP central-directory and inflate limits</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    LEGAL_SEARCH_HYDRATION_QUEUE_MAX ·
+                    LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX ·
+                    LEGAL_SEARCH_HYDRATION_WINDOW_MS
+                  </td>
+                  <td>
+                    Authenticated search hydration queue depth, per-user miss
+                    budget, and rolling window
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">

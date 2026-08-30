@@ -6,6 +6,11 @@ import {
   type LegalSearchFilters,
 } from '@obiter/search-client'
 import type { ApiEnv } from '../../env'
+import { readLimitedJsonValue } from '../../limited-request-body'
+import {
+  canonicalHydrationQueryKey,
+  LegalSearchHydrationBudget,
+} from '../../legal-search-hydration-budget'
 import {
   isSupportedFindCaseLawRequest,
   createMojRateLimiter,
@@ -43,6 +48,11 @@ import {
 
 interface LegalSearchProxyRouteVariables {
   requestId: string
+  user: { id: string } | null
+}
+
+interface LegalSearchProxyRouteOptions {
+  hydrationBudget?: LegalSearchHydrationBudget
 }
 
 const storedSearchTimeoutMs = 350
@@ -51,8 +61,16 @@ const storedCourtBrowseLimit = 10
 export function createLegalSearchProxyRoutes(
   env: ApiEnv,
   legalAuthorityStore: LegalAuthoritySourceStore = createInMemoryLegalAuthoritySourceStore(),
+  options: LegalSearchProxyRouteOptions = {},
 ) {
   const app = new Hono<{ Variables: LegalSearchProxyRouteVariables }>()
+  const hydrationBudget =
+    options.hydrationBudget ??
+    new LegalSearchHydrationBudget({
+      queueMax: env.legalSearchHydrationQueueMax,
+      perClientMax: env.legalSearchHydrationPerClientMax,
+      windowMs: env.legalSearchHydrationWindowMs,
+    })
   const searchClient = createClient(
     env.meilisearchHost,
     env.meilisearchSearchApiKey,
@@ -66,9 +84,10 @@ export function createLegalSearchProxyRoutes(
 
   app.post('/api/search/fetch', async (c) => {
     const requestId = c.get('requestId')
-    const parsed = legalFetchRequestSchema.safeParse(
-      await c.req.json().catch(() => null),
-    )
+    const body = await readLimitedJsonValue(c, env.jsonBodyMaxBytes)
+    if (!body.ok) return body.response
+
+    const parsed = legalFetchRequestSchema.safeParse(body.value)
 
     if (
       !parsed.success ||
@@ -228,15 +247,50 @@ export function createLegalSearchProxyRoutes(
       )
     }
 
-    if (!parsed.data.foregroundLiveResults) {
-      void hydrateMojAuthoritiesFromSearch(
-        env,
-        legalAuthorityStore,
-        indexClient,
-        env.legalAuthoritiesIndex,
-        parsed.data,
-        mojRateLimiter,
+    const sessionUser = c.get('user') ?? null
+
+    if (!sessionUser) {
+      return c.json(
+        toFetchResponse([], parsed.data.query, true, 0, 0, false, {
+          outcome: 'no_match',
+          diagnostics: {
+            exactLookupSearched: Boolean(exactLookup),
+            storedIndexSearched: true,
+            storedSourceSearched: true,
+            liveProviderSearched: false,
+            storedOnlyBrowse,
+          },
+        }),
       )
+    }
+
+    if (!parsed.data.foregroundLiveResults) {
+      const hydrationKey = canonicalHydrationQueryKey(parsed.data)
+      const enqueue = hydrationBudget.tryBeginHydration(
+        sessionUser.id,
+        hydrationKey,
+      )
+      if (enqueue.status === 'budget_exceeded') {
+        return c.json(
+          apiError(
+            'hydration_budget_exceeded',
+            'Search hydration budget exceeded. Try again later.',
+            requestId,
+          ),
+          429,
+        )
+      }
+
+      if (enqueue.status === 'queued') {
+        void hydrateMojAuthoritiesFromSearch(
+          env,
+          legalAuthorityStore,
+          indexClient,
+          env.legalAuthoritiesIndex,
+          parsed.data,
+          mojRateLimiter,
+        ).finally(() => hydrationBudget.completeHydration(hydrationKey))
+      }
 
       return c.json(
         toFetchResponse([], parsed.data.query, false, 0, 0, true, {

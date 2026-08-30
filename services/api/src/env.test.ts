@@ -1,6 +1,20 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import {
+  OOXML_INFLATE_CONCURRENCY,
+  OOXML_MAX_COMPRESSION_RATIO,
+  OOXML_MAX_ENTRIES,
+  OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES,
+  OOXML_MAX_UNCOMPRESSED_BYTES,
+} from '@obiter/ooxml'
 import { readApiEnv, readRampartDetectionConfig } from './env'
 import { defaultRampartCacheDir } from './rampart-cache'
+import {
+  DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES,
+  DEFAULT_JSON_BODY_MAX_BYTES,
+  DEFAULT_LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX,
+  DEFAULT_LEGAL_SEARCH_HYDRATION_QUEUE_MAX,
+  DEFAULT_LEGAL_SEARCH_HYDRATION_WINDOW_MS,
+} from './request-limit-defaults'
 
 const originalEnv = { ...process.env }
 
@@ -45,6 +59,24 @@ describe('readApiEnv', () => {
     expect(env.rampartCacheDir).toBe(defaultRampartCacheDir())
     expect(env.rampartMinScore).toBe(0.4)
     expect(env.rampartChunkTokens).toBe(400)
+    expect(env.jsonBodyMaxBytes).toBe(DEFAULT_JSON_BODY_MAX_BYTES)
+    expect(env.documentUploadMaxBytes).toBe(DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES)
+    expect(env.ooxmlMaxEntries).toBe(OOXML_MAX_ENTRIES)
+    expect(env.ooxmlMaxUncompressedBytes).toBe(OOXML_MAX_UNCOMPRESSED_BYTES)
+    expect(env.ooxmlMaxEntryUncompressedBytes).toBe(
+      OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES,
+    )
+    expect(env.ooxmlMaxCompressionRatio).toBe(OOXML_MAX_COMPRESSION_RATIO)
+    expect(env.ooxmlInflateConcurrency).toBe(OOXML_INFLATE_CONCURRENCY)
+    expect(env.legalSearchHydrationQueueMax).toBe(
+      DEFAULT_LEGAL_SEARCH_HYDRATION_QUEUE_MAX,
+    )
+    expect(env.legalSearchHydrationPerClientMax).toBe(
+      DEFAULT_LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX,
+    )
+    expect(env.legalSearchHydrationWindowMs).toBe(
+      DEFAULT_LEGAL_SEARCH_HYDRATION_WINDOW_MS,
+    )
     expect(env.nodeEnv).toBe('development')
   })
 
@@ -285,6 +317,32 @@ describe('readApiEnv', () => {
     expect(() => readApiEnv()).toThrow(
       'MOJ_FIND_CASE_LAW_RATE_LIMIT must be a positive integer.',
     )
+  })
+
+  it.each([
+    ['JSON_BODY_MAX_BYTES', '0', 'must be a positive integer'],
+    ['DOCUMENT_UPLOAD_MAX_BYTES', '0', 'must be a positive integer'],
+    ['OOXML_MAX_ENTRIES', '0', 'must be a positive integer'],
+    ['OOXML_MAX_UNCOMPRESSED_BYTES', '0', 'must be a positive integer'],
+    ['OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES', '0', 'must be a positive integer'],
+    ['OOXML_INFLATE_CONCURRENCY', '0', 'must be a positive integer'],
+    [
+      'OOXML_MAX_COMPRESSION_RATIO',
+      '0',
+      'must be a positive integer compression ratio',
+    ],
+    ['LEGAL_SEARCH_HYDRATION_QUEUE_MAX', '0', 'must be a positive integer'],
+    [
+      'LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX',
+      '0',
+      'must be a positive integer',
+    ],
+    ['LEGAL_SEARCH_HYDRATION_WINDOW_MS', '0', 'must be a positive integer'],
+  ])('rejects invalid %s configuration', (key, value, reason) => {
+    seedDevelopmentEnv()
+    process.env[key] = value
+
+    expect(() => readApiEnv()).toThrow(`${key} ${reason}`)
   })
 
   it('parses valid production configuration', () => {

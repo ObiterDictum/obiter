@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { Hono } from 'hono'
 import {
   createLegalSearchProxyRoutes,
   createPostgresLegalAuthoritySourceStore,
@@ -6,6 +7,12 @@ import {
   parseJudgmentParagraphs,
 } from '../proxy-routes'
 import type { ApiEnv } from '../../../env'
+import {
+  canonicalHydrationQueryKey,
+  LegalSearchHydrationBudget,
+} from '../../../legal-search-hydration-budget'
+import { createTestApiEnv } from '../../../test-api-env'
+import * as mojClient from '../moj-client'
 
 const searchClientMock = vi.hoisted(() => ({
   createClient: vi.fn(() => ({ id: 'meili-client' })),
@@ -19,28 +26,25 @@ vi.mock('@obiter/search-client', async (importOriginal) => ({
   ...searchClientMock,
 }))
 
-const env: ApiEnv = {
-  databaseUrl: 'postgres://obiter:obiter@localhost:5432/obiter',
-  authSecret: 'dev-only-better-auth-secret',
-  authBaseUrl: 'http://localhost:8787',
-  webOrigin: 'http://localhost:3000',
-  marketingOrigin: null,
-  desktopOrigin: 'obiter://desktop-auth',
-  resendApiKey: null,
-  emailFrom: 'onboarding@resend.dev',
-  meilisearchHost: 'http://localhost:7700',
-  meilisearchSearchApiKey: 'dev-key',
-  meilisearchAdminApiKey: 'dev-key',
-  legalAuthoritiesIndex: 'legal_authorities',
-  mojFindCaseLawBaseUrl: 'https://caselaw.nationalarchives.gov.uk',
-  mojFindCaseLawRateLimit: 1000,
-  rampartModel: 'qarlus/rampart',
-  rampartRevision: 'c3221c5cd838eb69a249ab40f8b442483865f233',
-  rampartCacheDir: '/tmp/rampart-cache',
-  rampartMinScore: 0.4,
-  rampartChunkTokens: 400,
-  port: 8787,
-  nodeEnv: 'test',
+const env: ApiEnv = createTestApiEnv()
+
+function createAuthenticatedProxyApp(
+  sourceStore?: Parameters<typeof createLegalSearchProxyRoutes>[1],
+  options?: Parameters<typeof createLegalSearchProxyRoutes>[2],
+  user: { id: string } | null = { id: 'usr_test' },
+  routeEnv: ApiEnv = env,
+) {
+  const proxy = createLegalSearchProxyRoutes(routeEnv, sourceStore, options)
+  const app = new Hono<{
+    Variables: { requestId: string; user: { id: string } | null }
+  }>()
+  app.use('*', async (c, next) => {
+    c.set('requestId', 'req_test')
+    c.set('user', user)
+    await next()
+  })
+  app.route('/', proxy)
+  return app
 }
 
 const hit = {
@@ -350,7 +354,7 @@ describe('createLegalSearchProxyRoutes', () => {
       processingTimeMs: 1,
     })
     const fetchMock = vi.spyOn(globalThis, 'fetch')
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -402,7 +406,7 @@ describe('createLegalSearchProxyRoutes', () => {
       processingTimeMs: 1,
     })
     const fetchMock = vi.spyOn(globalThis, 'fetch')
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -454,7 +458,7 @@ describe('createLegalSearchProxyRoutes', () => {
       processingTimeMs: 1,
     })
     const fetchMock = vi.spyOn(globalThis, 'fetch')
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -505,7 +509,7 @@ describe('createLegalSearchProxyRoutes', () => {
       estimatedTotalHits: 1,
       processingTimeMs: 1,
     })
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -527,7 +531,7 @@ describe('createLegalSearchProxyRoutes', () => {
 
   it('accepts future source request fields but returns unsupported outcome for non-judgment source types', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -581,7 +585,7 @@ describe('createLegalSearchProxyRoutes', () => {
           '<html><body><p>This is a long enough judgment paragraph mentioning Potanina and the appeal.</p></body></html>',
         ),
       )
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -635,7 +639,7 @@ describe('createLegalSearchProxyRoutes', () => {
           '<html><body><p>This is a long enough judgment paragraph mentioning Potanina and the appeal.</p></body></html>',
         ),
       )
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -693,7 +697,7 @@ describe('createLegalSearchProxyRoutes', () => {
           '<html><body><p>This judgment paragraph is long enough for background hydration.</p></body></html>',
         ),
       )
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -736,7 +740,7 @@ describe('createLegalSearchProxyRoutes', () => {
           '<html><body><p>This judgment paragraph is long enough for background hydration.</p></body></html>',
         ),
       )
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -765,7 +769,7 @@ describe('createLegalSearchProxyRoutes', () => {
     vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(
       new Error('network unavailable'),
     )
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -823,7 +827,7 @@ describe('createLegalSearchProxyRoutes', () => {
             '<html><body><h1>Natalia Nikolaevna Potanina v Vladimir Olegovich Potanin</h1><h2><span>Neutral Citation Number</span>[2026] EWFC 80</h2><article><div class="judgment-header__date">Date: 20/04/2026</div><p>This foreground search result can be opened even if the durable source store missed.</p></article></body></html>',
           ),
       )
-    const app = createLegalSearchProxyRoutes(env, sourceStore)
+    const app = createAuthenticatedProxyApp(sourceStore)
 
     const searchResponse = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -878,7 +882,7 @@ describe('createLegalSearchProxyRoutes', () => {
           '<html><body><h1>NHS England v Justin Yung Hui Chin</h1><article><div class="judgment-header__date">Date: 26/02/2026</div><p>This Primary Health Lists decision paragraph is long enough to index without a neutral citation.</p></article></body></html>',
         ),
       )
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -927,7 +931,7 @@ describe('createLegalSearchProxyRoutes', () => {
           '<html><body><p>This is a long enough judgment paragraph mentioning Potanina and the appeal.</p></body></html>',
         ),
       )
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const firstResponse = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -989,7 +993,7 @@ describe('createLegalSearchProxyRoutes', () => {
       search: vi.fn(async () => []),
     }
     const fetchMock = vi.spyOn(globalThis, 'fetch')
-    const app = createLegalSearchProxyRoutes(env, sourceStore)
+    const app = createAuthenticatedProxyApp(sourceStore)
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -1098,7 +1102,7 @@ describe('createLegalSearchProxyRoutes', () => {
           '<html><body><p>This is a long enough judgment paragraph mentioning Potanina and the appeal.</p></body></html>',
         ),
       )
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -1142,7 +1146,7 @@ describe('createLegalSearchProxyRoutes', () => {
           '<html><body><p>This is a long enough judgment paragraph mentioning Potanina and the appeal.</p></body></html>',
         ),
       )
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -1187,7 +1191,7 @@ describe('createLegalSearchProxyRoutes', () => {
           '<html><body><p>This is a long enough judgment paragraph mentioning Potanina and the appeal.</p></body></html>',
         ),
       )
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -1210,7 +1214,7 @@ describe('createLegalSearchProxyRoutes', () => {
 
   it('rejects unsupported Find Case Law metadata filters before cache or fetch', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -1232,7 +1236,7 @@ describe('createLegalSearchProxyRoutes', () => {
 
   it('rejects malformed JSON and empty fetch queries before cache or fetch', async () => {
     const fetchMock = vi.spyOn(globalThis, 'fetch')
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const malformedResponse = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -1261,7 +1265,7 @@ describe('createLegalSearchProxyRoutes', () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(new Response('<feed />'))
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -1298,7 +1302,7 @@ describe('createLegalSearchProxyRoutes', () => {
           `<feed><entry><title>Tinkler v Esken Ltd</title><link href="https://caselaw.nationalarchives.gov.uk/ewca/civ/2026/659" rel="alternate"/><published>2026-05-22T00:00:00Z</published><tna:identifier slug="ewca/civ/2026/659" type="ukncn">[2026] EWCA Civ 659</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry></feed>`,
         ),
       )
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -1340,7 +1344,7 @@ describe('createLegalSearchProxyRoutes', () => {
           '<html><body><p>This High Court administrative judgment paragraph is long enough for indexing.</p></body></html>',
         ),
       )
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -1397,7 +1401,7 @@ describe('createLegalSearchProxyRoutes', () => {
             '<html><body><p>This official court judgment paragraph is long enough for indexing.</p></body></html>',
           ),
         )
-      const app = createLegalSearchProxyRoutes(env)
+      const app = createAuthenticatedProxyApp()
 
       const response = await app.request('/api/search/fetch', {
         method: 'POST',
@@ -1450,7 +1454,7 @@ describe('createLegalSearchProxyRoutes', () => {
           `<feed><entry><title>Potanina v Potanin</title><link href="https://caselaw.nationalarchives.gov.uk/uksc/2024/3" rel="alternate"/><published>2024-01-31T00:00:00Z</published><tna:identifier slug="uksc/2024/3" type="ukncn">[2024] UKSC 3</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry></feed>`,
         ),
       )
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -1478,7 +1482,7 @@ describe('createLegalSearchProxyRoutes', () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(new Response('<feed />'))
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -1529,7 +1533,7 @@ describe('createLegalSearchProxyRoutes', () => {
           '<html><body><p>This is a long enough judgment paragraph mentioning Potanina and pagination.</p></body></html>',
         ),
       )
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -1563,7 +1567,7 @@ describe('createLegalSearchProxyRoutes', () => {
       processingTimeMs: 1,
     })
     const fetchMock = vi.spyOn(globalThis, 'fetch')
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -1594,7 +1598,7 @@ describe('createLegalSearchProxyRoutes', () => {
         ),
       )
       .mockResolvedValueOnce(new Response('', { status: 503 }))
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -1643,7 +1647,7 @@ describe('createLegalSearchProxyRoutes', () => {
           '<html><body><p>This is a long enough judgment paragraph mentioning Potanina and the appeal.</p></body></html>',
         ),
       )
-    const app = createLegalSearchProxyRoutes(env, sourceStore)
+    const app = createAuthenticatedProxyApp(sourceStore)
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -1676,10 +1680,12 @@ describe('createLegalSearchProxyRoutes', () => {
         `<feed><entry><title>Potanina v Potanin</title><link href="https://caselaw.nationalarchives.gov.uk/uksc/2024/3" rel="alternate"/><published>2024-01-31T00:00:00Z</published><tna:identifier slug="uksc/2024/3" type="ukncn">[2024] UKSC 3</tna:identifier></entry></feed>`,
       ),
     )
-    const app = createLegalSearchProxyRoutes({
-      ...env,
-      mojFindCaseLawRateLimit: 1,
-    })
+    const app = createAuthenticatedProxyApp(
+      undefined,
+      undefined,
+      { id: 'usr_test' },
+      { ...env, mojFindCaseLawRateLimit: 1 },
+    )
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -1725,7 +1731,7 @@ describe('createLegalSearchProxyRoutes', () => {
           '<html><body><p>This High Court administrative judgment paragraph is long enough for indexing.</p></body></html>',
         ),
       )
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -1771,7 +1777,7 @@ describe('createLegalSearchProxyRoutes', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response('', { status: 429, headers: { 'retry-after': '120' } }),
     )
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -1797,7 +1803,7 @@ describe('createLegalSearchProxyRoutes', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response('', { status: 503 }),
     )
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -1825,7 +1831,7 @@ describe('createLegalSearchProxyRoutes', () => {
         },
       ],
     })
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/documents/uksc-2024-3')
 
@@ -1847,7 +1853,7 @@ describe('createLegalSearchProxyRoutes', () => {
         `<html><body><h1>Secretary of State for the Home Department v Miah</h1><h2><span>Neutral Citation Number</span>[2026] EWHC 1246 (Admin)</h2><article><div class="judgment-header__date">Date: 22/05/2026</div><p>The court considered the administrative law challenge and the evidence before the Secretary of State.</p></article></body></html>`,
       ),
     )
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request(
       '/api/search/documents/ewhc-admin-2026-1246',
@@ -1894,7 +1900,7 @@ describe('createLegalSearchProxyRoutes', () => {
             `<html><body><h1>Secretary of State for the Home Department v Miah</h1><h2><span>Neutral Citation Number</span>[2026] EWHC 1246 (Admin)</h2><article><div class="judgment-header__date">Date: 22/05/2026</div><p>The court considered the administrative law challenge and the evidence before the Secretary of State.</p></article></body></html>`,
           ),
       )
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const firstResponse = await app.request(
       '/api/search/documents/ewhc-admin-2026-1246',
@@ -1959,7 +1965,7 @@ describe('createLegalSearchProxyRoutes', () => {
         `<html><body><h1>Secretary of State for the Home Department v Miah</h1><h2><span>Neutral Citation Number</span>[2026] EWHC 1246 (Admin)</h2><article><div class="judgment-header__date">Date: 22/05/2026</div><p>The court considered the administrative law challenge and the evidence before the Secretary of State.</p></article></body></html>`,
       ),
     )
-    const app = createLegalSearchProxyRoutes(env, sourceStore)
+    const app = createAuthenticatedProxyApp(sourceStore)
 
     const response = await app.request(
       '/api/search/documents/ewhc-admin-2026-1246',
@@ -1981,7 +1987,7 @@ describe('createLegalSearchProxyRoutes', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response('', { status: 429, headers: { 'retry-after': '120' } }),
     )
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request(
       '/api/search/documents/ewhc-admin-2026-1246',
@@ -2000,7 +2006,7 @@ describe('createLegalSearchProxyRoutes', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response('', { status: 503 }),
     )
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request(
       '/api/search/documents/ewhc-admin-2026-1246',
@@ -2038,7 +2044,7 @@ describe('createLegalSearchProxyRoutes', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
       new Response('', { status: 429, headers: { 'retry-after': '60' } }),
     )
-    const app = createLegalSearchProxyRoutes(env, sourceStore)
+    const app = createAuthenticatedProxyApp(sourceStore)
 
     const response = await app.request('/api/search/documents/uksc-2024-3')
 
@@ -2065,7 +2071,7 @@ describe('createLegalSearchProxyRoutes', () => {
           `<html><body><h1>NHS Kent v OQD</h1><h2><span>Neutral Citation Number</span>[2026] EWCOP 23 (T3)</h2><article><div class="judgment-header__date">Date: 22/05/2026</div><p>This nested Court of Protection judgment paragraph is long enough to render.</p></article></body></html>`,
         ),
       )
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/documents/ewcop-t3-2026-23')
 
@@ -2109,7 +2115,7 @@ describe('createLegalSearchProxyRoutes', () => {
           `<html><body><h1>Craig Alfred v Information Commissioner</h1><h2><span>Neutral Citation Number</span>[2026] UKFTT 754 (GRC)</h2><article><div class="judgment-header__date">Date: 21/05/2026</div><p>This tribunal judgment paragraph is long enough to render from the alternate URL.</p></article></body></html>`,
         ),
       )
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const searchResponse = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -2139,7 +2145,7 @@ describe('createLegalSearchProxyRoutes', () => {
   })
 
   it('rejects invalid stored document ids before storage lookup', async () => {
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request('/api/search/documents/uksc_2024_1')
 
@@ -2152,7 +2158,7 @@ describe('createLegalSearchProxyRoutes', () => {
 
   it('returns not found when a stored legal document lookup misses', async () => {
     searchClientMock.getDocument.mockRejectedValueOnce(new Error('not found'))
-    const app = createLegalSearchProxyRoutes(env)
+    const app = createAuthenticatedProxyApp()
 
     const response = await app.request(
       '/api/search/documents/uksc-2024-missing',
@@ -2393,10 +2399,12 @@ describeLiveFindCaseLaw('Find Case Law live retrieval', () => {
         failedCount: 0,
         errors: [],
       })
-      const app = createLegalSearchProxyRoutes({
-        ...env,
-        mojFindCaseLawRateLimit: 100,
-      })
+      const app = createAuthenticatedProxyApp(
+        undefined,
+        undefined,
+        { id: 'usr_test' },
+        { ...env, mojFindCaseLawRateLimit: 100 },
+      )
 
       const response = await app.request('/api/search/fetch', {
         method: 'POST',
@@ -2429,4 +2437,159 @@ describeLiveFindCaseLaw('Find Case Law live retrieval', () => {
     },
     30_000,
   )
+})
+
+describe('search hydration guards', () => {
+  it('returns stored-only empty results for anonymous cache misses without provider hydration', async () => {
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [],
+      query: 'Potanina',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const hydrateSpy = vi
+      .spyOn(mojClient, 'hydrateMojAuthoritiesFromSearch')
+      .mockResolvedValue(undefined)
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    const app = createAuthenticatedProxyApp(undefined, undefined, null)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'Potanina', court: 'uksc' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [],
+      hydrationQueued: false,
+      outcome: 'no_match',
+      diagnostics: {
+        liveProviderSearched: false,
+        storedIndexSearched: true,
+        storedSourceSearched: true,
+      },
+    })
+    expect(hydrateSpy).not.toHaveBeenCalled()
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('deduplicates in-flight authenticated misses without starting a second hydrate job', async () => {
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: 'Potanina',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const hydrateSpy = vi
+      .spyOn(mojClient, 'hydrateMojAuthoritiesFromSearch')
+      .mockImplementation(() => new Promise(() => undefined))
+    const app = createAuthenticatedProxyApp()
+
+    const request = {
+      method: 'POST' as const,
+      body: JSON.stringify({ query: 'Potanina', court: 'uksc' }),
+      headers: { 'content-type': 'application/json' },
+    }
+    const [firstResponse, secondResponse] = await Promise.all([
+      app.request('/api/search/fetch', request),
+      app.request('/api/search/fetch', request),
+    ])
+
+    expect(firstResponse.status).toBe(200)
+    expect(secondResponse.status).toBe(200)
+    expect(await firstResponse.json()).toMatchObject({
+      hydrationQueued: true,
+      outcome: 'hydration_queued',
+    })
+    expect(await secondResponse.json()).toMatchObject({
+      hydrationQueued: true,
+      outcome: 'hydration_queued',
+    })
+    expect(hydrateSpy).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns hydration_budget_exceeded when the authenticated queue is full', async () => {
+    const budget = new LegalSearchHydrationBudget({
+      queueMax: 24,
+      perClientMax: 12,
+      windowMs: 600_000,
+    })
+    for (let index = 0; index < 24; index += 1) {
+      budget.tryBeginHydration(
+        'usr_test',
+        canonicalHydrationQueryKey({ query: `queued-${index}` }),
+      )
+    }
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [],
+      query: 'Example',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const app = createAuthenticatedProxyApp(undefined, {
+      hydrationBudget: budget,
+    })
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'Example', court: 'uksc' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(429)
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: 'hydration_budget_exceeded',
+        message: 'Search hydration budget exceeded. Try again later.',
+      },
+    })
+  })
+
+  it('returns hydration_budget_exceeded on the 13th distinct authenticated miss for one user', async () => {
+    const budget = new LegalSearchHydrationBudget({
+      queueMax: 24,
+      perClientMax: 12,
+      windowMs: 600_000,
+    })
+    const app = createAuthenticatedProxyApp(undefined, {
+      hydrationBudget: budget,
+    })
+
+    for (let index = 0; index < 12; index += 1) {
+      searchClientMock.search.mockResolvedValueOnce({
+        hits: [],
+        query: `query-${index}`,
+        estimatedTotalHits: 0,
+        processingTimeMs: 1,
+      })
+      const response = await app.request('/api/search/fetch', {
+        method: 'POST',
+        body: JSON.stringify({ query: `query-${index}`, court: 'uksc' }),
+        headers: { 'content-type': 'application/json' },
+      })
+      expect(response.status).toBe(200)
+      expect(await response.json()).toMatchObject({ hydrationQueued: true })
+      budget.completeHydration(
+        canonicalHydrationQueryKey({ query: `query-${index}`, court: 'uksc' }),
+      )
+    }
+
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [],
+      query: 'query-12',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'query-12', court: 'uksc' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(429)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'hydration_budget_exceeded' },
+    })
+  })
 })

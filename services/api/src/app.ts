@@ -29,6 +29,7 @@ import { createMattersRoutes } from './routes/matters'
 import { createOrganisationsRoutes } from './routes/organisations'
 import { configureRedactionDetector } from './redaction-detection'
 import { createRedactRoutes } from './routes/redact'
+import { apiRequestLimitsFromEnv } from './request-limits'
 import { createTrackedChangeRoutes } from './routes/tracked-changes'
 import { DocumentPresenceRegistry } from './document-presence'
 import { createLocalStorage, type StorageService } from './storage'
@@ -89,6 +90,7 @@ export function createApiApp(
   const auth = options.auth ?? createAuth(env, pool)
   const storage = options.storage ?? createLocalStorage()
   const presence = new DocumentPresenceRegistry()
+  const requestLimits = apiRequestLimitsFromEnv(env)
   const app = new Hono<{ Variables: AppVariables }>()
 
   app.onError((error, c) => {
@@ -174,7 +176,7 @@ export function createApiApp(
   app.route('/', createCommentsRoutes(pool, storage))
   app.route('/', createDocumentAccessRoutes(pool))
   app.route('/', createOrganisationsRoutes(pool))
-  app.route('/', createDocumentsRoutes(pool, storage))
+  app.route('/', createDocumentsRoutes(pool, storage, requestLimits))
   app.route('/', createDocumentCollaborationRoutes(pool, storage, presence))
   app.route('/', createDocumentEditRoutes(pool, storage))
   app.route('/', createDocumentModelRoutes(pool, storage))
@@ -182,7 +184,7 @@ export function createApiApp(
   app.route('/', createDocumentMediaRoutes(pool, storage))
   app.route('/', createDocumentPdfViewRoutes(pool, storage))
   app.route('/', createTrackedChangeRoutes(pool, storage))
-  app.route('/', createRedactRoutes(pool, storage))
+  app.route('/', createRedactRoutes(pool, storage, requestLimits))
   app.route('/', createLegalSearchRoutes(env))
   app.route(
     '/',
