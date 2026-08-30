@@ -292,6 +292,7 @@ export function createLegalSearchProxyRoutes(
         ).finally(() => hydrationBudget.completeHydration(hydrationKey))
       }
 
+      // Deduped still has an in-flight job; keep hydrationQueued true so clients poll.
       return c.json(
         toFetchResponse([], parsed.data.query, false, 0, 0, true, {
           outcome: 'hydration_queued',

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   canonicalHydrationQueryKey,
   LegalSearchHydrationBudget,
@@ -56,5 +56,32 @@ describe('LegalSearchHydrationBudget', () => {
         canonicalHydrationQueryKey({ query: 'query-12' }),
       ).status,
     ).toBe('budget_exceeded')
+  })
+
+  it('drops expired per-user miss windows instead of retaining empty keys', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-30T12:00:00Z'))
+    const budget = new LegalSearchHydrationBudget({
+      queueMax: 24,
+      perClientMax: 12,
+      windowMs: 60_000,
+    })
+    const goneKey = canonicalHydrationQueryKey({ query: 'gone' })
+    expect(budget.tryBeginHydration('usr_gone', goneKey)).toEqual({
+      status: 'queued',
+    })
+    budget.completeHydration(goneKey)
+    expect(budget.retainedUserMissWindows()).toBe(1)
+
+    vi.setSystemTime(new Date('2026-08-30T12:02:00Z'))
+    const otherKey = canonicalHydrationQueryKey({ query: 'other' })
+    expect(budget.tryBeginHydration('usr_other', otherKey)).toEqual({
+      status: 'queued',
+    })
+    expect(budget.retainedUserMissWindows()).toBe(1)
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
   })
 })

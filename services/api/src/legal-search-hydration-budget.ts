@@ -32,6 +32,11 @@ export function canonicalHydrationQueryKey(request: LegalFetchRequest) {
   })
 }
 
+/**
+ * In-process only. Each API replica has its own in-flight set and per-user
+ * windows, so N processes behind ingress multiply the effective allowance.
+ * Share this state when more than one process serves search.
+ */
 export class LegalSearchHydrationBudget {
   private readonly inFlight = new Set<string>()
   private readonly userMissTimestamps = new Map<string, number[]>()
@@ -41,6 +46,7 @@ export class LegalSearchHydrationBudget {
   ) {}
 
   tryBeginHydration(userId: string, key: string): HydrationEnqueueResult {
+    this.pruneExpiredUserMisses()
     if (this.inFlight.has(key)) return { status: 'deduped' }
     if (this.inFlight.size >= this.config.queueMax) {
       return { status: 'budget_exceeded' }
@@ -62,13 +68,21 @@ export class LegalSearchHydrationBudget {
     return this.inFlight.has(key)
   }
 
-  private userMissCount(userId: string) {
+  retainedUserMissWindows() {
+    return this.userMissTimestamps.size
+  }
+
+  private pruneExpiredUserMisses() {
     const cutoff = Date.now() - this.config.windowMs
-    const timestamps = (this.userMissTimestamps.get(userId) ?? []).filter(
-      (value) => value >= cutoff,
-    )
-    this.userMissTimestamps.set(userId, timestamps)
-    return timestamps.length
+    for (const [userId, timestamps] of this.userMissTimestamps) {
+      const kept = timestamps.filter((value) => value >= cutoff)
+      if (kept.length === 0) this.userMissTimestamps.delete(userId)
+      else this.userMissTimestamps.set(userId, kept)
+    }
+  }
+
+  private userMissCount(userId: string) {
+    return this.userMissTimestamps.get(userId)?.length ?? 0
   }
 
   private recordUserMiss(userId: string) {
