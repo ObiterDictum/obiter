@@ -127,7 +127,6 @@ export function createApiApp(
     await next()
   })
 
-  app.use('*', createRequestBodyLimitMiddleware(requestLimits))
   app.use('*', async (c, next) => {
     const session = await auth.api.getSession({
       headers: c.req.raw.headers,
@@ -137,6 +136,7 @@ export function createApiApp(
     c.set('session', session?.session ?? null)
     await next()
   })
+  app.use('*', createRequestBodyLimitMiddleware(requestLimits))
 
   app.on(['GET', 'POST'], '/api/auth/*', async (c) => {
     const requestId = c.get('requestId')

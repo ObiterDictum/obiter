@@ -2865,22 +2865,26 @@
             </li>
             <li>
               <span
-                ><b>Body bounded.</b> App middleware reads and caps every
-                request body before route handlers or Better Auth run. JSON
-                routes use <code>JSON_BODY_MAX_BYTES</code> (48 KiB by default).
-                Multipart document and redact uploads on
-                <code>/api/matters/:matterId/documents</code> and
-                <code>/api/redaction-runs</code> use
-                <code>DOCUMENT_UPLOAD_MAX_BYTES</code>. This includes
-                <code>/api/auth/*</code>; Better Auth sees only the replaced
-                bounded <code>Request</code>.</span
+                ><b>Session resolved.</b> better-auth reads a cookie (web) or
+                bearer token (desktop) and populates <code>user</code>, carrying
+                <code>organisationId</code> and <code>role</code>. Session
+                lookup uses request headers only, so it can run before the body
+                is buffered.</span
               >
             </li>
             <li>
               <span
-                ><b>Session resolved.</b> better-auth reads a cookie (web) or
-                bearer token (desktop) and populates <code>user</code>, carrying
-                <code>organisationId</code> and <code>role</code>.</span
+                ><b>Body bounded.</b> App middleware then reads and caps every
+                request body before route handlers or Better Auth run. JSON
+                routes and anonymous callers use
+                <code>JSON_BODY_MAX_BYTES</code> (48 KiB by default). Multipart
+                document and redact uploads on
+                <code>/api/matters/:matterId/documents</code> and
+                <code>/api/redaction-runs</code> use
+                <code>DOCUMENT_UPLOAD_MAX_BYTES</code> only when
+                <code>c.get('user')</code> is set. This includes
+                <code>/api/auth/*</code>; Better Auth sees only the replaced
+                bounded <code>Request</code>.</span
               >
             </li>
             <li>

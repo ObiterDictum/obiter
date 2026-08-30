@@ -14,8 +14,10 @@ function requestBodyMaxBytes(
   path: string,
   contentType: string | undefined,
   limits: ApiRequestLimits,
+  authenticated: boolean,
 ): { maxBytes: number; limitKind: 'json' | 'upload' } {
   if (
+    authenticated &&
     method === 'POST' &&
     contentType?.toLowerCase().startsWith('multipart/form-data') &&
     (MATTER_DOCUMENTS_UPLOAD_PATH.test(path) || path === '/api/redaction-runs')
@@ -47,6 +49,7 @@ export function createRequestBodyLimitMiddleware(
       c.req.path,
       c.req.header('content-type'),
       limits,
+      Boolean(c.get('user')),
     )
 
     if (contentLengthExceedsLimit(raw, maxBytes)) {

@@ -20,8 +20,9 @@ const allowlistedPaths = new Set([
 ])
 
 describe('request body architecture boundary', () => {
-  it('registers app-layer body limits before Better Auth', async () => {
+  it('registers app-layer body limits after session and before Better Auth', async () => {
     const source = await readFile(new URL('./app.ts', srcDirectory), 'utf8')
+    const sessionIndex = source.indexOf('auth.api.getSession')
     const authHandlerIndex = source.indexOf(
       "app.on(['GET', 'POST'], '/api/auth/*'",
     )
@@ -34,8 +35,10 @@ describe('request body architecture boundary', () => {
 
     expect(bodyLimitImport).toBe(true)
     expect(bodyLimitUse).toBe(true)
+    expect(sessionIndex).toBeGreaterThan(-1)
     expect(authHandlerIndex).toBeGreaterThan(-1)
     expect(bodyLimitUseIndex).toBeGreaterThan(-1)
+    expect(sessionIndex).toBeLessThan(bodyLimitUseIndex)
     expect(bodyLimitUseIndex).toBeLessThan(authHandlerIndex)
   })
 

@@ -18,6 +18,10 @@ function oversizedJsonBody() {
   return `{"name":"${'A'.repeat(60_000)}","primaryJurisdiction":"england_and_wales"}`
 }
 
+function oversizedMultipartBody() {
+  return 'x'.repeat(50_000)
+}
+
 describe('request body limit middleware', () => {
   it('returns 413 for oversized JSON on POST /api/matters before the handler runs', async () => {
     const query = vi.fn(async () => {
@@ -85,6 +89,57 @@ describe('request body limit middleware', () => {
     })
     expect(handlerCalled).toBe(false)
     expect(handler).not.toHaveBeenCalled()
+  })
+
+  it('keeps anonymous multipart uploads on the 48 KiB JSON limit', async () => {
+    const auth = {
+      api: { getSession: async () => null },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+
+    const app = createApiApp(
+      testEnv,
+      createPool(async () => ({ rows: [] })),
+      { auth },
+    )
+    const response = await app.request('/api/matters/mtr_1/documents', {
+      method: 'POST',
+      headers: { 'content-type': 'multipart/form-data; boundary=----x' },
+      body: oversizedMultipartBody(),
+    })
+
+    expect(response.status).toBe(413)
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: 'payload_too_large',
+        message: 'Request body exceeds the 48 KiB JSON limit.',
+      },
+    })
+  })
+
+  it('allows authenticated multipart uploads larger than the JSON limit', async () => {
+    const query = vi.fn(async () => ({ rows: [] }))
+    const auth = {
+      api: {
+        getSession: async () => ({
+          user: {
+            id: 'usr_1',
+            organisationId: 'org_1',
+          },
+          session: { id: 'ses_1' },
+        }),
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+
+    const app = createApiApp(testEnv, createPool(query), { auth })
+    const response = await app.request('/api/matters/mtr_1/documents', {
+      method: 'POST',
+      headers: { 'content-type': 'multipart/form-data; boundary=----x' },
+      body: oversizedMultipartBody(),
+    })
+
+    expect(response.status).not.toBe(413)
   })
 
   it('still creates a matter when the JSON body is within the limit', async () => {
