@@ -2867,7 +2867,24 @@
               <span
                 ><b>Session resolved.</b> better-auth reads a cookie (web) or
                 bearer token (desktop) and populates <code>user</code>, carrying
-                <code>organisationId</code> and <code>role</code>.</span
+                <code>organisationId</code> and <code>role</code>. Session
+                lookup uses request headers only, so it can run before the body
+                is buffered.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Body bounded.</b> App middleware then reads and caps every
+                request body before route handlers or Better Auth run. JSON
+                routes and anonymous callers use
+                <code>JSON_BODY_MAX_BYTES</code> (48 KiB by default). Multipart
+                document and redact uploads on
+                <code>/api/matters/:matterId/documents</code> and
+                <code>/api/redaction-runs</code> use
+                <code>DOCUMENT_UPLOAD_MAX_BYTES</code> only when
+                <code>c.get('user')</code> is set. This includes
+                <code>/api/auth/*</code>; Better Auth sees only the replaced
+                bounded <code>Request</code>.</span
               >
             </li>
             <li>
@@ -3786,7 +3803,10 @@
                   </td>
                   <td>
                     Request body caps for JSON routes and multipart document or
-                    redact uploads
+                    redact uploads. Enforced globally in
+                    <code>createApiApp</code> middleware, not only on routes
+                    that call <code>readLimitedJsonBody</code> or
+                    <code>readLimitedFormData</code>.
                   </td>
                 </tr>
                 <tr>
@@ -5374,6 +5394,16 @@
           <ul class="rules">
             <li>
               <span
+                ><b>Request bodies are capped in app middleware.</b> Every route
+                inherits the bound from <code>createApiApp</code>; handlers must
+                not read <code>c.req.raw</code> body streams directly. Raising
+                the upload cap for a new multipart route requires an explicit
+                path allowlist entry in
+                <code>request-body-limit.ts</code>.</span
+              >
+            </li>
+            <li>
+              <span
                 ><b>Primitives import nothing internal.</b>
                 <code>contracts</code>, <code>legal-schema</code>,
                 <code>ui</code> and <code>database</code> are leaves. This is
@@ -5548,6 +5578,19 @@
                 </tr>
               </thead>
               <tbody>
+                <tr>
+                  <td>
+                    App-layer 413 does not stop the client finishing a TCP send
+                  </td>
+                  <td>
+                    Middleware rejects once the bounded read exceeds the cap,
+                    but it does not close the socket while the client is still
+                    transmitting. Connection exhaustion at very large payloads
+                    still needs ingress <code>client_max_body_size</code> (or
+                    equivalent) as a deployment requirement.
+                  </td>
+                  <td class="id">architecture.html</td>
+                </tr>
                 <tr>
                   <td>Search matching is substring-based</td>
                   <td>
