@@ -49,6 +49,7 @@ export type ModelIdAllocator = {
 
 export type ParseDocxOptions = {
   idAllocator?: ModelIdAllocator
+  limits?: import('./package-limits-defaults').OoxmlPackageLimits
 }
 
 type TextRange = { start: number; end: number }
@@ -123,6 +124,7 @@ export { applyDocumentEdits, type TrackedEditContext } from './model-edits'
 
 export type OoxmlErrorCode =
   | 'invalid-package'
+  | 'package-limits-exceeded'
   | 'invalid-xml-part'
   | 'model-node-not-found'
   | 'model-node-not-editable'
@@ -136,8 +138,8 @@ export type OoxmlErrorCode =
 export class OoxmlError extends Error {
   readonly code: OoxmlErrorCode
 
-  constructor(code: OoxmlErrorCode) {
-    super(errorMessage(code))
+  constructor(code: OoxmlErrorCode, detail?: string) {
+    super(detail ?? errorMessage(code))
     this.name = 'OoxmlError'
     this.code = code
   }
@@ -145,6 +147,9 @@ export class OoxmlError extends Error {
 
 function errorMessage(code: OoxmlErrorCode) {
   if (code === 'invalid-package') return 'The document package is invalid.'
+  if (code === 'package-limits-exceeded') {
+    return 'The document package exceeds resource limits.'
+  }
   if (code === 'invalid-xml-part') return 'The document contains invalid XML.'
   if (code === 'model-node-not-found') return 'The document node was not found.'
   if (code === 'model-node-not-editable') {

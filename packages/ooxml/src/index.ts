@@ -12,6 +12,22 @@ export {
 } from '@obiter/contracts'
 
 export { createBlankDocx } from './blank'
+export {
+  DEFAULT_OOXML_PACKAGE_LIMITS,
+  OOXML_INFLATE_CONCURRENCY,
+  OOXML_MAX_COMPRESSION_RATIO,
+  OOXML_MAX_ENTRIES,
+  OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES,
+  OOXML_MAX_UNCOMPRESSED_BYTES,
+  OOXML_MIN_RATIO_COMPRESSED_BYTES,
+  type OoxmlPackageLimits,
+} from './package-limits-defaults'
+export {
+  assertOoxmlPackageCentralDirectory,
+  loadOoxmlZipEntries,
+  packageLimitViolationMessage,
+} from './package-loader'
+export { getActiveInflateCount, mapWithConcurrency } from './inflate-pool'
 export { validateCommentAnchor } from './comment-anchors'
 export {
   isPackageImagePartName,

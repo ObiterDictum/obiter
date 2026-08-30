@@ -814,8 +814,14 @@ changelog, and API liveness, not an omitted gate. The only place it was
 visible was the handlers.
 
 Decision: keep these five routes anonymous. They exist to serve public
-judgment search, stored-or-hydrated judgment documents, GitHub-backed release
-notes, and a minimal liveness probe. Search and changelog must never return
+judgment search of already stored authorities, GitHub-backed release notes,
+and a minimal liveness probe. Anonymous `POST /api/search/fetch` is stored-only: it
+must not queue hydration, call Find Case Law, or write Postgres or
+Meilisearch. Authenticated callers may queue bounded background hydration
+and request foreground live results subject to the existing MOJ rate
+limiter and per-user hydration budgets. Those budgets are per API process:
+replica count multiplies the effective queue and miss allowance until the
+counters are shared. Search and changelog must never return
 matter data, client documents, redaction source or output, session or
 organisation records, auth secrets, or Meilisearch admin keys. Health must
 return only `{ status: 'ok', service: 'obiter-api' }` and must never expose
