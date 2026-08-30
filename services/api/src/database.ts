@@ -1218,20 +1218,41 @@ export async function softDeleteDocumentWithCascade(
   try {
     await client.query('begin')
 
-    const lock = await client.query<{ id: string }>(
-      `select document.id
-       from matter_documents document
-       join matters matter
-         on matter.id = document.matter_id
-        and matter.organisation_id = document.organisation_id
-       where document.id = $1
-         and document.organisation_id = $2
-         and document.deleted_at is null
-         and ${matterAccessPredicate('$3', "'edit'")}
-       for update of document, matter`,
-      [input.id, input.organisationId, input.userId],
+    const candidate = await client.query<{ matter_id: string }>(
+      `select matter_id from matter_documents
+       where id = $1 and organisation_id = $2 and deleted_at is null`,
+      [input.id, input.organisationId],
     )
-    if (lock.rows.length === 0) {
+    const matterId = candidate.rows[0]?.matter_id
+    if (!matterId) {
+      await client.query('rollback')
+      return null
+    }
+
+    const matter = await client.query<{ id: string }>(
+      `select matter.id from matters matter
+       where matter.id = $1
+         and matter.organisation_id = $2
+         and matter.deleted_at is null
+         and ${matterAccessPredicate('$3', "'edit'")}
+       for update`,
+      [matterId, input.organisationId, input.userId],
+    )
+    if (!matter.rows[0]) {
+      await client.query('rollback')
+      return null
+    }
+
+    const lockedDocument = await client.query<{ id: string }>(
+      `select id from matter_documents
+       where id = $1
+         and organisation_id = $2
+         and matter_id = $3
+         and deleted_at is null
+       for update`,
+      [input.id, input.organisationId, matterId],
+    )
+    if (!lockedDocument.rows[0]) {
       await client.query('rollback')
       return null
     }
@@ -1289,7 +1310,7 @@ export async function softDeleteDocumentWithCascade(
   }
 }
 
-/** Restores a document and its cascade-deleted runs; intentionally not yet routed. */
+/** Restores a document and its cascade-deleted runs. */
 export async function restoreDocumentWithAudit(
   pool: Pool,
   input: {
@@ -1305,28 +1326,24 @@ export async function restoreDocumentWithAudit(
     await client.query('begin')
 
     const candidate = await client.query<{ matter_id: string }>(
-      `select document.matter_id
-       from matter_documents document
-       join matters matter
-         on matter.id = document.matter_id
-        and matter.organisation_id = document.organisation_id
-       where document.id = $1
-         and document.organisation_id = $2
-         and document.deleted_at is not null
-         and ${matterAccessPredicate('$3', "'edit'")}`,
-      [input.id, input.organisationId, input.userId],
+      `select matter_id from matter_documents
+       where id = $1 and organisation_id = $2 and deleted_at is not null`,
+      [input.id, input.organisationId],
     )
-    if (candidate.rows.length === 0) {
+    const matterId = candidate.rows[0]?.matter_id
+    if (!matterId) {
       await client.query('rollback')
       return null
     }
 
-    const matterId = candidate.rows[0].matter_id
     const matter = await client.query<{ id: string }>(
-      `select id from matters
-       where id = $1 and organisation_id = $2 and deleted_at is null
+      `select id from matters matter
+       where matter.id = $1
+         and matter.organisation_id = $2
+         and matter.deleted_at is null
+         and ${matterAccessPredicate('$3', "'edit'")}
        for update`,
-      [matterId, input.organisationId],
+      [matterId, input.organisationId, input.userId],
     )
     if (matter.rows.length === 0) {
       await client.query('rollback')

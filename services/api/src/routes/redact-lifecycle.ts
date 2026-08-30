@@ -7,6 +7,7 @@ import {
   renderAuditMarkdown,
 } from '../redaction-audit-report'
 import {
+  getDeletedRedactionRunForAudit,
   getRedactionRun,
   listRedactionAuditLog,
   publicRun,
@@ -140,19 +141,19 @@ export function createRedactLifecycleRoutes(
   routes.get('/api/redaction-runs/:runId/audit', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
-    // The audit report survives deletion (ruling 2): fetch with includeDeleted
-    // so a deleted finalized run's report stays retrievable. A deleted run is
-    // sensitive (the run itself is gone from every other surface), so only
-    // owner/admin may read it, while live runs' audit access is unchanged.
-    const run = await getRedactionRun(
-      pool,
-      user,
-      c.req.param('runId'),
-      'view',
-      {
-        includeDeleted: true,
-      },
-    )
+    // Live audits retain ordinary view access. Deleted audits use a separate
+    // owner/admin-gated resolver so deleted matters and non-creator standalone
+    // runs do not enter the live access predicate.
+    let run = await getRedactionRun(pool, user, c.req.param('runId'), 'view')
+    if (!run) {
+      const manageUser = await requireManageRole(c, pool)
+      if (manageUser instanceof Response) return manageUser
+      run = await getDeletedRedactionRunForAudit(
+        pool,
+        manageUser.organisationId,
+        c.req.param('runId'),
+      )
+    }
     if (!run)
       return errorResponse(
         c,
@@ -160,10 +161,6 @@ export function createRedactLifecycleRoutes(
         'Redaction run not found.',
         404,
       )
-    if (run.deletedAt) {
-      const manageUser = await requireManageRole(c, pool)
-      if (manageUser instanceof Response) return manageUser
-    }
     if (run.status !== 'finalized')
       return errorResponse(
         c,
@@ -171,10 +168,7 @@ export function createRedactLifecycleRoutes(
         'An audit report is available after finalization.',
         400,
       )
-    const report = buildAuditReport(
-      run,
-      await listRedactionAuditLog(pool, user.organisationId, run.id),
-    )
+    const report = buildAuditReport(run, await listRedactionAuditLog(pool, run))
     const format = c.req.query('format') ?? 'json'
     if (format === 'json') return c.json(report)
     if (format === 'markdown')

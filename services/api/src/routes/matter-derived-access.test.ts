@@ -3,6 +3,7 @@ import type { Pool } from 'pg'
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { AuthzVariables } from '../authz'
 import type { StorageService } from '../storage'
+import type { RedactionRunRow } from '../redaction-database'
 import { createDocumentAccessRoutes } from './document-access'
 import { createDocumentsRoutes } from './documents'
 import { createMattersRoutes } from './matters'
@@ -13,6 +14,19 @@ import { createRedactRunCreationRoutes } from './redact-run-creation'
 const queries: string[] = []
 const query = async (sql: string) => {
   queries.push(sql)
+  const text = sql.trim()
+  if (text.startsWith('select matter_id from matter_documents'))
+    return { rows: [{ matter_id: 'mtr_private' }] }
+  if (text.startsWith('select matter_id, document_id, replaces_run_id'))
+    return {
+      rows: [
+        {
+          matter_id: 'mtr_private',
+          document_id: 'doc_private',
+          replaces_run_id: null,
+        },
+      ],
+    }
   return { rows: [] }
 }
 const pool = {
@@ -65,9 +79,142 @@ const json = (body: unknown, method: 'POST' | 'PATCH' = 'POST') => ({
   body: JSON.stringify(body),
 })
 
-async function expectHidden(response: Response) {
-  expect(response.status).toBe(404)
-  expect(queries.some((sql) => sql.includes('matter_shares'))).toBe(true)
+async function expectHidden(response: Response, status = 404) {
+  expect(response.status).toBe(status)
+  if (status === 404)
+    expect(queries.some((sql) => sql.includes('matter_shares'))).toBe(true)
+}
+
+const standaloneRun: RedactionRunRow = {
+  id: 'red_standalone',
+  organisation_id: 'org_1',
+  matter_id: null,
+  matter_name: null,
+  document_id: null,
+  document_version_id: null,
+  source_filename: 'standalone.txt',
+  source_text_object_key: 'org/org_1/redaction-runs/red_standalone/source',
+  source_file_object_key: null,
+  source_layout_object_key: null,
+  source_mime_type: 'text/plain',
+  status: 'ready_for_review',
+  policy_mode: 'internal_ai_minimisation',
+  spans_json: [],
+  decisions_json: {},
+  output_artifact_id: null,
+  summary_json: {},
+  detector_version: 'detector-1',
+  detection_mode: 'model+supplement',
+  replaces_run_id: null,
+  replacement_run_id: null,
+  created_by: 'usr_creator',
+  created_at: '2026-01-01T00:00:00.000Z',
+  updated_at: '2026-01-01T00:00:00.000Z',
+  deleted_at: null,
+  deleted_by: null,
+}
+
+function standalonePool(
+  run = standaloneRun,
+  options: {
+    userId?: string
+    matterOwnerId?: string
+    sharedUserId?: string
+    matterDeleted?: boolean
+    sharedAccessLevel?: 'view' | 'edit'
+  } = {},
+) {
+  const userId = options.userId ?? 'usr_unshared'
+  const query = async (sql: string, parameters: unknown[] = []) => {
+    queries.push(sql)
+    const text = sql.toLowerCase()
+    if (!text.includes('from redaction_runs')) return { rows: [] }
+    if (
+      (text.includes('where id = $1') || text.includes('where run.id = $1')) &&
+      parameters[0] !== run.id
+    )
+      return { rows: [] }
+    if (text.startsWith('select matter_id, document_id, replaces_run_id')) {
+      return {
+        rows: [
+          {
+            matter_id: run.matter_id,
+            document_id: run.document_id,
+            replaces_run_id: run.replaces_run_id,
+          },
+        ],
+      }
+    }
+    const creatorParameter = text.match(/run\.created_by = \$(\d+)/)?.[1]
+    const shareParameter = text.match(/share\.grantee_user_id = \$(\d+)/)?.[1]
+    const checksAccess =
+      creatorParameter !== undefined || shareParameter !== undefined
+    if (checksAccess) {
+      const creatorBinding = creatorParameter
+        ? parameters[Number(creatorParameter) - 1]
+        : undefined
+      const shareBinding = shareParameter
+        ? parameters[Number(shareParameter) - 1]
+        : undefined
+      const predicateMatchesBindings =
+        creatorBinding === userId && shareBinding === userId
+      const editRequested = text.includes(
+        "'edit' = 'view' or share.access_level = 'edit'",
+      )
+      const isMatterOwner = userId === (options.matterOwnerId ?? run.created_by)
+      const linkedPredicate =
+        text.includes('run.matter_id is not null') &&
+        text.includes('matter.deleted_at is null') &&
+        !options.matterDeleted &&
+        text.includes('share.organisation_id = matter.organisation_id') &&
+        text.includes('share.access_level') &&
+        (!editRequested ||
+          options.sharedAccessLevel === 'edit' ||
+          isMatterOwner) &&
+        predicateMatchesBindings
+      const standalonePredicate =
+        text.includes('run.matter_id is null') && creatorBinding === userId
+      if (run.matter_id ? !linkedPredicate : !standalonePredicate)
+        return { rows: [] }
+      const allowed = run.matter_id
+        ? isMatterOwner || userId === options.sharedUserId
+        : userId === run.created_by
+      if (!allowed) return { rows: [] }
+    }
+    if (sql.includes('deleted_at is not null')) {
+      if (sql.trim().startsWith('select id from redaction_runs'))
+        return run.deleted_at ? { rows: [{ id: run.id }] } : { rows: [] }
+      return run.deleted_at ? { rows: [run] } : { rows: [] }
+    }
+    return { rows: [run] }
+  }
+  return {
+    query,
+    connect: async () => ({ query, release: () => undefined }),
+  } as unknown as Pool
+}
+
+function standaloneApp(
+  role: 'member' | 'admin' = 'member',
+  run = standaloneRun,
+  userId = 'usr_unshared',
+  access: { matterOwnerId?: string; sharedUserId?: string } = {},
+) {
+  const routes = new Hono<{ Variables: AuthzVariables }>()
+  routes.use('*', async (context, next) => {
+    context.set('requestId', 'req_standalone_access')
+    context.set('user', {
+      id: userId,
+      organisationId: 'org_1',
+      role,
+    })
+    await next()
+  })
+  const pool = standalonePool(run, { userId, ...access })
+  routes.route('/', createRedactRunCreationRoutes(pool, storage))
+  routes.route('/', createRedactReviewRoutes(pool, storage))
+  routes.route('/', createRedactLifecycleRoutes(pool, storage))
+  return routes
 }
 
 describe('mandatory matter-derived access boundary', () => {
@@ -172,6 +319,15 @@ describe('mandatory matter-derived access boundary', () => {
     expect(storageReads).toEqual([])
   })
 
+  it('rejects invalid standalone creation before writing storage', async () => {
+    const response = await app().request(
+      '/api/redaction-runs',
+      json({ filename: '', text: '' }),
+    )
+    expect(response.status).toBe(400)
+    expect(storageReads).toEqual([])
+  })
+
   const redactionReadRoutes = [
     '/api/redaction-runs/red_private',
     '/api/redaction-runs/red_private/document-text',
@@ -186,7 +342,10 @@ describe('mandatory matter-derived access boundary', () => {
   it.each(redactionReadRoutes)(
     'hides matter-derived redaction data at %s',
     async (path) => {
-      await expectHidden(await app().request(path))
+      await expectHidden(
+        await app().request(path),
+        path.endsWith('/audit') ? 403 : 404,
+      )
       expect(storageReads).toEqual([])
     },
   )
@@ -229,4 +388,115 @@ describe('mandatory matter-derived access boundary', () => {
       expect(queries.at(-1)).toContain('matter_shares')
     },
   )
+
+  const standaloneRunRoutes: Array<
+    [string, RequestInit | undefined, 'member' | 'admin']
+  > = [
+    ['/api/redaction-runs/red_standalone', undefined, 'member'],
+    ['/api/redaction-runs/red_standalone/document-text', undefined, 'member'],
+    ['/api/redaction-runs/red_standalone/source-file', undefined, 'member'],
+    ['/api/redaction-runs/red_standalone/layout', undefined, 'member'],
+    ['/api/redaction-runs/red_standalone/output', undefined, 'member'],
+    ['/api/redaction-runs/red_standalone/output/file', undefined, 'member'],
+    ['/api/redaction-runs/red_standalone/token-map', undefined, 'member'],
+    ['/api/redaction-runs/red_standalone/audit', undefined, 'member'],
+    [
+      '/api/redaction-runs/red_standalone/spans/span_1/decision',
+      json({ decision: 'accept' }),
+      'member',
+    ],
+    [
+      '/api/redaction-runs/red_standalone/finalize',
+      json({ outputMode: 'redacted' }),
+      'member',
+    ],
+    [
+      '/api/redaction-runs/red_standalone/redetect',
+      { method: 'POST' },
+      'member',
+    ],
+    ['/api/redaction-runs/red_standalone', { method: 'DELETE' }, 'admin'],
+    [
+      '/api/redaction-runs/red_standalone/restore',
+      { method: 'PATCH' },
+      'admin',
+    ],
+  ]
+
+  it.each(standaloneRunRoutes)(
+    'denies a non-creator on %s without reading storage',
+    async (path, init, role) => {
+      await expectHidden(
+        await standaloneApp(role).request(path, init),
+        path.endsWith('/audit') ? 403 : 404,
+      )
+      expect(storageReads).toEqual([])
+    },
+  )
+
+  it('allows the standalone run creator to read the run', async () => {
+    const response = await standaloneApp(
+      'member',
+      standaloneRun,
+      'usr_creator',
+    ).request('/api/redaction-runs/red_standalone')
+    expect(response.status).toBe(200)
+    expect(storageReads).toEqual([])
+  })
+
+  it('allows a matter share grantee to read a linked run', async () => {
+    const response = await standaloneApp(
+      'member',
+      { ...standaloneRun, matter_id: 'mtr_1' },
+      'usr_grantee',
+      { matterOwnerId: 'usr_owner', sharedUserId: 'usr_grantee' },
+    ).request('/api/redaction-runs/red_standalone')
+    expect(response.status).toBe(200)
+    expect(storageReads).toEqual([])
+  })
+
+  it('filters a non-creator from the generic standalone run list', async () => {
+    const response = await standaloneApp().request('/api/redaction-runs')
+    expect(response.status).toBe(200)
+    await expect(response.json()).resolves.toEqual({ runs: [] })
+    expect(storageReads).toEqual([])
+  })
+
+  it('gives an admin access to a deleted standalone audit', async () => {
+    const response = await standaloneApp('admin', {
+      ...standaloneRun,
+      status: 'finalized',
+      deleted_at: '2026-02-01T00:00:00.000Z',
+    }).request('/api/redaction-runs/red_standalone/audit')
+    expect(response.status).toBe(200)
+    expect(storageReads).toEqual([])
+  })
+
+  it('gives a member the same 403 for deleted and unknown audit ids', async () => {
+    const deletedRun = {
+      ...standaloneRun,
+      status: 'finalized' as const,
+      deleted_at: '2026-02-01T00:00:00.000Z',
+    }
+    const app = standaloneApp('member', deletedRun)
+    const deleted = await app.request(
+      '/api/redaction-runs/red_standalone/audit',
+    )
+    expect(deleted.status).toBe(403)
+    expect(queries.some((sql) => sql.includes('deleted_at is not null'))).toBe(
+      false,
+    )
+
+    queries.length = 0
+    const unknown = await app.request('/api/redaction-runs/red_unknown/audit')
+    expect(unknown.status).toBe(403)
+    expect(queries.some((sql) => sql.includes('deleted_at is not null'))).toBe(
+      false,
+    )
+
+    const unknownAdmin = await standaloneApp('admin', deletedRun).request(
+      '/api/redaction-runs/red_unknown/audit',
+    )
+    expect(unknownAdmin.status).toBe(404)
+  })
 })

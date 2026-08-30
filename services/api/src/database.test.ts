@@ -5,6 +5,7 @@ import {
   createOrganisationForUser,
   restoreDocumentWithAudit,
   restoreMatterWithAudit,
+  softDeleteDocumentWithCascade,
   softDeleteMatterWithCascade,
 } from './database'
 
@@ -309,6 +310,59 @@ describe('matter workspace database operations', () => {
     ])
   })
 
+  it('locks a document cascade in matter-document-run order', async () => {
+    const { pool, calls } = createTransactionalPool(async (sql) => {
+      const text = sql.trim()
+      if (text === 'begin' || text === 'commit' || text === 'rollback')
+        return { rows: [] }
+      if (text.startsWith('select matter_id from matter_documents'))
+        return { rows: [{ matter_id: 'mtr_1' }] }
+      if (text.includes('select matter.id from matters'))
+        return { rows: [{ id: 'mtr_1' }] }
+      if (text.startsWith('select id from matter_documents'))
+        return { rows: [{ id: 'doc_1' }] }
+      if (text.startsWith('update matter_documents'))
+        return {
+          rows: [documentRow({ deleted_at: '2026-02-01T00:00:00.000Z' })],
+        }
+      if (text.startsWith('update redaction_runs'))
+        return { rows: [{ id: 'red_1' }] }
+      if (text.includes('insert into audit_logs')) return { rows: [] }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    await expect(
+      softDeleteDocumentWithCascade(pool, {
+        organisationId: 'org_1',
+        userId: 'usr_1',
+        id: 'doc_1',
+        requestId: 'req_1',
+      }),
+    ).resolves.toMatchObject({
+      document: { id: 'doc_1' },
+      runs: [{ id: 'red_1' }],
+    })
+
+    const matterLock = calls.findIndex(([sql]) =>
+      sql.includes('select matter.id from matters'),
+    )
+    const documentLock = calls.findIndex(([sql]) =>
+      sql.startsWith('select id from matter_documents'),
+    )
+    const documentUpdate = calls.findIndex(([sql]) =>
+      sql.trim().startsWith('update matter_documents'),
+    )
+    const runUpdate = calls.findIndex(([sql]) =>
+      sql.trim().startsWith('update redaction_runs'),
+    )
+    expect(matterLock).toBeLessThan(documentLock)
+    expect(documentLock).toBeLessThan(documentUpdate)
+    expect(documentUpdate).toBeLessThan(runUpdate)
+    expect(
+      calls.some(([sql]) => sql.includes('for update of document, matter')),
+    ).toBe(false)
+  })
+
   it('returns null without auditing when the matter is already deleted', async () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       const text = sql.trim()
@@ -497,7 +551,7 @@ describe('matter workspace database operations', () => {
     const { pool, calls } = createTransactionalPool(async (sql) => {
       const text = sql.trim()
       if (text === 'begin' || text === 'commit') return { rows: [] }
-      if (text.startsWith('select document.matter_id')) {
+      if (text.startsWith('select matter_id from matter_documents')) {
         return { rows: [{ matter_id: 'mtr_1' }] }
       }
       if (text.startsWith('select id from matters')) {
@@ -533,6 +587,11 @@ describe('matter workspace database operations', () => {
     const runRestore = calls.find(([sql]) =>
       sql.includes('update redaction_runs'),
     )
+    const matterLockQuery = calls.find(([sql]) =>
+      sql.startsWith('select id from matters'),
+    )
+    expect(matterLockQuery?.[0]).toMatch(/from matters\s+matter/)
+    expect(matterLockQuery?.[0]).toContain('matter.created_by')
     expect(documentRestore?.[0]).toContain('deleted_at = $3::timestamptz')
     expect(documentRestore?.[1]?.[2]).toBe(deletedAt)
     expect(runRestore?.[0]).toContain('deleted_at = $3::timestamptz')
@@ -541,6 +600,16 @@ describe('matter workspace database operations', () => {
       .filter(([sql]) => sql.includes('insert into audit_logs'))
       .map(([, params]) => params?.[4])
     expect(auditActions).toEqual(['document.restore', 'redaction_run.restore'])
+    const matterLock = calls.findIndex(([sql]) =>
+      sql.startsWith('select id from matters'),
+    )
+    const documentLock = calls.findIndex(([sql]) =>
+      sql.startsWith('select deleted_at::text from matter_documents'),
+    )
+    expect(matterLock).toBeLessThan(documentLock)
+    expect(
+      calls.some(([sql]) => sql.includes('for update of document, matter')),
+    ).toBe(false)
   })
 })
 

@@ -1,9 +1,8 @@
 import { readdir, readFile } from 'node:fs/promises'
-import { basename } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const matterTables =
-  /\b(?:from|join|update|into)\s+(?:[a-z_]\w*\.)?(?:matters|matter_shares|matter_documents|document_versions|redaction_runs)\b/i
+const protectedTables =
+  /\b(?:from|join|update|into)\s+(?:[a-z_]\w*\.)?(?:matters|matter_shares|matter_documents|document_versions|redaction_runs|artifacts|audit_logs)\b/i
 
 describe('matter resource architecture boundary', () => {
   it('prevents route modules from resolving matter-derived rows directly', async () => {
@@ -12,14 +11,15 @@ describe('matter resource architecture boundary', () => {
       (file) =>
         file.endsWith('.ts') &&
         !file.includes('.test') &&
-        // document-access.ts is the one module allowed to query matter-derived tables directly.
-        basename(file) !== 'document-access.ts',
+        // Only the top-level document-access module may query these tables;
+        // matching the complete relative path prevents a nested bypass.
+        file !== 'document-access.ts',
     )
     const bypasses: string[] = []
 
     for (const file of files) {
       const source = await readFile(new URL(file, routeDirectory), 'utf8')
-      if (matterTables.test(source)) bypasses.push(file)
+      if (protectedTables.test(source)) bypasses.push(file)
     }
 
     expect(bypasses).toEqual([])

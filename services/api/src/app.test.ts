@@ -1427,7 +1427,11 @@ describe('createApiApp', () => {
           const text = String(sql)
           transactionQueries.push(text)
           if (text === 'begin' || text === 'commit') return { rows: [] }
-          if (text.includes('for update of run')) return { rows: [sourceRun] }
+          if (
+            text.includes('for update of run') ||
+            text.includes('select matter_id, document_id, replaces_run_id')
+          )
+            return { rows: [sourceRun] }
           if (text.includes('run.replaces_run_id')) return { rows: [] }
           if (text.includes('insert into redaction_runs')) {
             // Reconstruct the created row from the mocked insert params; the
@@ -1659,11 +1663,11 @@ describe('createApiApp', () => {
   })
 })
 
-function authWithRole(role: string | null): Auth {
+function authWithRole(role: string | null, userId = 'usr_1'): Auth {
   return {
     api: {
       getSession: async () => ({
-        user: { id: 'usr_1', organisationId: 'org_1', role },
+        user: { id: userId, organisationId: 'org_1', role },
         session: { id: 'ses_1' },
       }),
     },
@@ -1776,6 +1780,8 @@ describe('createApiApp redaction review reads', () => {
           if (text.includes('from redaction_runs')) {
             const visible =
               run && values[0] === run.id && values[1] === run.organisation_id
+            if (run?.deleted_at && text.includes('run.deleted_at is null'))
+              return { rows: [] }
             return { rows: visible ? [run] : [] }
           }
           if (text.includes('from document_versions')) {
@@ -1871,6 +1877,27 @@ describe('createApiApp redaction review reads', () => {
     expect(organisationless.status).toBe(404)
     expect(((await organisationless.json()) as ErrorBody).error.code).toBe(
       'redaction_run_not_found',
+    )
+  })
+
+  it('rejects unauthenticated standalone redaction creation before storage', async () => {
+    const unauthenticatedAuth = {
+      api: { getSession: async () => null },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const { app } = createRedactionReadApp({
+      run: null,
+      auth: unauthenticatedAuth,
+    })
+
+    const response = await app.request('/api/redaction-runs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ filename: 'source.txt', text: 'secret' }),
+    })
+    expect(response.status).toBe(401)
+    expect(((await response.json()) as ErrorBody).error.code).toBe(
+      'unauthenticated',
     )
   })
 
@@ -2260,7 +2287,11 @@ describe('createApiApp degraded finalization acknowledgement', () => {
         async (sql, params) => {
           const text = String(sql)
           if (text === 'begin' || text === 'commit') return { rows: [] }
-          if (text.includes('for update of run')) return { rows: [readyRun] }
+          if (
+            text.includes('for update of run') ||
+            text.includes('select matter_id, document_id, replaces_run_id')
+          )
+            return { rows: [readyRun] }
           if (text.includes('insert into artifacts')) {
             return {
               rows: [
@@ -2443,7 +2474,11 @@ describe('createApiApp degraded finalization acknowledgement', () => {
         async (sql) => {
           const text = String(sql)
           if (text === 'begin' || text === 'commit') return { rows: [] }
-          if (text.includes('for update of run')) return { rows: [readyRun] }
+          if (
+            text.includes('for update of run') ||
+            text.includes('select matter_id, document_id, replaces_run_id')
+          )
+            return { rows: [readyRun] }
           if (text.includes('insert into artifacts')) {
             return {
               rows: [
@@ -2543,7 +2578,10 @@ describe('createApiApp replaced redaction run guards', () => {
         async (sql) => {
           const text = String(sql)
           if (text === 'begin' || text === 'rollback') return { rows: [] }
-          if (text.includes('for update of run')) {
+          if (
+            text.includes('for update of run') ||
+            text.includes('select matter_id, document_id, replaces_run_id')
+          ) {
             return { rows: [replacedRun] }
           }
           if (text.includes('update redaction_runs')) {
@@ -2613,7 +2651,11 @@ describe('createApiApp soft-delete write races', () => {
         async (sql) => {
           const text = String(sql)
           if (text === 'begin' || text === 'rollback') return { rows: [] }
-          if (text.includes('for update of run')) return { rows: [] }
+          if (
+            text.includes('for update of run') ||
+            text.includes('select matter_id, document_id, replaces_run_id')
+          )
+            return { rows: [] }
           throw new Error(`Unexpected SQL: ${text}`)
         },
       ),
@@ -2656,7 +2698,11 @@ describe('createApiApp soft-delete write races', () => {
         async (sql) => {
           const text = String(sql)
           if (text === 'begin' || text === 'rollback') return { rows: [] }
-          if (text.includes('for update of run')) return { rows: [] }
+          if (
+            text.includes('for update of run') ||
+            text.includes('select matter_id, document_id, replaces_run_id')
+          )
+            return { rows: [] }
           throw new Error(`Unexpected SQL: ${text}`)
         },
       ),
@@ -2874,7 +2920,7 @@ describe('createApiApp restore routes', () => {
         const sql = String(args[0]).trim()
         if (sql === 'begin' || sql === 'commit' || sql === 'rollback')
           return { rows: [] }
-        if (sql.startsWith('select run.matter_id, run.document_id'))
+        if (sql.startsWith('select matter_id, document_id, replaces_run_id'))
           return {
             rows: [
               { matter_id: null, document_id: null, replaces_run_id: null },
@@ -2883,6 +2929,10 @@ describe('createApiApp restore routes', () => {
         if (sql.startsWith('select deleted_at::text'))
           return { rows: [{ deleted_at: '2026-02-01 00:00:00.1+00' }] }
         if (sql.startsWith('update redaction_runs')) return { rows: [] }
+        if (sql.startsWith('select run.id') && sql.includes('for update'))
+          return {
+            rows: [finalizedRunRow({ deleted_at: '2026-02-01 00:00:00.1+00' })],
+          }
         if (sql.startsWith('select run.id'))
           return { rows: [finalizedRunRow({ deleted_at: null })] }
         if (sql.includes('insert into audit_logs')) return { rows: [] }
@@ -2905,7 +2955,7 @@ describe('createApiApp restore routes', () => {
       createConnectedPool(async (...args) => {
         const sql = String(args[0]).trim()
         if (sql === 'begin' || sql === 'rollback') return { rows: [] }
-        if (sql.startsWith('select run.matter_id, run.document_id'))
+        if (sql.startsWith('select matter_id, document_id, replaces_run_id'))
           return {
             rows: [
               { matter_id: null, document_id: null, replaces_run_id: 'red_0' },
@@ -2913,6 +2963,15 @@ describe('createApiApp restore routes', () => {
           }
         if (sql.startsWith('select deleted_at::text'))
           return { rows: [{ deleted_at: '2026-02-01 00:00:00.1+00' }] }
+        if (sql.startsWith('select run.id') && sql.includes('for update'))
+          return {
+            rows: [
+              finalizedRunRow({
+                deleted_at: '2026-02-01 00:00:00.1+00',
+                replaces_run_id: 'red_0',
+              }),
+            ],
+          }
         if (sql.includes('replaces_run_id = $2'))
           return { rows: [{ id: 'red_2' }] }
         if (sql.startsWith('select id from redaction_runs'))
@@ -3132,14 +3191,16 @@ describe('createApiApp includeDeleted authorization', () => {
 })
 
 describe('createApiApp deleted-run audit access shape', () => {
-  it('returns the audit report of a deleted run to an owner', async () => {
+  it('returns the audit report of a deleted standalone run to a non-creator admin', async () => {
     const app = createApiApp(
       testEnv,
       createPool(async (sql) => {
         if (typeof sql === 'string' && sql.includes('from redaction_runs')) {
+          if (sql.includes('run.deleted_at is null')) return { rows: [] }
           return {
             rows: [
               finalizedRunRow({
+                created_by: 'usr_creator',
                 deleted_at: '2026-02-01T00:00:00.000Z',
                 deleted_by: 'usr_1',
                 detection_mode: 'heuristics+supplement',
@@ -3152,7 +3213,7 @@ describe('createApiApp deleted-run audit access shape', () => {
         }
         return { rows: [] }
       }),
-      { auth: authWithRole('owner') },
+      { auth: authWithRole('admin', 'usr_admin') },
     )
 
     const response = await app.request('/api/redaction-runs/red_1/audit')
@@ -3161,11 +3222,46 @@ describe('createApiApp deleted-run audit access shape', () => {
     expect(report.detectionMode).toBe('heuristics+supplement')
   })
 
-  it('forbids a member from reading a deleted run audit report', async () => {
+  it('returns an audit report for a run whose matter was deleted', async () => {
+    const queries: string[] = []
     const app = createApiApp(
       testEnv,
       createPool(async (sql) => {
         if (typeof sql === 'string' && sql.includes('from redaction_runs')) {
+          queries.push(sql)
+          if (sql.includes('run.deleted_at is null')) return { rows: [] }
+          return {
+            rows: [
+              finalizedRunRow({
+                matter_id: 'mtr_deleted',
+                deleted_at: '2026-02-01T00:00:00.000Z',
+                deleted_by: 'usr_owner',
+              }),
+            ],
+          }
+        }
+        if (typeof sql === 'string' && sql.includes('audit_logs'))
+          return { rows: [] }
+        return { rows: [] }
+      }),
+      { auth: authWithRole('owner', 'usr_owner') },
+    )
+
+    const response = await app.request('/api/redaction-runs/red_1/audit')
+    expect(response.status).toBe(200)
+    expect(
+      queries.some((sql) => sql.includes('run.deleted_at is not null')),
+    ).toBe(true)
+  })
+
+  it('forbids a member from a deleted run audit report', async () => {
+    const queries: string[] = []
+    const app = createApiApp(
+      testEnv,
+      createPool(async (sql) => {
+        queries.push(String(sql))
+        if (typeof sql === 'string' && sql.includes('from redaction_runs')) {
+          if (sql.includes('run.deleted_at is null')) return { rows: [] }
           return {
             rows: [
               finalizedRunRow({
@@ -3183,6 +3279,17 @@ describe('createApiApp deleted-run audit access shape', () => {
     const response = await app.request('/api/redaction-runs/red_1/audit')
     expect(response.status).toBe(403)
     expect(((await response.json()) as ErrorBody).error.code).toBe('forbidden')
+    expect(queries.some((sql) => sql.includes('deleted_at is not null'))).toBe(
+      false,
+    )
+
+    const unknownResponse = await app.request(
+      '/api/redaction-runs/red_unknown/audit',
+    )
+    expect(unknownResponse.status).toBe(403)
+    expect(queries.some((sql) => sql.includes('deleted_at is not null'))).toBe(
+      false,
+    )
   })
 
   it('returns 404 for a direct GET of a deleted run (excluded by default)', async () => {

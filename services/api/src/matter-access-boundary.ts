@@ -13,3 +13,20 @@ export function matterAccessPredicate(
     )
   )`
 }
+
+export function redactionRunAccessPredicate(
+  userParameter: `$${number}`,
+  requiredLevelExpression: `$${number}` | "'view'" | "'edit'",
+) {
+  return `(
+    (
+      run.matter_id is null
+      and run.created_by = ${userParameter}
+    )
+    or (
+      run.matter_id is not null
+      and matter.deleted_at is null
+      and ${matterAccessPredicate(userParameter, requiredLevelExpression)}
+    )
+  )`
+}
