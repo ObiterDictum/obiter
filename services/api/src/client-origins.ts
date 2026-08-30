@@ -48,8 +48,8 @@ export function isDevDesktopRendererOrigin(origin: string): boolean {
  * Single allow decision shared by CORS and better-auth. Configured clients
  * always; in development, also the electron-vite renderer Origin gate.
  *
- * Assumes real deploys set NODE_ENV=production. Unset/typo'd NODE_ENV falls
- * through to development in readApiEnv and would enable this loopback trust.
+ * Assumes real deploys set NODE_ENV=production. Unknown or unset NODE_ENV
+ * without OBITER_LOCAL_DEVELOPMENT=1 refuses startup (see readNodeEnv).
  */
 export function isAllowedClientOrigin(env: ApiEnv, origin: string): boolean {
   if (configuredClientOrigins(env).includes(origin)) {
