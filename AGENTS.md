@@ -48,6 +48,10 @@ Follow the roadmap. Do not jump ahead because a later feature looks interesting.
 - Section order and the sidebar both come from `scripts/architecture-sections.py`. Add a new section's id and label there rather than editing the page in two places.
 - If the code deliberately departs from a PRD, record it in the Known Divergences table. Do not leave the PRD silently wrong.
 
+## Assessing repository state
+
+Before assessing repository state, fetch and state the exact commit you are assessing: `git fetch origin && git rev-parse origin/<branch>`. Put that commit at the top of any report about branch state. After a merge, re-fetch before doing anything further. An assessment of a stale checkout reads as authoritative and is worse than no assessment.
+
 ## Working Style
 
 - Keep `AGENTS.md` small. Do not turn it into a second README.
