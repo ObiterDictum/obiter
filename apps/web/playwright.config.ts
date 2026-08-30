@@ -43,6 +43,8 @@ export default defineConfig({
         MEILISEARCH_ADMIN_API_KEY: 'search-benchmark-key',
         MEILI_MASTER_KEY: 'search-benchmark-key',
         BETTER_AUTH_URL: webOrigin,
+        BETTER_AUTH_SECRET: '0123456789abcdef0123456789abcdef',
+        NODE_ENV: 'development',
         OBITER_WEB_ORIGIN: webOrigin,
         PORT: String(apiPort),
       },

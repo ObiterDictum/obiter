@@ -3713,14 +3713,19 @@
             config package yet; <code>@obiter/config</code> is a reserved name.
           </p>
           <div class="callout">
-            <b>Eight are required at startup.</b> <code>DATABASE_URL</code>,
-            <code>BETTER_AUTH_SECRET</code>, <code>BETTER_AUTH_URL</code>,
+            <b>Startup is fail-closed.</b> <code>BETTER_AUTH_SECRET</code> must
+            be configured for every non-test boot (no shipped fallback).
+            <code>NODE_ENV</code> must be <code>production</code>,
+            <code>test</code>, or <code>development</code>; unknown values
+            refuse startup. Unset <code>NODE_ENV</code> is allowed only with
+            <code>OBITER_LOCAL_DEVELOPMENT=1</code>. In production,
+            <code>DATABASE_URL</code>, <code>BETTER_AUTH_URL</code>,
             <code>OBITER_WEB_ORIGIN</code>, <code>OBITER_RESEND_API_KEY</code>,
             <code>MEILISEARCH_HOST</code>,
             <code>MEILISEARCH_SEARCH_API_KEY</code> and
-            <code>MEILISEARCH_ADMIN_API_KEY</code>. The API refuses to boot
-            without them, which is the right behaviour: a missing search key
-            should not surface later as empty results.
+            <code>MEILISEARCH_ADMIN_API_KEY</code> are also required. The API
+            refuses to boot without them, which is the right behaviour: a
+            missing search key should not surface later as empty results.
           </div>
           <div class="scroll">
             <table>
@@ -3731,6 +3736,15 @@
                 </tr>
               </thead>
               <tbody>
+                <tr>
+                  <td class="id">NODE_ENV · OBITER_LOCAL_DEVELOPMENT</td>
+                  <td>
+                    Runtime mode (<code>production</code>, <code>test</code>, or
+                    <code>development</code>). Unset
+                    <code>NODE_ENV</code> requires
+                    <code>OBITER_LOCAL_DEVELOPMENT=1</code>
+                  </td>
+                </tr>
                 <tr>
                   <td class="id">DATABASE_URL · TEST_DATABASE_URL</td>
                   <td>PostgreSQL connection</td>
