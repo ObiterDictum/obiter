@@ -576,6 +576,61 @@ describe('mandatory matter-derived access boundary', () => {
     expect(storageReads).toEqual([])
   })
 
+  it('returns 404 for source-file when the caller organisation does not own the run', async () => {
+    const run: RedactionRunRow = {
+      ...standaloneRun,
+      id: 'red_cross_org_probe',
+      source_file_object_key:
+        'org/org_1/redaction-runs/red_cross_org_probe/source.pdf',
+      source_mime_type: 'application/pdf',
+    }
+    const crossOrgPool = {
+      query: async (sql: string, parameters: unknown[] = []) => {
+        queries.push(sql)
+        if (!sql.includes('from redaction_runs run')) return { rows: [] }
+        if (parameters[0] !== run.id) return { rows: [] }
+        if (sql.includes('run.organisation_id = $2')) {
+          return parameters[1] === run.organisation_id
+            ? { rows: [run] }
+            : { rows: [] }
+        }
+        return { rows: [run] }
+      },
+      connect: async () => ({
+        query: crossOrgPool.query,
+        release: () => undefined,
+      }),
+    } as unknown as Pool
+    const crossOrganisation = new Hono<{ Variables: AuthzVariables }>()
+    crossOrganisation.use('*', async (context, next) => {
+      context.set('requestId', 'req_cross_org_source_file')
+      context.set('user', {
+        id: 'usr_attacker',
+        organisationId: 'org_other',
+        role: 'member',
+      })
+      await next()
+    })
+    crossOrganisation.route(
+      '/',
+      createRedactReviewRoutes(crossOrgPool, storage),
+    )
+
+    const response = await crossOrganisation.request(
+      `/api/redaction-runs/${run.id}/source-file`,
+    )
+
+    expect(response.status).toBe(404)
+    expect(storageReads).toEqual([])
+    expect(
+      queries.some(
+        (sql) =>
+          sql.includes('from redaction_runs run') &&
+          sql.includes('run.organisation_id = $2'),
+      ),
+    ).toBe(true)
+  })
+
   it('gives a member the same 403 for deleted and unknown audit ids', async () => {
     const deletedRun = {
       ...standaloneRun,

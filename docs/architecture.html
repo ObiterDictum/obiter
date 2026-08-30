@@ -2553,7 +2553,11 @@
                 <tr>
                   <td class="id">GET /api/health</td>
                   <td class="id">app.ts</td>
-                  <td>Liveness</td>
+                  <td>
+                    Liveness probe. No session required. Must expose only status
+                    and service identifier; never env, version, config, matter
+                    data, or secrets.
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">GET /api/me</td>
@@ -3080,10 +3084,13 @@
             organisation-scoped deleted-run resolver after an owner/admin role
             check, while members are gated before the deleted lookup.
             <code>GET /api/search</code>, <code>POST /api/search/fetch</code>,
-            <code>GET /api/search/documents/:documentId</code>, and
-            <code>GET /api/changelog</code> are deliberately public: they serve
-            published authorities and release notes only, and must never return
-            matter, client, redaction, or session data.
+            <code>GET /api/search/documents/:documentId</code>,
+            <code>GET /api/changelog</code>, and <code>GET /api/health</code>
+            are deliberately public: search and changelog serve published
+            authorities and release notes only; health is a minimal liveness
+            probe. They must never return matter, client, redaction, or session
+            data, and health must never expose environment, version, or
+            configuration detail.
           </div>
         </section>
 

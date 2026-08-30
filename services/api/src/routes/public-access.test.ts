@@ -59,7 +59,7 @@ const publicHit = {
 }
 
 describe('deliberately public routes', () => {
-  it('allows anonymous callers on search and changelog routes', async () => {
+  it('allows anonymous callers on deliberately public routes', async () => {
     const auth = {
       api: { getSession: async () => null },
       handler: async () => new Response(null, { status: 404 }),
@@ -102,11 +102,13 @@ describe('deliberately public routes', () => {
       })
       const document = await app.request('/api/search/documents/uksc-2024-3')
       const changelog = await app.request('/api/changelog')
+      const health = await app.request('/api/health')
 
       expect(search.status).toBe(200)
       expect(fetchSearch.status).toBe(200)
       expect(document.status).toBe(200)
       expect(changelog.status).toBe(200)
+      expect(health.status).toBe(200)
       expect(((await search.json()) as { hits: unknown[] }).hits).toHaveLength(
         1,
       )
@@ -119,6 +121,10 @@ describe('deliberately public routes', () => {
       expect(((await changelog.json()) as { source: string }).source).toBe(
         'github_releases',
       )
+      expect(await health.json()).toEqual({
+        status: 'ok',
+        service: 'obiter-api',
+      })
     } finally {
       vi.unstubAllGlobals()
     }
