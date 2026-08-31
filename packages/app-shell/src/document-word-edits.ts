@@ -215,7 +215,11 @@ export function applySplitParagraph(
     state: {
       ...next,
       inserts: [
-        ...next.inserts,
+        ...next.inserts.map((item) =>
+          item.afterParagraphId === caret.paragraphId
+            ? { ...item, afterParagraphId: newId }
+            : item,
+        ),
         {
           clientId: newId,
           afterParagraphId: caret.paragraphId,

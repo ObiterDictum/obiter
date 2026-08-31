@@ -58,12 +58,13 @@ export function removeInsert(
   }
 }
 
-export function flowParagraphIds(
-  model: DocumentModelWire,
+const noOmitHosts: ReadonlySet<string> = new Set()
+
+export function flowIds(
+  hostIds: readonly string[],
   inserts: LocalInsert[],
-  deletedParagraphIds: string[],
+  omitHosts: ReadonlySet<string> = noOmitHosts,
 ): string[] {
-  const deleted = new Set(deletedParagraphIds)
   const byAfter = new Map<string, LocalInsert[]>()
   for (const insert of inserts) {
     const list = byAfter.get(insert.afterParagraphId) ?? []
@@ -77,11 +78,23 @@ export function flowParagraphIds(
       appendInserts(insert.clientId)
     }
   }
-  for (const paragraph of documentStory(model)?.paragraphs ?? []) {
-    if (!deleted.has(paragraph.id)) ids.push(paragraph.id)
-    appendInserts(paragraph.id)
+  for (const id of hostIds) {
+    if (!omitHosts.has(id)) ids.push(id)
+    appendInserts(id)
   }
   return ids
+}
+
+export function flowParagraphIds(
+  model: DocumentModelWire,
+  inserts: LocalInsert[],
+  deletedParagraphIds: string[],
+): string[] {
+  return flowIds(
+    (documentStory(model)?.paragraphs ?? []).map((paragraph) => paragraph.id),
+    inserts,
+    new Set(deletedParagraphIds),
+  )
 }
 
 export function collectEditOperations(
@@ -157,6 +170,18 @@ export function collectEditOperations(
   return operations
 }
 
+/**
+ * Property set is deliberately partial. It extracts styleId, bold, italic and
+ * underline only. Font family, size, colour, highlight, strikethrough,
+ * super/subscript, small caps, spacing and language live in the run's
+ * preservedXmlFragments and are dropped, because the apply path rebuilds runs
+ * with preservedXmlFragments: []. That is silent loss on a round-trip, tracked
+ * as E3b, and extending it is additive: optional fields on editRunSchema in
+ * @obiter/contracts, read here, written in insertRunPropertiesXml.
+ *
+ * Readers below match a hardcoded `w:` prefix while the writers use the
+ * document's own xml.prefix, tracked as E3c.
+ */
 function insertPayload(insert: LocalInsert) {
   if (!insert.runs || insert.runs.length === 0) return { text: insert.text }
   return {

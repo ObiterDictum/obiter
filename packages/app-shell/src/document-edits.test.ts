@@ -8,6 +8,7 @@ import {
 } from '@obiter/ooxml'
 import {
   collectEditOperations,
+  flowParagraphIds,
   insertPlainText,
   isDraftDirty,
   removeInsert,
@@ -312,6 +313,145 @@ describe('collectEditOperations', () => {
           { text: 'bold', styleId: 'Heading1Char', bold: true },
         ],
       },
+    ])
+  })
+})
+
+describe('paragraph split order', () => {
+  const three: DocumentModelWire = {
+    ...model,
+    stories: [
+      {
+        partName: 'word/document.xml',
+        kind: 'document',
+        paragraphs: [
+          {
+            id: 'p1',
+            runs: [
+              { id: 'r1', text: 'Before after', preservedXmlFragments: [] },
+            ],
+            preservedXmlFragments: [],
+          },
+          {
+            id: 'p2',
+            runs: [{ id: 'r2', text: 'Second', preservedXmlFragments: [] }],
+            preservedXmlFragments: [],
+          },
+          {
+            id: 'p3',
+            runs: [{ id: 'r3', text: 'Third', preservedXmlFragments: [] }],
+            preservedXmlFragments: [],
+          },
+        ],
+        preservedXmlFragments: [],
+      },
+    ],
+  }
+
+  function splitAt(offset: number, newId = 'ins1') {
+    const result = applySplitParagraph(
+      three,
+      emptyEditorState(),
+      { paragraphId: 'p1', offset },
+      newId,
+    )
+    if (!result) throw new Error('expected split')
+    return result
+  }
+
+  it('keeps trailing text in place when splitting a paragraph at a mid offset', () => {
+    const { state } = splitAt(7)
+    expect(state.drafts.r1).toBe('Before ')
+    expect(state.inserts).toEqual([
+      {
+        clientId: 'ins1',
+        afterParagraphId: 'p1',
+        text: 'after',
+        runs: [{ id: 'ins1-r0', text: 'after', preservedXmlFragments: [] }],
+      },
+    ])
+    expect(
+      flowParagraphIds(three, state.inserts, state.deletedParagraphIds),
+    ).toEqual(['p1', 'ins1', 'p2', 'p3'])
+    expect(
+      collectEditOperations(
+        three,
+        state.drafts,
+        state.inserts,
+        state.deletedParagraphIds,
+        state.extraRuns,
+      ),
+    ).toEqual([
+      { type: 'replace_run_text', runId: 'r1', text: 'Before ' },
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: 'p1',
+        runs: [{ text: 'after' }],
+      },
+    ])
+  })
+
+  it('does not send trailing text below later inserts after a mid-paragraph split', () => {
+    const prior = applySplitParagraph(
+      three,
+      emptyEditorState(),
+      { paragraphId: 'p1', offset: 12 },
+      'I1',
+    )
+    if (!prior) throw new Error('expected first split')
+    const typed = applyReplaceRange(
+      three,
+      prior.state,
+      'I1',
+      0,
+      0,
+      'Later insert',
+    )
+    if (!typed) throw new Error('expected insert text')
+    const nested = applySplitParagraph(
+      three,
+      typed.state,
+      { paragraphId: 'I1', offset: 12 },
+      'I2',
+    )
+    if (!nested) throw new Error('expected nested split')
+    const split = applySplitParagraph(
+      three,
+      nested.state,
+      { paragraphId: 'p1', offset: 7 },
+      'ins1',
+    )
+    if (!split) throw new Error('expected mid split')
+    expect(
+      flowParagraphIds(
+        three,
+        split.state.inserts,
+        split.state.deletedParagraphIds,
+      ),
+    ).toEqual(['p1', 'ins1', 'I1', 'I2', 'p2', 'p3'])
+    expect(split.state.drafts.r1).toBe('Before ')
+    expect(
+      split.state.inserts.find((item) => item.clientId === 'ins1')?.text,
+    ).toBe('after')
+  })
+
+  it('splits at offset 0 and at end of paragraph without moving later body text', () => {
+    const atStart = splitAt(0, 'ins-start')
+    expect(atStart.state.drafts.r1).toBe('')
+    expect(flowParagraphIds(three, atStart.state.inserts, [])).toEqual([
+      'p1',
+      'ins-start',
+      'p2',
+      'p3',
+    ])
+    const atEnd = splitAt(12, 'ins-end')
+    expect(atEnd.state.drafts.r1).toBe('Before after')
+    expect(atEnd.state.inserts[0]?.text).toBe('')
+    expect(flowParagraphIds(three, atEnd.state.inserts, [])).toEqual([
+      'p1',
+      'ins-end',
+      'p2',
+      'p3',
     ])
   })
 })
