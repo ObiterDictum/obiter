@@ -37,9 +37,7 @@ export function WorkspaceShell({
 
 export function WorkspaceRibbon({ children }: { children: ReactNode }) {
   return (
-    <div className="shrink-0 border-b border-line bg-surface px-3 py-2">
-      {children}
-    </div>
+    <div className="shrink-0 border-b border-line bg-surface">{children}</div>
   )
 }
 

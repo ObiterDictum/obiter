@@ -169,6 +169,84 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+function openRibbonTab(
+  name: 'Home' | 'Insert' | 'Layout' | 'References' | 'Review' | 'View',
+) {
+  fireEvent.click(screen.getByRole('tab', { name }))
+}
+
+describe('DocxWorkspace ribbon', () => {
+  it('keeps the ribbon outside the scrolling document desk', () => {
+    mountWorkspace({})
+    const desk = document.querySelector('[data-document-desk]')
+    expect(desk?.querySelector('[role="tab"]')).toBeNull()
+    expect(screen.getByRole('tab', { name: 'Home' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: 'Insert' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: 'Layout' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: 'References' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: 'Review' })).toBeTruthy()
+    expect(screen.getByRole('tab', { name: 'View' })).toBeTruthy()
+  })
+
+  it('shows Home font commands that are not wired yet as unavailable', () => {
+    mountWorkspace({})
+    expect(
+      screen.getByRole('combobox', { name: 'Font (not available yet)' }),
+    ).toHaveProperty('disabled', true)
+    expect(
+      screen.getByRole('button', { name: 'Font colour (not available yet)' }),
+    ).toHaveProperty('disabled', true)
+    expect(screen.getByRole('button', { name: 'Bullets' })).toHaveProperty(
+      'disabled',
+      true,
+    )
+    expect(
+      screen.getByRole('button', { name: 'Multilevel numbering' }),
+    ).toHaveProperty('disabled', true)
+    openRibbonTab('Insert')
+    expect(
+      screen.getByRole('button', { name: 'Insert table (not available yet)' }),
+    ).toHaveProperty('disabled', true)
+    openRibbonTab('Layout')
+    expect(
+      screen.getByRole('button', { name: 'Privileged (not available yet)' }),
+    ).toHaveProperty('disabled', true)
+    openRibbonTab('References')
+    expect(
+      screen.getByRole('button', { name: 'Insert authority' }),
+    ).toHaveProperty('disabled', false)
+    expect(screen.queryByRole('combobox', { name: /Harvard/i })).toBeNull()
+    openRibbonTab('Review')
+    expect(
+      screen.getByRole('button', {
+        name: 'Redact this document (not available yet)',
+      }),
+    ).toHaveProperty('disabled', true)
+  })
+
+  it('replaces find hits and lists extracted authorities', () => {
+    mountWorkspace({})
+    fireEvent.change(screen.getByLabelText('Paragraph text'), {
+      target: { value: 'See [2024] UKSC 3' },
+    })
+    openRibbonTab('Review')
+    fireEvent.change(screen.getByLabelText('Find in document'), {
+      target: { value: 'See' },
+    })
+    fireEvent.change(screen.getByLabelText('Replace in document'), {
+      target: { value: 'Read' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Replace' }))
+    expect(screen.getByLabelText('Paragraph text')).toHaveProperty(
+      'value',
+      'Read [2024] UKSC 3',
+    )
+    openRibbonTab('References')
+    fireEvent.click(screen.getByRole('button', { name: 'List of authorities' }))
+    expect(screen.getByRole('button', { name: '[2024] UKSC 3' })).toBeTruthy()
+  })
+})
+
 describe('DocxWorkspace export', () => {
   it('downloads the DOCX with the expected filename', async () => {
     const blob = new Blob()
@@ -177,7 +255,7 @@ describe('DocxWorkspace export', () => {
       skippedCommentCount: 0,
     })
     mountWorkspace({})
-
+    openRibbonTab('Review')
     fireEvent.click(screen.getByRole('button', { name: 'Export' }))
 
     await waitFor(() => {
@@ -197,7 +275,7 @@ describe('DocxWorkspace export', () => {
       ),
     )
     mountWorkspace({})
-
+    openRibbonTab('Review')
     fireEvent.click(screen.getByRole('button', { name: 'Export' }))
 
     await waitFor(() => {
@@ -215,7 +293,7 @@ describe('DocxWorkspace export', () => {
       skippedCommentCount: 2,
     })
     mountWorkspace({})
-
+    openRibbonTab('Review')
     fireEvent.click(screen.getByRole('button', { name: 'Export' }))
 
     await waitFor(() => {
@@ -241,6 +319,7 @@ describe('DocxWorkspace save', () => {
       outcome: 'merged',
     })
     mountWorkspace({ editAsync, mergeAsync })
+    openRibbonTab('Review')
 
     fireEvent.change(screen.getByLabelText('Paragraph text'), {
       target: { value: 'Hello world' },
@@ -263,6 +342,7 @@ describe('DocxWorkspace save', () => {
     const editAsync = vi.fn().mockRejectedValue(staleConflict)
     const mergeAsync = vi.fn().mockRejectedValue(staleConflict)
     mountWorkspace({ editAsync, mergeAsync })
+    openRibbonTab('Review')
 
     fireEvent.change(screen.getByLabelText('Paragraph text'), {
       target: { value: 'Hello world' },
@@ -291,6 +371,7 @@ describe('DocxWorkspace save', () => {
         versionNumber: 3,
       })
     mountWorkspace({ editAsync })
+    openRibbonTab('Review')
 
     const input = screen.getByLabelText('Paragraph text')
     fireEvent.change(input, { target: { value: 'Hello world' } })
@@ -318,6 +399,7 @@ describe('DocxWorkspace save', () => {
 describe('DocxWorkspace find and undo', () => {
   it('counts matches and restores the previous draft on undo', () => {
     mountWorkspace({})
+    openRibbonTab('Review')
 
     fireEvent.change(screen.getByLabelText('Find in document'), {
       target: { value: 'hello' },
@@ -326,6 +408,7 @@ describe('DocxWorkspace find and undo', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Next match' }))
     expect(screen.getByText('1/1')).toBeTruthy()
 
+    openRibbonTab('Home')
     const undo = screen.getByRole('button', { name: 'Undo' })
     expect(undo).toHaveProperty('disabled', true)
     fireEvent.change(screen.getByLabelText('Paragraph text'), {

@@ -11,7 +11,9 @@ import {
   type FormatDrafts,
 } from '../../document-format-edits'
 import {
+  applyInsertText,
   applyWordEdit,
+  replaceFindHits,
   type EditorResult,
   type ExtraRuns,
 } from '../../document-word-edits'
@@ -77,6 +79,43 @@ export function useWorkspaceDrafts() {
     return result.caret
   }
 
+  function replaceHits(
+    model: DocumentModelWire,
+    hits: ReadonlyArray<{ paragraphId: string; start: number; end: number }>,
+    replacement: string,
+    which: number | 'all',
+  ) {
+    const result = replaceFindHits(
+      model,
+      { drafts, inserts, deletedParagraphIds, extraRuns },
+      hits,
+      replacement,
+      which,
+    )
+    if (!result) return null
+    checkpoint()
+    commitEditor(result)
+    return result.caret
+  }
+
+  function insertText(
+    model: DocumentModelWire,
+    paragraphId: string,
+    offset: number,
+    text: string,
+  ) {
+    const result = applyInsertText(
+      model,
+      { drafts, inserts, deletedParagraphIds, extraRuns },
+      { paragraphId, offset },
+      text,
+    )
+    if (!result) return null
+    checkpoint()
+    commitEditor(result)
+    return result.caret
+  }
+
   function insertAfter(afterParagraphId: string) {
     checkpoint()
     const clientId = crypto.randomUUID()
@@ -124,6 +163,8 @@ export function useWorkspaceDrafts() {
     resetDrafts,
     undoDraft,
     handleWordEdit,
+    replaceHits,
+    insertText,
     insertAfter,
     deleteParagraph,
     canUndo: past.length > 0,
