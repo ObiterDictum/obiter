@@ -93,11 +93,14 @@ function PdfWorkspace({
           zoom={zoom}
           commentsOpen={false}
           changesOpen={false}
+          authoritiesOpen={false}
           commentCount={0}
           changeCount={0}
           presence={[]}
           onToggleComments={() => undefined}
           onToggleChanges={() => undefined}
+          onToggleAuthorities={() => undefined}
+          onInsertAuthority={() => undefined}
           onToggleTrackChanges={() => undefined}
           onZoom={setZoom}
           onExportText={() => {

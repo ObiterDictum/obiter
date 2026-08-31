@@ -6,8 +6,15 @@ import type {
 import { documentStory } from './document-model-text'
 import { paragraphNumPr } from './document-page-lists'
 import { xmlAttr, xmlTagAttrs } from './document-page-units'
+import {
+  paragraphListKind,
+  pickNumberingId,
+  toggleParagraphList,
+  type ListKind,
+} from './document-list-toggle'
 
 export { paragraphNumPr } from './document-page-lists'
+export type { ListKind } from './document-list-toggle'
 
 export type PendingEmphasis = {
   runId: string
@@ -366,6 +373,10 @@ export function formatControlState(
     canIndent,
     canOutdent: Boolean(numPr?.numId),
     canContinue: Boolean(previousNum?.numId),
+    listKind: paragraphListKind(model, format, paragraph),
+    canApplyBullet: Boolean(pickNumberingId(model, 'bullet')),
+    canApplyNumber: Boolean(pickNumberingId(model, 'number')),
+    canApplyMultilevel: Boolean(pickNumberingId(model, 'multilevel')),
   }
 }
 
@@ -386,6 +397,10 @@ export function documentFormatToolbar(
     canIndent: controls.canIndent,
     canOutdent: controls.canOutdent,
     canContinue: controls.canContinue,
+    listKind: controls.listKind,
+    canApplyBullet: controls.canApplyBullet,
+    canApplyNumber: controls.canApplyNumber,
+    canApplyMultilevel: controls.canApplyMultilevel,
     onParagraphStyle: (styleId: string | null) => {
       if (!paragraphId) return
       setFormat((current) =>
@@ -431,6 +446,12 @@ export function documentFormatToolbar(
     onContinueList: () => {
       if (!paragraph) return
       setFormat((current) => continueList(current, model, paragraph))
+    },
+    onToggleList: (kind: ListKind) => {
+      if (!paragraph) return
+      setFormat((current) =>
+        toggleParagraphList(current, model, paragraph, kind),
+      )
     },
   }
 }

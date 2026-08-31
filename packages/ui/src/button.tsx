@@ -18,6 +18,7 @@ export interface ButtonProps {
   /** Polymorphic render (e.g. `render={<Link to="/x" />}`). See Base UI render prop. */
   render?: BaseButtonRender
   'aria-label'?: string
+  'aria-pressed'?: boolean
   'data-testid'?: string
 }
 

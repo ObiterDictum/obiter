@@ -6,6 +6,7 @@ import {
   applySplitParagraph,
   applyWordEdit,
   emptyEditorState,
+  replaceFindHits,
 } from './document-word-edits'
 
 const twoParagraphs: DocumentModelWire = {
@@ -156,6 +157,30 @@ describe('applySplitParagraph', () => {
     )
     expect(result?.caret).toEqual({ paragraphId: 'ins1', offset: 0 })
     expect(result?.state.inserts).toHaveLength(1)
+  })
+})
+
+describe('replaceFindHits', () => {
+  it('replaces one hit or all hits from the end of each paragraph', () => {
+    const one = replaceFindHits(
+      twoParagraphs,
+      emptyEditorState(),
+      [{ paragraphId: 'p1', start: 0, end: 5 }],
+      'Hi',
+      0,
+    )
+    expect(one?.state.drafts.r1).toBe('Hi')
+    const all = replaceFindHits(
+      twoParagraphs,
+      emptyEditorState(),
+      [
+        { paragraphId: 'p1', start: 1, end: 2 },
+        { paragraphId: 'p1', start: 3, end: 4 },
+      ],
+      '-',
+      'all',
+    )
+    expect(all?.state.drafts.r1).toBe('H-l-o')
   })
 })
 

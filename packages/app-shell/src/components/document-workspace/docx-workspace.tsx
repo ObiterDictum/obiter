@@ -39,10 +39,11 @@ import {
   fetchDocumentExport,
   workspaceKeys,
 } from '../../document-workspace-api'
-import { DocumentChangesPanel } from './changes-panel'
-import { DocumentCommentsPanel } from './comments-panel'
+import { extractAuthorities } from '../../document-authorities'
 import { DocumentModelPage } from './model-view'
+import { InsertAuthorityDialog } from './insert-authority-dialog'
 import { DocumentWorkspaceToolbar } from './toolbar'
+import { WorkspaceSidePanels } from './workspace-side-panels'
 import { useDocumentPresenceHeartbeat } from './use-presence-heartbeat'
 import { useWorkspaceDrafts } from './use-workspace-drafts'
 import { DocumentDesk, DocumentPage } from './document-page'
@@ -93,6 +94,8 @@ export function DocxWorkspace({
   const [zoom, setZoom] = useState(100)
   const [commentsOpen, setCommentsOpen] = useState(false)
   const [changesOpen, setChangesOpen] = useState(false)
+  const [authoritiesOpen, setAuthoritiesOpen] = useState(false)
+  const [insertAuthorityOpen, setInsertAuthorityOpen] = useState(false)
   const [trackChanges, setTrackChanges] = useState(false)
   const [selectedParagraphId, setSelectedParagraphId] = useState<string | null>(
     null,
@@ -104,6 +107,7 @@ export function DocxWorkspace({
   const [banner, setBanner] = useState<string | null>(null)
   const [stale, setStale] = useState(false)
   const [findQuery, setFindQuery] = useState('')
+  const [replaceQuery, setReplaceQuery] = useState('')
   const [findIndex, setFindIndex] = useState(-1)
 
   const model = modelQuery.data?.model
@@ -147,6 +151,15 @@ export function DocxWorkspace({
   // Clamp the stored index to the current hit set so edits that shrink the
   // hits cannot leave the label or navigation on a stale position.
   const activeFindIndex = clampFindIndex(findIndex, findHits.length)
+  const authorities = model
+    ? extractAuthorities(
+        model,
+        drafts.drafts,
+        drafts.inserts,
+        drafts.deletedParagraphIds,
+        drafts.extraRuns,
+      )
+    : []
 
   function selectParagraph(paragraphId: string, offset?: number) {
     setSelectedParagraphId(paragraphId)
@@ -158,6 +171,38 @@ export function DocxWorkspace({
     if (!hit) return
     setFindIndex(index)
     selectParagraph(hit.paragraphId, hit.start)
+  }
+
+  function replaceCurrentHit() {
+    if (!model || findHits.length === 0) return
+    const index = activeFindIndex < 0 ? 0 : activeFindIndex
+    const caret = drafts.replaceHits(model, findHits, replaceQuery, index)
+    if (caret) selectParagraph(caret.paragraphId, caret.offset)
+  }
+
+  function replaceAllHits() {
+    if (!model || findHits.length === 0) return
+    const caret = drafts.replaceHits(model, findHits, replaceQuery, 'all')
+    if (caret) selectParagraph(caret.paragraphId, caret.offset)
+  }
+
+  function insertAuthority(citation: string) {
+    if (!model) return
+    const paragraphId =
+      selectedParagraphId ?? documentStory(model)?.paragraphs[0]?.id
+    if (!paragraphId) return
+    const state = {
+      drafts: drafts.drafts,
+      inserts: drafts.inserts,
+      deletedParagraphIds: drafts.deletedParagraphIds,
+      extraRuns: drafts.extraRuns,
+    }
+    const offset =
+      restoreCaret?.paragraphId === paragraphId
+        ? restoreCaret.offset
+        : blockText(model, state, paragraphId).length
+    const caret = drafts.insertText(model, paragraphId, offset, citation)
+    if (caret) selectParagraph(caret.paragraphId, caret.offset)
   }
 
   function undoDocument() {
@@ -277,6 +322,96 @@ export function DocxWorkspace({
     }
   }
 
+  const ribbon = (
+    <WorkspaceRibbon>
+      <DocumentWorkspaceToolbar
+        kind="docx"
+        dirty={dirty}
+        saving={saving}
+        trackChanges={trackChanges}
+        zoom={zoom}
+        commentsOpen={commentsOpen}
+        changesOpen={changesOpen}
+        authoritiesOpen={authoritiesOpen}
+        commentCount={commentsQuery.data?.comments.length ?? 0}
+        changeCount={changesQuery.data?.changes.length ?? 0}
+        presence={presence}
+        currentUserId={me?.user.id}
+        canEdit
+        canUndo={drafts.canUndo}
+        onToggleComments={() => setCommentsOpen((value) => !value)}
+        onToggleChanges={() => setChangesOpen((value) => !value)}
+        onToggleAuthorities={() => setAuthoritiesOpen((value) => !value)}
+        onInsertAuthority={() => setInsertAuthorityOpen(true)}
+        onToggleTrackChanges={() => setTrackChanges((value) => !value)}
+        onZoom={setZoom}
+        onExportText={() => {
+          void exportDocx()
+        }}
+        onSave={() => void save()}
+        onUndo={undoDocument}
+        onInsertParagraph={() => {
+          if (!selectedParagraphId) return
+          selectParagraph(drafts.insertAfter(selectedParagraphId), 0)
+        }}
+        onDeleteParagraph={() => {
+          if (!selectedParagraphId) return
+          const selectId = drafts.deleteParagraph(selectedParagraphId)
+          if (selectId) selectParagraph(selectId)
+        }}
+        format={
+          painted
+            ? documentFormatToolbar(
+                painted,
+                drafts.format,
+                selectedParagraphId,
+                drafts.setFormat,
+              )
+            : undefined
+        }
+        find={{
+          query: findQuery,
+          replace: replaceQuery,
+          matchLabel: findMatchLabel(activeFindIndex, findHits.length),
+          canReplace: findHits.length > 0,
+          onQuery: (query) => {
+            setFindQuery(query)
+            setFindIndex(-1)
+          },
+          onReplace: setReplaceQuery,
+          onNext: () => jumpToHit(nextFindIndex(findHits, activeFindIndex)),
+          onPrevious: () =>
+            jumpToHit(previousFindIndex(findHits, activeFindIndex)),
+          onReplaceOne: replaceCurrentHit,
+          onReplaceAll: replaceAllHits,
+        }}
+      />
+      {stale ? (
+        <div className="px-3 pb-2">
+          <ConflictBanner
+            body="The document has changed since editing began."
+            actionLabel="Reload"
+            onAction={() => void reload()}
+          />
+        </div>
+      ) : null}
+      {remoteChange && dirty && !stale ? (
+        <div className="px-3 pb-2">
+          <ConflictBanner
+            body="A colleague saved a newer version. Reload before saving, or save to merge disjoint edits."
+            actionLabel="Reload"
+            onAction={() => void reload()}
+          />
+        </div>
+      ) : null}
+      {banner ? (
+        <p className="px-3 pb-2 text-sm text-ink" role="status">
+          {banner}
+        </p>
+      ) : null}
+    </WorkspaceRibbon>
+  )
+
   return (
     <WorkspaceShell
       layout={layout}
@@ -288,81 +423,6 @@ export function DocxWorkspace({
         })
       }
     >
-      <WorkspaceRibbon>
-        <DocumentWorkspaceToolbar
-          kind="docx"
-          dirty={dirty}
-          saving={saving}
-          trackChanges={trackChanges}
-          zoom={zoom}
-          commentsOpen={commentsOpen}
-          changesOpen={changesOpen}
-          commentCount={commentsQuery.data?.comments.length ?? 0}
-          changeCount={changesQuery.data?.changes.length ?? 0}
-          presence={presence}
-          currentUserId={me?.user.id}
-          canEdit
-          canUndo={drafts.canUndo}
-          onToggleComments={() => setCommentsOpen((value) => !value)}
-          onToggleChanges={() => setChangesOpen((value) => !value)}
-          onToggleTrackChanges={() => setTrackChanges((value) => !value)}
-          onZoom={setZoom}
-          onExportText={() => {
-            void exportDocx()
-          }}
-          onSave={() => void save()}
-          onUndo={undoDocument}
-          onInsertParagraph={() => {
-            if (!selectedParagraphId) return
-            selectParagraph(drafts.insertAfter(selectedParagraphId), 0)
-          }}
-          onDeleteParagraph={() => {
-            if (!selectedParagraphId) return
-            const selectId = drafts.deleteParagraph(selectedParagraphId)
-            if (selectId) selectParagraph(selectId)
-          }}
-          format={
-            painted
-              ? documentFormatToolbar(
-                  painted,
-                  drafts.format,
-                  selectedParagraphId,
-                  drafts.setFormat,
-                )
-              : undefined
-          }
-          find={{
-            query: findQuery,
-            matchLabel: findMatchLabel(activeFindIndex, findHits.length),
-            onQuery: (query) => {
-              setFindQuery(query)
-              setFindIndex(-1)
-            },
-            onNext: () => jumpToHit(nextFindIndex(findHits, activeFindIndex)),
-            onPrevious: () =>
-              jumpToHit(previousFindIndex(findHits, activeFindIndex)),
-          }}
-        />
-        {stale ? (
-          <ConflictBanner
-            body="The document has changed since editing began."
-            actionLabel="Reload"
-            onAction={() => void reload()}
-          />
-        ) : null}
-        {remoteChange && dirty && !stale ? (
-          <ConflictBanner
-            body="A colleague saved a newer version. Reload before saving, or save to merge disjoint edits."
-            actionLabel="Reload"
-            onAction={() => void reload()}
-          />
-        ) : null}
-        {banner ? (
-          <p className="mt-2 text-sm text-ink" role="status">
-            {banner}
-          </p>
-        ) : null}
-      </WorkspaceRibbon>
       {modelQuery.isLoading ? (
         <LoadingBlock label="Loading document model" />
       ) : modelQuery.isError ? (
@@ -371,118 +431,131 @@ export function DocxWorkspace({
           fallback="The document model could not be loaded."
         />
       ) : model ? (
-        <DocumentDesk>
-          <div className="mx-auto flex w-max max-w-full flex-col items-start gap-6 lg:flex-row">
-            <div className="flex flex-col gap-6">
-              {pages.map((laid, index) => (
-                <DocumentPage
-                  key={`page-${index + 1}`}
-                  zoom={zoom}
-                  width={laid.box.widthPx}
-                  height={laid.box.heightPx}
-                  fontFamily={documentDefaultFace(model.styles).fontFamily}
-                >
-                  <DocumentModelPage
-                    model={model}
-                    pageNumber={index + 1}
-                    pageBlocks={laid.blocks}
-                    pageFloats={laid.floats}
-                    pageTextBoxes={laid.textBoxes}
-                    pageColumns={laid.columns}
-                    selectedParagraphId={selectedParagraphId}
-                    onSelectParagraph={(paragraphId, offset) =>
-                      selectParagraph(paragraphId, offset)
-                    }
-                    drafts={drafts.drafts}
-                    onRunTextChange={(runId, text) =>
-                      drafts.setDrafts((current) => ({
-                        ...current,
-                        [runId]: text,
-                      }))
-                    }
-                    editing
-                    presence={presence}
-                    currentUserId={me?.user.id}
-                    inserts={drafts.inserts}
-                    deletedParagraphIds={drafts.deletedParagraphIds}
-                    imageUrls={imageUrls}
-                    onInsertTextChange={(clientId, text) =>
-                      drafts.setInserts((current) =>
-                        current.map((item) =>
-                          item.clientId === clientId ? { ...item, text } : item,
-                        ),
-                      )
-                    }
-                    onInsertParagraph={(afterParagraphId) =>
-                      selectParagraph(drafts.insertAfter(afterParagraphId), 0)
-                    }
-                    onDeleteParagraph={(paragraphId) => {
-                      const selectId = drafts.deleteParagraph(paragraphId)
-                      if (selectId) selectParagraph(selectId)
-                    }}
-                    onWordEdit={(edit) => {
-                      const caret = drafts.handleWordEdit(model, edit)
-                      if (caret) {
-                        selectParagraph(caret.paragraphId, caret.offset)
+        <>
+          {ribbon}
+          <DocumentDesk>
+            <div className="mx-auto flex w-max max-w-full flex-col items-start gap-6 lg:flex-row">
+              <div className="flex w-full flex-col gap-6 lg:w-auto">
+                {pages.map((laid, index) => (
+                  <DocumentPage
+                    key={`page-${index + 1}`}
+                    zoom={zoom}
+                    width={laid.box.widthPx}
+                    height={laid.box.heightPx}
+                    fontFamily={documentDefaultFace(model.styles).fontFamily}
+                  >
+                    <DocumentModelPage
+                      model={model}
+                      pageNumber={index + 1}
+                      pageBlocks={laid.blocks}
+                      pageFloats={laid.floats}
+                      pageTextBoxes={laid.textBoxes}
+                      pageColumns={laid.columns}
+                      selectedParagraphId={selectedParagraphId}
+                      onSelectParagraph={(paragraphId, offset) =>
+                        selectParagraph(paragraphId, offset)
                       }
-                    }}
-                    restoreCaret={restoreCaret}
-                  />
-                </DocumentPage>
-              ))}
+                      drafts={drafts.drafts}
+                      onRunTextChange={(runId, text) =>
+                        drafts.setDrafts((current) => ({
+                          ...current,
+                          [runId]: text,
+                        }))
+                      }
+                      editing
+                      presence={presence}
+                      currentUserId={me?.user.id}
+                      inserts={drafts.inserts}
+                      deletedParagraphIds={drafts.deletedParagraphIds}
+                      imageUrls={imageUrls}
+                      onInsertTextChange={(clientId, text) =>
+                        drafts.setInserts((current) =>
+                          current.map((item) =>
+                            item.clientId === clientId
+                              ? { ...item, text }
+                              : item,
+                          ),
+                        )
+                      }
+                      onInsertParagraph={(afterParagraphId) =>
+                        selectParagraph(drafts.insertAfter(afterParagraphId), 0)
+                      }
+                      onDeleteParagraph={(paragraphId) => {
+                        const selectId = drafts.deleteParagraph(paragraphId)
+                        if (selectId) selectParagraph(selectId)
+                      }}
+                      onWordEdit={(edit) => {
+                        const caret = drafts.handleWordEdit(model, edit)
+                        if (caret) {
+                          selectParagraph(caret.paragraphId, caret.offset)
+                        }
+                      }}
+                      restoreCaret={restoreCaret}
+                    />
+                  </DocumentPage>
+                ))}
+              </div>
+              <WorkspaceSidePanels
+                commentsOpen={commentsOpen}
+                changesOpen={changesOpen}
+                authoritiesOpen={authoritiesOpen}
+                comments={commentsQuery.data?.comments ?? []}
+                selectedParagraphId={
+                  documentStory(model)?.paragraphs.some(
+                    (paragraph) => paragraph.id === selectedParagraphId,
+                  )
+                    ? selectedParagraphId
+                    : null
+                }
+                selectedParagraphLength={selectedParagraphLength(
+                  model,
+                  selectedParagraphId,
+                )}
+                commentsPending={
+                  createComment.isPending || resolveComment.isPending
+                }
+                commentsError={mutationError(
+                  createComment.error ?? resolveComment.error,
+                )}
+                onCreateComment={(input) => {
+                  createComment.mutate({
+                    body: input.body,
+                    anchor: {
+                      paragraphId: input.paragraphId,
+                      startOffset: 0,
+                      endOffset: input.endOffset,
+                    },
+                  })
+                }}
+                onResolveComment={(commentId) =>
+                  resolveComment.mutate(commentId)
+                }
+                changes={changesQuery.data?.changes ?? []}
+                changesPending={decideChange.isPending || saving}
+                changesError={mutationError(decideChange.error)}
+                onDecideChange={(action, changeId) => {
+                  decideChange.mutate({
+                    baseVersionId,
+                    action,
+                    changeIds: [changeId],
+                  })
+                }}
+                authorities={authorities}
+                onSelectAuthority={(paragraphId) =>
+                  selectParagraph(paragraphId)
+                }
+              />
             </div>
-            {commentsOpen ? (
-              <div className="w-full rounded-md bg-surface p-4 lg:w-80">
-                <DocumentCommentsPanel
-                  comments={commentsQuery.data?.comments ?? []}
-                  selectedParagraphId={
-                    documentStory(model)?.paragraphs.some(
-                      (paragraph) => paragraph.id === selectedParagraphId,
-                    )
-                      ? selectedParagraphId
-                      : null
-                  }
-                  selectedParagraphLength={selectedParagraphLength(
-                    model,
-                    selectedParagraphId,
-                  )}
-                  canEdit
-                  pending={createComment.isPending || resolveComment.isPending}
-                  error={mutationError(
-                    createComment.error ?? resolveComment.error,
-                  )}
-                  onCreate={(input) => {
-                    createComment.mutate({
-                      body: input.body,
-                      anchor: {
-                        paragraphId: input.paragraphId,
-                        startOffset: 0,
-                        endOffset: input.endOffset,
-                      },
-                    })
-                  }}
-                  onResolve={(commentId) => resolveComment.mutate(commentId)}
-                />
-              </div>
-            ) : null}
-            {changesOpen ? (
-              <div className="w-full rounded-md bg-surface p-4 lg:w-80">
-                <DocumentChangesPanel
-                  changes={changesQuery.data?.changes ?? []}
-                  pending={decideChange.isPending || saving}
-                  error={mutationError(decideChange.error)}
-                  onDecide={(action, changeId) => {
-                    decideChange.mutate({
-                      baseVersionId,
-                      action,
-                      changeIds: [changeId],
-                    })
-                  }}
-                />
-              </div>
-            ) : null}
-          </div>
-        </DocumentDesk>
+          </DocumentDesk>
+          <InsertAuthorityDialog
+            open={insertAuthorityOpen}
+            onOpenChange={setInsertAuthorityOpen}
+            disabled={
+              !selectedParagraphId && !documentStory(model)?.paragraphs[0]
+            }
+            onInsert={insertAuthority}
+          />
+        </>
       ) : null}
     </WorkspaceShell>
   )
