@@ -140,7 +140,7 @@ export function collectEditOperations(
     operations.push({
       type: 'insert_paragraph_after',
       paragraphId: resolveInsertAnchor(insert, insertById, realIds),
-      text: insertPlainText(insert),
+      ...insertPayload(insert),
     })
   }
 
@@ -155,6 +155,38 @@ export function collectEditOperations(
   )
 
   return operations
+}
+
+function insertPayload(insert: LocalInsert) {
+  if (!insert.runs || insert.runs.length === 0) return { text: insert.text }
+  return {
+    runs: insertRuns(insert).map((run) => {
+      const xml = run.preservedXmlFragments.join('')
+      return {
+        text: run.text,
+        ...(run.styleId ? { styleId: run.styleId } : {}),
+        ...(wordToggleOn(xml, 'b') ? { bold: true as const } : {}),
+        ...(wordToggleOn(xml, 'i') ? { italic: true as const } : {}),
+        ...(wordUnderlineOn(xml) ? { underline: true as const } : {}),
+      }
+    }),
+  }
+}
+
+function wordToggleOn(xml: string, name: 'b' | 'i') {
+  const tag = xml.match(
+    name === 'b' ? /<w:b\b([^>]*)\/?>/i : /<w:i\b([^>]*)\/?>/i,
+  )
+  if (!tag) return false
+  const value = tag[1]?.match(/w:val="([^"]+)"/i)?.[1]?.toLowerCase()
+  return value !== '0' && value !== 'false' && value !== 'off'
+}
+
+function wordUnderlineOn(xml: string) {
+  const tag = xml.match(/<w:u\b([^>]*)\/?>/i)
+  if (!tag) return false
+  const value = tag[1]?.match(/w:val="([^"]+)"/i)?.[1]?.toLowerCase()
+  return value !== 'none' && value !== '0' && value !== 'false'
 }
 
 function resolveInsertAnchor(
