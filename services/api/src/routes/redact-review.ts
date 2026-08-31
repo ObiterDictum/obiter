@@ -38,6 +38,19 @@ import {
   type RouteVariables,
 } from './redact-shared'
 
+/**
+ * Deliberately a second check, not a duplicate of mimeTypeFromStoredFileType.
+ * That helper translates stored types and passes real MIME types through
+ * unchanged, which is correct for its callers: standalone runs store real MIME
+ * types while document_versions stores short ones. This allowlist is the
+ * control. The response must not trust a stored value, so an unrecognised type
+ * degrades to octet-stream here, at the boundary, rather than upstream.
+ *
+ * Do not collapse these into one. Hardening the translator instead would put
+ * the control back on a single upstream path and leave the response trusting
+ * its input, which is the finding this closes. It would also return
+ * octet-stream for every standalone run, breaking PDF review. See P0.19.
+ */
 const REDACTION_SOURCE_RESPONSE_TYPES = new Set([
   'application/pdf',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
