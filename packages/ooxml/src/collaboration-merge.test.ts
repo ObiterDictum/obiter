@@ -220,12 +220,20 @@ describe('bounded collaboration reconciliation', () => {
     ).toEqual({ mergeable: false, operationIndexes: [0] })
   })
 
-  it('refuses stale structural operations and any changed skeleton', async () => {
+  it('refuses stale deletes and keeps inserts off a rewritten skeleton', async () => {
     const base = await parseDocx(source)
     const paragraphId = mainParagraphs(base)[0]?.id
     const [first] = firstTwoRuns(base)
     if (!paragraphId) throw new Error('Fixture paragraph is missing.')
 
+    expect(
+      reconcileDocumentEdits(
+        base,
+        await parseDocx(source),
+        [{ type: 'delete_paragraph', paragraphId }],
+        false,
+      ),
+    ).toEqual({ mergeable: false, operationIndexes: [0] })
     expect(
       reconcileDocumentEdits(
         base,
@@ -239,7 +247,7 @@ describe('bounded collaboration reconciliation', () => {
         ],
         false,
       ),
-    ).toEqual({ mergeable: false, operationIndexes: [0] })
+    ).toEqual({ mergeable: true })
 
     const current = await editedSource([
       {
@@ -252,10 +260,10 @@ describe('bounded collaboration reconciliation', () => {
       reconcileDocumentEdits(
         base,
         current,
-        [{ type: 'replace_run_text', runId: first.id, text: 'Unsafe' }],
+        [{ type: 'replace_run_text', runId: first.id, text: 'Safe disjoint' }],
         false,
       ),
-    ).toEqual({ mergeable: false, operationIndexes: [0] })
+    ).toEqual({ mergeable: true })
   })
 
   it('preserves tracked changes and remains semantically stable after a merge', async () => {
@@ -359,6 +367,121 @@ describe('bounded collaboration reconciliation', () => {
     ).toEqual({ mergeable: true })
   })
 
+  it('merges inserts anchored to different paragraphs', async () => {
+    const base = await parseDocx(source)
+    const [first, second] = firstTwoParagraphs(base)
+    const current = await editedSource([
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: first.id,
+        runs: [
+          {
+            text: 'Remote insert',
+            fontFamily: 'Times New Roman',
+            colour: '0000FF',
+            bold: true,
+          },
+        ],
+        alignment: 'left',
+        spaceBefore: 120,
+      },
+    ])
+
+    const local: DocumentEditOperation = {
+      type: 'insert_paragraph_after',
+      paragraphId: second.id,
+      runs: [
+        {
+          text: 'Local insert',
+          fontFamily: 'Arial',
+          colour: 'FF0000',
+          strikethrough: true,
+        },
+      ],
+      alignment: 'right',
+      spaceBefore: 240,
+    }
+    expect(reconcileDocumentEdits(base, current, [local], false)).toEqual({
+      mergeable: true,
+    })
+
+    applyDocumentEdits(current, [local])
+    const merged = mainParagraphs(await parseDocx(await serialiseDocx(current)))
+    const remote = merged.find((paragraph) =>
+      paragraph.runs.some((run) => run.text === 'Remote insert'),
+    )
+    const localParagraph = merged.find((paragraph) =>
+      paragraph.runs.some((run) => run.text === 'Local insert'),
+    )
+    const remoteXml = remote?.runs[0]?.preservedXmlFragments.join('') ?? ''
+    const localXml =
+      localParagraph?.runs[0]?.preservedXmlFragments.join('') ?? ''
+    const remoteParagraphXml = remote?.preservedXmlFragments.join('') ?? ''
+    const localParagraphXml =
+      localParagraph?.preservedXmlFragments.join('') ?? ''
+
+    expect(remote).toBeDefined()
+    expect(localParagraph).toBeDefined()
+    expect(remoteXml).toContain('Times New Roman')
+    expect(remoteXml).toContain('0000FF')
+    expect(remoteXml).toMatch(/<w:b\b/)
+    expect(remoteParagraphXml).toMatch(/w:val="left"/)
+    expect(remoteParagraphXml).toContain('120')
+    expect(localXml).toContain('Arial')
+    expect(localXml).toContain('FF0000')
+    expect(localXml).toMatch(/<w:strike\b/)
+    expect(localParagraphXml).toMatch(/w:val="right"/)
+    expect(localParagraphXml).toContain('240')
+  })
+
+  it('merges two inserts after the same paragraph without dropping either', async () => {
+    const base = await parseDocx(source)
+    const [first] = firstTwoParagraphs(base)
+    const current = await editedSource([
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: first.id,
+        text: 'Remote same-anchor',
+      },
+    ])
+    const local: DocumentEditOperation = {
+      type: 'insert_paragraph_after',
+      paragraphId: first.id,
+      text: 'Local same-anchor',
+    }
+    expect(reconcileDocumentEdits(base, current, [local], false)).toEqual({
+      mergeable: true,
+    })
+    applyDocumentEdits(current, [local])
+    const texts = mainParagraphs(
+      await parseDocx(await serialiseDocx(current)),
+    ).flatMap((paragraph) => paragraph.runs.map((run) => run.text))
+    expect(texts).toContain('Remote same-anchor')
+    expect(texts).toContain('Local same-anchor')
+  })
+
+  it('conflicts an insert when its anchor paragraph was deleted', async () => {
+    const base = await parseDocx(source)
+    const [first] = firstTwoParagraphs(base)
+    const current = await editedSource([
+      { type: 'delete_paragraph', paragraphId: first.id },
+    ])
+    expect(
+      reconcileDocumentEdits(
+        base,
+        current,
+        [
+          {
+            type: 'insert_paragraph_after',
+            paragraphId: first.id,
+            text: 'Orphan insert',
+          },
+        ],
+        false,
+      ),
+    ).toEqual({ mergeable: false, operationIndexes: [0] })
+  })
+
   it('conflicts numbering with a concurrent numbering change on the same paragraph', async () => {
     const base = await parseDocx(source)
     const first = mainParagraphs(base)[0]
@@ -400,6 +523,13 @@ function firstTwoRuns(document: Awaited<ReturnType<typeof parseDocx>>) {
   const first = mainParagraphs(document)[0]?.runs[0]
   const second = mainParagraphs(document)[1]?.runs[0]
   if (!first || !second) throw new Error('Fixture runs are missing.')
+  return [first, second] as const
+}
+
+function firstTwoParagraphs(document: Awaited<ReturnType<typeof parseDocx>>) {
+  const first = mainParagraphs(document)[0]
+  const second = mainParagraphs(document)[1]
+  if (!first || !second) throw new Error('Fixture paragraphs are missing.')
   return [first, second] as const
 }
 

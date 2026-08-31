@@ -640,16 +640,26 @@ operation list. Verbatim subtrees are opaque atoms and are never merged by
 raw XML replacement.
 
 If the request base is current, existing S4 operations apply normally. If it
-is stale, only non-structural operations over an unchanged typed skeleton are
-automatically reconciled. Text, direct run style, and direct paragraph style
-fields have separate semantic footprints. Different runs, and independent
-text and style fields, can merge. Opaque changes at a containing region,
-missing targets, changed run or paragraph skeletons, insertions, deletions,
-and overlapping footprints return a 409 conflict response with the current
+is stale, every base paragraph that has a `w14:paraId` must still exist in
+current, in order, with unchanged run `w14:textId` identities. Concurrent
+`insert_paragraph_after` edits appear as extra paragraphs without those ids
+and are not a skeleton failure. Two inserts after different identified
+anchors merge. Two inserts after the same identified anchor both apply;
+incoming inserts use the existing `applyDocumentEdits` insertion-count order
+(placed immediately after the anchor, the same placement a single-author
+`flowIds` chain uses). Sequential model ids shift after a round-tripped
+insert, so operations that only have those ids still conflict once extras
+exist. Text, direct run style, and direct paragraph style fields have
+separate semantic footprints. Different runs, and independent text and style
+fields, can merge. An insert whose identified anchor is missing, a stale
+`delete_paragraph`, reordered or rewritten identified paragraph or run
+skeletons, opaque changes at a containing region, missing targets, and
+overlapping footprints return a 409 conflict response with the current
 version id and operation indexes. The current concurrent version is the
 surfaced immutable conflict version; S6 does not create an empty duplicate.
-The losing operation never silently overwrites it. A disjoint stale request
-creates the next immutable version.
+The losing operation never silently overwrites it, and a merge never drops
+an incoming operation to succeed. A disjoint stale request creates the next
+immutable version.
 
 This restriction follows the identity choices in the S1 and S4 decisions.
 `w14:paraId` and `w14:textId` are passed through, but absent ids and newly
