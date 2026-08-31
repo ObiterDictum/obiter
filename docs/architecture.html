@@ -2463,7 +2463,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>13 migrations, 0001 to 0014, 0008 withdrawn</dd>
+                <dd>14 migrations, 0001 to 0015, 0008 withdrawn</dd>
               </dl>
             </article>
           </div>
@@ -3508,6 +3508,14 @@
                   <td class="id">organisations</td>
                   <td>Tenant root. Every business row hangs off this.</td>
                   <td class="id">0001</td>
+                </tr>
+                <tr>
+                  <td class="id">organisation_invites</td>
+                  <td>
+                    Pending membership invites. Token stored as a hash. One open
+                    invite per organisation email.
+                  </td>
+                  <td class="id">0015</td>
                 </tr>
                 <tr>
                   <td class="id">audit_logs</td>
