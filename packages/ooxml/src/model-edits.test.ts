@@ -1,7 +1,9 @@
+import { documentEditOperationSchema } from '@obiter/contracts'
 import JSZip from 'jszip'
 import { describe, expect, it } from 'vitest'
 
 import { buildOoxmlFixture } from '../fixtures/builder'
+
 import {
   applyDocumentEdits,
   applyTrackedChangeDecisions,
@@ -147,6 +149,62 @@ describe('OOXML document edits', () => {
     expect(mainParagraphs(reparsed)[1]?.runs[0]?.text).toBe(
       'Inserted paragraph',
     )
+  })
+
+  it('round-trips mixed run formatting through insert_paragraph_after', async () => {
+    const document = await parseFixture()
+    const firstId = mainParagraphs(document)[0]?.id
+    if (!firstId) throw new Error('Fixture paragraph is missing.')
+
+    applyDocumentEdits(document, [
+      documentEditOperationSchema.parse({
+        type: 'insert_paragraph_after',
+        paragraphId: firstId,
+        runs: [
+          { text: 'Plain ' },
+          { text: 'bold', bold: true },
+          { text: 'italic', italic: true, styleId: 'Heading1Char' },
+        ],
+      }),
+    ])
+    const reparsed = mainParagraphs(
+      await parseDocx(await serialiseDocx(document)),
+    )[1]
+    const fragments = (reparsed?.runs ?? []).map((run) =>
+      run.preservedXmlFragments.join(''),
+    )
+
+    expect(reparsed?.runs.map((run) => run.text)).toEqual([
+      'Plain ',
+      'bold',
+      'italic',
+    ])
+    expect(fragments[0]).not.toMatch(/<w:b\b|<w:i\b|<w:rStyle\b/)
+    expect(fragments[1]).toContain('<w:b/>')
+    expect(fragments[2]).toContain('<w:i/>')
+    expect(reparsed?.runs[2]?.styleId).toBe('Heading1Char')
+  })
+
+  it('replays a persisted flat-text insert_paragraph_after', async () => {
+    const document = await parseSingleParagraphFixture()
+    const firstId = mainParagraphs(document)[0]?.id
+    if (!firstId) throw new Error('Fixture paragraph is missing.')
+
+    applyDocumentEdits(document, [
+      documentEditOperationSchema.parse({
+        type: 'insert_paragraph_after',
+        paragraphId: firstId,
+        text: 'Legacy paragraph',
+      }),
+    ])
+    const reparsed = mainParagraphs(
+      await parseDocx(await serialiseDocx(document)),
+    )
+
+    expect(reparsed.map((paragraph) => paragraph.runs[0]?.text)).toEqual([
+      'Only',
+      'Legacy paragraph',
+    ])
   })
 
   it('inserts chained paragraphs after the same model anchor in visual order', async () => {
