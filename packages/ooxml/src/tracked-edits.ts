@@ -1,4 +1,8 @@
-import { isValidXmlText, type DocumentModelWire } from '@obiter/contracts'
+import {
+  isValidXmlText,
+  type DocumentEditRun,
+  type DocumentModelWire,
+} from '@obiter/contracts'
 
 import {
   OoxmlError,
@@ -85,13 +89,13 @@ export function createTrackedEditWriter(
     insertParagraphAfter(
       story: DocumentModelWire['stories'][number],
       anchor: ParagraphAnchor,
-      text: string,
+      runs: readonly DocumentEditRun[],
       styleId: string | null | undefined,
       offset: number,
     ) {
       const part = requireEditablePart(document, anchor.partName)
       const prefix = wordPrefix(part.overlay.source, anchor.paragraphRange, 'p')
-      insertParagraphAfter(document, story, anchor, text, styleId, offset, {
+      insertParagraphAfter(document, story, anchor, runs, styleId, offset, {
         prefix,
         wrapRun: (run) =>
           `<${prefix}:ins ${attributes(prefix)}>${run}</${prefix}:ins>`,

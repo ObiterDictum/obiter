@@ -1,5 +1,6 @@
 import {
   documentEditOperationsSchema,
+  insertParagraphRuns,
   type DocumentEditOperation,
 } from '@obiter/contracts'
 
@@ -128,7 +129,7 @@ export function applyDocumentEdits(
         trackedWriter.insertParagraphAfter(
           mainStory,
           operation.paragraph,
-          operation.text,
+          insertParagraphRuns(operation),
           operation.styleId,
           count,
         )
@@ -137,7 +138,7 @@ export function applyDocumentEdits(
           document,
           mainStory,
           operation.paragraph,
-          operation.text,
+          insertParagraphRuns(operation),
           operation.styleId,
           count,
         )
@@ -353,6 +354,12 @@ function validateStyle(
     !styleIds.has(operation.styleId)
   ) {
     throw new OoxmlError('invalid-document-edit')
+  }
+  if (operation.type !== 'insert_paragraph_after' || !operation.runs) return
+  for (const run of operation.runs) {
+    if (run.styleId && !styleIds.has(run.styleId)) {
+      throw new OoxmlError('invalid-document-edit')
+    }
   }
 }
 

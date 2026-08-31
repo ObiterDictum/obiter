@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import {
   DOCUMENT_EDIT_OPERATION_MAX_COUNT,
+  DOCUMENT_EDIT_RUN_MAX_COUNT,
   DOCUMENT_EDIT_TEXT_MAX_LENGTH,
   documentEditRequestSchema,
   documentEditResponseSchema,
@@ -127,6 +128,105 @@ describe('document edit contracts', () => {
     ],
   ])('rejects %s', (_label, request) => {
     expect(documentEditRequestSchema.safeParse(request).success).toBe(false)
+  })
+
+  it('accepts insert_paragraph_after with styled runs and rejects mixed payloads', () => {
+    expect(
+      documentEditRequestSchema.parse({
+        baseVersionId: 'ver_1',
+        operations: [
+          {
+            type: 'insert_paragraph_after',
+            paragraphId: 'para_1',
+            runs: [
+              { text: 'Plain ' },
+              { text: 'bold', bold: true },
+              {
+                text: 'italic',
+                italic: true,
+                styleId: 'Heading1Char',
+              },
+            ],
+          },
+        ],
+      }).operations[0],
+    ).toMatchObject({
+      type: 'insert_paragraph_after',
+      runs: [
+        { text: 'Plain ' },
+        { text: 'bold', bold: true },
+        { text: 'italic', italic: true, styleId: 'Heading1Char' },
+      ],
+    })
+    expect(
+      documentEditRequestSchema.safeParse({
+        baseVersionId: 'ver_1',
+        operations: [
+          {
+            type: 'insert_paragraph_after',
+            paragraphId: 'para_1',
+            text: 'Both',
+            runs: [{ text: 'Both' }],
+          },
+        ],
+      }).success,
+    ).toBe(false)
+    expect(
+      documentEditRequestSchema.safeParse({
+        baseVersionId: 'ver_1',
+        operations: [
+          {
+            type: 'insert_paragraph_after',
+            paragraphId: 'para_1',
+          },
+        ],
+      }).success,
+    ).toBe(false)
+  })
+
+  it('rejects insert runs that exceed count or total text limits', () => {
+    expect(
+      documentEditRequestSchema.safeParse({
+        baseVersionId: 'ver_1',
+        operations: [
+          {
+            type: 'insert_paragraph_after',
+            paragraphId: 'para_1',
+            runs: Array.from(
+              { length: DOCUMENT_EDIT_RUN_MAX_COUNT + 1 },
+              () => ({ text: 'x' }),
+            ),
+          },
+        ],
+      }).success,
+    ).toBe(false)
+    expect(
+      documentEditRequestSchema.safeParse({
+        baseVersionId: 'ver_1',
+        operations: [
+          {
+            type: 'insert_paragraph_after',
+            paragraphId: 'para_1',
+            runs: [
+              { text: 'x'.repeat(DOCUMENT_EDIT_TEXT_MAX_LENGTH) },
+              { text: 'y' },
+            ],
+          },
+        ],
+      }).success,
+    ).toBe(false)
+    expect(
+      documentEditRequestSchema.safeParse({
+        baseVersionId: 'ver_1',
+        operations: [
+          {
+            type: 'insert_paragraph_after',
+            paragraphId: 'para_1',
+            runs: [{ text: 'x'.repeat(DOCUMENT_EDIT_TEXT_MAX_LENGTH) }],
+          },
+        ],
+      }).success,
+    ).toBe(true)
   })
 
   it('accepts numbering without an ilvl when the numbering is cleared', () => {

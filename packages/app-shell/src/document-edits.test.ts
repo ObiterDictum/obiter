@@ -236,12 +236,12 @@ describe('collectEditOperations', () => {
       {
         type: 'insert_paragraph_after',
         paragraphId: paragraph.id,
-        text: 'First',
+        runs: [{ text: 'First' }],
       },
       {
         type: 'insert_paragraph_after',
         paragraphId: paragraph.id,
-        text: 'Second',
+        runs: [{ text: 'Second' }],
       },
     ])
     applyDocumentEdits(document, operations)
@@ -277,6 +277,41 @@ describe('collectEditOperations', () => {
         text: 'Next',
       },
       { type: 'delete_paragraph', paragraphId: 'p1' },
+    ])
+  })
+
+  it('emits insert runs with style and emphasis instead of flattening them', () => {
+    expect(
+      collectEditOperations(
+        model,
+        {},
+        [
+          {
+            clientId: 'local_1',
+            afterParagraphId: 'p1',
+            text: 'Plain bold',
+            runs: [
+              { id: 'local_1-r0', text: 'Plain ', preservedXmlFragments: [] },
+              {
+                id: 'local_1-r1',
+                text: 'bold',
+                styleId: 'Heading1Char',
+                preservedXmlFragments: ['<w:rPr><w:b/></w:rPr>'],
+              },
+            ],
+          },
+        ],
+        [],
+      ),
+    ).toEqual([
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: 'p1',
+        runs: [
+          { text: 'Plain ' },
+          { text: 'bold', styleId: 'Heading1Char', bold: true },
+        ],
+      },
     ])
   })
 })

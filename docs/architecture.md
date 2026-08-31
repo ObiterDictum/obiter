@@ -472,7 +472,10 @@ surface. The OOXML package exposes one command application entry point that
 uses the existing source-preserving overlays and the existing serializer.
 Style changes patch only direct `w:pStyle` or `w:rStyle` values. New nodes get
 non-serialised model ids, and all invalid or partially applicable operation
-lists fail without output.
+lists fail without output. `insert_paragraph_after` accepts either the
+historical flat `text` field or a bounded `runs` array that reuses
+`set_run_style` / `set_run_emphasis` property names, so mixed formatting
+survives save without a stored-operation migration.
 
 Decision: apply edits server-side. The API reads the immutable base source,
 parses it with `@obiter/ooxml`, applies the typed commands, and serialises
