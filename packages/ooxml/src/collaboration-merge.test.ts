@@ -460,6 +460,45 @@ describe('bounded collaboration reconciliation', () => {
     expect(texts).toContain('Local same-anchor')
   })
 
+  it('conflicts paragraph style when extras made current ids diverge from base', async () => {
+    const base = await parseDocx(source)
+    const [first] = firstTwoParagraphs(base)
+    const current = await editedSource([
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: first.id,
+        text: 'Extra',
+      },
+      {
+        type: 'set_paragraph_style',
+        paragraphId: first.id,
+        styleId: 'Base',
+      },
+    ])
+    const matched = mainParagraphs(current).find(
+      (paragraph) => paragraph.sourceParaId === first.sourceParaId,
+    )
+    if (!matched) throw new Error('Identified paragraph is missing.')
+    // w14 ids stay equal; sequential ids after extras are not matched.
+    // Shift the matched current id so the extras id space is the thing under
+    // test, not an accident of w14 stability.
+    matched.id = `${matched.id}-shifted`
+    expect(
+      reconcileDocumentEdits(
+        base,
+        current,
+        [
+          {
+            type: 'set_paragraph_style',
+            paragraphId: first.id,
+            styleId: null,
+          },
+        ],
+        false,
+      ),
+    ).toEqual({ mergeable: false, operationIndexes: [0] })
+  })
+
   it('conflicts an insert when its anchor paragraph was deleted', async () => {
     const base = await parseDocx(source)
     const [first] = firstTwoParagraphs(base)

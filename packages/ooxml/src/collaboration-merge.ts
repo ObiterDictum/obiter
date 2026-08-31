@@ -153,11 +153,12 @@ function changedFootprints(
         ? baseById.get(currentParagraph.id)
         : undefined
     if (!baseParagraph) return
-    paragraphIds.add(baseParagraph.id)
+    const paragraphId = baseParagraph.id
+    paragraphIds.add(paragraphId)
     if (
       (baseParagraph.styleId ?? null) !== (currentParagraph.styleId ?? null)
     ) {
-      paragraphStyles.add(currentParagraph.id)
+      paragraphStyles.add(paragraphId)
     }
     if (
       !sameStrings(
@@ -171,16 +172,17 @@ function changedFootprints(
         ),
       )
     ) {
-      paragraphOpaque.add(currentParagraph.id)
+      paragraphOpaque.add(paragraphId)
     }
 
     currentParagraph.runs.forEach((currentRun, runIndex) => {
       const baseRun = baseParagraph.runs[runIndex]
       if (!baseRun) return
-      runIds.add(currentRun.id)
-      if (baseRun.text !== currentRun.text) runText.add(currentRun.id)
+      const runId = baseRun.id
+      runIds.add(runId)
+      if (baseRun.text !== currentRun.text) runText.add(runId)
       if ((baseRun.styleId ?? null) !== (currentRun.styleId ?? null)) {
-        runStyles.add(currentRun.id)
+        runStyles.add(runId)
       }
       if (
         !sameStrings(
@@ -191,7 +193,7 @@ function changedFootprints(
           ),
         )
       ) {
-        runOpaque.add(currentRun.id)
+        runOpaque.add(runId)
       }
     })
   })
