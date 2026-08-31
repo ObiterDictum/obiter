@@ -157,6 +157,22 @@ export function collectEditOperations(
   return operations
 }
 
+/**
+ * Carries a deliberately partial property set: styleId, bold, italic and
+ * underline only. Font family, size, colour, highlight, strikethrough,
+ * super/subscript, small caps, spacing and language live in the run's
+ * preservedXmlFragments and are still dropped here, because the apply path
+ * rebuilds runs with preservedXmlFragments: []. That is silent loss on a
+ * round-trip and it is tracked as E3b.
+ *
+ * Extending this is additive: add optional fields to editRunSchema in
+ * @obiter/contracts, read them here, write them in insertRunPropertiesXml.
+ * The dual text|runs compatibility from #132 does not need repeating.
+ *
+ * The readers below match a hardcoded `w:` prefix while the writers use the
+ * document's own xml.prefix. A document with a different prefix reads as
+ * unformatted and loses even these four. Tracked as E3c.
+ */
 function insertPayload(insert: LocalInsert) {
   if (!insert.runs || insert.runs.length === 0) return { text: insert.text }
   return {
