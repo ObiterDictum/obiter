@@ -315,6 +315,78 @@ describe('collectEditOperations', () => {
       },
     ])
   })
+
+  it('reads run properties from a non-w prefix and keeps a stored bold-only fragment', () => {
+    expect(
+      collectEditOperations(
+        model,
+        {},
+        [
+          {
+            clientId: 'local_ns',
+            afterParagraphId: 'p1',
+            text: 'Formatted',
+            runs: [
+              {
+                id: 'local_ns-r0',
+                text: 'Formatted',
+                preservedXmlFragments: [
+                  '<ns:rPr><ns:b/><ns:i ns:val="0"/><ns:color ns:val="C00000"/><ns:sz ns:val="28"/><ns:rFonts ns:ascii="Times New Roman"/><ns:strike/><ns:smallCaps/><ns:vertAlign ns:val="superscript"/><ns:highlight ns:val="yellow"/></ns:rPr>',
+                ],
+              },
+            ],
+          },
+        ],
+        [],
+      ),
+    ).toEqual([
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: 'p1',
+        runs: [
+          {
+            text: 'Formatted',
+            bold: true,
+            italic: false,
+            fontFamily: 'Times New Roman',
+            fontSize: 28,
+            colour: 'C00000',
+            strikethrough: true,
+            smallCaps: true,
+            vertAlign: 'superscript',
+            highlight: 'yellow',
+          },
+        ],
+      },
+    ])
+    expect(
+      collectEditOperations(
+        model,
+        {},
+        [
+          {
+            clientId: 'local_legacy',
+            afterParagraphId: 'p1',
+            text: 'bold',
+            runs: [
+              {
+                id: 'local_legacy-r0',
+                text: 'bold',
+                preservedXmlFragments: ['<w:rPr><w:b/></w:rPr>'],
+              },
+            ],
+          },
+        ],
+        [],
+      ),
+    ).toEqual([
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: 'p1',
+        runs: [{ text: 'bold', bold: true }],
+      },
+    ])
+  })
 })
 
 describe('paragraph split order', () => {

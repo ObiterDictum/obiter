@@ -1,7 +1,10 @@
-import type {
-  DocumentEditOperation,
-  DocumentModelWire,
-  DocumentTextRunWire,
+import {
+  DOCUMENT_EDIT_COLOUR_PATTERN,
+  documentEditHighlightSchema,
+  documentEditVertAlignSchema,
+  type DocumentEditOperation,
+  type DocumentModelWire,
+  type DocumentTextRunWire,
 } from '@obiter/contracts'
 import { documentStory, paragraphPlainText } from './document-model-text'
 import {
@@ -171,16 +174,8 @@ export function collectEditOperations(
 }
 
 /**
- * Property set is deliberately partial. It extracts styleId, bold, italic and
- * underline only. Font family, size, colour, highlight, strikethrough,
- * super/subscript, small caps, spacing and language live in the run's
- * preservedXmlFragments and are dropped, because the apply path rebuilds runs
- * with preservedXmlFragments: []. That is silent loss on a round-trip, tracked
- * as E3b, and extending it is additive: optional fields on editRunSchema in
- * @obiter/contracts, read here, written in insertRunPropertiesXml.
- *
- * Readers below match a hardcoded `w:` prefix while the writers use the
- * document's own xml.prefix, tracked as E3c.
+ * Reads direct run formatting from preserved fragments onto editRunSchema.
+ * Prefix comes from the fragment, not a hardcoded `w:`.
  */
 function insertPayload(insert: LocalInsert) {
   if (!insert.runs || insert.runs.length === 0) return { text: insert.text }
@@ -190,28 +185,100 @@ function insertPayload(insert: LocalInsert) {
       return {
         text: run.text,
         ...(run.styleId ? { styleId: run.styleId } : {}),
-        ...(wordToggleOn(xml, 'b') ? { bold: true as const } : {}),
-        ...(wordToggleOn(xml, 'i') ? { italic: true as const } : {}),
-        ...(wordUnderlineOn(xml) ? { underline: true as const } : {}),
+        ...toggleField(xml, 'b', 'bold'),
+        ...toggleField(xml, 'i', 'italic'),
+        ...underlineField(xml),
+        ...toggleField(xml, 'strike', 'strikethrough'),
+        ...toggleField(xml, 'smallCaps', 'smallCaps'),
+        ...fontFamilyField(xml),
+        ...fontSizeField(xml),
+        ...namedAttr(xml, 'color', 'val', 'colour', isEditColour),
+        ...namedAttr(xml, 'highlight', 'val', 'highlight', isHighlight),
+        ...namedAttr(xml, 'vertAlign', 'val', 'vertAlign', isVertAlign),
       }
     }),
   }
 }
 
-function wordToggleOn(xml: string, name: 'b' | 'i') {
-  const tag = xml.match(
-    name === 'b' ? /<w:b\b([^>]*)\/?>/i : /<w:i\b([^>]*)\/?>/i,
-  )
-  if (!tag) return false
-  const value = tag[1]?.match(/w:val="([^"]+)"/i)?.[1]?.toLowerCase()
-  return value !== '0' && value !== 'false' && value !== 'off'
+function xmlPrefix(xml: string) {
+  return xml.match(/<([A-Za-z_][\w.-]*):/u)?.[1] ?? 'w'
 }
 
-function wordUnderlineOn(xml: string) {
-  const tag = xml.match(/<w:u\b([^>]*)\/?>/i)
-  if (!tag) return false
-  const value = tag[1]?.match(/w:val="([^"]+)"/i)?.[1]?.toLowerCase()
-  return value !== 'none' && value !== '0' && value !== 'false'
+function wordTag(xml: string, localName: string) {
+  const prefix = xmlPrefix(xml)
+  return xml.match(new RegExp(`<${prefix}:${localName}\\b([^>]*)\\/?>`, 'i'))
+}
+
+function wordAttr(attrs: string | undefined, name: string, prefix: string) {
+  return attrs?.match(new RegExp(`(?:${prefix}:)?${name}="([^"]+)"`, 'i'))?.[1]
+}
+
+function toggleField(
+  xml: string,
+  localName: string,
+  field: 'bold' | 'italic' | 'strikethrough' | 'smallCaps',
+) {
+  const tag = wordTag(xml, localName)
+  if (!tag) return {}
+  const value = wordAttr(tag[1], 'val', xmlPrefix(xml))?.toLowerCase()
+  const on = value !== '0' && value !== 'false' && value !== 'off'
+  return { [field]: on }
+}
+
+function underlineField(xml: string) {
+  const tag = wordTag(xml, 'u')
+  if (!tag) return {}
+  const value = wordAttr(tag[1], 'val', xmlPrefix(xml))?.toLowerCase()
+  return {
+    underline: value !== 'none' && value !== '0' && value !== 'false',
+  }
+}
+
+function namedAttr(
+  xml: string,
+  localName: string,
+  attr: string,
+  field: string,
+  ok: (value: string) => boolean = () => true,
+) {
+  const tag = wordTag(xml, localName)
+  const value = wordAttr(tag?.[1], attr, xmlPrefix(xml))
+  if (!value || !ok(value)) return {}
+  return { [field]: value }
+}
+
+function fontFamilyField(xml: string) {
+  const attrs = wordTag(xml, 'rFonts')?.[1]
+  const prefix = xmlPrefix(xml)
+  const name =
+    wordAttr(attrs, 'ascii', prefix) ?? wordAttr(attrs, 'hAnsi', prefix)
+  return name ? { fontFamily: name } : {}
+}
+
+function fontSizeField(xml: string) {
+  const raw = wordAttr(wordTag(xml, 'sz')?.[1], 'val', xmlPrefix(xml))
+  const size = raw === undefined ? Number.NaN : Number(raw)
+  return Number.isInteger(size) ? { fontSize: size } : {}
+}
+
+function isEditColour(value: string) {
+  return DOCUMENT_EDIT_COLOUR_PATTERN.test(value)
+}
+
+function isHighlight(
+  value: string,
+): value is (typeof documentEditHighlightSchema.options)[number] {
+  return (documentEditHighlightSchema.options as readonly string[]).includes(
+    value,
+  )
+}
+
+function isVertAlign(
+  value: string,
+): value is (typeof documentEditVertAlignSchema.options)[number] {
+  return (documentEditVertAlignSchema.options as readonly string[]).includes(
+    value,
+  )
 }
 
 function resolveInsertAnchor(
