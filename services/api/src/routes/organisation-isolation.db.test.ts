@@ -3,6 +3,7 @@ import { Pool } from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { AuthzVariables } from '../authz'
 import { createTestApiEnv } from '../test-api-env'
+import { createCommentsRoutes } from './comments'
 import { createDocumentAccessRoutes } from './document-access'
 import { createDocumentsRoutes } from './documents'
 import { createMattersRoutes } from './matters'
@@ -42,6 +43,7 @@ function app(pool: Pool, userId: string, organisationId: string) {
   routes.route('/', createMattersRoutes(pool))
   routes.route('/', createDocumentAccessRoutes(pool))
   routes.route('/', createDocumentsRoutes(pool))
+  routes.route('/', createCommentsRoutes(pool, storage))
   routes.route('/', createOrganisationsRoutes(pool, createTestApiEnv()))
   routes.route('/', createRedactRunCreationRoutes(pool, storage))
   routes.route('/', createRedactReviewRoutes(pool, storage))
@@ -61,6 +63,7 @@ function foreignNeedles(seed: OrganisationIsolationSeed) {
     seed.auditB,
     seed.artifactB,
     seed.inviteB,
+    seed.commentB,
   ]
 }
 
@@ -168,6 +171,33 @@ describe('organisation isolation against Postgres (V10)', () => {
       await userA.request(`/api/documents/${seed.documentB}`, {
         method: 'DELETE',
       }),
+      hidden,
+    )
+
+    const ownComments = await userA.request(
+      `/api/documents/${seed.documentA}/comments`,
+    )
+    expect(ownComments.status).toBe(200)
+    await assertHidden(ownComments, hidden, true)
+    await assertHidden(
+      await userA.request(`/api/documents/${seed.documentB}/comments`),
+      hidden,
+    )
+    await assertHidden(
+      await userA.request(
+        `/api/documents/${seed.documentB}/comments`,
+        json({
+          body: 'taken',
+          anchor: { paragraphId: 'p1', startOffset: 0, endOffset: 1 },
+        }),
+      ),
+      hidden,
+    )
+    await assertHidden(
+      await userA.request(
+        `/api/documents/${seed.documentB}/comments/${seed.commentB}/resolve`,
+        json({}, 'PATCH'),
+      ),
       hidden,
     )
 

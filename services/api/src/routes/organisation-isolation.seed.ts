@@ -26,6 +26,8 @@ export type OrganisationIsolationSeed = {
   artifactB: string
   inviteA: string
   inviteB: string
+  commentA: string
+  commentB: string
 }
 
 type TenantIds = {
@@ -39,6 +41,7 @@ type TenantIds = {
   auditId: string
   artifactId: string
   inviteId: string
+  commentId: string
 }
 
 function tenantIds(suffix: string, label: 'a' | 'b'): TenantIds {
@@ -53,6 +56,7 @@ function tenantIds(suffix: string, label: 'a' | 'b'): TenantIds {
     auditId: `aud_iso_${suffix}_${label}`,
     artifactId: `art_iso_${suffix}_${label}`,
     inviteId: `inv_iso_${suffix}_${label}`,
+    commentId: `cmt_iso_${suffix}_${label}`,
   }
 }
 
@@ -144,13 +148,13 @@ async function seedTenant(pool: Pool, suffix: string, label: 'a' | 'b') {
        size_bytes, object_key, text_object_key, document_status, failure_reason,
        version_number, content_sha256, sync_state, created_by, created_at, updated_at
      )
-     values ($1, $2, $3, $4, $5, 'txt', 12, $6, $7, 'ready', null, 1, $8, 'synced', $9, now(), now())`,
+     values ($1, $2, $3, $4, $5, 'docx', 12, $6, $7, 'ready', null, 1, $8, 'synced', $9, now(), now())`,
     [
       ids.versionId,
       ids.orgId,
       ids.matterId,
       ids.documentId,
-      `${ids.documentId}.txt`,
+      `${ids.documentId}.docx`,
       objectKey,
       textObjectKey,
       CONTENT_SHA256,
@@ -202,7 +206,7 @@ async function seedTenant(pool: Pool, suffix: string, label: 'a' | 'b') {
       ids.matterId,
       ids.documentId,
       ids.versionId,
-      `${ids.documentId}.txt`,
+      `${ids.documentId}.docx`,
       ids.artifactId,
       ids.userId,
     ],
@@ -238,6 +242,25 @@ async function seedTenant(pool: Pool, suffix: string, label: 'a' | 'b') {
       `invite-${suffix}-${label}@example.com`,
       createHash('sha256').update(`token-${suffix}-${label}`).digest('hex'),
       ids.userId,
+    ],
+  )
+
+  await pool.query(
+    `insert into document_comments (
+       id, organisation_id, matter_id, document_id, anchor_version_id,
+       paragraph_id, start_offset, end_offset, body, author_id, author_name,
+       created_at, updated_at
+     )
+     values ($1, $2, $3, $4, $5, 'p1', 0, 1, $6, $7, $8, now(), now())`,
+    [
+      ids.commentId,
+      ids.orgId,
+      ids.matterId,
+      ids.documentId,
+      ids.versionId,
+      `Isolation comment ${label}`,
+      ids.userId,
+      `Isolation User ${label.toUpperCase()}`,
     ],
   )
 
@@ -292,6 +315,8 @@ export async function seedOrganisationIsolation(
     artifactB: tenantB.artifactId,
     inviteA: tenantA.inviteId,
     inviteB: tenantB.inviteId,
+    commentA: tenantA.commentId,
+    commentB: tenantB.commentId,
   }
 }
 
@@ -301,6 +326,7 @@ export async function cleanupOrganisationIsolation(
 ): Promise<void> {
   const auditIds = [seed.auditA, seed.auditB]
   const inviteIds = [seed.inviteA, seed.inviteB]
+  const commentIds = [seed.commentA, seed.commentB]
   const shareIds = [seed.shareA, seed.shareB, seed.shareBToA]
   const runIds = [seed.runA, seed.runB]
   const artifactIds = [seed.artifactA, seed.artifactB]
@@ -314,6 +340,9 @@ export async function cleanupOrganisationIsolation(
     `delete from organisation_invites where id = any($1::text[])`,
     [inviteIds],
   )
+  await pool.query(`delete from document_comments where id = any($1::text[])`, [
+    commentIds,
+  ])
   await pool.query(`delete from audit_logs where id = any($1::text[])`, [
     auditIds,
   ])
