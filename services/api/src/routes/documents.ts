@@ -145,6 +145,14 @@ export function createDocumentsRoutes(
       )
     }
     const supportedType = normaliseFileType(fileType)
+    if (!supportedType) {
+      return errorResponse(
+        c,
+        'validation_failed',
+        'Document type must be PDF, DOCX or TXT.',
+        400,
+      )
+    }
     if (file && !storage?.writeBinary)
       return errorResponse(
         c,
@@ -189,7 +197,7 @@ export function createDocumentsRoutes(
       matterId,
       userId: user.id,
       filename,
-      fileType: verifiedType ?? fileType,
+      fileType: verifiedType,
       sizeBytes: uploadContents?.byteLength ?? sizeBytes,
       contentSha256: verifiedHash!,
     })

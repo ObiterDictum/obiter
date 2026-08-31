@@ -2097,15 +2097,20 @@ describe('createApiApp redaction review reads', () => {
     expect(readBinary).toHaveBeenCalledWith('org/org_1/artifacts/art_1')
   })
 
-  it('returns matter-attached source PDF bytes with a real MIME type and nosniff', async () => {
-    const pdfBytes = Buffer.from('%PDF-1.4 source')
-    const readBinary = vi.fn(async () => pdfBytes)
-    const run = finalizedRunRow({
-      source_filename: 'brief.pdf',
-      document_version_id: 'ver_1',
-      source_file_object_key: null,
-      source_mime_type: null,
-    })
+  function sourceFileApp({
+    run,
+    documentVersion,
+    bytes,
+  }: {
+    run: RedactionRunRow
+    documentVersion?: {
+      object_key: string
+      filename: string
+      file_type: string
+    }
+    bytes: Buffer
+  }) {
+    const readBinary = vi.fn(async () => bytes)
     const app = createApiApp(
       testEnv,
       createHybridPool(
@@ -2118,16 +2123,7 @@ describe('createApiApp redaction review reads', () => {
             return { rows: visible ? [run] : [] }
           }
           if (text.includes('from document_versions')) {
-            return {
-              rows: [
-                {
-                  object_key:
-                    'org/org_1/matters/mtr_1/documents/doc_1/versions/ver_1/source',
-                  filename: 'brief.pdf',
-                  file_type: 'pdf',
-                },
-              ],
-            }
+            return { rows: documentVersion ? [documentVersion] : [] }
           }
           return { rows: [] }
         },
@@ -2137,7 +2133,7 @@ describe('createApiApp redaction review reads', () => {
         auth: authWithRole('member'),
         storage: {
           readText: async () => {
-            throw new Error('text read should not be used for source PDF')
+            throw new Error('text read should not be used for source file')
           },
           writeText: async () => undefined,
           readBinary,
@@ -2145,16 +2141,92 @@ describe('createApiApp redaction review reads', () => {
         },
       },
     )
+    return { app, readBinary }
+  }
+
+  function expectNonExecutableSourceFile(response: Response) {
+    const disposition = response.headers.get('content-disposition') ?? ''
+    expect(disposition.split(';', 1)[0]?.trim().toLowerCase()).toBe(
+      'attachment',
+    )
+    const csp = response.headers.get('content-security-policy') ?? ''
+    expect(csp).toMatch(/\bsandbox\b/)
+    expect(csp).toMatch(/script-src\s+'none'/)
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff')
+  }
+
+  it('returns matter-attached source PDF bytes with a real MIME type and nosniff', async () => {
+    const pdfBytes = Buffer.from('%PDF-1.4 source')
+    const objectKey =
+      'org/org_1/matters/mtr_1/documents/doc_1/versions/ver_1/source'
+    const { app, readBinary } = sourceFileApp({
+      run: finalizedRunRow({
+        source_filename: 'brief.pdf',
+        document_version_id: 'ver_1',
+        source_file_object_key: null,
+        source_mime_type: null,
+      }),
+      documentVersion: {
+        object_key: objectKey,
+        filename: 'brief.pdf',
+        file_type: 'pdf',
+      },
+      bytes: pdfBytes,
+    })
 
     const response = await app.request('/api/redaction-runs/red_1/source-file')
     expect(response.status).toBe(200)
     expect(response.headers.get('content-type')).toBe('application/pdf')
     expect(response.headers.get('content-disposition')).toContain('brief.pdf')
-    expect(response.headers.get('x-content-type-options')).toBe('nosniff')
+    expectNonExecutableSourceFile(response)
     expect(Buffer.from(await response.arrayBuffer())).toEqual(pdfBytes)
-    expect(readBinary).toHaveBeenCalledWith(
-      'org/org_1/matters/mtr_1/documents/doc_1/versions/ver_1/source',
+    expect(readBinary).toHaveBeenCalledWith(objectKey)
+  })
+
+  it('returns standalone source DOCX bytes with the Word MIME type', async () => {
+    const docxBytes = Buffer.from('PK docx source')
+    const objectKey = 'org/org_1/redaction-runs/red_1/source-file'
+    const { app, readBinary } = sourceFileApp({
+      run: finalizedRunRow({
+        source_filename: 'brief.docx',
+        source_file_object_key: objectKey,
+        source_mime_type:
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      }),
+      bytes: docxBytes,
+    })
+
+    const response = await app.request('/api/redaction-runs/red_1/source-file')
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toBe(
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     )
+    expect(response.headers.get('content-disposition')).toContain('brief.docx')
+    expectNonExecutableSourceFile(response)
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(docxBytes)
+    expect(readBinary).toHaveBeenCalledWith(objectKey)
+  })
+
+  it('does not serve a stored hostile MIME as executable content', async () => {
+    const htmlBytes = Buffer.from('<script>alert(1)</script>')
+    const objectKey = 'org/org_1/redaction-runs/red_1/source-file'
+    const { app } = sourceFileApp({
+      run: finalizedRunRow({
+        source_filename: 'payload.html',
+        source_file_object_key: objectKey,
+        source_mime_type: 'text/html',
+      }),
+      bytes: htmlBytes,
+    })
+
+    const response = await app.request('/api/redaction-runs/red_1/source-file')
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toBe(
+      'application/octet-stream',
+    )
+    expect(response.headers.get('content-type')).not.toBe('text/html')
+    expectNonExecutableSourceFile(response)
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(htmlBytes)
   })
 
   it('returns text output/file with nosniff', async () => {

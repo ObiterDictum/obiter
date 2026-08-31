@@ -13,6 +13,7 @@ import {
   RedactionSpanIntegrityError,
 } from '@obiter/redaction-policy'
 import { appendAuditLog } from '../database'
+import { createDocumentMediaResponse } from '../document-media-response'
 import {
   finalizeRedactionRun,
   getRedactionOutputKey,
@@ -36,6 +37,19 @@ import {
   requireUser,
   type RouteVariables,
 } from './redact-shared'
+
+const REDACTION_SOURCE_RESPONSE_TYPES = new Set([
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+])
+
+function redactionSourceResponseContentType(storedMimeType: string): string {
+  const value = storedMimeType.split(';', 1)[0]?.trim().toLowerCase() ?? ''
+  return REDACTION_SOURCE_RESPONSE_TYPES.has(value)
+    ? value
+    : 'application/octet-stream'
+}
 
 export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   const routes = new Hono<{ Variables: RouteVariables }>()
@@ -96,15 +110,11 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         404,
       )
     const bytes = await storage.readBinary(source.objectKey)
-    return new Response(Uint8Array.from(bytes), {
-      status: 200,
-      headers: {
-        'content-type': source.mimeType,
-        'content-disposition': `inline; filename="${source.filename.replaceAll('"', '')}"`,
-        'cache-control': 'private, max-age=60',
-        'x-content-type-options': 'nosniff',
-      },
-    })
+    return createDocumentMediaResponse(
+      Uint8Array.from(bytes),
+      redactionSourceResponseContentType(source.mimeType),
+      source.filename,
+    )
   })
 
   routes.get('/api/redaction-runs/:runId/layout', async (c) => {
