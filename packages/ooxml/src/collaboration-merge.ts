@@ -53,29 +53,61 @@ function mainStory(document: OoxmlDocument) {
   return document.model.stories.find(({ kind }) => kind === 'document')
 }
 
-function sameSkeleton(base: MainStory, current: MainStory) {
+type StoryParagraph = MainStory['paragraphs'][number]
+
+function sameRunSkeleton(base: StoryParagraph, current: StoryParagraph) {
   return (
-    base.partName === current.partName &&
+    (base.sourceTextId ?? null) === (current.sourceTextId ?? null) &&
+    base.runs.length === current.runs.length &&
+    base.runs.every((run, runIndex) => {
+      const comparedRun = current.runs[runIndex]
+      return (
+        comparedRun !== undefined &&
+        (run.sourceTextId ?? null) === (comparedRun.sourceTextId ?? null) &&
+        (run.sourceTextId != null || run.id === comparedRun.id)
+      )
+    })
+  )
+}
+
+function indexAligned(base: MainStory, current: MainStory) {
+  return (
     base.paragraphs.length === current.paragraphs.length &&
     base.paragraphs.every((paragraph, paragraphIndex) => {
       const compared = current.paragraphs[paragraphIndex]
       return (
         compared !== undefined &&
         paragraph.id === compared.id &&
-        paragraph.sourceParaId === compared.sourceParaId &&
-        paragraph.sourceTextId === compared.sourceTextId &&
-        paragraph.runs.length === compared.runs.length &&
-        paragraph.runs.every((run, runIndex) => {
-          const comparedRun = compared.runs[runIndex]
-          return (
-            comparedRun !== undefined &&
-            run.id === comparedRun.id &&
-            run.sourceTextId === comparedRun.sourceTextId
-          )
-        })
+        (paragraph.sourceParaId ?? null) === (compared.sourceParaId ?? null) &&
+        sameRunSkeleton(paragraph, compared) &&
+        paragraph.runs.every(
+          (run, runIndex) => run.id === compared.runs[runIndex]?.id,
+        )
       )
     })
   )
+}
+
+function sameSkeleton(base: MainStory, current: MainStory) {
+  if (base.partName !== current.partName) return false
+  if (indexAligned(base, current)) return true
+  // Sequential model ids shift after a round-tripped insert. Only w14
+  // paraId/textId stay stable, so extras are allowed when every identified
+  // base paragraph still exists in order.
+  let currentIndex = 0
+  for (const paragraph of base.paragraphs) {
+    if (!paragraph.sourceParaId) continue
+    while (
+      currentIndex < current.paragraphs.length &&
+      current.paragraphs[currentIndex]?.sourceParaId !== paragraph.sourceParaId
+    ) {
+      currentIndex += 1
+    }
+    const matched = current.paragraphs[currentIndex]
+    if (!matched || !sameRunSkeleton(paragraph, matched)) return false
+    currentIndex += 1
+  }
+  return true
 }
 
 function changedFootprints(
@@ -103,14 +135,30 @@ function changedFootprints(
     }
   }
 
-  currentStory.paragraphs.forEach((currentParagraph, paragraphIndex) => {
-    const baseParagraph = baseStory.paragraphs[paragraphIndex]
+  const aligned = indexAligned(baseStory, currentStory)
+  const baseById = new Map(
+    baseStory.paragraphs.map((paragraph) => [paragraph.id, paragraph]),
+  )
+  const baseByParaId = new Map(
+    baseStory.paragraphs.flatMap((paragraph) =>
+      paragraph.sourceParaId
+        ? [[paragraph.sourceParaId, paragraph] as const]
+        : [],
+    ),
+  )
+  currentStory.paragraphs.forEach((currentParagraph) => {
+    const baseParagraph = currentParagraph.sourceParaId
+      ? baseByParaId.get(currentParagraph.sourceParaId)
+      : aligned
+        ? baseById.get(currentParagraph.id)
+        : undefined
     if (!baseParagraph) return
-    paragraphIds.add(currentParagraph.id)
+    const paragraphId = baseParagraph.id
+    paragraphIds.add(paragraphId)
     if (
       (baseParagraph.styleId ?? null) !== (currentParagraph.styleId ?? null)
     ) {
-      paragraphStyles.add(currentParagraph.id)
+      paragraphStyles.add(paragraphId)
     }
     if (
       !sameStrings(
@@ -124,16 +172,17 @@ function changedFootprints(
         ),
       )
     ) {
-      paragraphOpaque.add(currentParagraph.id)
+      paragraphOpaque.add(paragraphId)
     }
 
     currentParagraph.runs.forEach((currentRun, runIndex) => {
       const baseRun = baseParagraph.runs[runIndex]
       if (!baseRun) return
-      runIds.add(currentRun.id)
-      if (baseRun.text !== currentRun.text) runText.add(currentRun.id)
+      const runId = baseRun.id
+      runIds.add(runId)
+      if (baseRun.text !== currentRun.text) runText.add(runId)
       if ((baseRun.styleId ?? null) !== (currentRun.styleId ?? null)) {
-        runStyles.add(currentRun.id)
+        runStyles.add(runId)
       }
       if (
         !sameStrings(
@@ -144,7 +193,7 @@ function changedFootprints(
           ),
         )
       ) {
-        runOpaque.add(currentRun.id)
+        runOpaque.add(runId)
       }
     })
   })
@@ -164,12 +213,10 @@ function operationConflicts(
   operation: DocumentEditOperation,
   changes: ChangedFootprints,
 ) {
-  if (
-    operation.type === 'insert_paragraph_after' ||
-    operation.type === 'delete_paragraph'
-  ) {
-    return true
+  if (operation.type === 'insert_paragraph_after') {
+    return !changes.paragraphIds.has(operation.paragraphId)
   }
+  if (operation.type === 'delete_paragraph') return true
   if (operation.type === 'set_paragraph_style') {
     return (
       !changes.paragraphIds.has(operation.paragraphId) ||
