@@ -38,12 +38,22 @@ export function readIdentifier(xml: string) {
   )?.[1]
 }
 
+/**
+ * Attribute values in an Atom feed are XML-escaped, so a paged feed's next link
+ * arrives as `...&amp;page=2`. Handed to `new URL` undecoded it parses as a
+ * parameter literally named `amp;page`, which silently drops both the page
+ * number and every filter after the first ampersand: the request then returns
+ * page one again. Decoding here keeps that from reaching any caller.
+ */
 function readLink(xml: string, predicate: (attributes: string) => boolean) {
   const attributes = Array.from(xml.matchAll(/<link\b([^>]*?)\/?>/gi))
     .map((match) => match[1])
     .find(predicate)
 
-  return attributes ? readLinkAttribute(attributes, 'href') : undefined
+  if (!attributes) return undefined
+
+  const href = readLinkAttribute(attributes, 'href')
+  return href === undefined ? undefined : decodeXml(href)
 }
 
 function hasLinkRel(attributes: string, rel: string) {
@@ -155,13 +165,39 @@ export function decodeXml(value: string) {
 }
 
 export function decodeHtml(value: string) {
-  return value
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, ' ')
+  return (
+    value
+      // Numeric character references, decimal and hexadecimal. Judgment text is
+      // full of them — curly quotes, dashes, section marks — and leaving them
+      // encoded puts `&#8220;` into the indexed text where a quotation mark
+      // belongs, so a phrase query spanning a quote cannot match.
+      .replace(/&#(\d+);/g, (match, code: string) =>
+        codePointToString(Number(code), match),
+      )
+      .replace(/&#[xX]([0-9a-fA-F]+);/g, (match, code: string) =>
+        codePointToString(Number.parseInt(code, 16), match),
+      )
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/&nbsp;/g, ' ')
+      // Last, so that an encoded entity such as `&amp;#8220;` decodes to the
+      // literal text `&#8220;` rather than being decoded twice into a quote.
+      .replace(/&amp;/g, '&')
+  )
+}
+
+function codePointToString(codePoint: number, fallback: string) {
+  if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff) {
+    return fallback
+  }
+
+  try {
+    return String.fromCodePoint(codePoint)
+  } catch {
+    return fallback
+  }
 }
 
 export function hashText(value: string) {

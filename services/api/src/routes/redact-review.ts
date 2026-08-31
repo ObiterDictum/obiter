@@ -13,6 +13,7 @@ import {
   RedactionSpanIntegrityError,
 } from '@obiter/redaction-policy'
 import { appendAuditLog } from '../database'
+import { createDocumentMediaResponse } from '../document-media-response'
 import {
   finalizeRedactionRun,
   getRedactionOutputKey,
@@ -37,17 +38,39 @@ import {
   type RouteVariables,
 } from './redact-shared'
 
+/**
+ * Deliberately a second check, not a duplicate of mimeTypeFromStoredFileType.
+ * That helper translates stored types and passes real MIME types through
+ * unchanged, which is correct for its callers: standalone runs store real MIME
+ * types while document_versions stores short ones. This allowlist is the
+ * control. The response must not trust a stored value, so an unrecognised type
+ * degrades to octet-stream here, at the boundary, rather than upstream.
+ *
+ * Do not collapse these into one. Hardening the translator instead would put
+ * the control back on a single upstream path and leave the response trusting
+ * its input, which is the finding this closes. It would also return
+ * octet-stream for every standalone run, breaking PDF review. See P0.19.
+ */
+const REDACTION_SOURCE_RESPONSE_TYPES = new Set([
+  'application/pdf',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'text/plain',
+])
+
+function redactionSourceResponseContentType(storedMimeType: string): string {
+  const value = storedMimeType.split(';', 1)[0]?.trim().toLowerCase() ?? ''
+  return REDACTION_SOURCE_RESPONSE_TYPES.has(value)
+    ? value
+    : 'application/octet-stream'
+}
+
 export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   const routes = new Hono<{ Variables: RouteVariables }>()
 
   routes.get('/api/redaction-runs/:runId', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
-    const run = await getRedactionRun(
-      pool,
-      user.organisationId,
-      c.req.param('runId'),
-    )
+    const run = await getRedactionRun(pool, user, c.req.param('runId'), 'view')
     if (!run)
       return errorResponse(
         c,
@@ -61,11 +84,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   routes.get('/api/redaction-runs/:runId/document-text', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
-    const run = await getRedactionRun(
-      pool,
-      user.organisationId,
-      c.req.param('runId'),
-    )
+    const run = await getRedactionRun(pool, user, c.req.param('runId'), 'view')
     if (!run)
       return errorResponse(
         c,
@@ -87,11 +106,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   routes.get('/api/redaction-runs/:runId/source-file', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
-    const run = await getRedactionRun(
-      pool,
-      user.organisationId,
-      c.req.param('runId'),
-    )
+    const run = await getRedactionRun(pool, user, c.req.param('runId'), 'view')
     if (!run)
       return errorResponse(
         c,
@@ -108,25 +123,17 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         404,
       )
     const bytes = await storage.readBinary(source.objectKey)
-    return new Response(Uint8Array.from(bytes), {
-      status: 200,
-      headers: {
-        'content-type': source.mimeType,
-        'content-disposition': `inline; filename="${source.filename.replaceAll('"', '')}"`,
-        'cache-control': 'private, max-age=60',
-        'x-content-type-options': 'nosniff',
-      },
-    })
+    return createDocumentMediaResponse(
+      Uint8Array.from(bytes),
+      redactionSourceResponseContentType(source.mimeType),
+      source.filename,
+    )
   })
 
   routes.get('/api/redaction-runs/:runId/layout', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
-    const run = await getRedactionRun(
-      pool,
-      user.organisationId,
-      c.req.param('runId'),
-    )
+    const run = await getRedactionRun(pool, user, c.req.param('runId'), 'view')
     if (!run)
       return errorResponse(
         c,
@@ -181,6 +188,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
       const user = await requireUser(c, pool)
       if (user instanceof Response) return user
       const body = await jsonBody(c)
+      if (body instanceof Response) return body
       const decision = spanDecisionSchema.safeParse(body?.decision)
       if (!decision.success)
         return errorResponse(
@@ -252,7 +260,9 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   routes.post('/api/redaction-runs/:runId/finalize', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
-    const body = redactionFinalizeInputSchema.safeParse(await jsonBody(c))
+    const rawBody = await jsonBody(c)
+    if (rawBody instanceof Response) return rawBody
+    const body = redactionFinalizeInputSchema.safeParse(rawBody)
     if (!body.success)
       return errorResponse(
         c,
@@ -260,11 +270,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         'A valid output mode and acknowledgement value are required.',
         400,
       )
-    const run = await getRedactionRun(
-      pool,
-      user.organisationId,
-      c.req.param('runId'),
-    )
+    const run = await getRedactionRun(pool, user, c.req.param('runId'), 'edit')
     if (!run)
       return errorResponse(
         c,
@@ -492,11 +498,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   routes.get('/api/redaction-runs/:runId/output', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
-    const run = await getRedactionRun(
-      pool,
-      user.organisationId,
-      c.req.param('runId'),
-    )
+    const run = await getRedactionRun(pool, user, c.req.param('runId'), 'view')
     if (!run)
       return errorResponse(
         c,
@@ -511,11 +513,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         'This run has not been finalized.',
         400,
       )
-    const objectKey = await getRedactionOutputKey(
-      pool,
-      user.organisationId,
-      run.outputArtifactId,
-    )
+    const objectKey = await getRedactionOutputKey(pool, run)
     if (!objectKey)
       return errorResponse(
         c,
@@ -546,11 +544,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   routes.get('/api/redaction-runs/:runId/output/file', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
-    const run = await getRedactionRun(
-      pool,
-      user.organisationId,
-      c.req.param('runId'),
-    )
+    const run = await getRedactionRun(pool, user, c.req.param('runId'), 'view')
     if (!run)
       return errorResponse(
         c,
@@ -565,11 +559,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         'This run has not been finalized.',
         400,
       )
-    const objectKey = await getRedactionOutputKey(
-      pool,
-      user.organisationId,
-      run.outputArtifactId,
-    )
+    const objectKey = await getRedactionOutputKey(pool, run)
     if (!objectKey)
       return errorResponse(
         c,
@@ -618,11 +608,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
   routes.get('/api/redaction-runs/:runId/token-map', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
-    const run = await getRedactionRun(
-      pool,
-      user.organisationId,
-      c.req.param('runId'),
-    )
+    const run = await getRedactionRun(pool, user, c.req.param('runId'), 'view')
     if (!run)
       return errorResponse(
         c,

@@ -7,6 +7,7 @@ import {
   containsWholeTerm,
   createJudgmentParagraphEvidenceId,
   extractLegalSearchSnippets,
+  normalizeCitationValue,
   normalizeExactMatchValue,
   type LegalSearchHit,
   type LegalSearchMatchReason,
@@ -119,7 +120,10 @@ function getLegalSearchMatchReason(
   if (!normalizedQuery) return 'keyword_match'
   if (normalizeExactMatchValue(hit.id) === normalizedQuery)
     return 'exact_document_id'
-  if (normalizeExactMatchValue(hit.neutralCitation) === normalizedQuery)
+  if (
+    normalizeCitationValue(hit.neutralCitation) ===
+    normalizeCitationValue(normalizedQuery)
+  )
     return 'exact_neutral_citation'
 
   const normalizedTitle = normalizeExactMatchValue(hit.title)

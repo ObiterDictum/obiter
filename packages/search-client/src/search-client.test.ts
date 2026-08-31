@@ -10,6 +10,7 @@ import {
   getDocument,
   indexDocuments,
   legalSearchIndexSettings,
+  normalizeCitationValue,
   normalizeExactMatchValue,
   rankLegalSearchHitsByExactMatch,
   search,
@@ -69,6 +70,7 @@ describe('Legal search client', () => {
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
       updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
+      getPrefixSearch: vi.fn(async () => 'disabled'),
       updateStopWords: vi.fn(() => completedTask({ uid: 13 })),
       updateTypoTolerance: vi.fn(() => completedTask({ uid: 14 })),
       addDocuments: vi.fn(),
@@ -96,6 +98,7 @@ describe('Legal search client', () => {
       'jurisdiction',
       'sourceType',
       'dateDecided',
+      'dateDecidedTimestamp',
     ])
     expect(index.updateRankingRules).toHaveBeenCalledWith([
       'words',
@@ -140,6 +143,122 @@ describe('Legal search client', () => {
     })
   })
 
+  /**
+   * Meilisearch added `prefixSearch` in 1.12. A 1.8 server has no
+   * `settings/prefix-search` route and answers 404, so an index it configures
+   * still has prefix search on. That is a different search configuration from
+   * the one this package defines, not a cosmetic gap, and the benchmark floor
+   * `minimumShortWordPrecision` rests on prefix search being off.
+   */
+  describe('a server that cannot apply an index setting', () => {
+    function unsupportedPrefixSearch() {
+      const error = new Error('404: Not Found')
+      Object.assign(error, { response: new Response(null, { status: 404 }) })
+      return () => {
+        throw error
+      }
+    }
+
+    function indexWithout404PrefixSearch() {
+      return {
+        updateSearchableAttributes: vi.fn(() => completedTask({ uid: 8 })),
+        updateFilterableAttributes: vi.fn(() => completedTask({ uid: 9 })),
+        updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
+        updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
+        updatePrefixSearch: vi.fn(unsupportedPrefixSearch()),
+        getPrefixSearch: vi.fn(unsupportedPrefixSearch()),
+        updateStopWords: vi.fn(() => completedTask({ uid: 13 })),
+        updateTypoTolerance: vi.fn(() => completedTask({ uid: 14 })),
+        addDocuments: vi.fn(),
+        search: vi.fn(),
+      }
+    }
+
+    function clientFor(index: ReturnType<typeof indexWithout404PrefixSearch>) {
+      return {
+        createIndex: vi.fn(() => completedTask({ uid: 7 })),
+        index: vi.fn(() => index),
+      }
+    }
+
+    // The default. A caller that has not said it can live with a missing
+    // setting is told, rather than served an index it did not ask for.
+    it('fails by default rather than configuring a different index', async () => {
+      const index = indexWithout404PrefixSearch()
+
+      await expect(
+        createIndex(clientFor(index), 'legal_authorities'),
+      ).rejects.toThrow(/Search index setup failed/)
+    })
+
+    it('continues when the caller opts in, and names what it could not apply', async () => {
+      const index = indexWithout404PrefixSearch()
+
+      const result = await createIndex(clientFor(index), 'legal_authorities', {
+        allowUnsupportedSettings: true,
+      })
+
+      expect(result.unsupportedSettings).toEqual(['prefixSearch'])
+      // Everything after the unsupported setting still has to be applied.
+      expect(index.updateStopWords).toHaveBeenCalled()
+      expect(index.updateTypoTolerance).toHaveBeenCalled()
+    })
+
+    /**
+     * The reason support is established by reading. Writing to a settings route
+     * Meilisearch 1.8.3 does not have returns 404 and then wedges the index:
+     * measured with curl, a stop-words write succeeds 5 of 5 on its own and
+     * times out 4 of 5 when it follows a write to the absent prefix-search
+     * route. Catching the 404 is not enough — issuing it is what does the
+     * damage, and it lands on whatever request comes next.
+     */
+    it('never issues the write for a setting the server does not have', async () => {
+      const index = indexWithout404PrefixSearch()
+
+      await createIndex(clientFor(index), 'legal_authorities', {
+        allowUnsupportedSettings: true,
+      })
+
+      expect(index.getPrefixSearch).toHaveBeenCalled()
+      expect(index.updatePrefixSearch).not.toHaveBeenCalled()
+    })
+
+    it('reports nothing unsupported when every setting applies', async () => {
+      const index = {
+        ...indexWithout404PrefixSearch(),
+        updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
+        getPrefixSearch: vi.fn(async () => 'disabled'),
+      }
+
+      const result = await createIndex(clientFor(index), 'legal_authorities', {
+        allowUnsupportedSettings: true,
+      })
+
+      expect(result.unsupportedSettings).toEqual([])
+    })
+
+    // A 400 means the value was wrong, which is a bug here. Opting in to old
+    // servers must not turn a real error into a skipped setting. The probe
+    // succeeds, so the route exists and the write is genuinely at fault.
+    it('still fails on a rejected value, not only a missing route', async () => {
+      const index = indexWithout404PrefixSearch()
+      const badRequest = new Error('400: Bad Request')
+      Object.assign(badRequest, {
+        response: new Response(null, { status: 400 }),
+      })
+      index.getPrefixSearch = vi.fn(async () => 'disabled')
+      index.updatePrefixSearch = vi.fn(() => {
+        throw badRequest
+      })
+
+      await expect(
+        createIndex(clientFor(index), 'legal_authorities', {
+          allowUnsupportedSettings: true,
+        }),
+      ).rejects.toThrow(/Search index setup failed/)
+    })
+  })
+
   // The benchmark report embeds legalSearchIndexSettings as its record of the
   // configuration under test, so it is only trustworthy while these values are
   // the ones createIndex and search actually apply.
@@ -150,6 +269,7 @@ describe('Legal search client', () => {
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
       updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
+      getPrefixSearch: vi.fn(async () => 'disabled'),
       updateStopWords: vi.fn(() => completedTask({ uid: 13 })),
       updateTypoTolerance: vi.fn(() => completedTask({ uid: 14 })),
       addDocuments: vi.fn(),
@@ -190,6 +310,7 @@ describe('Legal search client', () => {
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
       updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
+      getPrefixSearch: vi.fn(async () => 'disabled'),
       updateStopWords: vi.fn(() => completedTask({ uid: 13 })),
       updateTypoTolerance: vi.fn(() => completedTask({ uid: 14 })),
       addDocuments: vi.fn(),
@@ -217,6 +338,7 @@ describe('Legal search client', () => {
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
       updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
+      getPrefixSearch: vi.fn(async () => 'disabled'),
       updateStopWords: vi.fn(() => completedTask({ uid: 13 })),
       updateTypoTolerance: vi.fn(() => completedTask({ uid: 14 })),
       addDocuments: vi.fn(),
@@ -260,6 +382,7 @@ describe('Legal search client', () => {
       updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
       updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
       updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
+      getPrefixSearch: vi.fn(async () => 'disabled'),
       updateStopWords: vi.fn(() => completedTask({ uid: 13 })),
       updateTypoTolerance: vi.fn(() => completedTask({ uid: 14 })),
       addDocuments: vi.fn(),
@@ -291,9 +414,13 @@ describe('Legal search client', () => {
     ])
 
     expect(result).toEqual({ indexedCount: 1, failedCount: 0, errors: [] })
-    expect(addDocuments).toHaveBeenCalledWith([authority()], {
-      primaryKey: 'id',
-    })
+    // The engine receives the document plus the derived numeric date. The
+    // domain document itself is unchanged; the field exists only in the index,
+    // so that range filters have a numeric operand to compare against.
+    expect(addDocuments).toHaveBeenCalledWith(
+      [{ ...authority(), dateDecidedTimestamp: Date.UTC(2024, 0, 31) }],
+      { primaryKey: 'id' },
+    )
     expect(indexingTask.waitTask).toHaveBeenCalledWith({
       timeout: 1_800_000,
       interval: 100,
@@ -368,6 +495,26 @@ describe('Legal search client', () => {
     expect(addDocuments).not.toHaveBeenCalled()
   })
 
+  it('rejects a malformed date bound instead of widening the search', async () => {
+    const searchMock = vi.fn(async () => ({
+      hits: [],
+      query: 'test',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    }))
+    const client = {
+      index: () => ({ search: searchMock }),
+    }
+
+    // Dropping an unparseable bound would return judgments outside the
+    // requested range as though they belonged in it, which is a wrong answer
+    // rather than a missing one.
+    await expect(
+      search(client, 'legal_authorities', 'test', { dateFrom: '01/01/2024' }),
+    ).rejects.toThrow(/dateFrom must be an ISO date/)
+    expect(searchMock).not.toHaveBeenCalled()
+  })
+
   it('returns typed search results and filter shape', async () => {
     const searchMock = vi.fn(async () => ({
       hits: [authority()],
@@ -392,8 +539,10 @@ describe('Legal search client', () => {
       filter: [
         'court = "uksc"',
         'jurisdiction = "england-and-wales"',
-        'dateDecided >= "2024-01-01"',
-        'dateDecided <= "2024-12-31"',
+        // Numeric operands. Meilisearch comparison operators reject a quoted
+        // date string, which is what made the three date benchmark cases error.
+        `dateDecidedTimestamp >= ${Date.UTC(2024, 0, 1)}`,
+        `dateDecidedTimestamp <= ${Date.UTC(2024, 11, 31)}`,
       ],
       sort: ['dateDecided:desc'],
       matchingStrategy: 'all',
@@ -1353,7 +1502,9 @@ describe('Legal search client', () => {
       id: 'uksc-2024-3',
       snippets: [
         {
-          evidenceId: 'uksc-2024-3:judgment_paragraph:7',
+          // Position in the document, not the number the judgment prints.
+          // The fixture's only matching paragraph is the first one retained.
+          evidenceId: 'uksc-2024-3:judgment_paragraph:1',
           matchReason: 'body_text_match',
           paragraphNumber: 7,
           text: 'Potanina appears in this indexed paragraph.',
@@ -1424,5 +1575,66 @@ describe('Legal search client', () => {
 
     expect(result.paragraphs).toEqual(authority().paragraphs)
     expect(getDocumentMock).toHaveBeenCalledWith('uksc-2024-3')
+  })
+
+  it('keys evidence ids on position when a document repeats a paragraph number', () => {
+    // LegalDocML marks block-quoted paragraphs from a cited judgment as
+    // paragraphs carrying that judgment's numbering, and appendices restart at
+    // 1. Both produce duplicate paragraphNumbers in one document.
+    const hit = {
+      ...authority(),
+      paragraphs: [
+        {
+          id: 'p1',
+          documentId: 'uksc-2024-3',
+          paragraphNumber: 7,
+          text: 'The appellant relied on the duty of care owed to visitors.',
+        },
+        {
+          id: 'p2',
+          documentId: 'uksc-2024-3',
+          paragraphNumber: 2,
+          text: 'Quoted: the duty of care question was settled in Caparo.',
+        },
+      ],
+    } as unknown as LegalSearchHit
+
+    const snippets = extractLegalSearchSnippets(hit, 'duty of care')
+
+    expect(snippets).toHaveLength(2)
+    expect(new Set(snippets.map((snippet) => snippet.evidenceId)).size).toBe(2)
+    // The number the judgment prints is preserved for display, duplicates and all.
+    expect(snippets.map((snippet) => snippet.paragraphNumber)).toEqual([7, 2])
+  })
+
+  it('matches a zero-padded tribunal citation against the unpadded form', () => {
+    // Find Case Law returns `[2024] UKUT 00236 (IAC)`; a reader types the form
+    // the tribunal's own headnote prints.
+    expect(normalizeCitationValue('[2024] UKUT 00236 (IAC)')).toBe(
+      normalizeCitationValue('[2024] UKUT 236 (IAC)'),
+    )
+    expect(normalizeCitationValue('[2024] UKFTT 001074 (TC)')).toBe(
+      '[2024] ukftt 1074 (tc)',
+    )
+    // Senior court citations are unaffected.
+    expect(normalizeCitationValue('[2024] UKSC 22')).toBe('[2024] uksc 22')
+
+    const padded = {
+      ...authority(),
+      id: 'ukut-iac-2024-236',
+      neutralCitation: '[2024] UKUT 00236 (IAC)',
+    } as unknown as LegalSearchHit
+    const other = {
+      ...authority(),
+      id: 'uksc-2024-3',
+      neutralCitation: '[2024] UKSC 3',
+    } as unknown as LegalSearchHit
+
+    const ranked = rankLegalSearchHitsByExactMatch(
+      [other, padded],
+      '[2024] UKUT 236 (IAC)',
+    )
+
+    expect(ranked[0]?.id).toBe('ukut-iac-2024-236')
   })
 })

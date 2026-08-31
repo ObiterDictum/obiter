@@ -128,17 +128,24 @@ async function app(
 async function upload(
   api: Awaited<ReturnType<typeof app>>,
   name: string,
-  bytes: Buffer,
+  fileOrBytes: Buffer | File,
   claimed = 'docx',
-  suppliedHash = hash(bytes),
+  suppliedHash?: string,
+  headers: Record<string, string> = {},
 ) {
   const form = new FormData()
-  form.set('file', new File([bytes], name))
+  const file =
+    fileOrBytes instanceof File ? fileOrBytes : new File([fileOrBytes], name)
+  form.set('file', file)
   form.set('fileType', claimed)
-  form.set('contentSha256', suppliedHash)
+  form.set(
+    'contentSha256',
+    suppliedHash ?? hash(Buffer.from(await file.arrayBuffer())),
+  )
   return api.request('/api/matters/mtr_1/documents', {
     method: 'POST',
     body: form,
+    headers,
   })
 }
 afterEach(async () =>
@@ -251,14 +258,24 @@ describe('multipart document extraction', () => {
     expect(body.version.documentStatus).toBe('queued')
     expect(body.version.textObjectKey).toBeNull()
   })
-  it.each([
-    [
-      'too large',
+  it('rejects declared Content-Length above the upload max before buffering', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'obiter-upload-'))
+    roots.push(root)
+    const response = await upload(
+      await app(root),
       'fixture.txt',
-      Buffer.alloc(MAX_DOCUMENT_UPLOAD_BYTES + 1),
+      Buffer.from('Plain text'),
       'txt',
-      hash(Buffer.alloc(MAX_DOCUMENT_UPLOAD_BYTES + 1)),
-    ],
+      undefined,
+      { 'content-length': String(MAX_DOCUMENT_UPLOAD_BYTES + 1) },
+    )
+    expect(response.status).toBe(413)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'payload_too_large' },
+    })
+    await expect(readFile(join(root, 'org'))).rejects.toThrow()
+  })
+  it.each([
     [
       'non zip docx',
       'fixture.docx',
@@ -276,13 +293,13 @@ describe('multipart document extraction', () => {
     ],
   ])(
     'rejects %s without writing storage',
-    async (_name, filename, bytes, type, suppliedHash) => {
+    async (_name, filename, fileOrBytes, type, suppliedHash) => {
       const root = await mkdtemp(join(tmpdir(), 'obiter-upload-'))
       roots.push(root)
       const response = await upload(
         await app(root),
         filename,
-        bytes,
+        fileOrBytes,
         type,
         suppliedHash,
       )
@@ -290,6 +307,27 @@ describe('multipart document extraction', () => {
       await expect(readFile(join(root, 'org'))).rejects.toThrow()
     },
   )
+  it('rejects an unsupported fileType before create when no file is attached', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'obiter-upload-'))
+    roots.push(root)
+    const response = await (
+      await app(root)
+    ).request('/api/matters/mtr_1/documents', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        filename: 'payload.html',
+        fileType: 'text/html',
+        contentSha256: '0'.repeat(64),
+        sizeBytes: 12,
+      }),
+    })
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'validation_failed' },
+    })
+    await expect(readFile(join(root, 'org'))).rejects.toThrow()
+  })
   it('returns storage_unavailable when binary storage is unavailable', async () => {
     const root = await mkdtemp(join(tmpdir(), 'obiter-upload-'))
     roots.push(root)

@@ -146,12 +146,13 @@ A restore endpoint exists for matters (`PATCH /api/matters/:id/restore`) and
 cascades with provenance as described above. Restore is an operator/server-side
 action; no UI surfaces it. A restore UI is deferred future work.
 
-#### Deferred document and run restore endpoints
+#### Document and run restore endpoints
 
 `restoreDocumentWithAudit` and `restoreRedactionRunWithAudit` exist with full
-parent-liveness checks and audit rows, but their HTTP endpoints are intentionally
-deferred. Matter restore is the only exposed restore route; document and run
-restore remain operator/server-side actions for now.
+parent-liveness checks and audit rows. Their manage-role HTTP endpoints are
+shipped: `PATCH /api/documents/:documentId/restore` and
+`PATCH /api/redaction-runs/:runId/restore`. Matter restore remains a manage-role
+endpoint as well; no restore UI surfaces these operator actions.
 
 ## Migration
 

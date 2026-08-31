@@ -1,5 +1,4 @@
 import type { DocumentStoryKind, DocumentModelWire } from '@obiter/contracts'
-import JSZip from 'jszip'
 
 import {
   createSequentialModelIdAllocator,
@@ -9,6 +8,7 @@ import {
   type SourcePart,
   type TrackedChangeNode,
 } from './model'
+import { loadOoxmlZipEntries } from './package-loader'
 import { parseContentTypes, isXmlPart } from './parts/content-types'
 import { parseNumbering } from './parts/numbering'
 import { createOpaquePart } from './parts/opaque'
@@ -28,21 +28,14 @@ export async function parseDocx(
   input: Uint8Array,
   options: ParseDocxOptions = {},
 ) {
-  let zip: JSZip
+  let payloads: Map<string, Uint8Array>
   try {
-    zip = await JSZip.loadAsync(input)
-  } catch {
+    payloads = await loadOoxmlZipEntries(input, options.limits)
+  } catch (error) {
+    if (error instanceof OoxmlError) throw error
     throw new OoxmlError('invalid-package')
   }
 
-  const entries = Object.values(zip.files).filter((entry) => !entry.dir)
-  const payloads = new Map(
-    await Promise.all(
-      entries.map(
-        async (entry) => [entry.name, await entry.async('uint8array')] as const,
-      ),
-    ),
-  )
   const contentTypesPayload = payloads.get(CONTENT_TYPES_PART)
   if (!contentTypesPayload) throw new OoxmlError('invalid-package')
 

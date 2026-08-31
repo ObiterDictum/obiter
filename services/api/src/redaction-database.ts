@@ -1,4 +1,8 @@
 import type { Pool } from 'pg'
+import {
+  matterAccessPredicate,
+  redactionRunAccessPredicate,
+} from './matter-access-boundary'
 import { appendAuditLog } from './database'
 import {
   detectionModeSchema,
@@ -10,11 +14,13 @@ import {
 } from '@obiter/contracts'
 import type {
   DetectionMode,
+  MatterAccessLevel,
   OutputMode,
   RedactionPolicyMode,
   RedactionRunStatus,
   SpanDecision,
 } from '@obiter/contracts'
+import type { AuthenticatedOrgUser } from './authz'
 import type {
   Decisions,
   RedactionSpan,
@@ -102,21 +108,29 @@ export const redactionRunsFrom = `from redaction_runs run
   left join matters matter on matter.id = run.matter_id and matter.organisation_id = run.organisation_id
   left join redaction_runs replacement on replacement.organisation_id = run.organisation_id
     and replacement.replaces_run_id = run.id and replacement.deleted_at is null`
+const redactionRunLockColumns = redactionRunColumns.replace(
+  'run.deleted_at,',
+  'run.deleted_at::text as deleted_at,',
+)
 
 function timestamp(value: Date | string) {
   return value instanceof Date ? value.toISOString() : value
 }
-function json(value: unknown): unknown {
-  if (typeof value !== 'string') return value
+function json<T>(value: unknown): T {
+  if (typeof value !== 'string') {
+    // SAFETY: pg jsonb may already be parsed object; stored JSON is validated by callers via Zod/schema before use
+    return value as T
+  }
   try {
-    return JSON.parse(value)
+    // SAFETY: stored redaction JSON is DB jsonb/text; callers validate shape immediately via schema or Array.isArray check
+    return JSON.parse(value) as T
   } catch {
     throw new Error('Stored redaction JSON is invalid.')
   }
 }
 
 function parseSpans(value: unknown): RedactionSpan[] {
-  const parsed = json(value)
+  const parsed = json<unknown>(value)
   if (!Array.isArray(parsed))
     throw new Error('Stored redaction spans are invalid.')
   return parsed.map((span): RedactionSpan => {
@@ -153,7 +167,7 @@ function parseSpans(value: unknown): RedactionSpan[] {
 }
 
 function parseDecisions(value: unknown): Decisions {
-  const parsed = json(value)
+  const parsed = json<unknown>(value)
   if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed))
     throw new Error('Stored redaction decisions are invalid.')
   const decisions: Decisions = {}
@@ -180,7 +194,7 @@ function parseDecisions(value: unknown): Decisions {
 export function mapRedactionRun(row: RedactionRunRow): RedactionRunRecord {
   if (row.replacement_run_id === undefined)
     throw new Error('Stored redaction replacement lineage was not selected.')
-  const summary = json(row.summary_json)
+  const summary = json<RedactionRunRecord['summary']>(row.summary_json)
   if (typeof summary !== 'object' || summary === null || Array.isArray(summary))
     throw new Error('Stored redaction summary is invalid.')
   return {
@@ -200,7 +214,7 @@ export function mapRedactionRun(row: RedactionRunRow): RedactionRunRecord {
     spans: parseSpans(row.spans_json),
     decisions: parseDecisions(row.decisions_json),
     outputArtifactId: row.output_artifact_id,
-    summary: summary as RedactionRunRecord['summary'],
+    summary,
     detectorVersion: row.detector_version,
     detectionMode: detectionModeSchema.parse(row.detection_mode),
     replacesRunId: row.replaces_run_id ?? null,
@@ -276,51 +290,149 @@ function isPdfSource(filename: string, mimeType: string | null) {
 
 async function selectRedactionRun(
   queryable: Pick<Pool, 'query'>,
-  organisationId: string,
+  user: AuthenticatedOrgUser,
   runId: string,
+  requiredLevel: MatterAccessLevel,
   includeDeleted = false,
 ) {
   const result = await queryable.query<RedactionRunRow>(
     `select ${redactionRunColumns} ${redactionRunsFrom}
      where run.id = $1 and run.organisation_id = $2
-       and ($3::boolean or run.deleted_at is null)`,
-    [runId, organisationId, includeDeleted],
+       and ($3::boolean or run.deleted_at is null)
+       and ${redactionRunAccessPredicate('$4', '$5')}`,
+    [runId, user.organisationId, includeDeleted, user.id, requiredLevel],
   )
   return result.rows[0] ? mapRedactionRun(result.rows[0]) : null
 }
 
-export async function getRedactionRun(
+export async function getDeletedRedactionRunForAudit(
   pool: Pool,
   organisationId: string,
   runId: string,
+) {
+  const result = await pool.query<RedactionRunRow>(
+    `select ${redactionRunColumns} ${redactionRunsFrom}
+     where run.id = $1 and run.organisation_id = $2 and run.deleted_at is not null`,
+    [runId, organisationId],
+  )
+  return result.rows[0] ? mapRedactionRun(result.rows[0]) : null
+}
+
+export async function selectMutationRun(
+  queryable: Pick<Pool, 'query'>,
+  input: {
+    organisationId: string
+    userId: string
+    runId: string
+    includeDeleted: boolean
+    lockLineage?: boolean
+  },
+) {
+  const candidate = await queryable.query<{
+    matter_id: string | null
+    document_id: string | null
+    replaces_run_id: string | null
+  }>(
+    `select matter_id, document_id, replaces_run_id from redaction_runs
+     where id = $1 and organisation_id = $2
+       and ${input.includeDeleted ? 'deleted_at is not null' : 'deleted_at is null'}`,
+    [input.runId, input.organisationId],
+  )
+  const parent = candidate.rows[0]
+  if (!parent) return null
+
+  if (parent.matter_id) {
+    const matter = await queryable.query<{ id: string }>(
+      `select matter.id from matters matter
+       where matter.id = $1
+         and matter.organisation_id = $2
+         and matter.deleted_at is null
+         and ${matterAccessPredicate('$3', "'edit'")}
+       for update`,
+      [parent.matter_id, input.organisationId, input.userId],
+    )
+    if (!matter.rows[0]) return null
+  }
+
+  if (parent.document_id) {
+    const document = await queryable.query<{ id: string }>(
+      `select id from matter_documents
+       where id = $1
+         and organisation_id = $2
+         and matter_id = $3
+         and deleted_at is null
+       for update`,
+      [parent.document_id, input.organisationId, parent.matter_id],
+    )
+    if (!document.rows[0]) return null
+  }
+
+  const runIds = [
+    input.runId,
+    ...(input.lockLineage && parent.replaces_run_id
+      ? [parent.replaces_run_id]
+      : []),
+  ].sort()
+  let locked: RedactionRunRow | undefined
+  for (const runId of runIds) {
+    if (runId === input.runId) {
+      const result = await queryable.query<RedactionRunRow>(
+        `select ${redactionRunLockColumns} ${redactionRunsFrom}
+         where run.id = $1 and run.organisation_id = $2
+           and ${input.includeDeleted ? 'run.deleted_at is not null' : 'run.deleted_at is null'}
+           and ${redactionRunAccessPredicate('$3', "'edit'")}
+         for update of run`,
+        [input.runId, input.organisationId, input.userId],
+      )
+      locked = result.rows[0]
+    } else {
+      const result = await queryable.query<{ id: string }>(
+        `select id from redaction_runs
+         where id = $1 and organisation_id = $2
+         for update`,
+        [runId, input.organisationId],
+      )
+      if (!result.rows[0]) return null
+    }
+  }
+  return locked ? mapRedactionRun(locked) : null
+}
+
+export async function getRedactionRun(
+  pool: Pool,
+  user: AuthenticatedOrgUser,
+  runId: string,
+  requiredLevel: MatterAccessLevel,
   options: { includeDeleted?: boolean } = {},
 ) {
   return selectRedactionRun(
     pool,
-    organisationId,
+    user,
     runId,
+    requiredLevel,
     options.includeDeleted === true,
   )
 }
 
 export async function listRedactionRuns(
   pool: Pool,
-  organisationId: string,
+  user: AuthenticatedOrgUser,
   options: { includeDeleted?: boolean } = {},
 ) {
   const result = await pool.query<RedactionRunRow>(
     `select ${redactionRunColumns} ${redactionRunsFrom}
      where run.organisation_id = $1
        and ($2::boolean or run.deleted_at is null)
+       and ${redactionRunAccessPredicate('$3', "'view'")}
      order by run.created_at desc`,
-    [organisationId, options.includeDeleted === true],
+    [user.organisationId, options.includeDeleted === true, user.id],
   )
   return result.rows.map(mapRedactionRun)
 }
 
 export async function listRedactionRunsForDocument(
   pool: Pool,
-  organisationId: string,
+  user: AuthenticatedOrgUser,
   documentId: string,
   options: { includeDeleted?: boolean } = {},
 ) {
@@ -328,8 +440,9 @@ export async function listRedactionRunsForDocument(
     `select ${redactionRunColumns} ${redactionRunsFrom}
      where run.document_id = $1 and run.organisation_id = $2
        and ($3::boolean or run.deleted_at is null)
+       and ${redactionRunAccessPredicate('$4', "'view'")}
      order by run.created_at desc`,
-    [documentId, organisationId, options.includeDeleted === true],
+    [documentId, user.organisationId, options.includeDeleted === true, user.id],
   )
   return result.rows.map(mapRedactionRun)
 }
@@ -411,7 +524,7 @@ export async function getRunLayoutObjectKey(
 
 export async function getDocumentRedactionSource(
   pool: Pool,
-  organisationId: string,
+  user: AuthenticatedOrgUser,
   documentId: string,
 ) {
   const result = await pool.query<{
@@ -424,9 +537,14 @@ export async function getDocumentRedactionSource(
     select document.matter_id, version.id as version_id, version.filename, version.text_object_key
     from matter_documents document
     join document_versions version on version.id = document.current_version_id and version.organisation_id = document.organisation_id
-    where document.id = $1 and document.organisation_id = $2 and document.deleted_at is null
+    join matters matter on matter.id = document.matter_id and matter.organisation_id = document.organisation_id
+    where document.id = $1
+      and document.organisation_id = $2
+      and document.deleted_at is null
+      and matter.deleted_at is null
+      and ${matterAccessPredicate('$3', "'edit'")}
   `,
-    [documentId, organisationId],
+    [documentId, user.organisationId, user.id],
   )
   return result.rows[0] ?? null
 }
@@ -442,15 +560,16 @@ export async function recordSpanDecision(input: {
   const client = await input.pool.connect()
   try {
     await client.query('begin')
-    const locked = await client.query<RedactionRunRow>(
-      `select ${redactionRunColumns} ${redactionRunsFrom} where run.id = $1 and run.organisation_id = $2 and run.deleted_at is null for update of run`,
-      [input.runId, input.organisationId],
-    )
-    if (!locked.rows[0]) {
+    const run = await selectMutationRun(client, {
+      organisationId: input.organisationId,
+      userId: input.userId,
+      runId: input.runId,
+      includeDeleted: false,
+    })
+    if (!run) {
       await client.query('rollback')
       return { kind: 'not_found' as const }
     }
-    const run = mapRedactionRun(locked.rows[0])
     if (run.status === 'finalized') {
       await client.query('rollback')
       return { kind: 'finalized' as const }
@@ -491,8 +610,13 @@ export async function recordSpanDecision(input: {
     )
     const updatedRun = await selectRedactionRun(
       client,
-      run.organisationId,
+      {
+        id: input.userId,
+        organisationId: input.organisationId,
+        role: 'member',
+      },
       run.id,
+      'edit',
     )
     if (!updatedRun) throw new Error('Updated redaction run could not be read.')
     await client.query('commit')
@@ -522,15 +646,16 @@ export async function finalizeRedactionRun(input: {
   const client = await input.pool.connect()
   try {
     await client.query('begin')
-    const locked = await client.query<RedactionRunRow>(
-      `select ${redactionRunColumns} ${redactionRunsFrom} where run.id = $1 and run.organisation_id = $2 and run.deleted_at is null for update of run`,
-      [input.runId, input.organisationId],
-    )
-    if (!locked.rows[0]) {
+    const run = await selectMutationRun(client, {
+      organisationId: input.organisationId,
+      userId: input.userId,
+      runId: input.runId,
+      includeDeleted: false,
+    })
+    if (!run) {
       await client.query('rollback')
       return { kind: 'not_found' as const }
     }
-    const run = mapRedactionRun(locked.rows[0])
     if (run.status === 'finalized') {
       await client.query('rollback')
       return { kind: 'already_finalized' as const }
@@ -582,8 +707,13 @@ export async function finalizeRedactionRun(input: {
     )
     const finalizedRun = await selectRedactionRun(
       client,
-      run.organisationId,
+      {
+        id: input.userId,
+        organisationId: input.organisationId,
+        role: 'member',
+      },
       run.id,
+      'edit',
     )
     if (!finalizedRun)
       throw new Error('Finalized redaction run could not be read.')
@@ -647,8 +777,7 @@ export interface RedactionAuditLogEntry {
 
 export async function listRedactionAuditLog(
   pool: Pool,
-  organisationId: string,
-  runId: string,
+  run: RedactionRunRecord,
 ): Promise<RedactionAuditLogEntry[]> {
   // organisation_id is deliberately part of the predicate: nullable auth rows
   // (migration 0009) cannot leak into an organisation-scoped run report.
@@ -662,33 +791,33 @@ export async function listRedactionAuditLog(
      from audit_logs
      where organisation_id = $1 and entity_type = 'redaction_run' and entity_id = $2
      order by created_at asc`,
-    [organisationId, runId],
+    [run.organisationId, run.id],
   )
   return result.rows.map((row) => ({
     action: row.action,
     userId: row.user_id,
     timestamp: timestamp(row.created_at),
-    details: (json(row.metadata_json) as Record<string, unknown>) ?? {},
+    details: json<Record<string, unknown>>(row.metadata_json) ?? {},
   }))
 }
 
 export async function getRedactionOutputKey(
   pool: Pool,
-  organisationId: string,
-  artifactId: string,
+  run: RedactionRunRecord,
 ) {
+  if (!run.outputArtifactId) return null
   const result = await pool.query<{ object_key: string }>(
-    "select object_key from artifacts where id = $1 and organisation_id = $2 and artifact_type = 'redaction_output' and status = 'ready'",
-    [artifactId, organisationId],
+    "select object_key from artifacts where id = $1 and organisation_id = $2 and matter_id is not distinct from $3 and artifact_type = 'redaction_output' and status = 'ready'",
+    [run.outputArtifactId, run.organisationId, run.matterId],
   )
   return result.rows[0]?.object_key ?? null
 }
 
 /**
- * Soft-deletes a standalone redaction run and writes the audit event in one
- * transaction. Returns null when the run is missing, cross-org, or already
- * deleted (caller surfaces 404 without auditing). Cascade deletes from a
- * matter or document use the same columns via database.ts and do not call this.
+ * Soft-deletes a redaction run and writes the audit event in one transaction.
+ * Returns null when the run is missing, cross-org, or already deleted (caller
+ * surfaces 404 without auditing). Cascade deletes from a matter or document
+ * are handled by database.ts and do not call this.
  */
 export async function softDeleteRedactionRun(
   pool: Pool,
@@ -704,13 +833,13 @@ export async function softDeleteRedactionRun(
   try {
     await client.query('begin')
 
-    const lock = await client.query<{ id: string }>(
-      `select id from redaction_runs
-       where id = $1 and organisation_id = $2 and deleted_at is null
-       for update`,
-      [input.runId, input.organisationId],
-    )
-    if (lock.rows.length === 0) {
+    const run = await selectMutationRun(client, {
+      organisationId: input.organisationId,
+      userId: input.userId,
+      runId: input.runId,
+      includeDeleted: false,
+    })
+    if (!run) {
       await client.query('rollback')
       return null
     }
@@ -721,26 +850,31 @@ export async function softDeleteRedactionRun(
        where id = $1 and organisation_id = $2 and deleted_at is null`,
       [input.runId, input.organisationId, input.userId],
     )
-    const run = await selectRedactionRun(
+    const deletedRun = await selectRedactionRun(
       client,
-      input.organisationId,
+      {
+        id: input.userId,
+        organisationId: input.organisationId,
+        role: 'member',
+      },
       input.runId,
+      'edit',
       true,
     )
-    if (!run) throw new Error('Deleted redaction run could not be read.')
+    if (!deletedRun) throw new Error('Deleted redaction run could not be read.')
 
     await appendAuditLog(client, {
       organisationId: input.organisationId,
       userId: input.userId,
       entityType: 'redaction_run',
-      entityId: run.id,
+      entityId: deletedRun.id,
       action: 'redaction_run.delete',
       metadata: {},
       requestId: input.requestId,
     })
 
     await client.query('commit')
-    return run
+    return deletedRun
   } catch (error) {
     await client.query('rollback')
     throw error
@@ -749,9 +883,9 @@ export async function softDeleteRedactionRun(
   }
 }
 
-/** Restores one run after parent-liveness checks; intentionally not yet routed. */
+/** Restores one run after parent-liveness checks. */
 export async function restoreRedactionRunWithAudit(
-  pool: Pool,
+  pool: Pick<Pool, 'connect'>,
   input: {
     organisationId: string
     userId: string
@@ -764,92 +898,40 @@ export async function restoreRedactionRunWithAudit(
   try {
     await client.query('begin')
 
-    const candidate = await client.query<{
-      matter_id: string | null
-      document_id: string | null
-      replaces_run_id: string | null
-    }>(
-      `select matter_id, document_id, replaces_run_id from redaction_runs
-       where id = $1 and organisation_id = $2 and deleted_at is not null`,
-      [input.runId, input.organisationId],
-    )
-    if (candidate.rows.length === 0) {
+    // Parent rows are locked before the target and lineage runs. Share
+    // revocation uses the same matter-first order.
+    const parent = await selectMutationRun(client, {
+      organisationId: input.organisationId,
+      userId: input.userId,
+      runId: input.runId,
+      includeDeleted: true,
+      lockLineage: true,
+    })
+    if (!parent || !parent.deletedAt) {
       await client.query('rollback')
       return { kind: 'not_found' as const }
     }
+    const cascadeTimestamp = parent.deletedAt
 
-    const parent = candidate.rows[0]
-    // Lock the run being restored, then its source run, then the matter and
-    // document. Re-detection locks the source run before the same parents, so
-    // sharing that order keeps the two paths from deadlocking on each other.
-    const lock = await client.query<{ deleted_at: string }>(
-      `select deleted_at::text from redaction_runs
-       where id = $1
-         and organisation_id = $2
-         and deleted_at is not null
-         and matter_id is not distinct from $3
-         and document_id is not distinct from $4
-       for update`,
-      [input.runId, input.organisationId, parent.matter_id, parent.document_id],
-    )
-    if (lock.rows.length === 0) {
-      await client.query('rollback')
-      return { kind: 'not_found' as const }
-    }
-    const cascadeTimestamp = lock.rows[0].deleted_at
-
-    if (parent.replaces_run_id) {
-      // Hold the source run so a concurrent re-detection cannot install a
-      // competing replacement between this check and the update below.
-      await client.query(
-        `select id from redaction_runs
-         where id = $1 and organisation_id = $2
-         for update`,
-        [parent.replaces_run_id, input.organisationId],
-      )
+    if (parent.replacesRunId) {
+      // selectMutationRun holds the source and target in deterministic id
+      // order, so a concurrent re-detection cannot install a competing
+      // replacement between this check and the update below.
       const competing = await client.query<{ id: string }>(
         `select id from redaction_runs
          where organisation_id = $1
            and replaces_run_id = $2
            and deleted_at is null
            and id <> $3`,
-        [input.organisationId, parent.replaces_run_id, input.runId],
+        [input.organisationId, parent.replacesRunId, input.runId],
       )
       if (competing.rows[0]) {
         await client.query('rollback')
         return {
           kind: 'replacement_exists' as const,
-          sourceRunId: parent.replaces_run_id,
+          sourceRunId: parent.replacesRunId,
           replacementRunId: competing.rows[0].id,
         }
-      }
-    }
-
-    if (parent.matter_id) {
-      const matter = await client.query<{ id: string }>(
-        `select id from matters
-         where id = $1 and organisation_id = $2 and deleted_at is null
-         for update`,
-        [parent.matter_id, input.organisationId],
-      )
-      if (matter.rows.length === 0) {
-        await client.query('rollback')
-        return { kind: 'not_found' as const }
-      }
-    }
-    if (parent.document_id) {
-      const document = await client.query<{ id: string }>(
-        `select id from matter_documents
-         where id = $1
-           and organisation_id = $2
-           and matter_id = $3
-           and deleted_at is null
-         for update`,
-        [parent.document_id, input.organisationId, parent.matter_id],
-      )
-      if (document.rows.length === 0) {
-        await client.query('rollback')
-        return { kind: 'not_found' as const }
       }
     }
 
@@ -861,25 +943,31 @@ export async function restoreRedactionRunWithAudit(
          and deleted_at = $3::timestamptz`,
       [input.runId, input.organisationId, cascadeTimestamp],
     )
-    const run = await selectRedactionRun(
+    const restoredRun = await selectRedactionRun(
       client,
-      input.organisationId,
+      {
+        id: input.userId,
+        organisationId: input.organisationId,
+        role: 'member',
+      },
       input.runId,
+      'edit',
     )
-    if (!run) throw new Error('Restored redaction run could not be read.')
+    if (!restoredRun)
+      throw new Error('Restored redaction run could not be read.')
 
     await appendAuditLog(client, {
       organisationId: input.organisationId,
       userId: input.userId,
       entityType: 'redaction_run',
-      entityId: run.id,
+      entityId: restoredRun.id,
       action: 'redaction_run.restore',
-      metadata: { replacesRunId: run.replacesRunId },
+      metadata: { replacesRunId: restoredRun.replacesRunId },
       requestId: input.requestId,
     })
 
     await client.query('commit')
-    return { kind: 'restored' as const, run }
+    return { kind: 'restored' as const, run: restoredRun }
   } catch (error) {
     await client.query('rollback')
     throw error

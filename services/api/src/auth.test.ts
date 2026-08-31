@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ApiEnv } from './env'
+import { createTestApiEnv } from './test-api-env'
 
 const resendSendMock = vi.hoisted(() => vi.fn())
 
@@ -24,29 +25,7 @@ beforeEach(() => {
   resendSendMock.mockClear()
 })
 
-const baseEnv: ApiEnv = {
-  databaseUrl: 'postgres://obiter:obiter@localhost:5432/obiter',
-  authSecret: 'dev-only-better-auth-secret',
-  authBaseUrl: 'http://localhost:8787',
-  webOrigin: 'http://localhost:3000',
-  marketingOrigin: null,
-  desktopOrigin: 'obiter://desktop-auth',
-  resendApiKey: null,
-  emailFrom: 'onboarding@resend.dev',
-  meilisearchHost: 'http://localhost:7700',
-  meilisearchSearchApiKey: 'dev-key',
-  meilisearchAdminApiKey: 'dev-key',
-  legalAuthoritiesIndex: 'legal_authorities',
-  mojFindCaseLawBaseUrl: 'https://caselaw.nationalarchives.gov.uk',
-  mojFindCaseLawRateLimit: 1000,
-  rampartModel: 'qarlus/rampart',
-  rampartRevision: 'c3221c5cd838eb69a249ab40f8b442483865f233',
-  rampartCacheDir: '/tmp/rampart-cache',
-  rampartMinScore: 0.4,
-  rampartChunkTokens: 400,
-  port: 8787,
-  nodeEnv: 'test',
-}
+const baseEnv: ApiEnv = createTestApiEnv()
 
 describe('authPlugins', () => {
   it('enables bearer authentication without changing cookie configuration', () => {

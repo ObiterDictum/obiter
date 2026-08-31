@@ -1,9 +1,14 @@
 import type { Pool } from 'pg'
+import {
+  matterAccessPredicate,
+  redactionRunAccessPredicate,
+} from './matter-access-boundary'
 import type { DetectionMode, RedactionPolicyMode } from '@obiter/contracts'
 import type { RedactionSpan } from '@obiter/redaction-policy'
 import { appendAuditLog } from './database'
 import {
   computeSummary,
+  selectMutationRun,
   mapRedactionRun,
   redactionRunColumns,
   redactionRunsFrom,
@@ -14,13 +19,15 @@ async function findLiveRedetectionRun(
   queryable: RedactionRunQueryable,
   organisationId: string,
   sourceRunId: string,
+  userId: string,
 ) {
   const result = await queryable.query<RedactionRunRow>(
     `select ${redactionRunColumns} ${redactionRunsFrom}
      where run.organisation_id = $1
        and run.replaces_run_id = $2
-       and run.deleted_at is null`,
-    [organisationId, sourceRunId],
+       and run.deleted_at is null
+       and ${redactionRunAccessPredicate('$3', "'view'")}`,
+    [organisationId, sourceRunId, userId],
   )
   return result.rows[0] ? mapRedactionRun(result.rows[0]) : null
 }
@@ -28,9 +35,10 @@ async function findLiveRedetectionRun(
 export async function getRedetectionRun(
   pool: Pool,
   organisationId: string,
+  userId: string,
   sourceRunId: string,
 ) {
-  return findLiveRedetectionRun(pool, organisationId, sourceRunId)
+  return findLiveRedetectionRun(pool, organisationId, sourceRunId, userId)
 }
 
 interface CreateRedactionRunInput {
@@ -108,16 +116,20 @@ async function lockLinkedRunParents(
   queryable: RedactionRunQueryable,
   input: {
     organisationId: string
+    userId: string
     matterId: string
     documentId: string
     documentVersionId: string
   },
 ) {
   const matter = await queryable.query<{ id: string }>(
-    `select id from matters
-     where id = $1 and organisation_id = $2 and deleted_at is null
+    `select matter.id from matters matter
+     where matter.id = $1
+       and matter.organisation_id = $2
+       and matter.deleted_at is null
+       and ${matterAccessPredicate('$3', "'edit'")}
      for update`,
-    [input.matterId, input.organisationId],
+    [input.matterId, input.organisationId, input.userId],
   )
   if (matter.rows.length === 0) return false
 
@@ -139,42 +151,6 @@ async function lockLinkedRunParents(
   return document.rows.length > 0
 }
 
-async function lockRedetectionParents(
-  queryable: RedactionRunQueryable,
-  input: {
-    organisationId: string
-    matterId: string
-    documentId: string
-    documentVersionId: string
-  },
-) {
-  const result = await queryable.query<{ id: string }>(
-    `select version.id
-     from matter_documents document
-     join matters matter
-       on matter.id = document.matter_id
-      and matter.organisation_id = document.organisation_id
-     join document_versions version
-       on version.id = $4
-      and version.matter_document_id = document.id
-      and version.matter_id = document.matter_id
-      and version.organisation_id = document.organisation_id
-     where document.id = $1
-       and document.organisation_id = $2
-       and document.matter_id = $3
-       and document.deleted_at is null
-       and matter.deleted_at is null
-     for update of document, matter`,
-    [
-      input.documentId,
-      input.organisationId,
-      input.matterId,
-      input.documentVersionId,
-    ],
-  )
-  return result.rows.length > 0
-}
-
 export async function createRedactionRun(input: CreateRedactionRunInput) {
   const matterId = input.matterId ?? null
   const documentId = input.documentId ?? null
@@ -192,6 +168,7 @@ export async function createRedactionRun(input: CreateRedactionRunInput) {
     await client.query('begin')
     const parentsExist = await lockLinkedRunParents(client, {
       organisationId: input.organisationId,
+      userId: input.userId,
       ...linkedSource,
     })
     if (!parentsExist) {
@@ -225,17 +202,16 @@ export async function createRedetectionRun(input: {
   const client = await input.pool.connect()
   try {
     await client.query('begin')
-    const locked = await client.query<RedactionRunRow>(
-      `select ${redactionRunColumns} ${redactionRunsFrom}
-       where run.id = $1 and run.organisation_id = $2 and run.deleted_at is null
-       for update of run`,
-      [input.sourceRunId, input.organisationId],
-    )
-    if (!locked.rows[0]) {
+    const sourceRun = await selectMutationRun(client, {
+      organisationId: input.organisationId,
+      userId: input.userId,
+      runId: input.sourceRunId,
+      includeDeleted: false,
+    })
+    if (!sourceRun) {
       await client.query('rollback')
       return { kind: 'not_found' as const }
     }
-    const sourceRun = mapRedactionRun(locked.rows[0])
     if (sourceRun.detectionMode === 'model+supplement') {
       await client.query('rollback')
       return { kind: 'already_model_detected' as const }
@@ -244,6 +220,7 @@ export async function createRedetectionRun(input: {
       client,
       input.organisationId,
       sourceRun.id,
+      input.userId,
     )
     if (existing) {
       await client.query('rollback')
@@ -259,11 +236,20 @@ export async function createRedetectionRun(input: {
           }
         : null
     if (linkedSource) {
-      const parentsExist = await lockRedetectionParents(client, {
-        organisationId: sourceRun.organisationId,
-        ...linkedSource,
-      })
-      if (!parentsExist) {
+      const version = await client.query<{ id: string }>(
+        `select id from document_versions
+         where id = $1
+           and organisation_id = $2
+           and matter_id = $3
+           and matter_document_id = $4`,
+        [
+          linkedSource.documentVersionId,
+          sourceRun.organisationId,
+          linkedSource.matterId,
+          linkedSource.documentId,
+        ],
+      )
+      if (!version.rows[0]) {
         await client.query('rollback')
         return { kind: 'linked_source_unavailable' as const }
       }

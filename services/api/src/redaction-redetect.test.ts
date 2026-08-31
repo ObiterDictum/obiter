@@ -135,6 +135,7 @@ describe('redetectRedactionRun', () => {
     expect(creation.getRedetectionRun).toHaveBeenCalledWith(
       request.pool,
       'org_1',
+      'usr_1',
       'red_1',
     )
     expect(store.delete).toHaveBeenCalledWith(store.writeText.mock.calls[0][0])

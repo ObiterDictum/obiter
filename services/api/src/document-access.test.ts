@@ -132,6 +132,7 @@ describe('resolveMatterAccess', () => {
       matterId,
       caller.organisationId,
       caller.id,
+      'view',
     ])
   })
 

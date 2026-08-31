@@ -3,9 +3,10 @@ import {
   normaliseFileType,
   type SupportedDocumentType,
 } from './document-extraction'
+import { DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES } from './request-limit-defaults'
 
 /** Bounds buffering and document parsing for authenticated uploads. */
-export const MAX_DOCUMENT_UPLOAD_BYTES = 25 * 1024 * 1024
+export const MAX_DOCUMENT_UPLOAD_BYTES = DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES
 
 export class DocumentUploadError extends Error {
   constructor(message: string) {
@@ -35,15 +36,16 @@ function verifiedType(
 export async function readDocumentUpload(
   file: File,
   declaredType: string,
+  maxBytes: number = MAX_DOCUMENT_UPLOAD_BYTES,
 ): Promise<{
   filename: string
   fileType: SupportedDocumentType
   contents: Buffer
 }> {
   const declaredSupported = normaliseFileType(declaredType)
-  if (file.size > MAX_DOCUMENT_UPLOAD_BYTES)
+  if (file.size > maxBytes)
     throw new DocumentUploadError(
-      `Document uploads must be at most ${MAX_DOCUMENT_UPLOAD_BYTES / 1024 / 1024} MB.`,
+      `Document uploads must be at most ${maxBytes / 1024 / 1024} MB.`,
     )
 
   const contents = Buffer.from(await file.arrayBuffer())

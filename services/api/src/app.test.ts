@@ -7,6 +7,7 @@ import { createApiApp } from './app'
 import type { createAuth } from './auth'
 import { SCANNED_PDF_MESSAGE } from './document-extraction'
 import type { ApiEnv } from './env'
+import { createTestApiEnv } from './test-api-env'
 import type { RedactionRunRow } from './redaction-database'
 import { createLocalStorage } from './storage'
 
@@ -32,7 +33,7 @@ vi.mock('./redaction-detection', () => ({
 }))
 
 type Auth = ReturnType<typeof createAuth>
-type QueryMock = (...args: unknown[]) => Promise<unknown>
+type QueryMock = (...args: unknown[]) => Promise<{ rows: unknown[] }>
 
 interface ErrorBody {
   error: {
@@ -42,29 +43,7 @@ interface ErrorBody {
   }
 }
 
-const testEnv: ApiEnv = {
-  databaseUrl: 'postgres://obiter:obiter@localhost:5432/obiter',
-  authSecret: 'dev-only-better-auth-secret',
-  authBaseUrl: 'http://localhost:8787',
-  webOrigin: 'http://localhost:3000',
-  marketingOrigin: null,
-  desktopOrigin: 'obiter://desktop-auth',
-  resendApiKey: null,
-  emailFrom: 'onboarding@resend.dev',
-  meilisearchHost: 'http://localhost:7700',
-  meilisearchSearchApiKey: 'dev-key',
-  meilisearchAdminApiKey: 'dev-key',
-  legalAuthoritiesIndex: 'legal_authorities',
-  mojFindCaseLawBaseUrl: 'https://caselaw.nationalarchives.gov.uk',
-  mojFindCaseLawRateLimit: 1000,
-  rampartModel: 'qarlus/rampart',
-  rampartRevision: 'c3221c5cd838eb69a249ab40f8b442483865f233',
-  rampartCacheDir: '/tmp/rampart-cache',
-  rampartMinScore: 0.4,
-  rampartChunkTokens: 400,
-  port: 8787,
-  nodeEnv: 'test',
-}
+const testEnv: ApiEnv = createTestApiEnv()
 
 function createPool(query: QueryMock): Pool {
   return {
@@ -440,7 +419,7 @@ describe('createApiApp', () => {
     expect(directQueries).toEqual([
       [
         expect.stringContaining('from matters'),
-        ['mtr_1', 'org_personal', false],
+        ['mtr_1', 'org_personal', false, 'usr_2', 'edit'],
       ],
       [
         expect.stringContaining('from matter_shares'),
@@ -764,7 +743,7 @@ describe('createApiApp', () => {
     expect(response.status).toBe(200)
     expect(queries[0]).toEqual([
       expect.stringContaining('from matters'),
-      ['org_1', false],
+      ['org_1', false, 'usr_1'],
     ])
   })
 
@@ -894,7 +873,7 @@ describe('createApiApp', () => {
       ),
     ).toEqual([
       'begin',
-      'select deleted_at::text from',
+      'select matter.deleted_at::text from',
       'update matters set',
       'update matter_documents set',
       'update redaction_runs set',
@@ -1427,7 +1406,11 @@ describe('createApiApp', () => {
           const text = String(sql)
           transactionQueries.push(text)
           if (text === 'begin' || text === 'commit') return { rows: [] }
-          if (text.includes('for update of run')) return { rows: [sourceRun] }
+          if (
+            text.includes('for update of run') ||
+            text.includes('select matter_id, document_id, replaces_run_id')
+          )
+            return { rows: [sourceRun] }
           if (text.includes('run.replaces_run_id')) return { rows: [] }
           if (text.includes('insert into redaction_runs')) {
             // Reconstruct the created row from the mocked insert params; the
@@ -1659,11 +1642,11 @@ describe('createApiApp', () => {
   })
 })
 
-function authWithRole(role: string | null): Auth {
+function authWithRole(role: string | null, userId = 'usr_1'): Auth {
   return {
     api: {
       getSession: async () => ({
-        user: { id: 'usr_1', organisationId: 'org_1', role },
+        user: { id: userId, organisationId: 'org_1', role },
         session: { id: 'ses_1' },
       }),
     },
@@ -1776,6 +1759,8 @@ describe('createApiApp redaction review reads', () => {
           if (text.includes('from redaction_runs')) {
             const visible =
               run && values[0] === run.id && values[1] === run.organisation_id
+            if (run?.deleted_at && text.includes('run.deleted_at is null'))
+              return { rows: [] }
             return { rows: visible ? [run] : [] }
           }
           if (text.includes('from document_versions')) {
@@ -1871,6 +1856,27 @@ describe('createApiApp redaction review reads', () => {
     expect(organisationless.status).toBe(404)
     expect(((await organisationless.json()) as ErrorBody).error.code).toBe(
       'redaction_run_not_found',
+    )
+  })
+
+  it('rejects unauthenticated standalone redaction creation before storage', async () => {
+    const unauthenticatedAuth = {
+      api: { getSession: async () => null },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const { app } = createRedactionReadApp({
+      run: null,
+      auth: unauthenticatedAuth,
+    })
+
+    const response = await app.request('/api/redaction-runs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ filename: 'source.txt', text: 'secret' }),
+    })
+    expect(response.status).toBe(401)
+    expect(((await response.json()) as ErrorBody).error.code).toBe(
+      'unauthenticated',
     )
   })
 
@@ -2091,15 +2097,20 @@ describe('createApiApp redaction review reads', () => {
     expect(readBinary).toHaveBeenCalledWith('org/org_1/artifacts/art_1')
   })
 
-  it('returns matter-attached source PDF bytes with a real MIME type and nosniff', async () => {
-    const pdfBytes = Buffer.from('%PDF-1.4 source')
-    const readBinary = vi.fn(async () => pdfBytes)
-    const run = finalizedRunRow({
-      source_filename: 'brief.pdf',
-      document_version_id: 'ver_1',
-      source_file_object_key: null,
-      source_mime_type: null,
-    })
+  function sourceFileApp({
+    run,
+    documentVersion,
+    bytes,
+  }: {
+    run: RedactionRunRow
+    documentVersion?: {
+      object_key: string
+      filename: string
+      file_type: string
+    }
+    bytes: Buffer
+  }) {
+    const readBinary = vi.fn(async () => bytes)
     const app = createApiApp(
       testEnv,
       createHybridPool(
@@ -2112,16 +2123,7 @@ describe('createApiApp redaction review reads', () => {
             return { rows: visible ? [run] : [] }
           }
           if (text.includes('from document_versions')) {
-            return {
-              rows: [
-                {
-                  object_key:
-                    'org/org_1/matters/mtr_1/documents/doc_1/versions/ver_1/source',
-                  filename: 'brief.pdf',
-                  file_type: 'pdf',
-                },
-              ],
-            }
+            return { rows: documentVersion ? [documentVersion] : [] }
           }
           return { rows: [] }
         },
@@ -2131,7 +2133,7 @@ describe('createApiApp redaction review reads', () => {
         auth: authWithRole('member'),
         storage: {
           readText: async () => {
-            throw new Error('text read should not be used for source PDF')
+            throw new Error('text read should not be used for source file')
           },
           writeText: async () => undefined,
           readBinary,
@@ -2139,16 +2141,92 @@ describe('createApiApp redaction review reads', () => {
         },
       },
     )
+    return { app, readBinary }
+  }
+
+  function expectNonExecutableSourceFile(response: Response) {
+    const disposition = response.headers.get('content-disposition') ?? ''
+    expect(disposition.split(';', 1)[0]?.trim().toLowerCase()).toBe(
+      'attachment',
+    )
+    const csp = response.headers.get('content-security-policy') ?? ''
+    expect(csp).toMatch(/\bsandbox\b/)
+    expect(csp).toMatch(/script-src\s+'none'/)
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff')
+  }
+
+  it('returns matter-attached source PDF bytes with a real MIME type and nosniff', async () => {
+    const pdfBytes = Buffer.from('%PDF-1.4 source')
+    const objectKey =
+      'org/org_1/matters/mtr_1/documents/doc_1/versions/ver_1/source'
+    const { app, readBinary } = sourceFileApp({
+      run: finalizedRunRow({
+        source_filename: 'brief.pdf',
+        document_version_id: 'ver_1',
+        source_file_object_key: null,
+        source_mime_type: null,
+      }),
+      documentVersion: {
+        object_key: objectKey,
+        filename: 'brief.pdf',
+        file_type: 'pdf',
+      },
+      bytes: pdfBytes,
+    })
 
     const response = await app.request('/api/redaction-runs/red_1/source-file')
     expect(response.status).toBe(200)
     expect(response.headers.get('content-type')).toBe('application/pdf')
     expect(response.headers.get('content-disposition')).toContain('brief.pdf')
-    expect(response.headers.get('x-content-type-options')).toBe('nosniff')
+    expectNonExecutableSourceFile(response)
     expect(Buffer.from(await response.arrayBuffer())).toEqual(pdfBytes)
-    expect(readBinary).toHaveBeenCalledWith(
-      'org/org_1/matters/mtr_1/documents/doc_1/versions/ver_1/source',
+    expect(readBinary).toHaveBeenCalledWith(objectKey)
+  })
+
+  it('returns standalone source DOCX bytes with the Word MIME type', async () => {
+    const docxBytes = Buffer.from('PK docx source')
+    const objectKey = 'org/org_1/redaction-runs/red_1/source-file'
+    const { app, readBinary } = sourceFileApp({
+      run: finalizedRunRow({
+        source_filename: 'brief.docx',
+        source_file_object_key: objectKey,
+        source_mime_type:
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      }),
+      bytes: docxBytes,
+    })
+
+    const response = await app.request('/api/redaction-runs/red_1/source-file')
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toBe(
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     )
+    expect(response.headers.get('content-disposition')).toContain('brief.docx')
+    expectNonExecutableSourceFile(response)
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(docxBytes)
+    expect(readBinary).toHaveBeenCalledWith(objectKey)
+  })
+
+  it('does not serve a stored hostile MIME as executable content', async () => {
+    const htmlBytes = Buffer.from('<script>alert(1)</script>')
+    const objectKey = 'org/org_1/redaction-runs/red_1/source-file'
+    const { app } = sourceFileApp({
+      run: finalizedRunRow({
+        source_filename: 'payload.html',
+        source_file_object_key: objectKey,
+        source_mime_type: 'text/html',
+      }),
+      bytes: htmlBytes,
+    })
+
+    const response = await app.request('/api/redaction-runs/red_1/source-file')
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-type')).toBe(
+      'application/octet-stream',
+    )
+    expect(response.headers.get('content-type')).not.toBe('text/html')
+    expectNonExecutableSourceFile(response)
+    expect(Buffer.from(await response.arrayBuffer())).toEqual(htmlBytes)
   })
 
   it('returns text output/file with nosniff', async () => {
@@ -2260,7 +2338,11 @@ describe('createApiApp degraded finalization acknowledgement', () => {
         async (sql, params) => {
           const text = String(sql)
           if (text === 'begin' || text === 'commit') return { rows: [] }
-          if (text.includes('for update of run')) return { rows: [readyRun] }
+          if (
+            text.includes('for update of run') ||
+            text.includes('select matter_id, document_id, replaces_run_id')
+          )
+            return { rows: [readyRun] }
           if (text.includes('insert into artifacts')) {
             return {
               rows: [
@@ -2443,7 +2525,11 @@ describe('createApiApp degraded finalization acknowledgement', () => {
         async (sql) => {
           const text = String(sql)
           if (text === 'begin' || text === 'commit') return { rows: [] }
-          if (text.includes('for update of run')) return { rows: [readyRun] }
+          if (
+            text.includes('for update of run') ||
+            text.includes('select matter_id, document_id, replaces_run_id')
+          )
+            return { rows: [readyRun] }
           if (text.includes('insert into artifacts')) {
             return {
               rows: [
@@ -2543,7 +2629,10 @@ describe('createApiApp replaced redaction run guards', () => {
         async (sql) => {
           const text = String(sql)
           if (text === 'begin' || text === 'rollback') return { rows: [] }
-          if (text.includes('for update of run')) {
+          if (
+            text.includes('for update of run') ||
+            text.includes('select matter_id, document_id, replaces_run_id')
+          ) {
             return { rows: [replacedRun] }
           }
           if (text.includes('update redaction_runs')) {
@@ -2613,7 +2702,11 @@ describe('createApiApp soft-delete write races', () => {
         async (sql) => {
           const text = String(sql)
           if (text === 'begin' || text === 'rollback') return { rows: [] }
-          if (text.includes('for update of run')) return { rows: [] }
+          if (
+            text.includes('for update of run') ||
+            text.includes('select matter_id, document_id, replaces_run_id')
+          )
+            return { rows: [] }
           throw new Error(`Unexpected SQL: ${text}`)
         },
       ),
@@ -2656,7 +2749,11 @@ describe('createApiApp soft-delete write races', () => {
         async (sql) => {
           const text = String(sql)
           if (text === 'begin' || text === 'rollback') return { rows: [] }
-          if (text.includes('for update of run')) return { rows: [] }
+          if (
+            text.includes('for update of run') ||
+            text.includes('select matter_id, document_id, replaces_run_id')
+          )
+            return { rows: [] }
           throw new Error(`Unexpected SQL: ${text}`)
         },
       ),
@@ -2709,7 +2806,8 @@ describe('createApiApp soft-delete write races', () => {
         async (sql) => {
           const text = String(sql)
           if (text === 'begin' || text === 'rollback') return { rows: [] }
-          if (text.includes('select id from matters')) return { rows: [] }
+          if (text.includes('select matter.id from matters'))
+            return { rows: [] }
           throw new Error(`Unexpected SQL: ${text}`)
         },
       ),
@@ -2760,7 +2858,8 @@ describe('createApiApp soft-delete write races', () => {
           const text = String(sql)
           transactionQueries.push(text)
           if (text === 'begin' || text === 'rollback') return { rows: [] }
-          if (text.includes('select id from matters')) return { rows: [] }
+          if (text.includes('select matter.id from matters'))
+            return { rows: [] }
           throw new Error(`Unexpected SQL: ${text}`)
         },
       ),
@@ -2872,7 +2971,7 @@ describe('createApiApp restore routes', () => {
         const sql = String(args[0]).trim()
         if (sql === 'begin' || sql === 'commit' || sql === 'rollback')
           return { rows: [] }
-        if (sql.startsWith('select matter_id, document_id'))
+        if (sql.startsWith('select matter_id, document_id, replaces_run_id'))
           return {
             rows: [
               { matter_id: null, document_id: null, replaces_run_id: null },
@@ -2881,6 +2980,10 @@ describe('createApiApp restore routes', () => {
         if (sql.startsWith('select deleted_at::text'))
           return { rows: [{ deleted_at: '2026-02-01 00:00:00.1+00' }] }
         if (sql.startsWith('update redaction_runs')) return { rows: [] }
+        if (sql.startsWith('select run.id') && sql.includes('for update'))
+          return {
+            rows: [finalizedRunRow({ deleted_at: '2026-02-01 00:00:00.1+00' })],
+          }
         if (sql.startsWith('select run.id'))
           return { rows: [finalizedRunRow({ deleted_at: null })] }
         if (sql.includes('insert into audit_logs')) return { rows: [] }
@@ -2903,7 +3006,7 @@ describe('createApiApp restore routes', () => {
       createConnectedPool(async (...args) => {
         const sql = String(args[0]).trim()
         if (sql === 'begin' || sql === 'rollback') return { rows: [] }
-        if (sql.startsWith('select matter_id, document_id'))
+        if (sql.startsWith('select matter_id, document_id, replaces_run_id'))
           return {
             rows: [
               { matter_id: null, document_id: null, replaces_run_id: 'red_0' },
@@ -2911,6 +3014,15 @@ describe('createApiApp restore routes', () => {
           }
         if (sql.startsWith('select deleted_at::text'))
           return { rows: [{ deleted_at: '2026-02-01 00:00:00.1+00' }] }
+        if (sql.startsWith('select run.id') && sql.includes('for update'))
+          return {
+            rows: [
+              finalizedRunRow({
+                deleted_at: '2026-02-01 00:00:00.1+00',
+                replaces_run_id: 'red_0',
+              }),
+            ],
+          }
         if (sql.includes('replaces_run_id = $2'))
           return { rows: [{ id: 'red_2' }] }
         if (sql.startsWith('select id from redaction_runs'))
@@ -3069,7 +3181,10 @@ describe('createApiApp includeDeleted authorization', () => {
         const values = Array.isArray(parameters) ? parameters : []
         const includeDeleted = values.includes(true)
 
-        if (text.includes('from matter_documents d')) {
+        if (
+          text.includes('from matter_documents d\n') &&
+          text.includes('order by d.created_at')
+        ) {
           return { rows: includeDeleted ? [deletedDocumentRow] : [] }
         }
         if (text.includes('from matter_documents')) {
@@ -3078,7 +3193,7 @@ describe('createApiApp includeDeleted authorization', () => {
           }
         }
         if (text.includes('from matters')) {
-          if (values.length === 2)
+          if (!text.includes('matter.id = $1'))
             return { rows: includeDeleted ? [deletedMatterRow] : [] }
           return {
             rows: includeDeleted ? [deletedMatterRow] : [liveMatterRow],
@@ -3127,14 +3242,16 @@ describe('createApiApp includeDeleted authorization', () => {
 })
 
 describe('createApiApp deleted-run audit access shape', () => {
-  it('returns the audit report of a deleted run to an owner', async () => {
+  it('returns the audit report of a deleted standalone run to a non-creator admin', async () => {
     const app = createApiApp(
       testEnv,
       createPool(async (sql) => {
         if (typeof sql === 'string' && sql.includes('from redaction_runs')) {
+          if (sql.includes('run.deleted_at is null')) return { rows: [] }
           return {
             rows: [
               finalizedRunRow({
+                created_by: 'usr_creator',
                 deleted_at: '2026-02-01T00:00:00.000Z',
                 deleted_by: 'usr_1',
                 detection_mode: 'heuristics+supplement',
@@ -3147,7 +3264,7 @@ describe('createApiApp deleted-run audit access shape', () => {
         }
         return { rows: [] }
       }),
-      { auth: authWithRole('owner') },
+      { auth: authWithRole('admin', 'usr_admin') },
     )
 
     const response = await app.request('/api/redaction-runs/red_1/audit')
@@ -3156,11 +3273,46 @@ describe('createApiApp deleted-run audit access shape', () => {
     expect(report.detectionMode).toBe('heuristics+supplement')
   })
 
-  it('forbids a member from reading a deleted run audit report', async () => {
+  it('returns an audit report for a run whose matter was deleted', async () => {
+    const queries: string[] = []
     const app = createApiApp(
       testEnv,
       createPool(async (sql) => {
         if (typeof sql === 'string' && sql.includes('from redaction_runs')) {
+          queries.push(sql)
+          if (sql.includes('run.deleted_at is null')) return { rows: [] }
+          return {
+            rows: [
+              finalizedRunRow({
+                matter_id: 'mtr_deleted',
+                deleted_at: '2026-02-01T00:00:00.000Z',
+                deleted_by: 'usr_owner',
+              }),
+            ],
+          }
+        }
+        if (typeof sql === 'string' && sql.includes('audit_logs'))
+          return { rows: [] }
+        return { rows: [] }
+      }),
+      { auth: authWithRole('owner', 'usr_owner') },
+    )
+
+    const response = await app.request('/api/redaction-runs/red_1/audit')
+    expect(response.status).toBe(200)
+    expect(
+      queries.some((sql) => sql.includes('run.deleted_at is not null')),
+    ).toBe(true)
+  })
+
+  it('forbids a member from a deleted run audit report', async () => {
+    const queries: string[] = []
+    const app = createApiApp(
+      testEnv,
+      createPool(async (sql) => {
+        queries.push(String(sql))
+        if (typeof sql === 'string' && sql.includes('from redaction_runs')) {
+          if (sql.includes('run.deleted_at is null')) return { rows: [] }
           return {
             rows: [
               finalizedRunRow({
@@ -3178,6 +3330,17 @@ describe('createApiApp deleted-run audit access shape', () => {
     const response = await app.request('/api/redaction-runs/red_1/audit')
     expect(response.status).toBe(403)
     expect(((await response.json()) as ErrorBody).error.code).toBe('forbidden')
+    expect(queries.some((sql) => sql.includes('deleted_at is not null'))).toBe(
+      false,
+    )
+
+    const unknownResponse = await app.request(
+      '/api/redaction-runs/red_unknown/audit',
+    )
+    expect(unknownResponse.status).toBe(403)
+    expect(queries.some((sql) => sql.includes('deleted_at is not null'))).toBe(
+      false,
+    )
   })
 
   it('returns 404 for a direct GET of a deleted run (excluded by default)', async () => {

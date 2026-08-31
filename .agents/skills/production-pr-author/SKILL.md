@@ -1,6 +1,6 @@
 ---
 name: production-pr-author
-description: Production-grade pull request authoring for Obiter. Use when creating, updating, or preparing PR titles/bodies/summaries. Produces clear engineering PR descriptions covering what changed, why, implementation details, tests, risks, security/data implications, architecture impact, rollout, and follow-ups.
+description: MUST use before creating, opening, updating, or preparing any Obiter pull request, including when the user asks to branch, commit, or write a PR body. Use for PR titles, bodies, summaries, and review-facing updates; require the structure and verification rules below.
 ---
 
 # Production PR Author
@@ -13,9 +13,12 @@ Do not write marketing copy, vague confidence language, or AI-flavored filler. B
 
 ## Subagent Model Policy
 
-Use the primary Codex model for the substantive engineering work: inspecting the diff, reading relevant rules and docs, deciding what changed, assessing security/data/privacy impact, identifying testing gaps, and choosing the final title/body claims.
+Keep the work in two halves:
 
-After those facts are locked, any delegated PR-title or PR-body drafting subagent must be spawned with `model: "opencode-go/deepseek-v4-flash"`. Do not inherit the primary model for post-analysis prose drafting unless the user explicitly overrides this policy.
+1. **Analysis:** the primary Codex model must do the substantive engineering work: inspect the diff, read relevant rules and docs, decide what changed, assess security/data/privacy impact, identify testing gaps, and choose the final claims.
+2. **Prose drafting:** only after those facts are locked, a delegated title/body drafter may turn a minimum sanitized packet into prose. Spawn it with `model: "openai-codex/gpt-5.6-luna"`.
+
+Luna owns prose drafting, not analysis. M9 evidence showed Luna finding important defects that same-model M8 reviewers missed, so it is the better independent voice for review-facing wording; keeping factual analysis in the primary model prevents an ungrounded drafter from inventing implementation or test claims. Do not give the drafter authority to inspect unrelated code, and do not inherit the primary model for post-analysis prose drafting unless the user explicitly overrides this policy.
 
 Give the mini-model subagent only the minimum sanitized packet: branch/base, changed-file summary, locked implementation notes, locked security/data/privacy assessment, exact tests run, known gaps, and wording constraints. Do not give it secrets, private matter data, raw legal text, raw prompts, embeddings, sensitive logs, private screenshots, or authority to inspect unrelated code.
 

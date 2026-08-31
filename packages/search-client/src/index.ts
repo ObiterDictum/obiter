@@ -8,6 +8,10 @@ import {
   type LegalSourceType,
 } from '@obiter/legal-schema'
 
+interface EngineRankingHit {
+  _rankingScore?: number
+}
+
 export type LegalSearchDocument = LegalAuthority
 export interface LegalSearchSnippet {
   evidenceId: string
@@ -37,10 +41,30 @@ export type LegalSearchFilters = Partial<{
 
 export interface SearchIndexOptions {
   primaryKey?: 'id'
+  /**
+   * Continue when the server does not support one of the index settings, and
+   * report which. Off by default: a Meilisearch that cannot apply a setting is
+   * not running the configuration this package defines, and a caller that has
+   * not said it can live with that should be told rather than served silently.
+   *
+   * The one real case is `prefixSearch`, which Meilisearch added in 1.12.
+   * A 1.8 server has no `settings/prefix-search` route and answers 404, so
+   * prefix search stays on and short queries match on prefixes. That materially
+   * changes short-word precision, which is why this is opt-in and reported
+   * rather than assumed harmless.
+   */
+  allowUnsupportedSettings?: boolean
 }
 
 export interface SearchIndexResult {
   taskUid?: number
+  /**
+   * Settings the server could not apply, empty when everything applied. A run
+   * that measures anything must put this in its report: a number measured under
+   * a configuration the report does not name cannot be compared with one that
+   * was.
+   */
+  unsupportedSettings: string[]
 }
 
 export interface SearchIndexDocumentsResult {
@@ -117,6 +141,8 @@ type IndexLike = {
   updatePrefixSearch(
     prefixSearch: 'disabled' | 'indexingTime',
   ): SearchEnqueuedTaskPromise
+  /** Read-only support probe. See `applyOptionalSetting`. */
+  getPrefixSearch(): Promise<string>
   updateStopWords(stopWords: string[]): SearchEnqueuedTaskPromise
   updateTypoTolerance(settings: {
     minWordSizeForTypos: { oneTypo: number; twoTypos: number }
@@ -158,7 +184,7 @@ type DocumentIndexClient = {
 
 type DocumentReadClient = {
   index(indexName: string): {
-    getDocument(documentId: string): Promise<unknown>
+    getDocument(documentId: string): Promise<LegalAuthority>
   }
 }
 
@@ -173,11 +199,54 @@ const searchableAttributes = [
   'paragraphs.text',
 ]
 
+/**
+ * Meilisearch comparison operators take numeric operands only, so a range
+ * filter cannot read the ISO `dateDecided` string. The index carries this
+ * derived companion field for range filtering; `dateDecided` remains the
+ * authority and the only date the domain schema and callers ever see.
+ */
+const dateDecidedTimestampField = 'dateDecidedTimestamp'
+
+/**
+ * Midnight UTC for an ISO `YYYY-MM-DD` date. Every indexed value lands on a day
+ * boundary, so an inclusive `dateTo` needs no end-of-day adjustment: a document
+ * decided on the boundary day compares equal, not greater.
+ */
+function toDateDecidedTimestamp(isoDate: string): number | null {
+  const match = isoDate.match(/^(\d{4})-(\d{2})-(\d{2})$/)
+  if (!match) return null
+
+  const timestamp = Date.UTC(
+    Number(match[1]),
+    Number(match[2]) - 1,
+    Number(match[3]),
+  )
+  return Number.isNaN(timestamp) ? null : timestamp
+}
+
+/**
+ * Projects a validated authority into the shape sent to the engine. The schema
+ * has already guaranteed `dateDecided` is an ISO date, so a null here means the
+ * two have drifted apart rather than that a caller passed something odd.
+ */
+function toIndexedLegalAuthority(document: LegalAuthority) {
+  const timestamp = toDateDecidedTimestamp(document.dateDecided)
+
+  if (timestamp === null) {
+    throw new Error(
+      `Cannot derive ${dateDecidedTimestampField} for document ${document.id}: dateDecided "${document.dateDecided}" passed schema validation but is not an ISO date.`,
+    )
+  }
+
+  return { ...document, [dateDecidedTimestampField]: timestamp }
+}
+
 const filterableAttributes = [
   'court',
   'jurisdiction',
   'sourceType',
   'dateDecided',
+  dateDecidedTimestampField,
 ]
 const sortableAttributes = ['dateDecided']
 const legalStopWords = [
@@ -258,12 +327,48 @@ export function createClient(host: string, apiKey: string): MeiliSearch {
   return new MeiliSearch({ host, apiKey })
 }
 
+/**
+ * Search-time parameters this server rejects as unknown.
+ *
+ * `createIndex` can only discover what an old server cannot be *configured*
+ * with. This finds what it cannot be *asked* for, which is a separate gap and
+ * was the larger one: Meilisearch added `rankingScoreThreshold` in 1.9, and a
+ * 1.8 server answers "Unknown field `rankingScoreThreshold`" to every non-empty
+ * query. Left undetected that is 51 of 54 benchmark cases failing as search
+ * errors, which looks like a broken index rather than an old server.
+ *
+ * One probe query, run once, rather than a per-search retry: a retry loop would
+ * hide the gap inside every call site and make the numbers depend on which
+ * queries happened to be tried.
+ */
+export async function detectUnsupportedSearchFeatures(
+  client: SearchClient,
+  indexName: string,
+): Promise<string[]> {
+  try {
+    await client.index(indexName).search('', {
+      limit: 1,
+      rankingScoreThreshold: legalSearchIndexSettings.rankingScoreThreshold,
+    })
+    return []
+  } catch (error) {
+    // MeiliSearchApiError puts the provider's message on `message` itself; the
+    // `cause` is the parsed error body, not a string.
+    const message = error instanceof Error ? error.message : ''
+    if (message.includes('rankingScoreThreshold')) {
+      return ['rankingScoreThreshold']
+    }
+    throw wrapSearchError('Search feature probe failed.', error)
+  }
+}
+
 export async function createIndex(
   client: IndexSetupClient,
   indexName: string,
   options: SearchIndexOptions = {},
 ): Promise<SearchIndexResult> {
   let taskUid: number | undefined
+  const unsupportedSettings: string[] = []
 
   try {
     const primaryKey = options.primaryKey ?? 'id'
@@ -295,9 +400,15 @@ export async function createIndex(
       index.updateRankingRules(rankingRules),
       indexSetupTaskTimeoutMs,
     )
-    await waitForSucceededTask(
-      index.updatePrefixSearch(legalSearchIndexSettings.prefixSearch),
-      indexSetupTaskTimeoutMs,
+    // Optional only in the sense that an older server cannot be given it. It is
+    // load-bearing where it applies: `minimumShortWordPrecision` in the
+    // benchmark baseline rests on prefix search being off.
+    await applyOptionalSetting(
+      'prefixSearch',
+      () => index.getPrefixSearch(),
+      () => index.updatePrefixSearch(legalSearchIndexSettings.prefixSearch),
+      options.allowUnsupportedSettings ?? false,
+      unsupportedSettings,
     )
     await waitForSucceededTask(
       index.updateStopWords(legalStopWords),
@@ -312,7 +423,7 @@ export async function createIndex(
       indexSetupTaskTimeoutMs,
     )
 
-    return { taskUid }
+    return { taskUid, unsupportedSettings }
   } catch (error) {
     throw wrapSearchError('Search index setup failed.', error)
   }
@@ -332,10 +443,12 @@ export async function indexDocuments(
     )
   }
 
+  const indexable = parsed.data.map(toIndexedLegalAuthority)
+
   try {
     const task = await client
       .index(indexName)
-      .addDocuments(parsed.data, {
+      .addDocuments(indexable, {
         primaryKey: 'id',
       })
       .waitTask({ timeout: documentIndexingTaskTimeoutMs, interval: 100 })
@@ -382,6 +495,11 @@ export async function search(
   filters: LegalSearchFilters = {},
   options: LegalSearchOptions = {},
 ): Promise<LegalSearchResult> {
+  // Built before the try: a malformed filter is the caller's input error, and
+  // wrapping it as a provider failure would hide which filter was wrong behind
+  // a generic "Search failed."
+  const filter = toMeiliFilters(filters)
+
   try {
     const searchOptions: {
       filter?: string[]
@@ -392,7 +510,7 @@ export async function search(
       rankingScoreThreshold?: number
       showRankingScore?: boolean
     } = {
-      filter: toMeiliFilters(filters),
+      filter,
       sort: ['dateDecided:desc'],
       matchingStrategy:
         options.matchingStrategy ?? legalSearchIndexSettings.matchingStrategy,
@@ -418,7 +536,8 @@ export async function search(
         options.includeParagraphs || options.includeSnippets
           ? LegalAuthoritySchema.parse(hit)
           : LegalAuthoritySummarySchema.parse(hit)
-      const engineRankingScore = readEngineRankingScore(hit)
+      // SAFETY: Meilisearch hit is external JSON; _rankingScore is engine metadata outside LegalAuthority schema, read via named EngineRankingHit interface after schema parse
+      const engineRankingScore = readEngineRankingScore(hit as EngineRankingHit)
       return engineRankingScore === undefined
         ? parsedHit
         : { ...parsedHit, engineRankingScore }
@@ -481,11 +600,8 @@ export function extractLegalSearchSnippets(
           .slice(0, 2)
       : []
 
-  return selectedParagraphs.map(({ paragraph, normalizedText }) => ({
-    evidenceId: createJudgmentParagraphEvidenceId(
-      hit.id,
-      paragraph.paragraphNumber,
-    ),
+  return selectedParagraphs.map(({ paragraph, index, normalizedText }) => ({
+    evidenceId: createJudgmentParagraphEvidenceId(hit.id, index + 1),
     paragraphNumber: paragraph.paragraphNumber,
     // Excerpting reads the raw text so the returned snippet keeps its original
     // casing and punctuation.
@@ -495,11 +611,27 @@ export function extractLegalSearchSnippets(
   }))
 }
 
+/**
+ * Anchors evidence to a paragraph's position in the document, not to the number
+ * the judgment prints beside it.
+ *
+ * Those are not the same thing. LegalDocML marks block-quoted paragraphs from a
+ * cited judgment as paragraphs in their own right, carrying the quoted case's
+ * numbering, and appendices restart at 1. Both put duplicate `paragraphNumber`
+ * values in one document — measured at 22 duplicates in a 159-paragraph UKSC
+ * judgment, and in 6 of 15 sampled documents across courts. Keying evidence on
+ * that number gives two different paragraphs the same evidence id, so a
+ * citation cannot identify what it cites.
+ *
+ * `ordinal` is 1-based position in the document's paragraph array, which the
+ * parsers already assign uniquely. `paragraphNumber` is unchanged and remains
+ * what a reader is shown, because "at [42]" has to say what the judgment says.
+ */
 export function createJudgmentParagraphEvidenceId(
   documentId: string,
-  paragraphNumber: number,
+  ordinal: number,
 ) {
-  return `${documentId}:judgment_paragraph:${paragraphNumber}`
+  return `${documentId}:judgment_paragraph:${ordinal}`
 }
 
 function matchedSnippetTerms(
@@ -569,7 +701,10 @@ function legalSearchMatchTier(hit: LegalSearchHit, normalizedQuery: string) {
   const normalizedTitle = normalizeExactMatchValue(hit.title)
 
   if (normalizeExactMatchValue(hit.id) === normalizedQuery) return 8
-  if (normalizeExactMatchValue(hit.neutralCitation) === normalizedQuery)
+  if (
+    normalizeCitationValue(hit.neutralCitation) ===
+    normalizeCitationValue(normalizedQuery)
+  )
     return 7
   if (normalizedTitle === normalizedQuery) return 6
   if (containsWholeTerm(normalizedTitle, normalizedQuery)) return 5
@@ -593,9 +728,8 @@ function legalSearchMatchTier(hit: LegalSearchHit, normalizedQuery: string) {
   return 0
 }
 
-function readEngineRankingScore(hit: unknown) {
-  if (typeof hit !== 'object' || hit === null) return undefined
-  return validEngineRankingScore(Reflect.get(hit, '_rankingScore'))
+function readEngineRankingScore(hit: EngineRankingHit) {
+  return validEngineRankingScore(hit._rankingScore)
 }
 
 function validEngineRankingScore(value: unknown) {
@@ -637,6 +771,27 @@ export function normalizeExactMatchValue(value: string | null | undefined) {
     .trim()
     .toLocaleLowerCase('en-GB')
     .replace(/\s+/g, ' ')
+}
+
+/**
+ * Citation-strength normalization: everything `normalizeExactMatchValue` does,
+ * plus dropping leading zeros from digit runs.
+ *
+ * Tribunals pad the number in a neutral citation and the senior courts do not.
+ * Find Case Law returns `[2024] UKUT 00236 (IAC)` and `[2024] UKFTT 001074 (TC)`
+ * alongside `[2024] UKSC 22`. A reader types the unpadded form, because that is
+ * what the tribunal's own headnote and every citing judgment print, so exact
+ * citation matching missed every padded citation and quietly degraded to
+ * keyword search across UKUT and UKFTT.
+ *
+ * Applied to both sides of a citation comparison, never to titles: a title may
+ * legitimately contain a zero-padded number that is part of a name.
+ */
+export function normalizeCitationValue(value: string | null | undefined) {
+  return normalizeExactMatchValue(value).replace(
+    /(?<![\p{L}\p{M}\p{N}_])0+(\d)/gu,
+    '$1',
+  )
 }
 
 /**
@@ -810,6 +965,56 @@ export async function getDocument(
   }
 }
 
+/**
+ * A settings route the server does not have, as opposed to a request it
+ * rejected. Meilisearch answers 404 for a route that does not exist in its
+ * version, and that is the only shape treated as "unsupported": a 400 means the
+ * value was wrong, which is a bug here rather than an old server.
+ */
+function isUnsupportedSettingError(error: unknown) {
+  // MeiliSearchApiError carries the raw Response. A 404 from a settings route
+  // means the route is absent from this server's version.
+  return (
+    error instanceof Error &&
+    'response' in error &&
+    (error.response as Response | undefined)?.status === 404
+  )
+}
+
+/**
+ * Applies a setting the server may not have, checking with a read first.
+ *
+ * The read is not politeness. Writing to a settings route Meilisearch 1.8.3 does
+ * not have returns 404 and then wedges the index: measured with plain curl, a
+ * `stop-words` write succeeds 5 times out of 5 on its own at 67ms, and times out
+ * 4 times out of 5 when it follows a `prefix-search` write to the absent route.
+ * A read of the same absent route is harmless — 5 out of 5, same 67ms — so
+ * support is established by reading and the unsupported write is never sent.
+ *
+ * Catching the write's 404 is therefore not enough. The damage is done by
+ * issuing it, and it lands on whatever request comes next, which makes it look
+ * like an unrelated flake somewhere downstream.
+ */
+async function applyOptionalSetting(
+  name: string,
+  probe: () => Promise<string>,
+  task: () => SearchEnqueuedTaskPromise,
+  allowUnsupported: boolean,
+  unsupported: string[],
+) {
+  if (allowUnsupported) {
+    try {
+      await probe()
+    } catch (error) {
+      if (!isUnsupportedSettingError(error)) throw error
+      unsupported.push(name)
+      return
+    }
+  }
+
+  await waitForSucceededTask(task(), indexSetupTaskTimeoutMs)
+}
+
 function isTaskWaitTimeout(error: unknown) {
   return error instanceof Error && /timed out|timeout/i.test(error.message)
 }
@@ -855,11 +1060,33 @@ function toMeiliFilters(filters: LegalSearchFilters): string[] | undefined {
   if (filters.sourceType)
     clauses.push(`sourceType = ${quoteFilter(filters.sourceType)}`)
   if (filters.dateFrom)
-    clauses.push(`dateDecided >= ${quoteFilter(filters.dateFrom)}`)
+    clauses.push(
+      `${dateDecidedTimestampField} >= ${toFilterTimestamp('dateFrom', filters.dateFrom)}`,
+    )
   if (filters.dateTo)
-    clauses.push(`dateDecided <= ${quoteFilter(filters.dateTo)}`)
+    clauses.push(
+      `${dateDecidedTimestampField} <= ${toFilterTimestamp('dateTo', filters.dateTo)}`,
+    )
 
   return clauses.length > 0 ? clauses : undefined
+}
+
+/**
+ * A malformed bound is rejected rather than dropped. Dropping it would widen the
+ * result set past what the caller asked for and return dates outside the
+ * requested range as though they belonged.
+ */
+function toFilterTimestamp(
+  field: 'dateFrom' | 'dateTo',
+  value: string,
+): number {
+  const timestamp = toDateDecidedTimestamp(value)
+
+  if (timestamp === null) {
+    throw new Error(`Search filter ${field} must be an ISO date (YYYY-MM-DD).`)
+  }
+
+  return timestamp
 }
 
 function quoteFilter(value: string) {

@@ -3,9 +3,12 @@ import type { PoolClient, QueryResult, QueryResultRow } from 'pg'
 import type {
   CurrentOrganisation,
   CurrentUser,
+  MatterAccessLevel,
   UserRole,
 } from '@obiter/contracts'
+import type { AuthenticatedOrgUser } from './authz'
 import type { ApiEnv } from './env'
+import { matterAccessPredicate } from './matter-access-boundary'
 
 export interface SessionUserRecord {
   id: string
@@ -556,18 +559,19 @@ export async function createMatter(
 
 export async function listMatters(
   pool: Pool,
-  organisationId: string,
+  user: AuthenticatedOrgUser,
   options: { includeDeleted?: boolean } = {},
 ): Promise<MatterRecord[]> {
   const result = await pool.query<MatterRow>(
     `
       select ${matterColumns}
-      from matters
-      where organisation_id = $1
-        and ($2::boolean or deleted_at is null)
-      order by created_at desc
+      from matters matter
+      where matter.organisation_id = $1
+        and ($2::boolean or matter.deleted_at is null)
+        and ${matterAccessPredicate('$3', "'view'")}
+      order by matter.created_at desc
     `,
-    [organisationId, options.includeDeleted === true],
+    [user.organisationId, options.includeDeleted === true, user.id],
   )
 
   return result.rows.map(mapMatter)
@@ -575,19 +579,27 @@ export async function listMatters(
 
 export async function getMatter(
   pool: Pool,
-  organisationId: string,
+  user: AuthenticatedOrgUser,
   id: string,
+  requiredLevel: MatterAccessLevel,
   options: { includeDeleted?: boolean } = {},
 ): Promise<MatterRecord | null> {
   const result = await pool.query<MatterRow>(
     `
       select ${matterColumns}
-      from matters
-      where id = $1
-        and organisation_id = $2
-        and ($3::boolean or deleted_at is null)
+      from matters matter
+      where matter.id = $1
+        and matter.organisation_id = $2
+        and ($3::boolean or matter.deleted_at is null)
+        and ${matterAccessPredicate('$4', '$5')}
     `,
-    [id, organisationId, options.includeDeleted === true],
+    [
+      id,
+      user.organisationId,
+      options.includeDeleted === true,
+      user.id,
+      requiredLevel,
+    ],
   )
 
   return firstOrNull(result, mapMatter)
@@ -595,43 +607,54 @@ export async function getMatter(
 
 export async function updateMatter(
   pool: Pool,
-  organisationId: string,
+  user: AuthenticatedOrgUser,
   id: string,
   input: UpdateMatterInput,
 ): Promise<MatterRecord | null> {
-  const result = await pool.query<MatterRow>(
-    `
-      update matters
-      set name = coalesce($3, name),
-        description = case when $4::boolean then $5 else description end,
-        primary_jurisdiction = coalesce($6, primary_jurisdiction),
-        secondary_jurisdictions = case when $7::boolean then $8::jsonb else secondary_jurisdictions end,
-        legal_domains = case when $9::boolean then $10::jsonb else legal_domains end,
-        client_reference = coalesce($11, client_reference),
-        status = coalesce($12, status),
-        updated_at = now()
-      where id = $1
-        and organisation_id = $2
-        and deleted_at is null
-      returning ${matterColumns}
-    `,
-    [
-      id,
-      organisationId,
-      input.name ?? null,
-      Object.hasOwn(input, 'description'),
-      input.description ?? null,
-      input.primaryJurisdiction ?? null,
-      Object.hasOwn(input, 'secondaryJurisdictions'),
-      JSON.stringify(input.secondaryJurisdictions ?? []),
-      Object.hasOwn(input, 'legalDomains'),
-      JSON.stringify(input.legalDomains ?? []),
-      input.clientReference ?? null,
-      input.status ?? null,
-    ],
-  )
-
-  return firstOrNull(result, mapMatter)
+  const client = await pool.connect()
+  try {
+    await client.query('begin')
+    const result = await client.query<MatterRow>(
+      `
+        update matters matter
+        set name = coalesce($4, name),
+          description = case when $5::boolean then $6 else description end,
+          primary_jurisdiction = coalesce($7, primary_jurisdiction),
+          secondary_jurisdictions = case when $8::boolean then $9::jsonb else secondary_jurisdictions end,
+          legal_domains = case when $10::boolean then $11::jsonb else legal_domains end,
+          client_reference = coalesce($12, client_reference),
+          status = coalesce($13, status),
+          updated_at = now()
+        where matter.id = $1
+          and matter.organisation_id = $2
+          and matter.deleted_at is null
+          and ${matterAccessPredicate('$3', "'edit'")}
+        returning ${matterColumns}
+      `,
+      [
+        id,
+        user.organisationId,
+        user.id,
+        input.name ?? null,
+        Object.hasOwn(input, 'description'),
+        input.description ?? null,
+        input.primaryJurisdiction ?? null,
+        Object.hasOwn(input, 'secondaryJurisdictions'),
+        JSON.stringify(input.secondaryJurisdictions ?? []),
+        Object.hasOwn(input, 'legalDomains'),
+        JSON.stringify(input.legalDomains ?? []),
+        input.clientReference ?? null,
+        input.status ?? null,
+      ],
+    )
+    await client.query('commit')
+    return firstOrNull(result, mapMatter)
+  } catch (error) {
+    await client.query('rollback')
+    throw error
+  } finally {
+    client.release()
+  }
 }
 
 export interface DeleteCascadeResult {
@@ -668,10 +691,13 @@ export async function softDeleteMatterWithCascade(
     await client.query('begin')
 
     const lock = await client.query<{ id: string }>(
-      `select id from matters
-       where id = $1 and organisation_id = $2 and deleted_at is null
+      `select matter.id from matters matter
+       where matter.id = $1
+         and matter.organisation_id = $2
+         and matter.deleted_at is null
+         and ${matterAccessPredicate('$3', "'edit'")}
        for update`,
-      [input.id, input.organisationId],
+      [input.id, input.organisationId, input.userId],
     )
     if (lock.rows.length === 0) {
       await client.query('rollback')
@@ -772,10 +798,13 @@ export async function restoreMatterWithAudit(
     await client.query('begin')
 
     const lock = await client.query<{ deleted_at: string }>(
-      `select deleted_at::text from matters
-       where id = $1 and organisation_id = $2 and deleted_at is not null
+      `select matter.deleted_at::text from matters matter
+       where matter.id = $1
+         and matter.organisation_id = $2
+         and matter.deleted_at is not null
+         and ${matterAccessPredicate('$3', "'edit'")}
        for update`,
-      [input.id, input.organisationId],
+      [input.id, input.organisationId, input.userId],
     )
     if (lock.rows.length === 0) {
       await client.query('rollback')
@@ -961,10 +990,13 @@ export async function createDocument(
     await client.query('begin')
 
     const matter = await client.query<{ id: string }>(
-      `select id from matters
-       where id = $1 and organisation_id = $2 and deleted_at is null
+      `select matter.id from matters matter
+       where matter.id = $1
+         and matter.organisation_id = $2
+         and matter.deleted_at is null
+         and ${matterAccessPredicate('$3', "'edit'")}
        for update`,
-      [input.matterId, input.organisationId],
+      [input.matterId, input.organisationId, input.userId],
     )
     if (matter.rows.length === 0) {
       await client.query('rollback')
@@ -1063,7 +1095,7 @@ export async function updateDocumentExtraction(
 
 export async function listDocuments(
   pool: Pool,
-  organisationId: string,
+  user: AuthenticatedOrgUser,
   matterId: string,
   options: { includeDeleted?: boolean } = {},
 ): Promise<MatterDocumentRecord[]> {
@@ -1077,12 +1109,16 @@ export async function listDocuments(
         case when v.id is null then null else to_jsonb(v) end as current_version
       from matter_documents d
       left join document_versions v on v.id = d.current_version_id
+      join matters matter
+        on matter.id = d.matter_id
+       and matter.organisation_id = d.organisation_id
       where d.organisation_id = $1
         and d.matter_id = $2
         and ($3::boolean or d.deleted_at is null)
+        and ${matterAccessPredicate('$4', "'view'")}
       order by d.created_at desc
     `,
-    [organisationId, matterId, options.includeDeleted === true],
+    [user.organisationId, matterId, options.includeDeleted === true, user.id],
   )
 
   return result.rows.map((row) => ({
@@ -1095,8 +1131,9 @@ export async function listDocuments(
 
 export async function getDocument(
   pool: Pool,
-  organisationId: string,
+  user: AuthenticatedOrgUser,
   id: string,
+  requiredLevel: MatterAccessLevel,
   options: { includeDeleted?: boolean } = {},
 ): Promise<{
   document: MatterDocumentRecord
@@ -1104,13 +1141,23 @@ export async function getDocument(
 } | null> {
   const documentResult = await pool.query<MatterDocumentRow>(
     `
-      select ${documentColumns}
-      from matter_documents
-      where id = $1
-        and organisation_id = $2
-        and ($3::boolean or deleted_at is null)
+      select ${documentColumns.replaceAll(/\b([a-z_]+)\b/g, 'document.$1')}
+      from matter_documents document
+      join matters matter
+        on matter.id = document.matter_id
+       and matter.organisation_id = document.organisation_id
+      where document.id = $1
+        and document.organisation_id = $2
+        and ($3::boolean or document.deleted_at is null)
+        and ${matterAccessPredicate('$4', '$5')}
     `,
-    [id, organisationId, options.includeDeleted === true],
+    [
+      id,
+      user.organisationId,
+      options.includeDeleted === true,
+      user.id,
+      requiredLevel,
+    ],
   )
   const document = firstOrNull(documentResult, mapDocument)
 
@@ -1126,11 +1173,15 @@ export async function getDocument(
         and matter_document_id = $2
       order by version_number desc
     `,
-    [organisationId, id],
+    [user.organisationId, id],
   )
   const versions = versionsResult.rows.map(mapVersion)
   const currentVersion = document.currentVersionId
-    ? await getDocumentVersion(pool, organisationId, document.currentVersionId)
+    ? await getDocumentVersion(
+        pool,
+        user.organisationId,
+        document.currentVersionId,
+      )
     : null
 
   return {
@@ -1167,13 +1218,41 @@ export async function softDeleteDocumentWithCascade(
   try {
     await client.query('begin')
 
-    const lock = await client.query<{ id: string }>(
-      `select id from matter_documents
-       where id = $1 and organisation_id = $2 and deleted_at is null
-       for update`,
+    const candidate = await client.query<{ matter_id: string }>(
+      `select matter_id from matter_documents
+       where id = $1 and organisation_id = $2 and deleted_at is null`,
       [input.id, input.organisationId],
     )
-    if (lock.rows.length === 0) {
+    const matterId = candidate.rows[0]?.matter_id
+    if (!matterId) {
+      await client.query('rollback')
+      return null
+    }
+
+    const matter = await client.query<{ id: string }>(
+      `select matter.id from matters matter
+       where matter.id = $1
+         and matter.organisation_id = $2
+         and matter.deleted_at is null
+         and ${matterAccessPredicate('$3', "'edit'")}
+       for update`,
+      [matterId, input.organisationId, input.userId],
+    )
+    if (!matter.rows[0]) {
+      await client.query('rollback')
+      return null
+    }
+
+    const lockedDocument = await client.query<{ id: string }>(
+      `select id from matter_documents
+       where id = $1
+         and organisation_id = $2
+         and matter_id = $3
+         and deleted_at is null
+       for update`,
+      [input.id, input.organisationId, matterId],
+    )
+    if (!lockedDocument.rows[0]) {
       await client.query('rollback')
       return null
     }
@@ -1231,7 +1310,7 @@ export async function softDeleteDocumentWithCascade(
   }
 }
 
-/** Restores a document and its cascade-deleted runs; intentionally not yet routed. */
+/** Restores a document and its cascade-deleted runs. */
 export async function restoreDocumentWithAudit(
   pool: Pool,
   input: {
@@ -1251,17 +1330,20 @@ export async function restoreDocumentWithAudit(
        where id = $1 and organisation_id = $2 and deleted_at is not null`,
       [input.id, input.organisationId],
     )
-    if (candidate.rows.length === 0) {
+    const matterId = candidate.rows[0]?.matter_id
+    if (!matterId) {
       await client.query('rollback')
       return null
     }
 
-    const matterId = candidate.rows[0].matter_id
     const matter = await client.query<{ id: string }>(
-      `select id from matters
-       where id = $1 and organisation_id = $2 and deleted_at is null
+      `select id from matters matter
+       where matter.id = $1
+         and matter.organisation_id = $2
+         and matter.deleted_at is null
+         and ${matterAccessPredicate('$3', "'edit'")}
        for update`,
-      [matterId, input.organisationId],
+      [matterId, input.organisationId, input.userId],
     )
     if (matter.rows.length === 0) {
       await client.query('rollback')

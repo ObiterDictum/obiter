@@ -17,8 +17,13 @@ export async function redetectRedactionRun(input: {
 }) {
   const sourceRun = await getRedactionRun(
     input.pool,
-    input.organisationId,
+    {
+      id: input.userId,
+      organisationId: input.organisationId,
+      role: 'member',
+    },
     input.runId,
+    'edit',
   )
   if (!sourceRun) return { kind: 'not_found' as const }
   if (sourceRun.detectionMode === 'model+supplement')
@@ -26,6 +31,7 @@ export async function redetectRedactionRun(input: {
   const existing = await getRedetectionRun(
     input.pool,
     input.organisationId,
+    input.userId,
     sourceRun.id,
   )
   if (existing) return { kind: 'existing' as const, run: existing }
@@ -80,6 +86,7 @@ export async function redetectRedactionRun(input: {
       persisted = await getRedetectionRun(
         input.pool,
         input.organisationId,
+        input.userId,
         sourceRun.id,
       )
     } catch {

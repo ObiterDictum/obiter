@@ -238,6 +238,27 @@ layer is standalone in S1b. No existing consumer is gated until S2 and later
 M1.25 slices import `requireMatterAccess`, which avoids the P3 defect of
 separate sibling checks.
 
+### Redaction run authorization and deletion (August 2026)
+
+Redaction runs inherit access from their matter: standalone runs are owned by
+`created_by`, while linked runs require the matter owner or an active share at
+the requested level. No administrator override exists for live run access.
+Every linked lifecycle mutation uses one lock order: matter, document,
+redaction run(s), then matter share, with ids sorted within each group. It probes
+ids without locks, then locks and revalidates each live parent before locking the
+run. Joined `FOR UPDATE` across tables is avoided. Matter-share revocation uses
+the matter-first prefix, so a revocation that wins the matter lock cannot be
+bypassed by a stale pre-lock authorization decision.
+
+Direct reads and lists exclude deleted runs. The sole deleted-run exception is
+`GET /api/redaction-runs/:runId/audit`: after the live resolver misses, the route
+uses a narrow organisation-scoped deleted-row resolver available only to
+`owner`/`admin`, and it never resolves deleted matter access or object-storage
+keys through the live boundary. Deleted-run audit access is by known id; there is
+no listing path for deleted runs. Restore and redetection preserve the same
+order, including deterministic redaction-run lineage locking, and re-check
+parent/lineage state before updating.
+
 ### M1.25 read-only document viewer: wire model and derived serve surface (10 August 2026)
 
 Context: M1.25 S2 serves the S1 OOXML model after S1b's matter access layer.
@@ -691,21 +712,25 @@ margin band looks like the Word formatting was stripped.
 
 Decision: keep the wire schema unchanged. Serve current-version image parts
 through `GET /api/documents/:id/media?part=`, gated like the model route, and
-restricted to image package paths. The route keeps an LRU cache of unzipped
-image parts for at most 16 immutable versions per API process and serves later
-image requests from that cache. The React page interprets preserved `w:tbl`
-fragments and drawing extents for display only: React tables and `<img>`, never
-HTML strings of OOXML. Binary media stays out of `model.json`. Page size,
-margins, fonts, run size, paragraph spacing, and drawing boxes come from the
-document's own twip and EMU values (plus `styles.xml` inheritance), not from a
-product type scale. Header and footer stories are painted on the page (top and
-bottom) rather than stacked in the body flow; letterhead bars come from a
-shaded three-cell table or from flanking shapes around a logo, and footer text
-sits on the shape fill. Header letterhead groups (navy bars plus a logo) are
-laid out from DrawingML/VML coordinates rather than a synthetic grey table.
-This is a block-flow layout engine: section page size and margins define a
-content frame, body blocks paginate into that frame, and `wp:anchor` offsets
-position floating drawings. Header and footer stories repeat on each page.
+restricted to image package paths. Responses are built only by
+`createDocumentMediaResponse`, which sets `Content-Disposition: attachment`
+and a non-executable Content-Security-Policy while preserving each part's
+`Content-Type` so the frontend can fetch blobs for `<img>` rendering. The route
+keeps an LRU cache of unzipped image parts for at most 16 immutable versions
+per API process and serves later image requests from that cache. The React page
+interprets preserved `w:tbl` fragments and drawing extents for display only:
+React tables and `<img>`, never HTML strings of OOXML. Binary media stays out
+of `model.json`. Page size, margins, fonts, run size, paragraph spacing, and
+drawing boxes come from the document's own twip and EMU values (plus
+`styles.xml` inheritance), not from a product type scale. Header and footer
+stories are painted on the page (top and bottom) rather than stacked in the
+body flow; letterhead bars come from a shaded three-cell table or from flanking
+shapes around a logo, and footer text sits on the shape fill. Header letterhead
+groups (navy bars plus a logo) are laid out from DrawingML/VML coordinates
+rather than a synthetic grey table. This is a block-flow layout engine: section
+page size and margins define a content frame, body blocks paginate into that
+frame, and `wp:anchor` offsets position floating drawings. Header and footer
+stories repeat on each page.
 Columns come from `w:cols`. Floating wrap uses the drawing's wrap kind:
 `wrapSquare` / `wrapTight` / `wrapThrough` inset the line, `wrapTopAndBottom`
 skips the drawing's vertical band, and `wrapNone` does not affect text flow.
@@ -782,3 +807,29 @@ Decision: wrap each cell to its width percentage (or an equal share of the
 column) minus cell padding. Typing in a cell emits the same `onWordEdit`
 operations as body text. A typed table model and row splits stay out of
 scope.
+
+### Public search, changelog, and health: no user authorization (30 August 2026)
+
+Context: `GET /api/search`, `POST /api/search/fetch`,
+`GET /api/search/documents/:documentId`, `GET /api/changelog`, and
+`GET /api/health` resolve a session when one exists but do not require one.
+That is a product policy for published legal authorities, the product
+changelog, and API liveness, not an omitted gate. The only place it was
+visible was the handlers.
+
+Decision: keep these five routes anonymous. They exist to serve public
+judgment search of already stored authorities, GitHub-backed release notes,
+and a minimal liveness probe. Anonymous `POST /api/search/fetch` is stored-only: it
+must not queue hydration, call Find Case Law, or write Postgres or
+Meilisearch. Authenticated callers may queue bounded background hydration
+and request foreground live results subject to the existing MOJ rate
+limiter and per-user hydration budgets. Those budgets are per API process:
+replica count multiplies the effective queue and miss allowance until the
+counters are shared. Search and changelog must never return
+matter data, client documents, redaction source or output, session or
+organisation records, auth secrets, or Meilisearch admin keys. Health must
+return only `{ status: 'ok', service: 'obiter-api' }` and must never expose
+environment, version, port, database or Meilisearch configuration, Rampart
+settings, matter data, or secrets. Adding an auth requirement is a product
+change and must fail `allows anonymous callers on deliberately public routes`
+in `services/api/src/routes/public-access.test.ts` rather than landing silently.

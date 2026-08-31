@@ -9,6 +9,20 @@ import {
 } from '@obiter/rampart-inference'
 import { defaultRampartCacheDir } from './rampart-cache'
 import type { RedactionDetectionConfig } from './redaction-detection'
+import {
+  DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES,
+  DEFAULT_JSON_BODY_MAX_BYTES,
+  DEFAULT_LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX,
+  DEFAULT_LEGAL_SEARCH_HYDRATION_QUEUE_MAX,
+  DEFAULT_LEGAL_SEARCH_HYDRATION_WINDOW_MS,
+} from './request-limit-defaults'
+import {
+  OOXML_INFLATE_CONCURRENCY,
+  OOXML_MAX_COMPRESSION_RATIO,
+  OOXML_MAX_ENTRIES,
+  OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES,
+  OOXML_MAX_UNCOMPRESSED_BYTES,
+} from '@obiter/ooxml'
 
 const requiredProductionKeys = [
   'DATABASE_URL',
@@ -45,19 +59,44 @@ export interface ApiEnv {
   rampartCacheDir: string
   rampartMinScore: number
   rampartChunkTokens: number
+  jsonBodyMaxBytes: number
+  documentUploadMaxBytes: number
+  ooxmlMaxEntries: number
+  ooxmlMaxUncompressedBytes: number
+  ooxmlMaxEntryUncompressedBytes: number
+  ooxmlMaxCompressionRatio: number
+  ooxmlInflateConcurrency: number
+  legalSearchHydrationQueueMax: number
+  legalSearchHydrationPerClientMax: number
+  legalSearchHydrationWindowMs: number
   port: number
   nodeEnv: 'development' | 'test' | 'production'
 }
 
 function readNodeEnv(): ApiEnv['nodeEnv'] {
-  if (
-    process.env.NODE_ENV === 'production' ||
-    process.env.NODE_ENV === 'test'
-  ) {
-    return process.env.NODE_ENV
+  const raw = process.env.NODE_ENV
+
+  if (raw === 'production' || raw === 'test') {
+    return raw
   }
 
-  return 'development'
+  if (raw === 'development') {
+    return 'development'
+  }
+
+  if (raw === undefined || raw === '') {
+    if (process.env.OBITER_LOCAL_DEVELOPMENT === '1') {
+      return 'development'
+    }
+
+    throw new Error(
+      'NODE_ENV must be production, test, or development. For local development with an unset NODE_ENV, set OBITER_LOCAL_DEVELOPMENT=1.',
+    )
+  }
+
+  throw new Error(
+    `NODE_ENV must be production, test, or development; got "${raw}".`,
+  )
 }
 
 function requireProductionEnv(nodeEnv: ApiEnv['nodeEnv']) {
@@ -200,6 +239,20 @@ function readOptionalSecret(key: string, nodeEnv: ApiEnv['nodeEnv']) {
   return readSecret(key, value, nodeEnv)
 }
 
+function readConfiguredSecret(key: string, nodeEnv: ApiEnv['nodeEnv']) {
+  const value = process.env[key]
+
+  if (!value) {
+    throw new Error(`${key} must be configured.`)
+  }
+
+  return readSecret(key, value, nodeEnv)
+}
+
+function readAuthSecret(nodeEnv: ApiEnv['nodeEnv']) {
+  return readConfiguredSecret('BETTER_AUTH_SECRET', nodeEnv)
+}
+
 function readPort() {
   const rawPort = process.env.PORT ?? '8787'
   const port = Number(rawPort)
@@ -260,6 +313,17 @@ function readPositiveInteger(key: string, fallback: string) {
 
   if (!Number.isInteger(parsed) || parsed < 1) {
     throw new Error(`${key} must be a positive integer.`)
+  }
+
+  return parsed
+}
+
+function readCompressionRatio(key: string, fallback: string) {
+  const value = process.env[key] ?? fallback
+  const parsed = Number(value)
+
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    throw new Error(`${key} must be a positive integer compression ratio.`)
   }
 
   return parsed
@@ -361,11 +425,7 @@ export function readApiEnv(): ApiEnv {
 
   return {
     databaseUrl: readDatabaseUrl(nodeEnv),
-    authSecret: readSecret(
-      'BETTER_AUTH_SECRET',
-      'dev-only-better-auth-secret',
-      nodeEnv,
-    ),
+    authSecret: readAuthSecret(nodeEnv),
     authBaseUrl: readRequiredUrl(
       'BETTER_AUTH_URL',
       nodeEnv === 'development' ? webOrigin : 'http://localhost:8787',
@@ -400,6 +460,46 @@ export function readApiEnv(): ApiEnv {
     rampartCacheDir: rampart.cacheDir,
     rampartMinScore: rampart.minScore,
     rampartChunkTokens: rampart.chunkTokens,
+    jsonBodyMaxBytes: readPositiveInteger(
+      'JSON_BODY_MAX_BYTES',
+      String(DEFAULT_JSON_BODY_MAX_BYTES),
+    ),
+    documentUploadMaxBytes: readPositiveInteger(
+      'DOCUMENT_UPLOAD_MAX_BYTES',
+      String(DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES),
+    ),
+    ooxmlMaxEntries: readPositiveInteger(
+      'OOXML_MAX_ENTRIES',
+      String(OOXML_MAX_ENTRIES),
+    ),
+    ooxmlMaxUncompressedBytes: readPositiveInteger(
+      'OOXML_MAX_UNCOMPRESSED_BYTES',
+      String(OOXML_MAX_UNCOMPRESSED_BYTES),
+    ),
+    ooxmlMaxEntryUncompressedBytes: readPositiveInteger(
+      'OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES',
+      String(OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES),
+    ),
+    ooxmlMaxCompressionRatio: readCompressionRatio(
+      'OOXML_MAX_COMPRESSION_RATIO',
+      String(OOXML_MAX_COMPRESSION_RATIO),
+    ),
+    ooxmlInflateConcurrency: readPositiveInteger(
+      'OOXML_INFLATE_CONCURRENCY',
+      String(OOXML_INFLATE_CONCURRENCY),
+    ),
+    legalSearchHydrationQueueMax: readPositiveInteger(
+      'LEGAL_SEARCH_HYDRATION_QUEUE_MAX',
+      String(DEFAULT_LEGAL_SEARCH_HYDRATION_QUEUE_MAX),
+    ),
+    legalSearchHydrationPerClientMax: readPositiveInteger(
+      'LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX',
+      String(DEFAULT_LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX),
+    ),
+    legalSearchHydrationWindowMs: readPositiveInteger(
+      'LEGAL_SEARCH_HYDRATION_WINDOW_MS',
+      String(DEFAULT_LEGAL_SEARCH_HYDRATION_WINDOW_MS),
+    ),
     port: readPort(),
     nodeEnv,
   }

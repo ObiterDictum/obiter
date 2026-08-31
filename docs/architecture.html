@@ -1092,6 +1092,12 @@
                 >
                 <a
                   class="node"
+                  href="https://github.com/ObiterDictum/obiter/tree/dev/packages/legal-source-provider"
+                  ><b>@obiter/legal-source-provider</b
+                  ><span>Find Case Law fetch and parse</span></a
+                >
+                <a
+                  class="node"
                   href="https://github.com/ObiterDictum/obiter/tree/dev/packages/ui"
                   ><b>@obiter/ui</b><span>Tokens and primitives</span></a
                 >
@@ -2547,7 +2553,11 @@
                 <tr>
                   <td class="id">GET /api/health</td>
                   <td class="id">app.ts</td>
-                  <td>Liveness</td>
+                  <td>
+                    Liveness probe. No session required. Must expose only status
+                    and service identifier; never env, version, config, matter
+                    data, or secrets.
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">GET /api/me</td>
@@ -2609,7 +2619,11 @@
                     <code>part</code> is a package path such as
                     <code>word/media/image1.png</code>. Image parts are unzipped
                     once per immutable version, kept in an LRU cache of 16
-                    versions per API process.
+                    versions per API process. Responses use
+                    <code>Content-Disposition: attachment</code> and a
+                    non-executable Content-Security-Policy; the frontend still
+                    fetches bytes as a blob for <code>&lt;img&gt;</code>
+                    rendering.
                   </td>
                 </tr>
                 <tr>
@@ -2691,17 +2705,26 @@
                 <tr>
                   <td class="id">GET /api/search</td>
                   <td class="id">legal-search/</td>
-                  <td>Stored judgment search</td>
+                  <td>
+                    Public stored judgment search. No session required. Must not
+                    expose matter or client data.
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">POST /api/search/fetch</td>
                   <td class="id">legal-search/</td>
-                  <td>Search with Find Case Law fallback</td>
+                  <td>
+                    Public search with Find Case Law fallback. No session
+                    required. Must not expose matter or client data.
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">GET /api/search/documents/:documentId</td>
                   <td class="id">legal-search/</td>
-                  <td>Judgment, stored or hydrated</td>
+                  <td>
+                    Public judgment, stored or hydrated. No session required.
+                    Must not expose matter or client data.
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">GET · POST /api/redaction-runs</td>
@@ -2807,7 +2830,10 @@
                 <tr>
                   <td class="id">GET /api/redaction-runs/:runId/audit</td>
                   <td class="id">redact-lifecycle.ts</td>
-                  <td>Audit report as JSON, Markdown or HTML</td>
+                  <td>
+                    Audit report as JSON, Markdown or HTML; deleted runs are
+                    available by known id to owner/admin only
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">POST /api/auth/sign-out</td>
@@ -2820,7 +2846,10 @@
                 <tr>
                   <td class="id">GET /api/changelog</td>
                   <td class="id">changelog.ts</td>
-                  <td>Release notes</td>
+                  <td>
+                    Public GitHub release notes. No session required. Must not
+                    expose matter or client data.
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -2842,7 +2871,24 @@
               <span
                 ><b>Session resolved.</b> better-auth reads a cookie (web) or
                 bearer token (desktop) and populates <code>user</code>, carrying
-                <code>organisationId</code> and <code>role</code>.</span
+                <code>organisationId</code> and <code>role</code>. Session
+                lookup uses request headers only, so it can run before the body
+                is buffered.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Body bounded.</b> App middleware then reads and caps every
+                request body before route handlers or Better Auth run. JSON
+                routes and anonymous callers use
+                <code>JSON_BODY_MAX_BYTES</code> (48 KiB by default). Multipart
+                document and redact uploads on
+                <code>/api/matters/:matterId/documents</code> and
+                <code>/api/redaction-runs</code> use
+                <code>DOCUMENT_UPLOAD_MAX_BYTES</code> only when
+                <code>c.get('user')</code> is set. This includes
+                <code>/api/auth/*</code>; Better Auth sees only the replaced
+                bounded <code>Request</code>.</span
               >
             </li>
             <li>
@@ -3001,9 +3047,10 @@
           <h2>Auth and scoping</h2>
           <p class="lede">
             Authentication is better-auth. Organisation authorisation lives in
-            <code>authz.ts</code>. M1.25 S1b ships the per-matter resolver in
-            <code>document-access.ts</code> as a forward contract for S2. The
-            share-management router retains its owner-only check so it can
+            <code>authz.ts</code>. Matter, document, document-version and linked
+            redaction resolvers require a caller and an access level, then apply
+            <code>matter-access-boundary.ts</code> inside the database query.
+            The share-management router retains its owner-only check so it can
             distinguish forbidden access from a missing matter.
           </p>
           <div class="scroll">
@@ -3042,10 +3089,30 @@
             Every query touching tenant data filters on
             <code>organisation_id</code>, and foreign keys are composite, so the
             database rejects a cross-organisation reference rather than relying
-            on the query being written correctly. M1.25 matter document access
-            resolves the matter creator first, then an edit or view grant, with
-            no administrator override. Denial is the uniform matter 404. Web
-            uses cookie sessions; desktop uses the bearer plugin.
+            on the query being written correctly. Matter-derived resource
+            resolvers require view access for reads and edit access for writes,
+            with no administrator override. Write transactions repeat the edit
+            predicate while locking the resource. Route modules are prohibited
+            from querying matter-derived tables directly, so a new route must
+            use an access-enforcing resolver. Denial is a uniform 404. Web uses
+            cookie sessions; desktop uses the bearer plugin. Linked redaction
+            runs inherit live matter view/edit access; standalone runs use their
+            creator for ordinary access, with no administrator override.
+            Transactional linked lifecycle mutations lock matter, document, and
+            redaction run lineage in deterministic id order, matching the
+            matter-first share-revocation prefix. Deleted runs stay out of
+            direct reads and lists; only the known-id audit route uses an
+            organisation-scoped deleted-run resolver after an owner/admin role
+            check, while members are gated before the deleted lookup.
+            <code>GET /api/search</code>, <code>POST /api/search/fetch</code>,
+            <code>GET /api/search/documents/:documentId</code>,
+            <code>GET /api/changelog</code>, and <code>GET /api/health</code>
+            are deliberately public: search and changelog serve published
+            authorities and release notes only; anonymous
+            <code>POST /api/search/fetch</code> is stored-only and does not
+            hydrate the provider; health is a minimal liveness probe. They must
+            never return matter, client, redaction, or session data, and health
+            must never expose environment, version, or configuration detail.
           </div>
         </section>
 
@@ -3668,14 +3735,19 @@
             config package yet; <code>@obiter/config</code> is a reserved name.
           </p>
           <div class="callout">
-            <b>Eight are required at startup.</b> <code>DATABASE_URL</code>,
-            <code>BETTER_AUTH_SECRET</code>, <code>BETTER_AUTH_URL</code>,
+            <b>Startup is fail-closed.</b> <code>BETTER_AUTH_SECRET</code> must
+            be configured for every non-test boot (no shipped fallback).
+            <code>NODE_ENV</code> must be <code>production</code>,
+            <code>test</code>, or <code>development</code>; unknown values
+            refuse startup. Unset <code>NODE_ENV</code> is allowed only with
+            <code>OBITER_LOCAL_DEVELOPMENT=1</code>. In production,
+            <code>DATABASE_URL</code>, <code>BETTER_AUTH_URL</code>,
             <code>OBITER_WEB_ORIGIN</code>, <code>OBITER_RESEND_API_KEY</code>,
             <code>MEILISEARCH_HOST</code>,
             <code>MEILISEARCH_SEARCH_API_KEY</code> and
-            <code>MEILISEARCH_ADMIN_API_KEY</code>. The API refuses to boot
-            without them, which is the right behaviour: a missing search key
-            should not surface later as empty results.
+            <code>MEILISEARCH_ADMIN_API_KEY</code> are also required. The API
+            refuses to boot without them, which is the right behaviour: a
+            missing search key should not surface later as empty results.
           </div>
           <div class="scroll">
             <table>
@@ -3686,6 +3758,15 @@
                 </tr>
               </thead>
               <tbody>
+                <tr>
+                  <td class="id">NODE_ENV · OBITER_LOCAL_DEVELOPMENT</td>
+                  <td>
+                    Runtime mode (<code>production</code>, <code>test</code>, or
+                    <code>development</code>). Unset
+                    <code>NODE_ENV</code> requires
+                    <code>OBITER_LOCAL_DEVELOPMENT=1</code>
+                  </td>
+                </tr>
                 <tr>
                   <td class="id">DATABASE_URL · TEST_DATABASE_URL</td>
                   <td>PostgreSQL connection</td>
@@ -3719,6 +3800,38 @@
                     MOJ_FIND_CASE_LAW_BASE_URL · MOJ_FIND_CASE_LAW_RATE_LIMIT
                   </td>
                   <td>Provider endpoint and throttle</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    JSON_BODY_MAX_BYTES · DOCUMENT_UPLOAD_MAX_BYTES
+                  </td>
+                  <td>
+                    Request body caps for JSON routes and multipart document or
+                    redact uploads. Enforced globally in
+                    <code>createApiApp</code> middleware, not only on routes
+                    that call <code>readLimitedJsonBody</code> or
+                    <code>readLimitedFormData</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    OOXML_MAX_ENTRIES · OOXML_MAX_UNCOMPRESSED_BYTES ·
+                    OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES ·
+                    OOXML_MAX_COMPRESSION_RATIO · OOXML_INFLATE_CONCURRENCY
+                  </td>
+                  <td>DOCX/ZIP central-directory and inflate limits</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    LEGAL_SEARCH_HYDRATION_QUEUE_MAX ·
+                    LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX ·
+                    LEGAL_SEARCH_HYDRATION_WINDOW_MS
+                  </td>
+                  <td>
+                    Authenticated search hydration queue depth, per-user miss
+                    budget, and rolling window. In-process only: each API
+                    replica has its own counters
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">
@@ -5285,6 +5398,27 @@
           <ul class="rules">
             <li>
               <span
+                ><b>Request bodies are capped in app middleware.</b> Every route
+                inherits the bound from <code>createApiApp</code>; handlers must
+                not read <code>c.req.raw</code> body streams directly. Raising
+                the upload cap for a new multipart route requires an explicit
+                path allowlist entry in
+                <code>request-body-limit.ts</code>.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Stored document media bodies use one response helper.</b>
+                Every HTTP response whose body is a stored document image part
+                must be built by
+                <code>createDocumentMediaResponse</code> in
+                <code>document-media-response.ts</code>; route handlers must not
+                construct those bodies with <code>new Response</code> or
+                <code>c.body</code> directly.</span
+              >
+            </li>
+            <li>
+              <span
                 ><b>Primitives import nothing internal.</b>
                 <code>contracts</code>, <code>legal-schema</code>,
                 <code>ui</code> and <code>database</code> are leaves. This is
@@ -5459,6 +5593,19 @@
                 </tr>
               </thead>
               <tbody>
+                <tr>
+                  <td>
+                    App-layer 413 does not stop the client finishing a TCP send
+                  </td>
+                  <td>
+                    Middleware rejects once the bounded read exceeds the cap,
+                    but it does not close the socket while the client is still
+                    transmitting. Connection exhaustion at very large payloads
+                    still needs ingress <code>client_max_body_size</code> (or
+                    equivalent) as a deployment requirement.
+                  </td>
+                  <td class="id">architecture.html</td>
+                </tr>
                 <tr>
                   <td>Search matching is substring-based</td>
                   <td>

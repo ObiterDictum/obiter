@@ -52,3 +52,46 @@ When summarizing work:
 - state any manual flows exercised
 - state what could not be tested
 - do not imply coverage that does not exist
+
+## Local CI mirror
+
+`scripts/ci-local.sh` runs the same gates as `.github/workflows/ci.yml` in the
+same order (`install` → `typecheck` → `format:check` → `lint` → `test` →
+`benchmark:search`). It has been verified green on this machine.
+
+## End-to-end (Playwright)
+
+One proven journey — deliberately small before any suite grows:
+
+`sign in → create an organisation → create a matter → upload a DOCX → see it listed`
+
+```bash
+pnpm --filter @obiter/web test:e2e   # or pnpm test:e2e from the repo root
+```
+
+The config lives in `apps/web/playwright.config.ts` (chromium only). `webServer`
+starts the API and web dev servers so a single command runs everything;
+Postgres and Meilisearch must already be running. If either is unreachable the
+run fails fast with an actionable `docker start …` message (same style as
+`scripts/ci-local.sh`).
+
+Fixture: `data/evals/redact/demo-fixture.docx` (synthetic, fictional names —
+no new binary added).
+
+Not yet wired into `scripts/ci-local.sh` or CI — intentionally. Prove it green
+locally twice in a row before promoting it to a gate; a flaky e2e in the gates
+is worse than no e2e.
+
+## Host prerequisites (found the hard way):
+
+- **Meilisearch must be running** at `http://127.0.0.1:7700` with
+  `MEILI_MASTER_KEY=search-benchmark-key`, matching the version pinned in
+  `ci.yml` (`getmeili/meilisearch:v1.53.1`). Start it with
+  `docker run -d --name meili -p 7700:7700 -e MEILI_MASTER_KEY=search-benchmark-key -e MEILI_NO_ANALYTICS=true getmeili/meilisearch:v1.53.1`
+  or `docker start meili` if you already have a stopped container.
+- **fontconfig and fonts-liberation must be installed.** Without them the PDF
+  glyph cover tests in `services/api` fail by fractions of a point, because
+  `pdf.js` substitutes a system font when rendering base-14 fonts and the
+  redaction cover geometry is measured against rendered ink. This is worth
+  stating explicitly: the failure looks like a code regression and is not.
+  Install with `sudo apt-get install fontconfig fonts-liberation`.

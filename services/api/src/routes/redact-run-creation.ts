@@ -7,6 +7,9 @@ import {
   extractDocumentContent,
 } from '../document-extraction'
 import { DocumentUploadError, readDocumentUpload } from '../document-upload'
+import { readLimitedFormData } from '../limited-request-body'
+import type { ApiRequestLimits } from '../request-limits'
+import { DEFAULT_API_REQUEST_LIMITS } from '../request-limits'
 import {
   getDocumentRedactionSource,
   listRedactionRuns,
@@ -40,13 +43,14 @@ function sourceInput(body: Record<string, unknown> | null) {
 export function createRedactRunCreationRoutes(
   pool: Pool,
   storage: StorageService,
+  limits: ApiRequestLimits = DEFAULT_API_REQUEST_LIMITS,
 ) {
   const routes = new Hono<{ Variables: RouteVariables }>()
 
   routes.get('/api/redaction-runs', async (c) => {
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
-    const runs = await listRedactionRuns(pool, user.organisationId)
+    const runs = await listRedactionRuns(pool, user)
     return c.json({ runs: runs.map((run) => listItem(publicRun(run))) })
   })
 
@@ -59,16 +63,19 @@ export function createRedactRunCreationRoutes(
         .header('content-type')
         ?.toLowerCase()
         .startsWith('multipart/form-data') ?? false
-    const form = isMultipart ? await c.req.formData().catch(() => null) : null
-    if (isMultipart && !form)
-      return errorResponse(
+    let form: FormData | null = null
+    if (isMultipart) {
+      const formResult = await readLimitedFormData(
         c,
-        'validation_failed',
-        'The uploaded file could not be read. Please try again.',
-        400,
+        limits.documentUploadMaxBytes,
       )
+      if (!formResult.ok) return formResult.response
+      form = formResult.form
+    }
+    const rawJsonBody = form ? null : await jsonBody(c, limits.jsonBodyMaxBytes)
+    if (rawJsonBody instanceof Response) return rawJsonBody
     const input = sourceInput(
-      form ? { policyMode: form.get('policyMode') } : await jsonBody(c),
+      form ? { policyMode: form.get('policyMode') } : rawJsonBody,
     )
     let filename = input.filename
     let text = input.text
@@ -89,6 +96,7 @@ export function createRedactRunCreationRoutes(
         const upload = await readDocumentUpload(
           file,
           form.get('fileType')?.toString() ?? file.type,
+          limits.documentUploadMaxBytes,
         )
         filename = upload.filename
         uploadContents = upload.contents
@@ -101,13 +109,20 @@ export function createRedactRunCreationRoutes(
         const extracted = await extractDocumentContent(
           upload.fileType,
           upload.contents,
+          { ooxmlLimits: limits.ooxmlLimits },
         )
         text = extracted.text
         if (extracted.layout) layoutJson = JSON.stringify(extracted.layout)
       } catch (error) {
         if (error instanceof DocumentUploadError)
           return errorResponse(c, 'validation_failed', error.message, 400)
-        if (error instanceof DocumentExtractionError)
+        if (error instanceof DocumentExtractionError) {
+          if (
+            error.userFacing &&
+            error.message.startsWith('The document package')
+          ) {
+            return errorResponse(c, 'ooxml_limits_exceeded', error.message, 413)
+          }
           return errorResponse(
             c,
             'validation_failed',
@@ -118,6 +133,7 @@ export function createRedactRunCreationRoutes(
               : 'Document text could not be read for redaction.',
             400,
           )
+        }
         throw error
       }
     }
@@ -202,6 +218,7 @@ export function createRedactRunCreationRoutes(
     const user = await requireUser(c, pool)
     if (user instanceof Response) return user
     const body = await jsonBody(c)
+    if (body instanceof Response) return body
     const policyMode = redactionPolicyModeSchema.safeParse(
       body?.policyMode ?? 'internal_ai_minimisation',
     )
@@ -214,7 +231,7 @@ export function createRedactRunCreationRoutes(
       )
     const source = await getDocumentRedactionSource(
       pool,
-      user.organisationId,
+      user,
       c.req.param('documentId'),
     )
     if (!source)
@@ -274,7 +291,7 @@ export function createRedactRunCreationRoutes(
     if (user instanceof Response) return user
     const runs = await listRedactionRunsForDocument(
       pool,
-      user.organisationId,
+      user,
       c.req.param('documentId'),
     )
     return c.json({ runs: runs.map((run) => listItem(publicRun(run))) })

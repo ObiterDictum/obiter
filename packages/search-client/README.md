@@ -23,6 +23,26 @@ and must never be serialised into an API response or user-facing log.
 searches, while each case retains Meilisearch's `processingTimeMs` separately.
 The 250 ms wall-clock P95 ceiling provides headroom over the observed 45 ms CI
 P95 without treating the engine's rounded processing time as end-to-end latency.
+
+### Running against an older Meilisearch
+
+`prefixSearch` arrived in Meilisearch 1.12. A 1.8 server has no
+`settings/prefix-search` route and answers 404, so `createIndex` fails rather
+than quietly configuring an index with prefix search still on. That is
+deliberate: the index would not be the one this package defines, and
+`minimumShortWordPrecision` is a floor of 1 that rests on prefix search being
+off.
+
+`SEARCH_BENCHMARK_ALLOW_UNSUPPORTED_SETTINGS=1` lets the run continue on such a
+server. The report then lists `unsupportedIndexSettings` and the run prints a
+warning. Read that field before comparing the numbers with anything: they were
+measured under a different configuration, and short-word precision is the metric
+most likely to move. CI pins 1.12.0 and does not set this, so it cannot drift
+into measuring something it did not intend.
+
+Callers other than the benchmark — `services/legal-ingestor` among them — leave
+`allowUnsupportedSettings` at its default and so still fail loudly.
+
 Set `SEARCH_BENCHMARK_ALLOW_REGRESSION=1` to retain the report while disabling
 its failure exit code, for local investigation only. Set
 `SEARCH_BENCHMARK_REPORT_PATH` to write the JSON report to a file. Benchmark
@@ -71,11 +91,18 @@ topology.
 Malformed citations are split between recoverable forms, which assert the
 correct authority, and unresolvable forms, which assert no results.
 
-The date-filter cases `date-brown-from-1994`, `date-potanina-2024` and
-`date-smith-before-2019` are currently expected to fail with `search_error`.
-Meilisearch comparison operators accept numeric operands only, while the
-current date filter emits a string date comparison. Fixing this requires a
-numeric date timestamp field in the document schema and is tracked separately.
+Date range filters compare against `dateDecidedTimestamp`, a numeric field
+derived from `dateDecided` at index time. Meilisearch comparison operators
+accept numeric operands only, so the earlier quoted-date comparison was
+rejected outright and the three cases `date-brown-from-1994`,
+`date-potanina-2024` and `date-smith-before-2019` errored. They now pass and
+`knownFailingCaseIds` is empty.
+
+`dateDecided` stays the authority and the only date callers see: the derived
+field lives in the index and is returned by neither search nor `getDocument`.
+A `dateFrom` or `dateTo` that is not an ISO date is rejected rather than
+dropped, because dropping a bound returns judgments from outside the requested
+range as though they belonged in it.
 
 The fixture text is synthetic. Do not replace it with raw legal or client
 matter text.

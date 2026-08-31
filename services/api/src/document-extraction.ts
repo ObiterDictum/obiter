@@ -1,7 +1,12 @@
 import { posix } from 'node:path'
 import { documentTextLayoutSchema } from '@obiter/contracts'
-import JSZip from 'jszip'
 import mammoth from 'mammoth'
+import {
+  DEFAULT_OOXML_PACKAGE_LIMITS,
+  loadOoxmlZipEntries,
+  OoxmlError,
+  type OoxmlPackageLimits,
+} from '@obiter/ooxml'
 import { getDocumentProxy } from 'unpdf'
 import {
   collapsePdfGlyphSpacingWithLayout,
@@ -16,6 +21,10 @@ import {
   type FontStyles,
   type PdfOps,
 } from './pdf-glyph-layout'
+
+interface PdfFont {
+  isType3Font?: boolean
+}
 
 export type {
   DocumentTextLayout,
@@ -216,7 +225,7 @@ async function exactPageChars(
     }>
     commonObjs?: {
       has: (id: string) => boolean
-      get: (id: string) => unknown
+      get: (id: string) => PdfFont | undefined
     }
   },
   pageIndex: number,
@@ -301,7 +310,8 @@ function operatorListUsesType3Font(
   operatorList: { fnArray: number[] | Int32Array; argsArray: unknown[] },
   ops: PdfOps,
   commonObjs:
-    { has: (id: string) => boolean; get: (id: string) => unknown } | undefined,
+    | { has: (id: string) => boolean; get: (id: string) => PdfFont | undefined }
+    | undefined,
 ) {
   if (!commonObjs) return false
   for (let index = 0; index < operatorList.fnArray.length; index += 1) {
@@ -532,21 +542,33 @@ interface DocxSupplementalContent {
 interface DocumentExtractionDependencies {
   extractDocxSupplementalContent?: (
     buffer: Buffer,
+    limits?: OoxmlPackageLimits,
   ) => Promise<DocxSupplementalContent>
+  ooxmlLimits?: OoxmlPackageLimits
+}
+
+async function boundedDocxBuffer(
+  buffer: Buffer,
+  limits: OoxmlPackageLimits,
+): Promise<Buffer> {
+  await loadOoxmlZipEntries(buffer, limits)
+  return buffer
 }
 
 async function extractDocxHeaderFooterText(
   buffer: Buffer,
+  limits: OoxmlPackageLimits = DEFAULT_OOXML_PACKAGE_LIMITS,
 ): Promise<DocxSupplementalContent> {
-  const archive = await JSZip.loadAsync(buffer)
-  const document = archive.file('word/document.xml')
-  const relationships = archive.file('word/_rels/document.xml.rels')
-  if (!document) return { header: [], footer: [], visualContent: 'unknown' }
+  const payloads = await loadOoxmlZipEntries(buffer, limits)
+  const documentPayload = payloads.get('word/document.xml')
+  const relationshipsPayload = payloads.get('word/_rels/document.xml.rels')
+  if (!documentPayload)
+    return { header: [], footer: [], visualContent: 'unknown' }
 
-  const [documentXml, relationshipsXml] = await Promise.all([
-    document.async('text'),
-    relationships?.async('text') ?? '',
-  ])
+  const documentXml = new TextDecoder().decode(documentPayload)
+  const relationshipsXml = relationshipsPayload
+    ? new TextDecoder().decode(relationshipsPayload)
+    : ''
   let visualContent: DocxSupplementalContent['visualContent'] =
     hasDocxVisualContent(documentXml, relationshipsXml) ? 'present' : 'absent'
   const referencedIds = new Set(
@@ -571,8 +593,8 @@ async function extractDocxHeaderFooterText(
   const header: string[] = []
   const footer: string[] = []
   for (const name of referencedParts) {
-    const file = archive.file(name)
-    if (!file) {
+    const partPayload = payloads.get(name)
+    if (!partPayload) {
       if (visualContent === 'absent') visualContent = 'unknown'
       continue
     }
@@ -581,11 +603,11 @@ async function extractDocxHeaderFooterText(
       '_rels',
       `${posix.basename(name)}.rels`,
     )
-    const relationshipsFile = archive.file(relationshipsName)
-    const [partXml, partRelationshipsXml] = await Promise.all([
-      file.async('text'),
-      relationshipsFile?.async('text') ?? '',
-    ])
+    const relationshipsPayload = payloads.get(relationshipsName)
+    const partXml = new TextDecoder().decode(partPayload)
+    const partRelationshipsXml = relationshipsPayload
+      ? new TextDecoder().decode(relationshipsPayload)
+      : ''
     if (hasDocxVisualContent(partXml, partRelationshipsXml))
       visualContent = 'present'
     const text = extractWordXmlText(partXml)
@@ -597,12 +619,13 @@ async function extractDocxHeaderFooterText(
 
 async function readDocxSupplementalContent(
   buffer: Buffer,
+  limits: OoxmlPackageLimits,
   extract: NonNullable<
     DocumentExtractionDependencies['extractDocxSupplementalContent']
   >,
 ) {
   try {
-    return await extract(buffer)
+    return await extract(buffer, limits)
   } catch (error) {
     console.warn('DOCX header/footer extraction warning', {
       reason: error instanceof Error ? error.message : 'Unknown archive error.',
@@ -630,10 +653,13 @@ export async function extractDocumentContent(
     if (fileType === 'txt')
       return { text: buffer.toString('utf8'), layout: null }
     if (fileType === 'pdf') return await extractPdfContent(buffer)
+    const limits = dependencies.ooxmlLimits ?? DEFAULT_OOXML_PACKAGE_LIMITS
+    const boundedBuffer = await boundedDocxBuffer(buffer, limits)
     const [result, supplemental] = await Promise.all([
-      mammoth.extractRawText({ buffer }),
+      mammoth.extractRawText({ buffer: boundedBuffer }),
       readDocxSupplementalContent(
         buffer,
+        limits,
         dependencies.extractDocxSupplementalContent ??
           extractDocxHeaderFooterText,
       ),
@@ -659,6 +685,12 @@ export async function extractDocumentContent(
     return { text, layout: null }
   } catch (error) {
     if (error instanceof DocumentExtractionError) throw error
+    if (
+      error instanceof OoxmlError &&
+      error.code === 'package-limits-exceeded'
+    ) {
+      throw new DocumentExtractionError(error.message, true)
+    }
     const message =
       error instanceof Error ? error.message : 'Unknown extraction error.'
     throw new DocumentExtractionError(

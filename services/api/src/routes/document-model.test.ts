@@ -66,7 +66,9 @@ describe('GET /api/documents/:id/model gates', () => {
 
     await expectDocument404(response)
     expect(storage.textReads).toEqual([])
-    expect(database.queries.at(-1)).toContain('left join matter_shares')
+    expect(database.queries.some((sql) => sql.includes('matter_shares'))).toBe(
+      true,
+    )
   })
 
   it.each([

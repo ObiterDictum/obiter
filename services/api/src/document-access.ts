@@ -10,6 +10,7 @@ import {
   type AuthenticatedOrgUser,
   type AuthzContext,
 } from './authz'
+import { matterAccessPredicate } from './matter-access-boundary'
 
 interface MatterAccessRow {
   created_by: string
@@ -33,8 +34,9 @@ export async function resolveMatterAccess(
       where matter.id = $1
         and matter.organisation_id = $2
         and matter.deleted_at is null
+        and ${matterAccessPredicate('$3', '$4')}
     `,
-    [matterId, user.organisationId, user.id],
+    [matterId, user.organisationId, user.id, requiredLevel],
   )
   const row = result.rows[0]
   if (!row) return 'denied'

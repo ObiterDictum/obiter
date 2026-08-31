@@ -84,7 +84,9 @@ describe('GET /api/documents/:id/export gates', () => {
 
     await expectDocument404(response)
     expect(storage.binaryReads).toEqual([])
-    expect(database.queries.at(-1)).toContain('left join matter_shares')
+    expect(database.queries.some((sql) => sql.includes('matter_shares'))).toBe(
+      true,
+    )
   })
 
   it.each([
@@ -163,10 +165,9 @@ describe('GET /api/documents/:id/export response', () => {
     ])
     expect(JSON.stringify(database.audits)).not.toContain('private.docx')
     expect(database.queries.map(queryKind)).toEqual([
-      'document',
+      'document-access',
       'versions',
       'current-version',
-      'matter-access',
       'comments',
       'audit',
     ])

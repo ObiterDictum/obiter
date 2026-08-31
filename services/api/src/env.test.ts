@@ -1,18 +1,38 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import {
+  OOXML_INFLATE_CONCURRENCY,
+  OOXML_MAX_COMPRESSION_RATIO,
+  OOXML_MAX_ENTRIES,
+  OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES,
+  OOXML_MAX_UNCOMPRESSED_BYTES,
+} from '@obiter/ooxml'
 import { readApiEnv, readRampartDetectionConfig } from './env'
 import { defaultRampartCacheDir } from './rampart-cache'
+import {
+  DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES,
+  DEFAULT_JSON_BODY_MAX_BYTES,
+  DEFAULT_LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX,
+  DEFAULT_LEGAL_SEARCH_HYDRATION_QUEUE_MAX,
+  DEFAULT_LEGAL_SEARCH_HYDRATION_WINDOW_MS,
+} from './request-limit-defaults'
 
 const originalEnv = { ...process.env }
+
+const TEST_AUTH_SECRET = '0123456789abcdef0123456789abcdef'
+
+function seedDevelopmentEnv() {
+  process.env.NODE_ENV = 'development'
+  process.env.BETTER_AUTH_SECRET = TEST_AUTH_SECRET
+}
 
 afterEach(() => {
   process.env = { ...originalEnv }
 })
 
 describe('readApiEnv', () => {
-  it('uses local development defaults without production secrets', () => {
-    process.env.NODE_ENV = 'development'
+  it('uses local development defaults when BETTER_AUTH_SECRET is configured', () => {
+    seedDevelopmentEnv()
     delete process.env.DATABASE_URL
-    delete process.env.BETTER_AUTH_SECRET
     delete process.env.BETTER_AUTH_URL
     delete process.env.OBITER_WEB_ORIGIN
     delete process.env.OBITER_RAMPART_MODEL
@@ -24,7 +44,7 @@ describe('readApiEnv', () => {
     const env = readApiEnv()
 
     expect(env.databaseUrl).toContain('localhost')
-    expect(env.authSecret).toBe('dev-only-better-auth-secret')
+    expect(env.authSecret).toBe(TEST_AUTH_SECRET)
     expect(env.authBaseUrl).toBe('http://localhost:3000')
     expect(env.meilisearchHost).toBe('http://localhost:7700')
     expect(env.meilisearchSearchApiKey).toBe('dev-key')
@@ -39,13 +59,67 @@ describe('readApiEnv', () => {
     expect(env.rampartCacheDir).toBe(defaultRampartCacheDir())
     expect(env.rampartMinScore).toBe(0.4)
     expect(env.rampartChunkTokens).toBe(400)
+    expect(env.jsonBodyMaxBytes).toBe(DEFAULT_JSON_BODY_MAX_BYTES)
+    expect(env.documentUploadMaxBytes).toBe(DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES)
+    expect(env.ooxmlMaxEntries).toBe(OOXML_MAX_ENTRIES)
+    expect(env.ooxmlMaxUncompressedBytes).toBe(OOXML_MAX_UNCOMPRESSED_BYTES)
+    expect(env.ooxmlMaxEntryUncompressedBytes).toBe(
+      OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES,
+    )
+    expect(env.ooxmlMaxCompressionRatio).toBe(OOXML_MAX_COMPRESSION_RATIO)
+    expect(env.ooxmlInflateConcurrency).toBe(OOXML_INFLATE_CONCURRENCY)
+    expect(env.legalSearchHydrationQueueMax).toBe(
+      DEFAULT_LEGAL_SEARCH_HYDRATION_QUEUE_MAX,
+    )
+    expect(env.legalSearchHydrationPerClientMax).toBe(
+      DEFAULT_LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX,
+    )
+    expect(env.legalSearchHydrationWindowMs).toBe(
+      DEFAULT_LEGAL_SEARCH_HYDRATION_WINDOW_MS,
+    )
     expect(env.nodeEnv).toBe('development')
   })
 
-  it('treats an empty DATABASE_URL as absent in development', () => {
-    process.env.NODE_ENV = 'development'
-    process.env.DATABASE_URL = ''
+  it('refuses non-test startup when BETTER_AUTH_SECRET is missing', () => {
+    seedDevelopmentEnv()
     delete process.env.BETTER_AUTH_SECRET
+
+    expect(() => readApiEnv()).toThrow('BETTER_AUTH_SECRET must be configured.')
+  })
+
+  it('rejects unknown NODE_ENV values', () => {
+    process.env.NODE_ENV = 'staging'
+    process.env.BETTER_AUTH_SECRET = TEST_AUTH_SECRET
+
+    expect(() => readApiEnv()).toThrow(
+      'NODE_ENV must be production, test, or development; got "staging".',
+    )
+  })
+
+  it('rejects unset NODE_ENV without local development opt-in', () => {
+    delete process.env.NODE_ENV
+    delete process.env.OBITER_LOCAL_DEVELOPMENT
+    process.env.BETTER_AUTH_SECRET = TEST_AUTH_SECRET
+
+    expect(() => readApiEnv()).toThrow(
+      'NODE_ENV must be production, test, or development.',
+    )
+  })
+
+  it('permits unset NODE_ENV when OBITER_LOCAL_DEVELOPMENT=1 and auth is configured', () => {
+    delete process.env.NODE_ENV
+    process.env.OBITER_LOCAL_DEVELOPMENT = '1'
+    process.env.BETTER_AUTH_SECRET = TEST_AUTH_SECRET
+
+    const env = readApiEnv()
+
+    expect(env.nodeEnv).toBe('development')
+    expect(env.authSecret).toBe(TEST_AUTH_SECRET)
+  })
+
+  it('treats an empty DATABASE_URL as absent in development', () => {
+    seedDevelopmentEnv()
+    process.env.DATABASE_URL = ''
     delete process.env.BETTER_AUTH_URL
     delete process.env.OBITER_WEB_ORIGIN
     delete process.env.OBITER_RAMPART_MODEL
@@ -60,7 +134,7 @@ describe('readApiEnv', () => {
   })
 
   it('reads validated Rampart configuration once with the rest of the API environment', () => {
-    process.env.NODE_ENV = 'development'
+    seedDevelopmentEnv()
     process.env.OBITER_RAMPART_MODEL = 'example/rampart-test'
     process.env.OBITER_RAMPART_REVISION = 'revision-1'
     process.env.OBITER_RAMPART_CACHE_DIR = '/tmp/rampart-cache'
@@ -82,7 +156,7 @@ describe('readApiEnv', () => {
   })
 
   it('defaults the model cache outside the workspace so installs do not discard it', () => {
-    process.env.NODE_ENV = 'development'
+    seedDevelopmentEnv()
     delete process.env.OBITER_RAMPART_CACHE_DIR
 
     const cacheDir = readApiEnv().rampartCacheDir
@@ -117,7 +191,7 @@ describe('readApiEnv', () => {
       'must be an integer between 65 and 500',
     ],
   ])('rejects invalid %s configuration', (key, value, reason) => {
-    process.env.NODE_ENV = 'development'
+    seedDevelopmentEnv()
     process.env[key] = value
 
     expect(() => readApiEnv()).toThrow(`${key} ${reason}`)
@@ -125,6 +199,7 @@ describe('readApiEnv', () => {
 
   it('uses TEST_DATABASE_URL as the only database URL in test mode', () => {
     process.env.NODE_ENV = 'test'
+    process.env.BETTER_AUTH_SECRET = TEST_AUTH_SECRET
     process.env.DATABASE_URL =
       'postgres://obiter:obiter@db.example.com:5432/prod'
     process.env.TEST_DATABASE_URL =
@@ -140,6 +215,7 @@ describe('readApiEnv', () => {
 
   it('fails loudly when test mode does not have a separate test database', () => {
     process.env.NODE_ENV = 'test'
+    process.env.BETTER_AUTH_SECRET = TEST_AUTH_SECRET
     process.env.DATABASE_URL =
       'postgres://obiter:obiter@db.example.com:5432/prod'
     delete process.env.TEST_DATABASE_URL
@@ -243,6 +319,32 @@ describe('readApiEnv', () => {
     )
   })
 
+  it.each([
+    ['JSON_BODY_MAX_BYTES', '0', 'must be a positive integer'],
+    ['DOCUMENT_UPLOAD_MAX_BYTES', '0', 'must be a positive integer'],
+    ['OOXML_MAX_ENTRIES', '0', 'must be a positive integer'],
+    ['OOXML_MAX_UNCOMPRESSED_BYTES', '0', 'must be a positive integer'],
+    ['OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES', '0', 'must be a positive integer'],
+    ['OOXML_INFLATE_CONCURRENCY', '0', 'must be a positive integer'],
+    [
+      'OOXML_MAX_COMPRESSION_RATIO',
+      '0',
+      'must be a positive integer compression ratio',
+    ],
+    ['LEGAL_SEARCH_HYDRATION_QUEUE_MAX', '0', 'must be a positive integer'],
+    [
+      'LEGAL_SEARCH_HYDRATION_PER_CLIENT_MAX',
+      '0',
+      'must be a positive integer',
+    ],
+    ['LEGAL_SEARCH_HYDRATION_WINDOW_MS', '0', 'must be a positive integer'],
+  ])('rejects invalid %s configuration', (key, value, reason) => {
+    seedDevelopmentEnv()
+    process.env[key] = value
+
+    expect(() => readApiEnv()).toThrow(`${key} ${reason}`)
+  })
+
   it('parses valid production configuration', () => {
     process.env.NODE_ENV = 'production'
     process.env.DATABASE_URL =
@@ -299,6 +401,7 @@ describe('readApiEnv', () => {
     )
 
     process.env.NODE_ENV = 'development'
+    process.env.BETTER_AUTH_SECRET = TEST_AUTH_SECRET
     process.env.MEILISEARCH_API_KEY = 'legacy-dev-key'
     delete process.env.MEILISEARCH_SEARCH_API_KEY
     delete process.env.MEILISEARCH_ADMIN_API_KEY

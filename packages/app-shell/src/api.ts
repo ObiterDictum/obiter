@@ -3,6 +3,7 @@ import { apiErrorResponseSchema } from '@obiter/contracts'
 import { apiUrl } from './lib/api-url'
 import { getDesktopAuthToken } from './lib/auth-token'
 import { readDesktopBridge } from './lib/desktop-bridge'
+import { getServerRequest } from './lib/server-request'
 
 /**
  * Typed error thrown by `apiFetch` when the API returns a non-2xx response that
@@ -39,16 +40,50 @@ const UNKNOWN_REQUEST_ID = 'req_unknown'
  *   expected envelope is treated as a storage-level failure (no silent success).
  * - Network-level failures (fetch itself rejects) propagate as native Errors.
  */
+async function serverCookieHeader(): Promise<Record<string, string>> {
+  if (typeof window !== 'undefined') return {}
+  // The host app (web) provides the SSR request via
+  // setServerRequestGetter(getRequest) where getRequest is imported
+  // from '@tanstack/react-start/server'. This indirection keeps
+  // app-shell free of a direct import that would otherwise need Vite
+  // static-analysis workarounds (prefix+suffix dynamic import,
+  // @ts-ignore, double cast) in tests. See
+  // packages/app-shell/src/lib/server-request.ts and
+  // apps/web/src/lib/init-server-request.ts.
+  try {
+    const req = getServerRequest()
+    if (!req) return {}
+    const cookie = req.headers.get('cookie')
+    if (cookie) return { Cookie: cookie }
+  } catch (error) {
+    // Only the "not in SSR / no request" case is expected and may be
+    // silently ignored (e.g., vitest, client-side). Any other failure
+    // (e.g., getRequest throwing unexpectedly inside SSR) must surface
+    // so SSR does not silently degrade to an unauthenticated fetch and
+    // redirect to /sign-in without diagnostics.
+    const message = error instanceof Error ? error.message : String(error)
+    const isExpectedNotInRequest =
+      message.includes('No StartEvent') ||
+      message.includes('not in a request') ||
+      message.includes('No request')
+    if (isExpectedNotInRequest) return {}
+    throw error
+  }
+  return {}
+}
+
 export async function apiFetch<T>(
   input: string,
   init?: RequestInit,
 ): Promise<T> {
   const desktopToken = readDesktopBridge() ? await getDesktopAuthToken() : null
+  const serverCookie = await serverCookieHeader()
   const response = await fetch(apiUrl(input), {
     credentials: 'include',
     ...init,
     headers: {
       Accept: 'application/json',
+      ...serverCookie,
       ...(desktopToken ? { Authorization: `Bearer ${desktopToken}` } : {}),
       ...(init?.body && !(init.body instanceof FormData)
         ? { 'Content-Type': 'application/json' }
@@ -102,10 +137,12 @@ export async function apiFetchBlobResult(
   init?: RequestInit,
 ): Promise<{ blob: Blob; headers: Headers }> {
   const desktopToken = readDesktopBridge() ? await getDesktopAuthToken() : null
+  const serverCookie = await serverCookieHeader()
   const response = await fetch(apiUrl(input), {
     credentials: 'include',
     ...init,
     headers: {
+      ...serverCookie,
       ...(desktopToken ? { Authorization: `Bearer ${desktopToken}` } : {}),
       ...init?.headers,
     },

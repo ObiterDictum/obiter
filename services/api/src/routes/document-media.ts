@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import type { Pool } from 'pg'
 import { isPackageImagePartName } from '@obiter/ooxml'
 import type { AuthzVariables } from '../authz'
+import { createDocumentMediaResponse } from '../document-media-response'
 import {
   getDocumentImagePart,
   createDocumentImagePartCache,
@@ -36,14 +37,10 @@ export function createDocumentMediaRoutes(pool: Pool, storage: StorageService) {
     )
     if (!part) return documentNotFound(c)
 
-    return new Response(Uint8Array.from(part.bytes), {
-      status: 200,
-      headers: {
-        'content-type': part.contentType,
-        'cache-control': 'no-store',
-        'x-content-type-options': 'nosniff',
-      },
-    })
+    return createDocumentMediaResponse(
+      Uint8Array.from(part.bytes),
+      part.contentType,
+    )
   })
 
   return routes

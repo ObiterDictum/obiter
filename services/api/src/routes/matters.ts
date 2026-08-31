@@ -161,9 +161,7 @@ export function createMattersRoutes(pool: Pool) {
       if (manageUser instanceof Response) return manageUser
     }
 
-    const matters = await listMatters(pool, user.organisationId, {
-      includeDeleted,
-    })
+    const matters = await listMatters(pool, user, { includeDeleted })
     return c.json({ matters })
   })
 
@@ -177,12 +175,9 @@ export function createMattersRoutes(pool: Pool) {
       if (manageUser instanceof Response) return manageUser
     }
 
-    const matter = await getMatter(
-      pool,
-      user.organisationId,
-      c.req.param('id'),
-      { includeDeleted },
-    )
+    const matter = await getMatter(pool, user, c.req.param('id'), 'view', {
+      includeDeleted,
+    })
     if (!matter) {
       return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
     }
@@ -257,22 +252,17 @@ export function createMattersRoutes(pool: Pool) {
       )
     }
 
-    const matter = await updateMatter(
-      pool,
-      user.organisationId,
-      c.req.param('id'),
-      {
-        ...(name === undefined ? {} : { name }),
-        ...(body.description === undefined ? {} : { description }),
-        ...(primaryJurisdiction === undefined ? {} : { primaryJurisdiction }),
-        ...(secondaryJurisdictions === undefined
-          ? {}
-          : { secondaryJurisdictions }),
-        ...(legalDomains === undefined ? {} : { legalDomains }),
-        ...(clientReference === undefined ? {} : { clientReference }),
-        ...(status === undefined ? {} : { status }),
-      },
-    )
+    const matter = await updateMatter(pool, user, c.req.param('id'), {
+      ...(name === undefined ? {} : { name }),
+      ...(body.description === undefined ? {} : { description }),
+      ...(primaryJurisdiction === undefined ? {} : { primaryJurisdiction }),
+      ...(secondaryJurisdictions === undefined
+        ? {}
+        : { secondaryJurisdictions }),
+      ...(legalDomains === undefined ? {} : { legalDomains }),
+      ...(clientReference === undefined ? {} : { clientReference }),
+      ...(status === undefined ? {} : { status }),
+    })
     if (!matter) {
       return errorResponse(c, 'matter_not_found', 'Matter not found.', 404)
     }
