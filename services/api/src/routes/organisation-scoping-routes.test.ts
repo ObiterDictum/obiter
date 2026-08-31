@@ -1,3 +1,8 @@
+/**
+ * Route behaviour against a fake pool. The fake's `scoped()` helper filters
+ * rows by organisation_id itself, so these tests are not evidence of
+ * SQL-level isolation. Real isolation is in organisation-isolation.db.test.ts.
+ */
 import { Hono } from 'hono'
 import type { Pool } from 'pg'
 import { describe, expect, it } from 'vitest'
