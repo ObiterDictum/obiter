@@ -11,7 +11,11 @@ import {
   type TextRunAnchor,
 } from './model'
 import { deleteParagraph, insertParagraphAfter } from './model-paragraph-edits'
-import { setParagraphNumbering, setRunEmphasis } from './model-property-edits'
+import {
+  setParagraphNumbering,
+  setParagraphFormat,
+  setRunEmphasis,
+} from './model-property-edits'
 import { setParagraphStyle, setRunStyle } from './model-style-edits'
 import { replaceTextRunAtAnchor } from './text-run-edit'
 import {
@@ -32,6 +36,7 @@ type PlannedOperation =
         type:
           | 'set_paragraph_style'
           | 'set_paragraph_numbering'
+          | 'set_paragraph_format'
           | 'insert_paragraph_after'
           | 'delete_paragraph'
       }
@@ -123,6 +128,14 @@ export function applyDocumentEdits(
           setParagraphNumbering(document, operation.paragraph, operation)
         }
       }
+    } else if (operation.type === 'set_paragraph_format') {
+      if (!deletedLater) {
+        if (trackedWriter) {
+          trackedWriter.setParagraphFormat(operation.paragraph, operation)
+        } else {
+          setParagraphFormat(document, operation.paragraph, operation)
+        }
+      }
     } else if (operation.type === 'insert_paragraph_after') {
       const count = insertionCounts.get(operation.paragraphId) ?? 0
       if (trackedWriter) {
@@ -132,6 +145,7 @@ export function applyDocumentEdits(
           insertParagraphRuns(operation),
           operation.styleId,
           count,
+          operation,
         )
       } else {
         insertParagraphAfter(
@@ -141,6 +155,7 @@ export function applyDocumentEdits(
           insertParagraphRuns(operation),
           operation.styleId,
           count,
+          { prefix: 'w', paragraphFormat: operation },
         )
       }
       insertionCounts.set(operation.paragraphId, count + 1)
@@ -210,6 +225,7 @@ function validateTrackedOperations(
   const runEmphasisTargets = new Set<string>()
   const paragraphStyleTargets = new Set<string>()
   const paragraphNumberingTargets = new Set<string>()
+  const paragraphFormatTargets = new Set<string>()
   for (const operation of planned) {
     if (deletedIds.has(operation.paragraph.wire.id)) continue
     if (operation.type === 'replace_run_text') {
@@ -272,6 +288,18 @@ function validateTrackedOperations(
         throw new OoxmlError('invalid-document-edit')
       }
       paragraphNumberingTargets.add(operation.paragraphId)
+    } else if (operation.type === 'set_paragraph_format') {
+      if (
+        containsTrackedChange(
+          document,
+          operation.paragraph.partName,
+          operation.paragraph.paragraphRange,
+        ) ||
+        paragraphFormatTargets.has(operation.paragraphId)
+      ) {
+        throw new OoxmlError('invalid-document-edit')
+      }
+      paragraphFormatTargets.add(operation.paragraphId)
     }
   }
 }
@@ -298,6 +326,7 @@ function planOperation(
 ): PlannedOperation {
   validateStyle(operation, styleIds)
   validateEmphasis(operation)
+  validateParagraphFormat(operation)
   validateNumbering(operation, numberingIds)
   if (
     operation.type === 'replace_run_text' ||
@@ -320,13 +349,36 @@ function planOperation(
   }
 }
 
+const RUN_EMPHASIS_KEYS = [
+  'bold',
+  'italic',
+  'underline',
+  'fontFamily',
+  'fontSize',
+  'colour',
+  'highlight',
+  'strikethrough',
+  'vertAlign',
+  'smallCaps',
+] as const
+
 function validateEmphasis(operation: DocumentEditOperation) {
   if (operation.type !== 'set_run_emphasis') return
-  if (
-    operation.bold == null &&
-    operation.italic == null &&
-    operation.underline == null
-  ) {
+  if (!RUN_EMPHASIS_KEYS.some((key) => operation[key] !== undefined)) {
+    throw new OoxmlError('invalid-document-edit')
+  }
+}
+
+function validateParagraphFormat(operation: DocumentEditOperation) {
+  if (operation.type !== 'set_paragraph_format') return
+  const keys = [
+    'alignment',
+    'lineSpacing',
+    'spaceBefore',
+    'spaceAfter',
+    'indentation',
+  ] as const
+  if (!keys.some((key) => operation[key] !== undefined)) {
     throw new OoxmlError('invalid-document-edit')
   }
 }

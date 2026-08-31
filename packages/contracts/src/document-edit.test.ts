@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  DOCUMENT_EDIT_FONT_NAME_MAX_LENGTH,
   DOCUMENT_EDIT_OPERATION_MAX_COUNT,
   DOCUMENT_EDIT_RUN_MAX_COUNT,
+  DOCUMENT_EDIT_SIZE_HALF_POINTS_MAX,
   DOCUMENT_EDIT_TEXT_MAX_LENGTH,
+  DOCUMENT_EDIT_TWIP_MAX,
   documentEditRequestSchema,
   documentEditResponseSchema,
 } from './document-edit'
@@ -31,6 +34,13 @@ describe('document edit contracts', () => {
             type: 'set_run_emphasis',
             runId: 'run_1',
             bold: true,
+            colour: 'C00000',
+          },
+          {
+            type: 'set_paragraph_format',
+            paragraphId: 'para_1',
+            alignment: 'center',
+            spaceBefore: 240,
           },
           {
             type: 'set_paragraph_numbering',
@@ -120,10 +130,82 @@ describe('document edit contracts', () => {
       },
     ],
     [
-      'emphasis with no set flag',
+      'emphasis with no assigned property',
       {
         baseVersionId: 'ver_1',
-        operations: [{ type: 'set_run_emphasis', runId: 'run_1', bold: null }],
+        operations: [{ type: 'set_run_emphasis', runId: 'run_1' }],
+      },
+    ],
+    [
+      'paragraph format with no assigned property',
+      {
+        baseVersionId: 'ver_1',
+        operations: [{ type: 'set_paragraph_format', paragraphId: 'para_1' }],
+      },
+    ],
+    [
+      'an overlong font name',
+      {
+        baseVersionId: 'ver_1',
+        operations: [
+          {
+            type: 'set_run_emphasis',
+            runId: 'run_1',
+            fontFamily: 'A'.repeat(DOCUMENT_EDIT_FONT_NAME_MAX_LENGTH + 1),
+          },
+        ],
+      },
+    ],
+    [
+      'a malformed colour',
+      {
+        baseVersionId: 'ver_1',
+        operations: [
+          {
+            type: 'set_run_emphasis',
+            runId: 'run_1',
+            colour: '#C00000',
+          },
+        ],
+      },
+    ],
+    [
+      'an oversized font size',
+      {
+        baseVersionId: 'ver_1',
+        operations: [
+          {
+            type: 'set_run_emphasis',
+            runId: 'run_1',
+            fontSize: DOCUMENT_EDIT_SIZE_HALF_POINTS_MAX + 1,
+          },
+        ],
+      },
+    ],
+    [
+      'an oversized spacing value',
+      {
+        baseVersionId: 'ver_1',
+        operations: [
+          {
+            type: 'set_paragraph_format',
+            paragraphId: 'para_1',
+            spaceBefore: DOCUMENT_EDIT_TWIP_MAX + 1,
+          },
+        ],
+      },
+    ],
+    [
+      'firstLine and hanging together',
+      {
+        baseVersionId: 'ver_1',
+        operations: [
+          {
+            type: 'set_paragraph_format',
+            paragraphId: 'para_1',
+            indentation: { firstLine: 240, hanging: 240 },
+          },
+        ],
       },
     ],
   ])('rejects %s', (_label, request) => {
@@ -227,6 +309,24 @@ describe('document edit contracts', () => {
         ],
       }).success,
     ).toBe(true)
+  })
+
+  it('replays a persisted pre-property-family emphasis operation', () => {
+    expect(
+      documentEditRequestSchema.parse({
+        baseVersionId: 'ver_1',
+        operations: [{ type: 'set_run_emphasis', runId: 'run_1', bold: true }],
+      }).operations[0],
+    ).toEqual({ type: 'set_run_emphasis', runId: 'run_1', bold: true })
+  })
+
+  it('treats null as unset and omitted as leave-alone', () => {
+    expect(
+      documentEditRequestSchema.parse({
+        baseVersionId: 'ver_1',
+        operations: [{ type: 'set_run_emphasis', runId: 'run_1', bold: null }],
+      }).operations[0],
+    ).toEqual({ type: 'set_run_emphasis', runId: 'run_1', bold: null })
   })
 
   it('accepts numbering without an ilvl when the numbering is cleared', () => {

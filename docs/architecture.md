@@ -836,3 +836,52 @@ environment, version, port, database or Meilisearch configuration, Rampart
 settings, matter data, or secrets. Adding an auth requirement is a product
 change and must fail `allows anonymous callers on deliberately public routes`
 in `services/api/src/routes/public-access.test.ts` rather than landing silently.
+
+### Document edit operations: property families without a second compatibility path (31 August 2026)
+
+Context: the editor wire had seven operations. Fonts, colours, alignment,
+spacing, and indent had no representation, so each control was free to invent
+one. Inserted runs already carried bold, italic, underline, and style id
+(#132). Extending that with a second insert shape or a renamed emphasis
+operation would have required a stored-operation migration.
+
+Decision: keep the existing seven `type` names and add one property operation,
+`set_paragraph_format`. Do not rename `set_run_emphasis`. Run character
+formatting stays on that type and on `editRunSchema`, additively.
+
+Naming: property operations are `set_{run|paragraph}_{family}`. They patch
+direct formatting on an existing node. Structural operations are
+`insert_*`, `delete_*`, or `replace_*`. They add, remove, or replace nodes or
+text. Families stay separate: style id, numbering, run character formatting,
+and paragraph layout are four ops, not one properties bag.
+
+Composition: omitted or `undefined` means leave the current direct value.
+`null` means remove that direct formatting so the style inherits. A concrete
+value writes it. At least one family field must be present, including an
+explicit `null`. A new property is an optional field on the existing family
+object. Persisted operations that omit it keep parsing. There is no column
+and no migration.
+
+Bounds: client strings and numbers are untrusted. Font names cap at 64 XML-safe
+characters. Colours are `auto` or six hex digits. Font size is Word
+half-points, 2 to 1638. Spacing and indent are twips, 0 to 31680 (22 inches).
+Highlight is Word's closed colour list. Vertical align is
+`superscript | subscript | baseline`. Alignment is `left | center | right | both`.
+
+E3b: `insertPayload` reads the run family from preserved fragments onto
+`editRunSchema`. E3c: those readers take the prefix from the fragment, not a
+hardcoded `w:`.
+
+Structural operations later (tables, images, footnotes, headers, breaks,
+cross-references, table of contents) fit the same rules and do not get schemas
+in this change. A table insert is `insert_table_after` with bounded cell
+counts, not a nested document model. An image is an insert that names an
+already-stored part, not raw bytes. Notes, headers, and breaks are inserts
+that target a story or a paragraph edge. Cross-references are property or
+insert ops that name an existing bookmark id. Commit those schemas when the
+apply path exists. Committing them now would freeze a guess.
+
+Rejected: a parallel `set_run_properties` type; renaming `set_run_emphasis`;
+theme colour objects; underline styles beyond the existing boolean; language
+and bidi; keep-with-next; schemas for tables, images, notes, headers, breaks,
+or TOC.
