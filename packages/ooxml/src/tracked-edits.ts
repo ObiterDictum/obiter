@@ -15,8 +15,10 @@ import { requireEditablePart } from './model-edit-overlay'
 import { insertParagraphAfter } from './model-paragraph-edits'
 import { expandSelfClosingProperties } from './model-properties'
 import {
+  patchParagraphFormatXml,
   patchParagraphNumberingXml,
   patchRunEmphasisXml,
+  type ParagraphFormat,
   type ParagraphNumbering,
   type RunEmphasis,
 } from './model-property-edits'
@@ -92,6 +94,7 @@ export function createTrackedEditWriter(
       runs: readonly DocumentEditRun[],
       styleId: string | null | undefined,
       offset: number,
+      paragraphFormat?: ParagraphFormat,
     ) {
       const part = requireEditablePart(document, anchor.partName)
       const prefix = wordPrefix(part.overlay.source, anchor.paragraphRange, 'p')
@@ -99,6 +102,7 @@ export function createTrackedEditWriter(
         prefix,
         wrapRun: (run) =>
           `<${prefix}:ins ${attributes(prefix)}>${run}</${prefix}:ins>`,
+        paragraphFormat,
       })
     },
 
@@ -205,6 +209,21 @@ export function createTrackedEditWriter(
         prefix,
         attributes: attributes(prefix),
         patch: (current) => patchParagraphNumberingXml(current, numbering),
+      })
+    },
+
+    setParagraphFormat(anchor: ParagraphAnchor, format: ParagraphFormat) {
+      const part = requireEditablePart(document, anchor.partName)
+      const prefix = wordPrefix(part.overlay.source, anchor.paragraphRange, 'p')
+      setTrackedProperties(document, {
+        id: anchor.wire.id,
+        partName: anchor.partName,
+        nodeRange: anchor.paragraphRange,
+        propertiesRange: anchor.paragraphPropertiesRange,
+        propertiesName: 'pPr',
+        prefix,
+        attributes: attributes(prefix),
+        patch: (current) => patchParagraphFormatXml(current, format),
       })
     },
   }

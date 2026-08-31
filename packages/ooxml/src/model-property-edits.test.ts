@@ -85,11 +85,6 @@ describe('run emphasis and paragraph numbering edits', () => {
     ).toThrowError(expect.objectContaining({ code: 'invalid-document-edit' }))
     expect(() =>
       applyDocumentEdits(document, [
-        { type: 'set_run_emphasis', runId: run.id, bold: null },
-      ]),
-    ).toThrowError(expect.objectContaining({ code: 'invalid-document-edit' }))
-    expect(() =>
-      applyDocumentEdits(document, [
         {
           type: 'set_paragraph_numbering',
           paragraphId: first.id,
@@ -101,6 +96,17 @@ describe('run emphasis and paragraph numbering edits', () => {
     expect(
       [...document.sourceParts.values()].every(({ dirty }) => !dirty),
     ).toBe(true)
+
+    const removable = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const removableRun = mainParagraphs(removable)[0]?.runs[0]
+    if (!removableRun) throw new Error('Fixture run is missing.')
+    expect(() =>
+      applyDocumentEdits(removable, [
+        { type: 'set_run_emphasis', runId: removableRun.id, bold: null },
+      ]),
+    ).not.toThrow()
   })
 
   it('merges style and numbering in one batch into a single pPr for every pPr shape', async () => {

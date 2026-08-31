@@ -183,6 +183,12 @@ function operationConflicts(
       changes.paragraphOpaque.has(operation.paragraphId)
     )
   }
+  if (operation.type === 'set_paragraph_format') {
+    return (
+      !changes.paragraphIds.has(operation.paragraphId) ||
+      changes.paragraphOpaque.has(operation.paragraphId)
+    )
+  }
   if (operation.type === 'set_run_emphasis') {
     return (
       !changes.runIds.has(operation.runId) ||
