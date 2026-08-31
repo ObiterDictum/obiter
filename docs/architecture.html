@@ -2570,6 +2570,46 @@
                   <td>Create an organisation for an org-less user</td>
                 </tr>
                 <tr>
+                  <td class="id">
+                    GET · POST /api/organisations/:organisationId/invites
+                  </td>
+                  <td class="id">organisations.ts</td>
+                  <td>
+                    Owner or admin list and create organisation invites. Path id
+                    must match the caller&apos;s organisation.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    DELETE /api/organisations/:organisationId/invites/:inviteId
+                  </td>
+                  <td class="id">organisations.ts</td>
+                  <td>Owner or admin revoke of an open invite</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    GET /api/organisations/:organisationId/members
+                  </td>
+                  <td class="id">organisations.ts</td>
+                  <td>Owner or admin list of organisation members</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    DELETE /api/organisations/:organisationId/members/:userId
+                  </td>
+                  <td class="id">organisations.ts</td>
+                  <td>Owner-only removal of a member; last owner is refused</td>
+                </tr>
+                <tr>
+                  <td class="id">POST /api/invites/accept</td>
+                  <td class="id">organisations.ts</td>
+                  <td>
+                    Verified user accepts an invite. Refused when the
+                    invitee&apos;s current organisation still has matters or
+                    other members.
+                  </td>
+                </tr>
+                <tr>
                   <td class="id">GET · POST /api/matters</td>
                   <td class="id">matters.ts</td>
                   <td>List and create matters</td>

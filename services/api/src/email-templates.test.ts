@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   magicLinkEmail,
+  organisationInviteEmail,
   resetPasswordEmail,
   verificationEmail,
 } from './email-templates'
@@ -48,6 +49,7 @@ describe('email templates', () => {
       magicLinkEmail(URL),
       verificationEmail(URL),
       resetPasswordEmail(URL),
+      organisationInviteEmail(URL),
     ]) {
       expect(email.html).not.toMatch(/!/)
       expect(email.text).not.toMatch(/!/)

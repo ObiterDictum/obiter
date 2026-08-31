@@ -33,7 +33,7 @@ function maskEmail(email: string) {
  * logs since the client-facing response does not reliably surface them).
  * Without a key it falls back to a dev-only console log of the one-time URL.
  */
-async function sendEmail(
+export async function sendEmail(
   env: ApiEnv,
   options: {
     email: string
