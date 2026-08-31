@@ -2,7 +2,7 @@ import type {
   DocumentModelWire,
   DocumentParagraphWire,
 } from '@obiter/contracts'
-import { insertRuns, type LocalInsert } from './document-edits'
+import { flowIds, insertRuns, type LocalInsert } from './document-edits'
 import type { ExtraRuns } from './document-word-edits'
 import { documentStory, paragraphPlainText } from './document-model-text'
 import { takeFragment } from './document-page-flow'
@@ -408,15 +408,25 @@ function withInserts(
   inserts: LocalInsert[],
 ): StoryBlock[] {
   if (inserts.length === 0) return blocks
-  const byAfter = new Map<string, LocalInsert[]>()
-  for (const insert of inserts) {
-    const list = byAfter.get(insert.afterParagraphId) ?? []
-    list.push(insert)
-    byAfter.set(insert.afterParagraphId, list)
+  const insertById = new Map(inserts.map((item) => [item.clientId, item]))
+  const hostIds: string[] = []
+  const hostBlock = new Map<string, StoryBlock>()
+  for (const block of blocks) {
+    if (block.type === 'paragraph') {
+      hostIds.push(block.paragraph.id)
+      hostBlock.set(block.paragraph.id, block)
+    } else {
+      for (const id of block.table.paragraphIds) {
+        hostIds.push(id)
+        hostBlock.set(id, block)
+      }
+    }
   }
+  const seen = new Set<StoryBlock>()
   const result: StoryBlock[] = []
-  const append = (id: string) => {
-    for (const insert of byAfter.get(id) ?? []) {
+  for (const id of flowIds(hostIds, inserts)) {
+    const insert = insertById.get(id)
+    if (insert) {
       result.push({
         type: 'paragraph',
         paragraph: {
@@ -425,15 +435,12 @@ function withInserts(
           preservedXmlFragments: [],
         },
       })
-      append(insert.clientId)
+      continue
     }
-  }
-  for (const block of blocks) {
+    const block = hostBlock.get(id)
+    if (!block || seen.has(block)) continue
+    seen.add(block)
     result.push(block)
-    if (block.type === 'paragraph') append(block.paragraph.id)
-    else {
-      for (const id of block.table.paragraphIds) append(id)
-    }
   }
   return result
 }

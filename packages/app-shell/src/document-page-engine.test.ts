@@ -4,7 +4,9 @@ import type {
   DocumentModelWire,
   DocumentParagraphWire,
 } from '@obiter/contracts'
+import { flowParagraphIds } from './document-edits'
 import { layoutDocument } from './document-page-engine'
+import { applySplitParagraph, emptyEditorState } from './document-word-edits'
 
 const SHORT_PAGE =
   '<w:sectPr><w:pgSz w:w="11906" w:h="4000"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/></w:sectPr>'
@@ -414,5 +416,48 @@ describe('layoutDocument', () => {
         ),
       ),
     ).toBe(true)
+  })
+
+  it('places a mid-paragraph split before later body paragraphs', () => {
+    const splitModel = modelOf([
+      paragraph('p1', 'Before after'),
+      paragraph('p2', 'Second'),
+      paragraph('p3', 'Third'),
+    ])
+    const prior = applySplitParagraph(
+      splitModel,
+      emptyEditorState(),
+      { paragraphId: 'p1', offset: 12 },
+      'I1',
+    )
+    if (!prior) throw new Error('expected first split')
+    const split = applySplitParagraph(
+      splitModel,
+      prior.state,
+      { paragraphId: 'p1', offset: 7 },
+      'ins1',
+    )
+    if (!split) throw new Error('expected split')
+    const pages = layoutDocument(
+      splitModel,
+      split.state.drafts,
+      split.state.inserts,
+      split.state.extraRuns,
+    )
+    const layoutIds = pages.flatMap((page) =>
+      page.blocks.flatMap((block) =>
+        block.type === 'paragraph' && !block.continuation
+          ? [block.paragraph.id]
+          : [],
+      ),
+    )
+    expect(layoutIds).toEqual(['p1', 'ins1', 'I1', 'p2', 'p3'])
+    expect(
+      flowParagraphIds(
+        splitModel,
+        split.state.inserts,
+        split.state.deletedParagraphIds,
+      ),
+    ).toEqual(layoutIds)
   })
 })
