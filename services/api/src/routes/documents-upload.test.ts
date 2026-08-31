@@ -307,6 +307,27 @@ describe('multipart document extraction', () => {
       await expect(readFile(join(root, 'org'))).rejects.toThrow()
     },
   )
+  it('rejects an unsupported fileType before create when no file is attached', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'obiter-upload-'))
+    roots.push(root)
+    const response = await (
+      await app(root)
+    ).request('/api/matters/mtr_1/documents', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        filename: 'payload.html',
+        fileType: 'text/html',
+        contentSha256: '0'.repeat(64),
+        sizeBytes: 12,
+      }),
+    })
+    expect(response.status).toBe(400)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'validation_failed' },
+    })
+    await expect(readFile(join(root, 'org'))).rejects.toThrow()
+  })
   it('returns storage_unavailable when binary storage is unavailable', async () => {
     const root = await mkdtemp(join(tmpdir(), 'obiter-upload-'))
     roots.push(root)
