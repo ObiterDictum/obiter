@@ -712,21 +712,25 @@ margin band looks like the Word formatting was stripped.
 
 Decision: keep the wire schema unchanged. Serve current-version image parts
 through `GET /api/documents/:id/media?part=`, gated like the model route, and
-restricted to image package paths. The route keeps an LRU cache of unzipped
-image parts for at most 16 immutable versions per API process and serves later
-image requests from that cache. The React page interprets preserved `w:tbl`
-fragments and drawing extents for display only: React tables and `<img>`, never
-HTML strings of OOXML. Binary media stays out of `model.json`. Page size,
-margins, fonts, run size, paragraph spacing, and drawing boxes come from the
-document's own twip and EMU values (plus `styles.xml` inheritance), not from a
-product type scale. Header and footer stories are painted on the page (top and
-bottom) rather than stacked in the body flow; letterhead bars come from a
-shaded three-cell table or from flanking shapes around a logo, and footer text
-sits on the shape fill. Header letterhead groups (navy bars plus a logo) are
-laid out from DrawingML/VML coordinates rather than a synthetic grey table.
-This is a block-flow layout engine: section page size and margins define a
-content frame, body blocks paginate into that frame, and `wp:anchor` offsets
-position floating drawings. Header and footer stories repeat on each page.
+restricted to image package paths. Responses are built only by
+`createDocumentMediaResponse`, which sets `Content-Disposition: attachment`
+and a non-executable Content-Security-Policy while preserving each part's
+`Content-Type` so the frontend can fetch blobs for `<img>` rendering. The route
+keeps an LRU cache of unzipped image parts for at most 16 immutable versions
+per API process and serves later image requests from that cache. The React page
+interprets preserved `w:tbl` fragments and drawing extents for display only:
+React tables and `<img>`, never HTML strings of OOXML. Binary media stays out
+of `model.json`. Page size, margins, fonts, run size, paragraph spacing, and
+drawing boxes come from the document's own twip and EMU values (plus
+`styles.xml` inheritance), not from a product type scale. Header and footer
+stories are painted on the page (top and bottom) rather than stacked in the
+body flow; letterhead bars come from a shaded three-cell table or from flanking
+shapes around a logo, and footer text sits on the shape fill. Header letterhead
+groups (navy bars plus a logo) are laid out from DrawingML/VML coordinates
+rather than a synthetic grey table. This is a block-flow layout engine: section
+page size and margins define a content frame, body blocks paginate into that
+frame, and `wp:anchor` offsets position floating drawings. Header and footer
+stories repeat on each page.
 Columns come from `w:cols`. Floating wrap uses the drawing's wrap kind:
 `wrapSquare` / `wrapTight` / `wrapThrough` inset the line, `wrapTopAndBottom`
 skips the drawing's vertical band, and `wrapNone` does not affect text flow.

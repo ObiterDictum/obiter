@@ -2619,7 +2619,11 @@
                     <code>part</code> is a package path such as
                     <code>word/media/image1.png</code>. Image parts are unzipped
                     once per immutable version, kept in an LRU cache of 16
-                    versions per API process.
+                    versions per API process. Responses use
+                    <code>Content-Disposition: attachment</code> and a
+                    non-executable Content-Security-Policy; the frontend still
+                    fetches bytes as a blob for <code>&lt;img&gt;</code>
+                    rendering.
                   </td>
                 </tr>
                 <tr>
@@ -5400,6 +5404,17 @@
                 the upload cap for a new multipart route requires an explicit
                 path allowlist entry in
                 <code>request-body-limit.ts</code>.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Stored document media bodies use one response helper.</b>
+                Every HTTP response whose body is a stored document image part
+                must be built by
+                <code>createDocumentMediaResponse</code> in
+                <code>document-media-response.ts</code>; route handlers must not
+                construct those bodies with <code>new Response</code> or
+                <code>c.body</code> directly.</span
               >
             </li>
             <li>

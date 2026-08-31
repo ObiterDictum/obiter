@@ -102,6 +102,12 @@ describe('useDocumentImageUrls', () => {
       )
     })
     expect(createObjectURL).toHaveBeenCalled()
+    // The bytes must come through the media endpoint, which serves them as an
+    // attachment under a sandbox CSP. Rendering from a blob URL is what keeps
+    // display working without pointing an element at that URL.
+    expect(api.apiFetchBlob).toHaveBeenCalledWith(
+      '/api/documents/doc_1/media?part=word%2Fmedia%2Flogo.png',
+    )
   })
 
   it('revokes only blob URLs whose part is no longer present', async () => {
