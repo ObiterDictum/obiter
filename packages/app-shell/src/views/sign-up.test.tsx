@@ -189,6 +189,61 @@ describe('SignUpRouteView', () => {
     await waitFor(() => {
       expect(authMocks.resendVerificationEmail).toHaveBeenCalledWith(
         'ada@obiter.dev',
+        `${window.location.origin}/invites/accept?token=invite-token`,
+      )
+    })
+  })
+
+  it('passes an invite accept callbackURL when resending verification has a token', async () => {
+    authMocks.signUpWithEmail.mockResolvedValueOnce({
+      ok: true,
+      verificationRequired: true,
+    })
+    authMocks.resendVerificationEmail.mockResolvedValueOnce({ ok: true })
+
+    render(<SignUpRouteView />)
+    fillForm()
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /resend verification email/i }),
+      ).toBeTruthy()
+    })
+    fireEvent.click(
+      screen.getByRole('button', { name: /resend verification email/i }),
+    )
+    await waitFor(() => {
+      expect(authMocks.resendVerificationEmail).toHaveBeenCalledWith(
+        'ada@obiter.dev',
+        `${window.location.origin}/invites/accept?token=invite-token`,
+      )
+    })
+  })
+
+  it('does not pass an invite callbackURL when resending verification has no token', async () => {
+    searchState.token = undefined
+    authMocks.signUpWithEmail.mockResolvedValueOnce({
+      ok: true,
+      verificationRequired: true,
+    })
+    authMocks.resendVerificationEmail.mockResolvedValueOnce({ ok: true })
+
+    render(<SignUpRouteView />)
+    fillForm()
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /resend verification email/i }),
+      ).toBeTruthy()
+    })
+    fireEvent.click(
+      screen.getByRole('button', { name: /resend verification email/i }),
+    )
+    await waitFor(() => {
+      expect(authMocks.resendVerificationEmail).toHaveBeenCalledWith(
+        'ada@obiter.dev',
       )
     })
   })

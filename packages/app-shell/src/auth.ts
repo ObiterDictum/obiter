@@ -90,6 +90,7 @@ export interface UseAuthReturn {
   ) => Promise<{ ok: boolean; message?: string; code?: string }>
   resendVerificationEmail: (
     email: string,
+    callbackURL?: string,
   ) => Promise<{ ok: boolean; message?: string }>
   signOut: () => Promise<void>
 }
@@ -156,8 +157,11 @@ export function useAuth(): UseAuthReturn {
     return { ok: true }
   }
 
-  async function resendVerificationEmail(email: string) {
-    const result = await authClient.sendVerificationEmail({ email })
+  async function resendVerificationEmail(email: string, callbackURL?: string) {
+    const result = await authClient.sendVerificationEmail({
+      email,
+      ...(callbackURL ? { callbackURL } : {}),
+    })
     if (result.error) {
       return {
         ok: false,
