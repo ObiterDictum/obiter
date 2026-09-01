@@ -38,7 +38,7 @@ type RouteContext = Context<{ Variables: RouteVariables }>
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000
 const NOT_EMPTY_MESSAGE =
-  'Your current organisation still has matters or other members. Obiter will not move or delete that data, so this invite cannot be accepted.'
+  'Your current organisation still has matters, other members, or pending invites. Obiter will not move or delete that data, so this invite cannot be accepted. Revoke pending invites first.'
 
 interface InviteRow {
   id: string
@@ -109,10 +109,16 @@ function callerOwnsOrganisation(
 }
 
 /**
- * Organisation creation. Self-registration no longer provisions an org, so an
- * org-less user creates one explicitly here. The single-org model holds: a
- * user that already has an organisation gets a 409 conflict. Creation and the
- * owner assignment are transactional in createOrganisationForUser.
+ * Organisation creation. Every user is auto-provisioned a private organisation
+ * on first authorised request via ensureOrgUser, so this route usually returns
+ * 409. It exists for the remaining case where that has not happened. The
+ * single-org model holds: a user that already has an organisation gets a 409
+ * conflict. Creation and the owner assignment are transactional in
+ * createOrganisationForUser.
+ *
+ * Accepting an invite therefore means leaving an organisation, which is why
+ * the accept path moves the user and deletes the vacated organisation when it
+ * is empty.
  */
 export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
   const routes = new Hono<{ Variables: RouteVariables }>()

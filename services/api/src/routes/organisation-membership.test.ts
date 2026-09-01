@@ -115,9 +115,18 @@ class MembershipStore {
         (user) =>
           user.organisationId === organisationId && user.id !== exceptUserId,
       )
+      const pendingInvites = this.invites.some(
+        (invite) =>
+          invite.organisation_id === organisationId &&
+          !invite.accepted_at &&
+          !invite.revoked_at,
+      )
       const occupied =
         otherMembers ||
-        this.matters.some((matter) => matter.organisation_id === organisationId)
+        this.matters.some(
+          (matter) => matter.organisation_id === organisationId,
+        ) ||
+        pendingInvites
       return { rows: [{ occupied }] }
     }
     if (text.startsWith('insert into organisation_invites')) {
@@ -476,6 +485,104 @@ describe('organisation membership routes', () => {
       error: { code: 'organisation_not_empty' },
     })
     expect(store.organisations.has('org_b')).toBe(true)
+  })
+
+  it('refuses accept when the invitee organisation has a pending invite', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const store = new MembershipStore()
+    store.invites.push({
+      id: 'inv_pending_from_b',
+      organisation_id: 'org_b',
+      email: 'other@example.com',
+      role: 'member',
+      token_hash: 'hash_pending_from_b',
+      expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+      created_by: 'usr_invitee',
+      created_at: new Date().toISOString(),
+      accepted_at: null,
+      revoked_at: null,
+    })
+    const ownerApp = appFor(store, {
+      id: 'usr_owner',
+      email: 'owner@example.com',
+      emailVerified: true,
+      organisationId: 'org_a',
+      role: 'owner',
+    })
+    await ownerApp.request(
+      '/api/organisations/org_a/invites',
+      json({ email: 'invitee@example.com', role: 'member' }),
+    )
+    const token = tokenFromInviteLog()
+    const response = await appFor(store, {
+      id: 'usr_invitee',
+      email: 'invitee@example.com',
+      emailVerified: true,
+      organisationId: 'org_b',
+      role: 'owner',
+    }).request('/api/invites/accept', json({ token }))
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'organisation_not_empty' },
+    })
+    expect(store.organisations.has('org_b')).toBe(true)
+    expect(store.users.get('usr_invitee')?.organisationId).toBe('org_b')
+  })
+
+  it('accepts when the invitee organisation invites are only accepted or revoked', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const store = new MembershipStore()
+    store.invites.push(
+      {
+        id: 'inv_accepted_from_b',
+        organisation_id: 'org_b',
+        email: 'accepted@example.com',
+        role: 'member',
+        token_hash: 'hash_accepted_from_b',
+        expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+        created_by: 'usr_invitee',
+        created_at: new Date().toISOString(),
+        accepted_at: new Date().toISOString(),
+        revoked_at: null,
+      },
+      {
+        id: 'inv_revoked_from_b',
+        organisation_id: 'org_b',
+        email: 'revoked@example.com',
+        role: 'member',
+        token_hash: 'hash_revoked_from_b',
+        expires_at: new Date(Date.now() + 86_400_000).toISOString(),
+        created_by: 'usr_invitee',
+        created_at: new Date().toISOString(),
+        accepted_at: null,
+        revoked_at: new Date().toISOString(),
+      },
+    )
+    const ownerApp = appFor(store, {
+      id: 'usr_owner',
+      email: 'owner@example.com',
+      emailVerified: true,
+      organisationId: 'org_a',
+      role: 'owner',
+    })
+    await ownerApp.request(
+      '/api/organisations/org_a/invites',
+      json({ email: 'invitee@example.com', role: 'member' }),
+    )
+    const token = tokenFromInviteLog()
+    const response = await appFor(store, {
+      id: 'usr_invitee',
+      email: 'invitee@example.com',
+      emailVerified: true,
+      organisationId: 'org_b',
+      role: 'owner',
+    }).request('/api/invites/accept', json({ token }))
+    expect(response.status).toBe(200)
+    expect(store.organisations.has('org_b')).toBe(false)
+    expect(store.users.get('usr_invitee')).toMatchObject({
+      organisationId: 'org_a',
+      role: 'member',
+    })
   })
 
   it('deletes the invitee empty organisation on a successful accept', async () => {

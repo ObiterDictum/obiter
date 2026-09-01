@@ -16,6 +16,12 @@ export async function organisationHasBlockingWork(
         or exists (select 1 from matters where organisation_id = $1)
         or exists (select 1 from redaction_runs where organisation_id = $1)
         or exists (select 1 from artifacts where organisation_id = $1)
+        or exists (
+          select 1 from organisation_invites
+          where organisation_id = $1
+            and accepted_at is null
+            and revoked_at is null
+        )
       ) as occupied
     `,
     [organisationId, exceptUserId],
