@@ -109,6 +109,53 @@ describe('run formatting when the caret is elsewhere', () => {
   })
 })
 
+describe('run formatting on the caret paragraph', () => {
+  it('renders a uniformly bold paragraph textarea at weight 700', () => {
+    render(
+      <DocumentModelPage
+        model={doc(para('p1', 'Alice Example bold', ['<w:rPr><w:b/></w:rPr>']))}
+        selectedParagraphId="p1"
+        restoreCaret={{ paragraphId: 'p1', offset: 0 }}
+        onSelectParagraph={() => undefined}
+        editing
+        onRunTextChange={() => undefined}
+      />,
+    )
+    const field = screen.getByLabelText('Paragraph text') as HTMLTextAreaElement
+    expect(field.style.fontWeight).toBe('700')
+  })
+
+  it('does not apply a run face when bold and plain runs share the slice', () => {
+    render(
+      <DocumentModelPage
+        model={doc({
+          id: 'p1',
+          runs: [
+            {
+              id: 'r1',
+              text: 'Bold',
+              preservedXmlFragments: ['<w:rPr><w:b/></w:rPr>'],
+            },
+            {
+              id: 'r2',
+              text: 'plain',
+              preservedXmlFragments: [],
+            },
+          ],
+          preservedXmlFragments: [],
+        })}
+        selectedParagraphId="p1"
+        restoreCaret={{ paragraphId: 'p1', offset: 0 }}
+        onSelectParagraph={() => undefined}
+        editing
+        onRunTextChange={() => undefined}
+      />,
+    )
+    const field = screen.getByLabelText('Paragraph text') as HTMLTextAreaElement
+    expect(field.style.fontWeight).not.toBe('700')
+  })
+})
+
 describe('click caret on a rendered paragraph', () => {
   it('selects the clicked character offset, not 0', () => {
     const selected: Array<{ id: string; offset?: number }> = []
