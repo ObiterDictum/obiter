@@ -1,6 +1,8 @@
 import { useEffect, useRef } from 'react'
 import type { CSSProperties } from 'react'
 import { cn } from '@obiter/ui'
+import { offsetAfterArrow, type ArrowNeighbor } from './paragraph-arrow'
+import type { WrappedLine } from '../../document-page-flow'
 
 export function ParagraphEditor({
   text,
@@ -8,7 +10,11 @@ export function ParagraphEditor({
   restoreCaret,
   style,
   className,
+  lines,
+  previous,
+  next,
   onSelect,
+  onMoveCaret,
   onChangeText,
   onBackspace,
   onDelete,
@@ -20,7 +26,11 @@ export function ParagraphEditor({
   restoreCaret?: number
   style?: CSSProperties
   className?: string
+  lines: WrappedLine[]
+  previous?: ArrowNeighbor
+  next?: ArrowNeighbor
   onSelect: () => void
+  onMoveCaret?: (paragraphId: string, offset: number) => void
   onChangeText: (next: string) => void
   onBackspace: (offset: number) => void
   onDelete: (offset: number) => void
@@ -71,7 +81,20 @@ export function ParagraphEditor({
         if (event.key === 'Delete' && start === end) {
           event.preventDefault()
           onDelete(start)
+          return
         }
+        if (start !== end || !onMoveCaret) return
+        const move = offsetAfterArrow({
+          key: event.key,
+          offset: start,
+          text,
+          lines,
+          previous,
+          next,
+        })
+        if (!move) return
+        event.preventDefault()
+        onMoveCaret(move.paragraphId, move.offset)
       }}
       onClick={(event) => {
         event.stopPropagation()

@@ -39,7 +39,7 @@ describe('paragraph alignment while editing', () => {
       render(
         <DocumentModelPage
           model={page(jc, 'Registered office')}
-          selectedParagraphId={null}
+          selectedParagraphId="p1"
           onSelectParagraph={() => undefined}
           editing
           onRunTextChange={() => undefined}

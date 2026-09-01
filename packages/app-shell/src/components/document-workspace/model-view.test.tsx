@@ -424,7 +424,7 @@ describe('DocumentModelPage', () => {
       />,
     )
     const fields = screen.getAllByLabelText('Paragraph text')
-    expect(fields).toHaveLength(2)
+    expect(fields).toHaveLength(1)
     const first = fields[0]
     if (!first) throw new Error('expected cell editor')
     fireEvent.change(first, {
@@ -878,7 +878,7 @@ describe('DocumentModelPage', () => {
         onRunTextChange={() => undefined}
       />,
     )
-    fireEvent.focus(screen.getByLabelText('Paragraph text'))
+    fireEvent.click(screen.getByText('Alice Example overview'))
     expect(selected).toEqual(['p1'])
   })
 
@@ -1048,11 +1048,7 @@ describe('DocumentModelPage', () => {
         }}
       />,
     )
-    const fields = screen.getAllByLabelText(
-      'Paragraph text',
-    ) as HTMLTextAreaElement[]
-    const field = fields[1]
-    if (!field) throw new Error('expected second paragraph')
+    const field = screen.getByLabelText('Paragraph text') as HTMLTextAreaElement
     field.setSelectionRange(0, 0)
     fireEvent.keyDown(field, { key: 'Backspace' })
     expect(joined).toEqual(['p2'])
