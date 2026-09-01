@@ -24,6 +24,23 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
 }))
 
+vi.mock('../organisation-membership', () => ({
+  useOrganisationMembers: () => ({ data: [] }),
+  useOrganisationInvites: () => ({ data: [] }),
+  useCreateOrganisationInvite: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
+  useRevokeOrganisationInvite: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
+  useRemoveOrganisationMember: () => ({
+    mutateAsync: vi.fn(),
+    isPending: false,
+  }),
+}))
+
 vi.mock('../current-user', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../current-user')>()
   return {
@@ -146,5 +163,38 @@ describe('SettingsRouteView — create organisation', () => {
     })
     expect(refetchSpy).toHaveBeenCalledWith({ queryKey: ['current-user'] })
     refetchSpy.mockRestore()
+  })
+})
+
+describe('SettingsRouteView — members and invites', () => {
+  afterEach(() => {
+    cleanup()
+  })
+
+  it('hides invite and remove controls for a member-role user', async () => {
+    mocks.useCurrentUser.mockReturnValue({
+      data: {
+        user: {
+          id: 'usr_3',
+          email: 'member@obiter.dev',
+          name: 'Member',
+          role: 'member',
+        },
+        organisation: {
+          id: 'org_1',
+          name: 'Acme Law',
+          plan: 'private_beta',
+        },
+      },
+    })
+    mocks.useCreateOrganisation.mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    })
+    renderSettings()
+    expect(await screen.findByText('Acme Law')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /send invite/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /remove/i })).toBeNull()
+    expect(screen.queryByRole('button', { name: /revoke/i })).toBeNull()
   })
 })
