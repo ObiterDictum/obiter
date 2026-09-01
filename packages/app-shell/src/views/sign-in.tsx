@@ -83,7 +83,12 @@ export function SignInRouteView({
     setNotice(null)
     setSubmitting(true)
     try {
-      const result = await requestMagicLink(email)
+      const result = await requestMagicLink(
+        email,
+        inviteToken
+          ? `${window.location.origin}/invites/accept?token=${encodeURIComponent(inviteToken)}`
+          : undefined,
+      )
       if (!result.ok) {
         setError(result.message ?? 'Could not send magic link.')
         return

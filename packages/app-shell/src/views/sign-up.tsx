@@ -51,6 +51,11 @@ export function SignUpRouteView() {
         name: trimmedName,
         email: email.trim(),
         password,
+        ...(token
+          ? {
+              callbackURL: `${window.location.origin}/invites/accept?token=${encodeURIComponent(token)}`,
+            }
+          : {}),
       })
       if (!result.ok) {
         setError(result.message ?? 'Sign-up failed.')

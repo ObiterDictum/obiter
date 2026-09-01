@@ -62,6 +62,7 @@ export interface SignUpEmailInput {
   name: string
   email: string
   password: string
+  callbackURL?: string
 }
 
 export interface UseAuthReturn {
@@ -78,6 +79,7 @@ export interface UseAuthReturn {
   }>
   requestMagicLink: (
     email: string,
+    callbackURL?: string,
   ) => Promise<{ ok: boolean; message?: string }>
   requestPasswordReset: (
     email: string,
@@ -168,10 +170,14 @@ export function useAuth(): UseAuthReturn {
     }
   }
 
-  async function requestMagicLink(email: string) {
-    const callbackURL =
-      typeof window === 'undefined' ? undefined : `${window.location.origin}/`
-    const result = await authClient.signIn.magicLink({ email, callbackURL })
+  async function requestMagicLink(email: string, callbackURL?: string) {
+    const resolvedCallbackURL =
+      callbackURL ??
+      (typeof window === 'undefined' ? undefined : `${window.location.origin}/`)
+    const result = await authClient.signIn.magicLink({
+      email,
+      callbackURL: resolvedCallbackURL,
+    })
     if (result.error) {
       return {
         ok: false,
