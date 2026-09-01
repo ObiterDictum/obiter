@@ -31,6 +31,7 @@ import {
   type RunFace,
 } from '../../document-page-style'
 import { PageDrawing } from './page-drawing'
+import type { ArrowNeighbor } from './paragraph-arrow'
 import { ParagraphEditor } from './paragraph-editor'
 
 export type ParagraphWordEdit = {
@@ -53,7 +54,10 @@ export function ModelParagraph({
   onDeleteParagraph,
   onJoinPrevious,
   onWordEdit,
+  onMoveCaret,
   restoreCaret,
+  previous,
+  next,
   editing,
   presence,
   currentUserId,
@@ -82,7 +86,10 @@ export function ModelParagraph({
   onDeleteParagraph?: (paragraphId: string) => void
   onJoinPrevious?: (paragraphId: string) => boolean | void
   onWordEdit?: (edit: ParagraphWordEdit) => void
+  onMoveCaret?: (paragraphId: string, offset: number) => void
   restoreCaret?: { paragraphId: string; offset: number } | null
+  previous?: ArrowNeighbor
+  next?: ArrowNeighbor
   editing?: boolean
   presence?: DocumentPresence[]
   currentUserId?: string
@@ -149,9 +156,9 @@ export function ModelParagraph({
   return (
     <div
       data-paragraph-id={paragraph.id}
+      data-paragraph-from={from ?? 0}
       aria-current={selected ? 'true' : undefined}
       aria-label={`Paragraph ${paragraph.id}`}
-      onClick={onSelect}
       className={cn(
         'relative w-full',
         face.align === 'left' && 'text-left',
@@ -212,12 +219,16 @@ export function ModelParagraph({
             <span aria-hidden="true">{noteMark}</span>
           </span>
         ) : null}
-        <div className="min-h-[1em] min-w-0 flex-1">
-          {editing && (!selected || holdsCaret) ? (
+        <div className="min-h-[1em] min-w-0 flex-1" data-paragraph-text>
+          {editing && holdsCaret ? (
             <ParagraphEditor
               text={sliceText}
               selected={holdsCaret}
               restoreCaret={restore}
+              lines={lines}
+              previous={previous}
+              next={next}
+              onMoveCaret={onMoveCaret}
               style={{
                 ...paragraphCss(face),
                 marginTop: 0,
