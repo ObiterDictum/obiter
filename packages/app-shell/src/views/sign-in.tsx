@@ -4,6 +4,7 @@ import { Button, Input } from '@obiter/ui'
 import type { AppPlatform } from '@obiter/contracts'
 import { useEffect, useState, type FormEvent } from 'react'
 import { useAuth } from '../auth'
+import { inviteAcceptCallbackURL } from '../invite-accept-callback-url'
 import { THEME_STORAGE_KEY } from '../use-app-theme'
 import { Wordmark } from '../wordmark'
 
@@ -83,7 +84,10 @@ export function SignInRouteView({
     setNotice(null)
     setSubmitting(true)
     try {
-      const result = await requestMagicLink(email)
+      const result = await requestMagicLink(
+        email,
+        inviteAcceptCallbackURL(inviteToken),
+      )
       if (!result.ok) {
         setError(result.message ?? 'Could not send magic link.')
         return
@@ -160,6 +164,7 @@ export function SignInRouteView({
             {unverified ? (
               <ResendVerificationControl
                 email={email}
+                callbackURL={inviteAcceptCallbackURL(inviteToken)}
                 resendVerificationEmail={resendVerificationEmail}
               />
             ) : null}
@@ -211,10 +216,15 @@ export function SignInRouteView({
 
 export function ResendVerificationControl({
   email,
+  callbackURL,
   resendVerificationEmail,
 }: {
   email: string
-  resendVerificationEmail: (email: string) => Promise<{
+  callbackURL?: string
+  resendVerificationEmail: (
+    email: string,
+    callbackURL?: string,
+  ) => Promise<{
     ok: boolean
     message?: string
   }>
@@ -226,7 +236,9 @@ export function ResendVerificationControl({
     setSending(true)
     setStatus(null)
     try {
-      const result = await resendVerificationEmail(email)
+      const result = callbackURL
+        ? await resendVerificationEmail(email, callbackURL)
+        : await resendVerificationEmail(email)
       setStatus(
         result.message ??
           (result.ok

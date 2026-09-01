@@ -3,6 +3,7 @@ import { ArrowRight } from '@phosphor-icons/react'
 import { Button, Input } from '@obiter/ui'
 import { useState, type FormEvent } from 'react'
 import { useAuth } from '../auth'
+import { inviteAcceptCallbackURL } from '../invite-accept-callback-url'
 import { Wordmark } from '../wordmark'
 import { useForceNightTheme, ResendVerificationControl } from './sign-in'
 
@@ -51,6 +52,7 @@ export function SignUpRouteView() {
         name: trimmedName,
         email: email.trim(),
         password,
+        ...(token ? { callbackURL: inviteAcceptCallbackURL(token) } : {}),
       })
       if (!result.ok) {
         setError(result.message ?? 'Sign-up failed.')
@@ -90,6 +92,7 @@ export function SignUpRouteView() {
               </p>
               <ResendVerificationControl
                 email={email.trim()}
+                callbackURL={inviteAcceptCallbackURL(token)}
                 resendVerificationEmail={resendVerificationEmail}
               />
               <Link

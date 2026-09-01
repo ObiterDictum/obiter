@@ -4,6 +4,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { ApiError, apiFetch } from '../api'
 import { useAuth } from '../auth'
+import { inviteAcceptCallbackURL } from '../invite-accept-callback-url'
 import { Wordmark } from '../wordmark'
 import { ResendVerificationControl, useForceNightTheme } from './sign-in'
 
@@ -95,6 +96,7 @@ export function AcceptInviteRouteView() {
               {error?.kind === 'unverified' && session.user.email ? (
                 <ResendVerificationControl
                   email={session.user.email}
+                  callbackURL={inviteAcceptCallbackURL(token)}
                   resendVerificationEmail={resendVerificationEmail}
                 />
               ) : null}
