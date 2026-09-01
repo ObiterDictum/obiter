@@ -1,13 +1,16 @@
 #!/usr/bin/env bash
 # Runs the same gates as .github/workflows/ci.yml, in the same order.
-# Meilisearch must be reachable for the search benchmark; if not, the script
-# exits 1 and tells you how to start it.
+# Meilisearch must be reachable for the search benchmark; Postgres must be
+# reachable and obiter_test migrated. If not, the script exits 1 and names
+# the compose command.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
 MEILI_KEY=search-benchmark-key
 MEILI_HOST=http://127.0.0.1:7700
+TEST_DATABASE_URL=postgres://obiter:obiter@localhost:5432/obiter_test
+COMPOSE_CMD='docker compose -f infra/docker/compose.yaml up -d'
 
 if ! curl -fsS "$MEILI_HOST/health" >/dev/null 2>&1; then
   echo "Meilisearch not reachable at $MEILI_HOST" >&2
@@ -38,6 +41,26 @@ if [ "$RUNNING_VERSION" != "$PINNED_VERSION" ]; then
   exit 1
 fi
 
+if ! command -v psql >/dev/null 2>&1; then
+  echo "psql not found (required for Postgres checks)" >&2
+  echo "Install with: sudo apt-get install postgresql-client" >&2
+  exit 1
+fi
+
+if ! pg_isready -h localhost -p 5432 -U obiter -d obiter_test >/dev/null 2>&1; then
+  echo "Postgres not reachable at $TEST_DATABASE_URL" >&2
+  echo "Start it with: $COMPOSE_CMD" >&2
+  exit 1
+fi
+
+if ! psql "$TEST_DATABASE_URL" -tAc "SELECT to_regclass('public.organisation_invites') is not null" | grep -qx t; then
+  echo "Postgres database obiter_test is not migrated" >&2
+  echo "Start Postgres with: $COMPOSE_CMD" >&2
+  echo "Then apply migrations:" >&2
+  echo "  for f in packages/database/migrations/*.sql; do psql \"$TEST_DATABASE_URL\" -v ON_ERROR_STOP=1 -f \"\$f\"; done" >&2
+  exit 1
+fi
+
 # PDF glyph cover tests in services/api fail by fractions of a point when
 # fontconfig or fonts-liberation are missing (pdf.js substitutes a system font
 # for base-14 fonts and the cover geometry is measured against rendered ink).
@@ -58,7 +81,7 @@ echo "== install"      && pnpm install --frozen-lockfile
 echo "== typecheck"    && pnpm typecheck
 echo "== format:check" && pnpm format:check
 echo "== lint"         && pnpm lint
-echo "== test"         && pnpm test
+echo "== test"         && TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm test
 
 echo "== benchmark:search"
 SEARCH_BENCHMARK_API_KEY="$MEILI_KEY" \

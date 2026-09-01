@@ -180,7 +180,7 @@ export function createApiApp(
   app.route('/', createMattersRoutes(pool))
   app.route('/', createCommentsRoutes(pool, storage))
   app.route('/', createDocumentAccessRoutes(pool))
-  app.route('/', createOrganisationsRoutes(pool))
+  app.route('/', createOrganisationsRoutes(pool, env))
   app.route('/', createDocumentsRoutes(pool, storage, requestLimits))
   app.route('/', createDocumentCollaborationRoutes(pool, storage, presence))
   app.route('/', createDocumentEditRoutes(pool, storage))

@@ -376,6 +376,40 @@ export type CreateOrganisationInput = z.infer<
   typeof createOrganisationInputSchema
 >
 
+export const createOrganisationInviteInputSchema = z.object({
+  email: z.string().trim().email().max(320),
+  role: userRoleSchema,
+})
+export type CreateOrganisationInviteInput = z.infer<
+  typeof createOrganisationInviteInputSchema
+>
+
+export const acceptOrganisationInviteInputSchema = z.object({
+  token: z.string().min(1),
+})
+export type AcceptOrganisationInviteInput = z.infer<
+  typeof acceptOrganisationInviteInputSchema
+>
+
+export const organisationInviteSchema = z.object({
+  id: z.string().min(1),
+  organisationId: z.string().min(1),
+  email: z.string().email(),
+  role: userRoleSchema,
+  expiresAt: z.string().datetime({ offset: true }),
+  createdBy: z.string().min(1),
+  createdAt: z.string().datetime({ offset: true }),
+})
+export type OrganisationInvite = z.infer<typeof organisationInviteSchema>
+
+export const organisationMemberSchema = z.object({
+  id: z.string().min(1),
+  email: z.string().email(),
+  name: z.string().min(1),
+  role: userRoleSchema,
+})
+export type OrganisationMember = z.infer<typeof organisationMemberSchema>
+
 export type AuthViewState =
   | { status: 'authenticated'; me: MeResponse }
   | { status: 'unauthenticated' }

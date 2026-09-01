@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { AuthzVariables } from '../authz'
 import type { StorageService } from '../storage'
 import type { RedactionRunRow } from '../redaction-database'
+import { createTestApiEnv } from '../test-api-env'
 import { createDocumentAccessRoutes } from './document-access'
 import { createDocumentsRoutes } from './documents'
 import { createMattersRoutes } from './matters'
@@ -62,7 +63,7 @@ function unauthenticatedApp() {
     await next()
   })
   routes.route('/', createMattersRoutes(pool))
-  routes.route('/', createOrganisationsRoutes(pool))
+  routes.route('/', createOrganisationsRoutes(pool, createTestApiEnv()))
   return routes
 }
 
@@ -78,7 +79,7 @@ function app(role: 'member' | 'admin' = 'member') {
     await next()
   })
   routes.route('/', createMattersRoutes(pool))
-  routes.route('/', createOrganisationsRoutes(pool))
+  routes.route('/', createOrganisationsRoutes(pool, createTestApiEnv()))
   routes.route('/', createDocumentAccessRoutes(pool))
   routes.route('/', createDocumentsRoutes(pool, storage))
   routes.route('/', createRedactRunCreationRoutes(pool, storage))

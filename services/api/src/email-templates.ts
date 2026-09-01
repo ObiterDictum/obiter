@@ -159,6 +159,23 @@ export function verificationEmail(url: string): EmailContent {
   }
 }
 
+export function organisationInviteEmail(url: string): EmailContent {
+  const body: EmailBody = {
+    heading: 'Join an organisation on Obiter',
+    bodyText:
+      'You have been invited to join an organisation. Use the link below to accept. The link expires in seven days.',
+    buttonLabel: 'Accept invite',
+    url,
+    ignoreLine:
+      'If you were not expecting this invite, you can ignore this email.',
+  }
+  return {
+    subject: 'Your Obiter organisation invite',
+    html: renderEmail(body),
+    text: renderText(body),
+  }
+}
+
 export function resetPasswordEmail(url: string): EmailContent {
   const body: EmailBody = {
     heading: 'Reset your password',

@@ -110,6 +110,23 @@ export async function requireManageRole(
   return user
 }
 
+export async function requireOwnerRole(
+  c: AuthzContext,
+  pool: Pool,
+): Promise<AuthenticatedOrgUser | Response> {
+  const user = await ensureOrgUser(c, pool)
+  if (user instanceof Response) return user
+  if (user.role !== 'owner') {
+    return authzError(
+      c,
+      'forbidden',
+      'Only owners may perform this action.',
+      403,
+    )
+  }
+  return user
+}
+
 function authzError(
   c: AuthzContext,
   code: ApiErrorCode,
