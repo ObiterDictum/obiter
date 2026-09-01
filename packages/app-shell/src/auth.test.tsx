@@ -10,6 +10,7 @@ const mock = vi.hoisted(() => ({
   signInEmail: vi.fn(),
   signUpEmail: vi.fn(),
   signOutFn: vi.fn(),
+  sendVerificationEmail: vi.fn(),
   useSession: vi.fn(),
   refetch: vi.fn(),
 }))
@@ -20,6 +21,7 @@ vi.mock('better-auth/react', () => ({
     signIn: { email: mock.signInEmail },
     signUp: { email: mock.signUpEmail },
     signOut: mock.signOutFn,
+    sendVerificationEmail: mock.sendVerificationEmail,
   }),
 }))
 
@@ -27,7 +29,14 @@ vi.mock('better-auth/client/plugins', () => ({
   magicLinkClient: () => ({}),
 }))
 
-const { signInEmail, signUpEmail, useSession, signOutFn, refetch } = mock
+const {
+  signInEmail,
+  signUpEmail,
+  useSession,
+  signOutFn,
+  sendVerificationEmail,
+  refetch,
+} = mock
 
 function createWrapper(client: QueryClient) {
   return function Wrapper({ children }: { children: ReactNode }) {
@@ -219,6 +228,7 @@ describe('useAuth — sign-in success/failure', () => {
     expect(outcome).toEqual({
       ok: false,
       message: 'Invalid email or password.',
+      code: undefined,
     })
   })
 
@@ -237,7 +247,39 @@ describe('useAuth — sign-in success/failure', () => {
       })
     })
 
-    expect(outcome).toEqual({ ok: false, message: 'Sign-in failed.' })
+    expect(outcome).toEqual({
+      ok: false,
+      message: 'Sign-in failed.',
+      code: undefined,
+    })
+  })
+
+  it('forwards EMAIL_NOT_VERIFIED so the sign-in screen can offer a resend', async () => {
+    signInEmail.mockResolvedValueOnce({
+      error: {
+        message: 'Email not verified',
+        code: 'EMAIL_NOT_VERIFIED',
+      },
+      data: null,
+    })
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: createWrapper(new QueryClient()),
+    })
+
+    let outcome
+    await act(async () => {
+      outcome = await result.current.signInWithEmail({
+        email: 'lex@obiter.dev',
+        password: 'obiter-dev',
+      })
+    })
+
+    expect(outcome).toEqual({
+      ok: false,
+      message: 'Email not verified',
+      code: 'EMAIL_NOT_VERIFIED',
+    })
   })
 })
 
@@ -347,5 +389,49 @@ describe('useAuth — signOut clears the current-user cache', () => {
     expect(signOutFn).toHaveBeenCalledOnce()
     // The cache is cleared so a fresh sign-in never reads the previous user.
     expect(client.getQueryData(['current-user'])).toBeUndefined()
+  })
+})
+
+describe('useAuth — resend verification email', () => {
+  it('calls the better-auth client and reports success', async () => {
+    sendVerificationEmail.mockResolvedValueOnce({ error: null, data: {} })
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: createWrapper(new QueryClient()),
+    })
+
+    let outcome
+    await act(async () => {
+      outcome = await result.current.resendVerificationEmail('lex@obiter.dev')
+    })
+
+    expect(sendVerificationEmail).toHaveBeenCalledWith({
+      email: 'lex@obiter.dev',
+    })
+    expect(outcome).toEqual({
+      ok: true,
+      message: 'Check your email for a verification link.',
+    })
+  })
+
+  it('reports a send failure', async () => {
+    sendVerificationEmail.mockResolvedValueOnce({
+      error: { message: 'Too many requests.' },
+      data: null,
+    })
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: createWrapper(new QueryClient()),
+    })
+
+    let outcome
+    await act(async () => {
+      outcome = await result.current.resendVerificationEmail('lex@obiter.dev')
+    })
+
+    expect(outcome).toEqual({
+      ok: false,
+      message: 'Too many requests.',
+    })
   })
 })
