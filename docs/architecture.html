@@ -2463,7 +2463,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>13 migrations, 0001 to 0014, 0008 withdrawn</dd>
+                <dd>14 migrations, 0001 to 0015, 0008 withdrawn</dd>
               </dl>
             </article>
           </div>
@@ -2568,6 +2568,46 @@
                   <td class="id">POST /api/organisations</td>
                   <td class="id">organisations.ts</td>
                   <td>Create an organisation for an org-less user</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    GET · POST /api/organisations/:organisationId/invites
+                  </td>
+                  <td class="id">organisations.ts</td>
+                  <td>
+                    Owner or admin list and create organisation invites. Path id
+                    must match the caller&apos;s organisation.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    DELETE /api/organisations/:organisationId/invites/:inviteId
+                  </td>
+                  <td class="id">organisations.ts</td>
+                  <td>Owner or admin revoke of an open invite</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    GET /api/organisations/:organisationId/members
+                  </td>
+                  <td class="id">organisations.ts</td>
+                  <td>Owner or admin list of organisation members</td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    DELETE /api/organisations/:organisationId/members/:userId
+                  </td>
+                  <td class="id">organisations.ts</td>
+                  <td>Owner-only removal of a member; last owner is refused</td>
+                </tr>
+                <tr>
+                  <td class="id">POST /api/invites/accept</td>
+                  <td class="id">organisations.ts</td>
+                  <td>
+                    Verified user accepts an invite. Refused when the
+                    invitee&apos;s current organisation still has matters, other
+                    members, or pending invites.
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">GET · POST /api/matters</td>
@@ -3508,6 +3548,14 @@
                   <td class="id">organisations</td>
                   <td>Tenant root. Every business row hangs off this.</td>
                   <td class="id">0001</td>
+                </tr>
+                <tr>
+                  <td class="id">organisation_invites</td>
+                  <td>
+                    Pending membership invites. Token stored as a hash. One open
+                    invite per organisation email.
+                  </td>
+                  <td class="id">0015</td>
                 </tr>
                 <tr>
                   <td class="id">audit_logs</td>
