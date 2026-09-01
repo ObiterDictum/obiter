@@ -175,6 +175,10 @@ function openRibbonTab(
   fireEvent.click(screen.getByRole('tab', { name }))
 }
 
+function selectBodyParagraph() {
+  fireEvent.click(screen.getByText('Hello'))
+}
+
 describe('DocxWorkspace ribbon', () => {
   it('keeps the ribbon outside the scrolling document desk', () => {
     mountWorkspace({})
@@ -226,6 +230,7 @@ describe('DocxWorkspace ribbon', () => {
 
   it('replaces find hits and lists extracted authorities', () => {
     mountWorkspace({})
+    selectBodyParagraph()
     fireEvent.change(screen.getByLabelText('Paragraph text'), {
       target: { value: 'See [2024] UKSC 3' },
     })
@@ -320,6 +325,7 @@ describe('DocxWorkspace save', () => {
     })
     mountWorkspace({ editAsync, mergeAsync })
     openRibbonTab('Review')
+    selectBodyParagraph()
 
     fireEvent.change(screen.getByLabelText('Paragraph text'), {
       target: { value: 'Hello world' },
@@ -343,6 +349,7 @@ describe('DocxWorkspace save', () => {
     const mergeAsync = vi.fn().mockRejectedValue(staleConflict)
     mountWorkspace({ editAsync, mergeAsync })
     openRibbonTab('Review')
+    selectBodyParagraph()
 
     fireEvent.change(screen.getByLabelText('Paragraph text'), {
       target: { value: 'Hello world' },
@@ -372,6 +379,7 @@ describe('DocxWorkspace save', () => {
       })
     mountWorkspace({ editAsync })
     openRibbonTab('Review')
+    selectBodyParagraph()
 
     const input = screen.getByLabelText('Paragraph text')
     fireEvent.change(input, { target: { value: 'Hello world' } })
@@ -424,6 +432,7 @@ describe('DocxWorkspace find and undo', () => {
 
   it('keeps selection on the anchor paragraph after undoing a split', () => {
     mountWorkspace({})
+    selectBodyParagraph()
 
     const editor = screen.getByLabelText('Paragraph text')
     editor.focus()
@@ -448,6 +457,7 @@ describe('DocxWorkspace find and undo', () => {
 
   it('keeps the caret inside a pending insert when undo only rewinds text', () => {
     mountWorkspace({})
+    selectBodyParagraph()
 
     const editor = screen.getByLabelText('Paragraph text')
     editor.focus()

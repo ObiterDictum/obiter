@@ -3,8 +3,7 @@ import type {
   DocumentParagraphWire,
   DocumentPresence,
 } from '@obiter/contracts'
-import { insertPlainText, type LocalInsert } from '../../document-edits'
-import { paragraphPlainText } from '../../document-model-text'
+import type { LocalInsert } from '../../document-edits'
 import {
   contrastFillText,
   imagePartNameForDrawing,
@@ -24,8 +23,14 @@ import type { LaidOutBlock } from '../../document-page-engine'
 import type { PageFloat, PageTextBox } from '../../document-page-floats'
 import { documentListMarkers } from '../../document-page-lists'
 import { documentNotes, type NoteKind } from '../../document-page-notes'
+import {
+  blockEndOffset,
+  paragraphClickCaret,
+  pageClickCaret,
+} from './model-click-caret'
 import { ModelParagraph } from './model-paragraph'
 import type { ParagraphWordEdit } from './model-paragraph'
+import { arrowNeighbors } from './paragraph-arrow'
 import { PendingInsert } from './pending-insert'
 import { PageDrawing } from './page-drawing'
 import { PageMarginBand } from './page-margin-band'
@@ -117,12 +122,35 @@ export function DocumentModelPage({
       className="relative flex flex-col overflow-clip"
       style={{ height: page.heightPx }}
       data-document-page
+      onMouseDown={(event) => {
+        event.currentTarget.dataset.pointerDown = `${event.clientX},${event.clientY}`
+      }}
       onClick={(event) => {
         if (!editing) return
         if (!(event.target instanceof Element)) return
-        if (event.target.closest('[data-paragraph-id]')) return
-        const caret = pageClickCaret(event.currentTarget, event.clientY, (id) =>
-          blockEndOffset(id, story.paragraphs, drafts, inserts),
+        const down = event.currentTarget.dataset.pointerDown
+        delete event.currentTarget.dataset.pointerDown
+        if (down && down !== `${event.clientX},${event.clientY}`) return
+        const endOffset = (id: string) =>
+          blockEndOffset(id, story.paragraphs, drafts, inserts)
+        const paragraphEl = event.target.closest('[data-paragraph-id]')
+        if (paragraphEl instanceof HTMLElement) {
+          const caret = paragraphClickCaret(
+            paragraphEl,
+            event.clientX,
+            event.clientY,
+            event.currentTarget,
+            endOffset,
+          )
+          if (caret) {
+            onSelectParagraph(caret.paragraphId, caret.offset)
+            return
+          }
+        }
+        const caret = pageClickCaret(
+          event.currentTarget,
+          event.clientY,
+          endOffset,
         )
         if (caret) onSelectParagraph(caret.paragraphId, caret.offset)
       }}
@@ -317,6 +345,12 @@ function renderBlock(
             if (!paragraph || ctx.deletedParagraphIds.includes(paragraph.id)) {
               return []
             }
+            const wrapWidthPx = cellWrapWidthPx(
+              cell,
+              ctx.columnWidthPx,
+              cellColumnCounts.get(cell) ?? 1,
+            )
+            const adjacent = arrowNeighbors(ctx, paragraph.id, wrapWidthPx)
             return [
               <ModelParagraph
                 key={paragraph.id}
@@ -330,6 +364,9 @@ function renderBlock(
                 onDeleteParagraph={ctx.onDeleteParagraph}
                 onJoinPrevious={ctx.onJoinPrevious}
                 onWordEdit={ctx.onWordEdit}
+                onMoveCaret={ctx.onSelectParagraph}
+                previous={adjacent.previous}
+                next={adjacent.next}
                 restoreCaret={ctx.restoreCaret}
                 editing={ctx.editing}
                 presence={ctx.presence}
@@ -339,11 +376,7 @@ function renderBlock(
                 imageUrls={ctx.imageUrls}
                 styles={ctx.model.styles}
                 listMarker={ctx.listMarkers.get(paragraph.id)}
-                wrapWidthPx={cellWrapWidthPx(
-                  cell,
-                  ctx.columnWidthPx,
-                  cellColumnCounts.get(cell) ?? 1,
-                )}
+                wrapWidthPx={wrapWidthPx}
                 noteMark={ctx.noteMarks.get(paragraph.id)?.mark}
                 noteKind={ctx.noteMarks.get(paragraph.id)?.kind}
               />,
@@ -374,6 +407,7 @@ function renderBlock(
       />,
     ]
   }
+  const adjacent = arrowNeighbors(ctx, paragraph.id, block.wrapWidthPx)
   return [
     <ModelParagraph
       key={`${paragraph.id}-${block.from ?? 0}`}
@@ -387,6 +421,9 @@ function renderBlock(
       onDeleteParagraph={ctx.onDeleteParagraph}
       onJoinPrevious={ctx.onJoinPrevious}
       onWordEdit={ctx.onWordEdit}
+      onMoveCaret={ctx.onSelectParagraph}
+      previous={adjacent.previous}
+      next={adjacent.next}
       restoreCaret={ctx.restoreCaret}
       editing={ctx.editing && !ctx.noteParagraphIds.has(paragraph.id)}
       presence={ctx.presence}
@@ -407,40 +444,4 @@ function renderBlock(
       noteKind={ctx.noteMarks.get(paragraph.id)?.kind}
     />,
   ]
-}
-
-function pageClickCaret(
-  root: HTMLElement,
-  clientY: number,
-  endOffset: (paragraphId: string) => number,
-): { paragraphId: string; offset: number } | undefined {
-  const nodes = [...root.querySelectorAll<HTMLElement>('[data-paragraph-id]')]
-  let best: { paragraphId: string; offset: number; dist: number } | undefined
-  for (const node of nodes) {
-    const paragraphId = node.dataset.paragraphId
-    if (!paragraphId) continue
-    const box = node.getBoundingClientRect()
-    const dist =
-      clientY < box.top
-        ? box.top - clientY
-        : clientY > box.bottom
-          ? clientY - box.bottom
-          : 0
-    const offset =
-      clientY < box.top + box.height / 2 ? 0 : endOffset(paragraphId)
-    if (!best || dist < best.dist) best = { paragraphId, offset, dist }
-  }
-  return best
-}
-
-function blockEndOffset(
-  paragraphId: string,
-  paragraphs: DocumentParagraphWire[],
-  drafts: Record<string, string> | undefined,
-  inserts: LocalInsert[],
-): number {
-  const insert = inserts.find((item) => item.clientId === paragraphId)
-  if (insert) return insertPlainText(insert).length
-  const paragraph = paragraphs.find((item) => item.id === paragraphId)
-  return paragraph ? paragraphPlainText(paragraph, drafts).length : 0
 }
