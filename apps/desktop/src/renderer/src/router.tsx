@@ -8,6 +8,7 @@ import {
   MattersRouteView,
   ResetPasswordRouteView,
   SignInRouteView,
+  SignUpRouteView,
   SettingsRouteView,
   VerifyRouteView,
   caseLawDocumentQueryOptions,
@@ -57,6 +58,7 @@ export const DESKTOP_SHARED_VIEW_PATHS = [
   '/cases/$caseId',
   '/case/$caseSlug',
   '/sign-in',
+  '/sign-up',
   '/forgot-password',
   '/reset-password',
 ] as const
@@ -305,6 +307,16 @@ function DesktopSignInRoute() {
   return <SignInRouteView platform="desktop" />
 }
 
+const signUpRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'sign-up',
+  component: DesktopSignUpRoute,
+})
+
+function DesktopSignUpRoute() {
+  return <SignUpRouteView />
+}
+
 const forgotPasswordRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'forgot-password',
@@ -339,6 +351,7 @@ const routeTree = rootRoute.addChildren([
   casesRoute,
   caseSlugRoute,
   signInRoute,
+  signUpRoute,
   forgotPasswordRoute,
   resetPasswordRoute,
 ])

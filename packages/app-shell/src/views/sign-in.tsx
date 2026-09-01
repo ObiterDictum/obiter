@@ -11,9 +11,9 @@ type Mode = 'password' | 'magic-link'
 
 /**
  * Sign-in against the auth API (better-auth email/password + magic link).
- * Account creation is not offered here — that lives on obiter.dev only.
- * The frame renders this route bare; on success the user is sent to Home.
- * Auth always forces the night aesthetic so the entry gate matches product chrome.
+ * Account creation lives on /sign-up. The frame renders this route bare; on
+ * success the user is sent to Home. Auth always forces the night aesthetic so
+ * the entry gate matches product chrome.
  */
 export function SignInRouteView({
   platform: _platform,
@@ -22,7 +22,14 @@ export function SignInRouteView({
 }) {
   const navigate = useNavigate()
   const { signInWithEmail, requestMagicLink } = useAuth()
-  const search = useSearch({ strict: false }) as { reset?: string }
+  const search = useSearch({ strict: false }) as {
+    reset?: string
+    token?: string
+  }
+  const inviteToken =
+    typeof search.token === 'string' && search.token.length > 0
+      ? search.token
+      : ''
   const [mode, setMode] = useState<Mode>('password')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -170,15 +177,14 @@ export function SignInRouteView({
         </div>
 
         <p className="text-center text-xs text-subtle">
-          Need an account? Create one at{' '}
-          <a
-            href="https://obiter.dev"
+          Need an account?{' '}
+          <Link
+            to="/sign-up"
+            search={inviteToken ? { token: inviteToken } : undefined}
             className="font-medium text-brand hover:text-brand-pressed"
-            rel="noreferrer"
-            target="_blank"
           >
-            obiter.dev
-          </a>
+            Create one
+          </Link>
           .
         </p>
       </div>

@@ -37,16 +37,26 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({
     children,
     to,
+    search,
     className,
   }: {
     children: ReactNode
     to?: string
+    search?: { token?: string }
     className?: string
-  }) => (
-    <a href={typeof to === 'string' ? to : '#'} className={className}>
-      {children}
-    </a>
-  ),
+  }) => {
+    const href =
+      typeof to === 'string'
+        ? search?.token
+          ? `${to}?token=${search.token}`
+          : to
+        : '#'
+    return (
+      <a href={href} className={className}>
+        {children}
+      </a>
+    )
+  },
 }))
 
 function fillPasswordForm(email: string, password: string) {
@@ -101,6 +111,13 @@ describe('SignInRouteView — password submit outcomes', () => {
       expect(authMocks.navigate).toHaveBeenCalledWith({ to: '/' })
     })
     expect(screen.queryByText(/Sign-in failed/i)).toBeNull()
+  })
+
+  it('points account creation at /sign-up', () => {
+    render(<SignInRouteView platform="web" />)
+    expect(
+      screen.getByRole('link', { name: /create one/i }).getAttribute('href'),
+    ).toBe('/sign-up')
   })
 
   it('surfaces unexpected thrown errors instead of clearing silently', async () => {

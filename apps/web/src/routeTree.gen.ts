@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as WorkspaceRouteImport } from './routes/workspace'
 import { Route as VerifyRouteImport } from './routes/verify'
 import { Route as SignInRouteImport } from './routes/sign-in'
+import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
@@ -38,6 +39,11 @@ const VerifyRoute = VerifyRouteImport.update({
 const SignInRoute = SignInRouteImport.update({
   id: '/sign-in',
   path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignUpRoute = SignUpRouteImport.update({
+  id: '/sign-up',
+  path: '/sign-up',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -109,6 +115,7 @@ export interface FileRoutesByFullPath {
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
   '/verify': typeof VerifyRoute
   '/workspace': typeof WorkspaceRoute
   '/case/$caseSlug': typeof CaseCaseSlugRoute
@@ -126,6 +133,7 @@ export interface FileRoutesByTo {
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
   '/verify': typeof VerifyRoute
   '/workspace': typeof WorkspaceRoute
   '/case/$caseSlug': typeof CaseCaseSlugRoute
@@ -144,6 +152,7 @@ export interface FileRoutesById {
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
   '/verify': typeof VerifyRoute
   '/workspace': typeof WorkspaceRoute
   '/case/$caseSlug': typeof CaseCaseSlugRoute
@@ -163,6 +172,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/settings'
     | '/sign-in'
+    | '/sign-up'
     | '/verify'
     | '/workspace'
     | '/case/$caseSlug'
@@ -180,6 +190,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/settings'
     | '/sign-in'
+    | '/sign-up'
     | '/verify'
     | '/workspace'
     | '/case/$caseSlug'
@@ -197,6 +208,7 @@ export interface FileRouteTypes {
     | '/search'
     | '/settings'
     | '/sign-in'
+    | '/sign-up'
     | '/verify'
     | '/workspace'
     | '/case/$caseSlug'
@@ -215,6 +227,7 @@ export interface RootRouteChildren {
   SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRoute
   SignInRoute: typeof SignInRoute
+  SignUpRoute: typeof SignUpRoute
   VerifyRoute: typeof VerifyRoute
   WorkspaceRoute: typeof WorkspaceRoute
   CaseCaseSlugRoute: typeof CaseCaseSlugRoute
@@ -246,6 +259,13 @@ declare module '@tanstack/react-router' {
       path: '/sign-in'
       fullPath: '/sign-in'
       preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-up': {
+      id: '/sign-up'
+      path: '/sign-up'
+      fullPath: '/sign-up'
+      preLoaderRoute: typeof SignUpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -355,6 +375,7 @@ const rootRouteChildren: RootRouteChildren = {
   SearchRoute: SearchRoute,
   SettingsRoute: SettingsRoute,
   SignInRoute: SignInRoute,
+  SignUpRoute: SignUpRoute,
   VerifyRoute: VerifyRoute,
   WorkspaceRoute: WorkspaceRoute,
   CaseCaseSlugRoute: CaseCaseSlugRoute,
