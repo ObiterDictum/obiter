@@ -220,6 +220,7 @@ describe('AcceptInviteRouteView', () => {
     await waitFor(() => {
       expect(mocks.resendVerificationEmail).toHaveBeenCalledWith(
         'ada@obiter.dev',
+        `${window.location.origin}/invites/accept?token=invite-token`,
       )
     })
   })

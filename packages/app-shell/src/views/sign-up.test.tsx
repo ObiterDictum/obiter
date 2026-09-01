@@ -15,6 +15,10 @@ const authMocks = vi.hoisted(() => ({
   resendVerificationEmail: vi.fn(),
 }))
 
+const searchState = vi.hoisted(() => ({
+  token: 'invite-token' as string | undefined,
+}))
+
 vi.mock('../auth', () => ({
   useAuth: () => ({
     session: null,
@@ -31,7 +35,7 @@ vi.mock('../auth', () => ({
 
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => vi.fn(),
-  useSearch: () => ({ token: 'invite-token' }),
+  useSearch: () => (searchState.token ? { token: searchState.token } : {}),
   Link: ({
     children,
     to,
@@ -72,6 +76,7 @@ function fillForm() {
 describe('SignUpRouteView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    searchState.token = 'invite-token'
   })
 
   afterEach(() => {
@@ -97,12 +102,53 @@ describe('SignUpRouteView', () => {
       name: 'Ada',
       email: 'ada@obiter.dev',
       password: 'SuperSecret123!',
+      callbackURL: `${window.location.origin}/invites/accept?token=invite-token`,
     })
     expect(
       screen
         .getByRole('link', { name: /back to sign in/i })
         .getAttribute('href'),
     ).toBe('/sign-in?token=invite-token')
+  })
+
+  it('passes an invite accept callbackURL when sign-up has a token', async () => {
+    authMocks.signUpWithEmail.mockResolvedValueOnce({
+      ok: true,
+      verificationRequired: true,
+    })
+
+    render(<SignUpRouteView />)
+    fillForm()
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }))
+
+    await waitFor(() => {
+      expect(authMocks.signUpWithEmail).toHaveBeenCalledWith({
+        name: 'Ada',
+        email: 'ada@obiter.dev',
+        password: 'SuperSecret123!',
+        callbackURL: `${window.location.origin}/invites/accept?token=invite-token`,
+      })
+    })
+  })
+
+  it('does not pass an invite callbackURL when sign-up has no token', async () => {
+    searchState.token = undefined
+    authMocks.signUpWithEmail.mockResolvedValueOnce({
+      ok: true,
+      verificationRequired: true,
+    })
+
+    render(<SignUpRouteView />)
+    fillForm()
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }))
+
+    await waitFor(() => {
+      expect(authMocks.signUpWithEmail).toHaveBeenCalledWith({
+        name: 'Ada',
+        email: 'ada@obiter.dev',
+        password: 'SuperSecret123!',
+      })
+    })
   })
 
   it('surfaces a sign-up failure without leaving the form', async () => {
@@ -122,6 +168,61 @@ describe('SignUpRouteView', () => {
   })
 
   it('resends verification from the check-your-email state', async () => {
+    authMocks.signUpWithEmail.mockResolvedValueOnce({
+      ok: true,
+      verificationRequired: true,
+    })
+    authMocks.resendVerificationEmail.mockResolvedValueOnce({ ok: true })
+
+    render(<SignUpRouteView />)
+    fillForm()
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /resend verification email/i }),
+      ).toBeTruthy()
+    })
+    fireEvent.click(
+      screen.getByRole('button', { name: /resend verification email/i }),
+    )
+    await waitFor(() => {
+      expect(authMocks.resendVerificationEmail).toHaveBeenCalledWith(
+        'ada@obiter.dev',
+        `${window.location.origin}/invites/accept?token=invite-token`,
+      )
+    })
+  })
+
+  it('passes an invite accept callbackURL when resending verification has a token', async () => {
+    authMocks.signUpWithEmail.mockResolvedValueOnce({
+      ok: true,
+      verificationRequired: true,
+    })
+    authMocks.resendVerificationEmail.mockResolvedValueOnce({ ok: true })
+
+    render(<SignUpRouteView />)
+    fillForm()
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /resend verification email/i }),
+      ).toBeTruthy()
+    })
+    fireEvent.click(
+      screen.getByRole('button', { name: /resend verification email/i }),
+    )
+    await waitFor(() => {
+      expect(authMocks.resendVerificationEmail).toHaveBeenCalledWith(
+        'ada@obiter.dev',
+        `${window.location.origin}/invites/accept?token=invite-token`,
+      )
+    })
+  })
+
+  it('does not pass an invite callbackURL when resending verification has no token', async () => {
+    searchState.token = undefined
     authMocks.signUpWithEmail.mockResolvedValueOnce({
       ok: true,
       verificationRequired: true,

@@ -19,6 +19,10 @@ const authMocks = vi.hoisted(() => ({
   resendVerificationEmail: vi.fn(),
 }))
 
+const searchState = vi.hoisted(() => ({
+  token: undefined as string | undefined,
+}))
+
 vi.mock('../auth', () => ({
   useAuth: () => ({
     session: null,
@@ -35,7 +39,7 @@ vi.mock('../auth', () => ({
 
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => authMocks.navigate,
-  useSearch: () => ({}),
+  useSearch: () => (searchState.token ? { token: searchState.token } : {}),
   Link: ({
     children,
     to,
@@ -73,6 +77,7 @@ function fillPasswordForm(email: string, password: string) {
 describe('SignInRouteView — password submit outcomes', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    searchState.token = undefined
   })
 
   afterEach(() => {
@@ -158,5 +163,42 @@ describe('SignInRouteView — password submit outcomes', () => {
       expect(screen.getByText('Network down')).toBeTruthy()
     })
     expect(authMocks.navigate).not.toHaveBeenCalled()
+  })
+
+  it('passes an invite accept callbackURL when magic-link sign-in has a token', async () => {
+    searchState.token = 'invite-token'
+    authMocks.requestMagicLink.mockResolvedValueOnce({ ok: true })
+
+    render(<SignInRouteView platform="web" />)
+    fireEvent.click(screen.getByRole('button', { name: /magic link/i }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
+      target: { value: 'lex@obiter.dev' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /send sign-in link/i }))
+
+    await waitFor(() => {
+      expect(authMocks.requestMagicLink).toHaveBeenCalledWith(
+        'lex@obiter.dev',
+        `${window.location.origin}/invites/accept?token=invite-token`,
+      )
+    })
+  })
+
+  it('does not pass an invite callbackURL when magic-link sign-in has no token', async () => {
+    authMocks.requestMagicLink.mockResolvedValueOnce({ ok: true })
+
+    render(<SignInRouteView platform="web" />)
+    fireEvent.click(screen.getByRole('button', { name: /magic link/i }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Email' }), {
+      target: { value: 'lex@obiter.dev' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /send sign-in link/i }))
+
+    await waitFor(() => {
+      expect(authMocks.requestMagicLink).toHaveBeenCalledWith(
+        'lex@obiter.dev',
+        undefined,
+      )
+    })
   })
 })
