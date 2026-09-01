@@ -122,9 +122,15 @@ export function DocumentModelPage({
       className="relative flex flex-col overflow-clip"
       style={{ height: page.heightPx }}
       data-document-page
+      onMouseDown={(event) => {
+        event.currentTarget.dataset.pointerDown = `${event.clientX},${event.clientY}`
+      }}
       onClick={(event) => {
         if (!editing) return
         if (!(event.target instanceof Element)) return
+        const down = event.currentTarget.dataset.pointerDown
+        delete event.currentTarget.dataset.pointerDown
+        if (down && down !== `${event.clientX},${event.clientY}`) return
         const endOffset = (id: string) =>
           blockEndOffset(id, story.paragraphs, drafts, inserts)
         const paragraphEl = event.target.closest('[data-paragraph-id]')

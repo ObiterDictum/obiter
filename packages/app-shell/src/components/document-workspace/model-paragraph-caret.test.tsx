@@ -190,6 +190,69 @@ describe('click caret on a rendered paragraph', () => {
     Object.assign(document, { caretPositionFromPoint })
     expect(selected).toEqual([{ id: 'p1', offset: 5 }])
   })
+
+  it('keeps a range when the pointer is released past the end of the text', () => {
+    const selected: Array<{ id: string; offset?: number }> = []
+    render(
+      <DocumentModelPage
+        model={doc(para('p1', 'Alice Example'))}
+        selectedParagraphId="p1"
+        restoreCaret={{ paragraphId: 'p1', offset: 5 }}
+        onSelectParagraph={(id, offset) => selected.push({ id, offset })}
+        editing
+        onRunTextChange={() => undefined}
+      />,
+    )
+    const field = screen.getByLabelText('Paragraph text') as HTMLTextAreaElement
+    field.setSelectionRange(5, 13)
+    const paragraph = field.closest('[data-paragraph-id]')
+    if (!(paragraph instanceof HTMLElement)) {
+      throw new Error('expected a paragraph')
+    }
+    fireEvent.mouseDown(field, { clientX: 24, clientY: 12 })
+    fireEvent.mouseMove(paragraph, { clientX: 80, clientY: 12 })
+    fireEvent.mouseUp(paragraph, { clientX: 200, clientY: 12 })
+    fireEvent.click(paragraph, { clientX: 200, clientY: 12 })
+    expect(selected).not.toContainEqual({ id: 'p1', offset: 13 })
+    expect(field.selectionStart).toBe(5)
+    expect(field.selectionEnd).toBe(13)
+  })
+
+  it('places the caret at the clicked offset when there is no drag', () => {
+    const selected: Array<{ id: string; offset?: number }> = []
+    const model = doc(para('p1', 'Alice Example'))
+    render(
+      <DocumentModelPage
+        model={model}
+        selectedParagraphId={null}
+        onSelectParagraph={(id, offset) => selected.push({ id, offset })}
+        editing
+        onRunTextChange={() => undefined}
+      />,
+    )
+    const text = screen.getByText('Alice Example')
+    const node = text.firstChild
+    if (!(node instanceof Text)) throw new Error('expected text node')
+    const caretPositionFromPoint = (
+      document as Document & {
+        caretPositionFromPoint?: (
+          x: number,
+          y: number,
+        ) => {
+          offsetNode: Node
+          offset: number
+        } | null
+      }
+    ).caretPositionFromPoint
+    Object.assign(document, {
+      caretPositionFromPoint: () => ({ offsetNode: node, offset: 5 }),
+    })
+    fireEvent.mouseDown(text, { clientX: 24, clientY: 12 })
+    fireEvent.mouseUp(text, { clientX: 24, clientY: 12 })
+    fireEvent.click(text, { clientX: 24, clientY: 12 })
+    Object.assign(document, { caretPositionFromPoint })
+    expect(selected).toEqual([{ id: 'p1', offset: 5 }])
+  })
 })
 
 describe('arrow keys across paragraphs', () => {
