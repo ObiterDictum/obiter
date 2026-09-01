@@ -16,6 +16,7 @@ export function writeWorkspaceLastPlace(
   place: Omit<WorkspaceLastPlace, 'at'>,
 ) {
   if (place.path === '/' || place.path.startsWith('/sign-')) return
+  if (place.path.startsWith('/invites/')) return
   const payload: WorkspaceLastPlace = {
     ...place,
     at: new Date().toISOString(),
@@ -48,6 +49,7 @@ export function lastPlaceFromPath(
   path: string,
 ): Omit<WorkspaceLastPlace, 'at'> | null {
   if (path === '/' || path.startsWith('/sign-')) return null
+  if (path.startsWith('/invites/')) return null
 
   if (
     path === '/search' ||

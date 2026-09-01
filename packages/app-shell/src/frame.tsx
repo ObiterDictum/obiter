@@ -76,8 +76,10 @@ export function AppShellLayout({
   })
   const isAuthRoute =
     currentPath === '/sign-in' ||
+    currentPath === '/sign-up' ||
     currentPath === '/forgot-password' ||
-    currentPath === '/reset-password'
+    currentPath === '/reset-password' ||
+    currentPath === '/invites/accept'
 
   let body: ReactNode
 

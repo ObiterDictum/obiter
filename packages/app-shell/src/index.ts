@@ -61,6 +61,8 @@ export { PageScaffold, type PageScaffoldProps } from './page-scaffold'
 
 // Route views
 export { SignInRouteView } from './views/sign-in'
+export { SignUpRouteView } from './views/sign-up'
+export { AcceptInviteRouteView } from './views/accept-invite'
 export { ForgotPasswordRouteView } from './views/forgot-password'
 export { ResetPasswordRouteView } from './views/reset-password'
 export { HomeRouteView } from './views/home'
