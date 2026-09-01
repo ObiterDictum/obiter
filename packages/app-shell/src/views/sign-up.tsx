@@ -4,7 +4,7 @@ import { Button, Input } from '@obiter/ui'
 import { useState, type FormEvent } from 'react'
 import { useAuth } from '../auth'
 import { Wordmark } from '../wordmark'
-import { useForceNightTheme } from './sign-in'
+import { useForceNightTheme, ResendVerificationControl } from './sign-in'
 
 function inviteTokenFromSearch(search: { token?: unknown }): string {
   return typeof search.token === 'string' && search.token.length > 0
@@ -17,7 +17,7 @@ function inviteTokenFromSearch(search: { token?: unknown }): string {
  * check-your-email state rather than a session.
  */
 export function SignUpRouteView() {
-  const { signUpWithEmail } = useAuth()
+  const { signUpWithEmail, resendVerificationEmail } = useAuth()
   const search = useSearch({ strict: false }) as { token?: string }
   const token = inviteTokenFromSearch(search)
   const [name, setName] = useState('')
@@ -88,6 +88,10 @@ export function SignUpRouteView() {
               <p className="text-sm leading-relaxed text-muted">
                 Check your email to verify your account before signing in.
               </p>
+              <ResendVerificationControl
+                email={email.trim()}
+                resendVerificationEmail={resendVerificationEmail}
+              />
               <Link
                 to="/sign-in"
                 search={signInSearch}

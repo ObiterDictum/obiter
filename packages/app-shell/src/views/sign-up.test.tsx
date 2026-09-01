@@ -12,6 +12,7 @@ import { SignUpRouteView } from './sign-up'
 
 const authMocks = vi.hoisted(() => ({
   signUpWithEmail: vi.fn(),
+  resendVerificationEmail: vi.fn(),
 }))
 
 vi.mock('../auth', () => ({
@@ -23,6 +24,7 @@ vi.mock('../auth', () => ({
     requestMagicLink: vi.fn(),
     requestPasswordReset: vi.fn(),
     resetPassword: vi.fn(),
+    resendVerificationEmail: authMocks.resendVerificationEmail,
     signOut: vi.fn(),
   }),
 }))
@@ -117,5 +119,31 @@ describe('SignUpRouteView', () => {
       expect(screen.getByText('Email already in use.')).toBeTruthy()
     })
     expect(screen.getByRole('button', { name: /create account/i })).toBeTruthy()
+  })
+
+  it('resends verification from the check-your-email state', async () => {
+    authMocks.signUpWithEmail.mockResolvedValueOnce({
+      ok: true,
+      verificationRequired: true,
+    })
+    authMocks.resendVerificationEmail.mockResolvedValueOnce({ ok: true })
+
+    render(<SignUpRouteView />)
+    fillForm()
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }))
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: /resend verification email/i }),
+      ).toBeTruthy()
+    })
+    fireEvent.click(
+      screen.getByRole('button', { name: /resend verification email/i }),
+    )
+    await waitFor(() => {
+      expect(authMocks.resendVerificationEmail).toHaveBeenCalledWith(
+        'ada@obiter.dev',
+      )
+    })
   })
 })

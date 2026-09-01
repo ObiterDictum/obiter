@@ -21,7 +21,8 @@ export function SignInRouteView({
   platform: AppPlatform
 }) {
   const navigate = useNavigate()
-  const { signInWithEmail, requestMagicLink } = useAuth()
+  const { signInWithEmail, requestMagicLink, resendVerificationEmail } =
+    useAuth()
   const search = useSearch({ strict: false }) as {
     reset?: string
     token?: string
@@ -40,6 +41,7 @@ export function SignInRouteView({
       : null,
   )
   const [submitting, setSubmitting] = useState(false)
+  const [unverified, setUnverified] = useState(false)
 
   useForceNightTheme()
 
@@ -51,11 +53,13 @@ export function SignInRouteView({
     event.preventDefault()
     setError(null)
     setNotice(null)
+    setUnverified(false)
     setSubmitting(true)
     try {
       const result = await signInWithEmail({ email, password })
       if (!result.ok) {
         setError(result.message ?? 'Sign-in failed.')
+        setUnverified(result.code === 'EMAIL_NOT_VERIFIED')
         return
       }
       await goToHome()
@@ -146,6 +150,12 @@ export function SignInRouteView({
               <p className="text-sm text-danger">{error}</p>
             ) : null}
             {notice ? <p className="text-sm text-muted">{notice}</p> : null}
+            {unverified ? (
+              <ResendVerificationControl
+                email={email}
+                resendVerificationEmail={resendVerificationEmail}
+              />
+            ) : null}
 
             <Button
               type="submit"
@@ -189,6 +199,53 @@ export function SignInRouteView({
         </p>
       </div>
     </main>
+  )
+}
+
+export function ResendVerificationControl({
+  email,
+  resendVerificationEmail,
+}: {
+  email: string
+  resendVerificationEmail: (email: string) => Promise<{
+    ok: boolean
+    message?: string
+  }>
+}) {
+  const [status, setStatus] = useState<string | null>(null)
+  const [sending, setSending] = useState(false)
+
+  async function handleResend() {
+    setSending(true)
+    setStatus(null)
+    try {
+      const result = await resendVerificationEmail(email)
+      setStatus(
+        result.message ??
+          (result.ok
+            ? 'Check your email for a verification link.'
+            : 'Could not send a verification email.'),
+      )
+    } catch {
+      setStatus('Could not send a verification email.')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <Button
+        type="button"
+        variant="secondary"
+        loading={sending}
+        onClick={() => void handleResend()}
+        className="w-full"
+      >
+        Resend verification email
+      </Button>
+      {status ? <p className="text-sm text-muted">{status}</p> : null}
+    </div>
   )
 }
 

@@ -16,6 +16,7 @@ const authMocks = vi.hoisted(() => ({
   signUpWithEmail: vi.fn(),
   requestMagicLink: vi.fn(),
   navigate: vi.fn(),
+  resendVerificationEmail: vi.fn(),
 }))
 
 vi.mock('../auth', () => ({
@@ -27,6 +28,7 @@ vi.mock('../auth', () => ({
     requestMagicLink: authMocks.requestMagicLink,
     requestPasswordReset: vi.fn(),
     resetPassword: vi.fn(),
+    resendVerificationEmail: authMocks.resendVerificationEmail,
     signOut: vi.fn(),
   }),
 }))
@@ -111,6 +113,31 @@ describe('SignInRouteView — password submit outcomes', () => {
       expect(authMocks.navigate).toHaveBeenCalledWith({ to: '/' })
     })
     expect(screen.queryByText(/Sign-in failed/i)).toBeNull()
+  })
+
+  it('offers a resend when sign-in fails because the address is unverified', async () => {
+    authMocks.signInWithEmail.mockResolvedValueOnce({
+      ok: false,
+      message: 'Email not verified',
+      code: 'EMAIL_NOT_VERIFIED',
+    })
+    authMocks.resendVerificationEmail.mockResolvedValueOnce({ ok: true })
+
+    render(<SignInRouteView platform="web" />)
+    fillPasswordForm('lex@obiter.dev', 'password123')
+    fireEvent.click(screen.getByRole('button', { name: /Continue/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Email not verified')).toBeTruthy()
+    })
+    fireEvent.click(
+      screen.getByRole('button', { name: /resend verification email/i }),
+    )
+    await waitFor(() => {
+      expect(authMocks.resendVerificationEmail).toHaveBeenCalledWith(
+        'lex@obiter.dev',
+      )
+    })
   })
 
   it('points account creation at /sign-up', () => {

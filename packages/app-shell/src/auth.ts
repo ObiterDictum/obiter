@@ -70,7 +70,7 @@ export interface UseAuthReturn {
   isPending: boolean
   signInWithEmail: (
     input: SignInEmailInput,
-  ) => Promise<{ ok: boolean; message?: string }>
+  ) => Promise<{ ok: boolean; message?: string; code?: string }>
   signUpWithEmail: (input: SignUpEmailInput) => Promise<{
     ok: boolean
     message?: string
@@ -86,6 +86,9 @@ export interface UseAuthReturn {
     token: string,
     newPassword: string,
   ) => Promise<{ ok: boolean; message?: string; code?: string }>
+  resendVerificationEmail: (
+    email: string,
+  ) => Promise<{ ok: boolean; message?: string }>
   signOut: () => Promise<void>
 }
 
@@ -121,7 +124,12 @@ export function useAuth(): UseAuthReturn {
   async function signInWithEmail(input: SignInEmailInput) {
     const result = await authClient.signIn.email(input)
     if (result.error) {
-      return { ok: false, message: result.error.message ?? 'Sign-in failed.' }
+      return {
+        ok: false,
+        message: result.error.message ?? 'Sign-in failed.',
+        code:
+          typeof result.error.code === 'string' ? result.error.code : undefined,
+      }
     }
     await refreshSessionAfterAuth()
     return { ok: true }
@@ -144,6 +152,20 @@ export function useAuth(): UseAuthReturn {
     }
     await refreshSessionAfterAuth()
     return { ok: true }
+  }
+
+  async function resendVerificationEmail(email: string) {
+    const result = await authClient.sendVerificationEmail({ email })
+    if (result.error) {
+      return {
+        ok: false,
+        message: result.error.message ?? 'Could not send a verification email.',
+      }
+    }
+    return {
+      ok: true,
+      message: 'Check your email for a verification link.',
+    }
   }
 
   async function requestMagicLink(email: string) {
@@ -221,6 +243,7 @@ export function useAuth(): UseAuthReturn {
     requestMagicLink,
     requestPasswordReset,
     resetPassword,
+    resendVerificationEmail,
     signOut,
   }
 }
