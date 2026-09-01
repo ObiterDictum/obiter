@@ -26,6 +26,7 @@ Auth owns:
 
 - `/sign-in`
 - `/sign-up`
+- `/invites/accept`
 - `/forgot-password`
 - `/reset-password`
 - `GET /api/me` (returns `organisation: null` for an org-less user)

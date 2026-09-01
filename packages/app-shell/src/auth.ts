@@ -94,7 +94,7 @@ export interface UseAuthReturn {
 
 /** Structural session type; the shell only checks presence. */
 interface AuthSessionPresence {
-  user: { id: string }
+  user: { id: string; email?: string }
   session: { id: string }
 }
 

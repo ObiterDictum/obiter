@@ -46,6 +46,13 @@ export function SignInRouteView({
   useForceNightTheme()
 
   async function goToHome() {
+    if (inviteToken) {
+      await navigate({
+        to: '/invites/accept',
+        search: { token: inviteToken },
+      })
+      return
+    }
     await navigate({ to: '/' })
   }
 

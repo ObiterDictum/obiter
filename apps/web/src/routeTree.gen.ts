@@ -18,6 +18,7 @@ import { Route as SearchRouteImport } from './routes/search'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as InvitesAcceptRouteImport } from './routes/invites/accept'
 import { Route as RedactIndexRouteImport } from './routes/redact/index'
 import { Route as MattersIndexRouteImport } from './routes/matters/index'
 import { Route as RedactRunIdRouteImport } from './routes/redact/$runId'
@@ -66,6 +67,11 @@ const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InvitesAcceptRoute = InvitesAcceptRouteImport.update({
+  id: '/invites/accept',
+  path: '/invites/accept',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
@@ -111,6 +117,7 @@ const MattersMatterIdDocumentsDocumentIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/invites/accept': typeof InvitesAcceptRoute
   '/reset-password': typeof ResetPasswordRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
@@ -129,6 +136,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/invites/accept': typeof InvitesAcceptRoute
   '/reset-password': typeof ResetPasswordRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
@@ -148,6 +156,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/invites/accept': typeof InvitesAcceptRoute
   '/reset-password': typeof ResetPasswordRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
@@ -168,6 +177,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/forgot-password'
+    | '/invites/accept'
     | '/reset-password'
     | '/search'
     | '/settings'
@@ -186,6 +196,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/forgot-password'
+    | '/invites/accept'
     | '/reset-password'
     | '/search'
     | '/settings'
@@ -204,6 +215,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/forgot-password'
+    | '/invites/accept'
     | '/reset-password'
     | '/search'
     | '/settings'
@@ -223,6 +235,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
+  InvitesAcceptRoute: typeof InvitesAcceptRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRoute
@@ -294,6 +307,13 @@ declare module '@tanstack/react-router' {
       path: '/forgot-password'
       fullPath: '/forgot-password'
       preLoaderRoute: typeof ForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invites/accept': {
+      id: '/invites/accept'
+      path: '/invites/accept'
+      fullPath: '/invites/accept'
+      preLoaderRoute: typeof InvitesAcceptRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -371,6 +391,7 @@ const MattersMatterIdRouteWithChildren = MattersMatterIdRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
+  InvitesAcceptRoute: InvitesAcceptRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SearchRoute: SearchRoute,
   SettingsRoute: SettingsRoute,

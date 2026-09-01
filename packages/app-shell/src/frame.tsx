@@ -78,7 +78,8 @@ export function AppShellLayout({
     currentPath === '/sign-in' ||
     currentPath === '/sign-up' ||
     currentPath === '/forgot-password' ||
-    currentPath === '/reset-password'
+    currentPath === '/reset-password' ||
+    currentPath === '/invites/accept'
 
   let body: ReactNode
 
