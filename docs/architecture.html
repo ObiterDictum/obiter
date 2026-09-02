@@ -4584,9 +4584,11 @@
             </li>
             <li>
               <span
-                ><b>Merge.</b> Model and supplement spans merge, the model
-                winning on overlap. Suggestions default by category: names and
-                identifiers to redact, dates and citations to keep.</span
+                ><b>Merge.</b> Model and supplement spans merge. Overlap redacts
+                the union of the two ranges; category, source, confidence, and
+                id come from the longer span. A suggestion already on a span is
+                kept; otherwise it defaults by category.</span
+              >
               >
             </li>
             <li>
@@ -5647,6 +5649,18 @@
                 </tr>
               </thead>
               <tbody>
+                <tr>
+                  <td>
+                    Merge overlap is a union, not "Rampart wins" (archived F21)
+                  </td>
+                  <td>
+                    Overlapping model and supplement spans cover the combined
+                    range so a truncated model span cannot disclose the rest of
+                    a format-valid identifier. Suggestions already computed
+                    upstream are preserved.
+                  </td>
+                  <td class="id">architecture.md</td>
+                </tr>
                 <tr>
                   <td>
                     App-layer 413 does not stop the client finishing a TCP send

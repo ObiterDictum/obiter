@@ -158,6 +158,109 @@ describe('redaction policy', () => {
     expect(mergeSpans([rampart], [supplement])).toEqual([rampart])
   })
 
+  it('covers a full National Insurance number when a truncated model span overlaps', () => {
+    const text = 'National Insurance number is QQ 12 34 56 C.'
+    const full = 'QQ 12 34 56 C'
+    const truncated = 'Q 12 34 56'
+    const fullStart = text.indexOf(full)
+    const truncatedStart = text.indexOf(truncated, fullStart + 1)
+    const merged = mergeSpans(
+      [
+        {
+          id: 'span_r',
+          start: truncatedStart,
+          end: truncatedStart + truncated.length,
+          text: truncated,
+          category: 'drivers_license',
+          source: 'rampart_model',
+          confidence: 'medium',
+          suggestion: 'redact',
+        },
+      ],
+      [
+        {
+          id: 'span_s',
+          start: fullStart,
+          end: fullStart + full.length,
+          text: full,
+          category: 'national_insurance',
+          source: 'uk_supplement',
+          confidence: 'high',
+          suggestion: 'redact',
+        },
+      ],
+    )
+    expect(
+      merged.some(
+        (span) =>
+          span.start <= fullStart && span.end >= fullStart + full.length,
+      ),
+    ).toBe(true)
+  })
+
+  it('covers a full sort code when a truncated model span overlaps', () => {
+    const text = 'sort code 20-00-00, account number 12345678.'
+    const full = '20-00-00'
+    const truncated = '00-00'
+    const fullStart = text.indexOf(full)
+    const truncatedStart = text.indexOf(truncated, fullStart)
+    const merged = mergeSpans(
+      [
+        {
+          id: 'span_r',
+          start: truncatedStart,
+          end: truncatedStart + truncated.length,
+          text: truncated,
+          category: 'address',
+          source: 'rampart_model',
+          confidence: 'low',
+          suggestion: 'redact',
+        },
+      ],
+      [
+        {
+          id: 'span_s',
+          start: fullStart,
+          end: fullStart + full.length,
+          text: full,
+          category: 'account_number',
+          source: 'uk_supplement',
+          confidence: 'high',
+          suggestion: 'redact',
+        },
+      ],
+    )
+    expect(
+      merged.some(
+        (span) =>
+          span.start <= fullStart && span.end >= fullStart + full.length,
+      ),
+    ).toBe(true)
+  })
+
+  it('keeps a date-of-birth suggestion of redact through the merge', () => {
+    const text = 'My date of birth is 12 March 1979.'
+    const dob = '12 March 1979'
+    const start = text.indexOf(dob)
+    const merged = mergeSpans(
+      [
+        {
+          id: 'span_dob',
+          start,
+          end: start + dob.length,
+          text: dob,
+          category: 'date',
+          source: 'rampart_model',
+          confidence: 'high',
+          suggestion: 'redact',
+        },
+      ],
+      [],
+    )
+    expect(merged).toHaveLength(1)
+    expect(merged[0]?.suggestion).toBe('redact')
+  })
+
   it('preserves non-overlapping spans', () => {
     const rampart = mapRampartSpans({
       text: legalText,

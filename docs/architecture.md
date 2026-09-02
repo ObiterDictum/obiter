@@ -895,3 +895,23 @@ Rejected: a parallel `set_run_properties` type; renaming `set_run_emphasis`;
 theme colour objects; underline styles beyond the existing boolean; language
 and bidi; keep-with-next; schemas for tables, images, notes, headers, breaks,
 or TOC.
+
+### Merge spans: union overlapping model and supplement ranges (2 September 2026)
+
+Context: `mergeSpans` in `packages/redaction-policy/src/merge.ts` dropped a
+supplement span whenever it overlapped a Rampart span, then recomputed every
+suggestion from category alone. A truncated model span therefore discarded a
+correct National Insurance or sort-code match, and a date of birth already
+marked `redact` was flipped to `keep`. Archived PRD F21 said the model wins
+on overlap.
+
+Decision: when a deterministic supplement span overlaps a model span, emit
+one span covering the union of the two ranges. Picking a winner discloses
+the loser's extra characters; the safe outcome is to cover both. Carry
+`category`, `source`, `confidence`, and `id` from the longer contributing
+span (the detector that covered more of the token). On a length tie, keep
+the Rampart span (`rampart_model` or `rampart_deterministic`) rather than
+the UK supplement. Suggestion is `redact` if either contributor is `redact`;
+otherwise keep a suggestion already present on a span and only call
+`suggestedAction(category)` when it is missing. Do not pass `isDateOfBirth`
+at merge time; that flag is applied upstream in `rampart-map.ts`.
