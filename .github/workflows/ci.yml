@@ -63,7 +63,11 @@ jobs:
         env:
           PGPASSWORD: obiter
         run: |
-          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          # fontconfig + Liberation match scripts/ci-local.sh: pdf.js maps
+          # base-14 fonts to them, and pdf-glyph-layout.test.ts measures cover
+          # against rendered ink. Without them the runner substitutes a different
+          # face and the contain checks fail by fractions of a point.
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client fontconfig fonts-liberation
           for f in packages/database/migrations/*.sql; do
             psql -h localhost -U obiter -d obiter_test -v ON_ERROR_STOP=1 -f "$f"
           done
