@@ -22,6 +22,7 @@ const patterns: Array<{
   category: SpanCategory
   regex: RegExp
   confidence: RedactionSpan['confidence']
+  dateOfBirth?: boolean
 }> = [
   // --- Existing UK legal-specific patterns ---
   {
@@ -108,6 +109,17 @@ const patterns: Array<{
       /(?<=\b(?:account\s*(?:no\.?|number)|a\/c)\b[^\d]{0,15})\d{8}(?!\d)/gi,
     confidence: 'medium',
   },
+
+  // Date of birth ONLY when preceded within a short window by a cue
+  // ("date of birth", "d.o.b.", "dob", "born on", "born"). Ungated dates
+  // (hearings, citations, page references) stay unmatched by design.
+  {
+    category: 'date',
+    regex:
+      /(?<=(?:\bdate\s+of\s+birth\b|\bd\.o\.b\.?|\bdob\b|\bborn\s+on\b|\bborn\b)[^\d]{0,20})(?:\d{1,2}(?:st|nd|rd|th)?\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}|\d{1,2}[/-]\d{1,2}[/-]\d{4}|\d{4}-\d{2}-\d{2})/gi,
+    confidence: 'high',
+    dateOfBirth: true,
+  },
 ]
 
 // Two spans overlap if one starts before the other ends and vice versa. Adjacent
@@ -144,21 +156,22 @@ function dedupeOverlaps(spans: RedactionSpan[]): RedactionSpan[] {
 export function supplementSpans(text: string): RedactionSpan[] {
   if (text.length === 0) return []
 
-  const spans = patterns.flatMap(({ category, regex, confidence }) =>
-    [...text.matchAll(regex)].map((match, index) => {
-      const start = match.index
-      const matchedText = match[0]
-      return {
-        id: `span_uk_${category}_${start}_${index}`,
-        start,
-        end: start + matchedText.length,
-        text: matchedText,
-        category,
-        source: 'uk_supplement' as const,
-        confidence,
-        suggestion: suggestedAction(category),
-      }
-    }),
+  const spans = patterns.flatMap(
+    ({ category, regex, confidence, dateOfBirth }) =>
+      [...text.matchAll(regex)].map((match, index) => {
+        const start = match.index
+        const matchedText = match[0]
+        return {
+          id: `span_uk_${category}_${start}_${index}`,
+          start,
+          end: start + matchedText.length,
+          text: matchedText,
+          category,
+          source: 'uk_supplement' as const,
+          confidence,
+          suggestion: suggestedAction(category, dateOfBirth === true),
+        }
+      }),
   )
 
   return dedupeOverlaps(spans).sort(

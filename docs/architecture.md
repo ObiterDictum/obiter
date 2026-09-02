@@ -915,3 +915,23 @@ the UK supplement. Suggestion is `redact` if either contributor is `redact`;
 otherwise keep a suggestion already present on a span and only call
 `suggestedAction(category)` when it is missing. Do not pass `isDateOfBirth`
 at merge time; that flag is applied upstream in `rampart-map.ts`.
+
+### Rampart DATE/DOB labels are aspirational (2 September 2026)
+
+Context: a finalized redaction disclosed `12 March 1979` after a date-of-birth
+cue. `GROUP_TO_LABEL` in `packages/rampart-inference/src/ner/classifier.ts`
+drops unknown groups, and it has no DATE or DOB entry.
+
+Findings: the shipped checkpoint `qarlus/rampart` at revision
+`c3221c5cd838eb69a249ab40f8b442483865f233` has no DATE or DOB in `id2label`.
+The cached config under `~/.cache/obiter/rampart-models` lists only the
+name, contact, identifier, and address groups already mapped. Adding DATE
+or DOB to `GROUP_TO_LABEL` would not fire.
+
+Decision: leave `GROUP_TO_LABEL` without those keys. Keep the DATE and DOB
+rows in `packages/redaction-policy/src/rampart-map.ts` as a map for a future
+checkpoint that emits them. Detect dates of birth in the UK supplement when
+a cue precedes the date; do not add an ungated date pattern (hearings,
+citations, and page references). `mergeSpans` does not pass
+`isDateOfBirth`, so the supplement span must already carry suggestion
+`redact`.

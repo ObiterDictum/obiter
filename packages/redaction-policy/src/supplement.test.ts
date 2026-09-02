@@ -138,6 +138,33 @@ describe('UK supplement — phone', () => {
   })
 })
 
+describe('UK supplement — date of birth (context-gated)', () => {
+  const formats = [
+    '12 March 1979',
+    '12th March 1979',
+    '12/03/1979',
+    '12-03-1979',
+    '1979-03-12',
+  ] as const
+
+  for (const date of formats) {
+    it(`redacts ${date} after a date-of-birth cue`, () => {
+      const prefix = 'My date of birth is '
+      const spans = supplementSpans(`${prefix}${date}`)
+      const dob = spans.find((span) => span.category === 'date')
+      expect(dob?.text).toBe(date)
+      expect(dob?.suggestion).toBe('redact')
+      expect(dob?.start).toBe(prefix.length)
+      expect(dob?.end).toBe(prefix.length + date.length)
+    })
+  }
+
+  it('does not match a bare hearing date with no cue', () => {
+    const spans = supplementSpans('the hearing on 4 February 2025')
+    expect(spans.filter((span) => span.category === 'date')).toHaveLength(0)
+  })
+})
+
 describe('UK supplement — bank details (context-gated)', () => {
   it('matches sort code only near a "sort code" cue, in dash and space forms', () => {
     const dash = supplementSpans('Sort code: 12-34-56 for payments.')

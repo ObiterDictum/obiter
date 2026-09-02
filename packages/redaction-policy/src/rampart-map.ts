@@ -24,10 +24,9 @@ const labelMap: Record<
   PHONE: { category: 'phone', source: 'rampart_model' },
   PASSPORT: { category: 'passport', source: 'rampart_model' },
   DRIVERS_LICENSE: { category: 'drivers_license', source: 'rampart_model' },
-  // DATE/DOB are NOT emitted by the base Rampart model (label space verified
-  // against the model config, July 2026 — see PRD 1, Rampart Spike Results).
-  // Retained so a future fine-tuned checkpoint emitting them maps correctly;
-  // v1 date/DOB detection comes from the UK supplement instead.
+  // DATE/DOB are not in qarlus/rampart@c3221c5 id2label (re-verified 2 Sep 2026
+  // against the cached model config). Kept so a later checkpoint that emits
+  // them maps; v1 DOB detection is the cue-gated UK supplement.
   DATE: { category: 'date', source: 'rampart_model' },
   DOB: { category: 'date', source: 'rampart_model', dateOfBirth: true },
   BUILDING_NUMBER: { category: 'address', source: 'rampart_model' },
