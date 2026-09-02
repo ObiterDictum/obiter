@@ -90,6 +90,12 @@ async function itemPathText(bytes: Buffer) {
   }
 }
 
+/**
+ * Rasterise a page and return the ink bounding box. Callers assert that a
+ * redaction cover contains this box with no slack: a short cover publishes
+ * part of a redacted glyph. Font mismatch (missing Liberation) moves the ink
+ * by fractions of a point; that is a CI install defect, not a looser bound.
+ */
 async function renderedInkBounds(bytes: Buffer) {
   const CanvasFactory = await createIsomorphicCanvasFactory(
     () => import('@napi-rs/canvas'),
