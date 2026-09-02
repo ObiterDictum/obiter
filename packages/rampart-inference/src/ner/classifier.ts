@@ -73,6 +73,7 @@ const GROUP_TO_LABEL: Readonly<Record<string, PiiLabel>> = {
   CITY: 'CITY',
   STATE: 'STATE',
   ZIP_CODE: 'ZIP_CODE',
+  // No DATE/DOB: pinned qarlus/rampart@c3221c5 id2label has neither.
 }
 
 /** The shipped Rampart token-classifier on Hugging Face (q4 ONNX only). */
