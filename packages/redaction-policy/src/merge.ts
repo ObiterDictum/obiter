@@ -26,6 +26,39 @@ function overlaps(left: RedactionSpan, right: RedactionSpan) {
   return left.start < right.end && right.start < left.end
 }
 
+function unionText(left: RedactionSpan, right: RedactionSpan) {
+  const [first, second] =
+    left.start <= right.start ? [left, right] : [right, left]
+  return first.text + second.text.slice(Math.max(0, first.end - second.start))
+}
+
+function longerSpan(left: RedactionSpan, right: RedactionSpan) {
+  const leftLength = left.end - left.start
+  const rightLength = right.end - right.start
+  if (rightLength !== leftLength) {
+    return rightLength > leftLength ? right : left
+  }
+  if (left.source === 'uk_supplement' && right.source !== 'uk_supplement') {
+    return right
+  }
+  return left
+}
+
+function unionSpans(left: RedactionSpan, right: RedactionSpan): RedactionSpan {
+  const base = longerSpan(left, right)
+  const suggestion =
+    left.suggestion === 'redact' || right.suggestion === 'redact'
+      ? 'redact'
+      : (base.suggestion ?? suggestedAction(base.category))
+  return {
+    ...base,
+    start: Math.min(left.start, right.start),
+    end: Math.max(left.end, right.end),
+    text: unionText(left, right),
+    suggestion,
+  }
+}
+
 export function mergeSpans(
   rampartSpans: RedactionSpan[],
   supplementSpans: RedactionSpan[],
@@ -34,12 +67,25 @@ export function mergeSpans(
   const validSupplement = supplementSpans.filter(
     (span) => span.start < span.end,
   )
-  const keptSupplement = validSupplement.filter(
-    (supplement) =>
-      !validRampart.some((rampart) => overlaps(rampart, supplement)),
-  )
+  const merged = [...validRampart]
+  for (const supplement of validSupplement) {
+    const hits = merged.filter((span) => overlaps(span, supplement))
+    if (hits.length === 0) {
+      merged.push(supplement)
+      continue
+    }
+    const union = hits.reduce(unionSpans, supplement)
+    for (const hit of hits) {
+      const index = merged.indexOf(hit)
+      if (index >= 0) merged.splice(index, 1)
+    }
+    merged.push(union)
+  }
 
-  return [...validRampart, ...keptSupplement]
-    .map((span) => ({ ...span, suggestion: suggestedAction(span.category) }))
+  return merged
+    .map((span) => ({
+      ...span,
+      suggestion: span.suggestion ?? suggestedAction(span.category),
+    }))
     .sort((left, right) => left.start - right.start || left.end - right.end)
 }
