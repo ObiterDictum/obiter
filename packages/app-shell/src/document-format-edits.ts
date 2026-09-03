@@ -203,12 +203,12 @@ function paintRangeEmphasis(
     } else {
       const localFrom = overlapFrom - cursor
       const localTo = overlapTo - cursor
+      const pieces: DocumentParagraphWire['runs'] = []
       if (localFrom > 0) {
-        runs.push({ ...run, text: run.text.slice(0, localFrom) })
+        pieces.push({ ...run, text: run.text.slice(0, localFrom) })
       }
-      runs.push({
+      pieces.push({
         ...run,
-        id: `${run.id}:${String(localFrom)}:${String(localTo)}`,
         text: run.text.slice(localFrom, localTo),
         preservedXmlFragments: patchFragments(
           run.preservedXmlFragments,
@@ -217,8 +217,18 @@ function paintRangeEmphasis(
         ),
       })
       if (localTo < run.text.length) {
-        runs.push({ ...run, text: run.text.slice(localTo) })
+        pieces.push({ ...run, text: run.text.slice(localTo) })
       }
+      pieces.forEach((piece, index) => {
+        runs.push(
+          index === 0
+            ? piece
+            : {
+                ...piece,
+                id: `${run.id}:${String(localFrom)}:${String(localTo)}:${String(index)}`,
+              },
+        )
+      })
     }
     cursor = end
   }
@@ -456,17 +466,57 @@ export function runFlagOn(
   return new RegExp(`<w:${name}\\b(?![^>]*w:val="0")`, 'i').test(xml)
 }
 
+function runsCoveringRange(
+  paragraph: DocumentParagraphWire | undefined,
+  selection: { from: number; to: number } | undefined,
+) {
+  if (!paragraph) return []
+  const from = Math.min(selection?.from ?? 0, selection?.to ?? 0)
+  const to = Math.max(selection?.from ?? 0, selection?.to ?? 0)
+  let cursor = 0
+  const covered: DocumentParagraphWire['runs'] = []
+  for (const run of paragraph.runs) {
+    const end = cursor + run.text.length
+    if (from === to) {
+      if (from >= cursor && from < end) return [run]
+    } else if (Math.max(from, cursor) < Math.min(to, end)) {
+      covered.push(run)
+    }
+    cursor = end
+  }
+  if (from === to) {
+    const last = paragraph.runs[paragraph.runs.length - 1]
+    return last ? [last] : []
+  }
+  return covered
+}
+
+function flagOnCoveredRuns(
+  runs: DocumentParagraphWire['runs'],
+  format: FormatDrafts,
+  flag: 'bold' | 'italic' | 'underline',
+) {
+  return (
+    runs.length > 0 &&
+    runs.every((run) =>
+      runFlagOn(
+        run.preservedXmlFragments.join(''),
+        format.emphasis.find((item) => item.runId === run.id),
+        flag,
+      ),
+    )
+  )
+}
+
+// e40-selection-format-state: pressed flags follow the covered runs, not runs[0]
 export function formatControlState(
   model: DocumentModelWire,
   format: FormatDrafts,
   paragraphId: string | null,
+  selection?: { from: number; to: number },
 ) {
   const paragraph = selectedParagraph(model, paragraphId)
-  const run = paragraph?.runs[0]
-  const pending = run
-    ? format.emphasis.find((item) => item.runId === run.id)
-    : undefined
-  const xml = run?.preservedXmlFragments.join('') ?? ''
+  const covered = runsCoveringRange(paragraph, selection)
   const numPr = paragraph
     ? (format.numbering[paragraph.id] ??
       paragraphNumPr(paragraph, model.styles))
@@ -489,9 +539,9 @@ export function formatControlState(
     paragraph,
     paragraphStyleId: paragraph?.styleId ?? '',
     paragraphStyles: paragraphStyleOptions(model),
-    bold: runFlagOn(xml, pending, 'bold'),
-    italic: runFlagOn(xml, pending, 'italic'),
-    underline: runFlagOn(xml, pending, 'underline'),
+    bold: flagOnCoveredRuns(covered, format, 'bold'),
+    italic: flagOnCoveredRuns(covered, format, 'italic'),
+    underline: flagOnCoveredRuns(covered, format, 'underline'),
     canIndent,
     canOutdent: Boolean(numPr?.numId),
     canContinue: Boolean(previousNum?.numId),
@@ -510,7 +560,7 @@ export function documentFormatToolbar(
   selection?: { from: number; to: number },
   trackChanges = false,
 ) {
-  const controls = formatControlState(model, format, paragraphId)
+  const controls = formatControlState(model, format, paragraphId, selection)
   const paragraph = controls.paragraph
   const address = paragraph
     ? emphasisAddress(

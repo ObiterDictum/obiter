@@ -5,6 +5,7 @@ import {
   documentFormatToolbar,
   emphasisAddress,
   emptyFormatDrafts,
+  formatControlState,
   formattedModel,
   indentList,
   mergeEmphasis,
@@ -241,5 +242,114 @@ describe('document format drafts', () => {
       '<w:shd w:val="clear" w:fill="F2F2F2"/>',
     )
     expect(fragments.join('')).toContain('<w:ilvl w:val="1"/>')
+  })
+})
+
+function modelWithRuns(
+  runs: DocumentModelWire['stories'][number]['paragraphs'][number]['runs'],
+): DocumentModelWire {
+  return {
+    version: 1,
+    stories: [
+      {
+        partName: 'word/document.xml',
+        kind: 'document',
+        paragraphs: [{ id: 'p1', runs, preservedXmlFragments: [] }],
+        preservedXmlFragments: [],
+      },
+    ],
+    styles: [],
+    numbering: [],
+    relationships: [],
+    preservedXmlFragments: [],
+    changes: [],
+  }
+}
+
+const boldXml = ['<w:rPr><w:b/><w:i/><w:u w:val="single"/></w:rPr>']
+const plainXml = ['<w:rPr/>']
+
+describe('formatControlState from the selection', () => {
+  it('presses only when every covered run has the flag', () => {
+    const allOn = modelWithRuns([
+      { id: 'r1', text: 'The Claimant seeks', preservedXmlFragments: boldXml },
+    ])
+    expect(
+      formatControlState(allOn, emptyFormatDrafts, 'p1', { from: 4, to: 13 }),
+    ).toMatchObject({ bold: true, italic: true, underline: true })
+
+    const allOff = modelWithRuns([
+      { id: 'r1', text: 'The Claimant seeks', preservedXmlFragments: plainXml },
+    ])
+    expect(
+      formatControlState(allOff, emptyFormatDrafts, 'p1', { from: 4, to: 13 }),
+    ).toMatchObject({ bold: false, italic: false, underline: false })
+
+    const mixed = modelWithRuns([
+      { id: 'r1', text: 'The ', preservedXmlFragments: boldXml },
+      { id: 'r2', text: 'Claimant', preservedXmlFragments: plainXml },
+      { id: 'r3', text: ' seeks', preservedXmlFragments: boldXml },
+    ])
+    expect(
+      formatControlState(mixed, emptyFormatDrafts, 'p1', { from: 0, to: 18 }),
+    ).toMatchObject({ bold: false, italic: false, underline: false })
+    expect(
+      formatControlState(mixed, emptyFormatDrafts, 'p1', { from: 0, to: 4 }),
+    ).toMatchObject({ bold: true, italic: true, underline: true })
+  })
+
+  it('reports the run that holds a collapsed caret', () => {
+    const mixed = modelWithRuns([
+      { id: 'r1', text: 'The ', preservedXmlFragments: boldXml },
+      { id: 'r2', text: 'Claimant', preservedXmlFragments: plainXml },
+    ])
+    expect(
+      formatControlState(mixed, emptyFormatDrafts, 'p1', { from: 1, to: 1 }),
+    ).toMatchObject({ bold: true })
+    expect(
+      formatControlState(mixed, emptyFormatDrafts, 'p1', { from: 6, to: 6 }),
+    ).toMatchObject({ bold: false })
+  })
+
+  it('flips pressed after one click on a plain selection, then back', () => {
+    const source = modelWithRuns([
+      { id: 'r1', text: 'Hello world', preservedXmlFragments: plainXml },
+    ])
+    const selection = { from: 6, to: 11 }
+    let format: FormatDrafts = emptyFormatDrafts
+    const toolbar = (view: DocumentModelWire) =>
+      documentFormatToolbar(
+        view,
+        format,
+        'p1',
+        (update) => {
+          format = update(format)
+        },
+        selection,
+      )
+
+    expect(toolbar(source).bold).toBe(false)
+    toolbar(source).onToggleBold()
+    const once = formattedModel(source, format)
+    expect(toolbar(once).bold).toBe(true)
+    toolbar(once).onToggleBold()
+    expect(toolbar(formattedModel(source, format)).bold).toBe(false)
+  })
+})
+
+describe('draft range paint run ids', () => {
+  it('gives each split part a distinct id', () => {
+    const source = modelWithRuns([
+      { id: 'r1', text: 'The Claimant seeks', preservedXmlFragments: boldXml },
+    ])
+    const painted = formattedModel(source, {
+      emphasis: [{ paragraphId: 'p1', from: 4, to: 13, bold: false }],
+      paragraphStyles: {},
+      numbering: {},
+    })
+    const ids =
+      painted.stories[0]?.paragraphs[0]?.runs.map((run) => run.id) ?? []
+    expect(ids).toHaveLength(3)
+    expect(new Set(ids).size).toBe(3)
   })
 })
