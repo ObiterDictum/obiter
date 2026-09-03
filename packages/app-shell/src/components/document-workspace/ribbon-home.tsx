@@ -126,6 +126,7 @@ export function HomeRibbon({
             label="Bold"
             pressed={format?.bold}
             disabled={!editing}
+            soon={format?.emphasisUnavailable}
             onClick={format?.onToggleBold}
             icon={<TextB size={16} aria-hidden />}
           />
@@ -133,6 +134,7 @@ export function HomeRibbon({
             label="Italic"
             pressed={format?.italic}
             disabled={!editing}
+            soon={format?.emphasisUnavailable}
             onClick={format?.onToggleItalic}
             icon={<TextItalic size={16} aria-hidden />}
           />
@@ -140,6 +142,7 @@ export function HomeRibbon({
             label="Underline"
             pressed={format?.underline}
             disabled={!editing}
+            soon={format?.emphasisUnavailable}
             onClick={format?.onToggleUnderline}
             icon={<TextUnderline size={16} aria-hidden />}
           />

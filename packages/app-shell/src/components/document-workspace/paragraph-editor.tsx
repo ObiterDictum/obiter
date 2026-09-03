@@ -15,6 +15,7 @@ export function ParagraphEditor({
   next,
   onSelect,
   onMoveCaret,
+  onTextSelection,
   onChangeText,
   onBackspace,
   onDelete,
@@ -31,6 +32,7 @@ export function ParagraphEditor({
   next?: ArrowNeighbor
   onSelect: () => void
   onMoveCaret?: (paragraphId: string, offset: number) => void
+  onTextSelection?: (start: number, end: number) => void
   onChangeText: (next: string) => void
   onBackspace: (offset: number) => void
   onDelete: (offset: number) => void
@@ -99,6 +101,12 @@ export function ParagraphEditor({
       onClick={(event) => {
         event.stopPropagation()
         onSelect()
+      }}
+      onSelect={(event) => {
+        onTextSelection?.(
+          event.currentTarget.selectionStart,
+          event.currentTarget.selectionEnd,
+        )
       }}
       className={cn(
         'block w-full resize-none overflow-hidden bg-transparent p-0 text-inherit',

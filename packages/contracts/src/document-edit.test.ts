@@ -311,6 +311,87 @@ describe('document edit contracts', () => {
     ).toBe(true)
   })
 
+  it('accepts set_run_emphasis range addressing and rejects mixed or empty ranges', () => {
+    expect(
+      documentEditRequestSchema.parse({
+        baseVersionId: 'ver_1',
+        operations: [
+          {
+            type: 'set_run_emphasis',
+            paragraphId: 'para_1',
+            from: 4,
+            to: 9,
+            bold: true,
+            colour: 'C00000',
+          },
+        ],
+      }).operations[0],
+    ).toEqual({
+      type: 'set_run_emphasis',
+      paragraphId: 'para_1',
+      from: 4,
+      to: 9,
+      bold: true,
+      colour: 'C00000',
+    })
+    expect(
+      documentEditRequestSchema.safeParse({
+        baseVersionId: 'ver_1',
+        operations: [
+          {
+            type: 'set_run_emphasis',
+            runId: 'run_1',
+            paragraphId: 'para_1',
+            from: 0,
+            to: 1,
+            bold: true,
+          },
+        ],
+      }).success,
+    ).toBe(false)
+    expect(
+      documentEditRequestSchema.safeParse({
+        baseVersionId: 'ver_1',
+        operations: [
+          {
+            type: 'set_run_emphasis',
+            paragraphId: 'para_1',
+            from: 9,
+            to: 4,
+            bold: true,
+          },
+        ],
+      }).success,
+    ).toBe(false)
+    expect(
+      documentEditRequestSchema.safeParse({
+        baseVersionId: 'ver_1',
+        operations: [
+          {
+            type: 'set_run_emphasis',
+            paragraphId: 'para_1',
+            from: 4,
+            to: 4,
+            bold: true,
+          },
+        ],
+      }).success,
+    ).toBe(false)
+    expect(
+      documentEditRequestSchema.safeParse({
+        baseVersionId: 'ver_1',
+        operations: [
+          {
+            type: 'set_run_emphasis',
+            paragraphId: 'para_1',
+            from: 0,
+            bold: true,
+          },
+        ],
+      }).success,
+    ).toBe(false)
+  })
+
   it('replays a persisted pre-property-family emphasis operation', () => {
     expect(
       documentEditRequestSchema.parse({

@@ -74,7 +74,7 @@ export function deleteParagraph(
   part.dirty = true
 }
 
-function allocateModelId(document: OoxmlDocument, prefix: string) {
+export function allocateModelId(document: OoxmlDocument, prefix: string) {
   const used = new Set(
     document.model.stories.flatMap((story) =>
       story.paragraphs.flatMap((paragraph) => [

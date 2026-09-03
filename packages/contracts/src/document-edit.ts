@@ -85,6 +85,11 @@ const twipSchema = z
   .int()
   .min(DOCUMENT_EDIT_TWIP_MIN)
   .max(DOCUMENT_EDIT_TWIP_MAX)
+const characterOffsetSchema = z
+  .number()
+  .int()
+  .min(0)
+  .max(DOCUMENT_EDIT_TEXT_MAX_LENGTH)
 
 const runPropertyFields = {
   bold: z.boolean().nullable().optional(),
@@ -197,7 +202,10 @@ export const documentEditOperationSchema = z.discriminatedUnion('type', [
   z
     .object({
       type: z.literal('set_run_emphasis'),
-      runId: editIdSchema,
+      runId: editIdSchema.optional(),
+      paragraphId: editIdSchema.optional(),
+      from: characterOffsetSchema.optional(),
+      to: characterOffsetSchema.optional(),
       ...runPropertyFields,
     })
     .strict()
@@ -208,6 +216,35 @@ export const documentEditOperationSchema = z.discriminatedUnion('type', [
         context,
         'At least one run property must be assigned.',
       )
+      const hasRun = operation.runId !== undefined
+      const rangeParts = [
+        operation.paragraphId !== undefined,
+        operation.from !== undefined,
+        operation.to !== undefined,
+      ]
+      const rangeCount = rangeParts.filter(Boolean).length
+      const hasRange = rangeCount === 3
+      if (hasRun === hasRange || (rangeCount > 0 && !hasRange)) {
+        context.addIssue({
+          code: 'custom',
+          path: hasRun ? ['paragraphId'] : ['runId'],
+          message:
+            'set_run_emphasis requires runId or paragraphId with from and to, not both.',
+        })
+        return
+      }
+      if (
+        hasRange &&
+        operation.from !== undefined &&
+        operation.to !== undefined &&
+        operation.from >= operation.to
+      ) {
+        context.addIssue({
+          code: 'custom',
+          path: ['to'],
+          message: 'from and to must form a non-empty forward range.',
+        })
+      }
     }),
   z
     .object({

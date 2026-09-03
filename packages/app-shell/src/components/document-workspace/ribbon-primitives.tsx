@@ -68,12 +68,17 @@ export function IconButton({
   label: string
   pressed?: boolean
   disabled?: boolean
-  soon?: boolean
+  soon?: boolean | string
   onClick?: () => void
   icon: ReactNode
 }) {
   const unavailable = Boolean(soon)
-  const caption = unavailable ? `${label} (not available yet)` : label
+  const caption =
+    typeof soon === 'string'
+      ? `${label}: ${soon}`
+      : unavailable
+        ? `${label} (not available yet)`
+        : label
   const button = (
     <Button
       variant={pressed ? 'secondary' : 'ghost'}
@@ -88,9 +93,17 @@ export function IconButton({
   )
   // The span anchor keeps the tooltip alive when the button is disabled, as a
   // disabled button swallows the pointer events the trigger listens for.
+  // preventDefault keeps the caret selection when Bold is pressed.
   return (
     <Tooltip>
-      <TooltipTrigger render={<span className="inline-flex" />}>
+      <TooltipTrigger
+        render={
+          <span
+            className="inline-flex"
+            onMouseDown={(event) => event.preventDefault()}
+          />
+        }
+      >
         {button}
       </TooltipTrigger>
       <TooltipContent>{caption}</TooltipContent>
