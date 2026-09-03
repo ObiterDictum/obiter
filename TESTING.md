@@ -19,12 +19,26 @@ For most changes, do all applicable items:
 - manually exercise the changed behavior
 - verify the failure path if the feature is safety- or trust-related
 
+## Confirm the running code
+
+Before claiming anything about behaviour in a running app, confirm the server
+is serving the change: fetch the changed file through the dev server (on this
+stack, the Vite `@fs` path) and check a marker from the change is present. A
+page reload is not proof — the server keeps serving cached transformed modules
+after the working tree moves underneath it. If the marker is stale, clear
+`node_modules/.vite` and restart; a change in a workspace package the API
+imports needs the API restarted too, not just the web server.
+
 ## Preferred Test Strategy
 
 - add focused tests near the changed behavior
 - prefer deterministic tests over broad fragile ones
 - test contracts, parsing, state transitions, and critical UI flows
+- test behavior through public boundaries, not internals — a pure refactor must not break tests
 - do not add shallow tests that only exercise implementation trivia
+- do not add tests that cannot fail meaningfully: no tautologies, no asserting constants, no snapshot dumps that mirror implementation
+- do not mock the behavior being tested; mock only external boundaries (network, storage, email, clocks, filesystem)
+- one test that would have caught a real bug beats ten that would not; bug fixes add or update the test that would have caught the bug
 
 ## High-Risk Areas
 
@@ -58,6 +72,11 @@ When summarizing work:
 `scripts/ci-local.sh` runs the same gates as `.github/workflows/ci.yml` in the
 same order (`install` → `typecheck` → `format:check` → `lint` → `test` →
 `benchmark:search`). It has been verified green on this machine.
+
+Matching gates is not matching environments: the mirror failed closed without
+fontconfig and Liberation faces from 28 August while the pipeline installed
+neither until 2 September (#143), so a green mirror never proved CI would
+pass. Aligned now; do not assume they stay aligned.
 
 ## End-to-end (Playwright)
 
