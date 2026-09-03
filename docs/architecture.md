@@ -952,7 +952,10 @@ Decision: keep the existing `set_run_emphasis` type. Accept either `runId`
 range addressing, not only bold. Bound `from` and `to` as integer offsets
 from 0 to the document edit text limit. Reject an inverted or empty range.
 Additive optional fields: persisted whole-run operations keep parsing. No
-new operation type and no migration.
+new operation type and no migration. Tracked range splits have no
+`rPrChange` writer, so apply skips that operation instead of aborting the
+batch, and the Home emphasis controls disable for a partial selection while
+Track Changes is on. Whole-run emphasis under tracking is unchanged.
 
 Rejected: a parallel range operation type; renaming `set_run_emphasis`;
 attaching a character range to `runId`.

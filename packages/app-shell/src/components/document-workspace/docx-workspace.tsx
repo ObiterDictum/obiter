@@ -372,6 +372,7 @@ export function DocxWorkspace({
                 selectedParagraphId,
                 drafts.setFormat,
                 formatRange ?? undefined,
+                trackChanges,
               )
             : undefined
         }

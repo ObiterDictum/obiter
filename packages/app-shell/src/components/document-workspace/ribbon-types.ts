@@ -14,6 +14,7 @@ export type DocumentFormatToolbar = {
   canApplyNumber: boolean
   canApplyMultilevel: boolean
   onParagraphStyle: (styleId: string | null) => void
+  emphasisUnavailable?: string
   onToggleBold: () => void
   onToggleItalic: () => void
   onToggleUnderline: () => void

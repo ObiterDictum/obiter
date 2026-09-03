@@ -68,12 +68,17 @@ export function IconButton({
   label: string
   pressed?: boolean
   disabled?: boolean
-  soon?: boolean
+  soon?: boolean | string
   onClick?: () => void
   icon: ReactNode
 }) {
   const unavailable = Boolean(soon)
-  const caption = unavailable ? `${label} (not available yet)` : label
+  const caption =
+    typeof soon === 'string'
+      ? `${label}: ${soon}`
+      : unavailable
+        ? `${label} (not available yet)`
+        : label
   const button = (
     <Button
       variant={pressed ? 'secondary' : 'ghost'}

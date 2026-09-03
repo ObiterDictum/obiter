@@ -100,6 +100,56 @@ describe('set_run_emphasis paragraph range', () => {
     ])
     expect(reparsed.runs.map(runBold)).toEqual([false, true, false])
   })
+
+  it('keeps a tracked text replacement when a range emphasis cannot be recorded', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const paragraph = mainParagraphs(document)[0]
+    const run = paragraph?.runs[0]
+    if (!paragraph || !run) throw new Error('Fixture run is missing.')
+
+    applyDocumentEdits(
+      document,
+      [
+        { type: 'replace_run_text', runId: run.id, text: 'Typed words here' },
+        {
+          type: 'set_run_emphasis',
+          paragraphId: paragraph.id,
+          from: 6,
+          to: 11,
+          bold: true,
+        },
+      ],
+      { author: 'Review Author', date: '2026-08-12T12:00:00.000Z' },
+    )
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    expect(xml).toContain('Typed words here')
+    expect(xml).not.toContain('>words</w:t>')
+  })
+
+  it('still records whole-run emphasis under tracking', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const run = mainParagraphs(document)[1]?.runs[0]
+    if (!run) throw new Error('Fixture run is missing.')
+
+    applyDocumentEdits(
+      document,
+      [{ type: 'set_run_emphasis', runId: run.id, bold: true }],
+      { author: 'Review Author', date: '2026-08-12T12:00:00.000Z' },
+    )
+    const xml = await zipText(
+      await serialiseDocx(document),
+      'word/document.xml',
+    )
+    expect(xml).toContain('<w:rPrChange ')
+    expect(xml).toContain('<w:b/>')
+  })
 })
 
 async function applyRange(

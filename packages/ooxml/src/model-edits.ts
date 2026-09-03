@@ -132,7 +132,7 @@ export function applyDocumentEdits(
           operation.to !== undefined
         ) {
           // Tracked range splits have no rPrChange writer yet.
-          if (trackedWriter) throw new OoxmlError('model-node-not-editable')
+          if (trackedWriter) continue
           applyRunEmphasisRange(
             document,
             operation.paragraph,

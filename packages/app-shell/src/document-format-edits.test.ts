@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest'
 import type { DocumentModelWire } from '@obiter/contracts'
 import {
   collectFormatOperations,
+  documentFormatToolbar,
   emphasisAddress,
+  emptyFormatDrafts,
   formattedModel,
   indentList,
   mergeEmphasis,
   outdentList,
+  type FormatDrafts,
 } from './document-format-edits'
 
 const model: DocumentModelWire = {
@@ -76,6 +79,44 @@ describe('emphasis addressing from the caret selection', () => {
   it('formats only the run that holds a collapsed caret', () => {
     expect(emphasisAddress(paragraph, 0, 8, 8)).toEqual({ runId: 'r2' })
     expect(emphasisAddress(paragraph, 0, 2, 2)).toEqual({ runId: 'r1' })
+  })
+})
+
+describe('tracked emphasis from the client path', () => {
+  it('does not queue a range emphasis while track changes is on', () => {
+    let format: FormatDrafts = emptyFormatDrafts
+    const toolbar = documentFormatToolbar(
+      model,
+      format,
+      'p1',
+      (update) => {
+        format = update(format)
+      },
+      { from: 1, to: 4 },
+      true,
+    )
+    expect(toolbar.emphasisUnavailable).toMatch(
+      /partial formatting is not yet recorded as a tracked change/i,
+    )
+    toolbar.onToggleBold()
+    expect(format.emphasis).toEqual([])
+  })
+
+  it('still queues whole-run emphasis while track changes is on', () => {
+    let format: FormatDrafts = emptyFormatDrafts
+    const toolbar = documentFormatToolbar(
+      model,
+      format,
+      'p1',
+      (update) => {
+        format = update(format)
+      },
+      { from: 2, to: 2 },
+      true,
+    )
+    expect(toolbar.emphasisUnavailable).toBeUndefined()
+    toolbar.onToggleBold()
+    expect(format.emphasis).toEqual([{ runId: 'r1', bold: true }])
   })
 })
 

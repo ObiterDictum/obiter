@@ -508,6 +508,7 @@ export function documentFormatToolbar(
   paragraphId: string | null,
   setFormat: (update: (current: FormatDrafts) => FormatDrafts) => void,
   selection?: { from: number; to: number },
+  trackChanges = false,
 ) {
   const controls = formatControlState(model, format, paragraphId)
   const paragraph = controls.paragraph
@@ -519,13 +520,21 @@ export function documentFormatToolbar(
         selection?.to ?? selection?.from ?? 0,
       )
     : undefined
+  const trackedRange =
+    trackChanges && address !== undefined && 'paragraphId' in address
   const toggle = (flag: 'bold' | 'italic' | 'underline', value: boolean) => {
-    if (!address) return
+    if (!address || trackedRange) return
     setFormat((current) =>
       toggleEmphasisAtAddress(current, address, flag, value),
     )
   }
   return {
+    ...(trackedRange
+      ? {
+          emphasisUnavailable:
+            'Partial formatting is not yet recorded as a tracked change',
+        }
+      : {}),
     paragraphStyleId: controls.paragraphStyleId,
     paragraphStyles: controls.paragraphStyles,
     bold: controls.bold,
