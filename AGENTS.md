@@ -1,28 +1,23 @@
 # Obiter Agent Guide
 
-## Purpose
+Start with [README.md](README.md) and [docs/roadmap.md](docs/roadmap.md). Load anything else only when the task needs it.
 
-Use this file as the lightweight entry point for work in this repo.
+Operating model and sync lives in the separate [`obiter-ops`](https://github.com/ObiterDictum/obiter-ops) repo.
 
-## Read First
+## On-demand docs
 
-Only load the docs needed for the task.
+- Rules: [RULES.md](RULES.md) — always follow, load once per task.
+- PR summaries: [PR.md](PR.md) — only when writing one.
+- Verification: [TESTING.md](TESTING.md) — only when deciding what to test.
+- Foundation: [docs/phase-0.md](docs/phase-0.md) — only for shell, auth, matter, storage work.
+- System map: [docs/architecture.html](docs/architecture.html) — what runs where.
+- Architecture rationale: [docs/architecture.md](docs/architecture.md) — only for structural decisions.
+- Security: [docs/data-and-compliance.md](docs/data-and-compliance.md) — only when touching matter data, storage, auth, or infra.
+- Specs: [docs/specs/README.md](docs/specs/README.md) — only for the module being built.
 
-- **Operating model & sync:** [github.com/ObiterDictum/obiter-ops](https://github.com/ObiterDictum/obiter-ops) (separate ops repo)
-- Product and execution baseline: [README.md](README.md)
-- Start order and milestones: [docs/roadmap.md](docs/roadmap.md)
-- Foundation rules: [docs/phase-0.md](docs/phase-0.md)
-- System map (what runs where): [docs/architecture.html](docs/architecture.html)
-- Architecture decisions and rationale: [docs/architecture.md](docs/architecture.md)
-- Security and data rules: [docs/data-and-compliance.md](docs/data-and-compliance.md)
-- Detailed specs: [docs/specs/README.md](docs/specs/README.md)
-- Implementation rules: [RULES.md](RULES.md)
-- PR writing rules: [PR.md](PR.md)
-- Testing rules: [TESTING.md](TESTING.md)
+## Build order
 
-## Build Order
-
-Follow the roadmap. Do not jump ahead because a later feature looks interesting.
+Follow the roadmap. Do not jump ahead.
 
 1. Phase 0 foundation
 2. Search
@@ -52,9 +47,7 @@ Follow the roadmap. Do not jump ahead because a later feature looks interesting.
 
 Before assessing repository state, fetch and state the exact commit you are assessing: `git fetch origin && git rev-parse origin/<branch>`. Put that commit at the top of any report about branch state. After a merge, re-fetch before doing anything further. An assessment of a stale checkout reads as authoritative and is worse than no assessment.
 
-## Working Style
+## Working style
 
-- Keep `AGENTS.md` small. Do not turn it into a second README.
-- Put detailed planning in `docs/`, not here.
-- Put implementation constraints and coding standards in `RULES.md`.
-- Use `PR.md` only when preparing a PR or equivalent summary.
+- Keep `AGENTS.md` a linker, not a rule body. Planning goes in `docs/`, constraints in `RULES.md`.
+- `PR.md` is for PR summaries only.
