@@ -237,6 +237,7 @@ function operationConflicts(
     )
   }
   if (operation.type === 'set_run_emphasis') {
+    if (operation.runId === undefined) return true
     return (
       !changes.runIds.has(operation.runId) ||
       changes.runOpaque.has(operation.runId) ||

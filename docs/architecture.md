@@ -935,3 +935,24 @@ a cue precedes the date; do not add an ungated date pattern (hearings,
 citations, and page references). `mergeSpans` does not pass
 `isDateOfBirth`, so the supplement span must already carry suggestion
 `redact`.
+
+### Document edit operations: range addressing on set_run_emphasis (3 September 2026)
+
+Context: Bold applied to every run in the caret paragraph because
+`set_run_emphasis` was addressed only by `runId` and the client listed every
+run. Intra-run splitting was left out of scope in the 13 August 2026
+formatting decision. Selecting two words therefore formatted the whole
+paragraph.
+
+Decision: keep the existing `set_run_emphasis` type. Accept either `runId`
+(today's whole-run form) or `paragraphId` plus `from` and `to`
+(paragraph-relative character offsets). Exclusive, enforced with
+`superRefine`, the same pattern as `text | runs` on `insert_paragraph_after`
+(#132). Reuse `runPropertyFields` from #135 so every run property gains
+range addressing, not only bold. Bound `from` and `to` as integer offsets
+from 0 to the document edit text limit. Reject an inverted or empty range.
+Additive optional fields: persisted whole-run operations keep parsing. No
+new operation type and no migration.
+
+Rejected: a parallel range operation type; renaming `set_run_emphasis`;
+attaching a character range to `runId`.

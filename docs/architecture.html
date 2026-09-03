@@ -2675,7 +2675,10 @@
                     <code>insert_paragraph_after</code> carries either flat
                     <code>text</code> or bounded styled <code>runs</code>. Run
                     character formatting is additive on
-                    <code>set_run_emphasis</code> and those runs. Paragraph
+                    <code>set_run_emphasis</code> and those runs.
+                    <code>set_run_emphasis</code> is addressed by
+                    <code>runId</code> or by <code>paragraphId</code> plus
+                    <code>from</code>/<code>to</code>, not both. Paragraph
                     layout uses <code>set_paragraph_format</code>. Tables,
                     images, notes, headers, and breaks have no wire schema yet.
                   </td>

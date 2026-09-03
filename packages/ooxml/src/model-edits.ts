@@ -259,11 +259,11 @@ function validateTrackedOperations(
           operation.run.partName,
           operation.run.runRange,
         ) ||
-        runEmphasisTargets.has(operation.runId)
+        runEmphasisTargets.has(operation.run.wire.id)
       ) {
         throw new OoxmlError('invalid-document-edit')
       }
-      runEmphasisTargets.add(operation.runId)
+      runEmphasisTargets.add(operation.run.wire.id)
     } else if (operation.type === 'set_paragraph_style') {
       if (
         containsTrackedChange(
@@ -328,10 +328,17 @@ function planOperation(
   validateEmphasis(operation)
   validateParagraphFormat(operation)
   validateNumbering(operation, numberingIds)
+  if (operation.type === 'set_run_emphasis') {
+    const runId = operation.runId
+    if (runId === undefined) throw new OoxmlError('invalid-document-edit')
+    const run = requireMainRun(document, runParagraphs, runId, false)
+    const paragraph = runParagraphs.get(runId)
+    if (!paragraph) throw new OoxmlError('model-node-not-editable')
+    return { ...operation, run, paragraph }
+  }
   if (
     operation.type === 'replace_run_text' ||
-    operation.type === 'set_run_style' ||
-    operation.type === 'set_run_emphasis'
+    operation.type === 'set_run_style'
   ) {
     const run = requireMainRun(
       document,
