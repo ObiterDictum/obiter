@@ -3,7 +3,8 @@ import {
   insertParagraphRuns,
   type DocumentEditOperation,
 } from '@obiter/contracts'
-
+// Range planning stays next to the other operation planners. Split if a third
+// addressing mode lands on this dispatcher.
 import {
   OoxmlError,
   type OoxmlDocument,
@@ -130,9 +131,8 @@ export function applyDocumentEdits(
           operation.from !== undefined &&
           operation.to !== undefined
         ) {
-          if (trackedWriter) {
-            throw new OoxmlError('model-node-not-editable')
-          }
+          // Tracked range splits have no rPrChange writer yet.
+          if (trackedWriter) throw new OoxmlError('model-node-not-editable')
           applyRunEmphasisRange(
             document,
             operation.paragraph,

@@ -88,9 +88,17 @@ export function IconButton({
   )
   // The span anchor keeps the tooltip alive when the button is disabled, as a
   // disabled button swallows the pointer events the trigger listens for.
+  // preventDefault keeps the caret selection when Bold is pressed.
   return (
     <Tooltip>
-      <TooltipTrigger render={<span className="inline-flex" />}>
+      <TooltipTrigger
+        render={
+          <span
+            className="inline-flex"
+            onMouseDown={(event) => event.preventDefault()}
+          />
+        }
+      >
         {button}
       </TooltipTrigger>
       <TooltipContent>{caption}</TooltipContent>

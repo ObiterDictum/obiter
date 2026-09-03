@@ -104,6 +104,10 @@ export function DocxWorkspace({
     paragraphId: string
     offset: number
   } | null>(null)
+  const [formatRange, setFormatRange] = useState<{
+    from: number
+    to: number
+  } | null>(null)
   const [banner, setBanner] = useState<string | null>(null)
   const [stale, setStale] = useState(false)
   const [findQuery, setFindQuery] = useState('')
@@ -164,6 +168,7 @@ export function DocxWorkspace({
   function selectParagraph(paragraphId: string, offset?: number) {
     setSelectedParagraphId(paragraphId)
     setRestoreCaret(offset == null ? null : { paragraphId, offset })
+    if (offset != null) setFormatRange({ from: offset, to: offset })
   }
 
   function jumpToHit(index: number) {
@@ -366,6 +371,7 @@ export function DocxWorkspace({
                 drafts.format,
                 selectedParagraphId,
                 drafts.setFormat,
+                formatRange ?? undefined,
               )
             : undefined
         }
@@ -454,6 +460,9 @@ export function DocxWorkspace({
                       selectedParagraphId={selectedParagraphId}
                       onSelectParagraph={(paragraphId, offset) =>
                         selectParagraph(paragraphId, offset)
+                      }
+                      onTextSelection={(from, to) =>
+                        setFormatRange({ from, to })
                       }
                       drafts={drafts.drafts}
                       onRunTextChange={(runId, text) =>

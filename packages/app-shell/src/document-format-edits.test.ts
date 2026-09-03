@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { DocumentModelWire } from '@obiter/contracts'
 import {
   collectFormatOperations,
+  emphasisAddress,
   formattedModel,
   indentList,
   mergeEmphasis,
@@ -49,7 +50,58 @@ const model: DocumentModelWire = {
   changes: [],
 }
 
+describe('emphasis addressing from the caret selection', () => {
+  const paragraph = {
+    id: 'p1',
+    runs: [
+      { id: 'r1', text: 'Hello ', preservedXmlFragments: [] },
+      { id: 'r2', text: 'world', preservedXmlFragments: [] },
+    ],
+    preservedXmlFragments: [],
+  }
+
+  it('emits a paragraph range for a non-empty selection', () => {
+    expect(emphasisAddress(paragraph, 0, 2, 4)).toEqual({
+      paragraphId: 'p1',
+      from: 2,
+      to: 4,
+    })
+    expect(emphasisAddress(paragraph, 5, 0, 2)).toEqual({
+      paragraphId: 'p1',
+      from: 5,
+      to: 7,
+    })
+  })
+
+  it('formats only the run that holds a collapsed caret', () => {
+    expect(emphasisAddress(paragraph, 0, 8, 8)).toEqual({ runId: 'r2' })
+    expect(emphasisAddress(paragraph, 0, 2, 2)).toEqual({ runId: 'r1' })
+  })
+})
+
 describe('document format drafts', () => {
+  it('collects a paragraph range emphasis operation from the selection', () => {
+    expect(
+      collectFormatOperations(
+        model,
+        {
+          emphasis: [{ paragraphId: 'p1', from: 2, to: 4, bold: true }],
+          paragraphStyles: {},
+          numbering: {},
+        },
+        [],
+      ),
+    ).toEqual([
+      {
+        type: 'set_run_emphasis',
+        paragraphId: 'p1',
+        from: 2,
+        to: 4,
+        bold: true,
+      },
+    ])
+  })
+
   it('collects coalesced emphasis, style, and numbering operations', () => {
     expect(
       collectFormatOperations(

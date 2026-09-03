@@ -151,12 +151,12 @@ function runPieceXml(
   start: InsertionPoint | undefined,
   end: InsertionPoint | undefined,
 ) {
-  if (!start && !end) {
-    return source.slice(run.runRange.start, run.runRange.end)
+  if (start && end) {
+    return `${openAt(source, run, start)}${source.slice(start.sourceOffset, end.sourceOffset)}${closeAt(source, run, end)}`
   }
-  if (!start && end) return closedPrefix(source, run, end)
-  if (start && !end) return openedSuffix(source, run, start)
-  return `${openAt(source, run, start)}${source.slice(start.sourceOffset, end.sourceOffset)}${closeAt(source, run, end)}`
+  if (start) return openedSuffix(source, run, start)
+  if (end) return closedPrefix(source, run, end)
+  return source.slice(run.runRange.start, run.runRange.end)
 }
 
 function closedPrefix(

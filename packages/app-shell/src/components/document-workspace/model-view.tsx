@@ -40,6 +40,7 @@ export function DocumentModelPage({
   model,
   selectedParagraphId,
   onSelectParagraph,
+  onTextSelection,
   drafts,
   onRunTextChange,
   editing,
@@ -63,6 +64,7 @@ export function DocumentModelPage({
   model: DocumentModelWire
   selectedParagraphId: string | null
   onSelectParagraph: (paragraphId: string, offset?: number) => void
+  onTextSelection?: (from: number, to: number) => void
   drafts?: Record<string, string>
   onRunTextChange?: (runId: string, text: string) => void
   editing?: boolean
@@ -195,6 +197,7 @@ export function DocumentModelPage({
                   storyPartName: story.partName,
                   selectedParagraphId,
                   onSelectParagraph,
+                  onTextSelection,
                   drafts,
                   onRunTextChange,
                   editing,
@@ -307,6 +310,7 @@ function renderBlock(
     storyPartName: string
     selectedParagraphId: string | null
     onSelectParagraph: (paragraphId: string, offset?: number) => void
+    onTextSelection?: (from: number, to: number) => void
     drafts?: Record<string, string>
     onRunTextChange?: (runId: string, text: string) => void
     editing?: boolean
@@ -365,6 +369,7 @@ function renderBlock(
                 onJoinPrevious={ctx.onJoinPrevious}
                 onWordEdit={ctx.onWordEdit}
                 onMoveCaret={ctx.onSelectParagraph}
+                onTextSelection={ctx.onTextSelection}
                 previous={adjacent.previous}
                 next={adjacent.next}
                 restoreCaret={ctx.restoreCaret}
@@ -422,6 +427,7 @@ function renderBlock(
       onJoinPrevious={ctx.onJoinPrevious}
       onWordEdit={ctx.onWordEdit}
       onMoveCaret={ctx.onSelectParagraph}
+      onTextSelection={ctx.onTextSelection}
       previous={adjacent.previous}
       next={adjacent.next}
       restoreCaret={ctx.restoreCaret}

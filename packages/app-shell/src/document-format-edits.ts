@@ -3,6 +3,8 @@ import type {
   DocumentModelWire,
   DocumentParagraphWire,
 } from '@obiter/contracts'
+// Drafts, toolbar, and range paint stay in one module so collect and formattedModel
+// cannot drift. Split if another property family lands here.
 import { documentStory } from './document-model-text'
 import { paragraphNumPr } from './document-page-lists'
 import { xmlAttr, xmlTagAttrs } from './document-page-units'
@@ -17,7 +19,10 @@ export { paragraphNumPr } from './document-page-lists'
 export type { ListKind } from './document-list-toggle'
 
 export type PendingEmphasis = {
-  runId: string
+  runId?: string
+  paragraphId?: string
+  from?: number
+  to?: number
   bold?: boolean | null
   italic?: boolean | null
   underline?: boolean | null
@@ -54,12 +59,35 @@ export function collectFormatOperations(
   const operations: DocumentEditOperation[] = []
   const emphasisByRun = new Map<string, PendingEmphasis>()
   for (const item of format.emphasis) {
-    if (!deletedRuns.has(item.runId)) emphasisByRun.set(item.runId, item)
+    if (item.runId && !deletedRuns.has(item.runId)) {
+      emphasisByRun.set(item.runId, item)
+    }
   }
   for (const item of emphasisByRun.values()) {
+    if (!item.runId) continue
     operations.push({
       type: 'set_run_emphasis',
       runId: item.runId,
+      ...(item.bold !== undefined ? { bold: item.bold } : {}),
+      ...(item.italic !== undefined ? { italic: item.italic } : {}),
+      ...(item.underline !== undefined ? { underline: item.underline } : {}),
+    })
+  }
+  for (const item of format.emphasis) {
+    if (
+      item.runId ||
+      !item.paragraphId ||
+      item.from === undefined ||
+      item.to === undefined ||
+      deleted.has(item.paragraphId)
+    ) {
+      continue
+    }
+    operations.push({
+      type: 'set_run_emphasis',
+      paragraphId: item.paragraphId,
+      from: item.from,
+      to: item.to,
       ...(item.bold !== undefined ? { bold: item.bold } : {}),
       ...(item.italic !== undefined ? { italic: item.italic } : {}),
       ...(item.underline !== undefined ? { underline: item.underline } : {}),
@@ -90,14 +118,27 @@ export function formattedModel(
   format: FormatDrafts,
 ): DocumentModelWire {
   const emphasisByRun = new Map(
-    format.emphasis.map((item) => [item.runId, item] as const),
+    format.emphasis.flatMap((item) =>
+      item.runId ? [[item.runId, item] as const] : [],
+    ),
+  )
+  const rangeEmphasis = format.emphasis.filter(
+    (item) =>
+      item.paragraphId && item.from !== undefined && item.to !== undefined,
   )
   return {
     ...model,
     stories: model.stories.map((story) => ({
       ...story,
       paragraphs: story.paragraphs.map((paragraph) =>
-        formattedParagraph(paragraph, format, emphasisByRun),
+        formattedParagraph(
+          rangeEmphasis.reduce(
+            (current, item) => paintRangeEmphasis(current, item),
+            paragraph,
+          ),
+          format,
+          emphasisByRun,
+        ),
       ),
     })),
   }
@@ -116,11 +157,72 @@ export function mergeEmphasis(
   current: PendingEmphasis[],
   next: PendingEmphasis,
 ): PendingEmphasis[] {
+  if (next.paragraphId !== undefined) return [...current, next]
   const previous = current.find((item) => item.runId === next.runId)
   return [
     ...current.filter((item) => item.runId !== next.runId),
     { ...previous, ...next },
   ]
+}
+
+export function emphasisAddress(
+  paragraph: DocumentParagraphWire,
+  sliceFrom: number,
+  selectionStart: number,
+  selectionEnd: number,
+): { runId: string } | { paragraphId: string; from: number; to: number } {
+  const from = sliceFrom + Math.min(selectionStart, selectionEnd)
+  const to = sliceFrom + Math.max(selectionStart, selectionEnd)
+  if (from !== to) return { paragraphId: paragraph.id, from, to }
+  let cursor = 0
+  for (const run of paragraph.runs) {
+    const end = cursor + run.text.length
+    if (from >= cursor && from < end) return { runId: run.id }
+    cursor = end
+  }
+  const last = paragraph.runs[paragraph.runs.length - 1]
+  return { runId: last?.id ?? '' }
+}
+
+function paintRangeEmphasis(
+  paragraph: DocumentParagraphWire,
+  item: PendingEmphasis,
+): DocumentParagraphWire {
+  if (item.paragraphId !== paragraph.id) return paragraph
+  const from = item.from
+  const to = item.to
+  if (from === undefined || to === undefined) return paragraph
+  const runs: DocumentParagraphWire['runs'] = []
+  let cursor = 0
+  for (const run of paragraph.runs) {
+    const end = cursor + run.text.length
+    const overlapFrom = Math.max(from, cursor)
+    const overlapTo = Math.min(to, end)
+    if (overlapFrom >= overlapTo) {
+      runs.push(run)
+    } else {
+      const localFrom = overlapFrom - cursor
+      const localTo = overlapTo - cursor
+      if (localFrom > 0) {
+        runs.push({ ...run, text: run.text.slice(0, localFrom) })
+      }
+      runs.push({
+        ...run,
+        id: `${run.id}:${String(localFrom)}:${String(localTo)}`,
+        text: run.text.slice(localFrom, localTo),
+        preservedXmlFragments: patchFragments(
+          run.preservedXmlFragments,
+          emphasisXml(run.preservedXmlFragments, item),
+          /<w:rPr\b/u,
+        ),
+      })
+      if (localTo < run.text.length) {
+        runs.push({ ...run, text: run.text.slice(localTo) })
+      }
+    }
+    cursor = end
+  }
+  return { ...paragraph, runs }
 }
 
 function formattedParagraph(
@@ -245,6 +347,27 @@ export function toggleEmphasisOnRuns(
   return { ...format, emphasis }
 }
 
+export function toggleEmphasisAtAddress(
+  format: FormatDrafts,
+  address: ReturnType<typeof emphasisAddress>,
+  flag: 'bold' | 'italic' | 'underline',
+  value: boolean,
+): FormatDrafts {
+  if ('runId' in address) {
+    if (!address.runId) return format
+    return toggleEmphasisOnRuns(format, [address.runId], flag, value)
+  }
+  return {
+    ...format,
+    emphasis: mergeEmphasis(format.emphasis, {
+      paragraphId: address.paragraphId,
+      from: address.from,
+      to: address.to,
+      [flag]: value,
+    }),
+  }
+}
+
 export function setParagraphStyleDraft(
   format: FormatDrafts,
   paragraphId: string,
@@ -364,7 +487,6 @@ export function formatControlState(
   )
   return {
     paragraph,
-    runIds: paragraph?.runs.map((item) => item.id) ?? [],
     paragraphStyleId: paragraph?.styleId ?? '',
     paragraphStyles: paragraphStyleOptions(model),
     bold: runFlagOn(xml, pending, 'bold'),
@@ -385,9 +507,24 @@ export function documentFormatToolbar(
   format: FormatDrafts,
   paragraphId: string | null,
   setFormat: (update: (current: FormatDrafts) => FormatDrafts) => void,
+  selection?: { from: number; to: number },
 ) {
   const controls = formatControlState(model, format, paragraphId)
   const paragraph = controls.paragraph
+  const address = paragraph
+    ? emphasisAddress(
+        paragraph,
+        0,
+        selection?.from ?? 0,
+        selection?.to ?? selection?.from ?? 0,
+      )
+    : undefined
+  const toggle = (flag: 'bold' | 'italic' | 'underline', value: boolean) => {
+    if (!address) return
+    setFormat((current) =>
+      toggleEmphasisAtAddress(current, address, flag, value),
+    )
+  }
   return {
     paragraphStyleId: controls.paragraphStyleId,
     paragraphStyles: controls.paragraphStyles,
@@ -408,32 +545,13 @@ export function documentFormatToolbar(
       )
     },
     onToggleBold: () => {
-      if (controls.runIds.length === 0) return
-      setFormat((current) =>
-        toggleEmphasisOnRuns(current, controls.runIds, 'bold', !controls.bold),
-      )
+      toggle('bold', !controls.bold)
     },
     onToggleItalic: () => {
-      if (controls.runIds.length === 0) return
-      setFormat((current) =>
-        toggleEmphasisOnRuns(
-          current,
-          controls.runIds,
-          'italic',
-          !controls.italic,
-        ),
-      )
+      toggle('italic', !controls.italic)
     },
     onToggleUnderline: () => {
-      if (controls.runIds.length === 0) return
-      setFormat((current) =>
-        toggleEmphasisOnRuns(
-          current,
-          controls.runIds,
-          'underline',
-          !controls.underline,
-        ),
-      )
+      toggle('underline', !controls.underline)
     },
     onIndent: () => {
       if (!paragraph) return
