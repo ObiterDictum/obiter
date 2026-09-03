@@ -89,6 +89,14 @@ jobs:
           echo "fc-match Liberation Serif: $(fc-match 'Liberation Serif')"
           echo "fc-match Helvetica: $(fc-match Helvetica)"
           echo "fc-match Courier: $(fc-match Courier)"
+          TIMES_MATCH=$(fc-match Times)
+          TNR_MATCH=$(fc-match 'Times New Roman')
+          if ! printf '%s' "$TIMES_MATCH" | grep -qi 'Liberation Serif' || ! printf '%s' "$TNR_MATCH" | grep -qi 'Liberation Serif'; then
+            echo "Times / Times New Roman must resolve to Liberation Serif (pdf.js local() order)." >&2
+            echo "Times: $TIMES_MATCH" >&2
+            echo "Times New Roman: $TNR_MATCH" >&2
+            exit 1
+          fi
           for f in packages/database/migrations/*.sql; do
             psql -h localhost -U obiter -d obiter_test -v ON_ERROR_STOP=1 -f "$f"
           done
