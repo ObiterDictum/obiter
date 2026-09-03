@@ -509,19 +509,20 @@ function flagOnCoveredRuns(
 }
 
 // e40-selection-format-state: pressed flags follow the covered runs, not runs[0]
+// e42-painted-format-control: cover painted splits, not the unsplit source paragraph
 export function formatControlState(
   model: DocumentModelWire,
   format: FormatDrafts,
   paragraphId: string | null,
   selection?: { from: number; to: number },
 ) {
-  const paragraph = selectedParagraph(model, paragraphId)
+  const view = formattedModel(model, format)
+  const paragraph = selectedParagraph(view, paragraphId)
   const covered = runsCoveringRange(paragraph, selection)
   const numPr = paragraph
-    ? (format.numbering[paragraph.id] ??
-      paragraphNumPr(paragraph, model.styles))
+    ? (format.numbering[paragraph.id] ?? paragraphNumPr(paragraph, view.styles))
     : undefined
-  const story = documentStory(model)
+  const story = documentStory(view)
   const index =
     story?.paragraphs.findIndex((item) => item.id === paragraphId) ?? -1
   const previous = index > 0 ? story?.paragraphs[index - 1] : undefined

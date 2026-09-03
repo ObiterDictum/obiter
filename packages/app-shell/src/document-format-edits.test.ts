@@ -335,6 +335,52 @@ describe('formatControlState from the selection', () => {
     toolbar(once).onToggleBold()
     expect(toolbar(formattedModel(source, format)).bold).toBe(false)
   })
+
+  it('reads painted splits after a range draft on an unsplit bold paragraph', () => {
+    const source = modelWithRuns([
+      { id: 'r1', text: 'The Claimant seeks', preservedXmlFragments: boldXml },
+    ])
+    const format: FormatDrafts = {
+      emphasis: [{ paragraphId: 'p1', from: 4, to: 13, bold: false }],
+      paragraphStyles: {},
+      numbering: {},
+    }
+    expect(
+      formatControlState(source, format, 'p1', { from: 4, to: 13 }),
+    ).toMatchObject({ bold: false })
+    expect(
+      formatControlState(source, format, 'p1', { from: 13, to: 18 }),
+    ).toMatchObject({ bold: true })
+    expect(
+      formatControlState(source, format, 'p1', { from: 0, to: 4 }),
+    ).toMatchObject({ bold: true })
+    expect(
+      formatControlState(source, format, 'p1', { from: 4, to: 18 }),
+    ).toMatchObject({ bold: false })
+  })
+
+  it('reads painted splits after a range draft on an unsplit plain paragraph', () => {
+    const source = modelWithRuns([
+      { id: 'r1', text: 'The Claimant seeks', preservedXmlFragments: plainXml },
+    ])
+    const format: FormatDrafts = {
+      emphasis: [{ paragraphId: 'p1', from: 4, to: 13, bold: true }],
+      paragraphStyles: {},
+      numbering: {},
+    }
+    expect(
+      formatControlState(source, format, 'p1', { from: 4, to: 13 }),
+    ).toMatchObject({ bold: true })
+    expect(
+      formatControlState(source, format, 'p1', { from: 13, to: 18 }),
+    ).toMatchObject({ bold: false })
+    expect(
+      formatControlState(source, format, 'p1', { from: 0, to: 4 }),
+    ).toMatchObject({ bold: false })
+    expect(
+      formatControlState(source, format, 'p1', { from: 4, to: 18 }),
+    ).toMatchObject({ bold: false })
+  })
 })
 
 describe('draft range paint run ids', () => {
