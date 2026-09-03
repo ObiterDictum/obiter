@@ -7,7 +7,9 @@ import type {
   DocumentParagraphWire,
 } from '@obiter/contracts'
 import { wrapLines } from '../../document-page-flow'
+import { paragraphPlainText } from '../../document-model-text'
 import { paragraphFace, paragraphLineHeightPx } from '../../document-page-style'
+import { paragraphClickCaret } from './model-click-caret'
 import { DocumentModelPage } from './model-view'
 
 afterEach(() => {
@@ -32,6 +34,62 @@ function para(
     ],
     preservedXmlFragments: [],
   }
+}
+
+function mixedRuns(extraPlain = ''): DocumentParagraphWire {
+  return {
+    id: 'p1',
+    runs: [
+      {
+        id: 'r1',
+        text: 'Bold',
+        preservedXmlFragments: ['<w:rPr><w:b/></w:rPr>'],
+      },
+      {
+        id: 'r2',
+        text: `plain${extraPlain}`,
+        preservedXmlFragments: [],
+      },
+    ],
+    preservedXmlFragments: [],
+  }
+}
+
+function clickOffset(
+  root: HTMLElement,
+  node: Node,
+  offset: number,
+): { paragraphId: string; offset: number } | undefined {
+  const paragraphEl = root.querySelector('[data-paragraph-id]')
+  if (!(paragraphEl instanceof HTMLElement)) {
+    throw new Error('expected a paragraph')
+  }
+  const caretPositionFromPoint = (
+    document as Document & {
+      caretPositionFromPoint?: (
+        x: number,
+        y: number,
+      ) => {
+        offsetNode: Node
+        offset: number
+      } | null
+    }
+  ).caretPositionFromPoint
+  Object.assign(document, {
+    caretPositionFromPoint: () => ({ offsetNode: node, offset }),
+  })
+  const caret = paragraphClickCaret(paragraphEl, 24, 12, root, () => 200)
+  Object.assign(document, { caretPositionFromPoint })
+  return caret
+}
+
+function wrappedLineText(root: HTMLElement, lineIndex: number): Text {
+  const line = root.querySelectorAll('[data-paragraph-text] .whitespace-pre')[
+    lineIndex
+  ]
+  const node = line?.querySelector('span')?.firstChild
+  if (!(node instanceof Text)) throw new Error('expected wrapped line text')
+  return node
 }
 
 function doc(...paragraphs: DocumentParagraphWire[]): DocumentModelWire {
@@ -110,7 +168,7 @@ describe('run formatting when the caret is elsewhere', () => {
 })
 
 describe('run formatting on the caret paragraph', () => {
-  it('renders a uniformly bold paragraph textarea at weight 700', () => {
+  it('renders a uniformly bold paragraph at weight 700 while it holds the caret', () => {
     render(
       <DocumentModelPage
         model={doc(para('p1', 'Alice Example bold', ['<w:rPr><w:b/></w:rPr>']))}
@@ -121,29 +179,19 @@ describe('run formatting on the caret paragraph', () => {
         onRunTextChange={() => undefined}
       />,
     )
+    const painted = document.querySelector('[data-caret-run-overlay] span')
+    if (!(painted instanceof HTMLElement)) {
+      throw new Error('expected overlay run')
+    }
+    expect(painted.style.fontWeight).toBe('700')
     const field = screen.getByLabelText('Paragraph text') as HTMLTextAreaElement
-    expect(field.style.fontWeight).toBe('700')
+    expect(field.style.fontWeight).not.toBe('700')
   })
 
-  it('does not apply a run face when bold and plain runs share the slice', () => {
+  it('renders a bold run and a plain run while the paragraph holds the caret', () => {
     render(
       <DocumentModelPage
-        model={doc({
-          id: 'p1',
-          runs: [
-            {
-              id: 'r1',
-              text: 'Bold',
-              preservedXmlFragments: ['<w:rPr><w:b/></w:rPr>'],
-            },
-            {
-              id: 'r2',
-              text: 'plain',
-              preservedXmlFragments: [],
-            },
-          ],
-          preservedXmlFragments: [],
-        })}
+        model={doc(mixedRuns())}
         selectedParagraphId="p1"
         restoreCaret={{ paragraphId: 'p1', offset: 0 }}
         onSelectParagraph={() => undefined}
@@ -151,8 +199,99 @@ describe('run formatting on the caret paragraph', () => {
         onRunTextChange={() => undefined}
       />,
     )
-    const field = screen.getByLabelText('Paragraph text') as HTMLTextAreaElement
-    expect(field.style.fontWeight).not.toBe('700')
+    expect(screen.getByText('Bold').style.fontWeight).toBe('700')
+    expect(screen.getByText('plain').style.fontWeight).not.toBe('700')
+    expect(screen.getByLabelText('Paragraph text')).toBeTruthy()
+  })
+
+  it('maps a mid-paragraph click to the same offset with the overlay as without', () => {
+    const model = doc(mixedRuns())
+    const { container, unmount } = render(
+      <DocumentModelPage
+        model={model}
+        selectedParagraphId={null}
+        onSelectParagraph={() => undefined}
+        editing
+        onRunTextChange={() => undefined}
+      />,
+    )
+    const page = container.querySelector('[data-document-page]')
+    if (!(page instanceof HTMLElement)) throw new Error('expected a page')
+    const node = screen.getByText('Bold').firstChild
+    if (!(node instanceof Text)) throw new Error('expected text node')
+    const without = clickOffset(page, node, 2)
+    unmount()
+
+    const overlay = render(
+      <DocumentModelPage
+        model={model}
+        selectedParagraphId="p1"
+        restoreCaret={{ paragraphId: 'p1', offset: 0 }}
+        onSelectParagraph={() => undefined}
+        editing
+        onRunTextChange={() => undefined}
+      />,
+    )
+    const overlayPage = overlay.container.querySelector('[data-document-page]')
+    if (!(overlayPage instanceof HTMLElement))
+      throw new Error('expected a page')
+    const overlayNode = screen.getByText('Bold').firstChild
+    if (!(overlayNode instanceof Text)) throw new Error('expected overlay text')
+    expect(clickOffset(overlayPage, overlayNode, 2)).toEqual(without)
+    expect(without).toEqual({ paragraphId: 'p1', offset: 2 })
+  })
+
+  it('maps a wrapped second-line click to the same offset with the overlay as without', () => {
+    const extra =
+      ' text that is long enough to wrap onto a second visual line here'
+    const paragraph = mixedRuns(extra)
+    const text = paragraphPlainText(paragraph)
+    const face = paragraphFace(paragraph, [])
+    const lines = wrapLines(
+      text,
+      face.run.fontSizePx ?? paragraphLineHeightPx(face),
+      wrapWidthPx,
+      face.run.fontFamily,
+    )
+    expect(lines.length).toBeGreaterThan(1)
+    const second = lines[1]
+    if (!second) throw new Error('expected a wrapped line')
+    const model = doc(paragraph)
+    const pageBlocks = [{ type: 'paragraph' as const, paragraph, wrapWidthPx }]
+
+    const { container, unmount } = render(
+      <DocumentModelPage
+        model={model}
+        pageBlocks={pageBlocks}
+        selectedParagraphId={null}
+        onSelectParagraph={() => undefined}
+        editing
+        onRunTextChange={() => undefined}
+      />,
+    )
+    const page = container.querySelector('[data-document-page]')
+    if (!(page instanceof HTMLElement)) throw new Error('expected a page')
+    const without = clickOffset(page, wrappedLineText(page, 1), 1)
+    unmount()
+
+    const overlay = render(
+      <DocumentModelPage
+        model={model}
+        pageBlocks={pageBlocks}
+        selectedParagraphId="p1"
+        restoreCaret={{ paragraphId: 'p1', offset: 0 }}
+        onSelectParagraph={() => undefined}
+        editing
+        onRunTextChange={() => undefined}
+      />,
+    )
+    const overlayPage = overlay.container.querySelector('[data-document-page]')
+    if (!(overlayPage instanceof HTMLElement))
+      throw new Error('expected a page')
+    expect(
+      clickOffset(overlayPage, wrappedLineText(overlayPage, 1), 1),
+    ).toEqual(without)
+    expect(without?.offset).toBe(second.from + 1)
   })
 })
 
