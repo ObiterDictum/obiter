@@ -1,11 +1,9 @@
-import type { CSSProperties } from 'react'
 import type {
   DocumentChangeWire,
   DocumentParagraphWire,
   DocumentPresence,
   DocumentRelationshipWire,
   DocumentStyleWire,
-  DocumentTextRunWire,
 } from '@obiter/contracts'
 import { cn } from '@obiter/ui'
 import {
@@ -30,7 +28,6 @@ import {
   paragraphLineHeightPx,
   runCss,
   runFace,
-  type ParagraphFace,
   type RunFace,
 } from '../../document-page-style'
 import { PageDrawing } from './page-drawing'
@@ -155,6 +152,49 @@ export function ModelParagraph({
     ? Math.max(0, listMarker.leftPx - listMarker.hangingPx)
     : (face.indentLeftPx ?? 0)
   const markerWidth = listMarker?.hangingPx ?? 0
+  const runPaint =
+    runs.length === 0 ? (
+      <span>&nbsp;</span>
+    ) : wrapWidthPx && wrapWidthPx > 0 ? (
+      lines.map((line, index) => (
+        <div
+          key={`${paragraph.id}-${start}-${line.from}-${index}`}
+          className="whitespace-pre"
+          style={{ height: linePx, lineHeight: `${linePx}px` }}
+        >
+          {line.text ? (
+            sliceParagraphRuns(
+              paragraph,
+              start + line.from,
+              start + line.to,
+              drafts,
+            ).map(({ run, text }) => (
+              <ModelRun
+                key={`${run.id}-${start}-${line.from}`}
+                text={text}
+                face={runFace(run, face, styles)}
+                kinds={runChangeKinds(changes, run.id)}
+                caret={carets.find((item) => item.cursor?.runId === run.id)}
+                notes={runEndNotes(run, text, drafts)}
+              />
+            ))
+          ) : (
+            <span>&nbsp;</span>
+          )}
+        </div>
+      ))
+    ) : (
+      runs.map(({ run, text }) => (
+        <ModelRun
+          key={`${run.id}-${start}`}
+          text={text}
+          face={runFace(run, face, styles)}
+          kinds={runChangeKinds(changes, run.id)}
+          caret={carets.find((item) => item.cursor?.runId === run.id)}
+          notes={runEndNotes(run, text, drafts)}
+        />
+      ))
+    )
 
   return (
     <div
@@ -222,175 +262,132 @@ export function ModelParagraph({
             <span aria-hidden="true">{noteMark}</span>
           </span>
         ) : null}
-        <div className="min-h-[1em] min-w-0 flex-1" data-paragraph-text>
+        <div
+          className="relative min-h-[1em] min-w-0 flex-1"
+          data-paragraph-text
+        >
           {editing && holdsCaret ? (
-            <ParagraphEditor
-              text={sliceText}
-              selected={holdsCaret}
-              restoreCaret={restore}
-              lines={lines}
-              previous={previous}
-              next={next}
-              onMoveCaret={onMoveCaret}
-              style={{
-                ...uniformRunCss(runs, face, styles),
-                ...paragraphCss(face),
-                marginTop: 0,
-                marginBottom: 0,
-                height: editorHeight,
-                lineHeight: `${linePx}px`,
-                whiteSpace: 'pre-wrap',
-                overflowWrap: 'normal',
-                wordBreak: 'normal',
-                textAlign: face.align ?? 'left',
-              }}
-              onSelect={onSelect}
-              onChangeText={(next) => {
-                const diff = textDiff(sliceText, next)
-                if (onWordEdit) {
-                  onWordEdit({
-                    type: 'replace',
-                    paragraphId: paragraph.id,
-                    offset: start + diff.from,
-                    from: start + diff.from,
-                    to: start + diff.to,
-                    insert: diff.insert,
-                  })
-                  return
-                }
-                const first = paragraph.runs[0]
-                if (first) {
-                  onRunTextChange?.(
-                    first.id,
-                    fullText.slice(0, start) + next + fullText.slice(end),
-                  )
-                }
-              }}
-              onBackspace={(local) => {
-                const offset = start + local
-                if (onWordEdit) {
-                  onWordEdit({
-                    type: 'deleteBackward',
-                    paragraphId: paragraph.id,
-                    offset,
-                  })
-                  return
-                }
-                if (offset > 0) {
-                  const next = deleteCharBeforeOffset(paragraph, drafts, offset)
-                  if (next) onRunTextChange?.(next.runId, next.text)
-                  return
-                }
-                if (onJoinPrevious?.(paragraph.id)) return
-                if (fullText.length === 0) onDeleteParagraph?.(paragraph.id)
-              }}
-              onDelete={(local) => {
-                const offset = start + local
-                if (onWordEdit) {
-                  onWordEdit({
-                    type: 'deleteForward',
-                    paragraphId: paragraph.id,
-                    offset,
-                  })
-                  return
-                }
-                if (offset < fullText.length) {
-                  const next = deleteCharBeforeOffset(
-                    paragraph,
-                    drafts,
-                    offset + 1,
-                  )
-                  if (next) onRunTextChange?.(next.runId, next.text)
-                }
-              }}
-              onEnter={(local) => {
-                if (onWordEdit) {
-                  onWordEdit({
-                    type: 'split',
-                    paragraphId: paragraph.id,
-                    offset: start + local,
-                  })
-                  return
-                }
-                onInsertParagraph?.(paragraph.id)
-              }}
-              onLineBreak={(local) => {
-                if (onWordEdit) {
-                  onWordEdit({
-                    type: 'lineBreak',
-                    paragraphId: paragraph.id,
-                    offset: start + local,
-                  })
-                }
-              }}
-            />
-          ) : runs.length === 0 ? (
-            <span>&nbsp;</span>
-          ) : wrapWidthPx && wrapWidthPx > 0 ? (
-            lines.map((line, index) => (
+            <>
               <div
-                key={`${paragraph.id}-${start}-${line.from}-${index}`}
-                className="whitespace-pre"
-                style={{ height: linePx, lineHeight: `${linePx}px` }}
+                data-caret-run-overlay
+                className="pointer-events-none absolute inset-0"
+                aria-hidden="true"
               >
-                {line.text ? (
-                  sliceParagraphRuns(
-                    paragraph,
-                    start + line.from,
-                    start + line.to,
-                    drafts,
-                  ).map(({ run, text }) => (
-                    <ModelRun
-                      key={`${run.id}-${start}-${line.from}`}
-                      text={text}
-                      face={runFace(run, face, styles)}
-                      kinds={runChangeKinds(changes, run.id)}
-                      caret={carets.find(
-                        (item) => item.cursor?.runId === run.id,
-                      )}
-                      notes={runEndNotes(run, text, drafts)}
-                    />
-                  ))
-                ) : (
-                  <span>&nbsp;</span>
-                )}
+                {runPaint}
               </div>
-            ))
-          ) : (
-            runs.map(({ run, text }) => (
-              <ModelRun
-                key={`${run.id}-${start}`}
-                text={text}
-                face={runFace(run, face, styles)}
-                kinds={runChangeKinds(changes, run.id)}
-                caret={carets.find((item) => item.cursor?.runId === run.id)}
-                notes={runEndNotes(run, text, drafts)}
+              <ParagraphEditor
+                text={sliceText}
+                selected={holdsCaret}
+                restoreCaret={restore}
+                lines={lines}
+                previous={previous}
+                next={next}
+                onMoveCaret={onMoveCaret}
+                style={{
+                  ...paragraphCss(face),
+                  marginTop: 0,
+                  marginBottom: 0,
+                  height: editorHeight,
+                  lineHeight: `${linePx}px`,
+                  whiteSpace: 'pre-wrap',
+                  overflowWrap: 'normal',
+                  wordBreak: 'normal',
+                  textAlign: face.align ?? 'left',
+                  color: 'transparent',
+                  backgroundColor: 'transparent',
+                }}
+                onSelect={onSelect}
+                onChangeText={(next) => {
+                  const diff = textDiff(sliceText, next)
+                  if (onWordEdit) {
+                    onWordEdit({
+                      type: 'replace',
+                      paragraphId: paragraph.id,
+                      offset: start + diff.from,
+                      from: start + diff.from,
+                      to: start + diff.to,
+                      insert: diff.insert,
+                    })
+                    return
+                  }
+                  const first = paragraph.runs[0]
+                  if (first) {
+                    onRunTextChange?.(
+                      first.id,
+                      fullText.slice(0, start) + next + fullText.slice(end),
+                    )
+                  }
+                }}
+                onBackspace={(local) => {
+                  const offset = start + local
+                  if (onWordEdit) {
+                    onWordEdit({
+                      type: 'deleteBackward',
+                      paragraphId: paragraph.id,
+                      offset,
+                    })
+                    return
+                  }
+                  if (offset > 0) {
+                    const next = deleteCharBeforeOffset(
+                      paragraph,
+                      drafts,
+                      offset,
+                    )
+                    if (next) onRunTextChange?.(next.runId, next.text)
+                    return
+                  }
+                  if (onJoinPrevious?.(paragraph.id)) return
+                  if (fullText.length === 0) onDeleteParagraph?.(paragraph.id)
+                }}
+                onDelete={(local) => {
+                  const offset = start + local
+                  if (onWordEdit) {
+                    onWordEdit({
+                      type: 'deleteForward',
+                      paragraphId: paragraph.id,
+                      offset,
+                    })
+                    return
+                  }
+                  if (offset < fullText.length) {
+                    const next = deleteCharBeforeOffset(
+                      paragraph,
+                      drafts,
+                      offset + 1,
+                    )
+                    if (next) onRunTextChange?.(next.runId, next.text)
+                  }
+                }}
+                onEnter={(local) => {
+                  if (onWordEdit) {
+                    onWordEdit({
+                      type: 'split',
+                      paragraphId: paragraph.id,
+                      offset: start + local,
+                    })
+                    return
+                  }
+                  onInsertParagraph?.(paragraph.id)
+                }}
+                onLineBreak={(local) => {
+                  if (onWordEdit) {
+                    onWordEdit({
+                      type: 'lineBreak',
+                      paragraphId: paragraph.id,
+                      offset: start + local,
+                    })
+                  }
+                }}
               />
-            ))
+            </>
+          ) : (
+            runPaint
           )}
         </div>
       </div>
     </div>
   )
-}
-
-function uniformRunCss(
-  runs: { run: DocumentTextRunWire }[],
-  paragraph: ParagraphFace,
-  styles: DocumentStyleWire[],
-): CSSProperties {
-  const first = runs[0]
-  if (!first) return {}
-  const css = runCss(runFace(first.run, paragraph, styles))
-  const serial = JSON.stringify(css)
-  for (const item of runs) {
-    if (
-      JSON.stringify(runCss(runFace(item.run, paragraph, styles))) !== serial
-    ) {
-      return {}
-    }
-  }
-  return css
 }
 
 function ModelRun({
