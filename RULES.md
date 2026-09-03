@@ -24,6 +24,9 @@ Only load [PR.md](PR.md) when writing a PR summary. Only load [TESTING.md](TESTI
 - Side effects live at boundaries (API handlers, workers, bridges, storage adapters). Pure domain logic stays testable without booting the app. Validate untrusted input at the boundary with shared schemas.
 - Discriminated unions for state machines and statuses; exhaustively handle branches. Unknown legal-critical states fail loudly — no silent fallbacks, no swallowed errors, no broad `try/catch` that continues in an uncertain state.
 - Names describe real behavior. No hidden magic, implicit globals, metaprogramming, or production mocks/fake data outside clearly named demo or test modules.
+- No speculative abstractions: no interface with one implementation, no factory for one product, no config for a value that never changes. No scaffolding "for later" — later can scaffold for itself.
+- Reuse before you write: check for an existing helper, util, or pattern a few files over before creating a new one. Then prefer stdlib and platform features, then existing dependencies — never a new dependency for what a few lines can do.
+- Fewest files possible, shortest working diff. Deletion over addition, boring over clever.
 - Authentication must always use a real server-side session and `GET /api/me`. No development auto-login, synthetic sessions, default credentials, or client-side auth bypasses. Fixtures must not provide runtime auth context; test fixtures may remain clearly isolated.
 - Comments explain intent or constraints only, never restate code.
 

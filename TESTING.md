@@ -24,7 +24,11 @@ For most changes, do all applicable items:
 - add focused tests near the changed behavior
 - prefer deterministic tests over broad fragile ones
 - test contracts, parsing, state transitions, and critical UI flows
+- test behavior through public boundaries, not internals — a pure refactor must not break tests
 - do not add shallow tests that only exercise implementation trivia
+- do not add tests that cannot fail meaningfully: no tautologies, no asserting constants, no snapshot dumps that mirror implementation
+- do not mock the behavior being tested; mock only external boundaries (network, storage, email, clocks, filesystem)
+- one test that would have caught a real bug beats ten that would not; bug fixes add or update the test that would have caught the bug
 
 ## High-Risk Areas
 
