@@ -29,7 +29,7 @@ Only load [PR.md](PR.md) when writing a PR summary. Only load [TESTING.md](TESTI
 - Fewest files possible, shortest working diff. Deletion over addition, boring over clever.
 - Fewest lines that stay readable: no verbose ceremony, no wrapper around a wrapper, no comment restating the line below it. Brevity never beats clarity — if shorter is harder to trace, keep the longer version.
 - Authentication must always use a real server-side session and `GET /api/me`. No development auto-login, synthetic sessions, default credentials, or client-side auth bypasses. Fixtures must not provide runtime auth context; test fixtures may remain clearly isolated.
-- Comments explain intent or constraints only, never restate code.
+- Comments explain why, not what: intent, constraints, or non-obvious reasoning — especially legal or safety rationale. Never restate the code, never narrate the obvious, never leave a comment that would survive the code being deleted.
 
 ## Architecture
 
