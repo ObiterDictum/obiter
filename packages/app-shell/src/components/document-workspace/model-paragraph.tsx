@@ -55,6 +55,7 @@ export function ModelParagraph({
   onJoinPrevious,
   onWordEdit,
   onMoveCaret,
+  onTextSelection,
   restoreCaret,
   previous,
   next,
@@ -87,6 +88,7 @@ export function ModelParagraph({
   onJoinPrevious?: (paragraphId: string) => boolean | void
   onWordEdit?: (edit: ParagraphWordEdit) => void
   onMoveCaret?: (paragraphId: string, offset: number) => void
+  onTextSelection?: (from: number, to: number) => void
   restoreCaret?: { paragraphId: string; offset: number } | null
   previous?: ArrowNeighbor
   next?: ArrowNeighbor
@@ -283,6 +285,9 @@ export function ModelParagraph({
                 previous={previous}
                 next={next}
                 onMoveCaret={onMoveCaret}
+                onTextSelection={(localStart, localEnd) =>
+                  onTextSelection?.(start + localStart, start + localEnd)
+                }
                 style={{
                   ...paragraphCss(face),
                   marginTop: 0,

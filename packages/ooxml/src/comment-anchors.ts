@@ -36,7 +36,7 @@ type EmptyParagraphSplitPoint = {
   paragraph: XmlElementRange
 }
 type SplitPoint = RunSplitPoint | EmptyParagraphSplitPoint
-type InsertionPoint = {
+export type InsertionPoint = {
   sourceOffset: number
   split?: SplitPoint
 }
@@ -201,7 +201,7 @@ function addMarker(
   }
 }
 
-function locateOffset(
+export function locateOffset(
   source: string,
   paragraph: ParagraphAnchor,
   offset: number,
@@ -351,7 +351,7 @@ function insertionXml(
   return { start, end: insertion.sourceOffset, value }
 }
 
-function preserveTextOpeningTag(opening: string) {
+export function preserveTextOpeningTag(opening: string) {
   const xmlSpace = /\s+xml:space\s*=\s*(["'])[^"']*\1/u
   if (xmlSpace.test(opening)) {
     return opening.replace(xmlSpace, ' xml:space="preserve"')

@@ -228,6 +228,26 @@ describe('DocxWorkspace ribbon', () => {
     ).toHaveProperty('disabled', true)
   })
 
+  it('disables partial emphasis while track changes is on', () => {
+    mountWorkspace({})
+    selectBodyParagraph()
+    const field = screen.getByLabelText('Paragraph text')
+    if (!(field instanceof HTMLTextAreaElement)) {
+      throw new Error('Paragraph field is missing.')
+    }
+    field.focus()
+    field.setSelectionRange(1, 4)
+    fireEvent.select(field)
+    openRibbonTab('Review')
+    fireEvent.click(screen.getByRole('button', { name: 'Track changes off' }))
+    openRibbonTab('Home')
+    expect(
+      screen.getByRole('button', {
+        name: 'Bold: Partial formatting is not yet recorded as a tracked change',
+      }),
+    ).toHaveProperty('disabled', true)
+  })
+
   it('replaces find hits and lists extracted authorities', () => {
     mountWorkspace({})
     selectBodyParagraph()
