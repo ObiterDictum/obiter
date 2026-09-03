@@ -294,7 +294,6 @@ export function ModelParagraph({
                   wordBreak: 'normal',
                   textAlign: face.align ?? 'left',
                   color: 'transparent',
-                  caretColor: '#000000',
                   backgroundColor: 'transparent',
                 }}
                 onSelect={onSelect}
