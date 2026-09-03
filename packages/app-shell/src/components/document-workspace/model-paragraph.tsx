@@ -1,11 +1,9 @@
-import type { CSSProperties } from 'react'
 import type {
   DocumentChangeWire,
   DocumentParagraphWire,
   DocumentPresence,
   DocumentRelationshipWire,
   DocumentStyleWire,
-  DocumentTextRunWire,
 } from '@obiter/contracts'
 import { cn } from '@obiter/ui'
 import {
@@ -30,7 +28,6 @@ import {
   paragraphLineHeightPx,
   runCss,
   runFace,
-  type ParagraphFace,
   type RunFace,
 } from '../../document-page-style'
 import { PageDrawing } from './page-drawing'
@@ -287,7 +284,6 @@ export function ModelParagraph({
                 next={next}
                 onMoveCaret={onMoveCaret}
                 style={{
-                  ...uniformRunCss(runs, face, styles),
                   ...paragraphCss(face),
                   marginTop: 0,
                   marginBottom: 0,
@@ -393,25 +389,6 @@ export function ModelParagraph({
       </div>
     </div>
   )
-}
-
-function uniformRunCss(
-  runs: { run: DocumentTextRunWire }[],
-  paragraph: ParagraphFace,
-  styles: DocumentStyleWire[],
-): CSSProperties {
-  const first = runs[0]
-  if (!first) return {}
-  const css = runCss(runFace(first.run, paragraph, styles))
-  const serial = JSON.stringify(css)
-  for (const item of runs) {
-    if (
-      JSON.stringify(runCss(runFace(item.run, paragraph, styles))) !== serial
-    ) {
-      return {}
-    }
-  }
-  return css
 }
 
 function ModelRun({

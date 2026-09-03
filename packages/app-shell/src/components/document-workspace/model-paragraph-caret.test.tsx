@@ -168,7 +168,7 @@ describe('run formatting when the caret is elsewhere', () => {
 })
 
 describe('run formatting on the caret paragraph', () => {
-  it('renders a uniformly bold paragraph textarea at weight 700', () => {
+  it('renders a uniformly bold paragraph at weight 700 while it holds the caret', () => {
     render(
       <DocumentModelPage
         model={doc(para('p1', 'Alice Example bold', ['<w:rPr><w:b/></w:rPr>']))}
@@ -179,8 +179,13 @@ describe('run formatting on the caret paragraph', () => {
         onRunTextChange={() => undefined}
       />,
     )
+    const painted = document.querySelector('[data-caret-run-overlay] span')
+    if (!(painted instanceof HTMLElement)) {
+      throw new Error('expected overlay run')
+    }
+    expect(painted.style.fontWeight).toBe('700')
     const field = screen.getByLabelText('Paragraph text') as HTMLTextAreaElement
-    expect(field.style.fontWeight).toBe('700')
+    expect(field.style.fontWeight).not.toBe('700')
   })
 
   it('renders a bold run and a plain run while the paragraph holds the caret', () => {
