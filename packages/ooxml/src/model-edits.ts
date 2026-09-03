@@ -16,6 +16,7 @@ import {
   setParagraphFormat,
   setRunEmphasis,
 } from './model-property-edits'
+import { applyRunEmphasisRange } from './model-run-range-edits'
 import { setParagraphStyle, setRunStyle } from './model-style-edits'
 import { replaceTextRunAtAnchor } from './text-run-edit'
 import {
@@ -28,8 +29,12 @@ export type { TrackedEditContext } from './tracked-edits'
 type PlannedOperation =
   | (Extract<
       DocumentEditOperation,
-      { type: 'replace_run_text' | 'set_run_style' | 'set_run_emphasis' }
+      { type: 'replace_run_text' | 'set_run_style' }
     > & { run: TextRunAnchor; paragraph: ParagraphAnchor })
+  | (Extract<DocumentEditOperation, { type: 'set_run_emphasis' }> & {
+      run?: TextRunAnchor
+      paragraph: ParagraphAnchor
+    })
   | (Extract<
       DocumentEditOperation,
       {
@@ -114,10 +119,29 @@ export function applyDocumentEdits(
       }
     } else if (operation.type === 'set_run_emphasis') {
       if (!deletedLater) {
-        if (trackedWriter) {
-          trackedWriter.setRunEmphasis(operation.run, operation)
+        if (operation.run) {
+          if (trackedWriter) {
+            trackedWriter.setRunEmphasis(operation.run, operation)
+          } else {
+            setRunEmphasis(document, operation.run, operation)
+          }
+        } else if (
+          operation.paragraphId !== undefined &&
+          operation.from !== undefined &&
+          operation.to !== undefined
+        ) {
+          if (trackedWriter) {
+            throw new OoxmlError('model-node-not-editable')
+          }
+          applyRunEmphasisRange(
+            document,
+            operation.paragraph,
+            operation.from,
+            operation.to,
+            operation,
+          )
         } else {
-          setRunEmphasis(document, operation.run, operation)
+          throw new OoxmlError('invalid-document-edit')
         }
       }
     } else if (operation.type === 'set_paragraph_numbering') {
@@ -253,7 +277,19 @@ function validateTrackedOperations(
       }
       runStyleTargets.add(operation.runId)
     } else if (operation.type === 'set_run_emphasis') {
-      if (
+      if (!operation.run) {
+        if (
+          containsTrackedChange(
+            document,
+            operation.paragraph.partName,
+            operation.paragraph.paragraphRange,
+          ) ||
+          runEmphasisTargets.has(operation.paragraphId ?? '')
+        ) {
+          throw new OoxmlError('invalid-document-edit')
+        }
+        runEmphasisTargets.add(operation.paragraphId ?? '')
+      } else if (
         containsTrackedChange(
           document,
           operation.run.partName,
@@ -262,8 +298,9 @@ function validateTrackedOperations(
         runEmphasisTargets.has(operation.run.wire.id)
       ) {
         throw new OoxmlError('invalid-document-edit')
+      } else {
+        runEmphasisTargets.add(operation.run.wire.id)
       }
-      runEmphasisTargets.add(operation.run.wire.id)
     } else if (operation.type === 'set_paragraph_style') {
       if (
         containsTrackedChange(
@@ -330,7 +367,19 @@ function planOperation(
   validateNumbering(operation, numberingIds)
   if (operation.type === 'set_run_emphasis') {
     const runId = operation.runId
-    if (runId === undefined) throw new OoxmlError('invalid-document-edit')
+    if (runId === undefined) {
+      if (
+        operation.paragraphId === undefined ||
+        operation.from === undefined ||
+        operation.to === undefined
+      ) {
+        throw new OoxmlError('invalid-document-edit')
+      }
+      return {
+        ...operation,
+        paragraph: requireMainParagraph(document, operation.paragraphId),
+      }
+    }
     const run = requireMainRun(document, runParagraphs, runId, false)
     const paragraph = runParagraphs.get(runId)
     if (!paragraph) throw new OoxmlError('model-node-not-editable')

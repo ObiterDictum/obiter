@@ -42,6 +42,7 @@ type MainStory = OoxmlDocument['model']['stories'][number]
 type ChangedFootprints = {
   paragraphStyles: ReadonlySet<string>
   paragraphOpaque: ReadonlySet<string>
+  paragraphRunChanges: ReadonlySet<string>
   runText: ReadonlySet<string>
   runStyles: ReadonlySet<string>
   runOpaque: ReadonlySet<string>
@@ -116,6 +117,7 @@ function changedFootprints(
 ): ChangedFootprints {
   const paragraphStyles = new Set<string>()
   const paragraphOpaque = new Set<string>()
+  const paragraphRunChanges = new Set<string>()
   const runText = new Set<string>()
   const runStyles = new Set<string>()
   const runOpaque = new Set<string>()
@@ -127,6 +129,7 @@ function changedFootprints(
     return {
       paragraphStyles,
       paragraphOpaque,
+      paragraphRunChanges,
       runText,
       runStyles,
       runOpaque,
@@ -180,9 +183,13 @@ function changedFootprints(
       if (!baseRun) return
       const runId = baseRun.id
       runIds.add(runId)
-      if (baseRun.text !== currentRun.text) runText.add(runId)
+      if (baseRun.text !== currentRun.text) {
+        runText.add(runId)
+        paragraphRunChanges.add(paragraphId)
+      }
       if ((baseRun.styleId ?? null) !== (currentRun.styleId ?? null)) {
         runStyles.add(runId)
+        paragraphRunChanges.add(paragraphId)
       }
       if (
         !sameStrings(
@@ -194,6 +201,7 @@ function changedFootprints(
         )
       ) {
         runOpaque.add(runId)
+        paragraphRunChanges.add(paragraphId)
       }
     })
   })
@@ -201,6 +209,7 @@ function changedFootprints(
   return {
     paragraphStyles,
     paragraphOpaque,
+    paragraphRunChanges,
     runText,
     runStyles,
     runOpaque,
@@ -237,11 +246,18 @@ function operationConflicts(
     )
   }
   if (operation.type === 'set_run_emphasis') {
-    if (operation.runId === undefined) return true
+    if (operation.runId !== undefined) {
+      return (
+        !changes.runIds.has(operation.runId) ||
+        changes.runOpaque.has(operation.runId) ||
+        changes.runStyles.has(operation.runId)
+      )
+    }
+    if (operation.paragraphId === undefined) return true
     return (
-      !changes.runIds.has(operation.runId) ||
-      changes.runOpaque.has(operation.runId) ||
-      changes.runStyles.has(operation.runId)
+      !changes.paragraphIds.has(operation.paragraphId) ||
+      changes.paragraphOpaque.has(operation.paragraphId) ||
+      changes.paragraphRunChanges.has(operation.paragraphId)
     )
   }
   if (!changes.runIds.has(operation.runId)) return true
