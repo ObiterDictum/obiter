@@ -27,6 +27,7 @@ Only load [PR.md](PR.md) when writing a PR summary. Only load [TESTING.md](TESTI
 - No speculative abstractions: no interface with one implementation, no factory for one product, no config for a value that never changes. No scaffolding "for later" — later can scaffold for itself.
 - Reuse before you write: check for an existing helper, util, or pattern a few files over before creating a new one. Then prefer stdlib and platform features, then existing dependencies — never a new dependency for what a few lines can do.
 - Fewest files possible, shortest working diff. Deletion over addition, boring over clever.
+- Fewest lines that stay readable: no verbose ceremony, no wrapper around a wrapper, no comment restating the line below it. Brevity never beats clarity — if shorter is harder to trace, keep the longer version.
 - Authentication must always use a real server-side session and `GET /api/me`. No development auto-login, synthetic sessions, default credentials, or client-side auth bypasses. Fixtures must not provide runtime auth context; test fixtures may remain clearly isolated.
 - Comments explain intent or constraints only, never restate code.
 
