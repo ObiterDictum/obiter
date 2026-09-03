@@ -70,6 +70,11 @@ fi
 # set -o pipefail, grep -q closes the pipe early, fc-list dies of SIGPIPE
 # (exit 141), and pipefail propagates 141 — so the check reports missing
 # fonts on a machine that has them.
+# Same pinned config as CI (FONTCONFIG_FILE in .github/workflows/ci.yml):
+# pdf.js resolves base-14 fonts through fontconfig, so the mirror must resolve
+# through the same file, not the developer's system config.
+export FONTCONFIG_FILE="$PWD/.github/fontconfig-liberation.conf"
+mkdir -p /tmp/obiter-fontconfig-cache
 fc-cache -f >/dev/null 2>&1 || true
 LIBERATION=$(fc-list 2>/dev/null | grep -ci liberation || true)
 if ! command -v fc-list >/dev/null 2>&1 || [ "${LIBERATION:-0}" -eq 0 ]; then

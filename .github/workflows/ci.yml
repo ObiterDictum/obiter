@@ -38,6 +38,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Runner forensics for the pdf-glyph-layout flake (two stable outcomes,
+      # alternating per run): GitHub mixes CPU generations in the pool and a
+      # rendering path that differs by instruction set would produce exactly
+      # that. Early and unconditional so failing runs always carry it.
+      - name: Runner diagnostics
+        run: |
+          echo "runner.name=${{ runner.name }}"
+          echo "runner.arch=${{ runner.arch }}"
+          echo "runner.os=${{ runner.os }}"
+          echo "RUNNER_NAME=$RUNNER_NAME"
+          uname -a
+          lscpu || cat /proc/cpuinfo
+
       - uses: pnpm/action-setup@v4
 
       - uses: actions/setup-node@v4

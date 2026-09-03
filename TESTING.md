@@ -118,4 +118,5 @@ is worse than no e2e.
   `.github/fontconfig-liberation.conf` so pdf.js `local()` aliases cannot
   pick DejaVu/Nimbus/Ubuntu instead of Liberation, rebuilds that cache, and
   fails closed if `fc-list` still shows no Liberation faces.
-  `scripts/ci-local.sh` rebuilds the host cache and fails closed the same way.
+  `scripts/ci-local.sh` exports the same `FONTCONFIG_FILE` and cache dir before
+  rebuilding, then fails closed the same way.
