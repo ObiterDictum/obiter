@@ -83,6 +83,15 @@ function clickOffset(
   return caret
 }
 
+function wrappedLineText(root: HTMLElement, lineIndex: number): Text {
+  const line = root.querySelectorAll('[data-paragraph-text] .whitespace-pre')[
+    lineIndex
+  ]
+  const node = line?.querySelector('span')?.firstChild
+  if (!(node instanceof Text)) throw new Error('expected wrapped line text')
+  return node
+}
+
 function doc(...paragraphs: DocumentParagraphWire[]): DocumentModelWire {
   return {
     version: 1,
@@ -257,10 +266,7 @@ describe('run formatting on the caret paragraph', () => {
     )
     const page = container.querySelector('[data-document-page]')
     if (!(page instanceof HTMLElement)) throw new Error('expected a page')
-    const snippet = second.text
-    const node = screen.getByText(snippet).firstChild
-    if (!(node instanceof Text)) throw new Error('expected text node')
-    const without = clickOffset(page, node, 1)
+    const without = clickOffset(page, wrappedLineText(page, 1), 1)
     unmount()
 
     const overlay = render(
@@ -277,9 +283,9 @@ describe('run formatting on the caret paragraph', () => {
     const overlayPage = overlay.container.querySelector('[data-document-page]')
     if (!(overlayPage instanceof HTMLElement))
       throw new Error('expected a page')
-    const overlayNode = screen.getByText(snippet).firstChild
-    if (!(overlayNode instanceof Text)) throw new Error('expected overlay text')
-    expect(clickOffset(overlayPage, overlayNode, 1)).toEqual(without)
+    expect(
+      clickOffset(overlayPage, wrappedLineText(overlayPage, 1), 1),
+    ).toEqual(without)
     expect(without?.offset).toBe(second.from + 1)
   })
 })
