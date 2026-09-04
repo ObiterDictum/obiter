@@ -1,11 +1,7 @@
 import { createCanvas } from '@napi-rs/canvas'
 import { documentTextLayoutSchema } from '@obiter/contracts'
 import { PDFDocument, StandardFonts } from 'pdf-lib'
-import {
-  coverRectsForSpan,
-  glyphCoverRect,
-  supplementSpans,
-} from '@obiter/redaction-policy'
+import { coverRectsForSpan, supplementSpans } from '@obiter/redaction-policy'
 import { createIsomorphicCanvasFactory, getDocumentProxy } from 'unpdf'
 import { describe, expect, it, vi } from 'vitest'
 import { extractDocumentContent, prepareLaidChars } from './document-extraction'
@@ -342,116 +338,6 @@ describe('exact glyph geometry', () => {
     })
     const ink = await renderedInkBounds(bytes)
     const covered = coverBoundsInViewport(ink.viewport, covers)
-    if (process.env.GITHUB_ACTIONS) {
-      const glyphs = []
-      for (const segment of extracted.layout!.segments) {
-        if (segment.end <= 0 || segment.start >= extracted.text.length) continue
-        const length = segment.end - segment.start
-        const advances = segment.advances
-        const offsets =
-          advances && advances.length === length
-            ? advances.reduce<number[]>(
-                (acc, advance) => {
-                  acc.push((acc.at(-1) ?? 0) + advance)
-                  return acc
-                },
-                [0],
-              )
-            : null
-        for (
-          let index = Math.max(segment.start, 0);
-          index < Math.min(segment.end, extracted.text.length);
-          index += 1
-        ) {
-          const local = index - segment.start
-          const mag =
-            Math.hypot(segment.baselineX ?? 1, segment.baselineY ?? 0) || 1
-          const baselineX = (segment.baselineX ?? 1) / mag
-          const baselineY = (segment.baselineY ?? 0) / mag
-          const ownWidth =
-            segment.glyphWidthOverrides?.[String(local)] ?? advances?.[local]
-          const offset = offsets?.[local]
-          const placed =
-            typeof ownWidth === 'number' && typeof offset === 'number'
-              ? {
-                  x: segment.x + offset * baselineX,
-                  y: segment.y + offset * baselineY,
-                  width: Math.max(ownWidth, 0.5),
-                }
-              : {
-                  x:
-                    length === 1
-                      ? segment.x
-                      : segment.x + segment.width * (local / length),
-                  y: segment.y,
-                  width:
-                    length === 1
-                      ? segment.width
-                      : Math.max(segment.width / length, 0.5),
-                }
-          const char = extracted.text[index] ?? ''
-          const transformedFlag = segment.baselineX !== undefined
-          const transformed =
-            transformedFlag ||
-            Math.abs(baselineX - 1) > 0.001 ||
-            Math.abs(baselineY) > 0.001
-          const pdf = glyphCoverRect({
-            x: placed.x,
-            y: placed.y,
-            width: placed.width,
-            fontSize: segment.height,
-            ink: char,
-            ascent: segment.ascent,
-            descent: segment.descent,
-            baselineX,
-            baselineY,
-            transformed: transformedFlag,
-          })
-          const viewport = coverBoundsInViewport(ink.viewport, [pdf])
-          glyphs.push({
-            index,
-            ink: char,
-            skipped: !char || /\s/u.test(char),
-            baselineX,
-            baselineY,
-            transformedFlag,
-            transformed,
-            pdfLeft: pdf.x,
-            pdfRight: pdf.x + pdf.width,
-            pdfBottom: pdf.y,
-            pdfTop: pdf.y + pdf.height,
-            ...viewport,
-          })
-        }
-      }
-      const included = glyphs.filter((glyph) => !glyph.skipped)
-      const minTop = Math.min(...included.map((glyph) => glyph.top))
-      console.error(
-        'CI_ROTATED_GLYPH_COVER',
-        JSON.stringify({
-          ink: {
-            left: ink.left,
-            right: ink.right,
-            top: ink.top,
-            bottom: ink.bottom,
-          },
-          covered,
-          segments: extracted.layout!.segments.map((segment) => ({
-            start: segment.start,
-            end: segment.end,
-            x: segment.x,
-            y: segment.y,
-            width: segment.width,
-            height: segment.height,
-            baselineX: segment.baselineX,
-            baselineY: segment.baselineY,
-          })),
-          minTop,
-          minTopGlyphs: included.filter((glyph) => glyph.top === minTop),
-          glyphs,
-        }),
-      )
-    }
     expect(covered.left).toBeLessThanOrEqual(ink.left)
     expect(covered.right).toBeGreaterThanOrEqual(ink.right)
     expect(covered.top).toBeLessThanOrEqual(ink.top)
