@@ -17,7 +17,7 @@ import {
 } from '@obiter/contracts'
 import { sendEmail } from '../auth'
 import { requireManageRole, requireOwnerRole } from '../authz'
-import { createOrganisationForUser } from '../database'
+import { createOrganisationForUser, renameOrganisation } from '../database'
 import { organisationInviteEmail } from '../email-templates'
 import type { ApiEnv } from '../env'
 import {
@@ -97,6 +97,32 @@ function mapInvite(row: InviteRow) {
   })
 }
 
+/**
+ * Shared organisation-name validation for create + rename: strip Unicode
+ * format characters (category Cf — zero-width spaces, joiners, directional
+ * marks) as well as ASCII whitespace before the emptiness check, so a name
+ * of only ZWSPs cannot pass trim() as non-empty and store an invisible
+ * organisation name. Enforces the shared length ceiling.
+ */
+function parseOrganisationName(
+  rawName: unknown,
+): { ok: true; name: string } | { ok: false; message: string } {
+  if (typeof rawName !== 'string') {
+    return { ok: false, message: 'Organisation name is required.' }
+  }
+  const name = rawName.replace(/\p{Cf}/gu, '').trim()
+  if (name.length === 0) {
+    return { ok: false, message: 'Organisation name is required.' }
+  }
+  if (name.length > ORGANISATION_NAME_MAX_LENGTH) {
+    return {
+      ok: false,
+      message: `Organisation name must be at most ${ORGANISATION_NAME_MAX_LENGTH} characters.`,
+    }
+  }
+  return { ok: true, name }
+}
+
 function callerOwnsOrganisation(
   c: RouteContext,
   organisationId: string,
@@ -138,36 +164,11 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
         ? (value as Record<string, unknown>).name
         : undefined
 
-    if (typeof rawName !== 'string') {
-      return errorResponse(
-        c,
-        'validation_failed',
-        'Organisation name is required.',
-        400,
-      )
+    const parsed = parseOrganisationName(rawName)
+    if (!parsed.ok) {
+      return errorResponse(c, 'validation_failed', parsed.message, 400)
     }
-
-    // Strip Unicode format characters (category Cf — zero-width spaces, joiners,
-    // directional marks) as well as ASCII whitespace before the emptiness check.
-    // A name of only ZWSPs would otherwise pass trim() as non-empty and store
-    // an invisible organisation name.
-    const name = rawName.replace(/\p{Cf}/gu, '').trim()
-    if (name.length === 0) {
-      return errorResponse(
-        c,
-        'validation_failed',
-        'Organisation name is required.',
-        400,
-      )
-    }
-    if (name.length > ORGANISATION_NAME_MAX_LENGTH) {
-      return errorResponse(
-        c,
-        'validation_failed',
-        `Organisation name must be at most ${ORGANISATION_NAME_MAX_LENGTH} characters.`,
-        400,
-      )
-    }
+    const name = parsed.name
 
     const result = await createOrganisationForUser(pool, {
       userId: user.id,
@@ -186,6 +187,61 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
 
     return c.json({ organisation: result.organisation }, 201)
   })
+
+  /**
+   * Owner-only rename. Two paths share one handler: PATCH /api/organisations
+   * renames the caller's own organisation, PATCH
+   * /api/organisations/:organisationId renames the addressed one after
+   * proving it is the caller's own. Both enforce the owner check — sibling
+   * management routes split owner vs owner/admin per route, so each twin
+   * states its own requirement rather than inheriting it.
+   */
+  async function handleRename(c: RouteContext, organisationId: string) {
+    const caller = await requireOwnerRole(c, pool)
+    if (caller instanceof Response) return caller
+    const denied = callerOwnsOrganisation(
+      c,
+      organisationId,
+      caller.organisationId,
+    )
+    if (denied) return denied
+
+    const value: unknown = await c.req.json().catch(() => null)
+    const rawName =
+      typeof value === 'object' && value !== null && !Array.isArray(value)
+        ? (value as Record<string, unknown>).name
+        : undefined
+    const parsed = parseOrganisationName(rawName)
+    if (!parsed.ok) {
+      return errorResponse(c, 'validation_failed', parsed.message, 400)
+    }
+
+    const result = await renameOrganisation(pool, {
+      organisationId,
+      userId: caller.id,
+      name: parsed.name,
+      requestId: c.get('requestId'),
+    })
+    if (!result) {
+      return errorResponse(
+        c,
+        'organisation_not_found',
+        'Organisation not found.',
+        404,
+      )
+    }
+    return c.json({ organisation: result.organisation })
+  }
+
+  routes.patch('/api/organisations', async (c) => {
+    const caller = await requireOwnerRole(c, pool)
+    if (caller instanceof Response) return caller
+    return handleRename(c, caller.organisationId)
+  })
+
+  routes.patch('/api/organisations/:organisationId', async (c) =>
+    handleRename(c, c.req.param('organisationId')),
+  )
 
   routes.post('/api/organisations/:organisationId/invites', async (c) => {
     const caller = await requireManageRole(c, pool)

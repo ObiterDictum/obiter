@@ -2,9 +2,11 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { ArrowRight } from '@phosphor-icons/react'
 import { Button, Input } from '@obiter/ui'
 import { useState, type FormEvent } from 'react'
+import { ORGANISATION_NAME_MAX_LENGTH } from '@obiter/contracts'
 import { useAuth } from '../auth'
 import { inviteAcceptCallbackURL } from '../invite-accept-callback-url'
 import { checkInviteAccountExists } from '../organisation-membership'
+import { savePendingOrganisationName } from '../pending-organisation'
 import { Wordmark } from '../wordmark'
 import { useForceNightTheme, ResendVerificationControl } from './sign-in'
 
@@ -26,6 +28,7 @@ export function SignUpRouteView() {
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [organisationName, setOrganisationName] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [submitted, setSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -38,6 +41,15 @@ export function SignUpRouteView() {
     const trimmedName = name.trim()
     if (!trimmedName) {
       setError('Name is required.')
+      return
+    }
+    // Invitees join the inviting organisation, so they never name one.
+    // Everyone else names their new workspace here — this is the only
+    // moment the name can be captured before product surfaces
+    // auto-provision a default-named workspace.
+    const trimmedOrgName = token ? '' : organisationName.trim()
+    if (!token && !trimmedOrgName) {
+      setError('Organisation name is required.')
       return
     }
     if (password.length < 8) {
@@ -62,6 +74,7 @@ export function SignUpRouteView() {
         await navigate({ to: '/sign-in', search: { token } })
         return
       }
+      if (trimmedOrgName) savePendingOrganisationName(trimmedOrgName)
       const result = await signUpWithEmail({
         name: trimmedName,
         email: trimmedEmail,
@@ -139,6 +152,17 @@ export function SignUpRouteView() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
+              {!token ? (
+                <Input
+                  label="Organisation name"
+                  type="text"
+                  autoComplete="organization"
+                  required
+                  maxLength={ORGANISATION_NAME_MAX_LENGTH}
+                  value={organisationName}
+                  onChange={(e) => setOrganisationName(e.target.value)}
+                />
+              ) : null}
               <Input
                 label="Password"
                 type="password"

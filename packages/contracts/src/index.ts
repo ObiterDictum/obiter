@@ -365,6 +365,9 @@ export type MeResponse = z.infer<typeof meResponseSchema>
 
 export const ORGANISATION_NAME_MAX_LENGTH = 120
 
+/** Default tenant name for auto-provisioned workspaces (see ensureOrganisationForUser). */
+export const PERSONAL_WORKSPACE_NAME = 'Personal workspace'
+
 export const createOrganisationInputSchema = z.object({
   name: z
     .string()
@@ -374,6 +377,11 @@ export const createOrganisationInputSchema = z.object({
 })
 export type CreateOrganisationInput = z.infer<
   typeof createOrganisationInputSchema
+>
+
+export const updateOrganisationInputSchema = createOrganisationInputSchema
+export type UpdateOrganisationInput = z.infer<
+  typeof updateOrganisationInputSchema
 >
 
 export const createOrganisationInviteInputSchema = z.object({
