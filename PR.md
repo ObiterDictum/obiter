@@ -51,7 +51,7 @@ Back verification claims with a provenance block:
 ```
 checkout HEAD: <sha> (dirty|clean)
 served: <path the web server resolved to>
-revision freshness: <yes|NOT CHECKED (no expected-marker given)>
+revision freshness: <yes|no|NOT CHECKED (no expected-marker given)>
 api checkout HEAD: <sha> (when development provenance is available)
 api served: <path> (when development provenance is available)
 [screenshot]
