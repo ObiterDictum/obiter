@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import type { PDFDocumentProxy, PageViewport } from 'pdfjs-dist'
 import { cn } from '@obiter/ui'
-import { coverRectsForSpan } from '@obiter/redaction-policy'
+import {
+  coverRectsForSpan,
+  snapDeviceCoverOutward,
+} from '@obiter/redaction-policy'
 import type { DocumentTextLayout } from './types'
 import type { RedactionSpan } from '@obiter/redaction-policy'
 
@@ -104,11 +107,17 @@ function coverToOverlay(
     cover.x + cover.width,
     cover.y + cover.height,
   ])
-  return {
+  const box = snapDeviceCoverOutward({
     left: Math.min(x1, x2),
+    right: Math.max(x1, x2),
     top: Math.min(y1, y2),
-    width: Math.max(Math.abs(x2 - x1), 4),
-    height: Math.max(Math.abs(y2 - y1), 4),
+    bottom: Math.max(y1, y2),
+  })
+  return {
+    left: box.left,
+    top: box.top,
+    width: Math.max(box.right - box.left, 4),
+    height: Math.max(box.bottom - box.top, 4),
   }
 }
 
