@@ -26,6 +26,11 @@ export interface GlyphCoverInput {
   /** Unit writing direction; defaults to ordinary left-to-right text. */
   baselineX?: number
   baselineY?: number
+  /**
+   * Non-identity CTM (Form XObject translation included). Rotation is inferred
+   * from the baseline; this flag covers transforms that leave it at (1, 0).
+   */
+  transformed?: boolean
 }
 
 export interface GlyphCoverRect {
@@ -54,22 +59,27 @@ type TrackedGlyph = GlyphCoverRect & {
 export function glyphCoverRect(input: GlyphCoverInput): GlyphCoverRect {
   const fontSize = Math.max(input.fontSize, 4)
   const ink = input.ink ?? ''
-  // Small slack covers anti-aliasing and faces that draw outside the em box.
-  const slack = fontSize * 0.08
+  const magnitude = Math.hypot(input.baselineX ?? 1, input.baselineY ?? 0) || 1
+  const baselineX = (input.baselineX ?? 1) / magnitude
+  const baselineY = (input.baselineY ?? 0) / magnitude
+  const transformed =
+    input.transformed === true ||
+    Math.abs(baselineX - 1) > 0.001 ||
+    Math.abs(baselineY) > 0.001
+  // Transformed ink (rotation or a nested CTM, including Form XObject
+  // translation) leaves the pixel grid; rasterisers disagree more than on
+  // upright text. Cover tests use 12pt Times (`/F1 12 Tf`) at viewport scale 2.
+  // CI shortfalls: rotated left 0.688vu = 0.344pt (0.029em); Form XObject
+  // right 1.056vu = 0.528pt (0.044em). 0.02em was below that and only padded
+  // the writing direction, which does not move a 90° cover's left edge (ascent).
+  // 0.08em is ~1.8× the larger shortfall, on all four sides.
+  const transformedSlack = transformed ? fontSize * 0.08 : 0
+  const slack = fontSize * 0.08 + transformedSlack
   const ascent = (input.ascent ?? fontSize * 0.8) + slack
   const fontDescent = input.descent ?? fontSize * 0.2
   const descent =
     Math.max(fontDescent, DEEP_DESCENDER.test(ink) ? fontSize * 0.34 : 0) +
     slack
-  const magnitude = Math.hypot(input.baselineX ?? 1, input.baselineY ?? 0) || 1
-  const baselineX = (input.baselineX ?? 1) / magnitude
-  const baselineY = (input.baselineY ?? 0) / magnitude
-  // Rasterizers disagree slightly at transformed edge pixels. Add conservative
-  // writing-direction slack so rotated covers contain anti-aliased edge ink.
-  const transformedSlack =
-    Math.abs(baselineX - 1) > 0.001 || Math.abs(baselineY) > 0.001
-      ? fontSize * 0.02
-      : 0
   const padLeft =
     fontSize * (DEEP_DESCENDER.test(ink) ? 0.22 : 0.04) + transformedSlack
   const padRight = fontSize * 0.04 + transformedSlack
@@ -160,6 +170,7 @@ export function coverRectsForSpan(input: {
           descent: segment.descent,
           baselineX,
           baselineY,
+          transformed: segment.baselineX !== undefined,
         }),
         pageIndex: segment.pageIndex,
         ink,
