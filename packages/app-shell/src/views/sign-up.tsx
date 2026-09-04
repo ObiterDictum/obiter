@@ -1,9 +1,10 @@
-import { Link, useSearch } from '@tanstack/react-router'
+import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { ArrowRight } from '@phosphor-icons/react'
 import { Button, Input } from '@obiter/ui'
 import { useState, type FormEvent } from 'react'
 import { useAuth } from '../auth'
 import { inviteAcceptCallbackURL } from '../invite-accept-callback-url'
+import { checkInviteAccountExists } from '../organisation-membership'
 import { Wordmark } from '../wordmark'
 import { useForceNightTheme, ResendVerificationControl } from './sign-in'
 
@@ -18,6 +19,7 @@ function inviteTokenFromSearch(search: { token?: unknown }): string {
  * check-your-email state rather than a session.
  */
 export function SignUpRouteView() {
+  const navigate = useNavigate()
   const { signUpWithEmail, resendVerificationEmail } = useAuth()
   const search = useSearch({ strict: false }) as { token?: string }
   const token = inviteTokenFromSearch(search)
@@ -48,9 +50,21 @@ export function SignUpRouteView() {
     }
     setSubmitting(true)
     try {
+      const trimmedEmail = email.trim()
+      // An invitee who already registered should sign in — better-auth's
+      // duplicate sign-up response is indistinguishable from a fresh one
+      // ("check your email" with no email actually sent). Undetermined →
+      // proceed with normal sign-up rather than blocking.
+      if (
+        token &&
+        (await checkInviteAccountExists(token, trimmedEmail)) === true
+      ) {
+        await navigate({ to: '/sign-in', search: { token } })
+        return
+      }
       const result = await signUpWithEmail({
         name: trimmedName,
-        email: email.trim(),
+        email: trimmedEmail,
         password,
         ...(token ? { callbackURL: inviteAcceptCallbackURL(token) } : {}),
       })

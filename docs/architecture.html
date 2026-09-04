@@ -2537,8 +2537,10 @@
         <section id="http">
           <h2>HTTP surface</h2>
           <p class="lede">
-            Every route is served by <code>services/api</code>. All business
-            routes are organisation-scoped, and there is no public API.
+            Every route is served by <code>services/api</code>. Business routes
+            are organisation-scoped. A few endpoints are deliberately
+            unauthenticated: health, changelog, published-authority search, and
+            a token-gated invite preview.
           </p>
           <div class="scroll">
             <table>
@@ -2599,6 +2601,17 @@
                   </td>
                   <td class="id">organisations.ts</td>
                   <td>Owner-only removal of a member; last owner is refused</td>
+                </tr>
+                <tr>
+                  <td class="id">GET /api/invites/preview</td>
+                  <td class="id">organisations.ts</td>
+                  <td>
+                    Unauthenticated lookup for a holder of a secret invite
+                    token. Returns only organisation and inviter display names.
+                    Distinct 404 codes for missing, expired, revoked, and
+                    already-accepted tokens. Does not return emails, member
+                    lists, token hashes, or matter data.
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">POST /api/invites/accept</td>
@@ -3157,13 +3170,16 @@
             check, while members are gated before the deleted lookup.
             <code>GET /api/search</code>, <code>POST /api/search/fetch</code>,
             <code>GET /api/search/documents/:documentId</code>,
-            <code>GET /api/changelog</code>, and <code>GET /api/health</code>
+            <code>GET /api/changelog</code>, <code>GET /api/health</code>, and
+            <code>GET /api/invites/preview</code>
             are deliberately public: search and changelog serve published
             authorities and release notes only; anonymous
             <code>POST /api/search/fetch</code> is stored-only and does not
-            hydrate the provider; health is a minimal liveness probe. They must
-            never return matter, client, redaction, or session data, and health
-            must never expose environment, version, or configuration detail.
+            hydrate the provider; health is a minimal liveness probe; invite
+            preview is gated by the secret invite token and returns only
+            organisation and inviter display names. They must never return
+            matter, client, redaction, or session data, and health must never
+            expose environment, version, or configuration detail.
           </div>
         </section>
 

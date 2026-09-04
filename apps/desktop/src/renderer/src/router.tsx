@@ -21,6 +21,7 @@ import {
   mattersListQueryOptions,
   currentUserQueryOptions,
   prefetchHomeData,
+  prefetchInviteAcceptData,
   resolveCaseDocumentIdFromSlug,
 } from '@obiter/app-shell'
 import {
@@ -322,6 +323,16 @@ function DesktopSignUpRoute() {
 const acceptInviteRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'invites/accept',
+  validateSearch: (search: Record<string, unknown>): { token: string } => ({
+    token: typeof search.token === 'string' ? search.token : '',
+  }),
+  loader: async ({ context, location }) => {
+    const token =
+      new URLSearchParams(location.searchStr.replace(/^\?/u, '')).get(
+        'token',
+      ) ?? ''
+    await prefetchInviteAcceptData(context.queryClient, token)
+  },
   component: DesktopAcceptInviteRoute,
 })
 

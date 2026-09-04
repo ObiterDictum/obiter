@@ -4,6 +4,7 @@ import { ApiError } from './api'
 import { currentUserQueryOptions } from './current-user'
 import { changelogQueryOptions } from './changelog'
 import { mattersListQueryOptions } from './matters'
+import { invitePreviewQueryOptions } from './organisation-membership'
 
 /**
  * Session-expiry handling for route loaders.
@@ -58,4 +59,12 @@ export async function prefetchHomeData(
     ]),
   )
   await queryClient.prefetchQuery(mattersListQueryOptions())
+}
+
+export async function prefetchInviteAcceptData(
+  queryClient: QueryClient,
+  token: string,
+): Promise<void> {
+  if (!token) return
+  await queryClient.ensureQueryData(invitePreviewQueryOptions(token))
 }

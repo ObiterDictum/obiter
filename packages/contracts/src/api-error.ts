@@ -7,6 +7,9 @@ export const apiErrorCodeSchema = z.enum([
   'organisation_not_found',
   'organisation_not_empty',
   'invite_not_found',
+  'invite_expired',
+  'invite_revoked',
+  'invite_already_accepted',
   // An authenticated user with no organisation tried an org-scoped endpoint.
   // Returned as 403 so the client can distinguish "sign in" from "create org".
   'no_organisation',
