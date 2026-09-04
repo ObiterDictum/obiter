@@ -314,6 +314,12 @@ class MembershipStore {
       this.organisations.delete(String(parameters[0]))
       return { rows: [] }
     }
+    if (text.includes('from users where email =')) {
+      const exists = [...this.users.values()].some(
+        (user) => user.email === String(parameters[0]),
+      )
+      return { rows: exists ? [{ id: 'usr_exists' }] : [] }
+    }
     return { rows: [] }
   }
 }
@@ -761,6 +767,74 @@ describe('organisation membership routes', () => {
 
     const missing = await appFor(store, null).request(
       '/api/invites/preview?token=not-a-real-token',
+    )
+    expect(missing.status).toBe(404)
+    expect(await missing.json()).toMatchObject({
+      error: { code: 'invite_not_found' },
+    })
+  })
+
+  it('reports whether the invite email already has an account', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const store = new MembershipStore()
+    const ownerApp = appFor(store, {
+      id: 'usr_owner',
+      email: 'owner@example.com',
+      emailVerified: true,
+      organisationId: 'org_a',
+      role: 'owner',
+    })
+    await ownerApp.request(
+      '/api/organisations/org_a/invites',
+      json({ email: 'invitee@example.com', role: 'member' }),
+    )
+    const token = tokenFromInviteLog()
+
+    const existing = await appFor(store, null).request(
+      `/api/invites/account-exists?token=${encodeURIComponent(token)}&email=invitee@example.com`,
+    )
+    expect(existing.status).toBe(200)
+    expect(await existing.json()).toEqual({ hasAccount: true })
+
+    vi.mocked(console.info).mockClear()
+    await ownerApp.request(
+      '/api/organisations/org_a/invites',
+      json({ email: 'fresh@example.com', role: 'member' }),
+    )
+    const freshToken = tokenFromInviteLog()
+    const fresh = await appFor(store, null).request(
+      `/api/invites/account-exists?token=${encodeURIComponent(freshToken)}&email=fresh@example.com`,
+    )
+    expect(fresh.status).toBe(200)
+    expect(await fresh.json()).toEqual({ hasAccount: false })
+  })
+
+  it('only answers account existence for the email the invite was sent to', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const store = new MembershipStore()
+    const ownerApp = appFor(store, {
+      id: 'usr_owner',
+      email: 'owner@example.com',
+      emailVerified: true,
+      organisationId: 'org_a',
+      role: 'owner',
+    })
+    await ownerApp.request(
+      '/api/organisations/org_a/invites',
+      json({ email: 'invitee@example.com', role: 'member' }),
+    )
+    const token = tokenFromInviteLog()
+
+    const wrongEmail = await appFor(store, null).request(
+      `/api/invites/account-exists?token=${encodeURIComponent(token)}&email=other@example.com`,
+    )
+    expect(wrongEmail.status).toBe(403)
+    expect(await wrongEmail.json()).toMatchObject({
+      error: { code: 'forbidden' },
+    })
+
+    const missing = await appFor(store, null).request(
+      '/api/invites/account-exists?token=not-a-real-token&email=invitee@example.com',
     )
     expect(missing.status).toBe(404)
     expect(await missing.json()).toMatchObject({

@@ -8,6 +8,8 @@ import {
   createOrganisationInviteInputSchema,
   organisationInviteSchema,
   organisationInvitePreviewSchema,
+  organisationInviteAccountExistsInputSchema,
+  organisationInviteAccountExistsSchema,
   organisationMemberSchema,
   type ApiErrorCode,
   type ApiErrorResponse,
@@ -461,6 +463,61 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
       organisationInvitePreviewSchema.parse({
         organisationName: preview.organisationName,
         invitedByName: preview.invitedByName,
+      }),
+    )
+  })
+
+  routes.get('/api/invites/account-exists', async (c) => {
+    const parsed = organisationInviteAccountExistsInputSchema.safeParse({
+      token: c.req.query('token'),
+      email: c.req.query('email'),
+    })
+    if (!parsed.success) {
+      return errorResponse(
+        c,
+        'validation_failed',
+        'An invite token and email are required.',
+        400,
+      )
+    }
+    const email = parsed.data.email.toLowerCase()
+    const invite = await pool.query<InviteRow>(
+      `
+        select id, organisation_id, email, role, expires_at, created_by,
+          created_at, accepted_at, revoked_at
+        from organisation_invites
+        where token_hash = $1
+      `,
+      [hashToken(parsed.data.token)],
+    )
+    const row = invite.rows[0]
+    const unavailable = inviteUnavailability(row)
+    if (unavailable || !row) {
+      return errorResponse(
+        c,
+        unavailable?.code ?? 'invite_not_found',
+        unavailable?.message ?? 'This invite was not found.',
+        404,
+      )
+    }
+    // The answer is only ever about the email the invite was sent to — the
+    // token already identifies the invitee — so this is not a general account
+    // enumeration surface.
+    if (row.email !== email) {
+      return errorResponse(
+        c,
+        'forbidden',
+        'This invite was sent to a different email address.',
+        403,
+      )
+    }
+    const account = await pool.query<{ id: string }>(
+      `select id from users where email = $1 limit 1`,
+      [email],
+    )
+    return c.json(
+      organisationInviteAccountExistsSchema.parse({
+        hasAccount: account.rows.length > 0,
       }),
     )
   })

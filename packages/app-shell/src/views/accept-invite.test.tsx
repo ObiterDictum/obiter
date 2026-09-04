@@ -131,6 +131,17 @@ describe('AcceptInviteRouteView', () => {
     ).toBe('/sign-up?token=invite-token')
   })
 
+  it('offers a sign-in link carrying the token to signed-out invitees', async () => {
+    renderAccept()
+    await waitFor(() => {
+      expect(screen.getByRole('link', { name: /sign in/i })).toBeTruthy()
+    })
+    expect(
+      screen.getByRole('link', { name: /sign in/i }).getAttribute('href'),
+    ).toBe('/sign-in?token=invite-token')
+    expect(screen.queryByText(/then return here/i)).toBeNull()
+  })
+
   it('accepts the invite and routes home when signed in', async () => {
     mocks.session = {
       user: { id: 'usr_1', email: 'ada@obiter.dev' },

@@ -7,6 +7,7 @@ import {
 import type {
   CreateOrganisationInviteInput,
   OrganisationInvite,
+  OrganisationInviteAccountExists,
   OrganisationInvitePreview,
   OrganisationMember,
 } from '@obiter/contracts'
@@ -71,6 +72,26 @@ export function organisationMembersQueryOptions(organisationId: string) {
       return response.members
     },
   })
+}
+
+/**
+ * Whether an account already exists for the email an invite was sent to. Only
+ * answerable for the invite's own email (403 otherwise). Returns null when the
+ * answer is undetermined (invite unavailable, email mismatch, network failure)
+ * so sign-up can fall back to its normal path instead of blocking.
+ */
+export async function checkInviteAccountExists(
+  token: string,
+  email: string,
+): Promise<boolean | null> {
+  try {
+    const response = await apiFetch<OrganisationInviteAccountExists>(
+      `/api/invites/account-exists?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`,
+    )
+    return response.hasAccount
+  } catch {
+    return null
+  }
 }
 
 export function organisationInvitesQueryOptions(organisationId: string) {

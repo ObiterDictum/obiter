@@ -391,6 +391,26 @@ export type AcceptOrganisationInviteInput = z.infer<
   typeof acceptOrganisationInviteInputSchema
 >
 
+/**
+ * Sign-up asks, for an invite's own email, whether an account already exists
+ * so an existing invitee can be routed to sign-in instead of a duplicate-email
+ * dead end. Only answerable for the email the invite was sent to.
+ */
+export const organisationInviteAccountExistsInputSchema = z.object({
+  token: z.string().min(1),
+  email: z.string().trim().email().max(320),
+})
+export type OrganisationInviteAccountExistsInput = z.infer<
+  typeof organisationInviteAccountExistsInputSchema
+>
+
+export const organisationInviteAccountExistsSchema = z.object({
+  hasAccount: z.boolean(),
+})
+export type OrganisationInviteAccountExists = z.infer<
+  typeof organisationInviteAccountExistsSchema
+>
+
 export const organisationInvitePreviewSchema = z.object({
   organisationName: z.string().min(1),
   invitedByName: z.string().min(1),

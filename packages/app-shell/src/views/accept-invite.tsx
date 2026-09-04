@@ -99,15 +99,27 @@ export function AcceptInviteRouteView() {
             <div className="flex flex-col gap-4">
               <p className="text-sm leading-relaxed text-muted">
                 You need an Obiter account to accept this invite. Create one
-                with the same email the invite was sent to, then return here.
+                with the same email the invite was sent to.
               </p>
-              <Link
-                to="/sign-up"
-                search={{ token }}
-                className="text-sm font-medium text-brand hover:text-brand-pressed"
-              >
-                Create an account
-              </Link>
+              <div className="flex flex-col gap-1 text-sm">
+                <Link
+                  to="/sign-up"
+                  search={{ token }}
+                  className="font-medium text-brand hover:text-brand-pressed"
+                >
+                  Create an account
+                </Link>
+                <p className="text-subtle">
+                  Already have an account?{' '}
+                  <Link
+                    to="/sign-in"
+                    search={{ token }}
+                    className="font-medium text-brand hover:text-brand-pressed"
+                  >
+                    Sign in
+                  </Link>
+                </p>
+              </div>
             </div>
           ) : (
             <div className="flex flex-col gap-4">
