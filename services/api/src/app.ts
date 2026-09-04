@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process'
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import type { Pool } from 'pg'
@@ -50,6 +51,30 @@ interface ApiAppOptions {
   storage?: StorageService
 }
 
+interface DevelopmentApiProvenance {
+  commitSha: string
+  checkoutRoot: string
+}
+
+function readDevelopmentApiProvenance(): DevelopmentApiProvenance | null {
+  try {
+    const checkoutRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+    }).trim()
+    const commitSha = execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: process.cwd(),
+      encoding: 'utf8',
+    }).trim()
+
+    return checkoutRoot && commitSha ? { checkoutRoot, commitSha } : null
+  } catch {
+    // A source checkout is expected in development, but health must remain
+    // useful when the process is started without git metadata.
+    return null
+  }
+}
+
 function createRequestId() {
   return `req_${crypto.randomUUID()}`
 }
@@ -90,6 +115,10 @@ export function createApiApp(
   })
   const auth = options.auth ?? createAuth(env, pool)
   const storage = options.storage ?? createLocalStorage()
+  // This is deliberately development-only: the public health route must not
+  // expose filesystem paths or build metadata in production.
+  const developmentProvenance =
+    env.nodeEnv === 'development' ? readDevelopmentApiProvenance() : null
   const presence = new DocumentPresenceRegistry()
   const requestLimits = apiRequestLimitsFromEnv(env)
   const app = new Hono<{ Variables: AppVariables }>()
@@ -170,12 +199,16 @@ export function createApiApp(
     return response
   })
 
-  app.get('/api/health', (c) =>
-    c.json({
-      status: 'ok',
-      service: 'obiter-api',
-    }),
-  )
+  app.get('/api/health', (c) => {
+    const health = {
+      status: 'ok' as const,
+      service: 'obiter-api' as const,
+    }
+
+    return developmentProvenance
+      ? c.json({ ...health, provenance: developmentProvenance })
+      : c.json(health)
+  })
 
   app.route('/', createMattersRoutes(pool))
   app.route('/', createCommentsRoutes(pool, storage))

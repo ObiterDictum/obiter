@@ -51,6 +51,9 @@ Back verification claims with a provenance block:
 ```
 checkout HEAD: <sha> (dirty|clean)
 served: <path the web server resolved to>
+revision freshness: <yes|NOT CHECKED (no expected-marker given)>
+api checkout HEAD: <sha> (when development provenance is available)
+api served: <path> (when development provenance is available)
 [screenshot]
 ```
 
@@ -62,9 +65,17 @@ kept serving an older checkout, and a stale build made S11 on #148 look
 broken. Name the path so a mismatch is visible instead of persuasive.
 
 The path match proves the server was started from that checkout, not that it
-is running that commit. Servers started before a checkout, pull, or commit
-change keep serving the old code; restart the dev server after any checkout
-change, then run the script again.
+is running that commit. For any browser-observed claim where an edit must be
+proven live, run the script with `--expect <marker>` and include its revision
+freshness line. An absent marker points to stale or cached transformed modules.
+Without `--expect`, state that only the checkout path was proven. Servers
+started before a checkout, pull, or commit change keep serving the old code;
+restart the dev server after any checkout change, then run the script again.
+
+Development `/api/health` responses include the API commit SHA and absolute
+checkout root, which the script reports and checks against the tested checkout.
+Production and older API servers omit those fields, so the script reports API
+provenance as not determinable and does not fail on that absence alone.
 
 State the limit plainly: a screenshot proves what the page rendered, not what
 the system recorded. Claims about persisted state — audit rows, stored

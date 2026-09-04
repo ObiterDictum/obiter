@@ -8,19 +8,75 @@
 # server loads its code from and compares it against the checkout it is run
 # from, failing closed when it cannot.
 #
-# Usage: scripts/verify-provenance.sh [web-origin] [api-origin]
+# Usage: scripts/verify-provenance.sh [web-origin] [api-origin] [--expect marker]
 #   defaults: http://localhost:3000 http://localhost:8787
 #
-# Exit 0 only when the web dev server provably serves this checkout. Exit 1
-# when it serves a different checkout, or when its provenance cannot be
-# determined. The API reports provenance when determinable and says so
-# honestly when not (it currently exposes no checkout marker over HTTP, so
-# the report is "not determinable"); API provenance never influences the
-# exit code because unprovable is the normal, honest state for it.
+# Exit 0 only when the web dev server provably serves this checkout and, when
+# requested, the served module contains the expected marker. Exit 1 when it
+# serves a different checkout, its provenance cannot be determined, or the
+# marker is absent. API checkout mismatches also fail; absent API provenance
+# does not, because production and older servers do not expose it.
 set -euo pipefail
 
-web_origin=${1:-http://localhost:3000}
-api_origin=${2:-http://localhost:8787}
+usage() {
+  cat <<'EOF'
+Usage: scripts/verify-provenance.sh [web-origin] [api-origin] [--expect marker]
+
+Defaults:
+  web-origin  http://localhost:3000
+  api-origin  http://localhost:8787
+
+--expect marker  require the literal marker in the served web module to check
+                 revision freshness as well as checkout path
+EOF
+}
+
+web_origin='http://localhost:3000'
+api_origin='http://localhost:8787'
+expected_marker=''
+expected_marker_given='no'
+positionals=()
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --expect)
+      if [ "$#" -lt 2 ]; then
+        echo 'error: --expect requires a marker' >&2
+        usage >&2
+        exit 2
+      fi
+      expected_marker=$2
+      expected_marker_given='yes'
+      shift 2
+      ;;
+    --expect=*)
+      expected_marker=${1#--expect=}
+      expected_marker_given='yes'
+      shift
+      ;;
+    -*)
+      echo "error: unknown option: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+    *)
+      positionals+=("$1")
+      shift
+      ;;
+  esac
+done
+
+if [ "${#positionals[@]}" -gt 2 ]; then
+  echo 'error: expected at most web-origin and api-origin' >&2
+  usage >&2
+  exit 2
+fi
+[ "${#positionals[@]}" -ge 1 ] && web_origin=${positionals[0]}
+[ "${#positionals[@]}" -ge 2 ] && api_origin=${positionals[1]}
 
 cd "$(dirname "$0")/.."
 
@@ -33,8 +89,8 @@ dirty='clean'
 # ---- web: where does the dev server load modules from? ---------------------
 # Vite embeds the absolute filesystem path of out-of-root imports in every
 # served module, as /@fs/<path> URLs and bare /<path> strings. The longest
-# common path of those is the checkout the server was started in — no
-# guessing, that is where Vite reads files from.
+# common path of those is the checkout the server was started in, which is
+# where Vite reads files from.
 web_module=''
 web_body=''
 for candidate in /src/routes/index.tsx /src/routes/__root.tsx; do
@@ -46,6 +102,18 @@ done
 
 web_root=''
 web_matches='no'
+web_note=''
+web_marker='not checked'
+web_marker_note=''
+if [ "$expected_marker_given" = 'yes' ]; then
+  web_marker='no'
+  web_marker_note='expected marker not found in served module; stale/cached web modules are the likely cause'
+  if [ -n "$web_body" ] && grep -Fq -- "$expected_marker" <<<"$web_body"; then
+    web_marker='yes'
+    web_marker_note=''
+  fi
+fi
+
 if [ -z "$web_module" ]; then
   web_note="no Vite module served at $web_origin/src/routes/{index,__root}.tsx — is the web dev server running?"
 else
@@ -104,13 +172,31 @@ EOF
   fi
 fi
 
-# ---- api: probe and report, never guess ------------------------------------
+# ---- api: probe and report --------------------------------------------------
 api_reachable='no'
 api_note=''
+api_sha=''
+api_root=''
+api_root_matches='not determinable'
 if api_body=$(curl -fsS -m 5 "$api_origin/api/health" 2>/dev/null); then
   api_reachable='yes'
   if printf '%s\n' "$api_body" | grep -q '"service"[[:space:]]*:[[:space:]]*"obiter-api"'; then
-    api_note='reachable, but exposes no checkout marker in HTTP responses — API provenance not determinable'
+    api_sha_pattern='"commitSha"[[:space:]]*:[[:space:]]*"([^\"]+)"'
+    api_root_pattern='"checkoutRoot"[[:space:]]*:[[:space:]]*"([^\"]+)"'
+    if [[ $api_body =~ $api_sha_pattern ]]; then
+      api_sha=${BASH_REMATCH[1]}
+    fi
+    if [[ $api_body =~ $api_root_pattern ]]; then
+      api_root=${BASH_REMATCH[1]}
+    fi
+
+    if [ -n "$api_sha" ] && [ -n "$api_root" ]; then
+      api_root_matches='yes'
+      [ "$api_root" = "$current_root" ] || api_root_matches='no'
+      api_note='reachable, development provenance exposed by /api/health'
+    else
+      api_note='reachable, but development provenance fields are absent (production or old server); API provenance not determinable'
+    fi
   else
     api_note="reachable, but response does not look like this stack's /api/health"
   fi
@@ -120,7 +206,9 @@ fi
 
 # ---- report -----------------------------------------------------------------
 web_pass='FAIL'
-[ "$web_matches" = 'yes' ] && web_pass='PASS'
+if [ "$web_matches" = 'yes' ] && { [ "$web_marker" = 'yes' ] || [ "$web_marker" = 'not checked' ]; }; then
+  web_pass='PASS'
+fi
 
 echo '== provenance check ============================='
 echo "run from checkout : $current_root"
@@ -129,6 +217,7 @@ echo "  NOTE            : path match proves this checkout, not that a long-runni
 echo "                  : server reloaded its latest commit — restart the dev"
 echo "                  : server after checkout/pull/commit changes."
 echo
+
 echo "web  $web_origin"
 if [ -n "$web_module" ]; then
   echo "  module probed   : $web_module"
@@ -137,12 +226,30 @@ if [ -n "$web_root" ]; then
   echo "  served from     : $web_root"
 fi
 echo "  matches checkout : $web_matches  [$web_pass]"
+if [ "$expected_marker_given" = 'yes' ]; then
+  marker_pass='FAIL'
+  [ "$web_marker" = 'yes' ] && marker_pass='PASS'
+  echo "  expected marker  : checked  [$marker_pass]"
+else
+  echo '  revision freshness: NOT CHECKED (no expected-marker given)'
+fi
+if [ -n "$web_marker_note" ]; then
+  echo "  marker note      : $web_marker_note"
+fi
 if [ -n "$web_note" ]; then
   echo "  note            : $web_note"
 fi
+
 echo
 echo "api  $api_origin"
 echo "  reachable       : $api_reachable"
+if [ -n "$api_sha" ]; then
+  echo "  commit sha      : $api_sha"
+fi
+if [ -n "$api_root" ]; then
+  echo "  checkout root   : $api_root"
+  echo "  root matches    : $api_root_matches"
+fi
 echo "  provenance      : $api_note"
 echo
 echo 'PR evidence block (paste into the PR body) ======'
@@ -150,7 +257,18 @@ echo "checkout HEAD: $current_sha ($dirty)"
 if [ -n "$web_root" ]; then
   echo "served: $web_root"
 fi
+if [ "$expected_marker_given" = 'yes' ]; then
+  echo "revision freshness: $web_marker"
+else
+  echo 'revision freshness: NOT CHECKED (no expected-marker given)'
+fi
+if [ -n "$api_sha" ] && [ -n "$api_root" ]; then
+  echo "api checkout HEAD: $api_sha"
+  echo "api served: $api_root"
+else
+  echo "api provenance: not determinable ($api_note)"
+fi
 echo "[screenshot]  (web provenance: $web_pass)"
 echo '=================================================='
 
-[ "$web_matches" = 'yes' ]
+[ "$web_pass" = 'PASS' ] && [ "$api_root_matches" != 'no' ]

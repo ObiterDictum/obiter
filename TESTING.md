@@ -27,8 +27,21 @@ the filesystem path the web dev server loads modules from (the absolute
 paths Vite embeds in served modules), compares it against the checkout the
 script is run from, probes the API, and prints a paste-ready evidence block.
 Exit is non-zero when the web server serves a different checkout or its
-provenance cannot be determined; the API reports what is determinable and
-says so when it is not.
+provenance cannot be determined; API checkout mismatches also fail. The API
+reports what is determinable and says why when it is not.
+
+When a browser-observed claim depends on an edit being live, pass a literal
+marker from that edit with `--expect <marker>`, for example:
+
+```bash
+scripts/verify-provenance.sh http://localhost:3000 http://localhost:8787 --expect "unique text from the edit"
+```
+
+The marker must occur in the served web module. An absent marker fails and
+names stale or cached modules as the likely cause of Vite serving pre-edit
+transformed code while the path still matches. Without `--expect`, the script
+prints `revision freshness: NOT CHECKED (no expected-marker given)` and proves
+only the checkout path, not the revision being served.
 
 A path match proves the server was started from the named checkout, not that
 it is running the latest commit. A dev server started before a checkout,
@@ -50,7 +63,11 @@ answer requests and pass health checks while serving the previous change.
 
 If a marker check turns up stale: clear `node_modules/.vite` and restart the
 web server; a change in a workspace package the API imports needs the API
-restarted too, not just the web server.
+restarted too, not just the web server. In development, `/api/health` also
+reports the API commit SHA and absolute checkout root. The script compares the
+reported root with the checkout under test. Production and older API servers
+omit those fields, so API provenance remains not determinable and does not
+fail the check by itself.
 
 ## Preferred Test Strategy
 

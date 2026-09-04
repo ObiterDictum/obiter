@@ -91,6 +91,40 @@ describe('createApiApp', () => {
     })
   })
 
+  it('exposes checkout provenance only in development', async () => {
+    const auth = {
+      api: {
+        getSession: async () => null,
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const pool = createPool(async () => ({ rows: [] }))
+
+    const developmentHealth = await createApiApp(
+      { ...testEnv, nodeEnv: 'development' },
+      pool,
+      { auth },
+    ).request('/api/health')
+    expect(await developmentHealth.json()).toMatchObject({
+      status: 'ok',
+      service: 'obiter-api',
+      provenance: {
+        commitSha: expect.stringMatching(/^[0-9a-f]{40}$/),
+        checkoutRoot: expect.stringContaining('/'),
+      },
+    })
+
+    const productionHealth = await createApiApp(
+      { ...testEnv, nodeEnv: 'production' },
+      pool,
+      { auth },
+    ).request('/api/health')
+    expect(await productionHealth.json()).toEqual({
+      status: 'ok',
+      service: 'obiter-api',
+    })
+  })
+
   it('returns changelog entries from GitHub releases', async () => {
     const auth = {
       api: {
