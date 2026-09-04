@@ -25,10 +25,13 @@ Before claiming anything about behaviour in a running app, prove each server
 is serving the checkout under test. `scripts/verify-provenance.sh` resolves
 the filesystem path the web dev server loads modules from (the absolute
 paths Vite embeds in served modules), compares it against the checkout the
-script is run from, probes the API, and prints a paste-ready evidence block.
-Exit is non-zero when the web server serves a different checkout or its
-provenance cannot be determined; API checkout mismatches also fail. The API
-reports what is determinable and says why when it is not.
+script is run from, probes the requested API, and prints a paste-ready evidence
+block. Exit is non-zero when the web server serves a different checkout or its
+provenance cannot be determined. API unreachable, HTTP-error, non-stack, root
+mismatch, and reported commit-SHA mismatch responses also fail. A reachable
+stack health response with absent development provenance fields is the only
+non-failing API absence case; the API reports what is determinable and says why
+when it is not.
 
 When a browser-observed claim depends on an edit being live, pass a literal
 marker from that edit with `--expect <marker>`, for example:
@@ -64,10 +67,10 @@ answer requests and pass health checks while serving the previous change.
 If a marker check turns up stale: clear `node_modules/.vite` and restart the
 web server; a change in a workspace package the API imports needs the API
 restarted too, not just the web server. In development, `/api/health` also
-reports the API commit SHA and absolute checkout root. The script compares the
-reported root with the checkout under test. Production and older API servers
-omit those fields, so API provenance remains not determinable and does not
-fail the check by itself.
+reports the API commit SHA and absolute checkout root. The script compares
+each reported field with the checkout under test, so a same-root stale API
+commit also fails. Production and older API servers omit those fields, so API
+provenance remains not determinable and does not fail the check by itself.
 
 ## Preferred Test Strategy
 

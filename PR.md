@@ -72,10 +72,13 @@ Without `--expect`, state that only the checkout path was proven. Servers
 started before a checkout, pull, or commit change keep serving the old code;
 restart the dev server after any checkout change, then run the script again.
 
-Development `/api/health` responses include the API commit SHA and absolute
-checkout root, which the script reports and checks against the tested checkout.
-Production and older API servers omit those fields, so the script reports API
-provenance as not determinable and does not fail on that absence alone.
+The requested `/api/health` check must be reachable, return a 2xx response,
+and identify this stack; unreachable APIs, HTTP errors, and non-stack responses
+fail. Development responses include the API commit SHA and absolute checkout
+root, which the script reports and compares with the tested checkout. A
+same-root stale SHA therefore fails too. Production and older API servers omit
+those fields; a reachable stack response with absent provenance remains an
+honest, non-failing `API provenance not determinable` result.
 
 State the limit plainly: a screenshot proves what the page rendered, not what
 the system recorded. Claims about persisted state — audit rows, stored

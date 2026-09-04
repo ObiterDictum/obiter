@@ -12,10 +12,10 @@
 #   defaults: http://localhost:3000 http://localhost:8787
 #
 # Exit 0 only when the web dev server provably serves this checkout and, when
-# requested, the served module contains the expected marker. Exit 1 when it
-# serves a different checkout, its provenance cannot be determined, or the
-# marker is absent. API checkout mismatches also fail; absent API provenance
-# does not, because production and older servers do not expose it.
+# requested, the served module contains the expected marker, and the requested
+# API health check succeeds. Exit 1 when the web or API provenance check fails.
+# A reachable stack health response without development provenance is the one
+# non-failing API exception; production and older servers do not expose it.
 set -euo pipefail
 
 usage() {
@@ -28,6 +28,13 @@ Defaults:
 
 --expect marker  require the literal marker in the served web module to check
                  revision freshness as well as checkout path
+
+API check:       the default API origin is always probed. Unreachable APIs,
+                 HTTP errors, and non-stack health responses fail. A reachable
+                 stack health response without development provenance is the
+                 only non-failing absence case. When /api/health reports
+                 commitSha or checkoutRoot, each reported value is compared
+                 with this checkout and a mismatch fails.
 EOF
 }
 
@@ -108,7 +115,7 @@ web_marker_note=''
 if [ "$expected_marker_given" = 'yes' ]; then
   web_marker='no'
   web_marker_note='expected marker not found in served module; stale/cached web modules are the likely cause'
-  if [ -n "$web_body" ] && grep -Fq -- "$expected_marker" <<<"$web_body"; then
+  if [ -n "$web_body" ] && [[ $web_body == *"$expected_marker"* ]]; then
     web_marker='yes'
     web_marker_note=''
   fi
@@ -174,25 +181,39 @@ fi
 
 # ---- api: probe and report --------------------------------------------------
 api_reachable='no'
+api_health_pass='FAIL'
 api_note=''
 api_sha=''
 api_root=''
+api_sha_matches='not determinable'
 api_root_matches='not determinable'
-if api_body=$(curl -fsS -m 5 "$api_origin/api/health" 2>/dev/null); then
+api_response=''
+api_http_status=''
+if api_response=$(curl -sS -m 5 -w $'\n%{http_code}' "$api_origin/api/health" 2>/dev/null); then
   api_reachable='yes'
-  if printf '%s\n' "$api_body" | grep -q '"service"[[:space:]]*:[[:space:]]*"obiter-api"'; then
+  api_http_status=${api_response##*$'\n'}
+  api_body=${api_response%$'\n'*}
+  if [[ "$api_http_status" != 2?? ]]; then
+    api_note="HTTP error from $api_origin/api/health (status $api_http_status)"
+  elif printf '%s\n' "$api_body" | grep -q '"service"[[:space:]]*:[[:space:]]*"obiter-api"'; then
+    api_health_pass='PASS'
     api_sha_pattern='"commitSha"[[:space:]]*:[[:space:]]*"([^\"]+)"'
     api_root_pattern='"checkoutRoot"[[:space:]]*:[[:space:]]*"([^\"]+)"'
     if [[ $api_body =~ $api_sha_pattern ]]; then
       api_sha=${BASH_REMATCH[1]}
+      api_sha_matches='yes'
+      [ "$api_sha" = "$current_sha" ] || api_sha_matches='no'
     fi
     if [[ $api_body =~ $api_root_pattern ]]; then
       api_root=${BASH_REMATCH[1]}
-    fi
-
-    if [ -n "$api_sha" ] && [ -n "$api_root" ]; then
       api_root_matches='yes'
       [ "$api_root" = "$current_root" ] || api_root_matches='no'
+    fi
+
+    if [ "$api_sha_matches" = 'no' ] || [ "$api_root_matches" = 'no' ]; then
+      api_health_pass='FAIL'
+      api_note='provenance mismatch in /api/health'
+    elif [ "$api_sha_matches" = 'yes' ] || [ "$api_root_matches" = 'yes' ]; then
       api_note='reachable, development provenance exposed by /api/health'
     else
       api_note='reachable, but development provenance fields are absent (production or old server); API provenance not determinable'
@@ -245,14 +266,18 @@ fi
 echo
 echo "api  $api_origin"
 echo "  reachable       : $api_reachable"
+if [ -n "$api_http_status" ]; then
+  echo "  HTTP status     : $api_http_status"
+fi
 if [ -n "$api_sha" ]; then
   echo "  commit sha      : $api_sha"
+  echo "  sha matches     : $api_sha_matches"
 fi
 if [ -n "$api_root" ]; then
   echo "  checkout root   : $api_root"
   echo "  root matches    : $api_root_matches"
 fi
-echo "  provenance      : $api_note"
+echo "  provenance      : $api_note [$api_health_pass]"
 echo
 echo 'PR evidence block (paste into the PR body) ======'
 echo "checkout HEAD: $current_sha ($dirty)"
@@ -264,13 +289,16 @@ if [ "$expected_marker_given" = 'yes' ]; then
 else
   echo 'revision freshness: NOT CHECKED (no expected-marker given)'
 fi
-if [ -n "$api_sha" ] && [ -n "$api_root" ]; then
+if [ -n "$api_sha" ]; then
   echo "api checkout HEAD: $api_sha"
+fi
+if [ -n "$api_root" ]; then
   echo "api served: $api_root"
-else
+fi
+if [ -z "$api_sha" ] && [ -z "$api_root" ]; then
   echo "api provenance: not determinable ($api_note)"
 fi
 echo "[screenshot]  (web provenance: $web_pass)"
 echo '=================================================='
 
-[ "$web_pass" = 'PASS' ] && [ "$api_root_matches" != 'no' ]
+[ "$web_pass" = 'PASS' ] && [ "$api_health_pass" = 'PASS' ]
