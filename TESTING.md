@@ -21,13 +21,29 @@ For most changes, do all applicable items:
 
 ## Confirm the running code
 
-Before claiming anything about behaviour in a running app, confirm the server
-is serving the change: fetch the changed file through the dev server (on this
-stack, the Vite `@fs` path) and check a marker from the change is present. A
-page reload is not proof — the server keeps serving cached transformed modules
-after the working tree moves underneath it. If the marker is stale, clear
-`node_modules/.vite` and restart; a change in a workspace package the API
-imports needs the API restarted too, not just the web server.
+Before claiming anything about behaviour in a running app, prove each server
+is serving the checkout under test. `scripts/verify-provenance.sh` resolves
+the filesystem path the web dev server loads modules from (the absolute
+paths Vite embeds in served modules), compares it against the checkout the
+script is run from, probes the API, and prints a paste-ready evidence block.
+Exit is non-zero when the web server serves a different checkout or its
+provenance cannot be determined; the API reports what is determinable and
+says so when it is not.
+
+Prove every server separately. The API and web server can be running from
+different checkouts at the same time, and the symptom looks like a product
+bug, not a stale server. A page reload is not proof — the server keeps
+serving cached transformed modules after the working tree moves underneath
+it.
+
+Where agents run in per-task worktrees, start the servers from the current
+task's worktree at the start of the task. The previous task's worktree is
+stale but plausible: it holds its own copy of the code, so its servers
+answer requests and pass health checks while serving the previous change.
+
+If a marker check turns up stale: clear `node_modules/.vite` and restart the
+web server; a change in a workspace package the API imports needs the API
+restarted too, not just the web server.
 
 ## Preferred Test Strategy
 
