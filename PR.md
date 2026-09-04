@@ -49,17 +49,22 @@ Use this structure unless the change is trivial:
 Back verification claims with a provenance block:
 
 ```
-Verified on <sha>
+checkout HEAD: <sha> (dirty|clean)
 served: <path the web server resolved to>
 [screenshot]
 ```
 
-The `Verified on` line comes from `scripts/verify-provenance.sh` run against
-the servers you tested against — the served path is the evidence that the
-page came from the checkout named. This exists because two verification
-rounds measured code that did not contain the fix: dev servers kept serving
-an older checkout, and a stale build made S11 on #148 look broken. Name the
-path so a mismatch is visible instead of persuasive.
+The `checkout HEAD` line comes from `scripts/verify-provenance.sh` run
+against the servers you tested against — the served path is the evidence
+that the page came from the checkout named. This exists because two
+verification rounds measured code that did not contain the fix: dev servers
+kept serving an older checkout, and a stale build made S11 on #148 look
+broken. Name the path so a mismatch is visible instead of persuasive.
+
+The path match proves the server was started from that checkout, not that it
+is running that commit. Servers started before a checkout, pull, or commit
+change keep serving the old code; restart the dev server after any checkout
+change, then run the script again.
 
 State the limit plainly: a screenshot proves what the page rendered, not what
 the system recorded. Claims about persisted state — audit rows, stored

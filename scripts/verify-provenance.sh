@@ -27,6 +27,8 @@ cd "$(dirname "$0")/.."
 current_root=$(git rev-parse --show-toplevel)
 current_sha=$(git rev-parse HEAD)
 current_branch=$(git rev-parse --abbrev-ref HEAD)
+dirty='clean'
+[ -n "$(git status --porcelain)" ] && dirty='dirty'
 
 # ---- web: where does the dev server load modules from? ---------------------
 # Vite embeds the absolute filesystem path of out-of-root imports in every
@@ -107,14 +109,11 @@ api_reachable='no'
 api_note=''
 if api_body=$(curl -fsS -m 5 "$api_origin/api/health" 2>/dev/null); then
   api_reachable='yes'
-  case "$api_body" in
-    *'"service":"obiter-api"'*)
-      api_note='reachable, but exposes no checkout marker in HTTP responses — API provenance not determinable'
-      ;;
-    *)
-      api_note="reachable, but response does not look like this stack's /api/health"
-      ;;
-  esac
+  if printf '%s\n' "$api_body" | grep -q '"service"[[:space:]]*:[[:space:]]*"obiter-api"'; then
+    api_note='reachable, but exposes no checkout marker in HTTP responses — API provenance not determinable'
+  else
+    api_note="reachable, but response does not look like this stack's /api/health"
+  fi
 else
   api_note="unreachable at $api_origin/api/health — is the API running?"
 fi
@@ -125,7 +124,10 @@ web_pass='FAIL'
 
 echo '== provenance check ============================='
 echo "run from checkout : $current_root"
-echo "commit            : $current_sha ($current_branch)"
+echo "checkout HEAD     : $current_sha ($current_branch, $dirty)"
+echo "  NOTE            : path match proves this checkout, not that a long-running"
+echo "                  : server reloaded its latest commit — restart the dev"
+echo "                  : server after checkout/pull/commit changes."
 echo
 echo "web  $web_origin"
 if [ -n "$web_module" ]; then
@@ -144,7 +146,7 @@ echo "  reachable       : $api_reachable"
 echo "  provenance      : $api_note"
 echo
 echo 'PR evidence block (paste into the PR body) ======'
-echo "Verified on $current_sha"
+echo "checkout HEAD: $current_sha ($dirty)"
 if [ -n "$web_root" ]; then
   echo "served: $web_root"
 fi

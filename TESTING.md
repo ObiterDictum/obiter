@@ -30,6 +30,13 @@ Exit is non-zero when the web server serves a different checkout or its
 provenance cannot be determined; the API reports what is determinable and
 says so when it is not.
 
+A path match proves the server was started from the named checkout, not that
+it is running the latest commit. A dev server started before a checkout,
+pull, or commit change keeps serving the old code while the path still
+matches, so the script labels the checkout HEAD and its dirty state and the
+check never replaces a restart: restart the dev server after any checkout
+change, then verify.
+
 Prove every server separately. The API and web server can be running from
 different checkouts at the same time, and the symptom looks like a product
 bug, not a stale server. A page reload is not proof — the server keeps
