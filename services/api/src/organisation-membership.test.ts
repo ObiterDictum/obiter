@@ -52,7 +52,7 @@ describe('inviteUnavailability', () => {
 })
 
 describe('moveUserAndDeleteEmptyOrganisation', () => {
-  it('reassigns audit rows to the destination organisation instead of nulling them', async () => {
+  it('nulls vacated-org audit rows instead of reassigning them', async () => {
     const statements: { sql: string; params: unknown[] }[] = []
     const client = {
       query: async (sql: string, params: unknown[] = []) => {
@@ -72,7 +72,7 @@ describe('moveUserAndDeleteEmptyOrganisation', () => {
       statement.sql.includes('audit_logs'),
     )
     expect(audit).toBeDefined()
-    expect(audit?.sql).not.toMatch(/organisation_id\s*=\s*null/i)
-    expect(audit?.params).toEqual(['org_to', 'org_from'])
+    expect(audit?.sql).toMatch(/organisation_id\s*=\s*null/i)
+    expect(audit?.params).toEqual(['org_from'])
   })
 })

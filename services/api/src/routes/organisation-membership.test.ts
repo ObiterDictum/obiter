@@ -677,7 +677,7 @@ describe('organisation membership routes', () => {
       role: 'admin',
     })
     expect(store.invites.some((invite) => invite.accepted_at)).toBe(true)
-    expect(store.auditLogs).toEqual([{ organisation_id: 'org_a' }])
+    expect(store.auditLogs).toEqual([{ organisation_id: null }])
   })
 
   it('scopes invite routes to the caller organisation', async () => {

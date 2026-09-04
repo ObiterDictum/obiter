@@ -128,12 +128,14 @@ export async function moveUserAndDeleteEmptyOrganisation(
   if (!input.fromOrganisationId) return
   // The vacated org is empty (matters, other members, artefacts, and open
   // invites are refused before this runs). Remaining audit rows are the
-  // invitee's own auth and organisation.create events. Reassign them to the
-  // destination so they keep a tenant; nulling them drops attribution in a
-  // multi-organisation deployment. Do not run this against a non-empty org.
+  // invitee's own auth and organisation.create events. Null them deliberately:
+  // reassignment would be a false record (e.g. auth.sign_in/auth.sign_out
+  // sessions from before the invitee joined did not happen inside the firm).
+  // The real fix is a denormalised tenant snapshot that deletion does not
+  // touch. Do not run this against a non-empty org.
   await client.query(
-    `update audit_logs set organisation_id = $1 where organisation_id = $2`,
-    [input.toOrganisationId, input.fromOrganisationId],
+    `update audit_logs set organisation_id = null where organisation_id = $1`,
+    [input.fromOrganisationId],
   )
   await client.query(
     `delete from organisation_invites where organisation_id = $1`,
