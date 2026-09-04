@@ -1,7 +1,11 @@
 import { createCanvas } from '@napi-rs/canvas'
 import { documentTextLayoutSchema } from '@obiter/contracts'
 import { PDFDocument, StandardFonts } from 'pdf-lib'
-import { coverRectsForSpan, supplementSpans } from '@obiter/redaction-policy'
+import {
+  coverRectsForSpan,
+  snapDeviceCoverOutward,
+  supplementSpans,
+} from '@obiter/redaction-policy'
 import { createIsomorphicCanvasFactory, getDocumentProxy } from 'unpdf'
 import { describe, expect, it, vi } from 'vitest'
 import { extractDocumentContent, prepareLaidChars } from './document-extraction'
@@ -159,12 +163,12 @@ function coverBoundsInViewport(
       bottom: Math.max(y1, y2),
     }
   })
-  return {
+  return snapDeviceCoverOutward({
     left: Math.min(...rectangles.map((rect) => rect.left)),
     right: Math.max(...rectangles.map((rect) => rect.right)),
     top: Math.min(...rectangles.map((rect) => rect.top)),
     bottom: Math.max(...rectangles.map((rect) => rect.bottom)),
-  }
+  })
 }
 
 describe('exact glyph geometry', () => {

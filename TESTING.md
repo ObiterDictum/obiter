@@ -113,4 +113,10 @@ is worse than no e2e.
   `pdf.js` substitutes a system font when rendering base-14 fonts and the
   redaction cover geometry is measured against rendered ink. This is worth
   stating explicitly: the failure looks like a code regression and is not.
-  Install with `sudo apt-get install fontconfig fonts-liberation`.
+  Install with `sudo apt-get install fontconfig fonts-liberation`, then
+  `sudo fc-cache -f`. CI pins `FONTCONFIG_FILE` to
+  `.github/fontconfig-liberation.conf` so pdf.js `local()` aliases cannot
+  pick DejaVu/Nimbus/Ubuntu instead of Liberation, rebuilds that cache, and
+  fails closed if `fc-list` still shows no Liberation faces.
+  `scripts/ci-local.sh` exports the same `FONTCONFIG_FILE` and cache dir before
+  rebuilding, then fails closed the same way.

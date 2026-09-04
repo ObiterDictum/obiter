@@ -12,6 +12,8 @@ jobs:
   checks:
     name: Typecheck, format, lint, test
     runs-on: ubuntu-latest
+    env:
+      FONTCONFIG_FILE: ${{ github.workspace }}/.github/fontconfig-liberation.conf
     services:
       meilisearch:
         image: getmeili/meilisearch:v1.53.1
@@ -35,6 +37,19 @@ jobs:
           --health-retries 10
     steps:
       - uses: actions/checkout@v4
+
+      # Runner forensics for the pdf-glyph-layout flake (two stable outcomes,
+      # alternating per run): GitHub mixes CPU generations in the pool and a
+      # rendering path that differs by instruction set would produce exactly
+      # that. Early and unconditional so failing runs always carry it.
+      - name: Runner diagnostics
+        run: |
+          echo "runner.name=${{ runner.name }}"
+          echo "runner.arch=${{ runner.arch }}"
+          echo "runner.os=${{ runner.os }}"
+          echo "RUNNER_NAME=$RUNNER_NAME"
+          uname -a
+          lscpu || cat /proc/cpuinfo
 
       - uses: pnpm/action-setup@v4
 
@@ -68,6 +83,33 @@ jobs:
           # against rendered ink. Without them the runner substitutes a different
           # face and the contain checks fail by fractions of a point.
           sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client fontconfig fonts-liberation
+          mkdir -p /tmp/obiter-fontconfig-cache
+          fc-cache -f
+          LIBERATION=$(fc-list 2>/dev/null | grep -ci liberation || true)
+          if ! command -v fc-list >/dev/null 2>&1 || [ "${LIBERATION:-0}" -eq 0 ]; then
+            echo "Liberation fonts did not resolve after install (fontconfig / fonts-liberation)." >&2
+            echo "pdf.js will substitute a different face and pdf-glyph-layout.test.ts will fail by covering less ink than it should." >&2
+            echo "fc-list | grep -i liberation is empty. Install the packages, then run: fc-cache -f with FONTCONFIG_FILE=.github/fontconfig-liberation.conf" >&2
+            echo "fc-match Times: $(fc-match Times 2>/dev/null || true)" >&2
+            echo "fc-match 'Times New Roman': $(fc-match 'Times New Roman' 2>/dev/null || true)" >&2
+            echo "fc-match Helvetica: $(fc-match Helvetica 2>/dev/null || true)" >&2
+            echo "fc-match Courier: $(fc-match Courier 2>/dev/null || true)" >&2
+            exit 1
+          fi
+          echo "fc-match Times: $(fc-match Times)"
+          echo "fc-match Times New Roman: $(fc-match 'Times New Roman')"
+          echo "fc-match Times-Roman: $(fc-match Times-Roman)"
+          echo "fc-match Liberation Serif: $(fc-match 'Liberation Serif')"
+          echo "fc-match Helvetica: $(fc-match Helvetica)"
+          echo "fc-match Courier: $(fc-match Courier)"
+          TIMES_MATCH=$(fc-match Times)
+          TNR_MATCH=$(fc-match 'Times New Roman')
+          if ! printf '%s' "$TIMES_MATCH" | grep -qi 'Liberation Serif' || ! printf '%s' "$TNR_MATCH" | grep -qi 'Liberation Serif'; then
+            echo "Times / Times New Roman must resolve to Liberation Serif (pdf.js local() order)." >&2
+            echo "Times: $TIMES_MATCH" >&2
+            echo "Times New Roman: $TNR_MATCH" >&2
+            exit 1
+          fi
           for f in packages/database/migrations/*.sql; do
             psql -h localhost -U obiter -d obiter_test -v ON_ERROR_STOP=1 -f "$f"
           done

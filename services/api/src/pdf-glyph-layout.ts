@@ -94,6 +94,17 @@ function translation(tx: number, ty: number): Matrix {
   return [1, 0, 0, 1, tx, ty]
 }
 
+function ctmIsIdentity(matrix: Matrix) {
+  return (
+    Math.abs(matrix[0] - 1) < 0.001 &&
+    Math.abs(matrix[1]) < 0.001 &&
+    Math.abs(matrix[2]) < 0.001 &&
+    Math.abs(matrix[3] - 1) < 0.001 &&
+    Math.abs(matrix[4]) < 0.001 &&
+    Math.abs(matrix[5]) < 0.001
+  )
+}
+
 function asMatrix(value: unknown): Matrix | null {
   // pdf.js passes matrices as arrays or as array-like objects.
   const source = value as ArrayLike<number> | undefined
@@ -218,6 +229,7 @@ export function laidCharsFromOperatorList(input: {
             baselineX,
             baselineY,
             ...(skewed ? { skewed: true } : {}),
+            ...(ctmIsIdentity(ctm) ? {} : { transformed: true }),
           })
           offset += perCharWidth
         }

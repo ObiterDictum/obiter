@@ -31,6 +31,8 @@ export interface LaidChar {
   baselineY: number
   /** True when writing and font-height axes are not perpendicular. */
   skewed?: boolean
+  /** Non-identity CTM; translation-only Form XObjects still need extra cover bleed. */
+  transformed?: boolean
 }
 
 /** Same baseline slack as coverRectsForSpan union-merge. */
@@ -130,6 +132,7 @@ function charSegments(chars: LaidChar[]): DocumentTextLayoutSegment[] {
     const rotated =
       Math.abs(current.baselineX - 1) > 0.001 ||
       Math.abs(current.baselineY) > 0.001
+    const transformed = rotated || current.transformed === true
     const width = roundGeometry(Math.max(current.width, 0.5))
     run = {
       start: index,
@@ -143,7 +146,7 @@ function charSegments(chars: LaidChar[]): DocumentTextLayoutSegment[] {
       descent: current.descent,
       advances: [width],
       glyphWidthOverrides: {},
-      ...(rotated
+      ...(transformed
         ? {
             baselineX: roundGeometry(current.baselineX),
             baselineY: roundGeometry(current.baselineY),

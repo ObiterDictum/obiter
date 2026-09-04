@@ -6,6 +6,7 @@ import {
   affectsOutput,
   coverRectsForSpan,
   glyphCoverRect,
+  snapDeviceCoverOutward,
   type TokenMap,
 } from '@obiter/redaction-policy'
 import type { Decisions, RedactionSpan } from '@obiter/redaction-policy'
@@ -114,10 +115,16 @@ function paintRedaction(
     rect.x + rect.width,
     rect.y + rect.height,
   ])
-  const left = Math.min(x1, x2)
-  const top = Math.min(y1, y2)
-  const width = Math.max(Math.abs(x2 - x1), 1)
-  const height = Math.max(Math.abs(y2 - y1), 1)
+  const snapped = snapDeviceCoverOutward({
+    left: Math.min(x1, x2),
+    right: Math.max(x1, x2),
+    top: Math.min(y1, y2),
+    bottom: Math.max(y1, y2),
+  })
+  const left = snapped.left
+  const top = snapped.top
+  const width = Math.max(snapped.right - snapped.left, 1)
+  const height = Math.max(snapped.bottom - snapped.top, 1)
   const fringe = 1
 
   // pdf.js leaves transforms / alpha on the context after render; reset so
