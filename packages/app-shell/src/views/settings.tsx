@@ -3,9 +3,17 @@ import { ArrowRight } from '@phosphor-icons/react'
 import { Button, Input, Table, THead, TBody, TR, TH, TD } from '@obiter/ui'
 import { useState, type FormEvent } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { userRoleSchema, type UserRole } from '@obiter/contracts'
+import {
+  ORGANISATION_NAME_MAX_LENGTH,
+  userRoleSchema,
+  type UserRole,
+} from '@obiter/contracts'
 import { ApiError } from '../api'
-import { useCreateOrganisation, useCurrentUser } from '../current-user'
+import {
+  useCreateOrganisation,
+  useCurrentUser,
+  useRenameOrganisation,
+} from '../current-user'
 import {
   useCreateOrganisationInvite,
   useOrganisationInvites,
@@ -61,12 +69,22 @@ export function SettingsRouteView() {
             Organisation
           </p>
           {me.organisation ? (
-            <dl className="grid max-w-lg gap-3 text-sm">
-              <div className="flex flex-col gap-0.5">
-                <dt className="text-muted">Name</dt>
-                <dd className="font-medium text-ink">{me.organisation.name}</dd>
-              </div>
-            </dl>
+            <div className="flex max-w-lg flex-col gap-4">
+              <dl className="grid max-w-lg gap-3 text-sm">
+                <div className="flex flex-col gap-0.5">
+                  <dt className="text-muted">Name</dt>
+                  <dd className="font-medium text-ink">
+                    {me.organisation.name}
+                  </dd>
+                </div>
+              </dl>
+              {me.user.role === 'owner' ? (
+                <RenameOrganisationForm
+                  organisationId={me.organisation.id}
+                  currentName={me.organisation.name}
+                />
+              ) : null}
+            </div>
           ) : (
             <CreateOrganisationForm />
           )}
@@ -144,6 +162,70 @@ function CreateOrganisationForm() {
         </Button>
       </form>
     </div>
+  )
+}
+
+function RenameOrganisationForm({
+  organisationId,
+  currentName,
+}: {
+  organisationId: string
+  currentName: string
+}) {
+  const renameOrganisation = useRenameOrganisation(organisationId)
+  const [orgName, setOrgName] = useState(currentName)
+  const [error, setError] = useState<string | null>(null)
+  const [saved, setSaved] = useState(false)
+
+  async function handleRename(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const trimmed = orgName.trim()
+    if (!trimmed) {
+      setError('Organisation name is required.')
+      return
+    }
+    setError(null)
+    setSaved(false)
+    try {
+      await renameOrganisation.mutateAsync({ name: trimmed })
+      setSaved(true)
+    } catch (cause) {
+      setError(
+        cause instanceof ApiError
+          ? cause.message
+          : 'Could not rename the organisation. Try again.',
+      )
+    }
+  }
+
+  return (
+    <form
+      className="flex max-w-lg flex-col gap-4"
+      onSubmit={handleRename}
+      noValidate
+    >
+      <Input
+        label="Rename organisation"
+        type="text"
+        autoComplete="organization"
+        required
+        maxLength={ORGANISATION_NAME_MAX_LENGTH}
+        value={orgName}
+        onChange={(e) => setOrgName(e.target.value)}
+        error={error ?? undefined}
+      />
+      <div className="flex items-center gap-3">
+        <Button
+          type="submit"
+          loading={renameOrganisation.isPending}
+          iconEnd={<ArrowRight size={16} weight="bold" />}
+          className="w-fit"
+        >
+          Rename
+        </Button>
+        {saved ? <p className="text-sm text-muted">Name updated.</p> : null}
+      </div>
+    </form>
   )
 }
 

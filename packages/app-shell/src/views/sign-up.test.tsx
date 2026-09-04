@@ -14,6 +14,7 @@ const authMocks = vi.hoisted(() => ({
   signUpWithEmail: vi.fn(),
   resendVerificationEmail: vi.fn(),
   checkInviteAccountExists: vi.fn(),
+  savePendingOrganisationName: vi.fn(),
 }))
 
 const navigateMock = vi.hoisted(() => vi.fn())
@@ -38,6 +39,10 @@ vi.mock('../auth', () => ({
 
 vi.mock('../organisation-membership', () => ({
   checkInviteAccountExists: authMocks.checkInviteAccountExists,
+}))
+
+vi.mock('../pending-organisation', () => ({
+  savePendingOrganisationName: authMocks.savePendingOrganisationName,
 }))
 
 vi.mock('@tanstack/react-router', () => ({
@@ -68,7 +73,7 @@ vi.mock('@tanstack/react-router', () => ({
   },
 }))
 
-function fillForm() {
+function fillForm(options: { organisationName?: string } = {}) {
   fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), {
     target: { value: 'Ada' },
   })
@@ -78,6 +83,15 @@ function fillForm() {
   fireEvent.change(document.querySelector('input[type="password"]')!, {
     target: { value: 'SuperSecret123!' },
   })
+  // The organisation field only renders without an invite token.
+  const orgInput = screen.queryByRole('textbox', {
+    name: 'Organisation name',
+  })
+  if (orgInput && options.organisationName !== undefined) {
+    fireEvent.change(orgInput, { target: { value: options.organisationName } })
+  } else if (orgInput) {
+    fireEvent.change(orgInput, { target: { value: 'Acme Law' } })
+  }
 }
 
 describe('SignUpRouteView', () => {
@@ -158,6 +172,64 @@ describe('SignUpRouteView', () => {
       })
     })
     expect(authMocks.checkInviteAccountExists).not.toHaveBeenCalled()
+  })
+
+  it('hides the organisation field for invitees and stashes no name', async () => {
+    authMocks.signUpWithEmail.mockResolvedValueOnce({
+      ok: true,
+      verificationRequired: true,
+    })
+
+    render(<SignUpRouteView />)
+    expect(
+      screen.queryByRole('textbox', { name: 'Organisation name' }),
+    ).toBeNull()
+    fillForm()
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }))
+
+    await waitFor(() => {
+      expect(authMocks.signUpWithEmail).toHaveBeenCalled()
+    })
+    expect(authMocks.savePendingOrganisationName).not.toHaveBeenCalled()
+  })
+
+  it('requires an organisation name when signing up without a token', async () => {
+    searchState.token = undefined
+    // No signUp stub: the submit returns before reaching sign-up, and a
+    // queued once-value here would leak into the next test's queue.
+
+    render(<SignUpRouteView />)
+    expect(
+      screen.getByRole('textbox', { name: 'Organisation name' }),
+    ).toBeTruthy()
+    fillForm({ organisationName: '   ' })
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Organisation name is required.')).toBeTruthy()
+    })
+    expect(authMocks.signUpWithEmail).not.toHaveBeenCalled()
+    expect(authMocks.savePendingOrganisationName).not.toHaveBeenCalled()
+  })
+
+  it('stashes the organisation name for provisioning after verification', async () => {
+    searchState.token = undefined
+    authMocks.signUpWithEmail.mockResolvedValueOnce({
+      ok: true,
+      verificationRequired: true,
+    })
+
+    render(<SignUpRouteView />)
+    fillForm({ organisationName: '  Acme Law  ' })
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }))
+
+    await waitFor(() => {
+      expect(authMocks.signUpWithEmail).toHaveBeenCalled()
+    })
+    // Stored trimmed: the API validation trims again, so both agree.
+    expect(authMocks.savePendingOrganisationName).toHaveBeenCalledWith(
+      'Acme Law',
+    )
   })
 
   it('routes an invitee whose account already exists to sign-in with the token', async () => {

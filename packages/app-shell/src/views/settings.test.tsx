@@ -21,6 +21,7 @@ import { SettingsRouteView } from './settings'
 const mocks = vi.hoisted(() => ({
   useCurrentUser: vi.fn(),
   useCreateOrganisation: vi.fn(),
+  useRenameOrganisation: vi.fn(),
   navigate: vi.fn(),
 }))
 
@@ -47,6 +48,7 @@ vi.mock('../current-user', async (importOriginal) => {
     ...actual,
     useCurrentUser: mocks.useCurrentUser,
     useCreateOrganisation: mocks.useCreateOrganisation,
+    useRenameOrganisation: mocks.useRenameOrganisation,
   }
 })
 
@@ -91,6 +93,10 @@ describe('SettingsRouteView — create organisation', () => {
     vi.clearAllMocks()
     mocks.useCurrentUser.mockReturnValue({ data: ORGLESS_ME })
     mocks.useCreateOrganisation.mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    })
+    mocks.useRenameOrganisation.mockReturnValue({
       mutateAsync: vi.fn(),
       isPending: false,
     })
@@ -163,6 +169,115 @@ describe('SettingsRouteView — create organisation', () => {
     })
     expect(refetchSpy).toHaveBeenCalledWith({ queryKey: ['current-user'] })
     refetchSpy.mockRestore()
+  })
+})
+
+describe('SettingsRouteView — rename organisation', () => {
+  const OWNER_ME = {
+    user: {
+      id: 'usr_1',
+      email: 'owner@obiter.dev',
+      name: 'Owner',
+      role: 'owner',
+    },
+    organisation: {
+      id: 'org_1',
+      name: 'Personal workspace',
+      plan: 'private_beta',
+    },
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.useCurrentUser.mockReturnValue({ data: OWNER_ME })
+    mocks.useCreateOrganisation.mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    })
+    mocks.useRenameOrganisation.mockReturnValue({
+      mutateAsync: vi.fn(),
+      isPending: false,
+    })
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  async function submitRename(name: string) {
+    const input = await screen.findByLabelText('Rename organisation')
+    fireEvent.change(input, { target: { value: name } })
+    fireEvent.submit(input.closest('form')!)
+  }
+
+  it('offers rename to the owner and applies the trimmed name', async () => {
+    const mutateAsync = vi.fn().mockResolvedValue({ id: 'org_1' })
+    mocks.useRenameOrganisation.mockReturnValue({
+      mutateAsync,
+      isPending: false,
+    })
+    renderSettings()
+    await submitRename('  Rebranded Chambers  ')
+    await waitFor(() => {
+      expect(mutateAsync).toHaveBeenCalledWith({
+        name: 'Rebranded Chambers',
+      })
+      expect(screen.getByText('Name updated.')).toBeTruthy()
+    })
+  })
+
+  it('requires a name and surfaces API failures', async () => {
+    renderSettings()
+    await submitRename('   ')
+    await waitFor(() => {
+      expect(screen.getByText('Organisation name is required.')).toBeTruthy()
+    })
+    expect(mocks.useRenameOrganisation().mutateAsync).not.toHaveBeenCalled()
+
+    const mutateAsync = vi
+      .fn()
+      .mockRejectedValue(
+        new ApiError(
+          'forbidden',
+          'Only owners may perform this action.',
+          403,
+          'req_1',
+        ),
+      )
+    mocks.useRenameOrganisation.mockReturnValue({
+      mutateAsync,
+      isPending: false,
+    })
+    await submitRename('Takeover')
+    await waitFor(() => {
+      expect(
+        screen.getByText('Only owners may perform this action.'),
+      ).toBeTruthy()
+    })
+  })
+
+  it('hides rename from admins and members', async () => {
+    for (const role of ['admin', 'member'] as const) {
+      cleanup()
+      mocks.useCurrentUser.mockReturnValue({
+        data: {
+          user: {
+            id: 'usr_2',
+            email: `${role}@obiter.dev`,
+            name: role,
+            role,
+          },
+          organisation: {
+            id: 'org_1',
+            name: 'Personal workspace',
+            plan: 'private_beta',
+          },
+        },
+      })
+      renderSettings()
+      expect(await screen.findByText('Personal workspace')).toBeTruthy()
+      expect(screen.queryByLabelText('Rename organisation')).toBeNull()
+    }
   })
 })
 

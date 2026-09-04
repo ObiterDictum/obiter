@@ -1,10 +1,11 @@
 import { Pool } from 'pg'
 import type { PoolClient, QueryResult, QueryResultRow } from 'pg'
-import type {
-  CurrentOrganisation,
-  CurrentUser,
-  MatterAccessLevel,
-  UserRole,
+import {
+  PERSONAL_WORKSPACE_NAME,
+  type CurrentOrganisation,
+  type CurrentUser,
+  type MatterAccessLevel,
+  type UserRole,
 } from '@obiter/contracts'
 import type { AuthenticatedOrgUser } from './authz'
 import type { ApiEnv } from './env'
@@ -31,6 +32,7 @@ export interface AuditRecordInput {
     | 'auth.sign_up'
     | 'auth.sign_out'
     | 'organisation.create'
+    | 'organisation.rename'
     | 'matter.create'
     | 'matter.update'
     | 'matter.delete'
@@ -299,8 +301,12 @@ export async function createOrganisationForUser(
   }
 }
 
-/** Default tenant name when an org-less user first hits Matters or Redact. */
-export const PERSONAL_WORKSPACE_NAME = 'Personal workspace'
+/**
+ * Default tenant name when an org-less user first hits Matters or Redact.
+ * Canonical value lives in @obiter/contracts so the client can recognise a
+ * still-default workspace; re-exported here for existing import sites.
+ */
+export { PERSONAL_WORKSPACE_NAME }
 
 /**
  * Ensures the user has an organisation for tenant-scoped product data.
@@ -328,6 +334,68 @@ export async function ensureOrganisationForUser(
     organisationId: result.organisationId,
     role: result.role,
     created: false,
+  }
+}
+
+/**
+ * Renames an organisation and writes the audit row in one transaction.
+ * Returns null when the organisation does not exist so the caller can
+ * surface a 404 without writing an audit row (no existence leak).
+ * A no-op rename (same name) still succeeds without an audit row.
+ */
+export async function renameOrganisation(
+  pool: Pool,
+  input: {
+    organisationId: string
+    userId: string
+    name: string
+    requestId: string
+  },
+): Promise<{ organisation: CurrentOrganisation; renamed: boolean } | null> {
+  const client = await pool.connect()
+  try {
+    await client.query('begin')
+    const current = await client['query']<{
+      id: string
+      name: string
+      plan: CurrentOrganisation['plan']
+    }>(`select id, name, plan from organisations where id = $1 for update`, [
+      input.organisationId,
+    ])
+    const row = current.rows[0]
+    if (!row) {
+      await client.query('rollback')
+      return null
+    }
+    if (row.name === input.name) {
+      await client.query('commit')
+      return { organisation: row, renamed: false }
+    }
+    const updated = await client['query']<{
+      id: string
+      name: string
+      plan: CurrentOrganisation['plan']
+    }>(
+      `update organisations set name = $2, updated_at = now()
+       where id = $1 returning id, name, plan`,
+      [input.organisationId, input.name],
+    )
+    await appendAuditLog(client, {
+      organisationId: input.organisationId,
+      userId: input.userId,
+      entityType: 'organisation',
+      entityId: input.organisationId,
+      action: 'organisation.rename',
+      metadata: { previousName: row.name, name: input.name },
+      requestId: input.requestId,
+    })
+    await client.query('commit')
+    return { organisation: updated.rows[0], renamed: true }
+  } catch (error) {
+    await client.query('rollback')
+    throw error
+  } finally {
+    client.release()
   }
 }
 
