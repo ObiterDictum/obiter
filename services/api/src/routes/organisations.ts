@@ -7,6 +7,7 @@ import {
   acceptOrganisationInviteInputSchema,
   createOrganisationInviteInputSchema,
   organisationInviteSchema,
+  organisationInvitePreviewSchema,
   organisationMemberSchema,
   type ApiErrorCode,
   type ApiErrorResponse,
@@ -18,6 +19,8 @@ import { createOrganisationForUser } from '../database'
 import { organisationInviteEmail } from '../email-templates'
 import type { ApiEnv } from '../env'
 import {
+  inviteUnavailability,
+  loadInvitePreview,
   moveUserAndDeleteEmptyOrganisation,
   organisationHasBlockingWork,
 } from '../organisation-membership'
@@ -227,8 +230,24 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
         ],
       )
       const row = inserted.rows[0]
+      const organisation = await pool.query<{ name: string }>(
+        `select name from organisations where id = $1`,
+        [caller.organisationId],
+      )
+      const organisationName = organisation.rows[0]?.name
+      if (!organisationName) {
+        await pool.query(`delete from organisation_invites where id = $1`, [
+          row.id,
+        ])
+        return errorResponse(
+          c,
+          'organisation_not_found',
+          'Organisation not found.',
+          404,
+        )
+      }
       const url = `${env.webOrigin}/invites/accept?token=${encodeURIComponent(token)}`
-      const emailContent = organisationInviteEmail(url)
+      const emailContent = organisationInviteEmail(url, organisationName)
       try {
         await sendEmail(env, {
           email,
@@ -422,6 +441,30 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
     },
   )
 
+  routes.get('/api/invites/preview', async (c) => {
+    const parsed = acceptOrganisationInviteInputSchema.safeParse({
+      token: c.req.query('token'),
+    })
+    if (!parsed.success) {
+      return errorResponse(
+        c,
+        'validation_failed',
+        'An invite token is required.',
+        400,
+      )
+    }
+    const preview = await loadInvitePreview(pool, hashToken(parsed.data.token))
+    if (!preview.ok) {
+      return errorResponse(c, preview.code, preview.message, 404)
+    }
+    return c.json(
+      organisationInvitePreviewSchema.parse({
+        organisationName: preview.organisationName,
+        invitedByName: preview.invitedByName,
+      }),
+    )
+  })
+
   routes.post('/api/invites/accept', async (c) => {
     const sessionUser = c.get('user')
     if (!sessionUser) {
@@ -472,17 +515,13 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
         [tokenHash],
       )
       const row = invite.rows[0]
-      if (
-        !row ||
-        row.accepted_at ||
-        row.revoked_at ||
-        new Date(row.expires_at).getTime() <= Date.now()
-      ) {
+      const unavailable = inviteUnavailability(row)
+      if (unavailable || !row) {
         await client.query('rollback')
         return errorResponse(
           c,
-          'invite_not_found',
-          'This invite is no longer valid.',
+          unavailable?.code ?? 'invite_not_found',
+          unavailable?.message ?? 'This invite was not found.',
           404,
         )
       }

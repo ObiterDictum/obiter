@@ -36,6 +36,15 @@ describe('email templates', () => {
     })
   })
 
+  describe('organisationInviteEmail', () => {
+    it('names the organisation in both parts and the subject', () => {
+      const email = organisationInviteEmail(URL, 'North Chambers')
+      expect(email.subject).toBe('Your invite to North Chambers on Obiter')
+      expect(email.html).toContain('North Chambers')
+      expect(email.text).toContain('North Chambers')
+    })
+  })
+
   it('escapes HTML-special characters in the URL within the html part', () => {
     const evil = 'https://app.obiter.test/auth/reset?token=a&b=<script>'
     const email = magicLinkEmail(evil)
@@ -49,7 +58,7 @@ describe('email templates', () => {
       magicLinkEmail(URL),
       verificationEmail(URL),
       resetPasswordEmail(URL),
-      organisationInviteEmail(URL),
+      organisationInviteEmail(URL, 'North Chambers'),
     ]) {
       expect(email.html).not.toMatch(/!/)
       expect(email.text).not.toMatch(/!/)

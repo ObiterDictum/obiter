@@ -7,15 +7,58 @@ import {
 import type {
   CreateOrganisationInviteInput,
   OrganisationInvite,
+  OrganisationInvitePreview,
   OrganisationMember,
 } from '@obiter/contracts'
-import { apiFetch } from './api'
+import { apiFetch, ApiError } from './api'
 
 export const organisationMembershipKeys = {
   members: (organisationId: string) =>
     ['organisation-members', organisationId] as const,
   invites: (organisationId: string) =>
     ['organisation-invites', organisationId] as const,
+  invitePreview: (token: string) => ['invite-preview', token] as const,
+}
+
+const INVITE_UNAVAILABLE_CODES = [
+  'invite_not_found',
+  'invite_expired',
+  'invite_revoked',
+  'invite_already_accepted',
+] as const
+
+export type InviteUnavailableCode = (typeof INVITE_UNAVAILABLE_CODES)[number]
+
+export type InvitePreviewResult =
+  | { ok: true; organisationName: string; invitedByName: string }
+  | { ok: false; code: InviteUnavailableCode; message: string }
+
+function isInviteUnavailableCode(code: string): code is InviteUnavailableCode {
+  return INVITE_UNAVAILABLE_CODES.some((value) => value === code)
+}
+
+export function invitePreviewQueryOptions(token: string) {
+  return queryOptions({
+    queryKey: organisationMembershipKeys.invitePreview(token),
+    queryFn: async (): Promise<InvitePreviewResult> => {
+      try {
+        const preview = await apiFetch<OrganisationInvitePreview>(
+          `/api/invites/preview?token=${encodeURIComponent(token)}`,
+        )
+        return { ok: true, ...preview }
+      } catch (caught) {
+        if (
+          caught instanceof ApiError &&
+          isInviteUnavailableCode(caught.code)
+        ) {
+          return { ok: false, code: caught.code, message: caught.message }
+        }
+        throw caught
+      }
+    },
+    retry: false,
+    staleTime: 30_000,
+  })
 }
 
 export function organisationMembersQueryOptions(organisationId: string) {

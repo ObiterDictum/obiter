@@ -3,6 +3,7 @@ import { QueryClient } from '@tanstack/react-query'
 import {
   organisationInvitesQueryOptions,
   organisationMembersQueryOptions,
+  invitePreviewQueryOptions,
 } from './organisation-membership'
 
 const api = vi.hoisted(() => ({ apiFetch: vi.fn() }))
@@ -41,6 +42,24 @@ describe('organisation membership queries', () => {
     await client.fetchQuery(organisationInvitesQueryOptions('org_1'))
     expect(api.apiFetch).toHaveBeenCalledWith(
       '/api/organisations/org_1/invites',
+    )
+  })
+
+  it('loads an invite preview through GET /api/invites/preview', async () => {
+    api.apiFetch.mockResolvedValueOnce({
+      organisationName: 'North Chambers',
+      invitedByName: 'Ada Owner',
+    })
+    const client = new QueryClient()
+    await expect(
+      client.fetchQuery(invitePreviewQueryOptions('invite-token')),
+    ).resolves.toEqual({
+      ok: true,
+      organisationName: 'North Chambers',
+      invitedByName: 'Ada Owner',
+    })
+    expect(api.apiFetch).toHaveBeenCalledWith(
+      '/api/invites/preview?token=invite-token',
     )
   })
 })

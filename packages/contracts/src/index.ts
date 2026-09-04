@@ -391,6 +391,14 @@ export type AcceptOrganisationInviteInput = z.infer<
   typeof acceptOrganisationInviteInputSchema
 >
 
+export const organisationInvitePreviewSchema = z.object({
+  organisationName: z.string().min(1),
+  invitedByName: z.string().min(1),
+})
+export type OrganisationInvitePreview = z.infer<
+  typeof organisationInvitePreviewSchema
+>
+
 export const organisationInviteSchema = z.object({
   id: z.string().min(1),
   organisationId: z.string().min(1),

@@ -35,8 +35,14 @@ interface MatterRow {
 class MembershipStore {
   users = new Map<string, UserRow>()
   organisations = new Set<string>(['org_a', 'org_b'])
+  organisationNames = new Map<string, string>([
+    ['org_a', 'North Chambers'],
+    ['org_b', 'Personal workspace'],
+    ['org_c', 'Other Chambers'],
+  ])
   invites: InviteRow[] = []
   matters: MatterRow[] = []
+  auditLogs: { organisation_id: string | null }[] = []
   nextInvite = 1
   private snapshot: string | null = null
 
@@ -72,8 +78,10 @@ class MembershipStore {
     return JSON.stringify({
       users: [...this.users.entries()],
       organisations: [...this.organisations],
+      organisationNames: [...this.organisationNames.entries()],
       invites: this.invites,
       matters: this.matters,
+      auditLogs: this.auditLogs,
       nextInvite: this.nextInvite,
     })
   }
@@ -82,14 +90,18 @@ class MembershipStore {
     const parsed = JSON.parse(snapshot) as {
       users: [string, UserRow][]
       organisations: string[]
+      organisationNames: [string, string][]
       invites: InviteRow[]
       matters: MatterRow[]
+      auditLogs: { organisation_id: string | null }[]
       nextInvite: number
     }
     this.users = new Map(parsed.users)
     this.organisations = new Set(parsed.organisations)
+    this.organisationNames = new Map(parsed.organisationNames)
     this.invites = parsed.invites
     this.matters = parsed.matters
+    this.auditLogs = parsed.auditLogs
     this.nextInvite = parsed.nextInvite
   }
 
@@ -159,6 +171,30 @@ class MembershipStore {
       this.nextInvite += 1
       this.invites.push(row)
       return { rows: [row] }
+    }
+    if (text.includes('as organisation_name')) {
+      const invite = this.invites.find(
+        (row) => row.token_hash === parameters[0],
+      )
+      if (!invite) return { rows: [] }
+      const inviter = this.users.get(invite.created_by)
+      return {
+        rows: [
+          {
+            accepted_at: invite.accepted_at,
+            revoked_at: invite.revoked_at,
+            expires_at: invite.expires_at,
+            organisation_name:
+              this.organisationNames.get(invite.organisation_id) ??
+              invite.organisation_id,
+            invited_by_name: inviter?.name ?? 'Unknown',
+          },
+        ],
+      }
+    }
+    if (text.startsWith('select name from organisations')) {
+      const name = this.organisationNames.get(String(parameters[0]))
+      return { rows: name ? [{ name }] : [] }
     }
     if (
       text.startsWith('select id, organisation_id, email, role, expires_at')
@@ -262,7 +298,18 @@ class MembershipStore {
       }
       return { rows: [] }
     }
-    if (text.startsWith('update audit_logs')) return { rows: [] }
+    if (text.startsWith('update audit_logs')) {
+      const to = text.includes('organisation_id = null')
+        ? null
+        : String(parameters[0])
+      const from = String(
+        text.includes('organisation_id = null') ? parameters[0] : parameters[1],
+      )
+      for (const row of this.auditLogs) {
+        if (row.organisation_id === from) row.organisation_id = to
+      }
+      return { rows: [] }
+    }
     if (text.startsWith('delete from organisations')) {
       this.organisations.delete(String(parameters[0]))
       return { rows: [] }
@@ -286,7 +333,7 @@ function appFor(
     emailVerified: boolean
     organisationId: string | null
     role: UserRole | null
-  },
+  } | null,
 ) {
   const routes = new Hono<{ Variables: AuthzVariables }>()
   routes.use('*', async (context, next) => {
@@ -356,6 +403,9 @@ describe('organisation membership routes', () => {
       json({ token }),
     )
     expect(second.status).toBe(404)
+    expect(await second.json()).toMatchObject({
+      error: { code: 'invite_already_accepted' },
+    })
 
     vi.mocked(console.info).mockClear()
     const revokedCreate = await ownerApp.request(
@@ -380,6 +430,9 @@ describe('organisation membership routes', () => {
       role: 'owner',
     }).request('/api/invites/accept', json({ token: revokedToken }))
     expect(afterRevoke.status).toBe(404)
+    expect(await afterRevoke.json()).toMatchObject({
+      error: { code: 'invite_revoked' },
+    })
 
     vi.mocked(console.info).mockClear()
     const expiredCreate = await ownerApp.request(
@@ -401,6 +454,9 @@ describe('organisation membership routes', () => {
       role: 'owner',
     }).request('/api/invites/accept', json({ token: expiredToken }))
     expect(afterExpiry.status).toBe(404)
+    expect(await afterExpiry.json()).toMatchObject({
+      error: { code: 'invite_expired' },
+    })
   })
 
   it('refuses accept when the session email does not match the invite', async () => {
@@ -588,6 +644,7 @@ describe('organisation membership routes', () => {
   it('deletes the invitee empty organisation on a successful accept', async () => {
     vi.spyOn(console, 'info').mockImplementation(() => undefined)
     const store = new MembershipStore()
+    store.auditLogs.push({ organisation_id: 'org_b' })
     const ownerApp = appFor(store, {
       id: 'usr_owner',
       email: 'owner@example.com',
@@ -614,6 +671,7 @@ describe('organisation membership routes', () => {
       role: 'admin',
     })
     expect(store.invites.some((invite) => invite.accepted_at)).toBe(true)
+    expect(store.auditLogs).toEqual([{ organisation_id: 'org_a' }])
   })
 
   it('scopes invite routes to the caller organisation', async () => {
@@ -626,5 +684,87 @@ describe('organisation membership routes', () => {
       role: 'owner',
     }).request('/api/organisations/org_b/invites')
     expect(response.status).toBe(403)
+  })
+
+  it('previews an open invite without a session and names organisation and inviter', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const store = new MembershipStore()
+    const ownerApp = appFor(store, {
+      id: 'usr_owner',
+      email: 'owner@example.com',
+      emailVerified: true,
+      organisationId: 'org_a',
+      role: 'owner',
+    })
+    await ownerApp.request(
+      '/api/organisations/org_a/invites',
+      json({ email: 'invitee@example.com', role: 'member' }),
+    )
+    const token = tokenFromInviteLog()
+    const response = await appFor(store, null).request(
+      `/api/invites/preview?token=${encodeURIComponent(token)}`,
+    )
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      organisationName: 'North Chambers',
+      invitedByName: 'Owner',
+    })
+  })
+
+  it('previews expired, revoked, and missing invites with distinct codes', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const store = new MembershipStore()
+    const ownerApp = appFor(store, {
+      id: 'usr_owner',
+      email: 'owner@example.com',
+      emailVerified: true,
+      organisationId: 'org_a',
+      role: 'owner',
+    })
+    await ownerApp.request(
+      '/api/organisations/org_a/invites',
+      json({ email: 'invitee@example.com', role: 'member' }),
+    )
+    const expiredToken = tokenFromInviteLog()
+    const expiredInvite = store.invites.find(
+      (invite) => invite.email === 'invitee@example.com',
+    )
+    if (expiredInvite)
+      expiredInvite.expires_at = new Date(Date.now() - 1000).toISOString()
+    const expired = await appFor(store, null).request(
+      `/api/invites/preview?token=${encodeURIComponent(expiredToken)}`,
+    )
+    expect(expired.status).toBe(404)
+    expect(await expired.json()).toMatchObject({
+      error: { code: 'invite_expired' },
+    })
+
+    vi.mocked(console.info).mockClear()
+    await ownerApp.request(
+      '/api/organisations/org_a/invites',
+      json({ email: 'other@example.com', role: 'member' }),
+    )
+    const revokedToken = tokenFromInviteLog()
+    const inviteId = store.invites.find(
+      (invite) => invite.email === 'other@example.com',
+    )?.id
+    await ownerApp.request(`/api/organisations/org_a/invites/${inviteId}`, {
+      method: 'DELETE',
+    })
+    const revoked = await appFor(store, null).request(
+      `/api/invites/preview?token=${encodeURIComponent(revokedToken)}`,
+    )
+    expect(revoked.status).toBe(404)
+    expect(await revoked.json()).toMatchObject({
+      error: { code: 'invite_revoked' },
+    })
+
+    const missing = await appFor(store, null).request(
+      '/api/invites/preview?token=not-a-real-token',
+    )
+    expect(missing.status).toBe(404)
+    expect(await missing.json()).toMatchObject({
+      error: { code: 'invite_not_found' },
+    })
   })
 })
