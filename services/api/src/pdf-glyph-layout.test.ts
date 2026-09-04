@@ -1,7 +1,11 @@
 import { createCanvas } from '@napi-rs/canvas'
 import { documentTextLayoutSchema } from '@obiter/contracts'
 import { PDFDocument, StandardFonts } from 'pdf-lib'
-import { coverRectsForSpan, supplementSpans } from '@obiter/redaction-policy'
+import {
+  coverRectsForSpan,
+  glyphCoverRect,
+  supplementSpans,
+} from '@obiter/redaction-policy'
 import { createIsomorphicCanvasFactory, getDocumentProxy } from 'unpdf'
 import { describe, expect, it, vi } from 'vitest'
 import { extractDocumentContent, prepareLaidChars } from './document-extraction'
@@ -338,6 +342,76 @@ describe('exact glyph geometry', () => {
     })
     const ink = await renderedInkBounds(bytes)
     const covered = coverBoundsInViewport(ink.viewport, covers)
+    if (process.env.GITHUB_ACTIONS) {
+      const segment = extracted.layout!.segments[0]!
+      const advances = segment.advances
+      const offsets =
+        advances && advances.length === segment.end - segment.start
+          ? advances.reduce<number[]>(
+              (acc, advance) => {
+                acc.push((acc.at(-1) ?? 0) + advance)
+                return acc
+              },
+              [0],
+            )
+          : null
+      const local = 4
+      const mag =
+        Math.hypot(segment.baselineX ?? 1, segment.baselineY ?? 0) || 1
+      const baselineX = (segment.baselineX ?? 1) / mag
+      const baselineY = (segment.baselineY ?? 0) / mag
+      const ownWidth =
+        segment.glyphWidthOverrides?.[String(local)] ?? advances?.[local]
+      const offset = offsets?.[local]
+      const input =
+        typeof ownWidth === 'number' && typeof offset === 'number'
+          ? {
+              x: segment.x + offset * baselineX,
+              y: segment.y + offset * baselineY,
+              width: Math.max(ownWidth, 0.5),
+            }
+          : { x: segment.x, y: segment.y, width: segment.width }
+      const fontSize = Math.max(segment.height, 4)
+      const transformedSlack = fontSize * 0.08
+      const padLeft = fontSize * 0.04 + transformedSlack
+      const padRight = fontSize * 0.04 + transformedSlack
+      const slack = fontSize * 0.08 + transformedSlack
+      const ascent = (segment.ascent ?? fontSize * 0.8) + slack
+      const descent = Math.max(segment.descent ?? fontSize * 0.2, 0) + slack
+      const pdf = glyphCoverRect({
+        ...input,
+        fontSize: segment.height,
+        ink: extracted.text[local] ?? '',
+        ascent: segment.ascent,
+        descent: segment.descent,
+        baselineX,
+        baselineY,
+        transformed: segment.baselineX !== undefined,
+      })
+      console.error(
+        'CI_ROTATED_GLYPH_4',
+        JSON.stringify({
+          input,
+          ascent,
+          descent,
+          padLeft,
+          padRight,
+          corners: {
+            left: pdf.x,
+            right: pdf.x + pdf.width,
+            bottom: pdf.y,
+            top: pdf.y + pdf.height,
+          },
+          ink: {
+            left: ink.left,
+            right: ink.right,
+            top: ink.top,
+            bottom: ink.bottom,
+          },
+          covered,
+        }),
+      )
+    }
     expect(covered.left).toBeLessThanOrEqual(ink.left)
     expect(covered.right).toBeGreaterThanOrEqual(ink.right)
     expect(covered.top).toBeLessThanOrEqual(ink.top)
