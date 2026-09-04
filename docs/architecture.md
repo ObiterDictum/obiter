@@ -840,12 +840,15 @@ limiter and per-user hydration budgets. Those budgets are per API process:
 replica count multiplies the effective queue and miss allowance until the
 counters are shared. Search and changelog must never return
 matter data, client documents, redaction source or output, session or
-organisation records, auth secrets, or Meilisearch admin keys. Health must
-return only `{ status: 'ok', service: 'obiter-api' }` and must never expose
-environment, version, port, database or Meilisearch configuration, Rampart
-settings, matter data, or secrets. Adding an auth requirement is a product
-change and must fail `allows anonymous callers on deliberately public routes`
-in `services/api/src/routes/public-access.test.ts` rather than landing silently.
+organisation records, auth secrets, or Meilisearch admin keys. Production
+health must return only `{ status: 'ok', service: 'obiter-api' }` and must never
+expose environment, version, port, database or Meilisearch configuration,
+Rampart settings, matter data, or secrets. Development health additively
+includes the API commit SHA and checkout root for local provenance checks; these
+fields are not exposed outside development. Adding an auth requirement is a
+product change and must fail `allows anonymous callers on deliberately public
+routes` in `services/api/src/routes/public-access.test.ts` rather than landing
+silently.
 
 ### Document edit operations: property families without a second compatibility path (31 August 2026)
 
