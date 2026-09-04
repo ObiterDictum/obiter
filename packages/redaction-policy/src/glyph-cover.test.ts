@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { coverRectsForSpan, glyphCoverRect } from './glyph-cover'
+import {
+  coverRectsForSpan,
+  glyphCoverRect,
+  snapDeviceCoverOutward,
+} from './glyph-cover'
 
 describe('glyphCoverRect', () => {
   it('uses font ascent/descent when provided', () => {
@@ -29,6 +33,19 @@ describe('glyphCoverRect', () => {
     })
     expect(100 - jones.y).toBeGreaterThan(4 + 20 * 0.08)
     expect(jones.x).toBeLessThan(40)
+  })
+})
+
+describe('snapDeviceCoverOutward', () => {
+  it('floors min edges and ceils max edges', () => {
+    expect(
+      snapDeviceCoverOutward({
+        left: 579.768,
+        right: 609.048,
+        top: 929.136,
+        bottom: 986.88,
+      }),
+    ).toEqual({ left: 579, right: 610, top: 929, bottom: 987 })
   })
 })
 

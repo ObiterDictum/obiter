@@ -41,6 +41,28 @@ export interface GlyphCoverRect {
   height: number
 }
 
+export interface DeviceCoverBox {
+  left: number
+  right: number
+  top: number
+  bottom: number
+}
+
+/**
+ * Expand a cover to whole device pixels after the viewport transform.
+ * Floor min edges, ceil max edges. Outward-only is safe: extra covered
+ * pixels stay black; inward rounding would re-open the sub-pixel leak
+ * this exists to close (raster ink can sit 0.136vu past a fractional edge).
+ */
+export function snapDeviceCoverOutward(box: DeviceCoverBox): DeviceCoverBox {
+  return {
+    left: Math.floor(box.left),
+    right: Math.ceil(box.right),
+    top: Math.floor(box.top),
+    bottom: Math.ceil(box.bottom),
+  }
+}
+
 export type LayoutSegmentLike = DocumentTextLayoutSegment
 
 type TrackedGlyph = GlyphCoverRect & {
