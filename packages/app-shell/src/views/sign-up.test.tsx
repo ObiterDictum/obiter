@@ -13,7 +13,10 @@ import { SignUpRouteView } from './sign-up'
 const authMocks = vi.hoisted(() => ({
   signUpWithEmail: vi.fn(),
   resendVerificationEmail: vi.fn(),
+  checkInviteAccountExists: vi.fn(),
 }))
+
+const navigateMock = vi.hoisted(() => vi.fn())
 
 const searchState = vi.hoisted(() => ({
   token: 'invite-token' as string | undefined,
@@ -33,8 +36,12 @@ vi.mock('../auth', () => ({
   }),
 }))
 
+vi.mock('../organisation-membership', () => ({
+  checkInviteAccountExists: authMocks.checkInviteAccountExists,
+}))
+
 vi.mock('@tanstack/react-router', () => ({
-  useNavigate: () => vi.fn(),
+  useNavigate: () => navigateMock,
   useSearch: () => (searchState.token ? { token: searchState.token } : {}),
   Link: ({
     children,
@@ -77,6 +84,7 @@ describe('SignUpRouteView', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     searchState.token = 'invite-token'
+    authMocks.checkInviteAccountExists.mockResolvedValue(null)
   })
 
   afterEach(() => {
@@ -147,6 +155,49 @@ describe('SignUpRouteView', () => {
         name: 'Ada',
         email: 'ada@obiter.dev',
         password: 'SuperSecret123!',
+      })
+    })
+    expect(authMocks.checkInviteAccountExists).not.toHaveBeenCalled()
+  })
+
+  it('routes an invitee whose account already exists to sign-in with the token', async () => {
+    authMocks.checkInviteAccountExists.mockResolvedValueOnce(true)
+    navigateMock.mockResolvedValueOnce(undefined)
+
+    render(<SignUpRouteView />)
+    fillForm()
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }))
+
+    await waitFor(() => {
+      expect(authMocks.checkInviteAccountExists).toHaveBeenCalledWith(
+        'invite-token',
+        'ada@obiter.dev',
+      )
+      expect(navigateMock).toHaveBeenCalledWith({
+        to: '/sign-in',
+        search: { token: 'invite-token' },
+      })
+    })
+    expect(authMocks.signUpWithEmail).not.toHaveBeenCalled()
+  })
+
+  it('proceeds with sign-up when the account check is undetermined', async () => {
+    authMocks.checkInviteAccountExists.mockResolvedValueOnce(null)
+    authMocks.signUpWithEmail.mockResolvedValueOnce({
+      ok: true,
+      verificationRequired: true,
+    })
+
+    render(<SignUpRouteView />)
+    fillForm()
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }))
+
+    await waitFor(() => {
+      expect(authMocks.signUpWithEmail).toHaveBeenCalledWith({
+        name: 'Ada',
+        email: 'ada@obiter.dev',
+        password: 'SuperSecret123!',
+        callbackURL: `${window.location.origin}/invites/accept?token=invite-token`,
       })
     })
   })

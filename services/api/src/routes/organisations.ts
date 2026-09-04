@@ -7,6 +7,9 @@ import {
   acceptOrganisationInviteInputSchema,
   createOrganisationInviteInputSchema,
   organisationInviteSchema,
+  organisationInvitePreviewSchema,
+  organisationInviteAccountExistsInputSchema,
+  organisationInviteAccountExistsSchema,
   organisationMemberSchema,
   type ApiErrorCode,
   type ApiErrorResponse,
@@ -18,6 +21,8 @@ import { createOrganisationForUser } from '../database'
 import { organisationInviteEmail } from '../email-templates'
 import type { ApiEnv } from '../env'
 import {
+  inviteUnavailability,
+  loadInvitePreview,
   moveUserAndDeleteEmptyOrganisation,
   organisationHasBlockingWork,
 } from '../organisation-membership'
@@ -227,8 +232,24 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
         ],
       )
       const row = inserted.rows[0]
+      const organisation = await pool.query<{ name: string }>(
+        `select name from organisations where id = $1`,
+        [caller.organisationId],
+      )
+      const organisationName = organisation.rows[0]?.name
+      if (!organisationName) {
+        await pool.query(`delete from organisation_invites where id = $1`, [
+          row.id,
+        ])
+        return errorResponse(
+          c,
+          'organisation_not_found',
+          'Organisation not found.',
+          404,
+        )
+      }
       const url = `${env.webOrigin}/invites/accept?token=${encodeURIComponent(token)}`
-      const emailContent = organisationInviteEmail(url)
+      const emailContent = organisationInviteEmail(url, organisationName)
       try {
         await sendEmail(env, {
           email,
@@ -422,6 +443,85 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
     },
   )
 
+  routes.get('/api/invites/preview', async (c) => {
+    const parsed = acceptOrganisationInviteInputSchema.safeParse({
+      token: c.req.query('token'),
+    })
+    if (!parsed.success) {
+      return errorResponse(
+        c,
+        'validation_failed',
+        'An invite token is required.',
+        400,
+      )
+    }
+    const preview = await loadInvitePreview(pool, hashToken(parsed.data.token))
+    if (!preview.ok) {
+      return errorResponse(c, preview.code, preview.message, 404)
+    }
+    return c.json(
+      organisationInvitePreviewSchema.parse({
+        organisationName: preview.organisationName,
+        invitedByName: preview.invitedByName,
+      }),
+    )
+  })
+
+  routes.get('/api/invites/account-exists', async (c) => {
+    const parsed = organisationInviteAccountExistsInputSchema.safeParse({
+      token: c.req.query('token'),
+      email: c.req.query('email'),
+    })
+    if (!parsed.success) {
+      return errorResponse(
+        c,
+        'validation_failed',
+        'An invite token and email are required.',
+        400,
+      )
+    }
+    const email = parsed.data.email.toLowerCase()
+    const invite = await pool.query<InviteRow>(
+      `
+        select id, organisation_id, email, role, expires_at, created_by,
+          created_at, accepted_at, revoked_at
+        from organisation_invites
+        where token_hash = $1
+      `,
+      [hashToken(parsed.data.token)],
+    )
+    const row = invite.rows[0]
+    const unavailable = inviteUnavailability(row)
+    if (unavailable || !row) {
+      return errorResponse(
+        c,
+        unavailable?.code ?? 'invite_not_found',
+        unavailable?.message ?? 'This invite was not found.',
+        404,
+      )
+    }
+    // The answer is only ever about the email the invite was sent to — the
+    // token already identifies the invitee — so this is not a general account
+    // enumeration surface.
+    if (row.email !== email) {
+      return errorResponse(
+        c,
+        'forbidden',
+        'This invite was sent to a different email address.',
+        403,
+      )
+    }
+    const account = await pool.query<{ id: string }>(
+      `select id from users where email = $1 limit 1`,
+      [email],
+    )
+    return c.json(
+      organisationInviteAccountExistsSchema.parse({
+        hasAccount: account.rows.length > 0,
+      }),
+    )
+  })
+
   routes.post('/api/invites/accept', async (c) => {
     const sessionUser = c.get('user')
     if (!sessionUser) {
@@ -472,17 +572,13 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
         [tokenHash],
       )
       const row = invite.rows[0]
-      if (
-        !row ||
-        row.accepted_at ||
-        row.revoked_at ||
-        new Date(row.expires_at).getTime() <= Date.now()
-      ) {
+      const unavailable = inviteUnavailability(row)
+      if (unavailable || !row) {
         await client.query('rollback')
         return errorResponse(
           c,
-          'invite_not_found',
-          'This invite is no longer valid.',
+          unavailable?.code ?? 'invite_not_found',
+          unavailable?.message ?? 'This invite was not found.',
           404,
         )
       }
