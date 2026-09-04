@@ -205,6 +205,8 @@ else
 fi
 
 # ---- report -----------------------------------------------------------------
+web_path_pass='FAIL'
+[ "$web_matches" = 'yes' ] && web_path_pass='PASS'
 web_pass='FAIL'
 if [ "$web_matches" = 'yes' ] && { [ "$web_marker" = 'yes' ] || [ "$web_marker" = 'not checked' ]; }; then
   web_pass='PASS'
@@ -225,7 +227,7 @@ fi
 if [ -n "$web_root" ]; then
   echo "  served from     : $web_root"
 fi
-echo "  matches checkout : $web_matches  [$web_pass]"
+echo "  matches checkout : $web_matches  [$web_path_pass]"
 if [ "$expected_marker_given" = 'yes' ]; then
   marker_pass='FAIL'
   [ "$web_marker" = 'yes' ] && marker_pass='PASS'
