@@ -44,6 +44,48 @@ Use this structure unless the change is trivial:
 - deferred work
 - rollout considerations if relevant
 
+## Verification Evidence
+
+Back verification claims with a provenance block:
+
+```
+checkout HEAD: <sha> (dirty|clean)
+served: <path the web server resolved to>
+revision freshness: <yes|no|NOT CHECKED (no expected-marker given)>
+api checkout HEAD: <sha> (when development provenance is available)
+api served: <path> (when development provenance is available)
+[screenshot]
+```
+
+The `checkout HEAD` line comes from `scripts/verify-provenance.sh` run
+against the servers you tested against — the served path is the evidence
+that the page came from the checkout named. This exists because two
+verification rounds measured code that did not contain the fix: dev servers
+kept serving an older checkout, and a stale build made S11 on #148 look
+broken. Name the path so a mismatch is visible instead of persuasive.
+
+The path match proves the server was started from that checkout, not that it
+is running that commit. For any browser-observed claim where an edit must be
+proven live, run the script with `--expect <marker>` and include its revision
+freshness line. An absent marker points to stale or cached transformed modules.
+Without `--expect`, state that only the checkout path was proven. Servers
+started before a checkout, pull, or commit change keep serving the old code;
+restart the dev server after any checkout change, then run the script again.
+
+The requested `/api/health` check must be reachable, return a 2xx response,
+and identify this stack; unreachable APIs, HTTP errors, and non-stack responses
+fail. Development responses include the API commit SHA and absolute checkout
+root, which the script reports and compares with the tested checkout. A
+same-root stale SHA therefore fails too. Production and older API servers omit
+those fields; a reachable stack response with absent provenance remains an
+honest, non-failing `API provenance not determinable` result.
+
+State the limit plainly: a screenshot proves what the page rendered, not what
+the system recorded. Claims about persisted state — audit rows, stored
+documents, database effects — need a read of that state, not a screenshot.
+C12 on #148 could not have been verified by screenshot; show the read you
+made.
+
 ## Writing Rules
 
 - Write like an engineer handing work to another engineer.
