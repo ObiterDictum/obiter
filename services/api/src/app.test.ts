@@ -2715,8 +2715,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     expect(refused.outputWrites()).toBe(0)
 
     // Fresh extraction carries the note bodies, so the same source finalizes.
-    const { extractDocumentContent } =
-      await import('./document-extraction')
+    const { extractDocumentContent } = await import('./document-extraction')
     const footnotesSource = await readFile(
       'test-fixtures/upload-corpus/letter-footnotes-numbering.docx',
     )
