@@ -108,6 +108,12 @@ function readExplicitDatabaseUrl() {
 
 async function main() {
   const databaseUrl = readExplicitDatabaseUrl()
+  // Name the target before touching anything: a stale DATABASE_URL is the
+  // likeliest way to migrate the wrong database. Host and name only.
+  const target = new URL(databaseUrl)
+  console.info(
+    `Migrating database ${target.pathname.replace(/^\//, '')} on host ${target.host}...`,
+  )
   const pool = new Pool({ connectionString: databaseUrl })
   try {
     const { applied, skipped } = await runMigrations(pool)
