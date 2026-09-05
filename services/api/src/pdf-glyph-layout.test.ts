@@ -2,6 +2,7 @@ import { createCanvas } from '@napi-rs/canvas'
 import { documentTextLayoutSchema } from '@obiter/contracts'
 import { PDFDocument, StandardFonts } from 'pdf-lib'
 import {
+  applyRedacted,
   coverRectsForSpan,
   snapDeviceCoverOutward,
   supplementSpans,
@@ -9,6 +10,7 @@ import {
 import { createIsomorphicCanvasFactory, getDocumentProxy } from 'unpdf'
 import { describe, expect, it, vi } from 'vitest'
 import { extractDocumentContent, prepareLaidChars } from './document-extraction'
+import { findUncoveredPdfRegions } from './extraction-coverage'
 import {
   rawFormPdf,
   rawRtlPdf,
@@ -432,5 +434,115 @@ describe('exact glyph geometry', () => {
     } finally {
       warn.mockRestore()
     }
+  })
+})
+
+describe('claim-form word boundaries', () => {
+  // Synthetic claim-form lines (never real legal text): all-caps headings, a
+  // damages figure, and a spaced NI number.
+  const LINES = [
+    'IN THE COUNTY COURT AT CENTRAL LONDON',
+    'PARTICULARS OF CLAIM',
+    'The Claimant claims damages totalling GBP 162,526.25',
+    'NI number QQ 12 34 56 C was recorded',
+  ]
+
+  /** One drawText per line: real space glyphs, the well-formed producer. */
+  async function spacedClaimFormPdf() {
+    const doc = await PDFDocument.create()
+    const font = await doc.embedFont(StandardFonts.TimesRoman)
+    const page = doc.addPage([595, 842])
+    LINES.forEach((line, index) => {
+      page.drawText(line, {
+        x: START_X,
+        y: BASELINE - index * 24,
+        size: SIZE,
+        font,
+      })
+    })
+    return Buffer.from(await doc.save())
+  }
+
+  /**
+   * Word-by-word at the running advance: zero inter-word advance, the fused
+   * producer. Per-character advance sums (drawText emits no kerning) so the
+   * gap is truly zero, matching the measured failure mode.
+   */
+  async function fusedClaimFormPdf() {
+    const doc = await PDFDocument.create()
+    const font = await doc.embedFont(StandardFonts.TimesRoman)
+    const page = doc.addPage([595, 842])
+    LINES.forEach((line, index) => {
+      let x = START_X
+      for (const word of line.split(' ')) {
+        page.drawText(word, {
+          x,
+          y: BASELINE - index * 24,
+          size: SIZE,
+          font,
+        })
+        x += drawnAdvance(font, word)
+      }
+    })
+    return Buffer.from(await doc.save())
+  }
+
+  it('keeps word boundaries on all-caps claim-form lines', async () => {
+    const extracted = await extractDocumentContent(
+      'pdf',
+      await spacedClaimFormPdf(),
+    )
+
+    expect(extracted.text).toContain('IN THE COUNTY COURT AT CENTRAL LONDON')
+    expect(extracted.text).toContain('PARTICULARS OF CLAIM')
+    expect(extracted.text).toContain('totalling GBP 162,526.25')
+    // The spaced NI survives extraction, so deterministic detection fires and
+    // the end-to-end redacted output carries no trace of it.
+    const spans = supplementSpans(extracted.text)
+    expect(spans).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          category: 'national_insurance',
+          text: 'QQ 12 34 56 C',
+        }),
+      ]),
+    )
+    const decisions = Object.fromEntries(
+      spans.map((span) => [
+        span.id,
+        {
+          decision: 'accept' as const,
+          decidedBy: 'test',
+          decidedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ]),
+    )
+    const redacted = applyRedacted(extracted.text, spans, decisions)
+    expect(redacted).not.toContain('QQ 12 34 56 C')
+    expect(redacted).toContain('[REDACTED]')
+    expect(findUncoveredPdfRegions(extracted.text)).toEqual([])
+  })
+
+  it('flags zero-advance fusion, where the fused NI evades detection', async () => {
+    const extracted = await extractDocumentContent(
+      'pdf',
+      await fusedClaimFormPdf(),
+    )
+
+    // True zero-gap fusion is faithful extraction: the rendered page shows no
+    // spaces, and intra- and inter-word gaps both measure 0.00pt, so no
+    // threshold can recover the boundaries.
+    expect(extracted.text).toContain('PARTICULARSOFCLAIM')
+    expect(extracted.text).not.toContain('IN THE COUNTY')
+    // The NI fused to its neighbours matches no pattern (no boundary either
+    // side), so the coverage guard must refuse finalisation instead.
+    expect(
+      supplementSpans(extracted.text).filter(
+        (span) => span.category === 'national_insurance',
+      ),
+    ).toEqual([])
+    const regions = findUncoveredPdfRegions(extracted.text)
+    expect(regions).toHaveLength(1)
+    expect(regions[0]).toContain('fused-text')
   })
 })

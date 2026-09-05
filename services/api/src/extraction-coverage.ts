@@ -20,18 +20,35 @@ import {
 // footnote separators and trivial fragments do not block clean documents.
 export const UNEXAMINED_PART_MIN_CHARS = 20
 
-// PDF fusion signal: zero-gap fused runs (adjacent Tj, no spaces) keep every
-// char, so char-ratio shows ~zero loss — the signal is long-token share, not
-// char count. Fused probe "HelloWorldthisisfused" (21 chars, 1 token) is NOT
-// rescued by withSemanticSpaces. Whole fused lines run to 100+ chars, so:
-// N=30 with >=5% share catches systemic fusion; longest>=100 catches a single
-// fused line hiding in a long document. Cannot detect fusion below N,
-// over-spaced text (handled nowhere), or scanned PDFs (handled separately via
-// MINIMUM_PDF_CHARS_PER_PAGE). Thresholds validated against clean fixtures in
-// extraction-coverage.test.ts; recalibrate on real fused runs if needed.
+// PDF fusion signals: zero-gap fused runs (adjacent Tj, no spaces) keep every
+// char, so char-ratio shows ~zero loss — the signal is run shape, not char
+// count. Fused probe "HelloWorldthisisfused" (21 chars, 1 token) is NOT
+// rescued by withSemanticSpaces. Two signals, either of which refuses:
+// - Long-token share: whole fused lines run to 100+ chars, so N=30 with >=5%
+//   share catches systemic fusion; longest>=100 catches a single fused line
+//   hiding in a long document.
+// - Long letter-run share: the observed collapse artifact peaked at an
+//   18-letter run (PARTICULARSOFCLAIM) with 0% of chars in tokens over 30,
+//   so the token signal missed it. No token-length threshold can catch that
+//   without flagging clean PDFs (the text-layer fixture carries a 24-char
+//   spaceless token, amina.rahman@example.test), but letter runs separate
+//   them: clean PDF fixtures peak at a 7-letter run (11 post-fix on an
+//   all-caps claim-form probe: PARTICULARS) versus 18 fused, so N=16 with
+//   >=5% letter share flags the artifact while clean fixtures pass with
+//   margin. The share gate (not longest alone) keeps a single legit long
+//   word in a long document passing.
+// Cannot detect fusion that yields only sub-N runs (e.g. an alphanumeric
+// fusion such as NUMBERQQ123456CWAS, letter runs 8+3 — mitigated because the
+// observed producer fuses whole all-caps lines, which still trip the run
+// signal), a single legit 16+ letter word in a very short document, or
+// over-spaced text (handled nowhere). Scanned PDFs are handled separately
+// via MINIMUM_PDF_CHARS_PER_PAGE. Thresholds validated against clean
+// fixtures in extraction-coverage.test.ts; recalibrate on real fused runs.
 export const FUSED_TOKEN_MIN_LENGTH = 30
 export const FUSED_TOKEN_CHAR_SHARE = 0.05
 export const FUSED_TOKEN_ABSOLUTE_LENGTH = 100
+export const FUSED_LETTER_RUN_MIN_LENGTH = 16
+export const FUSED_LETTER_RUN_SHARE = 0.05
 
 function nonWhitespaceChars(value: string) {
   return [...value].filter((ch) => !/\s/u.test(ch)).length
@@ -150,6 +167,25 @@ export function findUncoveredPdfRegions(extractedText: string): string[] {
     const share = Math.round((longChars / total) * 100)
     return [
       `fused-text (longest whitespace-free token ${longest} chars; ${share}% of chars in tokens over ${FUSED_TOKEN_MIN_LENGTH} chars)`,
+    ]
+  }
+  const runs = extractedText.match(/[A-Za-z]+/gu) ?? []
+  let totalLetters = 0
+  let longestRun = 0
+  let longRunChars = 0
+  for (const run of runs) {
+    const length = [...run].length
+    totalLetters += length
+    if (length > longestRun) longestRun = length
+    if (length >= FUSED_LETTER_RUN_MIN_LENGTH) longRunChars += length
+  }
+  if (
+    totalLetters > 0 &&
+    longRunChars / totalLetters >= FUSED_LETTER_RUN_SHARE
+  ) {
+    const share = Math.round((longRunChars / totalLetters) * 100)
+    return [
+      `fused-text (longest letter run ${longestRun} chars; ${share}% of letters in runs of ${FUSED_LETTER_RUN_MIN_LENGTH}+ chars)`,
     ]
   }
   return []
