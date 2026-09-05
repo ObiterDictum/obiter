@@ -1,13 +1,20 @@
 import { loadOoxmlZipEntries } from '@obiter/ooxml'
-import { extractWordXmlText, normaliseFileType } from './document-extraction'
+import {
+  extractWordXmlText,
+  normaliseFileType,
+  readDocxNoteBodies,
+} from './document-extraction'
 
 // Extraction coverage guard: redaction must not finalise over regions it never
-// examined. Measured recall (upload-corpus): letter-footnotes-numbering carries
-// 5972 document chars + 1205 footnote chars but extraction emits 6002 chars
-// (83.6%) — footnote bodies are absent (probe "disclosure timetable agreed on
-// 2 May" not in output). Endnotes/comments are code-evident ignored (no reader
-// references them); textboxes are dropped by mammoth (w:txbxContent). E43 owns
-// extracting these regions; this module only refuses to claim completeness.
+// examined. E43 extracts word/footnotes.xml and word/endnotes.xml into a
+// labelled trailing region ("[Footnote N] ..."), so the guard below treats
+// a note body as covered only when that body is present in the extracted
+// text — runs extracted before E43, or text that dropped the region, still
+// refuse. Comments are deferred (review-thread authorship needs anchor and
+// product decisions before merging into redaction text) and body textboxes
+// are deferred (mid-sentence content needs inline placement, which shifts
+// offsets and needs its own design); both still refuse. Fused-PDF and
+// scanned-PDF signals are unchanged.
 
 // Parts with fewer non-whitespace chars than this are ignored so empty
 // footnote separators and trivial fragments do not block clean documents.
@@ -34,6 +41,26 @@ function regionLabel(name: string, chars: number) {
   return `${name} (${chars} chars not examined)`
 }
 
+/**
+ * Non-whitespace chars of note bodies of one kind that are absent from the
+ * extracted text. Extraction appends each body verbatim inside its label, so
+ * a body present in the text is covered; anything else (including runs
+ * extracted before E43) is not.
+ */
+function uncoveredNoteChars(
+  entries: Map<string, Uint8Array>,
+  extractedText: string,
+  kind: 'footnote' | 'endnote',
+): number {
+  let chars = 0
+  for (const note of readDocxNoteBodies(entries)) {
+    if (note.kind !== kind) continue
+    if (!extractedText.includes(note.text))
+      chars += nonWhitespaceChars(note.text)
+  }
+  return chars
+}
+
 function wordPartText(entries: Map<string, Uint8Array>, name: string) {
   const payload = entries.get(name)
   if (!payload) return ''
@@ -51,11 +78,14 @@ export function countBodyTextboxChars(documentXml: string) {
 
 /**
  * Regions of a .docx source that extraction never reads. Headers/footers
- * reached via document.xml.rels and document.xml itself are covered, so only
- * footnotes, endnotes, comments, and body textboxes are reported.
+ * reached via document.xml.rels and document.xml itself are covered, and
+ * footnote/endnote bodies are covered when the extracted text contains them
+ * (E43 appends them as a labelled trailing region). Comments and body
+ * textboxes are still reported whenever non-trivial.
  */
 export async function findUncoveredDocxRegions(
   sourceBytes: Buffer,
+  extractedText = '',
 ): Promise<string[]> {
   let entries: Map<string, Uint8Array>
   try {
@@ -65,11 +95,21 @@ export async function findUncoveredDocxRegions(
     return []
   }
   const regions: string[] = []
-  const candidates = [
-    { pattern: /^word\/footnotes\.xml$/i, name: 'footnotes' },
-    { pattern: /^word\/endnotes\.xml$/i, name: 'endnotes' },
-    { pattern: /^word\/comments.*\.xml$/i, name: 'comments' },
-  ]
+  const uncoveredFootnoteChars = uncoveredNoteChars(
+    entries,
+    extractedText,
+    'footnote',
+  )
+  if (uncoveredFootnoteChars >= UNEXAMINED_PART_MIN_CHARS)
+    regions.push(regionLabel('footnotes', uncoveredFootnoteChars))
+  const uncoveredEndnoteChars = uncoveredNoteChars(
+    entries,
+    extractedText,
+    'endnote',
+  )
+  if (uncoveredEndnoteChars >= UNEXAMINED_PART_MIN_CHARS)
+    regions.push(regionLabel('endnotes', uncoveredEndnoteChars))
+  const candidates = [{ pattern: /^word\/comments.*\.xml$/i, name: 'comments' }]
   for (const [entryName] of entries) {
     const candidate = candidates.find((item) => item.pattern.test(entryName))
     if (!candidate) continue
@@ -145,5 +185,5 @@ export async function findUncoveredRegions(input: {
   const kind = classifySource(input.filename, input.mimeType)
   if (kind === 'pdf') return findUncoveredPdfRegions(input.extractedText)
   if (kind !== 'docx' || !input.sourceBytes) return []
-  return findUncoveredDocxRegions(input.sourceBytes)
+  return findUncoveredDocxRegions(input.sourceBytes, input.extractedText)
 }
