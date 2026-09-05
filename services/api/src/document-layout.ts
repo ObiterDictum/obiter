@@ -189,7 +189,15 @@ function collapseLineGlyphSpacing(line: string) {
     }
   }
   if (/[a-z]/u.test(next) || !/\s/u.test(next)) return next
-  return next.replace(/[A-Z0-9]+(?:\s+[A-Z0-9]{1,3}){2,}/gu, (run) =>
+  // Word-boundary anchored: an unanchored [A-Z0-9]{1,3} group matches the
+  // prefix of a longer word ("COU" of "COUNTY"), so the join shredded real
+  // all-caps prose ("IN THE COUNTY COURT AT CENTRAL LONDON" extracted as
+  // "INTHECOUNTY COURTATCENTRAL LONDON", "PARTICULARS OF CLAIM" as
+  // "PARTICULARSOFCLAIM"). Anchored, only runs of short tokens such as
+  // "AB CD EF" still collapse; the first token is short too so a long word
+  // followed by initials is left alone. Runs containing a standalone number
+  // keep their spaces (spaced identifiers such as QQ 12 34 56 C).
+  return next.replace(/\b[A-Z0-9]{1,3}(?:\s+[A-Z0-9]{1,3}\b){2,}/gu, (run) =>
     /\b\d+\b/u.test(run) ? run : run.replace(/\s+/gu, ''),
   )
 }
