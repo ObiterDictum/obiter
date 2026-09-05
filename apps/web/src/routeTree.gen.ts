@@ -11,18 +11,18 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WorkspaceRouteImport } from './routes/workspace'
 import { Route as VerifyRouteImport } from './routes/verify'
-import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SignUpRouteImport } from './routes/sign-up'
+import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SearchRouteImport } from './routes/search'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as InvitesAcceptRouteImport } from './routes/invites/accept'
 import { Route as RedactIndexRouteImport } from './routes/redact/index'
 import { Route as MattersIndexRouteImport } from './routes/matters/index'
 import { Route as RedactRunIdRouteImport } from './routes/redact/$runId'
 import { Route as MattersMatterIdRouteImport } from './routes/matters/$matterId'
+import { Route as InvitesAcceptRouteImport } from './routes/invites/accept'
 import { Route as CasesCaseIdRouteImport } from './routes/cases/$caseId'
 import { Route as CaseCaseSlugRouteImport } from './routes/case/$caseSlug'
 import { Route as MattersMatterIdDocumentsDocumentIdRouteImport } from './routes/matters/$matterId/documents/$documentId'
@@ -37,14 +37,14 @@ const VerifyRoute = VerifyRouteImport.update({
   path: '/verify',
   getParentRoute: () => rootRouteImport,
 } as any)
-const SignInRoute = SignInRouteImport.update({
-  id: '/sign-in',
-  path: '/sign-in',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const SignUpRoute = SignUpRouteImport.update({
   id: '/sign-up',
   path: '/sign-up',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignInRoute = SignInRouteImport.update({
+  id: '/sign-in',
+  path: '/sign-in',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -65,11 +65,6 @@ const ResetPasswordRoute = ResetPasswordRouteImport.update({
 const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   id: '/forgot-password',
   path: '/forgot-password',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const InvitesAcceptRoute = InvitesAcceptRouteImport.update({
-  id: '/invites/accept',
-  path: '/invites/accept',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -97,6 +92,11 @@ const MattersMatterIdRoute = MattersMatterIdRouteImport.update({
   path: '/matters/$matterId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InvitesAcceptRoute = InvitesAcceptRouteImport.update({
+  id: '/invites/accept',
+  path: '/invites/accept',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const CasesCaseIdRoute = CasesCaseIdRouteImport.update({
   id: '/cases/$caseId',
   path: '/cases/$caseId',
@@ -117,7 +117,6 @@ const MattersMatterIdDocumentsDocumentIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/forgot-password': typeof ForgotPasswordRoute
-  '/invites/accept': typeof InvitesAcceptRoute
   '/reset-password': typeof ResetPasswordRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
@@ -127,6 +126,7 @@ export interface FileRoutesByFullPath {
   '/workspace': typeof WorkspaceRoute
   '/case/$caseSlug': typeof CaseCaseSlugRoute
   '/cases/$caseId': typeof CasesCaseIdRoute
+  '/invites/accept': typeof InvitesAcceptRoute
   '/matters/$matterId': typeof MattersMatterIdRouteWithChildren
   '/redact/$runId': typeof RedactRunIdRoute
   '/matters/': typeof MattersIndexRoute
@@ -136,7 +136,6 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/forgot-password': typeof ForgotPasswordRoute
-  '/invites/accept': typeof InvitesAcceptRoute
   '/reset-password': typeof ResetPasswordRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
@@ -146,6 +145,7 @@ export interface FileRoutesByTo {
   '/workspace': typeof WorkspaceRoute
   '/case/$caseSlug': typeof CaseCaseSlugRoute
   '/cases/$caseId': typeof CasesCaseIdRoute
+  '/invites/accept': typeof InvitesAcceptRoute
   '/matters/$matterId': typeof MattersMatterIdRouteWithChildren
   '/redact/$runId': typeof RedactRunIdRoute
   '/matters': typeof MattersIndexRoute
@@ -156,7 +156,6 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/forgot-password': typeof ForgotPasswordRoute
-  '/invites/accept': typeof InvitesAcceptRoute
   '/reset-password': typeof ResetPasswordRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
@@ -166,6 +165,7 @@ export interface FileRoutesById {
   '/workspace': typeof WorkspaceRoute
   '/case/$caseSlug': typeof CaseCaseSlugRoute
   '/cases/$caseId': typeof CasesCaseIdRoute
+  '/invites/accept': typeof InvitesAcceptRoute
   '/matters/$matterId': typeof MattersMatterIdRouteWithChildren
   '/redact/$runId': typeof RedactRunIdRoute
   '/matters/': typeof MattersIndexRoute
@@ -177,7 +177,6 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/forgot-password'
-    | '/invites/accept'
     | '/reset-password'
     | '/search'
     | '/settings'
@@ -187,6 +186,7 @@ export interface FileRouteTypes {
     | '/workspace'
     | '/case/$caseSlug'
     | '/cases/$caseId'
+    | '/invites/accept'
     | '/matters/$matterId'
     | '/redact/$runId'
     | '/matters/'
@@ -196,7 +196,6 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/forgot-password'
-    | '/invites/accept'
     | '/reset-password'
     | '/search'
     | '/settings'
@@ -206,6 +205,7 @@ export interface FileRouteTypes {
     | '/workspace'
     | '/case/$caseSlug'
     | '/cases/$caseId'
+    | '/invites/accept'
     | '/matters/$matterId'
     | '/redact/$runId'
     | '/matters'
@@ -215,7 +215,6 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/forgot-password'
-    | '/invites/accept'
     | '/reset-password'
     | '/search'
     | '/settings'
@@ -225,6 +224,7 @@ export interface FileRouteTypes {
     | '/workspace'
     | '/case/$caseSlug'
     | '/cases/$caseId'
+    | '/invites/accept'
     | '/matters/$matterId'
     | '/redact/$runId'
     | '/matters/'
@@ -235,7 +235,6 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
-  InvitesAcceptRoute: typeof InvitesAcceptRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRoute
@@ -245,6 +244,7 @@ export interface RootRouteChildren {
   WorkspaceRoute: typeof WorkspaceRoute
   CaseCaseSlugRoute: typeof CaseCaseSlugRoute
   CasesCaseIdRoute: typeof CasesCaseIdRoute
+  InvitesAcceptRoute: typeof InvitesAcceptRoute
   MattersMatterIdRoute: typeof MattersMatterIdRouteWithChildren
   RedactRunIdRoute: typeof RedactRunIdRoute
   MattersIndexRoute: typeof MattersIndexRoute
@@ -267,18 +267,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VerifyRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/sign-in': {
-      id: '/sign-in'
-      path: '/sign-in'
-      fullPath: '/sign-in'
-      preLoaderRoute: typeof SignInRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/sign-up': {
       id: '/sign-up'
       path: '/sign-up'
       fullPath: '/sign-up'
       preLoaderRoute: typeof SignUpRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-in': {
+      id: '/sign-in'
+      path: '/sign-in'
+      fullPath: '/sign-in'
+      preLoaderRoute: typeof SignInRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -307,13 +307,6 @@ declare module '@tanstack/react-router' {
       path: '/forgot-password'
       fullPath: '/forgot-password'
       preLoaderRoute: typeof ForgotPasswordRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/invites/accept': {
-      id: '/invites/accept'
-      path: '/invites/accept'
-      fullPath: '/invites/accept'
-      preLoaderRoute: typeof InvitesAcceptRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -349,6 +342,13 @@ declare module '@tanstack/react-router' {
       path: '/matters/$matterId'
       fullPath: '/matters/$matterId'
       preLoaderRoute: typeof MattersMatterIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/invites/accept': {
+      id: '/invites/accept'
+      path: '/invites/accept'
+      fullPath: '/invites/accept'
+      preLoaderRoute: typeof InvitesAcceptRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/cases/$caseId': {
@@ -391,7 +391,6 @@ const MattersMatterIdRouteWithChildren = MattersMatterIdRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
-  InvitesAcceptRoute: InvitesAcceptRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SearchRoute: SearchRoute,
   SettingsRoute: SettingsRoute,
@@ -401,6 +400,7 @@ const rootRouteChildren: RootRouteChildren = {
   WorkspaceRoute: WorkspaceRoute,
   CaseCaseSlugRoute: CaseCaseSlugRoute,
   CasesCaseIdRoute: CasesCaseIdRoute,
+  InvitesAcceptRoute: InvitesAcceptRoute,
   MattersMatterIdRoute: MattersMatterIdRouteWithChildren,
   RedactRunIdRoute: RedactRunIdRoute,
   MattersIndexRoute: MattersIndexRoute,

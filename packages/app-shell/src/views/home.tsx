@@ -13,7 +13,11 @@ import {
   X,
 } from '@phosphor-icons/react'
 import { Skeleton, cn } from '@obiter/ui'
-import type { AppPlatform, RedactionRunStatus } from '@obiter/contracts'
+import {
+  PERSONAL_WORKSPACE_NAME,
+  type AppPlatform,
+  type RedactionRunStatus,
+} from '@obiter/contracts'
 import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import {
   useQueries,
@@ -60,6 +64,10 @@ export function HomeRouteView({
       organisationName={me.organisation?.name ?? null}
       userName={me.user.name}
       hasOrganisation={Boolean(me.organisation)}
+      showNamingPrompt={
+        me.user.role === 'owner' &&
+        me.organisation?.name === PERSONAL_WORKSPACE_NAME
+      }
     />
   )
 }
@@ -68,10 +76,12 @@ function OrganisationHome({
   organisationName,
   userName,
   hasOrganisation,
+  showNamingPrompt,
 }: {
   organisationName: string | null
   userName: string
   hasOrganisation: boolean
+  showNamingPrompt: boolean
 }) {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
@@ -325,6 +335,19 @@ function OrganisationHome({
             </div>
           </div>
         </header>
+
+        {showNamingPrompt ? (
+          <p className="mb-5 rounded-md border border-line bg-raised px-4 py-3 text-sm text-muted">
+            Your workspace still has its default name.{' '}
+            <Link
+              to="/settings"
+              className="font-medium text-brand hover:text-brand-pressed"
+            >
+              Name it in Settings
+            </Link>
+            .
+          </p>
+        ) : null}
 
         {/* Command + work desk */}
         <div className="flex flex-col border-t border-line pt-5">

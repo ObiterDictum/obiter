@@ -372,6 +372,54 @@ describe('HomeRouteView — organisation-less state', () => {
   })
 })
 
+describe('HomeRouteView — default workspace naming prompt', () => {
+  it('prompts the owner of a default-named workspace to name it', async () => {
+    mocks.useCurrentUser.mockReturnValue({
+      data: {
+        ...ME,
+        organisation: { ...ME.organisation, name: 'Personal workspace' },
+      },
+    })
+    mocks.useMattersList.mockReturnValue(mattersSuccess(0))
+    renderHome()
+
+    await waitFor(() => {
+      expect(screen.getByText(/still has its default name/i)).toBeTruthy()
+    })
+    expect(
+      screen.getByRole('link', { name: /name it in settings/i }),
+    ).toBeTruthy()
+  })
+
+  it('shows no prompt for named workspaces or non-owners', async () => {
+    mocks.useMattersList.mockReturnValue(mattersLoading())
+    renderHome()
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Good (morning|afternoon|evening), Lex/i),
+      ).toBeTruthy()
+    })
+    expect(screen.queryByText(/still has its default name/i)).toBeNull()
+    cleanup()
+
+    mocks.useCurrentUser.mockReturnValue({
+      data: {
+        user: { ...ME.user, role: 'member' as const },
+        organisation: { ...ME.organisation, name: 'Personal workspace' },
+      },
+    })
+    renderHome()
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(/Good (morning|afternoon|evening), Lex/i),
+      ).toBeTruthy()
+    })
+    expect(screen.queryByText(/still has its default name/i)).toBeNull()
+  })
+})
+
 describe('HomeRouteView — relevant density', () => {
   it('does not render changelog tips or shortcuts in the desk body', async () => {
     mocks.useMattersList.mockReturnValue(mattersSuccess(1))

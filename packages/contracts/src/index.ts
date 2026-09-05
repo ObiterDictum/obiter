@@ -365,6 +365,9 @@ export type MeResponse = z.infer<typeof meResponseSchema>
 
 export const ORGANISATION_NAME_MAX_LENGTH = 120
 
+/** Default tenant name for auto-provisioned workspaces (see ensureOrganisationForUser). */
+export const PERSONAL_WORKSPACE_NAME = 'Personal workspace'
+
 export const createOrganisationInputSchema = z.object({
   name: z
     .string()
@@ -375,6 +378,39 @@ export const createOrganisationInputSchema = z.object({
 export type CreateOrganisationInput = z.infer<
   typeof createOrganisationInputSchema
 >
+
+export const updateOrganisationInputSchema = createOrganisationInputSchema
+
+export type UpdateOrganisationInput = z.infer<
+  typeof updateOrganisationInputSchema
+>
+
+/**
+ * Shared organisation-name validation for create + rename + sign-up stash
+ * consumption: strip Unicode format characters (category Cf — zero-width
+ * spaces, joiners, directional marks) as well as ASCII whitespace before
+ * the emptiness check, so a name of only ZWSPs cannot pass trim() as
+ * non-empty and store an invisible organisation name. Enforces the shared
+ * length ceiling.
+ */
+export function parseOrganisationName(
+  rawName: unknown,
+): { ok: true; name: string } | { ok: false; message: string } {
+  if (typeof rawName !== 'string') {
+    return { ok: false, message: 'Organisation name is required.' }
+  }
+  const name = rawName.replace(/\p{Cf}/gu, '').trim()
+  if (name.length === 0) {
+    return { ok: false, message: 'Organisation name is required.' }
+  }
+  if (name.length > ORGANISATION_NAME_MAX_LENGTH) {
+    return {
+      ok: false,
+      message: `Organisation name must be at most ${ORGANISATION_NAME_MAX_LENGTH} characters.`,
+    }
+  }
+  return { ok: true, name }
+}
 
 export const createOrganisationInviteInputSchema = z.object({
   email: z.string().trim().email().max(320),
