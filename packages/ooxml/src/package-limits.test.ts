@@ -158,6 +158,20 @@ describe('OOXML package limits', () => {
     expect(() => assertOoxmlPackageCentralDirectory(zip)).toThrow(OoxmlError)
   })
 
+  it('accepts a real-toolchain-shaped ratio below the ceiling', () => {
+    // python-docx styles parts reach ~32x; the ceiling must clear them.
+    const zip = buildZipWithCentralDirectory([
+      {
+        name: 'word/styles.xml',
+        compressedSize: 512,
+        uncompressedSize: 512 * 33,
+        payload: new Uint8Array(512),
+      },
+    ])
+
+    expect(() => assertOoxmlPackageCentralDirectory(zip)).not.toThrow()
+  })
+
   it('rejects a ZIP whose compression ratio exceeds the configured maximum', () => {
     const zip = buildZipWithCentralDirectory([
       {
