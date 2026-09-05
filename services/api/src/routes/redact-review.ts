@@ -14,6 +14,7 @@ import {
 } from '@obiter/redaction-policy'
 import { appendAuditLog } from '../database'
 import { createDocumentMediaResponse } from '../document-media-response'
+import { findUncoveredRegions } from '../extraction-coverage'
 import {
   finalizeRedactionRun,
   getRedactionOutputKey,
@@ -328,6 +329,51 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         404,
       )
     const text = await storage.readText(textObjectKey)
+    const source = await getRunSourceFile(pool, run)
+    // Fail closed: finalising claims the output is complete, so refuse when
+    // the source holds text extraction never examined (footnotes, endnotes,
+    // comments, textboxes, fused PDF runs). Checked here — after the text
+    // read, before any artifact write — so refusal leaves no output behind.
+    // 409 matches the other finalize conflicts (already-finalized,
+    // span-integrity); uncovered regions ride in the message because the
+    // shared error envelope carries no extra fields, and the review UI
+    // already renders the message. E43 owns extracting these regions.
+    // No stored source (legacy runs predate the guard) is the one exception:
+    // those proceed but are marked unchecked below. A stored source that
+    // cannot be read is not evidence of coverage, so it refuses like an
+    // uncovered region.
+    let sourceBytes: Buffer | null = null
+    let coverageUnchecked = false
+    if (!source || !storage.readBinary) {
+      // No stored source recorded, so coverage cannot be checked. The bytes
+      // never existed (legacy runs predate the guard), which is distinct
+      // from a stored source that failed to read — see below.
+      coverageUnchecked = true
+    } else {
+      try {
+        sourceBytes = await storage.readBinary(source.objectKey)
+      } catch {
+        return errorResponse(
+          c,
+          'extraction_coverage_incomplete',
+          'This run cannot be finalized: the stored source could not be read, so extraction coverage is unproven.',
+          409,
+        )
+      }
+    }
+    const uncoveredRegions = await findUncoveredRegions({
+      filename: run.sourceFilename,
+      mimeType: source?.mimeType ?? run.sourceMimeType ?? null,
+      sourceBytes,
+      extractedText: text,
+    })
+    if (uncoveredRegions.length > 0)
+      return errorResponse(
+        c,
+        'extraction_coverage_incomplete',
+        `This run cannot be finalized: part of the source was never examined (${uncoveredRegions.join('; ')}), so completeness cannot be claimed.`,
+        409,
+      )
     let output: string
     let tokenMap: Record<string, string>
     try {
@@ -354,7 +400,6 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
     let outputMimeType = 'text/plain'
     let outputFilename = redactedTextFilename(run.sourceFilename)
     try {
-      const source = await getRunSourceFile(pool, run)
       const layoutObjectKey = await getRunLayoutObjectKey(pool, run)
       const canWritePdf =
         Boolean(source) &&
@@ -488,10 +533,24 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
     const unreviewedSpanIds = result.run.spans
       .filter((span) => !result.run.decisions[span.id])
       .map((span) => span.id)
+    if (coverageUnchecked) {
+      await appendAuditLog(pool, {
+        organisationId: user.organisationId,
+        userId: user.id,
+        entityType: 'redaction_run',
+        entityId: result.run.id,
+        action: 'redaction.coverage_unchecked',
+        metadata: {
+          reason:
+            'No stored source recorded; extraction coverage could not be checked.',
+        },
+        requestId: c.get('requestId'),
+      })
+    }
     return c.json({
       run: publicRun(result.run),
       artifact: result.artifact,
-      warnings: { unreviewedSpanIds },
+      warnings: { unreviewedSpanIds, coverageUnchecked },
     })
   })
 

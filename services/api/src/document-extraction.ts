@@ -507,7 +507,7 @@ function decodeXmlText(value: string) {
   )
 }
 
-function extractWordXmlText(xml: string) {
+export function extractWordXmlText(xml: string) {
   const parts: string[] = []
   const tokens =
     /<w:t(?:\s[^>]*)?>([\s\S]*?)<\/w:t>|<w:(?:tab|br)(?:\s[^>]*)?\s*\/\s*>|<\/w:p>/gi

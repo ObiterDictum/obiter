@@ -2634,6 +2634,203 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     )
     log.mockRestore()
   })
+
+  it('refuses to finalize over unexamined docx regions but passes clean docs', async () => {
+    async function finalizeWithSource(fixtureName: string) {
+      const sourceBytes = await readFile(
+        `test-fixtures/upload-corpus/${fixtureName}`,
+      )
+      const readyRun = finalizedRunRow({
+        status: 'ready_for_review',
+        output_artifact_id: null,
+        source_filename: fixtureName,
+        source_mime_type:
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        source_file_object_key: 'org/org_1/redaction-runs/red_1/original',
+      })
+      let outputWrites = 0
+      const app = createApiApp(
+        testEnv,
+        createHybridPool(
+          async (sql) => {
+            if (String(sql).includes('from redaction_runs')) {
+              return { rows: [readyRun] }
+            }
+            return { rows: [] }
+          },
+          async (sql) => {
+            const text = String(sql)
+            if (text === 'begin' || text === 'commit') return { rows: [] }
+            if (
+              text.includes('for update of run') ||
+              text.includes('select matter_id, document_id, replaces_run_id')
+            )
+              return { rows: [readyRun] }
+            if (text.includes('insert into artifacts')) {
+              return {
+                rows: [
+                  { id: 'art_1', object_key: 'org/org_1/artifacts/art_1' },
+                ],
+              }
+            }
+            if (text.includes('update redaction_runs')) return { rows: [] }
+            if (text.includes('from redaction_runs')) {
+              return { rows: [finalizedRunRow()] }
+            }
+            if (text.includes('insert into audit_logs')) return { rows: [] }
+            throw new Error(`Unexpected SQL: ${text}`)
+          },
+        ),
+        {
+          auth: authWithRole('member'),
+          storage: {
+            readText: async () => 'Synthetic text.',
+            readBinary: async () => sourceBytes,
+            writeText: async () => {
+              outputWrites += 1
+            },
+            delete: async () => undefined,
+          },
+        },
+      )
+      const response = await app.request('/api/redaction-runs/red_1/finalize', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ outputMode: 'redacted' }),
+      })
+      return { response, outputWrites: () => outputWrites }
+    }
+
+    const refused = await finalizeWithSource('letter-footnotes-numbering.docx')
+    expect(refused.response.status).toBe(409)
+    expect(((await refused.response.json()) as ErrorBody).error).toMatchObject({
+      code: 'extraction_coverage_incomplete',
+      message: expect.stringContaining('footnotes'),
+    })
+    expect(refused.outputWrites()).toBe(0)
+
+    const clean = await finalizeWithSource('letter-plain.docx')
+    expect(clean.response.status).toBe(200)
+    expect(clean.outputWrites()).toBe(1)
+  })
+
+  it('finalizes runs with no stored source as coverage-unchecked (warning + audit)', async () => {
+    const readyRun = finalizedRunRow({
+      status: 'ready_for_review',
+      output_artifact_id: null,
+    })
+    const auditActions: unknown[] = []
+    const captureAudit = (sql: unknown, params: unknown) => {
+      if (String(sql).includes('insert into audit_logs'))
+        auditActions.push((params as unknown[])[4])
+    }
+    let outputWrites = 0
+    const app = createApiApp(
+      testEnv,
+      createHybridPool(
+        async (sql, params) => {
+          captureAudit(sql, params)
+          if (String(sql).includes('from redaction_runs')) {
+            return { rows: [readyRun] }
+          }
+          return { rows: [] }
+        },
+        async (sql, params) => {
+          const text = String(sql)
+          captureAudit(sql, params)
+          if (text === 'begin' || text === 'commit') return { rows: [] }
+          if (
+            text.includes('for update of run') ||
+            text.includes('select matter_id, document_id, replaces_run_id')
+          )
+            return { rows: [readyRun] }
+          if (text.includes('insert into artifacts')) {
+            return {
+              rows: [{ id: 'art_1', object_key: 'org/org_1/artifacts/art_1' }],
+            }
+          }
+          if (text.includes('update redaction_runs')) return { rows: [] }
+          if (text.includes('from redaction_runs')) {
+            return { rows: [finalizedRunRow()] }
+          }
+          if (text.includes('insert into audit_logs')) return { rows: [] }
+          throw new Error(`Unexpected SQL: ${text}`)
+        },
+      ),
+      {
+        auth: authWithRole('member'),
+        storage: {
+          readText: async () => 'Synthetic text.',
+          writeText: async () => {
+            outputWrites += 1
+          },
+          delete: async () => undefined,
+        },
+      },
+    )
+    const response = await app.request('/api/redaction-runs/red_1/finalize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ outputMode: 'redacted' }),
+    })
+    expect(response.status).toBe(200)
+    expect(outputWrites).toBe(1)
+    const body = (await response.json()) as {
+      warnings: { unreviewedSpanIds: string[]; coverageUnchecked: boolean }
+    }
+    expect(body.warnings.coverageUnchecked).toBe(true)
+    expect(auditActions).toContain('redaction.coverage_unchecked')
+  })
+
+  it('refuses to finalize when the stored source cannot be read', async () => {
+    const readyRun = finalizedRunRow({
+      status: 'ready_for_review',
+      output_artifact_id: null,
+      source_filename: 'letter-plain.docx',
+      source_mime_type:
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      source_file_object_key: 'org/org_1/redaction-runs/red_1/original',
+    })
+    let outputWrites = 0
+    const app = createApiApp(
+      testEnv,
+      createHybridPool(
+        async (sql) => {
+          if (String(sql).includes('from redaction_runs')) {
+            return { rows: [readyRun] }
+          }
+          return { rows: [] }
+        },
+        async (sql) => {
+          throw new Error(`Unexpected SQL: ${String(sql)}`)
+        },
+      ),
+      {
+        auth: authWithRole('member'),
+        storage: {
+          readText: async () => 'Synthetic text.',
+          readBinary: async () => {
+            throw new Error('transient storage failure')
+          },
+          writeText: async () => {
+            outputWrites += 1
+          },
+          delete: async () => undefined,
+        },
+      },
+    )
+    const response = await app.request('/api/redaction-runs/red_1/finalize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ outputMode: 'redacted' }),
+    })
+    expect(response.status).toBe(409)
+    expect(((await response.json()) as ErrorBody).error).toMatchObject({
+      code: 'extraction_coverage_incomplete',
+      message: expect.stringContaining('could not be read'),
+    })
+    expect(outputWrites).toBe(0)
+  })
 })
 
 describe('createApiApp replaced redaction run guards', () => {

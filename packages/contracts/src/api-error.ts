@@ -31,6 +31,7 @@ export const apiErrorCodeSchema = z.enum([
   'redaction_detection_failed',
   'redaction_model_unavailable',
   'redaction_span_integrity_error',
+  'extraction_coverage_incomplete',
   'payload_too_large',
   'ooxml_limits_exceeded',
   'hydration_budget_exceeded',
