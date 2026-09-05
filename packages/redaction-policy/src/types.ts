@@ -30,6 +30,14 @@ export type Decisions = Record<
   { decision: SpanDecision; decidedBy: string; decidedAt: string }
 >
 
+/**
+ * Why a finalized run downgraded to text instead of the burned container
+ * (PDF/.docx). Reason codes only — never span text or filenames. Persisted
+ * in summary_json so the warning survives a page reload.
+ */
+export type OutputDowngradeReason =
+  'tracked_change' | 'residual_text' | 'burn_failed'
+
 export interface RunSummary {
   totalSpans: number
   byCategory: Record<SpanCategory, number>
@@ -45,4 +53,8 @@ export interface RunSummary {
   outputMode?: 'redacted' | 'pseudonymised'
   outputMimeType?: string
   outputFilename?: string | null
+  outputDowngrade?: {
+    from: 'pdf' | 'docx'
+    reason: OutputDowngradeReason
+  } | null
 }
