@@ -338,12 +338,27 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
     // span-integrity); uncovered regions ride in the message because the
     // shared error envelope carries no extra fields, and the review UI
     // already renders the message. E43 owns extracting these regions.
+    // No stored source (legacy runs predate the guard) is the one exception:
+    // those proceed but are marked unchecked below. A stored source that
+    // cannot be read is not evidence of coverage, so it refuses like an
+    // uncovered region.
     let sourceBytes: Buffer | null = null
-    if (source && storage.readBinary) {
+    let coverageUnchecked = false
+    if (!source || !storage.readBinary) {
+      // No stored source recorded, so coverage cannot be checked. The bytes
+      // never existed (legacy runs predate the guard), which is distinct
+      // from a stored source that failed to read — see below.
+      coverageUnchecked = true
+    } else {
       try {
         sourceBytes = await storage.readBinary(source.objectKey)
       } catch {
-        sourceBytes = null
+        return errorResponse(
+          c,
+          'extraction_coverage_incomplete',
+          'This run cannot be finalized: the stored source could not be read, so extraction coverage is unproven.',
+          409,
+        )
       }
     }
     const uncoveredRegions = await findUncoveredRegions({
@@ -518,10 +533,24 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
     const unreviewedSpanIds = result.run.spans
       .filter((span) => !result.run.decisions[span.id])
       .map((span) => span.id)
+    if (coverageUnchecked) {
+      await appendAuditLog(pool, {
+        organisationId: user.organisationId,
+        userId: user.id,
+        entityType: 'redaction_run',
+        entityId: result.run.id,
+        action: 'redaction.coverage_unchecked',
+        metadata: {
+          reason:
+            'No stored source recorded; extraction coverage could not be checked.',
+        },
+        requestId: c.get('requestId'),
+      })
+    }
     return c.json({
       run: publicRun(result.run),
       artifact: result.artifact,
-      warnings: { unreviewedSpanIds },
+      warnings: { unreviewedSpanIds, coverageUnchecked },
     })
   })
 

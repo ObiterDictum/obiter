@@ -128,10 +128,13 @@ function classifySource(
 }
 
 /**
- * Unexamined regions for a finalize candidate. Returns [] when coverage cannot
- * be assessed (txt sources, missing source bytes) — the upload path always
- * stores source bytes, so real runs are checked; failing closed here would
- * strand runs whose bytes predate the guard.
+ * Unexamined regions for a finalize candidate. Null sourceBytes means no
+ * stored source was recorded (legacy runs predate the guard), so there is
+ * nothing to compare against and this returns []. The caller marks those
+ * runs unchecked; a stored source that fails to read never reaches here —
+ * the caller refuses finalisation instead, since an unreadable source is
+ * not evidence of coverage. Txt sources return [] by design (nothing
+ * outside the extracted text can hide).
  */
 export async function findUncoveredRegions(input: {
   filename: string
