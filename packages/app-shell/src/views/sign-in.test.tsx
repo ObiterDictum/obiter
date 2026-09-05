@@ -17,7 +17,6 @@ const authMocks = vi.hoisted(() => ({
   requestMagicLink: vi.fn(),
   navigate: vi.fn(),
   resendVerificationEmail: vi.fn(),
-  provisionPendingOrganisation: vi.fn(),
 }))
 
 const searchState = vi.hoisted(() => ({
@@ -36,10 +35,6 @@ vi.mock('../auth', () => ({
     resendVerificationEmail: authMocks.resendVerificationEmail,
     signOut: vi.fn(),
   }),
-}))
-
-vi.mock('../pending-organisation', () => ({
-  provisionPendingOrganisation: authMocks.provisionPendingOrganisation,
 }))
 
 vi.mock('@tanstack/react-router', () => ({
@@ -123,23 +118,6 @@ describe('SignInRouteView — password submit outcomes', () => {
       expect(authMocks.navigate).toHaveBeenCalledWith({ to: '/' })
     })
     expect(screen.queryByText(/Sign-in failed/i)).toBeNull()
-  })
-
-  it('claims a pending sign-up organisation name before leaving sign-in', async () => {
-    authMocks.signInWithEmail.mockResolvedValueOnce({ ok: true })
-    authMocks.navigate.mockResolvedValueOnce(undefined)
-    authMocks.provisionPendingOrganisation.mockResolvedValueOnce(true)
-
-    render(<SignInRouteView platform="web" />)
-    fillPasswordForm('livetest@example.com', 'SuperSecret123!')
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: /Continue/i }))
-    })
-
-    await waitFor(() => {
-      expect(authMocks.provisionPendingOrganisation).toHaveBeenCalled()
-      expect(authMocks.navigate).toHaveBeenCalledWith({ to: '/' })
-    })
   })
 
   it('offers a resend when sign-in fails because the address is unverified', async () => {

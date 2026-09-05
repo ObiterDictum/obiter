@@ -5,7 +5,6 @@ import type { AppPlatform } from '@obiter/contracts'
 import { useEffect, useState, type FormEvent } from 'react'
 import { useAuth } from '../auth'
 import { inviteAcceptCallbackURL } from '../invite-accept-callback-url'
-import { provisionPendingOrganisation } from '../pending-organisation'
 import { THEME_STORAGE_KEY } from '../use-app-theme'
 import { Wordmark } from '../wordmark'
 
@@ -71,9 +70,6 @@ export function SignInRouteView({
         setUnverified(result.code === 'EMAIL_NOT_VERIFIED')
         return
       }
-      // A name typed at sign-up is still pending: claim it before any
-      // product query can auto-provision a default-named workspace.
-      await provisionPendingOrganisation()
       await goToHome()
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : 'Sign-in failed.')

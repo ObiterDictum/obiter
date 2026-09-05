@@ -33,10 +33,6 @@ import {
 import { useMattersList, type MatterRecord } from '../matters'
 import { useCurrentUser } from '../current-user'
 import {
-  provisionPendingOrganisation,
-  readPendingOrganisationName,
-} from '../pending-organisation'
-import {
   attentionRunLabel,
   isAttentionRun,
   useRedactionRunsList,
@@ -62,21 +58,6 @@ export function HomeRouteView({
   platform: AppPlatform
 }) {
   const { data: me } = useCurrentUser()
-  const queryClient = useQueryClient()
-  const provisionedPending = useRef(false)
-
-  // Verification-link landings bypass the sign-in view, so the sign-up
-  // organisation name is claimed here instead. Either path converges: the
-  // POST wins while still org-less, otherwise the fresh default workspace
-  // is renamed to the typed name.
-  useEffect(() => {
-    if (provisionedPending.current || !readPendingOrganisationName()) return
-    provisionedPending.current = true
-    void provisionPendingOrganisation().then((changed) => {
-      if (changed)
-        void queryClient.invalidateQueries({ queryKey: ['current-user'] })
-    })
-  }, [queryClient])
 
   return (
     <OrganisationHome

@@ -13,6 +13,7 @@ interface UserRow {
   role: UserRole | null
   organisationId: string | null
   emailVerified: boolean
+  pendingOrganisationName?: string | null
 }
 
 interface InviteRow {
@@ -330,6 +331,7 @@ class MembershipStore {
       if (user) {
         user.organisationId = String(parameters[0])
         user.role = parameters[1] as UserRole
+        user.pendingOrganisationName = null
       }
       return { rows: [] }
     }
@@ -697,6 +699,8 @@ describe('organisation membership routes', () => {
     vi.spyOn(console, 'info').mockImplementation(() => undefined)
     const store = new MembershipStore()
     store.auditLogs.push({ organisation_id: 'org_b' })
+    // A sign-up stash predates the invite: joining a firm consumes it.
+    store.users.get('usr_invitee')!.pendingOrganisationName = 'Solo Practice'
     const ownerApp = appFor(store, {
       id: 'usr_owner',
       email: 'owner@example.com',
@@ -721,6 +725,7 @@ describe('organisation membership routes', () => {
     expect(store.users.get('usr_invitee')).toMatchObject({
       organisationId: 'org_a',
       role: 'admin',
+      pendingOrganisationName: null,
     })
     expect(store.invites.some((invite) => invite.accepted_at)).toBe(true)
     expect(store.auditLogs).toEqual([{ organisation_id: null }])

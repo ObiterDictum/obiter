@@ -19,6 +19,7 @@ const {
   emailAndPasswordOptions,
   sendResetPasswordForUser,
   authPlugins,
+  userAdditionalFields,
 } = await import('./auth')
 
 beforeEach(() => {
@@ -37,6 +38,25 @@ describe('authPlugins', () => {
     expect(plugins.find((plugin) => plugin.id === 'bearer')?.options).toEqual(
       undefined,
     )
+  })
+})
+
+describe('userAdditionalFields — sign-up stash seam (config regression)', () => {
+  it('accepts the sign-up organisation name but never privileged fields', () => {
+    const fields = userAdditionalFields()
+
+    // The cross-device stash: clients may send it at sign-up, and
+    // better-auth persists it on the user row for provisioning to consume.
+    expect(fields.pendingOrganisationName).toMatchObject({
+      type: 'string',
+      required: false,
+    })
+    expect(
+      (fields.pendingOrganisationName as { input?: boolean }).input,
+    ).not.toBe(false)
+    // Privilege boundary: organisation assignment stays server-side.
+    expect(fields.organisationId).toMatchObject({ input: false })
+    expect(fields.role).toMatchObject({ input: false })
   })
 })
 

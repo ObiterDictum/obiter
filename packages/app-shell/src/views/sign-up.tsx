@@ -6,7 +6,6 @@ import { ORGANISATION_NAME_MAX_LENGTH } from '@obiter/contracts'
 import { useAuth } from '../auth'
 import { inviteAcceptCallbackURL } from '../invite-accept-callback-url'
 import { checkInviteAccountExists } from '../organisation-membership'
-import { savePendingOrganisationName } from '../pending-organisation'
 import { Wordmark } from '../wordmark'
 import { useForceNightTheme, ResendVerificationControl } from './sign-in'
 
@@ -74,12 +73,12 @@ export function SignUpRouteView() {
         await navigate({ to: '/sign-in', search: { token } })
         return
       }
-      if (trimmedOrgName) savePendingOrganisationName(trimmedOrgName)
       const result = await signUpWithEmail({
         name: trimmedName,
         email: trimmedEmail,
         password,
         ...(token ? { callbackURL: inviteAcceptCallbackURL(token) } : {}),
+        ...(trimmedOrgName ? { pendingOrganisationName: trimmedOrgName } : {}),
       })
       if (!result.ok) {
         setError(result.message ?? 'Sign-up failed.')

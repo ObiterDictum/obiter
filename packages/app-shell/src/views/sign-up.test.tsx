@@ -14,7 +14,6 @@ const authMocks = vi.hoisted(() => ({
   signUpWithEmail: vi.fn(),
   resendVerificationEmail: vi.fn(),
   checkInviteAccountExists: vi.fn(),
-  savePendingOrganisationName: vi.fn(),
 }))
 
 const navigateMock = vi.hoisted(() => vi.fn())
@@ -39,10 +38,6 @@ vi.mock('../auth', () => ({
 
 vi.mock('../organisation-membership', () => ({
   checkInviteAccountExists: authMocks.checkInviteAccountExists,
-}))
-
-vi.mock('../pending-organisation', () => ({
-  savePendingOrganisationName: authMocks.savePendingOrganisationName,
 }))
 
 vi.mock('@tanstack/react-router', () => ({
@@ -169,12 +164,13 @@ describe('SignUpRouteView', () => {
         name: 'Ada',
         email: 'ada@obiter.dev',
         password: 'SuperSecret123!',
+        pendingOrganisationName: 'Acme Law',
       })
     })
     expect(authMocks.checkInviteAccountExists).not.toHaveBeenCalled()
   })
 
-  it('hides the organisation field for invitees and stashes no name', async () => {
+  it('hides the organisation field for invitees and sends no name', async () => {
     authMocks.signUpWithEmail.mockResolvedValueOnce({
       ok: true,
       verificationRequired: true,
@@ -188,9 +184,13 @@ describe('SignUpRouteView', () => {
     fireEvent.click(screen.getByRole('button', { name: /create account/i }))
 
     await waitFor(() => {
-      expect(authMocks.signUpWithEmail).toHaveBeenCalled()
+      expect(authMocks.signUpWithEmail).toHaveBeenCalledWith({
+        name: 'Ada',
+        email: 'ada@obiter.dev',
+        password: 'SuperSecret123!',
+        callbackURL: `${window.location.origin}/invites/accept?token=invite-token`,
+      })
     })
-    expect(authMocks.savePendingOrganisationName).not.toHaveBeenCalled()
   })
 
   it('requires an organisation name when signing up without a token', async () => {
@@ -209,10 +209,9 @@ describe('SignUpRouteView', () => {
       expect(screen.getByText('Organisation name is required.')).toBeTruthy()
     })
     expect(authMocks.signUpWithEmail).not.toHaveBeenCalled()
-    expect(authMocks.savePendingOrganisationName).not.toHaveBeenCalled()
   })
 
-  it('stashes the organisation name for provisioning after verification', async () => {
+  it('sends the organisation name with sign-up for server-side provisioning', async () => {
     searchState.token = undefined
     authMocks.signUpWithEmail.mockResolvedValueOnce({
       ok: true,
@@ -223,13 +222,15 @@ describe('SignUpRouteView', () => {
     fillForm({ organisationName: '  Acme Law  ' })
     fireEvent.click(screen.getByRole('button', { name: /create account/i }))
 
+    // Sent trimmed: the API validation trims again, so both agree.
     await waitFor(() => {
-      expect(authMocks.signUpWithEmail).toHaveBeenCalled()
+      expect(authMocks.signUpWithEmail).toHaveBeenCalledWith({
+        name: 'Ada',
+        email: 'ada@obiter.dev',
+        password: 'SuperSecret123!',
+        pendingOrganisationName: 'Acme Law',
+      })
     })
-    // Stored trimmed: the API validation trims again, so both agree.
-    expect(authMocks.savePendingOrganisationName).toHaveBeenCalledWith(
-      'Acme Law',
-    )
   })
 
   it('routes an invitee whose account already exists to sign-in with the token', async () => {

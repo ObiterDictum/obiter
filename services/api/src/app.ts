@@ -253,8 +253,8 @@ export function createApiApp(
 
     // Org-less users (organisationId null) are a first-class state: the user
     // exists and is authenticated but has not yet named an organisation in
-    // Settings (and may not have hit Matters/Redact, which auto-provision a
-    // personal workspace). Return organisation null so Settings can offer
+    // Settings (and may not have hit Matters/Redact, which auto-provision on
+    // first use). Return organisation null so Settings can offer
     // optional setup; product surfaces do not require it first.
     if (!organisationId) {
       const response: MeResponse = {

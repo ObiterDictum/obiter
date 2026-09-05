@@ -3,7 +3,6 @@ import { Hono } from 'hono'
 import type { Context } from 'hono'
 import type { Pool } from 'pg'
 import {
-  ORGANISATION_NAME_MAX_LENGTH,
   acceptOrganisationInviteInputSchema,
   createOrganisationInviteInputSchema,
   organisationInviteSchema,
@@ -11,6 +10,7 @@ import {
   organisationInviteAccountExistsInputSchema,
   organisationInviteAccountExistsSchema,
   organisationMemberSchema,
+  parseOrganisationName,
   type ApiErrorCode,
   type ApiErrorResponse,
   type UserRole,
@@ -95,32 +95,6 @@ function mapInvite(row: InviteRow) {
     createdBy: row.created_by,
     createdAt: iso(row.created_at),
   })
-}
-
-/**
- * Shared organisation-name validation for create + rename: strip Unicode
- * format characters (category Cf — zero-width spaces, joiners, directional
- * marks) as well as ASCII whitespace before the emptiness check, so a name
- * of only ZWSPs cannot pass trim() as non-empty and store an invisible
- * organisation name. Enforces the shared length ceiling.
- */
-function parseOrganisationName(
-  rawName: unknown,
-): { ok: true; name: string } | { ok: false; message: string } {
-  if (typeof rawName !== 'string') {
-    return { ok: false, message: 'Organisation name is required.' }
-  }
-  const name = rawName.replace(/\p{Cf}/gu, '').trim()
-  if (name.length === 0) {
-    return { ok: false, message: 'Organisation name is required.' }
-  }
-  if (name.length > ORGANISATION_NAME_MAX_LENGTH) {
-    return {
-      ok: false,
-      message: `Organisation name must be at most ${ORGANISATION_NAME_MAX_LENGTH} characters.`,
-    }
-  }
-  return { ok: true, name }
 }
 
 function callerOwnsOrganisation(

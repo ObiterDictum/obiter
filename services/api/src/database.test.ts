@@ -3,6 +3,7 @@ import type { Pool, PoolClient } from 'pg'
 import {
   createDocument,
   createOrganisationForUser,
+  ensureOrganisationForUser,
   restoreDocumentWithAudit,
   restoreMatterWithAudit,
   softDeleteDocumentWithCascade,
@@ -680,5 +681,218 @@ describe('createOrganisationForUser', () => {
     expect(sequence.some((s) => s.includes('insert into organisations'))).toBe(
       false,
     )
+  })
+
+  it('consumes the stashed sign-up name when no explicit name is given', async () => {
+    const { pool, calls } = createTransactionalPool(async (sql, params) => {
+      if (sql === 'begin' || sql === 'commit' || sql === 'rollback') {
+        return { rows: [] }
+      }
+      if (sql.includes('select "organisationId"')) {
+        return {
+          rows: [
+            {
+              organisationId: null,
+              role: null,
+              pendingOrganisationName: 'Acme Law',
+            },
+          ],
+        }
+      }
+      if (sql.includes('insert into organisations')) {
+        return {
+          rows: [
+            {
+              id: 'org_1',
+              name: String(params?.[0]),
+              plan: 'private_beta',
+            },
+          ],
+        }
+      }
+      if (
+        sql.includes('update users') ||
+        sql.includes('insert into audit_logs')
+      ) {
+        return { rows: [] }
+      }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    const result = await ensureOrganisationForUser(pool, {
+      userId: 'usr_1',
+      requestId: 'req_1',
+    })
+
+    expect(result).toEqual({
+      organisationId: 'org_1',
+      role: 'owner',
+      created: true,
+    })
+    const insert = calls.find(([sql]) =>
+      sql.includes('insert into organisations'),
+    )
+    expect(insert?.[1]?.[0]).toBe('Acme Law')
+    // Single-use: the stash is cleared on assignment.
+    expect(
+      calls.some(
+        ([sql]) =>
+          sql.includes('update users') &&
+          sql.includes('"pendingOrganisationName" = null'),
+      ),
+    ).toBe(true)
+    const audit = calls.find(([sql]) => sql.includes('insert into audit_logs'))
+    expect(audit?.[1]?.[4]).toBe('organisation.create')
+  })
+
+  it('falls back to the default workspace name on a forged stash', async () => {
+    const { pool, calls } = createTransactionalPool(async (sql, params) => {
+      if (sql === 'begin' || sql === 'commit' || sql === 'rollback') {
+        return { rows: [] }
+      }
+      if (sql.includes('select "organisationId"')) {
+        return {
+          rows: [
+            {
+              organisationId: null,
+              role: null,
+              // Invisible-only name: fails the shared Cf-strip validation.
+              pendingOrganisationName: '\u200b\u200c',
+            },
+          ],
+        }
+      }
+      if (sql.includes('insert into organisations')) {
+        return {
+          rows: [
+            {
+              id: 'org_1',
+              name: String(params?.[0]),
+              plan: 'private_beta',
+            },
+          ],
+        }
+      }
+      if (
+        sql.includes('update users') ||
+        sql.includes('insert into audit_logs')
+      ) {
+        return { rows: [] }
+      }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    await ensureOrganisationForUser(pool, {
+      userId: 'usr_1',
+      requestId: 'req_1',
+    })
+
+    const insert = calls.find(([sql]) =>
+      sql.includes('insert into organisations'),
+    )
+    expect(insert?.[1]?.[0]).toBe('Personal workspace')
+  })
+
+  it('prefers an explicit name over the stash and still clears it', async () => {
+    const { pool, calls } = createTransactionalPool(async (sql, params) => {
+      if (sql === 'begin' || sql === 'commit' || sql === 'rollback') {
+        return { rows: [] }
+      }
+      if (sql.includes('select "organisationId"')) {
+        return {
+          rows: [
+            {
+              organisationId: null,
+              role: null,
+              pendingOrganisationName: 'Stale Name',
+            },
+          ],
+        }
+      }
+      if (sql.includes('insert into organisations')) {
+        return {
+          rows: [
+            {
+              id: 'org_1',
+              name: String(params?.[0]),
+              plan: 'private_beta',
+            },
+          ],
+        }
+      }
+      if (
+        sql.includes('update users') ||
+        sql.includes('insert into audit_logs')
+      ) {
+        return { rows: [] }
+      }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    const result = await createOrganisationForUser(pool, {
+      userId: 'usr_1',
+      name: 'Explicit Chambers',
+      requestId: 'req_1',
+    })
+
+    expect(result).toEqual({
+      created: true,
+      organisation: {
+        id: 'org_1',
+        name: 'Explicit Chambers',
+        plan: 'private_beta',
+      },
+    })
+    expect(
+      calls.some(
+        ([sql]) =>
+          sql.includes('update users') &&
+          sql.includes('"pendingOrganisationName" = null'),
+      ),
+    ).toBe(true)
+  })
+
+  it('clears a stale stash when the user already has an organisation', async () => {
+    const { pool, calls } = createTransactionalPool(async (sql) => {
+      if (sql === 'begin' || sql === 'commit' || sql === 'rollback') {
+        return { rows: [] }
+      }
+      if (sql.includes('select "organisationId"')) {
+        return {
+          rows: [
+            {
+              organisationId: 'org_existing',
+              role: 'member',
+              pendingOrganisationName: 'Never consumed',
+            },
+          ],
+        }
+      }
+      if (sql.includes('update users')) {
+        return { rows: [] }
+      }
+      throw new Error(`Unexpected SQL: ${sql}`)
+    })
+
+    await expect(
+      createOrganisationForUser(pool, {
+        userId: 'usr_1',
+        requestId: 'req_1',
+      }),
+    ).resolves.toEqual({
+      created: false,
+      organisationId: 'org_existing',
+      role: 'member',
+    })
+
+    const sequence = calls.map(([sql]) => sql)
+    expect(sequence).toContain('commit')
+    expect(
+      sequence.some(
+        (s) =>
+          s.includes('update users') &&
+          s.includes('"pendingOrganisationName" = null'),
+      ),
+    ).toBe(true)
   })
 })
