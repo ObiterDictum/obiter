@@ -53,11 +53,20 @@ if ! pg_isready -h localhost -p 5432 -U obiter -d obiter_test >/dev/null 2>&1; t
   exit 1
 fi
 
-if ! psql "$TEST_DATABASE_URL" -tAc "SELECT to_regclass('public.organisation_invites') is not null" | grep -qx t; then
-  echo "Postgres database obiter_test is not migrated" >&2
-  echo "Start Postgres with: $COMPOSE_CMD" >&2
-  echo "Then apply migrations:" >&2
-  echo "  for f in packages/database/migrations/*.sql; do psql \"$TEST_DATABASE_URL\" -v ON_ERROR_STOP=1 -f \"\$f\"; done" >&2
+# The test database must have every migration in packages/database/migrations
+# recorded in schema_migrations (applied via `pnpm db:migrate`). Comparing the
+# file list against the tracking table — rather than probing one hardcoded
+# table — keeps this check correct as migrations are added.
+if ! APPLIED=$(psql "$TEST_DATABASE_URL" -tAc "SELECT filename FROM public.schema_migrations ORDER BY filename" 2>/dev/null); then
+  echo "Postgres database obiter_test has no schema_migrations table" >&2
+  echo "Apply migrations with: pnpm db:migrate --database-url=\"$TEST_DATABASE_URL\"" >&2
+  exit 1
+fi
+MISSING=$(comm -23 <(for f in packages/database/migrations/*.sql; do basename "$f"; done | sort) <(printf '%s\n' "$APPLIED" | sort) || true)
+if [ -n "$MISSING" ]; then
+  echo "Postgres database obiter_test is missing migrations:" >&2
+  printf '%s\n' "$MISSING" | sed 's/^/  /' >&2
+  echo "Apply them with: pnpm db:migrate --database-url=\"$TEST_DATABASE_URL\"" >&2
   exit 1
 fi
 

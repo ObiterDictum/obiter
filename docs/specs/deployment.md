@@ -6,7 +6,7 @@ Status: planned (July 2026). PostgreSQL 16 already runs on the Hetzner VPS under
 
 - **Database**: running on the server (Dokploy). Local dev expects `postgres://obiter:obiter@localhost:5432/obiter` (default in `services/api/src/env.ts`).
 - **Web Dockerfile exists** at `apps/web/Dockerfile` (added in the app shell rebuild M3), with a dependency-free SSR host (`apps/web/serve.mjs`) and a repo-root `.dockerignore`. It has not been `docker build`-verified in the dev environment (no Docker there) but is standard Node 22 + corepack pnpm and CI-verifiable; see the Implementation section below.
-- **No API Dockerfile and no migration runner** exist yet. `packages/database/migrations/*.sql` are raw SQL files with no tracking table and no apply script — the server schema was applied manually. Both are Redact-track owned and remain a precondition for automated API deploys; a deploy that cannot apply `0005_redaction.sql` repeatably will block the Redact track.
+- **No API Dockerfile** exists yet. Migrations in `packages/database/migrations/*.sql` are applied by `pnpm db:migrate` (`services/api/src/migrate.ts`, tracked in `schema_migrations`) and at API startup; the server schema is no longer applied manually. The Dockerfile remains a precondition for automated API deploys and is Redact-track owned.
 - `apps/web` is a TanStack Start app — it has an SSR server component, so it deploys as a Node service, not a static bundle.
 - Auth is better-auth with cookie sessions, which constrains routing (below).
 
@@ -26,7 +26,7 @@ Three Dokploy applications on the existing VPS, plus the existing database:
 
 ### Migration runner — owned by the Redact track (first to need it)
 
-`scripts/migrate.ts`: applies `packages/database/migrations/*.sql` in filename order, tracked in a `schema_migrations` table (filename + applied_at), idempotent, refuses to run out of order. Wired as `pnpm migrate`. Used identically for local dev, tests, and as the API container's pre-start step. The Redact agent needs this anyway to apply `0005_redaction.sql` repeatably.
+`services/api/src/migrate.ts`: applies `packages/database/migrations/*.sql` in filename order, tracked in a `schema_migrations` table (filename + applied_at), idempotent, each file in its own transaction, stops at the first failure naming the file. Wired as `pnpm db:migrate --database-url=<url>` (the URL must be passed explicitly — no default — so the wrong database is never migrated by accident). The API runs it at startup behind a Postgres advisory lock and refuses to start when migrations cannot be applied. Used identically for local dev, tests, and as the API container's pre-start step. The Redact agent needs this anyway to apply `0005_redaction.sql` repeatably.
 
 ### API Dockerfile — owned by the Redact track
 
