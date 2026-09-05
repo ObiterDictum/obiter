@@ -21,6 +21,7 @@ import {
   DocumentExtractionError,
   extractDocumentContent,
   normaliseFileType,
+  type ExtractedDocumentContent,
 } from '../document-extraction'
 import { DocumentUploadError, readDocumentUpload } from '../document-upload'
 import {
@@ -192,6 +193,30 @@ export function createDocumentsRoutes(
       verifiedHash = computedHash
     }
 
+    // Extract before creating the row so a package-limits rejection (413)
+    // persists nothing — the redact-run route already orders it this way.
+    // Other extraction failures still create a `failed` row (201) with a
+    // distinct status, deletable via DELETE /api/documents/:id.
+    let preExtracted: ExtractedDocumentContent | null = null
+    if (uploadContents && verifiedType) {
+      try {
+        preExtracted = await extractDocumentContent(
+          verifiedType,
+          uploadContents,
+          { ooxmlLimits: limits.ooxmlLimits },
+        )
+      } catch (error) {
+        if (
+          error instanceof DocumentExtractionError &&
+          error.userFacing &&
+          error.message.startsWith('The document package')
+        ) {
+          return errorResponse(c, 'ooxml_limits_exceeded', error.message, 413)
+        }
+        // Content-level failures reuse the post-create failure path below.
+      }
+    }
+
     const result = await createDocument(pool, {
       organisationId: user.organisationId,
       matterId,
@@ -234,11 +259,13 @@ export function createDocumentsRoutes(
         )
       }
       try {
-        const extracted = await extractDocumentContent(
-          verifiedType,
-          uploadContents,
-          { ooxmlLimits: limits.ooxmlLimits },
-        )
+        // Reuses the pre-create extraction on success; on content-level
+        // failure it deterministically fails the same way again.
+        const extracted =
+          preExtracted ??
+          (await extractDocumentContent(verifiedType, uploadContents, {
+            ooxmlLimits: limits.ooxmlLimits,
+          }))
         await storage.writeText(textObjectKey, extracted.text)
         if (extracted.layout) {
           const layoutObjectKey = result.version.objectKey.replace(

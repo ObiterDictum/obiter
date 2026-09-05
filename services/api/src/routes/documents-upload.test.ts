@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { deflateSync } from 'node:zlib'
 import { Hono } from 'hono'
 import type { Pool } from 'pg'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -342,5 +343,108 @@ describe('multipart document extraction', () => {
     await expect(response.json()).resolves.toMatchObject({
       error: { code: 'storage_unavailable' },
     })
+  })
+})
+
+// P2.24/P2.29: real-toolchain corpus must upload 201 + ready, while a genuine
+// high-ratio package is rejected 413 without persisting any row.
+const CORPUS_DIR = 'test-fixtures/upload-corpus'
+const CORPUS_EXPECTED_TEXT: Record<string, string> = {
+  'letter-plain.docx': 'Mill Farm',
+  'letter-table.docx': 'Schedule of correspondence',
+  'letter-footnotes-numbering.docx': 'Numbered advice point 1',
+  'letter-tracked-changes.docx': 'Mill Farm',
+  'letter-image.docx': 'Site plan exhibit',
+}
+
+/** Genuine zip bomb: real deflate payload, ~1000x ratio, tiny absolute size. */
+function zipBomb(): Buffer {
+  const uncompressedSize = 256 * 1024
+  const payload = deflateSync(Buffer.alloc(uncompressedSize, 0))
+  const name = Buffer.from('word/document.xml')
+  const local = Buffer.alloc(30 + name.length)
+  local.writeUInt32LE(0x04034b50, 0)
+  local.writeUInt16LE(20, 4)
+  local.writeUInt16LE(8, 8)
+  local.writeUInt32LE(payload.length, 18)
+  local.writeUInt32LE(uncompressedSize, 22)
+  local.writeUInt16LE(name.length, 26)
+  name.copy(local, 30)
+  const central = Buffer.alloc(46 + name.length)
+  central.writeUInt32LE(0x02014b50, 0)
+  central.writeUInt16LE(8, 10)
+  central.writeUInt32LE(payload.length, 20)
+  central.writeUInt32LE(uncompressedSize, 24)
+  central.writeUInt16LE(name.length, 28)
+  name.copy(central, 46)
+  const eocd = Buffer.alloc(22)
+  eocd.writeUInt32LE(0x06054b50, 0)
+  eocd.writeUInt16LE(1, 8)
+  eocd.writeUInt16LE(1, 10)
+  eocd.writeUInt32LE(central.length, 12)
+  eocd.writeUInt32LE(local.length + payload.length, 16)
+  return Buffer.concat([local, payload, central, eocd])
+}
+
+describe('upload acceptance corpus (P2.24) and rejected-upload persistence (P2.29)', () => {
+  it.each(Object.keys(CORPUS_EXPECTED_TEXT))(
+    'accepts corpus doc %s as ready with content intact',
+    async (filename) => {
+      const root = await mkdtemp(join(tmpdir(), 'obiter-upload-'))
+      roots.push(root)
+      const bytes = await readFile(join(CORPUS_DIR, filename))
+      const api = await app(root)
+      const response = await upload(api, filename, bytes)
+      const body = (await response.json()) as {
+        version: {
+          objectKey: string
+          textObjectKey: string
+          documentStatus: string
+        }
+      }
+      expect(response.status).toBe(201)
+      expect(body.version.documentStatus).toBe('ready')
+      await expect(
+        readFile(join(root, body.version.textObjectKey), 'utf8'),
+      ).resolves.toContain(CORPUS_EXPECTED_TEXT[filename])
+    },
+  )
+  it('rejects a genuine compression bomb without creating any row', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'obiter-upload-'))
+    roots.push(root)
+    const statements: string[] = []
+    const database = pool()
+    type MockQuery = (
+      sql: string,
+      params?: unknown[],
+    ) => Promise<{ rows: Record<string, unknown>[] }>
+    const innerQuery = database.query as unknown as MockQuery
+    const recording = {
+      ...database,
+      query: async (sql: string, params?: unknown[]) => {
+        statements.push(sql)
+        return innerQuery(sql, params)
+      },
+      connect: async () => ({
+        query: async (sql: string, params?: unknown[]) => {
+          statements.push(sql)
+          return innerQuery(sql, params)
+        },
+        release: () => undefined,
+      }),
+    } as unknown as Pool
+    const api = await app(root, createLocalStorage(root), recording)
+    const response = await upload(api, 'bomb.docx', zipBomb())
+    expect(response.status).toBe(413)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'ooxml_limits_exceeded' },
+    })
+    expect(
+      statements.some((sql) => sql.includes('insert into matter_documents')),
+    ).toBe(false)
+    expect(
+      statements.some((sql) => sql.includes('insert into document_versions')),
+    ).toBe(false)
+    await expect(readFile(join(root, 'org'))).rejects.toThrow()
   })
 })
