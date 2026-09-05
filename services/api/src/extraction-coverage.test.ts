@@ -21,6 +21,35 @@ const PREF_FIX_FUSED_CLAIM_FORM =
   'The Claimant seeks damages of GBP 18,420.00\n' +
   'NI number QQ 12 34 56 C was recorded'
 
+// Synthetic clean shorts (never real legal text): ordinary notes carrying
+// the long words that tripped the old 5% letter-run gate. Measured shares
+// (N=16): 5.14% over 331 letters, 5.25% over 324, 7.53% over 425,
+// 8.10% over 432 — all four flagged under the old 5% gate, all passing
+// under the recalibrated 10% while the fused probe above sits at 16.1%.
+const CLEAN_SHORTS = [
+  'Attendance note, 2 May. The client telephoned about the sale particulars for the flat. ' +
+    'She said the agent had described the roof as recently replaced, but the survey records only patch repairs. ' +
+    'I advised that any misrepresentation claim needs the exact wording of the statement and evidence of reliance, ' +
+    'and that we should write for disclosure of the listing drafts before advising further on prospects.',
+  'Advice on settlement. Counsel asks whether equity assists where the price looks one-sided. ' +
+    'The doctrine of unconscionability is narrow: it requires exploitation of a serious disadvantage, not merely a hard bargain. ' +
+    'On these facts the imbalance alone is unlikely to suffice, so the stronger route remains the contractual construction point, ' +
+    'with the equity argument held strictly in reserve.',
+  'Dear Sirs, We write concerning your continuing responsibilities for the communal areas at the property. ' +
+    'The characterisation of the disputed service charge turns on the lease wording, ' +
+    'and the managing agent should now produce the audited expenditure for the last two years. ' +
+    'Once those accounts arrive we can advise whether any element can properly be challenged, ' +
+    'and we will confirm our costs estimate for that review before any further work is done. ' +
+    'We will also check the reserve fund position. Yours faithfully.',
+  'File note. Counsel flagged a possible misrepresentation claim in the alternative, ' +
+    'though limitation remains tight and permission may be needed before any amendment. ' +
+    'The invoice is said to be disproportionately large next to the approved estimate, ' +
+    'so we will compare each line against the schedule of works. ' +
+    'We will also ask the surveyor to confirm which items were actually instructed on site, ' +
+    'and then draft the advice with a clear view on settlement prospects before Friday. ' +
+    'We will report back once the surveyor replies.',
+]
+
 describe('extraction coverage guard', () => {
   it('passes the footnotes fixture once extraction carries the note bodies', async () => {
     const source = await corpus('letter-footnotes-numbering.docx')
@@ -113,6 +142,40 @@ describe('extraction coverage guard', () => {
     // long document passing.
     const text = `misrepresentation ${'ordinary prose words '.repeat(200)}`
     expect(findUncoveredPdfRegions(text)).toEqual([])
+  })
+
+  it('passes short legal notes carrying ordinary long words', () => {
+    // Each short holds 1-2 of responsibilities/characterisation (16),
+    // misrepresentation/unconscionability (17), disproportionately (18).
+    for (const [index, text] of CLEAN_SHORTS.entries())
+      expect(findUncoveredPdfRegions(text), `clean short ${index}`).toEqual([])
+  })
+
+  it('extracts the committed claim-form pair in both directions', async () => {
+    // Reproductions of the lost V11 probe (never the original bytes): the
+    // pre-fix collapse text above must flag, while the fixed extraction of
+    // the well-formed bytes below is clean.
+    const spaced = await corpus('claim-form-spaced.pdf')
+    const fixed = await extractDocumentContent('pdf', spaced)
+    expect(fixed.text).toContain('IN THE COUNTY COURT AT CENTRAL LONDON')
+    expect(fixed.text).toContain('PARTICULARS OF CLAIM')
+    expect(fixed.text).toContain('totalling GBP 162,526.25')
+    await expect(
+      findUncoveredRegions({
+        filename: 'claim-form-spaced.pdf',
+        mimeType: 'application/pdf',
+        sourceBytes: spaced,
+        extractedText: fixed.text,
+      }),
+      'fixed extraction is clean',
+    ).resolves.toEqual([])
+
+    const fused = await corpus('claim-form-fused.pdf')
+    const fusedText = (await extractDocumentContent('pdf', fused)).text
+    expect(fusedText).not.toContain('IN THE COUNTY')
+    expect(findUncoveredPdfRegions(fusedText)).toEqual([
+      expect.stringContaining('fused-text'),
+    ])
   })
 
   it('passes clean extracted PDFs (all text-layer fixtures)', async () => {

@@ -34,9 +34,21 @@ export const UNEXAMINED_PART_MIN_CHARS = 20
 //   spaceless token, amina.rahman@example.test), but letter runs separate
 //   them: clean PDF fixtures peak at a 7-letter run (11 post-fix on an
 //   all-caps claim-form probe: PARTICULARS) versus 18 fused, so N=16 with
-//   >=5% letter share flags the artifact while clean fixtures pass with
-//   margin. The share gate (not longest alone) keeps a single legit long
-//   word in a long document passing.
+//   >=10% letter share flags the artifact while clean fixtures pass with
+//   margin. The 10% level (up from 5%) is measured, not guessed: ordinary
+//   vocabulary already reaches N=16 (responsibilities/characterisation 16,
+//   misrepresentation/unconscionability 17, disproportionately 18), and
+//   four synthetic clean shorts trip the old 5% gate — one long word in a
+//   ~325-letter note is 5.1-5.3%, two in ~425-432 letters is 7.5-8.1% —
+//   while the fused probe sits at 18/112 letters = 16.1%. At 10% the probe
+//   flags with 6.1pp margin and the densest clean short passes with 1.9pp.
+//   The 50-letter floor skips degenerate fragments where one word owns the
+//   share (the probe at 112 letters keeps 62 of margin). Two gates were
+//   measured and rejected: distinct>=2 would blind the guard to the
+//   observed artifact (it carries exactly one 16+ run), and an absolute
+//   long-run-chars minimum points the wrong way (fused 18 < clean
+//   two-word 32-35). The share gate (not longest alone) keeps a single
+//   legit long word in a long document passing.
 // Cannot detect fusion that yields only sub-N runs (e.g. an alphanumeric
 // fusion such as NUMBERQQ123456CWAS, letter runs 8+3 — mitigated because the
 // observed producer fuses whole all-caps lines, which still trip the run
@@ -48,7 +60,9 @@ export const FUSED_TOKEN_MIN_LENGTH = 30
 export const FUSED_TOKEN_CHAR_SHARE = 0.05
 export const FUSED_TOKEN_ABSOLUTE_LENGTH = 100
 export const FUSED_LETTER_RUN_MIN_LENGTH = 16
-export const FUSED_LETTER_RUN_SHARE = 0.05
+export const FUSED_LETTER_RUN_SHARE = 0.1
+// Share is meaningless below a sentence or two: one word owns the ratio.
+export const FUSED_LETTER_RUN_MIN_TOTAL_LETTERS = 50
 
 function nonWhitespaceChars(value: string) {
   return [...value].filter((ch) => !/\s/u.test(ch)).length
@@ -180,7 +194,7 @@ export function findUncoveredPdfRegions(extractedText: string): string[] {
     if (length >= FUSED_LETTER_RUN_MIN_LENGTH) longRunChars += length
   }
   if (
-    totalLetters > 0 &&
+    totalLetters >= FUSED_LETTER_RUN_MIN_TOTAL_LETTERS &&
     longRunChars / totalLetters >= FUSED_LETTER_RUN_SHARE
   ) {
     const share = Math.round((longRunChars / totalLetters) * 100)
