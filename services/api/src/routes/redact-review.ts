@@ -31,6 +31,11 @@ import {
   redactedPdfFilename,
   redactedTextFilename,
 } from '../redaction-pdf-output'
+import {
+  buildRedactedDocx,
+  isDocxMimeOrFilename,
+  redactedDocxFilename,
+} from '../redaction-docx-output'
 import type { StorageService } from '../storage'
 import {
   errorResponse,
@@ -401,15 +406,21 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
     let outputFilename = redactedTextFilename(run.sourceFilename)
     try {
       const layoutObjectKey = await getRunLayoutObjectKey(pool, run)
+      const sourceMimeType = run.sourceMimeType ?? source?.mimeType ?? null
       const canWritePdf =
         Boolean(source) &&
         Boolean(layoutObjectKey) &&
         Boolean(storage.readBinary) &&
         Boolean(storage.writeBinary) &&
-        isPdfMimeOrFilename(
-          run.sourceFilename,
-          run.sourceMimeType ?? source?.mimeType ?? null,
-        )
+        isPdfMimeOrFilename(run.sourceFilename, sourceMimeType)
+      // Burned .docx needs no layout geometry: spans address w:t runs, not
+      // page coordinates, so the source bytes alone are sufficient.
+      const canWriteDocx =
+        !canWritePdf &&
+        Boolean(source) &&
+        Boolean(storage.readBinary) &&
+        Boolean(storage.writeBinary) &&
+        isDocxMimeOrFilename(run.sourceFilename, sourceMimeType)
 
       if (canWritePdf && source && layoutObjectKey) {
         const parsedLayout = documentTextLayoutSchema.safeParse(
@@ -437,12 +448,29 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         await storage.writeBinary!(objectKey, Buffer.from(redactedPdf))
         outputMimeType = 'application/pdf'
         outputFilename = redactedPdfFilename(run.sourceFilename)
+      } else if (canWriteDocx && source) {
+        const docxBytes = await storage.readBinary!(source.objectKey)
+        const redactedDocx = await buildRedactedDocx({
+          docxBytes: Buffer.from(docxBytes),
+          text,
+          spans: run.spans,
+          decisions: run.decisions,
+          outputMode: body.data.outputMode,
+          tokenMap,
+        })
+        await storage.writeBinary!(objectKey, Buffer.from(redactedDocx))
+        outputMimeType =
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        outputFilename = redactedDocxFilename(run.sourceFilename)
       } else {
         await storage.writeText(objectKey, output)
       }
     } catch (error) {
       if (error instanceof RedactionSpanIntegrityError) throw error
-      // PDF burn failed — fall back to text output so finalize still completes.
+      // PDF/DOCX burn failed — fall back to text output so finalize still
+      // completes. The text output carries no source container, so tracked
+      // changes, metadata, comments, and embedded parts cannot leak
+      // through it.
       // Do not log span ids, filenames, or document content (cover-geometry
       // errors name span ids in their message).
       const reason =
@@ -451,7 +479,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
           : error instanceof Error
             ? error.message
             : 'unknown failure'
-      console.error('redaction_pdf_burn_failed', {
+      console.error('redaction_burn_failed', {
         requestId: c.get('requestId'),
         runId: run.id,
         reason,
@@ -585,8 +613,15 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
       run.summary.outputFilename ??
       (mimeType === 'application/pdf'
         ? redactedPdfFilename(run.sourceFilename)
-        : redactedTextFilename(run.sourceFilename))
-    if (mimeType === 'application/pdf') {
+        : mimeType ===
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          ? redactedDocxFilename(run.sourceFilename)
+          : redactedTextFilename(run.sourceFilename))
+    if (
+      mimeType === 'application/pdf' ||
+      mimeType ===
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ) {
       return c.json({
         mimeType,
         filename,
@@ -631,9 +666,16 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
       run.summary.outputFilename ??
       (mimeType === 'application/pdf'
         ? redactedPdfFilename(run.sourceFilename)
-        : redactedTextFilename(run.sourceFilename))
+        : mimeType ===
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          ? redactedDocxFilename(run.sourceFilename)
+          : redactedTextFilename(run.sourceFilename))
     const safeName = filename.replaceAll('"', '')
-    if (mimeType === 'application/pdf') {
+    if (
+      mimeType === 'application/pdf' ||
+      mimeType ===
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ) {
       if (!storage.readBinary)
         return errorResponse(
           c,
@@ -645,7 +687,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
       return new Response(Uint8Array.from(bytes), {
         status: 200,
         headers: {
-          'content-type': 'application/pdf',
+          'content-type': mimeType,
           'content-disposition': `attachment; filename="${safeName}"`,
           'cache-control': 'private, max-age=60',
           'x-content-type-options': 'nosniff',

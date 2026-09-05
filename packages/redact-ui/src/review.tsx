@@ -228,13 +228,18 @@ function FinalizedOutput({
   const mimeType =
     outputQuery.data?.mimeType ?? run.summary.outputMimeType ?? 'text/plain'
   const isPdf = mimeType === 'application/pdf'
+  const isDocx =
+    mimeType ===
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+  // Both burned outputs download as files; only the PDF previews inline.
+  const isFile = isPdf || isDocx
   const filename =
     outputQuery.data?.filename ??
     run.summary.outputFilename ??
     run.sourceFilename
   const fileQuery = useRedactionOutputFile(
     run.id,
-    isPdf && Boolean(run.outputArtifactId),
+    isFile && Boolean(run.outputArtifactId),
   )
 
   return (
@@ -251,19 +256,21 @@ function FinalizedOutput({
             <p className="mt-1 text-sm text-muted">
               {isPdf
                 ? 'Redacted PDF ready to download or share.'
-                : 'Redacted text ready to download or share.'}
+                : isDocx
+                  ? 'Redacted document ready to download or share.'
+                  : 'Redacted text ready to download or share.'}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
             <Button
               variant="secondary"
               disabled={
-                isPdf
+                isFile
                   ? !fileQuery.data
                   : !outputQuery.data?.text && outputQuery.data?.text !== ''
               }
               onClick={() => {
-                if (isPdf && fileQuery.data) {
+                if (isFile && fileQuery.data) {
                   downloadBlob(fileQuery.data, filename)
                   return
                 }
@@ -281,13 +288,13 @@ function FinalizedOutput({
             </Button>
             <Button
               disabled={
-                isPdf
+                isFile
                   ? !fileQuery.data
                   : !outputQuery.data?.text && outputQuery.data?.text !== ''
               }
               onClick={() => {
                 void (async () => {
-                  if (isPdf && fileQuery.data) {
+                  if (isFile && fileQuery.data) {
                     await shareOrDownload(fileQuery.data, filename)
                     return
                   }
@@ -307,14 +314,19 @@ function FinalizedOutput({
           </div>
         </header>
         <div className="px-4 py-4 sm:px-5 md:px-6">
-          {outputQuery.isPending || (isPdf && fileQuery.isPending) ? (
+          {outputQuery.isPending || (isFile && fileQuery.isPending) ? (
             <Skeleton className="h-32" />
           ) : outputQuery.error ? (
             <p className="text-sm text-danger">{outputQuery.error.message}</p>
-          ) : isPdf && fileQuery.error ? (
+          ) : isFile && fileQuery.error ? (
             <p className="text-sm text-danger">{fileQuery.error.message}</p>
           ) : isPdf && fileQuery.data ? (
             <PdfDocumentPreview file={fileQuery.data} />
+          ) : isDocx && fileQuery.data ? (
+            <p className="text-sm text-muted">
+              The redacted document keeps its formatting. Use Download to open
+              it in Word.
+            </p>
           ) : (
             <div className="px-4 pb-4 text-base leading-relaxed text-ink [overflow-wrap:anywhere] whitespace-pre-wrap md:px-5">
               {outputQuery.data?.text}
