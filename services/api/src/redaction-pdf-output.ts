@@ -37,7 +37,7 @@ const RENDER_SCALE = 2
 /**
  * Thrown when an output-affecting span has no cover geometry. Finalize catches
  * this and falls back to text output; the message names span ids for diagnosis
- * but must not be logged verbatim (see redaction_pdf_burn_failed).
+ * but must not be logged verbatim (see redaction_burn_failed in redact-review).
  */
 export class RedactionCoverGeometryError extends Error {
   readonly spanIds: string[]

@@ -11,6 +11,7 @@ import {
   applyRedacted,
   createTokenMap,
   RedactionSpanIntegrityError,
+  type OutputDowngradeReason,
 } from '@obiter/redaction-policy'
 import { appendAuditLog } from '../database'
 import { createDocumentMediaResponse } from '../document-media-response'
@@ -31,6 +32,11 @@ import {
   redactedPdfFilename,
   redactedTextFilename,
 } from '../redaction-pdf-output'
+import {
+  buildRedactedDocx,
+  isDocxMimeOrFilename,
+  redactedDocxFilename,
+} from '../redaction-docx-output'
 import type { StorageService } from '../storage'
 import {
   errorResponse,
@@ -63,6 +69,19 @@ function redactionSourceResponseContentType(storedMimeType: string): string {
   return REDACTION_SOURCE_RESPONSE_TYPES.has(value)
     ? value
     : 'application/octet-stream'
+}
+
+/**
+ * Map a burn refusal to a user-facing reason code. Matches on stable
+ * message fragments server-side; only the code crosses to the client —
+ * never the message (cover-geometry errors name span ids, the package
+ * gate names part paths).
+ */
+function burnFallbackReason(error: unknown): OutputDowngradeReason {
+  const message = error instanceof Error ? error.message : ''
+  if (message.includes('tracked change')) return 'tracked_change'
+  if (message.includes('survives in')) return 'residual_text'
+  return 'burn_failed'
 }
 
 export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
@@ -399,19 +418,31 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
 
     let outputMimeType = 'text/plain'
     let outputFilename = redactedTextFilename(run.sourceFilename)
+    // Set only when a container burn was attempted and refused: the text
+    // fallback is then a silent downgrade the user must be told about.
+    // Reason codes only — never span text or filenames (user-facing).
+    let attemptedBurn: 'pdf' | 'docx' | null = null
+    let downgradeReason: OutputDowngradeReason | null = null
     try {
       const layoutObjectKey = await getRunLayoutObjectKey(pool, run)
+      const sourceMimeType = run.sourceMimeType ?? source?.mimeType ?? null
       const canWritePdf =
         Boolean(source) &&
         Boolean(layoutObjectKey) &&
         Boolean(storage.readBinary) &&
         Boolean(storage.writeBinary) &&
-        isPdfMimeOrFilename(
-          run.sourceFilename,
-          run.sourceMimeType ?? source?.mimeType ?? null,
-        )
+        isPdfMimeOrFilename(run.sourceFilename, sourceMimeType)
+      // Burned .docx needs no layout geometry: spans address w:t runs, not
+      // page coordinates, so the source bytes alone are sufficient.
+      const canWriteDocx =
+        !canWritePdf &&
+        Boolean(source) &&
+        Boolean(storage.readBinary) &&
+        Boolean(storage.writeBinary) &&
+        isDocxMimeOrFilename(run.sourceFilename, sourceMimeType)
 
       if (canWritePdf && source && layoutObjectKey) {
+        attemptedBurn = 'pdf'
         const parsedLayout = documentTextLayoutSchema.safeParse(
           JSON.parse(await storage.readText(layoutObjectKey)),
         )
@@ -437,12 +468,30 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         await storage.writeBinary!(objectKey, Buffer.from(redactedPdf))
         outputMimeType = 'application/pdf'
         outputFilename = redactedPdfFilename(run.sourceFilename)
+      } else if (canWriteDocx && source) {
+        attemptedBurn = 'docx'
+        const docxBytes = await storage.readBinary!(source.objectKey)
+        const redactedDocx = await buildRedactedDocx({
+          docxBytes: Buffer.from(docxBytes),
+          text,
+          spans: run.spans,
+          decisions: run.decisions,
+          outputMode: body.data.outputMode,
+          tokenMap,
+        })
+        await storage.writeBinary!(objectKey, Buffer.from(redactedDocx))
+        outputMimeType =
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+        outputFilename = redactedDocxFilename(run.sourceFilename)
       } else {
         await storage.writeText(objectKey, output)
       }
     } catch (error) {
       if (error instanceof RedactionSpanIntegrityError) throw error
-      // PDF burn failed — fall back to text output so finalize still completes.
+      // PDF/DOCX burn failed — fall back to text output so finalize still
+      // completes. The text output carries no source container, so tracked
+      // changes, metadata, comments, and embedded parts cannot leak
+      // through it.
       // Do not log span ids, filenames, or document content (cover-geometry
       // errors name span ids in their message).
       const reason =
@@ -451,11 +500,12 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
           : error instanceof Error
             ? error.message
             : 'unknown failure'
-      console.error('redaction_pdf_burn_failed', {
+      console.error('redaction_burn_failed', {
         requestId: c.get('requestId'),
         runId: run.id,
         reason,
       })
+      if (attemptedBurn) downgradeReason = burnFallbackReason(error)
       await storage.writeText(objectKey, output)
       outputMimeType = 'text/plain'
       outputFilename = redactedTextFilename(run.sourceFilename)
@@ -478,6 +528,9 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
           body.data.unknownDetectionAcknowledged === true,
         outputMimeType,
         outputFilename,
+        outputDowngrade: attemptedBurn
+          ? { from: attemptedBurn, reason: downgradeReason ?? 'burn_failed' }
+          : null,
       })
     } catch (error) {
       await storage.delete(objectKey)
@@ -547,10 +600,16 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         requestId: c.get('requestId'),
       })
     }
+    // Built from the same values persisted above (not re-read from the run),
+    // so the warning agrees with the stored summary by construction.
+    const outputDowngrade =
+      attemptedBurn && downgradeReason
+        ? { from: attemptedBurn, reason: downgradeReason }
+        : null
     return c.json({
       run: publicRun(result.run),
       artifact: result.artifact,
-      warnings: { unreviewedSpanIds, coverageUnchecked },
+      warnings: { unreviewedSpanIds, coverageUnchecked, outputDowngrade },
     })
   })
 
@@ -585,8 +644,15 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
       run.summary.outputFilename ??
       (mimeType === 'application/pdf'
         ? redactedPdfFilename(run.sourceFilename)
-        : redactedTextFilename(run.sourceFilename))
-    if (mimeType === 'application/pdf') {
+        : mimeType ===
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          ? redactedDocxFilename(run.sourceFilename)
+          : redactedTextFilename(run.sourceFilename))
+    if (
+      mimeType === 'application/pdf' ||
+      mimeType ===
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ) {
       return c.json({
         mimeType,
         filename,
@@ -631,9 +697,16 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
       run.summary.outputFilename ??
       (mimeType === 'application/pdf'
         ? redactedPdfFilename(run.sourceFilename)
-        : redactedTextFilename(run.sourceFilename))
+        : mimeType ===
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+          ? redactedDocxFilename(run.sourceFilename)
+          : redactedTextFilename(run.sourceFilename))
     const safeName = filename.replaceAll('"', '')
-    if (mimeType === 'application/pdf') {
+    if (
+      mimeType === 'application/pdf' ||
+      mimeType ===
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    ) {
       if (!storage.readBinary)
         return errorResponse(
           c,
@@ -645,7 +718,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
       return new Response(Uint8Array.from(bytes), {
         status: 200,
         headers: {
-          'content-type': 'application/pdf',
+          'content-type': mimeType,
           'content-disposition': `attachment; filename="${safeName}"`,
           'cache-control': 'private, max-age=60',
           'x-content-type-options': 'nosniff',
