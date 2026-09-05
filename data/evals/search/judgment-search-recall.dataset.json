@@ -1,0 +1,33 @@
+{
+  "dataset_id": "search.judgment.recall",
+  "version": "0.1.0",
+  "name": "Judgment Search Recall",
+  "family": "search",
+  "source": "Hand-judged solicitor queries against the benchmark fixture corpus; relevance sets fixed independently of the index.",
+  "licence": "internal-fixture-metadata-only",
+  "jurisdiction": "england-and-wales",
+  "legal_domain": "general",
+  "task_types": [
+    "neutral_citation_lookup",
+    "partial_citation",
+    "malformed_citation",
+    "party_names",
+    "misspelled_party_name",
+    "ambiguous_party_name",
+    "subject_matter",
+    "citation_decoy_no_answer"
+  ],
+  "case_count": 19,
+  "expected_output_type": "ranked_legal_search_results",
+  "sensitivity": "public_metadata_only",
+  "external_model_allowed": false,
+  "scoring": {
+    "recall": "mean per-query recall@10 over the 15 non-decoy queries",
+    "precision": "fraction of the 4 citation-decoy queries returning zero results"
+  },
+  "known_limitations": [
+    "Three relevance sets name real authorities not yet ingested (donoghue-v-stevenson-1932, cobbe-v-yeomans-row-2008, carlill-v-carbolic-1893), so recall is honestly below 1.0 until the ingest campaign lands them.",
+    "Fixture corpus is 66 synthetic documents; ranking scores depend on corpus statistics, so thresholds re-measured here must be re-measured on a real corpus.",
+    "Recall@10 does not measure rank order within the top 10; the gate-1 top-1/top-3 checks cover exact-lookup priority."
+  ]
+}

@@ -10,11 +10,18 @@ import {
 } from '../index'
 import {
   searchBenchmarkCases,
+  searchRecallQueries,
   type SearchBenchmarkCase,
   type SearchBenchmarkCategory,
 } from './cases'
 import { searchBenchmarkBaseline } from './baseline'
 import { searchBenchmarkDocuments } from './fixtures'
+import {
+  recallRegressionFailures,
+  runRecallQuery,
+  scoreRecallQueries,
+  type RecallQueryResult,
+} from './recall'
 
 const host = process.env.SEARCH_BENCHMARK_HOST ?? 'http://127.0.0.1:7700'
 const apiKey = process.env.SEARCH_BENCHMARK_API_KEY ?? 'search-benchmark-key'
@@ -469,6 +476,15 @@ async function main() {
     )
   }
 
+  if (
+    searchRecallQueries.length !==
+    searchBenchmarkBaseline.expectedRecallQueryCount
+  ) {
+    throw new Error(
+      `Search recall benchmark defines ${searchRecallQueries.length} queries; expected ${searchBenchmarkBaseline.expectedRecallQueryCount}.`,
+    )
+  }
+
   const client = createClient(host, apiKey)
 
   try {
@@ -501,12 +517,25 @@ async function main() {
     }
 
     const metrics = calculateMetrics(results)
-    const regressions = regressionFailures(metrics, results)
+
+    const indexedIds = new Set(searchBenchmarkDocuments.map(({ id }) => id))
+    const recallResults: RecallQueryResult[] = []
+    for (const testCase of searchRecallQueries) {
+      recallResults.push(
+        await runRecallQuery(client, indexName, testCase, indexedIds),
+      )
+    }
+    const recallMetrics = scoreRecallQueries(recallResults)
+    const regressions = [
+      ...regressionFailures(metrics, results),
+      ...recallRegressionFailures(recallMetrics, recallResults),
+    ]
     const report = {
       benchmark: 'search-correctness-gate-1',
       generatedAt: new Date().toISOString(),
       fixtureDocumentCount: searchBenchmarkDocuments.length,
       metrics,
+      recall: recallMetrics,
       // The configuration this run applied. Reported so every artifact states
       // the settings it was measured under, and a summary that disagrees with
       // the committed value is contradicted by its own evidence.
@@ -521,6 +550,7 @@ async function main() {
       unsupportedSearchFeatures,
       baseline: searchBenchmarkBaseline,
       cases: results,
+      recallQueries: recallResults,
       regressionFailures: regressions,
     }
 

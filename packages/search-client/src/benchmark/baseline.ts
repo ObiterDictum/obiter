@@ -24,4 +24,28 @@ export const searchBenchmarkBaseline = {
   // quoted date string, so the three date cases no longer error.
   knownFailingCaseIds: [],
   maximumSearchWallClockP95Ms: 250,
+  // Recall floors are honest, not aspirational: three relevance sets name real
+  // authorities the fixtures do not index yet, so recall sits below 1 until
+  // the ingest campaign lands them. The PR that ingests one tightens its floor.
+  expectedRecallQueryCount: 19,
+  minimumRecall: 0.8333,
+  minimumPrecision: 1,
+  minimumRecallByQuery: {
+    // Per-query floors; a drop names its query in the failure string.
+    'recall-cite-uksc-2024-3': 1,
+    'recall-cite-ewca-partial': 1,
+    'recall-cite-uksc-partial': 1,
+    'recall-cite-malformed': 1,
+    'recall-party-potanina': 1,
+    'recall-party-rizwan': 1,
+    'recall-party-typo': 1,
+    'recall-party-ambiguous-smith': 1,
+    'recall-party-ambiguous-brown': 1,
+    'recall-subject-psychiatric': 0,
+    'recall-subject-candour': 1,
+    'recall-subject-estoppel': 0.5,
+    'recall-subject-remedy': 1,
+    'recall-subject-self-incrimination': 1,
+    'recall-subject-carlill': 0,
+  } as Record<string, number>,
 } as const
