@@ -72,6 +72,37 @@ async function createMinimalDocx(
   return archive.generateAsync({ type: 'nodebuffer' })
 }
 
+/** Minimal DOCX carrying one footnote and one endnote, each after a
+ *  self-closing separator placeholder. */
+async function createNotesDocx() {
+  const archive = new JSZip()
+  archive.file(
+    '[Content_Types].xml',
+    `<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/><Override PartName="/word/footnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.footnotes+xml"/><Override PartName="/word/endnotes.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.endnotes+xml"/></Types>`,
+  )
+  archive.file(
+    '_rels/.rels',
+    '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/></Relationships>',
+  )
+  archive.file(
+    'word/document.xml',
+    `<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Body paragraph one.</w:t><w:footnoteReference w:id="5"/><w:endnoteReference w:id="7"/></w:r></w:p></w:body></w:document>`,
+  )
+  archive.file(
+    'word/_rels/document.xml.rels',
+    '<?xml version="1.0"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"></Relationships>',
+  )
+  archive.file(
+    'word/footnotes.xml',
+    `<?xml version="1.0"?><w:footnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:footnote w:type="separator" w:id="0"/><w:footnote w:id="5"><w:p><w:r><w:t>Footnote body five.</w:t></w:r></w:p></w:footnote></w:footnotes>`,
+  )
+  archive.file(
+    'word/endnotes.xml',
+    `<?xml version="1.0"?><w:endnotes xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:endnote w:type="separator" w:id="0"/><w:endnote w:id="7"><w:p><w:r><w:t>Endnote body seven.</w:t></w:r></w:p></w:endnote></w:endnotes>`,
+  )
+  return archive.generateAsync({ type: 'nodebuffer' })
+}
+
 describe('extractDocumentText', () => {
   it('extracts text from the checked-in DOCX demo fixture', async () => {
     const fixture = await readFile('../../data/evals/redact/demo-fixture.docx')
@@ -155,6 +186,60 @@ describe('extractDocumentText', () => {
     expect(text).toContain('Body: Jane Example')
     expect(text).toContain('Table: Sarah Example')
     expect(text).toContain('Footer: Bob Example')
+  })
+
+  it('appends footnote bodies as a labelled trailing region, after the body', async () => {
+    const fixture = await readFile(
+      'test-fixtures/upload-corpus/letter-footnotes-numbering.docx',
+    )
+
+    const text = await extractDocumentText('docx', fixture)
+
+    // Both note bodies, including the one after the self-closing separator.
+    expect(text).toContain('Three Rivers')
+    expect(text).toContain('disclosure timetable agreed on 2 May')
+    expect(text).toContain('[Footnote 2]')
+    expect(text).toContain('[Footnote 3]')
+    // Notes sit after the last body paragraph, so body offsets are stable.
+    const notesStart = text.indexOf('[Footnote 2]')
+    expect(notesStart).toBeGreaterThan(text.indexOf('Footnote reference 9.'))
+    expect(text.slice(0, notesStart)).not.toContain(
+      'disclosure timetable agreed on 2 May',
+    )
+  })
+
+  it('keeps body offsets stable when note extraction is added', async () => {
+    const fixture = await readFile(
+      'test-fixtures/upload-corpus/letter-footnotes-numbering.docx',
+    )
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    const baseline = await extractDocumentText('docx', fixture, {
+      extractDocxSupplementalContent: async () => ({
+        header: [],
+        footer: [],
+        notes: [],
+        visualContent: 'absent',
+      }),
+    })
+    const full = await extractDocumentText('docx', fixture)
+
+    // Notes are appended, never interleaved: every pre-existing offset holds.
+    expect(full.startsWith(baseline)).toBe(true)
+    warn.mockRestore()
+  })
+
+  it('extracts endnote bodies with addressable labels', async () => {
+    const fixture = await createNotesDocx()
+
+    const text = await extractDocumentText('docx', fixture)
+
+    expect(text).toContain('Body paragraph one.')
+    expect(text).toContain('[Footnote 5] Footnote body five.')
+    expect(text).toContain('[Endnote 7] Endnote body seven.')
+    expect(text.indexOf('[Footnote 5]')).toBeGreaterThan(
+      text.indexOf('Body paragraph one.'),
+    )
   })
 
   it('joins text-layer PDF pages and preserves known PII without detaching the source buffer', async () => {

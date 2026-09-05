@@ -11,9 +11,26 @@ import {
 const corpus = (name: string) => readFile(`test-fixtures/upload-corpus/${name}`)
 
 describe('extraction coverage guard', () => {
-  it('flags footnote bodies the extractor never reads', async () => {
+  it('passes the footnotes fixture once extraction carries the note bodies', async () => {
+    const source = await corpus('letter-footnotes-numbering.docx')
+    const { text } = await extractDocumentContent('docx', source)
+    // Probe from word/footnotes.xml, absent before E43.
+    expect(text).toContain('disclosure timetable agreed on 2 May')
+    await expect(
+      findUncoveredRegions({
+        filename: 'letter-footnotes-numbering.docx',
+        mimeType:
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        sourceBytes: source,
+        extractedText: text,
+      }),
+    ).resolves.toEqual([])
+  })
+
+  it('still refuses runs whose stored text predates footnote extraction', async () => {
     const regions = await findUncoveredDocxRegions(
       await corpus('letter-footnotes-numbering.docx'),
+      'Synthetic text.',
     )
     expect(regions).toHaveLength(1)
     expect(regions[0]).toMatch(/^footnotes \(\d+ chars not examined\)$/)
@@ -25,8 +42,10 @@ describe('extraction coverage guard', () => {
       'letter-table.docx',
       'letter-tracked-changes.docx',
     ]) {
+      const source = await corpus(name)
+      const { text } = await extractDocumentContent('docx', source)
       await expect(
-        findUncoveredDocxRegions(await corpus(name)),
+        findUncoveredDocxRegions(source, text),
         name,
       ).resolves.toEqual([])
     }

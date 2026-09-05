@@ -536,7 +536,64 @@ function hasDocxVisualContent(xml: string, relationshipsXml: string) {
 interface DocxSupplementalContent {
   header: string[]
   footer: string[]
+  /** Labelled footnote/endnote bodies, appended after the footer. */
+  notes: string[]
   visualContent: 'present' | 'absent' | 'unknown'
+}
+
+export interface DocxNoteBody {
+  kind: 'footnote' | 'endnote'
+  id: string
+  text: string
+}
+
+/**
+ * Footnote/endnote bodies in document order, skipping separator and
+ * continuation placeholders (w:type). Shared by extraction and the coverage
+ * guard so both agree on what "covered" means.
+ */
+export function readDocxNoteBodies(
+  entries: Map<string, Uint8Array>,
+): DocxNoteBody[] {
+  const notes: DocxNoteBody[] = []
+  for (const [entryName, payload] of entries) {
+    const lower = entryName.toLowerCase()
+    const kind =
+      lower === 'word/footnotes.xml'
+        ? ('footnote' as const)
+        : lower === 'word/endnotes.xml'
+          ? ('endnote' as const)
+          : null
+    if (!kind) continue
+    const tag = kind === 'footnote' ? 'footnote' : 'endnote'
+    // (?<!\/)> keeps self-closing placeholders (<w:footnote ... />) from
+    // matching as an open tag and swallowing the next note's body.
+    const pattern = new RegExp(
+      `<w:${tag}\\b([^>]*)(?<!\\/)>([\\s\\S]*?)<\\/w:${tag}>`,
+      'gi',
+    )
+    const xml = new TextDecoder().decode(payload)
+    for (const match of xml.matchAll(pattern)) {
+      // Any w:type means a non-content placeholder (separator,
+      // continuationSeparator, continuationNotice).
+      if (/\bw:type\s*=/i.test(match[1] ?? '')) continue
+      const id = /\bw:id\s*=\s*"([^"]+)"/i.exec(match[1] ?? '')?.[1] ?? '?'
+      const text = extractWordXmlText(match[2] ?? '')
+      if (text) notes.push({ kind, id, text })
+    }
+  }
+  return notes
+}
+
+/**
+ * Addressable label for a note body: the w:id routes a future OOXML burn-in
+ * back to word/footnotes.xml (or endnotes.xml); the body keeps the w:anchor
+ * context ("Footnote reference N") next to its w:footnoteReference in the
+ * main text, so reviewers can find the reference point.
+ */
+export function formatDocxNoteBody(note: DocxNoteBody): string {
+  const label = note.kind === 'footnote' ? 'Footnote' : 'Endnote'
+  return `[${label} ${note.id}] ${note.text}`
 }
 
 interface DocumentExtractionDependencies {
@@ -555,7 +612,7 @@ async function boundedDocxBuffer(
   return buffer
 }
 
-async function extractDocxHeaderFooterText(
+async function extractDocxSupplementalContent(
   buffer: Buffer,
   limits: OoxmlPackageLimits = DEFAULT_OOXML_PACKAGE_LIMITS,
 ): Promise<DocxSupplementalContent> {
@@ -563,7 +620,7 @@ async function extractDocxHeaderFooterText(
   const documentPayload = payloads.get('word/document.xml')
   const relationshipsPayload = payloads.get('word/_rels/document.xml.rels')
   if (!documentPayload)
-    return { header: [], footer: [], visualContent: 'unknown' }
+    return { header: [], footer: [], notes: [], visualContent: 'unknown' }
 
   const documentXml = new TextDecoder().decode(documentPayload)
   const relationshipsXml = relationshipsPayload
@@ -614,7 +671,12 @@ async function extractDocxHeaderFooterText(
     if (!text) continue
     ;(/^word\/header/i.test(name) ? header : footer).push(text)
   }
-  return { header, footer, visualContent }
+  return {
+    header,
+    footer,
+    notes: readDocxNoteBodies(payloads).map(formatDocxNoteBody),
+    visualContent,
+  }
 }
 
 async function readDocxSupplementalContent(
@@ -630,7 +692,12 @@ async function readDocxSupplementalContent(
     console.warn('DOCX header/footer extraction warning', {
       reason: error instanceof Error ? error.message : 'Unknown archive error.',
     })
-    return { header: [], footer: [], visualContent: 'unknown' }
+    return {
+      header: [],
+      footer: [],
+      notes: [],
+      visualContent: 'unknown',
+    }
   }
 }
 
@@ -661,7 +728,7 @@ export async function extractDocumentContent(
         buffer,
         limits,
         dependencies.extractDocxSupplementalContent ??
-          extractDocxHeaderFooterText,
+          extractDocxSupplementalContent,
       ),
     ])
     if (result.messages.length > 0)
@@ -669,7 +736,12 @@ export async function extractDocumentContent(
         count: result.messages.length,
         types: [...new Set(result.messages.map((message) => message.type))],
       })
-    const text = [...supplemental.header, result.value, ...supplemental.footer]
+    const text = [
+      ...supplemental.header,
+      result.value,
+      ...supplemental.footer,
+      ...supplemental.notes,
+    ]
       .filter((part) => part.length > 0)
       .join('\n\n')
     if (text.trim().length === 0) {

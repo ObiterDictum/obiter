@@ -2635,8 +2635,8 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     log.mockRestore()
   })
 
-  it('refuses to finalize over unexamined docx regions but passes clean docs', async () => {
-    async function finalizeWithSource(fixtureName: string) {
+  it('finalizes footnote-bearing docs once extracted, still refuses stale text', async () => {
+    async function finalizeWithSource(fixtureName: string, text: string) {
       const sourceBytes = await readFile(
         `test-fixtures/upload-corpus/${fixtureName}`,
       )
@@ -2684,7 +2684,7 @@ describe('createApiApp degraded finalization acknowledgement', () => {
         {
           auth: authWithRole('member'),
           storage: {
-            readText: async () => 'Synthetic text.',
+            readText: async () => text,
             readBinary: async () => sourceBytes,
             writeText: async () => {
               outputWrites += 1
@@ -2701,7 +2701,12 @@ describe('createApiApp degraded finalization acknowledgement', () => {
       return { response, outputWrites: () => outputWrites }
     }
 
-    const refused = await finalizeWithSource('letter-footnotes-numbering.docx')
+    // Stale stored text that predates footnote extraction still refuses: the
+    // guard stays live for runs extracted before E43.
+    const refused = await finalizeWithSource(
+      'letter-footnotes-numbering.docx',
+      'Synthetic text.',
+    )
     expect(refused.response.status).toBe(409)
     expect(((await refused.response.json()) as ErrorBody).error).toMatchObject({
       code: 'extraction_coverage_incomplete',
@@ -2709,7 +2714,28 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     })
     expect(refused.outputWrites()).toBe(0)
 
-    const clean = await finalizeWithSource('letter-plain.docx')
+    // Fresh extraction carries the note bodies, so the same source finalizes.
+    const { extractDocumentContent } =
+      await import('./document-extraction')
+    const footnotesSource = await readFile(
+      'test-fixtures/upload-corpus/letter-footnotes-numbering.docx',
+    )
+    const footnotesText = (
+      await extractDocumentContent('docx', footnotesSource)
+    ).text
+    expect(footnotesText).toContain('disclosure timetable agreed on 2 May')
+    const footnotes = await finalizeWithSource(
+      'letter-footnotes-numbering.docx',
+      footnotesText,
+    )
+    expect(footnotes.response.status).toBe(200)
+    expect(footnotes.outputWrites()).toBe(1)
+
+    const cleanSource = await readFile(
+      'test-fixtures/upload-corpus/letter-plain.docx',
+    )
+    const cleanText = (await extractDocumentContent('docx', cleanSource)).text
+    const clean = await finalizeWithSource('letter-plain.docx', cleanText)
     expect(clean.response.status).toBe(200)
     expect(clean.outputWrites()).toBe(1)
   })
