@@ -68,7 +68,7 @@ vi.mock('@tanstack/react-router', () => ({
   },
 }))
 
-function fillForm() {
+function fillForm(options: { organisationName?: string } = {}) {
   fireEvent.change(screen.getByRole('textbox', { name: 'Name' }), {
     target: { value: 'Ada' },
   })
@@ -78,6 +78,15 @@ function fillForm() {
   fireEvent.change(document.querySelector('input[type="password"]')!, {
     target: { value: 'SuperSecret123!' },
   })
+  // The organisation field only renders without an invite token.
+  const orgInput = screen.queryByRole('textbox', {
+    name: 'Organisation name',
+  })
+  if (orgInput && options.organisationName !== undefined) {
+    fireEvent.change(orgInput, { target: { value: options.organisationName } })
+  } else if (orgInput) {
+    fireEvent.change(orgInput, { target: { value: 'Acme Law' } })
+  }
 }
 
 describe('SignUpRouteView', () => {
@@ -155,9 +164,73 @@ describe('SignUpRouteView', () => {
         name: 'Ada',
         email: 'ada@obiter.dev',
         password: 'SuperSecret123!',
+        pendingOrganisationName: 'Acme Law',
       })
     })
     expect(authMocks.checkInviteAccountExists).not.toHaveBeenCalled()
+  })
+
+  it('hides the organisation field for invitees and sends no name', async () => {
+    authMocks.signUpWithEmail.mockResolvedValueOnce({
+      ok: true,
+      verificationRequired: true,
+    })
+
+    render(<SignUpRouteView />)
+    expect(
+      screen.queryByRole('textbox', { name: 'Organisation name' }),
+    ).toBeNull()
+    fillForm()
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }))
+
+    await waitFor(() => {
+      expect(authMocks.signUpWithEmail).toHaveBeenCalledWith({
+        name: 'Ada',
+        email: 'ada@obiter.dev',
+        password: 'SuperSecret123!',
+        callbackURL: `${window.location.origin}/invites/accept?token=invite-token`,
+      })
+    })
+  })
+
+  it('requires an organisation name when signing up without a token', async () => {
+    searchState.token = undefined
+    // No signUp stub: the submit returns before reaching sign-up, and a
+    // queued once-value here would leak into the next test's queue.
+
+    render(<SignUpRouteView />)
+    expect(
+      screen.getByRole('textbox', { name: 'Organisation name' }),
+    ).toBeTruthy()
+    fillForm({ organisationName: '   ' })
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText('Organisation name is required.')).toBeTruthy()
+    })
+    expect(authMocks.signUpWithEmail).not.toHaveBeenCalled()
+  })
+
+  it('sends the organisation name with sign-up for server-side provisioning', async () => {
+    searchState.token = undefined
+    authMocks.signUpWithEmail.mockResolvedValueOnce({
+      ok: true,
+      verificationRequired: true,
+    })
+
+    render(<SignUpRouteView />)
+    fillForm({ organisationName: '  Acme Law  ' })
+    fireEvent.click(screen.getByRole('button', { name: /create account/i }))
+
+    // Sent trimmed: the API validation trims again, so both agree.
+    await waitFor(() => {
+      expect(authMocks.signUpWithEmail).toHaveBeenCalledWith({
+        name: 'Ada',
+        email: 'ada@obiter.dev',
+        password: 'SuperSecret123!',
+        pendingOrganisationName: 'Acme Law',
+      })
+    })
   })
 
   it('routes an invitee whose account already exists to sign-in with the token', async () => {

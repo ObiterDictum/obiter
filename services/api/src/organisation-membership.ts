@@ -120,7 +120,7 @@ export async function moveUserAndDeleteEmptyOrganisation(
   await client.query(
     `
       update users
-      set "organisationId" = $1, role = $2, "updatedAt" = now()
+      set "organisationId" = $1, role = $2, "pendingOrganisationName" = null, "updatedAt" = now()
       where id = $3
     `,
     [input.toOrganisationId, input.role, input.userId],

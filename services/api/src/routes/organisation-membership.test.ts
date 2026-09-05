@@ -13,6 +13,7 @@ interface UserRow {
   role: UserRole | null
   organisationId: string | null
   emailVerified: boolean
+  pendingOrganisationName?: string | null
 }
 
 interface InviteRow {
@@ -42,7 +43,11 @@ class MembershipStore {
   ])
   invites: InviteRow[] = []
   matters: MatterRow[] = []
-  auditLogs: { organisation_id: string | null }[] = []
+  auditLogs: {
+    organisation_id: string | null
+    action?: string
+    entity_id?: string
+  }[] = []
   nextInvite = 1
   private snapshot: string | null = null
 
@@ -71,6 +76,22 @@ class MembershipStore {
       organisationId: 'org_c',
       emailVerified: true,
     })
+    this.users.set('usr_admin', {
+      id: 'usr_admin',
+      email: 'admin@example.com',
+      name: 'Admin',
+      role: 'admin',
+      organisationId: 'org_a',
+      emailVerified: true,
+    })
+    this.users.set('usr_member', {
+      id: 'usr_member',
+      email: 'member@example.com',
+      name: 'Member',
+      role: 'member',
+      organisationId: 'org_a',
+      emailVerified: true,
+    })
     this.organisations.add('org_c')
   }
 
@@ -93,7 +114,11 @@ class MembershipStore {
       organisationNames: [string, string][]
       invites: InviteRow[]
       matters: MatterRow[]
-      auditLogs: { organisation_id: string | null }[]
+      auditLogs: {
+        organisation_id: string | null
+        action?: string
+        entity_id?: string
+      }[]
       nextInvite: number
     }
     this.users = new Map(parsed.users)
@@ -196,6 +221,28 @@ class MembershipStore {
       const name = this.organisationNames.get(String(parameters[0]))
       return { rows: name ? [{ name }] : [] }
     }
+    if (text.startsWith('select id, name, plan from organisations')) {
+      const id = String(parameters[0])
+      const name = this.organisationNames.get(id)
+      if (!this.organisations.has(id) || !name) return { rows: [] }
+      return { rows: [{ id, name, plan: 'private_beta' }] }
+    }
+    if (text.startsWith('update organisations')) {
+      const id = String(parameters[0])
+      const name = String(parameters[1])
+      if (!this.organisations.has(id) || !this.organisationNames.has(id))
+        return { rows: [] }
+      this.organisationNames.set(id, name)
+      return { rows: [{ id, name, plan: 'private_beta' }] }
+    }
+    if (text.startsWith('insert into audit_logs')) {
+      this.auditLogs.push({
+        organisation_id: String(parameters[0]),
+        entity_id: String(parameters[3]),
+        action: String(parameters[4]),
+      })
+      return { rows: [] }
+    }
     if (
       text.startsWith('select id, organisation_id, email, role, expires_at')
     ) {
@@ -284,6 +331,7 @@ class MembershipStore {
       if (user) {
         user.organisationId = String(parameters[0])
         user.role = parameters[1] as UserRole
+        user.pendingOrganisationName = null
       }
       return { rows: [] }
     }
@@ -651,6 +699,8 @@ describe('organisation membership routes', () => {
     vi.spyOn(console, 'info').mockImplementation(() => undefined)
     const store = new MembershipStore()
     store.auditLogs.push({ organisation_id: 'org_b' })
+    // A sign-up stash predates the invite: joining a firm consumes it.
+    store.users.get('usr_invitee')!.pendingOrganisationName = 'Solo Practice'
     const ownerApp = appFor(store, {
       id: 'usr_owner',
       email: 'owner@example.com',
@@ -675,9 +725,121 @@ describe('organisation membership routes', () => {
     expect(store.users.get('usr_invitee')).toMatchObject({
       organisationId: 'org_a',
       role: 'admin',
+      pendingOrganisationName: null,
     })
     expect(store.invites.some((invite) => invite.accepted_at)).toBe(true)
     expect(store.auditLogs).toEqual([{ organisation_id: null }])
+  })
+
+  it('renames the organisation as owner on both PATCH twins and audits it', async () => {
+    const store = new MembershipStore()
+    const owner = {
+      id: 'usr_owner',
+      email: 'owner@example.com',
+      emailVerified: true,
+      organisationId: 'org_a' as const,
+      role: 'owner' as const,
+    }
+    const addressed = await appFor(store, owner).request(
+      '/api/organisations/org_a',
+      {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: '  Rebranded Chambers  ' }),
+      },
+    )
+    expect(addressed.status).toBe(200)
+    await expect(addressed.json()).resolves.toMatchObject({
+      organisation: { id: 'org_a', name: 'Rebranded Chambers' },
+    })
+
+    const own = await appFor(store, owner).request('/api/organisations', {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ name: 'Own Path Chambers' }),
+    })
+    expect(own.status).toBe(200)
+    await expect(own.json()).resolves.toMatchObject({
+      organisation: { id: 'org_a', name: 'Own Path Chambers' },
+    })
+    expect(store.organisationNames.get('org_a')).toBe('Own Path Chambers')
+    expect(store.auditLogs).toMatchObject([
+      {
+        organisation_id: 'org_a',
+        entity_id: 'org_a',
+        action: 'organisation.rename',
+      },
+      {
+        organisation_id: 'org_a',
+        entity_id: 'org_a',
+        action: 'organisation.rename',
+      },
+    ])
+  })
+
+  it('refuses rename for admins and members on both PATCH twins', async () => {
+    const store = new MembershipStore()
+    for (const role of ['admin', 'member'] as const) {
+      for (const path of ['/api/organisations', '/api/organisations/org_a']) {
+        const response = await appFor(store, {
+          id: role === 'admin' ? 'usr_admin' : 'usr_member',
+          email: `${role}@example.com`,
+          emailVerified: true,
+          organisationId: 'org_a',
+          role,
+        }).request(path, {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name: 'Takeover Chambers' }),
+        })
+        expect(response.status).toBe(403)
+      }
+    }
+    expect(store.organisationNames.get('org_a')).toBe('North Chambers')
+    expect(store.auditLogs).toEqual([])
+  })
+
+  it('refuses rename of another organisation and rejects bad names', async () => {
+    const store = new MembershipStore()
+    const owner = {
+      id: 'usr_owner',
+      email: 'owner@example.com',
+      emailVerified: true,
+      organisationId: 'org_a' as const,
+      role: 'owner' as const,
+    }
+    const cross = await appFor(store, owner).request(
+      '/api/organisations/org_b',
+      {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Takeover Chambers' }),
+      },
+    )
+    expect(cross.status).toBe(403)
+
+    for (const name of ['', '   ', '\u200b\u200d\u202e', 'x'.repeat(121)]) {
+      const response = await appFor(store, owner).request(
+        '/api/organisations/org_a',
+        {
+          method: 'PATCH',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ name }),
+        },
+      )
+      expect(response.status).toBe(400)
+    }
+    const unauthenticated = await appFor(store, null).request(
+      '/api/organisations/org_a',
+      {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ name: 'Nope' }),
+      },
+    )
+    expect(unauthenticated.status).toBe(401)
+    expect(store.organisationNames.get('org_a')).toBe('North Chambers')
+    expect(store.auditLogs).toEqual([])
   })
 
   it('scopes invite routes to the caller organisation', async () => {

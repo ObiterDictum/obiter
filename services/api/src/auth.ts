@@ -272,6 +272,40 @@ export function emailAndPasswordOptions(env: ApiEnv) {
 }
 
 /**
+ * Extra user columns kept separate from createAuth so the sign-up stash
+ * seam can be regression-tested without booting better-auth's
+ * asynchronous database adapter. `pendingOrganisationName` is the
+ * organisation name typed at sign-up: `input` stays enabled (the default)
+ * so the sign-up endpoint accepts and stores it, while `organisationId`
+ * and `role` stay `input: false` so clients can never assign them.
+ * Consumption validates the stashed value and falls back to the default
+ * workspace name — a forged over-long or invisible name can sit in the
+ * column but never becomes a tenant name.
+ */
+export function userAdditionalFields(): {
+  organisationId: { type: 'string'; required: false; input: false }
+  role: { type: ['owner', 'admin', 'member']; required: false; input: false }
+  pendingOrganisationName: { type: 'string'; required: false }
+} {
+  return {
+    organisationId: {
+      type: 'string',
+      required: false,
+      input: false,
+    },
+    role: {
+      type: ['owner', 'admin', 'member'],
+      required: false,
+      input: false,
+    },
+    pendingOrganisationName: {
+      type: 'string',
+      required: false,
+    },
+  }
+}
+
+/**
  * Auth plugins kept separate from createAuth so configuration can be regression
  * tested without initializing better-auth's asynchronous database adapter.
  */
@@ -306,18 +340,7 @@ export function createAuth(env: ApiEnv, pool: Pool) {
     },
     user: {
       modelName: 'users',
-      additionalFields: {
-        organisationId: {
-          type: 'string',
-          required: false,
-          input: false,
-        },
-        role: {
-          type: ['owner', 'admin', 'member'],
-          required: false,
-          input: false,
-        },
-      },
+      additionalFields: userAdditionalFields(),
     },
     session: {
       modelName: 'sessions',

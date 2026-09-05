@@ -125,11 +125,11 @@ export class TestDatabase {
           this.transactionCommands.push(command)
           if (
             this.options.provisionFails &&
-            sql.includes('select "organisationId", role from users')
+            sql.includes('from users where id = $1 for update')
           ) {
             throw new Error('private provisioning diagnostic')
           }
-          if (sql.includes('select "organisationId", role from users')) {
+          if (sql.includes('from users where id = $1 for update')) {
             return { rows: [{ organisationId: null, role: null }] }
           }
           if (sql.includes('insert into organisations')) {

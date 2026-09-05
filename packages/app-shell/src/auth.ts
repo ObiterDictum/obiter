@@ -63,6 +63,14 @@ export interface SignUpEmailInput {
   email: string
   password: string
   callbackURL?: string
+  /**
+   * Organisation name typed at sign-up. Stored server-side on the user row
+   * (better-auth additional field) and consumed by the first organisation
+   * provisioning — no client stash, so verification on another device
+   * still provisions the typed name. Omitted for invitees, who join the
+   * inviting organisation.
+   */
+  pendingOrganisationName?: string
 }
 
 export interface UseAuthReturn {

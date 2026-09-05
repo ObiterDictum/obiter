@@ -36,8 +36,9 @@ export interface AuthenticatedOrgUser {
 
 /**
  * Authenticates the caller and ensures they have an organisation tenant.
- * Org-less users receive a personal workspace on first Matters/Documents/Redact
- * use so product surfaces are not gated on Settings. Returns the org-scoped
+ * Org-less users are provisioned on first Matters/Documents/Redact use —
+ * with the stashed sign-up name when present, else a personal workspace —
+ * so product surfaces are not gated on Settings. Returns the org-scoped
  * user, or a 401 Response for the caller to return.
  */
 export async function ensureOrgUser(

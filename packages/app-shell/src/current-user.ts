@@ -68,3 +68,27 @@ export function createOrganisationMutationOptions(): MutationOptions<
 export function useCreateOrganisation() {
   return useMutation(createOrganisationMutationOptions())
 }
+
+/**
+ * Owner-only rename via PATCH /api/organisations/:organisationId. Merges the
+ * renamed organisation into the cached /api/me so Settings and Home reflect
+ * it immediately, then invalidates to reconcile with the server.
+ */
+export function useRenameOrganisation(organisationId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: async (input: { name: string }) => {
+      const result = await apiFetch<{ organisation: CurrentOrganisation }>(
+        `/api/organisations/${organisationId}`,
+        { method: 'PATCH', body: JSON.stringify({ name: input.name }) },
+      )
+      return result.organisation
+    },
+    onSuccess: (organisation) => {
+      queryClient.setQueryData<MeResponse>(['current-user'], (prev) =>
+        prev ? { ...prev, organisation } : prev,
+      )
+      void queryClient.invalidateQueries({ queryKey: ['current-user'] })
+    },
+  })
+}
