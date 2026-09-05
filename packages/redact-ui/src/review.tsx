@@ -6,6 +6,7 @@ import {
   EyeSlash,
   Funnel,
   ShieldCheck,
+  Warning,
 } from '@phosphor-icons/react'
 import type { SpanCategory, SpanDecision, SpanSource } from '@obiter/contracts'
 import {
@@ -218,6 +219,42 @@ async function shareOrDownload(blob: Blob, filename: string) {
   downloadBlob(blob, filename)
 }
 
+const downgradeCopy: Record<string, string> = {
+  tracked_change:
+    'Part of this document holds redacted text inside a tracked change, which redaction does not cover. Accept or reject the tracked changes and finalize again. Do not serve this file without checking it first.',
+  residual_text:
+    'Some redacted text could not be removed from the document safely. Do not serve this file without checking it first.',
+  burn_failed:
+    'The formatted document could not be produced, so a plain-text file was provided instead. Do not serve this file without checking it first.',
+}
+
+function OutputDowngradeWarning({ run }: { run: RedactionRun }) {
+  const downgrade = run.summary.outputDowngrade
+  if (!downgrade) return null
+  const title =
+    downgrade.from === 'docx'
+      ? 'Word document unavailable — text file provided instead'
+      : 'PDF unavailable — text file provided instead'
+  return (
+    <section
+      className="flex flex-wrap items-start gap-3 border-b border-warning/40 bg-raised/40 px-5 py-3 text-sm text-ink sm:px-6"
+      role="alert"
+    >
+      <Warning
+        className="mt-0.5 shrink-0 text-warning"
+        size={18}
+        aria-hidden="true"
+      />
+      <div className="min-w-0 flex-1">
+        <p className="font-semibold">{title}</p>
+        <p className="mt-1 text-muted">
+          {downgradeCopy[downgrade.reason] ?? downgradeCopy.burn_failed}
+        </p>
+      </div>
+    </section>
+  )
+}
+
 function FinalizedOutput({
   run,
   outputQuery,
@@ -245,6 +282,7 @@ function FinalizedOutput({
   return (
     <section className="px-4 py-4 sm:px-5" aria-label="Redaction output">
       <div className="w-full rounded-lg border border-line-strong bg-raised text-ink shadow-lg">
+        <OutputDowngradeWarning run={run} />
         <header className="flex flex-wrap items-start justify-between gap-4 border-b border-line px-8 py-6 md:px-10">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-subtle">

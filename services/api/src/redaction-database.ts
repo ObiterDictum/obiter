@@ -642,6 +642,7 @@ export async function finalizeRedactionRun(input: {
   unknownDetectionAcknowledged: boolean
   outputMimeType?: string
   outputFilename?: string
+  outputDowngrade?: RunSummary['outputDowngrade']
 }) {
   const client = await input.pool.connect()
   try {
@@ -700,6 +701,9 @@ export async function finalizeRedactionRun(input: {
       outputMode: input.outputMode,
       outputMimeType: input.outputMimeType ?? 'text/plain',
       outputFilename: input.outputFilename ?? null,
+      // Burn fallback reason persists here (not just in the finalize
+      // response) so the review UI still warns after a page reload.
+      outputDowngrade: input.outputDowngrade ?? null,
     }
     await client.query(
       `update redaction_runs set status = 'finalized', output_artifact_id = $3, summary_json = $4::jsonb, updated_at = now() where id = $1 and organisation_id = $2`,

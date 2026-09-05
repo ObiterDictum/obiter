@@ -11,6 +11,7 @@ import {
   applyRedacted,
   createTokenMap,
   RedactionSpanIntegrityError,
+  type OutputDowngradeReason,
 } from '@obiter/redaction-policy'
 import { appendAuditLog } from '../database'
 import { createDocumentMediaResponse } from '../document-media-response'
@@ -68,6 +69,19 @@ function redactionSourceResponseContentType(storedMimeType: string): string {
   return REDACTION_SOURCE_RESPONSE_TYPES.has(value)
     ? value
     : 'application/octet-stream'
+}
+
+/**
+ * Map a burn refusal to a user-facing reason code. Matches on stable
+ * message fragments server-side; only the code crosses to the client —
+ * never the message (cover-geometry errors name span ids, the package
+ * gate names part paths).
+ */
+function burnFallbackReason(error: unknown): OutputDowngradeReason {
+  const message = error instanceof Error ? error.message : ''
+  if (message.includes('tracked change')) return 'tracked_change'
+  if (message.includes('survives in')) return 'residual_text'
+  return 'burn_failed'
 }
 
 export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
@@ -404,6 +418,11 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
 
     let outputMimeType = 'text/plain'
     let outputFilename = redactedTextFilename(run.sourceFilename)
+    // Set only when a container burn was attempted and refused: the text
+    // fallback is then a silent downgrade the user must be told about.
+    // Reason codes only — never span text or filenames (user-facing).
+    let attemptedBurn: 'pdf' | 'docx' | null = null
+    let downgradeReason: OutputDowngradeReason | null = null
     try {
       const layoutObjectKey = await getRunLayoutObjectKey(pool, run)
       const sourceMimeType = run.sourceMimeType ?? source?.mimeType ?? null
@@ -423,6 +442,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         isDocxMimeOrFilename(run.sourceFilename, sourceMimeType)
 
       if (canWritePdf && source && layoutObjectKey) {
+        attemptedBurn = 'pdf'
         const parsedLayout = documentTextLayoutSchema.safeParse(
           JSON.parse(await storage.readText(layoutObjectKey)),
         )
@@ -449,6 +469,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         outputMimeType = 'application/pdf'
         outputFilename = redactedPdfFilename(run.sourceFilename)
       } else if (canWriteDocx && source) {
+        attemptedBurn = 'docx'
         const docxBytes = await storage.readBinary!(source.objectKey)
         const redactedDocx = await buildRedactedDocx({
           docxBytes: Buffer.from(docxBytes),
@@ -484,6 +505,7 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         runId: run.id,
         reason,
       })
+      if (attemptedBurn) downgradeReason = burnFallbackReason(error)
       await storage.writeText(objectKey, output)
       outputMimeType = 'text/plain'
       outputFilename = redactedTextFilename(run.sourceFilename)
@@ -506,6 +528,9 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
           body.data.unknownDetectionAcknowledged === true,
         outputMimeType,
         outputFilename,
+        outputDowngrade: attemptedBurn
+          ? { from: attemptedBurn, reason: downgradeReason ?? 'burn_failed' }
+          : null,
       })
     } catch (error) {
       await storage.delete(objectKey)
@@ -575,10 +600,16 @@ export function createRedactReviewRoutes(pool: Pool, storage: StorageService) {
         requestId: c.get('requestId'),
       })
     }
+    // Built from the same values persisted above (not re-read from the run),
+    // so the warning agrees with the stored summary by construction.
+    const outputDowngrade =
+      attemptedBurn && downgradeReason
+        ? { from: attemptedBurn, reason: downgradeReason }
+        : null
     return c.json({
       run: publicRun(result.run),
       artifact: result.artifact,
-      warnings: { unreviewedSpanIds, coverageUnchecked },
+      warnings: { unreviewedSpanIds, coverageUnchecked, outputDowngrade },
     })
   })
 

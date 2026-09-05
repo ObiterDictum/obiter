@@ -2633,6 +2633,13 @@ describe('createApiApp degraded finalization acknowledgement', () => {
       }),
     )
     log.mockRestore()
+    const body = (await response.json()) as {
+      warnings: { outputDowngrade: { from: string; reason: string } | null }
+    }
+    expect(body.warnings.outputDowngrade).toEqual({
+      from: 'pdf',
+      reason: 'burn_failed',
+    })
   })
 
   it('finalizes footnote-bearing docs once extracted, still refuses stale text', async () => {
@@ -2859,6 +2866,10 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     finalized = true
     expect(textWrites).toBe(0)
     expect(binaryWrites).toBe(1)
+    expect(
+      ((await response.json()) as { warnings: { outputDowngrade: unknown } })
+        .warnings.outputDowngrade,
+    ).toBeNull()
     expect(published).not.toBeNull()
     const zip = await JSZip.loadAsync(published ?? Buffer.alloc(0))
     for (const name of Object.keys(zip.files)) {
@@ -2890,6 +2901,132 @@ describe('createApiApp degraded finalization acknowledgement', () => {
     expect(file.headers.get('content-type')).toBe(
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     )
+  })
+
+  it('warns and persists the downgrade when .docx burn refuses tracked-change text', async () => {
+    const { extractDocumentContent } = await import('./document-extraction')
+    const sourceBytes = await readFile(
+      'test-fixtures/upload-corpus/letter-tracked-changes.docx',
+    )
+    const text = (await extractDocumentContent('docx', sourceBytes)).text
+    // The same name appears in the body and inside a tracked change, so an
+    // accepted body span forces the burn to refuse.
+    const target = 'Cartwright'
+    expect(text).toContain(target)
+    const start = text.indexOf(target)
+    const readyRun = finalizedRunRow({
+      status: 'ready_for_review',
+      output_artifact_id: null,
+      source_filename: 'letter-tracked-changes.docx',
+      source_mime_type:
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      source_file_object_key: 'org/org_1/redaction-runs/red_1/original',
+      spans_json: [
+        {
+          id: 'span_1',
+          start,
+          end: start + target.length,
+          text: target,
+          category: 'person_name',
+          source: 'rampart_model',
+          confidence: 'high',
+          suggestion: 'redact',
+        },
+      ],
+      decisions_json: {
+        span_1: {
+          decision: 'accept',
+          decidedBy: 'usr_1',
+          decidedAt: '2026-07-30T00:00:00.000Z',
+        },
+      },
+    })
+    let textWrites = 0
+    let binaryWrites = 0
+    let persistedSummary: Record<string, unknown> | null = null
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    const app = createApiApp(
+      testEnv,
+      createHybridPool(
+        async (sql) => {
+          if (String(sql).includes('from redaction_runs')) {
+            return { rows: [readyRun] }
+          }
+          return { rows: [] }
+        },
+        async (sql, params) => {
+          const statement = String(sql)
+          if (statement === 'begin' || statement === 'commit')
+            return { rows: [] }
+          if (
+            statement.includes('for update of run') ||
+            statement.includes('select matter_id, document_id, replaces_run_id')
+          )
+            return { rows: [readyRun] }
+          if (statement.includes('insert into artifacts')) {
+            return {
+              rows: [{ id: 'art_1', object_key: 'org/org_1/artifacts/art_1' }],
+            }
+          }
+          if (statement.includes('update redaction_runs')) {
+            persistedSummary = JSON.parse(
+              (params as unknown[])[3] as string,
+            ) as Record<string, unknown>
+            return { rows: [] }
+          }
+          if (statement.includes('from redaction_runs')) {
+            return { rows: [finalizedRunRow()] }
+          }
+          if (statement.includes('insert into audit_logs')) return { rows: [] }
+          throw new Error(`Unexpected SQL: ${statement}`)
+        },
+      ),
+      {
+        auth: authWithRole('member'),
+        storage: {
+          readText: async () => text,
+          readBinary: async () => sourceBytes,
+          writeText: async () => {
+            textWrites += 1
+          },
+          writeBinary: async () => {
+            binaryWrites += 1
+          },
+          delete: async () => undefined,
+        },
+      },
+    )
+    const response = await app.request('/api/redaction-runs/red_1/finalize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ outputMode: 'redacted' }),
+    })
+    expect(response.status).toBe(200)
+    // Safe text fallback: no .docx artifact written.
+    expect(textWrites).toBe(1)
+    expect(binaryWrites).toBe(0)
+    expect(log).toHaveBeenCalledWith(
+      'redaction_burn_failed',
+      expect.objectContaining({ runId: 'red_1' }),
+    )
+    log.mockRestore()
+    const body = (await response.json()) as {
+      warnings: {
+        unreviewedSpanIds: string[]
+        coverageUnchecked: boolean
+        outputDowngrade: { from: string; reason: string } | null
+      }
+    }
+    // The downgrade is surfaced, not silent: reason codes only.
+    expect(body.warnings.outputDowngrade).toEqual({
+      from: 'docx',
+      reason: 'tracked_change',
+    })
+    // ... and persisted on the run so it survives a page reload.
+    expect(persistedSummary).toMatchObject({
+      outputMimeType: 'text/plain',
+      outputDowngrade: { from: 'docx', reason: 'tracked_change' },
+    })
   })
 
   it('finalizes runs with no stored source as coverage-unchecked (warning + audit)', async () => {
