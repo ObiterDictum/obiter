@@ -49,7 +49,7 @@ export interface RedetectResponse {
 export interface FinalizeResponse {
   run: RedactionRun
   artifact: { id: string; objectKey: string; artifactType: 'redaction_output' }
-  warnings: { unreviewedSpanIds: string[] }
+  warnings: { unreviewedSpanIds: string[]; coverageUnchecked?: boolean }
 }
 
 export interface SpanDecisionInput {
