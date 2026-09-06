@@ -58,6 +58,7 @@ export interface LegalSearchFetchResponse {
     storedSourceSearched?: boolean
     liveProviderSearched?: boolean
     storedOnlyBrowse?: boolean
+    storedIndexStatus?: 'ok' | 'unavailable'
   }
 }
 
