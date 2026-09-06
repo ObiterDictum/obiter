@@ -58,6 +58,10 @@ export function toFetchResponse(
       storedSourceSearched?: boolean
       liveProviderSearched?: boolean
       storedOnlyBrowse?: boolean
+      /** Present only when the stored Meilisearch index was consulted.
+       * 'unavailable' means it timed out or errored and the Postgres
+       * fallback carried the request — a miss reads 'ok' with no hits. */
+      storedIndexStatus?: 'ok' | 'unavailable'
     }
   } = {},
 ) {

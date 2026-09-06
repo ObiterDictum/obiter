@@ -1,4 +1,5 @@
 import { serve } from '@hono/node-server'
+import { createClient, getIndexStatus } from '@obiter/search-client'
 import { createApiApp } from './app'
 import { createPool } from './database'
 import { readApiEnv } from './env'
@@ -27,6 +28,38 @@ async function main() {
   }
 
   const app = createApiApp(env, pool)
+
+  // Loud at boot, never blocking: an unreachable or empty stored index must
+  // be visible here, not discovered later as silent "no results". Serving
+  // starts regardless — queries degrade to Postgres FTS and say so.
+  void getIndexStatus(
+    createClient(env.meilisearchHost, env.meilisearchSearchApiKey),
+    env.legalAuthoritiesIndex,
+  ).then((state) => {
+    switch (state.status) {
+      case 'ready':
+        console.info('Stored search index ready.', {
+          index: env.legalAuthoritiesIndex,
+          documentCount: state.documentCount,
+        })
+        break
+      case 'empty':
+        console.error(
+          `Stored search index "${env.legalAuthoritiesIndex}" exists but holds 0 documents — stored search returns no Meilisearch hits until documents are indexed.`,
+        )
+        break
+      case 'missing':
+        console.error(
+          `Stored search index "${env.legalAuthoritiesIndex}" does not exist on ${env.meilisearchHost} — stored search falls back to Postgres FTS without typo tolerance.`,
+        )
+        break
+      case 'unreachable':
+        console.error(
+          `Stored search index "${env.legalAuthoritiesIndex}" is unreachable with the configured search key (${state.reason}) on ${env.meilisearchHost} — stored search falls back to Postgres FTS without typo tolerance. Check MEILISEARCH_HOST and MEILISEARCH_SEARCH_API_KEY.`,
+        )
+        break
+    }
+  })
 
   const server = serve(
     {

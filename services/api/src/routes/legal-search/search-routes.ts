@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { Hono } from 'hono'
 import {
   createClient,
+  getIndexStatus,
   search,
   type LegalSearchFilters,
 } from '@obiter/search-client'
@@ -15,6 +16,10 @@ import type { ApiEnv } from '../../env'
 interface LegalSearchRouteVariables {
   requestId: string
 }
+
+// Short on purpose: an offline engine holds the TCP SYN long past this, and
+// the probe must report unreachable instead of hanging the caller.
+const searchReadinessTimeoutMs = 1500
 
 const legalSlugSchema = z
   .string()
@@ -55,6 +60,19 @@ function apiError(
 export function createLegalSearchRoutes(env: ApiEnv) {
   const app = new Hono<{ Variables: LegalSearchRouteVariables }>()
   const client = createClient(env.meilisearchHost, env.meilisearchSearchApiKey)
+
+  // Index readiness with the same credentials the query path uses, so an
+  // "empty" product index is reportable here instead of survey-discovered.
+  // Probed live on each call behind a short timeout: readiness must stay fast
+  // even when the engine is down.
+  app.get('/api/search/readiness', async (c) => {
+    const state = await getIndexStatus(
+      client,
+      env.legalAuthoritiesIndex,
+      searchReadinessTimeoutMs,
+    )
+    return c.json({ index: env.legalAuthoritiesIndex, ...state })
+  })
 
   app.get('/api/search', async (c) => {
     const requestId = c.get('requestId')

@@ -8,6 +8,7 @@ import {
   exactMatchPunctuationTo,
   extractLegalSearchSnippets,
   getDocument,
+  getIndexStatus,
   indexDocuments,
   legalSearchIndexSettings,
   normalizeCitationValue,
@@ -1636,5 +1637,92 @@ describe('Legal search client', () => {
     )
 
     expect(ranked[0]?.id).toBe('ukut-iac-2024-236')
+  })
+
+  describe('getIndexStatus', () => {
+    function statsClient(
+      getStats: () => Promise<{ numberOfDocuments: number }>,
+    ) {
+      return { index: () => ({ getStats }) }
+    }
+
+    it('reports a populated index as ready with its document count', async () => {
+      const state = await getIndexStatus(
+        statsClient(async () => ({ numberOfDocuments: 42 })),
+        'legal_authorities',
+      )
+
+      expect(state).toEqual({
+        status: 'ready',
+        exists: true,
+        documentCount: 42,
+      })
+    })
+
+    it('reports an existing but empty index as empty', async () => {
+      const state = await getIndexStatus(
+        statsClient(async () => ({ numberOfDocuments: 0 })),
+        'legal_authorities',
+      )
+
+      expect(state).toEqual({
+        status: 'empty',
+        exists: true,
+        documentCount: 0,
+      })
+    })
+
+    it('reports a missing index instead of throwing', async () => {
+      const missing = Object.assign(new Error('Index not found.'), {
+        code: 'index_not_found',
+      })
+      const state = await getIndexStatus(
+        statsClient(async () => {
+          throw missing
+        }),
+        'legal_authorities',
+      )
+
+      expect(state).toEqual({
+        status: 'missing',
+        exists: false,
+        documentCount: 0,
+        reason: 'index_not_found',
+      })
+    })
+
+    it('reports rejected credentials as unreachable with the provider code', async () => {
+      const denied = Object.assign(new Error('Invalid API key.'), {
+        code: 'invalid_api_key',
+      })
+      const state = await getIndexStatus(
+        statsClient(async () => {
+          throw denied
+        }),
+        'legal_authorities',
+      )
+
+      expect(state).toEqual({
+        status: 'unreachable',
+        exists: false,
+        documentCount: null,
+        reason: 'invalid_api_key',
+      })
+    })
+
+    it('reports a hung probe as unreachable instead of hanging', async () => {
+      const state = await getIndexStatus(
+        statsClient(() => new Promise(() => undefined)),
+        'legal_authorities',
+        10,
+      )
+
+      expect(state).toEqual({
+        status: 'unreachable',
+        exists: false,
+        documentCount: null,
+        reason: 'timeout',
+      })
+    })
   })
 })

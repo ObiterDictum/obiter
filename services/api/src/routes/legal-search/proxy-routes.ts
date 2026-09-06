@@ -4,6 +4,7 @@ import {
   rankLegalSearchHitsByExactMatch,
   search,
   type LegalSearchFilters,
+  type LegalSearchHit,
 } from '@obiter/search-client'
 import type { ApiEnv } from '../../env'
 import { readLimitedJsonValue } from '../../limited-request-body'
@@ -154,6 +155,7 @@ export function createLegalSearchProxyRoutes(
               storedSourceSearched: exactStoredAuthority.storedSourceSearched,
               liveProviderSearched: false,
               storedOnlyBrowse,
+              storedIndexStatus: exactStoredAuthority.storedIndexStatus,
             },
           },
         ),
@@ -189,6 +191,7 @@ export function createLegalSearchProxyRoutes(
               storedSourceSearched: false,
               liveProviderSearched: false,
               storedOnlyBrowse,
+              storedIndexStatus: cached.storedIndexStatus,
             },
           },
         ),
@@ -226,6 +229,7 @@ export function createLegalSearchProxyRoutes(
               storedSourceSearched: true,
               liveProviderSearched: false,
               storedOnlyBrowse,
+              storedIndexStatus: cached.storedIndexStatus,
             },
           },
         ),
@@ -242,6 +246,7 @@ export function createLegalSearchProxyRoutes(
             storedSourceSearched: true,
             liveProviderSearched: false,
             storedOnlyBrowse,
+            storedIndexStatus: cached.storedIndexStatus,
           },
         }),
       )
@@ -259,6 +264,7 @@ export function createLegalSearchProxyRoutes(
             storedSourceSearched: true,
             liveProviderSearched: false,
             storedOnlyBrowse,
+            storedIndexStatus: cached.storedIndexStatus,
           },
         }),
       )
@@ -302,6 +308,7 @@ export function createLegalSearchProxyRoutes(
             storedSourceSearched: true,
             liveProviderSearched: false,
             storedOnlyBrowse,
+            storedIndexStatus: cached.storedIndexStatus,
           },
         }),
       )
@@ -385,6 +392,7 @@ export function createLegalSearchProxyRoutes(
             storedSourceSearched: true,
             liveProviderSearched: true,
             storedOnlyBrowse,
+            storedIndexStatus: cached.storedIndexStatus,
           },
         },
       ),
@@ -566,11 +574,16 @@ async function findExactStoredAuthority(
     filters,
     5,
   )
+  const storedIndexStatus = storedIndexResult.storedIndexStatus
   const storedIndexHit = storedIndexResult.hits.find((hit) =>
     isExactLookupHit(hit, lookup),
   )
   if (storedIndexHit)
-    return { hit: storedIndexHit, storedSourceSearched: false }
+    return {
+      hit: storedIndexHit,
+      storedSourceSearched: false,
+      storedIndexStatus,
+    }
 
   if (lookup.kind === 'document_id') {
     const storedRecord = await getLegalAuthoritySourceRecord(
@@ -579,7 +592,11 @@ async function findExactStoredAuthority(
     )
     const storedDocument = storedRecord?.document ?? storedRecord?.summary
     if (storedDocument && sourceMatchesFilters(storedDocument, filters)) {
-      return { hit: storedDocument, storedSourceSearched: true }
+      return {
+        hit: storedDocument,
+        storedSourceSearched: true,
+        storedIndexStatus,
+      }
     }
   }
 
@@ -592,7 +609,7 @@ async function findExactStoredAuthority(
     isExactLookupHit(hit, lookup),
   )
   return storedSourceHit
-    ? { hit: storedSourceHit, storedSourceSearched: true }
+    ? { hit: storedSourceHit, storedSourceSearched: true, storedIndexStatus }
     : null
 }
 
@@ -627,13 +644,27 @@ function sourceMatchesFilters(
   return true
 }
 
+type StoredIndexStatus = 'ok' | 'unavailable'
+
+interface StoredAuthoritiesResult {
+  hits: LegalSearchHit[]
+  query: string
+  estimatedTotalHits: number
+  processingTimeMs: number
+  storedIndexStatus: StoredIndexStatus
+}
+
 async function searchStoredAuthorities(
   searchClient: Parameters<typeof search>[0],
   indexName: string,
   query: string,
   filters: LegalSearchFilters,
   limit?: number,
-) {
+): Promise<StoredAuthoritiesResult> {
+  // A stored-index failure is reported, not swallowed: the caller carries
+  // storedIndexStatus into response diagnostics so a broken engine never
+  // reads as "no results". Only the error message is logged — RULES.md
+  // forbids secrets in logs, so the provider cause is never serialised.
   try {
     const searchOptions =
       typeof limit === 'number'
@@ -644,20 +675,41 @@ async function searchStoredAuthorities(
       storedSearchTimeoutMs,
     )
 
-    if (result) {
+    if (!result) {
+      console.error(
+        'Stored Meilisearch search timed out — falling back to Postgres FTS without typo tolerance.',
+        { indexName, timeoutMs: storedSearchTimeoutMs },
+      )
       return {
-        ...result,
-        hits:
-          typeof limit === 'number' ? result.hits.slice(0, limit) : result.hits,
+        hits: [],
+        query,
+        estimatedTotalHits: 0,
+        processingTimeMs: 0,
+        storedIndexStatus: 'unavailable',
       }
     }
-  } catch {}
 
-  return {
-    hits: [],
-    query,
-    estimatedTotalHits: 0,
-    processingTimeMs: 0,
+    return {
+      ...result,
+      hits:
+        typeof limit === 'number' ? result.hits.slice(0, limit) : result.hits,
+      storedIndexStatus: 'ok',
+    }
+  } catch (error: unknown) {
+    console.error(
+      'Stored Meilisearch search failed — falling back to Postgres FTS without typo tolerance.',
+      {
+        indexName,
+        reason: error instanceof Error ? error.message : String(error),
+      },
+    )
+    return {
+      hits: [],
+      query,
+      estimatedTotalHits: 0,
+      processingTimeMs: 0,
+      storedIndexStatus: 'unavailable',
+    }
   }
 }
 
