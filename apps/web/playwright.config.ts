@@ -39,9 +39,9 @@ export default defineConfig({
         // 7700/meili to avoid the Tailscale host in .env.
         DATABASE_URL: 'postgresql://obiter:obiter@127.0.0.1:5432/obiter',
         MEILISEARCH_HOST: 'http://127.0.0.1:7700',
-        MEILISEARCH_SEARCH_API_KEY: 'search-benchmark-key',
-        MEILISEARCH_ADMIN_API_KEY: 'search-benchmark-key',
-        MEILI_MASTER_KEY: 'search-benchmark-key',
+        MEILISEARCH_SEARCH_API_KEY: 'obiter-local-dev-key',
+        MEILISEARCH_ADMIN_API_KEY: 'obiter-local-dev-key',
+        MEILI_MASTER_KEY: 'obiter-local-dev-key',
         BETTER_AUTH_URL: webOrigin,
         BETTER_AUTH_SECRET: '0123456789abcdef0123456789abcdef',
         NODE_ENV: 'development',
