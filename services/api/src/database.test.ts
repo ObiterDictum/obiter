@@ -8,6 +8,7 @@ import {
   restoreMatterWithAudit,
   softDeleteDocumentWithCascade,
   softDeleteMatterWithCascade,
+  updateDocumentExtraction,
 } from './database'
 
 type QueryCall = [string, unknown[] | undefined]
@@ -894,5 +895,91 @@ describe('createOrganisationForUser', () => {
           s.includes('"pendingOrganisationName" = null'),
       ),
     ).toBe(true)
+  })
+})
+
+describe('updateDocumentExtraction', () => {
+  // This layer persists verbatim by design: curation of raw parser
+  // diagnostics into user-facing sentences happens at the call site
+  // (routes/documents.ts, pinned in documents-upload.test.ts). These tests
+  // pin that what the caller passes is exactly what gets stored — no
+  // transformation that could smuggle raw diagnostics back in — and that an
+  // absent reason falls back to the generic sentence.
+  function extractionPool() {
+    const calls: QueryCall[] = []
+    const pool = {
+      query: async (sql: string, params?: unknown[]) => {
+        calls.push([sql, params])
+        return {
+          rows: [
+            versionRow({
+              document_status: params?.[3],
+              failure_reason: params?.[4],
+              text_object_key: params?.[2],
+            }),
+          ],
+        }
+      },
+    } as unknown as Pool
+    return { pool, calls }
+  }
+
+  it('persists a curated failure reason verbatim', async () => {
+    const curated =
+      'This PDF appears to be scanned — text extraction requires OCR, which is not yet supported.'
+    const { pool, calls } = extractionPool()
+
+    const version = await updateDocumentExtraction(pool, {
+      organisationId: 'org_1',
+      versionId: 'ver_1',
+      failureReason: curated,
+    })
+
+    const params = calls[0]?.[1]
+    expect(params).toEqual(['ver_1', 'org_1', null, 'failed', curated])
+    expect(version?.documentStatus).toBe('failed')
+    expect(version?.failureReason).toBe(curated)
+  })
+
+  it('defaults to the generic sentence when no reason is given', async () => {
+    const { pool, calls } = extractionPool()
+
+    const version = await updateDocumentExtraction(pool, {
+      organisationId: 'org_1',
+      versionId: 'ver_1',
+    })
+
+    const params = calls[0]?.[1]
+    expect(params).toEqual([
+      'ver_1',
+      'org_1',
+      null,
+      'failed',
+      'Document text extraction failed.',
+    ])
+    expect(version?.documentStatus).toBe('failed')
+    expect(version?.failureReason).toBe('Document text extraction failed.')
+  })
+
+  it('marks the version ready with no failure reason on success', async () => {
+    const { pool, calls } = extractionPool()
+
+    const version = await updateDocumentExtraction(pool, {
+      organisationId: 'org_1',
+      versionId: 'ver_1',
+      textObjectKey:
+        'org/org_1/matters/mtr_1/documents/doc_1/versions/ver_1/text',
+    })
+
+    const params = calls[0]?.[1]
+    expect(params).toEqual([
+      'ver_1',
+      'org_1',
+      'org/org_1/matters/mtr_1/documents/doc_1/versions/ver_1/text',
+      'ready',
+      null,
+    ])
+    expect(version?.documentStatus).toBe('ready')
+    expect(version?.failureReason).toBeNull()
   })
 })

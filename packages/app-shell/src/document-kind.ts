@@ -1,4 +1,4 @@
-export type WorkspaceKind = 'docx' | 'pdf' | 'other'
+export type WorkspaceKind = 'docx' | 'pdf' | 'txt' | 'other'
 
 export function workspaceKind(
   fileType: string | null | undefined,
@@ -14,6 +14,9 @@ export function workspaceKind(
   }
   if (value === 'pdf' || value === '.pdf' || value === 'application/pdf') {
     return 'pdf'
+  }
+  if (value === 'txt' || value === '.txt' || value === 'text/plain') {
+    return 'txt'
   }
   return 'other'
 }

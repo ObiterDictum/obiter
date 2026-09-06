@@ -18,8 +18,15 @@ describe('workspaceKind', () => {
     expect(workspaceKind('application/pdf')).toBe('pdf')
   })
 
+  it('recognises plain-text types', () => {
+    expect(workspaceKind('txt')).toBe('txt')
+    expect(workspaceKind('.txt')).toBe('txt')
+    expect(workspaceKind('text/plain')).toBe('txt')
+    expect(workspaceKind('text/plain; charset=utf-8')).toBe('txt')
+  })
+
   it('treats everything else as other', () => {
-    expect(workspaceKind('txt')).toBe('other')
+    expect(workspaceKind('odt')).toBe('other')
     expect(workspaceKind(undefined)).toBe('other')
   })
 })

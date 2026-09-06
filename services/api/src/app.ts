@@ -20,6 +20,7 @@ import { createChangelogRoutes } from './routes/changelog'
 import { createCommentsRoutes } from './routes/comments'
 import { createDocumentAccessRoutes } from './routes/document-access'
 import { createDocumentCollaborationRoutes } from './routes/document-collaboration'
+import { createDocumentContentRoutes } from './routes/document-content'
 import { createDocumentEditRoutes } from './routes/document-edit'
 import { createDocumentExportRoutes } from './routes/document-export'
 import { createDocumentMediaRoutes } from './routes/document-media'
@@ -218,6 +219,7 @@ export function createApiApp(
   app.route('/', createOrganisationsRoutes(pool, env))
   app.route('/', createDocumentsRoutes(pool, storage, requestLimits))
   app.route('/', createDocumentCollaborationRoutes(pool, storage, presence))
+  app.route('/', createDocumentContentRoutes(pool, storage))
   app.route('/', createDocumentEditRoutes(pool, storage))
   app.route('/', createDocumentModelRoutes(pool, storage))
   app.route('/', createDocumentExportRoutes(pool, storage))
