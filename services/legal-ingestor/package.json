@@ -5,15 +5,19 @@
   "type": "module",
   "scripts": {
     "dev": "tsx src/index.ts",
+    "bulk:ingest": "tsx src/bulk-ingest.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@obiter/legal-schema": "workspace:*",
+    "@obiter/legal-source-provider": "workspace:*",
     "@obiter/search-client": "workspace:*",
-    "meilisearch": "^0.51.0"
+    "meilisearch": "^0.51.0",
+    "pg": "^8.20.0"
   },
   "devDependencies": {
+    "@types/pg": "^8.20.0",
     "tsx": "^4.23.0"
   }
 }

@@ -19,6 +19,7 @@ describe('runBoundedSampleIndexing', () => {
       legalAuthoritiesIndex: 'legal_authorities_fixtures',
       mojFindCaseLawBaseUrl: 'https://caselaw.nationalarchives.gov.uk',
       mojFindCaseLawRateLimit: 1000,
+      databaseUrl: 'postgres://obiter:obiter@localhost:5432/obiter',
       nodeEnv: 'test',
     })
 
@@ -37,6 +38,7 @@ describe('runBoundedSampleIndexing', () => {
         legalAuthoritiesIndex: 'legal_authorities',
         mojFindCaseLawBaseUrl: 'https://caselaw.nationalarchives.gov.uk',
         mojFindCaseLawRateLimit: 1000,
+        databaseUrl: 'postgres://obiter:obiter@localhost:5432/obiter',
         nodeEnv: 'test',
       }),
     ).rejects.toThrow('Refusing to seed fixtures into product index')
