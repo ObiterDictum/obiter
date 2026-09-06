@@ -12,6 +12,7 @@ import {
   getIndexStatus,
   indexDocuments,
   legalSearchIndexSettings,
+  meilisearchDocumentPayloadMaxBytes,
   listDocumentIds,
   normalizeCitationValue,
   normalizeExactMatchValue,
@@ -19,6 +20,10 @@ import {
   search,
 } from './index'
 import type { LegalSearchHit } from './index'
+import {
+  partitionByUtf8JsonPayload,
+  utf8JsonBytes,
+} from './document-payload-batches'
 
 function authority(overrides: Record<string, unknown> = {}) {
   return {
@@ -510,6 +515,206 @@ describe('Legal search client', () => {
     ).rejects.toThrow(
       'Document indexing status timed out. The Meilisearch task may still be running.',
     )
+  })
+
+  it('sends large sequences as multiple addDocuments calls', async () => {
+    const addDocuments = vi.fn((documents: unknown[]) =>
+      completedTask({
+        details: {
+          receivedDocuments: documents.length,
+          indexedDocuments: documents.length,
+        },
+      }),
+    )
+    const client = { index: () => ({ addDocuments }) }
+    const first = authority({ id: 'uksc-2024-1' })
+    const second = authority({ id: 'uksc-2024-2' })
+    const indexedBytes = utf8JsonBytes({
+      ...first,
+      dateDecidedTimestamp: Date.UTC(2024, 0, 31),
+    })
+    const capBytes = indexedBytes + 2
+
+    const result = await indexDocuments(
+      client,
+      'legal_authorities',
+      [first, second],
+      { maxPayloadBytes: capBytes },
+    )
+
+    expect(result).toEqual({ indexedCount: 2, failedCount: 0, errors: [] })
+    expect(addDocuments).toHaveBeenCalledTimes(2)
+    expect(addDocuments.mock.calls[0]?.[0]).toHaveLength(1)
+    expect(addDocuments.mock.calls[1]?.[0]).toHaveLength(1)
+  })
+
+  it('stops sending batches after the first addDocuments failure', async () => {
+    const payloadError = Object.assign(
+      new Error(
+        'The provided payload reached the size limit. The maximum accepted payload size is 100 MB.',
+      ),
+      {
+        name: 'MeiliSearchApiError',
+        code: 'payload_too_large',
+      },
+    )
+    const addDocuments = vi
+      .fn()
+      .mockImplementationOnce((documents: unknown[]) =>
+        completedTask({
+          details: {
+            receivedDocuments: documents.length,
+            indexedDocuments: documents.length,
+          },
+        }),
+      )
+      .mockImplementationOnce(() => {
+        throw payloadError
+      })
+      .mockImplementationOnce((documents: unknown[]) =>
+        completedTask({
+          details: {
+            receivedDocuments: documents.length,
+            indexedDocuments: documents.length,
+          },
+        }),
+      )
+    const client = { index: () => ({ addDocuments }) }
+    const docs = [
+      authority({ id: 'uksc-2024-1' }),
+      authority({ id: 'uksc-2024-2' }),
+      authority({ id: 'uksc-2024-3' }),
+    ]
+    const indexedBytes = utf8JsonBytes({
+      ...docs[0],
+      dateDecidedTimestamp: Date.UTC(2024, 0, 31),
+    })
+
+    await expect(
+      indexDocuments(client, 'legal_authorities', docs, {
+        maxPayloadBytes: indexedBytes + 2,
+      }),
+    ).rejects.toMatchObject({
+      message:
+        'Document indexing failed. Search provider error: payload_too_large: The provided payload reached the size limit. The maximum accepted payload size is 100 MB.',
+      cause: payloadError,
+    })
+    expect(addDocuments).toHaveBeenCalledTimes(2)
+  })
+
+  it('stops sending batches when an indexing task does not succeed', async () => {
+    const addDocuments = vi
+      .fn()
+      .mockImplementationOnce((documents: unknown[]) =>
+        completedTask({
+          details: {
+            receivedDocuments: documents.length,
+            indexedDocuments: documents.length,
+          },
+        }),
+      )
+      .mockImplementationOnce((documents: unknown[]) =>
+        completedTask({
+          uid: 12,
+          status: 'failed',
+          details: {
+            receivedDocuments: documents.length,
+            indexedDocuments: 0,
+          },
+          error: { code: 'internal' },
+        }),
+      )
+      .mockImplementationOnce(() => completedTask())
+    const client = { index: () => ({ addDocuments }) }
+    const docs = [
+      authority({ id: 'uksc-2024-1' }),
+      authority({ id: 'uksc-2024-2' }),
+      authority({ id: 'uksc-2024-3' }),
+    ]
+    const indexedBytes = utf8JsonBytes({
+      ...docs[0],
+      dateDecidedTimestamp: Date.UTC(2024, 0, 31),
+    })
+
+    const result = await indexDocuments(client, 'legal_authorities', docs, {
+      maxPayloadBytes: indexedBytes + 2,
+    })
+
+    expect(addDocuments).toHaveBeenCalledTimes(2)
+    expect(result.indexedCount).toBe(1)
+    expect(result.failedCount).toBe(2)
+    expect(result.errors[0]?.message).toContain(
+      'Indexing task 12 failed (internal).',
+    )
+  })
+
+  it('batches by JSON byte length rather than document count', async () => {
+    const addDocuments = vi.fn((documents: unknown[]) =>
+      completedTask({
+        details: {
+          receivedDocuments: documents.length,
+          indexedDocuments: documents.length,
+        },
+      }),
+    )
+    const client = { index: () => ({ addDocuments }) }
+    const compact = [
+      authority({ id: 'uksc-2024-1' }),
+      authority({ id: 'uksc-2024-2' }),
+      authority({ id: 'uksc-2024-3' }),
+    ]
+    const compactIndexed = compact.map((document) => ({
+      ...document,
+      dateDecidedTimestamp: Date.UTC(2024, 0, 31),
+    }))
+    const threeFitCap = utf8JsonBytes(compactIndexed) + 16
+
+    await indexDocuments(client, 'legal_authorities', compact, {
+      maxPayloadBytes: threeFitCap,
+    })
+    expect(addDocuments).toHaveBeenCalledTimes(1)
+    expect(addDocuments.mock.calls[0]?.[0]).toHaveLength(3)
+
+    addDocuments.mockClear()
+    const bulky = authority({
+      id: 'uksc-2024-9',
+      paragraphs: [
+        {
+          id: 'uksc-2024-9-p1',
+          documentId: 'uksc-2024-9',
+          paragraphNumber: 1,
+          text: 'judgment body '.repeat(400),
+        },
+      ],
+    })
+    const bulkyBytes = utf8JsonBytes({
+      ...bulky,
+      dateDecidedTimestamp: Date.UTC(2024, 0, 31),
+    })
+    const twoCompactWouldFit = utf8JsonBytes([
+      compactIndexed[0],
+      compactIndexed[1],
+    ])
+    expect(twoCompactWouldFit).toBeLessThan(bulkyBytes)
+
+    await indexDocuments(client, 'legal_authorities', [bulky, bulky], {
+      maxPayloadBytes: bulkyBytes + 2,
+    })
+    expect(addDocuments).toHaveBeenCalledTimes(2)
+  })
+
+  it('fails closed when a single document exceeds the payload cap', async () => {
+    const addDocuments = vi.fn(() => completedTask())
+    const client = { index: () => ({ addDocuments }) }
+
+    await expect(
+      indexDocuments(client, 'legal_authorities', [authority()], {
+        maxPayloadBytes: 32,
+      }),
+    ).rejects.toThrow(
+      /Document uksc-2024-3 serialises to \d+ bytes, which exceeds the 32 byte Meilisearch payload cap/,
+    )
+    expect(addDocuments).not.toHaveBeenCalled()
   })
 
   it('reports validation failures without touching Meilisearch', async () => {
@@ -1580,6 +1785,38 @@ describe('Legal search client', () => {
     )
   })
 
+  it('wraps MeiliSearchApiError with the provider code and message', async () => {
+    const providerError = Object.assign(
+      new Error(
+        'The provided payload reached the size limit. The maximum accepted payload size is 100 MB.',
+      ),
+      {
+        name: 'MeiliSearchApiError',
+        cause: {
+          message:
+            'The provided payload reached the size limit. The maximum accepted payload size is 100 MB.',
+          code: 'payload_too_large',
+          type: 'invalid_request',
+        },
+      },
+    )
+    const client = {
+      index: () => ({
+        search: async () => {
+          throw providerError
+        },
+      }),
+    }
+
+    await expect(
+      search(client, 'legal_authorities', 'test'),
+    ).rejects.toMatchObject({
+      message:
+        'Search failed. Search provider error: payload_too_large: The provided payload reached the size limit. The maximum accepted payload size is 100 MB.',
+      cause: providerError,
+    })
+  })
+
   it('wraps provider errors without leaking keys', async () => {
     const providerError = new Error('failed with dev-key')
     const client = {
@@ -1756,6 +1993,36 @@ describe('Legal search client', () => {
         reason: 'timeout',
       })
     })
+  })
+})
+
+describe('document payload batches', () => {
+  it('caps addDocuments payloads 20 MB under the Meilisearch 100 MB limit', () => {
+    expect(meilisearchDocumentPayloadMaxBytes).toBe(80_000_000)
+  })
+
+  it('packs records so each serialised batch stays at or under the cap', () => {
+    const records = [
+      { id: 'a', text: 'x'.repeat(40) },
+      { id: 'b', text: 'y'.repeat(40) },
+      { id: 'c', text: 'z'.repeat(40) },
+    ]
+    const twoFit = utf8JsonBytes([records[0], records[1]])
+    const batches = partitionByUtf8JsonPayload(records, twoFit)
+
+    expect(batches.length).toBeGreaterThan(1)
+    for (const batch of batches) {
+      expect(utf8JsonBytes(batch)).toBeLessThanOrEqual(twoFit)
+    }
+  })
+
+  it('running totals match JSON.stringify of the emitted batch', () => {
+    const records = [{ id: 'a' }, { id: 'b' }, { id: 'c' }]
+    const cap = utf8JsonBytes([records[0], records[1]])
+    const batches = partitionByUtf8JsonPayload(records, cap)
+
+    expect(batches).toEqual([[records[0], records[1]], [records[2]]])
+    expect(utf8JsonBytes(batches[0])).toBe(cap)
   })
 })
 
