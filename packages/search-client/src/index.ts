@@ -7,6 +7,12 @@ import {
   type LegalAuthoritySummary,
   type LegalSourceType,
 } from '@obiter/legal-schema'
+import {
+  meilisearchDocumentPayloadMaxBytes,
+  partitionByUtf8JsonPayload,
+} from './document-payload-batches'
+
+export { meilisearchDocumentPayloadMaxBytes } from './document-payload-batches'
 
 interface EngineRankingHit {
   _rankingScore?: number
@@ -71,6 +77,24 @@ export interface SearchIndexDocumentsResult {
   indexedCount: number
   failedCount: number
   errors: Array<{ recordId: string | null; message: string }>
+}
+
+export interface IndexDocumentsProgress {
+  batchNumber: number
+  batchCount: number
+  batchDocumentCount: number
+  indexedCount: number
+  totalDocuments: number
+}
+
+export interface IndexDocumentsOptions {
+  /**
+   * UTF-8 byte cap for `JSON.stringify(batch)` sent to addDocuments.
+   * Defaults to {@link meilisearchDocumentPayloadMaxBytes}. Tests pass a
+   * smaller value so batching can be asserted without 80 MB fixtures.
+   */
+  maxPayloadBytes?: number
+  onProgress?: (progress: IndexDocumentsProgress) => void
 }
 
 // Optional timings for diagnostics, not product behaviour.
@@ -433,6 +457,7 @@ export async function indexDocuments(
   client: DocumentIndexClient,
   indexName: string,
   documents: unknown[],
+  options: IndexDocumentsOptions = {},
 ): Promise<SearchIndexDocumentsResult> {
   const parsed = legalAuthoritiesSchema.safeParse(documents)
 
@@ -444,30 +469,63 @@ export async function indexDocuments(
   }
 
   const indexable = parsed.data.map(toIndexedLegalAuthority)
+  const capBytes = options.maxPayloadBytes ?? meilisearchDocumentPayloadMaxBytes
+  const batches = partitionByUtf8JsonPayload(indexable, capBytes)
+
+  if (batches.length === 0) {
+    return { indexedCount: 0, failedCount: 0, errors: [] }
+  }
+
+  const index = client.index(indexName)
+  let indexedCount = 0
 
   try {
-    const task = await client
-      .index(indexName)
-      .addDocuments(indexable, {
-        primaryKey: 'id',
+    for (const [batchIndex, batch] of batches.entries()) {
+      options.onProgress?.({
+        batchNumber: batchIndex + 1,
+        batchCount: batches.length,
+        batchDocumentCount: batch.length,
+        indexedCount,
+        totalDocuments: parsed.data.length,
       })
-      .waitTask({ timeout: documentIndexingTaskTimeoutMs, interval: 100 })
 
-    if (task.status !== 'succeeded') {
-      return indexingTaskFailure(parsed.data, task)
+      const task = await index
+        .addDocuments(batch, {
+          primaryKey: 'id',
+        })
+        .waitTask({ timeout: documentIndexingTaskTimeoutMs, interval: 100 })
+
+      if (task.status !== 'succeeded') {
+        const remaining = parsed.data.length - indexedCount
+        return indexingTaskFailure(remaining, task, indexedCount)
+      }
+
+      const batchIndexed =
+        typeof task.details?.indexedDocuments === 'number'
+          ? task.details.indexedDocuments
+          : batch.length
+      indexedCount += batchIndexed
+      const batchFailed = Math.max(batch.length - batchIndexed, 0)
+      if (batchFailed > 0) {
+        return {
+          indexedCount,
+          failedCount: parsed.data.length - indexedCount,
+          errors: [
+            {
+              recordId: null,
+              message:
+                'Indexing task completed without indexing every document.',
+            },
+          ],
+        }
+      }
     }
-
-    const indexedCount =
-      typeof task.details?.indexedDocuments === 'number'
-        ? task.details.indexedDocuments
-        : parsed.data.length
-    const failedCount = Math.max(parsed.data.length - indexedCount, 0)
 
     return {
       indexedCount,
-      failedCount,
+      failedCount: Math.max(parsed.data.length - indexedCount, 0),
       errors:
-        failedCount > 0
+        parsed.data.length - indexedCount > 0
           ? [
               {
                 recordId: null,
@@ -1141,23 +1199,35 @@ export async function getIndexStatus(
   }
 }
 
+type SearchProviderErrorBody = {
+  code?: string
+  message?: string
+  cause?: SearchProviderErrorBody
+}
+
+function searchProviderErrorBody(
+  error: unknown,
+): SearchProviderErrorBody | null {
+  if (typeof error !== 'object' || error === null) return null
+
+  const body: SearchProviderErrorBody = {}
+  if ('code' in error && typeof error.code === 'string') {
+    body.code = error.code
+  }
+  if ('message' in error && typeof error.message === 'string') {
+    body.message = error.message
+  }
+  if ('cause' in error) {
+    const nested = searchProviderErrorBody(error.cause)
+    if (nested) body.cause = nested
+  }
+  return body
+}
+
 /** Meilisearch error code off the error or its cause; null when neither carries one. */
 function searchProviderCode(error: unknown): string | null {
-  const cause =
-    typeof error === 'object' && error !== null && 'cause' in error
-      ? (error as { cause?: unknown }).cause
-      : undefined
-  for (const candidate of [error, cause]) {
-    if (
-      typeof candidate === 'object' &&
-      candidate !== null &&
-      'code' in candidate &&
-      typeof (candidate as { code?: unknown }).code === 'string'
-    ) {
-      return (candidate as { code: string }).code
-    }
-  }
-  return null
+  const body = searchProviderErrorBody(error)
+  return body?.code ?? body?.cause?.code ?? null
 }
 
 /**
@@ -1226,8 +1296,9 @@ async function waitForSucceededTask(
 }
 
 function indexingTaskFailure(
-  documents: LegalSearchDocument[],
+  failedCount: number,
   task: SearchIndexingTask,
+  indexedCount = 0,
 ): SearchIndexDocumentsResult {
   const taskId = task.uid ?? task.taskUid
   const taskLabel = typeof taskId === 'number' ? ` ${taskId}` : ''
@@ -1235,8 +1306,8 @@ function indexingTaskFailure(
   const errorLabel = errorCode ? ` (${errorCode})` : ''
 
   return {
-    indexedCount: 0,
-    failedCount: documents.length,
+    indexedCount,
+    failedCount,
     errors: [
       {
         recordId: null,
@@ -1288,11 +1359,35 @@ function quoteFilter(value: string) {
   return `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
 }
 
-// The cause contains the unredacted provider error for internal diagnostics such as
-// the benchmark report. Never serialise it into an API response or user-facing log.
+function searchProviderMessage(error: unknown): string | null {
+  const body = searchProviderErrorBody(error)
+  const message = body?.message ?? body?.cause?.message
+  return typeof message === 'string' && message.length > 0
+    ? message.replace(/\.+$/, '')
+    : null
+}
+
+// The cause keeps the full provider object for diagnostics such as the
+// benchmark report. The wrapped message names the provider code and message
+// so operators can see payload_too_large; it must not include judgment text.
 function wrapSearchError(message: string, error: unknown): Error {
   if (error instanceof SearchTaskError) {
     return new Error(`${message} ${error.message}`, { cause: error })
+  }
+
+  const code = searchProviderCode(error)
+  const providerMessage = searchProviderMessage(error)
+  const isMeilisearchApiError =
+    error instanceof Error && error.name === 'MeiliSearchApiError'
+
+  if (code || isMeilisearchApiError) {
+    const detail = [code, providerMessage]
+      .filter((part): part is string => typeof part === 'string' && part !== '')
+      .join(': ')
+    const named = detail.length > 0 ? detail : 'MeiliSearchApiError'
+    return new Error(`${message} Search provider error: ${named}.`, {
+      cause: error,
+    })
   }
 
   const detail = error instanceof Error ? error.name : typeof error

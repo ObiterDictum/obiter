@@ -128,6 +128,13 @@ async function main() {
     documents.push(parsed.data)
   }
 
+  console.info(
+    `Read ${rows.rows.length} rows from Postgres; ` +
+      `${documents.length} valid authorities to index ` +
+      `(${indexedFromSummaryOnly} summary-only, ` +
+      `${Number(withdrawn.rows[0]?.count ?? 0)} withdrawn excluded).`,
+  )
+
   const report: RebuildReport = {
     index: config.indexName,
     docsRead: rows.rows.length,
@@ -152,11 +159,24 @@ async function main() {
   await admin.deleteIndexIfExists(stagingIndexName)
   await createIndex(admin, stagingIndexName)
   try {
-    const indexed = await indexDocuments(admin, stagingIndexName, documents)
+    const indexed = await indexDocuments(admin, stagingIndexName, documents, {
+      onProgress: ({
+        batchNumber,
+        batchCount,
+        indexedCount,
+        totalDocuments,
+      }) => {
+        console.info(
+          `Indexing staging batch ${batchNumber} of ${batchCount} ` +
+            `(${indexedCount} of ${totalDocuments} indexed so far).`,
+        )
+      },
+    })
     if (indexed.failedCount > 0) {
       throw new Error(indexed.errors.map((error) => error.message).join('; '))
     }
     report.indexed = indexed.indexedCount
+    console.info(`Indexed ${indexed.indexedCount} documents on staging.`)
   } catch (error) {
     await admin.deleteIndexIfExists(stagingIndexName)
     const reason = error instanceof Error ? error.message : String(error)
