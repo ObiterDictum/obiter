@@ -2785,6 +2785,14 @@
                   </td>
                 </tr>
                 <tr>
+                  <td class="id">GET /api/search/readiness</td>
+                  <td class="id">legal-search/</td>
+                  <td>
+                    Public index state: whether the product index exists and its
+                    approximate document count. No session required.
+                  </td>
+                </tr>
+                <tr>
                   <td class="id">GET /api/search/documents/:documentId</td>
                   <td class="id">legal-search/</td>
                   <td>
@@ -3171,6 +3179,7 @@
             organisation-scoped deleted-run resolver after an owner/admin role
             check, while members are gated before the deleted lookup.
             <code>GET /api/search</code>, <code>POST /api/search/fetch</code>,
+            <code>GET /api/search/readiness</code>,
             <code>GET /api/search/documents/:documentId</code>,
             <code>GET /api/changelog</code>, <code>GET /api/health</code>, and
             <code>GET /api/invites/preview</code>
@@ -4267,6 +4276,23 @@
             untuned. Meilisearch's score is discarded. And provider calls are to
             leave the request path once the corpus is held locally. Tracked in
             the Search PRD.
+          </div>
+          <div class="callout">
+            <b>Stored-search failure is visible, not silent.</b> When the
+            Meilisearch query errors or times out, fetch degrades to the
+            Postgres tier but marks every response with
+            <code>diagnostics.storedIndexStatus: "unavailable"</code> (a healthy
+            miss reads <code>"ok"</code>) and logs the failure at boot and at
+            query time. <code>GET /api/search/readiness</code>
+            reports whether the product index exists and its approximate
+            document count using the same credentials the query path uses. API
+            keys are provisioned per Meilisearch engine: a 403
+            <code>invalid_api_key</code> means the configured keys belong to a
+            different engine than <code>MEILISEARCH_HOST</code> points at, not
+            that the index is empty. The local
+            <code>127.0.0.1:7700</code> container runs under the benchmark
+            master key and holds only throwaway benchmark indexes — it is not
+            the product index.
           </div>
         </section>
 

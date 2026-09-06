@@ -1116,6 +1116,10 @@ describe('createLegalSearchProxyRoutes', () => {
       indexedCount: 0,
       hydrationQueued: true,
       hits: [],
+      diagnostics: {
+        storedIndexSearched: true,
+        storedIndexStatus: 'unavailable',
+      },
     })
     await vi.waitFor(() =>
       expect(searchClientMock.indexDocuments).toHaveBeenCalledWith(
@@ -1124,6 +1128,50 @@ describe('createLegalSearchProxyRoutes', () => {
         [expect.objectContaining({ id: 'uksc-2024-3' })],
       ),
     )
+  })
+
+  it('marks a stored-index miss as ok so it cannot read as an outage', async () => {
+    // A miss with a healthy engine carries the same diagnostics shape with a
+    // different storedIndexStatus, so a miss and an outage stay distinguishable.
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [],
+      query: 'Potanina',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    searchClientMock.indexDocuments.mockResolvedValueOnce({
+      indexedCount: 1,
+      failedCount: 0,
+      errors: [],
+    })
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          `<feed><entry><title>Potanina v Potanin</title><link href="https://caselaw.nationalarchives.gov.uk/uksc/2024/3" rel="alternate"/><published>2024-01-31T00:00:00Z</published><tna:identifier slug="uksc/2024/3" type="ukncn">[2024] UKSC 3</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry></feed>`,
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          '<html><body><p>This is a long enough judgment paragraph mentioning Potanina and the appeal.</p></body></html>',
+        ),
+      )
+    const app = createAuthenticatedProxyApp()
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'Potanina', court: 'uksc' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hydrationQueued: true,
+      hits: [],
+      diagnostics: {
+        storedIndexSearched: true,
+        storedIndexStatus: 'ok',
+      },
+    })
   })
 
   it('queues Find Case Law hydration when stored search is slow', async () => {
