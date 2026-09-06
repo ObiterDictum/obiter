@@ -103,6 +103,21 @@ describe('GET /api/documents/:id/download gates', () => {
     },
   )
 
+  it('serves a non-ASCII filename as RFC 5987 with an ASCII fallback', async () => {
+    const filename = 'Müller 判決.pdf'
+    const database = new TestDatabase({ fileType: 'pdf', filename })
+    const storage = new MemoryStorage({ binary: pdfBytes })
+    const response = await routeApp(database, storage).app.request(
+      '/api/documents/doc_1/download',
+    )
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('content-disposition')).toBe(
+      'attachment; filename="M_ller __.pdf"; filename*=UTF-8\'\'M%C3%BCller%20%E5%88%A4%E6%B1%BA.pdf',
+    )
+    await expect(Buffer.from(await response.arrayBuffer())).toEqual(pdfBytes)
+  })
+
   it('fails closed when the stored bytes are missing', async () => {
     const database = new TestDatabase({ fileType: 'pdf' })
     const storage = new MemoryStorage({ binary: pdfBytes })
@@ -190,6 +205,25 @@ describe('GET /api/documents/:id/text gates', () => {
       versionNumber: 1,
       text: txtExtracted,
     })
+  })
+
+  it('serves a large txt in full: /text is bounded by the upload cap, not truncated', async () => {
+    // The 200,000-character bound lives on the PDF extraction path only.
+    // A 255,500-character txt was observed live; the route returns it whole.
+    const largeText = 'x'.repeat(255_500)
+    const database = new TestDatabase({
+      fileType: 'txt',
+      filename: 'large.txt',
+    })
+    const storage = new MemoryStorage({ text: largeText })
+    const response = await routeApp(database, storage).app.request(
+      '/api/documents/doc_1/text',
+    )
+
+    expect(response.status).toBe(200)
+    const parsed = documentTextResponseSchema.safeParse(await response.json())
+    expect(parsed.success).toBe(true)
+    expect(parsed.success && parsed.data.text).toBe(largeText)
   })
 
   it('fails closed when the stored text is missing', async () => {

@@ -118,7 +118,10 @@ export function createDocumentContentRoutes(
     }
 
     return createDocumentMediaResponse(
-      Uint8Array.from(source),
+      // A view, not a copy: Response reads the bytes at construction and
+      // `source` is never mutated afterwards, so sharing the Buffer's
+      // memory is safe (byteOffset/length keep pooled Buffers windowed).
+      new Uint8Array(source.buffer, source.byteOffset, source.length),
       downloadContentType(version.fileType),
       downloadFilename(version.filename),
     )
@@ -126,6 +129,15 @@ export function createDocumentContentRoutes(
 
   // Plain-text view for ready TXT versions. DOCX answers /model and PDF
   // answers /pdf-view; TXT had no view route until this one.
+  //
+  // Deliberately uncapped: the 200,000-character bound in
+  // document-extraction applies to the PDF path only, where it bounds
+  // per-glyph geometry work and layout size. TXT extraction is plain UTF-8
+  // decoding, and the siblings are likewise whole-content (/model serves
+  // the full DOCX model, /export the full DOCX bytes), so truncating here
+  // would corrupt the round-trip without bounding any real work. The hard
+  // bound is the upload cap (MAX_DOCUMENT_UPLOAD_BYTES, 25 MB); a stored
+  // text that fails the response schema still fails closed below.
   routes.get('/api/documents/:id/text', async (c) => {
     const resolved = await resolveCurrentReadyDocumentVersion(
       c,
