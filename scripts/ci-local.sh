@@ -14,7 +14,7 @@ COMPOSE_CMD='docker compose -f infra/docker/compose.yaml up -d'
 
 if ! curl -fsS "$MEILI_HOST/health" >/dev/null 2>&1; then
   echo "Meilisearch not reachable at $MEILI_HOST" >&2
-  echo "Start it with: docker start meili" >&2
+  echo "Start it with: $COMPOSE_CMD" >&2
   exit 1
 fi
 
@@ -37,7 +37,7 @@ if [ -z "$RUNNING_VERSION" ]; then
 fi
 if [ "$RUNNING_VERSION" != "$PINNED_VERSION" ]; then
   echo "Meilisearch version mismatch: running $RUNNING_VERSION but ci.yml pins $PINNED_VERSION ($PINNED_IMAGE)" >&2
-  echo "Restart with the pinned image: docker rm -f meili; docker run -d --name meili -p 7700:7700 -e MEILI_MASTER_KEY=$MEILI_KEY -e MEILI_NO_ANALYTICS=true $PINNED_IMAGE" >&2
+  echo "Recreate it from compose (image tag pinned in infra/docker/compose.yaml): docker compose -f infra/docker/compose.yaml up -d --force-recreate meilisearch" >&2
   exit 1
 fi
 
