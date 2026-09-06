@@ -8,7 +8,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
+    "test": "vitest run --config ../../vitest.shared.ts"
   },
   "dependencies": {
     "@obiter/app-shell": "workspace:*",
