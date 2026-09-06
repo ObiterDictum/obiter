@@ -13,6 +13,7 @@ import {
 } from '../../../legal-search-hydration-budget'
 import { createTestApiEnv } from '../../../test-api-env'
 import * as mojClient from '../moj-client'
+import { createInMemoryLegalAuthoritySourceStore } from '../source-store'
 
 const searchClientMock = vi.hoisted(() => ({
   createClient: vi.fn(() => ({ id: 'meili-client' })),
@@ -1889,6 +1890,104 @@ describe('createLegalSearchProxyRoutes', () => {
     })
   })
 
+  it('returns a withdrawn document with a banner and no full text', async () => {
+    // The derived index still holds a stale copy; Postgres is the record, so
+    // the banner wins over the stale indexed full text.
+    searchClientMock.getDocument.mockResolvedValueOnce({
+      ...hit,
+      paragraphs: [
+        {
+          id: 'uksc-2024-3-p1',
+          documentId: 'uksc-2024-3',
+          paragraphNumber: 1,
+          text: 'Stale indexed paragraph that must not be served.',
+        },
+      ],
+    })
+    const base = createInMemoryLegalAuthoritySourceStore()
+    const store = {
+      ...base,
+      get: async () => ({
+        summary: { ...hit },
+        provider: {
+          documentUri: '/uksc/2024/3',
+          sourceUri: '/uksc/2024/3',
+          xmlUri: '/uksc/2024/3/data.xml',
+          pdfUri: null,
+          contentHash: 'abc123',
+          rawAtomEntry: '<entry />',
+        },
+        withdrawn: {
+          at: '2026-09-01T00:00:00.000Z',
+          checkedUris: ['/uksc/2024/3', '/uksc/2024/3/data.xml'],
+          runIds: ['run-0', 'run-1'],
+        },
+      }),
+    }
+    const app = createAuthenticatedProxyApp(store)
+
+    const response = await app.request('/api/search/documents/uksc-2024-3')
+
+    expect(response.status).toBe(200)
+    const withdrawnBody = (await response.json()) as {
+      document: Record<string, unknown>
+      withdrawn: Record<string, unknown>
+    }
+    expect(withdrawnBody).toMatchObject({
+      document: { id: 'uksc-2024-3' },
+      withdrawn: {
+        withdrawn: true,
+        withdrawnAt: '2026-09-01T00:00:00.000Z',
+        officialUrl: hit.sourceUrl,
+      },
+    })
+    expect(withdrawnBody.document.paragraphs).toBeUndefined()
+  })
+
+  it('excludes withdrawn rows from fetch search results', async () => {
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [],
+      query: 'uksc-2024-3',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const base = createInMemoryLegalAuthoritySourceStore()
+    // The Postgres store excludes withdrawn rows in SQL; the in-memory
+    // stand-in cannot carry the flag, so the test simulates the predicate
+    // while the exact-id guard below is exercised for real.
+    const store = {
+      ...base,
+      search: async () => [],
+      get: async () => ({
+        summary: { ...hit },
+        document: { ...hit },
+        provider: {
+          documentUri: '/uksc/2024/3',
+          sourceUri: '/uksc/2024/3',
+          xmlUri: null,
+          pdfUri: null,
+          contentHash: 'abc123',
+          rawAtomEntry: '<entry />',
+        },
+        withdrawn: {
+          at: '2026-09-01T00:00:00.000Z',
+          checkedUris: ['/uksc/2024/3'],
+          runIds: ['run-0', 'run-1'],
+        },
+      }),
+    }
+    const app = createAuthenticatedProxyApp(store)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'uksc-2024-3' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({ hits: [] })
+  })
+
   it('fetches, returns, and caches a live document when stored lookup misses', async () => {
     searchClientMock.getDocument.mockRejectedValueOnce(new Error('not found'))
     searchClientMock.indexDocuments.mockResolvedValueOnce({
@@ -2216,6 +2315,227 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(await response.json()).toMatchObject({
       error: { code: 'document_not_found' },
     })
+  })
+
+  it('filters stale withdrawn hits from the derived index before responding', async () => {
+    // The derived index still holds the copy; Postgres is the record, so the
+    // stale hit is dropped and the browse reads empty instead of serving it.
+    searchClientMock.search.mockResolvedValue({
+      hits: [hit],
+      query: '',
+      estimatedTotalHits: 1,
+      processingTimeMs: 1,
+    })
+    const base = createInMemoryLegalAuthoritySourceStore()
+    const store = {
+      ...base,
+      get: async () => ({
+        summary: { ...hit },
+        provider: {
+          documentUri: '/uksc/2024/3',
+          sourceUri: '/uksc/2024/3',
+          xmlUri: '/uksc/2024/3/data.xml',
+          pdfUri: null,
+          contentHash: 'abc123',
+          rawAtomEntry: '<entry />',
+        },
+        withdrawn: {
+          at: '2026-09-01T00:00:00.000Z',
+          checkedUris: ['/uksc/2024/3', '/uksc/2024/3/data.xml'],
+          runIds: ['run-0', 'run-1'],
+        },
+      }),
+    }
+    const app = createAuthenticatedProxyApp(store)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: '',
+        court: 'uksc',
+        foregroundLiveResults: false,
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [],
+      outcome: 'stored_browse_empty',
+    })
+  })
+
+  it('drops an exact derived-index hit for a withdrawn row', async () => {
+    searchClientMock.search.mockResolvedValue({
+      hits: [hit],
+      query: 'uksc-2024-3',
+      estimatedTotalHits: 1,
+      processingTimeMs: 1,
+    })
+    const base = createInMemoryLegalAuthoritySourceStore()
+    const store = {
+      ...base,
+      get: async () => ({
+        summary: { ...hit },
+        document: { ...hit },
+        provider: {
+          documentUri: '/uksc/2024/3',
+          sourceUri: '/uksc/2024/3',
+          xmlUri: null,
+          pdfUri: null,
+          contentHash: 'abc123',
+          rawAtomEntry: '<entry />',
+        },
+        withdrawn: {
+          at: '2026-09-01T00:00:00.000Z',
+          checkedUris: ['/uksc/2024/3'],
+          runIds: ['run-0', 'run-1'],
+        },
+      }),
+    }
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response('<feed />'),
+    )
+    const app = createAuthenticatedProxyApp(store)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'uksc-2024-3' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [],
+      outcome: 'hydration_queued',
+    })
+  })
+
+  it('fails closed on the document route when the store times out', async () => {
+    // The derived index may hold a stale full text; an unknown store state
+    // must 503, never fall through to it.
+    searchClientMock.getDocument.mockResolvedValueOnce({
+      ...hit,
+      paragraphs: [
+        {
+          id: 'uksc-2024-3-p1',
+          documentId: 'uksc-2024-3',
+          paragraphNumber: 1,
+          text: 'Stale indexed paragraph that must not be served.',
+        },
+      ],
+    })
+    const store = {
+      async upsertSummary() {},
+      async upsertDocument() {},
+      get() {
+        return new Promise<null>(() => undefined)
+      },
+      async search() {
+        return []
+      },
+    }
+    const app = createAuthenticatedProxyApp(store)
+
+    const response = await app.request('/api/search/documents/uksc-2024-3')
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'storage_unavailable' },
+    })
+    expect(searchClientMock.getDocument).not.toHaveBeenCalled()
+  })
+
+  it('fails closed on the document route when the store errors', async () => {
+    searchClientMock.getDocument.mockResolvedValueOnce({ ...hit })
+    const store = {
+      async upsertSummary() {},
+      async upsertDocument() {},
+      async get() {
+        throw new Error('database unreachable')
+      },
+      async search() {
+        return []
+      },
+    }
+    const app = createAuthenticatedProxyApp(store)
+
+    const response = await app.request('/api/search/documents/uksc-2024-3')
+
+    expect(response.status).toBe(503)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'storage_unavailable' },
+    })
+    expect(searchClientMock.getDocument).not.toHaveBeenCalled()
+  })
+
+  it('skips withdrawn rows during live hydration without dropping live hits', async () => {
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [],
+      query: 'Potanina',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response(
+          `<feed><entry><title>Potanina v Potanin</title><link href="https://caselaw.nationalarchives.gov.uk/uksc/2024/3" rel="alternate"/><published>2024-01-31T00:00:00Z</published><tna:identifier slug="uksc/2024/3" type="ukncn">[2024] UKSC 3</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry></feed>`,
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          '<html><body><p>This is a long enough judgment paragraph mentioning Potanina and the appeal.</p></body></html>',
+        ),
+      )
+    const store = {
+      upsertSummary: vi.fn(async () => undefined),
+      upsertDocument: vi.fn(async () => undefined),
+      async get() {
+        return {
+          summary: { ...hit },
+          provider: {
+            documentUri: '/uksc/2024/3',
+            sourceUri: '/uksc/2024/3',
+            xmlUri: '/uksc/2024/3/data.xml',
+            pdfUri: null,
+            contentHash: 'abc123',
+            rawAtomEntry: '<entry />',
+          },
+          withdrawn: {
+            at: '2026-09-01T00:00:00.000Z',
+            checkedUris: ['/uksc/2024/3', '/uksc/2024/3/data.xml'],
+            runIds: ['run-0', 'run-1'],
+          },
+        }
+      },
+      async search() {
+        return []
+      },
+    }
+    const app = createAuthenticatedProxyApp(store)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'Potanina',
+        court: 'uksc',
+        foregroundLiveResults: true,
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    // The live hit is verified present right now, so it serves; the
+    // withdrawn mark only blocks it from being cached or re-indexed.
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [{ id: 'uksc-2024-3' }],
+    })
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(store.upsertSummary).not.toHaveBeenCalled()
+    expect(store.upsertDocument).not.toHaveBeenCalled()
+    expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
   })
 })
 

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx src/index.ts",
     "bulk:ingest": "tsx src/bulk-ingest.ts",
+    "withdrawal:check": "tsx src/withdrawal-check.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

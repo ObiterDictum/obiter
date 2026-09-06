@@ -14,11 +14,20 @@ import {
 // storage callers keep importing it from the store they already use.
 export type { ProviderSourceMetadata } from '@obiter/legal-source-provider'
 import type { ProviderSourceMetadata } from '@obiter/legal-source-provider'
+import {
+  readWithdrawnInfo,
+  type WithdrawnInfo,
+} from '@obiter/legal-source-provider'
+
+export type { WithdrawnInfo }
 
 export interface StoredLegalAuthorityRecord {
   summary: LegalAuthority
   document?: LegalAuthority
   provider: ProviderSourceMetadata
+  /** Set when the row is marked withdrawn upstream. Search excludes these
+   * from default results; the document route surfaces a banner instead. */
+  withdrawn?: WithdrawnInfo | null
 }
 
 export interface LegalAuthoritySourceStore {
@@ -31,6 +40,12 @@ export interface LegalAuthoritySourceStore {
     provider: ProviderSourceMetadata,
   ): Promise<void>
   get(documentId: string): Promise<StoredLegalAuthorityRecord | null>
+  /**
+   * Must exclude withdrawn rows (Postgres does it in SQL, the in-memory
+   * store filters): withdrawn rows stay readable via get for the document
+   * banner path but never surface in search. Callers additionally
+   * cross-check derived-index hits via get — this method is trusted.
+   */
   search(query: string, filters: LegalSearchFilters): Promise<LegalAuthority[]>
 }
 
@@ -54,6 +69,10 @@ export function createInMemoryLegalAuthoritySourceStore(): LegalAuthoritySourceS
           ...existing?.provider,
           ...provider,
         },
+        // Mirror the Postgres merge upsert, which preserves the withdrawn
+        // flag across re-ingests: a fresh provider payload never carries the
+        // flag, so dropping it here would silently resurrect withdrawals.
+        withdrawn: existing?.withdrawn,
       })
     },
     async upsertDocument(
@@ -68,6 +87,7 @@ export function createInMemoryLegalAuthoritySourceStore(): LegalAuthoritySourceS
           ...existing?.provider,
           ...provider,
         },
+        withdrawn: existing?.withdrawn,
       })
     },
     async get(documentId: string) {
@@ -75,7 +95,11 @@ export function createInMemoryLegalAuthoritySourceStore(): LegalAuthoritySourceS
     },
     async search(query: string, filters: LegalSearchFilters) {
       const normalizedQuery = normalizeExactMatchValue(query)
+      // Mirrors the Postgres `provider_json->>'withdrawn' is null`
+      // predicate: withdrawn rows stay readable via get (banner path) but
+      // never surface in search. get intentionally still returns them.
       const dateOrderedMatches = Array.from(records.values())
+        .filter((record) => !record.withdrawn)
         .map((record) => record.document ?? record.summary)
         .filter((document) =>
           documentMatchesSearch(document, normalizedQuery, filters),
@@ -214,6 +238,7 @@ export function createPostgresLegalAuthoritySourceStore(
                 and ($3::text is null or summary_json->>'sourceType' = $3)
                 and ($4::text is null or summary_json->>'dateDecided' >= $4)
                 and ($5::text is null or summary_json->>'dateDecided' <= $5)
+                and provider_json->>'withdrawn' is null
             )
             select summary_json, document_json, provider_json
             from normalized_documents
@@ -282,6 +307,7 @@ function toStoredLegalAuthorityRecord(
     summary,
     document,
     provider: row.provider_json,
+    withdrawn: readWithdrawnInfo(row.provider_json),
   }
 }
 

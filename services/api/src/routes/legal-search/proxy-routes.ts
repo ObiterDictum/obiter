@@ -170,10 +170,19 @@ export function createLegalSearchProxyRoutes(
       storedOnlyBrowse ? storedCourtBrowseLimit : undefined,
     )
 
-    if (cached.hits.length > 0) {
+    // The derived index lags the checker: filter Meili hits against the
+    // Postgres withdrawn flag before responding, so a stale indexed copy of
+    // a withdrawn judgment never serves. Unknown (lookup miss/timeout)
+    // stays visible — only an explicit withdrawn flag hides a hit.
+    const visibleCachedHits = await excludeWithdrawnIndexHits(
+      legalAuthorityStore,
+      cached.hits,
+    )
+
+    if (visibleCachedHits.length > 0) {
       return c.json(
         toFetchResponse(
-          cached.hits.map((hit, index) =>
+          visibleCachedHits.map((hit, index) =>
             toSummaryHit(hit, parsed.data.query, {
               retrievalPath: 'stored_index',
               retrievalRank: index + 1,
@@ -346,16 +355,17 @@ export function createLegalSearchProxyRoutes(
     }
 
     for (const entry of liveResult.entries) {
-      rememberForegroundSourceRecord(
-        foregroundSourceRecords,
-        atomEntryToAuthoritySummary(env, entry),
-        providerMetadataFromAtomEntry(entry),
-      )
-      await upsertLegalAuthoritySummary(
+      const summary = atomEntryToAuthoritySummary(env, entry)
+      const provider = providerMetadataFromAtomEntry(entry)
+      // Never re-index a withdrawn judgment from live hydration: the
+      // checker owns the flag and only the manual runbook clears it.
+      const existing = await getLegalAuthoritySourceRecord(
         legalAuthorityStore,
-        atomEntryToAuthoritySummary(env, entry),
-        providerMetadataFromAtomEntry(entry),
+        summary.id,
       )
+      if (existing?.withdrawn) continue
+      rememberForegroundSourceRecord(foregroundSourceRecords, summary, provider)
+      await upsertLegalAuthoritySummary(legalAuthorityStore, summary, provider)
     }
 
     void hydrateAndIndexMojAuthorities(
@@ -410,6 +420,43 @@ export function createLegalSearchProxyRoutes(
       )
     }
 
+    // Fail closed: an unknown store state (timeout/error) must not fall
+    // through to the derived index, which could serve a stale full text of
+    // a withdrawn judgment. Only a confirmed store miss continues.
+    const storedLookup = await getDocumentRouteSourceRecord(
+      legalAuthorityStore,
+      parsed.data,
+    )
+    if (storedLookup.status === 'unavailable') {
+      return c.json(
+        apiError(
+          'storage_unavailable',
+          'Legal source storage is unavailable.',
+          requestId,
+        ),
+        503,
+      )
+    }
+    const storedSourceRecord = storedLookup.record
+    // Postgres is the record: a withdrawn row stays stored but marked, so
+    // direct fetch returns 200 with metadata and a banner, never 404 and
+    // never full text. Checked before the derived index because a rebuild
+    // may not have dropped the copy yet.
+    if (storedSourceRecord?.withdrawn) {
+      const { paragraphs: _paragraphs, ...metadata } =
+        storedSourceRecord.summary
+      return c.json({
+        document: metadata,
+        withdrawn: {
+          withdrawn: true,
+          withdrawnAt: storedSourceRecord.withdrawn.at,
+          officialUrl: storedSourceRecord.summary.sourceUrl,
+          message:
+            'This judgment was withdrawn upstream by Find Case Law and is no longer published. Showing stored metadata only.',
+        },
+      })
+    }
+
     const document = await getStoredAuthorityDocument(
       indexClient,
       env.legalAuthoritiesIndex,
@@ -420,10 +467,6 @@ export function createLegalSearchProxyRoutes(
       return c.json({ document })
     }
 
-    const storedSourceRecord = await getLegalAuthoritySourceRecord(
-      legalAuthorityStore,
-      parsed.data,
-    )
     const foregroundSourceRecord = foregroundSourceRecords.get(parsed.data)
     const sourceRecord = storedSourceRecord ?? foregroundSourceRecord ?? null
     const sourceRecordIsForegroundOnly =
@@ -441,6 +484,26 @@ export function createLegalSearchProxyRoutes(
       : await fetchMojAuthorityDocumentById(env, parsed.data, mojRateLimiter)
 
     if (liveDocument.status === 'ok') {
+      // Re-check before caching: the row may have been marked withdrawn
+      // between the route-entry lookup and the live fetch. A withdrawn row
+      // answers with the banner, never with fresh full text.
+      const currentRecord = await getLegalAuthoritySourceRecord(
+        legalAuthorityStore,
+        liveDocument.document.id,
+      )
+      if (currentRecord?.withdrawn) {
+        const { paragraphs: _paragraphs, ...metadata } = currentRecord.summary
+        return c.json({
+          document: metadata,
+          withdrawn: {
+            withdrawn: true,
+            withdrawnAt: currentRecord.withdrawn.at,
+            officialUrl: currentRecord.summary.sourceUrl,
+            message:
+              'This judgment was withdrawn upstream by Find Case Law and is no longer published. Showing stored metadata only.',
+          },
+        })
+      }
       try {
         await upsertLegalAuthorityDocument(
           legalAuthorityStore,
@@ -575,7 +638,13 @@ async function findExactStoredAuthority(
     5,
   )
   const storedIndexStatus = storedIndexResult.storedIndexStatus
-  const storedIndexHit = storedIndexResult.hits.find((hit) =>
+  // Same stale-index guard as the main search path: an exact Meili hit for
+  // a withdrawn row is dropped here, and direct fetch owns the banner.
+  const visibleIndexHits = await excludeWithdrawnIndexHits(
+    legalAuthorityStore,
+    storedIndexResult.hits,
+  )
+  const storedIndexHit = visibleIndexHits.find((hit) =>
     isExactLookupHit(hit, lookup),
   )
   if (storedIndexHit)
@@ -590,12 +659,16 @@ async function findExactStoredAuthority(
       legalAuthorityStore,
       lookup.normalizedQuery,
     )
-    const storedDocument = storedRecord?.document ?? storedRecord?.summary
-    if (storedDocument && sourceMatchesFilters(storedDocument, filters)) {
-      return {
-        hit: storedDocument,
-        storedSourceSearched: true,
-        storedIndexStatus,
+    // Withdrawn rows never surface in search, even on an exact id lookup:
+    // direct fetch owns the banner response.
+    if (storedRecord && !storedRecord.withdrawn) {
+      const storedDocument = storedRecord.document ?? storedRecord.summary
+      if (storedDocument && sourceMatchesFilters(storedDocument, filters)) {
+        return {
+          hit: storedDocument,
+          storedSourceSearched: true,
+          storedIndexStatus,
+        }
       }
     }
   }
@@ -741,6 +814,52 @@ async function getLegalAuthoritySourceRecord(
     )
   } catch {
     return null
+  }
+}
+
+/**
+ * Cross-checks derived-index hits against the Postgres withdrawn flag.
+ * Only an explicit flag hides a hit; a lookup miss, timeout, or error
+ * keeps it visible so a transient store wobble cannot blank search.
+ */
+async function excludeWithdrawnIndexHits(
+  legalAuthorityStore: LegalAuthoritySourceStore,
+  hits: LegalSearchHit[],
+): Promise<LegalSearchHit[]> {
+  if (hits.length === 0) return hits
+  const records = await Promise.all(
+    hits.map((hit) =>
+      getLegalAuthoritySourceRecord(legalAuthorityStore, hit.id),
+    ),
+  )
+  return hits.filter((_, index) => !records[index]?.withdrawn)
+}
+
+/**
+ * Document-route store lookup that distinguishes "row absent" (continue to
+ * the derived index) from "store unknown" (fail closed with 503). The
+ * plain helper above conflates both as null, which is fine for search
+ * fallbacks but would serve stale indexed full text on the document route.
+ */
+async function getDocumentRouteSourceRecord(
+  legalAuthorityStore: LegalAuthoritySourceStore,
+  documentId: string,
+): Promise<
+  | { status: 'ok'; record: StoredLegalAuthorityRecord | null }
+  | { status: 'unavailable' }
+> {
+  const timedOut = Symbol('store-timeout')
+  try {
+    const record = await Promise.race([
+      legalAuthorityStore.get(documentId),
+      new Promise<typeof timedOut>((resolve) =>
+        setTimeout(() => resolve(timedOut), storedSearchTimeoutMs),
+      ),
+    ])
+    if (record === timedOut) return { status: 'unavailable' }
+    return { status: 'ok', record }
+  } catch {
+    return { status: 'unavailable' }
   }
 }
 

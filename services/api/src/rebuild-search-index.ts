@@ -47,6 +47,7 @@ interface SkippedRow {
 interface RebuildReport {
   index: string
   docsRead: number
+  excludedWithdrawn: number
   indexed: number
   indexedFromSummaryOnly: number
   skipped: SkippedRow[]
@@ -92,12 +93,21 @@ async function main() {
   )
   // ponytail: no try/finally around pool.end; a throw below exits non-zero
   // with the pool still open, and the process ending releases it.
+  // Withdrawn rows are excluded from the derived index: Postgres is the
+  // record, so the mark survives there and the product index simply stops
+  // serving the document. Counted separately so the report shows what was
+  // left out and why, rather than silently narrowing the index.
   const rows = await pool.query<{
     document_id: string
     summary_json: unknown
     document_json: unknown | null
   }>(
-    `select document_id, summary_json, document_json from legal_source_documents order by document_id`,
+    `select document_id, summary_json, document_json from legal_source_documents
+      where provider_json->>'withdrawn' is null order by document_id`,
+  )
+  const withdrawn = await pool.query<{ count: string }>(
+    `select count(*) as count from legal_source_documents
+      where provider_json->>'withdrawn' is not null`,
   )
   await pool.end()
 
@@ -121,6 +131,7 @@ async function main() {
   const report: RebuildReport = {
     index: config.indexName,
     docsRead: rows.rows.length,
+    excludedWithdrawn: Number(withdrawn.rows[0]?.count ?? 0),
     indexed: 0,
     indexedFromSummaryOnly,
     skipped,
@@ -178,7 +189,7 @@ async function main() {
   }
   console.info(
     `Rebuilt ${config.indexName}: ${report.indexed} documents indexed ` +
-      `(${indexedFromSummaryOnly} from summaries only), readiness ready.`,
+      `(${indexedFromSummaryOnly} from summaries only, ${report.excludedWithdrawn} withdrawn excluded), readiness ready.`,
   )
 }
 

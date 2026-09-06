@@ -82,6 +82,7 @@ export {
   CaseLawDocumentView,
   caseLawDocumentQueryOptions,
 } from './views/CaseLawDocumentView'
+export type { CaseLawDocumentResponse } from './views/CaseLawDocumentView'
 export {
   createCanonicalCasePath,
   resolveCaseDocumentIdFromSlug,

@@ -48,6 +48,27 @@ export async function upsertLegalAuthorityDocument(
   await legalAuthorityStore.upsertDocument(document, provider)
 }
 
+/**
+ * True only when the store explicitly reports the row withdrawn. A miss,
+ * timeout, or error returns false so transient store trouble cannot block
+ * hydration of live rows; withdrawn rows already stored are still hidden by
+ * the read-time guards in the proxy routes.
+ */
+async function isWithdrawnInStore(
+  legalAuthorityStore: LegalAuthoritySourceStore,
+  documentId: string,
+): Promise<boolean> {
+  try {
+    const stored = await withTimeout(
+      legalAuthorityStore.get(documentId),
+      storedSearchTimeoutMs,
+    )
+    return Boolean(stored?.withdrawn)
+  } catch {
+    return false
+  }
+}
+
 function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
@@ -114,9 +135,14 @@ export async function hydrateMojAuthoritiesFromSearch(
     if (mojResult.status !== 'ok') return
 
     for (const entry of mojResult.entries) {
+      // Background hydration must not resurrect withdrawals: skip rows the
+      // checker marked. Unknown store state proceeds — the read-time
+      // cross-check still hides withdrawn hits from search responses.
+      const summary = atomEntryToAuthoritySummary(env, entry)
+      if (await isWithdrawnInStore(legalAuthorityStore, summary.id)) continue
       await upsertLegalAuthoritySummary(
         legalAuthorityStore,
-        atomEntryToAuthoritySummary(env, entry),
+        summary,
         providerMetadataFromAtomEntry(entry),
       )
     }
@@ -152,6 +178,8 @@ export async function hydrateAndIndexMojAuthorities(
     const documents: LegalAuthority[] = []
     for (const result of detailResults) {
       if (result.status !== 'ok') continue
+      if (await isWithdrawnInStore(legalAuthorityStore, result.document.id))
+        continue
       try {
         await upsertLegalAuthorityDocument(
           legalAuthorityStore,
