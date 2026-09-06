@@ -4,11 +4,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DocumentWorkspace } from './workspace'
 import type { DocumentVersionRecord } from '../../documents'
 
-const pdf = vi.hoisted(() => ({ useDocumentPdfView: vi.fn() }))
-
-vi.mock('../../document-workspace-api', () => ({
-  useDocumentPdfView: pdf.useDocumentPdfView,
+const workspaceApi = vi.hoisted(() => ({
+  useDocumentPdfView: vi.fn(),
+  useDocumentText: vi.fn(),
 }))
+
+vi.mock('../../document-workspace-api', () => workspaceApi)
 
 vi.mock('./docx-workspace', () => ({
   DocxWorkspace: () => <div>Word workspace</div>,
@@ -51,7 +52,7 @@ describe('DocumentWorkspace', () => {
   })
 
   it('opens the PDF layout view for a ready pdf version', () => {
-    pdf.useDocumentPdfView.mockReturnValue({
+    workspaceApi.useDocumentPdfView.mockReturnValue({
       isLoading: false,
       isError: false,
       data: {
@@ -84,10 +85,11 @@ describe('DocumentWorkspace', () => {
     )
     expect(screen.getByText('View only, not editable')).toBeTruthy()
     expect(screen.getByText('Judgment text')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Download' })).toBeTruthy()
   })
 
   it('omits the page heading when opened in the matter pane', () => {
-    pdf.useDocumentPdfView.mockReturnValue({
+    workspaceApi.useDocumentPdfView.mockReturnValue({
       isLoading: false,
       isError: false,
       data: {
@@ -113,6 +115,28 @@ describe('DocumentWorkspace', () => {
     expect(screen.getByText('View only, not editable')).toBeTruthy()
   })
 
+  it('renders the extracted text for a ready txt version', () => {
+    workspaceApi.useDocumentText.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: {
+        documentId: 'doc_1',
+        versionId: 'ver_1',
+        versionNumber: 1,
+        text: 'Plain retrieval text.',
+      },
+    })
+    render(
+      <DocumentWorkspace
+        documentId="doc_1"
+        version={version({ filename: 'notes.txt', fileType: 'txt' })}
+      />,
+    )
+    expect(screen.getByText('Plain retrieval text.')).toBeTruthy()
+    expect(screen.getByText('Plain text, not editable')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Download' })).toBeTruthy()
+  })
+
   it('explains when the version is not ready', () => {
     render(
       <DocumentWorkspace
@@ -123,15 +147,49 @@ describe('DocumentWorkspace', () => {
     expect(screen.getByText('Document is not ready to open')).toBeTruthy()
   })
 
-  it('explains when the file type has no workspace', () => {
+  it('shows the stored failure reason in full when extraction failed', () => {
     render(
       <DocumentWorkspace
         documentId="doc_1"
-        version={version({ fileType: 'txt', filename: 'notes.txt' })}
+        version={version({
+          documentStatus: 'failed',
+          failureReason:
+            'This PDF appears to be scanned — text extraction requires OCR, which is not yet supported.',
+        })}
+      />,
+    )
+    expect(screen.getByText('This document could not be opened')).toBeTruthy()
+    expect(
+      screen.getByText(
+        'This PDF appears to be scanned — text extraction requires OCR, which is not yet supported.',
+      ),
+    ).toBeTruthy()
+  })
+
+  it('falls back to a generic message when a failed version has no reason', () => {
+    render(
+      <DocumentWorkspace
+        documentId="doc_1"
+        version={version({ documentStatus: 'failed' })}
+      />,
+    )
+    expect(
+      screen.getByText(
+        'The document text could not be read. Try uploading it again.',
+      ),
+    ).toBeTruthy()
+  })
+
+  it('offers a download instead of a dead end for an unsupported type', () => {
+    render(
+      <DocumentWorkspace
+        documentId="doc_1"
+        version={version({ fileType: 'odt', filename: 'legacy.odt' })}
       />,
     )
     expect(
       screen.getByText('No in-product viewer for this file type'),
     ).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Download' })).toBeTruthy()
   })
 })

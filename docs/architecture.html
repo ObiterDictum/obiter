@@ -2752,6 +2752,27 @@
                   </td>
                 </tr>
                 <tr>
+                  <td class="id">GET /api/documents/:id/download</td>
+                  <td class="id">document-content.ts</td>
+                  <td>
+                    View-gated raw source bytes for any ready version (DOCX,
+                    PDF, TXT) — byte-identical to what was uploaded. DOCX keeps
+                    <code>/export</code> for comment-embedding downloads. Served
+                    as <code>Content-Disposition: attachment</code> under a
+                    non-executable Content-Security-Policy.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">GET /api/documents/:id/text</td>
+                  <td class="id">document-content.ts</td>
+                  <td>
+                    View-gated extracted text for a ready TXT version. DOCX
+                    answers <code>/model</code> and PDF answers
+                    <code>/pdf-view</code>; other types get the document 404
+                    here.
+                  </td>
+                </tr>
+                <tr>
                   <td class="id">GET · POST /api/documents/:id/comments</td>
                   <td class="id">comments.ts</td>
                   <td>View-gated list and edit-gated comment creation</td>

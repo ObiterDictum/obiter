@@ -10,7 +10,9 @@ export async function resolveCurrentReadyDocumentVersion(
   c: RouteContext,
   pool: Pool,
   documentId: string,
-  fileType: string,
+  // Null matches any ready version regardless of type (the download path).
+  // View routes keep passing their own type so a PDF never answers /model.
+  fileType: string | null,
   requiredAccess: MatterAccessLevel = 'view',
 ) {
   return resolveReadyDocumentVersion(
@@ -27,7 +29,7 @@ export async function resolveReadyDocumentVersion(
   c: RouteContext,
   pool: Pool,
   documentId: string,
-  fileType: string,
+  fileType: string | null,
   requiredAccess: MatterAccessLevel,
   selection: { versionId?: string; requireCurrent?: boolean } = {},
 ) {
@@ -49,7 +51,7 @@ export async function resolveReadyDocumentVersion(
     version.matterId !== result.document.matterId ||
     version.matterDocumentId !== result.document.id ||
     version.documentStatus !== 'ready' ||
-    version.fileType !== fileType
+    (fileType !== null && version.fileType !== fileType)
   ) {
     return documentNotFound(c)
   }
