@@ -19,6 +19,7 @@ import type {
   DocumentModelResponse,
   DocumentPdfViewResponse,
   DocumentPresenceUpdateRequest,
+  DocumentTextResponse,
   DocumentTrackedChangeDecisionRequest,
   DocumentTrackedChangeListResponse,
 } from '@obiter/contracts'
@@ -30,6 +31,8 @@ export const workspaceKeys = {
     [...documentsKeys.all, 'model', documentId] as const,
   pdfView: (documentId: string) =>
     [...documentsKeys.all, 'pdf-view', documentId] as const,
+  text: (documentId: string) =>
+    [...documentsKeys.all, 'text', documentId] as const,
   comments: (documentId: string) =>
     [...documentsKeys.all, 'comments', documentId] as const,
   trackedChanges: (documentId: string) =>
@@ -55,6 +58,14 @@ export function documentPdfViewQueryOptions(documentId: string) {
       apiFetch<DocumentPdfViewResponse>(
         `/api/documents/${documentId}/pdf-view`,
       ),
+  })
+}
+
+export function documentTextQueryOptions(documentId: string) {
+  return queryOptions({
+    queryKey: workspaceKeys.text(documentId),
+    queryFn: () =>
+      apiFetch<DocumentTextResponse>(`/api/documents/${documentId}/text`),
   })
 }
 
@@ -168,6 +179,11 @@ export async function fetchDocumentExport(
   return { blob, skippedCommentCount: Number.isFinite(skipped) ? skipped : 0 }
 }
 
+/** Raw source bytes for any ready version: the download path behind every viewer. */
+export async function fetchDocumentDownload(documentId: string): Promise<Blob> {
+  return apiFetchBlob(`/api/documents/${documentId}/download`)
+}
+
 export function useDocumentModel(
   documentId: string,
   options?: { enabled?: boolean },
@@ -184,6 +200,16 @@ export function useDocumentPdfView(
 ) {
   return useQuery({
     ...documentPdfViewQueryOptions(documentId),
+    enabled: options?.enabled ?? true,
+  })
+}
+
+export function useDocumentText(
+  documentId: string,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    ...documentTextQueryOptions(documentId),
     enabled: options?.enabled ?? true,
   })
 }

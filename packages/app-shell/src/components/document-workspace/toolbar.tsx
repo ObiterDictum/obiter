@@ -1,6 +1,10 @@
 import type { DocumentPresence } from '@obiter/contracts'
 import { Button, Tabs, TabsContent, TabsList } from '@obiter/ui'
-import { DownloadSimple, FloppyDisk } from '@phosphor-icons/react'
+import {
+  DownloadSimple,
+  FileArrowDown,
+  FloppyDisk,
+} from '@phosphor-icons/react'
 import { HomeRibbon } from './ribbon-home'
 import { FindControls, ZoomControls } from './ribbon-find'
 import { InsertRibbon, LayoutRibbon } from './ribbon-insert-layout'
@@ -30,6 +34,7 @@ export function DocumentWorkspaceToolbar({
   onToggleTrackChanges,
   onZoom,
   onExportText,
+  onDownload,
   onSave,
   onUndo,
   onInsertParagraph,
@@ -58,6 +63,7 @@ export function DocumentWorkspaceToolbar({
   onToggleTrackChanges: () => void
   onZoom: (next: number) => void
   onExportText: () => void
+  onDownload?: () => void
   onSave: () => void
   onUndo?: () => void
   onInsertParagraph: () => void
@@ -90,6 +96,13 @@ export function DocumentWorkspaceToolbar({
             onClick={onExportText}
             icon={<DownloadSimple size={16} aria-hidden />}
           />
+          {onDownload ? (
+            <IconButton
+              label="Download"
+              onClick={onDownload}
+              icon={<FileArrowDown size={16} aria-hidden />}
+            />
+          ) : null}
         </ToolbarGroup>
         <span className="pl-2 text-xs text-muted">View only, not editable</span>
       </div>

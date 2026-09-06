@@ -7,7 +7,9 @@ import {
   documentCommentsQueryOptions,
   documentModelQueryOptions,
   documentPdfViewQueryOptions,
+  documentTextQueryOptions,
   documentTrackedChangesQueryOptions,
+  fetchDocumentDownload,
   fetchDocumentExport,
   useDocumentImageUrls,
 } from './document-workspace-api'
@@ -77,6 +79,24 @@ describe('document workspace query options', () => {
     await expect(fetchDocumentExport('doc_1')).resolves.toMatchObject({
       skippedCommentCount: 2,
     })
+  })
+
+  it('loads the text view from the txt route', async () => {
+    api.apiFetch.mockResolvedValue({ text: 'Plain retrieval text.' })
+
+    await documentTextQueryOptions('doc_1').queryFn?.({} as never)
+
+    expect(api.apiFetch).toHaveBeenCalledWith('/api/documents/doc_1/text')
+  })
+
+  it('downloads the stored source bytes from the download route', async () => {
+    const blob = new Blob(['Plain retrieval text.'])
+    api.apiFetchBlob.mockResolvedValue(blob)
+
+    await expect(fetchDocumentDownload('doc_1')).resolves.toBe(blob)
+    expect(api.apiFetchBlob).toHaveBeenCalledWith(
+      '/api/documents/doc_1/download',
+    )
   })
 })
 
