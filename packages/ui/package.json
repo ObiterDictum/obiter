@@ -34,7 +34,7 @@
     "vitest": "^3.2.4"
   },
   "scripts": {
-    "test": "vitest run",
+    "test": "vitest run --config ../../vitest.shared.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   }
 }

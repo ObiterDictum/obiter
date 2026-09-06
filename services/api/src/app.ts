@@ -11,11 +11,11 @@ import { appendAuditLog, findOrganisation, toCurrentUser } from './database'
 import type { ApiEnv } from './env'
 import { createAuth } from './auth'
 import { corsAllowedOrigin } from './client-origins'
+import { createLegalSearchRoutes } from './routes/legal-search/search-routes'
 import {
-  createLegalSearchRoutes,
   createLegalSearchProxyRoutes,
   createPostgresLegalAuthoritySourceStore,
-} from './routes/legal-search'
+} from './routes/legal-search/proxy-routes'
 import { createChangelogRoutes } from './routes/changelog'
 import { createCommentsRoutes } from './routes/comments'
 import { createDocumentAccessRoutes } from './routes/document-access'
@@ -29,7 +29,9 @@ import { createDocumentsRoutes } from './routes/documents'
 import { createMattersRoutes } from './routes/matters'
 import { createOrganisationsRoutes } from './routes/organisations'
 import { configureRedactionDetector } from './redaction-detection'
-import { createRedactRoutes } from './routes/redact'
+import { createRedactRunCreationRoutes } from './routes/redact-run-creation'
+import { createRedactReviewRoutes } from './routes/redact-review'
+import { createRedactLifecycleRoutes } from './routes/redact-lifecycle'
 import { apiRequestLimitsFromEnv } from './request-limits'
 import { createRequestBodyLimitMiddleware } from './request-body-limit'
 import { createTrackedChangeRoutes } from './routes/tracked-changes'
@@ -222,7 +224,9 @@ export function createApiApp(
   app.route('/', createDocumentMediaRoutes(pool, storage))
   app.route('/', createDocumentPdfViewRoutes(pool, storage))
   app.route('/', createTrackedChangeRoutes(pool, storage))
-  app.route('/', createRedactRoutes(pool, storage, requestLimits))
+  app.route('/', createRedactRunCreationRoutes(pool, storage, requestLimits))
+  app.route('/', createRedactReviewRoutes(pool, storage))
+  app.route('/', createRedactLifecycleRoutes(pool, storage))
   app.route('/', createLegalSearchRoutes(env))
   app.route(
     '/',
