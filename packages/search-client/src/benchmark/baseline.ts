@@ -8,7 +8,10 @@ export const searchBenchmarkBaseline = {
   // party-rizwan-one-typo pass, so top-1 and top-3 tighten to 42/45 (0.9333).
   // The numeric dateDecidedTimestamp filter fixes the three date cases, which
   // were the only remaining misses, so both tighten to 45/45.
-  expectedCaseCount: 54,
+  // B2 follow-up adds party-paul (55 cases) plus two id-decoy fixtures that
+  // make party-potanina and party-paul re-rank-decisive: deleting the
+  // exact-match re-ranking stage flips both to top_1_miss.
+  expectedCaseCount: 55,
   minimumTop1ExactSourceSuccess: 1,
   minimumTop3ExactSourceSuccess: 1,
   minimumExactLookupTop1Success: 1,

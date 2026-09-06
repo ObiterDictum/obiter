@@ -27,7 +27,7 @@
   },
   "known_limitations": [
     "Three relevance sets name real authorities not yet ingested (donoghue-v-stevenson-1932, cobbe-v-yeomans-row-2008, carlill-v-carbolic-1893), so recall is honestly below 1.0 until the ingest campaign lands them.",
-    "Fixture corpus is 66 synthetic documents; ranking scores depend on corpus statistics, so thresholds re-measured here must be re-measured on a real corpus.",
-    "Recall@10 does not measure rank order within the top 10; the gate-1 top-1/top-3 checks cover exact-lookup priority."
+    "Fixture corpus is 68 synthetic documents, including two costs-ruling decoys whose ids carry a party token (potanina-costs-2025-1, paul-costs-2025-1); ranking scores depend on corpus statistics, so thresholds re-measured here must be re-measured on a real corpus.",
+    "Recall@10 does not measure rank order within the top 10. Rank order is covered by the gate-1 top-1/top-3 checks, including the party-potanina and party-paul cases whose decoys outrank the right judgment on engine scoring alone, so only the exact-match re-ranking stage puts the right document first."
   ]
 }

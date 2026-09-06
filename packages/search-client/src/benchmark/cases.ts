@@ -125,6 +125,17 @@ const objectiveCases: SearchBenchmarkCase[] = [
     query: 'Potanina',
     expectedTopId: 'uksc-2024-3',
   },
+  // party-potanina and party-paul are re-ranking-decisive: the
+  // *-costs-2025-1 decoys match the single party token in their id, which the
+  // engine's attribute rule ranks above the title match, so only the exact-
+  // match tier re-rank restores the right judgment. Deleting that stage flips
+  // both to top_1_miss.
+  {
+    id: 'party-paul',
+    category: 'party_names',
+    query: 'Paul',
+    expectedTopId: 'uksc-2023-28',
+  },
   {
     id: 'party-wolverhampton',
     category: 'party_names',
