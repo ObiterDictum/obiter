@@ -1,8 +1,6 @@
 import net from 'node:net'
 
 const MEILI_HOST = process.env.MEILISEARCH_HOST ?? 'http://127.0.0.1:7700'
-const MEILI_KEY =
-  process.env.MEILISEARCH_SEARCH_API_KEY ?? 'search-benchmark-key'
 
 async function checkMeilisearch() {
   try {
@@ -13,8 +11,7 @@ async function checkMeilisearch() {
   } catch {
     throw new Error(
       `Meilisearch not reachable at ${MEILI_HOST}\n` +
-        `Start it with: docker start meili\n` +
-        `Or: docker run -d --name meili -p 7700:7700 -e MEILI_MASTER_KEY=${MEILI_KEY} -e MEILI_NO_ANALYTICS=true getmeili/meilisearch:v1.53.1`,
+        `Start it with: docker compose -f infra/docker/compose.yaml up -d`,
     )
   }
 }

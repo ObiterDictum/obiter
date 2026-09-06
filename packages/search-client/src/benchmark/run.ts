@@ -24,7 +24,7 @@ import {
 } from './recall'
 
 const host = process.env.SEARCH_BENCHMARK_HOST ?? 'http://127.0.0.1:7700'
-const apiKey = process.env.SEARCH_BENCHMARK_API_KEY ?? 'search-benchmark-key'
+const apiKey = process.env.SEARCH_BENCHMARK_API_KEY ?? 'obiter-local-dev-key'
 const indexName = `legal-authorities-benchmark-${process.pid}`
 const topKSize = 3
 const resultLimit = 20

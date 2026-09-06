@@ -1225,10 +1225,17 @@ function isIndexAlreadyExistsError(error: unknown): boolean {
   }
 
   const cause = (error as { cause?: unknown }).cause
-  return (
+  if (
     typeof cause === 'object' &&
     cause !== null &&
     'code' in cause &&
     (cause as { code?: unknown }).code === 'index_already_exists'
-  )
+  ) {
+    return true
+  }
+
+  // Meilisearch v1.53 enqueues index creation, so a duplicate surfaces as a
+  // failed waitTask: SearchTaskError('Meilisearch task <n> failed
+  // (index_already_exists).') with no .code/.cause. Match the async form here.
+  return error instanceof Error && /index_already_exists/.test(error.message)
 }

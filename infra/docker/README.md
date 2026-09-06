@@ -11,6 +11,43 @@ Local development backing services for Obiter. No production configuration lives
 
 The `obiter_test` database (used by the API test suite, `NODE_ENV=test`) is created on first boot by `init/create-test-db.sh`.
 
+## Meilisearch
+
+`compose.yaml` also runs the single local Meilisearch (image tag pinned to
+`.github/workflows/ci.yml`) alongside the API. The remote Halcyn instance
+is abandoned: Postgres `legal_source_documents` is the system of record and
+the index is derived, so any host holding a copy that cannot be rebuilt from
+Postgres is a liability rather than a shortcut.
+
+Local search configuration, in one place:
+
+| What          | Value                                                 | Where set                                     |
+| ------------- | ----------------------------------------------------- | --------------------------------------------- |
+| Host          | `http://127.0.0.1:7700`                               | `MEILISEARCH_HOST` (API/ingestor default)     |
+| Key           | `obiter-local-dev-key`                                | `MEILISEARCH_*_API_KEY`, compose master key   |
+| Product index | `legal_authorities`                                   | `LEGAL_AUTHORITIES_INDEX` (API default)       |
+| Fixture index | `legal_authorities_fixtures`                          | ingestor default; never the product index     |
+| Benchmark     | throwaway `legal-authorities-benchmark-<pid>` per run | `packages/search-client/src/benchmark/run.ts` |
+
+Product and benchmark share the instance but never share an index: the
+benchmark creates its index at startup and deletes it on exit, so a
+benchmark run cannot narrow or widen what product search serves.
+
+### Rebuild the product index
+
+The index is derived, never migrated. Rebuild it from Postgres with:
+
+```sh
+pnpm rebuild:search-index
+```
+
+Flags (`--database-url=`, `--host=`, `--admin-key=`, `--index=`) override
+the matching env vars. The command reports docs read, documents indexed
+(including how many were indexed from summaries only), and skipped rows
+with reasons; any validation or indexing failure aborts with the product
+index untouched and a non-zero exit. Verify with
+`GET /api/search/readiness`, which reports `ready` with the document count.
+
 ### Run
 
 ```sh

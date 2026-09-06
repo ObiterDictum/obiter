@@ -1,8 +1,17 @@
-# Local development database for Obiter.
+# Local development backing services for Obiter.
 #
 # Matches the API's defaults in services/api/src/env.ts:
 #   DATABASE_URL        = postgres://obiter:obiter@localhost:5432/obiter
 #   TEST_DATABASE_URL   = postgres://obiter:obiter@localhost:5432/obiter_test
+#
+# Meilisearch is the derived search index over the legal_source_documents
+# table (Postgres stays the system of record). Product and benchmark share
+# this one instance: the product index is LEGAL_AUTHORITIES_INDEX
+# (default `legal_authorities`), the benchmark creates and deletes a
+# throwaway `legal-authorities-benchmark-<pid>` index per run. One instance,
+# one local key (`obiter-local-dev-key`, matching CI and ci-local.sh).
+#
+# The Meilisearch image tag must match the pin in .github/workflows/ci.yml.
 #
 # Usage:
 #   docker compose up -d
@@ -29,5 +38,27 @@ services:
       timeout: 3s
       retries: 10
 
+  meilisearch:
+    image: getmeili/meilisearch:v1.53.1
+    container_name: obiter-meilisearch
+    command: /bin/meilisearch --db-path /meili_data/data.ms
+    environment:
+      MEILI_MASTER_KEY: obiter-local-dev-key
+      MEILI_NO_ANALYTICS: 'true'
+    ports:
+      - '7700:7700'
+    volumes:
+      - obiter_meili_data:/meili_data
+    healthcheck:
+      test:
+        [
+          'CMD-SHELL',
+          'wget -q -O /dev/null http://127.0.0.1:7700/health || exit 1',
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
 volumes:
   obiter_pg_data:
+  obiter_meili_data:

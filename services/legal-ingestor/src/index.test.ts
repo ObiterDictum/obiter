@@ -16,7 +16,7 @@ describe('runBoundedSampleIndexing', () => {
     const report = await runBoundedSampleIndexing({
       meilisearchHost: 'http://localhost:7700',
       meilisearchAdminApiKey: 'dev-key',
-      legalAuthoritiesIndex: 'legal_authorities',
+      legalAuthoritiesIndex: 'legal_authorities_fixtures',
       mojFindCaseLawBaseUrl: 'https://caselaw.nationalarchives.gov.uk',
       mojFindCaseLawRateLimit: 1000,
       nodeEnv: 'test',
@@ -27,5 +27,18 @@ describe('runBoundedSampleIndexing', () => {
       failedCount: 0,
       errors: [],
     })
+  })
+
+  it('refuses the product index', async () => {
+    await expect(
+      runBoundedSampleIndexing({
+        meilisearchHost: 'http://localhost:7700',
+        meilisearchAdminApiKey: 'dev-key',
+        legalAuthoritiesIndex: 'legal_authorities',
+        mojFindCaseLawBaseUrl: 'https://caselaw.nationalarchives.gov.uk',
+        mojFindCaseLawRateLimit: 1000,
+        nodeEnv: 'test',
+      }),
+    ).rejects.toThrow('Refusing to seed fixtures into product index')
   })
 })

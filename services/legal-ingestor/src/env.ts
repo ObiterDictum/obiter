@@ -101,8 +101,10 @@ function readIndexName(key: string, fallback: string) {
   return trimmed
 }
 
+// Fixture default: the sample seeder must never write the product index,
+// which the rebuild owns. runBoundedSampleIndexing refuses it outright.
 function readLegalAuthoritiesIndexName() {
-  return readIndexName('LEGAL_AUTHORITIES_INDEX', 'legal_authorities')
+  return readIndexName('LEGAL_AUTHORITIES_INDEX', 'legal_authorities_fixtures')
 }
 
 function loadLocalDotEnv() {
