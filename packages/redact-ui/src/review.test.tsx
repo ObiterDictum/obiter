@@ -17,12 +17,7 @@ const hooks = vi.hoisted(() => ({
 }))
 
 const sourcePreviewHooks = vi.hoisted(() => ({
-  useRedactionSourceFile: vi.fn(() => ({
-    isPending: false,
-    data: undefined,
-    isError: false,
-  })),
-  useRedactionLayout: vi.fn(() => ({
+  useRedactionSource: vi.fn(() => ({
     isPending: false,
     data: undefined,
     isError: false,

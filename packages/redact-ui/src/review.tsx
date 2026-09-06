@@ -25,10 +25,7 @@ import {
   useRedactionRun,
   useSpanDecision,
 } from './hooks'
-import {
-  useRedactionLayout,
-  useRedactionSourceFile,
-} from './source-preview-hooks'
+import { useRedactionSource } from './source-preview-hooks'
 import { PdfDocumentPreview } from './pdf-document-preview'
 import { PdfReviewDocument } from './pdf-review-document'
 import { DetectionRetryWarning } from './detection-retry-warning'
@@ -400,8 +397,12 @@ export function RedactionReviewView({
   const runQuery = useRedactionRun(runId)
   const textQuery = useRedactionDocumentText(runId)
   const pdfPreviewEnabled = runQuery.data?.sourcePreview?.available === true
-  const sourceFileQuery = useRedactionSourceFile(runId, pdfPreviewEnabled)
-  const layoutQuery = useRedactionLayout(runId, pdfPreviewEnabled)
+  const sourceFileQuery = useRedactionSource(
+    runId,
+    'source-file',
+    pdfPreviewEnabled,
+  )
+  const layoutQuery = useRedactionSource(runId, 'layout', pdfPreviewEnabled)
   const outputQuery = useRedactionOutput(
     runId,
     runQuery.data?.status === 'finalized',
