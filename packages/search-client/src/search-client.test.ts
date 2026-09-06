@@ -367,6 +367,36 @@ describe('Legal search client', () => {
     expect(index.updateRankingRules).toHaveBeenCalled()
   })
 
+  it('tolerates the async duplicate-index form (enqueued create fails as index_already_exists)', async () => {
+    const index = {
+      updateSearchableAttributes: vi.fn(() => completedTask({ uid: 8 })),
+      updateFilterableAttributes: vi.fn(() => completedTask({ uid: 9 })),
+      updateSortableAttributes: vi.fn(() => completedTask({ uid: 10 })),
+      updateRankingRules: vi.fn(() => completedTask({ uid: 11 })),
+      updatePrefixSearch: vi.fn(() => completedTask({ uid: 12 })),
+      getPrefixSearch: vi.fn(async () => 'disabled'),
+      updateStopWords: vi.fn(() => completedTask({ uid: 13 })),
+      updateTypoTolerance: vi.fn(() => completedTask({ uid: 14 })),
+      addDocuments: vi.fn(),
+      search: vi.fn(),
+    }
+    const client = {
+      createIndex: vi.fn(() =>
+        completedTask({
+          uid: 94,
+          status: 'failed',
+          error: { code: 'index_already_exists' },
+        }),
+      ),
+      index: vi.fn(() => index),
+    }
+
+    const result = await createIndex(client, 'legal_authorities')
+
+    expect(result.taskUid).toBe(94)
+    expect(index.updateSearchableAttributes).toHaveBeenCalled()
+  })
+
   it('fails index setup when a settings task fails after enqueue', async () => {
     const index = {
       updateSearchableAttributes: vi.fn(() => completedTask({ uid: 8 })),
