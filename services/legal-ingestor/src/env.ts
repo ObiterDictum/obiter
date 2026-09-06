@@ -14,6 +14,7 @@ export interface LegalIngestorEnv {
   legalAuthoritiesIndex: string
   mojFindCaseLawBaseUrl: string
   mojFindCaseLawRateLimit: number
+  databaseUrl: string
   nodeEnv: 'development' | 'test' | 'production'
 }
 
@@ -174,6 +175,10 @@ export function readLegalIngestorEnv(): LegalIngestorEnv {
     mojFindCaseLawRateLimit: readPositiveInteger(
       'MOJ_FIND_CASE_LAW_RATE_LIMIT',
       '1000',
+    ),
+    databaseUrl: readRequiredUrl(
+      'DATABASE_URL',
+      'postgres://obiter:obiter@localhost:5432/obiter',
     ),
     nodeEnv,
   }
