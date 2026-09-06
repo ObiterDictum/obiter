@@ -147,9 +147,9 @@ is worse than no e2e.
 ## Host prerequisites (found the hard way):
 
 - **Meilisearch must be running** at `http://127.0.0.1:7700` with
-  `MEILI_MASTER_KEY=search-benchmark-key`, matching the version pinned in
+  `MEILI_MASTER_KEY=obiter-local-dev-key`, matching the version pinned in
   `ci.yml` (`getmeili/meilisearch:v1.53.1`). Start it with
-  `docker run -d --name meili -p 7700:7700 -e MEILI_MASTER_KEY=search-benchmark-key -e MEILI_NO_ANALYTICS=true getmeili/meilisearch:v1.53.1`
+  `docker run -d --name meili -p 7700:7700 -e MEILI_MASTER_KEY=obiter-local-dev-key -e MEILI_NO_ANALYTICS=true getmeili/meilisearch:v1.53.1`
   or `docker start meili` if you already have a stopped container.
 - **fontconfig and fonts-liberation must be installed.** Without them the PDF
   glyph cover tests in `services/api` fail by fractions of a point, because

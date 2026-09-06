@@ -33,7 +33,7 @@ import {
 const localMeilisearchHost = 'http://127.0.0.1:7700'
 // The single local key. Compose, CI, ci-local.sh and the benchmark all use
 // this value; production sets MEILISEARCH_ADMIN_API_KEY explicitly.
-const localMeilisearchAdminKey = 'search-benchmark-key'
+const localMeilisearchAdminKey = 'obiter-local-dev-key'
 const localDatabaseUrl = 'postgres://obiter:obiter@localhost:5432/obiter'
 const defaultIndexName = 'legal_authorities'
 const stagingIndexSuffix = '--rebuild'

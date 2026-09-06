@@ -18,7 +18,7 @@ describe('readLegalIngestorEnv', () => {
 
     expect(env.meilisearchHost).toBe('http://localhost:7700')
     expect(env.meilisearchAdminApiKey).toBe('dev-key')
-    expect(env.legalAuthoritiesIndex).toBe('legal_authorities')
+    expect(env.legalAuthoritiesIndex).toBe('legal_authorities_fixtures')
   })
 
   it('requires hosted search values in production', () => {

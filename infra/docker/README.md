@@ -24,8 +24,9 @@ Local search configuration, in one place:
 | What          | Value                                                 | Where set                                     |
 | ------------- | ----------------------------------------------------- | --------------------------------------------- |
 | Host          | `http://127.0.0.1:7700`                               | `MEILISEARCH_HOST` (API/ingestor default)     |
-| Key           | `search-benchmark-key`                                | `MEILISEARCH_*_API_KEY`, compose master key   |
-| Product index | `legal_authorities`                                   | `LEGAL_AUTHORITIES_INDEX` (API/ingestor)      |
+| Key           | `obiter-local-dev-key`                                | `MEILISEARCH_*_API_KEY`, compose master key   |
+| Product index | `legal_authorities`                                   | `LEGAL_AUTHORITIES_INDEX` (API default)       |
+| Fixture index | `legal_authorities_fixtures`                          | ingestor default; never the product index     |
 | Benchmark     | throwaway `legal-authorities-benchmark-<pid>` per run | `packages/search-client/src/benchmark/run.ts` |
 
 Product and benchmark share the instance but never share an index: the

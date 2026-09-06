@@ -7,7 +7,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-MEILI_KEY=search-benchmark-key
+MEILI_KEY=obiter-local-dev-key
 MEILI_HOST=http://127.0.0.1:7700
 TEST_DATABASE_URL=postgres://obiter:obiter@localhost:5432/obiter_test
 COMPOSE_CMD='docker compose -f infra/docker/compose.yaml up -d'
