@@ -214,10 +214,10 @@ const casesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: 'cases/$caseId',
   loader: async ({ context, params }) => {
-    const document = await context.queryClient.ensureQueryData(
+    const response = await context.queryClient.ensureQueryData(
       caseLawDocumentQueryOptions(params.caseId),
     )
-    const canonicalPath = createCanonicalCasePath(document)
+    const canonicalPath = createCanonicalCasePath(response.document)
     const caseSlug = canonicalPath.replace(/^\/case\//, '')
     throw redirect({ to: '/case/$caseSlug', params: { caseSlug } })
   },

@@ -22,13 +22,26 @@ interface CaseLawDocument {
   paragraphs?: CaseLawParagraph[]
 }
 
-interface CaseLawDocumentResponse {
+interface CaseLawWithdrawnNotice {
+  withdrawn: true
+  withdrawnAt: string
+  officialUrl: string
+  message: string
+}
+
+export interface CaseLawDocumentResponse {
   document: CaseLawDocument
+  withdrawn?: CaseLawWithdrawnNotice
 }
 
 export function caseLawDocumentQueryOptions(caseId: string) {
   return queryOptions({
     queryKey: ['case-law-document', caseId],
+    // Withdrawal banners must appear without a reload: never serve this
+    // from cache on mount, so a judgment withdrawn since the last visit
+    // revalidates and the banner renders on fresh data.
+    staleTime: 0,
+    refetchOnMount: 'always',
     queryFn: async () => {
       const response = await fetch(
         apiUrl(`/api/search/documents/${encodeURIComponent(caseId)}`),
@@ -38,14 +51,18 @@ export function caseLawDocumentQueryOptions(caseId: string) {
         throw new Error('Case law document was not found.')
       }
 
-      return ((await response.json()) as CaseLawDocumentResponse).document
+      return (await response.json()) as CaseLawDocumentResponse
     },
   })
 }
 
 export function CaseLawDocumentView({ caseId }: { caseId: string }) {
   const [caseQuery, setCaseQuery] = useState('')
-  const { data } = useSuspenseQuery(caseLawDocumentQueryOptions(caseId))
+  const { data: response } = useSuspenseQuery(
+    caseLawDocumentQueryOptions(caseId),
+  )
+  const data = response.document
+  const withdrawn = response.withdrawn
   const paragraphs = selectJudgmentParagraphs(data).filter((paragraph) =>
     isDisplayJudgmentParagraph(paragraph, data),
   )
@@ -60,6 +77,27 @@ export function CaseLawDocumentView({ caseId }: { caseId: string }) {
 
   return (
     <div className="mx-auto flex w-full max-w-[min(1500px,calc(100vw-420px))] flex-col gap-4">
+      {withdrawn ? (
+        <div
+          className="rounded-lg border border-danger/60 bg-danger/10 px-4 py-3"
+          role="alert"
+        >
+          <p className="text-sm font-semibold text-danger">
+            Withdrawn upstream
+            {withdrawn.withdrawnAt
+              ? ` on ${withdrawn.withdrawnAt.slice(0, 10)}`
+              : ''}
+          </p>
+          <p className="mt-1 text-sm text-muted">{withdrawn.message}</p>
+          <a
+            className="mt-1 inline-block text-sm font-semibold text-brand underline"
+            href={withdrawn.officialUrl}
+            rel="noreferrer noopener"
+          >
+            View the official judgment page
+          </a>
+        </div>
+      ) : null}
       <section className="grid items-start gap-2.5 md:grid-cols-[minmax(0,1fr)_auto] md:gap-x-4">
         <div className="flex flex-col gap-2">
           <p className="text-xs font-semibold uppercase tracking-wider text-subtle">

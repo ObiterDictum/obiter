@@ -6,6 +6,7 @@
     "build": "pnpm -r --if-present build",
     "db:migrate": "tsx services/api/src/migrate.ts",
     "rebuild:search-index": "tsx services/api/src/rebuild-search-index.ts",
+    "check:search-parity": "tsx services/api/src/check-search-parity.ts",
     "dev:api": "pnpm --filter @obiter/api --if-present dev",
     "dev:desktop": "pnpm --filter @obiter/desktop --if-present dev",
     "dev:desktop:api": "pnpm --parallel --stream --filter @obiter/api --filter @obiter/desktop --if-present dev",
