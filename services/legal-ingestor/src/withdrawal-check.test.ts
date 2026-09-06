@@ -5,6 +5,8 @@ import {
   createWithdrawalDeps,
   evaluateWithdrawal,
   runWithdrawalCheck,
+  shouldAbortWithdrawalRun,
+  withdrawalConfirmationLimit,
   type UriCheck,
   type WithdrawalCheckDeps,
 } from './withdrawal-check'
@@ -489,5 +491,103 @@ describe('runWithdrawalCheck', () => {
     for (const init of seenInits) {
       expect(init).toMatchObject({ redirect: 'manual' })
     }
+  })
+})
+
+describe('withdrawalConfirmationLimit', () => {
+  it('floors at 10 so small corpora never abort on one genuine withdrawal', () => {
+    expect(withdrawalConfirmationLimit(0)).toBe(10)
+    expect(withdrawalConfirmationLimit(1)).toBe(10)
+    expect(withdrawalConfirmationLimit(1000)).toBe(10)
+    expect(withdrawalConfirmationLimit(2000)).toBe(20)
+  })
+
+  it('trips just above the limit, never on it', () => {
+    expect(shouldAbortWithdrawalRun(1000, 10)).toBe(false)
+    expect(shouldAbortWithdrawalRun(1000, 11)).toBe(true)
+    expect(shouldAbortWithdrawalRun(2000, 20)).toBe(false)
+    expect(shouldAbortWithdrawalRun(2000, 21)).toBe(true)
+  })
+})
+
+describe('run-level confirmation cap', () => {
+  const oldCandidateJson = () => ({
+    withdrawalCandidate: {
+      firstSeenAt: '2026-08-01T00:00:00.000Z',
+      runId: 'run-0',
+      checkedUris: ['x'],
+    },
+  })
+  const row = (index: number, confirming: boolean) => ({
+    document_id: `doc-${index}`,
+    source_uri: `/test/2024/${index}`,
+    xml_uri: `/test/2024/${index}/data.xml`,
+    provider_json: confirming ? oldCandidateJson() : {},
+  })
+  // First `confirming` rows double-404 against an old candidate (so they
+  // would confirm); the rest are present. Limit for 20 checked is 10.
+  const mixedRun = (confirming: number, total = 20) => {
+    const rows = Array.from({ length: total }, (_, index) =>
+      row(index, index < confirming),
+    )
+    const entries: Record<string, Response> = {}
+    for (let index = 0; index < total; index += 1) {
+      const gone = index < confirming
+      entries[`${baseUrl}/test/2024/${index}`] = gone
+        ? notFoundPage.clone()
+        : okPage.clone()
+      entries[`${baseUrl}/test/2024/${index}/data.xml`] = gone
+        ? notFoundPage.clone()
+        : okPage.clone()
+    }
+    return setup(rows, fetchMap(entries))
+  }
+  const audits = (queries: RecordedQuery[]) =>
+    queries.filter((query) =>
+      query.text.includes('insert into legal_source_withdrawal_audits'),
+    )
+
+  it('aborts a systemic run and marks nothing, keeping only audit evidence', async () => {
+    const { deps, queries, deleteFromIndex } = mixedRun(20)
+
+    const report = await runWithdrawalCheck(deps)
+
+    expect(report.aborted).toBe(true)
+    expect(report.abortReason).toContain('20 confirmations among 20 checked')
+    expect(report.checked).toBe(20)
+    expect(report.withdrawn).toEqual([])
+    expect(report.candidates).toBe(0)
+    expect(updates(queries)).toEqual([])
+    expect(deleteFromIndex).not.toHaveBeenCalled()
+    // Read-only evidence stays: two audit rows per document prove the run.
+    expect(audits(queries)).toHaveLength(40)
+  })
+
+  it('proceeds normally with 2 confirmations among 50 present', async () => {
+    const { deps, queries, deleteFromIndex } = mixedRun(2, 50)
+
+    const report = await runWithdrawalCheck(deps)
+
+    expect(report.aborted).toBe(false)
+    expect(report.abortReason).toBeNull()
+    expect(report.withdrawn).toEqual(['doc-0', 'doc-1'])
+    expect(report.present).toBe(48)
+    expect(deleteFromIndex).toHaveBeenCalledTimes(2)
+    expect(updates(queries)).toHaveLength(2)
+  })
+
+  it('holds the boundary: 10 of 20 proceeds, 11 of 20 aborts unmarked', async () => {
+    const atLimit = mixedRun(10)
+    const atReport = await runWithdrawalCheck(atLimit.deps)
+    expect(atReport.aborted).toBe(false)
+    expect(atReport.withdrawn).toHaveLength(10)
+    expect(atLimit.deleteFromIndex).toHaveBeenCalledTimes(10)
+
+    const overLimit = mixedRun(11)
+    const overReport = await runWithdrawalCheck(overLimit.deps)
+    expect(overReport.aborted).toBe(true)
+    expect(overReport.withdrawn).toEqual([])
+    expect(updates(overLimit.queries)).toEqual([])
+    expect(overLimit.deleteFromIndex).not.toHaveBeenCalled()
   })
 })
