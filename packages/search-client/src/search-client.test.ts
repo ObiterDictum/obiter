@@ -3,6 +3,7 @@ import {
   containsEveryQueryTerm,
   containsEverySearchableQueryTerm,
   createIndex,
+  deleteDocuments,
   exactMatchPunctuationFolds,
   exactMatchPunctuationFrom,
   exactMatchPunctuationTo,
@@ -11,6 +12,7 @@ import {
   getIndexStatus,
   indexDocuments,
   legalSearchIndexSettings,
+  listDocumentIds,
   normalizeCitationValue,
   normalizeExactMatchValue,
   rankLegalSearchHitsByExactMatch,
@@ -1753,6 +1755,45 @@ describe('Legal search client', () => {
         documentCount: null,
         reason: 'timeout',
       })
+    })
+  })
+})
+
+describe('derived index removal and listing', () => {
+  it('deletes withdrawn documents by id and reports the count', async () => {
+    const deleteFn = vi.fn(() => completedTask({ uid: 21 }))
+    const client = { index: vi.fn(() => ({ deleteDocuments: deleteFn })) }
+
+    const result = await deleteDocuments(client, 'legal_authorities', [
+      'uksc-2024-99',
+    ])
+
+    expect(deleteFn).toHaveBeenCalledWith(['uksc-2024-99'])
+    expect(result).toEqual({ taskUid: 21, deletedCount: 1 })
+  })
+
+  it('skips the engine entirely for an empty deletion', async () => {
+    const client = { index: vi.fn() }
+
+    const result = await deleteDocuments(client, 'legal_authorities', [])
+
+    expect(client.index).not.toHaveBeenCalled()
+    expect(result).toEqual({ deletedCount: 0 })
+  })
+
+  it('pages the index id listing to the end', async () => {
+    const getDocuments = vi.fn(async ({ offset }: { offset: number }) => ({
+      results: offset === 0 ? [{ id: 'a' }, { id: 'b' }] : [{ id: 'c' }],
+    }))
+    const client = { index: vi.fn(() => ({ getDocuments })) }
+
+    const ids = await listDocumentIds(client, 'legal_authorities', 2)
+
+    expect(ids).toEqual(['a', 'b', 'c'])
+    expect(getDocuments).toHaveBeenLastCalledWith({
+      limit: 2,
+      offset: 2,
+      fields: ['id'],
     })
   })
 })

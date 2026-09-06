@@ -59,6 +59,9 @@ export {
 
 export { createMojRateLimiter } from './rate-limiter'
 
+export type { WithdrawalCandidate, WithdrawnInfo } from './withdrawal'
+export { readWithdrawalCandidate, readWithdrawnInfo } from './withdrawal'
+
 export type {
   DetailFetchOptions,
   LegalDocMlFallbackReason,
