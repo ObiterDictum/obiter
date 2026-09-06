@@ -15,6 +15,7 @@ export { expectDocument404, sourceObjectKey, textObjectKey }
 export const docxBytes = Buffer.from('PK\x03\x04fake-docx-bytes')
 export const pdfBytes = Buffer.from('%PDF-1.4 fake-pdf-bytes')
 export const txtBytes = Buffer.from('Plain retrieval text.\n')
+export const odtBytes = Buffer.from('PK\x03\x04fake-odt-bytes')
 export const txtExtracted = 'Plain retrieval text.\n'
 
 export class TestDatabase extends SharedTestDatabase {

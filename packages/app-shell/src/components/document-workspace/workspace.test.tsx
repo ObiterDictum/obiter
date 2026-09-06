@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DocumentWorkspace } from './workspace'
 import type { DocumentVersionRecord } from '../../documents'
 
 const workspaceApi = vi.hoisted(() => ({
+  fetchDocumentDownload: vi.fn(),
   useDocumentPdfView: vi.fn(),
   useDocumentText: vi.fn(),
 }))
@@ -135,6 +136,31 @@ describe('DocumentWorkspace', () => {
     expect(screen.getByText('Plain retrieval text.')).toBeTruthy()
     expect(screen.getByText('Plain text, not editable')).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Download' })).toBeTruthy()
+  })
+
+  it('surfaces a rejected download as a status message in the text viewer', async () => {
+    workspaceApi.useDocumentText.mockReturnValue({
+      isLoading: false,
+      isError: false,
+      data: {
+        documentId: 'doc_1',
+        versionId: 'ver_1',
+        versionNumber: 1,
+        text: 'Plain retrieval text.',
+      },
+    })
+    workspaceApi.fetchDocumentDownload.mockRejectedValue(
+      new Error('Download failed.'),
+    )
+    render(
+      <DocumentWorkspace
+        documentId="doc_1"
+        version={version({ filename: 'notes.txt', fileType: 'txt' })}
+      />,
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Download' }))
+    const status = await screen.findByRole('status')
+    expect(status.textContent).toBe('Download failed.')
   })
 
   it('explains when the version is not ready', () => {

@@ -4,6 +4,7 @@ import {
   docxBytes,
   expectDocument404,
   MemoryStorage,
+  odtBytes,
   pdfBytes,
   routeApp,
   TestDatabase,
@@ -60,6 +61,7 @@ describe('GET /api/documents/:id/download gates', () => {
   it.each([
     ['an absent current version', { currentVersion: false }],
     ['a processing current version', { status: 'processing' as const }],
+    ['a failed current version', { status: 'failed' as const }],
   ])('returns the uniform 404 for %s', async (_name, options) => {
     const database = new TestDatabase({ fileType: 'pdf', ...options })
     const storage = new MemoryStorage({ binary: pdfBytes })
@@ -80,6 +82,7 @@ describe('GET /api/documents/:id/download gates', () => {
     ],
     ['pdf', 'bundle.pdf', pdfBytes, 'application/pdf'],
     ['txt', 'notes.txt', txtBytes, 'text/plain;charset=utf-8'],
+    ['other', 'legacy.odt', odtBytes, 'application/octet-stream'],
   ])(
     'returns the stored %s bytes with a download disposition',
     async (fileType, filename, bytes, contentType) => {
@@ -153,6 +156,10 @@ describe('GET /api/documents/:id/text gates', () => {
       'a processing txt version',
       { fileType: 'txt', filename: 'notes.txt', status: 'processing' as const },
     ],
+    [
+      'a failed txt version',
+      { fileType: 'txt', filename: 'notes.txt', status: 'failed' as const },
+    ],
   ])('returns the uniform 404 for %s', async (_name, options) => {
     const database = new TestDatabase(options)
     const storage = new MemoryStorage()
@@ -183,5 +190,22 @@ describe('GET /api/documents/:id/text gates', () => {
       versionNumber: 1,
       text: txtExtracted,
     })
+  })
+
+  it('fails closed when the stored text is missing', async () => {
+    const database = new TestDatabase({
+      fileType: 'txt',
+      filename: 'notes.txt',
+    })
+    const storage = new MemoryStorage()
+    storage.text.clear()
+    const { app, errors } = routeApp(database, storage)
+    const response = await app.request('/api/documents/doc_1/text')
+
+    expect(response.status).toBe(500)
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: 'storage_unavailable' },
+    })
+    expect(errors).toEqual(['The document text could not be read.'])
   })
 })
