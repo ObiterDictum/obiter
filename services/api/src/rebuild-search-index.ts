@@ -10,8 +10,8 @@ import {
 
 /**
  * Rebuilds the product Meilisearch index from Postgres, which is the system
- * of record. Repeatable and idempotent: every run reads all of
- * legal_source_documents, builds a staging index, and atomically swaps it
+ * of record. Repeatable and idempotent: every run streams all of
+ * legal_source_documents through a staging index and atomically swaps it
  * into place. Not a migration — it derives the index from current rows.
  *
  * Rows with only summary_json (no document_json) ARE indexed, as summaries.
@@ -21,14 +21,33 @@ import {
  * the derived index below what Postgres holds, which is worse than a
  * summary-only hit. They are counted separately as indexedFromSummaryOnly.
  *
- * Failure leaves no half-rebuilt product index behind. Validation happens
- * entirely before anything is written: any invalid row aborts the run with
- * the product index untouched. Indexing happens on the staging index; if it
- * fails the staging index is deleted and the product index keeps serving the
- * previous build. The run verifies readiness afterwards and exits non-zero
- * unless the product index reports ready with the expected document count,
- * so readiness can never call a partial rebuild ready.
+ * Memory is bounded by one read page, not one corpus. Rows are keyset-paged
+ * from Postgres on document_id (page size below), validated per page, and
+ * each page is partitioned by measured JSON bytes, sent to staging, and
+ * released before the next page is read. Peak memory is one page plus one
+ * HTTP payload batch; the whole corpus is never materialised.
+ *
+ * Fail-before-write is per page, not whole-corpus: each page is validated as
+ * it is read and the first bad row aborts the run with the product index
+ * untouched. Earlier pages may already sit on the staging index at that
+ * point, so an abort deletes the staging index. The product index is only
+ * ever touched by the atomic swap, which runs after every batch succeeded.
+ * A whole-corpus validation pass before any write would double the read for
+ * no extra product safety, so the run does not do one.
+ *
+ * Failure leaves no half-rebuilt product index behind. Indexing happens on
+ * the staging index; if it fails the staging index is deleted and the
+ * product index keeps serving the previous build. The run verifies readiness
+ * afterwards and exits non-zero unless the product index reports ready with
+ * the expected document count, so readiness can never call a partial rebuild
+ * ready.
  */
+
+// 500 rows keeps a page plus one 80 MB payload batch well under the default
+// heap even for the largest judgments measured (~1 MB stored), while keeping
+// the page count (76 for 37,934 rows) low enough that keyset round trips do
+// not dominate the run.
+const readPageSize = 500
 
 const localMeilisearchHost = 'http://127.0.0.1:7700'
 // The single local key. Compose, CI, ci-local.sh and the benchmark all use
@@ -91,130 +110,200 @@ async function main() {
     config.meilisearchHost,
     config.meilisearchAdminApiKey,
   )
-  // ponytail: no try/finally around pool.end; a throw below exits non-zero
-  // with the pool still open, and the process ending releases it.
-  // Withdrawn rows are excluded from the derived index: Postgres is the
-  // record, so the mark survives there and the product index simply stops
-  // serving the document. Counted separately so the report shows what was
-  // left out and why, rather than silently narrowing the index.
-  const rows = await pool.query<{
-    document_id: string
-    summary_json: unknown
-    document_json: unknown | null
-  }>(
-    `select document_id, summary_json, document_json from legal_source_documents
-      where provider_json->>'withdrawn' is null order by document_id`,
-  )
-  const withdrawn = await pool.query<{ count: string }>(
-    `select count(*) as count from legal_source_documents
-      where provider_json->>'withdrawn' is not null`,
-  )
-  await pool.end()
-
-  const documents = []
-  const skipped: SkippedRow[] = []
-  let indexedFromSummaryOnly = 0
-  for (const row of rows.rows) {
-    const candidate = row.document_json ?? row.summary_json
-    const parsed = LegalAuthoritySchema.safeParse(candidate)
-    if (!parsed.success) {
-      skipped.push({
-        documentId: row.document_id,
-        reason: parsed.error.issues.map((issue) => issue.message).join('; '),
-      })
-      continue
-    }
-    if (row.document_json === null) indexedFromSummaryOnly += 1
-    documents.push(parsed.data)
-  }
-
-  console.info(
-    `Read ${rows.rows.length} rows from Postgres; ` +
-      `${documents.length} valid authorities to index ` +
-      `(${indexedFromSummaryOnly} summary-only, ` +
-      `${Number(withdrawn.rows[0]?.count ?? 0)} withdrawn excluded).`,
-  )
-
   const report: RebuildReport = {
     index: config.indexName,
-    docsRead: rows.rows.length,
-    excludedWithdrawn: Number(withdrawn.rows[0]?.count ?? 0),
+    docsRead: 0,
+    excludedWithdrawn: 0,
     indexed: 0,
-    indexedFromSummaryOnly,
-    skipped,
+    indexedFromSummaryOnly: 0,
+    skipped: [],
     documentCount: null,
   }
   const fail = (message: string): never => {
     console.log(JSON.stringify(report, null, 2))
     throw new Error(message)
   }
-
-  if (skipped.length > 0) {
-    fail(
-      `Rebuild aborted: ${skipped.length} of ${report.docsRead} rows failed validation. Product index untouched.`,
-    )
-  }
-
-  // Idempotent staging: a crashed run may have left the staging index behind.
-  await admin.deleteIndexIfExists(stagingIndexName)
-  await createIndex(admin, stagingIndexName)
-  try {
-    const indexed = await indexDocuments(admin, stagingIndexName, documents, {
-      onProgress: ({
-        batchNumber,
-        batchCount,
-        indexedCount,
-        totalDocuments,
-      }) => {
-        console.info(
-          `Indexing staging batch ${batchNumber} of ${batchCount} ` +
-            `(${indexedCount} of ${totalDocuments} indexed so far).`,
-        )
-      },
-    })
-    if (indexed.failedCount > 0) {
-      throw new Error(indexed.errors.map((error) => error.message).join('; '))
+  // Staging cleanup must never mask the error that caused it. When the
+  // staging failure is the engine itself going away, the delete below
+  // fails too; the run still reports the original reason and the product
+  // guarantee, and notes the orphan. The next run deletes stale staging
+  // before writing anything, so an orphan can never leak into a build.
+  const removeStaging = async (): Promise<string | null> => {
+    try {
+      await admin.deleteIndexIfExists(stagingIndexName)
+      return null
+    } catch (cleanupError) {
+      return cleanupError instanceof Error
+        ? cleanupError.message
+        : String(cleanupError)
     }
-    report.indexed = indexed.indexedCount
-    console.info(`Indexed ${indexed.indexedCount} documents on staging.`)
-  } catch (error) {
-    await admin.deleteIndexIfExists(stagingIndexName)
-    const reason = error instanceof Error ? error.message : String(error)
-    fail(`Rebuild aborted during staging: ${reason} Product index untouched.`)
   }
 
-  // createIndex tolerates an existing index, so this also covers the first
-  // rebuild on a fresh instance where the product index does not exist yet.
-  await createIndex(admin, config.indexName)
   try {
-    const swapPair: [string, string] = [stagingIndexName, config.indexName]
-    await admin
-      .swapIndexes([{ indexes: swapPair }])
-      .waitTask({ timeout: swapTaskTimeoutMs, interval: 100 })
-  } catch (error) {
-    await admin.deleteIndexIfExists(stagingIndexName)
-    const reason = error instanceof Error ? error.message : String(error)
-    fail(`Rebuild aborted during swap: ${reason} Product index untouched.`)
-  }
-  await admin.deleteIndexIfExists(stagingIndexName)
-
-  const state = await getIndexStatus(admin, config.indexName)
-  report.documentCount = state.documentCount
-  console.log(JSON.stringify(report, null, 2))
-  if (state.status !== 'ready' || state.documentCount !== report.indexed) {
-    throw new Error(
-      `Rebuild finished but index ${config.indexName} reports ${state.status} ` +
-        `(count ${String(state.documentCount)}, expected ${report.indexed}).`,
+    // Withdrawn rows are excluded from the derived index: Postgres is the
+    // record, so the mark survives there and the product index simply stops
+    // serving the document. Counted separately so the report shows what was
+    // left out and why, rather than silently narrowing the index.
+    const [expected, withdrawn] = await Promise.all([
+      pool.query<{ count: string }>(
+        `select count(*) as count from legal_source_documents
+          where provider_json->>'withdrawn' is null`,
+      ),
+      pool.query<{ count: string }>(
+        `select count(*) as count from legal_source_documents
+          where provider_json->>'withdrawn' is not null`,
+      ),
+    ])
+    const totalDocuments = Number(expected.rows[0]?.count ?? 0)
+    report.excludedWithdrawn = Number(withdrawn.rows[0]?.count ?? 0)
+    console.info(
+      `Streaming ${totalDocuments} rows from Postgres in pages of ${readPageSize} ` +
+        `(${report.excludedWithdrawn} withdrawn excluded).`,
     )
+
+    // Idempotent staging: a crashed run may have left the staging index behind.
+    await admin.deleteIndexIfExists(stagingIndexName)
+    await createIndex(admin, stagingIndexName)
+
+    try {
+      // Keyset on document_id: stable under concurrent inserts elsewhere in
+      // the keyspace and free of offset drift. document_id is unique, so
+      // `>` never skips or repeats a row.
+      let lastDocumentId = ''
+      let pageNumber = 0
+      let batchNumber = 0
+      for (;;) {
+        const page = await pool.query<{
+          document_id: string
+          summary_json: unknown
+          document_json: unknown | null
+        }>(
+          `select document_id, summary_json, document_json from legal_source_documents
+            where provider_json->>'withdrawn' is null and document_id > $1
+            order by document_id limit $2`,
+          [lastDocumentId, readPageSize],
+        )
+        if (page.rows.length === 0) break
+        pageNumber += 1
+        report.docsRead += page.rows.length
+
+        const documents = []
+        for (const row of page.rows) {
+          const candidate = row.document_json ?? row.summary_json
+          const parsed = LegalAuthoritySchema.safeParse(candidate)
+          if (!parsed.success) {
+            report.skipped.push({
+              documentId: row.document_id,
+              reason: parsed.error.issues
+                .map((issue) => issue.message)
+                .join('; '),
+            })
+            continue
+          }
+          if (row.document_json === null) report.indexedFromSummaryOnly += 1
+          documents.push(parsed.data)
+        }
+
+        if (report.skipped.length > 0) {
+          throw new Error(
+            `Validation failed on page ${pageNumber}: ` +
+              `${report.skipped.length} of ${report.docsRead} rows failed validation.`,
+          )
+        }
+
+        // indexDocuments partitions this page by measured payload bytes and
+        // sends it batch by batch; the page array is released before the
+        // next page is read, so peak memory stays at one page plus one batch.
+        const indexed = await indexDocuments(
+          admin,
+          stagingIndexName,
+          documents,
+          {
+            onProgress: ({ batchCount, batchDocumentCount }) => {
+              batchNumber += 1
+              console.info(
+                `Indexing staging batch ${batchNumber} ` +
+                  `(page ${pageNumber}, ${batchDocumentCount} documents, ` +
+                  `${report.indexed} of ${totalDocuments} indexed so far, ` +
+                  `${batchCount} batches in page).`,
+              )
+            },
+          },
+        )
+        if (indexed.failedCount > 0) {
+          throw new Error(
+            indexed.errors.map((error) => error.message).join('; '),
+          )
+        }
+        report.indexed += indexed.indexedCount
+        lastDocumentId =
+          page.rows[page.rows.length - 1]?.document_id ?? lastDocumentId
+      }
+
+      console.info(
+        `Read ${report.docsRead} rows from Postgres; ` +
+          `${report.indexed} valid authorities indexed ` +
+          `(${report.indexedFromSummaryOnly} summary-only, ` +
+          `${report.excludedWithdrawn} withdrawn excluded).`,
+      )
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      const cleanupFailure = await removeStaging()
+      fail(
+        `Rebuild aborted during staging: ${reason} Product index untouched.` +
+          (cleanupFailure === null
+            ? ''
+            : ` Staging cleanup failed (${cleanupFailure}); the next run resets staging before writing.`),
+      )
+    }
+
+    // createIndex tolerates an existing index, so this also covers the first
+    // rebuild on a fresh instance where the product index does not exist yet.
+    await createIndex(admin, config.indexName)
+    try {
+      const swapPair: [string, string] = [stagingIndexName, config.indexName]
+      await admin
+        .swapIndexes([{ indexes: swapPair }])
+        .waitTask({ timeout: swapTaskTimeoutMs, interval: 100 })
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : String(error)
+      const cleanupFailure = await removeStaging()
+      fail(
+        `Rebuild aborted during swap: ${reason} Product index untouched.` +
+          (cleanupFailure === null
+            ? ''
+            : ` Staging cleanup failed (${cleanupFailure}); the next run resets staging before writing.`),
+      )
+    }
+    await admin.deleteIndexIfExists(stagingIndexName)
+
+    const state = await getIndexStatus(admin, config.indexName)
+    report.documentCount = state.documentCount
+    console.log(JSON.stringify(report, null, 2))
+    if (state.status !== 'ready' || state.documentCount !== report.indexed) {
+      throw new Error(
+        `Rebuild finished but index ${config.indexName} reports ${state.status} ` +
+          `(count ${String(state.documentCount)}, expected ${report.indexed}).`,
+      )
+    }
+    console.info(
+      `Rebuilt ${config.indexName}: ${report.indexed} documents indexed ` +
+        `(${report.indexedFromSummaryOnly} from summaries only, ${report.excludedWithdrawn} withdrawn excluded), readiness ready.`,
+    )
+  } finally {
+    await pool.end()
   }
-  console.info(
-    `Rebuilt ${config.indexName}: ${report.indexed} documents indexed ` +
-      `(${indexedFromSummaryOnly} from summaries only, ${report.excludedWithdrawn} withdrawn excluded), readiness ready.`,
-  )
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href)
   void main().catch((error: unknown) => {
     console.error(error instanceof Error ? error.message : 'Rebuild failed')
-    process.exitCode = 1
+    // Exit explicitly rather than setting exitCode: a waitTask that throws
+    // (the abort path above) leaks its timeout timer inside meilisearch-js
+    // 0.51.0, which only clears it on success. The ref'd timer holds the
+    // event loop for the full indexing timeout, so the run would report its
+    // failure and then hang for 30 minutes instead of exiting non-zero.
+    // Every cleanup this run owns (pool.end, staging delete attempt) has
+    // already run by this point, so nothing is skipped.
+    process.exit(1)
   })
