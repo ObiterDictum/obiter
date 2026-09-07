@@ -110,6 +110,26 @@ When summarizing work:
 - state what could not be tested
 - do not imply coverage that does not exist
 
+## Real-corpus search relevance
+
+`pnpm benchmark:search-corpus` measures `POST /api/search/fetch` against the
+local product `legal_authorities` index. It is not a CI gate and is not part
+of `scripts/ci-local.sh`: CI has no copy of the 37k-document corpus, and the
+fixture benchmark in `packages/search-client` already covers the engine
+adapter on synthetic documents.
+
+Run it before and after any ranking change. It refuses to measure unless
+`GET /api/search/readiness` reports `ready` with the baseline document count,
+re-checks every held id and every absent citation against Postgres, and fails
+if the count moves during the run. Do not ingest while it is running.
+
+UKSC, UKPC, and both Court of Appeal divisions are complete, so expectations
+drawn from them stay valid as High Court later gains pre-2020 material. If
+the document count changes, re-verify the absent-citation cases before
+updating `scripts/search-corpus-relevance/baseline.ts`. The baseline records
+today's numbers including failures; ranking work ratchets those floors, it
+does not tidy failing cases out of the set.
+
 ## Local CI mirror
 
 `scripts/ci-local.sh` runs the same gates as `.github/workflows/ci.yml` in the

@@ -11,3 +11,4 @@ Current datasets:
 
 - `search/judgment-search-gate-1.dataset.json`: first judgment Search benchmark dataset for exact lookup, title search, body-text search, no-answer, ambiguity, court browse, and date filters.
 - `search/judgment-search-recall.dataset.json`: solicitor-query recall set with hand-judged relevance sets (including authorities not yet ingested) plus citation-decoy precision probes.
+- `search/corpus-relevance.dataset.json`: served-path relevance set for `POST /api/search/fetch` against the local product corpus. Not a CI gate.
