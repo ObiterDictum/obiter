@@ -1,9 +1,13 @@
 import {
   createCanonicalCasePath,
   type ApiErrorResponse,
+  type LegalSearchCitation,
+  type LegalSearchCitationMatch,
+  type LegalSearchCitationStatus,
 } from '@obiter/contracts'
 import type { LegalAuthority } from '@obiter/legal-schema'
 import {
+  containsEveryQueryTerm,
   containsWholeTerm,
   createJudgmentParagraphEvidenceId,
   extractLegalSearchSnippets,
@@ -11,6 +15,7 @@ import {
   normalizeExactMatchValue,
   type LegalSearchHit,
   type LegalSearchMatchReason,
+  type LegalSearchSnippet,
 } from '@obiter/search-client'
 
 export type LegalFetchRetrievalPath =
@@ -21,10 +26,13 @@ export type LegalFetchOutcome =
   | 'hydration_queued'
   | 'stored_browse_empty'
   | 'unsupported_source_type'
+  | 'recognised_not_held'
 export interface LegalFetchSearchHit extends LegalSearchHit {
   canonicalUrl?: string
   evidenceIds?: string[]
   matchReason?: LegalSearchMatchReason
+  /** Relation to the recognised citation; absent unless the query was one. */
+  citationMatch?: LegalSearchCitationMatch
   retrievalPath?: LegalFetchRetrievalPath
   retrievalRank?: number
   retrievalScore?: number
@@ -52,12 +60,16 @@ export function toFetchResponse(
   hydrationQueued = false,
   options: {
     outcome?: LegalFetchOutcome
+    /** Citation honesty; omitted entirely unless the caller passes it. */
+    citation?: LegalSearchCitation
     diagnostics?: {
       exactLookupSearched?: boolean
       storedIndexSearched?: boolean
       storedSourceSearched?: boolean
       liveProviderSearched?: boolean
       storedOnlyBrowse?: boolean
+      citationRecognised?: boolean
+      citationStatus?: LegalSearchCitationStatus
       /** Present only when the stored Meilisearch index was consulted.
        * 'unavailable' means it timed out or errored and the Postgres
        * fallback carried the request — a miss reads 'ok' with no hits. */
@@ -77,6 +89,8 @@ export function toFetchResponse(
     skippedCount,
     hydrationQueued,
     outcome,
+    // Undefined serialises away, so non-citation callers send no new key.
+    citation: options.citation,
     diagnostics: options.diagnostics,
   }
 }
@@ -87,10 +101,18 @@ export function toSummaryHit(
   options: {
     retrievalPath?: LegalFetchRetrievalPath
     retrievalRank?: number
+    /** Recognised citation surface form; labels the hit, never gates it. */
+    recognisedCitation?: string | null
   } = {},
 ): LegalFetchSearchHit {
   const snippets = hit.snippets ?? extractLegalSearchSnippets(hit, query)
   const matchReason = getLegalSearchMatchReason(hit, query, snippets.length > 0)
+  const citationMatch = getCitationMatch(
+    hit,
+    options.recognisedCitation ?? null,
+    matchReason,
+    snippets,
+  )
   const evidenceIds =
     snippets.length > 0
       ? snippets.map((snippet) => snippet.evidenceId)
@@ -108,6 +130,7 @@ export function toSummaryHit(
     canonicalUrl: createCanonicalCasePath(hit),
     evidenceIds,
     matchReason,
+    citationMatch,
     retrievalPath: options.retrievalPath,
     retrievalRank: options.retrievalRank,
     retrievalScore: scoreLegalSearchMatch(matchReason),
@@ -141,6 +164,36 @@ function getLegalSearchMatchReason(
   if (hasSnippetMatch) return 'body_text_match'
 
   return 'keyword_match'
+}
+
+/**
+ * Labels a served hit against the recognised citation. Exact reuses the
+ * match reason (no second definition of exactness); citing reads the body
+ * text the hit already carries. Null unless the query was a recognised
+ * citation, so party-name responses gain no new key.
+ */
+function getCitationMatch(
+  hit: LegalSearchHit,
+  recognisedCitation: string | null,
+  matchReason: LegalSearchMatchReason,
+  snippets: LegalSearchSnippet[],
+): LegalSearchCitationMatch | undefined {
+  if (!recognisedCitation) return undefined
+  if (
+    matchReason === 'exact_document_id' ||
+    matchReason === 'exact_neutral_citation'
+  ) {
+    return 'exact'
+  }
+
+  const bodyText = [
+    ...(hit.paragraphs?.map((paragraph) => paragraph.text) ?? []),
+    ...snippets.map((snippet) => snippet.text),
+  ].join(' ')
+  if (bodyText && containsEveryQueryTerm(bodyText, recognisedCitation)) {
+    return 'citing'
+  }
+  return 'none'
 }
 
 function scoreLegalSearchMatch(matchReason: LegalSearchMatchReason) {

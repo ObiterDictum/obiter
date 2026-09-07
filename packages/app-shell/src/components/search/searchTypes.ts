@@ -1,3 +1,9 @@
+import type {
+  LegalSearchCitation,
+  LegalSearchCitationMatch,
+  LegalSearchCitationStatus,
+} from '@obiter/contracts'
+
 export interface CaseLawParagraph {
   id: string
   paragraphNumber: number
@@ -27,6 +33,7 @@ export type LegalSearchOutcome =
   | 'hydration_queued'
   | 'stored_browse_empty'
   | 'unsupported_source_type'
+  | 'recognised_not_held'
 
 export interface LegalSearchResult {
   id: string
@@ -38,6 +45,8 @@ export interface LegalSearchResult {
   canonicalUrl?: string
   evidenceIds?: string[]
   matchReason?: LegalSearchMatchReason
+  /** Relation to the recognised citation; absent unless the query was one. */
+  citationMatch?: LegalSearchCitationMatch
   retrievalPath?: LegalSearchRetrievalPath
   retrievalRank?: number
   retrievalScore?: number
@@ -52,12 +61,16 @@ export interface LegalSearchFetchResponse {
   skippedCount: number
   hydrationQueued?: boolean
   outcome?: LegalSearchOutcome
+  /** Citation honesty; absent for responses that predate it. */
+  citation?: LegalSearchCitation
   diagnostics?: {
     exactLookupSearched?: boolean
     storedIndexSearched?: boolean
     storedSourceSearched?: boolean
     liveProviderSearched?: boolean
     storedOnlyBrowse?: boolean
+    citationRecognised?: boolean
+    citationStatus?: LegalSearchCitationStatus
     storedIndexStatus?: 'ok' | 'unavailable'
   }
 }
