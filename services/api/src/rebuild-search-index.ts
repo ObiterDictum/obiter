@@ -1,4 +1,4 @@
-import { Pool } from 'pg'
+import { Pool, type PoolClient } from 'pg'
 import { pathToFileURL } from 'node:url'
 import { LegalAuthoritySchema } from '@obiter/legal-schema'
 import {
@@ -26,6 +26,14 @@ import {
  * each page is partitioned by measured JSON bytes, sent to staging, and
  * released before the next page is read. Peak memory is one page plus one
  * HTTP payload batch; the whole corpus is never materialised.
+ *
+ * The whole paged read runs inside a single REPEATABLE READ transaction on
+ * one dedicated client, so every page sees the same snapshot. document_id
+ * is a hash, not a sequence, so without this a row inserted below the
+ * cursor mid-rebuild would be missed entirely and the index would silently
+ * end up short. The transaction commits as soon as the last page is read
+ * and never spans the swap; every abort path rolls it back before staging
+ * cleanup, because a leaked open transaction blocks vacuum.
  *
  * Fail-before-write is per page, not whole-corpus: each page is validated as
  * it is read and the first bad row aborts the run with the product index
@@ -139,21 +147,49 @@ async function main() {
     }
   }
 
+  // The paged read below runs in a single REPEATABLE READ transaction on
+  // one dedicated client, so every page sees the same snapshot even if
+  // rows are inserted concurrently. The client is released on every exit
+  // path (including the abort paths, which roll back before staging
+  // cleanup); a leaked open transaction blocks vacuum, which is worse than
+  // the missed-row problem being fixed. Counts run on the same client so
+  // the expected total matches the snapshot the pages read.
+  // pool.connect sits inside the try so a connect failure still reaches
+  // pool.end in the finally.
+  let snapshot: PoolClient | null = null
+  let snapshotOpen = false
+  const rollbackSnapshot = async (): Promise<void> => {
+    if (!snapshotOpen || snapshot === null) return
+    snapshotOpen = false
+    try {
+      await snapshot.query('ROLLBACK')
+    } catch {
+      // The original error matters; a rollback failure only affects cleanup.
+    }
+  }
   try {
+    snapshot = await pool.connect()
+    // Idempotent staging: a crashed run may have left the staging index behind.
+    // Runs before BEGIN so the snapshot is held only for the read itself.
+    await admin.deleteIndexIfExists(stagingIndexName)
+    await createIndex(admin, stagingIndexName)
+
+    await snapshot.query('BEGIN TRANSACTION ISOLATION LEVEL REPEATABLE READ')
+    snapshotOpen = true
     // Withdrawn rows are excluded from the derived index: Postgres is the
     // record, so the mark survives there and the product index simply stops
     // serving the document. Counted separately so the report shows what was
     // left out and why, rather than silently narrowing the index.
-    const [expected, withdrawn] = await Promise.all([
-      pool.query<{ count: string }>(
-        `select count(*) as count from legal_source_documents
+    // Sequential queries: one client runs one query at a time, and both
+    // must see the same snapshot as the pages below.
+    const expected = await snapshot.query<{ count: string }>(
+      `select count(*) as count from legal_source_documents
           where provider_json->>'withdrawn' is null`,
-      ),
-      pool.query<{ count: string }>(
-        `select count(*) as count from legal_source_documents
+    )
+    const withdrawn = await snapshot.query<{ count: string }>(
+      `select count(*) as count from legal_source_documents
           where provider_json->>'withdrawn' is not null`,
-      ),
-    ])
+    )
     const totalDocuments = Number(expected.rows[0]?.count ?? 0)
     report.excludedWithdrawn = Number(withdrawn.rows[0]?.count ?? 0)
     console.info(
@@ -161,19 +197,15 @@ async function main() {
         `(${report.excludedWithdrawn} withdrawn excluded).`,
     )
 
-    // Idempotent staging: a crashed run may have left the staging index behind.
-    await admin.deleteIndexIfExists(stagingIndexName)
-    await createIndex(admin, stagingIndexName)
-
     try {
       // Keyset on document_id: stable under concurrent inserts elsewhere in
-      // the keyspace and free of offset drift. document_id is unique, so
-      // `>` never skips or repeats a row.
+      // the keyspace and free of offset drift within the snapshot.
+      // document_id is unique, so `>` never skips or repeats a row.
       let lastDocumentId = ''
       let pageNumber = 0
       let batchNumber = 0
       for (;;) {
-        const page = await pool.query<{
+        const page = await snapshot.query<{
           document_id: string
           summary_json: unknown
           document_json: unknown | null
@@ -246,8 +278,14 @@ async function main() {
           `(${report.indexedFromSummaryOnly} summary-only, ` +
           `${report.excludedWithdrawn} withdrawn excluded).`,
       )
+      await snapshot.query('COMMIT')
+      snapshotOpen = false
     } catch (error) {
       const reason = error instanceof Error ? error.message : String(error)
+      // Roll back before touching Meilisearch: the snapshot must not stay
+      // open across cleanup, and fail() below throws, so this catch is the
+      // only place that can release it on the abort path.
+      await rollbackSnapshot()
       const cleanupFailure = await removeStaging()
       fail(
         `Rebuild aborted during staging: ${reason} Product index untouched.` +
@@ -291,6 +329,13 @@ async function main() {
         `(${report.indexedFromSummaryOnly} from summaries only, ${report.excludedWithdrawn} withdrawn excluded), readiness ready.`,
     )
   } finally {
+    // Covers connect failure (snapshot null, no-op rollback), BEGIN
+    // failure, count-query failure, and any throw between BEGIN and COMMIT
+    // that the inner catch did not already roll back. No-op after a
+    // successful COMMIT. pool.end runs after the client is back in the
+    // pool so an open snapshot can never outlive the run.
+    await rollbackSnapshot()
+    snapshot?.release()
     await pool.end()
   }
 }
