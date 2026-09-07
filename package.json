@@ -17,13 +17,14 @@
     "prefetch:rampart": "tsx scripts/prefetch-rampart-model.ts",
     "bench:guard": "tsx scripts/bench-guard.ts",
     "benchmark:search": "tsx packages/search-client/src/benchmark/run.ts",
+    "benchmark:search-corpus": "tsx scripts/search-corpus-relevance/run.ts",
     "synthetic-v2:smoke": "tsx scripts/synthetic-v2/smoke.ts",
     "synthetic-v2:canary": "tsx scripts/synthetic-v2/smoke.ts --profile=tournament-canary",
     "synthetic-v2:tournament": "tsx scripts/synthetic-v2/run.ts --stage=tournament",
     "synthetic-v2:tournament:assemble": "tsx scripts/synthetic-v2/run.ts --assemble-tournament",
     "test:e2e": "pnpm --filter @obiter/web test:e2e",
-    "test": "pnpm -r --if-present test && vitest run scripts/synthetic-v2 scripts/redact-acceptance",
-    "typecheck": "pnpm -r --if-present typecheck && tsc --noEmit -p scripts/synthetic-v2/tsconfig.json && tsc --noEmit -p scripts/redact-acceptance/tsconfig.json"
+    "test": "pnpm -r --if-present test && vitest run scripts/synthetic-v2 scripts/redact-acceptance scripts/search-corpus-relevance",
+    "typecheck": "pnpm -r --if-present typecheck && tsc --noEmit -p scripts/synthetic-v2/tsconfig.json && tsc --noEmit -p scripts/redact-acceptance/tsconfig.json && tsc --noEmit -p scripts/search-corpus-relevance/tsconfig.json"
   },
   "_comment:oxlint-coupled": "oxlint and @oxlint/plugins must be on the same exact version (1.73.0) — update together; pnpm update would otherwise break the plugin",
   "_comment:oxlint": "1.73.0 must match @oxlint/plugins — see _comment:oxlint-coupled",

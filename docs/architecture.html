@@ -2516,6 +2516,15 @@
                   <td>Guards benchmark regressions</td>
                 </tr>
                 <tr>
+                  <td class="id">search-corpus-relevance/</td>
+                  <td class="id">pnpm benchmark:search-corpus</td>
+                  <td>
+                    Local served-path relevance suite against
+                    <code>POST /api/search/fetch</code> on the product corpus.
+                    Not a CI gate.
+                  </td>
+                </tr>
+                <tr>
                   <td class="id">generate-pdf-fixtures.mjs</td>
                   <td class="id">node</td>
                   <td>Builds PDF test fixtures for extraction tests</td>
@@ -3809,7 +3818,11 @@
                 </tr>
                 <tr>
                   <td class="id">data/evals/search/</td>
-                  <td>Gate 1 judgment search benchmark seed artifacts</td>
+                  <td>
+                    Gate 1 judgment search benchmark seed artifacts, plus the
+                    local corpus-relevance dataset card. The corpus suite is not
+                    a CI gate.
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">data/bench/uk-legal-pii/</td>
@@ -5334,6 +5347,14 @@
                 <tr>
                   <td class="id">pnpm format:check</td>
                   <td>Prettier across the repository</td>
+                </tr>
+                <tr>
+                  <td class="id">pnpm benchmark:search-corpus</td>
+                  <td>
+                    Local <code>POST /api/search/fetch</code> relevance suite
+                    against the product corpus. Not run in CI or
+                    <code>scripts/ci-local.sh</code>.
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">pnpm --filter &lt;pkg&gt; test</td>

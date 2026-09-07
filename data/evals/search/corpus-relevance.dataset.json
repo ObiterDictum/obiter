@@ -1,0 +1,33 @@
+{
+  "dataset_id": "search.corpus.relevance",
+  "version": "0.1.0",
+  "name": "Judgment Search Corpus Relevance",
+  "family": "search",
+  "source": "Hand-seeded solicitor queries with document ids verified against the local Find Case Law product corpus. Measured on POST /api/search/fetch, not the engine adapter.",
+  "licence": "internal-fixture-metadata-only",
+  "jurisdiction": "england-and-wales",
+  "legal_domain": "general",
+  "task_types": [
+    "party_names",
+    "neutral_citation_lookup",
+    "provider_document_id",
+    "citation_decoy_no_answer"
+  ],
+  "case_count": 61,
+  "expected_output_type": "ranked_legal_search_results",
+  "sensitivity": "public_metadata_only",
+  "external_model_allowed": false,
+  "scoring": {
+    "held_recall": "mean per-query recall@20 over held cases",
+    "held_precision": "mean relevant-returned / returned over held cases",
+    "absent_precision": "fraction of absent-citation queries returning zero results",
+    "mrr": "mean reciprocal rank of the primary expected document on held cases",
+    "rank": "1-based position of each expected document, or null if absent from the top 20"
+  },
+  "known_limitations": [
+    "Not a CI gate. CI has no product corpus; run pnpm benchmark:search-corpus locally against a ready legal_authorities index.",
+    "UKSC, UKPC, EWCA Civ and EWCA Crim are complete and expectations drawn from them are stable. High Court is 2020-onward and will gain pre-2020 material; a document-count change requires re-verifying absent-citation cases before updating the baseline.",
+    "The fixture benchmark in packages/search-client remains the CI engine-adapter gate. This suite exists because that fixture set cannot see fetch-layer drops on the real corpus.",
+    "Failing cases stay in the set. The baseline records today's ranks including misses; ranking work ratchets the floors."
+  ]
+}

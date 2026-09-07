@@ -107,6 +107,11 @@ range as though they belonged in it.
 The fixture text is synthetic. Do not replace it with raw legal or client
 matter text.
 
+The fixture suite does not measure the served path. `pnpm benchmark:search-corpus`
+hits `POST /api/search/fetch` on the local product corpus and records recall,
+precision, and the rank of each expected document. It is a local command, not
+a CI gate. See TESTING.md.
+
 Because it is synthetic, the 0.25 ranking score threshold is calibrated on
 data that is not the data. Meilisearch ranking scores depend on corpus
 statistics, so both the junk band and the recall band will move on a real
