@@ -2,7 +2,12 @@
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { LEGAL_SEARCH_DEBOUNCE_MS, LegalSearchView } from './LegalSearchView'
+import {
+  LEGAL_SEARCH_DEBOUNCE_MS,
+  LEGAL_SEARCH_HYDRATION_MAX_POLLS,
+  LEGAL_SEARCH_HYDRATION_POLL_MS,
+  LegalSearchView,
+} from './LegalSearchView'
 
 const routerMocks = vi.hoisted(() => ({
   navigate: vi.fn(),
@@ -61,7 +66,12 @@ function createDeferredResponse(): DeferredResponse {
 
 function createSearchResponse(
   hits: unknown[] = [],
-  options: { cached?: boolean } = {},
+  options: {
+    cached?: boolean
+    outcome?: string
+    hydrationQueued?: boolean
+    liveProviderSearched?: boolean
+  } = {},
 ) {
   return {
     ok: true,
@@ -70,6 +80,17 @@ function createSearchResponse(
       cached: options.cached ?? false,
       indexedCount: 0,
       skippedCount: 0,
+      ...(options.outcome ? { outcome: options.outcome } : {}),
+      ...(options.hydrationQueued !== undefined
+        ? { hydrationQueued: options.hydrationQueued }
+        : {}),
+      ...(options.liveProviderSearched !== undefined
+        ? {
+            diagnostics: {
+              liveProviderSearched: options.liveProviderSearched,
+            },
+          }
+        : {}),
     }),
   } as Response
 }
@@ -247,7 +268,7 @@ describe('LegalSearchView debounce lifecycle', () => {
 
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(container.textContent).toContain(
-      'Stored legal sources and available provider results did not match "Potanin" with the selected filters.',
+      'Stored legal sources did not match "Potanin" with the selected filters. Providers were not consulted for this search.',
     )
   })
 
@@ -307,6 +328,7 @@ describe('LegalSearchView debounce lifecycle', () => {
         skippedCount: 0,
         outcome: 'recognised_not_held',
         citation: { recognised: true, status: 'not_held' },
+        diagnostics: { liveProviderSearched: true },
       }),
     } as Response)
     vi.stubGlobal('fetch', fetchMock)
@@ -328,6 +350,189 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(container.textContent).toContain(
       'No stored or provider source holds "[2023] EWCA Civ 123" as a judgment.',
     )
+  })
+
+  it('tells signed-out users providers were not consulted on no_match', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        hits: [],
+        cached: true,
+        indexedCount: 0,
+        skippedCount: 0,
+        outcome: 'no_match',
+        diagnostics: { liveProviderSearched: false },
+      }),
+    } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(getSearchInput(container), 'zxqwv neverseen')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    expect(container.textContent).toContain('No sources found')
+    expect(container.textContent).toContain(
+      'Stored legal sources did not match "zxqwv neverseen"',
+    )
+    expect(container.textContent).toContain(
+      'Providers were not consulted for this search.',
+    )
+    expect(container.textContent).not.toContain('Find Case Law did not match')
+  })
+
+  it('names Find Case Law when live was consulted and found nothing', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        hits: [],
+        cached: false,
+        indexedCount: 0,
+        skippedCount: 0,
+        outcome: 'no_match',
+        hydrationQueued: false,
+        diagnostics: { liveProviderSearched: true },
+      }),
+    } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(getSearchInput(container), 'zxqwv neverseen')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    expect(container.textContent).toContain(
+      'Stored legal sources and Find Case Law did not match "zxqwv neverseen"',
+    )
+    expect(container.textContent).not.toContain('were not consulted')
+  })
+
+  it('keeps stored-only copy for a citation live never checked', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        hits: [],
+        cached: true,
+        indexedCount: 0,
+        skippedCount: 0,
+        outcome: 'recognised_not_held',
+        citation: { recognised: true, status: 'not_held' },
+        diagnostics: { liveProviderSearched: false },
+      }),
+    } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(getSearchInput(container), '[2023] EWCA Civ 123')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    expect(container.textContent).toContain('Citation not held')
+    expect(container.textContent).toContain(
+      'No stored legal source holds "[2023] EWCA Civ 123" as a judgment.',
+    )
+    expect(container.textContent).toContain('Providers were not consulted')
+  })
+
+  it('labels unsupported source types instead of no-match copy', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        hits: [],
+        cached: true,
+        indexedCount: 0,
+        skippedCount: 0,
+        outcome: 'unsupported_source_type',
+      }),
+    } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(getSearchInput(container), 'section 6')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    expect(container.textContent).toContain(
+      'This source type is not searchable yet',
+    )
+    expect(container.textContent).toContain(
+      'Search currently covers judgments.',
+    )
+  })
+
+  it('rechecks queued searches on a bound and expires plainly with retry', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        hits: [],
+        cached: false,
+        indexedCount: 0,
+        skippedCount: 0,
+        outcome: 'hydration_queued',
+        hydrationQueued: true,
+        diagnostics: { liveProviderSearched: false },
+      }),
+    } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(getSearchInput(container), 'zxqwv neverseen')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    expect(container.textContent).toContain('Checking legal sources')
+    expect(container.textContent).toContain(
+      'Rechecking public legal sources automatically',
+    )
+    expect(container.textContent).toContain('Retry now')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_HYDRATION_POLL_MS)
+    })
+    await flushMicrotasks()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(container.textContent).toContain('check 2 of 6')
+
+    for (let poll = 0; poll < LEGAL_SEARCH_HYDRATION_MAX_POLLS; poll += 1) {
+      await act(async () => {
+        vi.advanceTimersByTime(LEGAL_SEARCH_HYDRATION_POLL_MS)
+      })
+      await flushMicrotasks()
+    }
+
+    expect(container.textContent).toContain('Still no match after rechecks')
+    expect(container.textContent).toContain('found nothing new')
+    const callsAfterExpiry = fetchMock.mock.calls.length
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_HYDRATION_POLL_MS * 3)
+    })
+    await flushMicrotasks()
+    expect(fetchMock.mock.calls.length).toBe(callsAfterExpiry)
+
+    await clickButton(container, 'Retry search')
+    await flushMicrotasks()
+    expect(fetchMock.mock.calls.length).toBe(callsAfterExpiry + 1)
   })
 
   it('labels empty stored-only court browse without blank-query copy', async () => {
