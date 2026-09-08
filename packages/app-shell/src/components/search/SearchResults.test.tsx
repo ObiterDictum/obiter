@@ -94,6 +94,47 @@ describe('SearchResults citation distinction', () => {
     )
   })
 
+  it('stays neutral when not-held hits carry no citing label', () => {
+    const rendered = renderResults({
+      hits: [
+        {
+          ...citingHit,
+          citationMatch: 'none' as const,
+          matchReason: 'keyword_match' as const,
+        },
+      ],
+      cached: false,
+      indexedCount: 0,
+      skippedCount: 0,
+      hydrationQueued: true,
+      outcome: 'results',
+      citation: { recognised: true, status: 'not_held' },
+    })
+    root = rendered.root
+    container = rendered.container
+
+    expect(container.textContent).toContain(
+      'Citation not held · 1 result from Find Case Law',
+    )
+    expect(container.textContent).not.toContain('citing')
+    expect(container.textContent).not.toContain('Cites the queried citation')
+  })
+
+  it('renders the partial title match label distinctly from a full title match', () => {
+    const rendered = renderResults({
+      hits: [{ ...citingHit, matchReason: 'partial_title_match' as const }],
+      cached: false,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'results',
+    })
+    root = rendered.root
+    container = rendered.container
+
+    expect(container.textContent).toContain('Partial title match')
+    expect(container.textContent).not.toContain('Body text match')
+  })
+
   it('stays quiet on citationMatch for ordinary matches', () => {
     const rendered = renderResults({
       hits: [

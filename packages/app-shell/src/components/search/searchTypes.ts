@@ -22,6 +22,7 @@ export type LegalSearchMatchReason =
   | 'exact_document_id'
   | 'exact_neutral_citation'
   | 'title_match'
+  | 'partial_title_match'
   | 'body_text_match'
   | 'keyword_match'
 

@@ -30,6 +30,11 @@ export type LegalSearchMatchReason =
   | 'exact_document_id'
   | 'exact_neutral_citation'
   | 'title_match'
+  // One distinctive query term in the title (rank tier 4). Labelled apart
+  // from 'title_match' so a card never claims a full title match on
+  // single-term evidence; see getLegalSearchMatchReason in the API's
+  // response-utils for the wording rationale.
+  | 'partial_title_match'
   | 'body_text_match'
   | 'keyword_match'
 export type LegalSearchHit = LegalAuthoritySummary & {
@@ -884,15 +889,22 @@ function courtSeniorityForRanking(court: string | null | undefined) {
 function legalSearchMatchTier(hit: LegalSearchHit, normalizedQuery: string) {
   const normalizedTitle = normalizeExactMatchValue(hit.title)
 
-  if (normalizeExactMatchValue(hit.id) === normalizedQuery) return 8
+  if (normalizeExactMatchValue(hit.id) === normalizedQuery) return 9
   if (
     normalizeCitationValue(hit.neutralCitation) ===
     normalizeCitationValue(normalizedQuery)
   )
-    return 7
-  if (normalizedTitle === normalizedQuery) return 6
-  if (containsWholeTerm(normalizedTitle, normalizedQuery)) return 5
-  if (titleContainsEveryQueryTerm(normalizedTitle, normalizedQuery)) return 4
+    return 8
+  if (normalizedTitle === normalizedQuery) return 7
+  if (containsWholeTerm(normalizedTitle, normalizedQuery)) return 6
+  if (titleContainsEveryQueryTerm(normalizedTitle, normalizedQuery)) return 5
+  // A title carrying one distinctive query term outranks any body mention.
+  // A misspelled party query defeats every whole-title tier, and without
+  // this the title-bearing judgment ties the body mentions and loses on the
+  // seniority tiebreak. Title evidence still ranks below every whole-title
+  // tier, so full title matches keep their priority.
+  if (titleContainsAnySearchableQueryTerm(normalizedTitle, normalizedQuery))
+    return 4
 
   const bodySegments = hit.paragraphs?.length
     ? hit.paragraphs.map(({ text }) => text)
@@ -1018,15 +1030,20 @@ function containsEveryNormalizedQueryTerm(
 }
 
 /**
- * Title form of the every-term check: a term also matches as the initials of
- * consecutive title words. Parties are routinely cited by acronym (FCA for
- * the Financial Conduct Authority), and the acronym never appears in the
- * decision's own title, so a literal-only check caps such queries at the
- * body tiers while dozens of citing judgments carry the literal phrase and
- * outrank the decision itself. Title-only: prose throws up accidental
- * initialisms everywhere, so body matching stays literal.
+ * Title form of the every-term check (rank tier 5): a term also matches as
+ * the initials of consecutive title words. Parties are routinely cited by
+ * acronym (FCA for the Financial Conduct Authority), and the acronym never
+ * appears in the decision's own title, so a literal-only check caps such
+ * queries at the body tiers while dozens of citing judgments carry the
+ * literal phrase and outrank the decision itself. Title-only: prose throws
+ * up accidental initialisms everywhere, so body matching stays literal.
+ *
+ * Both arguments must already be normalized with `normalizeExactMatchValue`.
+ * Exported so the API's served match-reason labels read the same title
+ * evidence the rank tiers do; a second local definition would let ranking
+ * and labels drift.
  */
-function titleContainsEveryQueryTerm(
+export function titleContainsEveryQueryTerm(
   normalizedTitle: string,
   normalizedQuery: string,
 ) {
@@ -1037,6 +1054,28 @@ function titleContainsEveryQueryTerm(
     (term) =>
       containsWholeTerm(normalizedTitle, term) ||
       isTitleAcronym(term, titleWords),
+  )
+}
+
+/**
+ * Title-partial check (rank tier 4): one distinctive query term in the
+ * title. Stop words and single-character terms never count, so the "v"
+ * every party name carries cannot promote a title on its own. Title-only,
+ * like the every-term check it refines: prose throws up accidental matches.
+ *
+ * Both arguments must already be normalized with `normalizeExactMatchValue`.
+ * Exported for served-label parity, as `titleContainsEveryQueryTerm` is.
+ */
+export function titleContainsAnySearchableQueryTerm(
+  normalizedTitle: string,
+  normalizedQuery: string,
+) {
+  const terms = normalizedQuery.split(' ').filter(Boolean)
+  return terms.some(
+    (term) =>
+      term.length > 1 &&
+      !legalStopWordSet.has(term) &&
+      containsWholeTerm(normalizedTitle, term),
   )
 }
 
