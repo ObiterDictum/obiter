@@ -66,6 +66,7 @@ export function SearchResults({
                       {result.retrievalPath
                         ? ` · ${formatRetrievalPath(result.retrievalPath)}`
                         : ''}
+                      {formatCitationMatch(result.citationMatch)}
                     </small>
                   </span>
                   <ArrowRight
@@ -104,6 +105,20 @@ function formatMatchReason(matchReason: string | undefined) {
   }
 }
 
+/**
+ * Citation relation to the queried citation. Exact needs no extra label:
+ * the match reason already says so. Citing is the honest distinction this
+ * change exists for; anything else stays quiet.
+ */
+function formatCitationMatch(citationMatch: string | undefined) {
+  switch (citationMatch) {
+    case 'citing':
+      return ' · Cites the queried citation'
+    default:
+      return ''
+  }
+}
+
 function formatRetrievalPath(retrievalPath: string) {
   switch (retrievalPath) {
     case 'stored_exact_lookup':
@@ -127,6 +142,14 @@ function formatResultMeta(
   if (browse) {
     const caseLabel = response.hits.length === 1 ? 'case' : 'cases'
     return `${response.hits.length} recent ${caseLabel} for ${browse.courtLabel} from stored legal sources`
+  }
+
+  // A recognised citation no source holds still serves the cases that cite
+  // it. The count says what they are so citing cases never read as the
+  // judgment itself.
+  if (response.citation?.status === 'not_held' && response.hits.length > 0) {
+    const resultLabel = response.hits.length === 1 ? 'result' : 'results'
+    return `Citation not held · ${response.hits.length} citing ${resultLabel} from Find Case Law`
   }
 
   const resultLabel = response.hits.length === 1 ? 'result' : 'results'

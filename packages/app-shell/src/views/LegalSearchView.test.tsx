@@ -297,6 +297,39 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(container.textContent).toContain('Potanina v Potanin')
   })
 
+  it('renders the honest empty for a recognised citation no source holds', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        hits: [],
+        cached: true,
+        indexedCount: 0,
+        skippedCount: 0,
+        outcome: 'recognised_not_held',
+        citation: { recognised: true, status: 'not_held' },
+      }),
+    } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(getSearchInput(container), '[2023] EWCA Civ 123')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(container.textContent).toContain('Citation not held')
+    expect(container.textContent).toContain(
+      'No judgment held for this citation',
+    )
+    expect(container.textContent).toContain(
+      'No stored or provider source holds "[2023] EWCA Civ 123" as a judgment.',
+    )
+  })
+
   it('labels empty stored-only court browse without blank-query copy', async () => {
     const fetchMock = vi
       .fn<typeof fetch>()
