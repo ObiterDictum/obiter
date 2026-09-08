@@ -456,10 +456,7 @@ export function LegalSearchView() {
         setState({
           status: 'error',
           query: trimmedQuery,
-          message:
-            response.status === 503
-              ? 'Find Case Law is currently unreachable. Cached results may still be available through standard search.'
-              : 'Search could not complete the request.',
+          message: await readSearchErrorMessage(response),
         })
         keepSearchInputFocused()
         return
@@ -739,6 +736,31 @@ export function LegalSearchView() {
       ) : null}
     </div>
   )
+}
+
+/**
+ * Names the failure the API reported so the error panel never shows a
+ * generic message for a specific outage. The error code is read from the
+ * body, not the status alone: 503 covers both the search index and Find
+ * Case Law, and only the code says which one is down.
+ */
+async function readSearchErrorMessage(response: Response): Promise<string> {
+  if (response.status === 429) {
+    return 'Search is busy fetching new results. Try again shortly.'
+  }
+  if (response.status !== 503) {
+    return 'Search could not complete the request.'
+  }
+  const code = await response
+    .json()
+    .then(
+      (body: unknown) =>
+        (body as { error?: { code?: unknown } } | null)?.error?.code,
+    )
+    .catch(() => undefined)
+  return code === 'search_unavailable'
+    ? 'Legal search is temporarily unavailable because the search index cannot be reached. Try again later.'
+    : 'Find Case Law is currently unreachable. Cached results may still be available through standard search.'
 }
 
 function isTextEntryTarget(target: EventTarget | null) {

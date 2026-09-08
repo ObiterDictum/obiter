@@ -2463,7 +2463,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>16 migrations, 0001 to 0017, 0008 withdrawn</dd>
+                <dd>17 migrations, 0001 to 0019, 0008 withdrawn</dd>
               </dl>
             </article>
           </div>
@@ -2797,14 +2797,6 @@
                   <td class="id">PATCH /api/documents/:id/restore</td>
                   <td class="id">documents.ts</td>
                   <td>Undo soft delete, cascading to its runs</td>
-                </tr>
-                <tr>
-                  <td class="id">GET /api/search</td>
-                  <td class="id">legal-search/</td>
-                  <td>
-                    Public stored judgment search. No session required. Must not
-                    expose matter or client data.
-                  </td>
                 </tr>
                 <tr>
                   <td class="id">POST /api/search/fetch</td>
@@ -3208,7 +3200,7 @@
             direct reads and lists; only the known-id audit route uses an
             organisation-scoped deleted-run resolver after an owner/admin role
             check, while members are gated before the deleted lookup.
-            <code>GET /api/search</code>, <code>POST /api/search/fetch</code>,
+            <code>POST /api/search/fetch</code>,
             <code>GET /api/search/readiness</code>,
             <code>GET /api/search/documents/:documentId</code>,
             <code>GET /api/changelog</code>, <code>GET /api/health</code>, and
@@ -3680,9 +3672,10 @@
                   <td class="id">legal_source_documents</td>
                   <td>
                     Stored judgments, summary and document JSON, provider
-                    metadata, generated tsvector
+                    metadata. The generated tsvector from 0003/0004 was dropped
+                    in 0019 when Meilisearch became the sole query engine.
                   </td>
-                  <td class="id">0003, 0004</td>
+                  <td class="id">0003, 0004, 0019</td>
                 </tr>
                 <tr>
                   <td class="id">redaction_runs</td>
@@ -3703,12 +3696,11 @@
             </table>
           </div>
           <div class="callout">
-            <b>Two search indexes exist.</b>
-            <code>legal_source_documents</code> carries a generated
-            <code>tsvector</code> with <code>setweight</code> field weighting,
-            alongside Meilisearch. They rank differently, so the same query can
-            return different results depending on which served it. The Search
-            PRD retires the Postgres tier.
+            <b>One query layer remains.</b> Meilisearch is the sole query
+            engine; the Postgres <code>tsvector</code> tier was retired and its
+            generated column dropped in 0019. Postgres stays the system of
+            record: <code>legal_source_documents</code> holds every judgment,
+            the index rebuilds from it, and retrieval by id reads from it.
           </div>
         </section>
 
@@ -4157,24 +4149,6 @@
                 <g>
                   <rect
                     x="420"
-                    y="220"
-                    width="124.8"
-                    height="41"
-                    rx="2"
-                    fill="var(--raised)"
-                    stroke="var(--danger)"
-                    stroke-dasharray="3 3"
-                  />
-                  <text x="482.4" y="237" text-anchor="middle" class="n">
-                    Postgres tsvector
-                  </text>
-                  <text x="482.4" y="248" text-anchor="middle" class="s">
-                    second tier
-                  </text>
-                </g>
-                <g>
-                  <rect
-                    x="420"
                     y="24"
                     width="100.6"
                     height="41"
@@ -4243,23 +4217,12 @@
                 <text x="501.275" y="92.5" text-anchor="middle" class="e">
                   miss
                 </text>
-                <path
-                  d="M464.25,161 L482.4,220"
-                  fill="none"
-                  stroke="var(--danger)"
-                  stroke-width="1"
-                  stroke-dasharray="4 3"
-                  marker-end="url(#ahd-t-search-request-flow)"
-                />
-                <text x="515.325" y="190.5" text-anchor="middle" class="e">
-                  fallback
-                </text>
               </svg>
             </div>
             <figcaption>
               Red marks what is changing: the JavaScript re-rank discards
-              Meilisearch's score, the Postgres tier ranks differently from the
-              engine beside it, and the provider call sits inside the request.
+              Meilisearch's score, and the provider call sits inside the
+              request.
             </figcaption>
           </figure>
           <ol class="steps">
@@ -4312,12 +4275,13 @@
             the Search PRD.
           </div>
           <div class="callout">
-            <b>Stored-search failure is visible, not silent.</b> When the
-            Meilisearch query errors or times out, fetch degrades to the
-            Postgres tier but marks every response with
-            <code>diagnostics.storedIndexStatus: "unavailable"</code> (a healthy
-            miss reads <code>"ok"</code>) and logs the failure at boot and at
-            query time. <code>GET /api/search/readiness</code>
+            <b>Stored-search failure is visible, not silent.</b>
+            Meilisearch is the sole query engine, so when its query errors or
+            times out, fetch answers
+            <code>503 search_unavailable</code> naming the outage instead of
+            degrading to a differently-ranked second engine or serving an empty
+            result set. Failures are logged at boot and at query time.
+            <code>GET /api/search/readiness</code>
             reports whether the product index exists and its approximate
             document count using the same credentials the query path uses. API
             keys are provisioned per Meilisearch engine: a 403

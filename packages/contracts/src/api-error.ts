@@ -22,6 +22,10 @@ export const apiErrorCodeSchema = z.enum([
   'artifact_not_found',
   'upload_failed',
   'storage_unavailable',
+  // The Meilisearch product index cannot be reached, so search has no query
+  // engine. Distinct from storage_unavailable (Find Case Law or Postgres)
+  // so the UI names the outage instead of blaming the provider.
+  'search_unavailable',
   'job_unavailable',
   'conflict_detected',
   'redaction_run_not_found',
