@@ -1025,32 +1025,11 @@ describe('createApiApp', () => {
     ])
   })
 
-  it('searches legal authorities with validated query filters', async () => {
-    searchClientMock.search.mockResolvedValueOnce({
-      hits: [
-        {
-          id: 'uksc-2024-3',
-          title: 'Potanina v Potanin',
-          neutralCitation: '[2024] UKSC 3',
-          court: 'uksc',
-          jurisdiction: 'england-and-wales',
-          dateDecided: '2024-01-31',
-          sourceType: 'judgment',
-          sourceUrl: 'https://caselaw.nationalarchives.gov.uk/uksc/2024/3',
-          paragraphs: [
-            {
-              id: 'uksc-2024-3-p1',
-              documentId: 'uksc-2024-3',
-              paragraphNumber: 1,
-              text: 'The application for permission to bring proceedings under Part III is allowed.',
-            },
-          ],
-        },
-      ],
-      query: 'Potanina',
-      estimatedTotalHits: 1,
-      processingTimeMs: 1,
-    })
+  it('does not serve a second Meilisearch-shaped GET search route', async () => {
+    // GET /api/search was Meilisearch-only with no product caller and a
+    // second validation shape beside POST /api/search/fetch. It was deleted
+    // with the Postgres query tier so the route layer cannot reintroduce
+    // the split; this pins the deletion.
     const auth = {
       api: {
         getSession: async () => null,
@@ -1066,100 +1045,9 @@ describe('createApiApp', () => {
       },
     )
 
-    const response = await app.request(
-      '/api/search?q=Potanina&court=ewhc/admin&jurisdiction=england-and-wales&dateFrom=2024-01-01&dateTo=2024-12-31&sourceType=judgment',
-    )
+    const response = await app.request('/api/search?q=Potanina')
 
-    expect(response.status).toBe(200)
-    const body = (await response.json()) as {
-      hits: Array<Record<string, unknown>>
-      estimatedTotalHits: number
-    }
-    expect(body).toMatchObject({
-      hits: [{ neutralCitation: '[2024] UKSC 3' }],
-      estimatedTotalHits: 1,
-    })
-    expect(body.hits[0]).not.toHaveProperty('paragraphs')
-    expect(searchClientMock.search).toHaveBeenCalledWith(
-      { id: 'meili-client' },
-      'legal_authorities',
-      'Potanina',
-      {
-        court: 'ewhc-admin',
-        jurisdiction: 'england-and-wales',
-        dateFrom: '2024-01-01',
-        dateTo: '2024-12-31',
-        sourceType: 'judgment',
-      },
-      { includeSnippets: true },
-    )
-  })
-
-  it('rejects invalid legal authority search query params', async () => {
-    const auth = {
-      api: {
-        getSession: async () => null,
-      },
-      handler: async () => new Response(null, { status: 404 }),
-    } as unknown as Auth
-    const app = createApiApp(
-      testEnv,
-      createPool(async () => ({ rows: [] })),
-      {
-        auth,
-      },
-    )
-
-    const response = await app.request(
-      '/api/search?q=&dateFrom=not-a-date&sourceType=legislation',
-    )
-    const body = (await response.json()) as ErrorBody
-
-    expect(response.status).toBe(400)
-    expect(body.error.code).toBe('validation_failed')
-    expect(searchClientMock.search).not.toHaveBeenCalledWith(
-      expect.anything(),
-      expect.anything(),
-      '',
-      expect.anything(),
-    )
-  })
-
-  it('rejects malformed legal authority metadata filter values before search', async () => {
-    const auth = {
-      api: {
-        getSession: async () => null,
-      },
-      handler: async () => new Response(null, { status: 404 }),
-    } as unknown as Auth
-    const app = createApiApp(
-      testEnv,
-      createPool(async () => ({ rows: [] })),
-      {
-        auth,
-      },
-    )
-    searchClientMock.search.mockClear()
-
-    const invalidFilterValues = [
-      ['court', 'uksc" OR court = "bad'],
-      ['court', 'uksc\\'],
-      ['court', 'uksc OR court'],
-      ['jurisdiction', 'england-and-wales"'],
-      ['jurisdiction', 'england-and-wales\\'],
-      ['jurisdiction', 'england-and-wales AND judgment'],
-    ]
-
-    for (const [param, value] of invalidFilterValues) {
-      const response = await app.request(
-        `/api/search?q=Potanina&${param}=${encodeURIComponent(value)}`,
-      )
-      const body = (await response.json()) as ErrorBody
-
-      expect(response.status).toBe(400)
-      expect(body.error.code).toBe('validation_failed')
-    }
-
+    expect(response.status).toBe(404)
     expect(searchClientMock.search).not.toHaveBeenCalled()
   })
 
@@ -1642,37 +1530,6 @@ describe('createApiApp', () => {
     const body = (await response.json()) as ErrorBody
     expect(body.error.code).toBe('validation_failed')
     expect(body.error.message).toBe(SCANNED_PDF_MESSAGE)
-  })
-
-  it('models future legal source query params without running judgment search', async () => {
-    const auth = {
-      api: {
-        getSession: async () => null,
-      },
-      handler: async () => new Response(null, { status: 404 }),
-    } as unknown as Auth
-    const app = createApiApp(
-      testEnv,
-      createPool(async () => ({ rows: [] })),
-      {
-        auth,
-      },
-    )
-
-    const response = await app.request(
-      '/api/search?q=section%206&sourceType=legislation_provision&sourceFamily=legislation&legalDomain=human-rights&provider=legislation-gov-uk&topic=Human%20Rights%20Act&asAtDate=2024-01-01&legislationVersion=current',
-    )
-    const body = (await response.json()) as {
-      hits: unknown[]
-      outcome: string
-    }
-
-    expect(response.status).toBe(200)
-    expect(body).toMatchObject({
-      hits: [],
-      outcome: 'unsupported_source_type',
-    })
-    expect(searchClientMock.search).not.toHaveBeenCalled()
   })
 })
 

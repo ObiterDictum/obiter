@@ -21,7 +21,7 @@ import {
 } from '@obiter/search-client'
 
 export type LegalFetchRetrievalPath =
-  'stored_exact_lookup' | 'stored_index' | 'stored_source' | 'live_provider'
+  'stored_exact_lookup' | 'stored_index' | 'live_provider'
 export type LegalFetchOutcome =
   | 'results'
   | 'no_match'
@@ -67,15 +67,10 @@ export function toFetchResponse(
     diagnostics?: {
       exactLookupSearched?: boolean
       storedIndexSearched?: boolean
-      storedSourceSearched?: boolean
       liveProviderSearched?: boolean
       storedOnlyBrowse?: boolean
       citationRecognised?: boolean
       citationStatus?: LegalSearchCitationStatus
-      /** Present only when the stored Meilisearch index was consulted.
-       * 'unavailable' means it timed out or errored and the Postgres
-       * fallback carried the request — a miss reads 'ok' with no hits. */
-      storedIndexStatus?: 'ok' | 'unavailable'
     }
   } = {},
 ) {

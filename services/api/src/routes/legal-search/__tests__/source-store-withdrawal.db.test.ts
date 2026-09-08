@@ -3,10 +3,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createPostgresLegalAuthoritySourceStore } from '../source-store'
 
 /**
- * Withdrawal surfacing against the real Postgres store: a row marked
+ * Withdrawal surfacing against the real Postgres record store: a row marked
  * withdrawn (the checker writes provider_json.withdrawn, simulated here with
- * the same merge) disappears from default search and reports its flag on
- * get, while untouched rows keep serving. Requires TEST_DATABASE_URL.
+ * the same merge) still reads back by id with its flag set, so the document
+ * route can answer with the banner instead of full text. Requires
+ * TEST_DATABASE_URL.
  */
 
 const documentId = 'db-test-withdrawn-2026-1'
@@ -71,15 +72,14 @@ describe('postgres legal authority source store withdrawals', () => {
     await pool.end()
   })
 
-  it('serves the row in search and without a flag before withdrawal', async () => {
-    const hits = await store.search('fiduciary appendix', {})
-    expect(hits.map((hit) => hit.id)).toContain(documentId)
-
+  it('reads the row by id without a flag before withdrawal', async () => {
     const record = await store.get(documentId)
+
+    expect(record?.document?.id).toBe(documentId)
     expect(record?.withdrawn).toBeNull()
   })
 
-  it('excludes the marked row from search but reports it on get', async () => {
+  it('reports the withdrawn flag on get so the document route can banner it', async () => {
     await pool.query(
       `update legal_source_documents
         set provider_json = legal_source_documents.provider_json || $2::jsonb,
@@ -88,11 +88,15 @@ describe('postgres legal authority source store withdrawals', () => {
       [documentId, JSON.stringify({ withdrawn })],
     )
 
-    const hits = await store.search('fiduciary appendix', {})
-    expect(hits.map((hit) => hit.id)).not.toContain(documentId)
-
     const record = await store.get(documentId)
     expect(record?.withdrawn).toEqual(withdrawn)
     expect(record?.document?.id).toBe(documentId)
+  })
+
+  it('preserves the withdrawn flag across re-ingest upserts', async () => {
+    await store.upsertDocument(authority, provider)
+
+    const record = await store.get(documentId)
+    expect(record?.withdrawn).toEqual(withdrawn)
   })
 })

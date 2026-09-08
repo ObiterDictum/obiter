@@ -199,8 +199,6 @@ d3.node("meili", 420, 120, "Meilisearch", "lexical")
 d3.node("rank", 570, 120, "JS re-rank", "bucket score", accent="var(--danger)")
 d3.node("snip", 715, 120, "snippets", "evidence ids")
 d3.node("resp", 845, 120, "response", accent="var(--info)")
-d3.node("pg", 420, 220, "Postgres tsvector", "second tier", accent="var(--danger)",
-        kind="dashed")
 d3.node("fcl", 420, 24, "Find Case Law", "on miss", accent="var(--danger)",
         kind="dashed")
 
@@ -212,8 +210,6 @@ d3.edge("rank", "snip", sa="r", sb="l")
 d3.edge("snip", "resp", sa="r", sb="l")
 d3.edge("meili", "fcl", sa="t", sb="b", tone="var(--danger)", dashed=True,
         label="miss", lx=34)
-d3.edge("meili", "pg", sa="b", sb="t", tone="var(--danger)", dashed=True,
-        label="fallback", lx=42)
 
 # ------------------------------------------------------------- redact flow
 d4 = Diagram(920, 330, "Redaction pipeline",

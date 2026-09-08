@@ -1,12 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   containsEveryQueryTerm,
-  containsEverySearchableQueryTerm,
   createIndex,
   deleteDocuments,
-  exactMatchPunctuationFolds,
-  exactMatchPunctuationFrom,
-  exactMatchPunctuationTo,
   extractLegalSearchSnippets,
   getDocument,
   getIndexStatus,
@@ -1606,14 +1602,6 @@ describe('Legal search client', () => {
     expect(containsEveryQueryTerm('Joséphine contested', 'José test')).toBe(
       false,
     )
-    expect(containsEverySearchableQueryTerm('test_case', 'test')).toBe(false)
-    expect(containsEverySearchableQueryTerm('_test', 'test')).toBe(false)
-    expect(
-      containsEverySearchableQueryTerm('The test was applied.', 'the test'),
-    ).toBe(true)
-    expect(
-      containsEverySearchableQueryTerm('The test was applied.', 'the'),
-    ).toBe(false)
   })
 
   it('normalizes raw and display snippet text equivalently', () => {
@@ -1623,16 +1611,6 @@ describe('Legal search client', () => {
     expect(normalizeExactMatchValue(rawText)).toBe(
       normalizeExactMatchValue(displayText),
     )
-  })
-
-  it('derives equal-length SQL punctuation translation arguments', () => {
-    const fromCharacters = Array.from(exactMatchPunctuationFrom)
-    const toCharacters = Array.from(exactMatchPunctuationTo)
-
-    expect(fromCharacters).toHaveLength(toCharacters.length)
-    expect(
-      fromCharacters.map((from, index) => [from, toCharacters[index]]),
-    ).toEqual(exactMatchPunctuationFolds)
   })
 
   it('folds typographic apostrophes before whole-term matching', () => {

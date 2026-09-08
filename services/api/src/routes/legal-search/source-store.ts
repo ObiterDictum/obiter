@@ -1,14 +1,5 @@
 import type { Pool, QueryResultRow } from 'pg'
 import { LegalAuthoritySchema, type LegalAuthority } from '@obiter/legal-schema'
-import {
-  containsEverySearchableQueryTerm,
-  exactMatchPunctuationFrom,
-  exactMatchPunctuationTo,
-  normalizeCitationValue,
-  normalizeExactMatchValue,
-  rankLegalSearchHitsByExactMatch,
-  type LegalSearchFilters,
-} from '@obiter/search-client'
 
 // Defined alongside the provider that produces it, and re-exported here so
 // storage callers keep importing it from the store they already use.
@@ -40,17 +31,8 @@ export interface LegalAuthoritySourceStore {
     provider: ProviderSourceMetadata,
   ): Promise<void>
   get(documentId: string): Promise<StoredLegalAuthorityRecord | null>
-  /**
-   * Must exclude withdrawn rows (Postgres does it in SQL, the in-memory
-   * store filters): withdrawn rows stay readable via get for the document
-   * banner path but never surface in search. Callers additionally
-   * cross-check derived-index hits via get — this method is trusted.
-   */
-  search(query: string, filters: LegalSearchFilters): Promise<LegalAuthority[]>
 }
 
-const storedSearchTimeoutMs = 350
-const sourceStoreStatementTimeout = `${storedSearchTimeoutMs}ms`
 const foregroundSourceRecordLimit = 100
 
 export function createInMemoryLegalAuthoritySourceStore(): LegalAuthoritySourceStore {
@@ -92,26 +74,6 @@ export function createInMemoryLegalAuthoritySourceStore(): LegalAuthoritySourceS
     },
     async get(documentId: string) {
       return records.get(documentId) ?? null
-    },
-    async search(query: string, filters: LegalSearchFilters) {
-      const normalizedQuery = normalizeExactMatchValue(query)
-      // Mirrors the Postgres `provider_json->>'withdrawn' is null`
-      // predicate: withdrawn rows stay readable via get (banner path) but
-      // never surface in search. get intentionally still returns them.
-      const dateOrderedMatches = Array.from(records.values())
-        .filter((record) => !record.withdrawn)
-        .map((record) => record.document ?? record.summary)
-        .filter((document) =>
-          documentMatchesSearch(document, normalizedQuery, filters),
-        )
-        .sort((left, right) =>
-          right.dateDecided.localeCompare(left.dateDecided),
-        )
-
-      return rankLegalSearchHitsByExactMatch(dateOrderedMatches, query).slice(
-        0,
-        10,
-      )
     },
   }
 }
@@ -210,86 +172,6 @@ export function createPostgresLegalAuthoritySourceStore(
 
       return toStoredLegalAuthorityRecord(result.rows[0])
     },
-    async search(query, filters) {
-      const normalizedQuery = normalizeExactMatchValue(query)
-      const client = await pool.connect()
-
-      try {
-        await client.query('begin')
-        await client.query('select set_config($1, $2, true)', [
-          'statement_timeout',
-          sourceStoreStatementTimeout,
-        ])
-
-        const result = await client.query<LegalAuthoritySourceRow>(
-          `
-            with normalized_documents as (
-              select
-                summary_json,
-                document_json,
-                provider_json,
-                search_vector,
-                regexp_replace(lower(trim(translate(normalize(coalesce(summary_json->>'id', ''), NFKC), $8, $9))), '\\s+', ' ', 'g') as normalized_id,
-                regexp_replace(regexp_replace(lower(trim(translate(normalize(coalesce(summary_json->>'neutralCitation', ''), NFKC), $8, $9))), '\\s+', ' ', 'g'), '\\m0+(\\d)', '\\1', 'g') as normalized_neutral_citation,
-                regexp_replace(lower(trim(translate(normalize(coalesce(summary_json->>'title', ''), NFKC), $8, $9))), '\\s+', ' ', 'g') as normalized_title
-              from legal_source_documents
-              where ($1::text is null or summary_json->>'court' = $1)
-                and ($2::text is null or summary_json->>'jurisdiction' = $2)
-                and ($3::text is null or summary_json->>'sourceType' = $3)
-                and ($4::text is null or summary_json->>'dateDecided' >= $4)
-                and ($5::text is null or summary_json->>'dateDecided' <= $5)
-                and provider_json->>'withdrawn' is null
-            )
-            select summary_json, document_json, provider_json
-            from normalized_documents
-            where (
-              $6::text = ''
-              or search_vector @@ websearch_to_tsquery('english', $6)
-              or normalized_id = $7
-              or normalized_neutral_citation = $10
-              or normalized_title = $7
-            )
-            order by
-              case
-                when normalized_id = $7 then 3
-                when normalized_neutral_citation = $10 then 2
-                when normalized_title = $7 then 1
-                else 0
-              end desc,
-              ts_rank_cd(search_vector, websearch_to_tsquery('english', $6)) desc,
-              summary_json->>'dateDecided' desc
-            limit 10
-          `,
-          [
-            filters.court ?? null,
-            filters.jurisdiction ?? null,
-            filters.sourceType ?? null,
-            filters.dateFrom ?? null,
-            filters.dateTo ?? null,
-            normalizedQuery,
-            normalizedQuery,
-            exactMatchPunctuationFrom,
-            exactMatchPunctuationTo,
-            normalizeCitationValue(query),
-          ],
-        )
-        await client.query('commit')
-
-        const documents = result.rows
-          .map((row) => {
-            const record = toStoredLegalAuthorityRecord(row)
-            return record?.document ?? record?.summary
-          })
-          .filter((document): document is LegalAuthority => Boolean(document))
-
-        return rankLegalSearchHitsByExactMatch(documents, query)
-      } catch (error) {
-        await client.query('rollback').catch(() => undefined)
-        throw error
-      } finally {
-        client.release()
-      }
-    },
   }
 }
 
@@ -345,28 +227,4 @@ export function rememberForegroundSourceRecord(
   if (records.size > foregroundSourceRecordLimit && oldestRecordId) {
     records.delete(oldestRecordId)
   }
-}
-
-function documentMatchesSearch(
-  document: LegalAuthority,
-  normalizedQuery: string,
-  filters: LegalSearchFilters,
-) {
-  if (filters.court && document.court !== filters.court) return false
-  if (filters.jurisdiction && document.jurisdiction !== filters.jurisdiction)
-    return false
-  if (filters.sourceType && document.sourceType !== filters.sourceType)
-    return false
-  if (filters.dateFrom && document.dateDecided < filters.dateFrom) return false
-  if (filters.dateTo && document.dateDecided > filters.dateTo) return false
-  if (!normalizedQuery) return true
-
-  const haystack = [
-    document.id,
-    document.title,
-    document.neutralCitation,
-    ...(document.paragraphs?.map((paragraph) => paragraph.text) ?? []),
-  ].join(' ')
-
-  return containsEverySearchableQueryTerm(haystack, normalizedQuery)
 }
