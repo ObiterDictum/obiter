@@ -73,7 +73,6 @@ describe('deliberately public routes', () => {
     )
 
     try {
-      const search = await app.request('/api/search?q=Potanina')
       const fetchSearch = await app.request('/api/search/fetch', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -83,14 +82,10 @@ describe('deliberately public routes', () => {
       const changelog = await app.request('/api/changelog')
       const health = await app.request('/api/health')
 
-      expect(search.status).toBe(200)
       expect(fetchSearch.status).toBe(200)
       expect(document.status).toBe(200)
       expect(changelog.status).toBe(200)
       expect(health.status).toBe(200)
-      expect(((await search.json()) as { hits: unknown[] }).hits).toHaveLength(
-        1,
-      )
       expect(
         ((await fetchSearch.json()) as { hits: unknown[] }).hits,
       ).toHaveLength(1)

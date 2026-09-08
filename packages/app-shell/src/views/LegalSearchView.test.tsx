@@ -794,6 +794,98 @@ describe('LegalSearchView debounce lifecycle', () => {
     })
   })
 
+  it('names the wait on rate-limited search instead of a generic failure', async () => {
+    // The API answers 429 hydration_budget_exceeded while background
+    // hydration is over budget; the panel must say waiting, not failed.
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: false,
+      status: 429,
+      json: async () => ({
+        error: {
+          code: 'hydration_budget_exceeded',
+          message: 'Search hydration budget exceeded. Try again later.',
+          requestId: 'req_test',
+        },
+      }),
+    } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(getSearchInput(container), 'Potanina')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    expect(container.textContent).toContain('Search could not complete')
+    expect(container.textContent).toContain(
+      'Search is busy fetching new results. Try again shortly.',
+    )
+    expect(container.textContent).not.toContain(
+      'Search could not complete the request.',
+    )
+  })
+
+  it('names the search index when it is down instead of blaming the provider', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({
+        error: {
+          code: 'search_unavailable',
+          message:
+            'Legal search is temporarily unavailable because the search index cannot be reached. Try again later.',
+          requestId: 'req_test',
+        },
+      }),
+    } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(getSearchInput(container), 'Potanina')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    expect(container.textContent).toContain(
+      'Legal search is temporarily unavailable because the search index cannot be reached. Try again later.',
+    )
+    expect(container.textContent).not.toContain('Find Case Law')
+  })
+
+  it('keeps blaming Find Case Law for provider 503s', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: false,
+      status: 503,
+      json: async () => ({
+        error: {
+          code: 'storage_unavailable',
+          message: 'Find Case Law is unavailable.',
+          requestId: 'req_test',
+        },
+      }),
+    } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(getSearchInput(container), 'Potanina')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    expect(container.textContent).toContain(
+      'Find Case Law is currently unreachable. Cached results may still be available through standard search.',
+    )
+  })
+
   it('opens and closes the keyboard shortcuts overlay', async () => {
     const fetchMock = vi.fn<typeof fetch>()
     vi.stubGlobal('fetch', fetchMock)

@@ -949,13 +949,6 @@ export const exactMatchPunctuationFolds = [
   ['―', '-'],
 ] as const
 
-export const exactMatchPunctuationFrom = exactMatchPunctuationFolds
-  .map(([from]) => from)
-  .join('')
-export const exactMatchPunctuationTo = exactMatchPunctuationFolds
-  .map(([, to]) => to)
-  .join('')
-
 export function normalizeExactMatchValue(value: string | null | undefined) {
   const punctuationFolded = exactMatchPunctuationFolds.reduce(
     (normalized, [from, to]) => normalized.replaceAll(from, to),
@@ -997,24 +990,6 @@ export function containsEveryQueryTerm(value: string, query: string) {
   return containsEveryNormalizedQueryTerm(
     normalizeExactMatchValue(value),
     normalizeExactMatchValue(query),
-  )
-}
-
-/**
- * Whole-term matching that ignores the same words the index ignores, for
- * callers standing in for Meilisearch. Requiring a term the engine drops makes
- * the fallback stricter than the engine it replaces. A query made entirely of
- * stop words matches nothing, which is what the engine returns for one too.
- */
-export function containsEverySearchableQueryTerm(value: string, query: string) {
-  const normalizedValue = normalizeExactMatchValue(value)
-  const searchableTerms = normalizeExactMatchValue(query)
-    .split(' ')
-    .filter((term) => term && !legalStopWordSet.has(term))
-
-  return (
-    searchableTerms.length > 0 &&
-    searchableTerms.every((term) => containsWholeTerm(normalizedValue, term))
   )
 }
 

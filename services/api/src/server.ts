@@ -31,7 +31,8 @@ async function main() {
 
   // Loud at boot, never blocking: an unreachable or empty stored index must
   // be visible here, not discovered later as silent "no results". Serving
-  // starts regardless — queries degrade to Postgres FTS and say so.
+  // starts regardless — queries fail visibly with 503 until the engine
+  // answers, because Meilisearch is the sole query layer.
   void getIndexStatus(
     createClient(env.meilisearchHost, env.meilisearchSearchApiKey),
     env.legalAuthoritiesIndex,
@@ -50,12 +51,12 @@ async function main() {
         break
       case 'missing':
         console.error(
-          `Stored search index "${env.legalAuthoritiesIndex}" does not exist on ${env.meilisearchHost} — stored search falls back to Postgres FTS without typo tolerance.`,
+          `Stored search index "${env.legalAuthoritiesIndex}" does not exist on ${env.meilisearchHost} — search serves 503 search_unavailable until it is rebuilt from Postgres.`,
         )
         break
       case 'unreachable':
         console.error(
-          `Stored search index "${env.legalAuthoritiesIndex}" is unreachable with the configured search key (${state.reason}) on ${env.meilisearchHost} — stored search falls back to Postgres FTS without typo tolerance. Check MEILISEARCH_HOST and MEILISEARCH_SEARCH_API_KEY.`,
+          `Stored search index "${env.legalAuthoritiesIndex}" is unreachable with the configured search key (${state.reason}) on ${env.meilisearchHost} — search serves 503 search_unavailable until it answers. Check MEILISEARCH_HOST and MEILISEARCH_SEARCH_API_KEY.`,
         )
         break
     }

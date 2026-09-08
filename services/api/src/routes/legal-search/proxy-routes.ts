@@ -58,11 +58,10 @@ interface LegalSearchProxyRouteOptions {
   hydrationBudget?: LegalSearchHydrationBudget
 }
 
-// Bounds every stored lookup: Meili pool fetch, Postgres source search and
-// withdrawn checks. Sized for a 100-hit paragraph pool (~1s measured worst
-// case, ~690ms p50 on stored paths; held-citation phrase queries stay
-// ~20-50ms); a slower engine falls back to Postgres FTS and reports
-// storedIndexStatus unavailable rather than holding the route open.
+// Bounds every stored lookup: Meili pool fetch and Postgres withdrawn-record
+// checks. Sized for a 100-hit paragraph pool (~1s measured worst case,
+// ~690ms p50 on stored paths; held-citation phrase queries stay ~20-50ms);
+// a slower engine fails visibly with 503 rather than holding the route open.
 const storedSearchTimeoutMs = 2000
 const storedCourtBrowseLimit = 10
 /**
@@ -127,7 +126,6 @@ export function createLegalSearchProxyRoutes(
           outcome: 'unsupported_source_type',
           diagnostics: {
             storedIndexSearched: false,
-            storedSourceSearched: false,
             liveProviderSearched: false,
             storedOnlyBrowse: false,
           },
@@ -153,7 +151,14 @@ export function createLegalSearchProxyRoutes(
           )
         : null
 
-    if (exactStoredAuthority) {
+    // Meilisearch is the sole query engine: without it there is nothing to
+    // rank or verify against, so the outage fails visibly instead of
+    // degrading to a differently-ranked second engine.
+    if (exactStoredAuthority?.storedIndexStatus === 'unavailable') {
+      return c.json(searchIndexUnavailable(requestId), 503)
+    }
+
+    if (exactStoredAuthority?.hit) {
       const summaries = [
         toSummaryHit(exactStoredAuthority.hit, parsed.data.query, {
           retrievalPath: 'stored_exact_lookup',
@@ -171,10 +176,8 @@ export function createLegalSearchProxyRoutes(
           diagnostics: {
             exactLookupSearched: true,
             storedIndexSearched: true,
-            storedSourceSearched: exactStoredAuthority.storedSourceSearched,
             liveProviderSearched: false,
             storedOnlyBrowse,
-            storedIndexStatus: exactStoredAuthority.storedIndexStatus,
             ...citationDiagnostics,
           },
         }),
@@ -203,6 +206,10 @@ export function createLegalSearchProxyRoutes(
       cached.hits,
     )
 
+    if (cached.storedIndexStatus === 'unavailable') {
+      return c.json(searchIndexUnavailable(requestId), 503)
+    }
+
     // Honesty gate: a recognised citation is only found when a visible hit
     // IS that citation. Keyword neighbours that merely mention it are citing
     // cases, not the judgment, so they fall through to live instead of
@@ -228,56 +235,12 @@ export function createLegalSearchProxyRoutes(
           diagnostics: {
             exactLookupSearched: Boolean(exactLookup),
             storedIndexSearched: true,
-            storedSourceSearched: false,
             liveProviderSearched: false,
             storedOnlyBrowse,
-            storedIndexStatus: cached.storedIndexStatus,
             ...citationDiagnostics,
           },
         }),
       )
-    }
-
-    const storedDocuments = await searchLegalAuthoritySourceStore(
-      legalAuthorityStore,
-      parsed.data.query,
-      filters,
-    )
-    if (storedDocuments.length > 0) {
-      const rankedStoredDocuments = rankLegalSearchHitsByExactMatch(
-        limitStoredBrowseHits(storedDocuments, storedOnlyBrowse),
-        parsed.data.query,
-      )
-
-      // Stored-source twin of the index gate above: same recognised-citation
-      // rule, so a citing case in Postgres cannot suppress live either.
-      if (hasGoodStoredHits(rankedStoredDocuments, exactLookup)) {
-        const summaries = rankedStoredDocuments.map((hit, index) =>
-          toSummaryHit(hit, parsed.data.query, {
-            retrievalPath: 'stored_source',
-            retrievalRank: index + 1,
-            recognisedCitation,
-          }),
-        )
-        const { citation, citationDiagnostics } = citationFields(
-          exactLookup,
-          summaries,
-        )
-        return c.json(
-          toFetchResponse(summaries, parsed.data.query, true, 0, 0, false, {
-            citation,
-            diagnostics: {
-              exactLookupSearched: Boolean(exactLookup),
-              storedIndexSearched: true,
-              storedSourceSearched: true,
-              liveProviderSearched: false,
-              storedOnlyBrowse,
-              storedIndexStatus: cached.storedIndexStatus,
-              ...citationDiagnostics,
-            },
-          }),
-        )
-      }
     }
 
     if (!parsed.data.query.trim()) {
@@ -289,10 +252,8 @@ export function createLegalSearchProxyRoutes(
           diagnostics: {
             exactLookupSearched: Boolean(exactLookup),
             storedIndexSearched: true,
-            storedSourceSearched: true,
             liveProviderSearched: false,
             storedOnlyBrowse,
-            storedIndexStatus: cached.storedIndexStatus,
             ...citationDiagnostics,
           },
         }),
@@ -331,6 +292,9 @@ export function createLegalSearchProxyRoutes(
               },
             )
           : null
+      if (citingLookup?.storedIndexStatus === 'unavailable') {
+        return c.json(searchIndexUnavailable(requestId), 503)
+      }
       const visibleCitingHits = citingLookup
         ? await excludeWithdrawnIndexHits(
             legalAuthorityStore,
@@ -340,8 +304,6 @@ export function createLegalSearchProxyRoutes(
       const citingSummaries = await citingStoredSummariesForCitation(
         legalAuthorityStore,
         visibleCitingHits,
-        storedDocuments,
-        storedOnlyBrowse,
         parsed.data.query,
         recognisedCitation,
       )
@@ -363,11 +325,8 @@ export function createLegalSearchProxyRoutes(
               diagnostics: {
                 exactLookupSearched: true,
                 storedIndexSearched: true,
-                storedSourceSearched: true,
                 liveProviderSearched: false,
                 storedOnlyBrowse,
-                storedIndexStatus:
-                  citingLookup?.storedIndexStatus ?? cached.storedIndexStatus,
                 ...citationDiagnostics,
               },
             },
@@ -385,10 +344,8 @@ export function createLegalSearchProxyRoutes(
           diagnostics: {
             exactLookupSearched: Boolean(exactLookup),
             storedIndexSearched: true,
-            storedSourceSearched: true,
             liveProviderSearched: false,
             storedOnlyBrowse,
-            storedIndexStatus: cached.storedIndexStatus,
             ...citationDiagnostics,
           },
         }),
@@ -432,10 +389,8 @@ export function createLegalSearchProxyRoutes(
           diagnostics: {
             exactLookupSearched: Boolean(exactLookup),
             storedIndexSearched: true,
-            storedSourceSearched: true,
             liveProviderSearched: false,
             storedOnlyBrowse,
-            storedIndexStatus: cached.storedIndexStatus,
             ...citationDiagnostics,
           },
         }),
@@ -542,10 +497,8 @@ export function createLegalSearchProxyRoutes(
           diagnostics: {
             exactLookupSearched: Boolean(exactLookup),
             storedIndexSearched: true,
-            storedSourceSearched: true,
             liveProviderSearched: true,
             storedOnlyBrowse,
-            storedIndexStatus: cached.storedIndexStatus,
             ...citationDiagnostics,
           },
         },
@@ -739,8 +692,17 @@ function isImplementedFetchSourceType(request: LegalFetchRequest) {
   return !request.sourceType || request.sourceType === 'judgment'
 }
 
-function limitStoredBrowseHits<T>(hits: T[], storedOnlyBrowse: boolean) {
-  return storedOnlyBrowse ? hits.slice(0, storedCourtBrowseLimit) : hits
+/**
+ * Visible 503 when Meilisearch cannot be reached. The engine is the sole
+ * query layer, so its outage is search's outage: a named error the UI can
+ * quote, never an empty result set standing in for a failure.
+ */
+function searchIndexUnavailable(requestId: string) {
+  return apiError(
+    'search_unavailable',
+    'Legal search is temporarily unavailable because the search index cannot be reached. Try again later.',
+    requestId,
+  )
 }
 
 type ExactLookup =
@@ -794,6 +756,11 @@ async function findExactStoredAuthority(
     { limit: 5, exactPhrase: lookup.recognisedQuery },
   )
   const storedIndexStatus = storedIndexResult.storedIndexStatus
+  // No engine, no exact lookup: the handler turns this into a visible 503
+  // rather than answering from a differently-ranked second engine.
+  if (storedIndexStatus === 'unavailable') {
+    return { hit: null, storedIndexStatus }
+  }
   // Same stale-index guard as the main search path: an exact Meili hit for
   // a withdrawn row is dropped here, and direct fetch owns the banner.
   const visibleIndexHits = await excludeWithdrawnIndexHits(
@@ -803,13 +770,11 @@ async function findExactStoredAuthority(
   const storedIndexHit = visibleIndexHits.find((hit) =>
     isExactLookupHit(hit, lookup),
   )
-  if (storedIndexHit)
-    return {
-      hit: storedIndexHit,
-      storedSourceSearched: false,
-      storedIndexStatus,
-    }
+  if (storedIndexHit) return { hit: storedIndexHit, storedIndexStatus }
 
+  // A document id names its row directly, so the record itself answers when
+  // the index lags. Citation-to-id resolution needs the engine and stays
+  // above: without it there is nothing exact to serve.
   if (lookup.kind === 'document_id') {
     const storedRecord = await getLegalAuthoritySourceRecord(
       legalAuthorityStore,
@@ -820,26 +785,12 @@ async function findExactStoredAuthority(
     if (storedRecord && !storedRecord.withdrawn) {
       const storedDocument = storedRecord.document ?? storedRecord.summary
       if (storedDocument && sourceMatchesFilters(storedDocument, filters)) {
-        return {
-          hit: storedDocument,
-          storedSourceSearched: true,
-          storedIndexStatus,
-        }
+        return { hit: storedDocument, storedIndexStatus }
       }
     }
   }
 
-  const storedSourceHits = await searchLegalAuthoritySourceStore(
-    legalAuthorityStore,
-    query,
-    filters,
-  )
-  const storedSourceHit = storedSourceHits.find((hit) =>
-    isExactLookupHit(hit, lookup),
-  )
-  return storedSourceHit
-    ? { hit: storedSourceHit, storedSourceSearched: true, storedIndexStatus }
-    : null
+  return { hit: null, storedIndexStatus }
 }
 
 function isExactDocumentId(normalizedQuery: string) {
@@ -868,37 +819,24 @@ function hasGoodStoredHits(
  * Stored-only citing set for an anonymous recognised-citation query. Index
  * hits arrive as summaries (paragraphs stripped) carrying short excerpts,
  * which cannot prove a citation either way, so candidates without paragraph
- * text are hydrated from the source store before labelling. Only documents
- * whose body carries the citation as a bounded phrase serve, deduped with
- * the stored index first. Exact hits cannot reach here (the gates above
- * return them), and the phrase check keeps keyword neighbours out, so an
- * invented citation with no citing cases honestly serves nothing.
+ * text are hydrated from the record store before labelling. Only documents
+ * whose body carries the citation as a bounded phrase serve. Exact hits
+ * cannot reach here (the gates above return them), and the phrase check
+ * keeps keyword neighbours out, so an invented citation with no citing
+ * cases honestly serves nothing.
  */
 async function citingStoredSummariesForCitation(
   legalAuthorityStore: LegalAuthoritySourceStore,
   indexHits: LegalFetchSearchHit[],
-  sourceHits: LegalFetchSearchHit[],
-  storedOnlyBrowse: boolean,
   query: string,
   recognisedCitation: string | null,
 ): Promise<LegalFetchSearchHit[]> {
   if (!recognisedCitation) return []
-  const rankedSourceHits = rankLegalSearchHitsByExactMatch(
-    limitStoredBrowseHits(sourceHits, storedOnlyBrowse),
-    query,
-  )
-  const candidates = [
-    ...indexHits.map((hit, index) => ({
-      hit,
-      retrievalPath: 'stored_index' as const,
-      retrievalRank: index + 1,
-    })),
-    ...rankedSourceHits.map((hit, index) => ({
-      hit,
-      retrievalPath: 'stored_source' as const,
-      retrievalRank: index + 1,
-    })),
-  ]
+  const candidates = indexHits.map((hit, index) => ({
+    hit,
+    retrievalPath: 'stored_index' as const,
+    retrievalRank: index + 1,
+  }))
   const hydrated = await Promise.all(
     candidates.map(async (candidate) => ({
       ...candidate,
@@ -1061,10 +999,10 @@ async function searchStoredAuthorities(
     rankingScoreThreshold?: number | null
   } = {},
 ): Promise<StoredAuthoritiesResult> {
-  // A stored-index failure is reported, not swallowed: the caller carries
-  // storedIndexStatus into response diagnostics so a broken engine never
-  // reads as "no results". Only the error message is logged — RULES.md
-  // forbids secrets in logs, so the provider cause is never serialised.
+  // A stored-index failure is reported, not swallowed: the caller turns
+  // storedIndexStatus into a visible 503 so a broken engine never reads as
+  // "no results". Only the error message is logged — RULES.md forbids
+  // secrets in logs, so the provider cause is never serialised.
   try {
     // A recognised citation searches as an exact phrase so an absent
     // citation finds nothing instead of keyword neighbours.
@@ -1098,7 +1036,7 @@ async function searchStoredAuthorities(
 
     if (!result) {
       console.error(
-        'Stored Meilisearch search timed out — falling back to Postgres FTS without typo tolerance.',
+        'Stored Meilisearch search timed out — serving 503 search_unavailable.',
         { indexName, timeoutMs: storedSearchTimeoutMs },
       )
       return {
@@ -1120,7 +1058,7 @@ async function searchStoredAuthorities(
     }
   } catch (error: unknown) {
     console.error(
-      'Stored Meilisearch search failed — falling back to Postgres FTS without typo tolerance.',
+      'Stored Meilisearch search failed — serving 503 search_unavailable.',
       {
         indexName,
         reason: error instanceof Error ? error.message : String(error),
@@ -1133,23 +1071,6 @@ async function searchStoredAuthorities(
       processingTimeMs: 0,
       storedIndexStatus: 'unavailable',
     }
-  }
-}
-
-async function searchLegalAuthoritySourceStore(
-  legalAuthorityStore: LegalAuthoritySourceStore,
-  query: string,
-  filters: LegalSearchFilters,
-) {
-  try {
-    return (
-      (await withTimeout(
-        legalAuthorityStore.search(query, filters),
-        storedSearchTimeoutMs,
-      )) ?? []
-    )
-  } catch {
-    return []
   }
 }
 
@@ -1188,8 +1109,9 @@ async function excludeWithdrawnIndexHits(
 /**
  * Document-route store lookup that distinguishes "row absent" (continue to
  * the derived index) from "store unknown" (fail closed with 503). The
- * plain helper above conflates both as null, which is fine for search
- * fallbacks but would serve stale indexed full text on the document route.
+ * plain helper above conflates both as null, which is fine for
+ * withdrawn-filtering but would serve stale indexed full text on the
+ * document route.
  */
 async function getDocumentRouteSourceRecord(
   legalAuthorityStore: LegalAuthoritySourceStore,
