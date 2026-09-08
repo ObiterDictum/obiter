@@ -23,6 +23,14 @@ export { courtOptionGroups, getCourtLabel }
 
 export const LEGAL_SEARCH_DEBOUNCE_MS = 300
 export const LEGAL_SEARCH_RECENT_SEARCHES_LIMIT = 5
+// Bounded recheck for hydration_queued: the background path has not
+// consulted live yet, so a queue position is honest there but cannot
+// resolve itself. Five rechecks at 2s (~10s total) covers a normal
+// hydration landing without letting the spinner run forever (the reported
+// case polled byte-identical for 80s+). When the bound is reached the UI
+// says so plainly instead of spinning on.
+export const LEGAL_SEARCH_HYDRATION_POLL_MS = 2000
+export const LEGAL_SEARCH_HYDRATION_MAX_POLLS = 5
 const legalSearchRecentSearchesKey = 'obiter.search.recentSearches'
 const courtShortcuts = [
   { code: 'uksc', label: 'UKSC' },
@@ -144,25 +152,46 @@ export function getLegalSearchEmptyFeedback(input: {
   outcome?: LegalSearchOutcome
   hydrationQueued?: boolean
   browse?: { courtLabel: string }
+  /** Response diagnostics.liveProviderSearched; undefined (pre-diagnostics
+   * responses) reads as not-consulted so copy never claims more than the
+   * response supports. */
+  liveProviderSearched?: boolean
+  /** 1-based count of queued polls so far, for the progress line. */
+  hydrationAttempt?: number
+  /** True once the bounded recheck gives up waiting. */
+  hydrationExpired?: boolean
 }) {
   const outcome =
     input.outcome ?? (input.hydrationQueued ? 'hydration_queued' : 'no_match')
+  const liveSearched = input.liveProviderSearched === true
 
   // Honest empty for a well-formed citation no source holds. Names the
   // citation so the failure reads as not-held rather than not-searched.
+  // Signed-out (or otherwise stored-only) searches must not claim a
+  // provider was consulted: the API gates live on session.
   if (outcome === 'recognised_not_held') {
     return {
       eyebrow: 'Citation not held',
       title: 'No judgment held for this citation',
-      body: `No stored or provider source holds "${input.query}" as a judgment. Check the citation or search party names instead.`,
+      body: liveSearched
+        ? `No stored or provider source holds "${input.query}" as a judgment. Check the citation or search party names instead.`
+        : `No stored legal source holds "${input.query}" as a judgment. Providers were not consulted for this search. Check the citation or search party names instead.`,
     }
   }
 
   if (outcome === 'hydration_queued') {
+    if (input.hydrationExpired) {
+      return {
+        eyebrow: 'Search queued',
+        title: 'Still no match after rechecks',
+        body: `Stored sources did not have "${input.query}" and rechecks of public legal sources found nothing new. Retry the search or refine the query.`,
+      }
+    }
+    const attempt = Math.max(1, input.hydrationAttempt ?? 1)
     return {
       eyebrow: 'Search queued',
       title: 'Checking legal sources',
-      body: `Stored sources did not yet have "${input.query}". Public legal source hydration is queued; retry shortly for newly indexed results.`,
+      body: `Stored sources did not yet have "${input.query}". Rechecking public legal sources automatically (check ${attempt} of ${LEGAL_SEARCH_HYDRATION_MAX_POLLS + 1}); results will appear without retyping.`,
     }
   }
 
@@ -174,10 +203,20 @@ export function getLegalSearchEmptyFeedback(input: {
     }
   }
 
+  if (outcome === 'unsupported_source_type') {
+    return {
+      eyebrow: 'Unsupported search',
+      title: 'This source type is not searchable yet',
+      body: `Search currently covers judgments. Refine to a judgment search for "${input.query}".`,
+    }
+  }
+
   return {
     eyebrow: 'No indexed match',
     title: 'No sources found',
-    body: `Stored legal sources and available provider results did not match "${input.query}" with the selected filters.`,
+    body: liveSearched
+      ? `Stored legal sources and Find Case Law did not match "${input.query}" with the selected filters.`
+      : `Stored legal sources did not match "${input.query}" with the selected filters. Providers were not consulted for this search.`,
   }
 }
 
@@ -369,7 +408,7 @@ export function LegalSearchView() {
   async function runSearch(
     searchQuery = query,
     searchFilters: LegalSearchRequestFilters = { court, dateFrom, dateTo },
-    options: { clearDebounce?: boolean } = {},
+    options: { clearDebounce?: boolean; hydrationAttempt?: number } = {},
   ) {
     if (options.clearDebounce ?? true) clearAutoSearchTimer()
 
@@ -430,18 +469,64 @@ export function LegalSearchView() {
       if (searchRequestId.current !== requestId) return
       if (abortController.current === requestAbortController)
         abortController.current = null
-      setState(
-        body.hits.length > 0
-          ? { status: 'results', query: trimmedQuery, response: body, browse }
-          : {
-              status: 'empty',
-              query: trimmedQuery,
-              outcome: body.outcome,
-              hydrationQueued: body.hydrationQueued,
-              browse,
-            },
-      )
-      setSelectedResultIndex(body.hits.length > 0 ? 0 : -1)
+      if (body.hits.length > 0) {
+        setState({
+          status: 'results',
+          query: trimmedQuery,
+          response: body,
+          browse,
+        })
+        setSelectedResultIndex(0)
+        keepSearchInputFocused()
+        return
+      }
+      // Empty: carry liveProviderSearched so no_match copy never claims a
+      // provider was consulted when the API stayed stored-only. A queued
+      // outcome rechecks on a bound (timer-driven from this handler, not a
+      // fetching effect) and expires plainly at the bound instead of
+      // spinning forever.
+      const liveProviderSearched = body.diagnostics?.liveProviderSearched
+      const outcome =
+        body.outcome ?? (body.hydrationQueued ? 'hydration_queued' : 'no_match')
+      const hydrationAttempt = options.hydrationAttempt ?? 0
+      if (
+        outcome === 'hydration_queued' &&
+        hydrationAttempt < LEGAL_SEARCH_HYDRATION_MAX_POLLS
+      ) {
+        const nextAttempt = hydrationAttempt + 1
+        setState({
+          status: 'empty',
+          query: trimmedQuery,
+          outcome,
+          hydrationQueued: body.hydrationQueued,
+          browse,
+          liveProviderSearched,
+          hydrationAttempt: nextAttempt,
+        })
+        setSelectedResultIndex(-1)
+        clearAutoSearchTimer()
+        autoSearchTimer.current = setTimeout(() => {
+          autoSearchTimer.current = null
+          void runSearch(trimmedQuery, searchFilters, {
+            clearDebounce: false,
+            hydrationAttempt: nextAttempt,
+          })
+        }, LEGAL_SEARCH_HYDRATION_POLL_MS)
+        keepSearchInputFocused()
+        return
+      }
+      setState({
+        status: 'empty',
+        query: trimmedQuery,
+        outcome,
+        hydrationQueued: body.hydrationQueued,
+        browse,
+        liveProviderSearched,
+        hydrationAttempt:
+          outcome === 'hydration_queued' ? hydrationAttempt + 1 : undefined,
+        hydrationExpired: outcome === 'hydration_queued' ? true : undefined,
+      })
+      setSelectedResultIndex(-1)
       keepSearchInputFocused()
     } catch {
       if (searchRequestId.current !== requestId) return
@@ -603,7 +688,20 @@ export function LegalSearchView() {
                     outcome: state.outcome,
                     hydrationQueued: state.hydrationQueued,
                     browse: state.browse,
+                    liveProviderSearched: state.liveProviderSearched,
+                    hydrationAttempt: state.hydrationAttempt,
+                    hydrationExpired: state.hydrationExpired,
                   })}
+                  action={
+                    state.outcome === 'hydration_queued'
+                      ? {
+                          label: state.hydrationExpired
+                            ? 'Retry search'
+                            : 'Retry now',
+                          onClick: () => void runSearch(state.query),
+                        }
+                      : undefined
+                  }
                   tone="warning"
                 />
               ) : null}

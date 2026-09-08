@@ -117,6 +117,13 @@ export type LegalSearchState =
       outcome?: LegalSearchOutcome
       hydrationQueued?: boolean
       browse?: LegalSearchBrowseContext
+      /** Mirrors response diagnostics so copy never claims a provider was
+       * consulted when it was not (signed-out searches stay stored-only). */
+      liveProviderSearched?: boolean
+      /** 1-based queued-poll count for the progress line. */
+      hydrationAttempt?: number
+      /** True once the bounded hydration recheck gives up waiting. */
+      hydrationExpired?: boolean
     }
   | { status: 'error'; query: string; message: string }
 

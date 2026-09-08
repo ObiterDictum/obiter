@@ -23,8 +23,6 @@ export function SearchResults({
   selectedIndex,
   onSelectIndex,
 }: SearchResultsProps) {
-  const storedResultsAvailable = response.cached || response.indexedCount > 0
-
   return (
     <section
       className="min-h-0 flex-1 overflow-y-auto"
@@ -33,7 +31,7 @@ export function SearchResults({
     >
       <div className="mx-auto w-full max-w-3xl px-5 py-4 sm:px-6">
         <p className="pb-3 text-[11px] font-medium tracking-wide text-muted">
-          {formatResultMeta(response, storedResultsAvailable, browse)}
+          {formatResultMeta(response, browse)}
         </p>
         <ul className="flex flex-col gap-1">
           {response.hits.map((result, index) => {
@@ -136,7 +134,6 @@ function formatRetrievalPath(retrievalPath: string) {
 
 function formatResultMeta(
   response: LegalSearchFetchResponse,
-  storedResultsAvailable: boolean,
   browse?: LegalSearchBrowseContext,
 ) {
   if (browse) {
@@ -153,9 +150,25 @@ function formatResultMeta(
   }
 
   const resultLabel = response.hits.length === 1 ? 'result' : 'results'
+  // Source attribution reads the served retrieval paths, never the cache
+  // flag: a non-cached set can still be stored hits, and a cached set is
+  // always stored. Unknown (pathless) hits stay neutral so the line never
+  // claims a provider was consulted when the response does not say so.
+  const paths = new Set(
+    response.hits.map((hit) => hit.retrievalPath).filter(Boolean),
+  )
+  const hasLive = paths.has('live_provider')
+  const hasStored = [...paths].some((path) => path?.startsWith('stored'))
+  if (hasLive && hasStored) {
+    return `${response.hits.length} ${resultLabel} from stored legal sources and Find Case Law`
+  }
+  if (hasLive) {
+    return `${response.hits.length} ${resultLabel} from Find Case Law`
+  }
+  if (hasStored) {
+    return `${response.hits.length} ${resultLabel} from stored legal sources`
+  }
   return `${response.hits.length} ${resultLabel} from ${
-    response.cached || storedResultsAvailable
-      ? 'stored legal sources'
-      : 'Find Case Law'
+    response.cached ? 'stored legal sources' : 'legal sources'
   }`
 }

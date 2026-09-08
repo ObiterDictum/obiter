@@ -116,4 +116,75 @@ describe('SearchResults citation distinction', () => {
     expect(container.textContent).not.toContain('Cites the queried citation')
     expect(container.textContent).not.toContain('Citation not held')
   })
+
+  it('attributes stored hits to stored sources even when not cached', () => {
+    const rendered = renderResults({
+      hits: [
+        {
+          ...citingHit,
+          retrievalPath: 'stored_index' as const,
+          citationMatch: undefined,
+        },
+      ],
+      cached: false,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'results',
+    })
+    root = rendered.root
+    container = rendered.container
+
+    expect(container.textContent).toContain(
+      '1 result from stored legal sources',
+    )
+    expect(container.textContent).not.toContain('from Find Case Law')
+  })
+
+  it('names both sources for mixed stored and live hits', () => {
+    const rendered = renderResults({
+      hits: [
+        {
+          ...citingHit,
+          retrievalPath: 'stored_index' as const,
+          citationMatch: undefined,
+        },
+        {
+          ...citingHit,
+          id: 'live-2',
+          retrievalPath: 'live_provider' as const,
+          citationMatch: undefined,
+        },
+      ],
+      cached: false,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'results',
+    })
+    root = rendered.root
+    container = rendered.container
+
+    expect(container.textContent).toContain(
+      '2 results from stored legal sources and Find Case Law',
+    )
+  })
+
+  it('stays neutral for pathless non-cached results', () => {
+    const {
+      citationMatch: _citationMatch,
+      retrievalPath: _retrievalPath,
+      ...pathless
+    } = citingHit
+    const rendered = renderResults({
+      hits: [{ ...pathless }],
+      cached: false,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'results',
+    })
+    root = rendered.root
+    container = rendered.container
+
+    expect(container.textContent).toContain('1 result from legal sources')
+    expect(container.textContent).not.toContain('from Find Case Law')
+  })
 })
