@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { corpusRelevanceCases, type CorpusRelevanceCase } from './cases'
-import { scoreCase, type CaseResult } from './metrics'
+import { scoreCase, splitAbsentScoringIds, type CaseResult } from './metrics'
 
 const execFileAsync = promisify(execFile)
 const fetchTimeoutMs = 30_000
@@ -16,6 +16,7 @@ export interface SearchReadiness {
 
 export interface FetchHit {
   id: string
+  citationMatch?: string | null
 }
 
 export interface FetchResponse {
@@ -122,7 +123,11 @@ export async function fetchSearch(
           `POST /api/search/fetch hit ${index} has no id for ${JSON.stringify(query)}.`,
         )
       }
-      return { id: hit.id }
+      return {
+        id: hit.id,
+        citationMatch:
+          typeof hit.citationMatch === 'string' ? hit.citationMatch : null,
+      }
     }),
     outcome: readString(body.outcome) ?? undefined,
     diagnostics: diagnostics
@@ -214,7 +219,20 @@ async function runOneCase(
 ): Promise<CaseResult> {
   try {
     const body = await fetchSearch(apiBase, testCase.query)
-    const returnedIds = (body.hits ?? []).map((hit) => hit.id)
+    const hits = body.hits ?? []
+    // Absent citations honestly serve labelled citing judgments (status
+    // not_held); those are the distinguished answer, not false positives.
+    // Score only hits that could read as the judgment itself.
+    if (testCase.kind === 'absent') {
+      const { violatingIds, exemptLabelledCitingCount } =
+        splitAbsentScoringIds(hits)
+      return scoreCase(testCase, violatingIds, {
+        storedIndexStatus: body.diagnostics?.storedIndexStatus ?? null,
+        outcome: body.outcome ?? null,
+        exemptLabelledCitingCount,
+      })
+    }
+    const returnedIds = hits.map((hit) => hit.id)
     return scoreCase(testCase, returnedIds, {
       storedIndexStatus: body.diagnostics?.storedIndexStatus ?? null,
       outcome: body.outcome ?? null,

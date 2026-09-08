@@ -562,6 +562,247 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('serves stored citing cases to anonymous callers, labelled not_held', async () => {
+    // [2003] UKHL 1 is recognised but not held; the stored citing cases
+    // must serve clearly distinguished instead of being discarded.
+    const citing = {
+      ...hit,
+      id: 'ewca-civ-2005-420',
+      title: 'Later judgment applying [2003] UKHL 1',
+      neutralCitation: '[2005] EWCA Civ 420',
+      court: 'ewca-civ',
+      dateDecided: '2005-04-01',
+      sourceUrl: 'https://caselaw.nationalarchives.gov.uk/ewca/civ/2005/420',
+      paragraphs: [
+        {
+          id: 'ewca-civ-2005-420-p1',
+          documentId: 'ewca-civ-2005-420',
+          paragraphNumber: 1,
+          text: 'As held in [2003] UKHL 1, the statutory test applies here at length.',
+        },
+      ],
+    }
+    searchClientMock.search.mockResolvedValue({
+      hits: [citing],
+      query: '[2003] UKHL 1',
+      estimatedTotalHits: 1,
+      processingTimeMs: 1,
+    })
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    const app = createAuthenticatedProxyApp(undefined, undefined, null)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: '[2003] UKHL 1' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      outcome: 'results',
+      citation: { recognised: true, status: 'not_held' },
+      diagnostics: {
+        exactLookupSearched: true,
+        storedIndexSearched: true,
+        storedSourceSearched: true,
+        liveProviderSearched: false,
+        citationRecognised: true,
+        citationStatus: 'not_held',
+      },
+      hits: [
+        {
+          id: 'ewca-civ-2005-420',
+          citationMatch: 'citing',
+          retrievalPath: 'stored_index',
+          retrievalRank: 1,
+        },
+      ],
+    })
+    // Anonymous stays stored-only: no live call even when serving citing.
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('hydrates index summaries from the source store to prove citing cases', async () => {
+    // Production index hits arrive as summaries: paragraphs stripped, short
+    // excerpts only. The phrase check cannot read those, so the candidate
+    // is hydrated from the source store before labelling.
+    const summaryHit = {
+      ...hit,
+      id: 'ewca-civ-2005-420',
+      title: 'Later judgment applying [2003] UKHL 1',
+      neutralCitation: '[2005] EWCA Civ 420',
+      court: 'ewca-civ',
+      dateDecided: '2005-04-01',
+      sourceUrl: 'https://caselaw.nationalarchives.gov.uk/ewca/civ/2005/420',
+    }
+    const fullDocument = {
+      ...summaryHit,
+      paragraphs: [
+        {
+          id: 'ewca-civ-2005-420-p1',
+          documentId: 'ewca-civ-2005-420',
+          paragraphNumber: 1,
+          text: 'As held in [2003] UKHL 1, the statutory test applies here at length.',
+        },
+      ],
+    }
+    searchClientMock.search.mockResolvedValue({
+      hits: [summaryHit],
+      query: '[2003] UKHL 1',
+      estimatedTotalHits: 1,
+      processingTimeMs: 1,
+    })
+    const store = createInMemoryLegalAuthoritySourceStore()
+    await store.upsertDocument(fullDocument, {
+      documentUri: '/ewca/civ/2005/420',
+      sourceUri: '/ewca/civ/2005/420',
+      xmlUri: null,
+      pdfUri: null,
+      contentHash: 'hydration-test',
+      rawAtomEntry: '<entry />',
+    })
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    const app = createAuthenticatedProxyApp(store, undefined, null)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: '[2003] UKHL 1' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      outcome: 'results',
+      citation: { recognised: true, status: 'not_held' },
+      hits: [
+        {
+          id: 'ewca-civ-2005-420',
+          citationMatch: 'citing',
+          retrievalPath: 'stored_index',
+          retrievalRank: 1,
+        },
+      ],
+    })
+    // The ranked lookup keeps the tuned floor; the citing lookup repeats
+    // the same phrase without it so floor-starved citing cases verify.
+    expect(searchClientMock.search).toHaveBeenCalledWith(
+      { id: 'meili-client' },
+      'legal_authorities',
+      '[2003] UKHL 1',
+      { sourceType: 'judgment' },
+      { includeSnippets: true, exactPhrase: '[2003] UKHL 1' },
+    )
+    expect(searchClientMock.search).toHaveBeenCalledWith(
+      { id: 'meili-client' },
+      'legal_authorities',
+      '[2003] UKHL 1',
+      { sourceType: 'judgment' },
+      {
+        includeSnippets: true,
+        exactPhrase: '[2003] UKHL 1',
+        rankingScoreThreshold: null,
+      },
+    )
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('excludes keyword neighbours that never quote the citation', async () => {
+    // Scattered terms are not citing: a neighbour whose excerpts mention
+    // the court, the year, and some other number must not serve, and a
+    // judgment citing only [2003] UKHL 17 must not match [2003] UKHL 1.
+    const neighbourSummary = {
+      ...hit,
+      id: 'ewhc-2026-1362',
+      title: 'Family proceedings using the citation terms apart',
+      neutralCitation: '[2026] EWHC 1362 (Fam)',
+      court: 'ewhc',
+      dateDecided: '2026-03-01',
+      sourceUrl: 'https://caselaw.nationalarchives.gov.uk/ewhc/2026/1362',
+      snippets: [
+        {
+          evidenceId: 'ewhc-2026-1362:judgment_paragraph:1',
+          paragraphNumber: 1,
+          text: 'The EWCA revisited family appeals in 2026. Civ procedure requires permission; see paragraph 1.',
+          matchedTerms: ['ewca'],
+          matchReason: 'body_text_match',
+        },
+      ],
+    }
+    const siblingCiter = {
+      ...hit,
+      id: 'ewca-civ-2005-421',
+      title: 'Judgment citing only the sibling citation',
+      neutralCitation: '[2005] EWCA Civ 421',
+      court: 'ewca-civ',
+      dateDecided: '2005-04-02',
+      sourceUrl: 'https://caselaw.nationalarchives.gov.uk/ewca/civ/2005/421',
+      paragraphs: [
+        {
+          id: 'ewca-civ-2005-421-p1',
+          documentId: 'ewca-civ-2005-421',
+          paragraphNumber: 1,
+          text: 'As held in [2003] UKHL 17, see paragraph 1 of that judgment.',
+        },
+      ],
+    }
+    searchClientMock.search.mockResolvedValue({
+      hits: [neighbourSummary],
+      query: '[2003] UKHL 1',
+      estimatedTotalHits: 1,
+      processingTimeMs: 1,
+    })
+    const store = createInMemoryLegalAuthoritySourceStore()
+    await store.upsertDocument(siblingCiter, {
+      documentUri: '/ewca/civ/2005/421',
+      sourceUri: '/ewca/civ/2005/421',
+      xmlUri: null,
+      pdfUri: null,
+      contentHash: 'neighbour-test',
+      rawAtomEntry: '<entry />',
+    })
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    const app = createAuthenticatedProxyApp(store, undefined, null)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: '[2003] UKHL 1' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [],
+      outcome: 'recognised_not_held',
+      citation: { recognised: true, status: 'not_held' },
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('returns recognised_not_held for an invented citation with no citing cases', async () => {
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: '[2021] EWCA Civ 9999',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    const app = createAuthenticatedProxyApp(undefined, undefined, null)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: '[2021] EWCA Civ 9999' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [],
+      outcome: 'recognised_not_held',
+      citation: { recognised: true, status: 'not_held' },
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('reaches live when stored holds no exact citation hit', async () => {
     searchClientMock.search.mockResolvedValueOnce({
       hits: [],

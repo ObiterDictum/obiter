@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import {
   createClient,
+  normalizeExactMatchValue,
   rankLegalSearchHitsByExactMatch,
   search,
   type LegalSearchFilters,
@@ -282,8 +283,81 @@ export function createLegalSearchProxyRoutes(
     const sessionUser = c.get('user') ?? null
 
     if (!sessionUser) {
+      // Anonymous stays stored-only (30-Aug decision): no live call. A
+      // recognised citation with no exact stored hit is honestly not held —
+      // but stored judgments that cite it are still served, labelled by
+      // their citationMatch, so the answer reads as not-held-with-citing
+      // rather than a silent no-match. Candidates prove the citation with
+      // full paragraph text (hydrated where the index serves summaries)
+      // against a bounded phrase, so keyword neighbours stay excluded even
+      // when scattered terms co-occur.
+      //
+      // The ranked search above carries the relevance floor, which starves
+      // exact-phrase citation lookups once sort is applied (measured: the
+      // [2003] UKHL 1 phrase matches ten citing judgments unfiltered and
+      // zero with the floor). The citing lookup below repeats the same
+      // phrase without the floor; matchingStrategy is untouched, and the
+      // floor still gates every ranked result. Precision comes from the
+      // phrase plus the bounded-phrase body check, not the score.
+      const citingLookup =
+        exactLookup && recognisedCitation
+          ? await searchStoredAuthorities(
+              searchClient,
+              env.legalAuthoritiesIndex,
+              parsed.data.query,
+              filters,
+              {
+                exactPhrase: recognisedCitation,
+                rankingScoreThreshold: null,
+              },
+            )
+          : null
+      const visibleCitingHits = citingLookup
+        ? await excludeWithdrawnIndexHits(
+            legalAuthorityStore,
+            citingLookup.hits,
+          )
+        : []
+      const citingSummaries = await citingStoredSummariesForCitation(
+        legalAuthorityStore,
+        visibleCitingHits,
+        storedDocuments,
+        storedOnlyBrowse,
+        parsed.data.query,
+        recognisedCitation,
+      )
+      if (exactLookup && citingSummaries.length > 0) {
+        const { citation, citationDiagnostics } = citationFields(
+          exactLookup,
+          citingSummaries,
+        )
+        return c.json(
+          toFetchResponse(
+            citingSummaries,
+            parsed.data.query,
+            true,
+            0,
+            0,
+            false,
+            {
+              citation,
+              diagnostics: {
+                exactLookupSearched: true,
+                storedIndexSearched: true,
+                storedSourceSearched: true,
+                liveProviderSearched: false,
+                storedOnlyBrowse,
+                storedIndexStatus:
+                  citingLookup?.storedIndexStatus ?? cached.storedIndexStatus,
+                ...citationDiagnostics,
+              },
+            },
+          ),
+        )
+      }
       // Anonymous stays stored-only (30-Aug decision): a recognised citation
-      // with no exact stored hit is honestly not held, not a silent no-match.
+      // with no exact stored hit and no stored citing case is honestly not
+      // held, not a silent no-match.
       const { citation, citationDiagnostics } = citationFields(exactLookup, [])
       return c.json(
         toFetchResponse([], parsed.data.query, true, 0, 0, false, {
@@ -762,6 +836,134 @@ function hasGoodStoredHits(
 }
 
 /**
+ * Stored-only citing set for an anonymous recognised-citation query. Index
+ * hits arrive as summaries (paragraphs stripped) carrying short excerpts,
+ * which cannot prove a citation either way, so candidates without paragraph
+ * text are hydrated from the source store before labelling. Only documents
+ * whose body carries the citation as a bounded phrase serve, deduped with
+ * the stored index first. Exact hits cannot reach here (the gates above
+ * return them), and the phrase check keeps keyword neighbours out, so an
+ * invented citation with no citing cases honestly serves nothing.
+ */
+async function citingStoredSummariesForCitation(
+  legalAuthorityStore: LegalAuthoritySourceStore,
+  indexHits: LegalFetchSearchHit[],
+  sourceHits: LegalFetchSearchHit[],
+  storedOnlyBrowse: boolean,
+  query: string,
+  recognisedCitation: string | null,
+): Promise<LegalFetchSearchHit[]> {
+  if (!recognisedCitation) return []
+  const rankedSourceHits = rankLegalSearchHitsByExactMatch(
+    limitStoredBrowseHits(sourceHits, storedOnlyBrowse),
+    query,
+  )
+  const candidates = [
+    ...indexHits.map((hit, index) => ({
+      hit,
+      retrievalPath: 'stored_index' as const,
+      retrievalRank: index + 1,
+    })),
+    ...rankedSourceHits.map((hit, index) => ({
+      hit,
+      retrievalPath: 'stored_source' as const,
+      retrievalRank: index + 1,
+    })),
+  ]
+  const hydrated = await Promise.all(
+    candidates.map(async (candidate) => ({
+      ...candidate,
+      hit: await withCitingBodyText(legalAuthorityStore, candidate.hit),
+    })),
+  )
+  const seen = new Set<string>()
+  const citing: LegalFetchSearchHit[] = []
+  for (const candidate of hydrated) {
+    if (seen.has(candidate.hit.id)) continue
+    seen.add(candidate.hit.id)
+    if (
+      !bodyCitesRecognisedCitation(
+        candidate.hit.paragraphs,
+        candidate.hit.snippets,
+        recognisedCitation,
+      )
+    ) {
+      continue
+    }
+    const summary = toSummaryHit(candidate.hit, query, {
+      retrievalPath: candidate.retrievalPath,
+      retrievalRank: citing.length + 1,
+      recognisedCitation,
+    })
+    if (summary.citationMatch !== 'citing') continue
+    citing.push(summary)
+  }
+  return citing
+}
+
+/**
+ * Paragraph text for the citing check. Hits that already carry paragraphs
+ * pass through; summaries are hydrated from the source store so the phrase
+ * check reads full body text rather than excerpt windows. Unresolvable and
+ * withdrawn records stay as they are and fail the check below — a candidate
+ * that cannot prove the citation never serves. Snippets are dropped on
+ * hydration so the served summary re-extracts excerpts from the full text.
+ */
+async function withCitingBodyText(
+  legalAuthorityStore: LegalAuthoritySourceStore,
+  hit: LegalFetchSearchHit,
+): Promise<LegalFetchSearchHit> {
+  if ((hit.paragraphs ?? []).length > 0) return hit
+  const record = await getLegalAuthoritySourceRecord(
+    legalAuthorityStore,
+    hit.id,
+  )
+  if (!record || record.withdrawn) return hit
+  const full = record.document ?? record.summary
+  if (!full || (full.paragraphs ?? []).length === 0) return hit
+  return { ...hit, paragraphs: full.paragraphs, snippets: undefined }
+}
+
+const citingPhrasePatterns = new Map<string, RegExp>()
+const citingPhrasePatternLimit = 500
+
+/**
+ * True citing test: the recognised citation as a bounded phrase in body
+ * text, not its terms scattered across a judgment. A neighbour that merely
+ * mentions the court, the year, and some other number fails; a judgment
+ * quoting the citation passes. Boundaries use the same word class as the
+ * engine's whole-term matching so `[2003] UKHL 1` never matches
+ * `[2003] UKHL 17`.
+ */
+function bodyCitesRecognisedCitation(
+  paragraphs: LegalFetchSearchHit['paragraphs'],
+  snippets: LegalFetchSearchHit['snippets'],
+  recognisedCitation: string,
+): boolean {
+  const normalizedCitation = normalizeExactMatchValue(recognisedCitation)
+  if (!normalizedCitation) return false
+  let pattern = citingPhrasePatterns.get(normalizedCitation)
+  if (!pattern) {
+    const escaped = normalizedCitation.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    pattern = new RegExp(
+      `(?<![\\p{L}\\p{M}\\p{N}_])${escaped}(?![\\p{L}\\p{M}\\p{N}_])`,
+      'u',
+    )
+    citingPhrasePatterns.set(normalizedCitation, pattern)
+    const oldest = citingPhrasePatterns.keys().next().value
+    if (citingPhrasePatterns.size > citingPhrasePatternLimit && oldest) {
+      citingPhrasePatterns.delete(oldest)
+    }
+  }
+  const bodyText = [
+    ...(paragraphs?.map((paragraph) => paragraph.text) ?? []),
+    ...(snippets?.map((snippet) => snippet.text) ?? []),
+  ].join('\n')
+  if (!bodyText) return false
+  return pattern.test(normalizeExactMatchValue(bodyText))
+}
+
+/**
  * Citation honesty for a served set: held when a served hit is the exact
  * judgment, not held when the citation is recognised but none is, and not
  * a citation question at all otherwise. Read from served citationMatch
@@ -824,7 +1026,11 @@ async function searchStoredAuthorities(
   indexName: string,
   query: string,
   filters: LegalSearchFilters,
-  options: { limit?: number; exactPhrase?: string } = {},
+  options: {
+    limit?: number
+    exactPhrase?: string
+    rankingScoreThreshold?: number | null
+  } = {},
 ): Promise<StoredAuthoritiesResult> {
   // A stored-index failure is reported, not swallowed: the caller carries
   // storedIndexStatus into response diagnostics so a broken engine never
@@ -837,12 +1043,19 @@ async function searchStoredAuthorities(
       includeSnippets: boolean
       limit?: number
       exactPhrase?: string
+      rankingScoreThreshold?: number | null
     } = { includeSnippets: true }
     if (typeof options.limit === 'number') {
       searchOptions.limit = options.limit
     }
     if (options.exactPhrase) {
       searchOptions.exactPhrase = options.exactPhrase
+    }
+    // Opt-in only: every other caller sends the tuned floor by omission.
+    // The anonymous citing lookup passes null to repeat its exact phrase
+    // without the relevance floor.
+    if (options.rankingScoreThreshold !== undefined) {
+      searchOptions.rankingScoreThreshold = options.rankingScoreThreshold
     }
     const result = await withTimeout(
       search(searchClient, indexName, query, filters, searchOptions),
