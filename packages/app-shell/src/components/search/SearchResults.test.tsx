@@ -120,6 +120,21 @@ describe('SearchResults citation distinction', () => {
     expect(container.textContent).not.toContain('Cites the queried citation')
   })
 
+  it('renders the partial title match label distinctly from a full title match', () => {
+    const rendered = renderResults({
+      hits: [{ ...citingHit, matchReason: 'partial_title_match' as const }],
+      cached: false,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'results',
+    })
+    root = rendered.root
+    container = rendered.container
+
+    expect(container.textContent).toContain('Partial title match')
+    expect(container.textContent).not.toContain('Body text match')
+  })
+
   it('stays quiet on citationMatch for ordinary matches', () => {
     const rendered = renderResults({
       hits: [

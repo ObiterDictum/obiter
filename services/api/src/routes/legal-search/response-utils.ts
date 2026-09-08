@@ -13,6 +13,8 @@ import {
   extractLegalSearchSnippets,
   normalizeCitationValue,
   normalizeExactMatchValue,
+  titleContainsAnySearchableQueryTerm,
+  titleContainsEveryQueryTerm,
   type LegalSearchHit,
   type LegalSearchMatchReason,
   type LegalSearchSnippet,
@@ -160,6 +162,22 @@ function getLegalSearchMatchReason(
   ) {
     return 'title_match'
   }
+  // Rank tier 5 (every query term, acronym-aware) is full title evidence:
+  // every term the caller typed names this judgment, so it keeps the
+  // 'title_match' card its rank already claims.
+  if (titleContainsEveryQueryTerm(normalizedTitle, normalizedQuery)) {
+    return 'title_match'
+  }
+  // Rank tier 4 fires on one distinctive title term (e.g. 'Donoghue' of a
+  // misspelled 'Donoghue v Stevnson'). Calling that 'title_match' would
+  // overstate single-term evidence alongside full matches like Prest, and
+  // leaving it as 'body_text_match' is what put a title win in body
+  // clothing. 'partial_title_match' names the evidence honestly while
+  // keeping the tier's rank above every body tier, which the comparator
+  // (not this label) decides.
+  if (titleContainsAnySearchableQueryTerm(normalizedTitle, normalizedQuery)) {
+    return 'partial_title_match'
+  }
 
   if (hasSnippetMatch) return 'body_text_match'
 
@@ -217,6 +235,11 @@ function scoreLegalSearchMatch(matchReason: LegalSearchMatchReason) {
       return 0.95
     case 'title_match':
       return 0.8
+    // Display score only: ordering comes from the rank-tier comparator,
+    // which this label leaves untouched. It still sits between full title
+    // and body so any score reader agrees with the tier order.
+    case 'partial_title_match':
+      return 0.72
     case 'body_text_match':
       return 0.65
     case 'keyword_match':

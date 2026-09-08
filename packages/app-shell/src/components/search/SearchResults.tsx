@@ -94,6 +94,8 @@ function formatMatchReason(matchReason: string | undefined) {
       return 'Exact citation'
     case 'title_match':
       return 'Title match'
+    case 'partial_title_match':
+      return 'Partial title match'
     case 'body_text_match':
       return 'Body text match'
     case 'keyword_match':
