@@ -59,8 +59,9 @@ interface LegalSearchProxyRouteOptions {
 }
 
 // Bounds every stored lookup: Meili pool fetch, Postgres source search and
-// withdrawn checks. Sized for a 100-hit paragraph pool (~900ms measured
-// worst case); a slower engine falls back to Postgres FTS and reports
+// withdrawn checks. Sized for a 100-hit paragraph pool (~1s measured worst
+// case, ~690ms p50 on stored paths; held-citation phrase queries stay
+// ~20-50ms); a slower engine falls back to Postgres FTS and reports
 // storedIndexStatus unavailable rather than holding the route open.
 const storedSearchTimeoutMs = 2000
 const storedCourtBrowseLimit = 10
