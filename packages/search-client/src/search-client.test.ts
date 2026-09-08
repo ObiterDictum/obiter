@@ -18,6 +18,7 @@ import {
   normalizeExactMatchValue,
   rankLegalSearchHitsByExactMatch,
   search,
+  toExactPhraseQuery,
 } from './index'
 import type { LegalSearchHit } from './index'
 import {
@@ -797,6 +798,48 @@ describe('Legal search client', () => {
         'sourceUrl',
       ],
     })
+  })
+
+  it('sends a recognised citation as an exact phrase', async () => {
+    const searchMock = vi.fn(async () => ({
+      hits: [authority()],
+      query: '"[2024] uksc 3"',
+      estimatedTotalHits: 1,
+      processingTimeMs: 1,
+    }))
+    const client = {
+      index: () => ({ search: searchMock }),
+    }
+
+    const result = await search(
+      client,
+      'legal_authorities',
+      '[2024] UKSC 3',
+      {},
+      { exactPhrase: '[2024] UKSC 3' },
+    )
+
+    // The engine sees the quoted phrase; the caller keeps its own query for
+    // the response, snippets, and tier ranking.
+    expect(searchMock).toHaveBeenCalledWith(
+      '"[2024] uksc 3"',
+      expect.objectContaining({ matchingStrategy: 'all' }),
+    )
+    expect(result.query).toBe('[2024] UKSC 3')
+    expect(result.hits[0]?.neutralCitation).toBe('[2024] UKSC 3')
+  })
+
+  it('builds exact phrases with the citation folding', () => {
+    expect(toExactPhraseQuery('[2024] UKSC 3')).toBe('"[2024] uksc 3"')
+    expect(toExactPhraseQuery('  [2024]  UKSC 3  ')).toBe('"[2024] uksc 3"')
+    // Quotes are escaped so a hostile phrase cannot break out of the phrase.
+    expect(toExactPhraseQuery('say "hi"')).toBe('"say \\"hi\\""')
+    // Padded tribunal numbers keep their zeros: the index stores them
+    // padded, and the comparison tier strips them, so stripping here would
+    // make a padded citation unfindable as a phrase while exact elsewhere.
+    expect(toExactPhraseQuery('[2024] UKUT 00236 (IAC)')).toBe(
+      '"[2024] ukut 00236 (iac)"',
+    )
   })
 
   it('allows callers to lower or disable the ranking-score threshold', async () => {

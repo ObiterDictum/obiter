@@ -6,6 +6,7 @@ import {
   regressionFailures,
   roundMetric,
   scoreCase,
+  splitAbsentScoringIds,
   type CorpusRelevanceBaseline,
 } from './metrics'
 
@@ -76,6 +77,33 @@ describe('corpus relevance metrics', () => {
     const noisy = scoreCase(absentCase, ['uksc-2024-33'])
     expect(noisy.precision).toBe(0)
     expect(noisy.failureLabels).toEqual(['absent_hits'])
+  })
+
+  it('exempts only labelled citing hits from absent scoring', () => {
+    // The honest not-held-with-citing answer serves stored judgments that
+    // cite the absent citation; those must not read as false positives.
+    // Exact, none, and unlabeled hits still count, so a broken phrase
+    // lookup serving keyword neighbours keeps failing loudly.
+    expect(
+      splitAbsentScoringIds([
+        { id: 'ewca-civ-2005-420', citationMatch: 'citing' },
+        { id: 'ewca-civ-2005-421', citationMatch: 'citing' },
+      ]),
+    ).toEqual({ violatingIds: [], exemptLabelledCitingCount: 2 })
+    expect(
+      splitAbsentScoringIds([
+        { id: 'ewca-civ-2005-420', citationMatch: 'citing' },
+        { id: 'neighbour', citationMatch: 'none' },
+        { id: 'legacy' },
+      ]),
+    ).toEqual({
+      violatingIds: ['neighbour', 'legacy'],
+      exemptLabelledCitingCount: 1,
+    })
+    const scored = scoreCase(absentCase, [], { exemptLabelledCitingCount: 2 })
+    expect(scored.precision).toBe(1)
+    expect(scored.failureLabels).toEqual([])
+    expect(scored.exemptLabelledCitingCount).toBe(2)
   })
 
   it('guards precision against a zero returned set on held queries', () => {

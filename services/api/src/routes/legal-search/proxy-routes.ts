@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import {
   createClient,
+  normalizeExactMatchValue,
   rankLegalSearchHitsByExactMatch,
   search,
   type LegalSearchFilters,
@@ -20,6 +21,7 @@ import {
   type LegalFetchRequest,
   extractNeutralCitation,
 } from '@obiter/legal-source-provider'
+import type { LegalSearchCitationStatus } from '@obiter/contracts'
 import {
   apiError,
   toFetchResponse,
@@ -122,6 +124,9 @@ export function createLegalSearchProxyRoutes(
     const filters = toSearchFilters(parsed.data)
     const storedOnlyBrowse = isStoredOnlyBrowse(parsed.data)
     const exactLookup = classifyExactLookup(parsed.data.query)
+    // Recognised citation surface form: the phrase the stored index searches
+    // for and the label served hits carry. Null for every other query.
+    const recognisedCitation = exactLookup?.recognisedQuery ?? null
     const exactStoredAuthority =
       !storedOnlyBrowse && exactLookup
         ? await findExactStoredAuthority(
@@ -135,30 +140,30 @@ export function createLegalSearchProxyRoutes(
         : null
 
     if (exactStoredAuthority) {
+      const summaries = [
+        toSummaryHit(exactStoredAuthority.hit, parsed.data.query, {
+          retrievalPath: 'stored_exact_lookup',
+          retrievalRank: 1,
+          recognisedCitation,
+        }),
+      ]
+      const { citation, citationDiagnostics } = citationFields(
+        exactLookup,
+        summaries,
+      )
       return c.json(
-        toFetchResponse(
-          [
-            toSummaryHit(exactStoredAuthority.hit, parsed.data.query, {
-              retrievalPath: 'stored_exact_lookup',
-              retrievalRank: 1,
-            }),
-          ],
-          parsed.data.query,
-          true,
-          0,
-          0,
-          false,
-          {
-            diagnostics: {
-              exactLookupSearched: true,
-              storedIndexSearched: true,
-              storedSourceSearched: exactStoredAuthority.storedSourceSearched,
-              liveProviderSearched: false,
-              storedOnlyBrowse,
-              storedIndexStatus: exactStoredAuthority.storedIndexStatus,
-            },
+        toFetchResponse(summaries, parsed.data.query, true, 0, 0, false, {
+          citation,
+          diagnostics: {
+            exactLookupSearched: true,
+            storedIndexSearched: true,
+            storedSourceSearched: exactStoredAuthority.storedSourceSearched,
+            liveProviderSearched: false,
+            storedOnlyBrowse,
+            storedIndexStatus: exactStoredAuthority.storedIndexStatus,
+            ...citationDiagnostics,
           },
-        ),
+        }),
       )
     }
 
@@ -167,7 +172,10 @@ export function createLegalSearchProxyRoutes(
       env.legalAuthoritiesIndex,
       parsed.data.query,
       filters,
-      storedOnlyBrowse ? storedCourtBrowseLimit : undefined,
+      {
+        ...(storedOnlyBrowse ? { limit: storedCourtBrowseLimit } : {}),
+        ...(recognisedCitation ? { exactPhrase: recognisedCitation } : {}),
+      },
     )
 
     // The derived index lags the checker: filter Meili hits against the
@@ -179,31 +187,35 @@ export function createLegalSearchProxyRoutes(
       cached.hits,
     )
 
-    if (visibleCachedHits.length > 0) {
+    // Honesty gate: a recognised citation is only found when a visible hit
+    // IS that citation. Keyword neighbours that merely mention it are citing
+    // cases, not the judgment, so they fall through to live instead of
+    // suppressing it. Any visible hit still satisfies other queries.
+    if (hasGoodStoredHits(visibleCachedHits, exactLookup)) {
+      const summaries = visibleCachedHits.map((hit, index) =>
+        toSummaryHit(hit, parsed.data.query, {
+          retrievalPath: 'stored_index',
+          retrievalRank: index + 1,
+          recognisedCitation,
+        }),
+      )
+      const { citation, citationDiagnostics } = citationFields(
+        exactLookup,
+        summaries,
+      )
       return c.json(
-        toFetchResponse(
-          visibleCachedHits.map((hit, index) =>
-            toSummaryHit(hit, parsed.data.query, {
-              retrievalPath: 'stored_index',
-              retrievalRank: index + 1,
-            }),
-          ),
-          parsed.data.query,
-          true,
-          0,
-          0,
-          false,
-          {
-            diagnostics: {
-              exactLookupSearched: Boolean(exactLookup),
-              storedIndexSearched: true,
-              storedSourceSearched: false,
-              liveProviderSearched: false,
-              storedOnlyBrowse,
-              storedIndexStatus: cached.storedIndexStatus,
-            },
+        toFetchResponse(summaries, parsed.data.query, true, 0, 0, false, {
+          citation,
+          diagnostics: {
+            exactLookupSearched: Boolean(exactLookup),
+            storedIndexSearched: true,
+            storedSourceSearched: false,
+            liveProviderSearched: false,
+            storedOnlyBrowse,
+            storedIndexStatus: cached.storedIndexStatus,
+            ...citationDiagnostics,
           },
-        ),
+        }),
       )
     }
 
@@ -218,20 +230,23 @@ export function createLegalSearchProxyRoutes(
         parsed.data.query,
       )
 
-      return c.json(
-        toFetchResponse(
-          rankedStoredDocuments.map((hit, index) =>
-            toSummaryHit(hit, parsed.data.query, {
-              retrievalPath: 'stored_source',
-              retrievalRank: index + 1,
-            }),
-          ),
-          parsed.data.query,
-          true,
-          0,
-          0,
-          false,
-          {
+      // Stored-source twin of the index gate above: same recognised-citation
+      // rule, so a citing case in Postgres cannot suppress live either.
+      if (hasGoodStoredHits(rankedStoredDocuments, exactLookup)) {
+        const summaries = rankedStoredDocuments.map((hit, index) =>
+          toSummaryHit(hit, parsed.data.query, {
+            retrievalPath: 'stored_source',
+            retrievalRank: index + 1,
+            recognisedCitation,
+          }),
+        )
+        const { citation, citationDiagnostics } = citationFields(
+          exactLookup,
+          summaries,
+        )
+        return c.json(
+          toFetchResponse(summaries, parsed.data.query, true, 0, 0, false, {
+            citation,
             diagnostics: {
               exactLookupSearched: Boolean(exactLookup),
               storedIndexSearched: true,
@@ -239,16 +254,19 @@ export function createLegalSearchProxyRoutes(
               liveProviderSearched: false,
               storedOnlyBrowse,
               storedIndexStatus: cached.storedIndexStatus,
+              ...citationDiagnostics,
             },
-          },
-        ),
-      )
+          }),
+        )
+      }
     }
 
     if (!parsed.data.query.trim()) {
+      const { citation, citationDiagnostics } = citationFields(exactLookup, [])
       return c.json(
         toFetchResponse([], parsed.data.query, true, 0, 0, false, {
           outcome: 'stored_browse_empty',
+          citation,
           diagnostics: {
             exactLookupSearched: Boolean(exactLookup),
             storedIndexSearched: true,
@@ -256,6 +274,7 @@ export function createLegalSearchProxyRoutes(
             liveProviderSearched: false,
             storedOnlyBrowse,
             storedIndexStatus: cached.storedIndexStatus,
+            ...citationDiagnostics,
           },
         }),
       )
@@ -264,9 +283,86 @@ export function createLegalSearchProxyRoutes(
     const sessionUser = c.get('user') ?? null
 
     if (!sessionUser) {
+      // Anonymous stays stored-only (30-Aug decision): no live call. A
+      // recognised citation with no exact stored hit is honestly not held —
+      // but stored judgments that cite it are still served, labelled by
+      // their citationMatch, so the answer reads as not-held-with-citing
+      // rather than a silent no-match. Candidates prove the citation with
+      // full paragraph text (hydrated where the index serves summaries)
+      // against a bounded phrase, so keyword neighbours stay excluded even
+      // when scattered terms co-occur.
+      //
+      // The ranked search above carries the relevance floor, which starves
+      // exact-phrase citation lookups once sort is applied (measured: the
+      // [2003] UKHL 1 phrase matches ten citing judgments unfiltered and
+      // zero with the floor). The citing lookup below repeats the same
+      // phrase without the floor; matchingStrategy is untouched, and the
+      // floor still gates every ranked result. Precision comes from the
+      // phrase plus the bounded-phrase body check, not the score.
+      const citingLookup =
+        exactLookup && recognisedCitation
+          ? await searchStoredAuthorities(
+              searchClient,
+              env.legalAuthoritiesIndex,
+              parsed.data.query,
+              filters,
+              {
+                exactPhrase: recognisedCitation,
+                rankingScoreThreshold: null,
+              },
+            )
+          : null
+      const visibleCitingHits = citingLookup
+        ? await excludeWithdrawnIndexHits(
+            legalAuthorityStore,
+            citingLookup.hits,
+          )
+        : []
+      const citingSummaries = await citingStoredSummariesForCitation(
+        legalAuthorityStore,
+        visibleCitingHits,
+        storedDocuments,
+        storedOnlyBrowse,
+        parsed.data.query,
+        recognisedCitation,
+      )
+      if (exactLookup && citingSummaries.length > 0) {
+        const { citation, citationDiagnostics } = citationFields(
+          exactLookup,
+          citingSummaries,
+        )
+        return c.json(
+          toFetchResponse(
+            citingSummaries,
+            parsed.data.query,
+            true,
+            0,
+            0,
+            false,
+            {
+              citation,
+              diagnostics: {
+                exactLookupSearched: true,
+                storedIndexSearched: true,
+                storedSourceSearched: true,
+                liveProviderSearched: false,
+                storedOnlyBrowse,
+                storedIndexStatus:
+                  citingLookup?.storedIndexStatus ?? cached.storedIndexStatus,
+                ...citationDiagnostics,
+              },
+            },
+          ),
+        )
+      }
+      // Anonymous stays stored-only (30-Aug decision): a recognised citation
+      // with no exact stored hit and no stored citing case is honestly not
+      // held, not a silent no-match.
+      const { citation, citationDiagnostics } = citationFields(exactLookup, [])
       return c.json(
         toFetchResponse([], parsed.data.query, true, 0, 0, false, {
-          outcome: 'no_match',
+          outcome: exactLookup ? 'recognised_not_held' : 'no_match',
+          citation,
           diagnostics: {
             exactLookupSearched: Boolean(exactLookup),
             storedIndexSearched: true,
@@ -274,6 +370,7 @@ export function createLegalSearchProxyRoutes(
             liveProviderSearched: false,
             storedOnlyBrowse,
             storedIndexStatus: cached.storedIndexStatus,
+            ...citationDiagnostics,
           },
         }),
       )
@@ -308,9 +405,11 @@ export function createLegalSearchProxyRoutes(
       }
 
       // Deduped still has an in-flight job; keep hydrationQueued true so clients poll.
+      const { citation, citationDiagnostics } = citationFields(exactLookup, [])
       return c.json(
         toFetchResponse([], parsed.data.query, false, 0, 0, true, {
           outcome: 'hydration_queued',
+          citation,
           diagnostics: {
             exactLookupSearched: Boolean(exactLookup),
             storedIndexSearched: true,
@@ -318,6 +417,7 @@ export function createLegalSearchProxyRoutes(
             liveProviderSearched: false,
             storedOnlyBrowse,
             storedIndexStatus: cached.storedIndexStatus,
+            ...citationDiagnostics,
           },
         }),
       )
@@ -381,21 +481,35 @@ export function createLegalSearchProxyRoutes(
       liveResult.documents,
       parsed.data.query,
     )
+    const liveSummaries = rankedLiveDocuments.map((hit, index) =>
+      toSummaryHit(hit, parsed.data.query, {
+        retrievalPath: 'live_provider',
+        retrievalRank: index + 1,
+        recognisedCitation,
+      }),
+    )
+    const { citation, citationDiagnostics } = citationFields(
+      exactLookup,
+      liveSummaries,
+    )
 
     return c.json(
       toFetchResponse(
-        rankedLiveDocuments.map((hit, index) =>
-          toSummaryHit(hit, parsed.data.query, {
-            retrievalPath: 'live_provider',
-            retrievalRank: index + 1,
-          }),
-        ),
+        liveSummaries,
         parsed.data.query,
         false,
         0,
         liveResult.skippedCount,
         true,
         {
+          // A recognised citation live finds nothing for is not a silent
+          // no-match; live hits without the exact judgment stay results
+          // labelled by their citationMatch, with status not_held.
+          outcome:
+            exactLookup && liveSummaries.length === 0
+              ? 'recognised_not_held'
+              : undefined,
+          citation,
           diagnostics: {
             exactLookupSearched: Boolean(exactLookup),
             storedIndexSearched: true,
@@ -403,6 +517,7 @@ export function createLegalSearchProxyRoutes(
             liveProviderSearched: true,
             storedOnlyBrowse,
             storedIndexStatus: cached.storedIndexStatus,
+            ...citationDiagnostics,
           },
         },
       ),
@@ -600,15 +715,23 @@ function limitStoredBrowseHits<T>(hits: T[], storedOnlyBrowse: boolean) {
 }
 
 type ExactLookup =
-  | { kind: 'document_id'; normalizedQuery: string }
-  | { kind: 'neutral_citation'; normalizedQuery: string }
+  | { kind: 'document_id'; normalizedQuery: string; recognisedQuery: string }
+  | {
+      kind: 'neutral_citation'
+      normalizedQuery: string
+      recognisedQuery: string
+    }
 
 function classifyExactLookup(query: string): ExactLookup | null {
   const normalizedQuery = normalizeSearchValue(query)
   if (!normalizedQuery) return null
 
   if (isExactDocumentId(normalizedQuery)) {
-    return { kind: 'document_id', normalizedQuery }
+    return {
+      kind: 'document_id',
+      normalizedQuery,
+      recognisedQuery: query,
+    }
   }
 
   const extractedCitation = extractNeutralCitation(query)
@@ -616,7 +739,11 @@ function classifyExactLookup(query: string): ExactLookup | null {
     extractedCitation &&
     normalizeSearchValue(extractedCitation) === normalizedQuery
   ) {
-    return { kind: 'neutral_citation', normalizedQuery }
+    return {
+      kind: 'neutral_citation',
+      normalizedQuery,
+      recognisedQuery: extractedCitation,
+    }
   }
 
   return null
@@ -635,7 +762,7 @@ async function findExactStoredAuthority(
     indexName,
     query,
     filters,
-    5,
+    { limit: 5, exactPhrase: lookup.recognisedQuery },
   )
   const storedIndexStatus = storedIndexResult.storedIndexStatus
   // Same stale-index guard as the main search path: an exact Meili hit for
@@ -693,6 +820,173 @@ function isExactDocumentId(normalizedQuery: string) {
   )
 }
 
+/**
+ * Honesty gate for the stored early returns. A recognised citation is only
+ * found when a visible hit IS that citation (exact id or neutral citation);
+ * keyword neighbours that merely mention it are citing cases, not the
+ * judgment, and must not suppress live. Every other query keeps the
+ * any-hit rule. The 0.25 engine floor stays inside search(), not here.
+ */
+function hasGoodStoredHits(
+  hits: LegalFetchSearchHit[],
+  exactLookup: ExactLookup | null,
+) {
+  if (!exactLookup) return hits.length > 0
+  return hits.some((hit) => isExactLookupHit(hit, exactLookup))
+}
+
+/**
+ * Stored-only citing set for an anonymous recognised-citation query. Index
+ * hits arrive as summaries (paragraphs stripped) carrying short excerpts,
+ * which cannot prove a citation either way, so candidates without paragraph
+ * text are hydrated from the source store before labelling. Only documents
+ * whose body carries the citation as a bounded phrase serve, deduped with
+ * the stored index first. Exact hits cannot reach here (the gates above
+ * return them), and the phrase check keeps keyword neighbours out, so an
+ * invented citation with no citing cases honestly serves nothing.
+ */
+async function citingStoredSummariesForCitation(
+  legalAuthorityStore: LegalAuthoritySourceStore,
+  indexHits: LegalFetchSearchHit[],
+  sourceHits: LegalFetchSearchHit[],
+  storedOnlyBrowse: boolean,
+  query: string,
+  recognisedCitation: string | null,
+): Promise<LegalFetchSearchHit[]> {
+  if (!recognisedCitation) return []
+  const rankedSourceHits = rankLegalSearchHitsByExactMatch(
+    limitStoredBrowseHits(sourceHits, storedOnlyBrowse),
+    query,
+  )
+  const candidates = [
+    ...indexHits.map((hit, index) => ({
+      hit,
+      retrievalPath: 'stored_index' as const,
+      retrievalRank: index + 1,
+    })),
+    ...rankedSourceHits.map((hit, index) => ({
+      hit,
+      retrievalPath: 'stored_source' as const,
+      retrievalRank: index + 1,
+    })),
+  ]
+  const hydrated = await Promise.all(
+    candidates.map(async (candidate) => ({
+      ...candidate,
+      hit: await withCitingBodyText(legalAuthorityStore, candidate.hit),
+    })),
+  )
+  const seen = new Set<string>()
+  const citing: LegalFetchSearchHit[] = []
+  for (const candidate of hydrated) {
+    if (seen.has(candidate.hit.id)) continue
+    seen.add(candidate.hit.id)
+    if (
+      !bodyCitesRecognisedCitation(
+        candidate.hit.paragraphs,
+        candidate.hit.snippets,
+        recognisedCitation,
+      )
+    ) {
+      continue
+    }
+    const summary = toSummaryHit(candidate.hit, query, {
+      retrievalPath: candidate.retrievalPath,
+      retrievalRank: citing.length + 1,
+      recognisedCitation,
+    })
+    if (summary.citationMatch !== 'citing') continue
+    citing.push(summary)
+  }
+  return citing
+}
+
+/**
+ * Paragraph text for the citing check. Hits that already carry paragraphs
+ * pass through; summaries are hydrated from the source store so the phrase
+ * check reads full body text rather than excerpt windows. Unresolvable and
+ * withdrawn records stay as they are and fail the check below — a candidate
+ * that cannot prove the citation never serves. Snippets are dropped on
+ * hydration so the served summary re-extracts excerpts from the full text.
+ */
+async function withCitingBodyText(
+  legalAuthorityStore: LegalAuthoritySourceStore,
+  hit: LegalFetchSearchHit,
+): Promise<LegalFetchSearchHit> {
+  if ((hit.paragraphs ?? []).length > 0) return hit
+  const record = await getLegalAuthoritySourceRecord(
+    legalAuthorityStore,
+    hit.id,
+  )
+  if (!record || record.withdrawn) return hit
+  const full = record.document ?? record.summary
+  if (!full || (full.paragraphs ?? []).length === 0) return hit
+  return { ...hit, paragraphs: full.paragraphs, snippets: undefined }
+}
+
+const citingPhrasePatterns = new Map<string, RegExp>()
+const citingPhrasePatternLimit = 500
+
+/**
+ * True citing test: the recognised citation as a bounded phrase in body
+ * text, not its terms scattered across a judgment. A neighbour that merely
+ * mentions the court, the year, and some other number fails; a judgment
+ * quoting the citation passes. Boundaries use the same word class as the
+ * engine's whole-term matching so `[2003] UKHL 1` never matches
+ * `[2003] UKHL 17`.
+ */
+function bodyCitesRecognisedCitation(
+  paragraphs: LegalFetchSearchHit['paragraphs'],
+  snippets: LegalFetchSearchHit['snippets'],
+  recognisedCitation: string,
+): boolean {
+  const normalizedCitation = normalizeExactMatchValue(recognisedCitation)
+  if (!normalizedCitation) return false
+  let pattern = citingPhrasePatterns.get(normalizedCitation)
+  if (!pattern) {
+    const escaped = normalizedCitation.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+    pattern = new RegExp(
+      `(?<![\\p{L}\\p{M}\\p{N}_])${escaped}(?![\\p{L}\\p{M}\\p{N}_])`,
+      'u',
+    )
+    citingPhrasePatterns.set(normalizedCitation, pattern)
+    const oldest = citingPhrasePatterns.keys().next().value
+    if (citingPhrasePatterns.size > citingPhrasePatternLimit && oldest) {
+      citingPhrasePatterns.delete(oldest)
+    }
+  }
+  const bodyText = [
+    ...(paragraphs?.map((paragraph) => paragraph.text) ?? []),
+    ...(snippets?.map((snippet) => snippet.text) ?? []),
+  ].join('\n')
+  if (!bodyText) return false
+  return pattern.test(normalizeExactMatchValue(bodyText))
+}
+
+/**
+ * Citation honesty for a served set: held when a served hit is the exact
+ * judgment, not held when the citation is recognised but none is, and not
+ * a citation question at all otherwise. Read from served citationMatch
+ * labels so status and labels cannot disagree.
+ */
+function citationFields(
+  exactLookup: ExactLookup | null,
+  servedHits: Array<Pick<LegalFetchSearchHit, 'citationMatch'>>,
+) {
+  const status: LegalSearchCitationStatus = !exactLookup
+    ? 'not_citation'
+    : servedHits.some((hit) => hit.citationMatch === 'exact')
+      ? 'held_exact'
+      : 'not_held'
+  return {
+    citation: { recognised: exactLookup !== null, status },
+    citationDiagnostics: {
+      citationRecognised: exactLookup !== null,
+      citationStatus: status,
+    },
+  }
+}
+
 function isExactLookupHit(hit: LegalFetchSearchHit, lookup: ExactLookup) {
   switch (lookup.kind) {
     case 'document_id':
@@ -732,17 +1026,37 @@ async function searchStoredAuthorities(
   indexName: string,
   query: string,
   filters: LegalSearchFilters,
-  limit?: number,
+  options: {
+    limit?: number
+    exactPhrase?: string
+    rankingScoreThreshold?: number | null
+  } = {},
 ): Promise<StoredAuthoritiesResult> {
   // A stored-index failure is reported, not swallowed: the caller carries
   // storedIndexStatus into response diagnostics so a broken engine never
   // reads as "no results". Only the error message is logged — RULES.md
   // forbids secrets in logs, so the provider cause is never serialised.
   try {
-    const searchOptions =
-      typeof limit === 'number'
-        ? { includeSnippets: true, limit }
-        : { includeSnippets: true }
+    // A recognised citation searches as an exact phrase so an absent
+    // citation finds nothing instead of keyword neighbours.
+    const searchOptions: {
+      includeSnippets: boolean
+      limit?: number
+      exactPhrase?: string
+      rankingScoreThreshold?: number | null
+    } = { includeSnippets: true }
+    if (typeof options.limit === 'number') {
+      searchOptions.limit = options.limit
+    }
+    if (options.exactPhrase) {
+      searchOptions.exactPhrase = options.exactPhrase
+    }
+    // Opt-in only: every other caller sends the tuned floor by omission.
+    // The anonymous citing lookup passes null to repeat its exact phrase
+    // without the relevance floor.
+    if (options.rankingScoreThreshold !== undefined) {
+      searchOptions.rankingScoreThreshold = options.rankingScoreThreshold
+    }
     const result = await withTimeout(
       search(searchClient, indexName, query, filters, searchOptions),
       storedSearchTimeoutMs,
@@ -765,7 +1079,9 @@ async function searchStoredAuthorities(
     return {
       ...result,
       hits:
-        typeof limit === 'number' ? result.hits.slice(0, limit) : result.hits,
+        typeof options.limit === 'number'
+          ? result.hits.slice(0, options.limit)
+          : result.hits,
       storedIndexStatus: 'ok',
     }
   } catch (error: unknown) {

@@ -120,6 +120,13 @@ export interface LegalSearchOptions {
   // Set null to disable the relevance floor when recall matters more than precision.
   rankingScoreThreshold?: number | null
   matchingStrategy?: 'all' | 'frequency'
+  /**
+   * Recognised citation surface form. When set, the engine query becomes an
+   * exact phrase for that citation instead of the keyword query, so an
+   * absent citation returns nothing rather than keyword neighbours. Snippet
+   * extraction and tier ranking still read the original query.
+   */
+  exactPhrase?: string
 }
 
 interface SearchIndexingTask {
@@ -675,7 +682,15 @@ export async function search(
     }
 
     const providerSearchStartedAt = performance.now()
-    const result = await client.index(indexName).search(query, searchOptions)
+    // A recognised citation searches as a phrase: the caller already knows
+    // what it is looking for, so keyword neighbours are noise, not recall.
+    const trimmedPhrase = options.exactPhrase?.trim()
+    const engineQuery = trimmedPhrase
+      ? toExactPhraseQuery(trimmedPhrase)
+      : query
+    const result = await client
+      .index(indexName)
+      .search(engineQuery, searchOptions)
     const providerSearchTimeMs = performance.now() - providerSearchStartedAt
     const clientProcessingStartedAt = performance.now()
     const hits: LegalSearchHit[] = result.hits.map((hit) => {
@@ -705,7 +720,8 @@ export async function search(
 
     return {
       hits: rankedHits,
-      query: result.query ?? query,
+      // Echo the caller's query, not the engine phrase form of it.
+      query: trimmedPhrase ? query : (result.query ?? query),
       estimatedTotalHits: result.estimatedTotalHits ?? rankedHits.length,
       processingTimeMs: result.processingTimeMs ?? 0,
       diagnostics: {
@@ -1357,6 +1373,22 @@ function toFilterTimestamp(
 
 function quoteFilter(value: string) {
   return `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`
+}
+
+/**
+ * Builds a Meilisearch exact-phrase query from a recognised citation.
+ *
+ * Folds case, punctuation, and whitespace with the same function the
+ * citation comparison tier is built on, so the phrase and the tier agree on
+ * what a citation looks like. Leading zeros are deliberately kept: the index
+ * stores padded tribunal citations (`[2024] UKUT 00236 (IAC)`), and stripping
+ * them here would make a padded citation unfindable as a phrase while the
+ * comparison tier still calls it exact.
+ */
+export function toExactPhraseQuery(phrase: string) {
+  const normalized = normalizeExactMatchValue(phrase)
+  const escaped = normalized.replaceAll('\\', '\\\\').replaceAll('"', '\\"')
+  return `"${escaped}"`
 }
 
 function searchProviderMessage(error: unknown): string | null {

@@ -148,6 +148,16 @@ export function getLegalSearchEmptyFeedback(input: {
   const outcome =
     input.outcome ?? (input.hydrationQueued ? 'hydration_queued' : 'no_match')
 
+  // Honest empty for a well-formed citation no source holds. Names the
+  // citation so the failure reads as not-held rather than not-searched.
+  if (outcome === 'recognised_not_held') {
+    return {
+      eyebrow: 'Citation not held',
+      title: 'No judgment held for this citation',
+      body: `No stored or provider source holds "${input.query}" as a judgment. Check the citation or search party names instead.`,
+    }
+  }
+
   if (outcome === 'hydration_queued') {
     return {
       eyebrow: 'Search queued',

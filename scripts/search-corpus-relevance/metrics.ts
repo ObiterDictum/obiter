@@ -23,6 +23,14 @@ export interface CaseResult {
   query: string
   returnedIds: string[]
   returnedHitCount: number
+  /**
+   * Labelled citing hits exempted from absent scoring. An anonymous
+   * recognised-citation query honestly serves stored judgments that cite
+   * the absent citation (citationMatch 'citing', status not_held); those
+   * are the distinguished not-held-with-citing answer, not false positives
+   * claiming to be the judgment, so they score and count separately here.
+   */
+  exemptLabelledCitingCount: number
   ranks: Array<number | null>
   recall: number | null
   precision: number | null
@@ -64,8 +72,10 @@ export function scoreCase(
     storedIndexStatus?: string | null
     outcome?: string | null
     searchErrorMessage?: string
+    exemptLabelledCitingCount?: number
   } = {},
 ): CaseResult {
+  const exemptLabelledCitingCount = options.exemptLabelledCitingCount ?? 0
   const ranks = testCase.expectedIds.map((id) => rankOf(returnedIds, id))
   const failureLabels: string[] = []
   if (options.searchErrorMessage) failureLabels.push('search_error')
@@ -82,6 +92,7 @@ export function scoreCase(
       query: testCase.query,
       returnedIds,
       returnedHitCount: returnedIds.length,
+      exemptLabelledCitingCount,
       ranks,
       recall: null,
       precision: returnedIds.length === 0 ? 1 : 0,
@@ -114,6 +125,7 @@ export function scoreCase(
     query: testCase.query,
     returnedIds,
     returnedHitCount: returnedIds.length,
+    exemptLabelledCitingCount,
     ranks,
     recall,
     precision,
@@ -123,6 +135,24 @@ export function scoreCase(
     failureLabels,
     searchErrorMessage: options.searchErrorMessage,
   }
+}
+
+/**
+ * Splits an absent query's served hits into scoring ids and exempt citing
+ * ids. Only hits the API explicitly labels `citing` are exempt: exact,
+ * none, and unlabeled hits (pre-label servers) still count, so a broken
+ * phrase lookup that serves keyword neighbours keeps failing loudly.
+ */
+export function splitAbsentScoringIds(
+  hits: ReadonlyArray<{ id: string; citationMatch?: string | null }>,
+): { violatingIds: string[]; exemptLabelledCitingCount: number } {
+  const violatingIds: string[] = []
+  let exemptLabelledCitingCount = 0
+  for (const hit of hits) {
+    if (hit.citationMatch === 'citing') exemptLabelledCitingCount += 1
+    else violatingIds.push(hit.id)
+  }
+  return { violatingIds, exemptLabelledCitingCount }
 }
 
 export function aggregateMetrics(
