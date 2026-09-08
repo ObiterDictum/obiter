@@ -143,10 +143,15 @@ function formatResultMeta(
 
   // A recognised citation no source holds still serves the cases that cite
   // it. The count says what they are so citing cases never read as the
-  // judgment itself.
+  // judgment itself. The citing claim needs labelled hits behind it: live
+  // neighbours without body or title proof stay neutral so the header never
+  // overrules what the cards can show.
   if (response.citation?.status === 'not_held' && response.hits.length > 0) {
     const resultLabel = response.hits.length === 1 ? 'result' : 'results'
-    return `Citation not held · ${response.hits.length} citing ${resultLabel} from Find Case Law`
+    if (response.hits.every((hit) => hit.citationMatch === 'citing')) {
+      return `Citation not held · ${response.hits.length} citing ${resultLabel} from Find Case Law`
+    }
+    return `Citation not held · ${response.hits.length} ${resultLabel} from Find Case Law`
   }
 
   const resultLabel = response.hits.length === 1 ? 'result' : 'results'

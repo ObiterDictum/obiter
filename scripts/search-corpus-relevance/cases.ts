@@ -105,6 +105,15 @@ const partyHeld = held('party_name', [
     ['ewca-civ-2020-1295'],
     'ewca-civ',
   ],
+  // Misspelled party query: the EWCA title shares two of three terms while
+  // apex-court bodies merely mention the name, so the title-partial tier
+  // must lift it above body mentions (Finding 1 gate).
+  [
+    'party-donoghue-stevnson',
+    'Donoghue v Stevnson',
+    ['ewca-civ-2003-231'],
+    'ewca-civ',
+  ],
 ])
 
 const citationHeld = held('neutral_citation', [

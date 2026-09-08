@@ -1222,6 +1222,93 @@ describe('Legal search client', () => {
     ).toEqual(['benchmark-tie-older', 'benchmark-tie-newer'])
   })
 
+  it('ranks a partial title match ahead of a body mention from a senior court', () => {
+    // Misspelled party query: no whole-title tier fires, so without the
+    // title-partial tier the EWCA title bearer ties the UKSC body mention
+    // and loses on seniority.
+    const bodyMention = authority({
+      id: 'uksc-body-mention',
+      title: 'Montgomery v Lanarkshire Health Board',
+      neutralCitation: '[2015] UKSC 11',
+      court: 'uksc',
+      dateDecided: '2015-03-11',
+      engineRankingScore: 0.9,
+      paragraphs: [
+        {
+          id: 'uksc-body-mention-p1',
+          documentId: 'uksc-body-mention',
+          paragraphNumber: 93,
+          text: 'The reasoning of the House of Lords in Donoghue v Stevenson [1932] AC 562 was received similarly.',
+        },
+      ],
+    })
+    const titleBearer = authority({
+      id: 'ewca-civ-2003-231',
+      title: 'Donoghue v Folkestone Properties Ltd',
+      neutralCitation: '[2003] EWCA Civ 231',
+      court: 'ewca-civ',
+      dateDecided: '2003-03-27',
+      engineRankingScore: 0.5,
+      paragraphs: [
+        {
+          id: 'ewca-civ-2003-231-p1',
+          documentId: 'ewca-civ-2003-231',
+          paragraphNumber: 1,
+          text: 'Mrs Donoghue brought this claim in negligence.',
+        },
+      ],
+    })
+
+    expect(
+      rankLegalSearchHitsByExactMatch(
+        [bodyMention, titleBearer] as LegalSearchHit[],
+        'Donoghue v Stevnson',
+      ).map(({ id }) => id),
+    ).toEqual(['ewca-civ-2003-231', 'uksc-body-mention'])
+  })
+
+  it('does not promote a title on the bare "v" alone', () => {
+    const bystander = authority({
+      id: 'ewca-bystander',
+      title: 'Smith v Bloggs',
+      neutralCitation: '[2020] EWCA Civ 1',
+      court: 'ewca-civ',
+      dateDecided: '2020-01-01',
+      engineRankingScore: 0.9,
+      paragraphs: [
+        {
+          id: 'ewca-bystander-p1',
+          documentId: 'ewca-bystander',
+          paragraphNumber: 1,
+          text: 'Costs were assessed.',
+        },
+      ],
+    })
+    const titleBearer = authority({
+      id: 'ewca-civ-2003-231',
+      title: 'Donoghue v Folkestone Properties Ltd',
+      neutralCitation: '[2003] EWCA Civ 231',
+      court: 'ewca-civ',
+      dateDecided: '2003-03-27',
+      engineRankingScore: 0.1,
+      paragraphs: [
+        {
+          id: 'ewca-civ-2003-231-p1',
+          documentId: 'ewca-civ-2003-231',
+          paragraphNumber: 1,
+          text: 'Mrs Donoghue brought this claim in negligence.',
+        },
+      ],
+    })
+
+    expect(
+      rankLegalSearchHitsByExactMatch(
+        [bystander, titleBearer] as LegalSearchHit[],
+        'Donoghue v Stevnson',
+      ).map(({ id }) => id),
+    ).toEqual(['ewca-civ-2003-231', 'ewca-bystander'])
+  })
+
   it('ranks a title phrase ahead of a title containing scattered query terms', () => {
     const scatteredTerms = authority({
       id: 'scattered-title-terms',

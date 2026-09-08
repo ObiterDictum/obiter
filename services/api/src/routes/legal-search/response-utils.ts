@@ -186,6 +186,19 @@ function getCitationMatch(
     return 'exact'
   }
 
+  // A title naming the queried citation proves the judgment discusses it,
+  // which is what the served header claims for not-held citations. Without
+  // this, bodyless live hits read as keyword neighbours on the card while
+  // the header calls the same set citing results.
+  if (
+    containsWholeTerm(
+      normalizeCitationValue(hit.title),
+      normalizeCitationValue(recognisedCitation),
+    )
+  ) {
+    return 'citing'
+  }
+
   const bodyText = [
     ...(hit.paragraphs?.map((paragraph) => paragraph.text) ?? []),
     ...snippets.map((snippet) => snippet.text),

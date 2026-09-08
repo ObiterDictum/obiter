@@ -884,15 +884,22 @@ function courtSeniorityForRanking(court: string | null | undefined) {
 function legalSearchMatchTier(hit: LegalSearchHit, normalizedQuery: string) {
   const normalizedTitle = normalizeExactMatchValue(hit.title)
 
-  if (normalizeExactMatchValue(hit.id) === normalizedQuery) return 8
+  if (normalizeExactMatchValue(hit.id) === normalizedQuery) return 9
   if (
     normalizeCitationValue(hit.neutralCitation) ===
     normalizeCitationValue(normalizedQuery)
   )
-    return 7
-  if (normalizedTitle === normalizedQuery) return 6
-  if (containsWholeTerm(normalizedTitle, normalizedQuery)) return 5
-  if (titleContainsEveryQueryTerm(normalizedTitle, normalizedQuery)) return 4
+    return 8
+  if (normalizedTitle === normalizedQuery) return 7
+  if (containsWholeTerm(normalizedTitle, normalizedQuery)) return 6
+  if (titleContainsEveryQueryTerm(normalizedTitle, normalizedQuery)) return 5
+  // A title carrying one distinctive query term outranks any body mention.
+  // A misspelled party query defeats every whole-title tier, and without
+  // this the title-bearing judgment ties the body mentions and loses on the
+  // seniority tiebreak. Title evidence still ranks below every whole-title
+  // tier, so full title matches keep their priority.
+  if (titleContainsAnySearchableQueryTerm(normalizedTitle, normalizedQuery))
+    return 4
 
   const bodySegments = hit.paragraphs?.length
     ? hit.paragraphs.map(({ text }) => text)
@@ -1037,6 +1044,25 @@ function titleContainsEveryQueryTerm(
     (term) =>
       containsWholeTerm(normalizedTitle, term) ||
       isTitleAcronym(term, titleWords),
+  )
+}
+
+/**
+ * Title-partial check: one distinctive query term in the title. Stop words
+ * and single-character terms never count, so the "v" every party name
+ * carries cannot promote a title on its own. Title-only, like the
+ * every-term check it refines: prose throws up accidental matches.
+ */
+function titleContainsAnySearchableQueryTerm(
+  normalizedTitle: string,
+  normalizedQuery: string,
+) {
+  const terms = normalizedQuery.split(' ').filter(Boolean)
+  return terms.some(
+    (term) =>
+      term.length > 1 &&
+      !legalStopWordSet.has(term) &&
+      containsWholeTerm(normalizedTitle, term),
   )
 }
 

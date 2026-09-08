@@ -830,7 +830,7 @@ describe('createLegalSearchProxyRoutes', () => {
       .spyOn(globalThis, 'fetch')
       .mockResolvedValueOnce(
         new Response(
-          `<feed><entry><title>Later judgment discussing [2023] EWCA Civ 123</title><link href="https://caselaw.nationalarchives.gov.uk/ewca/civ/2026/99" rel="alternate"/><published>2026-01-01T00:00:00Z</published><tna:identifier slug="ewca/civ/2026/99" type="ukncn">[2026] EWCA Civ 99</tna:identifier><tna:contenthash>citing123</tna:contenthash></entry></feed>`,
+          `<feed><entry><title>Later judgment discussing [2023] EWCA Civ 123</title><link href="https://caselaw.nationalarchives.gov.uk/ewca/civ/2026/99" rel="alternate"/><published>2026-01-01T00:00:00Z</published><tna:identifier slug="ewca/civ/2026/99" type="ukncn">[2026] EWCA Civ 99</tna:identifier><tna:contenthash>citing123</tna:contenthash></entry><entry><title>Unrelated costs decision</title><link href="https://caselaw.nationalarchives.gov.uk/ewca/civ/2026/100" rel="alternate"/><published>2026-01-02T00:00:00Z</published><tna:identifier slug="ewca/civ/2026/100" type="ukncn">[2026] EWCA Civ 100</tna:identifier><tna:contenthash>neighbour100</tna:contenthash></entry></feed>`,
         ),
       )
       .mockResolvedValue(
@@ -863,6 +863,11 @@ describe('createLegalSearchProxyRoutes', () => {
       hits: [
         {
           id: 'ewca-civ-2026-99',
+          citationMatch: 'citing',
+          retrievalPath: 'live_provider',
+        },
+        {
+          id: 'ewca-civ-2026-100',
           citationMatch: 'none',
           retrievalPath: 'live_provider',
         },
