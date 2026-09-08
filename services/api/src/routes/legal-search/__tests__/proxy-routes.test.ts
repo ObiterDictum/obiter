@@ -1172,6 +1172,71 @@ describe('createLegalSearchProxyRoutes', () => {
     )
   })
 
+  it('returns no_match without queueing when foreground live finds nothing', async () => {
+    // Regression: the foreground path set hydrationQueued unconditionally,
+    // so a query with zero live results read as hydration_queued forever.
+    // Live was consulted here, so the honest answer is no_match.
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [],
+      query: 'zxqwv obiter neverseen hydra q1',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response('<feed />'),
+    )
+    const app = createAuthenticatedProxyApp()
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'zxqwv obiter neverseen hydra q1',
+        foregroundLiveResults: true,
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [],
+      outcome: 'no_match',
+      hydrationQueued: false,
+      diagnostics: { liveProviderSearched: true },
+    })
+    expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
+  })
+
+  it('returns recognised_not_held without queueing when foreground live finds no citation', async () => {
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [],
+      query: '[2021] EWCA Civ 9999',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response('<feed />'),
+    )
+    const app = createAuthenticatedProxyApp()
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: '[2021] EWCA Civ 9999',
+        foregroundLiveResults: true,
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [],
+      outcome: 'recognised_not_held',
+      hydrationQueued: false,
+      citation: { recognised: true, status: 'not_held' },
+      diagnostics: { liveProviderSearched: true },
+    })
+  })
+
   it('ranks foreground live exact matches ahead of newer partial matches', async () => {
     searchClientMock.search.mockResolvedValueOnce({
       hits: [],

@@ -512,6 +512,14 @@ export function createLegalSearchProxyRoutes(
       liveSummaries,
     )
 
+    // Foreground live was actually consulted, so an empty live set is an
+    // answer, not a queue position: hydrationQueued stays true only while
+    // there are live hits still being indexed in the background. A query
+    // with nothing live and nothing stored is no_match (or
+    // recognised_not_held for a citation), never hydration_queued, so it
+    // cannot poll forever. The background path below keeps hydration_queued
+    // because it has not consulted live yet; the UI bounds that poll.
+    const liveHasHits = liveSummaries.length > 0
     return c.json(
       toFetchResponse(
         liveSummaries,
@@ -519,7 +527,7 @@ export function createLegalSearchProxyRoutes(
         false,
         0,
         liveResult.skippedCount,
-        true,
+        liveHasHits,
         {
           // A recognised citation live finds nothing for is not a silent
           // no-match; live hits without the exact judgment stay results
@@ -527,7 +535,9 @@ export function createLegalSearchProxyRoutes(
           outcome:
             exactLookup && liveSummaries.length === 0
               ? 'recognised_not_held'
-              : undefined,
+              : liveHasHits
+                ? undefined
+                : 'no_match',
           citation,
           diagnostics: {
             exactLookupSearched: Boolean(exactLookup),
