@@ -433,7 +433,7 @@ describe('createLegalSearchProxyRoutes', () => {
       'legal_authorities',
       '',
       { court: 'uksc', sourceType: 'judgment' },
-      { includeSnippets: true, limit: 10 },
+      { includeSnippets: false, includeParagraphs: true, limit: 10 },
     )
     expect(fetchMock).not.toHaveBeenCalled()
   })
@@ -494,7 +494,12 @@ describe('createLegalSearchProxyRoutes', () => {
       'legal_authorities',
       '[2024] UKSC 3',
       { court: 'uksc', sourceType: 'judgment' },
-      { includeSnippets: true, limit: 5, exactPhrase: '[2024] UKSC 3' },
+      {
+        includeSnippets: false,
+        includeParagraphs: true,
+        limit: 5,
+        exactPhrase: '[2024] UKSC 3',
+      },
     )
     expect(fetchMock).not.toHaveBeenCalled()
   })
@@ -690,7 +695,12 @@ describe('createLegalSearchProxyRoutes', () => {
       'legal_authorities',
       '[2003] UKHL 1',
       { sourceType: 'judgment' },
-      { includeSnippets: true, exactPhrase: '[2003] UKHL 1' },
+      {
+        includeSnippets: false,
+        includeParagraphs: true,
+        limit: 100,
+        exactPhrase: '[2003] UKHL 1',
+      },
     )
     expect(searchClientMock.search).toHaveBeenCalledWith(
       { id: 'meili-client' },
@@ -698,7 +708,8 @@ describe('createLegalSearchProxyRoutes', () => {
       '[2003] UKHL 1',
       { sourceType: 'judgment' },
       {
-        includeSnippets: true,
+        includeSnippets: false,
+        includeParagraphs: true,
         exactPhrase: '[2003] UKHL 1',
         rankingScoreThreshold: null,
       },
@@ -1818,7 +1829,11 @@ describe('createLegalSearchProxyRoutes', () => {
       'legal_authorities',
       'Example',
       expect.objectContaining({ court: 'ewhc-admin' }),
-      { includeSnippets: true },
+      {
+        includeSnippets: false,
+        includeParagraphs: true,
+        limit: 100,
+      },
     )
     expect(fetchMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -1897,7 +1912,11 @@ describe('createLegalSearchProxyRoutes', () => {
       'legal_authorities',
       'Example',
       expect.objectContaining({ court: 'ewhc-admin' }),
-      { includeSnippets: true },
+      {
+        includeSnippets: false,
+        includeParagraphs: true,
+        limit: 100,
+      },
     )
     expect(fetchMock).toHaveBeenCalledWith(
       expect.objectContaining({

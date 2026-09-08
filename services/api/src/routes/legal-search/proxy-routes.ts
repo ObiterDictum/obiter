@@ -58,8 +58,21 @@ interface LegalSearchProxyRouteOptions {
   hydrationBudget?: LegalSearchHydrationBudget
 }
 
-const storedSearchTimeoutMs = 350
+// Bounds every stored lookup: Meili pool fetch, Postgres source search and
+// withdrawn checks. Sized for a 100-hit paragraph pool (~900ms measured
+// worst case); a slower engine falls back to Postgres FTS and reports
+// storedIndexStatus unavailable rather than holding the route open.
+const storedSearchTimeoutMs = 2000
 const storedCourtBrowseLimit = 10
+/**
+ * Engine candidates re-ranked per stored-index query. The engine cutoff used
+ * to sit at its default 20, so the exact-match re-rank could only reorder
+ * survivors and party-name targets the engine ranked 41-92 never surfaced.
+ * Served responses stay capped below; the pool only feeds the re-rank.
+ */
+const storedIndexRerankPoolLimit = 100
+/** Stored-index hits served per query; the suite measures the top 20. */
+const servedStoredHitsLimit = 20
 
 export function createLegalSearchProxyRoutes(
   env: ApiEnv,
@@ -173,7 +186,9 @@ export function createLegalSearchProxyRoutes(
       parsed.data.query,
       filters,
       {
-        ...(storedOnlyBrowse ? { limit: storedCourtBrowseLimit } : {}),
+        ...(storedOnlyBrowse
+          ? { limit: storedCourtBrowseLimit }
+          : { limit: storedIndexRerankPoolLimit }),
         ...(recognisedCitation ? { exactPhrase: recognisedCitation } : {}),
       },
     )
@@ -192,13 +207,16 @@ export function createLegalSearchProxyRoutes(
     // cases, not the judgment, so they fall through to live instead of
     // suppressing it. Any visible hit still satisfies other queries.
     if (hasGoodStoredHits(visibleCachedHits, exactLookup)) {
-      const summaries = visibleCachedHits.map((hit, index) =>
-        toSummaryHit(hit, parsed.data.query, {
-          retrievalPath: 'stored_index',
-          retrievalRank: index + 1,
-          recognisedCitation,
-        }),
-      )
+      // search() already re-ranked the pool; serve the top page of it.
+      const summaries = visibleCachedHits
+        .slice(0, servedStoredHitsLimit)
+        .map((hit, index) =>
+          toSummaryHit(hit, parsed.data.query, {
+            retrievalPath: 'stored_index',
+            retrievalRank: index + 1,
+            recognisedCitation,
+          }),
+        )
       const { citation, citationDiagnostics } = citationFields(
         exactLookup,
         summaries,
@@ -1039,12 +1057,17 @@ async function searchStoredAuthorities(
   try {
     // A recognised citation searches as an exact phrase so an absent
     // citation finds nothing instead of keyword neighbours.
+    // Paragraphs without snippets: body tiers need the text, but snippet
+    // extraction over a 100-hit pool costs ~1s of normalising (measured
+    // 890ms vs 1634ms for Arch Insurance). Served hits get snippets lazily
+    // from toSummaryHit, so the pool pays for text transfer and parse only.
     const searchOptions: {
       includeSnippets: boolean
+      includeParagraphs: boolean
       limit?: number
       exactPhrase?: string
       rankingScoreThreshold?: number | null
-    } = { includeSnippets: true }
+    } = { includeSnippets: false, includeParagraphs: true }
     if (typeof options.limit === 'number') {
       searchOptions.limit = options.limit
     }

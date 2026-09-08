@@ -842,22 +842,43 @@ export function rankLegalSearchHitsByExactMatch<T extends LegalSearchHit>(
         hit,
         index,
         matchTier: legalSearchMatchTier(hit, normalizedQuery),
+        courtSeniority: courtSeniorityForRanking(hit.court),
         engineRankingScore:
           validEngineRankingScore(hit.engineRankingScore) ?? 0,
       }))
-      // Legal match tiers express user intent. Engine scores break ties within a
-      // tier, then ties preserve the caller's or engine's supplied order. An
+      // Legal match tiers express user intent. Within a tier the higher
+      // court goes first: for an ambiguous party name the apex-court
+      // decision is usually the wanted one, and a bare surname otherwise
+      // drowns it under dozens of same-tier lower-court title matches.
+      // Engine scores break remaining ties, then ties preserve the
+      // caller's or engine's supplied order. An
       // equal engine score is not equal engine relevance: it is one lossy number
       // summarising the words, typo, proximity, attribute, exactness and sort
       // cascade, so the supplied order still carries signal the score has lost.
       .sort(
         (left, right) =>
           right.matchTier - left.matchTier ||
+          right.courtSeniority - left.courtSeniority ||
           right.engineRankingScore - left.engineRankingScore ||
           left.index - right.index,
       )
       .map(({ hit }) => hit)
   )
+}
+
+/**
+ * Precedent hierarchy for within-tier ranking: UKSC, then the Privy Council,
+ * then the Court of Appeal divisions, then the High Court, then anything
+ * else (unreported and unknown courts). Only ever a tiebreak inside one
+ * match tier, so an exact citation or id match never loses to it.
+ */
+function courtSeniorityForRanking(court: string | null | undefined) {
+  const normalized = court?.trim().toLowerCase() ?? ''
+  if (normalized === 'uksc') return 4
+  if (normalized === 'ukpc') return 3
+  if (normalized.startsWith('ewca')) return 2
+  if (normalized.startsWith('ewhc')) return 1
+  return 0
 }
 
 function legalSearchMatchTier(hit: LegalSearchHit, normalizedQuery: string) {
@@ -871,8 +892,7 @@ function legalSearchMatchTier(hit: LegalSearchHit, normalizedQuery: string) {
     return 7
   if (normalizedTitle === normalizedQuery) return 6
   if (containsWholeTerm(normalizedTitle, normalizedQuery)) return 5
-  if (containsEveryNormalizedQueryTerm(normalizedTitle, normalizedQuery))
-    return 4
+  if (titleContainsEveryQueryTerm(normalizedTitle, normalizedQuery)) return 4
 
   const bodySegments = hit.paragraphs?.length
     ? hit.paragraphs.map(({ text }) => text)
@@ -994,6 +1014,40 @@ function containsEveryNormalizedQueryTerm(
   return (
     terms.length > 0 &&
     terms.every((term) => containsWholeTerm(normalizedValue, term))
+  )
+}
+
+/**
+ * Title form of the every-term check: a term also matches as the initials of
+ * consecutive title words. Parties are routinely cited by acronym (FCA for
+ * the Financial Conduct Authority), and the acronym never appears in the
+ * decision's own title, so a literal-only check caps such queries at the
+ * body tiers while dozens of citing judgments carry the literal phrase and
+ * outrank the decision itself. Title-only: prose throws up accidental
+ * initialisms everywhere, so body matching stays literal.
+ */
+function titleContainsEveryQueryTerm(
+  normalizedTitle: string,
+  normalizedQuery: string,
+) {
+  const terms = normalizedQuery.split(' ').filter(Boolean)
+  if (terms.length === 0) return false
+  const titleWords = normalizedTitle.split(' ').filter(Boolean)
+  return terms.every(
+    (term) =>
+      containsWholeTerm(normalizedTitle, term) ||
+      isTitleAcronym(term, titleWords),
+  )
+}
+
+/** A term of two or more letters matching the first letters of that many
+ * consecutive title words: FCA against financial conduct authority. */
+function isTitleAcronym(term: string, titleWords: string[]) {
+  if (term.length < 2) return false
+  return titleWords.some((_, start) =>
+    term
+      .split('')
+      .every((letter, offset) => titleWords[start + offset]?.[0] === letter),
   )
 }
 

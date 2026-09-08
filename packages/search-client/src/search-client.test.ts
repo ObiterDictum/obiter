@@ -1302,6 +1302,84 @@ describe('Legal search client', () => {
     ).toEqual([withCitation, withoutCitation])
   })
 
+  it('ranks the higher court first within one title tier', () => {
+    const lowerCourtTitleMatch = authority({
+      id: 'ewhc-admin-2020-225',
+      title: 'Miller, R (On the Application Of) v The College of Policing',
+      neutralCitation: '[2020] EWHC 225 (Admin)',
+      court: 'ewhc-admin',
+      dateDecided: '2020-01-17',
+      engineRankingScore: 0.8712,
+      paragraphs: [],
+    })
+    const apexCourtTitleMatch = authority({
+      id: 'uksc-2017-5',
+      title:
+        'R (on the application of Miller and another) v Secretary of State for Exiting the European Union',
+      neutralCitation: '[2017] UKSC 5',
+      court: 'uksc',
+      dateDecided: '2017-01-24',
+      engineRankingScore: 0.8333,
+      paragraphs: [],
+    })
+
+    expect(
+      rankLegalSearchHitsByExactMatch(
+        [lowerCourtTitleMatch, apexCourtTitleMatch] as LegalSearchHit[],
+        'Miller',
+      ).map(({ id }) => id),
+    ).toEqual(['uksc-2017-5', 'ewhc-admin-2020-225'])
+  })
+
+  it('matches a party acronym against consecutive title words', () => {
+    const citingJudgment = authority({
+      id: 'ewhc-comm-2020-2449',
+      title: 'Bath Racecourse Company Ltd v Liberty Mutual Insurance',
+      neutralCitation: '[2020] EWHC 2449 (Comm)',
+      court: 'ewhc-comm',
+      dateDecided: '2020-06-01',
+      engineRankingScore: 0.99,
+      paragraphs: [
+        {
+          id: 'ewhc-comm-2020-2449-p1',
+          documentId: 'ewhc-comm-2020-2449',
+          paragraphNumber: 1,
+          text: 'As the Supreme Court held in FCA v Arch, the test is objective.',
+        },
+      ],
+    })
+    const acronymTitleMatch = authority({
+      id: 'uksc-2021-1',
+      title:
+        'The Financial Conduct Authority v Arch Insurance (UK) Ltd and others',
+      neutralCitation: '[2021] UKSC 1',
+      court: 'uksc',
+      dateDecided: '2021-01-15',
+      engineRankingScore: 0.89,
+      paragraphs: [
+        {
+          id: 'uksc-2021-1-p1',
+          documentId: 'uksc-2021-1',
+          paragraphNumber: 1,
+          text: 'The FCA appeals against the decision of the Court of Appeal.',
+        },
+        {
+          id: 'uksc-2021-1-p2',
+          documentId: 'uksc-2021-1',
+          paragraphNumber: 2,
+          text: 'Arch Insurance issued cover for business interruption.',
+        },
+      ],
+    })
+
+    expect(
+      rankLegalSearchHitsByExactMatch(
+        [citingJudgment, acronymTitleMatch] as LegalSearchHit[],
+        'FCA v Arch',
+      ).map(({ id }) => id),
+    ).toEqual(['uksc-2021-1', 'ewhc-comm-2020-2449'])
+  })
+
   it('ranks title matches ahead of provider hits that only match body text', () => {
     const bodyReferenceOnly = authority({
       id: 'd-33d1f5cf-b1d8-4437-8602-a9ae61baf7e5',
