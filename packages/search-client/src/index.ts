@@ -403,6 +403,46 @@ export async function createIndex(
   indexName: string,
   options: SearchIndexOptions = {},
 ): Promise<SearchIndexResult> {
+  return setupIndexWithSettings(
+    client,
+    indexName,
+    {
+      searchableAttributes,
+      filterableAttributes,
+      sortableAttributes,
+      rankingRules,
+      prefixSearch: legalSearchIndexSettings.prefixSearch,
+      stopWords: legalStopWords,
+      minWordSizeForTypos: {
+        ...legalSearchIndexSettings.minWordSizeForTypos,
+      },
+    },
+    options,
+  )
+}
+
+/**
+ * Index settings bundle for a product index other than legal_authorities.
+ * createIndex above is this function with the judgment settings; the
+ * legislation provisions index passes its own. One code path applies
+ * settings so the two indexes cannot drift in how they handle old servers.
+ */
+export interface ProductIndexSettings {
+  searchableAttributes: string[]
+  filterableAttributes: string[]
+  sortableAttributes: string[]
+  rankingRules: string[]
+  prefixSearch: 'disabled' | 'indexingTime'
+  stopWords: string[]
+  minWordSizeForTypos: { oneTypo: number; twoTypos: number }
+}
+
+export async function setupIndexWithSettings(
+  client: IndexSetupClient,
+  indexName: string,
+  settings: ProductIndexSettings,
+  options: SearchIndexOptions = {},
+): Promise<SearchIndexResult> {
   let taskUid: number | undefined
   const unsupportedSettings: string[] = []
 
@@ -421,19 +461,19 @@ export async function createIndex(
   try {
     const index = client.index(indexName)
     await waitForSucceededTask(
-      index.updateSearchableAttributes(searchableAttributes),
+      index.updateSearchableAttributes(settings.searchableAttributes),
       indexSetupTaskTimeoutMs,
     )
     await waitForSucceededTask(
-      index.updateFilterableAttributes(filterableAttributes),
+      index.updateFilterableAttributes(settings.filterableAttributes),
       indexSetupTaskTimeoutMs,
     )
     await waitForSucceededTask(
-      index.updateSortableAttributes(sortableAttributes),
+      index.updateSortableAttributes(settings.sortableAttributes),
       indexSetupTaskTimeoutMs,
     )
     await waitForSucceededTask(
-      index.updateRankingRules(rankingRules),
+      index.updateRankingRules(settings.rankingRules),
       indexSetupTaskTimeoutMs,
     )
     // Optional only in the sense that an older server cannot be given it. It is
@@ -442,19 +482,17 @@ export async function createIndex(
     await applyOptionalSetting(
       'prefixSearch',
       () => index.getPrefixSearch(),
-      () => index.updatePrefixSearch(legalSearchIndexSettings.prefixSearch),
+      () => index.updatePrefixSearch(settings.prefixSearch),
       options.allowUnsupportedSettings ?? false,
       unsupportedSettings,
     )
     await waitForSucceededTask(
-      index.updateStopWords(legalStopWords),
+      index.updateStopWords(settings.stopWords),
       indexSetupTaskTimeoutMs,
     )
     await waitForSucceededTask(
       index.updateTypoTolerance({
-        minWordSizeForTypos: {
-          ...legalSearchIndexSettings.minWordSizeForTypos,
-        },
+        minWordSizeForTypos: { ...settings.minWordSizeForTypos },
       }),
       indexSetupTaskTimeoutMs,
     )
@@ -1523,3 +1561,19 @@ function isIndexAlreadyExistsError(error: unknown): boolean {
   // (index_already_exists).') with no .code/.cause. Match the async form here.
   return error instanceof Error && /index_already_exists/.test(error.message)
 }
+
+export {
+  createLegislationIndex,
+  getLegislationProvision,
+  indexLegislationProvisions,
+  isLegislationProvisionDocument,
+  legislationSearchIndexSettings as legislationIndexSettings,
+  normalizeLegislationQuery,
+  searchLegislation,
+} from './legislation-index'
+export type {
+  LegislationProvisionDocument,
+  LegislationSearchHit,
+  LegislationSearchOptions,
+  LegislationSearchResult,
+} from './legislation-index'

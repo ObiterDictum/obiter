@@ -235,6 +235,12 @@ export function createApiApp(
     createLegalSearchProxyRoutes(
       env,
       createPostgresLegalAuthoritySourceStore(pool),
+      {
+        legislation: {
+          pool,
+          indexName: env.legislationProvisionsIndex,
+        },
+      },
     ),
   )
   app.route('/', createChangelogRoutes())

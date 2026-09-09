@@ -28,6 +28,7 @@ export function createTestApiEnv(overrides: Partial<ApiEnv> = {}): ApiEnv {
     meilisearchSearchApiKey: 'dev-key',
     meilisearchAdminApiKey: 'dev-key',
     legalAuthoritiesIndex: 'legal_authorities',
+    legislationProvisionsIndex: 'legislation_provisions',
     mojFindCaseLawBaseUrl: 'https://caselaw.nationalarchives.gov.uk',
     mojFindCaseLawRateLimit: 1000,
     rampartModel: 'qarlus/rampart',

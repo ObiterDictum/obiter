@@ -22,6 +22,7 @@ import {
 
 export type LegalFetchRetrievalPath =
   'stored_exact_lookup' | 'stored_index' | 'live_provider'
+export type LegalFetchResultGroupKey = 'judgments' | 'legislation'
 export type LegalFetchOutcome =
   | 'results'
   | 'no_match'
@@ -39,6 +40,45 @@ export interface LegalFetchSearchHit extends LegalSearchHit {
   retrievalRank?: number
   retrievalScore?: number
   paragraphs?: LegalAuthority['paragraphs']
+  /** Federated group label. Absent on judgment hits, which predate groups. */
+  resultGroup?: LegalFetchResultGroupKey
+}
+/**
+ * Served Stage 1 legislation hit. Text is served only when the provision has
+ * no recorded unapplied effects; an amended provision carries the notice and
+ * the official URL instead, and never its text.
+ */
+export interface LegislationFetchHit {
+  id: string
+  resultGroup: 'legislation'
+  legislationStatus: 'current' | 'amended_not_held'
+  title: string
+  provisionLabel: string
+  labelPath: string
+  documentIdentity: string
+  extent: string
+  text?: string
+  snippets?: Array<{ text: string }>
+  officialUrl: string
+  sourceUrl: string
+  notice?: string
+  citationMatch?: LegalSearchCitationMatch
+  retrievalPath?: LegalFetchRetrievalPath
+  retrievalRank?: number
+}
+
+export interface LegalFetchResultGroup {
+  key: LegalFetchResultGroupKey
+  label: string
+  hits: LegislationFetchHit[]
+}
+
+export function amendedProvisionNotice(officialUrl: string): string {
+  return (
+    'This provision is affected by amendments that have been recorded but not ' +
+    'yet applied to the published text. Obiter does not hold the amended wording, ' +
+    `so no text is shown. Read the official revised provision: ${officialUrl}`
+  )
 }
 export function apiError(
   code: ApiErrorResponse['error']['code'],
@@ -64,6 +104,10 @@ export function toFetchResponse(
     outcome?: LegalFetchOutcome
     /** Citation honesty; omitted entirely unless the caller passes it. */
     citation?: LegalSearchCitation
+    /** Federated labelled groups served after the flat judgment hits. The
+     * flat hits array is unchanged, so clients that predate groups keep
+     * reading exactly what they read before. */
+    groups?: LegalFetchResultGroup[]
     diagnostics?: {
       exactLookupSearched?: boolean
       storedIndexSearched?: boolean
@@ -71,6 +115,9 @@ export function toFetchResponse(
       storedOnlyBrowse?: boolean
       citationRecognised?: boolean
       citationStatus?: LegalSearchCitationStatus
+      legislationSearched?: boolean
+      legislationGroupServed?: boolean
+      legislationNote?: string
     }
   } = {},
 ) {
@@ -89,6 +136,7 @@ export function toFetchResponse(
     // Undefined serialises away, so non-citation callers send no new key.
     citation: options.citation,
     diagnostics: options.diagnostics,
+    groups: options.groups,
   }
 }
 

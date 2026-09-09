@@ -8,6 +8,7 @@ import {
   type LegalSearchHit,
 } from '@obiter/search-client'
 import type { ApiEnv } from '../../env'
+import type { Pool } from 'pg'
 import { readLimitedJsonValue } from '../../limited-request-body'
 import {
   canonicalHydrationQueryKey,
@@ -36,6 +37,10 @@ import {
   type StoredLegalAuthorityRecord,
 } from './source-store'
 import {
+  resolveLegislationFetch,
+  type LegislationFetchResult,
+} from './legislation-serve'
+import {
   fetchMojAuthorityDocumentById,
   fetchMojAuthorityDocumentFromRecord,
   fetchMojAuthoritySummaries,
@@ -56,6 +61,14 @@ interface LegalSearchProxyRouteVariables {
 
 interface LegalSearchProxyRouteOptions {
   hydrationBudget?: LegalSearchHydrationBudget
+  /**
+   * Stage 1 legislation serving. Absent in tests that predate it, in which
+   * case fetch stays judgment-only and no legislation group is served.
+   */
+  legislation?: {
+    pool: Pool
+    indexName: string
+  }
 }
 
 // Bounds every stored lookup: Meili pool fetch and Postgres withdrawn-record
@@ -139,9 +152,29 @@ export function createLegalSearchProxyRoutes(
     // Recognised citation surface form: the phrase the stored index searches
     // for and the label served hits carry. Null for every other query.
     const recognisedCitation = exactLookup?.recognisedQuery ?? null
-    const exactStoredAuthority =
+    // Stage 1 legislation half: Postgres exact answers plus a labelled
+    // keyword group, federated after the judgment flat hits. Skipped only
+    // when the caller narrows to judgments or the route was built without
+    // a legislation store (older tests). Never touches the judgment flow.
+    // Started without awaiting so it runs concurrently with the judgment
+    // lookups below: a slow legislation store (2s fail-open) must not hold
+    // the judgment half open. Every return path awaits it before responding.
+    const legislationPromise =
+      !storedOnlyBrowse &&
+      !isJudgmentOnlyFetch(parsed.data) &&
+      options.legislation
+        ? resolveLegislationFetch(
+            {
+              pool: options.legislation.pool,
+              searchClient,
+              indexName: options.legislation.indexName,
+            },
+            parsed.data.query,
+          )
+        : Promise.resolve(null)
+    const exactStoredAuthorityPromise =
       !storedOnlyBrowse && exactLookup
-        ? await findExactStoredAuthority(
+        ? findExactStoredAuthority(
             searchClient,
             legalAuthorityStore,
             env.legalAuthoritiesIndex,
@@ -149,7 +182,13 @@ export function createLegalSearchProxyRoutes(
             filters,
             exactLookup,
           )
-        : null
+        : Promise.resolve(null)
+    // Overlap the two halves: neither holds the other open beyond its own
+    // 2s fail-open bounds.
+    const [exactStoredAuthority, legislation] = await Promise.all([
+      exactStoredAuthorityPromise,
+      legislationPromise,
+    ])
 
     // Meilisearch is the sole query engine: without it there is nothing to
     // rank or verify against, so the outage fails visibly instead of
@@ -166,19 +205,22 @@ export function createLegalSearchProxyRoutes(
           recognisedCitation,
         }),
       ]
-      const { citation, citationDiagnostics } = citationFields(
+      const { citation, citationDiagnostics } = citationFieldsWithLegislation(
         exactLookup,
         summaries,
+        legislation,
       )
       return c.json(
         toFetchResponse(summaries, parsed.data.query, true, 0, 0, false, {
           citation,
+          ...legislationGroupsFor(legislation),
           diagnostics: {
             exactLookupSearched: true,
             storedIndexSearched: true,
             liveProviderSearched: false,
             storedOnlyBrowse,
             ...citationDiagnostics,
+            ...legislationDiagnosticsFor(legislation),
           },
         }),
       )
@@ -225,36 +267,45 @@ export function createLegalSearchProxyRoutes(
             recognisedCitation,
           }),
         )
-      const { citation, citationDiagnostics } = citationFields(
+      const { citation, citationDiagnostics } = citationFieldsWithLegislation(
         exactLookup,
         summaries,
+        legislation,
       )
       return c.json(
         toFetchResponse(summaries, parsed.data.query, true, 0, 0, false, {
           citation,
+          ...legislationGroupsFor(legislation),
           diagnostics: {
             exactLookupSearched: Boolean(exactLookup),
             storedIndexSearched: true,
             liveProviderSearched: false,
             storedOnlyBrowse,
             ...citationDiagnostics,
+            ...legislationDiagnosticsFor(legislation),
           },
         }),
       )
     }
 
     if (!parsed.data.query.trim()) {
-      const { citation, citationDiagnostics } = citationFields(exactLookup, [])
+      const { citation, citationDiagnostics } = citationFieldsWithLegislation(
+        exactLookup,
+        [],
+        legislation,
+      )
       return c.json(
         toFetchResponse([], parsed.data.query, true, 0, 0, false, {
           outcome: 'stored_browse_empty',
           citation,
+          ...legislationGroupsFor(legislation),
           diagnostics: {
             exactLookupSearched: Boolean(exactLookup),
             storedIndexSearched: true,
             liveProviderSearched: false,
             storedOnlyBrowse,
             ...citationDiagnostics,
+            ...legislationDiagnosticsFor(legislation),
           },
         }),
       )
@@ -308,9 +359,10 @@ export function createLegalSearchProxyRoutes(
         recognisedCitation,
       )
       if (exactLookup && citingSummaries.length > 0) {
-        const { citation, citationDiagnostics } = citationFields(
+        const { citation, citationDiagnostics } = citationFieldsWithLegislation(
           exactLookup,
           citingSummaries,
+          legislation,
         )
         return c.json(
           toFetchResponse(
@@ -322,12 +374,14 @@ export function createLegalSearchProxyRoutes(
             false,
             {
               citation,
+              ...legislationGroupsFor(legislation),
               diagnostics: {
                 exactLookupSearched: true,
                 storedIndexSearched: true,
                 liveProviderSearched: false,
                 storedOnlyBrowse,
                 ...citationDiagnostics,
+                ...legislationDiagnosticsFor(legislation),
               },
             },
           ),
@@ -336,17 +390,27 @@ export function createLegalSearchProxyRoutes(
       // Anonymous stays stored-only (30-Aug decision): a recognised citation
       // with no exact stored hit and no stored citing case is honestly not
       // held, not a silent no-match.
-      const { citation, citationDiagnostics } = citationFields(exactLookup, [])
+      const { citation, citationDiagnostics } = citationFieldsWithLegislation(
+        exactLookup,
+        [],
+        legislation,
+      )
       return c.json(
         toFetchResponse([], parsed.data.query, true, 0, 0, false, {
-          outcome: exactLookup ? 'recognised_not_held' : 'no_match',
+          outcome: legislationGroupsServed(legislation)
+            ? 'results'
+            : exactLookup || legislation?.recognisedNotHeld
+              ? 'recognised_not_held'
+              : 'no_match',
           citation,
+          ...legislationGroupsFor(legislation),
           diagnostics: {
             exactLookupSearched: Boolean(exactLookup),
             storedIndexSearched: true,
             liveProviderSearched: false,
             storedOnlyBrowse,
             ...citationDiagnostics,
+            ...legislationDiagnosticsFor(legislation),
           },
         }),
       )
@@ -381,17 +445,25 @@ export function createLegalSearchProxyRoutes(
       }
 
       // Deduped still has an in-flight job; keep hydrationQueued true so clients poll.
-      const { citation, citationDiagnostics } = citationFields(exactLookup, [])
+      const { citation, citationDiagnostics } = citationFieldsWithLegislation(
+        exactLookup,
+        [],
+        legislation,
+      )
       return c.json(
         toFetchResponse([], parsed.data.query, false, 0, 0, true, {
-          outcome: 'hydration_queued',
+          outcome: legislationGroupsServed(legislation)
+            ? 'results'
+            : 'hydration_queued',
           citation,
+          ...legislationGroupsFor(legislation),
           diagnostics: {
             exactLookupSearched: Boolean(exactLookup),
             storedIndexSearched: true,
             liveProviderSearched: false,
             storedOnlyBrowse,
             ...citationDiagnostics,
+            ...legislationDiagnosticsFor(legislation),
           },
         }),
       )
@@ -462,9 +534,10 @@ export function createLegalSearchProxyRoutes(
         recognisedCitation,
       }),
     )
-    const { citation, citationDiagnostics } = citationFields(
+    const { citation, citationDiagnostics } = citationFieldsWithLegislation(
       exactLookup,
       liveSummaries,
+      legislation,
     )
 
     // Foreground live was actually consulted, so an empty live set is an
@@ -488,18 +561,22 @@ export function createLegalSearchProxyRoutes(
           // no-match; live hits without the exact judgment stay results
           // labelled by their citationMatch, with status not_held.
           outcome:
-            exactLookup && liveSummaries.length === 0
-              ? 'recognised_not_held'
-              : liveHasHits
-                ? undefined
-                : 'no_match',
+            legislationGroupsServed(legislation) && liveSummaries.length === 0
+              ? 'results'
+              : exactLookup && liveSummaries.length === 0
+                ? 'recognised_not_held'
+                : liveHasHits
+                  ? undefined
+                  : 'no_match',
           citation,
+          ...legislationGroupsFor(legislation),
           diagnostics: {
             exactLookupSearched: Boolean(exactLookup),
             storedIndexSearched: true,
             liveProviderSearched: true,
             storedOnlyBrowse,
             ...citationDiagnostics,
+            ...legislationDiagnosticsFor(legislation),
           },
         },
       ),
@@ -689,7 +766,77 @@ function isStoredOnlyBrowse(request: LegalFetchRequest) {
 }
 
 function isImplementedFetchSourceType(request: LegalFetchRequest) {
-  return !request.sourceType || request.sourceType === 'judgment'
+  return (
+    !request.sourceType ||
+    request.sourceType === 'judgment' ||
+    request.sourceType === 'legislation_document' ||
+    request.sourceType === 'legislation_provision'
+  )
+}
+
+/** A caller that narrows to judgments opts out of the legislation group. */
+function isJudgmentOnlyFetch(request: LegalFetchRequest) {
+  return request.sourceType === 'judgment'
+}
+
+/**
+ * Merges the legislation half into a judgment-half response. Groups ride
+ * along on every site so the flat judgment hits array is byte-identical
+ * with or without legislation; outcome flips to results only when the
+ * legislation half actually served hits into an otherwise empty answer.
+ */
+function legislationGroupsServed(legislation: LegislationFetchResult | null) {
+  return legislation?.groups.some((group) => group.hits.length > 0) ?? false
+}
+
+/** Spread into a site diagnostics literal. Empty when legislation is off. */
+function legislationDiagnosticsFor(legislation: LegislationFetchResult | null) {
+  if (!legislation) return {}
+  return {
+    legislationSearched: legislation.searched,
+    legislationGroupServed: legislationGroupsServed(legislation),
+    ...(legislation.note ? { legislationNote: legislation.note } : {}),
+  }
+}
+
+/** Spread into a toFetchResponse options literal. Empty when no group. */
+function legislationGroupsFor(legislation: LegislationFetchResult | null) {
+  if (!legislation || legislation.groups.length === 0) return {}
+  return { groups: legislation.groups }
+}
+
+/**
+ * Citation honesty with the legislation half: a judgment citation keeps its
+ * existing verdict; otherwise a held legislation exact wins held_exact and
+ * a recognised-but-unheld one wins not_held. Never overrides a judgment
+ * exactLookup, so judgment benchmarks read byte-identical fields.
+ */
+function citationFieldsWithLegislation(
+  exactLookup: ExactLookup | null,
+  servedHits: Array<Pick<LegalFetchSearchHit, 'citationMatch'>>,
+  legislation: LegislationFetchResult | null,
+) {
+  const base = citationFields(exactLookup, servedHits)
+  if (exactLookup || !legislation) return base
+  if (legislation.citationHeldExact) {
+    return {
+      citation: { recognised: true, status: 'held_exact' as const },
+      citationDiagnostics: {
+        citationRecognised: true,
+        citationStatus: 'held_exact' as const,
+      },
+    }
+  }
+  if (legislation.recognisedNotHeld) {
+    return {
+      citation: { recognised: true, status: 'not_held' as const },
+      citationDiagnostics: {
+        citationRecognised: true,
+        citationStatus: 'not_held' as const,
+      },
+    }
+  }
+  return base
 }
 
 /**

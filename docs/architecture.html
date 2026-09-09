@@ -2463,7 +2463,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>17 migrations, 0001 to 0019, 0008 withdrawn</dd>
+                <dd>19 migrations, 0001 to 0021, 0008 withdrawn</dd>
               </dl>
             </article>
           </div>
@@ -2803,7 +2803,10 @@
                   <td class="id">legal-search/</td>
                   <td>
                     Public search with Find Case Law fallback. No session
-                    required. Must not expose matter or client data.
+                    required. Must not expose matter or client data. Also serves
+                    a labelled legislation group (exact citations from Postgres,
+                    keyword hits from the legislation_provisions index)
+                    federated after the judgment hits.
                   </td>
                 </tr>
                 <tr>
@@ -3678,6 +3681,23 @@
                   <td class="id">0003, 0004, 0019</td>
                 </tr>
                 <tr>
+                  <td class="id">
+                    legislation_documents · legislation_provisions ·
+                    legislation_ingest_progress
+                  </td>
+                  <td>
+                    Stored UK Public General Acts and their addressable
+                    provisions, keyed by <code>/id/</code> URI identity
+                    (document <code>type/year/number</code>, provision label
+                    path such as <code>section/13/2</code>). Postgres is the
+                    record; the <code>legislation_provisions</code>
+                    Meilisearch index rebuilds from these rows. Per-act ingest
+                    progress makes re-runs resume. Secondary legislation is out
+                    of scope.
+                  </td>
+                  <td class="id">0020</td>
+                </tr>
+                <tr>
                   <td class="id">redaction_runs</td>
                   <td>
                     Spans, decisions, summary, detector version and mode,
@@ -3911,6 +3931,10 @@
                 <tr>
                   <td class="id">LEGAL_AUTHORITIES_INDEX</td>
                   <td>Meilisearch index name</td>
+                </tr>
+                <tr>
+                  <td class="id">LEGISLATION_PROVISIONS_INDEX</td>
+                  <td>Meilisearch legislation provisions index name</td>
                 </tr>
                 <tr>
                   <td class="id">
@@ -4257,6 +4281,18 @@
               <span
                 ><b>Snippets.</b> Matching paragraphs become bounded snippets
                 with evidence ids and a match reason.</span
+              >
+            </li>
+            <li>
+              <span
+                ><b>Legislation group.</b> The same query is also resolved
+                against stored legislation: exact citations (chapter numbers,
+                short titles, aliases, section forms) read Postgres directly,
+                keyword queries read the
+                <code>legislation_provisions</code> index, and the hits serve as
+                a labelled group after the judgment hits, never interleaved.
+                Provisions with recorded but unapplied amendments serve a notice
+                with the official link instead of text.</span
               >
             </li>
             <li>

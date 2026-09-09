@@ -1013,9 +1013,14 @@ describe('createLegalSearchProxyRoutes', () => {
     })
   })
 
-  it('accepts future source request fields but returns unsupported outcome for non-judgment source types', async () => {
-    const fetchMock = vi.spyOn(globalThis, 'fetch')
+  it('accepts legislation source types as implemented and searches the stored index', async () => {
     const app = createAuthenticatedProxyApp()
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [],
+      query: 'section 6',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
 
     const response = await app.request('/api/search/fetch', {
       method: 'POST',
@@ -1032,17 +1037,38 @@ describe('createLegalSearchProxyRoutes', () => {
       headers: { 'content-type': 'application/json' },
     })
 
+    // Stage 1 implements legislation source types: the request is searched,
+    // not rejected, and judgment-only callers keep the unsupported outcome
+    // for anything else. No legislation store is wired in this test, so no
+    // legislation group is served.
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [],
+      outcome: 'hydration_queued',
+      diagnostics: {
+        storedIndexSearched: true,
+      },
+    })
+    expect(searchClientMock.search).toHaveBeenCalled()
+  })
+
+  it('still returns unsupported outcome for source types neither half implements', async () => {
+    const app = createAuthenticatedProxyApp()
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'section 6',
+        sourceType: 'guidance',
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
     expect(response.status).toBe(200)
     expect(await response.json()).toMatchObject({
       hits: [],
       outcome: 'unsupported_source_type',
-      diagnostics: {
-        storedIndexSearched: false,
-        liveProviderSearched: false,
-      },
     })
-    expect(searchClientMock.search).not.toHaveBeenCalled()
-    expect(fetchMock).not.toHaveBeenCalled()
   })
 
   it('queues Find Case Law hydration after a cache miss without returning provider results in the foreground', async () => {
