@@ -16,6 +16,23 @@ export function createCanonicalProvisionPath(
   return `/ln/${documentIdentity}/${labelPath}`
 }
 
+export function createCanonicalActPath(documentIdentity: string) {
+  return `/ln/${documentIdentity}`
+}
+
+export function parseLegislationActPath(path: string): {
+  documentIdentity: string
+} | null {
+  const trimmed = path.replace(/^\/ln\/?/, '').replace(/^\/+/, '')
+  const parts = trimmed.split('/').filter(Boolean)
+  if (parts.length !== 3) return null
+  const [actType, year, number] = parts
+  if (actType !== 'ukpga') return null
+  if (!year || !/^\d{4}$/.test(year)) return null
+  if (!number || !/^\d+$/.test(number)) return null
+  return { documentIdentity: `${actType}/${year}/${number}` }
+}
+
 export function parseLegislationProvisionPath(path: string): {
   documentIdentity: string
   labelPath: string

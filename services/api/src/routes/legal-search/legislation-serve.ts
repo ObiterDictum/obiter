@@ -47,7 +47,7 @@ export interface LegislationFetchResult {
 // fails this half open (no group) rather than holding the route.
 const storedLegislationTimeoutMs = 2000
 
-async function withStoredTimeout<T>(promise: Promise<T>): Promise<T> {
+export async function withStoredTimeout<T>(promise: Promise<T>): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined
   try {
     return await Promise.race([

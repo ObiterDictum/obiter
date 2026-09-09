@@ -90,6 +90,11 @@ export {
 } from './views/LegislationProvisionView'
 export type { LegislationProvisionResponse } from './views/LegislationProvisionView'
 export {
+  LegislationActView,
+  legislationActQueryOptions,
+} from './views/LegislationActView'
+export type { LegislationActResponse } from './views/LegislationActView'
+export {
   createCanonicalCasePath,
   resolveCaseDocumentIdFromSlug,
 } from '@obiter/contracts'

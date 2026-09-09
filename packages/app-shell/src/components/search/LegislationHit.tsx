@@ -21,10 +21,29 @@ export function LegislationHit({
   const isProvision = Boolean(hit.labelPath)
 
   if (!isProvision) {
+    // Act-level hit: link through to the Act contents page instead of
+    // asking for a section number. provisionResultLocation already maps
+    // an empty labelPath to /ln/{identity}.
+    const location = provisionResultLocation(hit)
     return (
-      <div className="rounded-md px-3 py-3 text-ink">
+      <Link
+        {...location}
+        data-legislation-status="current"
+        className={
+          selected
+            ? 'group flex items-start justify-between gap-4 rounded-md bg-raised px-3 py-3 text-ink transition-colors'
+            : 'group flex items-start justify-between gap-4 rounded-md px-3 py-3 text-ink transition-colors hover:bg-raised'
+        }
+        onFocus={onSelect}
+        onMouseEnter={onSelect}
+      >
         <CurrentLegislationBody hit={hit} />
-      </div>
+        <ArrowRight
+          aria-hidden
+          size={16}
+          className="mt-0.5 shrink-0 text-subtle transition-colors group-hover:text-ink"
+        />
+      </Link>
     )
   }
 
