@@ -85,11 +85,12 @@ describe('parseClmlDocument', () => {
     expect(parsed.provisions[0]?.text).toBe('Kept text.')
   })
 
-  it('flags the BlockAmendment-insert gap instead of failing', () => {
+  it('stays quiet on the BlockAmendment-insert gap', () => {
     // Two P1 opens declared, one addressable: the bare P1 is a quoted
     // insert for another Act (no document IdURI, correctly never a row).
     // Real Acts look like this (ukpga/2020/7: 579 declared, 15 inserts),
-    // so the gap stores flagged, it never fails the document.
+    // so the fully-explained gap stores unflagged, it never fails the
+    // document and never lands in the mismatch list.
     const xml = `<?xml version="1.0"?>
 <Legislation DocumentURI="http://www.legislation.gov.uk/ukpga/2020/9" IdURI="http://www.legislation.gov.uk/id/ukpga/2020/9" NumberOfProvisions="2">
 <ukm:Metadata xmlns:ukm="x"><dc:title xmlns:dc="x">Gap Act</dc:title></ukm:Metadata>
@@ -103,7 +104,55 @@ describe('parseClmlDocument', () => {
     expect(parsed.declaredProvisions).toBe(2)
     expect(parsed.p1Seen).toBe(2)
     expect(parsed.p1Rows).toBe(1)
-    expect(provisionCountNote(parsed)).toContain('1 P1 without an emitted row')
+    expect(parsed.p1BlockAmendment).toBe(1)
+    expect(parsed.p1NoIdUriOther).toBe(0)
+    expect(parsed.p1EmptyText).toBe(0)
+    // The gap is fully explained by the quoted insert: quiet.
+    expect(provisionCountNote(parsed)).toBeNull()
+  })
+
+  it('stays loud on a no-IdURI P1 outside BlockAmendment', () => {
+    const xml = `<?xml version="1.0"?>
+<Legislation DocumentURI="http://www.legislation.gov.uk/ukpga/2020/9" IdURI="http://www.legislation.gov.uk/id/ukpga/2020/9" NumberOfProvisions="2">
+<ukm:Metadata xmlns:ukm="x"><dc:title xmlns:dc="x">Stray Act</dc:title></ukm:Metadata>
+<Primary><P1 DocumentURI="http://www.legislation.gov.uk/ukpga/2020/9/section/1" IdURI="http://www.legislation.gov.uk/id/ukpga/2020/9/section/1" id="section-1"><Pnumber>1</Pnumber><P1para><Text>Only row.</Text></P1para></P1></Primary>
+<P1><Pnumber>i</Pnumber><P1para><Text>Stray insert, no BlockAmendment home.</Text></P1para></P1>
+</Legislation>`
+    const parsed = parseClmlDocument(xml, { ...ref, year: 2020, number: 9 })
+    if ('skipped' in parsed)
+      throw new Error(`unexpected skip: ${parsed.skipped}`)
+    expect(parsed.p1Seen).toBe(2)
+    expect(parsed.p1BlockAmendment).toBe(0)
+    expect(parsed.p1NoIdUriOther).toBe(1)
+    expect(provisionCountNote(parsed)).toContain('outside BlockAmendment')
+  })
+
+  it('stays loud on an addressable P1 with no emitted row', () => {
+    const xml = `<?xml version="1.0"?>
+<Legislation DocumentURI="http://www.legislation.gov.uk/ukpga/2020/9" IdURI="http://www.legislation.gov.uk/id/ukpga/2020/9" NumberOfProvisions="1">
+<ukm:Metadata xmlns:ukm="x"><dc:title xmlns:dc="x">Empty Act</dc:title></ukm:Metadata>
+<Primary><P1 DocumentURI="http://www.legislation.gov.uk/ukpga/2020/9/section/1" IdURI="http://www.legislation.gov.uk/id/ukpga/2020/9/section/1" id="section-1"><Pnumber>1</Pnumber><P1para></P1para></P1></Primary>
+</Legislation>`
+    const parsed = parseClmlDocument(xml, { ...ref, year: 2020, number: 9 })
+    // No rows at all: the document-level skip fires before the census.
+    expect(parsed).toEqual({
+      skipped: 'no addressable provision text in data.xml',
+    })
+  })
+
+  it('stays loud when an addressable P1 beside rows emits nothing', () => {
+    const xml = `<?xml version="1.0"?>
+<Legislation DocumentURI="http://www.legislation.gov.uk/ukpga/2020/9" IdURI="http://www.legislation.gov.uk/id/ukpga/2020/9" NumberOfProvisions="2">
+<ukm:Metadata xmlns:ukm="x"><dc:title xmlns:dc="x">Half-empty Act</dc:title></ukm:Metadata>
+<Primary><P1 DocumentURI="http://www.legislation.gov.uk/ukpga/2020/9/section/1" IdURI="http://www.legislation.gov.uk/id/ukpga/2020/9/section/1" id="section-1"><Pnumber>1</Pnumber><P1para><Text>Kept.</Text></P1para></P1><P1 DocumentURI="http://www.legislation.gov.uk/ukpga/2020/9/section/2" IdURI="http://www.legislation.gov.uk/id/ukpga/2020/9/section/2" id="section-2"><Pnumber>2</Pnumber><P1para></P1para></P1></Primary>
+</Legislation>`
+    const parsed = parseClmlDocument(xml, { ...ref, year: 2020, number: 9 })
+    if ('skipped' in parsed)
+      throw new Error(`unexpected skip: ${parsed.skipped}`)
+    expect(parsed.p1Seen).toBe(2)
+    expect(parsed.p1Rows).toBe(1)
+    expect(parsed.p1EmptyText).toBe(1)
+    expect(provisionCountNote(parsed)).toContain('emitted no row')
   })
 })
 
@@ -118,15 +167,47 @@ describe('formatProvisionLabel', () => {
 })
 
 describe('provisionCountNote', () => {
+  const healthy = {
+    p1Addressable: 1,
+    p1BlockAmendment: 0,
+    p1NoIdUriOther: 0,
+    p1EmptyText: 0,
+  }
+
   it('reports a missing declaration instead of staying silent', () => {
     expect(
-      provisionCountNote({ declaredProvisions: null, p1Seen: 1, p1Rows: 1 }),
+      provisionCountNote({
+        ...healthy,
+        declaredProvisions: null,
+        p1Seen: 1,
+        p1Rows: 1,
+      }),
     ).toBe('upstream declared no NumberOfProvisions')
   })
 
   it('reports tokenizer drift against the declaration', () => {
     expect(
-      provisionCountNote({ declaredProvisions: 5, p1Seen: 4, p1Rows: 4 }),
+      provisionCountNote({
+        ...healthy,
+        p1Addressable: 4,
+        declaredProvisions: 5,
+        p1Seen: 4,
+        p1Rows: 4,
+      }),
     ).toContain('tokenizer saw 4 P1 opens but upstream declared 5')
+  })
+
+  it('stays quiet when inserts explain the whole gap', () => {
+    expect(
+      provisionCountNote({
+        declaredProvisions: 3,
+        p1Seen: 3,
+        p1Rows: 2,
+        p1Addressable: 2,
+        p1BlockAmendment: 1,
+        p1NoIdUriOther: 0,
+        p1EmptyText: 0,
+      }),
+    ).toBeNull()
   })
 })

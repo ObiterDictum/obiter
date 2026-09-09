@@ -68,7 +68,9 @@ export type LegislationDocOutcome =
       identity: string
       provisions: number
       declaredProvisions: number | null
+      p1Seen: number
       p1Rows: number
+      p1BlockAmendment: number
       provisionCountNote: string | null
     }
   | { status: 'skipped-unchanged'; identity: string }
@@ -86,12 +88,15 @@ export interface LegislationScopeReport {
   failed: number
   failures: Array<{ identity: string; reason: string }>
   /** Stored documents whose P1 extraction diverged from the declared
-   * count. Gaps are expected per document (BlockAmendment inserts); the
-   * list exists so a systematic gap shows as a pattern across a year. */
+   * count. A gap fully explained by BlockAmendment inserts is healthy
+   * and never lands here; the list exists so a systematic unexplained
+   * gap shows as a pattern across a year. */
   provisionCountMismatches: Array<{
     identity: string
     declaredProvisions: number | null
+    p1Seen: number
     p1Rows: number
+    p1BlockAmendment: number
     provisions: number
     note: string
   }>
@@ -346,6 +351,30 @@ export async function ingestEffectsForDocument(
   return { checked: doc.provisions.length, amended }
 }
 
+/**
+ * Re-derives the extraction-completeness note from an unchanged Act's
+ * re-fetched body and updates the row only when the note moved. Never
+ * touches provisions and never fails the Act: an unparseable re-fetch of
+ * unchanged content leaves the stored note alone.
+ */
+async function refreshCountNote(pool: Db, identity: string, xml: string) {
+  const [actType = '', yearText = '', numberText = ''] = identity.split('/')
+  const parsed = parseClmlDocument(xml, {
+    actType,
+    year: Number(yearText),
+    number: Number(numberText),
+    title: identity,
+  })
+  if ('skipped' in parsed) return
+  const note = provisionCountNote(parsed) ?? ''
+  await pool.query(
+    `update legislation_documents
+        set provision_count_note = $2, updated_at = now()
+      where identity = $1 and provision_count_note <> $2`,
+    [identity, note],
+  )
+}
+
 export async function ingestOneAct(
   deps: LegislationIngestDeps,
   ref: IngestActRef,
@@ -390,6 +419,12 @@ export async function ingestOneAct(
   }
   const hash = sha256Hex(xml)
   if (stored.rows[0]?.content_hash === hash) {
+    // Content unchanged: provisions stay untouched, but the
+    // extraction-completeness note is re-derived from the re-fetched
+    // body. The count check changed (BlockAmendment-explained gaps went
+    // quiet), and without this refresh a stale loud note from the old
+    // check would sit on a healthy document forever.
+    await refreshCountNote(deps.pool, identity, xml)
     return { status: 'skipped-unchanged', identity }
   }
   const parsed = parseClmlDocument(xml, ref)
@@ -416,7 +451,9 @@ export async function ingestOneAct(
     identity,
     provisions: parsed.provisions.length,
     declaredProvisions: parsed.declaredProvisions,
+    p1Seen: parsed.p1Seen,
     p1Rows: parsed.p1Rows,
+    p1BlockAmendment: parsed.p1BlockAmendment,
     provisionCountNote: provisionCountNote(parsed),
   }
 }
@@ -514,7 +551,9 @@ export async function ingestYear(
         report.provisionCountMismatches.push({
           identity: outcome.identity,
           declaredProvisions: outcome.declaredProvisions,
+          p1Seen: outcome.p1Seen,
           p1Rows: outcome.p1Rows,
+          p1BlockAmendment: outcome.p1BlockAmendment,
           provisions: outcome.provisions,
           note: outcome.provisionCountNote,
         })
@@ -575,24 +614,139 @@ export async function ingestYear(
   return report
 }
 
-function readFlag(name: string) {
-  return process.argv
-    .find((arg) => arg.startsWith(`--${name}=`))
-    ?.slice(name.length + 3)
+export const legislationIngestUsage = `Usage: pnpm legislation:ingest [options] (from services/legal-ingestor)
+
+Stage 1 legislation ingest: UK Public General Acts (ukpga) into Postgres
+legislation_documents / legislation_provisions. Polite by construction:
+one sequential loop honouring the site's Crawl-delay.
+
+Options:
+  --act=ukpga/YYYY/N   ingest a single Act (e.g. --act=ukpga/2023/29)
+  --years=2020,2021    year scopes to ingest (default: 2020 through the current year)
+  --max-acts=N         stop after N Acts per year (verification slices)
+  --gap-ms=MS          ms between upstream requests (default 5000, never below Crawl-delay)
+  --skip-effects       skip the affected-changes effects pass (bare or =1)
+  -h, --help           print this usage and exit`
+
+export interface LegislationIngestCliOptions {
+  act: IngestActRef | null
+  years: number[]
+  gapMsRaw: string | undefined
+  skipEffects: boolean
+  maxActs?: number
 }
 
-function readYears(): number[] {
-  const raw = readFlag('years')
-  if (!raw) {
-    const current = new Date().getUTCFullYear()
-    const years: number[] = []
-    for (let year = scopeStartYear; year <= current; year += 1) years.push(year)
-    return years
+export type LegislationIngestCliParse =
+  | { ok: true; help: false; options: LegislationIngestCliOptions }
+  | { ok: true; help: true }
+  | { ok: false; error: string }
+
+function defaultScopeYears(): number[] {
+  const current = new Date().getUTCFullYear()
+  const years: number[] = []
+  for (let year = scopeStartYear; year <= current; year += 1) years.push(year)
+  return years
+}
+
+/**
+ * Pure argv parse so --help and bad flags never reach env, network, or
+ * the database. Unknown flags and positionals fail rather than being
+ * silently ignored (a bare --skip-effects once ran the full effects
+ * pass because only --skip-effects=1 was read).
+ */
+export function parseLegislationIngestArgs(
+  argv: string[],
+): LegislationIngestCliParse {
+  const fail = (error: string): LegislationIngestCliParse => ({
+    ok: false,
+    error,
+  })
+  let help = false
+  let actRaw: string | undefined
+  let yearsRaw: string | undefined
+  let gapMsRaw: string | undefined
+  let skipEffects = false
+  let maxActsRaw: string | undefined
+  for (const arg of argv) {
+    if (arg === '--help' || arg === '-h') {
+      help = true
+      continue
+    }
+    if (arg === '--skip-effects') {
+      skipEffects = true
+      continue
+    }
+    const eq = arg.indexOf('=')
+    const name = eq === -1 ? arg : arg.slice(0, eq)
+    const value = eq === -1 ? undefined : arg.slice(eq + 1)
+    switch (name) {
+      case '--act':
+      case '--years':
+      case '--gap-ms':
+      case '--max-acts': {
+        if (value === undefined || value === '')
+          return fail(`${name} needs a value (${name}=...)`)
+        if (name === '--act') actRaw = value
+        else if (name === '--years') yearsRaw = value
+        else if (name === '--gap-ms') gapMsRaw = value
+        else maxActsRaw = value
+        break
+      }
+      case '--skip-effects': {
+        if (value === '1' || value === 'true' || value === 'yes')
+          skipEffects = true
+        else if (value === '0' || value === 'false' || value === 'no')
+          skipEffects = false
+        else
+          return fail(`--skip-effects takes no value, 1, or 0 (got ${value})`)
+        break
+      }
+      default:
+        return fail(
+          arg.startsWith('-')
+            ? `unrecognised flag ${arg}`
+            : `unexpected argument ${arg}`,
+        )
+    }
   }
-  return raw
-    .split(',')
-    .map((part) => Number(part.trim()))
-    .filter((year) => Number.isInteger(year))
+  if (help) return { ok: true, help: true }
+  let act: IngestActRef | null = null
+  if (actRaw !== undefined) {
+    const match = actRaw.match(/^(ukpga)\/(\d{4})\/(\d+)$/i)
+    if (!match) return fail('--act must look like ukpga/2010/15')
+    act = {
+      actType: match[1]!.toLowerCase(),
+      year: Number(match[2]),
+      number: Number(match[3]),
+      title: actRaw,
+    }
+  }
+  let years = defaultScopeYears()
+  if (yearsRaw !== undefined) {
+    years = yearsRaw.split(',').map((part) => Number(part.trim()))
+    if (years.length === 0 || years.some((year) => !Number.isInteger(year))) {
+      return fail(
+        '--years must be a comma list of years (e.g. --years=2020,2021)',
+      )
+    }
+  }
+  let maxActs: number | undefined
+  if (maxActsRaw !== undefined) {
+    maxActs = Number(maxActsRaw)
+    if (!Number.isInteger(maxActs) || maxActs < 1)
+      return fail('--max-acts must be a positive integer')
+  }
+  return {
+    ok: true,
+    help: false,
+    options: {
+      act,
+      years,
+      gapMsRaw,
+      skipEffects,
+      ...(maxActs !== undefined ? { maxActs } : {}),
+    },
+  }
 }
 
 /** Request gap with a finite-number guard: a non-numeric --gap-ms falls
@@ -607,11 +761,24 @@ export function resolveRequestGapMs(
 }
 
 async function main() {
+  // Parse before env, pool, or network: --help must print usage and
+  // exit with no DATABASE_URL, no database, and no upstream contact.
+  const parsed = parseLegislationIngestArgs(process.argv.slice(2))
+  if (!parsed.ok) {
+    console.error(parsed.error)
+    console.error(legislationIngestUsage)
+    process.exitCode = 2
+    return
+  }
+  if (parsed.help) {
+    console.info(legislationIngestUsage)
+    return
+  }
   const { readLegalIngestorEnv } = await import('./env.js')
   const env = readLegalIngestorEnv()
   const pool = new Pool({ connectionString: env.databaseUrl })
   const crawlDelay = await readCrawlDelaySeconds(fetch)
-  const gapMs = resolveRequestGapMs(readFlag('gap-ms'), crawlDelay)
+  const gapMs = resolveRequestGapMs(parsed.options.gapMsRaw, crawlDelay)
   console.info(
     JSON.stringify({
       robotsCrawlDelaySeconds: crawlDelay,
@@ -621,28 +788,23 @@ async function main() {
   const deps: LegislationIngestDeps = {
     pool,
     gapMs,
-    skipEffects: readFlag('skip-effects') === '1',
-    ...(readFlag('max-acts') ? { maxActs: Number(readFlag('max-acts')) } : {}),
+    skipEffects: parsed.options.skipEffects,
+    ...(parsed.options.maxActs !== undefined
+      ? { maxActs: parsed.options.maxActs }
+      : {}),
     sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
     fetchImpl: fetch,
   }
-  const single = readFlag('act')
+  const single = parsed.options.act
   if (single) {
-    const match = single.match(/^(ukpga)\/(\d{4})\/(\d+)$/i)
-    if (!match) throw new Error('--act must look like ukpga/2010/15')
-    const outcome = await ingestOneAct(deps, {
-      actType: match[1]!.toLowerCase(),
-      year: Number(match[2]),
-      number: Number(match[3]),
-      title: single,
-    })
+    const outcome = await ingestOneAct(deps, single)
     console.info(JSON.stringify(outcome))
     await pool.end()
     if (outcome.status === 'failed') process.exitCode = 1
     return
   }
   const reports: LegislationScopeReport[] = []
-  for (const year of readYears()) {
+  for (const year of parsed.options.years) {
     const report = await ingestYear(deps, year)
     reports.push(report)
     console.info(JSON.stringify(report))

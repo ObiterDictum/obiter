@@ -50,6 +50,22 @@ export interface IngestDocument {
   declaredProvisions: number | null
   /** Every P1 open the tokenizer saw, inserts included. */
   p1Seen: number
+  /**
+   * Census of the P1 opens, reconciling as
+   * p1Seen = p1Addressable + p1BlockAmendment + p1NoIdUriOther and
+   * p1Addressable = p1Rows + p1EmptyText. BlockAmendment inserts quote
+   * new-law text for another Act: they carry no document IdURI and
+   * correctly never become rows, so only they are quiet in the count
+   * check. Anything else without a row stays loud (see
+   * provisionCountNote).
+   */
+  p1Addressable: number
+  /** No-IdURI P1 opens inside a BlockAmendment element: explained gap. */
+  p1BlockAmendment: number
+  /** No-IdURI P1 opens anywhere else: unexplained, check stays loud. */
+  p1NoIdUriOther: number
+  /** Addressable P1 opens that emitted no row for want of text. */
+  p1EmptyText: number
   /** Emitted rows whose frame tag was P1. */
   p1Rows: number
 }
@@ -221,6 +237,13 @@ function parseClmlWithStack(
   let order = 0
   let p1Seen = 0
   let p1Rows = 0
+  let p1Addressable = 0
+  let p1BlockAmendment = 0
+  let p1NoIdUriOther = 0
+  let p1EmptyText = 0
+  // Nesting depth of BlockAmendment elements: the only legitimate home
+  // of a P1 open without a document IdURI.
+  let blockAmendmentDepth = 0
   let textDepth = 0
   const tagPattern = /<(\/?)([A-Za-z0-9:]+)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g
   let textStart = 0
@@ -275,15 +298,25 @@ function parseClmlWithStack(
       extentSaved.push(extentCurrent)
       if (tagExtent !== null) extentCurrent = tagExtent
       if (tag === 'Text') textDepth += 1
+      // A self-closing BlockAmendment cannot contain a P1, so only
+      // paired opens move the depth.
       if (provisionTags.has(tag)) {
-        // Every P1 open counts towards the declared total, including the
-        // BlockAmendment inserts below that carry no document IdURI.
-        if (tag === 'P1') p1Seen += 1
+        // Every P1 open counts towards the declared total and the
+        // census: addressable opens must yield rows (or an empty-text
+        // note), no-IdURI opens are explained only inside
+        // BlockAmendment.
         const idUri = readAttribute(attrs, 'IdURI') ?? ''
         const marker = `/id/${identity}/`
         const idx = idUri.indexOf(marker)
+        const labelPath =
+          idx !== -1 ? idUri.slice(idx + marker.length).replace(/\/$/, '') : ''
+        if (tag === 'P1') {
+          p1Seen += 1
+          if (labelPath) p1Addressable += 1
+          else if (blockAmendmentDepth > 0) p1BlockAmendment += 1
+          else p1NoIdUriOther += 1
+        }
         if (idx !== -1) {
-          const labelPath = idUri.slice(idx + marker.length).replace(/\/$/, '')
           if (labelPath) {
             stack.push({
               tag,
@@ -316,6 +349,9 @@ function parseClmlWithStack(
           }
         }
       } else {
+        if (tag === 'BlockAmendment' && !selfClosing) {
+          blockAmendmentDepth += 1
+        }
         if (tag === 'Pnumber') {
           const prov = currentProvision()
           if (prov && !prov.pnumber) prov.inPnumber = true
@@ -337,6 +373,9 @@ function parseClmlWithStack(
         }
       }
     } else {
+      if (tag === 'BlockAmendment') {
+        blockAmendmentDepth = Math.max(blockAmendmentDepth - 1, 0)
+      }
       closeTag(tag)
       const saved = extentSaved.pop()
       if (saved !== undefined) extentCurrent = saved
@@ -366,7 +405,12 @@ function parseClmlWithStack(
       .map((t) => stripTags(t))
       .filter(Boolean)
       .join(' ')
-    if (!text) return
+    if (!text) {
+      // Addressable but textless: stays a row-less P1 and stays loud
+      // in the count check rather than vanishing silently.
+      if (frame.tag === 'P1') p1EmptyText += 1
+      return
+    }
     if (frame.tag === 'P1') p1Rows += 1
     provisions.push({
       labelPath: frame.labelPath,
@@ -423,24 +467,38 @@ function parseClmlWithStack(
     declaredProvisions,
     p1Seen,
     p1Rows,
+    p1Addressable,
+    p1BlockAmendment,
+    p1NoIdUriOther,
+    p1EmptyText,
   }
 }
 
 /**
- * Human-readable extraction-completeness note, or null when the counts are
- * consistent. Mismatch behaviour is store-flagged-and-reported, never fail
- * the document, and the reason is structural: NumberOfProvisions counts
- * every P1 open including BlockAmendment inserts (quoted new-law text for
- * another Act, correctly carrying no document IdURI and correctly never a
- * row: ukpga/2020/7 declares 579 with 15 such inserts), and provisions with
- * no text emit no row. Exact equality is therefore unachievable by
- * construction, and failing on it would drop whole Acts over legitimate
- * quoted text. The note persists on the document row and every mismatch
- * lands in the ingest summary, so a systematic gap (a tokenizer drift, a
- * dead extract) shows as a pattern instead of one silent document.
+ * Human-readable extraction-completeness note, or null when the counts
+ * are consistent. Mismatch behaviour is store-flagged-and-reported,
+ * never fail the document. Only the BlockAmendment gap is quiet:
+ * NumberOfProvisions counts every P1 open including quoted-insert P1s
+ * (new-law text for another Act, correctly carrying no document IdURI
+ * and correctly never a row: ukpga/2020/7 declares 579 with 15 such
+ * inserts), so a gap fully explained by them is healthy. Everything else
+ * stays loud: tokenizer drift, a no-IdURI P1 outside BlockAmendment, an
+ * addressable P1 with no emitted row, or a census that does not
+ * reconcile. The note persists on the document row and every mismatch
+ * lands in the ingest summary, so a systematic gap shows as a pattern
+ * instead of one silent document.
  */
 export function provisionCountNote(
-  doc: Pick<IngestDocument, 'declaredProvisions' | 'p1Seen' | 'p1Rows'>,
+  doc: Pick<
+    IngestDocument,
+    | 'declaredProvisions'
+    | 'p1Seen'
+    | 'p1Rows'
+    | 'p1Addressable'
+    | 'p1BlockAmendment'
+    | 'p1NoIdUriOther'
+    | 'p1EmptyText'
+  >,
 ): string | null {
   if (doc.declaredProvisions === null) {
     return 'upstream declared no NumberOfProvisions'
@@ -451,14 +509,27 @@ export function provisionCountNote(
       `tokenizer saw ${doc.p1Seen} P1 opens but upstream declared ${doc.declaredProvisions}`,
     )
   }
-  const gap = doc.p1Seen - doc.p1Rows
-  if (gap > 0) {
+  if (
+    doc.p1Seen !==
+    doc.p1Addressable + doc.p1BlockAmendment + doc.p1NoIdUriOther
+  ) {
     notes.push(
-      `${gap} P1 without an emitted row (BlockAmendment inserts carry no document IdURI; empty-text provisions emit no row)`,
+      `census does not reconcile (seen ${doc.p1Seen} != addressable ${doc.p1Addressable} + inserts ${doc.p1BlockAmendment} + other no-IdURI ${doc.p1NoIdUriOther}): parser bug`,
     )
-  } else if (gap < 0) {
+  }
+  if (doc.p1NoIdUriOther > 0) {
     notes.push(
-      `emitted ${doc.p1Rows} P1 rows from ${doc.p1Seen} P1 opens: impossible, parser bug`,
+      `${doc.p1NoIdUriOther} P1 without document IdURI outside BlockAmendment: unexplained, possible gap`,
+    )
+  }
+  if (doc.p1EmptyText > 0) {
+    notes.push(
+      `${doc.p1EmptyText} addressable P1 emitted no row (empty text): possible gap`,
+    )
+  }
+  if (doc.p1Rows + doc.p1EmptyText !== doc.p1Addressable) {
+    notes.push(
+      `emitted ${doc.p1Rows} P1 rows from ${doc.p1Addressable} addressable P1 opens: impossible, parser bug`,
     )
   }
   return notes.length > 0 ? notes.join('; ') : null
