@@ -229,3 +229,132 @@ describe('SearchResults citation distinction', () => {
     expect(container.textContent).not.toContain('from Find Case Law')
   })
 })
+
+describe('SearchResults legislation group', () => {
+  let root: ReturnType<typeof createRoot> | null
+  let container: HTMLElement | null
+
+  beforeEach(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+    root = null
+    container = null
+  })
+
+  afterEach(() => {
+    if (root) {
+      act(() => root?.unmount())
+    }
+    container?.remove()
+  })
+
+  it('renders provision text when current and the notice without text when amended', () => {
+    const rendered = renderResults({
+      hits: [],
+      groups: [
+        {
+          key: 'legislation',
+          label: 'Legislation',
+          hits: [
+            {
+              id: 'ukpga/2010/15/section/13',
+              resultGroup: 'legislation',
+              legislationStatus: 'current',
+              title: 'Equality Act 2010',
+              provisionLabel: 's. 13',
+              labelPath: 'section/13',
+              documentIdentity: 'ukpga/2010/15',
+              extent: 'E+W+S',
+              text: 'Direct discrimination applies here.',
+              snippets: [{ text: 'Direct discrimination applies here.' }],
+              officialUrl:
+                'https://www.legislation.gov.uk/ukpga/2010/15/section/13',
+              sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
+            },
+            {
+              id: 'ukpga/2010/15/section/80',
+              resultGroup: 'legislation',
+              legislationStatus: 'amended_not_held',
+              title: 'Equality Act 2010',
+              provisionLabel: 's. 80',
+              labelPath: 'section/80',
+              documentIdentity: 'ukpga/2010/15',
+              extent: 'E+W+S',
+              // Defence in depth: the API never sends text on amended hits,
+              // but even a caller that passes it must not see it rendered.
+              text: 'Stale amended wording that must never render.',
+              officialUrl:
+                'https://www.legislation.gov.uk/ukpga/2010/15/section/80',
+              sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
+              notice:
+                'This provision is affected by amendments that have been recorded but not yet applied.',
+            },
+          ],
+        },
+      ],
+      cached: true,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'results',
+    })
+    root = rendered.root
+    container = rendered.container
+
+    expect(container.textContent).toContain('Legislation')
+    expect(container.textContent).toContain(
+      'Direct discrimination applies here.',
+    )
+    expect(container.textContent).toContain(
+      'amendments that have been recorded but not yet applied',
+    )
+    expect(container.textContent).not.toContain(
+      'Stale amended wording that must never render',
+    )
+    const amendedItem = Array.from(container.querySelectorAll('li')).find(
+      (item) => item.textContent?.includes('s. 80'),
+    )
+    expect(amendedItem?.textContent).not.toContain('Direct discrimination')
+    expect(
+      amendedItem?.querySelector(
+        'a[href="https://www.legislation.gov.uk/ukpga/2010/15/section/80"]',
+      ),
+    ).not.toBeNull()
+  })
+
+  it('renders the act-level guidance notice that carries no provision text', () => {
+    const rendered = renderResults({
+      hits: [],
+      groups: [
+        {
+          key: 'legislation',
+          label: 'Legislation',
+          hits: [
+            {
+              id: 'ukpga/2010/15',
+              resultGroup: 'legislation',
+              legislationStatus: 'current',
+              title: 'Equality Act 2010',
+              provisionLabel: 'Equality Act 2010',
+              labelPath: '',
+              documentIdentity: 'ukpga/2010/15',
+              extent: 'E+W+S',
+              officialUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
+              sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
+              notice:
+                'Matched Equality Act 2010. Add a section number (for example s. 40) to read a provision.',
+            },
+          ],
+        },
+      ],
+      cached: true,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'results',
+    })
+    root = rendered.root
+    container = rendered.container
+
+    expect(container.textContent).toContain(
+      'Matched Equality Act 2010. Add a section number',
+    )
+  })
+})

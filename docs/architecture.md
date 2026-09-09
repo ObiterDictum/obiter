@@ -962,3 +962,42 @@ Track Changes is on. Whole-run emphasis under tracking is unchanged.
 
 Rejected: a parallel range operation type; renaming `set_run_emphasis`;
 attaching a character range to `runId`.
+
+### Stage 1 legislation search: stored Acts with withheld amended text (September 2026)
+
+Context: search covered judgments only. Stage 1 adds UK Public General Acts
+2020 onwards as a second federated group on `POST /api/search/fetch`.
+
+Decision: store Acts in `legislation_documents` plus addressable
+`legislation_provisions` (migration 0020), keyed by legislation.gov.uk
+`/id/` URI identity with label paths such as `section/13/2`. Ingest reads
+the documented CLML `data.xml` (version-neutral, XSD-declared, stable IdURI
+and RestrictExtent attributes) rather than `data.akn`, politely at one
+request per 5 seconds per the re-fetched `Crawl-delay: 5`, into Postgres
+only; `rebuild-legislation-index.ts` derives the separate
+`legislation_provisions` Meilisearch index afterwards, so the ingestor is
+never a second writer. Per-provision currency comes from the per-Act
+`/changes/affected/` feed's `ukm:Effect Applied` attribute with client-side
+`ukm:Section` filtering and `rel="next"` paging, never from the HTML
+yet-to-be-applied heading, which is whole-Act level. Exact citations
+(chapter numbers, short titles, aliases, section forms) resolve from
+Postgres; keyword queries read the provisions index with a provisional 0.35
+floor (stricter than the judgment 0.25 because provision boilerplate
+inflates keyword scores; re-sweep before trusting). A provision with
+recorded unapplied effects serves an amended-not-held notice with the
+official link and never its text; ambiguity resolves visibly, never to a
+silent winner. Secondary legislation is explicitly next, not dropped.
+
+Fix-up: extraction completeness is validated, not assumed. Each CLML
+`Legislation` tag declares `NumberOfProvisions`, verified against a real
+Act to count every `P1` open including `BlockAmendment` inserts (quoted
+new-law text for another Act, correctly carrying no document `IdURI` and
+correctly never a row), so the check compares `P1` rows against the
+declaration and never total rows (sub-provisions always exceed it). A
+mismatch stores flagged (`provision_count_note`, migration 0021) and is
+reported in the ingest summary; it never fails the document, because exact
+equality is unachievable by construction and failing on it would drop whole
+Acts over legitimate quoted text. The affected-changes feed likewise has no
+server-side provision filter: a filtered query is silently ignored and the
+whole-Act feed returns, so per-provision currency pages the whole feed and
+filters client-side on document-scoped `ukm:Section` URIs.
