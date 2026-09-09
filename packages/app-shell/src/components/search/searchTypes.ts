@@ -55,8 +55,34 @@ export interface LegalSearchResult {
   paragraphs?: CaseLawParagraph[]
 }
 
+export interface LegislationSearchResultHit {
+  id: string
+  resultGroup: 'legislation'
+  legislationStatus: 'current' | 'amended_not_held'
+  title: string
+  provisionLabel: string
+  labelPath: string
+  documentIdentity: string
+  extent: string
+  text?: string
+  snippets?: Array<{ text: string }>
+  officialUrl: string
+  sourceUrl: string
+  notice?: string
+  citationMatch?: LegalSearchCitationMatch
+  retrievalPath?: LegalSearchRetrievalPath
+  retrievalRank?: number
+}
+
+export interface LegalSearchFetchGroup {
+  key: 'judgments' | 'legislation'
+  label: string
+  hits: LegislationSearchResultHit[]
+}
+
 export interface LegalSearchFetchResponse {
   hits: LegalSearchResult[]
+  groups?: LegalSearchFetchGroup[]
   cached: boolean
   indexedCount: number
   skippedCount: number

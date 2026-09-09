@@ -3,7 +3,9 @@ import { ArrowRight } from '@phosphor-icons/react'
 import { caseResultLocation } from '../../case-navigation'
 import type {
   LegalSearchBrowseContext,
+  LegalSearchFetchGroup,
   LegalSearchFetchResponse,
+  LegislationSearchResultHit,
 } from './searchTypes'
 
 interface SearchResultsProps {
@@ -77,8 +79,68 @@ export function SearchResults({
             )
           })}
         </ul>
+        {response.groups?.map((group) => (
+          <LegislationGroupSection key={group.key} group={group} />
+        ))}
       </div>
     </section>
+  )
+}
+
+/**
+ * Federated legislation group: provision text when current, the amended
+ * notice with the official link when recorded amendments are unapplied.
+ * Amended provisions never render text here because the API never sends it.
+ */
+function LegislationGroupSection({ group }: { group: LegalSearchFetchGroup }) {
+  if (group.hits.length === 0) return null
+  return (
+    <div className="mt-6">
+      <h2 className="pb-2 text-[11px] font-medium tracking-wide text-muted">
+        {group.label}
+      </h2>
+      <ul className="flex flex-col gap-1">
+        {group.hits.map((hit) => (
+          <li
+            key={hit.id}
+            className="rounded-md px-3 py-3 text-ink transition-colors hover:bg-raised"
+          >
+            <LegislationHit hit={hit} />
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+function LegislationHit({ hit }: { hit: LegislationSearchResultHit }) {
+  return (
+    <span className="block min-w-0 flex-1">
+      <strong className="block text-sm font-medium leading-snug">
+        {hit.provisionLabel} · {hit.title}
+      </strong>
+      {hit.legislationStatus === 'amended_not_held' ? (
+        <span className="mt-1 block text-[12px] text-muted">
+          {hit.notice}{' '}
+          <a
+            href={hit.officialUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="underline"
+          >
+            Read the official revised provision
+          </a>
+        </span>
+      ) : (
+        <span className="mt-1 block text-[12px] text-muted">
+          {hit.snippets?.[0]?.text ?? hit.text}
+        </span>
+      )}
+      <small className="mt-1 block text-[11px] text-subtle">
+        legislation.gov.uk
+        {hit.extent ? ` · ${hit.extent}` : ''}
+      </small>
+    </span>
   )
 }
 

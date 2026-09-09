@@ -52,6 +52,7 @@ export interface ApiEnv {
   meilisearchSearchApiKey: string
   meilisearchAdminApiKey: string
   legalAuthoritiesIndex: string
+  legislationProvisionsIndex: string
   mojFindCaseLawBaseUrl: string
   mojFindCaseLawRateLimit: number
   rampartModel: string
@@ -227,6 +228,10 @@ function readIndexName(key: string, fallback: string) {
 
 function readLegalAuthoritiesIndexName() {
   return readIndexName('LEGAL_AUTHORITIES_INDEX', 'legal_authorities')
+}
+
+function readLegislationProvisionsIndexName() {
+  return readIndexName('LEGISLATION_PROVISIONS_INDEX', 'legislation_provisions')
 }
 
 function readOptionalSecret(key: string, nodeEnv: ApiEnv['nodeEnv']) {
@@ -447,6 +452,7 @@ export function readApiEnv(): ApiEnv {
     meilisearchSearchApiKey: readSearchApiKey(nodeEnv),
     meilisearchAdminApiKey: readAdminApiKey(nodeEnv),
     legalAuthoritiesIndex: readLegalAuthoritiesIndexName(),
+    legislationProvisionsIndex: readLegislationProvisionsIndexName(),
     mojFindCaseLawBaseUrl: readRequiredUrl(
       'MOJ_FIND_CASE_LAW_BASE_URL',
       'https://caselaw.nationalarchives.gov.uk',

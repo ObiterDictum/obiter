@@ -466,7 +466,13 @@ export function LegalSearchView() {
       if (searchRequestId.current !== requestId) return
       if (abortController.current === requestAbortController)
         abortController.current = null
-      if (body.hits.length > 0) {
+      // Federated groups count as results: a legislation-only answer has
+      // an empty judgment hits array by design, never interleaved into it.
+      const groupHitCount = (body.groups ?? []).reduce(
+        (sum, group) => sum + group.hits.length,
+        0,
+      )
+      if (body.hits.length > 0 || groupHitCount > 0) {
         setState({
           status: 'results',
           query: trimmedQuery,

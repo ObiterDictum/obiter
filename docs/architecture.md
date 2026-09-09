@@ -962,3 +962,28 @@ Track Changes is on. Whole-run emphasis under tracking is unchanged.
 
 Rejected: a parallel range operation type; renaming `set_run_emphasis`;
 attaching a character range to `runId`.
+
+### Stage 1 legislation search: stored Acts with withheld amended text (September 2026)
+
+Context: search covered judgments only. Stage 1 adds UK Public General Acts
+2020 onwards as a second federated group on `POST /api/search/fetch`.
+
+Decision: store Acts in `legislation_documents` plus addressable
+`legislation_provisions` (migration 0020), keyed by legislation.gov.uk
+`/id/` URI identity with label paths such as `section/13/2`. Ingest reads
+the documented CLML `data.xml` (version-neutral, XSD-declared, stable IdURI
+and RestrictExtent attributes) rather than `data.akn`, politely at one
+request per 5 seconds per the re-fetched `Crawl-delay: 5`, into Postgres
+only; `rebuild-legislation-index.ts` derives the separate
+`legislation_provisions` Meilisearch index afterwards, so the ingestor is
+never a second writer. Per-provision currency comes from the per-Act
+`/changes/affected/` feed's `ukm:Effect Applied` attribute with client-side
+`ukm:Section` filtering and `rel="next"` paging, never from the HTML
+yet-to-be-applied heading, which is whole-Act level. Exact citations
+(chapter numbers, short titles, aliases, section forms) resolve from
+Postgres; keyword queries read the provisions index with a provisional 0.35
+floor (stricter than the judgment 0.25 because provision boilerplate
+inflates keyword scores; re-sweep before trusting). A provision with
+recorded unapplied effects serves an amended-not-held notice with the
+official link and never its text; ambiguity resolves visibly, never to a
+silent winner. Secondary legislation is explicitly next, not dropped.
