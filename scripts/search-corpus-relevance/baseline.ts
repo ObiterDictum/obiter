@@ -11,7 +11,8 @@ export const corpusRelevanceBaseline: CorpusRelevanceBaseline = {
   heldRecall: 1,
   heldPrecision: 0.5332,
   absentPrecision: 1,
-  mrr: 0.9371,
+  // Ratchet of the measured post-#170 floor (was 0.9371). Not a relaxation.
+  mrr: 0.9383,
   byQuery: {
     'party-okpabi': { recall: 1, ranks: [1], returnedHitCount: 20 },
     'party-guest': { recall: 1, ranks: [1], returnedHitCount: 20 },

@@ -28,6 +28,7 @@ export interface StoredLegislationProvision {
   hasUnappliedEffects: boolean
   effectsCheckedAt: string | null
   title: string
+  year: number
   sourceUrl: string
 }
 
@@ -56,7 +57,7 @@ export async function getLegislationProvision(
             p.provision_text as text,
             p.has_unapplied_effects as "hasUnappliedEffects",
             p.effects_checked_at as "effectsCheckedAt",
-            d.title, d.source_url as "sourceUrl"
+            d.title, d.year, d.source_url as "sourceUrl"
        from legislation_provisions p
        join legislation_documents d on d.identity = p.document_identity
       where p.id = $1`,

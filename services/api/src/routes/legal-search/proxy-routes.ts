@@ -22,6 +22,7 @@ import {
   type LegalFetchRequest,
   extractNeutralCitation,
 } from '@obiter/legal-source-provider'
+import { parseLegislationProvisionPath } from '@obiter/contracts'
 import type { LegalSearchCitationStatus } from '@obiter/contracts'
 import {
   apiError,
@@ -38,6 +39,7 @@ import {
 } from './source-store'
 import {
   resolveLegislationFetch,
+  resolveLegislationProvisionPage,
   type LegislationFetchResult,
 } from './legislation-serve'
 import {
@@ -213,7 +215,7 @@ export function createLegalSearchProxyRoutes(
       return c.json(
         toFetchResponse(summaries, parsed.data.query, true, 0, 0, false, {
           citation,
-          ...legislationGroupsFor(legislation),
+          ...legislationFetchExtras(exactLookup, legislation),
           diagnostics: {
             exactLookupSearched: true,
             storedIndexSearched: true,
@@ -275,7 +277,7 @@ export function createLegalSearchProxyRoutes(
       return c.json(
         toFetchResponse(summaries, parsed.data.query, true, 0, 0, false, {
           citation,
-          ...legislationGroupsFor(legislation),
+          ...legislationFetchExtras(exactLookup, legislation),
           diagnostics: {
             exactLookupSearched: Boolean(exactLookup),
             storedIndexSearched: true,
@@ -298,7 +300,7 @@ export function createLegalSearchProxyRoutes(
         toFetchResponse([], parsed.data.query, true, 0, 0, false, {
           outcome: 'stored_browse_empty',
           citation,
-          ...legislationGroupsFor(legislation),
+          ...legislationFetchExtras(exactLookup, legislation),
           diagnostics: {
             exactLookupSearched: Boolean(exactLookup),
             storedIndexSearched: true,
@@ -374,7 +376,7 @@ export function createLegalSearchProxyRoutes(
             false,
             {
               citation,
-              ...legislationGroupsFor(legislation),
+              ...legislationFetchExtras(exactLookup, legislation),
               diagnostics: {
                 exactLookupSearched: true,
                 storedIndexSearched: true,
@@ -403,7 +405,7 @@ export function createLegalSearchProxyRoutes(
               ? 'recognised_not_held'
               : 'no_match',
           citation,
-          ...legislationGroupsFor(legislation),
+          ...legislationFetchExtras(exactLookup, legislation),
           diagnostics: {
             exactLookupSearched: Boolean(exactLookup),
             storedIndexSearched: true,
@@ -456,7 +458,7 @@ export function createLegalSearchProxyRoutes(
             ? 'results'
             : 'hydration_queued',
           citation,
-          ...legislationGroupsFor(legislation),
+          ...legislationFetchExtras(exactLookup, legislation),
           diagnostics: {
             exactLookupSearched: Boolean(exactLookup),
             storedIndexSearched: true,
@@ -569,7 +571,7 @@ export function createLegalSearchProxyRoutes(
                   ? undefined
                   : 'no_match',
           citation,
-          ...legislationGroupsFor(legislation),
+          ...legislationFetchExtras(exactLookup, legislation),
           diagnostics: {
             exactLookupSearched: Boolean(exactLookup),
             storedIndexSearched: true,
@@ -754,6 +756,57 @@ export function createLegalSearchProxyRoutes(
     )
   })
 
+  app.get('/api/search/legislation/*', async (c) => {
+    const requestId = c.get('requestId')
+    if (!options.legislation) {
+      return c.json(
+        apiError(
+          'document_not_found',
+          'Legislation provision was not found.',
+          requestId,
+        ),
+        404,
+      )
+    }
+    const rest = c.req.path.replace(/^\/api\/search\/legislation\/?/, '')
+    const parsed = parseLegislationProvisionPath(rest)
+    if (!parsed) {
+      return c.json(
+        apiError(
+          'validation_failed',
+          'Legislation provision path is invalid.',
+          requestId,
+        ),
+        400,
+      )
+    }
+    const result = await resolveLegislationProvisionPage(
+      options.legislation.pool,
+      parsed.provisionId,
+    )
+    if (result.status === 'unavailable') {
+      return c.json(
+        apiError(
+          'storage_unavailable',
+          'Legal source storage is unavailable.',
+          requestId,
+        ),
+        503,
+      )
+    }
+    if (result.status === 'not_found') {
+      return c.json(
+        apiError(
+          'document_not_found',
+          'Legislation provision was not found.',
+          requestId,
+        ),
+        404,
+      )
+    }
+    return c.json(result.page)
+  })
+
   return app
 }
 
@@ -803,6 +856,29 @@ function legislationDiagnosticsFor(legislation: LegislationFetchResult | null) {
 function legislationGroupsFor(legislation: LegislationFetchResult | null) {
   if (!legislation || legislation.groups.length === 0) return {}
   return { groups: legislation.groups }
+}
+
+/**
+ * Statute-shaped queries (the API already classified them) lead with
+ * legislation. Judgment citations and keyword queries stay judgment-led.
+ * Omitted on judgment-led answers so existing clients keep the same JSON.
+ */
+function legislationLeadFor(
+  exactLookup: ExactLookup | null,
+  legislation: LegislationFetchResult | null,
+) {
+  if (exactLookup || !legislation?.citationRecognised) return {}
+  return { primaryGroup: 'legislation' as const }
+}
+
+function legislationFetchExtras(
+  exactLookup: ExactLookup | null,
+  legislation: LegislationFetchResult | null,
+) {
+  return {
+    ...legislationGroupsFor(legislation),
+    ...legislationLeadFor(exactLookup, legislation),
+  }
 }
 
 /**

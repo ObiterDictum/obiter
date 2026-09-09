@@ -5,10 +5,12 @@ import {
   createActDirectory,
   type LegislationActDirectoryEntry,
 } from './legislation-citations'
+import { createCanonicalProvisionPath } from '@obiter/contracts'
 import {
   getLegislationDocument,
   getLegislationProvision,
   listLegislationActs,
+  type StoredLegislationProvision,
 } from './legislation-store'
 import {
   amendedProvisionNotice,
@@ -95,6 +97,7 @@ function currentProvisionHit(
     extent: string
     text: string
     title: string
+    year: number
     sourceUrl: string
   },
   retrievalPath: LegislationFetchHit['retrievalPath'],
@@ -105,10 +108,15 @@ function currentProvisionHit(
     resultGroup: 'legislation',
     legislationStatus: 'current',
     title: provision.title,
+    year: provision.year,
     provisionLabel: provision.label,
     labelPath: provision.labelPath,
     documentIdentity: provision.documentIdentity,
     extent: provision.extent,
+    canonicalUrl: createCanonicalProvisionPath(
+      provision.documentIdentity,
+      provision.labelPath,
+    ),
     text: provision.text.slice(0, 4000),
     snippets: [{ text: excerpt(provision.text) }],
     officialUrl: officialProvisionUrl(
@@ -130,6 +138,7 @@ function amendedProvisionHit(
     label: string
     extent: string
     title: string
+    year: number
     sourceUrl: string
   },
   retrievalPath: LegislationFetchHit['retrievalPath'],
@@ -144,10 +153,15 @@ function amendedProvisionHit(
     resultGroup: 'legislation',
     legislationStatus: 'amended_not_held',
     title: provision.title,
+    year: provision.year,
     provisionLabel: provision.label,
     labelPath: provision.labelPath,
     documentIdentity: provision.documentIdentity,
     extent: provision.extent,
+    canonicalUrl: createCanonicalProvisionPath(
+      provision.documentIdentity,
+      provision.labelPath,
+    ),
     officialUrl,
     sourceUrl: provision.sourceUrl,
     notice: amendedProvisionNotice(officialUrl),
@@ -253,6 +267,7 @@ export async function resolveLegislationFetch(
       resultGroup: 'legislation',
       legislationStatus: 'current',
       title: document.title,
+      year: document.year,
       provisionLabel: document.title,
       labelPath: '',
       documentIdentity: document.identity,
@@ -324,6 +339,7 @@ async function searchKeywordProvisions(
               extent: hit.extent,
               text: hit.text,
               title: hit.title,
+              year: hit.year,
               sourceUrl: hit.sourceUrl,
             },
             'stored_index',
@@ -340,6 +356,7 @@ async function searchKeywordProvisions(
               label: hit.label,
               extent: hit.extent,
               title: hit.title,
+              year: hit.year,
               sourceUrl: hit.sourceUrl,
             },
             'stored_index',
@@ -348,4 +365,90 @@ async function searchKeywordProvisions(
           citationMatch: undefined,
         },
   )
+}
+
+export interface LegislationProvisionPage {
+  provision: {
+    id: string
+    documentIdentity: string
+    title: string
+    year: number
+    provisionLabel: string
+    labelPath: string
+    extent: string
+    legislationStatus: 'current' | 'amended_not_held'
+    text?: string
+    officialUrl: string
+    sourceUrl: string
+    notice?: string
+    canonicalUrl: string
+  }
+}
+
+export type LegislationProvisionPageResult =
+  | { status: 'ok'; page: LegislationProvisionPage }
+  | { status: 'not_found' }
+  | { status: 'unavailable' }
+
+export async function resolveLegislationProvisionPage(
+  pool: LegislationServeDeps['pool'],
+  provisionId: string,
+): Promise<LegislationProvisionPageResult> {
+  let provision: StoredLegislationProvision | null
+  try {
+    provision = await withStoredTimeout(
+      getLegislationProvision(pool, provisionId),
+    )
+  } catch {
+    return { status: 'unavailable' }
+  }
+  if (!provision) return { status: 'not_found' }
+  const officialUrl = officialProvisionUrl(
+    provision.documentIdentity,
+    provision.labelPath,
+  )
+  const canonicalUrl = createCanonicalProvisionPath(
+    provision.documentIdentity,
+    provision.labelPath,
+  )
+  if (provision.hasUnappliedEffects === false) {
+    return {
+      status: 'ok',
+      page: {
+        provision: {
+          id: provision.id,
+          documentIdentity: provision.documentIdentity,
+          title: provision.title,
+          year: provision.year,
+          provisionLabel: provision.label,
+          labelPath: provision.labelPath,
+          extent: provision.extent,
+          legislationStatus: 'current',
+          text: provision.text,
+          officialUrl,
+          sourceUrl: provision.sourceUrl,
+          canonicalUrl,
+        },
+      },
+    }
+  }
+  return {
+    status: 'ok',
+    page: {
+      provision: {
+        id: provision.id,
+        documentIdentity: provision.documentIdentity,
+        title: provision.title,
+        year: provision.year,
+        provisionLabel: provision.label,
+        labelPath: provision.labelPath,
+        extent: provision.extent,
+        legislationStatus: 'amended_not_held',
+        officialUrl,
+        sourceUrl: provision.sourceUrl,
+        notice: amendedProvisionNotice(officialUrl),
+        canonicalUrl,
+      },
+    },
+  }
 }

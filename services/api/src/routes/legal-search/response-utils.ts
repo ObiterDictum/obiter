@@ -5,6 +5,8 @@ import {
   type LegalSearchCitationMatch,
   type LegalSearchCitationStatus,
 } from '@obiter/contracts'
+
+export type LegalFetchPrimaryGroup = 'judgments' | 'legislation'
 import type { LegalAuthority } from '@obiter/legal-schema'
 import {
   containsEveryQueryTerm,
@@ -53,10 +55,12 @@ export interface LegislationFetchHit {
   resultGroup: 'legislation'
   legislationStatus: 'current' | 'amended_not_held'
   title: string
+  year: number
   provisionLabel: string
   labelPath: string
   documentIdentity: string
   extent: string
+  canonicalUrl?: string
   text?: string
   snippets?: Array<{ text: string }>
   officialUrl: string
@@ -108,6 +112,9 @@ export function toFetchResponse(
      * flat hits array is unchanged, so clients that predate groups keep
      * reading exactly what they read before. */
     groups?: LegalFetchResultGroup[]
+    /** Display order of the two groups. Omitted unless the query is a
+     * classified statute citation, so judgment-led answers stay additive. */
+    primaryGroup?: LegalFetchPrimaryGroup
     diagnostics?: {
       exactLookupSearched?: boolean
       storedIndexSearched?: boolean
@@ -137,6 +144,7 @@ export function toFetchResponse(
     citation: options.citation,
     diagnostics: options.diagnostics,
     groups: options.groups,
+    primaryGroup: options.primaryGroup,
   }
 }
 

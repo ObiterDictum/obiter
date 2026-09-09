@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   resolveLegislationFetch,
+  resolveLegislationProvisionPage,
   type LegislationServeDeps,
 } from './legislation-serve'
 
@@ -26,6 +27,7 @@ const currentProvision = {
   hasUnappliedEffects: false,
   effectsCheckedAt: '2026-09-01T00:00:00Z',
   title: 'Equality Act 2010',
+  year: 2010,
   sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
 }
 
@@ -99,6 +101,8 @@ describe('resolveLegislationFetch', () => {
     const hit = result.groups[0]?.hits[0]
     expect(hit?.legislationStatus).toBe('current')
     expect(hit?.text).toContain('Direct discrimination')
+    expect(hit?.canonicalUrl).toBe('/ln/ukpga/2010/15/section/13')
+    expect(hit?.year).toBe(2010)
   })
 
   it('withholds text and links out for an amended provision', async () => {
@@ -195,5 +199,35 @@ describe('resolveLegislationFetch', () => {
     )
     expect(result.groups).toEqual([])
     expect(result.note).toContain('unavailable')
+  })
+})
+
+describe('resolveLegislationProvisionPage', () => {
+  it('serves full text when effects are explicitly absent', async () => {
+    const result = await resolveLegislationProvisionPage(
+      createDeps({}).pool,
+      currentProvision.id,
+    )
+    expect(result.status).toBe('ok')
+    if (result.status !== 'ok') return
+    expect(result.page.provision.legislationStatus).toBe('current')
+    expect(result.page.provision.text).toContain('Direct discrimination')
+    expect(result.page.provision.canonicalUrl).toBe(
+      '/ln/ukpga/2010/15/section/13',
+    )
+  })
+
+  it('withholds text when effects are recorded', async () => {
+    const result = await resolveLegislationProvisionPage(
+      createDeps({ provision: amendedProvision }).pool,
+      amendedProvision.id,
+    )
+    expect(result.status).toBe('ok')
+    if (result.status !== 'ok') return
+    expect(result.page.provision.legislationStatus).toBe('amended_not_held')
+    expect(result.page.provision).not.toHaveProperty('text')
+    expect(result.page.provision.notice).toContain(
+      'does not hold the amended wording',
+    )
   })
 })
