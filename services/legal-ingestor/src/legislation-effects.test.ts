@@ -73,6 +73,12 @@ describe('recorded ukpga/2010/15 snapshot', () => {
   // recorded effects, all Applied=true, while s.80 carried an unapplied
   // one. Phrased as a snapshot date throughout: the feed moves, so s.40
   // serving text is true as of this audit, not forever.
+  //
+  // Read whole-Act, filtered client-side: the feed has no server-side
+  // provision filter, so a query param naming s.40 is silently ignored and
+  // the whole-Act feed returns. An earlier filtered read misattributed 16
+  // whole-Act effects to s.40; only ukm:AffectedProvisions/ukm:Section URIs
+  // scoped to this document decide which provision an effect touches.
   const snapshotFeed = `<?xml version="1.0" encoding="utf-8"?>
 <feed xmlns="http://www.w3.org/2005/Atom" xmlns:ukm="http://www.legislation.gov.uk/namespaces/metadata">
 <entry><id>e1</id><content type="text/xml">

@@ -987,3 +987,17 @@ inflates keyword scores; re-sweep before trusting). A provision with
 recorded unapplied effects serves an amended-not-held notice with the
 official link and never its text; ambiguity resolves visibly, never to a
 silent winner. Secondary legislation is explicitly next, not dropped.
+
+Fix-up: extraction completeness is validated, not assumed. Each CLML
+`Legislation` tag declares `NumberOfProvisions`, verified against a real
+Act to count every `P1` open including `BlockAmendment` inserts (quoted
+new-law text for another Act, correctly carrying no document `IdURI` and
+correctly never a row), so the check compares `P1` rows against the
+declaration and never total rows (sub-provisions always exceed it). A
+mismatch stores flagged (`provision_count_note`, migration 0021) and is
+reported in the ingest summary; it never fails the document, because exact
+equality is unachievable by construction and failing on it would drop whole
+Acts over legitimate quoted text. The affected-changes feed likewise has no
+server-side provision filter: a filtered query is silently ignored and the
+whole-Act feed returns, so per-provision currency pages the whole feed and
+filters client-side on document-scoped `ukm:Section` URIs.

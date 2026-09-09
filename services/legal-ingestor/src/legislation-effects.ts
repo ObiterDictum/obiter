@@ -6,6 +6,10 @@
  * follow `rel="next"` links. The server offers no per-provision filter, so
  * callers page through the whole feed and filter client-side on the
  * `ukm:AffectedProvisions/ukm:Section` references of each `ukm:Effect`.
+ * A filtered query (e.g. `?affected-provision=s.40`) is silently ignored:
+ * the whole-Act feed returns, and 16 of its effects were once misread as
+ * s.40's. Only Section URIs scoped to the requested document attribute an
+ * effect to a provision.
  * The `Applied` attribute on `ukm:Effect` is the source of truth: the HTML
  * yet-to-be-applied heading is whole-Act level (verified identical whether
  * the query names an amended or an unamended section), so it cannot answer

@@ -40,6 +40,18 @@ export interface IngestDocument {
   contentHash: string
   extent: string
   provisions: IngestProvision[]
+  /**
+   * The Legislation open tag's NumberOfProvisions, null when absent or not
+   * a number. Verified against a real 1.2 MB Act (ukpga/2020/7, declared
+   * 579) to count every P1 open, including BlockAmendment inserts that
+   * carry no document IdURI, so it is a P1-level check, never a total-row
+   * check: our rows include P2..P5 and always exceed it.
+   */
+  declaredProvisions: number | null
+  /** Every P1 open the tokenizer saw, inserts included. */
+  p1Seen: number
+  /** Emitted rows whose frame tag was P1. */
+  p1Rows: number
 }
 
 function decodeXmlEntities(value: string): string {
@@ -53,10 +65,59 @@ function decodeXmlEntities(value: string): string {
     .replace(/&amp;/g, '&')
 }
 
+/**
+ * Drops XML tags from character data. Hand scanner, not a tag regex: the
+ * old `/<[^>]*>/g` stopped at the first `>` even inside an attribute value
+ * or comment, leaving tag residue (the CodeQL incomplete-sanitization
+ * flag on this function), and comments arriving in character data were cut
+ * mid-comment. Quotes are honoured so `>` inside attributes stays inside
+ * the tag; `<!-- ... -->` is skipped whole.
+ *
+ * Why this is safe rather than just quiet: the output flows to Postgres
+ * provision text, then API JSON, then React text nodes (`{hit.text}` in
+ * SearchResults.tsx). There is no HTML sink anywhere on that path: no
+ * dangerouslySetInnerHTML in app-shell, services/api, or the ingestor
+ * (grep-verified), so a missed fragment could garble display text but
+ * cannot become element injection. The scanner is still worth having
+ * correct, because a red check everyone ignores rots: like the PDF glyph
+ * cover tests pinned in ci-local.sh, a permanently-red gate teaches the
+ * next reader to merge past red, and the real breakage then walks through
+ * unnoticed. Clear it, do not normalise it.
+ */
 function stripTags(value: string): string {
-  return decodeXmlEntities(value.replace(/<[^>]*>/g, ''))
-    .replace(/\s+/g, ' ')
-    .trim()
+  const kept: string[] = []
+  let i = 0
+  while (i < value.length) {
+    if (value[i] !== '<') {
+      kept.push(value[i]!)
+      i += 1
+      continue
+    }
+    if (value.startsWith('<!--', i)) {
+      const end = value.indexOf('-->', i + 4)
+      i = end === -1 ? value.length : end + 3
+      continue
+    }
+    // Skip to the closing `>`, honouring both quote kinds so a `>` inside
+    // an attribute value does not end the tag early. A `<` with no closing
+    // `>` drops the tail: such input never occurs in CLML character data,
+    // and dropping beats serving tag residue as text.
+    i += 1
+    let quote: string | null = null
+    while (i < value.length) {
+      const char = value[i]!
+      if (quote !== null) {
+        if (char === quote) quote = null
+      } else if (char === '"' || char === "'") {
+        quote = char
+      } else if (char === '>') {
+        i += 1
+        break
+      }
+      i += 1
+    }
+  }
+  return decodeXmlEntities(kept.join('')).replace(/\s+/g, ' ').trim()
 }
 
 function readAttribute(tag: string, name: string): string | null {
@@ -116,9 +177,20 @@ export function parseClmlDocument(
         /<ukm:Metadata\b[\s\S]*?<dc:title\b[^>]*>([\s\S]*?)<\/dc:title>/i,
       )?.[1] ?? '',
     ) || ref.title
-  const rootExtent = xml.match(/<Legislation\b([^>]*)>/i)?.[1] ?? ''
-  const extent = readAttribute(rootExtent, 'RestrictExtent') ?? ''
-  return parseClmlWithStack(xml, identity, title || ref.title, extent)
+  const rootTag = xml.match(/<Legislation\b([^>]*)>/i)?.[1] ?? ''
+  const extent = readAttribute(rootTag, 'RestrictExtent') ?? ''
+  const declaredRaw = readAttribute(rootTag, 'NumberOfProvisions')
+  const declaredCount =
+    declaredRaw !== null && /^\d+$/.test(declaredRaw.trim())
+      ? Number(declaredRaw.trim())
+      : null
+  return parseClmlWithStack(
+    xml,
+    identity,
+    title || ref.title,
+    extent,
+    declaredCount,
+  )
 }
 
 interface ClmlFrame {
@@ -140,12 +212,15 @@ function parseClmlWithStack(
   identity: string,
   title: string,
   rootExtent: string,
+  declaredProvisions: number | null,
 ): IngestDocument | { skipped: string } {
   const provisions: IngestProvision[] = []
   const stack: ClmlFrame[] = []
   let extentCurrent = rootExtent
   const extentSaved: string[] = []
   let order = 0
+  let p1Seen = 0
+  let p1Rows = 0
   let textDepth = 0
   const tagPattern = /<(\/?)([A-Za-z0-9:]+)((?:"[^"]*"|'[^']*'|[^>"'])*)>/g
   let textStart = 0
@@ -201,6 +276,9 @@ function parseClmlWithStack(
       if (tagExtent !== null) extentCurrent = tagExtent
       if (tag === 'Text') textDepth += 1
       if (provisionTags.has(tag)) {
+        // Every P1 open counts towards the declared total, including the
+        // BlockAmendment inserts below that carry no document IdURI.
+        if (tag === 'P1') p1Seen += 1
         const idUri = readAttribute(attrs, 'IdURI') ?? ''
         const marker = `/id/${identity}/`
         const idx = idUri.indexOf(marker)
@@ -289,6 +367,7 @@ function parseClmlWithStack(
       .filter(Boolean)
       .join(' ')
     if (!text) return
+    if (frame.tag === 'P1') p1Rows += 1
     provisions.push({
       labelPath: frame.labelPath,
       label: formatProvisionLabel(frame.labelPath, frame.pnumber),
@@ -341,7 +420,48 @@ function parseClmlWithStack(
     contentHash: sha256Hex(xml),
     extent: rootExtent,
     provisions,
+    declaredProvisions,
+    p1Seen,
+    p1Rows,
   }
+}
+
+/**
+ * Human-readable extraction-completeness note, or null when the counts are
+ * consistent. Mismatch behaviour is store-flagged-and-reported, never fail
+ * the document, and the reason is structural: NumberOfProvisions counts
+ * every P1 open including BlockAmendment inserts (quoted new-law text for
+ * another Act, correctly carrying no document IdURI and correctly never a
+ * row: ukpga/2020/7 declares 579 with 15 such inserts), and provisions with
+ * no text emit no row. Exact equality is therefore unachievable by
+ * construction, and failing on it would drop whole Acts over legitimate
+ * quoted text. The note persists on the document row and every mismatch
+ * lands in the ingest summary, so a systematic gap (a tokenizer drift, a
+ * dead extract) shows as a pattern instead of one silent document.
+ */
+export function provisionCountNote(
+  doc: Pick<IngestDocument, 'declaredProvisions' | 'p1Seen' | 'p1Rows'>,
+): string | null {
+  if (doc.declaredProvisions === null) {
+    return 'upstream declared no NumberOfProvisions'
+  }
+  const notes: string[] = []
+  if (doc.p1Seen !== doc.declaredProvisions) {
+    notes.push(
+      `tokenizer saw ${doc.p1Seen} P1 opens but upstream declared ${doc.declaredProvisions}`,
+    )
+  }
+  const gap = doc.p1Seen - doc.p1Rows
+  if (gap > 0) {
+    notes.push(
+      `${gap} P1 without an emitted row (BlockAmendment inserts carry no document IdURI; empty-text provisions emit no row)`,
+    )
+  } else if (gap < 0) {
+    notes.push(
+      `emitted ${doc.p1Rows} P1 rows from ${doc.p1Seen} P1 opens: impossible, parser bug`,
+    )
+  }
+  return notes.length > 0 ? notes.join('; ') : null
 }
 
 /** Display label from the /id/ label path, e.g. section/13/2/a to s. 13(2)(a).

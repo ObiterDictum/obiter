@@ -1,8 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { formatProvisionLabel, parseClmlDocument } from './legislation-clml'
+import {
+  formatProvisionLabel,
+  parseClmlDocument,
+  provisionCountNote,
+} from './legislation-clml'
 
 const sampleClml = `<?xml version="1.0" encoding="utf-8"?>
-<Legislation xmlns="http://www.legislation.gov.uk/namespaces/legislation" DocumentURI="http://www.legislation.gov.uk/ukpga/2020/1" IdURI="http://www.legislation.gov.uk/id/ukpga/2020/1" NumberOfProvisions="3" RestrictExtent="E+W">
+<Legislation xmlns="http://www.legislation.gov.uk/namespaces/legislation" DocumentURI="http://www.legislation.gov.uk/ukpga/2020/1" IdURI="http://www.legislation.gov.uk/id/ukpga/2020/1" NumberOfProvisions="2" RestrictExtent="E+W">
 <ukm:Metadata xmlns:ukm="http://www.legislation.gov.uk/namespaces/metadata"><dc:title xmlns:dc="http://purl.org/dc/elements/1.1/">Sample Act 2020</dc:title></ukm:Metadata>
 <Primary><Pblock><Title>General</Title>
 <P1 DocumentURI="http://www.legislation.gov.uk/ukpga/2020/1/section/13" IdURI="http://www.legislation.gov.uk/id/ukpga/2020/1/section/13" id="section-13"><Pnumber>13</Pnumber><P1para><Text>Main duties apply.</Text></P1para>
@@ -46,6 +50,12 @@ describe('parseClmlDocument', () => {
     expect(parsed.provisions[0]?.text).toBe(
       'Main duties apply. Duties extend to agents. Agents acting openly.',
     )
+    // The declaration counts P1 opens (both are P1 here), not total rows:
+    // P2/P3 sub-provisions are rows but never declared provisions.
+    expect(parsed.declaredProvisions).toBe(2)
+    expect(parsed.p1Seen).toBe(2)
+    expect(parsed.p1Rows).toBe(2)
+    expect(provisionCountNote(parsed)).toBeNull()
     // Nested text is included so a section row answers subsection terms.
     expect(parsed.provisions[1]?.text).toContain('Agents acting openly.')
     expect(
@@ -59,6 +69,42 @@ describe('parseClmlDocument', () => {
       skipped: 'data.xml does not carry this Act identity',
     })
   })
+
+  it('strips comments whole, even with > inside', () => {
+    // The old tag regex stopped at the first `>`, leaving ` comment -->`
+    // residue in the text. Comments arrive in character data (the tag
+    // tokenizer does not match `<!--`), so the stripper must skip them.
+    const xml = `<?xml version="1.0"?>
+<Legislation DocumentURI="http://www.legislation.gov.uk/ukpga/2020/9" IdURI="http://www.legislation.gov.uk/id/ukpga/2020/9" NumberOfProvisions="1">
+<ukm:Metadata xmlns:ukm="x"><dc:title xmlns:dc="x">Comment Act</dc:title></ukm:Metadata>
+<P1 DocumentURI="http://www.legislation.gov.uk/ukpga/2020/9/section/1" IdURI="http://www.legislation.gov.uk/id/ukpga/2020/9/section/1" id="section-1"><Pnumber>1</Pnumber><P1para><Text>Kept <!-- a > comment --> text.</Text></P1para></P1>
+</Legislation>`
+    const parsed = parseClmlDocument(xml, { ...ref, year: 2020, number: 9 })
+    if ('skipped' in parsed)
+      throw new Error(`unexpected skip: ${parsed.skipped}`)
+    expect(parsed.provisions[0]?.text).toBe('Kept text.')
+  })
+
+  it('flags the BlockAmendment-insert gap instead of failing', () => {
+    // Two P1 opens declared, one addressable: the bare P1 is a quoted
+    // insert for another Act (no document IdURI, correctly never a row).
+    // Real Acts look like this (ukpga/2020/7: 579 declared, 15 inserts),
+    // so the gap stores flagged, it never fails the document.
+    const xml = `<?xml version="1.0"?>
+<Legislation DocumentURI="http://www.legislation.gov.uk/ukpga/2020/9" IdURI="http://www.legislation.gov.uk/id/ukpga/2020/9" NumberOfProvisions="2">
+<ukm:Metadata xmlns:ukm="x"><dc:title xmlns:dc="x">Gap Act</dc:title></ukm:Metadata>
+<Primary><P1 DocumentURI="http://www.legislation.gov.uk/ukpga/2020/9/section/1" IdURI="http://www.legislation.gov.uk/id/ukpga/2020/9/section/1" id="section-1"><Pnumber>1</Pnumber><P1para><Text>Only row.</Text></P1para></P1></Primary>
+<BlockAmendment><P1><Pnumber>i</Pnumber><P1para><Text>Quoted insert, not this Act.</Text></P1para></P1></BlockAmendment>
+</Legislation>`
+    const parsed = parseClmlDocument(xml, { ...ref, year: 2020, number: 9 })
+    if ('skipped' in parsed)
+      throw new Error(`unexpected skip: ${parsed.skipped}`)
+    expect(parsed.provisions).toHaveLength(1)
+    expect(parsed.declaredProvisions).toBe(2)
+    expect(parsed.p1Seen).toBe(2)
+    expect(parsed.p1Rows).toBe(1)
+    expect(provisionCountNote(parsed)).toContain('1 P1 without an emitted row')
+  })
 })
 
 describe('formatProvisionLabel', () => {
@@ -68,5 +114,19 @@ describe('formatProvisionLabel', () => {
     expect(formatProvisionLabel('schedule/2/paragraph/4', '4')).toBe(
       'Sch. 2 para. 4',
     )
+  })
+})
+
+describe('provisionCountNote', () => {
+  it('reports a missing declaration instead of staying silent', () => {
+    expect(
+      provisionCountNote({ declaredProvisions: null, p1Seen: 1, p1Rows: 1 }),
+    ).toBe('upstream declared no NumberOfProvisions')
+  })
+
+  it('reports tokenizer drift against the declaration', () => {
+    expect(
+      provisionCountNote({ declaredProvisions: 5, p1Seen: 4, p1Rows: 4 }),
+    ).toContain('tokenizer saw 4 P1 opens but upstream declared 5')
   })
 })

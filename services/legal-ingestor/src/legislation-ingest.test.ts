@@ -61,6 +61,9 @@ describe('upsertLegislationDocument transaction', () => {
     sourceUrl: 'https://www.legislation.gov.uk/ukpga/2020/1',
     contentHash: 'hash-1',
     extent: 'E+W',
+    declaredProvisions: 1,
+    p1Seen: 1,
+    p1Rows: 1,
     provisions: [
       {
         labelPath: 'section/1',
@@ -96,6 +99,35 @@ describe('upsertLegislationDocument transaction', () => {
     expect(statements).toContain('ROLLBACK')
     expect(statements).not.toContain('COMMIT')
     expect(client.release).toHaveBeenCalled()
+  })
+
+  it('persists the extraction-completeness note on the document row', async () => {
+    // Declared 2 P1s, one emitted row: the stored note flags the gap so a
+    // mismatch is auditable per Act instead of failing the document.
+    const gappy: IngestDocument = {
+      ...doc,
+      declaredProvisions: 2,
+      p1Seen: 2,
+      p1Rows: 1,
+    }
+    const seen: Array<{ text: string; values?: unknown[] }> = []
+    const client = {
+      query: async (text: string, values?: unknown[]) => {
+        seen.push({ text, values })
+        return { rows: [] }
+      },
+      release: vi.fn(),
+    }
+    const pool = {
+      query: async () => ({ rows: [] }),
+      connect: async () => client,
+    } as unknown as Db
+
+    await upsertLegislationDocument(pool, gappy)
+    const docInsert = seen.find((call) =>
+      call.text.includes('insert into legislation_documents'),
+    )
+    expect(docInsert?.values?.[8]).toContain('1 P1 without an emitted row')
   })
 
   it('commits the document, delete, and inserts on one client', async () => {
@@ -134,7 +166,7 @@ describe('upsertLegislationDocument transaction', () => {
 
 describe('ingestYear with mocked fetch', () => {
   const clmlFor = (n: number) =>
-    `<?xml version="1.0"?><Legislation RestrictExtent="E+W">` +
+    `<?xml version="1.0"?><Legislation RestrictExtent="E+W" NumberOfProvisions="1">` +
     `<ukm:Metadata xmlns:ukm="x"><dc:title xmlns:dc="x">Act ${n}</dc:title></ukm:Metadata>` +
     `<P1 IdURI="http://www.legislation.gov.uk/id/ukpga/2020/${n}/section/1">` +
     `<Pnumber>1</Pnumber><P1para><Text>Provision text for act ${n}.</Text></P1para></P1>` +
@@ -226,6 +258,8 @@ describe('ingestYear with mocked fetch', () => {
     expect(first.provisionsStored).toBe(5)
     expect(first.skippedUnchanged).toBe(0)
     expect(first.failed).toBe(0)
+    // Each mock body declares its one P1 and yields one row: no mismatch.
+    expect(first.provisionCountMismatches).toEqual([])
 
     // Re-run re-fetches every body and compares hashes: nothing re-stores,
     // everything reports skipped-unchanged. The old row-presence skip would

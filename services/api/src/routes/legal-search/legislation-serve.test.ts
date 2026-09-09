@@ -115,6 +115,27 @@ describe('resolveLegislationFetch', () => {
     )
   })
 
+  it('withholds text when the effects flag is undefined', async () => {
+    // Fail-closed: only an explicit false serves text. A row predating the
+    // flag (or any store shape that drops it) must land amended_not_held
+    // with no text, never current.
+    const flagless = {
+      ...currentProvision,
+      hasUnappliedEffects: undefined,
+    } as unknown as typeof currentProvision
+    const result = await resolveLegislationFetch(
+      createDeps({ provision: flagless }),
+      'section 13 Equality Act 2010',
+    )
+    expect(result.citationHeldExact).toBe(true)
+    const hit = result.groups[0]?.hits[0]
+    expect(hit?.legislationStatus).toBe('amended_not_held')
+    expect(hit).not.toHaveProperty('text')
+    expect(hit?.officialUrl).toBe(
+      'https://www.legislation.gov.uk/ukpga/2010/15/section/13',
+    )
+  })
+
   it('reports a recognised but unheld provision visibly', async () => {
     const result = await resolveLegislationFetch(
       createDeps({ provision: null }),

@@ -63,9 +63,13 @@ create index if not exists legislation_provisions_document_idx
 create index if not exists legislation_provisions_label_idx
   on legislation_provisions (document_identity, label_path);
 
--- Per-Act ingest progress: one row per ukpga/year/number scope. Re-runs
--- resume after the last completed act; provision writes are idempotent on
--- source_hash, so a resumed run never duplicates rows.
+-- Per-year ingest progress: one row per ukpga/year scope recording the last
+-- completed Act number. Re-runs do not resume after it: every listed Act is
+-- re-fetched and re-validated by content hash (unchanged reports
+-- skipped-unchanged without re-parsing, changed re-stores), so updates are
+-- picked up; the number is a record of progress, not a resume offset.
+-- Provision writes are idempotent on source_hash, so a re-run never
+-- duplicates rows.
 create table if not exists legislation_ingest_progress (
   scope_key text primary key,
   act_type text not null,

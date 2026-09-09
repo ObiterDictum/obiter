@@ -4,6 +4,7 @@ import {
   legislationBaseUrl,
   parseClmlDocument,
   parseYearFeed,
+  provisionCountNote,
   sha256Hex,
   type IngestActRef,
   type IngestDocument,
@@ -62,7 +63,14 @@ const scopeActType = 'ukpga'
 export const scopeStartYear = 2020
 
 export type LegislationDocOutcome =
-  | { status: 'stored'; identity: string; provisions: number }
+  | {
+      status: 'stored'
+      identity: string
+      provisions: number
+      declaredProvisions: number | null
+      p1Rows: number
+      provisionCountNote: string | null
+    }
   | { status: 'skipped-unchanged'; identity: string }
   | { status: 'skipped-no-fulltext'; identity: string; reason: string }
   | { status: 'failed'; identity: string; reason: string }
@@ -77,6 +85,16 @@ export interface LegislationScopeReport {
   skippedNoFulltext: number
   failed: number
   failures: Array<{ identity: string; reason: string }>
+  /** Stored documents whose P1 extraction diverged from the declared
+   * count. Gaps are expected per document (BlockAmendment inserts); the
+   * list exists so a systematic gap shows as a pattern across a year. */
+  provisionCountMismatches: Array<{
+    identity: string
+    declaredProvisions: number | null
+    p1Rows: number
+    provisions: number
+    note: string
+  }>
 }
 
 export type Db = Pick<Pool, 'query' | 'connect'>
@@ -95,16 +113,21 @@ export async function upsertLegislationDocument(pool: Db, doc: IngestDocument) {
   // must never leave a document with half its provisions (or none, after
   // the delete). Pool.query would spread these across connections, so
   // checkout one client for the whole BEGIN/COMMIT.
+  // The extraction-completeness note persists on the row (never a separate
+  // lookup): a mismatch stores flagged, it never fails the document, so
+  // the flag is what makes that decision auditable per Act.
+  const note = provisionCountNote(doc)
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
     await client.query(
       `insert into legislation_documents
-      (identity, act_type, year, number, title, source_url, content_hash, extent, updated_at)
-     values ($1, $2, $3, $4, $5, $6, $7, $8, now())
+      (identity, act_type, year, number, title, source_url, content_hash, extent, provision_count_note, updated_at)
+     values ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
      on conflict (identity) do update set
        title = excluded.title, source_url = excluded.source_url,
        content_hash = excluded.content_hash, extent = excluded.extent,
+       provision_count_note = excluded.provision_count_note,
        updated_at = now()`,
       [
         doc.identity,
@@ -115,6 +138,7 @@ export async function upsertLegislationDocument(pool: Db, doc: IngestDocument) {
         doc.sourceUrl,
         doc.contentHash,
         doc.extent,
+        note ?? '',
       ],
     )
     await client.query(
@@ -254,7 +278,15 @@ export async function readCrawlDelaySeconds(
  * Paging is capped at 100 pages (50 results each): the feed is finite, and
  * an uncapped `rel=next` walk would loop forever on a cycling server. Flags
  * are only cleared after at least one page read succeeds, so a feed that is
- * down (404 on page 1, or an early throw) never wipes known-good flags. */
+ * down (404 on page 1, or an early throw) never wipes known-good flags.
+ *
+ * The feed has NO server-side provision filter: a query param naming a
+ * provision (e.g. `data.feed?affected-provision=s.40`) is silently ignored
+ * and the whole-Act feed returns, so 16 whole-Act effects were once misread
+ * as one section's. Never add a filter param here; page the whole feed and
+ * scope client-side on ukm:AffectedProvisions/ukm:Section URIs, which is
+ * what makes the flags honest. Same whole-Act trap as the HTML
+ * yet-to-be-applied heading one layer down, which is why neither is read. */
 export async function ingestEffectsForDocument(
   deps: LegislationIngestDeps,
   doc: IngestDocument,
@@ -379,7 +411,14 @@ export async function ingestOneAct(
       }
     }
   }
-  return { status: 'stored', identity, provisions: parsed.provisions.length }
+  return {
+    status: 'stored',
+    identity,
+    provisions: parsed.provisions.length,
+    declaredProvisions: parsed.declaredProvisions,
+    p1Rows: parsed.p1Rows,
+    provisionCountNote: provisionCountNote(parsed),
+  }
 }
 
 export function nextFeedPageUrl(xml: string): string | null {
@@ -409,6 +448,7 @@ export async function ingestYear(
     skippedNoFulltext: 0,
     failed: 0,
     failures: [],
+    provisionCountMismatches: [],
   }
   const feedResponse = await fetchPolitely(
     deps,
@@ -470,6 +510,15 @@ export async function ingestYear(
     if (outcome.status === 'stored') {
       report.stored += 1
       report.provisionsStored += outcome.provisions
+      if (outcome.provisionCountNote !== null) {
+        report.provisionCountMismatches.push({
+          identity: outcome.identity,
+          declaredProvisions: outcome.declaredProvisions,
+          p1Rows: outcome.p1Rows,
+          provisions: outcome.provisions,
+          note: outcome.provisionCountNote,
+        })
+      }
     } else if (outcome.status === 'skipped-unchanged') {
       report.skippedUnchanged += 1
     } else if (outcome.status === 'skipped-no-fulltext') {

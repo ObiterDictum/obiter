@@ -76,18 +76,3 @@ export async function listLegislationActs(
   )
   return result.rows
 }
-
-export async function findLegislationActByYearNumber(
-  pool: Pick<Pool, 'query'>,
-  year: number,
-  number: number,
-): Promise<StoredLegislationDocument | null> {
-  const result = await pool.query<StoredLegislationDocument>(
-    `select identity, act_type as "actType", year, number, title,
-            source_url as "sourceUrl", extent
-       from legislation_documents
-      where act_type = 'ukpga' and year = $1 and number = $2`,
-    [year, number],
-  )
-  return result.rows[0] ?? null
-}
