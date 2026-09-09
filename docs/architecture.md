@@ -1001,3 +1001,47 @@ Acts over legitimate quoted text. The affected-changes feed likewise has no
 server-side provision filter: a filtered query is silently ignored and the
 whole-Act feed returns, so per-provision currency pages the whole feed and
 filters client-side on document-scoped `ukm:Section` URIs.
+
+### Act contents hierarchy: Parts and Schedules as rows (September 2026)
+
+Context: whole-Act contents listed sections only; `legislation_provisions`
+held no Part or Schedule-container rows, so the Equality Act 2010 rendered
+as 234 undifferentiated sections while its schedules stayed invisible
+(corpus-wide check during #176). CLML is typed — Part, Pblock (crossheading),
+P1group, P1, P1para, P2 — with schedules mirroring the P1..P5 shape, and the
+parser read P1 and below, dropping everything above.
+
+Level census (sampled across 1998–2026 Acts incl. the dev anchors): primary
+Parts (`part/N`) with optional Chapters (`part/N/chapter/M`), Pblocks
+(crossheadings at Act, part, chapter, schedule and schedule-part levels),
+P1groups (no IdURI, not addressable), P1 sections (flat IdURIs like
+`section/100`); schedules (`schedule/N`) with optional internal Parts
+(`schedule/N/part/X`), Chapters and crossheadings over P1 paragraphs
+(`schedule/N/paragraph/M`); P2..P5 below. Containers may lack an IdURI in
+some Acts (2023/55 carries 23 such Pblocks) and then are not rows.
+Inserted-amendment provisions carry hierarchical IdURIs
+(`part/2/section/100/kn1`) while base provisions are flat, so parentage
+comes from CLML nesting, never label-path prefixes.
+
+Decision: emit rows for every addressable container — Part, Chapter,
+Schedule, crossheading (Pblock) — alongside P1..P5 (migration 0022 adds
+`kind` plus `parent_label_path`; the parent is the nearest addressable
+ancestor in the XML stack). Crossheadings are carried, not dropped: they
+are addressable and are the only grouping level in part-less Acts (Human
+Rights Act 1998 groups entirely by crossheadings), so dropping them would
+leave most of the corpus flat again. P1group Titles are not carried (no
+IdURI, no stable identity to row on). The Act page builds a tree of
+containers plus P1 rows (sections and schedule paragraphs) in document
+order and never sorts numerically, so inserted s. 13A stays between ss. 13
+and 14. Withheld counts in the banner now cover every listed content row
+(sections and schedule paragraphs), with wording "X of Y provisions";
+containers are headings, never withheld, and are excluded from both counts
+(the effects pass flags provision rows only). Container rows never enter
+the derived Meilisearch index: they are headings with no searchable body,
+so keyword search semantics are unchanged. Because ingest skips unchanged
+Acts by content hash, the CLI gained `--force-reparse` to re-extract after
+parsing changes; it goes through the same effects pass as a changed Act and
+rows are only replaced once that pass has succeeded (a failed feed aborts
+before any write, an unreadable one preserves known-good flags), so
+withheld flags survive the row rewrite and text can never become servable
+through it.

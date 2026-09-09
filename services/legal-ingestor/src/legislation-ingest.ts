@@ -6,8 +6,10 @@ import {
   parseYearFeed,
   provisionCountNote,
   sha256Hex,
+  containerProvisionKinds,
   type IngestActRef,
   type IngestDocument,
+  type LegislationProvisionKind,
 } from './legislation-clml'
 import {
   parseEffectsFeed,
@@ -108,12 +110,73 @@ export interface LegislationIngestDeps {
   pool: Db
   gapMs: number
   skipEffects: boolean
+  /** Re-parse and re-store even when the content hash is unchanged. The
+   * forced path goes through the same effects pass as a changed Act, so
+   * withheld flags survive the row rewrite. Verification/rescue runs only. */
+  forceReparse: boolean
   maxActs?: number
   sleep: (ms: number) => Promise<void>
   fetchImpl: typeof fetch
 }
 
-export async function upsertLegislationDocument(pool: Db, doc: IngestDocument) {
+/** Effects are per-provision state. Container rows (Part, Chapter, Schedule,
+ * crossheading) are headings: never withheld, never flagged, excluded from
+ * the effects pass, so banner counts stay honest and their always-visible
+ * identity does not depend on feed state. Kinds are shared from
+ * legislation-clml.ts rather than re-listed here. */
+export function isProvisionRow(kind: LegislationProvisionKind): boolean {
+  return !containerProvisionKinds.has(kind)
+}
+
+/** Withheld/due state for a document's provision rows, computed from a
+ * successfully read effects feed (label path -> has-unapplied), or null
+ * when the feed could not be read. Null is "no information", never "no
+ * effects": the replacement then preserves known-good flags and defaults
+ * new rows to withheld, so text can only ever move towards
+ * amended-not-held, never towards servable. */
+export type EffectsWithheldMap = Map<string, boolean> | null
+
+/** Whether a provision carries an unapplied effect. Matching is
+ * bidirectional (an amendment to s. 13 makes s. 13(2) stale, and an
+ * amendment to s. 13(2)(a) makes the served s. 13 text stale), so it
+ * recomputes from full effect references rather than testing the unapplied
+ * set for the exact path. */
+function hasUnappliedEffect(
+  unappliedLabelPaths: Set<string>,
+  labelPath: string,
+): boolean {
+  const effects = [...unappliedLabelPaths].map((path) => ({
+    effectId: '',
+    applied: false,
+    type: '',
+    affectedDisplay: '',
+    affectingTitle: '',
+    affected: [{ ref: '', labelPath: path, display: '' }],
+  }))
+  return unappliedEffectsForProvision(effects, labelPath).length > 0
+}
+
+/** Withheld flag per provision row, from a successfully read effects feed. */
+export function withheldByLabelPath(
+  doc: IngestDocument,
+  unappliedLabelPaths: Set<string>,
+): Map<string, boolean> {
+  const map = new Map<string, boolean>()
+  for (const provision of doc.provisions) {
+    if (!isProvisionRow(provision.kind)) continue
+    map.set(
+      provision.labelPath,
+      hasUnappliedEffect(unappliedLabelPaths, provision.labelPath),
+    )
+  }
+  return map
+}
+
+export async function upsertLegislationDocument(
+  pool: Db,
+  doc: IngestDocument,
+  effects: EffectsWithheldMap = null,
+) {
   // One transaction: a crash between the document row and its provisions
   // must never leave a document with half its provisions (or none, after
   // the delete). Pool.query would spread these across connections, so
@@ -146,29 +209,69 @@ export async function upsertLegislationDocument(pool: Db, doc: IngestDocument) {
         note ?? '',
       ],
     )
+    // The rewrite deletes and recreates every row, so the effects flags
+    // must come from the staged effects pass, never from the column
+    // default: without a successful read, matching label paths keep their
+    // known-good flag and new rows default to withheld (fail-closed).
+    const existing = await client.query<{
+      label_path: string
+      has_unapplied_effects: boolean
+      effects_checked_at: string | null
+    }>(
+      `select label_path, has_unapplied_effects, effects_checked_at
+         from legislation_provisions where document_identity = $1`,
+      [doc.identity],
+    )
+    const oldFlags = new Map(
+      existing.rows.map((row) => [row.label_path, row.has_unapplied_effects]),
+    )
+    const oldCheckedAt = new Map(
+      existing.rows.map((row) => [row.label_path, row.effects_checked_at]),
+    )
     await client.query(
       'delete from legislation_provisions where document_identity = $1',
       [doc.identity],
     )
     for (const provision of doc.provisions) {
+      // Three decision branches, matched on effects availability so no
+      // non-null assertion is needed: checked read wins, otherwise a
+      // provision keeps its known-good flag / new rows withhold.
+      const oldFlag = oldFlags.get(provision.labelPath) ?? true
+      const oldChecked = oldCheckedAt.get(provision.labelPath) ?? null
+      const hasUnapplied = isProvisionRow(provision.kind)
+        ? effects !== null
+          ? (effects.get(provision.labelPath) ?? true)
+          : oldFlag
+        : false
+      const effectsCheckedAt = effects !== null ? new Date() : oldChecked
       await client.query(
         `insert into legislation_provisions
-        (id, document_identity, label_path, label, extent, provision_text, source_hash, doc_order, updated_at)
-       values ($1, $2, $3, $4, $5, $6, $7, $8, now())
+        (id, document_identity, label_path, label, parent_label_path, kind,
+         extent, provision_text, source_hash, doc_order,
+         has_unapplied_effects, effects_checked_at, updated_at)
+       values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, now())
        on conflict (id) do update set
          label_path = excluded.label_path, label = excluded.label,
+         parent_label_path = excluded.parent_label_path,
+         kind = excluded.kind,
          extent = excluded.extent, provision_text = excluded.provision_text,
          source_hash = excluded.source_hash, doc_order = excluded.doc_order,
+         has_unapplied_effects = excluded.has_unapplied_effects,
+         effects_checked_at = excluded.effects_checked_at,
          updated_at = now()`,
         [
           `${doc.identity}/${provision.labelPath}`,
           doc.identity,
           provision.labelPath,
           provision.label,
+          provision.parentLabelPath,
+          provision.kind,
           provision.extent,
           provision.text,
           doc.contentHash,
           provision.docOrder,
+          hasUnapplied,
+          effectsCheckedAt,
         ],
       )
     }
@@ -185,27 +288,51 @@ export async function upsertLegislationDocument(pool: Db, doc: IngestDocument) {
   }
 }
 
-async function markProvisionEffects(
-  pool: Db,
-  identity: string,
-  labelPath: string,
-  hasUnapplied: boolean,
-) {
-  await pool.query(
-    `update legislation_provisions
-       set has_unapplied_effects = $3, effects_checked_at = now()
-     where document_identity = $1 and label_path = $2`,
-    [identity, labelPath, hasUnapplied],
-  )
-}
-
-async function clearProvisionEffects(pool: Db, identity: string) {
-  await pool.query(
-    `update legislation_provisions
-       set has_unapplied_effects = false, effects_checked_at = now()
-     where document_identity = $1`,
-    [identity],
-  )
+/** Pages the whole affected-changes feed and returns the set of provision
+ * label paths carrying at least one unapplied effect. Returns null when no
+ * page could be read (a 404 first page, or zero successful pages): "no
+ * information", not "no effects" — the caller preserves known-good flags
+ * instead of clearing them. Throws when a page read fails, so the caller
+ * aborts before replacing any rows.
+ *
+ * Paging is capped at 100 pages (50 results each): the feed is finite, and
+ * an uncapped `rel=next` walk would loop forever on a cycling server.
+ *
+ * The feed has NO server-side provision filter: a query param naming a
+ * provision (e.g. `data.feed?affected-provision=s.40`) is silently ignored
+ * and the whole-Act feed returns, so 16 whole-Act effects were once misread
+ * as one section's. Never add a filter param here; page the whole feed and
+ * scope client-side on ukm:AffectedProvisions/ukm:Section URIs, which is
+ * what makes the flags honest. Same whole-Act trap as the HTML
+ * yet-to-be-applied heading one layer down, which is why neither is read. */
+export async function readUnappliedEffects(
+  deps: LegislationIngestDeps,
+  doc: IngestDocument,
+): Promise<Set<string> | null> {
+  const maxEffectsPages = 100
+  const base = `${legislationBaseUrl}/changes/affected/${doc.identity}/data.feed`
+  let url: string | null = base
+  const unappliedLabelPaths = new Set<string>()
+  let pagesRead = 0
+  while (url !== null) {
+    if (pagesRead >= maxEffectsPages) break
+    const response = await fetchPolitely(deps, url)
+    if (response.status === 404) break
+    if (!response.ok)
+      throw new Error(`effects feed returned ${response.status}`)
+    const xml = await response.text()
+    const parsed = parseEffectsFeed(xml, doc.identity)
+    pagesRead += 1
+    for (const effect of parsed.effects) {
+      if (effect.applied) continue
+      for (const ref of effect.affected) {
+        if (ref.labelPath) unappliedLabelPaths.add(ref.labelPath)
+      }
+    }
+    url = parsed.nextPageUrl
+  }
+  if (pagesRead === 0) return null
+  return unappliedLabelPaths
 }
 
 async function politeSleep(deps: LegislationIngestDeps) {
@@ -279,78 +406,6 @@ export async function readCrawlDelaySeconds(
   }
 }
 
-/** Pages the whole affected-changes feed and flags amended provisions.
- * Paging is capped at 100 pages (50 results each): the feed is finite, and
- * an uncapped `rel=next` walk would loop forever on a cycling server. Flags
- * are only cleared after at least one page read succeeds, so a feed that is
- * down (404 on page 1, or an early throw) never wipes known-good flags.
- *
- * The feed has NO server-side provision filter: a query param naming a
- * provision (e.g. `data.feed?affected-provision=s.40`) is silently ignored
- * and the whole-Act feed returns, so 16 whole-Act effects were once misread
- * as one section's. Never add a filter param here; page the whole feed and
- * scope client-side on ukm:AffectedProvisions/ukm:Section URIs, which is
- * what makes the flags honest. Same whole-Act trap as the HTML
- * yet-to-be-applied heading one layer down, which is why neither is read. */
-export async function ingestEffectsForDocument(
-  deps: LegislationIngestDeps,
-  doc: IngestDocument,
-): Promise<{ checked: number; amended: number }> {
-  const maxEffectsPages = 100
-  const base = `${legislationBaseUrl}/changes/affected/${doc.identity}/data.feed`
-  let url: string | null = base
-  const unappliedLabelPaths = new Set<string>()
-  let pagesRead = 0
-  while (url !== null) {
-    if (pagesRead >= maxEffectsPages) break
-    const response = await fetchPolitely(deps, url)
-    if (response.status === 404) break
-    if (!response.ok)
-      throw new Error(`effects feed returned ${response.status}`)
-    const xml = await response.text()
-    const parsed = parseEffectsFeed(xml, doc.identity)
-    pagesRead += 1
-    for (const effect of parsed.effects) {
-      if (effect.applied) continue
-      for (const ref of effect.affected) {
-        if (ref.labelPath) unappliedLabelPaths.add(ref.labelPath)
-      }
-    }
-    url = parsed.nextPageUrl
-  }
-  if (pagesRead === 0) {
-    // No successful page: leave existing flags untouched and report zero
-    // coverage rather than clearing good state on a failed read.
-    return { checked: 0, amended: 0 }
-  }
-  await clearProvisionEffects(deps.pool, doc.identity)
-  let amended = 0
-  for (const provision of doc.provisions) {
-    const hits = unappliedEffectsForProvision(
-      // Re-expand: match() needs full effects; unapplied set alone cannot do
-      // the bidirectional ancestor check. Recompute from stored paths.
-      [...unappliedLabelPaths].map((labelPath) => ({
-        effectId: '',
-        applied: false,
-        type: '',
-        affectedDisplay: '',
-        affectingTitle: '',
-        affected: [{ ref: '', labelPath, display: '' }],
-      })),
-      provision.labelPath,
-    )
-    const hasUnapplied = hits.length > 0
-    if (hasUnapplied) amended += 1
-    await markProvisionEffects(
-      deps.pool,
-      doc.identity,
-      provision.labelPath,
-      hasUnapplied,
-    )
-  }
-  return { checked: doc.provisions.length, amended }
-}
-
 /**
  * Re-derives the extraction-completeness note from an unchanged Act's
  * re-fetched body and updates the row only when the note moved. Never
@@ -418,12 +473,15 @@ export async function ingestOneAct(
     }
   }
   const hash = sha256Hex(xml)
-  if (stored.rows[0]?.content_hash === hash) {
+  if (stored.rows[0]?.content_hash === hash && !deps.forceReparse) {
     // Content unchanged: provisions stay untouched, but the
     // extraction-completeness note is re-derived from the re-fetched
     // body. The count check changed (BlockAmendment-explained gaps went
     // quiet), and without this refresh a stale loud note from the old
-    // check would sit on a healthy document forever.
+    // check would sit on a healthy document forever. A forced re-parse
+    // (parser change under test) bypasses this branch and re-stores,
+    // going through the same effects pass as a changed Act so the
+    // withheld flags survive the row rewrite.
     await refreshCountNote(deps.pool, identity, xml)
     return { status: 'skipped-unchanged', identity }
   }
@@ -431,10 +489,18 @@ export async function ingestOneAct(
   if ('skipped' in parsed) {
     return { status: 'skipped-no-fulltext', identity, reason: parsed.skipped }
   }
-  await upsertLegislationDocument(deps.pool, parsed)
+  // Effects before rows: the replacement deletes and recreates every
+  // provision row, so a row must never land servable before its effects
+  // state is known. A failed feed aborts before any write (old rows and
+  // known-good flags stay intact); an unreadable feed (404 is "no
+  // information", not "no effects") preserves old flags and defaults new
+  // rows to withheld — text can only move towards amended-not-held.
+  let effects: EffectsWithheldMap = null
   if (!deps.skipEffects) {
     try {
-      await ingestEffectsForDocument(deps, parsed)
+      const unapplied = await readUnappliedEffects(deps, parsed)
+      effects =
+        unapplied === null ? null : withheldByLabelPath(parsed, unapplied)
     } catch (error) {
       return {
         status: 'failed',
@@ -446,6 +512,7 @@ export async function ingestOneAct(
       }
     }
   }
+  await upsertLegislationDocument(deps.pool, parsed, effects)
   return {
     status: 'stored',
     identity,
@@ -626,6 +693,7 @@ Options:
   --max-acts=N         stop after N Acts per year (verification slices)
   --gap-ms=MS          ms between upstream requests (default 5000, never below Crawl-delay)
   --skip-effects       skip the affected-changes effects pass (bare or =1)
+  --force-reparse      re-parse and re-store unchanged Acts too (bare or =1)
   -h, --help           print this usage and exit`
 
 export interface LegislationIngestCliOptions {
@@ -633,6 +701,7 @@ export interface LegislationIngestCliOptions {
   years: number[]
   gapMsRaw: string | undefined
   skipEffects: boolean
+  forceReparse: boolean
   maxActs?: number
 }
 
@@ -666,6 +735,7 @@ export function parseLegislationIngestArgs(
   let yearsRaw: string | undefined
   let gapMsRaw: string | undefined
   let skipEffects = false
+  let forceReparse = false
   let maxActsRaw: string | undefined
   for (const arg of argv) {
     if (arg === '--help' || arg === '-h') {
@@ -674,6 +744,10 @@ export function parseLegislationIngestArgs(
     }
     if (arg === '--skip-effects') {
       skipEffects = true
+      continue
+    }
+    if (arg === '--force-reparse') {
+      forceReparse = true
       continue
     }
     const eq = arg.indexOf('=')
@@ -699,6 +773,15 @@ export function parseLegislationIngestArgs(
           skipEffects = false
         else
           return fail(`--skip-effects takes no value, 1, or 0 (got ${value})`)
+        break
+      }
+      case '--force-reparse': {
+        if (value === '1' || value === 'true' || value === 'yes')
+          forceReparse = true
+        else if (value === '0' || value === 'false' || value === 'no')
+          forceReparse = false
+        else
+          return fail(`--force-reparse takes no value, 1, or 0 (got ${value})`)
         break
       }
       default:
@@ -744,6 +827,7 @@ export function parseLegislationIngestArgs(
       years,
       gapMsRaw,
       skipEffects,
+      forceReparse,
       ...(maxActs !== undefined ? { maxActs } : {}),
     },
   }
@@ -789,6 +873,7 @@ async function main() {
     pool,
     gapMs,
     skipEffects: parsed.options.skipEffects,
+    forceReparse: parsed.options.forceReparse,
     ...(parsed.options.maxActs !== undefined
       ? { maxActs: parsed.options.maxActs }
       : {}),

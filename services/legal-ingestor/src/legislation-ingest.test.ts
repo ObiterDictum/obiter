@@ -7,6 +7,7 @@ import {
   resolveRequestGapMs,
   upsertLegislationDocument,
   type Db,
+  type LegislationIngestDeps,
 } from './legislation-ingest'
 import {
   parseYearFeed,
@@ -115,8 +116,10 @@ describe('upsertLegislationDocument transaction', () => {
     p1EmptyText: 0,
     provisions: [
       {
+        kind: 'P1',
         labelPath: 'section/1',
         label: 's. 1',
+        parentLabelPath: null,
         extent: 'E+W',
         text: 'Provision text.',
         docOrder: 0,
@@ -189,11 +192,13 @@ describe('upsertLegislationDocument transaction', () => {
         statements.push(
           text.includes('insert into legislation_documents')
             ? 'INSERT doc'
-            : text.includes('delete from legislation_provisions')
-              ? 'DELETE provs'
-              : text.includes('insert into legislation_provisions')
-                ? 'INSERT prov'
-                : text,
+            : text.includes('select label_path')
+              ? 'SELECT old flags'
+              : text.includes('delete from legislation_provisions')
+                ? 'DELETE provs'
+                : text.includes('insert into legislation_provisions')
+                  ? 'INSERT prov'
+                  : text,
         )
         return { rows: [] }
       },
@@ -208,6 +213,7 @@ describe('upsertLegislationDocument transaction', () => {
     expect(statements).toEqual([
       'BEGIN',
       'INSERT doc',
+      'SELECT old flags',
       'DELETE provs',
       'INSERT prov',
       'COMMIT',
@@ -301,6 +307,7 @@ describe('ingestYear with mocked fetch', () => {
       pool,
       gapMs: 0,
       skipEffects: true,
+      forceReparse: false,
       sleep: async () => {},
       fetchImpl,
     }
@@ -352,6 +359,7 @@ describe('ingestYear with mocked fetch', () => {
       pool,
       gapMs: 0,
       skipEffects: true,
+      forceReparse: false,
       sleep: async () => {},
       fetchImpl,
     }
@@ -368,5 +376,280 @@ describe('ingestYear with mocked fetch', () => {
       call.text.includes('update legislation_documents'),
     )
     expect(refresh?.values).toEqual(['ukpga/2020/7', ''])
+  })
+})
+
+/**
+ * Security fix: the effects pass is staged BEFORE any row write. The
+ * replacement deletes and recreates every provision row, so a failed or
+ * unreadable feed must never leave servable flags behind (a row must not
+ * land servable before its effects state is known), and --force-reparse
+ * must re-store AND re-run the pass.
+ */
+describe('ingestOneAct effects staging and --force-reparse', () => {
+  const identity = 'ukpga/2020/1'
+  const clmlBody = (sections: number[]) =>
+    `<?xml version="1.0"?><Legislation RestrictExtent="E+W" NumberOfProvisions="${sections.length}">` +
+    `<ukm:Metadata xmlns:ukm="x"><dc:title xmlns:dc="x">Act 1</dc:title></ukm:Metadata>` +
+    sections
+      .map(
+        (n) =>
+          `<P1 IdURI="http://www.legislation.gov.uk/id/${identity}/section/${n}">` +
+          `<Pnumber>${n}</Pnumber><P1para><Text>Provision text for s. ${n}.</Text></P1para></P1>`,
+      )
+      .join('') +
+    `</Legislation>`
+
+  /** One feed page with one unapplied effect per path. */
+  const effectsFeed = (unapplied: string[]) =>
+    `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom" xmlns:ukm="http://www.legislation.gov.uk/namespaces/metadata">` +
+    unapplied
+      .map(
+        (path, index) =>
+          `<entry><id>http://www.legislation.gov.uk/changes/affected/${identity}/effect-${index}</id>` +
+          `<content type="text/xml"><ukm:Effect Applied="false" Type="words inserted" EffectId="effect-${index}" AffectedProvisions="${path}" AffectingYear="2021" AffectedYear="2020" AffectedNumber="1" AffectingNumber="2" AffectedURI="http://www.legislation.gov.uk/id/${identity}" AffectingURI="http://www.legislation.gov.uk/id/ukpga/2021/2">` +
+          `<ukm:AffectedTitle>Act 1</ukm:AffectedTitle><ukm:AffectedProvisions><ukm:Section Ref="${path.replaceAll('/', '-')}" URI="http://www.legislation.gov.uk/id/${identity}/${path}">${path}</ukm:Section></ukm:AffectedProvisions>` +
+          `<ukm:AffectingTitle>Later Act 2021</ukm:AffectingTitle></ukm:Effect></content></entry>`,
+      )
+      .join('') +
+    `</feed>`
+
+  const httpResponse = (status: number, body: string) =>
+    ({
+      status,
+      ok: status >= 200 && status < 300,
+      headers: { get: () => null },
+      text: async () => body,
+    }) as unknown as Response
+
+  interface StoredRow {
+    labelPath: string
+    hasUnappliedEffects: boolean
+    effectsCheckedAt: string | null
+  }
+
+  function createPool(initial: StoredRow[], storedHash: string | null) {
+    const rows = new Map<string, StoredRow[]>()
+    if (initial.length > 0) rows.set(identity, initial)
+    const events: string[] = []
+    const insertedRows: StoredRow[] = []
+    const pool = {
+      rows,
+      events,
+      insertedRows,
+      async query(text: string, _values?: unknown[]) {
+        if (text.includes('select content_hash')) {
+          return {
+            rows: storedHash ? [{ content_hash: storedHash }] : [],
+          }
+        }
+        return { rows: [] }
+      },
+      async connect() {
+        return {
+          query: async (text: string, values?: unknown[]) => {
+            if (text === 'BEGIN' || text === 'COMMIT' || text === 'ROLLBACK') {
+              return { rows: [] }
+            }
+            if (text.includes('insert into legislation_documents')) {
+              return { rows: [] }
+            }
+            if (text.includes('select label_path')) {
+              return {
+                rows: (rows.get(values?.[0] as string) ?? []).map((row) => ({
+                  label_path: row.labelPath,
+                  has_unapplied_effects: row.hasUnappliedEffects,
+                  effects_checked_at: row.effectsCheckedAt,
+                })),
+              }
+            }
+            if (text.includes('delete from legislation_provisions')) {
+              events.push('delete')
+              return { rows: [] }
+            }
+            if (text.includes('insert into legislation_provisions')) {
+              events.push('insert')
+              insertedRows.push({
+                labelPath: values?.[2] as string,
+                hasUnappliedEffects: values?.[10] as boolean,
+                effectsCheckedAt: values?.[11] as string | null,
+              })
+              return { rows: [] }
+            }
+            return { rows: [] }
+          },
+          release: vi.fn(),
+        }
+      },
+    } as unknown as Db & {
+      rows: Map<string, StoredRow[]>
+      events: string[]
+      insertedRows: StoredRow[]
+    }
+    return pool
+  }
+
+  const depsFor = (
+    pool: ReturnType<typeof createPool>,
+    fetchImpl: typeof fetch,
+    forceReparse: boolean,
+  ): LegislationIngestDeps => ({
+    pool,
+    gapMs: 0,
+    skipEffects: false,
+    forceReparse,
+    sleep: async () => {},
+    fetchImpl,
+  })
+
+  const actRef = {
+    actType: 'ukpga',
+    year: 2020,
+    number: 1,
+    title: 'Act 1',
+  }
+
+  it('--force-reparse re-stores an unchanged Act and re-runs the pass', async () => {
+    // Stored hash matches the current body, so the normal path would skip;
+    // the forced path re-stores and recomputes flags from the feed (the
+    // old true on section/1 clears, the new section/2 reads as amended).
+    const body = clmlBody([1, 2])
+    const pool = createPool(
+      [
+        {
+          labelPath: 'section/1',
+          hasUnappliedEffects: true,
+          effectsCheckedAt: '2020-01-01T00:00:00Z',
+        },
+      ],
+      sha256Hex(body),
+    )
+    const fetchImpl = (async (url: unknown) => {
+      const href = String(url)
+      if (href.endsWith(`/${identity}/data.xml`)) return httpResponse(200, body)
+      if (href.includes('/changes/affected/'))
+        return httpResponse(200, effectsFeed(['section/2']))
+      throw new Error(`unexpected fetch ${href}`)
+    }) as unknown as typeof fetch
+    const outcome = await ingestOneAct(depsFor(pool, fetchImpl, true), actRef)
+    expect(outcome.status).toBe('stored')
+    expect(pool.events).toEqual(['delete', 'insert', 'insert'])
+    expect(pool.insertedRows).toEqual([
+      {
+        labelPath: 'section/1',
+        hasUnappliedEffects: false,
+        effectsCheckedAt: expect.any(Date),
+      },
+      {
+        labelPath: 'section/2',
+        hasUnappliedEffects: true,
+        effectsCheckedAt: expect.any(Date),
+      },
+    ])
+  })
+
+  it('a failed effects feed aborts before any row write', async () => {
+    const body = clmlBody([1, 2])
+    const pool = createPool(
+      [
+        {
+          labelPath: 'section/1',
+          hasUnappliedEffects: true,
+          effectsCheckedAt: null,
+        },
+      ],
+      sha256Hex(body),
+    )
+    const fetchImpl = (async (url: unknown) => {
+      const href = String(url)
+      if (href.endsWith(`/${identity}/data.xml`)) return httpResponse(200, body)
+      throw new Error('effects feed down')
+    }) as unknown as typeof fetch
+    const outcome = await ingestOneAct(depsFor(pool, fetchImpl, true), actRef)
+    expect(outcome.status).toBe('failed')
+    if (outcome.status !== 'failed') return
+    expect(outcome.reason).toContain('effects pass failed')
+    // The known-good rows and their withheld flag are untouched.
+    expect(pool.events).toEqual([])
+    expect(pool.insertedRows).toEqual([])
+  })
+
+  it('an unreadable (404) feed preserves old flags and withholds new rows', async () => {
+    const body = clmlBody([1, 2])
+    const pool = createPool(
+      [
+        {
+          labelPath: 'section/1',
+          hasUnappliedEffects: true,
+          effectsCheckedAt: '2020-01-01T00:00:00Z',
+        },
+      ],
+      sha256Hex(body),
+    )
+    const fetchImpl = (async (url: unknown) => {
+      const href = String(url)
+      if (href.endsWith(`/${identity}/data.xml`)) return httpResponse(200, body)
+      if (href.includes('/changes/affected/'))
+        return httpResponse(404, 'not found')
+      throw new Error(`unexpected fetch ${href}`)
+    }) as unknown as typeof fetch
+    const outcome = await ingestOneAct(depsFor(pool, fetchImpl, true), actRef)
+    expect(outcome.status).toBe('stored')
+    // 404 is "no information", not "no effects": section/1 keeps its true
+    // flag and the new section/2 defaults to withheld rather than servable.
+    expect(pool.insertedRows).toEqual([
+      {
+        labelPath: 'section/1',
+        hasUnappliedEffects: true,
+        effectsCheckedAt: '2020-01-01T00:00:00Z',
+      },
+      {
+        labelPath: 'section/2',
+        hasUnappliedEffects: true,
+        effectsCheckedAt: null,
+      },
+    ])
+  })
+
+  it('--skip-effects never lands unchecked new rows servable', async () => {
+    // Brand-new Act with no stored rows and no effects pass: every row is
+    // withheld, never servable-by-default from the column default.
+    const body = clmlBody([1, 2])
+    const pool = createPool([], null)
+    const fetchImpl = (async (url: unknown) => {
+      const href = String(url)
+      if (href.endsWith(`/${identity}/data.xml`)) return httpResponse(200, body)
+      throw new Error(`unexpected fetch ${href}`)
+    }) as unknown as typeof fetch
+    const deps = depsFor(pool, fetchImpl, false)
+    deps.skipEffects = true
+    const outcome = await ingestOneAct(deps, actRef)
+    expect(outcome.status).toBe('stored')
+    expect(pool.insertedRows.map((row) => row.hasUnappliedEffects)).toEqual([
+      true,
+      true,
+    ])
+  })
+
+  it('an unchanged Act stays skipped-unchanged without --force-reparse', async () => {
+    const body = clmlBody([1])
+    const pool = createPool(
+      [
+        {
+          labelPath: 'section/1',
+          hasUnappliedEffects: false,
+          effectsCheckedAt: '2020-01-01T00:00:00Z',
+        },
+      ],
+      sha256Hex(body),
+    )
+    const fetchImpl = (async (url: unknown) => {
+      const href = String(url)
+      if (href.endsWith(`/${identity}/data.xml`)) return httpResponse(200, body)
+      throw new Error(`unexpected fetch ${href}`)
+    }) as unknown as typeof fetch
+    const outcome = await ingestOneAct(depsFor(pool, fetchImpl, false), actRef)
+    expect(outcome.status).toBe('skipped-unchanged')
+    expect(pool.events).toEqual([])
   })
 })

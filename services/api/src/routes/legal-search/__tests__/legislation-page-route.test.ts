@@ -112,6 +112,8 @@ describe('GET /api/search/legislation/<identity> (Act page)', () => {
                 extent: 'E+W+S',
                 hasUnappliedEffects: false,
                 docOrder: 0,
+                kind: 'P1',
+                parentLabelPath: null,
               },
               {
                 label: 's. 14',
@@ -119,6 +121,8 @@ describe('GET /api/search/legislation/<identity> (Act page)', () => {
                 extent: 'E+W+S',
                 hasUnappliedEffects: true,
                 docOrder: 1,
+                kind: 'P1',
+                parentLabelPath: null,
               },
             ],
           }

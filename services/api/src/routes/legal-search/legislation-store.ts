@@ -1,5 +1,7 @@
 import type { Pool } from 'pg'
 
+import type { LegislationProvisionKind } from './legislation-kind'
+
 /**
  * Postgres reads for Stage 1 legislation serving. Postgres is the record:
  * exact citation resolution reads these rows, never the derived
@@ -40,18 +42,25 @@ export interface StoredLegislationActProvision {
   extent: string
   hasUnappliedEffects: boolean
   docOrder: number
+  kind: LegislationProvisionKind
+  parentLabelPath: string | null
+  /** Holder for container heading text; empty for provision rows. */
+  text: string
 }
 
 /**
- * Top-level contents of one Act in document order. In the current ingest
- * these rows are all sections: schedules survive only as paragraph-level
- * rows (schedule/1/paragraph/1) and Parts are not stored, so there is no
- * schedule or Part row to list. Subsections likewise stay on their
- * provision pages; the Act page lists the addressable top level, where
- * label_path carries exactly one slash. ORDER BY doc_order, never numeric
+ * Contents of one Act as rows for tree building: containers (part, chapter,
+ * schedule, crossheading) plus P1 content rows (sections and schedule
+ * paragraphs), in document order. P2..P5 sub-provisions stay on provision
+ * pages and never render on the Act page. ORDER BY doc_order, never numeric
  * or lexical label sort: inserted sections (s. 13A between ss. 13 and 14)
- * sort wrong otherwise.
- */
+ * sort wrong otherwise, and containers interleave with their content.
+ *
+ * provision_text is read for container rows only — the Act page renders
+ * container heading text but never provision body text (the provision page
+ * carries that gate) — so the query pulls the full body of the heaviest Act
+ * (1.2 MB) just to discard it per page load. The case narrows the fetch to
+ * headings. */
 export async function listLegislationActProvisions(
   pool: Pick<Pool, 'query'>,
   identity: string,
@@ -59,10 +68,13 @@ export async function listLegislationActProvisions(
   const result = await pool.query<StoredLegislationActProvision>(
     `select label, label_path as "labelPath", extent,
             has_unapplied_effects as "hasUnappliedEffects",
-            doc_order as "docOrder"
+            doc_order as "docOrder", kind,
+            parent_label_path as "parentLabelPath",
+            case when kind in ('part', 'chapter', 'schedule', 'crossheading')
+                 then provision_text else '' end as text
        from legislation_provisions
       where document_identity = $1
-        and label_path not like '%/%/%'
+        and (kind in ('part', 'chapter', 'schedule', 'crossheading') or kind = 'P1')
       order by doc_order`,
     [identity],
   )

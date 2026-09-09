@@ -15,41 +15,95 @@ describe('resolveLegislationActPage', () => {
 
   // Document order: s. 10 follows s. 9, and the inserted s. 13A sits
   // between ss. 13 and 14. Lexical label sort would put s. 10 first.
-  const actProvisions = [
+  const actProvisions: Array<{
+    label: string
+    labelPath: string
+    extent: string
+    hasUnappliedEffects: boolean
+    docOrder: number
+    kind: string
+    parentLabelPath: string | null
+  }> = [
+    {
+      label: 'Part 2',
+      labelPath: 'part/2',
+      extent: 'E+W+S',
+      hasUnappliedEffects: false,
+      docOrder: 0,
+      kind: 'part',
+      parentLabelPath: null,
+    },
     {
       label: 's. 9',
       labelPath: 'section/9',
       extent: 'E+W+S',
       hasUnappliedEffects: false,
-      docOrder: 0,
+      docOrder: 1,
+      kind: 'P1',
+      parentLabelPath: 'part/2',
     },
     {
       label: 's. 10',
       labelPath: 'section/10',
       extent: 'E+W+S',
       hasUnappliedEffects: false,
-      docOrder: 1,
+      docOrder: 2,
+      kind: 'P1',
+      parentLabelPath: 'part/2',
     },
     {
       label: 's. 13',
       labelPath: 'section/13',
       extent: 'E+W+S',
       hasUnappliedEffects: false,
-      docOrder: 2,
+      docOrder: 3,
+      kind: 'P1',
+      parentLabelPath: 'part/2',
     },
     {
       label: 's. 13A',
       labelPath: 'section/13A',
       extent: 'E+W+S',
       hasUnappliedEffects: false,
-      docOrder: 3,
+      docOrder: 4,
+      kind: 'P1',
+      parentLabelPath: 'part/2',
     },
     {
       label: 's. 14',
       labelPath: 'section/14',
       extent: 'E+W+S',
       hasUnappliedEffects: true,
-      docOrder: 4,
+      docOrder: 5,
+      kind: 'P1',
+      parentLabelPath: 'part/2',
+    },
+    {
+      label: 'Schedule 2',
+      labelPath: 'schedule/2',
+      extent: 'E+W+S',
+      hasUnappliedEffects: false,
+      docOrder: 6,
+      kind: 'schedule',
+      parentLabelPath: null,
+    },
+    {
+      label: 'Sch. 2 para. 4',
+      labelPath: 'schedule/2/paragraph/4',
+      extent: 'E+W+S',
+      hasUnappliedEffects: false,
+      docOrder: 7,
+      kind: 'P1',
+      parentLabelPath: 'schedule/2',
+    },
+    {
+      label: 'Sch. 2 para. 5',
+      labelPath: 'schedule/2/paragraph/5',
+      extent: 'E+W+S',
+      hasUnappliedEffects: true,
+      docOrder: 8,
+      kind: 'P1',
+      parentLabelPath: 'schedule/2',
     },
   ]
 
@@ -67,7 +121,7 @@ describe('resolveLegislationActPage', () => {
     } as unknown as LegislationServeDeps['pool']
   }
 
-  it('serves the header and contents in document order', async () => {
+  it('serves the header and a hierarchy in document order', async () => {
     const result = await resolveLegislationActPage(actPool(), 'ukpga/2010/15')
     expect(result.status).toBe('ok')
     if (result.status !== 'ok') return
@@ -77,24 +131,49 @@ describe('resolveLegislationActPage', () => {
       'https://www.legislation.gov.uk/ukpga/2010/15',
     )
     expect(result.page.act.canonicalUrl).toBe('/ln/ukpga/2010/15')
+    // Roots are the containers; the inserted s. 13A stays between ss. 13
+    // and 14 inside Part 2, and the schedule has its paragraphs inside.
     expect(result.page.act.contents.map((entry) => entry.label)).toEqual([
+      'Part 2',
+      'Schedule 2',
+    ])
+    const part2 = result.page.act.contents[0]!
+    expect(part2.kind).toBe('part')
+    expect(part2.children.map((entry) => entry.label)).toEqual([
       's. 9',
       's. 10',
       's. 13',
       's. 13A',
       's. 14',
     ])
-    expect(result.page.act.contents[3]?.href).toBe(
-      '/ln/ukpga/2010/15/section/13A',
-    )
+    expect(part2.children[3]?.href).toBe('/ln/ukpga/2010/15/section/13A')
+    const schedule2 = result.page.act.contents[1]!
+    expect(schedule2.kind).toBe('schedule')
+    expect(schedule2.children.map((entry) => entry.label)).toEqual([
+      'Sch. 2 para. 4',
+      'Sch. 2 para. 5',
+    ])
   })
 
-  it('counts withheld entries fail-closed without serving text', async () => {
+  it('counts withheld content rows only, containers excluded', async () => {
+    // withheld: s. 14 and Sch. 2 para. 5. Containers (Part 2, Schedule 2)
+    // are headings and never figure in either count.
+    const result = await resolveLegislationActPage(actPool(), 'ukpga/2010/15')
+    expect(result.status).toBe('ok')
+    if (result.status !== 'ok') return
+    expect(result.page.act.totalCount).toBe(7)
+    expect(result.page.act.withheldCount).toBe(2)
+  })
+
+  it('counts flagless rows fail-closed as withheld', async () => {
     const flagless = {
       label: 's. 15',
       labelPath: 'section/15',
       extent: 'E+W+S',
       hasUnappliedEffects: undefined,
+      docOrder: 9,
+      kind: 'P1',
+      parentLabelPath: null,
     }
     const result = await resolveLegislationActPage(
       actPool(actDocument, [...actProvisions, flagless]),
@@ -102,25 +181,20 @@ describe('resolveLegislationActPage', () => {
     )
     expect(result.status).toBe('ok')
     if (result.status !== 'ok') return
-    // s. 14 (flagged) plus the flagless s. 15: only explicit false reads
-    // as servable, matching the provision-page gate.
-    expect(result.page.act.totalCount).toBe(6)
-    expect(result.page.act.withheldCount).toBe(2)
-    const byLabel = new Map(
-      result.page.act.contents.map((entry) => [entry.label, entry]),
-    )
-    expect(byLabel.get('s. 14')?.withheld).toBe(true)
-    expect(byLabel.get('s. 15')?.withheld).toBe(true)
-    expect(byLabel.get('s. 13')?.withheld).toBe(false)
+    // s. 14, Sch. 2 para. 5 (flagged) plus the flagless s. 15: only
+    // explicit false reads as servable, matching the provision-page gate.
+    expect(result.page.act.totalCount).toBe(8)
+    expect(result.page.act.withheldCount).toBe(3)
+    expect(result.page.act.contents).toHaveLength(3)
     expect(result.page.act).not.toHaveProperty('text')
   })
 
   it('returns not_found for an unheld Act', async () => {
     const missing = await resolveLegislationActPage(
       actPool(null, []),
-      'ukpga/2099/1',
+      'ukpga/2010/15',
     )
-    expect(missing.status).toBe('not_found')
+    expect(missing).toEqual({ status: 'not_found' })
   })
 
   it('returns unavailable when the store is down', async () => {

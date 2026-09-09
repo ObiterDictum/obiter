@@ -112,6 +112,8 @@ async function main() {
     let lastId = ''
     for (;;) {
       const page = await pool.query<ProvisionRow>(
+        // Container rows (Part, Chapter, Schedule, crossheading) are
+        // headings with no searchable body: provisions only reach the index.
         `select p.id, p.document_identity,
                 d.act_type, d.year, d.number, d.title,
                 p.label, p.label_path, p.extent, p.provision_text,
@@ -119,6 +121,7 @@ async function main() {
            from legislation_provisions p
            join legislation_documents d on d.identity = p.document_identity
           where p.id > $1
+            and p.kind in ('P1', 'P2', 'P3', 'P4', 'P5')
           order by p.id limit $2`,
         [lastId, readPageSize],
       )
