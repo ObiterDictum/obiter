@@ -17,7 +17,12 @@ export function createLegalSearchRoutes(env: ApiEnv) {
   // Index readiness with the same credentials the query path uses, so an
   // "empty" product index is reportable here instead of survey-discovered.
   // Probed live on each call behind a short timeout: readiness must stay fast
-  // even when the engine is down.
+  // even when the engine is down. Both product indexes are reported: the
+  // judgment corpus and the legislation provisions corpus are separate
+  // Meilisearch indexes, and an empty, missing, or unreachable legislation
+  // index must be as detectable as a judgment one. The top-level fields
+  // stay the legal_authorities probe so existing readers (benchmark,
+  // scripts) keep working; per-index detail lives in `indexes`.
   //
   // This module serves readiness only. The former GET /api/search was the
   // only other route here: Meilisearch-only, with no product caller and a
@@ -25,12 +30,26 @@ export function createLegalSearchRoutes(env: ApiEnv) {
   // when Meilisearch became the sole query engine so the route layer cannot
   // reintroduce the split the served flow just removed.
   app.get('/api/search/readiness', async (c) => {
-    const state = await getIndexStatus(
-      client,
-      env.legalAuthoritiesIndex,
-      searchReadinessTimeoutMs,
-    )
-    return c.json({ index: env.legalAuthoritiesIndex, ...state })
+    const [authorities, provisions] = await Promise.all([
+      getIndexStatus(
+        client,
+        env.legalAuthoritiesIndex,
+        searchReadinessTimeoutMs,
+      ),
+      getIndexStatus(
+        client,
+        env.legislationProvisionsIndex,
+        searchReadinessTimeoutMs,
+      ),
+    ])
+    return c.json({
+      index: env.legalAuthoritiesIndex,
+      ...authorities,
+      indexes: [
+        { index: env.legalAuthoritiesIndex, ...authorities },
+        { index: env.legislationProvisionsIndex, ...provisions },
+      ],
+    })
   })
 
   return app
