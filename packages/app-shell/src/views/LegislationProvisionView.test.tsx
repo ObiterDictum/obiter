@@ -107,7 +107,7 @@ describe('LegislationProvisionView', () => {
   it('withholds text and states why', async () => {
     renderView('ukpga/2010/15/section/80')
     await waitFor(() => {
-      expect(screen.getByText('Text not shown')).toBeTruthy()
+      expect(screen.getByText('Amended wording withheld')).toBeTruthy()
     })
     expect(screen.getByText(/amendments that have been recorded/)).toBeTruthy()
     expect(screen.queryByText('Direct discrimination applies here.')).toBeNull()

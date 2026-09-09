@@ -112,7 +112,9 @@ export function LegislationProvisionView({
           role="alert"
           data-legislation-status="amended_not_held"
         >
-          <p className="text-sm font-semibold text-warning">Text not shown</p>
+          <p className="text-sm font-semibold text-warning">
+            Amended wording withheld
+          </p>
           <p className="mt-1 text-sm text-muted">{provision.notice}</p>
           <a
             className="mt-2 inline-block text-sm font-semibold text-warning underline"

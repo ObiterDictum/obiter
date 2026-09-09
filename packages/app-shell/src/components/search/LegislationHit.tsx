@@ -1,5 +1,10 @@
 import { Link } from '@tanstack/react-router'
-import { ArrowRight, ArrowSquareOut, Warning } from '@phosphor-icons/react'
+import {
+  ArrowRight,
+  ArrowSquareOut,
+  WarningCircle,
+} from '@phosphor-icons/react'
+import { Badge } from '@obiter/ui'
 import { provisionResultLocation } from '../../legislation-navigation'
 import type { LegislationSearchResultHit } from './searchTypes'
 
@@ -25,12 +30,14 @@ export function LegislationHit({
 
   const location = provisionResultLocation(hit)
   if (withheld) {
+    // One warning surface: amber frame + #174 badge. The list item is unstyled
+    // so this card is not nested inside a second withheld treatment.
     return (
       <article
         className={
           selected
-            ? 'rounded-md border border-warning/50 bg-warning/15 px-3 py-3 text-ink'
-            : 'rounded-md border border-warning/40 bg-warning/10 px-3 py-3 text-ink'
+            ? 'rounded-md border border-warning/50 bg-warning/15 px-3 py-3 text-ink transition-colors'
+            : 'rounded-md border border-warning/40 bg-warning/10 px-3 py-3 text-ink transition-colors hover:bg-warning/15'
         }
         data-legislation-status="amended_not_held"
       >
@@ -40,11 +47,13 @@ export function LegislationHit({
           onFocus={onSelect}
           onMouseEnter={onSelect}
         >
-          <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-warning">
-            <Warning aria-hidden size={12} />
-            Text not shown
+          <span className="mb-1.5 block">
+            <Badge tone="warning">
+              <WarningCircle size={13} aria-hidden />
+              Amended wording withheld
+            </Badge>
           </span>
-          <strong className="mt-1.5 block text-sm font-medium leading-snug">
+          <strong className="block text-sm font-medium leading-snug">
             {hit.provisionLabel} · {hit.title}
           </strong>
           <span className="mt-1 block text-[12px] text-muted">
