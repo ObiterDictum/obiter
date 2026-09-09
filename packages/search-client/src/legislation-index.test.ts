@@ -83,6 +83,20 @@ describe('legislation provision index', () => {
     ).toBe(false)
   })
 
+  it('requires the effects flag, fail-closed without it', () => {
+    const { hasUnappliedEffects: _dropped, ...flagless } = provision
+    expect(isLegislationProvisionDocument(flagless)).toBe(false)
+    expect(
+      isLegislationProvisionDocument({ ...provision, hasUnappliedEffects: 0 }),
+    ).toBe(false)
+    expect(
+      isLegislationProvisionDocument({
+        ...provision,
+        hasUnappliedEffects: true,
+      }),
+    ).toBe(true)
+  })
+
   it('indexes batches and names the provider error on failure', async () => {
     const seen: unknown[][] = []
     const client = {

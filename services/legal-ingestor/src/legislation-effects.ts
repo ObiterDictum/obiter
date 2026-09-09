@@ -44,12 +44,13 @@ function readAttribute(tag: string, name: string): string | null {
 }
 
 function decodeXmlEntities(value: string): string {
+  // &amp; decodes last: a single pass must not turn `&amp;lt;` into `<`.
   return value
-    .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&')
 }
 
 /**

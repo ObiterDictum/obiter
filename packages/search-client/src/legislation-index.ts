@@ -131,6 +131,8 @@ export function isLegislationProvisionDocument(
 ): value is LegislationProvisionDocument {
   if (typeof value !== 'object' || value === null) return false
   const record = value as Record<string, unknown>
+  // hasUnappliedEffects is required boolean, fail-closed: a row without it
+  // is withheld/dropped, never served as current text.
   return (
     typeof record.id === 'string' &&
     typeof record.provisionRef === 'string' &&
@@ -139,7 +141,8 @@ export function isLegislationProvisionDocument(
     typeof record.label === 'string' &&
     typeof record.labelPath === 'string' &&
     typeof record.text === 'string' &&
-    typeof record.sourceUrl === 'string'
+    typeof record.sourceUrl === 'string' &&
+    typeof record.hasUnappliedEffects === 'boolean'
   )
 }
 

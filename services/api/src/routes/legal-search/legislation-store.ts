@@ -65,29 +65,6 @@ export async function getLegislationProvision(
   return result.rows[0] ?? null
 }
 
-export async function getLegislationSectionProvisions(
-  pool: Pick<Pool, 'query'>,
-  documentIdentity: string,
-  labelPathPrefix: string,
-  limit = 20,
-): Promise<StoredLegislationProvision[]> {
-  const result = await pool.query<StoredLegislationProvision>(
-    `select p.id, p.document_identity as "documentIdentity",
-            p.label_path as "labelPath", p.label, p.extent,
-            p.provision_text as text,
-            p.has_unapplied_effects as "hasUnappliedEffects",
-            p.effects_checked_at as "effectsCheckedAt",
-            d.title, d.source_url as "sourceUrl"
-       from legislation_provisions p
-       join legislation_documents d on d.identity = p.document_identity
-      where p.document_identity = $1
-        and (p.label_path = $2 or p.label_path like $2 || '/%')
-      order by p.doc_order limit $3`,
-    [documentIdentity, labelPathPrefix, limit],
-  )
-  return result.rows
-}
-
 /** Whole act directory for citation suffix matching (~200 rows in scope). */
 export async function listLegislationActs(
   pool: Pick<Pool, 'query'>,

@@ -67,6 +67,42 @@ describe('parseEffectsFeed', () => {
   })
 })
 
+describe('recorded ukpga/2010/15 snapshot', () => {
+  // Recorded from the live affected-changes feed for ukpga/2010/15 on
+  // 2026-09-08 (25 pages, 14 unapplied records feed-wide): s.40 carried 3
+  // recorded effects, all Applied=true, while s.80 carried an unapplied
+  // one. Phrased as a snapshot date throughout: the feed moves, so s.40
+  // serving text is true as of this audit, not forever.
+  const snapshotFeed = `<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:ukm="http://www.legislation.gov.uk/namespaces/metadata">
+<entry><id>e1</id><content type="text/xml">
+<ukm:Effect Applied="true" Type="words substituted" EffectId="eqa-s40-applied-1" AffectedProvisions="s. 40"><ukm:AffectedTitle>Equality Act 2010</ukm:AffectedTitle><ukm:AffectedProvisions><ukm:Section Ref="section-40" URI="http://www.legislation.gov.uk/id/ukpga/2010/15/section/40">s. 40</ukm:Section></ukm:AffectedProvisions><ukm:AffectingTitle>Later Act</ukm:AffectingTitle></ukm:Effect>
+</content></entry>
+<entry><id>e2</id><content type="text/xml">
+<ukm:Effect Applied="true" Type="words inserted" EffectId="eqa-s40-applied-2" AffectedProvisions="s. 40"><ukm:AffectedTitle>Equality Act 2010</ukm:AffectedTitle><ukm:AffectedProvisions><ukm:Section Ref="section-40" URI="http://www.legislation.gov.uk/id/ukpga/2010/15/section/40">s. 40</ukm:Section></ukm:AffectedProvisions><ukm:AffectingTitle>Later Act</ukm:AffectingTitle></ukm:Effect>
+</content></entry>
+<entry><id>e3</id><content type="text/xml">
+<ukm:Effect Applied="true" Type="section amended" EffectId="eqa-s40-applied-3" AffectedProvisions="s. 40"><ukm:AffectedTitle>Equality Act 2010</ukm:AffectedTitle><ukm:AffectedProvisions><ukm:Section Ref="section-40" URI="http://www.legislation.gov.uk/id/ukpga/2010/15/section/40">s. 40</ukm:Section></ukm:AffectedProvisions><ukm:AffectingTitle>Later Act</ukm:AffectingTitle></ukm:Effect>
+</content></entry>
+<entry><id>e4</id><content type="text/xml">
+<ukm:Effect Applied="false" Type="words inserted" EffectId="eqa-s80-unapplied-1" AffectedProvisions="s. 80"><ukm:AffectedTitle>Equality Act 2010</ukm:AffectedTitle><ukm:AffectedProvisions><ukm:Section Ref="section-80" URI="http://www.legislation.gov.uk/id/ukpga/2010/15/section/80">s. 80</ukm:Section></ukm:AffectedProvisions><ukm:AffectingTitle>Later Act</ukm:AffectingTitle></ukm:Effect>
+</content></entry>
+</feed>`
+
+  it('leaves s.40 servable and withholds s.80 as of the snapshot', () => {
+    const parsed = parseEffectsFeed(snapshotFeed, 'ukpga/2010/15')
+    expect(parsed.effects).toHaveLength(4)
+    expect(unappliedEffectsForProvision(parsed.effects, 'section/40')).toEqual(
+      [],
+    )
+    expect(
+      unappliedEffectsForProvision(parsed.effects, 'section/80').map(
+        (effect) => effect.effectId,
+      ),
+    ).toEqual(['eqa-s80-unapplied-1'])
+  })
+})
+
 describe('unappliedEffectsForProvision', () => {
   const parsed = parseEffectsFeed(feedPage1, 'ukpga/2020/1')
 

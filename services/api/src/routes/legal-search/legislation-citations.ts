@@ -110,11 +110,13 @@ function parseChapterNumber(
   return { year: Number(match[1]), number: Number(match[2]) }
 }
 
-/** s. 13(2)(a) to section/13/2/a; 6 to section/6. Null when not a section form. */
+/** s. 13(2)(a) to section/13/2/a; 6 to section/6. Null when not a section form.
+ * Subsection groups are bounded at 5: real citations nest far less, and an
+ * unbounded `(…)*` over user input is the ReDoS surface CodeQL flags. */
 export function parseSectionLabelPath(sectionText: string): string | null {
   const match = sectionText
     .trim()
-    .match(/^(\d+[A-Za-z]?)\s*((?:\([^()]+\)\s*)*)$/)
+    .match(/^(\d+[A-Za-z]?)\s*((?:\([^()]+\)\s*){0,5})$/)
   if (!match) return null
   const parts = [match[1]!]
   for (const group of match[2]!.matchAll(/\(([^()]+)\)/g)) {
@@ -125,12 +127,13 @@ export function parseSectionLabelPath(sectionText: string): string | null {
   return `section/${parts.join('/')}`
 }
 
-/** Schedule 2 paragraph 4 (and Sch./para. abbreviations) to schedule/2/paragraph/4. */
+/** Schedule 2 paragraph 4 (and Sch./para. abbreviations) to schedule/2/paragraph/4.
+ * Subsection groups bounded at 5 for the same ReDoS reason as above. */
 export function parseScheduleLabelPath(scheduleText: string): string | null {
   const match = scheduleText
     .trim()
     .match(
-      /^(?:schedule|sch\.?)\s*(\d+)\s*(?:paragraph|para\.?)\s*(\d+[A-Za-z]?)\s*((?:\([^()]+\)\s*)*)$/i,
+      /^(?:schedule|sch\.?)\s*(\d+)\s*(?:paragraph|para\.?)\s*(\d+[A-Za-z]?)\s*((?:\([^()]+\)\s*){0,5})$/i,
     )
   if (!match) return null
   const parts = [`schedule/${match[1]}`, `paragraph/${match[2]}`]
@@ -232,7 +235,7 @@ function splitSectionQuery(query: string): SplitSectionQuery | null {
     // The section token runs to the first boundary the Act remainder can
     // start at: peel a leading section number off, the rest names the Act.
     const inner = sectionFirst[1]!.match(
-      /^(\d+[A-Za-z]?(?:\s*\([^()]+\)\s*)*)\s*(.*)$/,
+      /^(\d+[A-Za-z]?(?:\s*\([^()]+\)\s*){0,5})\s*(.*)$/,
     )
     if (inner && inner[2]) {
       return {
@@ -251,11 +254,11 @@ function splitScheduleQuery(
   query: string,
 ): { scheduleText: string; actText: string } | null {
   const match = query.match(
-    /^\s*((?:schedule|sch\.?)\s*\d+\s*(?:paragraph|para\.?)\s*\d+[A-Za-z]?(?:\s*\([^()]+\)\s*)*)\s+(.+?)\s*$/i,
+    /^\s*((?:schedule|sch\.?)\s*\d+\s*(?:paragraph|para\.?)\s*\d+[A-Za-z]?(?:\s*\([^()]+\)\s*){0,5})\s+(.+?)\s*$/i,
   )
   if (match) return { scheduleText: match[1]!, actText: match[2]! }
   const trailing = query.match(
-    /^\s*(.+?)\s+((?:schedule|sch\.?)\s*\d+\s*(?:paragraph|para\.?)\s*\d+[A-Za-z]?(?:\s*\([^()]+\)\s*)*)\s*$/i,
+    /^\s*(.+?)\s+((?:schedule|sch\.?)\s*\d+\s*(?:paragraph|para\.?)\s*\d+[A-Za-z]?(?:\s*\([^()]+\)\s*){0,5})\s*$/i,
   )
   if (trailing) return { scheduleText: trailing[2]!, actText: trailing[1]! }
   // A bare schedule form names no Act: visible non-resolution, not a guess.

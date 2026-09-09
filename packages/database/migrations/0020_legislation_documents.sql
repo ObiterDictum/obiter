@@ -26,7 +26,8 @@ create table if not exists legislation_documents (
   constraint legislation_documents_title_check check (char_length(title) > 0),
   constraint legislation_documents_identity_check check (
     identity = act_type || '/' || year::text || '/' || number::text
-  )
+  ),
+  constraint legislation_documents_act_type_check check (act_type = 'ukpga')
 );
 
 create index if not exists legislation_documents_year_number_idx

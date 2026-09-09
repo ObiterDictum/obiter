@@ -38,9 +38,10 @@ import {
  * magnitude under it.
  *
  * Resumable per Act: `legislation_ingest_progress` records the last
- * completed Act number per year scope, and provision writes are idempotent
- * on the document content hash, so a re-run skips already-stored Acts
- * without re-fetching their bodies.
+ * completed Act number per year scope. Re-runs re-fetch every listed Act's
+ * data.xml and compare the content hash: unchanged Acts report
+ * skipped-unchanged without re-parsing, changed Acts re-store. Nothing is
+ * skipped on stored row presence alone, so updates are picked up.
  *
  * Size note: this stays one orchestration module (~450 lines, over the 300
  * target) on purpose. Politeness, effects paging, per-act progress, and the
@@ -78,7 +79,7 @@ export interface LegislationScopeReport {
   failures: Array<{ identity: string; reason: string }>
 }
 
-export type Db = Pick<Pool, 'query'>
+export type Db = Pick<Pool, 'query' | 'connect'>
 
 export interface LegislationIngestDeps {
   pool: Db
@@ -89,33 +90,40 @@ export interface LegislationIngestDeps {
   fetchImpl: typeof fetch
 }
 
-async function upsertLegislationDocument(pool: Db, doc: IngestDocument) {
-  await pool.query(
-    `insert into legislation_documents
+export async function upsertLegislationDocument(pool: Db, doc: IngestDocument) {
+  // One transaction: a crash between the document row and its provisions
+  // must never leave a document with half its provisions (or none, after
+  // the delete). Pool.query would spread these across connections, so
+  // checkout one client for the whole BEGIN/COMMIT.
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    await client.query(
+      `insert into legislation_documents
       (identity, act_type, year, number, title, source_url, content_hash, extent, updated_at)
      values ($1, $2, $3, $4, $5, $6, $7, $8, now())
      on conflict (identity) do update set
        title = excluded.title, source_url = excluded.source_url,
        content_hash = excluded.content_hash, extent = excluded.extent,
        updated_at = now()`,
-    [
-      doc.identity,
-      doc.actType,
-      doc.year,
-      doc.number,
-      doc.title,
-      doc.sourceUrl,
-      doc.contentHash,
-      doc.extent,
-    ],
-  )
-  await pool.query(
-    'delete from legislation_provisions where document_identity = $1',
-    [doc.identity],
-  )
-  for (const provision of doc.provisions) {
-    await pool.query(
-      `insert into legislation_provisions
+      [
+        doc.identity,
+        doc.actType,
+        doc.year,
+        doc.number,
+        doc.title,
+        doc.sourceUrl,
+        doc.contentHash,
+        doc.extent,
+      ],
+    )
+    await client.query(
+      'delete from legislation_provisions where document_identity = $1',
+      [doc.identity],
+    )
+    for (const provision of doc.provisions) {
+      await client.query(
+        `insert into legislation_provisions
         (id, document_identity, label_path, label, extent, provision_text, source_hash, doc_order, updated_at)
        values ($1, $2, $3, $4, $5, $6, $7, $8, now())
        on conflict (id) do update set
@@ -123,17 +131,28 @@ async function upsertLegislationDocument(pool: Db, doc: IngestDocument) {
          extent = excluded.extent, provision_text = excluded.provision_text,
          source_hash = excluded.source_hash, doc_order = excluded.doc_order,
          updated_at = now()`,
-      [
-        `${doc.identity}/${provision.labelPath}`,
-        doc.identity,
-        provision.labelPath,
-        provision.label,
-        provision.extent,
-        provision.text,
-        doc.contentHash,
-        provision.docOrder,
-      ],
-    )
+        [
+          `${doc.identity}/${provision.labelPath}`,
+          doc.identity,
+          provision.labelPath,
+          provision.label,
+          provision.extent,
+          provision.text,
+          doc.contentHash,
+          provision.docOrder,
+        ],
+      )
+    }
+    await client.query('COMMIT')
+  } catch (error) {
+    try {
+      await client.query('ROLLBACK')
+    } catch {
+      // Rollback failure must not mask the original write error.
+    }
+    throw error
+  } finally {
+    client.release()
   }
 }
 
@@ -231,21 +250,29 @@ export async function readCrawlDelaySeconds(
   }
 }
 
-/** Pages the whole affected-changes feed and flags amended provisions. */
+/** Pages the whole affected-changes feed and flags amended provisions.
+ * Paging is capped at 100 pages (50 results each): the feed is finite, and
+ * an uncapped `rel=next` walk would loop forever on a cycling server. Flags
+ * are only cleared after at least one page read succeeds, so a feed that is
+ * down (404 on page 1, or an early throw) never wipes known-good flags. */
 export async function ingestEffectsForDocument(
   deps: LegislationIngestDeps,
   doc: IngestDocument,
 ): Promise<{ checked: number; amended: number }> {
+  const maxEffectsPages = 100
   const base = `${legislationBaseUrl}/changes/affected/${doc.identity}/data.feed`
   let url: string | null = base
   const unappliedLabelPaths = new Set<string>()
+  let pagesRead = 0
   while (url !== null) {
+    if (pagesRead >= maxEffectsPages) break
     const response = await fetchPolitely(deps, url)
     if (response.status === 404) break
     if (!response.ok)
       throw new Error(`effects feed returned ${response.status}`)
     const xml = await response.text()
     const parsed = parseEffectsFeed(xml, doc.identity)
+    pagesRead += 1
     for (const effect of parsed.effects) {
       if (effect.applied) continue
       for (const ref of effect.affected) {
@@ -253,6 +280,11 @@ export async function ingestEffectsForDocument(
       }
     }
     url = parsed.nextPageUrl
+  }
+  if (pagesRead === 0) {
+    // No successful page: leave existing flags untouched and report zero
+    // coverage rather than clearing good state on a failed read.
+    return { checked: 0, amended: 0 }
   }
   await clearProvisionEffects(deps.pool, doc.identity)
   let amended = 0
@@ -412,18 +444,18 @@ export async function ingestYear(
     feedUrl = nextFeedPageUrl(pageXml)
   }
   acts.sort((a, b) => a.number - b.number)
-  report.actsListed = acts.length
-  // Resume on stored rows, not on the number cursor: a scope whose listing
-  // grew (year-feed paging was added mid-campaign) must still pick up Acts
-  // below the cursor. ingestOneAct stays hash-idempotent underneath.
-  const stored = await deps.pool.query<{ number: number }>(
-    'select number from legislation_documents where act_type = $1 and year = $2',
-    [scopeActType, year],
+  // Year feeds should not repeat an Act across pages, but dedupe anyway so
+  // a repeated entry re-validates by hash instead of ingesting twice.
+  const deduped = acts.filter(
+    (act, index) => index === 0 || acts[index - 1]!.number !== act.number,
   )
-  const storedNumbers = new Set(stored.rows.map((row) => row.number))
+  report.actsListed = deduped.length
+  // No stored-number skip: every listed Act is re-fetched and compared on
+  // content hash inside ingestOneAct (unchanged reports skipped-unchanged
+  // without re-parsing, changed re-stores). Skipping on row presence alone
+  // is what made year re-runs dead to updates.
   let processed = 0
-  for (const act of acts) {
-    if (storedNumbers.has(act.number)) continue
+  for (const act of deduped) {
     if (deps.maxActs !== undefined && processed >= deps.maxActs) break
     let outcome: LegislationDocOutcome
     try {
@@ -461,7 +493,17 @@ export async function ingestYear(
          skipped_unchanged_count = legislation_ingest_progress.skipped_unchanged_count + excluded.skipped_unchanged_count,
          skipped_no_fulltext_count = legislation_ingest_progress.skipped_no_fulltext_count + excluded.skipped_no_fulltext_count,
          failed_count = legislation_ingest_progress.failed_count + excluded.failed_count,
-         failures_json = excluded.failures_json,
+         failures_json = (
+           select coalesce(jsonb_agg(elem order by ord), '[]'::jsonb)
+           from (
+             select elem, ord
+             from jsonb_array_elements(
+               coalesce(legislation_ingest_progress.failures_json, '[]'::jsonb)
+               || excluded.failures_json
+             ) with ordinality as t(elem, ord)
+             order by ord desc limit 50
+           ) tail
+         ),
          updated_at = now()`,
       [
         scopeKey,
@@ -504,15 +546,23 @@ function readYears(): number[] {
     .filter((year) => Number.isInteger(year))
 }
 
+/** Request gap with a finite-number guard: a non-numeric --gap-ms falls
+ * back to the 5s floor instead of propagating NaN into the sleep loop. */
+export function resolveRequestGapMs(
+  raw: string | undefined,
+  crawlDelaySeconds: number | null,
+): number {
+  const parsed = raw === undefined ? settledRequestGapMs : Number(raw)
+  const requested = Number.isFinite(parsed) ? parsed : settledRequestGapMs
+  return Math.max(requested, (crawlDelaySeconds ?? 5) * 1000)
+}
+
 async function main() {
   const { readLegalIngestorEnv } = await import('./env.js')
   const env = readLegalIngestorEnv()
   const pool = new Pool({ connectionString: env.databaseUrl })
   const crawlDelay = await readCrawlDelaySeconds(fetch)
-  const gapMs = Math.max(
-    Number(readFlag('gap-ms') ?? settledRequestGapMs),
-    (crawlDelay ?? 5) * 1000,
-  )
+  const gapMs = resolveRequestGapMs(readFlag('gap-ms'), crawlDelay)
   console.info(
     JSON.stringify({
       robotsCrawlDelaySeconds: crawlDelay,

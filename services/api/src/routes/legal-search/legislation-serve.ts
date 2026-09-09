@@ -209,9 +209,12 @@ export async function resolveLegislationFetch(
           `(official text: ${officialProvisionUrl(outcome.provision.identity, outcome.provision.labelPath)}).`,
       }
     }
-    const hit = provision.hasUnappliedEffects
-      ? amendedProvisionHit(provision, 'stored_exact_lookup', 1)
-      : currentProvisionHit(provision, 'stored_exact_lookup', 1)
+    // Fail-closed: only an explicit false serves text. Undefined (a row the
+    // validator would now drop, or a store row predating the flag) withholds.
+    const hit =
+      provision.hasUnappliedEffects === false
+        ? currentProvisionHit(provision, 'stored_exact_lookup', 1)
+        : amendedProvisionHit(provision, 'stored_exact_lookup', 1)
     return {
       groups: [{ key: 'legislation', label: 'Legislation', hits: [hit] }],
       citationRecognised: true,
@@ -308,15 +311,18 @@ async function searchKeywordProvisions(
     return []
   }
   return result.hits.slice(0, limit).map((hit, index) =>
-    hit.hasUnappliedEffects
+    // Fail-closed here too: only explicit false serves text; the validator
+    // already drops flagless index rows, this covers any direct caller.
+    hit.hasUnappliedEffects === false
       ? {
-          ...amendedProvisionHit(
+          ...currentProvisionHit(
             {
               id: hit.id,
               documentIdentity: hit.documentIdentity,
               labelPath: hit.labelPath,
               label: hit.label,
               extent: hit.extent,
+              text: hit.text,
               title: hit.title,
               sourceUrl: hit.sourceUrl,
             },
@@ -326,14 +332,13 @@ async function searchKeywordProvisions(
           citationMatch: undefined,
         }
       : {
-          ...currentProvisionHit(
+          ...amendedProvisionHit(
             {
               id: hit.id,
               documentIdentity: hit.documentIdentity,
               labelPath: hit.labelPath,
               label: hit.label,
               extent: hit.extent,
-              text: hit.text,
               title: hit.title,
               sourceUrl: hit.sourceUrl,
             },

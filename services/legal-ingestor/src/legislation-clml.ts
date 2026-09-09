@@ -43,12 +43,14 @@ export interface IngestDocument {
 }
 
 function decodeXmlEntities(value: string): string {
+  // &amp; decodes last so a single pass never double-unescapes: `&amp;lt;`
+  // becomes `&lt;` (one level) rather than `<` (two levels).
   return value
-    .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&')
 }
 
 function stripTags(value: string): string {

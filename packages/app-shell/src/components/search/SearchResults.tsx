@@ -114,12 +114,15 @@ function LegislationGroupSection({ group }: { group: LegalSearchFetchGroup }) {
 }
 
 function LegislationHit({ hit }: { hit: LegislationSearchResultHit }) {
-  return (
-    <span className="block min-w-0 flex-1">
-      <strong className="block text-sm font-medium leading-snug">
-        {hit.provisionLabel} · {hit.title}
-      </strong>
-      {hit.legislationStatus === 'amended_not_held' ? (
+  // Act-level hits carry a notice and no text: render the notice so the
+  // "Matched X. Add a section number" guidance is visible. Amended hits
+  // never render text even if a caller passes it (API never sends it).
+  if (hit.legislationStatus === 'amended_not_held') {
+    return (
+      <span className="block min-w-0 flex-1">
+        <strong className="block text-sm font-medium leading-snug">
+          {hit.provisionLabel} · {hit.title}
+        </strong>
         <span className="mt-1 block text-[12px] text-muted">
           {hit.notice}{' '}
           <a
@@ -131,11 +134,26 @@ function LegislationHit({ hit }: { hit: LegislationSearchResultHit }) {
             Read the official revised provision
           </a>
         </span>
-      ) : (
+        <small className="mt-1 block text-[11px] text-subtle">
+          legislation.gov.uk
+          {hit.extent ? ` · ${hit.extent}` : ''}
+        </small>
+      </span>
+    )
+  }
+  return (
+    <span className="block min-w-0 flex-1">
+      <strong className="block text-sm font-medium leading-snug">
+        {hit.provisionLabel} · {hit.title}
+      </strong>
+      {hit.notice ? (
+        <span className="mt-1 block text-[12px] text-muted">{hit.notice}</span>
+      ) : null}
+      {(hit.snippets?.[0]?.text ?? hit.text) ? (
         <span className="mt-1 block text-[12px] text-muted">
           {hit.snippets?.[0]?.text ?? hit.text}
         </span>
-      )}
+      ) : null}
       <small className="mt-1 block text-[11px] text-subtle">
         legislation.gov.uk
         {hit.extent ? ` · ${hit.extent}` : ''}

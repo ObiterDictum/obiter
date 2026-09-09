@@ -156,11 +156,14 @@ export function createLegalSearchProxyRoutes(
     // keyword group, federated after the judgment flat hits. Skipped only
     // when the caller narrows to judgments or the route was built without
     // a legislation store (older tests). Never touches the judgment flow.
-    const legislation =
+    // Started without awaiting so it runs concurrently with the judgment
+    // lookups below: a slow legislation store (2s fail-open) must not hold
+    // the judgment half open. Every return path awaits it before responding.
+    const legislationPromise =
       !storedOnlyBrowse &&
       !isJudgmentOnlyFetch(parsed.data) &&
       options.legislation
-        ? await resolveLegislationFetch(
+        ? resolveLegislationFetch(
             {
               pool: options.legislation.pool,
               searchClient,
@@ -168,10 +171,10 @@ export function createLegalSearchProxyRoutes(
             },
             parsed.data.query,
           )
-        : null
-    const exactStoredAuthority =
+        : Promise.resolve(null)
+    const exactStoredAuthorityPromise =
       !storedOnlyBrowse && exactLookup
-        ? await findExactStoredAuthority(
+        ? findExactStoredAuthority(
             searchClient,
             legalAuthorityStore,
             env.legalAuthoritiesIndex,
@@ -179,7 +182,13 @@ export function createLegalSearchProxyRoutes(
             filters,
             exactLookup,
           )
-        : null
+        : Promise.resolve(null)
+    // Overlap the two halves: neither holds the other open beyond its own
+    // 2s fail-open bounds.
+    const [exactStoredAuthority, legislation] = await Promise.all([
+      exactStoredAuthorityPromise,
+      legislationPromise,
+    ])
 
     // Meilisearch is the sole query engine: without it there is nothing to
     // rank or verify against, so the outage fails visibly instead of

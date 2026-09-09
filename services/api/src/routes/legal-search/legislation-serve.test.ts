@@ -44,7 +44,7 @@ function createDeps(overrides: {
   actsError?: boolean
 }): LegislationServeDeps {
   const pool = {
-    query: vi.fn(async (text: string) => {
+    query: vi.fn(async (text: string, values?: unknown[]) => {
       if (overrides.actsError) throw new Error('db down')
       if (text.includes('from legislation_documents order by'))
         return { rows: acts }
@@ -58,11 +58,15 @@ function createDeps(overrides: {
         }
       }
       if (text.includes('from legislation_provisions')) {
-        const rows =
-          overrides.provision === null
-            ? []
-            : [overrides.provision ?? currentProvision]
-        return { rows }
+        // Keyed on the requested provision id: an unknown id is a store
+        // miss (recognised_not_held), never a neighbouring row.
+        if (overrides.provision === null) return { rows: [] }
+        const stored = overrides.provision ?? currentProvision
+        const wanted = values?.[0]
+        if (typeof wanted === 'string' && wanted !== stored.id) {
+          return { rows: [] }
+        }
+        return { rows: [stored] }
       }
       return { rows: [] }
     }),
@@ -116,6 +120,20 @@ describe('resolveLegislationFetch', () => {
       createDeps({ provision: null }),
       's 99 Equality Act 2010',
     )
+    expect(result.recognisedNotHeld).toBe(true)
+    expect(result.groups).toEqual([])
+    expect(result.note).toContain('not held')
+  })
+
+  it('never serves a neighbour for an unknown provision id', async () => {
+    // Default store holds only s.13: s.99 resolves to a different
+    // provision id, so the keyed lookup misses and the answer is
+    // recognised_not_held with no group, not the s.13 text.
+    const result = await resolveLegislationFetch(
+      createDeps({}),
+      's 99 Equality Act 2010',
+    )
+    expect(result.citationRecognised).toBe(true)
     expect(result.recognisedNotHeld).toBe(true)
     expect(result.groups).toEqual([])
     expect(result.note).toContain('not held')
