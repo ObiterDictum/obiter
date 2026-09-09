@@ -8,6 +8,7 @@ export * from './document-model'
 export * from './document-tracked-changes'
 // Citation honesty shapes for legal search (additive, optional at the boundary).
 export * from './legal-search'
+export * from './legislation-paths'
 export * from './xml-text'
 
 export type AppPlatform = 'web' | 'desktop'

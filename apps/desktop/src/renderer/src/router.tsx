@@ -1,6 +1,7 @@
 import {
   AppShellLayout,
   CaseLawDocumentView,
+  LegislationProvisionView,
   DocumentDetailLayoutView,
   ForgotPasswordRouteView,
   HomeRouteView,
@@ -13,6 +14,7 @@ import {
   SettingsRouteView,
   VerifyRouteView,
   caseLawDocumentQueryOptions,
+  legislationProvisionQueryOptions,
   createCanonicalCasePath,
   documentQueryOptions,
   guardAuth,
@@ -59,6 +61,7 @@ export const DESKTOP_SHARED_VIEW_PATHS = [
   '/verify',
   '/cases/$caseId',
   '/case/$caseSlug',
+  '/ln/$',
   '/sign-in',
   '/sign-up',
   '/invites/accept',
@@ -247,6 +250,29 @@ function DesktopCaseSlugRoute() {
   return <CaseLawDocumentView caseId={caseId} />
 }
 
+const legislationRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: 'ln/$',
+  loader: ({ context, params }) => {
+    const provisionPath = params._splat
+    if (!provisionPath) {
+      throw new Error('Legislation provision path is missing.')
+    }
+    return context.queryClient.ensureQueryData(
+      legislationProvisionQueryOptions(provisionPath),
+    )
+  },
+  component: DesktopLegislationRoute,
+})
+
+function DesktopLegislationRoute() {
+  const { _splat: provisionPath } = legislationRoute.useParams()
+  if (!provisionPath) {
+    throw new Error('Legislation provision path is missing.')
+  }
+  return <LegislationProvisionView provisionPath={provisionPath} />
+}
+
 function DesktopMatterDetailRoute() {
   const { matterId } = matterDetailRoute.useParams()
 
@@ -373,6 +399,7 @@ const routeTree = rootRoute.addChildren([
   settingsRoute,
   casesRoute,
   caseSlugRoute,
+  legislationRoute,
   signInRoute,
   signUpRoute,
   acceptInviteRoute,

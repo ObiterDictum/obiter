@@ -2,6 +2,7 @@ import { useNavigate } from '@tanstack/react-router'
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { apiUrl } from '../lib/api-url'
 import { caseResultLocation } from '../case-navigation'
+import { provisionResultLocation } from '../legislation-navigation'
 import {
   SearchCommandBar,
   SearchFeedbackPanel,
@@ -18,6 +19,7 @@ import {
   type LegalSearchResult,
   type LegalSearchState,
 } from '../components/search'
+import { searchResultRows } from '../components/search/searchResultRows'
 
 export { courtOptionGroups, getCourtLabel }
 
@@ -351,7 +353,8 @@ export function LegalSearchView() {
 
       if (shortcutsOpen || state.status !== 'results') return
 
-      const resultCount = state.response.hits.length
+      const rows = searchResultRows(state.response)
+      const resultCount = rows.length
       if (resultCount === 0) return
 
       const textEntryTarget = isTextEntryTarget(event.target)
@@ -383,11 +386,16 @@ export function LegalSearchView() {
         event.key === 'Enter' &&
         selectedResultIndex >= 0
       ) {
-        const selectedResult = state.response.hits[selectedResultIndex]
-        if (!selectedResult) return
+        const selectedRow = rows[selectedResultIndex]
+        if (!selectedRow) return
 
         event.preventDefault()
-        void navigate(caseResultLocation(selectedResult))
+        if (selectedRow.kind === 'judgment') {
+          void navigate(caseResultLocation(selectedRow.hit))
+          return
+        }
+        if (!selectedRow.hit.labelPath) return
+        void navigate(provisionResultLocation(selectedRow.hit))
       }
     }
 

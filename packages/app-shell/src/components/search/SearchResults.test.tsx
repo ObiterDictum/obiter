@@ -269,6 +269,8 @@ describe('SearchResults legislation group', () => {
               officialUrl:
                 'https://www.legislation.gov.uk/ukpga/2010/15/section/13',
               sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
+              canonicalUrl: '/ln/ukpga/2010/15/section/13',
+              year: 2010,
             },
             {
               id: 'ukpga/2010/15/section/80',
@@ -285,6 +287,8 @@ describe('SearchResults legislation group', () => {
               officialUrl:
                 'https://www.legislation.gov.uk/ukpga/2010/15/section/80',
               sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
+              canonicalUrl: '/ln/ukpga/2010/15/section/80',
+              year: 2010,
               notice:
                 'This provision is affected by amendments that have been recorded but not yet applied.',
             },
@@ -306,13 +310,24 @@ describe('SearchResults legislation group', () => {
     expect(container.textContent).toContain(
       'amendments that have been recorded but not yet applied',
     )
+    expect(container.textContent).toContain('Text not shown')
     expect(container.textContent).not.toContain(
       'Stale amended wording that must never render',
     )
-    const amendedItem = Array.from(container.querySelectorAll('li')).find(
-      (item) => item.textContent?.includes('s. 80'),
+    const amendedItem = container.querySelector(
+      '[data-legislation-status="amended_not_held"]',
     )
+    const currentItem = container.querySelector(
+      '[data-legislation-status="current"]',
+    )
+    expect(amendedItem).not.toBeNull()
+    expect(currentItem).not.toBeNull()
+    expect(amendedItem?.className).toContain('border-warning')
+    expect(currentItem?.className).not.toContain('border-warning')
     expect(amendedItem?.textContent).not.toContain('Direct discrimination')
+    expect(
+      container.querySelector('a[href="/ln/ukpga/2010/15/section/13"]'),
+    ).not.toBeNull()
     expect(
       amendedItem?.querySelector(
         'a[href="https://www.legislation.gov.uk/ukpga/2010/15/section/80"]',
@@ -356,5 +371,86 @@ describe('SearchResults legislation group', () => {
     expect(container.textContent).toContain(
       'Matched Equality Act 2010. Add a section number',
     )
+  })
+
+  it('leads with legislation when the API marks the query as statute-shaped', () => {
+    const rendered = renderResults({
+      hits: [citingHit],
+      primaryGroup: 'legislation',
+      groups: [
+        {
+          key: 'legislation',
+          label: 'Legislation',
+          hits: [
+            {
+              id: 'ukpga/2010/15/section/13',
+              resultGroup: 'legislation',
+              legislationStatus: 'current',
+              title: 'Equality Act 2010',
+              year: 2010,
+              provisionLabel: 's. 13',
+              labelPath: 'section/13',
+              documentIdentity: 'ukpga/2010/15',
+              extent: 'E+W+S',
+              canonicalUrl: '/ln/ukpga/2010/15/section/13',
+              officialUrl:
+                'https://www.legislation.gov.uk/ukpga/2010/15/section/13',
+              sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
+              text: 'Direct discrimination applies here.',
+            },
+          ],
+        },
+      ],
+      cached: true,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'results',
+    })
+    root = rendered.root
+    container = rendered.container
+    const headings = Array.from(container.querySelectorAll('h2')).map(
+      (heading) => heading.textContent,
+    )
+    expect(headings).toEqual(['Legislation', 'Case law'])
+  })
+
+  it('keeps case law first when the query is not a statute citation', () => {
+    const rendered = renderResults({
+      hits: [citingHit],
+      groups: [
+        {
+          key: 'legislation',
+          label: 'Legislation',
+          hits: [
+            {
+              id: 'ukpga/2010/15/section/13',
+              resultGroup: 'legislation',
+              legislationStatus: 'current',
+              title: 'Equality Act 2010',
+              year: 2010,
+              provisionLabel: 's. 13',
+              labelPath: 'section/13',
+              documentIdentity: 'ukpga/2010/15',
+              extent: 'E+W+S',
+              canonicalUrl: '/ln/ukpga/2010/15/section/13',
+              officialUrl:
+                'https://www.legislation.gov.uk/ukpga/2010/15/section/13',
+              sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
+              text: 'Direct discrimination applies here.',
+            },
+          ],
+        },
+      ],
+      cached: true,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'results',
+    })
+    root = rendered.root
+    container = rendered.container
+    const headings = Array.from(container.querySelectorAll('h2')).map(
+      (heading) => heading.textContent,
+    )
+    expect(headings).toEqual(['Case law', 'Legislation'])
   })
 })
