@@ -1,12 +1,18 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
+  ingestOneAct,
   ingestYear,
   nextFeedPageUrl,
+  parseLegislationIngestArgs,
   resolveRequestGapMs,
   upsertLegislationDocument,
   type Db,
 } from './legislation-ingest'
-import { parseYearFeed, type IngestDocument } from './legislation-clml'
+import {
+  parseYearFeed,
+  sha256Hex,
+  type IngestDocument,
+} from './legislation-clml'
 
 // Year feeds page at 20 entries: page 1 of 2020 ends at c.10, so a scope
 // that reads only the first page silently drops c.1-9. This pins the
@@ -38,6 +44,45 @@ ${next ? `<link rel="next" type="application/atom+xml" href="${next}"/>` : ''}
   })
 })
 
+describe('parseLegislationIngestArgs', () => {
+  it('parses --help and -h without options', () => {
+    expect(parseLegislationIngestArgs(['--help'])).toEqual({
+      ok: true,
+      help: true,
+    })
+    expect(parseLegislationIngestArgs(['-h'])).toEqual({
+      ok: true,
+      help: true,
+    })
+  })
+
+  it('rejects unrecognised flags and positionals instead of ignoring them', () => {
+    expect(parseLegislationIngestArgs(['--skip-effekts']).ok).toBe(false)
+    expect(parseLegislationIngestArgs(['ukpga/2020/1']).ok).toBe(false)
+    expect(parseLegislationIngestArgs(['--years']).ok).toBe(false)
+  })
+
+  it('accepts bare --skip-effects and validates the rest', () => {
+    const bare = parseLegislationIngestArgs(['--skip-effects'])
+    if (!bare.ok || bare.help) throw new Error('expected options')
+    expect(bare.options.skipEffects).toBe(true)
+    const explicit = parseLegislationIngestArgs(['--skip-effects=0'])
+    if (!explicit.ok || explicit.help) throw new Error('expected options')
+    expect(explicit.options.skipEffects).toBe(false)
+    expect(parseLegislationIngestArgs(['--skip-effects=maybe']).ok).toBe(false)
+    const act = parseLegislationIngestArgs(['--act=ukpga/2023/29'])
+    if (!act.ok || act.help) throw new Error('expected options')
+    expect(act.options.act).toMatchObject({
+      actType: 'ukpga',
+      year: 2023,
+      number: 29,
+    })
+    expect(parseLegislationIngestArgs(['--act=nope']).ok).toBe(false)
+    expect(parseLegislationIngestArgs(['--max-acts=0']).ok).toBe(false)
+    expect(parseLegislationIngestArgs(['--years=2020,abc']).ok).toBe(false)
+  })
+})
+
 describe('resolveRequestGapMs', () => {
   it('falls back to the 5s floor for non-numeric input', () => {
     expect(resolveRequestGapMs('abc', 5)).toBe(5000)
@@ -64,6 +109,10 @@ describe('upsertLegislationDocument transaction', () => {
     declaredProvisions: 1,
     p1Seen: 1,
     p1Rows: 1,
+    p1Addressable: 1,
+    p1BlockAmendment: 0,
+    p1NoIdUriOther: 0,
+    p1EmptyText: 0,
     provisions: [
       {
         labelPath: 'section/1',
@@ -102,13 +151,16 @@ describe('upsertLegislationDocument transaction', () => {
   })
 
   it('persists the extraction-completeness note on the document row', async () => {
-    // Declared 2 P1s, one emitted row: the stored note flags the gap so a
+    // Declared 2 P1s, one addressable row and one textless addressable
+    // P1: the stored note flags the unexplained row-less P1 so a
     // mismatch is auditable per Act instead of failing the document.
     const gappy: IngestDocument = {
       ...doc,
       declaredProvisions: 2,
       p1Seen: 2,
+      p1Addressable: 2,
       p1Rows: 1,
+      p1EmptyText: 1,
     }
     const seen: Array<{ text: string; values?: unknown[] }> = []
     const client = {
@@ -127,7 +179,7 @@ describe('upsertLegislationDocument transaction', () => {
     const docInsert = seen.find((call) =>
       call.text.includes('insert into legislation_documents'),
     )
-    expect(docInsert?.values?.[8]).toContain('1 P1 without an emitted row')
+    expect(docInsert?.values?.[8]).toContain('addressable P1 emitted no row')
   })
 
   it('commits the document, delete, and inserts on one client', async () => {
@@ -271,5 +323,50 @@ describe('ingestYear with mocked fetch', () => {
     expect(second.skippedUnchanged).toBe(5)
     expect(second.failed).toBe(0)
     expect(dataXmlFetches).toHaveLength(5)
+  })
+
+  it('re-derives the count note when content is unchanged', async () => {
+    // Act 7 is already stored with this exact body (hash match) but
+    // carries a stale loud note from the old check. The re-ingest must
+    // report skipped-unchanged for the provisions yet clear the note,
+    // or a fixed check would never go quiet on healthy documents.
+    const inner = createMockPool()
+    const body = clmlFor(7)
+    inner.docs.set('ukpga/2020/7', sha256Hex(body))
+    const updates: Array<{ text: string; values?: unknown[] }> = []
+    const pool = {
+      docs: inner.docs,
+      query: async (text: string, values?: unknown[]) => {
+        updates.push({ text, values })
+        return inner.query(text, values)
+      },
+      connect: () => inner.connect(),
+    } as unknown as Db & { docs: Map<string, string> }
+    const fetchImpl = (async (url: unknown) => {
+      if (String(url).endsWith('/ukpga/2020/7/data.xml')) {
+        return xmlResponse(body)
+      }
+      throw new Error(`unexpected fetch ${String(url)}`)
+    }) as unknown as typeof fetch
+    const deps = {
+      pool,
+      gapMs: 0,
+      skipEffects: true,
+      sleep: async () => {},
+      fetchImpl,
+    }
+    const outcome = await ingestOneAct(deps, {
+      actType: 'ukpga',
+      year: 2020,
+      number: 7,
+      title: 'Act 7',
+    })
+    expect(outcome.status).toBe('skipped-unchanged')
+    // The mock body declares its one P1 and yields one row: healthy, so
+    // the refresh writes back the quiet (empty) note.
+    const refresh = updates.find((call) =>
+      call.text.includes('update legislation_documents'),
+    )
+    expect(refresh?.values).toEqual(['ukpga/2020/7', ''])
   })
 })

@@ -5,7 +5,39 @@ only. The Meilisearch product index (`legal_authorities`) is derived and
 populated only by `pnpm rebuild:search-index`; this service never writes it.
 The fixture seeder (`src/index.ts`) stays on `legal_authorities_fixtures`.
 
-## Commands
+## Legislation ingest (Stage 1)
+
+UK Public General Acts into Postgres `legislation_documents` /
+`legislation_provisions`. The script exists only in this package: run it
+from `services/legal-ingestor`, not the repo root.
+
+```bash
+# One Act (with the affected-changes effects pass)
+DATABASE_URL=postgres://obiter:obiter@localhost:5432/obiter pnpm legislation:ingest --act=ukpga/2023/29
+
+# Whole years (default: 2020 through the current year)
+DATABASE_URL=... pnpm legislation:ingest --years=2020,2021
+
+# Verification slice without the effects pass
+DATABASE_URL=... pnpm legislation:ingest --years=2023 --max-acts=2 --skip-effects
+```
+
+Flags: `--act=ukpga/YYYY/N`, `--years=Y1,Y2`, `--max-acts=N`,
+`--gap-ms=MS` (default 5000, never below the site's Crawl-delay),
+`--skip-effects` (bare or `=1`). `pnpm legislation:ingest --help`
+prints usage and exits without touching env, the database, or upstream.
+Unknown flags fail with usage instead of being ignored.
+
+One sequential loop at the settled 5 s gap; re-runs compare content
+hashes per Act, so unchanged Acts report skipped-unchanged (provisions
+untouched, though the count note is re-derived from the re-fetched body
+so a stale flag from an older check clears). A P1-count gap
+fully explained by BlockAmendment quoted inserts is healthy and stores
+unflagged; anything else (tokenizer drift, a no-IdURI P1 outside
+BlockAmendment, an addressable P1 with no row) stores flagged in
+`provision_count_note` and lands in the per-year mismatch list.
+
+## Commands (Find Case Law)
 
 ```bash
 # Full measured scope (~38k docs, ~6h at the settled rate)
