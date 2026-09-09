@@ -76,6 +76,7 @@ export { VerifyRouteView } from './views/verify'
 export { SettingsRouteView } from './views/settings'
 export { DocumentDetailLayoutView } from './views/document-detail'
 export { caseResultLocation } from './case-navigation'
+export { provisionResultLocation } from './legislation-navigation'
 
 // Search surfaces (M3 restyle; logic unchanged)
 export {
@@ -83,6 +84,11 @@ export {
   caseLawDocumentQueryOptions,
 } from './views/CaseLawDocumentView'
 export type { CaseLawDocumentResponse } from './views/CaseLawDocumentView'
+export {
+  LegislationProvisionView,
+  legislationProvisionQueryOptions,
+} from './views/LegislationProvisionView'
+export type { LegislationProvisionResponse } from './views/LegislationProvisionView'
 export {
   createCanonicalCasePath,
   resolveCaseDocumentIdFromSlug,

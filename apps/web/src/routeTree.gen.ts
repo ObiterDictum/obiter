@@ -22,6 +22,7 @@ import { Route as RedactIndexRouteImport } from './routes/redact/index'
 import { Route as MattersIndexRouteImport } from './routes/matters/index'
 import { Route as RedactRunIdRouteImport } from './routes/redact/$runId'
 import { Route as MattersMatterIdRouteImport } from './routes/matters/$matterId'
+import { Route as LnSplatRouteImport } from './routes/ln/$'
 import { Route as InvitesAcceptRouteImport } from './routes/invites/accept'
 import { Route as CasesCaseIdRouteImport } from './routes/cases/$caseId'
 import { Route as CaseCaseSlugRouteImport } from './routes/case/$caseSlug'
@@ -92,6 +93,11 @@ const MattersMatterIdRoute = MattersMatterIdRouteImport.update({
   path: '/matters/$matterId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LnSplatRoute = LnSplatRouteImport.update({
+  id: '/ln/$',
+  path: '/ln/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const InvitesAcceptRoute = InvitesAcceptRouteImport.update({
   id: '/invites/accept',
   path: '/invites/accept',
@@ -127,6 +133,7 @@ export interface FileRoutesByFullPath {
   '/case/$caseSlug': typeof CaseCaseSlugRoute
   '/cases/$caseId': typeof CasesCaseIdRoute
   '/invites/accept': typeof InvitesAcceptRoute
+  '/ln/$': typeof LnSplatRoute
   '/matters/$matterId': typeof MattersMatterIdRouteWithChildren
   '/redact/$runId': typeof RedactRunIdRoute
   '/matters/': typeof MattersIndexRoute
@@ -146,6 +153,7 @@ export interface FileRoutesByTo {
   '/case/$caseSlug': typeof CaseCaseSlugRoute
   '/cases/$caseId': typeof CasesCaseIdRoute
   '/invites/accept': typeof InvitesAcceptRoute
+  '/ln/$': typeof LnSplatRoute
   '/matters/$matterId': typeof MattersMatterIdRouteWithChildren
   '/redact/$runId': typeof RedactRunIdRoute
   '/matters': typeof MattersIndexRoute
@@ -166,6 +174,7 @@ export interface FileRoutesById {
   '/case/$caseSlug': typeof CaseCaseSlugRoute
   '/cases/$caseId': typeof CasesCaseIdRoute
   '/invites/accept': typeof InvitesAcceptRoute
+  '/ln/$': typeof LnSplatRoute
   '/matters/$matterId': typeof MattersMatterIdRouteWithChildren
   '/redact/$runId': typeof RedactRunIdRoute
   '/matters/': typeof MattersIndexRoute
@@ -187,6 +196,7 @@ export interface FileRouteTypes {
     | '/case/$caseSlug'
     | '/cases/$caseId'
     | '/invites/accept'
+    | '/ln/$'
     | '/matters/$matterId'
     | '/redact/$runId'
     | '/matters/'
@@ -206,6 +216,7 @@ export interface FileRouteTypes {
     | '/case/$caseSlug'
     | '/cases/$caseId'
     | '/invites/accept'
+    | '/ln/$'
     | '/matters/$matterId'
     | '/redact/$runId'
     | '/matters'
@@ -225,6 +236,7 @@ export interface FileRouteTypes {
     | '/case/$caseSlug'
     | '/cases/$caseId'
     | '/invites/accept'
+    | '/ln/$'
     | '/matters/$matterId'
     | '/redact/$runId'
     | '/matters/'
@@ -245,6 +257,7 @@ export interface RootRouteChildren {
   CaseCaseSlugRoute: typeof CaseCaseSlugRoute
   CasesCaseIdRoute: typeof CasesCaseIdRoute
   InvitesAcceptRoute: typeof InvitesAcceptRoute
+  LnSplatRoute: typeof LnSplatRoute
   MattersMatterIdRoute: typeof MattersMatterIdRouteWithChildren
   RedactRunIdRoute: typeof RedactRunIdRoute
   MattersIndexRoute: typeof MattersIndexRoute
@@ -344,6 +357,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof MattersMatterIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ln/$': {
+      id: '/ln/$'
+      path: '/ln/$'
+      fullPath: '/ln/$'
+      preLoaderRoute: typeof LnSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/invites/accept': {
       id: '/invites/accept'
       path: '/invites/accept'
@@ -401,6 +421,7 @@ const rootRouteChildren: RootRouteChildren = {
   CaseCaseSlugRoute: CaseCaseSlugRoute,
   CasesCaseIdRoute: CasesCaseIdRoute,
   InvitesAcceptRoute: InvitesAcceptRoute,
+  LnSplatRoute: LnSplatRoute,
   MattersMatterIdRoute: MattersMatterIdRouteWithChildren,
   RedactRunIdRoute: RedactRunIdRoute,
   MattersIndexRoute: MattersIndexRoute,

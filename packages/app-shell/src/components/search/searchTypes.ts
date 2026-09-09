@@ -60,10 +60,12 @@ export interface LegislationSearchResultHit {
   resultGroup: 'legislation'
   legislationStatus: 'current' | 'amended_not_held'
   title: string
+  year?: number
   provisionLabel: string
   labelPath: string
   documentIdentity: string
   extent: string
+  canonicalUrl?: string
   text?: string
   snippets?: Array<{ text: string }>
   officialUrl: string
@@ -83,6 +85,8 @@ export interface LegalSearchFetchGroup {
 export interface LegalSearchFetchResponse {
   hits: LegalSearchResult[]
   groups?: LegalSearchFetchGroup[]
+  /** Statute-shaped queries lead with legislation; omitted otherwise. */
+  primaryGroup?: 'judgments' | 'legislation'
   cached: boolean
   indexedCount: number
   skippedCount: number
