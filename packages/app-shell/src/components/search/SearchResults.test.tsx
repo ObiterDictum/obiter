@@ -336,7 +336,7 @@ describe('SearchResults legislation group', () => {
     ).not.toBeNull()
   })
 
-  it('renders the act-level guidance notice that carries no provision text', () => {
+  it('links an act-level hit through to the Act page', () => {
     const rendered = renderResults({
       hits: [],
       groups: [
@@ -372,6 +372,10 @@ describe('SearchResults legislation group', () => {
     expect(container.textContent).toContain(
       'Matched Equality Act 2010. Add a section number',
     )
+    // The Act hit is a link to the Act contents page, not static guidance.
+    const actLink = container.querySelector('a[href="/ln/ukpga/2010/15"]')
+    expect(actLink).not.toBeNull()
+    expect(actLink?.textContent).toContain('Equality Act 2010')
   })
 
   it('leads with legislation when the API marks the query as statute-shaped', () => {

@@ -34,6 +34,41 @@ export interface StoredLegislationProvision {
 
 export interface LegislationActListEntry extends StoredLegislationDocument {}
 
+export interface StoredLegislationActProvision {
+  label: string
+  labelPath: string
+  extent: string
+  hasUnappliedEffects: boolean
+  docOrder: number
+}
+
+/**
+ * Top-level contents of one Act in document order. In the current ingest
+ * these rows are all sections: schedules survive only as paragraph-level
+ * rows (schedule/1/paragraph/1) and Parts are not stored, so there is no
+ * schedule or Part row to list. Subsections likewise stay on their
+ * provision pages; the Act page lists the addressable top level, where
+ * label_path carries exactly one slash. ORDER BY doc_order, never numeric
+ * or lexical label sort: inserted sections (s. 13A between ss. 13 and 14)
+ * sort wrong otherwise.
+ */
+export async function listLegislationActProvisions(
+  pool: Pick<Pool, 'query'>,
+  identity: string,
+): Promise<StoredLegislationActProvision[]> {
+  const result = await pool.query<StoredLegislationActProvision>(
+    `select label, label_path as "labelPath", extent,
+            has_unapplied_effects as "hasUnappliedEffects",
+            doc_order as "docOrder"
+       from legislation_provisions
+      where document_identity = $1
+        and label_path not like '%/%/%'
+      order by doc_order`,
+    [identity],
+  )
+  return result.rows
+}
+
 export async function getLegislationDocument(
   pool: Pick<Pool, 'query'>,
   identity: string,

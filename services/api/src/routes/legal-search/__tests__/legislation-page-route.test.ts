@@ -88,3 +88,108 @@ describe('GET /api/search/legislation/*', () => {
     expect(response.status).toBe(400)
   })
 })
+
+describe('GET /api/search/legislation/<identity> (Act page)', () => {
+  const actDocument = {
+    identity: 'ukpga/2010/15',
+    actType: 'ukpga',
+    year: 2010,
+    number: 15,
+    title: 'Equality Act 2010',
+    sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
+    extent: 'E+W+S',
+  }
+
+  function createActApp(documentRows = [actDocument]) {
+    const pool = {
+      query: vi.fn(async (text: string) => {
+        if (text.includes('from legislation_provisions')) {
+          return {
+            rows: [
+              {
+                label: 's. 13',
+                labelPath: 'section/13',
+                extent: 'E+W+S',
+                hasUnappliedEffects: false,
+                docOrder: 0,
+              },
+              {
+                label: 's. 14',
+                labelPath: 'section/14',
+                extent: 'E+W+S',
+                hasUnappliedEffects: true,
+                docOrder: 1,
+              },
+            ],
+          }
+        }
+        return { rows: documentRows }
+      }),
+    }
+    const proxy = createLegalSearchProxyRoutes(createTestApiEnv(), undefined, {
+      legislation: {
+        pool: pool as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+    const app = new Hono<{
+      Variables: { requestId: string; user: { id: string } | null }
+    }>()
+    app.use('*', async (c, next) => {
+      c.set('requestId', 'req_test')
+      c.set('user', null)
+      await next()
+    })
+    app.route('/', proxy)
+    return app
+  }
+
+  it('serves the Act contents in document order with counts', async () => {
+    const response = await createActApp().request(
+      '/api/search/legislation/ukpga/2010/15',
+    )
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as {
+      act: {
+        title: string
+        chapter: string
+        totalCount: number
+        withheldCount: number
+        contents: Array<{ label: string; href: string; withheld: boolean }>
+      }
+    }
+    expect(body.act.title).toBe('Equality Act 2010')
+    expect(body.act.chapter).toBe('2010 c. 15')
+    expect(body.act.totalCount).toBe(2)
+    expect(body.act.withheldCount).toBe(1)
+    expect(body.act.contents.map((entry) => entry.label)).toEqual([
+      's. 13',
+      's. 14',
+    ])
+    expect(body.act.contents[0]?.href).toBe('/ln/ukpga/2010/15/section/13')
+    expect(body.act.contents[0]?.withheld).toBe(false)
+    expect(body.act.contents[1]?.withheld).toBe(true)
+  })
+
+  it('still routes a provision path to the provision page', async () => {
+    const response = await createActApp().request(
+      '/api/search/legislation/ukpga/2010/15/section/13',
+    )
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { provision?: unknown }
+    expect(body.provision).toBeDefined()
+  })
+
+  it('returns 404 with document_not_found for an unheld Act', async () => {
+    const response = await createActApp([]).request(
+      '/api/search/legislation/ukpga/2099/1',
+    )
+    expect(response.status).toBe(404)
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: 'document_not_found',
+        message: 'Legislation Act was not found.',
+      },
+    })
+  })
+})

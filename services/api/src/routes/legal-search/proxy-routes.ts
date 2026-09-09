@@ -22,7 +22,10 @@ import {
   type LegalFetchRequest,
   extractNeutralCitation,
 } from '@obiter/legal-source-provider'
-import { parseLegislationProvisionPath } from '@obiter/contracts'
+import {
+  parseLegislationActPath,
+  parseLegislationProvisionPath,
+} from '@obiter/contracts'
 import type { LegalSearchCitationStatus } from '@obiter/contracts'
 import {
   apiError,
@@ -37,6 +40,7 @@ import {
   type LegalAuthoritySourceStore,
   type StoredLegalAuthorityRecord,
 } from './source-store'
+import { resolveLegislationActPage } from './legislation-act'
 import {
   resolveLegislationFetch,
   resolveLegislationProvisionPage,
@@ -770,21 +774,49 @@ export function createLegalSearchProxyRoutes(
     }
     const rest = c.req.path.replace(/^\/api\/search\/legislation\/?/, '')
     const parsed = parseLegislationProvisionPath(rest)
-    if (!parsed) {
+    if (parsed) {
+      const result = await resolveLegislationProvisionPage(
+        options.legislation.pool,
+        parsed.provisionId,
+      )
+      if (result.status === 'unavailable') {
+        return c.json(
+          apiError(
+            'storage_unavailable',
+            'Legal source storage is unavailable.',
+            requestId,
+          ),
+          503,
+        )
+      }
+      if (result.status === 'not_found') {
+        return c.json(
+          apiError(
+            'document_not_found',
+            'Legislation provision was not found.',
+            requestId,
+          ),
+          404,
+        )
+      }
+      return c.json(result.page)
+    }
+    const actParsed = parseLegislationActPath(rest)
+    if (!actParsed) {
       return c.json(
         apiError(
           'validation_failed',
-          'Legislation provision path is invalid.',
+          'Legislation path is invalid.',
           requestId,
         ),
         400,
       )
     }
-    const result = await resolveLegislationProvisionPage(
+    const actResult = await resolveLegislationActPage(
       options.legislation.pool,
-      parsed.provisionId,
+      actParsed.documentIdentity,
     )
-    if (result.status === 'unavailable') {
+    if (actResult.status === 'unavailable') {
       return c.json(
         apiError(
           'storage_unavailable',
@@ -794,17 +826,17 @@ export function createLegalSearchProxyRoutes(
         503,
       )
     }
-    if (result.status === 'not_found') {
+    if (actResult.status === 'not_found') {
       return c.json(
         apiError(
           'document_not_found',
-          'Legislation provision was not found.',
+          'Legislation Act was not found.',
           requestId,
         ),
         404,
       )
     }
-    return c.json(result.page)
+    return c.json(actResult.page)
   })
 
   return app
