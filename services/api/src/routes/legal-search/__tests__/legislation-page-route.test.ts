@@ -100,7 +100,7 @@ describe('GET /api/search/legislation/<identity> (Act page)', () => {
     extent: 'E+W+S',
   }
 
-  function createActApp() {
+  function createActApp(documentRows = [actDocument]) {
     const pool = {
       query: vi.fn(async (text: string) => {
         if (text.includes('from legislation_provisions')) {
@@ -123,7 +123,7 @@ describe('GET /api/search/legislation/<identity> (Act page)', () => {
             ],
           }
         }
-        return { rows: [actDocument] }
+        return { rows: documentRows }
       }),
     }
     const proxy = createLegalSearchProxyRoutes(createTestApiEnv(), undefined, {
@@ -178,5 +178,18 @@ describe('GET /api/search/legislation/<identity> (Act page)', () => {
     expect(response.status).toBe(200)
     const body = (await response.json()) as { provision?: unknown }
     expect(body.provision).toBeDefined()
+  })
+
+  it('returns 404 with document_not_found for an unheld Act', async () => {
+    const response = await createActApp([]).request(
+      '/api/search/legislation/ukpga/2099/1',
+    )
+    expect(response.status).toBe(404)
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: 'document_not_found',
+        message: 'Legislation Act was not found.',
+      },
+    })
   })
 })

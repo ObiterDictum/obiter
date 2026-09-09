@@ -38,8 +38,14 @@ export function legislationActQueryOptions(identity: string) {
     staleTime: 0,
     refetchOnMount: 'always',
     queryFn: async () => {
+      // Encode per segment so identity slashes stay as separators while
+      // unsafe characters inside a segment cannot break the request path.
+      const encodedIdentity = identity
+        .split('/')
+        .map((segment) => encodeURIComponent(segment))
+        .join('/')
       const response = await fetch(
-        apiUrl(`/api/search/legislation/${identity}`),
+        apiUrl(`/api/search/legislation/${encodedIdentity}`),
       )
       if (response.status === 404) {
         throw new Error('Legislation Act was not found.')

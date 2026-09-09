@@ -3,7 +3,10 @@ import { Suspense, type ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
-import { LegislationActView } from './LegislationActView'
+import {
+  LegislationActView,
+  legislationActQueryOptions,
+} from './LegislationActView'
 
 vi.mock('@tanstack/react-router', () => ({
   Link: ({
@@ -175,5 +178,17 @@ describe('LegislationActView', () => {
     expect(screen.getByText('s. 1').closest('a')?.getAttribute('href')).toBe(
       '/ln/ukpga/2020/1/section/1',
     )
+  })
+
+  it('encodes each identity segment in the request URL', async () => {
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockResolvedValueOnce(jsonResponse(ACT_PAYLOAD))
+    const identity = 'ukpga/2010/15 A'
+    const options = legislationActQueryOptions(identity)
+    if (!options.queryFn) throw new Error('expected queryFn to be defined')
+    await options.queryFn({} as never)
+    const requestedUrl = fetchMock.mock.calls.at(-1)?.[0] as string
+    expect(requestedUrl).toContain('/api/search/legislation/ukpga/2010/15%20A')
+    expect(options.queryKey).toEqual(['legislation-act', identity])
   })
 })
