@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router'
-import { ArrowRight } from '@phosphor-icons/react'
+import { ArrowRight, WarningCircle } from '@phosphor-icons/react'
+import { Badge } from '@obiter/ui'
 import { caseResultLocation } from '../../case-navigation'
 import type {
   LegalSearchBrowseContext,
@@ -35,6 +36,11 @@ export function SearchResults({
         <p className="pb-3 text-[11px] font-medium tracking-wide text-muted">
           {formatResultMeta(response, browse)}
         </p>
+        {response.hits.length > 0 ? (
+          <h2 className="pb-2 text-[11px] font-medium tracking-wide text-muted">
+            Case law
+          </h2>
+        ) : null}
         <ul className="flex flex-col gap-1">
           {response.hits.map((result, index) => {
             const location = caseResultLocation(result)
@@ -101,9 +107,16 @@ function LegislationGroupSection({ group }: { group: LegalSearchFetchGroup }) {
       </h2>
       <ul className="flex flex-col gap-1">
         {group.hits.map((hit) => (
+          // Withheld provisions read as tinted bordered cards beside plain
+          // current-text rows: the warning border and badge register before
+          // the notice text is read, without alarming every legislation hit.
           <li
             key={hit.id}
-            className="rounded-md px-3 py-3 text-ink transition-colors hover:bg-raised"
+            className={
+              hit.legislationStatus === 'amended_not_held'
+                ? 'rounded-md border border-warning/40 bg-warning/10 px-3 py-3 text-ink'
+                : 'rounded-md px-3 py-3 text-ink transition-colors hover:bg-raised'
+            }
           >
             <LegislationHit hit={hit} />
           </li>
@@ -120,6 +133,12 @@ function LegislationHit({ hit }: { hit: LegislationSearchResultHit }) {
   if (hit.legislationStatus === 'amended_not_held') {
     return (
       <span className="block min-w-0 flex-1">
+        <span className="mb-1.5 block">
+          <Badge tone="warning">
+            <WarningCircle size={13} aria-hidden />
+            Amended wording withheld
+          </Badge>
+        </span>
         <strong className="block text-sm font-medium leading-snug">
           {hit.provisionLabel} · {hit.title}
         </strong>

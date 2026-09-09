@@ -2813,7 +2813,8 @@
                   <td class="id">GET /api/search/readiness</td>
                   <td class="id">legal-search/</td>
                   <td>
-                    Public index state: whether the product index exists and its
+                    Public index state: whether each product index
+                    (legal_authorities, legislation_provisions) exists and its
                     approximate document count. No session required.
                   </td>
                 </tr>
@@ -4318,9 +4319,10 @@
             degrading to a differently-ranked second engine or serving an empty
             result set. Failures are logged at boot and at query time.
             <code>GET /api/search/readiness</code>
-            reports whether the product index exists and its approximate
-            document count using the same credentials the query path uses. API
-            keys are provisioned per Meilisearch engine: a 403
+            reports whether each product index (legal_authorities and
+            legislation_provisions) exists and its approximate document count
+            using the same credentials the query path uses. API keys are
+            provisioned per Meilisearch engine: a 403
             <code>invalid_api_key</code> means the configured keys belong to a
             different engine than <code>MEILISEARCH_HOST</code> points at, not
             that the index is empty. The local

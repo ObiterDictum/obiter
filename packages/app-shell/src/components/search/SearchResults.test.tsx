@@ -358,3 +358,139 @@ describe('SearchResults legislation group', () => {
     )
   })
 })
+
+describe('SearchResults withheld distinction and group headings', () => {
+  let root: ReturnType<typeof createRoot> | null
+  let container: HTMLElement | null
+
+  beforeEach(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+    root = null
+    container = null
+  })
+
+  afterEach(() => {
+    if (root) {
+      act(() => root?.unmount())
+    }
+    container?.remove()
+  })
+
+  const currentHit = {
+    id: 'ukpga/2010/15/section/13',
+    resultGroup: 'legislation' as const,
+    legislationStatus: 'current' as const,
+    title: 'Equality Act 2010',
+    provisionLabel: 's. 13',
+    labelPath: 'section/13',
+    documentIdentity: 'ukpga/2010/15',
+    extent: 'E+W+S',
+    text: 'Direct discrimination applies here.',
+    snippets: [{ text: 'Direct discrimination applies here.' }],
+    officialUrl: 'https://www.legislation.gov.uk/ukpga/2010/15/section/13',
+    sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
+  }
+
+  const withheldHit = {
+    id: 'ukpga/2010/15/section/80',
+    resultGroup: 'legislation' as const,
+    legislationStatus: 'amended_not_held' as const,
+    title: 'Equality Act 2010',
+    provisionLabel: 's. 80',
+    labelPath: 'section/80',
+    documentIdentity: 'ukpga/2010/15',
+    extent: 'E+W+S',
+    officialUrl: 'https://www.legislation.gov.uk/ukpga/2010/15/section/80',
+    sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
+    notice:
+      'This provision is affected by amendments that have been recorded but not yet applied.',
+  }
+
+  function renderMixed() {
+    const rendered = renderResults({
+      hits: [citingHit],
+      groups: [
+        {
+          key: 'legislation',
+          label: 'Legislation',
+          hits: [currentHit, withheldHit],
+        },
+      ],
+      cached: true,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'results',
+    })
+    root = rendered.root
+    container = rendered.container
+    return rendered.container
+  }
+
+  it('badges the withheld provision while the current row stays plain', () => {
+    const host = renderMixed()
+
+    expect(host.textContent).toContain('Amended wording withheld')
+    // Wording and the official link stay intact beside the badge.
+    expect(host.textContent).toContain(
+      'amendments that have been recorded but not yet applied',
+    )
+    expect(
+      host.querySelector(
+        'a[href="https://www.legislation.gov.uk/ukpga/2010/15/section/80"]',
+      ),
+    ).not.toBeNull()
+
+    const items = Array.from(host.querySelectorAll('li'))
+    const withheldItem = items.find((item) =>
+      item.textContent?.includes('s. 80'),
+    )
+    const currentItem = items.find((item) =>
+      item.textContent?.includes('s. 13'),
+    )
+    expect(withheldItem?.className).toContain('border-warning/40')
+    expect(withheldItem?.className).toContain('bg-warning/10')
+    expect(currentItem?.className).not.toContain('border-warning/40')
+    expect(currentItem?.className).not.toContain('bg-warning')
+    const badge = Array.from(host.querySelectorAll('span')).find(
+      (span) =>
+        span.className.includes('bg-warning') &&
+        span.textContent?.includes('Amended wording withheld'),
+    )
+    expect(badge?.textContent).toContain('Amended wording withheld')
+  })
+
+  it('labels the case-law list so both groups carry a heading', () => {
+    const host = renderMixed()
+
+    const headings = Array.from(host.querySelectorAll('h2')).map(
+      (heading) => heading.textContent,
+    )
+    expect(headings).toContain('Case law')
+    expect(headings).toContain('Legislation')
+  })
+
+  it('omits the case-law heading when no case-law hits render', () => {
+    const rendered = renderResults({
+      hits: [],
+      groups: [
+        {
+          key: 'legislation',
+          label: 'Legislation',
+          hits: [withheldHit],
+        },
+      ],
+      cached: true,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'results',
+    })
+    root = rendered.root
+    container = rendered.container
+
+    const headings = Array.from(container.querySelectorAll('h2')).map(
+      (heading) => heading.textContent,
+    )
+    expect(headings).not.toContain('Case law')
+    expect(headings).toContain('Legislation')
+  })
+})
