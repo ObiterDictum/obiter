@@ -39,43 +39,84 @@ const ACT_PAYLOAD = {
     officialUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
     sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
     canonicalUrl: '/ln/ukpga/2010/15',
-    totalCount: 5,
+    totalCount: 6,
     withheldCount: 2,
     contents: [
       {
-        label: 's. 9',
-        labelPath: 'section/9',
-        href: '/ln/ukpga/2010/15/section/9',
+        label: 'Part 2',
+        labelPath: 'part/2',
+        href: '/ln/ukpga/2010/15/part/2',
         extent: 'E+W+S',
         withheld: false,
+        kind: 'part',
+        text: 'Equality: key concepts',
+        children: [
+          {
+            label: 's. 9',
+            labelPath: 'section/9',
+            href: '/ln/ukpga/2010/15/section/9',
+            extent: 'E+W+S',
+            withheld: false,
+            kind: 'P1',
+            children: [],
+          },
+          {
+            label: 's. 10',
+            labelPath: 'section/10',
+            href: '/ln/ukpga/2010/15/section/10',
+            extent: 'E+W+S',
+            withheld: false,
+            kind: 'P1',
+            children: [],
+          },
+          {
+            label: 's. 13',
+            labelPath: 'section/13',
+            href: '/ln/ukpga/2010/15/section/13',
+            extent: 'E+W+S',
+            withheld: false,
+            kind: 'P1',
+            children: [],
+          },
+          {
+            label: 's. 13A',
+            labelPath: 'section/13A',
+            href: '/ln/ukpga/2010/15/section/13A',
+            extent: 'E+W+S',
+            withheld: false,
+            kind: 'P1',
+            children: [],
+          },
+          {
+            label: 's. 14',
+            labelPath: 'section/14',
+            href: '/ln/ukpga/2010/15/section/14',
+            extent: 'E+W+S',
+            withheld: true,
+            kind: 'P1',
+            children: [],
+          },
+        ],
       },
       {
-        label: 's. 10',
-        labelPath: 'section/10',
-        href: '/ln/ukpga/2010/15/section/10',
+        label: 'Schedule 2',
+        labelPath: 'schedule/2',
+        href: '/ln/ukpga/2010/15/schedule/2',
         extent: 'E+W+S',
         withheld: false,
-      },
-      {
-        label: 's. 13',
-        labelPath: 'section/13',
-        href: '/ln/ukpga/2010/15/section/13',
-        extent: 'E+W+S',
-        withheld: false,
-      },
-      {
-        label: 's. 13A',
-        labelPath: 'section/13A',
-        href: '/ln/ukpga/2010/15/section/13A',
-        extent: 'E+W+S',
-        withheld: false,
-      },
-      {
-        label: 's. 14',
-        labelPath: 'section/14',
-        href: '/ln/ukpga/2010/15/section/14',
-        extent: 'E+W+S',
-        withheld: true,
+        kind: 'schedule',
+        text: 'Equality of terms',
+        children: [
+          {
+            label: 'Sch. 2 para. 4',
+            labelPath: 'schedule/2/paragraph/4',
+            href: '/ln/ukpga/2010/15/schedule/2/paragraph/4',
+            extent: 'E+W+S',
+            withheld: true,
+            kind: 'P1',
+            children: [],
+          },
+        ],
       },
     ],
   },
@@ -96,6 +137,8 @@ const CLEAN_ACT_PAYLOAD = {
         href: '/ln/ukpga/2020/1/section/1',
         extent: 'E+W+S+N.I.',
         withheld: false,
+        kind: 'P1',
+        children: [],
       },
     ],
   },
@@ -139,21 +182,40 @@ describe('LegislationActView', () => {
     vi.unstubAllGlobals()
   })
 
-  it('shows the header, accurate withheld summary, and ordered contents', async () => {
+  it('shows the header, accurate withheld summary, and hierarchy', async () => {
     renderView('ukpga/2010/15')
     await waitFor(() => {
       expect(screen.getByText('Equality Act 2010')).toBeTruthy()
     })
     // Chapter appears as the eyebrow and in the definition list.
     expect(screen.getAllByText('2010 c. 15')).toHaveLength(2)
-    // Accurate against the payload: 2 of 5 listed entries withheld.
-    expect(screen.getByText('2 of 5 sections are not shown')).toBeTruthy()
-    // Document order preserved: s. 10 after s. 9, inserted s. 13A kept
-    // between ss. 13 and 14 rather than sorted.
+    // Accurate against the payload: 2 of 6 content rows withheld. The
+    // Part and Schedule headings are never counted.
+    expect(screen.getByText('2 of 6 provisions are not shown')).toBeTruthy()
+    // Heading rows render for containers, with their heading text.
+    expect(screen.getByText('Part 2')).toBeTruthy()
+    expect(screen.getByText('Equality: key concepts')).toBeTruthy()
+    expect(screen.getByText('Schedule 2')).toBeTruthy()
+    expect(screen.getByText('Equality of terms')).toBeTruthy()
+    // Document order preserved inside Part 2: s. 10 after s. 9, inserted
+    // s. 13A kept between ss. 13 and 14 rather than sorted. Headings are
+    // divs, so the leaf order comes from the provision-status links.
     const labels = screen
-      .getAllByRole('listitem')
-      .map((item) => item.querySelector('strong')?.textContent)
-    expect(labels).toEqual(['s. 9', 's. 10', 's. 13', 's. 13A', 's. 14'])
+      .getAllByRole('link')
+      .filter((link) => link.getAttribute('data-legislation-status'))
+      .map((link) => link.querySelector('strong')?.textContent)
+    expect(labels).toEqual([
+      's. 9',
+      's. 10',
+      's. 13',
+      's. 13A',
+      's. 14',
+      'Sch. 2 para. 4',
+    ])
+    // The schedule paragraph is a leaf link nested under the schedule.
+    expect(
+      screen.getByText('Sch. 2 para. 4').closest('a')?.getAttribute('href'),
+    ).toBe('/ln/ukpga/2010/15/schedule/2/paragraph/4')
     // Withheld entry stays listed and links to its provision page.
     const withheldLink = screen.getByText('s. 14').closest('a')
     expect(withheldLink?.getAttribute('href')).toBe(
@@ -178,6 +240,9 @@ describe('LegislationActView', () => {
     expect(screen.getByText('s. 1').closest('a')?.getAttribute('href')).toBe(
       '/ln/ukpga/2020/1/section/1',
     )
+    expect(
+      screen.getByText('Contents · 1 provision in document order'),
+    ).toBeTruthy()
   })
 
   it('encodes each identity segment in the request URL', async () => {
