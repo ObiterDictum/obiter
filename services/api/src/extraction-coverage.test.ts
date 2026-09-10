@@ -359,6 +359,18 @@ describe('extraction coverage denylist', () => {
     expect(regions[0]).toMatch(/^unexamined part word\/mystery\.xml/)
   })
 
+  it('refuses nested-markup smuggling in an unclassified part', async () => {
+    const source = await packDocx({
+      parts: {
+        'word/mystery.xml':
+          '<?xml version="1.0" encoding="UTF-8"?><m:thing xmlns:m="urn:example:mystery"><<script>script>Smuggled content nobody classifies here</script></m:thing>',
+      },
+    })
+    const regions = await findUncoveredDocxRegions(source, LIVE_TEXT)
+    expect(regions).toHaveLength(1)
+    expect(regions[0]).toMatch(/^unexamined part word\/mystery\.xml/)
+  })
+
   it('refuses an unclassified binary part', async () => {
     const source = await packDocx({
       parts: {
