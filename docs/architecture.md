@@ -1052,3 +1052,67 @@ rewrite fills in real kinds. The gate flag and the contents are read in
 one statement, so they share one snapshot and the rewrite (a single
 transaction) can never land between the two reads and leave a torn,
 incomplete tree served as 200.
+
+### Organisation invite role grants are bounded by the inviter's role (10 September 2026)
+
+Context: `POST /api/organisations/:organisationId/invites` gated on
+`requireManageRole`, which admits owners and admins, and inserted the
+caller-supplied `role` verbatim. `createOrganisationInviteInputSchema.role`
+permitted `owner`, so an admin could invite an address they control as
+`owner`; the invitee accepted and `moveUserAndDeleteEmptyOrganisation` wrote
+that role, making the invitee strictly more privileged than the admin who
+invited them. The invite route is the only role-granting surface in the
+product.
+
+Decision: an actor may grant at most the role they themselves hold — owner may
+invite owner/admin/member, admin may invite admin/member, and member cannot
+invite at all. An admin requesting `owner` gets a 403 `forbidden`, not a
+silent downgrade to admin. The clamp is `canGrantRole` in
+`services/api/src/authz.ts`. Owner is a strict tier above admin: rename,
+organisation update and member removal all require `requireOwnerRole`, so
+granting owner is the only action that dissolves that tier. Rejection over
+silent clamp is deliberate — RULES.md forbids silent fallbacks, and silently
+granting admin when owner was requested would hand back a different role than
+the caller asked for. An owner inviting an owner is not escalation and stays
+allowed.
+
+Invite creation, acceptance and revocation each write an audit row
+(`organisation.invite_create`, `organisation.invite_accept`,
+`organisation.invite_revoke`) carrying the actor, the invitee email and the
+granted role. Creation writes the invite and its audit row in one transaction;
+a delivery failure withdraws the invite, records an
+`organisation.invite_revoke` row with `reason: 'delivery_failed'`, and
+deliberately leaves the `invite_create` row, because the grant was recorded and
+non-delivery is operational rather than a permission change. Acceptance writes
+its row in the same transaction as the move, so the role change and the grant
+record commit together.
+
+The clamp is not only forward-looking. Migration
+`0023_revoke_admin_granted_owner_invites.sql` revokes, at deploy, every open
+owner invite whose creator does not currently hold owner, so a pre-existing
+admin-granted owner invite cannot complete the escalation before it expires.
+
+Deferred product question — last-owner removal (reported, not changed):
+`DELETE /api/organisations/:organisationId/members/:userId` requires an owner
+and refuses only when the target is the last owner, so a second owner can
+remove the first and can then remove every other owner. That is defensible for
+offboarding and unavoidable for a two-owner firm, but it gives one compromised
+owner the whole tenant, and removal should arguably need a different owner's
+assent rather than any single owner's. That is a product decision and is not
+implemented here. The removal transaction now locks the organisation's owner
+rows with `order by id` before it reads and counts them, so the count and the
+removal are one serial decision and two simultaneous removals of the last two
+owners can no longer both commit. Locking the owner rows rather than the
+`organisations` row is deliberate: the invite-accept path updates `users` and
+only then deletes the vacated organisation, so taking an organisation-row lock
+before the user locks here would invert that order and deadlock against
+accept. A concurrent invite acceptance can only add an owner and never locks
+the existing owner rows, so it cannot create an ownerless organisation. That
+matters because the clamp in this change is what made the race unrecoverable
+through the API: before it an ownerless organisation could be recovered by an
+admin minting an owner invite, and after it only an owner can grant owner.
+One concrete gap in the surrounding guard remains and is recorded so it is not
+lost: member removal writes no audit row at all, so an owner eviction is
+currently invisible in the audit log — the highest-value low-risk follow-up.
+It is reported, not fixed, to keep this change to the escalation decision; the
+decision to leave it is explicit rather than silent.

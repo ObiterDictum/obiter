@@ -347,7 +347,7 @@ function OrganisationPeople({
           >
             <option value="member">Member</option>
             <option value="admin">Admin</option>
-            <option value="owner">Owner</option>
+            {role === 'owner' ? <option value="owner">Owner</option> : null}
           </select>
         </label>
         <Button

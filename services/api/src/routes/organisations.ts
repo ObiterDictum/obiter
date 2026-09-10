@@ -16,8 +16,12 @@ import {
   type UserRole,
 } from '@obiter/contracts'
 import { sendEmail } from '../auth'
-import { requireManageRole, requireOwnerRole } from '../authz'
-import { createOrganisationForUser, renameOrganisation } from '../database'
+import { canGrantRole, requireManageRole, requireOwnerRole } from '../authz'
+import {
+  appendAuditLog,
+  createOrganisationForUser,
+  renameOrganisation,
+} from '../database'
 import { organisationInviteEmail } from '../email-templates'
 import type { ApiEnv } from '../env'
 import {
@@ -239,11 +243,38 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
       )
     }
     const email = body.data.email.toLowerCase()
+    if (!canGrantRole(caller.role, body.data.role)) {
+      return errorResponse(
+        c,
+        'forbidden',
+        'You cannot grant a role above your own.',
+        403,
+      )
+    }
     const token = randomBytes(32).toString('base64url')
     const expiresAt = new Date(Date.now() + INVITE_TTL_MS)
 
+    // Read the organisation name before opening the transaction: a missing
+    // organisation is a 404 and nothing has been written yet.
+    const organisation = await pool.query<{ name: string }>(
+      `select name from organisations where id = $1`,
+      [caller.organisationId],
+    )
+    const organisationName = organisation.rows[0]?.name
+    if (!organisationName) {
+      return errorResponse(
+        c,
+        'organisation_not_found',
+        'Organisation not found.',
+        404,
+      )
+    }
+
+    const client = await pool.connect()
+    let row: InviteRow
     try {
-      const inserted = await pool.query<InviteRow>(
+      await client.query('begin')
+      const inserted = await client.query<InviteRow>(
         `
           insert into organisation_invites (
             organisation_id, email, role, token_hash, expires_at, created_by
@@ -261,42 +292,19 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
           caller.id,
         ],
       )
-      const row = inserted.rows[0]
-      const organisation = await pool.query<{ name: string }>(
-        `select name from organisations where id = $1`,
-        [caller.organisationId],
-      )
-      const organisationName = organisation.rows[0]?.name
-      if (!organisationName) {
-        await pool.query(`delete from organisation_invites where id = $1`, [
-          row.id,
-        ])
-        return errorResponse(
-          c,
-          'organisation_not_found',
-          'Organisation not found.',
-          404,
-        )
-      }
-      const url = `${env.webOrigin}/invites/accept?token=${encodeURIComponent(token)}`
-      const emailContent = organisationInviteEmail(url, organisationName)
-      try {
-        await sendEmail(env, {
-          email,
-          url,
-          subject: emailContent.subject,
-          html: emailContent.html,
-          text: emailContent.text,
-          logLabel: 'Organisation-invite',
-        })
-      } catch (error) {
-        await pool.query(`delete from organisation_invites where id = $1`, [
-          row.id,
-        ])
-        throw error
-      }
-      return c.json({ invite: mapInvite(row) }, 201)
+      row = inserted.rows[0]
+      await appendAuditLog(client, {
+        organisationId: caller.organisationId,
+        userId: caller.id,
+        entityType: 'organisation_invite',
+        entityId: row.id,
+        action: 'organisation.invite_create',
+        metadata: { email, role: body.data.role },
+        requestId: c.get('requestId'),
+      })
+      await client.query('commit')
     } catch (error) {
+      await client.query('rollback')
       if (
         typeof error === 'object' &&
         error !== null &&
@@ -311,7 +319,41 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
         )
       }
       throw error
+    } finally {
+      client.release()
     }
+
+    const url = `${env.webOrigin}/invites/accept?token=${encodeURIComponent(token)}`
+    const emailContent = organisationInviteEmail(url, organisationName)
+    try {
+      await sendEmail(env, {
+        email,
+        url,
+        subject: emailContent.subject,
+        html: emailContent.html,
+        text: emailContent.text,
+        logLabel: 'Organisation-invite',
+      })
+    } catch (error) {
+      // The invite_create audit row deliberately survives this withdrawal:
+      // the grant was recorded, and failure to deliver is operational, not a
+      // permission change. The revoke row makes the withdrawal visible, so a
+      // failed delivery is distinguishable from a delivered invite.
+      await pool.query(`delete from organisation_invites where id = $1`, [
+        row.id,
+      ])
+      await appendAuditLog(pool, {
+        organisationId: caller.organisationId,
+        userId: caller.id,
+        entityType: 'organisation_invite',
+        entityId: row.id,
+        action: 'organisation.invite_revoke',
+        metadata: { email, role: body.data.role, reason: 'delivery_failed' },
+        requestId: c.get('requestId'),
+      })
+      throw error
+    }
+    return c.json({ invite: mapInvite(row) }, 201)
   })
 
   routes.get('/api/organisations/:organisationId/invites', async (c) => {
@@ -351,22 +393,47 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
       )
       if (denied) return denied
 
-      const revoked = await pool.query<{ id: string }>(
-        `
-          update organisation_invites
-          set revoked_at = now()
-          where id = $1
-            and organisation_id = $2
-            and accepted_at is null
-            and revoked_at is null
-          returning id
-        `,
-        [c.req.param('inviteId'), caller.organisationId],
-      )
-      if (!revoked.rows[0]) {
-        return errorResponse(c, 'invite_not_found', 'Invite not found.', 404)
+      const client = await pool.connect()
+      try {
+        await client.query('begin')
+        const revoked = await client.query<{
+          id: string
+          email: string
+          role: UserRole
+        }>(
+          `
+            update organisation_invites
+            set revoked_at = now()
+            where id = $1
+              and organisation_id = $2
+              and accepted_at is null
+              and revoked_at is null
+            returning id, email, role
+          `,
+          [c.req.param('inviteId'), caller.organisationId],
+        )
+        const revokedRow = revoked.rows[0]
+        if (!revokedRow) {
+          await client.query('rollback')
+          return errorResponse(c, 'invite_not_found', 'Invite not found.', 404)
+        }
+        await appendAuditLog(client, {
+          organisationId: caller.organisationId,
+          userId: caller.id,
+          entityType: 'organisation_invite',
+          entityId: revokedRow.id,
+          action: 'organisation.invite_revoke',
+          metadata: { email: revokedRow.email, role: revokedRow.role },
+          requestId: c.get('requestId'),
+        })
+        await client.query('commit')
+        return c.json({ revoked: true, inviteId: revokedRow.id })
+      } catch (error) {
+        await client.query('rollback')
+        throw error
+      } finally {
+        client.release()
       }
-      return c.json({ revoked: true, inviteId: revoked.rows[0].id })
     },
   )
 
@@ -416,6 +483,29 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
       const client = await pool.connect()
       try {
         await client.query('begin')
+        // Lock the organisation's owner rows before reading and counting them.
+        // A target-row lock only serialises removals of the same user, so two
+        // removals of different owners never conflict and can both read a count
+        // that still includes the other. Locking the owner set first makes the
+        // count and the removal one serial decision; the fixed `order by id`
+        // gives concurrent sibling removals a deterministic lock order so they
+        // cannot deadlock each other. An `organisations`-row mutex was rejected:
+        // the invite-accept path updates `users` and only then deletes the
+        // vacated organisation, so taking the organisation lock before the user
+        // locks here would invert that order and deadlock against accept. A
+        // concurrent invite acceptance can only add an owner and never locks
+        // the existing owner rows, so it cannot create an ownerless
+        // organisation.
+        const owners = await client.query<{ id: string }>(
+          `
+            select id
+            from users
+            where "organisationId" = $1 and role = 'owner'
+            order by id
+            for update
+          `,
+          [caller.organisationId],
+        )
         const target = await client.query<{ role: UserRole }>(
           `
             select role
@@ -435,24 +525,14 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
             404,
           )
         }
-        if (targetRow.role === 'owner') {
-          const owners = await client.query<{ count: string }>(
-            `
-              select count(*)::text as count
-              from users
-              where "organisationId" = $1 and role = 'owner'
-            `,
-            [caller.organisationId],
+        if (targetRow.role === 'owner' && owners.rows.length <= 1) {
+          await client.query('rollback')
+          return errorResponse(
+            c,
+            'forbidden',
+            'The last owner cannot be removed.',
+            403,
           )
-          if (Number(owners.rows[0]?.count ?? 0) <= 1) {
-            await client.query('rollback')
-            return errorResponse(
-              c,
-              'forbidden',
-              'The last owner cannot be removed.',
-              403,
-            )
-          }
         }
         await client.query(
           `
@@ -674,6 +754,17 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
         `,
         [row.id],
       )
+      // Written in the same transaction as the move, so the role change and
+      // the grant record commit together.
+      await appendAuditLog(client, {
+        organisationId: row.organisation_id,
+        userId: sessionUser.id,
+        entityType: 'organisation_invite',
+        entityId: row.id,
+        action: 'organisation.invite_accept',
+        metadata: { email: row.email, role: row.role },
+        requestId: c.get('requestId'),
+      })
       await client.query('commit')
       return c.json({
         organisationId: row.organisation_id,
