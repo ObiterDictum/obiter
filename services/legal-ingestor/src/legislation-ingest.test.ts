@@ -4,6 +4,7 @@ import {
   ingestYear,
   nextFeedPageUrl,
   parseLegislationIngestArgs,
+  readUnappliedEffects,
   resolveRequestGapMs,
   upsertLegislationDocument,
   type Db,
@@ -651,5 +652,164 @@ describe('ingestOneAct effects staging and --force-reparse', () => {
     const outcome = await ingestOneAct(depsFor(pool, fetchImpl, false), actRef)
     expect(outcome.status).toBe('skipped-unchanged')
     expect(pool.events).toEqual([])
+  })
+
+  it('a legacy unchecked false row never survives a reparse as servable', async () => {
+    // Migration-default rows (or pre-effects inserts) carry
+    // has_unapplied_effects=false with effects_checked_at=null: never
+    // checked, so not known-good. When the effects pass cannot run, the
+    // rewrite must not preserve that false — the row withholds (flag
+    // true, timestamp still null) until a real check replaces it.
+    const body = clmlBody([1])
+    const pool = createPool(
+      [
+        {
+          labelPath: 'section/1',
+          hasUnappliedEffects: false,
+          effectsCheckedAt: null,
+        },
+      ],
+      sha256Hex(body),
+    )
+    const fetchImpl = (async (url: unknown) => {
+      const href = String(url)
+      if (href.endsWith(`/${identity}/data.xml`)) return httpResponse(200, body)
+      if (href.includes('/changes/affected/'))
+        return httpResponse(404, 'not found')
+      throw new Error(`unexpected fetch ${href}`)
+    }) as unknown as typeof fetch
+    const outcome = await ingestOneAct(depsFor(pool, fetchImpl, true), actRef)
+    expect(outcome.status).toBe('stored')
+    expect(pool.insertedRows).toEqual([
+      {
+        labelPath: 'section/1',
+        hasUnappliedEffects: true,
+        effectsCheckedAt: null,
+      },
+    ])
+  })
+})
+
+/**
+ * Fail-closed paging (second security review): only a FIRST-page 404 may
+ * mean "no feed". A later-page 404, a non-OK page, a cycling rel=next
+ * walk, or a feed longer than the 100-page cap must abort by throwing —
+ * never return a partial effect set, which would clear the withheld flags
+ * of provisions whose effects live on unread pages.
+ */
+describe('readUnappliedEffects fail-closed paging', () => {
+  const identity = 'ukpga/2020/1'
+  const base =
+    'https://www.legislation.gov.uk/changes/affected/ukpga/2020/1/data.feed'
+
+  const httpResponse = (status: number, body: string) =>
+    ({
+      status,
+      ok: status >= 200 && status < 300,
+      headers: { get: () => null },
+      text: async () => body,
+    }) as unknown as Response
+
+  const feedPage = (next: string | null) =>
+    `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom">` +
+    (next
+      ? `<link rel="next" type="application/atom+xml" href="${next}"/>`
+      : '') +
+    `</feed>`
+
+  const feedWithEffect = (next: string | null, path: string) =>
+    `<?xml version="1.0"?><feed xmlns="http://www.w3.org/2005/Atom" xmlns:ukm="http://www.legislation.gov.uk/namespaces/metadata">` +
+    `<entry><id>http://www.legislation.gov.uk/changes/affected/ukpga/2020/1/e1</id>` +
+    `<content type="text/xml"><ukm:Effect Applied="false" Type="words inserted" EffectId="e1" AffectedProvisions="${path}" AffectingYear="2021" AffectedYear="2020" AffectedNumber="1" AffectingNumber="2" AffectedURI="http://www.legislation.gov.uk/id/ukpga/2020/1" AffectingURI="http://www.legislation.gov.uk/id/ukpga/2021/2">` +
+    `<ukm:AffectedTitle>Act 1</ukm:AffectedTitle><ukm:AffectedProvisions><ukm:Section Ref="section-2" URI="http://www.legislation.gov.uk/id/ukpga/2020/1/${path}">${path}</ukm:Section></ukm:AffectedProvisions>` +
+    `<ukm:AffectingTitle>Later Act 2021</ukm:AffectingTitle></ukm:Effect></content></entry>` +
+    (next
+      ? `<link rel="next" type="application/atom+xml" href="${next}"/>`
+      : '') +
+    `</feed>`
+
+  const depsFor = (fetchImpl: typeof fetch): LegislationIngestDeps => ({
+    pool: {} as Db,
+    gapMs: 0,
+    skipEffects: false,
+    forceReparse: false,
+    sleep: async () => {},
+    fetchImpl,
+  })
+
+  const doc: IngestDocument = {
+    identity,
+    actType: 'ukpga',
+    year: 2020,
+    number: 1,
+    title: 'Act 1',
+    sourceUrl: 'https://www.legislation.gov.uk/ukpga/2020/1',
+    contentHash: 'hash',
+    extent: 'E+W',
+    declaredProvisions: 0,
+    p1Seen: 0,
+    p1Rows: 0,
+    p1Addressable: 0,
+    p1BlockAmendment: 0,
+    p1NoIdUriOther: 0,
+    p1EmptyText: 0,
+    provisions: [],
+  }
+
+  it('a first-page 404 means no feed: null, not a servable-clearing set', async () => {
+    const fetchImpl = (async () =>
+      httpResponse(404, 'not found')) as unknown as typeof fetch
+    const result = await readUnappliedEffects(depsFor(fetchImpl), doc)
+    expect(result).toBeNull()
+  })
+
+  it('a later-page 404 after earlier pages read aborts instead of returning a partial set', async () => {
+    // Review repro: page 1 carries rel=next and no effects, page 2 404s.
+    // Old code broke out and returned the page-1 set non-null, rewriting
+    // every flag servable. Now the mid-walk 404 throws and nothing writes.
+    const fetchImpl = (async (url: unknown) => {
+      const href = String(url)
+      if (href === base) return httpResponse(200, feedPage(`${base}?page=2`))
+      return httpResponse(404, 'not found')
+    }) as unknown as typeof fetch
+    await expect(readUnappliedEffects(depsFor(fetchImpl), doc)).rejects.toThrow(
+      /404/,
+    )
+  })
+
+  it('aborts at the 100-page cap instead of silently truncating', async () => {
+    // Review repro: 100 chained pages each promising another returned a
+    // non-null (partial) set under the old cap-break. Now the cap aborts.
+    const fetchImpl = (async (url: unknown) => {
+      const href = String(url)
+      const page = Number(/page=(\d+)$/.exec(href)?.[1] ?? '1')
+      return httpResponse(200, feedPage(`${base}?page=${page + 1}`))
+    }) as unknown as typeof fetch
+    await expect(readUnappliedEffects(depsFor(fetchImpl), doc)).rejects.toThrow(
+      /exceeded 100 pages/,
+    )
+  })
+
+  it('aborts on a cycling feed instead of looping to the cap', async () => {
+    const fetchImpl = (async (url: unknown) => {
+      const href = String(url)
+      if (href === base) return httpResponse(200, feedPage(`${base}?page=2`))
+      // Page 2 points back at itself: an instant cycle.
+      return httpResponse(200, feedPage(`${base}?page=2`))
+    }) as unknown as typeof fetch
+    await expect(readUnappliedEffects(depsFor(fetchImpl), doc)).rejects.toThrow(
+      /cycled back/,
+    )
+  })
+
+  it('a completed walk returns every collected label path', async () => {
+    const fetchImpl = (async (url: unknown) => {
+      const href = String(url)
+      if (href === base)
+        return httpResponse(200, feedWithEffect(`${base}?page=2`, 'section/2'))
+      return httpResponse(200, feedWithEffect(null, 'section/3'))
+    }) as unknown as typeof fetch
+    const result = await readUnappliedEffects(depsFor(fetchImpl), doc)
+    expect(result).toEqual(new Set(['section/2', 'section/3']))
   })
 })

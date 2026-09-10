@@ -20,6 +20,7 @@ describe('resolveLegislationActPage', () => {
     labelPath: string
     extent: string
     hasUnappliedEffects: boolean
+    effectsCheckedAt: string | null
     docOrder: number
     kind: string
     parentLabelPath: string | null
@@ -29,6 +30,7 @@ describe('resolveLegislationActPage', () => {
       labelPath: 'part/2',
       extent: 'E+W+S',
       hasUnappliedEffects: false,
+      effectsCheckedAt: '2026-09-01T00:00:00Z',
       docOrder: 0,
       kind: 'part',
       parentLabelPath: null,
@@ -38,6 +40,7 @@ describe('resolveLegislationActPage', () => {
       labelPath: 'section/9',
       extent: 'E+W+S',
       hasUnappliedEffects: false,
+      effectsCheckedAt: '2026-09-01T00:00:00Z',
       docOrder: 1,
       kind: 'P1',
       parentLabelPath: 'part/2',
@@ -47,6 +50,7 @@ describe('resolveLegislationActPage', () => {
       labelPath: 'section/10',
       extent: 'E+W+S',
       hasUnappliedEffects: false,
+      effectsCheckedAt: '2026-09-01T00:00:00Z',
       docOrder: 2,
       kind: 'P1',
       parentLabelPath: 'part/2',
@@ -56,6 +60,7 @@ describe('resolveLegislationActPage', () => {
       labelPath: 'section/13',
       extent: 'E+W+S',
       hasUnappliedEffects: false,
+      effectsCheckedAt: '2026-09-01T00:00:00Z',
       docOrder: 3,
       kind: 'P1',
       parentLabelPath: 'part/2',
@@ -65,6 +70,7 @@ describe('resolveLegislationActPage', () => {
       labelPath: 'section/13A',
       extent: 'E+W+S',
       hasUnappliedEffects: false,
+      effectsCheckedAt: '2026-09-01T00:00:00Z',
       docOrder: 4,
       kind: 'P1',
       parentLabelPath: 'part/2',
@@ -74,6 +80,7 @@ describe('resolveLegislationActPage', () => {
       labelPath: 'section/14',
       extent: 'E+W+S',
       hasUnappliedEffects: true,
+      effectsCheckedAt: '2026-09-01T00:00:00Z',
       docOrder: 5,
       kind: 'P1',
       parentLabelPath: 'part/2',
@@ -83,6 +90,7 @@ describe('resolveLegislationActPage', () => {
       labelPath: 'schedule/2',
       extent: 'E+W+S',
       hasUnappliedEffects: false,
+      effectsCheckedAt: '2026-09-01T00:00:00Z',
       docOrder: 6,
       kind: 'schedule',
       parentLabelPath: null,
@@ -92,6 +100,7 @@ describe('resolveLegislationActPage', () => {
       labelPath: 'schedule/2/paragraph/4',
       extent: 'E+W+S',
       hasUnappliedEffects: false,
+      effectsCheckedAt: '2026-09-01T00:00:00Z',
       docOrder: 7,
       kind: 'P1',
       parentLabelPath: 'schedule/2',
@@ -101,6 +110,7 @@ describe('resolveLegislationActPage', () => {
       labelPath: 'schedule/2/paragraph/5',
       extent: 'E+W+S',
       hasUnappliedEffects: true,
+      effectsCheckedAt: '2026-09-01T00:00:00Z',
       docOrder: 8,
       kind: 'P1',
       parentLabelPath: 'schedule/2',
@@ -171,6 +181,7 @@ describe('resolveLegislationActPage', () => {
       labelPath: 'section/15',
       extent: 'E+W+S',
       hasUnappliedEffects: undefined,
+      effectsCheckedAt: undefined,
       docOrder: 9,
       kind: 'P1',
       parentLabelPath: null,
@@ -187,6 +198,34 @@ describe('resolveLegislationActPage', () => {
     expect(result.page.act.withheldCount).toBe(3)
     expect(result.page.act.contents).toHaveLength(3)
     expect(result.page.act).not.toHaveProperty('text')
+  })
+
+  it('counts unchecked false rows as withheld, not servable', async () => {
+    // A legacy row with flag false but no check timestamp (migration
+    // default) is unknown, not known-good: it must withhold like a flagged
+    // row even though has_unapplied_effects reads false.
+    const unchecked = {
+      label: 's. 16',
+      labelPath: 'section/16',
+      extent: 'E+W+S',
+      hasUnappliedEffects: false,
+      effectsCheckedAt: null,
+      docOrder: 9,
+      kind: 'P1',
+      parentLabelPath: null,
+    }
+    const result = await resolveLegislationActPage(
+      actPool(actDocument, [...actProvisions, unchecked]),
+      'ukpga/2010/15',
+    )
+    expect(result.status).toBe('ok')
+    if (result.status !== 'ok') return
+    expect(result.page.act.totalCount).toBe(8)
+    expect(result.page.act.withheldCount).toBe(3)
+    const s16 = result.page.act.contents.find(
+      (entry) => entry.labelPath === 'section/16',
+    )
+    expect(s16?.withheld).toBe(true)
   })
 
   it('returns not_found for an unheld Act', async () => {

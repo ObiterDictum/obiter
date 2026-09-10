@@ -72,6 +72,8 @@ interface ProvisionRow {
   extent: string
   provision_text: string
   has_unapplied_effects: boolean
+  /** pg returns timestamptz as Date, not the ISO string of the contract. */
+  effects_checked_at: Date | string | null
   source_url: string
 }
 
@@ -117,7 +119,7 @@ async function main() {
         `select p.id, p.document_identity,
                 d.act_type, d.year, d.number, d.title,
                 p.label, p.label_path, p.extent, p.provision_text,
-                p.has_unapplied_effects, d.source_url
+                p.has_unapplied_effects, p.effects_checked_at, d.source_url
            from legislation_provisions p
            join legislation_documents d on d.identity = p.document_identity
           where p.id > $1
@@ -144,6 +146,12 @@ async function main() {
           extent: row.extent,
           text: row.provision_text,
           hasUnappliedEffects: row.has_unapplied_effects,
+          // pg returns timestamptz as Date; the index contract is ISO or
+          // null, and search returns ISO strings, so normalize at write.
+          effectsCheckedAt:
+            row.effects_checked_at instanceof Date
+              ? row.effects_checked_at.toISOString()
+              : row.effects_checked_at,
           sourceUrl: row.source_url,
         }
       })

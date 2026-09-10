@@ -5,6 +5,7 @@ import {
 import {
   getLegislationDocument,
   listLegislationActProvisions,
+  provisionTextServable,
   type StoredLegislationActProvision,
 } from './legislation-store'
 import {
@@ -54,6 +55,15 @@ export type LegislationActPageResult =
   | { status: 'not_found' }
   | { status: 'unavailable' }
 
+/** Fail-closed per-row withheld state for the contents tree: a P1 row
+ * withholds unless a successful effects check (non-null timestamp) found
+ * no unapplied effects. Container rows are headings: never flagged by the
+ * effects pass, never withheld. */
+function rowWithheld(row: StoredLegislationActProvision): boolean {
+  if (isContainerKind(row.kind)) return false
+  return !provisionTextServable(row.hasUnappliedEffects, row.effectsCheckedAt)
+}
+
 /**
  * Assembles the contents tree from rows already ordered by doc_order.
  * Children attach through the stored parent pointers (CLML nesting), never
@@ -76,9 +86,9 @@ function buildContentsTree(
       href: createCanonicalProvisionPath(documentIdentity, row.labelPath),
       extent: row.extent,
       // Fail-closed, matching the provision-page gate: only an explicit
-      // false reads as servable. Container rows are never flagged (the
-      // effects pass skips them), so headings stay visible.
-      withheld: row.hasUnappliedEffects !== false,
+      // false carrying a check timestamp reads as servable. Containers are
+      // never flagged and never withheld, so headings stay visible.
+      withheld: rowWithheld(row),
       kind: row.kind,
       // Container rows carry their heading text so the Act page can render
       // "Part 2 — Equality: key concepts". Provision body text is never
@@ -100,8 +110,7 @@ function buildContentsTree(
     0,
   )
   const withheldCount = rows.reduce(
-    (sum, row) =>
-      row.kind === 'P1' && row.hasUnappliedEffects !== false ? sum + 1 : sum,
+    (sum, row) => (row.kind === 'P1' && rowWithheld(row) ? sum + 1 : sum),
     0,
   )
   return { roots, totalCount: contentRowCount, withheldCount }
@@ -113,7 +122,8 @@ function buildContentsTree(
  * ss. 13 and 14) keep their enacted position. Withheld entries stay listed
  * and linked (the provision page carries the gate); only the text is
  * absent, and text is never served here at all. Fail-closed matches the
- * provision page: only an explicit false reads as servable.
+ * provision page: current text reads as servable only after a successful
+ * effects check; an unchecked row still lists and links, minus text.
  */
 export async function resolveLegislationActPage(
   pool: LegislationServeDeps['pool'],

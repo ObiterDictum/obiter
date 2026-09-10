@@ -41,11 +41,28 @@ export interface StoredLegislationActProvision {
   labelPath: string
   extent: string
   hasUnappliedEffects: boolean
+  /** Timestamp of the successful effects check that produced the flag,
+   * null when the row was never checked (legacy default, skipped pass). */
+  effectsCheckedAt: string | null
   docOrder: number
   kind: LegislationProvisionKind
   parentLabelPath: string | null
   /** Holder for container heading text; empty for provision rows. */
   text: string
+}
+
+/**
+ * Fail-closed servability for provision text: current text serves only
+ * after a successful effects check (non-null timestamp) found no unapplied
+ * effects. A false flag with a null timestamp is a legacy row that was
+ * never verified — it withholds like an unknown flag, never serves.
+ * Containers never carry effects state; callers exempt them where needed.
+ */
+export function provisionTextServable(
+  hasUnappliedEffects: StoredLegislationProvision['hasUnappliedEffects'],
+  effectsCheckedAt: StoredLegislationProvision['effectsCheckedAt'],
+): boolean {
+  return hasUnappliedEffects === false && effectsCheckedAt !== null
 }
 
 /**
@@ -68,6 +85,7 @@ export async function listLegislationActProvisions(
   const result = await pool.query<StoredLegislationActProvision>(
     `select label, label_path as "labelPath", extent,
             has_unapplied_effects as "hasUnappliedEffects",
+            effects_checked_at as "effectsCheckedAt",
             doc_order as "docOrder", kind,
             parent_label_path as "parentLabelPath",
             case when kind in ('part', 'chapter', 'schedule', 'crossheading')

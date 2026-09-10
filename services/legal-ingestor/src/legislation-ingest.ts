@@ -211,8 +211,9 @@ export async function upsertLegislationDocument(
     )
     // The rewrite deletes and recreates every row, so the effects flags
     // must come from the staged effects pass, never from the column
-    // default: without a successful read, matching label paths keep their
-    // known-good flag and new rows default to withheld (fail-closed).
+    // default (migration default is false): without a successful read,
+    // matching label paths keep their flag only when it carries a check
+    // timestamp, otherwise the row withholds (fail-closed).
     const existing = await client.query<{
       label_path: string
       has_unapplied_effects: boolean
@@ -234,14 +235,19 @@ export async function upsertLegislationDocument(
     )
     for (const provision of doc.provisions) {
       // Three decision branches, matched on effects availability so no
-      // non-null assertion is needed: checked read wins, otherwise a
-      // provision keeps its known-good flag / new rows withhold.
+      // non-null assertion is needed: checked read wins; otherwise a
+      // provision keeps its known-good flag only when that flag came from
+      // a real check (non-null timestamp) — a legacy default-false row
+      // with no check never stays servable, it withholds. New rows
+      // withhold too.
       const oldFlag = oldFlags.get(provision.labelPath) ?? true
       const oldChecked = oldCheckedAt.get(provision.labelPath) ?? null
       const hasUnapplied = isProvisionRow(provision.kind)
         ? effects !== null
           ? (effects.get(provision.labelPath) ?? true)
-          : oldFlag
+          : oldChecked !== null
+            ? oldFlag
+            : true
         : false
       const effectsCheckedAt = effects !== null ? new Date() : oldChecked
       await client.query(
@@ -289,14 +295,21 @@ export async function upsertLegislationDocument(
 }
 
 /** Pages the whole affected-changes feed and returns the set of provision
- * label paths carrying at least one unapplied effect. Returns null when no
- * page could be read (a 404 first page, or zero successful pages): "no
- * information", not "no effects" — the caller preserves known-good flags
- * instead of clearing them. Throws when a page read fails, so the caller
- * aborts before replacing any rows.
+ * label paths carrying at least one unapplied effect. Returns null ONLY
+ * when the FIRST page is a 404: the feed is absent, "no information", not
+ * "no effects" — the caller preserves known-good flags instead of clearing
+ * them.
  *
- * Paging is capped at 100 pages (50 results each): the feed is finite, and
- * an uncapped `rel=next` walk would loop forever on a cycling server.
+ * Every other pagination outcome throws, so the caller aborts before
+ * replacing any rows. A later-page 404, any non-OK page, a cycling feed,
+ * or a feed longer than the 100-page cap would each yield a PARTIAL effect
+ * set, and a partial set clears the flag on every provision whose effects
+ * live on an unread page. Fail-closed is no writes, never a partial read
+ * treated as complete.
+ *
+ * Paging is capped at 100 pages (50 results each) as a cycle guard: the
+ * feed is finite, an uncapped `rel=next` walk would loop forever on a
+ * cycling server, and reaching the cap aborts instead of truncating.
  *
  * The feed has NO server-side provision filter: a query param naming a
  * provision (e.g. `data.feed?affected-provision=s.40`) is silently ignored
@@ -313,13 +326,28 @@ export async function readUnappliedEffects(
   const base = `${legislationBaseUrl}/changes/affected/${doc.identity}/data.feed`
   let url: string | null = base
   const unappliedLabelPaths = new Set<string>()
+  const seenUrls = new Set<string>()
   let pagesRead = 0
   while (url !== null) {
-    if (pagesRead >= maxEffectsPages) break
+    if (pagesRead >= maxEffectsPages)
+      throw new Error(
+        `effects feed exceeded ${maxEffectsPages} pages (last: ${url})`,
+      )
+    // A cycling feed re-issues a page it already read (next round-trips
+    // to an earlier URL): without this guard it walks to the cap and the
+    // guard would otherwise misread the resulting partial set as complete.
+    if (seenUrls.has(url)) throw new Error(`effects feed cycled back to ${url}`)
+    seenUrls.add(url)
     const response = await fetchPolitely(deps, url)
-    if (response.status === 404) break
+    // Only the first 404 means "no feed". A later-page 404 is a partial
+    // read: aborting beats clearing flags from a truncated walk.
+    if (response.status === 404 && pagesRead === 0) return null
+    if (response.status === 404)
+      throw new Error(
+        `effects feed page ${pagesRead + 1} returned 404 (${url})`,
+      )
     if (!response.ok)
-      throw new Error(`effects feed returned ${response.status}`)
+      throw new Error(`effects feed returned ${response.status} (${url})`)
     const xml = await response.text()
     const parsed = parseEffectsFeed(xml, doc.identity)
     pagesRead += 1
@@ -331,7 +359,6 @@ export async function readUnappliedEffects(
     }
     url = parsed.nextPageUrl
   }
-  if (pagesRead === 0) return null
   return unappliedLabelPaths
 }
 
