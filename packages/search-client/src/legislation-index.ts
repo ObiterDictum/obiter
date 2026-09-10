@@ -39,6 +39,10 @@ export interface LegislationProvisionDocument {
   extent: string
   text: string
   hasUnappliedEffects: boolean
+  /** Successful-effects-check timestamp (ISO string), null for rows never
+   * checked. Carried so the serve gate can fail closed on legacy/false-
+   * only index rows. */
+  effectsCheckedAt: string | null
   sourceUrl: string
 }
 
@@ -132,7 +136,9 @@ export function isLegislationProvisionDocument(
   if (typeof value !== 'object' || value === null) return false
   const record = value as Record<string, unknown>
   // hasUnappliedEffects is required boolean, fail-closed: a row without it
-  // is withheld/dropped, never served as current text.
+  // is withheld/dropped, never served as current text. effectsCheckedAt is
+  // required present (string or null): an index doc predating check
+  // provenance is malformed and dropped, not served.
   return (
     typeof record.id === 'string' &&
     typeof record.provisionRef === 'string' &&
@@ -142,7 +148,9 @@ export function isLegislationProvisionDocument(
     typeof record.labelPath === 'string' &&
     typeof record.text === 'string' &&
     typeof record.sourceUrl === 'string' &&
-    typeof record.hasUnappliedEffects === 'boolean'
+    typeof record.hasUnappliedEffects === 'boolean' &&
+    (typeof record.effectsCheckedAt === 'string' ||
+      record.effectsCheckedAt === null)
   )
 }
 

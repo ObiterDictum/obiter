@@ -40,6 +40,12 @@ const amendedProvision = {
   hasUnappliedEffects: true,
 }
 
+/** Legacy default row: false flag, but never checked (null timestamp). */
+const uncheckedProvision = {
+  ...currentProvision,
+  effectsCheckedAt: null,
+} as unknown as typeof currentProvision
+
 function createDeps(overrides: {
   provision?: typeof currentProvision | null
   keywordHits?: Array<Record<string, unknown>>
@@ -140,6 +146,40 @@ describe('resolveLegislationFetch', () => {
     )
   })
 
+  it('withholds text for an unchecked row even when the flag is false', async () => {
+    // Legacy rows carry has_unapplied_effects=false with
+    // effects_checked_at=null (migration default): never checked, never
+    // known-good. Only a false flag WITH a check timestamp serves.
+    const result = await resolveLegislationFetch(
+      createDeps({ provision: uncheckedProvision }),
+      'section 13 Equality Act 2010',
+    )
+    expect(result.citationHeldExact).toBe(true)
+    const hit = result.groups[0]?.hits[0]
+    expect(hit?.legislationStatus).toBe('amended_not_held')
+    expect(hit).not.toHaveProperty('text')
+    expect(hit?.officialUrl).toBe(
+      'https://www.legislation.gov.uk/ukpga/2010/15/section/13',
+    )
+  })
+
+  it('withholds keyword hits whose effects were never checked', async () => {
+    // A false flag without a check timestamp (stale index copy or an
+    // unchecked legacy row) never serves text on the keyword path either.
+    const uncheckedHit = {
+      ...currentProvision,
+      provisionRef: currentProvision.id,
+      effectsCheckedAt: null,
+    }
+    const result = await resolveLegislationFetch(
+      createDeps({ keywordHits: [uncheckedHit] }),
+      'direct discrimination',
+    )
+    const hit = result.groups[0]?.hits[0]
+    expect(hit?.legislationStatus).toBe('amended_not_held')
+    expect(hit).not.toHaveProperty('text')
+  })
+
   it('reports a recognised but unheld provision visibly', async () => {
     const result = await resolveLegislationFetch(
       createDeps({ provision: null }),
@@ -229,5 +269,16 @@ describe('resolveLegislationProvisionPage', () => {
     expect(result.page.provision.notice).toContain(
       'does not hold the amended wording',
     )
+  })
+
+  it('withholds full text for an unchecked false row on the page too', async () => {
+    const result = await resolveLegislationProvisionPage(
+      createDeps({ provision: uncheckedProvision }).pool,
+      currentProvision.id,
+    )
+    expect(result.status).toBe('ok')
+    if (result.status !== 'ok') return
+    expect(result.page.provision.legislationStatus).toBe('amended_not_held')
+    expect(result.page.provision).not.toHaveProperty('text')
   })
 })

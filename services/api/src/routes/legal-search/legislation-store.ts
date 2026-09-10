@@ -1,5 +1,7 @@
 import type { Pool } from 'pg'
 
+import type { LegislationProvisionKind } from './legislation-kind'
+
 /**
  * Postgres reads for Stage 1 legislation serving. Postgres is the record:
  * exact citation resolution reads these rows, never the derived
@@ -39,34 +41,90 @@ export interface StoredLegislationActProvision {
   labelPath: string
   extent: string
   hasUnappliedEffects: boolean
+  /** Timestamp of the successful effects check that produced the flag,
+   * null when the row was never checked (legacy default, skipped pass). */
+  effectsCheckedAt: string | null
   docOrder: number
+  kind: LegislationProvisionKind
+  parentLabelPath: string | null
+  /** Holder for container heading text; empty for provision rows. */
+  text: string
 }
 
 /**
- * Top-level contents of one Act in document order. In the current ingest
- * these rows are all sections: schedules survive only as paragraph-level
- * rows (schedule/1/paragraph/1) and Parts are not stored, so there is no
- * schedule or Part row to list. Subsections likewise stay on their
- * provision pages; the Act page lists the addressable top level, where
- * label_path carries exactly one slash. ORDER BY doc_order, never numeric
- * or lexical label sort: inserted sections (s. 13A between ss. 13 and 14)
- * sort wrong otherwise.
+ * Fail-closed servability for provision text: current text serves only
+ * after a successful effects check (non-null timestamp) found no unapplied
+ * effects. A false flag with a null timestamp is a legacy row that was
+ * never verified — it withholds like an unknown flag, never serves.
+ * Containers never carry effects state; callers exempt them where needed.
  */
-export async function listLegislationActProvisions(
+export function provisionTextServable(
+  hasUnappliedEffects: StoredLegislationProvision['hasUnappliedEffects'],
+  effectsCheckedAt: StoredLegislationProvision['effectsCheckedAt'],
+): boolean {
+  return hasUnappliedEffects === false && effectsCheckedAt !== null
+}
+
+export interface LegislationActProvisionsSnapshot {
+  /** Document holds no NULL-kind row: the whole Act page may serve. */
+  classified: boolean
+  /** Containers plus P1 rows in document order, empty while unclassified. */
+  rows: StoredLegislationActProvision[]
+}
+
+/**
+ * One-statement read of the Act-page gate and its contents: the flag and
+ * the rows come back from a single statement, so they share one snapshot
+ * and always describe the same committed state. A --force-reparse rewrites
+ * every row of a document in one transaction, so the read sees either all
+ * of it (gate open, rows present) or none of it (legacy NULL-kind rows
+ * filtered out, gate closed) — never the old torn mix where an independent
+ * gate statement read post-commit at the same time the listing read
+ * pre-commit, which served an empty tree as 200 instead of 503.
+ *
+ * Rows whose kind is NULL are pre-0022 legacy rows that no --force-reparse
+ * has rewritten: their true classification is unknown, so they must never
+ * reach the tree. The gate withholds the whole document until none remain
+ * (fail-closed: any other outcome reads as not-classified).
+ *
+ * Contents arrive in document order via json_agg over the inner ORDER BY:
+ * inserted sections (s. 13A between ss. 13 and 14) keep their enacted
+ * position, and containers interleave with their content. provision_text is
+ * read for container rows only — the Act page renders container heading
+ * text but never provision body text (the provision page carries that
+ * gate) — so the query never pulls full provision bodies. */
+export async function getLegislationActProvisionsSnapshot(
   pool: Pick<Pool, 'query'>,
   identity: string,
-): Promise<StoredLegislationActProvision[]> {
-  const result = await pool.query<StoredLegislationActProvision>(
-    `select label, label_path as "labelPath", extent,
-            has_unapplied_effects as "hasUnappliedEffects",
-            doc_order as "docOrder"
-       from legislation_provisions
-      where document_identity = $1
-        and label_path not like '%/%/%'
-      order by doc_order`,
+): Promise<LegislationActProvisionsSnapshot> {
+  const result = await pool.query<{
+    classified: boolean
+    rows: StoredLegislationActProvision[]
+  }>(
+    `select not exists(
+        select 1 from legislation_provisions
+         where document_identity = $1 and kind is null
+      ) as "classified",
+      coalesce((
+        select json_agg(rows order by rows."docOrder")
+          from (
+            select label, label_path as "labelPath", extent,
+                   has_unapplied_effects as "hasUnappliedEffects",
+                   effects_checked_at as "effectsCheckedAt",
+                   doc_order as "docOrder", kind,
+                   parent_label_path as "parentLabelPath",
+                   case when kind in ('part', 'chapter', 'schedule', 'crossheading')
+                        then provision_text else '' end as text
+              from legislation_provisions
+             where document_identity = $1
+               and kind is not null
+               and (kind in ('part', 'chapter', 'schedule', 'crossheading') or kind = 'P1')
+          ) rows
+      ), '[]'::json) as "rows"`,
     [identity],
   )
-  return result.rows
+  const row = result.rows[0]
+  return { classified: row?.classified ?? false, rows: row?.rows ?? [] }
 }
 
 export async function getLegislationDocument(

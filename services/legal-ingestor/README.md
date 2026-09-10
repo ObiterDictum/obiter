@@ -24,18 +24,29 @@ DATABASE_URL=... pnpm legislation:ingest --years=2023 --max-acts=2 --skip-effect
 
 Flags: `--act=ukpga/YYYY/N`, `--years=Y1,Y2`, `--max-acts=N`,
 `--gap-ms=MS` (default 5000, never below the site's Crawl-delay),
-`--skip-effects` (bare or `=1`). `pnpm legislation:ingest --help`
+`--skip-effects` (bare or `=1`),
+`--force-reparse` (bare or `=1`). `pnpm legislation:ingest --help`
 prints usage and exits without touching env, the database, or upstream.
 Unknown flags fail with usage instead of being ignored.
 
 One sequential loop at the settled 5 s gap; re-runs compare content
 hashes per Act, so unchanged Acts report skipped-unchanged (provisions
 untouched, though the count note is re-derived from the re-fetched body
-so a stale flag from an older check clears). A P1-count gap
-fully explained by BlockAmendment quoted inserts is healthy and stores
-unflagged; anything else (tokenizer drift, a no-IdURI P1 outside
-BlockAmendment, an addressable P1 with no row) stores flagged in
-`provision_count_note` and lands in the per-year mismatch list.
+so a stale flag from an older check clears). `--force-reparse` re-parses
+and re-stores even unchanged Acts, going through the same effects pass as
+a changed Act; it exists for parser changes that alter what rows are
+emitted (e.g. when container rows were added). Rows are only replaced
+after the effects pass has succeeded: a failed feed aborts before any
+write (old rows and their known-good withheld flags stay intact), and an
+unreadable feed (404 first page) is treated as "no information", never
+"no effects", so the replacement preserves known-good flags and defaults
+new rows to withheld. `--skip-effects` likewise defaults unchecked new
+rows to withheld (fail-closed), and preserves known-good flags on
+rewrites. A P1-count gap fully explained by BlockAmendment quoted
+inserts is healthy and stores unflagged; anything else (tokenizer drift,
+a no-IdURI P1 outside BlockAmendment, an addressable P1 with no row)
+stores flagged in `provision_count_note` and lands in the per-year
+mismatch list.
 
 ## Commands (Find Case Law)
 

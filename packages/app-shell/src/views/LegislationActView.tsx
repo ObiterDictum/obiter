@@ -5,12 +5,27 @@ import { Badge } from '@obiter/ui'
 import { apiUrl } from '../lib/api-url'
 import { provisionResultLocation } from '../legislation-navigation'
 
-export interface LegislationActContentsEntry {
+export type LegislationActContentsKind =
+  | 'part'
+  | 'chapter'
+  | 'schedule'
+  | 'crossheading'
+  | 'P1'
+  | 'P2'
+  | 'P3'
+  | 'P4'
+  | 'P5'
+
+export interface LegislationActContentsNode {
   label: string
   labelPath: string
   href: string
   extent: string
   withheld: boolean
+  kind: LegislationActContentsKind
+  /** Heading text for container rows; never set for provision rows. */
+  text?: string
+  children: LegislationActContentsNode[]
 }
 
 export interface LegislationActDocument {
@@ -23,13 +38,98 @@ export interface LegislationActDocument {
   officialUrl: string
   sourceUrl: string
   canonicalUrl: string
+  /** Content rows only: sections plus schedule paragraphs. Containers
+   * (Part, Chapter, Schedule, crossheading) are headings, never withheld,
+   * and excluded from both counts. */
   totalCount: number
   withheldCount: number
-  contents: LegislationActContentsEntry[]
+  contents: LegislationActContentsNode[]
 }
 
 export interface LegislationActResponse {
   act: LegislationActDocument
+}
+
+const containerKinds = new Set<LegislationActContentsKind>([
+  'part',
+  'chapter',
+  'schedule',
+  'crossheading',
+])
+
+function isContainerKind(kind: LegislationActContentsKind): boolean {
+  return containerKinds.has(kind)
+}
+
+function countLabel(count: number): string {
+  return `${count} ${count === 1 ? 'provision' : 'provisions'}`
+}
+
+function ActContentsItem({
+  node,
+  documentIdentity,
+}: {
+  node: LegislationActContentsNode
+  documentIdentity: string
+}) {
+  // Container rows (Part, Chapter, Schedule, crossheading) render as
+  // headings with their children nested beneath; provision rows are links
+  // to their provision pages. Indentation comes from the tree itself,
+  // never from label-path depth.
+  if (isContainerKind(node.kind)) {
+    return (
+      <li>
+        <div className="flex flex-col gap-0.5 py-1.5 pl-3">
+          <span className="text-sm font-bold text-ink">{node.label}</span>
+          {node.text && node.text !== node.label ? (
+            <span className="text-sm text-muted">{node.text}</span>
+          ) : null}
+        </div>
+        {node.children.length > 0 ? (
+          <ul className="ml-3 flex flex-col gap-1 border-l border-line/60 pl-2">
+            {node.children.map((child) => (
+              <ActContentsItem
+                key={child.labelPath}
+                node={child}
+                documentIdentity={documentIdentity}
+              />
+            ))}
+          </ul>
+        ) : null}
+      </li>
+    )
+  }
+  return (
+    <li>
+      <Link
+        {...provisionResultLocation({
+          documentIdentity,
+          labelPath: node.labelPath,
+          canonicalUrl: node.href,
+        })}
+        data-legislation-status={node.withheld ? 'amended_not_held' : 'current'}
+        className={
+          node.withheld
+            ? 'group flex items-start justify-between gap-4 rounded-md border border-warning/40 bg-warning/10 px-3 py-2.5 text-ink transition-colors hover:bg-warning/15'
+            : 'group flex items-start justify-between gap-4 rounded-md px-3 py-2.5 text-ink transition-colors hover:bg-raised'
+        }
+      >
+        <span className="block min-w-0 flex-1">
+          <strong className="block text-sm font-medium leading-snug">
+            {node.label}
+          </strong>
+          {node.withheld ? (
+            <span className="mt-1.5 block">
+              <Badge tone="warning">
+                <WarningCircle size={13} aria-hidden />
+                Amended wording withheld
+              </Badge>
+            </span>
+          ) : null}
+        </span>
+      </Link>
+    </li>
+  )
 }
 
 export function legislationActQueryOptions(identity: string) {
@@ -118,7 +218,7 @@ export function LegislationActView({ identity }: { identity: string }) {
           role="alert"
         >
           <p className="text-sm font-semibold text-warning">
-            {act.withheldCount} of {act.totalCount} sections are not shown
+            {act.withheldCount} of {countLabel(act.totalCount)} are not shown
           </p>
           <p className="mt-1 text-sm text-muted">
             Those provisions are affected by amendments that have been recorded
@@ -130,45 +230,16 @@ export function LegislationActView({ identity }: { identity: string }) {
 
       <section aria-label={`${act.title} contents`}>
         <h2 className="pb-2 text-[11px] font-medium tracking-wide text-muted">
-          Contents · {act.totalCount} sections in document order
+          Contents · {countLabel(act.totalCount)} in document order
         </h2>
-        <ul className="flex flex-col gap-1">
-          {act.contents.map((entry) => {
-            const location = provisionResultLocation({
-              documentIdentity: act.identity,
-              labelPath: entry.labelPath,
-              canonicalUrl: entry.href,
-            })
-            return (
-              <li key={entry.labelPath}>
-                <Link
-                  {...location}
-                  data-legislation-status={
-                    entry.withheld ? 'amended_not_held' : 'current'
-                  }
-                  className={
-                    entry.withheld
-                      ? 'group flex items-start justify-between gap-4 rounded-md border border-warning/40 bg-warning/10 px-3 py-2.5 text-ink transition-colors hover:bg-warning/15'
-                      : 'group flex items-start justify-between gap-4 rounded-md px-3 py-2.5 text-ink transition-colors hover:bg-raised'
-                  }
-                >
-                  <span className="block min-w-0 flex-1">
-                    <strong className="block text-sm font-medium leading-snug">
-                      {entry.label}
-                    </strong>
-                    {entry.withheld ? (
-                      <span className="mt-1.5 block">
-                        <Badge tone="warning">
-                          <WarningCircle size={13} aria-hidden />
-                          Amended wording withheld
-                        </Badge>
-                      </span>
-                    ) : null}
-                  </span>
-                </Link>
-              </li>
-            )
-          })}
+        <ul className="flex flex-col gap-0.5">
+          {act.contents.map((node) => (
+            <ActContentsItem
+              key={node.labelPath}
+              node={node}
+              documentIdentity={act.identity}
+            />
+          ))}
         </ul>
       </section>
     </div>

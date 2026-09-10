@@ -10,6 +10,7 @@ import {
   getLegislationDocument,
   getLegislationProvision,
   listLegislationActs,
+  provisionTextServable,
   type StoredLegislationProvision,
 } from './legislation-store'
 import {
@@ -223,12 +224,16 @@ export async function resolveLegislationFetch(
           `(official text: ${officialProvisionUrl(outcome.provision.identity, outcome.provision.labelPath)}).`,
       }
     }
-    // Fail-closed: only an explicit false serves text. Undefined (a row the
-    // validator would now drop, or a store row predating the flag) withholds.
-    const hit =
-      provision.hasUnappliedEffects === false
-        ? currentProvisionHit(provision, 'stored_exact_lookup', 1)
-        : amendedProvisionHit(provision, 'stored_exact_lookup', 1)
+    // Fail-closed: only an explicit false carrying a check timestamp
+    // serves text. Undefined (a row the validator would now drop, or a
+    // store row predating the flag) and unchecked legacy rows (a
+    // default-false flag with a null timestamp) both withhold.
+    const hit = provisionTextServable(
+      provision.hasUnappliedEffects,
+      provision.effectsCheckedAt,
+    )
+      ? currentProvisionHit(provision, 'stored_exact_lookup', 1)
+      : amendedProvisionHit(provision, 'stored_exact_lookup', 1)
     return {
       groups: [{ key: 'legislation', label: 'Legislation', hits: [hit] }],
       citationRecognised: true,
@@ -326,9 +331,11 @@ async function searchKeywordProvisions(
     return []
   }
   return result.hits.slice(0, limit).map((hit, index) =>
-    // Fail-closed here too: only explicit false serves text; the validator
-    // already drops flagless index rows, this covers any direct caller.
-    hit.hasUnappliedEffects === false
+    // Fail-closed here too: only explicit false after a successful check
+    // serves text; the validator already drops malformed index rows, and
+    // unchecked legacy rows carry a null timestamp, so this covers stale
+    // index copies and any direct caller.
+    provisionTextServable(hit.hasUnappliedEffects, hit.effectsCheckedAt)
       ? {
           ...currentProvisionHit(
             {
@@ -411,7 +418,12 @@ export async function resolveLegislationProvisionPage(
     provision.documentIdentity,
     provision.labelPath,
   )
-  if (provision.hasUnappliedEffects === false) {
+  if (
+    provisionTextServable(
+      provision.hasUnappliedEffects,
+      provision.effectsCheckedAt,
+    )
+  ) {
     return {
       status: 'ok',
       page: {

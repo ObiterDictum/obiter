@@ -81,6 +81,23 @@ describe('GET /api/search/legislation/*', () => {
     expect(body.provision).not.toHaveProperty('text')
   })
 
+  it('withholds an unchecked false row on the page too', async () => {
+    // Migration-default rows carry the flag false with no check timestamp:
+    // the page must withhold text, never treat them as known-good.
+    const response = await createApp({
+      ...currentProvision,
+      effectsCheckedAt: null as string | null,
+    } as unknown as typeof currentProvision).request(
+      '/api/search/legislation/ukpga/2010/15/section/13',
+    )
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as {
+      provision: { text?: string; legislationStatus: string }
+    }
+    expect(body.provision.legislationStatus).toBe('amended_not_held')
+    expect(body.provision).not.toHaveProperty('text')
+  })
+
   it('rejects an unparseable path', async () => {
     const response = await createApp().request(
       '/api/search/legislation/not-a-provision',
@@ -103,22 +120,58 @@ describe('GET /api/search/legislation/<identity> (Act page)', () => {
   function createActApp(documentRows = [actDocument]) {
     const pool = {
       query: vi.fn(async (text: string) => {
+        // The Act-page gate flag and the content rows are returned by one
+        // statement (getLegislationActProvisionsSnapshot); this fixture
+        // holds classified rows, so the gate reads as ready.
+        if (text.includes('json_agg')) {
+          return {
+            rows: [
+              {
+                classified: true,
+                rows: [
+                  {
+                    label: 's. 13',
+                    labelPath: 'section/13',
+                    extent: 'E+W+S',
+                    hasUnappliedEffects: false,
+                    effectsCheckedAt: '2026-09-01T00:00:00Z',
+                    docOrder: 0,
+                    kind: 'P1',
+                    parentLabelPath: null,
+                    text: '',
+                  },
+                  {
+                    label: 's. 14',
+                    labelPath: 'section/14',
+                    extent: 'E+W+S',
+                    hasUnappliedEffects: true,
+                    effectsCheckedAt: '2026-09-01T00:00:00Z',
+                    docOrder: 1,
+                    kind: 'P1',
+                    parentLabelPath: null,
+                    text: '',
+                  },
+                ],
+              },
+            ],
+          }
+        }
+        // Provision-page reads and any rows-only query.
         if (text.includes('from legislation_provisions')) {
           return {
             rows: [
               {
-                label: 's. 13',
+                id: 'ukpga/2010/15/section/13',
+                documentIdentity: 'ukpga/2010/15',
                 labelPath: 'section/13',
+                label: 's. 13',
                 extent: 'E+W+S',
+                text: 'Direct discrimination applies here.',
                 hasUnappliedEffects: false,
-                docOrder: 0,
-              },
-              {
-                label: 's. 14',
-                labelPath: 'section/14',
-                extent: 'E+W+S',
-                hasUnappliedEffects: true,
-                docOrder: 1,
+                effectsCheckedAt: '2026-09-01T00:00:00Z',
+                title: 'Equality Act 2010',
+                year: 2010,
+                sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
               },
             ],
           }

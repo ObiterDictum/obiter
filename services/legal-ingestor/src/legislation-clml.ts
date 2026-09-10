@@ -1,12 +1,13 @@
 /**
  * Pure CLML parsing for Stage 1 legislation ingest. No network, no
- * storage: one row per P1..P5 element carrying an /id/ URI under the
- * requested document, in document order, plus the year-feed listing
- * parse. Fetching, resumption, and database writes live in
- * legislation-ingest.ts.
+ * storage: one row per addressable element carrying an /id/ URI under the
+ * requested document, in document order — provisions (P1..P5) plus
+ * containers (Part, Chapter, Schedule, crossheading Pblock) — and the
+ * year-feed listing parse. Fetching, resumption, and database writes live
+ * in legislation-ingest.ts.
  *
  * Size note: the tokenizer keeps provision, extent, title, and text state in
- * one pass (~350 lines, over the 300 target). Splitting open/close handling
+ * one pass (~400 lines, over the 300 target). Splitting open/close handling
  * across modules would separate state updates from the state they update;
  * the module is pure with one entry point and its tests read the samples.
  */
@@ -22,9 +23,42 @@ export interface IngestActRef {
   title: string
 }
 
+/** Kind of an emitted row: the CLML element tag for provisions (P1..P5) or
+ * the container name for the hierarchy levels (part, chapter, schedule,
+ * crossheading). Containers and provisions share the row shape because the
+ * Act page renders one document-order tree from both. */
+export type LegislationProvisionKind =
+  | 'part'
+  | 'chapter'
+  | 'schedule'
+  | 'crossheading'
+  | 'P1'
+  | 'P2'
+  | 'P3'
+  | 'P4'
+  | 'P5'
+
+/** Container row kinds (Part, Chapter, Schedule, crossheading): headings,
+ * never provisions and never withheld. Shared with ingest orchestration so
+ * the set is not triplicated; the API mirrors it in legislation-kind.ts
+ * because services must not import each other. */
+export const containerProvisionKinds: ReadonlySet<LegislationProvisionKind> =
+  new Set<LegislationProvisionKind>([
+    'part',
+    'chapter',
+    'schedule',
+    'crossheading',
+  ])
+
 export interface IngestProvision {
+  kind: LegislationProvisionKind
   labelPath: string
   label: string
+  /** Nearest addressable ancestor in CLML nesting, null for tree roots.
+   * Never derived from label-path prefixes: inserted-amendment provisions
+   * carry hierarchical IdURIs (part/2/section/100/kn1) while base
+   * provisions are flat (section/100), so prefixing would mis-nest. */
+  parentLabelPath: string | null
   extent: string
   text: string
   docOrder: number
@@ -171,10 +205,15 @@ export function parseYearFeed(xml: string, year: number): IngestActRef[] {
 }
 
 /**
- * One row per P1..P5 element carrying an IdURI under this document, in
- * document order. Schedule paragraphs are P1 elements too, so section/13/2
- * and schedule/2/paragraph/4 share one rule: identity is the /id/ URI
- * suffix. Text is the concatenated descendant Text nodes (nested
+ * One row per addressable element carrying an IdURI under this document, in
+ * document order: provisions (P1..P5) and containers (Part, Chapter,
+ * Schedule, crossheading Pblock). Sections are P1 elements inside Primary;
+ * schedule paragraphs are P1 elements inside Schedules, so
+ * section/13/2 and schedule/2/paragraph/4 share one rule: identity is the
+ * /id/ URI suffix. Container rows carry their heading as text and a parent
+ * pointer to the nearest addressable ancestor, so the Act page can render
+ * Parts containing sections and Schedules containing paragraphs in document
+ * order. Text is the concatenated descendant Text nodes (nested
  * sub-provisions included, which is what makes a section row searchable for
  * its subsection terms). Extent inherits the nearest RestrictExtent.
  */
@@ -211,12 +250,17 @@ export function parseClmlDocument(
 
 interface ClmlFrame {
   tag: string
+  /** Null for placeholder frames: an element that is never a row because
+   * it has no document IdURI (P1group, ScheduleBody, Body, amendments). */
+  kind: LegislationProvisionKind | null
   isProvision: boolean
   labelPath: string | null
+  parentLabelPath: string | null
   pnumber: string
   title: string
   extent: string
   texts: string[]
+  inNumber: boolean
   inPnumber: boolean
   inTitle: boolean
   titleDepth: number
@@ -259,6 +303,42 @@ function parseClmlWithStack(
     return null
   }
 
+  // Addressable containers: Part, Chapter and Schedule are the numbered
+  // levels; Pblock is the crossheading level (every observed Pblock IdURI
+  // carries a crossheading segment). Like provisions, they become rows only
+  // when carrying a document IdURI: the corpus has Parts, Chapters,
+  // Schedules and crossheadings without one (2023/55 carries 23 such
+  // Pblocks), and addressability is the row criterion everywhere.
+  const containerTags = new Set(['Part', 'Chapter', 'Schedule', 'Pblock'])
+
+  function containerKindFor(tag: string): LegislationProvisionKind | null {
+    switch (tag) {
+      case 'Part':
+        return 'part'
+      case 'Chapter':
+        return 'chapter'
+      case 'Schedule':
+        return 'schedule'
+      case 'Pblock':
+        return 'crossheading'
+      default:
+        return null
+    }
+  }
+
+  /** Nearest open frame that is or will be a row (container or provision). */
+  const currentAddressable = (): ClmlFrame | null => {
+    for (let i = stack.length - 1; i >= 0; i -= 1) {
+      if (stack[i]!.kind !== null) return stack[i]!
+    }
+    return null
+  }
+
+  const nearestAddressableLabelPath = (): string | null => {
+    const open = currentAddressable()
+    return open?.labelPath ?? null
+  }
+
   let m: RegExpExecArray | null
   tagPattern.lastIndex = 0
   while ((m = tagPattern.exec(xml)) !== null) {
@@ -268,17 +348,18 @@ function parseClmlWithStack(
     const textBefore = xml.slice(textStart, m.index)
     textStart = tagPattern.lastIndex
     // Character data belongs to whatever is open before this tag: accumulate
-    // first, so a Pnumber's digits land while it is still open.
-    // Character data counts only inside an open Text run: Pnumber digits
-    // and titles outside one must not leak into provision text.
-    if (textBefore && textDepth > 0) {
-      const open = currentProvision()
+    // first, so a container's Number or a Pnumber's digits land while still
+    // open. Provision body text counts only inside an open Text run; Number
+    // and Title capture is ungated because container headings (SCHEDULE 1,
+    // crossheading titles) are never wrapped in Text elements.
+    if (textBefore) {
+      const open = currentAddressable()
       if (open) {
-        if (open.inPnumber && !open.pnumber) {
+        if (open.inNumber && !open.pnumber) {
           const cleaned = stripTags(textBefore)
           if (cleaned) {
             open.pnumber = cleaned
-            open.inPnumber = false
+            open.inNumber = false
           }
         } else if (open.inTitle && stack.length >= open.titleDepth) {
           const cleaned = stripTags(textBefore)
@@ -286,9 +367,19 @@ function parseClmlWithStack(
             open.title = open.title ? `${open.title} ${cleaned}` : cleaned
         }
       }
-      for (const frame of openProvisions()) {
-        if (frame.texts.length > 0) {
-          frame.texts[frame.texts.length - 1] += textBefore
+      if (textDepth > 0) {
+        const provision = currentProvision()
+        if (provision && provision.inPnumber && !provision.pnumber) {
+          const cleaned = stripTags(textBefore)
+          if (cleaned) {
+            provision.pnumber = cleaned
+            provision.inPnumber = false
+          }
+        }
+        for (const frame of openProvisions()) {
+          if (frame.texts.length > 0) {
+            frame.texts[frame.texts.length - 1] += textBefore
+          }
         }
       }
     }
@@ -300,11 +391,11 @@ function parseClmlWithStack(
       if (tag === 'Text') textDepth += 1
       // A self-closing BlockAmendment cannot contain a P1, so only
       // paired opens move the depth.
-      if (provisionTags.has(tag)) {
+      if (provisionTags.has(tag) || containerTags.has(tag)) {
         // Every P1 open counts towards the declared total and the
         // census: addressable opens must yield rows (or an empty-text
         // note), no-IdURI opens are explained only inside
-        // BlockAmendment.
+        // BlockAmendment. Containers never touch the P1 census.
         const idUri = readAttribute(attrs, 'IdURI') ?? ''
         const marker = `/id/${identity}/`
         const idx = idUri.indexOf(marker)
@@ -320,12 +411,19 @@ function parseClmlWithStack(
           if (labelPath) {
             stack.push({
               tag,
-              isProvision: true,
+              kind:
+                containerKindFor(tag) ??
+                (provisionTags.has(tag)
+                  ? (tag as LegislationProvisionKind)
+                  : null),
+              isProvision: provisionTags.has(tag),
               labelPath,
+              parentLabelPath: nearestAddressableLabelPath(),
               pnumber: '',
               title: '',
               extent: extentCurrent,
               texts: [],
+              inNumber: false,
               inPnumber: false,
               inTitle: false,
               titleDepth: 0,
@@ -340,8 +438,8 @@ function parseClmlWithStack(
             }
           }
         } else {
-          // Provision-level element without a document IdURI (e.g. a
-          // quoted extract): not addressable, never a row.
+          // Element without a document IdURI (e.g. a quoted extract, or a
+          // non-addressable container): not addressable, never a row.
           stack.push(placeholderFrame(tag))
           if (selfClosing) {
             stack.pop()
@@ -352,14 +450,23 @@ function parseClmlWithStack(
         if (tag === 'BlockAmendment' && !selfClosing) {
           blockAmendmentDepth += 1
         }
-        if (tag === 'Pnumber') {
+        if (tag === 'Number') {
+          const container = currentAddressable()
+          if (container && containerProvisionKinds.has(container.kind!)) {
+            container.inNumber = true
+          }
+        } else if (tag === 'Pnumber') {
           const prov = currentProvision()
           if (prov && !prov.pnumber) prov.inPnumber = true
         } else if (tag === 'Title') {
-          const prov = currentProvision()
-          if (prov && !prov.title) {
-            prov.inTitle = true
-            prov.titleDepth = stack.length
+          // Title capture targets the nearest addressable frame (container
+          // or provision) that has no title yet, so inner group headings
+          // (P1group Titles, which are not addressable) are skipped once
+          // their container's own Title is captured.
+          const open = currentAddressable()
+          if (open && !open.title) {
+            open.inTitle = true
+            open.titleDepth = stack.length + 1
           }
         } else if (tag === 'Text') {
           // Every enclosing provision accumulates the run, so a section row
@@ -385,12 +492,15 @@ function parseClmlWithStack(
   function placeholderFrame(tag: string): ClmlFrame {
     return {
       tag,
+      kind: null,
       isProvision: false,
       labelPath: null,
+      parentLabelPath: null,
       pnumber: '',
       title: '',
       extent: '',
       texts: [],
+      inNumber: false,
       inPnumber: false,
       inTitle: false,
       titleDepth: 0,
@@ -400,7 +510,27 @@ function parseClmlWithStack(
 
   function closeFrame() {
     const frame = stack.pop()
-    if (!frame || !frame.isProvision || !frame.labelPath) return
+    if (!frame || frame.kind === null || !frame.labelPath) return
+    if (containerProvisionKinds.has(frame.kind)) {
+      const label = formatContainerLabel(
+        frame.kind,
+        frame.pnumber,
+        frame.title,
+        frame.labelPath,
+      )
+      provisions.push({
+        kind: frame.kind,
+        labelPath: frame.labelPath,
+        label,
+        parentLabelPath: frame.parentLabelPath,
+        extent: frame.extent,
+        // A container row's text is its heading: the Act page shows Parts
+        // and Schedules as headings, never as searchable body content.
+        text: frame.title || label,
+        docOrder: frame.order,
+      })
+      return
+    }
     const text = frame.texts
       .map((t) => stripTags(t))
       .filter(Boolean)
@@ -413,8 +543,10 @@ function parseClmlWithStack(
     }
     if (frame.tag === 'P1') p1Rows += 1
     provisions.push({
+      kind: frame.kind,
       labelPath: frame.labelPath,
       label: formatProvisionLabel(frame.labelPath, frame.pnumber),
+      parentLabelPath: frame.parentLabelPath,
       extent: frame.extent,
       text,
       docOrder: frame.order,
@@ -427,16 +559,21 @@ function parseClmlWithStack(
     for (let i = stack.length - 1; i >= 0; i -= 1) {
       const frame = stack[i]!
       if (frame.tag !== tag) continue
-      if (frame.isProvision) {
+      if (frame.kind !== null) {
         // Remove any placeholders opened inside, then emit.
         stack.splice(i + 1)
         closeFrame()
       } else {
         stack.splice(i, 1)
-        // Leaving a Title scope ends title capture.
-        const prov = currentProvision()
-        if (prov && prov.inTitle && stack.length < prov.titleDepth) {
-          prov.inTitle = false
+        // Leaving a Title scope ends title capture (titleDepth counts the
+        // Title frame, so this must clear explicitly, not via depth).
+        if (tag === 'Title') {
+          const open = currentAddressable()
+          if (open) open.inTitle = false
+        }
+        if (tag === 'Number') {
+          const container = currentAddressable()
+          if (container && container.inNumber) container.inNumber = false
         }
         if (tag === 'Pnumber') {
           const p = currentProvision()
@@ -533,6 +670,43 @@ export function provisionCountNote(
     )
   }
   return notes.length > 0 ? notes.join('; ') : null
+}
+
+/** Display label for a container row. Upstream Number text is inconsistent
+ * in case ("Part 2", "PART 6ZA", "SCHEDULE 1", "Chapter 1"), so the number
+ * is normalised and re-prefixed with the canonical capitalisation. A
+ * crossheading has no Number: its title is the heading. */
+export function formatContainerLabel(
+  kind: LegislationProvisionKind,
+  pnumber: string,
+  title: string,
+  labelPath: string,
+): string {
+  const stripped = pnumber.replace(/^(part|schedule|chapter)\s*/i, '').trim()
+  switch (kind) {
+    case 'part':
+      return stripped ? `Part ${stripped}` : 'Part'
+    case 'chapter':
+      // Chapters normally number as "Chapter 1", but ECHR-style schedules
+      // number their chapters as "Article 2"; that verbatim form is the
+      // published label, so only a chapter-prefixed Number is normalised.
+      if (pnumber && !/^chapter/i.test(pnumber)) return pnumber.trim()
+      return stripped ? `Chapter ${stripped}` : 'Chapter'
+    case 'schedule':
+      return stripped ? `Schedule ${stripped}` : 'Schedule'
+    case 'crossheading': {
+      // A crossheading has no Number: its label is the heading text, or the
+      // last slug segment humanised when upstream carried no Title.
+      const heading = title.trim()
+      if (heading) return heading
+      const slug = labelPath.split('/').at(-1) ?? ''
+      return slug
+        .replace(/-/g, ' ')
+        .replace(/\b\w/g, (char) => char.toUpperCase())
+    }
+    default:
+      return title || pnumber || kind
+  }
 }
 
 /** Display label from the /id/ label path, e.g. section/13/2/a to s. 13(2)(a).

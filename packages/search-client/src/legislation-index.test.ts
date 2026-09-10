@@ -21,6 +21,7 @@ const provision: LegislationProvisionDocument = {
   extent: 'E+W',
   text: 'Duties extend to agents.',
   hasUnappliedEffects: false,
+  effectsCheckedAt: '2026-09-01T00:00:00Z',
   sourceUrl: 'https://www.legislation.gov.uk/ukpga/2020/1',
 }
 
@@ -93,6 +94,17 @@ describe('legislation provision index', () => {
       isLegislationProvisionDocument({
         ...provision,
         hasUnappliedEffects: true,
+      }),
+    ).toBe(true)
+  })
+
+  it('requires check provenance, fail-closed without it', () => {
+    const { effectsCheckedAt: _dropped, ...provenanceless } = provision
+    expect(isLegislationProvisionDocument(provenanceless)).toBe(false)
+    expect(
+      isLegislationProvisionDocument({
+        ...provision,
+        effectsCheckedAt: null,
       }),
     ).toBe(true)
   })
