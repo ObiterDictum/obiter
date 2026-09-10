@@ -372,6 +372,8 @@ describe('extraction coverage denylist', () => {
   })
 
   it('refuses an unclassified part whose text run ends with a raw >', async () => {
+    // Well-formed variant: the raw > sits in the final run but a closing tag
+    // follows, so even the pre-fix elementCharData counted the text after it.
     const source = await packDocx({
       parts: {
         'word/mystery.xml':
@@ -383,11 +385,44 @@ describe('extraction coverage denylist', () => {
     expect(regions[0]).toMatch(/^unexamined part word\/mystery\.xml/)
   })
 
+  it('refuses an unclosed unclassified part whose final text run holds a raw >', async () => {
+    // Bypass variant the two well-formed tests above cannot catch: with no
+    // closing tag the raw > is the part's LAST >, so the pre-fix scan took
+    // ' end' as the trailing run (3 non-ws chars, under the 20 floor) and the
+    // guard returned []. The text carries 43 non-ws chars and must refuse.
+    const source = await packDocx({
+      parts: {
+        'word/mystery.xml':
+          '<m:thing>SECRET confidential client matter ref 998877 > end',
+      },
+    })
+    const regions = await findUncoveredDocxRegions(source, LIVE_TEXT)
+    expect(regions).toHaveLength(1)
+    expect(regions[0]).toMatch(/^unexamined part word\/mystery\.xml/)
+  })
+
   it('refuses customXml text carrying a raw > in the final run', async () => {
+    // Well-formed variant: the closing </b:Title> follows the raw >, so the
+    // pre-fix scan still found the text between the tags.
     const source = await packDocx({
       parts: {
         'customXml/item1.xml':
           '<?xml version="1.0" encoding="UTF-8"?><b:Sources xmlns:b="http://schemas.openxmlformats.org/officeDocument/2006/bibliography"><b:Source><b:Title>SECRET confidential client matter ref 998877 > end</b:Title></b:Source></b:Sources>',
+      },
+    })
+    const regions = await findUncoveredDocxRegions(source, LIVE_TEXT)
+    expect(regions).toHaveLength(1)
+    expect(regions[0]).toMatch(/^customXml content in customXml\/item1\.xml/)
+  })
+
+  it('refuses unclosed customXml whose final text run holds a raw >', async () => {
+    // Bypass variant: no closing tag, so the raw > is the part's last >. The
+    // pre-fix scan returned ' end' (3 non-ws chars, under the floor) and the
+    // guard returned []; the text carries 43 non-ws chars and must refuse.
+    const source = await packDocx({
+      parts: {
+        'customXml/item1.xml':
+          '<b:Title>SECRET confidential client matter ref 998877 > end',
       },
     })
     const regions = await findUncoveredDocxRegions(source, LIVE_TEXT)
