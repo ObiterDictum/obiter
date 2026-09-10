@@ -67,6 +67,7 @@ export interface PdfOps {
   setHScale: number
   setLeading: number
   setFont: number
+  setGState: number
   setTextRise: number
   moveText: number
   setLeadingMoveText: number
@@ -157,6 +158,11 @@ export function laidCharsFromOperatorList(input: {
   const moveLine = (tx: number, ty: number) => {
     lineMatrix = multiply(translation(tx, ty), lineMatrix)
     textMatrix = lineMatrix
+  }
+
+  const applyFont = (name: unknown, size: unknown) => {
+    if (typeof name === 'string') state.fontName = name
+    if (typeof size === 'number') state.fontSize = size
   }
 
   const show = (items: unknown) => {
@@ -296,10 +302,26 @@ export function laidCharsFromOperatorList(input: {
       case ops.endText:
         break
       case ops.setFont:
-        state.fontName = (args?.[0] as string) ?? state.fontName
-        state.fontSize =
-          typeof args?.[1] === 'number' ? args[1] : state.fontSize
+        applyFont(args?.[0], args?.[1])
         break
+      case ops.setGState: {
+        // An ExtGState /Font entry changes the text font and size through the
+        // renderer's setFont path, so it moves every subsequent glyph; the
+        // replay must apply it or the cover lands at the previous font's
+        // geometry while the page drew that text at a different size. The
+        // worker emits args[0] as an array of [key, value] pairs, and only
+        // Font carries placement — line width, colours and blend mode do not.
+        const entries = args?.[0]
+        if (Array.isArray(entries)) {
+          for (const entry of entries) {
+            if (Array.isArray(entry) && entry[0] === 'Font') {
+              const font = entry[1]
+              if (Array.isArray(font)) applyFont(font[0], font[1])
+            }
+          }
+        }
+        break
+      }
       case ops.setCharSpacing:
         state.charSpacing = (args?.[0] as number) ?? 0
         break

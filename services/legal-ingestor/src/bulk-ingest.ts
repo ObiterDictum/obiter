@@ -6,6 +6,7 @@ import {
   documentIdFromUri,
   fetchMojAuthorityDetail,
   parseFindCaseLawAtom,
+  resolveProviderUrl,
   toFindCaseLawCourtParam,
   type AtomEntry,
   type FindCaseLawEnv,
@@ -180,10 +181,13 @@ export async function fetchAtomPage(
   for (let attempt = 1; attempt <= maxAttemptsPerItem; attempt += 1) {
     await takePolitely(deps)
     let response: Response
+    const pageUrl = resolveProviderUrl(
+      deps.baseUrl,
+      buildAtomPageUrl(deps.baseUrl, scope, page).toString(),
+    )
+    if (!pageUrl) return { error: `atom page ${page} resolved off-origin` }
     try {
-      response = await deps.fetchImpl(
-        buildAtomPageUrl(deps.baseUrl, scope, page),
-      )
+      response = await deps.fetchImpl(pageUrl, { redirect: 'manual' })
     } catch (error) {
       if (attempt === maxAttemptsPerItem)
         return {

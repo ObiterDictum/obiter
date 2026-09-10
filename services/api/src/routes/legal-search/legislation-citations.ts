@@ -49,10 +49,13 @@ export type LegislationCitationOutcome =
   | { kind: 'unrecognised' }
 
 /** Curated aliases only: an alias maps one surface form to one Act, and any
- * form that could name two Acts stays out of this table on purpose. */
-const actAliases: Record<string, string> = {
-  'hra 1998': 'Human Rights Act 1998',
-}
+ * form that could name two Acts stays out of this table on purpose. A Map, not
+ * an object literal: `actAliases['constructor']` on an object resolves to
+ * `Object` and truthy, which then throws in `normalizeActTitle` for a bare
+ * query. */
+const actAliases = new Map<string, string>([
+  ['hra 1998', 'Human Rights Act 1998'],
+])
 
 export function normalizeActTitle(value: string): string {
   return value
@@ -174,7 +177,7 @@ export function formatProvisionDisplayLabel(labelPath: string): string {
 
 function expandAlias(actText: string): string {
   const normalized = normalizeActTitle(actText)
-  const aliased = actAliases[normalized]
+  const aliased = actAliases.get(normalized)
   if (aliased) return normalizeActTitle(aliased)
   return normalized
 }

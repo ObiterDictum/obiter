@@ -35,6 +35,21 @@ const entries: LegislationActDirectoryEntry[] = [
 const directory = createActDirectory(entries)
 
 describe('classifyLegislationCitation', () => {
+  it.each(['constructor', '__proto__', 'toString', 'valueOf'])(
+    'does not treat the inherited Object property %s as an alias',
+    (query) => {
+      // `actAliases` used to be an object literal, so `actAliases['constructor']`
+      // resolved to `Object` and was truthy, throwing in normalizeActTitle for
+      // the bare query `constructor`. An inherited name must be unrecognised.
+      expect(classifyLegislationCitation(query, directory).kind).toBe(
+        'unrecognised',
+      )
+    },
+  )
+
+  it('still resolves the curated alias', () => {
+    expect(classifyLegislationCitation('HRA 1998', directory).kind).toBe('act')
+  })
   it('resolves chapter numbers', () => {
     const outcome = classifyLegislationCitation('1998 c.42', directory)
     expect(outcome).toEqual({
