@@ -180,6 +180,50 @@ describe('resolveLegislationFetch', () => {
     expect(hit).not.toHaveProperty('text')
   })
 
+  it('serves the Act alone for an Act-name query, never tied provisions', async () => {
+    // Every provision of an Act carries its title, so an Act-name query
+    // matches all of them equally and the engine's tiebreak is the document
+    // id — whose `schedule/` prefix sorts ahead of `section/`. The result was
+    // a fixed handful of Schedule 1 paragraphs. The Act page carries the
+    // contents instead, so the keyword hits must not be served at all.
+    const scheduleParagraph = {
+      ...currentProvision,
+      id: 'ukpga/2010/15/schedule/1/paragraph/1',
+      provisionRef: 'ukpga/2010/15/schedule/1/paragraph/1',
+      labelPath: 'schedule/1/paragraph/1',
+      label: 'Sch. 1 para. 1',
+      text: 'Regulations may make provision for a condition of a prescribed description.',
+    }
+    const result = await resolveLegislationFetch(
+      createDeps({ keywordHits: [scheduleParagraph] }),
+      'Equality Act 2010',
+    )
+    expect(result.citationHeldExact).toBe(true)
+    expect(result.groups[0]?.hits).toHaveLength(1)
+    const hit = result.groups[0]?.hits[0]
+    expect(hit?.id).toBe('ukpga/2010/15')
+    expect(hit?.labelPath).toBe('')
+    // The row renders `provisionLabel · title`: the chapter number, not the
+    // title a second time.
+    expect(hit?.provisionLabel).toBe('2010 c. 15')
+    expect(hit?.notice).toContain('browse its Parts, sections and schedules')
+  })
+
+  it('still serves provisions when the query carries more than the Act title', async () => {
+    const keywordHit = {
+      ...currentProvision,
+      id: 'ukpga/2010/15/section/13',
+      provisionRef: 'ukpga/2010/15/section/13',
+    }
+    const result = await resolveLegislationFetch(
+      createDeps({ keywordHits: [keywordHit] }),
+      'direct discrimination',
+    )
+    expect(result.citationRecognised).toBe(false)
+    expect(result.groups[0]?.hits).toHaveLength(1)
+    expect(result.groups[0]?.hits[0]?.labelPath).toBe('section/13')
+  })
+
   it('reports a recognised but unheld provision visibly', async () => {
     const result = await resolveLegislationFetch(
       createDeps({ provision: null }),

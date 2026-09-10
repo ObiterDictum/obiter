@@ -75,6 +75,16 @@ export interface LegislationSearchOptions {
 export const legislationSearchIndexSettings = {
   minWordSizeForTypos: { oneTypo: 5, twoTypos: 9 },
   prefixSearch: 'disabled',
+  // Every term the caller typed must be present. The engine's own default
+  // drops trailing terms until something matches, which answered
+  // "Human Rights Act 1998 proportionality" with Human Rights Act Schedule 1
+  // paragraph 1 — a provision that does not contain "proportionality", and
+  // no provision of that Act does. The judgment index requires every term for
+  // the same reason: a result the engine had to ignore the query to find is a
+  // worse answer than no result. The relevance floor below is not the same
+  // kind of value — it is a starting point awaiting a provisions corpus, while
+  // term coverage is the query, not a tuning choice.
+  matchingStrategy: 'all',
   rankingScoreThreshold: 0.35,
 } as const
 
@@ -236,6 +246,7 @@ type ProvisionSearchClient = {
       options: {
         limit?: number
         rankingScoreThreshold?: number
+        matchingStrategy?: 'all' | 'frequency'
         showRankingScore?: boolean
         attributesToRetrieve?: string[]
       },
@@ -257,8 +268,12 @@ export async function searchLegislation(
   const searchOptions: {
     limit?: number
     rankingScoreThreshold?: number
+    matchingStrategy: 'all' | 'frequency'
     showRankingScore: boolean
-  } = { showRankingScore: true }
+  } = {
+    matchingStrategy: legislationSearchIndexSettings.matchingStrategy,
+    showRankingScore: true,
+  }
   if (typeof options.limit === 'number') searchOptions.limit = options.limit
   if (query && options.rankingScoreThreshold !== null) {
     searchOptions.rankingScoreThreshold =

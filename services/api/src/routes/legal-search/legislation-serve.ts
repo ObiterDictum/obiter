@@ -273,26 +273,30 @@ export async function resolveLegislationFetch(
       legislationStatus: 'current',
       title: document.title,
       year: document.year,
-      provisionLabel: document.title,
+      // The row renders `provisionLabel · title`, so the title here read as
+      // "Sentencing Act 2020 · Sentencing Act 2020". An Act has no provision
+      // label; its chapter number is the identifier that distinguishes it.
+      provisionLabel: `${document.year} c. ${document.number}`,
       labelPath: '',
       documentIdentity: document.identity,
       extent: document.extent,
       officialUrl,
       sourceUrl: document.sourceUrl,
-      notice: `Matched ${document.title}. Add a section number (for example s. 40) to read a provision.`,
+      notice: 'Open the Act to browse its Parts, sections and schedules.',
       citationMatch: 'exact',
       retrievalPath: 'stored_exact_lookup',
       retrievalRank: 1,
     }
-    const keywordHits = await searchKeywordProvisions(deps, query, 2)
+    // A bare Act-name query serves the Act alone. Every provision of an Act
+    // carries that Act's title, so all of them match this query equally and
+    // the engine breaks the tie by insertion order — which is the identifier
+    // path, and `schedule/` sorts before `section/`. That returned a fixed
+    // handful of Schedule 1 paragraphs, identical for every Act, presented as
+    // if they were the relevant ones. The Act page is the navigation surface
+    // for the rest; a query carrying more than the title is no longer an
+    // Act-name query and falls to the keyword branch below.
     return {
-      groups: [
-        {
-          key: 'legislation',
-          label: 'Legislation',
-          hits: [actHit, ...keywordHits],
-        },
-      ],
+      groups: [{ key: 'legislation', label: 'Legislation', hits: [actHit] }],
       citationRecognised: true,
       citationHeldExact: true,
       recognisedNotHeld: false,
