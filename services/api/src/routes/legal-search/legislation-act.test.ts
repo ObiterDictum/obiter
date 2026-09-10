@@ -124,11 +124,11 @@ describe('resolveLegislationActPage', () => {
   ) {
     return {
       query: vi.fn(async (text: string) => {
-        if (text.includes('kind is null')) {
-          return { rows: [{ classified }] }
-        }
-        if (text.includes('from legislation_provisions')) {
-          return { rows: provisions }
+        // The Act-page gate flag and the content rows are returned by one
+        // statement (getLegislationActProvisionsSnapshot), so the fixture
+        // answers both from that single snapshot shape.
+        if (text.includes('json_agg')) {
+          return { rows: [{ classified, rows: provisions }] }
         }
         return { rows: document ? [document] : [] }
       }),
@@ -248,6 +248,41 @@ describe('resolveLegislationActPage', () => {
     const result = await resolveLegislationActPage(legacy, 'ukpga/2010/15')
     expect(result.status).toBe('unavailable')
     expect(legacy.query).toHaveBeenCalled()
+  })
+
+  it('never serves an incomplete tree from a torn reparse read', async () => {
+    // Regression for the gate/contents race: gate and rows must be read by
+    // one statement so they share one snapshot. The fake pool simulates the
+    // interleaving that broke the old two-query read — the listing
+    // statement's snapshot predates the --force-reparse commit (legacy
+    // NULL-kind rows filtered out, no rows), while an independent gate
+    // statement reads after it (classified true). A combined statement can
+    // never see that mix: it returns the pre-commit snapshot (gate closed),
+    // so the page withholds instead of serving an empty 200 tree.
+    const torn = {
+      query: vi.fn(async (text: string) => {
+        if (text.includes('json_agg')) {
+          // Single statement: pre-commit snapshot, legacy NULL kinds still
+          // present, so the gate reads unclassified and the listing is
+          // empty. This is the consistent answer an indivisible read gives.
+          return { rows: [{ classified: false, rows: [] }] }
+        }
+        if (text.includes('kind is null')) {
+          // Tear: a gate-only statement reading after the commit.
+          return { rows: [{ classified: true }] }
+        }
+        if (text.includes('from legislation_provisions')) {
+          // Tear: a listing-only statement reading before the commit.
+          return { rows: [] }
+        }
+        return { rows: [actDocument] }
+      }),
+    } as unknown as LegislationServeDeps['pool']
+    const result = await resolveLegislationActPage(torn, 'ukpga/2010/15')
+    expect(result.status).toBe('unavailable')
+    // Gate and contents travel in one statement: the document read plus one
+    // snapshot read, never a third independent gate query.
+    expect(torn.query).toHaveBeenCalledTimes(2)
   })
 
   it('returns unavailable when the store is down', async () => {

@@ -1048,4 +1048,7 @@ through it. The migration leaves pre-0022 rows with kind = NULL rather
 than a default, so the transitional window is visible and fail-closed: a
 document that still holds unclassified rows serves 503 for its Act page
 (never a flat list of mis-classified provisions) until the force-reparse
-rewrite fills in real kinds.
+rewrite fills in real kinds. The gate flag and the contents are read in
+one statement, so they share one snapshot and the rewrite (a single
+transaction) can never land between the two reads and leave a torn,
+incomplete tree served as 200.

@@ -3,9 +3,8 @@ import {
   createCanonicalProvisionPath,
 } from '@obiter/contracts'
 import {
+  getLegislationActProvisionsSnapshot,
   getLegislationDocument,
-  legislationActProvisionsClassified,
-  listLegislationActProvisions,
   provisionTextServable,
   type StoredLegislationActProvision,
 } from './legislation-store'
@@ -131,14 +130,12 @@ export async function resolveLegislationActPage(
   identity: string,
 ): Promise<LegislationActPageResult> {
   let document
-  let provisions
-  let classified
+  let snapshot
   try {
-    ;[document, provisions, classified] = await withStoredTimeout(
+    ;[document, snapshot] = await withStoredTimeout(
       Promise.all([
         getLegislationDocument(pool, identity),
-        listLegislationActProvisions(pool, identity),
-        legislationActProvisionsClassified(pool, identity),
+        getLegislationActProvisionsSnapshot(pool, identity),
       ]),
     )
   } catch {
@@ -149,12 +146,15 @@ export async function resolveLegislationActPage(
   // --force-reparse rewrites them; listing them here would render their
   // P2..P5 content as flat top-level provisions. Fail closed: the whole
   // Act page stays unavailable until every row of the document is
-  // classified, never a silently mis-classified tree.
-  if (!classified) return { status: 'unavailable' }
+  // classified, never a silently mis-classified tree. The gate flag and
+  // the rows come from one statement (getLegislationActProvisionsSnapshot),
+  // so they always share a snapshot: a reparse rewrite (one transaction)
+  // cannot land between the two reads and leave a torn 200.
+  if (!snapshot.classified) return { status: 'unavailable' }
   const officialUrl = `https://www.legislation.gov.uk/${document.identity}`
   const { roots, totalCount, withheldCount } = buildContentsTree(
     document.identity,
-    provisions,
+    snapshot.rows,
   )
   return {
     status: 'ok',

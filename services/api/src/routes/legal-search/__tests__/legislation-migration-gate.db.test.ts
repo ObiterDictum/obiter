@@ -123,6 +123,61 @@ describe('legislation act-page transition gate', () => {
     expect(result).toEqual({ status: 'unavailable' })
   })
 
+  it('reads the gate and the rows from one snapshot across a reparse commit', async () => {
+    // Reset to the pre-reparse state: every row kind = NULL again.
+    await pool.query(
+      'delete from legislation_provisions where document_identity = $1',
+      [identity],
+    )
+    for (const row of legacyRows) {
+      await pool.query(insertProvisionRowQuery(row, null, null))
+    }
+
+    // The reparse replaces every row of the document in one transaction
+    // (the ingestor holds one client for BEGIN/delete/insert/COMMIT). The
+    // Act-page read is a single statement, so it must see either the whole
+    // pre-commit legacy state (gate closed: unavailable) or the whole
+    // post-commit classified state (gate open: the complete tree), never a
+    // half-rewritten document. Hold the rewrite open and read mid-flight.
+    const client = await pool.connect()
+    let committed = false
+    try {
+      await client.query('BEGIN')
+      await client.query(
+        'delete from legislation_provisions where document_identity = $1',
+        [identity],
+      )
+      const reparsed = [
+        { row: legacyRows[0]!, kind: 'part', parent: null },
+        { row: legacyRows[1]!, kind: 'P1', parent: 'part/1' },
+        { row: legacyRows[2]!, kind: 'P2', parent: 'section/1' },
+        { row: legacyRows[3]!, kind: 'P1', parent: 'part/1' },
+      ]
+      for (const { row, kind, parent } of reparsed) {
+        await client.query(insertProvisionRowQuery(row, kind, parent))
+      }
+      // Uncommitted reparse must be invisible to the combined read: the
+      // page still sees the legacy NULL-kind rows and withholds.
+      const during = await resolveLegislationActPage(pool, identity)
+      expect(during).toEqual({ status: 'unavailable' })
+      await client.query('COMMIT')
+      committed = true
+    } finally {
+      if (!committed) await client.query('ROLLBACK').catch(() => {})
+      client.release()
+    }
+
+    const after = await resolveLegislationActPage(pool, identity)
+    expect(after.status).toBe('ok')
+    if (after.status !== 'ok') return
+    expect(after.page.act.contents.map((entry) => entry.label)).toEqual([
+      'Part 1',
+    ])
+    const part1 = after.page.act.contents[0]!
+    expect(part1.children.map((entry) => entry.label)).toEqual(['s. 1', 's. 2'])
+    expect(after.page.act.totalCount).toBe(2)
+  })
+
   it('serves the tree only after the reparse rewrite classifies every row', async () => {
     // The reparse ingestor rewrites every row of the document in one
     // transaction; simulate the same result: container rows get container

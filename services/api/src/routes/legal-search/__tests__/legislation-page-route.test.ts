@@ -120,33 +120,58 @@ describe('GET /api/search/legislation/<identity> (Act page)', () => {
   function createActApp(documentRows = [actDocument]) {
     const pool = {
       query: vi.fn(async (text: string) => {
-        // The act-page gate asks whether any row is unclassified; this
-        // fixture holds classified rows, so the gate must read as ready.
-        if (text.includes('kind is null')) {
-          return { rows: [{ classified: true }] }
+        // The Act-page gate flag and the content rows are returned by one
+        // statement (getLegislationActProvisionsSnapshot); this fixture
+        // holds classified rows, so the gate reads as ready.
+        if (text.includes('json_agg')) {
+          return {
+            rows: [
+              {
+                classified: true,
+                rows: [
+                  {
+                    label: 's. 13',
+                    labelPath: 'section/13',
+                    extent: 'E+W+S',
+                    hasUnappliedEffects: false,
+                    effectsCheckedAt: '2026-09-01T00:00:00Z',
+                    docOrder: 0,
+                    kind: 'P1',
+                    parentLabelPath: null,
+                    text: '',
+                  },
+                  {
+                    label: 's. 14',
+                    labelPath: 'section/14',
+                    extent: 'E+W+S',
+                    hasUnappliedEffects: true,
+                    effectsCheckedAt: '2026-09-01T00:00:00Z',
+                    docOrder: 1,
+                    kind: 'P1',
+                    parentLabelPath: null,
+                    text: '',
+                  },
+                ],
+              },
+            ],
+          }
         }
+        // Provision-page reads and any rows-only query.
         if (text.includes('from legislation_provisions')) {
           return {
             rows: [
               {
-                label: 's. 13',
+                id: 'ukpga/2010/15/section/13',
+                documentIdentity: 'ukpga/2010/15',
                 labelPath: 'section/13',
+                label: 's. 13',
                 extent: 'E+W+S',
+                text: 'Direct discrimination applies here.',
                 hasUnappliedEffects: false,
                 effectsCheckedAt: '2026-09-01T00:00:00Z',
-                docOrder: 0,
-                kind: 'P1',
-                parentLabelPath: null,
-              },
-              {
-                label: 's. 14',
-                labelPath: 'section/14',
-                extent: 'E+W+S',
-                hasUnappliedEffects: true,
-                effectsCheckedAt: '2026-09-01T00:00:00Z',
-                docOrder: 1,
-                kind: 'P1',
-                parentLabelPath: null,
+                title: 'Equality Act 2010',
+                year: 2010,
+                sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
               },
             ],
           }

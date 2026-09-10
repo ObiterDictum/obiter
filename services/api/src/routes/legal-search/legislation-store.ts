@@ -65,69 +65,66 @@ export function provisionTextServable(
   return hasUnappliedEffects === false && effectsCheckedAt !== null
 }
 
-/**
- * Contents of one Act as rows for tree building: containers (part, chapter,
- * schedule, crossheading) plus P1 content rows (sections and schedule
- * paragraphs), in document order. P2..P5 sub-provisions stay on provision
- * pages and never render on the Act page. ORDER BY doc_order, never numeric
- * or lexical label sort: inserted sections (s. 13A between ss. 13 and 14)
- * sort wrong otherwise, and containers interleave with their content.
- *
- * Rows whose kind is NULL are pre-0022 legacy rows that no --force-reparse
- * has rewritten: their true classification is unknown, so they must never
- * reach the tree (the Act-page gate in legislation-act.ts withholds the
- * whole document until none remain).
- *
- * provision_text is read for container rows only — the Act page renders
- * container heading text but never provision body text (the provision page
- * carries that gate) — so the query pulls the full body of the heaviest Act
- * (1.2 MB) just to discard it per page load. The case narrows the fetch to
- * headings. */
-export async function listLegislationActProvisions(
-  pool: Pick<Pool, 'query'>,
-  identity: string,
-): Promise<StoredLegislationActProvision[]> {
-  const result = await pool.query<StoredLegislationActProvision>(
-    `select label, label_path as "labelPath", extent,
-            has_unapplied_effects as "hasUnappliedEffects",
-            effects_checked_at as "effectsCheckedAt",
-            doc_order as "docOrder", kind,
-            parent_label_path as "parentLabelPath",
-            case when kind in ('part', 'chapter', 'schedule', 'crossheading')
-                 then provision_text else '' end as text
-       from legislation_provisions
-      where document_identity = $1
-        and kind is not null
-        and (kind in ('part', 'chapter', 'schedule', 'crossheading') or kind = 'P1')
-      order by doc_order`,
-    [identity],
-  )
-  return result.rows
+export interface LegislationActProvisionsSnapshot {
+  /** Document holds no NULL-kind row: the whole Act page may serve. */
+  classified: boolean
+  /** Containers plus P1 rows in document order, empty while unclassified. */
+  rows: StoredLegislationActProvision[]
 }
 
 /**
- * Fail-closed transitional gate for the Act page. Pre-migration rows carry
- * kind = NULL (see listLegislationActProvisions), so until --force-reparse
- * rewrites a document's rows, treating them as flat P1 provisions would
- * list its P2..P5 content as top-level sections. The gate withholds the
- * whole page (unavailable) for any document that still holds an
- * unclassified row. Not-exists over the document's rows, never a
- * document-level flag: classifications live per row, and a reparse rewrites
- * every row of a document atomically, so the per-document statement is the
- * whole answer. Any other outcome reads as not-classified (fail-closed):
- * the page withholds rather than risks a mis-classified tree. */
-export async function legislationActProvisionsClassified(
+ * One-statement read of the Act-page gate and its contents: the flag and
+ * the rows come back from a single statement, so they share one snapshot
+ * and always describe the same committed state. A --force-reparse rewrites
+ * every row of a document in one transaction, so the read sees either all
+ * of it (gate open, rows present) or none of it (legacy NULL-kind rows
+ * filtered out, gate closed) — never the old torn mix where an independent
+ * gate statement read post-commit at the same time the listing read
+ * pre-commit, which served an empty tree as 200 instead of 503.
+ *
+ * Rows whose kind is NULL are pre-0022 legacy rows that no --force-reparse
+ * has rewritten: their true classification is unknown, so they must never
+ * reach the tree. The gate withholds the whole document until none remain
+ * (fail-closed: any other outcome reads as not-classified).
+ *
+ * Contents arrive in document order via json_agg over the inner ORDER BY:
+ * inserted sections (s. 13A between ss. 13 and 14) keep their enacted
+ * position, and containers interleave with their content. provision_text is
+ * read for container rows only — the Act page renders container heading
+ * text but never provision body text (the provision page carries that
+ * gate) — so the query never pulls full provision bodies. */
+export async function getLegislationActProvisionsSnapshot(
   pool: Pick<Pool, 'query'>,
   identity: string,
-): Promise<boolean> {
-  const result = await pool.query<{ classified: boolean }>(
+): Promise<LegislationActProvisionsSnapshot> {
+  const result = await pool.query<{
+    classified: boolean
+    rows: StoredLegislationActProvision[]
+  }>(
     `select not exists(
-       select 1 from legislation_provisions
-        where document_identity = $1 and kind is null
-     ) as "classified"`,
+        select 1 from legislation_provisions
+         where document_identity = $1 and kind is null
+      ) as "classified",
+      coalesce((
+        select json_agg(rows order by rows."docOrder")
+          from (
+            select label, label_path as "labelPath", extent,
+                   has_unapplied_effects as "hasUnappliedEffects",
+                   effects_checked_at as "effectsCheckedAt",
+                   doc_order as "docOrder", kind,
+                   parent_label_path as "parentLabelPath",
+                   case when kind in ('part', 'chapter', 'schedule', 'crossheading')
+                        then provision_text else '' end as text
+              from legislation_provisions
+             where document_identity = $1
+               and kind is not null
+               and (kind in ('part', 'chapter', 'schedule', 'crossheading') or kind = 'P1')
+          ) rows
+      ), '[]'::json) as "rows"`,
     [identity],
   )
-  return result.rows[0]?.classified ?? false
+  const row = result.rows[0]
+  return { classified: row?.classified ?? false, rows: row?.rows ?? [] }
 }
 
 export async function getLegislationDocument(
