@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "vite build",
-    "dev": "vite dev --port 3000",
+    "dev": "vite dev",
     "preview": "vite preview",
     "start": "node serve.mjs",
     "test": "node --test serve.test.mjs",
