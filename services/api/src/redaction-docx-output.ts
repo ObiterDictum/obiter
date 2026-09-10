@@ -105,15 +105,29 @@ export async function buildRedactedDocx(
     }
   }
 
-  // Tracked-change content (w:delText, inserted/moved w:t) is excluded from
+  // Tracked-change content (w:delText, deleted/moved w:t) is excluded from
   // the document model and from extracted text, so spans can never address
-  // it. Refuse when it carries redacted text; the text fallback carries no
-  // tracked changes, so refusing here cannot leak.
+  // it. Refuse when it carries redacted text, in either direction: the
+  // change holding the whole span (residual copy survives the burn), or the
+  // change holding part of an accepted span ("Alice" in a w:del while
+  // "Alice Smith" burns to [REDACTED] still discloses the first name).
+  // The partial direction needs a floor — single characters of revision
+  // residue disclose nothing — so only subsumed changes of at least a few
+  // non-whitespace characters refuse. The text fallback carries no tracked
+  // changes, so refusing here cannot leak.
+  // Minimum subsumed revision text that still discloses something worth
+  // refusing over (first names and longer); shorter residue is noise.
+  const MIN_PARTIAL_TRACKED_CHARS = 4
   for (const change of document.trackedChanges.values()) {
     if (!change.wire.text) continue
-    const hit = affected.find(
-      (span) => span.text !== '' && change.wire.text.includes(span.text),
-    )
+    const hit = affected.find((span) => {
+      if (!span.text) return false
+      if (change.wire.text.includes(span.text)) return true
+      return (
+        change.wire.text.replace(/\s+/gu, '').length >=
+          MIN_PARTIAL_TRACKED_CHARS && span.text.includes(change.wire.text)
+      )
+    })
     if (hit) {
       throw new RedactionDocxBurnError(
         `The source holds redacted text inside a tracked change (${change.wire.elementName}), which redaction does not cover.`,
@@ -159,15 +173,29 @@ export async function buildRedactedDocx(
 /**
  * A redacted document naming its author in metadata has disclosed something.
  * Empty the authorship fields Word writes (dc:creator, cp:lastModifiedBy,
- * Company, Manager); dates, revision counts, and template names stay.
+ * Company, Manager) plus the other free-text docProps scalars that can carry
+ * client matter text unseen by the reviewer (dc:title, dc:subject,
+ * cp:keywords, dc:description, cp:category, cp:contentStatus, Template) and
+ * the arbitrary custom.xml properties. Counts, dates, revisions, producer
+ * ids, stats, and hyperlink bases stay: functional or non-textual. The
+ * thumbnail rendering is removed outright with its rel and content-type
+ * entry — a stale first-page preview would otherwise leak the unredacted
+ * document through the file manager. Coverage refuses non-trivial unexamined
+ * text in these parts before the burn, so stripping here only ever removes
+ * short residue the guard accepted.
  */
 async function stripDocumentAuthorship(input: Uint8Array) {
   const zip = await JSZip.loadAsync(input)
   const scrubs: Array<[RegExp, string]> = [
     [/(<[^>]*\bcreator[^>]*>)[\s\S]*?(<\/[^>]*>)/i, 'docProps/core.xml'],
     [/(<[^>]*\blastModifiedBy[^>]*>)[\s\S]*?(<\/[^>]*>)/i, 'docProps/core.xml'],
+    [
+      /(<[^>]*\b(?:title|subject|keywords|description|category|contentStatus)[^>]*>)[\s\S]*?(<\/[^>]*>)/gi,
+      'docProps/core.xml',
+    ],
     [/(<Company[^>]*>)[\s\S]*?(<\/Company[^>]*>)/, 'docProps/app.xml'],
     [/(<Manager[^>]*>)[\s\S]*?(<\/Manager[^>]*>)/, 'docProps/app.xml'],
+    [/(<Template[^>]*>)[\s\S]*?(<\/Template[^>]*>)/, 'docProps/app.xml'],
   ]
   for (const [pattern, partName] of scrubs) {
     const file = zip.file(partName)
@@ -175,6 +203,33 @@ async function stripDocumentAuthorship(input: Uint8Array) {
     const xml = await file.async('string')
     if (!pattern.test(xml)) continue
     zip.file(partName, xml.replace(pattern, '$1$2'))
+  }
+  if (zip.file('docProps/custom.xml')) {
+    zip.file(
+      'docProps/custom.xml',
+      '<?xml version="1.0" encoding="UTF-8"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"/>',
+    )
+  }
+  for (const name of Object.keys(zip.files)) {
+    if (/^docProps\/thumbnail\./i.test(name)) zip.remove(name)
+  }
+  const packageRels = zip.file('_rels/.rels')
+  if (packageRels) {
+    const xml = await packageRels.async('string')
+    const stripped = xml.replace(
+      /<Relationship\b[^>]*Target="[^"]*thumbnail[^"]*"[^>]*\/?>(?:<\/Relationship>)?/gi,
+      '',
+    )
+    if (stripped !== xml) zip.file('_rels/.rels', stripped)
+  }
+  const contentTypes = zip.file('[Content_Types].xml')
+  if (contentTypes) {
+    const xml = await contentTypes.async('string')
+    const stripped = xml.replace(
+      /<Override\b[^>]*PartName="[^"]*thumbnail[^"]*"[^>]*\/?>(?:<\/Override>)?/gi,
+      '',
+    )
+    if (stripped !== xml) zip.file('[Content_Types].xml', stripped)
   }
   return zip.generateAsync({ type: 'uint8array' })
 }

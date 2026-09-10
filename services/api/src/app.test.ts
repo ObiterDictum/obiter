@@ -2761,14 +2761,37 @@ describe('createApiApp degraded finalization acknowledgement', () => {
   })
 
   it('warns and persists the downgrade when .docx burn refuses tracked-change text', async () => {
-    const { extractDocumentContent } = await import('./document-extraction')
-    const sourceBytes = await readFile(
-      'test-fixtures/upload-corpus/letter-tracked-changes.docx',
-    )
-    const text = (await extractDocumentContent('docx', sourceBytes)).text
-    // The same name appears in the body and inside a tracked change, so an
-    // accepted body span forces the burn to refuse.
+    const { default: JSZip } = await import('jszip')
+    // The deletion duplicates live text exactly, so coverage passes it as
+    // examined — but the burn still refuses the residual tracked copy of
+    // the accepted span and falls back to text output.
     const target = 'Cartwright'
+    const text = `${target} attended.`
+    const zip = new JSZip()
+    zip.file(
+      '[Content_Types].xml',
+      '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+        '<Default Extension="xml" ContentType="application/xml"/>' +
+        '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+        '</Types>',
+    )
+    zip.file(
+      '_rels/.rels',
+      '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+        '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+        '</Relationships>',
+    )
+    zip.file(
+      'word/document.xml',
+      '<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body>' +
+        `<w:p><w:r><w:t>${text}</w:t></w:r></w:p>` +
+        `<w:p><w:del w:id="0" w:author="A" w:date="2024-01-01T00:00:00Z"><w:r><w:delText>${target}</w:delText></w:r></w:del></w:p>` +
+        '</w:body></w:document>',
+    )
+    const sourceBytes = Buffer.from(
+      await zip.generateAsync({ type: 'uint8array' }),
+    )
     expect(text).toContain(target)
     const start = text.indexOf(target)
     const readyRun = finalizedRunRow({

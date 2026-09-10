@@ -484,7 +484,7 @@ function trimLaidChars(chars: LaidChar[]) {
   return compact
 }
 
-function decodeXmlText(value: string) {
+export function decodeXmlText(value: string) {
   return value.replace(
     /&(lt|gt|amp|quot|apos|#\d+|#x[\da-f]+);/gi,
     (entity, code: string) => {
