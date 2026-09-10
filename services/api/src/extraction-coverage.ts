@@ -203,44 +203,54 @@ function bodyDrawingText(documentXml: string) {
   return parts.join('')
 }
 
+const CDATA_OPEN = '<![CDATA['
+const CDATA_CLOSE = ']]>'
+
 /**
  * Character data of a custom-vocabulary part (customXml, charts) or an
- * unclassified/altChunk XML part. A text-node scan, not a tag-strip regex:
- * single-pass `<...>` removal is the incomplete multi-character
- * sanitization CodeQL flags, and it is genuinely lossy
- * (`<<script>script>` strips to `<script>`, dropping smuggled text this
- * guard must count). Collecting the runs between markup cannot drop content
- * that way; `>` inside attribute values only adds residue chars, which is
- * the safe direction for a refuse-guard. CDATA content is real character
- * data, so it is included verbatim (entities there are literal, never
- * decoded).
+ * unclassified/altChunk XML part. An index-based scan, not a tag-strip
+ * regex: single-pass multi-character `<...>` removal is the incomplete
+ * multi-character sanitization CodeQL flags, and it is genuinely lossy
+ * (`<<script>script>` strips to `<script>`, dropping smuggled text this guard
+ * must count). This walk reads every run between markup tokens, so no run is
+ * dropped; `>` inside an attribute or comment is treated as text, which
+ * over-counts — the safe direction for a refuse-guard. CDATA content is real
+ * character data, so it is included verbatim (entities there are literal,
+ * never decoded).
  */
 function elementCharData(xml: string) {
-  const cdata: string[] = []
-  let markup = ''
+  const parts: string[] = []
+  const pushText = (text: string) => {
+    if (text !== '') parts.push(decodeXmlText(text))
+  }
   let cursor = 0
-  for (const match of xml.matchAll(/<!\[CDATA\[([\s\S]*?)\]\]>/g)) {
-    const index = match.index ?? cursor
-    markup += xml.slice(cursor, index)
-    cdata.push(match[1] ?? '')
-    cursor = index + match[0].length
+  while (cursor < xml.length) {
+    const lt = xml.indexOf('<', cursor)
+    if (lt === -1) {
+      pushText(xml.slice(cursor))
+      break
+    }
+    pushText(xml.slice(cursor, lt))
+    if (xml.startsWith(CDATA_OPEN, lt)) {
+      const body = lt + CDATA_OPEN.length
+      const end = xml.indexOf(CDATA_CLOSE, body)
+      if (end === -1) {
+        parts.push(xml.slice(body))
+        break
+      }
+      parts.push(xml.slice(body, end))
+      cursor = end + CDATA_CLOSE.length
+      continue
+    }
+    const gt = xml.indexOf('>', lt)
+    if (gt === -1) {
+      // Unterminated markup token: keep the remainder as text, never drop it.
+      pushText(xml.slice(lt))
+      break
+    }
+    cursor = gt + 1
   }
-  markup += xml.slice(cursor)
-  const texts: string[] = []
-  const firstTag = markup.indexOf('<')
-  if (firstTag === -1) {
-    texts.push(markup)
-  } else {
-    if (firstTag > 0) texts.push(markup.slice(0, firstTag))
-    for (const match of markup.matchAll(/>([^<]*)</g))
-      texts.push(match[1] ?? '')
-    const lastClose = markup.lastIndexOf('>')
-    const lastOpen = markup.lastIndexOf('<')
-    if (lastClose > lastOpen && lastClose + 1 < markup.length)
-      texts.push(markup.slice(lastClose + 1))
-    else if (lastOpen > lastClose) texts.push(markup.slice(lastOpen + 1))
-  }
-  return decodeXmlText(texts.join('')) + cdata.join('')
+  return parts.join('')
 }
 
 function docPropsScalarValues(xml: string) {

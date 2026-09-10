@@ -371,6 +371,30 @@ describe('extraction coverage denylist', () => {
     expect(regions[0]).toMatch(/^unexamined part word\/mystery\.xml/)
   })
 
+  it('refuses an unclassified part whose text run ends with a raw >', async () => {
+    const source = await packDocx({
+      parts: {
+        'word/mystery.xml':
+          '<?xml version="1.0" encoding="UTF-8"?><m:thing xmlns:m="urn:example:mystery">SECRET confidential client matter ref 998877 > end</m:thing>',
+      },
+    })
+    const regions = await findUncoveredDocxRegions(source, LIVE_TEXT)
+    expect(regions).toHaveLength(1)
+    expect(regions[0]).toMatch(/^unexamined part word\/mystery\.xml/)
+  })
+
+  it('refuses customXml text carrying a raw > in the final run', async () => {
+    const source = await packDocx({
+      parts: {
+        'customXml/item1.xml':
+          '<?xml version="1.0" encoding="UTF-8"?><b:Sources xmlns:b="http://schemas.openxmlformats.org/officeDocument/2006/bibliography"><b:Source><b:Title>SECRET confidential client matter ref 998877 > end</b:Title></b:Source></b:Sources>',
+      },
+    })
+    const regions = await findUncoveredDocxRegions(source, LIVE_TEXT)
+    expect(regions).toHaveLength(1)
+    expect(regions[0]).toMatch(/^customXml content in customXml\/item1\.xml/)
+  })
+
   it('refuses an unclassified binary part', async () => {
     const source = await packDocx({
       parts: {
