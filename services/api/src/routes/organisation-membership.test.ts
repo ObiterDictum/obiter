@@ -324,18 +324,23 @@ class MembershipStore {
         ),
       }
     }
+    if (text.includes('select id from users') && text.includes('for update')) {
+      const organisationId = String(parameters[0])
+      return {
+        rows: [...this.users.values()]
+          .filter(
+            (user) =>
+              user.organisationId === organisationId && user.role === 'owner',
+          )
+          .sort((left, right) => left.id.localeCompare(right.id))
+          .map((user) => ({ id: user.id })),
+      }
+    }
     if (text.includes('select role')) {
       const user = this.users.get(String(parameters[0]))
       if (!user || user.organisationId !== parameters[1] || !user.role)
         return { rows: [] }
       return { rows: [{ role: user.role }] }
-    }
-    if (text.includes('select count(*)')) {
-      const count = [...this.users.values()].filter(
-        (user) =>
-          user.organisationId === parameters[0] && user.role === 'owner',
-      ).length
-      return { rows: [{ count: String(count) }] }
     }
     if (
       text.startsWith('update users') &&
@@ -898,6 +903,52 @@ describe('organisation membership routes', () => {
     expect(response.status).toBe(403)
     expect(store.invites).toEqual([])
     expect(store.auditLogs).toEqual([])
+  })
+
+  it('refuses removing the last owner', async () => {
+    const store = new MembershipStore()
+    const response = await appFor(store, {
+      id: 'usr_owner',
+      email: 'owner@example.com',
+      emailVerified: true,
+      organisationId: 'org_a',
+      role: 'owner',
+    }).request('/api/organisations/org_a/members/usr_owner', {
+      method: 'DELETE',
+    })
+    expect(response.status).toBe(403)
+    expect(await response.json()).toMatchObject({
+      error: {
+        code: 'forbidden',
+        message: 'The last owner cannot be removed.',
+      },
+    })
+    expect(store.users.get('usr_owner')).toMatchObject({
+      organisationId: 'org_a',
+      role: 'owner',
+    })
+  })
+
+  it('removes a member when the organisation has an owner', async () => {
+    const store = new MembershipStore()
+    const response = await appFor(store, {
+      id: 'usr_owner',
+      email: 'owner@example.com',
+      emailVerified: true,
+      organisationId: 'org_a',
+      role: 'owner',
+    }).request('/api/organisations/org_a/members/usr_admin', {
+      method: 'DELETE',
+    })
+    expect(response.status).toBe(200)
+    expect(await response.json()).toEqual({
+      removed: true,
+      userId: 'usr_admin',
+    })
+    expect(store.users.get('usr_admin')).toMatchObject({
+      organisationId: null,
+      role: null,
+    })
   })
 
   it('audits an invite revocation with actor and granted role', async () => {

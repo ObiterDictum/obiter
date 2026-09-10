@@ -483,6 +483,29 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
       const client = await pool.connect()
       try {
         await client.query('begin')
+        // Lock the organisation's owner rows before reading and counting them.
+        // A target-row lock only serialises removals of the same user, so two
+        // removals of different owners never conflict and can both read a count
+        // that still includes the other. Locking the owner set first makes the
+        // count and the removal one serial decision; the fixed `order by id`
+        // gives concurrent sibling removals a deterministic lock order so they
+        // cannot deadlock each other. An `organisations`-row mutex was rejected:
+        // the invite-accept path updates `users` and only then deletes the
+        // vacated organisation, so taking the organisation lock before the user
+        // locks here would invert that order and deadlock against accept. A
+        // concurrent invite acceptance can only add an owner and never locks
+        // the existing owner rows, so it cannot create an ownerless
+        // organisation.
+        const owners = await client.query<{ id: string }>(
+          `
+            select id
+            from users
+            where "organisationId" = $1 and role = 'owner'
+            order by id
+            for update
+          `,
+          [caller.organisationId],
+        )
         const target = await client.query<{ role: UserRole }>(
           `
             select role
@@ -502,24 +525,14 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
             404,
           )
         }
-        if (targetRow.role === 'owner') {
-          const owners = await client.query<{ count: string }>(
-            `
-              select count(*)::text as count
-              from users
-              where "organisationId" = $1 and role = 'owner'
-            `,
-            [caller.organisationId],
+        if (targetRow.role === 'owner' && owners.rows.length <= 1) {
+          await client.query('rollback')
+          return errorResponse(
+            c,
+            'forbidden',
+            'The last owner cannot be removed.',
+            403,
           )
-          if (Number(owners.rows[0]?.count ?? 0) <= 1) {
-            await client.query('rollback')
-            return errorResponse(
-              c,
-              'forbidden',
-              'The last owner cannot be removed.',
-              403,
-            )
-          }
         }
         await client.query(
           `

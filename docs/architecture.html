@@ -2613,7 +2613,11 @@
                     DELETE /api/organisations/:organisationId/members/:userId
                   </td>
                   <td class="id">organisations.ts</td>
-                  <td>Owner-only removal of a member; last owner is refused</td>
+                  <td>
+                    Owner-only removal of a member; last owner is refused.
+                    Concurrent owner removals serialise on the
+                    organisation&apos;s owner rows.
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">GET /api/invites/preview</td>

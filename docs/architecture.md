@@ -1099,13 +1099,20 @@ remove the first and can then remove every other owner. That is defensible for
 offboarding and unavoidable for a two-owner firm, but it gives one compromised
 owner the whole tenant, and removal should arguably need a different owner's
 assent rather than any single owner's. That is a product decision and is not
-implemented here. Two concrete gaps in the surrounding guard are recorded so
-they are not lost: first, member removal writes no audit row at all, so an
-owner eviction is currently invisible in the audit log — the highest-value
-low-risk follow-up; second, the owner-count check is read without a lock, so
-two simultaneous removals of the last two owners can each observe two owners
-and both commit, leaving the organisation with no owner. The clamp in this
-change makes an ownerless organisation unrecoverable through the API, since
-only an owner can now mint an owner invite. Both are reported, not fixed, to
-keep this change to the escalation decision; the decision to leave them is
-explicit rather than silent.
+implemented here. The removal transaction now locks the organisation's owner
+rows with `order by id` before it reads and counts them, so the count and the
+removal are one serial decision and two simultaneous removals of the last two
+owners can no longer both commit. Locking the owner rows rather than the
+`organisations` row is deliberate: the invite-accept path updates `users` and
+only then deletes the vacated organisation, so taking an organisation-row lock
+before the user locks here would invert that order and deadlock against
+accept. A concurrent invite acceptance can only add an owner and never locks
+the existing owner rows, so it cannot create an ownerless organisation. That
+matters because the clamp in this change is what made the race unrecoverable
+through the API: before it an ownerless organisation could be recovered by an
+admin minting an owner invite, and after it only an owner can grant owner.
+One concrete gap in the surrounding guard remains and is recorded so it is not
+lost: member removal writes no audit row at all, so an owner eviction is
+currently invisible in the audit log — the highest-value low-risk follow-up.
+It is reported, not fixed, to keep this change to the escalation decision; the
+decision to leave it is explicit rather than silent.
