@@ -211,9 +211,10 @@ const CDATA_CLOSE = ']]>'
  * unclassified/altChunk XML part. An index-based scan, not a tag-strip
  * regex: single-pass multi-character `<...>` removal is the incomplete
  * multi-character sanitization CodeQL flags, and it is genuinely lossy
- * (`<<script>script>` strips to `<script>`, dropping smuggled text this guard
- * must count). This walk reads every run between markup tokens, so no run is
- * dropped; `>` inside an attribute or comment is treated as text, which
+ * (`<x><![CDATA[secret]]></x>` loses `secret` entirely, because the whole
+ * CDATA token matches `<[^>]*>`). This walk reads every run between markup
+ * tokens, so no run is dropped; `>` inside an attribute or comment is treated
+ * as text, which
  * over-counts — the safe direction for a refuse-guard. CDATA content is real
  * character data, so it is included verbatim (entities there are literal,
  * never decoded).
