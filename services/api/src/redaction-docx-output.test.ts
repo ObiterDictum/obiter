@@ -45,6 +45,9 @@ async function makeDocx(options?: {
   body?: string
   footnotes?: string | null
   comments?: string | null
+  coreXml?: string
+  appXml?: string
+  extraParts?: Record<string, string | Uint8Array>
 }) {
   const zip = new JSZip()
   const withFootnotes = options?.footnotes !== null
@@ -68,9 +71,11 @@ async function makeDocx(options?: {
   if (withFootnotes)
     zip.file('word/footnotes.xml', options?.footnotes ?? FOOTNOTES_XML)
   if (withComments) zip.file('word/comments.xml', options.comments ?? '')
-  zip.file('docProps/core.xml', CORE_XML)
-  zip.file('docProps/app.xml', APP_XML)
+  zip.file('docProps/core.xml', options?.coreXml ?? CORE_XML)
+  zip.file('docProps/app.xml', options?.appXml ?? APP_XML)
   zip.file('word/styles.xml', STYLES_XML)
+  for (const [name, data] of Object.entries(options?.extraParts ?? {}))
+    zip.file(name, data)
   return Buffer.from(await zip.generateAsync({ type: 'uint8array' }))
 }
 
@@ -247,6 +252,98 @@ describe('buildRedactedDocx', () => {
         tokenMap: {},
       }),
     ).rejects.toBeInstanceOf(RedactionDocxBurnError)
+  })
+
+  it('refuses when a tracked deletion holds part of an accepted span', async () => {
+    const source = await makeDocx({
+      body: `<w:p><w:r><w:t>Alice Smith attended.</w:t></w:r></w:p><w:p><w:del w:id="0" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:delText>Alice</w:delText></w:r></w:del></w:p>`,
+    })
+    const text = 'Alice Smith attended.'
+    const spans = [spanAt(text, 'Alice Smith', 1)]
+    await expect(
+      buildRedactedDocx({
+        docxBytes: source,
+        text,
+        spans,
+        decisions: {
+          [spans[0]!.id]: {
+            decision: 'accept',
+            decidedBy: 'usr_1',
+            decidedAt: '2026-01-01T00:00:00.000Z',
+          },
+        },
+        outputMode: 'redacted',
+        tokenMap: {},
+      }),
+    ).rejects.toBeInstanceOf(RedactionDocxBurnError)
+  })
+
+  it('ignores trivial revision residue inside an accepted span', async () => {
+    const source = await makeDocx({
+      body: `<w:p><w:r><w:t>Redacted word here.</w:t></w:r></w:p><w:p><w:del w:id="0" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:delText>ed</w:delText></w:r></w:del></w:p>`,
+      footnotes: null,
+    })
+    const text = 'Redacted word here.'
+    const spans = [spanAt(text, 'Redacted', 1)]
+    const output = await buildRedactedDocx({
+      docxBytes: source,
+      text,
+      spans,
+      decisions: {
+        [spans[0]!.id]: {
+          decision: 'accept',
+          decidedBy: 'usr_1',
+          decidedAt: '2026-01-01T00:00:00.000Z',
+        },
+      },
+      outputMode: 'redacted',
+      tokenMap: {},
+    })
+    const entries = await zipEntries(output)
+    expect(entries.get('word/document.xml')).toContain('[REDACTED]')
+  })
+
+  it('strips docProps text scalars, custom properties, and the thumbnail', async () => {
+    const subject = 'Alexandra Pemberton-Smith'
+    const source = await makeDocx({
+      body: `<w:p><w:r><w:t>Dear ${NAME}.</w:t></w:r></w:p>`,
+      footnotes: null,
+      coreXml: `<?xml version="1.0" encoding="UTF-8"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/"><dc:title>Letter about ${NAME}</dc:title><dc:subject>${subject}</dc:subject><dc:creator>${NAME}</dc:creator><cp:lastModifiedBy>${NAME}</cp:lastModifiedBy><cp:revision>2</cp:revision></cp:coreProperties>`,
+      appXml: `<?xml version="1.0" encoding="UTF-8"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"><Template>C:/Clients/Acme/letter.dotx</Template><Company>${NAME} Ltd</Company><Manager>Someone Else</Manager></Properties>`,
+      extraParts: {
+        'docProps/custom.xml':
+          '<?xml version="1.0" encoding="UTF-8"?><Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/custom-properties"><property name="Client"><vt:lpwstr xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">Alexandra</vt:lpwstr></property></Properties>',
+        'docProps/thumbnail.jpeg': new Uint8Array([1, 2, 3, 4]),
+      },
+    })
+    const text = `Dear ${NAME}.`
+    const spans = [spanAt(text, NAME, 1)]
+    const output = await buildRedactedDocx({
+      docxBytes: source,
+      text,
+      spans,
+      decisions: {
+        [spans[0]!.id]: {
+          decision: 'accept',
+          decidedBy: 'usr_1',
+          decidedAt: '2026-01-01T00:00:00.000Z',
+        },
+      },
+      outputMode: 'redacted',
+      tokenMap: {},
+    })
+    const entries = await zipEntries(output)
+    for (const [name, xml] of entries) {
+      expect(xml, `name survives in ${name}`).not.toContain(NAME)
+      expect(xml, `subject survives in ${name}`).not.toContain(subject)
+    }
+    expect(entries.get('docProps/core.xml')).toContain('<dc:title></dc:title>')
+    expect(entries.get('docProps/core.xml')).toContain(
+      '<cp:revision>2</cp:revision>',
+    )
+    expect(entries.get('docProps/app.xml')).toContain('<Template></Template>')
+    expect(entries.get('docProps/custom.xml')).not.toContain('Alexandra')
+    expect(entries.has('docProps/thumbnail.jpeg')).toBe(false)
   })
 
   it('refuses comment-bearing documents', async () => {

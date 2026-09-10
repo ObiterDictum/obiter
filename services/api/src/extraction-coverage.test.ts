@@ -76,11 +76,12 @@ describe('extraction coverage guard', () => {
     expect(regions[0]).toMatch(/^footnotes \(\d+ chars not examined\)$/)
   })
 
-  it('passes clean documents (plain, table, tracked-changes)', async () => {
+  it('passes clean documents (plain, table, footnotes, image)', async () => {
     for (const name of [
       'letter-plain.docx',
       'letter-table.docx',
-      'letter-tracked-changes.docx',
+      'letter-footnotes-numbering.docx',
+      'letter-image.docx',
     ]) {
       const source = await corpus(name)
       const { text } = await extractDocumentContent('docx', source)
@@ -89,6 +90,18 @@ describe('extraction coverage guard', () => {
         name,
       ).resolves.toEqual([])
     }
+  })
+
+  it('refuses the tracked-changes fixture deletion the reviewer never sees', async () => {
+    const source = await corpus('letter-tracked-changes.docx')
+    const { text } = await extractDocumentContent('docx', source)
+    expect(text).toContain('Inserted on review')
+    expect(text).not.toContain('Deleted on review')
+    const regions = await findUncoveredDocxRegions(source, text)
+    expect(regions).toHaveLength(1)
+    expect(regions[0]).toMatch(
+      /^tracked changes in word\/document\.xml \(\d+ chars not examined\)$/,
+    )
   })
 
   it('counts body textbox text as unexamined', () => {
@@ -217,5 +230,247 @@ describe('extraction coverage guard', () => {
         extractedText: 'anything',
       }),
     ).resolves.toEqual([])
+  })
+})
+
+const COVERAGE_W_NS =
+  'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+
+function coverageDocXml(body: string) {
+  return (
+    `<?xml version="1.0" encoding="UTF-8"?>` +
+    `<w:document xmlns:w="${COVERAGE_W_NS}"><w:body>${body}` +
+    `<w:p><w:r><w:t>Live body text for presence checks.</w:t></w:r></w:p>` +
+    `</w:body></w:document>`
+  )
+}
+
+async function packDocx(options?: {
+  body?: string
+  parts?: Record<string, string | Buffer>
+  coreXml?: string
+}) {
+  const { default: JSZip } = await import('jszip')
+  const zip = new JSZip()
+  zip.file(
+    '[Content_Types].xml',
+    '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">' +
+      '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>' +
+      '<Default Extension="xml" ContentType="application/xml"/>' +
+      '<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>' +
+      '</Types>',
+  )
+  zip.file(
+    '_rels/.rels',
+    '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>' +
+      '</Relationships>',
+  )
+  zip.file('word/document.xml', coverageDocXml(options?.body ?? ''))
+  if (options?.coreXml) zip.file('docProps/core.xml', options.coreXml)
+  for (const [name, data] of Object.entries(options?.parts ?? {}))
+    zip.file(name, data)
+  return Buffer.from(await zip.generateAsync({ type: 'uint8array' }))
+}
+
+const LIVE_TEXT = 'Live body text for presence checks.'
+
+describe('extraction coverage denylist', () => {
+  it('refuses text living only in a tracked deletion', async () => {
+    const source = await packDocx({
+      body:
+        `<w:p><w:del w:id="0" w:author="A" w:date="2024-01-01T00:00:00Z">` +
+        `<w:r><w:delText>HIDDENSECRET</w:delText></w:r></w:del></w:p>`,
+    })
+    const regions = await findUncoveredDocxRegions(source, LIVE_TEXT)
+    expect(regions).toHaveLength(1)
+    expect(regions[0]).toMatch(/^tracked changes in word\/document\.xml/)
+  })
+
+  it('passes a tracked deletion whose text is also live', async () => {
+    const source = await packDocx({
+      body:
+        `<w:p><w:del w:id="0" w:author="A" w:date="2024-01-01T00:00:00Z">` +
+        `<w:r><w:delText>Live body text for presence checks.</w:delText></w:r></w:del></w:p>`,
+    })
+    await expect(findUncoveredDocxRegions(source, LIVE_TEXT)).resolves.toEqual(
+      [],
+    )
+  })
+
+  it('refuses moved-from text extraction never reads', async () => {
+    const source = await packDocx({
+      body:
+        `<w:p><w:moveFrom w:id="0" w:author="A" w:date="2024-01-01T00:00:00Z" w:name="move1">` +
+        `<w:r><w:t>Moved away secret prose about the settlement.</w:t></w:r></w:moveFrom></w:p>`,
+    })
+    const regions = await findUncoveredDocxRegions(source, LIVE_TEXT)
+    expect(regions).toHaveLength(1)
+    expect(regions[0]).toMatch(/^tracked changes in word\/document\.xml/)
+  })
+
+  it('refuses content living only in an altChunk part', async () => {
+    const source = await packDocx({
+      parts: {
+        'word/_rels/document.xml.rels':
+          '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+          '<Relationship Id="rIdChunk" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/aFChunk" Target="afchunk.mht"/>' +
+          '</Relationships>',
+        'word/afchunk.mht':
+          'MIME-Version: 1.0\r\n\r\n<html><body><p>Secret embedded chunk content about the merger.</p></body></html>',
+      },
+    })
+    const regions = await findUncoveredDocxRegions(source, LIVE_TEXT)
+    expect(regions).toHaveLength(1)
+    expect(regions[0]).toMatch(/^altChunk content in word\/afchunk\.mht/)
+  })
+
+  it('refuses a client name living only in dc:subject', async () => {
+    const source = await packDocx({
+      coreXml:
+        '<?xml version="1.0" encoding="UTF-8"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/">' +
+        '<dc:subject>Alexandra Pemberton-Smith</dc:subject></cp:coreProperties>',
+    })
+    const regions = await findUncoveredDocxRegions(source, LIVE_TEXT)
+    expect(regions).toHaveLength(1)
+    expect(regions[0]).toMatch(/^docProps subject/)
+  })
+
+  it('passes a trivial docProps subject the burn strips', async () => {
+    const source = await packDocx({
+      coreXml:
+        '<?xml version="1.0" encoding="UTF-8"?><cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties" xmlns:dc="http://purl.org/dc/elements/1.1/">' +
+        '<dc:subject>Draft</dc:subject></cp:coreProperties>',
+    })
+    await expect(findUncoveredDocxRegions(source, LIVE_TEXT)).resolves.toEqual(
+      [],
+    )
+  })
+
+  it('refuses an unclassified part type carrying text', async () => {
+    const source = await packDocx({
+      parts: {
+        'word/mystery.xml':
+          '<?xml version="1.0" encoding="UTF-8"?><m:thing xmlns:m="urn:example:mystery">Smuggled content nobody classifies here</m:thing>',
+      },
+    })
+    const regions = await findUncoveredDocxRegions(source, LIVE_TEXT)
+    expect(regions).toHaveLength(1)
+    expect(regions[0]).toMatch(/^unexamined part word\/mystery\.xml/)
+  })
+
+  it('refuses nested-markup smuggling in an unclassified part', async () => {
+    const source = await packDocx({
+      parts: {
+        'word/mystery.xml':
+          '<?xml version="1.0" encoding="UTF-8"?><m:thing xmlns:m="urn:example:mystery"><<script>script>Smuggled content nobody classifies here</script></m:thing>',
+      },
+    })
+    const regions = await findUncoveredDocxRegions(source, LIVE_TEXT)
+    expect(regions).toHaveLength(1)
+    expect(regions[0]).toMatch(/^unexamined part word\/mystery\.xml/)
+  })
+
+  it('refuses an unclassified part whose text run ends with a raw >', async () => {
+    // Well-formed variant: the raw > sits in the final run but a closing tag
+    // follows, so even the pre-fix elementCharData counted the text after it.
+    const source = await packDocx({
+      parts: {
+        'word/mystery.xml':
+          '<?xml version="1.0" encoding="UTF-8"?><m:thing xmlns:m="urn:example:mystery">SECRET confidential client matter ref 998877 > end</m:thing>',
+      },
+    })
+    const regions = await findUncoveredDocxRegions(source, LIVE_TEXT)
+    expect(regions).toHaveLength(1)
+    expect(regions[0]).toMatch(/^unexamined part word\/mystery\.xml/)
+  })
+
+  it('refuses an unclosed unclassified part whose final text run holds a raw >', async () => {
+    // Bypass variant the two well-formed tests above cannot catch: with no
+    // closing tag the raw > is the part's LAST >, so the pre-fix scan took
+    // ' end' as the trailing run (3 non-ws chars, under the 20 floor) and the
+    // guard returned []. The text carries 43 non-ws chars and must refuse.
+    const source = await packDocx({
+      parts: {
+        'word/mystery.xml':
+          '<m:thing>SECRET confidential client matter ref 998877 > end',
+      },
+    })
+    const regions = await findUncoveredDocxRegions(source, LIVE_TEXT)
+    expect(regions).toHaveLength(1)
+    expect(regions[0]).toMatch(/^unexamined part word\/mystery\.xml/)
+  })
+
+  it('refuses customXml text carrying a raw > in the final run', async () => {
+    // Well-formed variant: the closing </b:Title> follows the raw >, so the
+    // pre-fix scan still found the text between the tags.
+    const source = await packDocx({
+      parts: {
+        'customXml/item1.xml':
+          '<?xml version="1.0" encoding="UTF-8"?><b:Sources xmlns:b="http://schemas.openxmlformats.org/officeDocument/2006/bibliography"><b:Source><b:Title>SECRET confidential client matter ref 998877 > end</b:Title></b:Source></b:Sources>',
+      },
+    })
+    const regions = await findUncoveredDocxRegions(source, LIVE_TEXT)
+    expect(regions).toHaveLength(1)
+    expect(regions[0]).toMatch(/^customXml content in customXml\/item1\.xml/)
+  })
+
+  it('refuses unclosed customXml whose final text run holds a raw >', async () => {
+    // Bypass variant: no closing tag, so the raw > is the part's last >. The
+    // pre-fix scan returned ' end' (3 non-ws chars, under the floor) and the
+    // guard returned []; the text carries 43 non-ws chars and must refuse.
+    const source = await packDocx({
+      parts: {
+        'customXml/item1.xml':
+          '<b:Title>SECRET confidential client matter ref 998877 > end',
+      },
+    })
+    const regions = await findUncoveredDocxRegions(source, LIVE_TEXT)
+    expect(regions).toHaveLength(1)
+    expect(regions[0]).toMatch(/^customXml content in customXml\/item1\.xml/)
+  })
+
+  it('refuses an unclassified binary part', async () => {
+    const source = await packDocx({
+      parts: {
+        'word/embeddings/oleObject1.bin': Buffer.from([1, 2, 3, 4]),
+      },
+    })
+    const regions = await findUncoveredDocxRegions(source, LIVE_TEXT)
+    expect(regions).toHaveLength(1)
+    expect(regions[0]).toMatch(/bytes never examined/)
+  })
+
+  it('refuses customXml carrying real text but passes the empty stub', async () => {
+    const stub = await packDocx({
+      parts: {
+        'customXml/item1.xml':
+          '<?xml version=\'1.0\' encoding=\'UTF-8\' standalone=\'yes\'?><b:Sources xmlns:b="http://schemas.openxmlformats.org/officeDocument/2006/bibliography" SelectedStyle="/APA.XSL" StyleName="APA"/>',
+      },
+    })
+    await expect(findUncoveredDocxRegions(stub, LIVE_TEXT)).resolves.toEqual([])
+    const loaded = await packDocx({
+      parts: {
+        'customXml/item1.xml':
+          "<?xml version='1.0' encoding='UTF-8'?><b:Sources xmlns:b=\"http://schemas.openxmlformats.org/officeDocument/2006/bibliography\"><b:Source><b:Title>Secret client project name here</b:Title></b:Source></b:Sources>",
+      },
+    })
+    const regions = await findUncoveredDocxRegions(loaded, LIVE_TEXT)
+    expect(regions).toHaveLength(1)
+    expect(regions[0]).toMatch(/^customXml content in customXml\/item1\.xml/)
+  })
+
+  it('refuses drawing-textbox prose mammoth drops', async () => {
+    const source = await packDocx({
+      body:
+        '<w:p><w:r><w:drawing><wp:inline xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">' +
+        '<a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">' +
+        '<a:graphicData><wps:txbx xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape">' +
+        '<a:t>Drawing textbox secret prose about the account.</a:t>' +
+        '</wps:txbx></a:graphicData></a:graphic></wp:inline></w:drawing></w:r></w:p>',
+    })
+    const regions = await findUncoveredDocxRegions(source, LIVE_TEXT)
+    expect(regions).toHaveLength(1)
+    expect(regions[0]).toMatch(/^drawing textboxes/)
   })
 })
