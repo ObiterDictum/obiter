@@ -128,6 +128,20 @@ export async function requireOwnerRole(
   return user
 }
 
+const ROLE_RANK: Record<UserRole, number> = { member: 0, admin: 1, owner: 2 }
+
+/**
+ * An actor may grant at most the role they themselves hold. Owner is a strict
+ * tier above admin — rename, organisation update and member removal all
+ * require `requireOwnerRole` — so granting owner is precisely the action that
+ * dissolves that tier. Callers must reject a grant above the actor's role
+ * loudly rather than downgrade it, because a silent grant would give the
+ * invitee a different role than the actor asked for.
+ */
+export function canGrantRole(actor: UserRole, granted: UserRole): boolean {
+  return ROLE_RANK[granted] <= ROLE_RANK[actor]
+}
+
 function authzError(
   c: AuthzContext,
   code: ApiErrorCode,

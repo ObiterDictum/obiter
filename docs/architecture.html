@@ -2463,7 +2463,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>21 migrations, 0001 to 0022, 0008 withdrawn</dd>
+                <dd>22 migrations, 0001 to 0023, 0008 withdrawn</dd>
               </dl>
             </article>
           </div>
@@ -2589,7 +2589,9 @@
                   <td class="id">organisations.ts</td>
                   <td>
                     Owner or admin list and create organisation invites. Path id
-                    must match the caller&apos;s organisation.
+                    must match the caller&apos;s organisation. A granted role
+                    may not exceed the caller&apos;s own role, so an admin
+                    cannot grant owner.
                   </td>
                 </tr>
                 <tr>

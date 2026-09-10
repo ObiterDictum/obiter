@@ -2,9 +2,15 @@ import { Hono } from 'hono'
 import type { Pool } from 'pg'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { UserRole } from '@obiter/contracts'
+import { sendEmail } from '../auth'
 import type { AuthzVariables } from '../authz'
 import { createTestApiEnv } from '../test-api-env'
 import { createOrganisationsRoutes } from './organisations'
+
+vi.mock('../auth', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../auth')>()
+  return { ...actual, sendEmail: vi.fn(actual.sendEmail) }
+})
 
 interface UserRow {
   id: string
@@ -45,8 +51,10 @@ class MembershipStore {
   matters: MatterRow[] = []
   auditLogs: {
     organisation_id: string | null
+    user_id?: string | null
     action?: string
     entity_id?: string
+    metadata_json?: string
   }[] = []
   nextInvite = 1
   private snapshot: string | null = null
@@ -116,8 +124,10 @@ class MembershipStore {
       matters: MatterRow[]
       auditLogs: {
         organisation_id: string | null
+        user_id?: string | null
         action?: string
         entity_id?: string
+        metadata_json?: string
       }[]
       nextInvite: number
     }
@@ -238,8 +248,10 @@ class MembershipStore {
     if (text.startsWith('insert into audit_logs')) {
       this.auditLogs.push({
         organisation_id: String(parameters[0]),
+        user_id: parameters[1] === null ? null : String(parameters[1] ?? ''),
         entity_id: String(parameters[3]),
         action: String(parameters[4]),
+        metadata_json: String(parameters[5] ?? ''),
       })
       return { rows: [] }
     }
@@ -274,7 +286,9 @@ class MembershipStore {
       )
       if (!invite) return { rows: [] }
       invite.revoked_at = new Date().toISOString()
-      return { rows: [{ id: invite.id }] }
+      return {
+        rows: [{ id: invite.id, email: invite.email, role: invite.role }],
+      }
     }
     if (
       text.startsWith('update organisation_invites') &&
@@ -728,7 +742,238 @@ describe('organisation membership routes', () => {
       pendingOrganisationName: null,
     })
     expect(store.invites.some((invite) => invite.accepted_at)).toBe(true)
-    expect(store.auditLogs).toEqual([{ organisation_id: null }])
+    expect(store.auditLogs).toMatchObject([
+      { organisation_id: null },
+      {
+        organisation_id: 'org_a',
+        user_id: 'usr_owner',
+        entity_id: 'inv_1',
+        action: 'organisation.invite_create',
+      },
+      {
+        organisation_id: 'org_a',
+        user_id: 'usr_invitee',
+        entity_id: 'inv_1',
+        action: 'organisation.invite_accept',
+      },
+    ])
+  })
+
+  it('refuses an admin invite that grants owner and writes nothing', async () => {
+    const store = new MembershipStore()
+    const response = await appFor(store, {
+      id: 'usr_admin',
+      email: 'admin@example.com',
+      emailVerified: true,
+      organisationId: 'org_a',
+      role: 'admin',
+    }).request(
+      '/api/organisations/org_a/invites',
+      json({ email: 'invitee@example.com', role: 'owner' }),
+    )
+    expect(response.status).toBe(403)
+    expect(await response.json()).toMatchObject({
+      error: { code: 'forbidden' },
+    })
+    expect(store.invites).toEqual([])
+    expect(store.auditLogs).toEqual([])
+  })
+
+  it('audits an admin granting a member invite without elevating it', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const store = new MembershipStore()
+    const response = await appFor(store, {
+      id: 'usr_admin',
+      email: 'admin@example.com',
+      emailVerified: true,
+      organisationId: 'org_a',
+      role: 'admin',
+    }).request(
+      '/api/organisations/org_a/invites',
+      json({ email: 'invitee@example.com', role: 'member' }),
+    )
+    expect(response.status).toBe(201)
+    const invite = store.invites.find(
+      (row) => row.email === 'invitee@example.com',
+    )
+    expect(invite?.role).toBe('member')
+    const createAudit = store.auditLogs.find(
+      (log) => log.action === 'organisation.invite_create',
+    )
+    expect(createAudit).toMatchObject({
+      organisation_id: 'org_a',
+      user_id: 'usr_admin',
+    })
+    expect(JSON.parse(createAudit?.metadata_json ?? '{}')).toMatchObject({
+      email: 'invitee@example.com',
+      role: 'member',
+    })
+  })
+
+  it('lets an admin grant admin and audits the grant through acceptance', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const store = new MembershipStore()
+    const created = await appFor(store, {
+      id: 'usr_admin',
+      email: 'admin@example.com',
+      emailVerified: true,
+      organisationId: 'org_a',
+      role: 'admin',
+    }).request(
+      '/api/organisations/org_a/invites',
+      json({ email: 'invitee@example.com', role: 'admin' }),
+    )
+    expect(created.status).toBe(201)
+    const token = tokenFromInviteLog()
+    const accepted = await appFor(store, {
+      id: 'usr_invitee',
+      email: 'invitee@example.com',
+      emailVerified: true,
+      organisationId: 'org_b',
+      role: 'owner',
+    }).request('/api/invites/accept', json({ token }))
+    expect(accepted.status).toBe(200)
+    expect(store.users.get('usr_invitee')).toMatchObject({
+      organisationId: 'org_a',
+      role: 'admin',
+    })
+    const createAudit = store.auditLogs.find(
+      (log) => log.action === 'organisation.invite_create',
+    )
+    expect(createAudit).toMatchObject({ user_id: 'usr_admin' })
+    expect(JSON.parse(createAudit?.metadata_json ?? '{}')).toMatchObject({
+      role: 'admin',
+    })
+    const acceptAudit = store.auditLogs.find(
+      (log) => log.action === 'organisation.invite_accept',
+    )
+    expect(acceptAudit).toMatchObject({ user_id: 'usr_invitee' })
+    expect(JSON.parse(acceptAudit?.metadata_json ?? '{}')).toMatchObject({
+      email: 'invitee@example.com',
+      role: 'admin',
+    })
+  })
+
+  it('lets an owner invite another owner', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const store = new MembershipStore()
+    const created = await appFor(store, {
+      id: 'usr_owner',
+      email: 'owner@example.com',
+      emailVerified: true,
+      organisationId: 'org_a',
+      role: 'owner',
+    }).request(
+      '/api/organisations/org_a/invites',
+      json({ email: 'invitee@example.com', role: 'owner' }),
+    )
+    expect(created.status).toBe(201)
+    const token = tokenFromInviteLog()
+    const accepted = await appFor(store, {
+      id: 'usr_invitee',
+      email: 'invitee@example.com',
+      emailVerified: true,
+      organisationId: 'org_b',
+      role: 'owner',
+    }).request('/api/invites/accept', json({ token }))
+    expect(accepted.status).toBe(200)
+    expect(store.users.get('usr_invitee')).toMatchObject({
+      organisationId: 'org_a',
+      role: 'owner',
+    })
+  })
+
+  it('refuses invites from a member', async () => {
+    const store = new MembershipStore()
+    const response = await appFor(store, {
+      id: 'usr_member',
+      email: 'member@example.com',
+      emailVerified: true,
+      organisationId: 'org_a',
+      role: 'member',
+    }).request(
+      '/api/organisations/org_a/invites',
+      json({ email: 'invitee@example.com', role: 'member' }),
+    )
+    expect(response.status).toBe(403)
+    expect(store.invites).toEqual([])
+    expect(store.auditLogs).toEqual([])
+  })
+
+  it('audits an invite revocation with actor and granted role', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const store = new MembershipStore()
+    const adminApp = appFor(store, {
+      id: 'usr_admin',
+      email: 'admin@example.com',
+      emailVerified: true,
+      organisationId: 'org_a',
+      role: 'admin',
+    })
+    await adminApp.request(
+      '/api/organisations/org_a/invites',
+      json({ email: 'invitee@example.com', role: 'member' }),
+    )
+    const invite = store.invites.find(
+      (row) => row.email === 'invitee@example.com',
+    )
+    const revoked = await adminApp.request(
+      `/api/organisations/org_a/invites/${invite?.id ?? ''}`,
+      { method: 'DELETE' },
+    )
+    expect(revoked.status).toBe(200)
+    const revokeAudit = store.auditLogs.find(
+      (log) => log.action === 'organisation.invite_revoke',
+    )
+    expect(revokeAudit).toMatchObject({
+      organisation_id: 'org_a',
+      user_id: 'usr_admin',
+      entity_id: invite?.id,
+    })
+    expect(JSON.parse(revokeAudit?.metadata_json ?? '{}')).toMatchObject({
+      email: 'invitee@example.com',
+      role: 'member',
+    })
+  })
+
+  it('withdraws the invite and audits the revoke when delivery fails', async () => {
+    vi.spyOn(console, 'info').mockImplementation(() => undefined)
+    const store = new MembershipStore()
+    vi.mocked(sendEmail).mockRejectedValueOnce(new Error('delivery failed'))
+    const response = await appFor(store, {
+      id: 'usr_owner',
+      email: 'owner@example.com',
+      emailVerified: true,
+      organisationId: 'org_a',
+      role: 'owner',
+    }).request(
+      '/api/organisations/org_a/invites',
+      json({ email: 'invitee@example.com', role: 'member' }),
+    )
+    expect(response.status).toBe(500)
+    expect(
+      store.invites.some((invite) => invite.email === 'invitee@example.com'),
+    ).toBe(false)
+    const createAudit = store.auditLogs.find(
+      (log) => log.action === 'organisation.invite_create',
+    )
+    expect(createAudit).toMatchObject({
+      organisation_id: 'org_a',
+      user_id: 'usr_owner',
+    })
+    const revokeAudit = store.auditLogs.find(
+      (log) => log.action === 'organisation.invite_revoke',
+    )
+    expect(revokeAudit).toMatchObject({
+      organisation_id: 'org_a',
+      user_id: 'usr_owner',
+      entity_id: createAudit?.entity_id,
+    })
+    expect(JSON.parse(revokeAudit?.metadata_json ?? '{}')).toMatchObject({
+      email: 'invitee@example.com',
+      role: 'member',
+      reason: 'delivery_failed',
+    })
   })
 
   it('renames the organisation as owner on both PATCH twins and audits it', async () => {
