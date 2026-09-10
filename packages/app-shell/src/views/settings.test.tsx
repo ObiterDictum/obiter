@@ -312,4 +312,41 @@ describe('SettingsRouteView — members and invites', () => {
     expect(screen.queryByRole('button', { name: /remove/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /revoke/i })).toBeNull()
   })
+
+  it('offers the owner invite role only to owners', async () => {
+    for (const { role, ownerOptionExpected } of [
+      { role: 'admin' as const, ownerOptionExpected: false },
+      { role: 'owner' as const, ownerOptionExpected: true },
+    ]) {
+      cleanup()
+      mocks.useCurrentUser.mockReturnValue({
+        data: {
+          user: {
+            id: `usr_${role}`,
+            email: `${role}@obiter.dev`,
+            name: role,
+            role,
+          },
+          organisation: {
+            id: 'org_1',
+            name: 'Acme Law',
+            plan: 'private_beta',
+          },
+        },
+      })
+      renderSettings()
+      expect(await screen.findByText('Acme Law')).toBeTruthy()
+      const select = screen.getByLabelText<HTMLSelectElement>('Role')
+      expect([...select.options].map((option) => option.value)).toEqual(
+        ownerOptionExpected
+          ? ['member', 'admin', 'owner']
+          : ['member', 'admin'],
+      )
+      if (ownerOptionExpected) {
+        expect(screen.getByRole('option', { name: 'Owner' })).toBeTruthy()
+      } else {
+        expect(screen.queryByRole('option', { name: 'Owner' })).toBeNull()
+      }
+    }
+  })
 })
