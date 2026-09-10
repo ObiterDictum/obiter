@@ -71,12 +71,15 @@ export interface PdfOps {
   moveText: number
   setLeadingMoveText: number
   setTextMatrix: number
+  nextLine: number
   showText: number
   showSpacedText: number
   nextLineShowText: number
   nextLineSetSpacingShowText: number
   paintFormXObjectBegin: number
   paintFormXObjectEnd: number
+  beginAnnotation: number
+  endAnnotation: number
 }
 
 function multiply(left: Matrix, right: Matrix): Matrix {
@@ -269,6 +272,23 @@ export function laidCharsFromOperatorList(input: {
         ctm = ctmStack.pop() ?? IDENTITY
         state = stateStack.pop() ?? initialState()
         break
+      case ops.beginAnnotation: {
+        // An annotation's page placement lives only in this operator's
+        // transform/matrix arguments, so restart from the page base and
+        // apply them in order like the renderer does.
+        ctmStack.push(ctm)
+        stateStack.push({ ...state })
+        ctm = IDENTITY
+        const transform = asMatrix(args?.[2])
+        if (transform) ctm = multiply(transform, ctm)
+        const matrix = asMatrix(args?.[3])
+        if (matrix) ctm = multiply(matrix, ctm)
+        break
+      }
+      case ops.endAnnotation:
+        ctm = ctmStack.pop() ?? IDENTITY
+        state = stateStack.pop() ?? initialState()
+        break
       case ops.beginText:
         textMatrix = IDENTITY
         lineMatrix = IDENTITY
@@ -317,6 +337,9 @@ export function laidCharsFromOperatorList(input: {
       case ops.showText:
       case ops.showSpacedText:
         show(args?.[0])
+        break
+      case ops.nextLine:
+        moveLine(0, -state.leading)
         break
       case ops.nextLineShowText:
         moveLine(0, -state.leading)
