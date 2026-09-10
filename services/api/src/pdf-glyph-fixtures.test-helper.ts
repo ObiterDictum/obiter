@@ -1,3 +1,43 @@
+import { PDFDocument, StandardFonts } from 'pdf-lib'
+
+export function rawFreeTextPdf() {
+  const rect: [number, number, number, number] = [300, 500, 450, 540]
+  const width = rect[2] - rect[0]
+  const height = rect[3] - rect[1]
+  return {
+    bytes: rawPdf([
+      '<< /Type /Catalog /Pages 2 0 R >>',
+      '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 7 0 R >> >> /Contents 4 0 R /Annots [5 0 R] >>',
+      pdfStream('BT /F1 12 Tf 1 0 0 1 60 700 Tm (BODYTEXT) Tj ET'),
+      `<< /Type /Annot /Subtype /FreeText /Rect [${rect.join(' ')}] /AP << /N 6 0 R >> /F 4 >>`,
+      pdfStream(
+        'BT /F1 12 Tf 1 0 0 1 2 4 Tm (SECRETVALUE) Tj ET',
+        `/Type /XObject /Subtype /Form /BBox [0 0 ${width} ${height}] /Resources << /Font << /F1 7 0 R >> >>`,
+      ),
+      '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
+    ]),
+    rect: { x: rect[0], y: rect[1], width, height },
+  }
+}
+
+/**
+ * One-page pdf-lib PDF: body text plus a text field holding `value`.
+ * Coordinates use the pdf-lib origin (bottom-left).
+ */
+export async function textFieldPdf(value: string) {
+  const doc = await PDFDocument.create()
+  const font = await doc.embedFont(StandardFonts.Helvetica)
+  const page = doc.addPage([595, 842])
+  page.drawText('BODYTEXT', { x: 60, y: 700, size: 11, font })
+  const rect = { x: 49.5, y: 299.5, width: 200, height: 24 }
+  const field = doc.getForm().createTextField('secret')
+  field.addToPage(page, { ...rect, font, borderWidth: 0 })
+  field.setText(value)
+  field.updateAppearances(font)
+  return { bytes: Buffer.from(await doc.save()), rect }
+}
+
 function pdfStream(content: string, dictionary = '') {
   return `<< /Length ${Buffer.byteLength(content, 'ascii')} ${dictionary} >>\nstream\n${content}\nendstream`
 }

@@ -7,16 +7,24 @@ import {
   snapDeviceCoverOutward,
   supplementSpans,
 } from '@obiter/redaction-policy'
-import { createIsomorphicCanvasFactory, getDocumentProxy } from 'unpdf'
+import {
+  createIsomorphicCanvasFactory,
+  extractText,
+  getDocumentProxy,
+} from 'unpdf'
 import { describe, expect, it, vi } from 'vitest'
 import { extractDocumentContent, prepareLaidChars } from './document-extraction'
+import type { DocumentTextLayout } from './document-layout'
+import { buildRedactedPdf } from './redaction-pdf-output'
 import { findUncoveredPdfRegions } from './extraction-coverage'
 import {
   rawFormPdf,
+  rawFreeTextPdf,
   rawRtlPdf,
   rawType1Pdf,
   rawType3Pdf,
   rawVerticalPdf,
+  textFieldPdf,
 } from './pdf-glyph-fixtures.test-helper'
 import {
   collapsePdfGlyphSpacingWithLayout,
@@ -544,5 +552,250 @@ describe('claim-form word boundaries', () => {
     const regions = findUncoveredPdfRegions(extracted.text)
     expect(regions).toHaveLength(1)
     expect(regions[0]).toContain('fused-text')
+  })
+})
+
+describe('annotation glyph placement', () => {
+  const SECRET = 'SECRETVALUE'
+
+  function spanCover(input: {
+    layout: DocumentTextLayout
+    text: string
+    spanText: string
+  }) {
+    const spanStart = input.text.indexOf(input.spanText)
+    expect(spanStart).toBeGreaterThanOrEqual(0)
+    const covers = coverRectsForSpan({
+      segments: input.layout.segments,
+      spanStart,
+      spanEnd: spanStart + input.spanText.length,
+      spanText: input.spanText,
+    })
+    expect(covers).toHaveLength(1)
+    return covers[0]!
+  }
+
+  function acceptedSpanInput(
+    pdfBytes: Buffer,
+    layout: DocumentTextLayout,
+    text: string,
+    spanText: string,
+  ) {
+    const spanStart = text.indexOf(spanText)
+    expect(spanStart).toBeGreaterThanOrEqual(0)
+    return {
+      pdfBytes,
+      layout,
+      spans: [
+        {
+          id: 'span_1',
+          start: spanStart,
+          end: spanStart + spanText.length,
+          text: spanText,
+          category: 'person_name' as const,
+          source: 'rampart_model' as const,
+          confidence: 'high' as const,
+          suggestion: 'redact' as const,
+        },
+      ],
+      decisions: {
+        span_1: {
+          decision: 'accept' as const,
+          decidedBy: 'test',
+          decidedAt: '2026-01-01T00:00:00.000Z',
+        },
+      },
+      outputMode: 'redacted' as const,
+      tokenMap: {},
+    }
+  }
+
+  interface PageRect {
+    x: number
+    y: number
+    width: number
+    height: number
+  }
+
+  async function rasterizePdf(bytes: Uint8Array) {
+    const CanvasFactory = await createIsomorphicCanvasFactory(
+      () => import('@napi-rs/canvas'),
+    )
+    const pdf = await getDocumentProxy(Uint8Array.from(bytes), {
+      CanvasFactory,
+    })
+    try {
+      const page = await pdf.getPage(1)
+      const viewport = page.getViewport({ scale: 2 })
+      const width = Math.max(1, Math.ceil(viewport.width))
+      const height = Math.max(1, Math.ceil(viewport.height))
+      const canvas = createCanvas(width, height)
+      const context = canvas.getContext('2d')
+      await page.render({
+        canvasContext: context as never,
+        viewport,
+        canvas: canvas as never,
+      }).promise
+      return { viewport, pixels: context.getImageData(0, 0, width, height) }
+    } finally {
+      await pdf.destroy()
+    }
+  }
+
+  function deviceBox(
+    viewport: { convertToViewportRectangle: (rect: number[]) => number[] },
+    rect: PageRect,
+  ) {
+    const [x1, y1, x2, y2] = viewport.convertToViewportRectangle([
+      rect.x,
+      rect.y,
+      rect.x + rect.width,
+      rect.y + rect.height,
+    ])
+    return {
+      left: Math.floor(Math.min(x1, x2)),
+      right: Math.ceil(Math.max(x1, x2)),
+      top: Math.floor(Math.min(y1, y2)),
+      bottom: Math.ceil(Math.max(y1, y2)),
+    }
+  }
+
+  function isDark(data: Uint8ClampedArray, offset: number) {
+    return (
+      (data[offset] ?? 255) < 128 &&
+      (data[offset + 1] ?? 255) < 128 &&
+      (data[offset + 2] ?? 255) < 128
+    )
+  }
+
+  /**
+   * Every dark source pixel inside `rect` must be black in the burned
+   * output: proves the value's ink is covered, not just the cover box.
+   */
+  async function expectSourceInkCovered(
+    source: Buffer,
+    output: Uint8Array,
+    rect: PageRect,
+  ) {
+    const [sourcePage, outputPage] = await Promise.all([
+      rasterizePdf(source),
+      rasterizePdf(output),
+    ])
+    const box = deviceBox(sourcePage.viewport, rect)
+    let inkPixels = 0
+    for (let y = box.top; y < box.bottom; y += 1) {
+      for (let x = box.left; x < box.right; x += 1) {
+        const offset = (y * sourcePage.pixels.width + x) * 4
+        if (!isDark(sourcePage.pixels.data, offset)) continue
+        inkPixels += 1
+        const brightest = Math.max(
+          outputPage.pixels.data[offset] ?? 255,
+          outputPage.pixels.data[offset + 1] ?? 255,
+          outputPage.pixels.data[offset + 2] ?? 255,
+        )
+        expect(brightest).toBeLessThan(20)
+      }
+    }
+    // The value must actually render, or the check above is vacuous.
+    expect(inkPixels).toBeGreaterThan(50)
+  }
+
+  /** Body text outside the bar must still render: the bar is local, not page-wide. */
+  async function expectInkPresent(output: Uint8Array, strip: PageRect) {
+    const { viewport, pixels } = await rasterizePdf(output)
+    const box = deviceBox(viewport, strip)
+    let darkest = 255
+    for (let y = box.top; y < box.bottom; y += 1) {
+      for (let x = box.left; x < box.right; x += 1) {
+        const offset = (y * pixels.width + x) * 4
+        darkest = Math.min(
+          darkest,
+          pixels.data[offset] ?? 255,
+          pixels.data[offset + 1] ?? 255,
+          pixels.data[offset + 2] ?? 255,
+        )
+      }
+    }
+    expect(darkest).toBeLessThan(128)
+  }
+
+  async function expectNoSelectableText(output: Uint8Array, absent: string) {
+    const pdf = await getDocumentProxy(Uint8Array.from(output))
+    try {
+      const { text } = await extractText(pdf, { mergePages: true })
+      const joined = (Array.isArray(text) ? text.join(' ') : text).trim()
+      expect(joined).not.toContain(absent)
+    } finally {
+      await pdf.destroy()
+    }
+  }
+
+  it('lays a text-field value at the widget rectangle', async () => {
+    const { bytes, rect } = await textFieldPdf(SECRET)
+    const extracted = await extractDocumentContent('pdf', bytes)
+    expect(extracted.text).toContain('BODYTEXT')
+    expect(extracted.text).toContain(SECRET)
+
+    const cover = spanCover({
+      layout: extracted.layout!,
+      text: extracted.text,
+      spanText: SECRET,
+    })
+    // Without beginAnnotation replay this cover sat at the page origin.
+    expect(cover.y).toBeGreaterThan(200)
+    expect(cover.x).toBeGreaterThanOrEqual(rect.x - 2)
+    expect(cover.y).toBeGreaterThanOrEqual(rect.y - 3)
+    expect(cover.x + cover.width).toBeLessThanOrEqual(rect.x + rect.width + 1)
+    expect(cover.y + cover.height).toBeLessThanOrEqual(rect.y + rect.height + 2)
+
+    const output = await buildRedactedPdf(
+      acceptedSpanInput(bytes, extracted.layout!, extracted.text, SECRET),
+    )
+    await expectSourceInkCovered(bytes, output, rect)
+    await expectInkPresent(output, { x: 60, y: 698, width: 140, height: 16 })
+    await expectNoSelectableText(output, SECRET)
+  })
+
+  it('lays a free-text annotation value at the annotation rectangle', async () => {
+    const { bytes, rect } = rawFreeTextPdf()
+    const extracted = await extractDocumentContent('pdf', bytes)
+    expect(extracted.text).toContain('BODYTEXT')
+    expect(extracted.text).toContain(SECRET)
+
+    const cover = spanCover({
+      layout: extracted.layout!,
+      text: extracted.text,
+      spanText: SECRET,
+    })
+    expect(cover.y).toBeGreaterThan(200)
+    expect(cover.x).toBeGreaterThanOrEqual(rect.x - 2)
+    expect(cover.y).toBeGreaterThanOrEqual(rect.y - 3)
+    expect(cover.x + cover.width).toBeLessThanOrEqual(rect.x + rect.width + 1)
+    expect(cover.y + cover.height).toBeLessThanOrEqual(rect.y + rect.height + 2)
+
+    const output = await buildRedactedPdf(
+      acceptedSpanInput(bytes, extracted.layout!, extracted.text, SECRET),
+    )
+    await expectSourceInkCovered(Buffer.from(bytes), output, rect)
+    await expectInkPresent(output, { x: 60, y: 698, width: 140, height: 16 })
+    await expectNoSelectableText(output, SECRET)
+  })
+
+  it('keeps no-annotation cover geometry identical to the pinned baseline', async () => {
+    const { bytes } = await singleLinePdf(
+      'Ms Wilhelmina Ashcroft-Hargreaves of 14 St Aldgate Terrace, Oxford',
+    )
+    const extracted = await extractDocumentContent('pdf', bytes)
+    // Annotation and nextLine handling must not move plain content-stream
+    // text: these pins predate both fixes.
+    const cover = spanCover({
+      layout: extracted.layout!,
+      text: extracted.text,
+      spanText: 'Oxford',
+    })
+    expect(cover.x).toBeCloseTo(340.29, 1)
+    expect(cover.y).toBeCloseTo(696.73, 1)
+    expect(cover.width).toBeCloseTo(32.65, 1)
+    expect(cover.height).toBeCloseTo(11.66, 1)
   })
 })
