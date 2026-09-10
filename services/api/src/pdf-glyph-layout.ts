@@ -71,6 +71,7 @@ export interface PdfOps {
   moveText: number
   setLeadingMoveText: number
   setTextMatrix: number
+  nextLine: number
   showText: number
   showSpacedText: number
   nextLineShowText: number
@@ -336,6 +337,9 @@ export function laidCharsFromOperatorList(input: {
       case ops.showText:
       case ops.showSpacedText:
         show(args?.[0])
+        break
+      case ops.nextLine:
+        moveLine(0, -state.leading)
         break
       case ops.nextLineShowText:
         moveLine(0, -state.leading)

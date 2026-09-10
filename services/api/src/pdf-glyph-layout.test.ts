@@ -20,6 +20,7 @@ import { findUncoveredPdfRegions } from './extraction-coverage'
 import {
   rawFormPdf,
   rawFreeTextPdf,
+  rawNextLinePdf,
   rawRtlPdf,
   rawType1Pdf,
   rawType3Pdf,
@@ -797,5 +798,28 @@ describe('annotation glyph placement', () => {
     expect(cover.y).toBeCloseTo(696.73, 1)
     expect(cover.width).toBeCloseTo(32.65, 1)
     expect(cover.height).toBeCloseTo(11.66, 1)
+  })
+
+  it('advances one leading on T*, quote and double-quote operators', async () => {
+    const bytes = rawNextLinePdf()
+    const extracted = await extractDocumentContent('pdf', bytes)
+    for (const [first, second] of [
+      ['Line1', 'Line2'],
+      ['Row1', 'Row2'],
+      ['Pair1', 'Pair2'],
+    ]) {
+      const firstCover = spanCover({
+        layout: extracted.layout!,
+        text: extracted.text,
+        spanText: first,
+      })
+      const secondCover = spanCover({
+        layout: extracted.layout!,
+        text: extracted.text,
+        spanText: second,
+      })
+      expect(secondCover.y).toBeLessThan(firstCover.y)
+      expect(firstCover.y - secondCover.y).toBeCloseTo(14, 1)
+    }
   })
 })

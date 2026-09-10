@@ -21,6 +21,15 @@ export function rawFreeTextPdf() {
   }
 }
 
+/** Line advances pdf-lib cannot emit: T*, quote and double-quote rewrites. */
+export function rawNextLinePdf() {
+  return rawType1Pdf(
+    'BT /F1 12 Tf 14 TL 1 0 0 1 60 700 Tm (Line1) Tj T* (Line2) Tj ET ' +
+      "BT /F1 12 Tf 14 TL 1 0 0 1 60 600 Tm (Row1) Tj (Row2) ' ET " +
+      'BT /F1 12 Tf 14 TL 1 0 0 1 60 500 Tm (Pair1) Tj 0 0 (Pair2) " ET',
+  )
+}
+
 /**
  * One-page pdf-lib PDF: body text plus a text field holding `value`.
  * Coordinates use the pdf-lib origin (bottom-left).
