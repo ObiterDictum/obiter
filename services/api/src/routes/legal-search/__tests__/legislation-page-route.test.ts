@@ -120,6 +120,11 @@ describe('GET /api/search/legislation/<identity> (Act page)', () => {
   function createActApp(documentRows = [actDocument]) {
     const pool = {
       query: vi.fn(async (text: string) => {
+        // The act-page gate asks whether any row is unclassified; this
+        // fixture holds classified rows, so the gate must read as ready.
+        if (text.includes('kind is null')) {
+          return { rows: [{ classified: true }] }
+        }
         if (text.includes('from legislation_provisions')) {
           return {
             rows: [

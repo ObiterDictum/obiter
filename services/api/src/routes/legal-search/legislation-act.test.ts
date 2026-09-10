@@ -120,9 +120,13 @@ describe('resolveLegislationActPage', () => {
   function actPool(
     document: typeof actDocument | null = actDocument,
     provisions: unknown[] = actProvisions,
+    classified = true,
   ) {
     return {
       query: vi.fn(async (text: string) => {
+        if (text.includes('kind is null')) {
+          return { rows: [{ classified }] }
+        }
         if (text.includes('from legislation_provisions')) {
           return { rows: provisions }
         }
@@ -234,6 +238,16 @@ describe('resolveLegislationActPage', () => {
       'ukpga/2010/15',
     )
     expect(missing).toEqual({ status: 'not_found' })
+  })
+
+  it('withholds the whole page while legacy rows are unclassified', async () => {
+    // Pre-migration rows carry kind = NULL (migration 0022 leaves them
+    // unknown rather than defaulting to a misleading 'P1'), so without the
+    // gate their P2..P5 content would render as flat top-level provisions.
+    const legacy = actPool(actDocument, [], /* classified */ false)
+    const result = await resolveLegislationActPage(legacy, 'ukpga/2010/15')
+    expect(result.status).toBe('unavailable')
+    expect(legacy.query).toHaveBeenCalled()
   })
 
   it('returns unavailable when the store is down', async () => {

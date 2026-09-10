@@ -1044,4 +1044,8 @@ parsing changes; it goes through the same effects pass as a changed Act and
 rows are only replaced once that pass has succeeded (a failed feed aborts
 before any write, an unreadable one preserves known-good flags), so
 withheld flags survive the row rewrite and text can never become servable
-through it.
+through it. The migration leaves pre-0022 rows with kind = NULL rather
+than a default, so the transitional window is visible and fail-closed: a
+document that still holds unclassified rows serves 503 for its Act page
+(never a flat list of mis-classified provisions) until the force-reparse
+rewrite fills in real kinds.

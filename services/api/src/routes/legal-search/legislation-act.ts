@@ -4,6 +4,7 @@ import {
 } from '@obiter/contracts'
 import {
   getLegislationDocument,
+  legislationActProvisionsClassified,
   listLegislationActProvisions,
   provisionTextServable,
   type StoredLegislationActProvision,
@@ -131,17 +132,25 @@ export async function resolveLegislationActPage(
 ): Promise<LegislationActPageResult> {
   let document
   let provisions
+  let classified
   try {
-    ;[document, provisions] = await withStoredTimeout(
+    ;[document, provisions, classified] = await withStoredTimeout(
       Promise.all([
         getLegislationDocument(pool, identity),
         listLegislationActProvisions(pool, identity),
+        legislationActProvisionsClassified(pool, identity),
       ]),
     )
   } catch {
     return { status: 'unavailable' }
   }
   if (!document) return { status: 'not_found' }
+  // Rows written before migration 0022 carry kind = NULL until a
+  // --force-reparse rewrites them; listing them here would render their
+  // P2..P5 content as flat top-level provisions. Fail closed: the whole
+  // Act page stays unavailable until every row of the document is
+  // classified, never a silently mis-classified tree.
+  if (!classified) return { status: 'unavailable' }
   const officialUrl = `https://www.legislation.gov.uk/${document.identity}`
   const { roots, totalCount, withheldCount } = buildContentsTree(
     document.identity,

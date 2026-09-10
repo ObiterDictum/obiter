@@ -73,6 +73,11 @@ export function provisionTextServable(
  * or lexical label sort: inserted sections (s. 13A between ss. 13 and 14)
  * sort wrong otherwise, and containers interleave with their content.
  *
+ * Rows whose kind is NULL are pre-0022 legacy rows that no --force-reparse
+ * has rewritten: their true classification is unknown, so they must never
+ * reach the tree (the Act-page gate in legislation-act.ts withholds the
+ * whole document until none remain).
+ *
  * provision_text is read for container rows only — the Act page renders
  * container heading text but never provision body text (the provision page
  * carries that gate) — so the query pulls the full body of the heaviest Act
@@ -92,11 +97,37 @@ export async function listLegislationActProvisions(
                  then provision_text else '' end as text
        from legislation_provisions
       where document_identity = $1
+        and kind is not null
         and (kind in ('part', 'chapter', 'schedule', 'crossheading') or kind = 'P1')
       order by doc_order`,
     [identity],
   )
   return result.rows
+}
+
+/**
+ * Fail-closed transitional gate for the Act page. Pre-migration rows carry
+ * kind = NULL (see listLegislationActProvisions), so until --force-reparse
+ * rewrites a document's rows, treating them as flat P1 provisions would
+ * list its P2..P5 content as top-level sections. The gate withholds the
+ * whole page (unavailable) for any document that still holds an
+ * unclassified row. Not-exists over the document's rows, never a
+ * document-level flag: classifications live per row, and a reparse rewrites
+ * every row of a document atomically, so the per-document statement is the
+ * whole answer. Any other outcome reads as not-classified (fail-closed):
+ * the page withholds rather than risks a mis-classified tree. */
+export async function legislationActProvisionsClassified(
+  pool: Pick<Pool, 'query'>,
+  identity: string,
+): Promise<boolean> {
+  const result = await pool.query<{ classified: boolean }>(
+    `select not exists(
+       select 1 from legislation_provisions
+        where document_identity = $1 and kind is null
+     ) as "classified"`,
+    [identity],
+  )
+  return result.rows[0]?.classified ?? false
 }
 
 export async function getLegislationDocument(
