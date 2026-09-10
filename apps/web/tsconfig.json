@@ -2,7 +2,12 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
-    "types": ["node", "vite/client"]
+    "types": ["node", "vite/client"],
+    // vite.config.ts imports parsePort from serve.mjs so the dev server and the
+    // production server resolve a port by identical rules. allowJs infers those
+    // types from the real source; checkJs stays off so serve.mjs is not newly
+    // typechecked by this change.
+    "allowJs": true
   },
   "include": ["src", "vite.config.ts"]
 }
