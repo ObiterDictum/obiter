@@ -31,10 +31,15 @@ export function SearchResults({
   const showJudgments = response.hits.length > 0
   const showLegislation = legislation.length > 0
   const legislationNote = response.diagnostics?.legislationNote
-  // Only the legislation not-held verdict, never an outage note or a judgment
-  // citation: the API marks the verdict explicitly so the page cannot mistake
-  // "the store did not answer" for "the corpus does not hold this".
-  const legislationNotHeld = response.diagnostics?.legislationNotHeld === true
+  // Every legislation verdict the API marks explicitly: an authoritative
+  // not-held, a whole-title request no exact key matched, or a title two
+  // stored Acts satisfy. An outage note carries none of these flags, so the
+  // page cannot mistake "the store did not answer" for a verdict.
+  const legislationVerdict =
+    (response.diagnostics?.legislationNotHeld === true ||
+      response.diagnostics?.legislationTitleUnresolved === true ||
+      response.diagnostics?.legislationAmbiguous === true) &&
+    Boolean(legislationNote)
   const legislationOffset = legislationLead ? 0 : response.hits.length
   const judgmentOffset = legislationLead ? legislation.length : 0
 
@@ -48,12 +53,10 @@ export function SearchResults({
         <p className="pb-3 text-[11px] font-medium tracking-wide text-muted">
           {formatResultMeta(response, browse)}
         </p>
-        {legislationNotHeld && !showLegislation ? (
-          // The legislation half recognised the citation but served nothing:
-          // an Act or chapter the corpus does not hold. Say so by name, above
-          // any judgment results, so an empty legislation group never reads as
-          // "we found nothing about this" when the truth is "we do not hold
-          // this statute".
+        {legislationVerdict && !showLegislation ? (
+          // The legislation half reached a verdict but served no group. Say so
+          // by name, above any judgment results, so an empty legislation group
+          // never reads as "we found nothing about this".
           <p
             role="status"
             className="mb-3 rounded-md border border-warning/30 bg-raised px-3 py-2 text-sm text-muted"

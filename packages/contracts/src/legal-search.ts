@@ -46,5 +46,7 @@ export const legalFetchOutcomeSchema = z.enum([
   'stored_browse_empty',
   'unsupported_source_type',
   'recognised_not_held',
+  'legislation_title_unresolved',
+  'legislation_ambiguous',
 ])
 export type LegalFetchOutcome = z.infer<typeof legalFetchOutcomeSchema>

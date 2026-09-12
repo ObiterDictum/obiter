@@ -501,6 +501,51 @@ describe('SearchResults legislation group', () => {
     )
     expect(container.textContent).toContain(citingHit.title)
   })
+
+  it('names an unresolved legislation title above judgment results', () => {
+    const rendered = renderResults({
+      hits: [citingHit],
+      cached: true,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'results',
+      diagnostics: {
+        legislationNote:
+          'No exact legislation title match was found for "Children Act 1989".',
+        legislationTitleUnresolved: true,
+      },
+    })
+    root = rendered.root
+    container = rendered.container
+
+    // The note says only what is known; it must never claim the Act is
+    // absent while judgment results are on the page.
+    expect(container.textContent).toContain(
+      'No exact legislation title match was found for "Children Act 1989".',
+    )
+    expect(container.textContent).not.toContain('is not held')
+    expect(container.textContent).toContain(citingHit.title)
+  })
+
+  it('names an ambiguous legislation title above judgment results', () => {
+    const rendered = renderResults({
+      hits: [citingHit],
+      cached: true,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'legislation_ambiguous',
+      diagnostics: {
+        legislationNote:
+          '“Sample Act 2020” names more than one stored Act. Candidates: A; B',
+        legislationAmbiguous: true,
+      },
+    })
+    root = rendered.root
+    container = rendered.container
+
+    expect(container.textContent).toContain('names more than one stored Act')
+    expect(container.textContent).toContain(citingHit.title)
+  })
 })
 
 describe('SearchResults withheld distinction and group headings', () => {
