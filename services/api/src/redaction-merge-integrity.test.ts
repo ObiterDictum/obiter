@@ -3,10 +3,12 @@ import type { Pool } from 'pg'
 import {
   detectHeuristics,
   mergeSpans as mergeRampartSpans,
+  type Span as RampartSpan,
 } from '@obiter/rampart-inference'
 import {
   mapRampartSpans,
   mergeSpans,
+  normalizePersonDetections,
   supplementSpans,
   type Decisions,
   type RedactionSpan,
@@ -40,7 +42,9 @@ function detectionSpans(): RedactionSpan[] {
   return mergeSpans(
     mapRampartSpans({
       text,
-      spans: mergeRampartSpans([...heuristic, modelSpan]),
+      spans: mergeRampartSpans(
+        normalizePersonDetections(text, [...heuristic, modelSpan]),
+      ),
     }),
     supplementSpans(text),
   )
@@ -174,5 +178,103 @@ describe('redaction merge integrity (P2.39)', () => {
 
     expect(response.status).toBe(200)
     expect(written()).toBe('[REDACTED]')
+  })
+})
+
+/**
+ * P0.30: `trimLeadingTitles` and `isDeniedPersonName` are written for a span the
+ * model returned as one detection. Applied to the partial-overlap union they
+ * discard bytes the losing contributor supplied, silently, because finalize
+ * derives span text from the source instead of rejecting a mismatch (P2.39).
+ * Production normalises each contributing detection before the union; these
+ * drive the real normaliser, union and mapper.
+ */
+describe('heuristics run per detection before the span union (P0.30)', () => {
+  function detect(text: string, spans: RampartSpan[]): RedactionSpan[] {
+    return mapRampartSpans({
+      text,
+      spans: mergeRampartSpans(normalizePersonDetections(text, spans)),
+    })
+  }
+
+  it('covers bytes a losing detection contributed a title-shaped prefix to', () => {
+    // The address detection starts "Dr", which the person heuristic would read
+    // as an honorific. Trimmed on the union it advances past the address's own
+    // bytes; trimmed per detection it leaves them covered.
+    const text = 'Dr Smith Street'
+    const spans = detect(text, [
+      {
+        start: 0,
+        end: 8,
+        label: 'STREET_NAME',
+        score: 0.8,
+        source: 'ner',
+        text: 'Dr Smith',
+      },
+      {
+        start: 3,
+        end: 15,
+        label: 'SURNAME',
+        score: 0.9,
+        source: 'ner',
+        text: 'Smith Street',
+      },
+    ])
+    expect(spans).toHaveLength(1)
+    expect(spans[0]!.start).toBe(0)
+    expect(text.slice(spans[0]!.start, spans[0]!.end)).toBe('Dr Smith Street')
+  })
+
+  it('drops only the detection that contained the line break', () => {
+    // Denying the union on its newline discards both contributors; denying per
+    // detection keeps the clean one redacted.
+    const text = 'Jo\nnes Smith'
+    const spans = detect(text, [
+      {
+        start: 0,
+        end: 5,
+        label: 'GIVEN_NAME',
+        score: 0.5,
+        source: 'ner',
+        text: 'Jo\nne',
+      },
+      {
+        start: 4,
+        end: 12,
+        label: 'SURNAME',
+        score: 0.9,
+        source: 'ner',
+        text: 'es Smith',
+      },
+    ])
+    expect(spans).toHaveLength(1)
+    expect(text.slice(spans[0]!.start, spans[0]!.end)).toBe('es Smith')
+  })
+
+  it('preserves single-detection trimming and denial', () => {
+    expect(
+      detect('Mr. Smith', [
+        {
+          start: 0,
+          end: 9,
+          label: 'GIVEN_NAME',
+          score: 0.9,
+          source: 'ner',
+          text: 'Mr. Smith',
+        },
+      ]).map((span) => span.text),
+    ).toEqual(['Smith'])
+    expect(
+      detect('Jones\nLaw', [
+        {
+          start: 0,
+          end: 9,
+          label: 'GIVEN_NAME',
+          score: 0.9,
+          source: 'ner',
+          text: 'Jones\nLaw',
+        },
+      ]),
+    ).toEqual([])
   })
 })

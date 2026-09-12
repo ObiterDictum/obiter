@@ -14,6 +14,7 @@ import {
 import {
   mapRampartSpans,
   mergeSpans,
+  normalizePersonDetections,
   supplementSpans,
 } from '@obiter/redaction-policy'
 import type { DetectionMode } from '@obiter/contracts'
@@ -147,7 +148,9 @@ export function createRedactionDetector(
       })
       const rampart = mapRampartSpans({
         text,
-        spans: mergeRampartSpans([...heuristic, ...projected]),
+        spans: mergeRampartSpans(
+          normalizePersonDetections(text, [...heuristic, ...projected]),
+        ),
       })
       const spans = mergeSpans(rampart, supplement)
       log('redaction_detection_completed', {
@@ -173,7 +176,7 @@ export function createRedactionDetector(
       })
       const rampart = mapRampartSpans({
         text,
-        spans: mergeRampartSpans(heuristic),
+        spans: mergeRampartSpans(normalizePersonDetections(text, heuristic)),
       })
       return {
         spans: mergeSpans(rampart, supplement),

@@ -3,10 +3,24 @@ import {
   chunkText,
   mapRampartSpans,
   mergeSpans,
+  normalizePersonDetections,
   reassembleSpans,
   supplementSpans,
 } from './index'
+import type { RampartSpanInput } from './rampart-map'
 import type { RedactionSpan } from './types'
+
+/**
+ * The production order for a set of contributing detections: normalise the
+ * person spans, then map. The mapper is heuristic-free; normalisation happens
+ * before the union so a heuristic only ever judges a single detection (P0.30).
+ */
+function mapNormalized(text: string, spans: RampartSpanInput[]) {
+  return mapRampartSpans({
+    text,
+    spans: normalizePersonDetections(text, spans),
+  })
+}
 
 const legalText = `Jane Smith of 10 Downing Street emailed jane.smith@example.com about matter CR-2024-00123. Her NI number is QQ 12 34 56 C. Smith & Jones Solicitors LLP act for the claimant.`
 
@@ -30,14 +44,11 @@ describe('redaction policy', () => {
   })
 
   it('drops model-brand person_name false positives', () => {
-    const spans = mapRampartSpans({
-      text: 'Kimi K3 and Claude run in the fleet.',
-      spans: [
-        { start: 0, end: 4, label: 'GIVEN_NAME', score: 0.7, text: 'Kimi' },
-        { start: 12, end: 18, label: 'GIVEN_NAME', score: 0.8, text: 'Claude' },
-        { start: 30, end: 35, label: 'GIVEN_NAME', score: 0.9, text: 'fleet' },
-      ],
-    })
+    const spans = mapNormalized('Kimi K3 and Claude run in the fleet.', [
+      { start: 0, end: 4, label: 'GIVEN_NAME', score: 0.7, text: 'Kimi' },
+      { start: 12, end: 18, label: 'GIVEN_NAME', score: 0.8, text: 'Claude' },
+      { start: 30, end: 35, label: 'GIVEN_NAME', score: 0.9, text: 'fleet' },
+    ])
     expect(spans.map((span) => span.text)).toEqual(['fleet'])
   })
 
@@ -46,18 +57,15 @@ describe('redaction policy', () => {
     // capitalised tokens, so a span arrives as "Dear Ms Amara" when the model
     // only tagged "Amara". The name must survive; the salutation must not.
     const text = 'Dear Ms Amara Okonkwo, our client Dr Fairbairn agrees.'
-    const spans = mapRampartSpans({
-      text,
-      spans: [
-        { start: 0, end: 13, label: 'GIVEN_NAME', score: 0.99 },
-        {
-          start: text.indexOf('Dr Fairbairn'),
-          end: text.indexOf('Dr Fairbairn') + 'Dr Fairbairn'.length,
-          label: 'SURNAME',
-          score: 0.94,
-        },
-      ],
-    })
+    const spans = mapNormalized(text, [
+      { start: 0, end: 13, label: 'GIVEN_NAME', score: 0.99 },
+      {
+        start: text.indexOf('Dr Fairbairn'),
+        end: text.indexOf('Dr Fairbairn') + 'Dr Fairbairn'.length,
+        label: 'SURNAME',
+        score: 0.94,
+      },
+    ])
     expect(spans.map((span) => span.text)).toEqual(['Amara', 'Fairbairn'])
     // Offsets must still point at the name in the source text, or the cover
     // geometry would black out the wrong characters.
@@ -69,27 +77,71 @@ describe('redaction policy', () => {
 
   it('keeps names that merely start with title-like letters', () => {
     const text = 'Mrs Missouri Drake and Miss Doe attended.'
-    const spans = mapRampartSpans({
-      text,
-      spans: [
-        { start: 0, end: 18, label: 'GIVEN_NAME', score: 0.9 },
-        {
-          start: text.indexOf('Miss Doe'),
-          end: text.indexOf('Miss Doe') + 'Miss Doe'.length,
-          label: 'SURNAME',
-          score: 0.9,
-        },
-      ],
-    })
+    const spans = mapNormalized(text, [
+      { start: 0, end: 18, label: 'GIVEN_NAME', score: 0.9 },
+      {
+        start: text.indexOf('Miss Doe'),
+        end: text.indexOf('Miss Doe') + 'Miss Doe'.length,
+        label: 'SURNAME',
+        score: 0.9,
+      },
+    ])
     expect(spans.map((span) => span.text)).toEqual(['Missouri Drake', 'Doe'])
   })
 
   it('drops a person span that was only a title', () => {
-    const spans = mapRampartSpans({
-      text: 'Dear Sir, please advise.',
-      spans: [{ start: 0, end: 8, label: 'GIVEN_NAME', score: 0.5 }],
-    })
+    const spans = mapNormalized('Dear Sir, please advise.', [
+      { start: 0, end: 8, label: 'GIVEN_NAME', score: 0.5 },
+    ])
     expect(spans).toEqual([])
+  })
+
+  it('normalises each detection and leaves other categories untouched', () => {
+    const text = 'Dear Ms Amara Okonkwo of Leicester'
+    const normalized = normalizePersonDetections(text, [
+      { start: 0, end: 21, label: 'GIVEN_NAME', score: 0.99 },
+      { start: 25, end: 34, label: 'CITY', score: 0.9 },
+    ])
+    expect(normalized.map((span) => text.slice(span.start, span.end))).toEqual([
+      'Amara Okonkwo',
+      'Leicester',
+    ])
+  })
+
+  it('still trims a lone honorific and still denies lone heading glue', () => {
+    expect(
+      mapNormalized('Mr. Smith attended.', [
+        { start: 0, end: 9, label: 'GIVEN_NAME', score: 0.9 },
+      ]).map((span) => span.text),
+    ).toEqual(['Smith'])
+    expect(
+      mapNormalized('Jones\nLaw', [
+        { start: 0, end: 9, label: 'GIVEN_NAME', score: 0.9 },
+      ]),
+    ).toEqual([])
+  })
+
+  it('maps an already-normalised union without re-applying person heuristics', () => {
+    // P0.30: the union is wider than either contributing detection, so trimming
+    // or denying it here would discard the losing contributor's bytes. The
+    // caller normalises before the union; the mapper must not do it again.
+    const text = 'Dr Smith Street'
+    const spans = mapRampartSpans({
+      text,
+      spans: [{ start: 0, end: 15, label: 'SURNAME', score: 0.9 }],
+    })
+    expect(spans.map((span) => span.text)).toEqual(['Dr Smith Street'])
+  })
+
+  it('maps an already-normalised union that contains a line break', () => {
+    // The break belonged to a contributing detection denied before the merge,
+    // or to a non-person detection; the mapper must not re-deny the union.
+    const text = 'Jo\nnes Smith'
+    const spans = mapRampartSpans({
+      text,
+      spans: [{ start: 0, end: 12, label: 'SURNAME', score: 0.9 }],
+    })
+    expect(spans.map((span) => span.text)).toEqual(['Jo\nnes Smith'])
   })
 
   it('leaves non-person categories untrimmed', () => {

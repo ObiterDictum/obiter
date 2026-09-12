@@ -177,6 +177,54 @@ function isDeniedPersonName(text: string) {
   return false
 }
 
+/**
+ * Apply the person-name heuristics to each contributing detection *before* the
+ * partial-overlap union, so a heuristic can only ever discard bytes from the
+ * detection it judged.
+ *
+ * `trimLeadingTitles` and `isDeniedPersonName` are written for a span the model
+ * returned as one detection. Once `mergeSpans` has unioned two detections, the
+ * merged span covers bytes from both and either heuristic can discard the
+ * other detection's characters:
+ *
+ *  - a title-shaped prefix can belong to a losing non-person detection (an
+ *    address that starts "Dr"), and trimming the union advances past it;
+ *  - a line break in one contributor makes the wider union trip the denial,
+ *    dropping the contributor that does not contain it.
+ *
+ * Both losses are silent now that finalize derives span text from the source
+ * instead of rejecting a mismatch (P2.39). Normalising first keeps every
+ * heuristic's input a single detection, and the union then covers the bytes
+ * each detection kept.
+ */
+export function normalizePersonDetections<T extends RampartSpanInput>(
+  text: string,
+  spans: readonly T[],
+): T[] {
+  const kept: T[] = []
+  for (const span of spans) {
+    const label = span.label ?? span.entity
+    if (label === undefined || labelMap[label]?.category !== 'person_name') {
+      kept.push(span)
+      continue
+    }
+    const start = trimLeadingTitles(text, span.start, span.end)
+    const trimmed = text.slice(start, span.end)
+    if (isDeniedPersonName(trimmed)) continue
+    // The spread preserves every property of T; only `start` and `text` change,
+    // and `RampartSpanInput` declares both, so the narrowing is sound.
+    kept.push({ ...span, start, text: trimmed } as T)
+  }
+  return kept
+}
+
+/**
+ * Map a merged Rampart span to an Obiter category.
+ *
+ * Person spans must already have been through {@link normalizePersonDetections};
+ * applying the person heuristics to a merged span is P0.30. The caller
+ * normalises the contributing detections, unions them, then calls this.
+ */
 export function mapRampartSpans(output: RampartOutput): RedactionSpan[] {
   return output.spans
     .filter((span) => span.start < span.end)
@@ -186,22 +234,16 @@ export function mapRampartSpans(output: RampartOutput): RedactionSpan[] {
         throw new Error(`Unrecognised Rampart label: ${label ?? '<missing>'}`)
       }
       const mapping = labelMap[label]
-      // Trim before the offsets are baked into the id and text so a trimmed
-      // span is indistinguishable from one the model returned that way.
-      const start =
-        mapping.category === 'person_name'
-          ? trimLeadingTitles(output.text, span.start, span.end)
-          : span.start
       // Always slice the source rather than trusting `span.text`. Upstream's
       // offset-changing merges (partial-overlap union in policy.mergeSpans)
       // widen start/end but keep the winner's text, so a carried `text` can
       // disagree with the offsets. `RedactionSpan.text` is a contract finalize
       // and the .docx burner enforce with text.slice(start, end) === text; the
       // source is authoritative here, so derive it instead of inheriting it.
-      const text = output.text.slice(start, span.end)
+      const text = output.text.slice(span.start, span.end)
       return {
-        id: `span_rampart_${start}_${index}`,
-        start,
+        id: `span_rampart_${span.start}_${index}`,
+        start: span.start,
         end: span.end,
         text,
         category: mapping.category,
@@ -210,9 +252,5 @@ export function mapRampartSpans(output: RampartOutput): RedactionSpan[] {
         suggestion: suggestedAction(mapping.category, mapping.dateOfBirth),
       }
     })
-    .filter(
-      (span) =>
-        span.category !== 'person_name' || !isDeniedPersonName(span.text),
-    )
     .sort((left, right) => left.start - right.start || left.end - right.end)
 }
