@@ -50,11 +50,25 @@ export interface LegislationSearchHit extends LegislationProvisionDocument {
   engineRankingScore?: number
 }
 
+export interface AppliedLegislationSearchParameters {
+  matchingStrategy: 'all' | 'frequency'
+  /** Null when no floor was applied (an empty query). */
+  rankingScoreThreshold: number | null
+}
+
 export interface LegislationSearchResult {
   hits: LegislationSearchHit[]
   query: string
   estimatedTotalHits: number
   processingTimeMs: number
+  /**
+   * The search-time parameters this call sent to the engine. Reported here so
+   * a caller measuring relevance can record the conditions its result was
+   * produced under. Its own configured constants are not evidence: the server
+   * that answered may be running a different checkout, and matchingStrategy
+   * is a request-time parameter that no index setting reveals.
+   */
+  appliedSearchParameters: AppliedLegislationSearchParameters
 }
 
 export interface LegislationSearchOptions {
@@ -300,6 +314,10 @@ export async function searchLegislation(
     query: trimmedPhrase ? query : (result.query ?? query),
     estimatedTotalHits: result.estimatedTotalHits ?? hits.length,
     processingTimeMs: result.processingTimeMs ?? 0,
+    appliedSearchParameters: {
+      matchingStrategy: searchOptions.matchingStrategy,
+      rankingScoreThreshold: searchOptions.rankingScoreThreshold ?? null,
+    },
   }
 }
 

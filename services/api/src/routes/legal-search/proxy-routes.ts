@@ -906,6 +906,13 @@ function legislationDiagnosticsFor(legislation: LegislationFetchResult | null) {
     legislationSearched: legislation.searched,
     legislationGroupServed: legislationGroupsServed(legislation),
     ...(legislation.note ? { legislationNote: legislation.note } : {}),
+    // The parameters this server sent to the engine on this response. Emitted
+    // by the layer that applied them, not by the caller's configuration, so a
+    // measurement records observed conditions. Omitted when no keyword search
+    // ran (an exact Act or provision answer, an ambiguous query).
+    ...(legislation.keywordSearchParameters
+      ? { legislationSearchParameters: legislation.keywordSearchParameters }
+      : {}),
   }
 }
 

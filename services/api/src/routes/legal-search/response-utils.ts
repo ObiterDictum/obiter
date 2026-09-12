@@ -17,6 +17,7 @@ import {
   normalizeExactMatchValue,
   titleContainsAnySearchableQueryTerm,
   titleContainsEveryQueryTerm,
+  type AppliedLegislationSearchParameters,
   type LegalSearchHit,
   type LegalSearchMatchReason,
   type LegalSearchSnippet,
@@ -125,6 +126,9 @@ export function toFetchResponse(
       legislationSearched?: boolean
       legislationGroupServed?: boolean
       legislationNote?: string
+      /** Search-time parameters the legislation keyword search sent to the
+       * engine on this response. Absent when no keyword search ran. */
+      legislationSearchParameters?: AppliedLegislationSearchParameters
     }
   } = {},
 ) {

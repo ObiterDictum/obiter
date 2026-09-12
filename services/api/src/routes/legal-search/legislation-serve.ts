@@ -1,5 +1,8 @@
 import type { Pool } from 'pg'
-import { searchLegislation } from '@obiter/search-client'
+import {
+  searchLegislation,
+  type AppliedLegislationSearchParameters,
+} from '@obiter/search-client'
 import {
   classifyLegislationCitation,
   createActDirectory,
@@ -42,6 +45,14 @@ export interface LegislationFetchResult {
   recognisedNotHeld: boolean
   note: string | null
   searched: boolean
+  /**
+   * Search-time parameters the legislation keyword search sent to the engine.
+   * Null when no keyword search ran: an exact Act or provision answer, an
+   * ambiguous query, a store failure, or an empty query. The serve layer
+   * reports what it applied so a caller never has to assert its own
+   * configured constants for conditions it did not observe.
+   */
+  keywordSearchParameters: AppliedLegislationSearchParameters | null
 }
 
 // Bounds every stored lookup, mirroring the judgment half: a slow store
@@ -73,6 +84,7 @@ const emptyResult: LegislationFetchResult = {
   recognisedNotHeld: false,
   note: null,
   searched: false,
+  keywordSearchParameters: null,
 }
 
 function excerpt(text: string, maxLength = 240): string {
@@ -241,6 +253,7 @@ export async function resolveLegislationFetch(
       recognisedNotHeld: false,
       note: null,
       searched: true,
+      keywordSearchParameters: null,
     }
   }
 
@@ -302,22 +315,30 @@ export async function resolveLegislationFetch(
       recognisedNotHeld: false,
       note: null,
       searched: true,
+      keywordSearchParameters: null,
     }
   }
 
-  const keywordHits = await searchKeywordProvisions(
+  const keyword = await searchKeywordProvisions(
     deps,
     query,
     deps.keywordLimit ?? 5,
   )
-  if (keywordHits.length === 0) return { ...emptyResult, searched: true }
+  if (keyword.hits.length === 0) {
+    return {
+      ...emptyResult,
+      searched: true,
+      keywordSearchParameters: keyword.appliedSearchParameters,
+    }
+  }
   return {
-    groups: [{ key: 'legislation', label: 'Legislation', hits: keywordHits }],
+    groups: [{ key: 'legislation', label: 'Legislation', hits: keyword.hits }],
     citationRecognised: false,
     citationHeldExact: false,
     recognisedNotHeld: false,
     note: null,
     searched: true,
+    keywordSearchParameters: keyword.appliedSearchParameters,
   }
 }
 
@@ -325,16 +346,19 @@ async function searchKeywordProvisions(
   deps: LegislationServeDeps,
   query: string,
   limit: number,
-): Promise<LegislationFetchHit[]> {
+): Promise<{
+  hits: LegislationFetchHit[]
+  appliedSearchParameters: AppliedLegislationSearchParameters | null
+}> {
   let result
   try {
     result = await searchLegislation(deps.searchClient, deps.indexName, query, {
       limit,
     })
   } catch {
-    return []
+    return { hits: [], appliedSearchParameters: null }
   }
-  return result.hits.slice(0, limit).map((hit, index) =>
+  const hits = result.hits.slice(0, limit).map((hit, index) =>
     // Fail-closed here too: only explicit false after a successful check
     // serves text; the validator already drops malformed index rows, and
     // unchecked legacy rows carry a null timestamp, so this covers stale
@@ -376,6 +400,7 @@ async function searchKeywordProvisions(
           citationMatch: undefined,
         },
   )
+  return { hits, appliedSearchParameters: result.appliedSearchParameters }
 }
 
 export interface LegislationProvisionPage {

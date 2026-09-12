@@ -1572,6 +1572,7 @@ export {
   searchLegislation,
 } from './legislation-index'
 export type {
+  AppliedLegislationSearchParameters,
   LegislationProvisionDocument,
   LegislationSearchHit,
   LegislationSearchOptions,
