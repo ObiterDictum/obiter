@@ -74,6 +74,15 @@ jobs:
       - name: Lint
         run: pnpm lint
 
+      # The web production build is a gate of its own: TanStack Start's
+      # import-protection plugin only rejects a server-only import reaching
+      # client code while building, so the failure typechecks, formats, lints
+      # and tests clean (#121 did exactly that on 29 August and every PR since
+      # merged green). Keep it in this job so it stays part of the required
+      # check rather than a separate workflow someone has to remember.
+      - name: Build web
+        run: pnpm --filter @obiter/web build
+
       - name: Apply database migrations
         env:
           PGPASSWORD: obiter
