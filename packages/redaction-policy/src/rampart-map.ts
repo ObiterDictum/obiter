@@ -192,10 +192,13 @@ export function mapRampartSpans(output: RampartOutput): RedactionSpan[] {
         mapping.category === 'person_name'
           ? trimLeadingTitles(output.text, span.start, span.end)
           : span.start
-      const text =
-        start === span.start
-          ? (span.text ?? output.text.slice(span.start, span.end))
-          : output.text.slice(start, span.end)
+      // Always slice the source rather than trusting `span.text`. Upstream's
+      // offset-changing merges (partial-overlap union in policy.mergeSpans)
+      // widen start/end but keep the winner's text, so a carried `text` can
+      // disagree with the offsets. `RedactionSpan.text` is a contract finalize
+      // and the .docx burner enforce with text.slice(start, end) === text; the
+      // source is authoritative here, so derive it instead of inheriting it.
+      const text = output.text.slice(start, span.end)
       return {
         id: `span_rampart_${start}_${index}`,
         start,

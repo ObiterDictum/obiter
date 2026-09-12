@@ -114,6 +114,30 @@ describe('redaction policy', () => {
     expect(spans.map((span) => span.category)).toEqual(['address', 'address'])
   })
 
+  it('re-slices merged spans from the source so text always matches offsets', () => {
+    // Upstream's partial-overlap union widens start/end but keeps the winner's
+    // text, so a merged span can arrive with text that disagrees with its
+    // offsets. Finalize and the .docx burner require text.slice(start, end) ===
+    // text; the mapper must derive text from the source, not inherit it.
+    const text = 'Alice alice@example.com'
+    const spans = mapRampartSpans({
+      text,
+      spans: [
+        {
+          start: 0,
+          end: 23,
+          label: 'EMAIL',
+          score: 1,
+          text: 'alice@example.com',
+        },
+      ],
+    })
+
+    expect(spans).toHaveLength(1)
+    expect(spans[0]?.text).toBe(text)
+    expect(text.slice(spans[0]!.start, spans[0]!.end)).toBe(spans[0]?.text)
+  })
+
   it('fails loudly for unknown Rampart labels', () => {
     expect(() =>
       mapRampartSpans({
