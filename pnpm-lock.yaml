@@ -99,6 +99,9 @@ importers:
       '@obiter/app-shell':
         specifier: workspace:*
         version: link:../../packages/app-shell
+      '@obiter/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       '@obiter/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -191,6 +194,8 @@ importers:
       react-dom:
         specifier: ^19.2.5
         version: 19.2.5(react@19.2.5)
+
+  packages/config: {}
 
   packages/contracts:
     dependencies:
@@ -355,6 +360,9 @@ importers:
       '@napi-rs/canvas':
         specifier: ^0.1.100
         version: 0.1.100
+      '@obiter/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       '@obiter/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -413,6 +421,9 @@ importers:
 
   services/legal-ingestor:
     dependencies:
+      '@obiter/config':
+        specifier: workspace:*
+        version: link:../../packages/config
       '@obiter/legal-schema':
         specifier: workspace:*
         version: link:../../packages/legal-schema
