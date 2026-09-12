@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   OOXML_INFLATE_CONCURRENCY,
@@ -6,7 +9,12 @@ import {
   OOXML_MAX_ENTRY_UNCOMPRESSED_BYTES,
   OOXML_MAX_UNCOMPRESSED_BYTES,
 } from '@obiter/ooxml'
-import { readApiEnv, readRampartDetectionConfig } from './env'
+import {
+  parseLocalEnvFile,
+  readApiEnv,
+  readRampartDetectionConfig,
+  resolveLocalEnvFile,
+} from './env'
 import { defaultRampartCacheDir } from './rampart-cache'
 import {
   DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES,
@@ -436,5 +444,91 @@ describe('readRampartDetectionConfig', () => {
       minScore: 0.4,
       chunkTokens: 400,
     })
+  })
+})
+
+describe('local .env resolution', () => {
+  const tempDirs: string[] = []
+
+  async function tempDir(prefix: string, base = tmpdir()) {
+    const directory = await mkdtemp(join(base, prefix))
+    tempDirs.push(directory)
+    return directory
+  }
+
+  // A worktree root, marked the way the real repository marks one.
+  async function tempWorktree(base = tmpdir()) {
+    const root = await tempDir('obiter-worktree-', base)
+    await writeFile(
+      join(root, 'pnpm-workspace.yaml'),
+      'packages:\n  - services/*\n',
+    )
+    return root
+  }
+
+  async function writeEnvFile(directory: string, contents: string) {
+    const envPath = join(directory, '.env')
+    await writeFile(envPath, contents)
+    return envPath
+  }
+
+  afterEach(async () => {
+    await Promise.all(
+      tempDirs
+        .splice(0)
+        .map((directory) => rm(directory, { recursive: true, force: true })),
+    )
+  })
+
+  it('finds the worktree root .env from a nested package', async () => {
+    const root = await tempWorktree()
+    const nested = join(root, 'services', 'api')
+    await mkdir(nested, { recursive: true })
+    const envPath = await writeEnvFile(root, 'DATABASE_URL=postgres://lane\n')
+
+    expect(resolveLocalEnvFile(nested)).toBe(envPath)
+  })
+
+  it('does not cross the worktree boundary into a parent checkout .env', async () => {
+    // The shape of ~/Source/Obiter: a checkout with a .env and a lane worktree
+    // nested inside it whose own .env is missing.
+    const parent = await tempDir('obiter-parent-')
+    await writeEnvFile(parent, 'DATABASE_URL=postgres://shared\n')
+
+    const worktree = await tempWorktree(parent)
+    const nested = join(worktree, 'services', 'api')
+    await mkdir(nested, { recursive: true })
+
+    expect(resolveLocalEnvFile(nested)).toBeNull()
+  })
+
+  it('returns null when the worktree has no .env', async () => {
+    const worktree = await tempWorktree()
+    expect(resolveLocalEnvFile(worktree)).toBeNull()
+  })
+
+  it('parses entries and strips surrounding quotes', async () => {
+    const directory = await tempDir('obiter-env-file-')
+    const envPath = await writeEnvFile(
+      directory,
+      '# lane configuration\nPORT=8791\nOBITER_WEB_ORIGIN="http://localhost:3004"\n\n',
+    )
+
+    expect([...parseLocalEnvFile(envPath)]).toEqual([
+      ['PORT', '8791'],
+      ['OBITER_WEB_ORIGIN', 'http://localhost:3004'],
+    ])
+  })
+
+  it('refuses a key assigned more than once', async () => {
+    const directory = await tempDir('obiter-env-dup-')
+    const envPath = await writeEnvFile(
+      directory,
+      'PORT=8791\nOBITER_WEB_PORT=3004\nPORT=8787\n',
+    )
+
+    // First-wins in this loader and last-wins in vite's loadEnv: accepting the
+    // duplicate would run the API and web server with different ports.
+    expect(() => parseLocalEnvFile(envPath)).toThrow(/PORT more than once/)
   })
 })

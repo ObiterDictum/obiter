@@ -54,6 +54,7 @@ served: <path the web server resolved to>
 revision freshness: <yes|no|NOT CHECKED (no expected-marker given)>
 api checkout HEAD: <sha> (when development provenance is available)
 api served: <path> (when development provenance is available)
+api env file: <path> (when development provenance is available)
 [screenshot]
 ```
 
@@ -74,11 +75,12 @@ restart the dev server after any checkout change, then run the script again.
 
 The requested `/api/health` check must be reachable, return a 2xx response,
 and identify this stack; unreachable APIs, HTTP errors, and non-stack responses
-fail. Development responses include the API commit SHA and absolute checkout
-root, which the script reports and compares with the tested checkout. A
-same-root stale SHA therefore fails too. Production and older API servers omit
-those fields; a reachable stack response with absent provenance remains an
-honest, non-failing `API provenance not determinable` result.
+fail. Development responses include the API commit SHA, absolute checkout
+root and resolved `.env` path, which the script reports and compares with the
+tested checkout. A same-root stale SHA therefore fails too. Production and
+older API servers omit those fields; a reachable stack response with absent
+provenance remains an honest, non-failing `API provenance not determinable`
+result.
 
 State the limit plainly: a screenshot proves what the page rendered, not what
 the system recorded. Claims about persisted state — audit rows, stored

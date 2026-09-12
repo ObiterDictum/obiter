@@ -28,10 +28,10 @@ paths Vite embeds in served modules), compares it against the checkout the
 script is run from, probes the requested API, and prints a paste-ready evidence
 block. Exit is non-zero when the web server serves a different checkout or its
 provenance cannot be determined. API unreachable, HTTP-error, non-stack, root
-mismatch, and reported commit-SHA mismatch responses also fail. A reachable
-stack health response with absent development provenance fields is the only
-non-failing API absence case; the API reports what is determinable and says why
-when it is not.
+mismatch, env-file mismatch, and reported commit-SHA mismatch responses also
+fail. A reachable stack health response with absent development provenance
+fields is the only non-failing API absence case; the API reports what is
+determinable and says why when it is not.
 
 When a browser-observed claim depends on an edit being live, pass a literal
 marker from that edit with `--expect <marker>`, for example:
@@ -67,9 +67,10 @@ answer requests and pass health checks while serving the previous change.
 If a marker check turns up stale: clear `node_modules/.vite` and restart the
 web server; a change in a workspace package the API imports needs the API
 restarted too, not just the web server. In development, `/api/health` also
-reports the API commit SHA and absolute checkout root. The script compares
-each reported field with the checkout under test, so a same-root stale API
-commit also fails. Production and older API servers omit those fields, so API
+reports the API commit SHA, absolute checkout root and the `.env` it resolved.
+The script compares each reported field with the checkout under test, so a
+same-root stale API commit or a lane running with another worktree's `.env`
+also fails. Production and older API servers omit those fields, so API
 provenance remains not determinable and does not fail the check by itself.
 
 ## Preferred Test Strategy

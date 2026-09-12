@@ -1,8 +1,10 @@
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { tanstackStart } from '@tanstack/react-start/plugin/vite'
 import tailwindcss from '@tailwindcss/vite'
+import { assertNoDuplicateEnvKeys } from './env-file.mjs'
 import { parsePort } from './serve.mjs'
 
 // The API reads the repo-root .env through its own loader (services/api/src/env.ts
@@ -12,6 +14,18 @@ import { parsePort } from './serve.mjs'
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url))
 
 export default defineConfig(({ mode }) => {
+  // A key assigned twice in the same file would be resolved last-wins by
+  // loadEnv and first-wins by the API's loader, so the two halves would run
+  // with different values and no error. Refuse it here too, before loading.
+  for (const envFile of [
+    '.env',
+    '.env.local',
+    `.env.${mode}`,
+    `.env.${mode}.local`,
+  ]) {
+    assertNoDuplicateEnvKeys(join(repoRoot, envFile))
+  }
+
   const fileEnv = loadEnv(mode, repoRoot, '')
   const read = (key: string) => process.env[key] ?? fileEnv[key]
 
