@@ -459,6 +459,48 @@ describe('SearchResults legislation group', () => {
     )
     expect(headings).toEqual(['Case law', 'Legislation'])
   })
+
+  it('names an unheld Act instead of a not-held judgment citation', () => {
+    const rendered = renderResults({
+      hits: [citingHit],
+      cached: true,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'recognised_not_held',
+      citation: { recognised: true, status: 'not_held' },
+      diagnostics: {
+        legislationNote: 'Children Act 1989 is not held.',
+        legislationNotHeld: true,
+      },
+    })
+    root = rendered.root
+    container = rendered.container
+
+    // The legislation half recognised the Act and served nothing. The page
+    // must say the Act is not held, not that a judgment citation is not held.
+    expect(container.textContent).toContain('Children Act 1989 is not held.')
+    expect(container.textContent).not.toContain('Citation not held')
+  })
+
+  it('does not surface a legislation outage as a not-held notice', () => {
+    const rendered = renderResults({
+      hits: [citingHit],
+      cached: true,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'results',
+      diagnostics: { legislationNote: 'Legislation store unavailable.' },
+    })
+    root = rendered.root
+    container = rendered.container
+
+    // An outage note is not a not-held verdict; the legislation half still
+    // fails open and the judgment results still stand.
+    expect(container.textContent).not.toContain(
+      'Legislation store unavailable.',
+    )
+    expect(container.textContent).toContain(citingHit.title)
+  })
 })
 
 describe('SearchResults withheld distinction and group headings', () => {

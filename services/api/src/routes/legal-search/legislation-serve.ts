@@ -212,6 +212,21 @@ export async function resolveLegislationFetch(
     }
   }
 
+  if (outcome.kind === 'not_held') {
+    // A recognised Act or chapter citation the corpus does not hold: the
+    // legislation mirror of the judgment honesty gate. No keyword search runs,
+    // because a provision that merely shares words with the title is not an
+    // answer to "show me that Act". The note names what was asked for, so the
+    // page reads as not held rather than not searched.
+    return {
+      ...emptyResult,
+      searched: true,
+      citationRecognised: true,
+      recognisedNotHeld: true,
+      note: `${outcome.recognisedQuery} is not held.`,
+    }
+  }
+
   if (outcome.kind === 'provision') {
     let provision = null
     try {

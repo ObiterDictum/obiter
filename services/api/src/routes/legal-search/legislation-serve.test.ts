@@ -257,6 +257,70 @@ describe('resolveLegislationFetch', () => {
     expect(result.note).toContain('not held')
   })
 
+  it('reports an unheld Act as not held, never keyword provisions', async () => {
+    // "Children Act 1989" is Act-shaped but not stored. Before the honest
+    // negative it fell to keyword search and served provisions of the
+    // Children's Wellbeing and Schools Act 2026 that merely share the word
+    // "children". The keyword hits are supplied here precisely so the test
+    // proves they are not served.
+    const neighbour = {
+      ...currentProvision,
+      id: 'ukpga/2026/21/section/12',
+      documentIdentity: 'ukpga/2026/21',
+      labelPath: 'section/12',
+      title: "Children's Wellbeing and Schools Act 2026",
+      text: 'A provision that shares a word with the title is not an answer.',
+    }
+    const result = await resolveLegislationFetch(
+      createDeps({ keywordHits: [neighbour] }),
+      'Children Act 1989',
+    )
+    expect(result.citationRecognised).toBe(true)
+    expect(result.recognisedNotHeld).toBe(true)
+    expect(result.citationHeldExact).toBe(false)
+    expect(result.groups).toEqual([])
+    expect(result.note).toBe('Children Act 1989 is not held.')
+    // No keyword search ran, so nothing may report parameters for one.
+    expect(result.keywordSearchParameters).toBe(null)
+  })
+
+  it('reports an unheld chapter number as not held', async () => {
+    const result = await resolveLegislationFetch(
+      createDeps({ keywordHits: [currentProvision] }),
+      '2008 c. 12',
+    )
+    expect(result.recognisedNotHeld).toBe(true)
+    expect(result.groups).toEqual([])
+    expect(result.note).toBe('2008 c. 12 is not held.')
+  })
+
+  it('folds a straight apostrophe to a curly stored Act title', async () => {
+    const curlyActs = [
+      {
+        identity: 'ukpga/2025/26',
+        actType: 'ukpga',
+        year: 2025,
+        number: 26,
+        title: 'Renters’ Rights Act 2025',
+        sourceUrl: 'https://www.legislation.gov.uk/ukpga/2025/26',
+        extent: 'E+W',
+      },
+    ]
+    const deps: LegislationServeDeps = {
+      pool: {
+        query: vi.fn(async () => ({ rows: curlyActs })),
+      } as unknown as LegislationServeDeps['pool'],
+      searchClient: createDeps({}).searchClient,
+      indexName: 'legislation_provisions',
+    }
+    const result = await resolveLegislationFetch(
+      deps,
+      "Renters' Rights Act 2025",
+    )
+    expect(result.citationHeldExact).toBe(true)
+    expect(result.groups[0]?.hits[0]?.documentIdentity).toBe('ukpga/2025/26')
+  })
+
   it('reports ambiguity with candidates, never a silent winner', async () => {
     const pool = {
       query: vi.fn(async () => ({

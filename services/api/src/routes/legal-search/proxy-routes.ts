@@ -905,6 +905,9 @@ function legislationDiagnosticsFor(legislation: LegislationFetchResult | null) {
   return {
     legislationSearched: legislation.searched,
     legislationGroupServed: legislationGroupsServed(legislation),
+    // A verdict, not an outage: the note alone cannot distinguish "the corpus
+    // does not hold this" from "the store did not answer".
+    ...(legislation.recognisedNotHeld ? { legislationNotHeld: true } : {}),
     ...(legislation.note ? { legislationNote: legislation.note } : {}),
     // The parameters this server sent to the engine on this response. Emitted
     // by the layer that applied them, not by the caller's configuration, so a

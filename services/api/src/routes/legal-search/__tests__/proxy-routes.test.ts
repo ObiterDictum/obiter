@@ -604,6 +604,55 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('names an unheld Act in diagnostics instead of a judgment citation', async () => {
+    // The legislation half recognised the Act and held nothing: the response
+    // must carry a not-held verdict, not just a free-text note that an outage
+    // could also set.
+    legislationServeMock.resolveLegislationFetch.mockResolvedValueOnce({
+      groups: [],
+      citationRecognised: true,
+      citationHeldExact: false,
+      recognisedNotHeld: true,
+      note: 'Children Act 1989 is not held.',
+      searched: true,
+      keywordSearchParameters: null,
+    })
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: 'Children Act 1989',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const app = createAuthenticatedProxyApp(
+      undefined,
+      {
+        legislation: {
+          pool: { query: vi.fn(async () => ({ rows: [] })) } as never,
+          indexName: 'legislation_provisions',
+        },
+      },
+      null,
+    )
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'Children Act 1989' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [],
+      outcome: 'recognised_not_held',
+      citation: { recognised: true, status: 'not_held' },
+      diagnostics: {
+        legislationNotHeld: true,
+        legislationNote: 'Children Act 1989 is not held.',
+        legislationGroupServed: false,
+      },
+    })
+  })
+
   it('serves stored citing cases to anonymous callers, labelled not_held', async () => {
     // [2003] UKHL 1 is recognised but not held; the stored citing cases
     // must serve clearly distinguished instead of being discarded.

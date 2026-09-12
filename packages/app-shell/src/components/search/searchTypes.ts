@@ -103,6 +103,12 @@ export interface LegalSearchFetchResponse {
     citationRecognised?: boolean
     citationStatus?: LegalSearchCitationStatus
     storedIndexStatus?: 'ok' | 'unavailable'
+    /** Set when the legislation half recognised a citation but served no
+     * group: an Act or chapter the corpus does not hold, or an ambiguous Act
+     * name. Names what was asked for so the page reads as not held. */
+    legislationNote?: string
+    /** True when the note above is a not-held verdict rather than an outage. */
+    legislationNotHeld?: boolean
   }
 }
 
@@ -155,6 +161,12 @@ export type LegalSearchState =
       hydrationAttempt?: number
       /** True once the bounded hydration recheck gives up waiting. */
       hydrationExpired?: boolean
+      /** Response diagnostics.legislationNote, so the empty copy names the
+       * unheld Act instead of claiming a judgment was sought. */
+      legislationNote?: string
+      /** Response diagnostics.legislationNotHeld: the note is a verdict, not
+       * an outage. */
+      legislationNotHeld?: boolean
     }
   | { status: 'error'; query: string; message: string }
 

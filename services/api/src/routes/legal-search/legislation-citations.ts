@@ -15,6 +15,8 @@
  * No network, no storage. Callers supply the act directory from Postgres.
  */
 
+import { exactMatchPunctuationFolds } from '@obiter/search-client'
+
 export interface LegislationActDirectoryEntry {
   actType: string
   year: number
@@ -46,6 +48,13 @@ export type LegislationCitationOutcome =
       recognisedQuery: string
     }
   | { kind: 'ambiguous'; candidates: LegislationActRef[]; reason: string }
+  // A well-formed citation for an Act or chapter the corpus does not hold.
+  // Distinct from `unrecognised` on purpose: `unrecognised` means the query
+  // is not a legislation citation and may fall through to keyword search,
+  // while `not_held` is a recognised citation whose honest answer is
+  // nothing. A provision that merely shares words with the title is not an
+  // answer to "show me that Act".
+  | { kind: 'not_held'; recognisedQuery: string }
   | { kind: 'unrecognised' }
 
 /** Curated aliases only: an alias maps one surface form to one Act, and any
@@ -57,13 +66,41 @@ const actAliases = new Map<string, string>([
   ['hra 1998', 'Human Rights Act 1998'],
 ])
 
+/**
+ * The one fold applied to both a typed Act title and every stored title.
+ *
+ * NFKC plus the shared quote/dash map (`exactMatchPunctuationFolds`, the same
+ * fold neutral-citation matching uses), then case, punctuation and whitespace
+ * folding. Folding one side only trades a failure for its mirror: the stored
+ * title carries U+2019 (Renters’ Rights Act 2025) while a UK keyboard emits
+ * the straight apostrophe. Stripping ASCII apostrophes but leaving U+2019
+ * meant the straight query missed the curly title and the curly query missed
+ * a straight one. NFKC also folds the non-breaking spaces Word and Google
+ * Docs paste in.
+ */
 export function normalizeActTitle(value: string): string {
-  return value
-    .normalize('NFKC')
+  const punctuationFolded = exactMatchPunctuationFolds.reduce(
+    (normalized, [from, to]) => normalized.replaceAll(from, to),
+    value.normalize('NFKC'),
+  )
+  return punctuationFolded
     .toLowerCase()
     .replace(/[.,;:'"()[\]]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+}
+
+/**
+ * True when the text names a single Act rather than a subject phrase: the
+ * word "Act" followed by a four-digit year, e.g. "Children Act 1989".
+ * Section and schedule forms are split before this test, so only the Act
+ * remainder reaches it. A phrase that is not Act-shaped is not a named
+ * entity, so an index miss may legitimately be a corpus keyword miss; it
+ * stays `unrecognised` and is searched.
+ */
+function looksLikeActTitle(value: string): boolean {
+  const normalized = normalizeActTitle(value)
+  return /\bact\b/.test(normalized) && /\b\d{4}$/.test(normalized)
 }
 
 export interface ActDirectory {
@@ -210,7 +247,16 @@ function resolveActByName(
       return normalized === title || normalized.endsWith(` ${title}`)
     })
     .sort((a, b) => b.title.length - a.title.length)
-  if (suffixes.length === 0) return { kind: 'unrecognised' }
+  // An Act-shaped title that resolves to no stored Act is a recognised
+  // citation the corpus does not hold. Returning `unrecognised` here sent
+  // "Children Act 1989" to keyword search, which served provisions of the
+  // Children's Wellbeing Act 2026 because they share the word "children".
+  // The honest answer is nothing, said visibly.
+  if (suffixes.length === 0) {
+    return looksLikeActTitle(actText)
+      ? { kind: 'not_held', recognisedQuery: actText.trim() }
+      : { kind: 'unrecognised' }
+  }
   const longest = normalizeActTitle(suffixes[0]!.title)
   const rivals = suffixes.filter(
     (entry) => normalizeActTitle(entry.title) === longest,
@@ -307,7 +353,9 @@ export function classifyLegislationCitation(
     const found = directory.byYearNumber(chapter.year, chapter.number)
     if (found)
       return { kind: 'act', act: toActRef(found), recognisedQuery: trimmed }
-    return { kind: 'unrecognised' }
+    // A chapter number the directory does not hold is a recognised citation
+    // with no answer in the corpus, not a phrase to keyword-search.
+    return { kind: 'not_held', recognisedQuery: trimmed }
   }
 
   const schedule = splitScheduleQuery(trimmed)

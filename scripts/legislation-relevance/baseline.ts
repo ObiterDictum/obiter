@@ -1,28 +1,44 @@
 import type { LegislationRelevanceBaseline } from './metrics'
 
 // Observed floors from POST /api/search/fetch on the product corpus at
-// documentCount 184772. These record today's behaviour including the failures;
-// ranking work ratchets them, it does not tidy failing cases out of the set.
+// documentCount 184772. These record today's behaviour; ranking work ratchets
+// them, it does not tidy failing cases out of the set.
 //
 // heldPrecision is computed over complete-answer (exact) held cases only: a
 // subject-matter query's relevant set is a lower bound, so there is no honest
 // precision to score for it. Subject recall is reported separately.
 //
-// The floors are not targets. Every absent_act case still serves five
-// provisions a lawyer did not ask for, and subject recall is 0.3125 because the
-// served top five are an insertion-order tie broken on identifier path. Those
-// are the numbers L3 and L23 have to argue from.
+// The floors are not targets. absentPrecision is 1: every absent Act, chapter,
+// provision and concept query is answered with no hits, because a recognised
+// citation the corpus does not hold is named as not held instead of being
+// filled with provisions that merely share its words. Held recall is 0.8226;
+// the remaining gap is subject recall, 0.3125, where the served top five are an
+// insertion-order tie broken on identifier path. That is what L23 has to argue
+// from.
+
 export const legislationRelevanceBaseline: LegislationRelevanceBaseline = {
   expectedCaseCount: 52,
   expectedIndexDocumentCount: 184772,
-  heldRecall: 0.7903,
-  heldPrecision: 0.9565,
-  absentPrecision: 0.4286,
-  mrr: 0.7823,
+  heldRecall: 0.8226,
+  heldPrecision: 1,
+  absentPrecision: 1,
+  mrr: 0.8145,
   byQuery: {
-    'act-human-rights-1998': { recall: 1, ranks: [1], returnedHitCount: 1 },
-    'act-equality-2010': { recall: 1, ranks: [1], returnedHitCount: 1 },
-    'act-online-safety-2023': { recall: 1, ranks: [1], returnedHitCount: 1 },
+    'act-human-rights-1998': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'act-equality-2010': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'act-online-safety-2023': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
     'act-employment-rights-2025': {
       recall: 1,
       ranks: [1],
@@ -33,32 +49,96 @@ export const legislationRelevanceBaseline: LegislationRelevanceBaseline = {
       ranks: [1],
       returnedHitCount: 1,
     },
-    'act-data-use-access-2025': { recall: 1, ranks: [1], returnedHitCount: 1 },
-    'act-mental-health-2025': { recall: 1, ranks: [1], returnedHitCount: 1 },
+    'act-data-use-access-2025': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'act-mental-health-2025': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
     'act-victims-prisoners-2024': {
       recall: 1,
       ranks: [1],
       returnedHitCount: 1,
     },
-    'act-hra-alias': { recall: 1, ranks: [1], returnedHitCount: 1 },
-    'act-renters-rights-curly': { recall: 1, ranks: [1], returnedHitCount: 1 },
-    'act-renters-rights-straight': {
-      recall: 0,
-      ranks: [null],
-      returnedHitCount: 5,
+    'act-hra-alias': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
     },
-    'chapter-hra-1998-c42': { recall: 1, ranks: [1], returnedHitCount: 1 },
-    'section-hra-s6': { recall: 1, ranks: [1], returnedHitCount: 1 },
-    'section-hra-s6-alias': { recall: 1, ranks: [1], returnedHitCount: 1 },
-    'section-hra-s2-of-the': { recall: 1, ranks: [1], returnedHitCount: 1 },
-    'section-ea-s13': { recall: 1, ranks: [1], returnedHitCount: 1 },
-    'section-ea-s20': { recall: 1, ranks: [1], returnedHitCount: 1 },
-    'section-ea-s20-3': { recall: 1, ranks: [1], returnedHitCount: 1 },
-    'section-ea-s40-act-first': { recall: 1, ranks: [1], returnedHitCount: 1 },
-    'section-ea-s149': { recall: 1, ranks: [1], returnedHitCount: 1 },
-    'section-ea-sch1-para1': { recall: 1, ranks: [1], returnedHitCount: 1 },
-    'section-osa-s1': { recall: 1, ranks: [1], returnedHitCount: 1 },
-    'section-era-2025-s1': { recall: 1, ranks: [1], returnedHitCount: 1 },
+    'act-renters-rights-curly': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'act-renters-rights-straight': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'chapter-hra-1998-c42': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'section-hra-s6': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'section-hra-s6-alias': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'section-hra-s2-of-the': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'section-ea-s13': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'section-ea-s20': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'section-ea-s20-3': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'section-ea-s40-act-first': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'section-ea-s149': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'section-ea-sch1-para1': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'section-osa-s1': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'section-era-2025-s1': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
     'subject-flexible-working': {
       recall: 0.5,
       ranks: [1, null],
@@ -102,55 +182,63 @@ export const legislationRelevanceBaseline: LegislationRelevanceBaseline = {
     'absent-act-children-1989': {
       recall: null,
       ranks: [],
-      returnedHitCount: 5,
+      returnedHitCount: 0,
     },
     'absent-act-data-protection-2018': {
       recall: null,
       ranks: [],
-      returnedHitCount: 5,
+      returnedHitCount: 0,
     },
     'absent-act-companies-2006': {
       recall: null,
       ranks: [],
-      returnedHitCount: 5,
+      returnedHitCount: 0,
     },
     'absent-act-landlord-tenant-1985': {
       recall: null,
       ranks: [],
-      returnedHitCount: 5,
+      returnedHitCount: 0,
     },
     'absent-act-limitation-1980': {
       recall: null,
       ranks: [],
-      returnedHitCount: 5,
+      returnedHitCount: 0,
     },
     'absent-act-misuse-drugs-1971': {
       recall: null,
       ranks: [],
-      returnedHitCount: 5,
+      returnedHitCount: 0,
     },
     'absent-act-sale-of-goods-1979': {
       recall: null,
       ranks: [],
-      returnedHitCount: 5,
+      returnedHitCount: 0,
     },
     'absent-act-proceeds-crime-2002': {
       recall: null,
       ranks: [],
-      returnedHitCount: 5,
+      returnedHitCount: 0,
     },
     'absent-act-employment-rights-1996': {
       recall: null,
       ranks: [],
-      returnedHitCount: 5,
+      returnedHitCount: 0,
     },
-    'absent-act-housing-2004': { recall: null, ranks: [], returnedHitCount: 5 },
+    'absent-act-housing-2004': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 0,
+    },
     'absent-act-criminal-justice-2003': {
       recall: null,
       ranks: [],
-      returnedHitCount: 5,
+      returnedHitCount: 0,
     },
-    'absent-chapter-2008-c12': { recall: null, ranks: [], returnedHitCount: 5 },
+    'absent-chapter-2008-c12': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 0,
+    },
     'absent-provision-ea-s999': {
       recall: null,
       ranks: [],
@@ -171,7 +259,11 @@ export const legislationRelevanceBaseline: LegislationRelevanceBaseline = {
       ranks: [],
       returnedHitCount: 0,
     },
-    'absent-concept-mens-rea': { recall: null, ranks: [], returnedHitCount: 0 },
+    'absent-concept-mens-rea': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 0,
+    },
     'absent-concept-res-judicata': {
       recall: null,
       ranks: [],
@@ -187,6 +279,10 @@ export const legislationRelevanceBaseline: LegislationRelevanceBaseline = {
       ranks: [],
       returnedHitCount: 0,
     },
-    'absent-concept-zygote': { recall: null, ranks: [], returnedHitCount: 0 },
+    'absent-concept-zygote': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 0,
+    },
   },
 }

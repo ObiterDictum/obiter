@@ -30,6 +30,11 @@ export function SearchResults({
   const legislation = legislationHits(response)
   const showJudgments = response.hits.length > 0
   const showLegislation = legislation.length > 0
+  const legislationNote = response.diagnostics?.legislationNote
+  // Only the legislation not-held verdict, never an outage note or a judgment
+  // citation: the API marks the verdict explicitly so the page cannot mistake
+  // "the store did not answer" for "the corpus does not hold this".
+  const legislationNotHeld = response.diagnostics?.legislationNotHeld === true
   const legislationOffset = legislationLead ? 0 : response.hits.length
   const judgmentOffset = legislationLead ? legislation.length : 0
 
@@ -43,6 +48,19 @@ export function SearchResults({
         <p className="pb-3 text-[11px] font-medium tracking-wide text-muted">
           {formatResultMeta(response, browse)}
         </p>
+        {legislationNotHeld && !showLegislation ? (
+          // The legislation half recognised the citation but served nothing:
+          // an Act or chapter the corpus does not hold. Say so by name, above
+          // any judgment results, so an empty legislation group never reads as
+          // "we found nothing about this" when the truth is "we do not hold
+          // this statute".
+          <p
+            role="status"
+            className="mb-3 rounded-md border border-warning/30 bg-raised px-3 py-2 text-sm text-muted"
+          >
+            {legislationNote}
+          </p>
+        ) : null}
         {legislationLead ? (
           <>
             {showLegislation ? (
@@ -238,7 +256,14 @@ function formatResultMeta(
     return `${response.hits.length} recent ${caseLabel} for ${browse.courtLabel} from stored legal sources`
   }
 
-  if (response.citation?.status === 'not_held' && response.hits.length > 0) {
+  if (
+    response.citation?.status === 'not_held' &&
+    response.hits.length > 0 &&
+    // A legislation not-held is reported by the legislation notice, not as a
+    // judgment citation: the query asked for an Act, not a case. An outage
+    // note is not a not-held verdict either.
+    response.diagnostics?.legislationNotHeld !== true
+  ) {
     const resultLabel = response.hits.length === 1 ? 'result' : 'results'
     if (response.hits.every((hit) => hit.citationMatch === 'citing')) {
       return `Citation not held · ${response.hits.length} citing ${resultLabel} from Find Case Law`

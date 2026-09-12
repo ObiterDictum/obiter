@@ -125,6 +125,11 @@ export function toFetchResponse(
       citationStatus?: LegalSearchCitationStatus
       legislationSearched?: boolean
       legislationGroupServed?: boolean
+      /** True when the legislation half recognised the citation but held no
+       * answer: an unheld Act or chapter, an unheld provision, or an
+       * ambiguous Act name. The note names it. Distinct from a legislation
+       * outage, which also sets a note but is not a not-held verdict. */
+      legislationNotHeld?: boolean
       legislationNote?: string
       /** Search-time parameters the legislation keyword search sent to the
        * engine on this response. Absent when no keyword search ran. */

@@ -130,15 +130,81 @@ describe('classifyLegislationCitation', () => {
     })
   })
 
-  it('leaves unknown Acts unrecognised', () => {
+  it('reports an Act-shaped name the corpus does not hold as not held', () => {
+    // An Act-shaped name is a recognised citation with no answer in the
+    // corpus, not an unrecognised phrase. It must not fall through to keyword
+    // search, where a provision of a different Act that shares a word would
+    // be served as if it answered the query.
     expect(
       classifyLegislationCitation('s 6 Imaginary Act 1998', directory),
-    ).toEqual({ kind: 'unrecognised' })
+    ).toEqual({ kind: 'not_held', recognisedQuery: 'Imaginary Act 1998' })
+    expect(classifyLegislationCitation('Children Act 1989', directory)).toEqual(
+      { kind: 'not_held', recognisedQuery: 'Children Act 1989' },
+    )
+  })
+
+  it('still leaves non-Act text unrecognised', () => {
     expect(
       classifyLegislationCitation('Donoghue v Stevenson', directory),
     ).toEqual({
       kind: 'unrecognised',
     })
+    // A phrase that merely shares a word with a title is not an Act citation.
+    expect(classifyLegislationCitation('proportionality', directory)).toEqual({
+      kind: 'unrecognised',
+    })
+  })
+
+  it('reports an unheld chapter number as not held', () => {
+    expect(classifyLegislationCitation('2008 c. 12', directory)).toEqual({
+      kind: 'not_held',
+      recognisedQuery: '2008 c. 12',
+    })
+  })
+
+  it('folds curly and straight quotes to the same Act title', () => {
+    const renters = createActDirectory([
+      {
+        actType: 'ukpga',
+        year: 2025,
+        number: 26,
+        identity: 'ukpga/2025/26',
+        title: 'Renters’ Rights Act 2025',
+      },
+    ])
+    // The stored title carries U+2019; the straight apostrophe is what a UK
+    // keyboard produces. Both must resolve, or one form merely shifts the
+    // miss to the other apostrophe.
+    for (const query of [
+      'Renters’ Rights Act 2025',
+      "Renters' Rights Act 2025",
+    ]) {
+      const outcome = classifyLegislationCitation(query, renters)
+      expect(outcome.kind).toBe('act')
+      if (outcome.kind === 'act') {
+        expect(outcome.act.identity).toBe('ukpga/2025/26')
+      }
+    }
+  })
+
+  it('folds non-breaking spaces and dash variants to the same Act title', () => {
+    const stored = createActDirectory([
+      ...entries,
+      {
+        actType: 'ukpga',
+        year: 2021,
+        number: 12,
+        identity: 'ukpga/2021/12',
+        title: 'High Speed Rail (West Midlands – Crewe) Act 2021',
+      },
+    ])
+    // The stored title carries an en dash; pasted text carries a hyphen and
+    // a non-breaking space. Both sides fold through the same map.
+    const outcome = classifyLegislationCitation(
+      'High Speed Rail (West Midlands\u00A0- Crewe) Act 2021',
+      stored,
+    )
+    expect(outcome.kind).toBe('act')
   })
 
   it('reports ambiguity with candidates instead of a silent winner', () => {

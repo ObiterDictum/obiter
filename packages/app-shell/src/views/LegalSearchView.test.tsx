@@ -352,6 +352,41 @@ describe('LegalSearchView debounce lifecycle', () => {
     )
   })
 
+  it('names the unheld Act instead of claiming a judgment was sought', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        hits: [],
+        cached: true,
+        indexedCount: 0,
+        skippedCount: 0,
+        outcome: 'recognised_not_held',
+        citation: { recognised: true, status: 'not_held' },
+        diagnostics: {
+          liveProviderSearched: true,
+          legislationNote: 'Children Act 1989 is not held.',
+          legislationNotHeld: true,
+        },
+      }),
+    } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(getSearchInput(container), 'Children Act 1989')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    // The legislation half recognised the Act and served nothing: the panel
+    // must name the Act, not report a missing judgment citation.
+    expect(container.textContent).toContain('Legislation not held')
+    expect(container.textContent).toContain('Children Act 1989 is not held.')
+    expect(container.textContent).not.toContain('No judgment held')
+  })
+
   it('tells signed-out users providers were not consulted on no_match', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
       ok: true,

@@ -162,10 +162,32 @@ export function getLegalSearchEmptyFeedback(input: {
   hydrationAttempt?: number
   /** True once the bounded recheck gives up waiting. */
   hydrationExpired?: boolean
+  /** Response diagnostics.legislationNote: the legislation half recognised a
+   * citation but served nothing. Names what was asked for. */
+  legislationNote?: string
+  /** Response diagnostics.legislationNotHeld: the note is a not-held verdict,
+   * not a legislation outage. */
+  legislationNotHeld?: boolean
 }) {
   const outcome =
     input.outcome ?? (input.hydrationQueued ? 'hydration_queued' : 'no_match')
   const liveSearched = input.liveProviderSearched === true
+
+  // The legislation half's honest negative: the Act, chapter or provision was
+  // recognised but the corpus does not hold it. Say so with the note that
+  // names it, and never fall through to the judgment copy below, which would
+  // claim a judgment was sought.
+  if (
+    outcome === 'recognised_not_held' &&
+    input.legislationNotHeld &&
+    input.legislationNote
+  ) {
+    return {
+      eyebrow: 'Legislation not held',
+      title: 'No stored legislation matches this search',
+      body: `${input.legislationNote} Nothing that merely shares words with the title is shown in its place.`,
+    }
+  }
 
   // Honest empty for a well-formed citation no source holds. Names the
   // citation so the failure reads as not-held rather than not-searched.
@@ -492,11 +514,14 @@ export function LegalSearchView() {
         return
       }
       // Empty: carry liveProviderSearched so no_match copy never claims a
-      // provider was consulted when the API stayed stored-only. A queued
-      // outcome rechecks on a bound (timer-driven from this handler, not a
-      // fetching effect) and expires plainly at the bound instead of
-      // spinning forever.
+      // provider was consulted when the API stayed stored-only, and
+      // legislationNote so an unheld Act is named rather than reported as a
+      // missing judgment. A queued outcome rechecks on a bound (timer-driven
+      // from this handler, not a fetching effect) and expires plainly at the
+      // bound instead of spinning forever.
       const liveProviderSearched = body.diagnostics?.liveProviderSearched
+      const legislationNote = body.diagnostics?.legislationNote
+      const legislationNotHeld = body.diagnostics?.legislationNotHeld === true
       const outcome =
         body.outcome ?? (body.hydrationQueued ? 'hydration_queued' : 'no_match')
       const hydrationAttempt = options.hydrationAttempt ?? 0
@@ -512,6 +537,8 @@ export function LegalSearchView() {
           hydrationQueued: body.hydrationQueued,
           browse,
           liveProviderSearched,
+          legislationNote,
+          legislationNotHeld,
           hydrationAttempt: nextAttempt,
         })
         setSelectedResultIndex(-1)
@@ -533,6 +560,8 @@ export function LegalSearchView() {
         hydrationQueued: body.hydrationQueued,
         browse,
         liveProviderSearched,
+        legislationNote,
+        legislationNotHeld,
         hydrationAttempt:
           outcome === 'hydration_queued' ? hydrationAttempt + 1 : undefined,
         hydrationExpired: outcome === 'hydration_queued' ? true : undefined,
@@ -700,6 +729,8 @@ export function LegalSearchView() {
                     hydrationQueued: state.hydrationQueued,
                     browse: state.browse,
                     liveProviderSearched: state.liveProviderSearched,
+                    legislationNote: state.legislationNote,
+                    legislationNotHeld: state.legislationNotHeld,
                     hydrationAttempt: state.hydrationAttempt,
                     hydrationExpired: state.hydrationExpired,
                   })}
