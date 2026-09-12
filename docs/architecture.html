@@ -3921,19 +3921,31 @@
             <code>loadEnv</code> reads the same file for the web server.
           </p>
           <div class="callout">
-            <b>Startup is fail-closed.</b> <code>BETTER_AUTH_SECRET</code> must
-            be configured for every non-test boot (no shipped fallback).
-            <code>NODE_ENV</code> must be <code>production</code>,
-            <code>test</code>, or <code>development</code>; unknown values
-            refuse startup. Unset <code>NODE_ENV</code> is allowed only with
-            <code>OBITER_LOCAL_DEVELOPMENT=1</code>. In production,
+            <b>Startup is fail-closed.</b> <code>NODE_ENV</code> must be
+            <code>production</code>, <code>test</code>, or
+            <code>development</code>; an unknown value refuses startup, and an
+            unset one is allowed only with
+            <code>OBITER_LOCAL_DEVELOPMENT=1</code>. Both services resolve it
+            through <code>@obiter/config</code>, sharing one rule: the API and
+            the ingestor fail on the same input rather than one guessing a mode.
+            That matters because the ingestor writes; a missing
+            <code>NODE_ENV</code> used to fall back to development and reach a
+            database and credential nobody chose.
+            <code>BETTER_AUTH_SECRET</code> must be configured for every
+            non-test API boot (no shipped fallback). In production,
             <code>DATABASE_URL</code>, <code>BETTER_AUTH_URL</code>,
             <code>OBITER_WEB_ORIGIN</code>, <code>OBITER_RESEND_API_KEY</code>,
             <code>MEILISEARCH_HOST</code>,
             <code>MEILISEARCH_SEARCH_API_KEY</code> and
-            <code>MEILISEARCH_ADMIN_API_KEY</code> are also required. The API
-            refuses to boot without them, which is the right behaviour: a
-            missing search key should not surface later as empty results.
+            <code>MEILISEARCH_ADMIN_API_KEY</code> are also required; the
+            ingestor requires <code>MEILISEARCH_HOST</code>,
+            <code>MEILISEARCH_ADMIN_API_KEY</code> and
+            <code>LEGAL_AUTHORITIES_INDEX</code>. The API refuses to boot
+            without them, which is the right behaviour: a missing search key
+            should not surface later as empty results. The <code>dev-key</code>
+            Meilisearch fallback exists only in
+            <code>development</code>; <code>test</code> and
+            <code>production</code> must name their key.
           </div>
           <div class="scroll">
             <table>

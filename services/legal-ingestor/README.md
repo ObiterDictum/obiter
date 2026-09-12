@@ -5,6 +5,16 @@ only. The Meilisearch product index (`legal_authorities`) is derived and
 populated only by `pnpm rebuild:search-index`; this service never writes it.
 The fixture seeder (`src/index.ts`) stays on `legal_authorities_fixtures`.
 
+## Configuration
+
+Both the API and this service read configuration through `@obiter/config`, so
+they fail on exactly the same input. `NODE_ENV` must be `production`, `test`, or
+`development`; a missing or unrecognised value stops the run before any write,
+unless `OBITER_LOCAL_DEVELOPMENT=1` opts into local development. Production
+additionally requires `MEILISEARCH_HOST`, `MEILISEARCH_ADMIN_API_KEY` and
+`LEGAL_AUTHORITIES_INDEX`. The `dev-key` Meilisearch fallback applies only in
+development.
+
 ## Legislation ingest (Stage 1)
 
 UK Public General Acts into Postgres `legislation_documents` /
@@ -97,8 +107,15 @@ are not re-fetched. Re-running the same command is the poller. Suggested
 schedule: weekly via cron or the existing job runner, e.g.
 
 ```cron
-0 2 * * 0  cd /srv/obiter/sargassum/services/legal-ingestor && DATABASE_URL=... pnpm bulk:ingest
+0 2 * * 0  cd /srv/obiter/sargassum/services/legal-ingestor && NODE_ENV=production DATABASE_URL=... pnpm bulk:ingest
 ```
+
+Name `NODE_ENV=production` in the job rather than inheriting it: a server
+worktree carrying a `NODE_ENV=development` `.env` would otherwise run the
+weekly write under development defaults, which is the case the fail-closed
+rule exists to stop. Production also requires `MEILISEARCH_HOST`,
+`MEILISEARCH_ADMIN_API_KEY` and `LEGAL_AUTHORITIES_INDEX` (from the worktree
+`.env` or the job environment).
 
 then `pnpm rebuild:search-index` from the repo root.
 

@@ -200,6 +200,8 @@ describe('readApiEnv', () => {
   it('uses TEST_DATABASE_URL as the only database URL in test mode', () => {
     process.env.NODE_ENV = 'test'
     process.env.BETTER_AUTH_SECRET = TEST_AUTH_SECRET
+    process.env.MEILISEARCH_SEARCH_API_KEY = 'test-search-key'
+    process.env.MEILISEARCH_ADMIN_API_KEY = 'test-admin-key'
     process.env.DATABASE_URL =
       'postgres://obiter:obiter@db.example.com:5432/prod'
     process.env.TEST_DATABASE_URL =
@@ -211,6 +213,18 @@ describe('readApiEnv', () => {
       'postgres://obiter:obiter@db.example.com:5432/obiter_test',
     )
     expect(env.nodeEnv).toBe('test')
+  })
+
+  it('requires Meilisearch keys outside development', () => {
+    process.env.NODE_ENV = 'test'
+    process.env.BETTER_AUTH_SECRET = TEST_AUTH_SECRET
+    process.env.TEST_DATABASE_URL =
+      'postgres://obiter:obiter@db.example.com:5432/obiter_test'
+    delete process.env.MEILISEARCH_SEARCH_API_KEY
+
+    expect(() => readApiEnv()).toThrow(
+      'MEILISEARCH_SEARCH_API_KEY must be configured.',
+    )
   })
 
   it('fails loudly when test mode does not have a separate test database', () => {

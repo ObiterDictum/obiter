@@ -1,4 +1,4 @@
-import { loadLocalEnvFile } from '@obiter/config'
+import { loadLocalEnvFile, readNodeEnv, type NodeEnv } from '@obiter/config'
 
 const requiredProductionKeys = [
   'MEILISEARCH_HOST',
@@ -12,18 +12,7 @@ export interface LegalIngestorEnv {
   mojFindCaseLawBaseUrl: string
   mojFindCaseLawRateLimit: number
   databaseUrl: string
-  nodeEnv: 'development' | 'test' | 'production'
-}
-
-function readNodeEnv(): LegalIngestorEnv['nodeEnv'] {
-  if (
-    process.env.NODE_ENV === 'production' ||
-    process.env.NODE_ENV === 'test'
-  ) {
-    return process.env.NODE_ENV
-  }
-
-  return 'development'
+  nodeEnv: NodeEnv
 }
 
 function requireProductionEnv(nodeEnv: LegalIngestorEnv['nodeEnv']) {
@@ -76,10 +65,21 @@ function readSecret(
   return trimmed
 }
 
+// `dev-key` is a working local placeholder, so it is reachable only in
+// development. An ingest run that reaches a real Meilisearch must name its key.
+// A missing key anywhere else fails at startup rather than writing with a
+// default credential.
 function readAdminApiKey(nodeEnv: LegalIngestorEnv['nodeEnv']) {
-  const fallback = nodeEnv === 'production' ? '' : 'dev-key'
+  if (nodeEnv === 'development') {
+    return readSecret('MEILISEARCH_ADMIN_API_KEY', 'dev-key', nodeEnv)
+  }
 
-  return readSecret('MEILISEARCH_ADMIN_API_KEY', fallback, nodeEnv)
+  const value = process.env.MEILISEARCH_ADMIN_API_KEY
+  if (!value) {
+    throw new Error('MEILISEARCH_ADMIN_API_KEY must be configured.')
+  }
+
+  return readSecret('MEILISEARCH_ADMIN_API_KEY', value, nodeEnv)
 }
 
 function readIndexName(key: string, fallback: string) {
