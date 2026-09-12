@@ -42,7 +42,15 @@ export interface LegislationFetchResult {
   groups: LegalFetchResultGroup[]
   citationRecognised: boolean
   citationHeldExact: boolean
+  /** Authoritative not-held: a chapter citation or provision the store proves
+   * is absent. Never set from a failed title lookup alone. */
   recognisedNotHeld: boolean
+  /** The query looked like a whole Act title but the directory could not
+   * resolve it. Suppresses keyword provisions without claiming the Act is
+   * absent. */
+  titleUnresolved: boolean
+  /** More than one stored Act satisfies the query. Never a not-held verdict. */
+  ambiguous: boolean
   note: string | null
   searched: boolean
   /**
@@ -82,6 +90,8 @@ const emptyResult: LegislationFetchResult = {
   citationRecognised: false,
   citationHeldExact: false,
   recognisedNotHeld: false,
+  titleUnresolved: false,
+  ambiguous: false,
   note: null,
   searched: false,
   keywordSearchParameters: null,
@@ -207,8 +217,22 @@ export async function resolveLegislationFetch(
       ...emptyResult,
       searched: true,
       citationRecognised: true,
-      recognisedNotHeld: true,
+      ambiguous: true,
       note: `${outcome.reason} Candidates: ${names}`,
+    }
+  }
+
+  if (outcome.kind === 'unresolved_title') {
+    // A whole Act-title request the directory cannot resolve. The local
+    // directory is partial and the fold is imperfect, so this suppression
+    // says only what is known: no exact title key matched. It never claims
+    // the Act itself is absent.
+    return {
+      ...emptyResult,
+      searched: true,
+      citationRecognised: true,
+      titleUnresolved: true,
+      note: `No exact legislation title match was found for "${outcome.recognisedQuery}".`,
     }
   }
 
@@ -266,6 +290,8 @@ export async function resolveLegislationFetch(
       citationRecognised: true,
       citationHeldExact: true,
       recognisedNotHeld: false,
+      titleUnresolved: false,
+      ambiguous: false,
       note: null,
       searched: true,
       keywordSearchParameters: null,
@@ -328,6 +354,8 @@ export async function resolveLegislationFetch(
       citationRecognised: true,
       citationHeldExact: true,
       recognisedNotHeld: false,
+      titleUnresolved: false,
+      ambiguous: false,
       note: null,
       searched: true,
       keywordSearchParameters: null,
@@ -351,6 +379,8 @@ export async function resolveLegislationFetch(
     citationRecognised: false,
     citationHeldExact: false,
     recognisedNotHeld: false,
+    titleUnresolved: false,
+    ambiguous: false,
     note: null,
     searched: true,
     keywordSearchParameters: keyword.appliedSearchParameters,

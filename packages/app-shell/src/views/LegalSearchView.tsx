@@ -165,27 +165,50 @@ export function getLegalSearchEmptyFeedback(input: {
   /** Response diagnostics.legislationNote: the legislation half recognised a
    * citation but served nothing. Names what was asked for. */
   legislationNote?: string
-  /** Response diagnostics.legislationNotHeld: the note is a not-held verdict,
-   * not a legislation outage. */
+  /** Response diagnostics.legislationNotHeld: an authoritative not-held
+   * verdict, not an outage. */
   legislationNotHeld?: boolean
+  /** Response diagnostics.legislationTitleUnresolved: a whole-title request no
+   * exact title key matched. */
+  legislationTitleUnresolved?: boolean
+  /** Response diagnostics.legislationAmbiguous: more than one stored Act
+   * satisfies the query. */
+  legislationAmbiguous?: boolean
 }) {
   const outcome =
     input.outcome ?? (input.hydrationQueued ? 'hydration_queued' : 'no_match')
   const liveSearched = input.liveProviderSearched === true
 
-  // The legislation half's honest negative: the Act, chapter or provision was
-  // recognised but the corpus does not hold it. Say so with the note that
-  // names it, and never fall through to the judgment copy below, which would
-  // claim a judgment was sought.
-  if (
-    outcome === 'recognised_not_held' &&
-    input.legislationNotHeld &&
-    input.legislationNote
-  ) {
+  // The legislation half's honest negatives. Each rides its own flag, so a
+  // terminal branch that answers no_match or hydration_queued still surfaces
+  // the verdict, and the generic judgment copy below never stands in for it.
+  // The not-held copy is reserved for an authoritative verdict (a chapter or
+  // provision the store proves absent), never a failed title lookup.
+  if (input.legislationNotHeld && input.legislationNote) {
     return {
       eyebrow: 'Legislation not held',
       title: 'No stored legislation matches this search',
       body: `${input.legislationNote} Nothing that merely shares words with the title is shown in its place.`,
+    }
+  }
+
+  // A whole-title request the directory could not resolve. Say only what is
+  // known: no exact title matched. Never claim the Act itself is absent, and
+  // suppress the unrelated keyword provisions the exact path would otherwise
+  // fall through to.
+  if (input.legislationTitleUnresolved && input.legislationNote) {
+    return {
+      eyebrow: 'Legislation title not matched',
+      title: 'No exact legislation title match',
+      body: `${input.legislationNote} Try the chapter citation (for example "2010 c. 15") or the Act's exact short title.`,
+    }
+  }
+
+  if (input.legislationAmbiguous && input.legislationNote) {
+    return {
+      eyebrow: 'Legislation ambiguous',
+      title: 'More than one stored Act matches',
+      body: `${input.legislationNote} Choose the Act you meant by its chapter citation.`,
     }
   }
 
@@ -522,6 +545,10 @@ export function LegalSearchView() {
       const liveProviderSearched = body.diagnostics?.liveProviderSearched
       const legislationNote = body.diagnostics?.legislationNote
       const legislationNotHeld = body.diagnostics?.legislationNotHeld === true
+      const legislationTitleUnresolved =
+        body.diagnostics?.legislationTitleUnresolved === true
+      const legislationAmbiguous =
+        body.diagnostics?.legislationAmbiguous === true
       const outcome =
         body.outcome ?? (body.hydrationQueued ? 'hydration_queued' : 'no_match')
       const hydrationAttempt = options.hydrationAttempt ?? 0
@@ -539,6 +566,8 @@ export function LegalSearchView() {
           liveProviderSearched,
           legislationNote,
           legislationNotHeld,
+          legislationTitleUnresolved,
+          legislationAmbiguous,
           hydrationAttempt: nextAttempt,
         })
         setSelectedResultIndex(-1)
@@ -562,6 +591,8 @@ export function LegalSearchView() {
         liveProviderSearched,
         legislationNote,
         legislationNotHeld,
+        legislationTitleUnresolved,
+        legislationAmbiguous,
         hydrationAttempt:
           outcome === 'hydration_queued' ? hydrationAttempt + 1 : undefined,
         hydrationExpired: outcome === 'hydration_queued' ? true : undefined,
@@ -731,6 +762,9 @@ export function LegalSearchView() {
                     liveProviderSearched: state.liveProviderSearched,
                     legislationNote: state.legislationNote,
                     legislationNotHeld: state.legislationNotHeld,
+                    legislationTitleUnresolved:
+                      state.legislationTitleUnresolved,
+                    legislationAmbiguous: state.legislationAmbiguous,
                     hydrationAttempt: state.hydrationAttempt,
                     hydrationExpired: state.hydrationExpired,
                   })}

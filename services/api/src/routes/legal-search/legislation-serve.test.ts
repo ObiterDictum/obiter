@@ -257,8 +257,10 @@ describe('resolveLegislationFetch', () => {
     expect(result.note).toContain('not held')
   })
 
-  it('reports an unheld Act as not held, never keyword provisions', async () => {
-    // "Children Act 1989" is Act-shaped but not stored. Before the honest
+  it('reports an unresolved Act title, never keyword provisions and never not-held', async () => {
+    // "Children Act 1989" is Act-shaped but not stored. A failed title
+    // lookup cannot prove the Act is absent, so the honest state suppresses
+    // keyword neighbours without making a not-held claim. Before the honest
     // negative it fell to keyword search and served provisions of the
     // Children's Wellbeing and Schools Act 2026 that merely share the word
     // "children". The keyword hits are supplied here precisely so the test
@@ -276,10 +278,12 @@ describe('resolveLegislationFetch', () => {
       'Children Act 1989',
     )
     expect(result.citationRecognised).toBe(true)
-    expect(result.recognisedNotHeld).toBe(true)
+    expect(result.titleUnresolved).toBe(true)
+    expect(result.recognisedNotHeld).toBe(false)
     expect(result.citationHeldExact).toBe(false)
     expect(result.groups).toEqual([])
-    expect(result.note).toBe('Children Act 1989 is not held.')
+    expect(result.note).toContain('No exact legislation title match')
+    expect(result.note).toContain('Children Act 1989')
     // No keyword search ran, so nothing may report parameters for one.
     expect(result.keywordSearchParameters).toBe(null)
   })
@@ -321,7 +325,7 @@ describe('resolveLegislationFetch', () => {
     expect(result.groups[0]?.hits[0]?.documentIdentity).toBe('ukpga/2025/26')
   })
 
-  it('reports ambiguity with candidates, never a silent winner', async () => {
+  it('reports ambiguity as its own state, never not-held', async () => {
     const pool = {
       query: vi.fn(async () => ({
         rows: [
@@ -337,7 +341,46 @@ describe('resolveLegislationFetch', () => {
     }
     const result = await resolveLegislationFetch(deps, 'Sample Act 2020')
     expect(result.groups).toEqual([])
+    expect(result.ambiguous).toBe(true)
+    // An Act that is held twice is not an unheld Act: the flag must not fire.
+    expect(result.recognisedNotHeld).toBe(false)
+    expect(result.titleUnresolved).toBe(false)
     expect(result.note).toContain('more than one')
+  })
+
+  it('resolves a short title whose stored title carries (repealed)', async () => {
+    const repealedActs = [
+      {
+        identity: 'ukpga/2021/28',
+        actType: 'ukpga',
+        year: 2021,
+        number: 28,
+        title: 'Health and Social Care Levy Act 2021 (repealed)',
+        sourceUrl: 'https://www.legislation.gov.uk/ukpga/2021/28',
+        extent: 'E+W+S',
+      },
+    ]
+    const deps: LegislationServeDeps = {
+      pool: {
+        query: vi.fn(async (text: string) => {
+          if (text.includes('from legislation_documents order by'))
+            return { rows: repealedActs }
+          if (text.includes('from legislation_documents'))
+            return { rows: repealedActs }
+          return { rows: [] }
+        }),
+      } as unknown as LegislationServeDeps['pool'],
+      searchClient: createDeps({}).searchClient,
+      indexName: 'legislation_provisions',
+    }
+    const result = await resolveLegislationFetch(
+      deps,
+      'Health and Social Care Levy Act 2021',
+    )
+    expect(result.citationHeldExact).toBe(true)
+    expect(result.recognisedNotHeld).toBe(false)
+    expect(result.titleUnresolved).toBe(false)
+    expect(result.groups[0]?.hits[0]?.documentIdentity).toBe('ukpga/2021/28')
   })
 
   it('leaves non-legislation queries to the judgment path', async () => {

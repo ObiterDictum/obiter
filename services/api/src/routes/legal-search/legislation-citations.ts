@@ -48,13 +48,16 @@ export type LegislationCitationOutcome =
       recognisedQuery: string
     }
   | { kind: 'ambiguous'; candidates: LegislationActRef[]; reason: string }
-  // A well-formed citation for an Act or chapter the corpus does not hold.
-  // Distinct from `unrecognised` on purpose: `unrecognised` means the query
-  // is not a legislation citation and may fall through to keyword search,
-  // while `not_held` is a recognised citation whose honest answer is
-  // nothing. A provision that merely shares words with the title is not an
-  // answer to "show me that Act".
+  // A well-formed chapter citation for a year and number the corpus does not
+  // hold. This is authoritative: the year and number are the canonical
+  // identity, so an absent chapter proves the Act is absent. A failed *title*
+  // lookup does not (see `unresolved_title`).
   | { kind: 'not_held'; recognisedQuery: string }
+  // The query is a whole Act-title request, but the directory cannot resolve
+  // it. The local directory is partial and title resolution is imperfect, so
+  // this state suppresses unrelated keyword provisions without claiming the
+  // Act is absent.
+  | { kind: 'unresolved_title'; recognisedQuery: string }
   | { kind: 'unrecognised' }
 
 /** Curated aliases only: an alias maps one surface form to one Act, and any
@@ -73,11 +76,26 @@ const actAliases = new Map<string, string>([
  * fold neutral-citation matching uses), then case, punctuation and whitespace
  * folding. Folding one side only trades a failure for its mirror: the stored
  * title carries U+2019 (Renters’ Rights Act 2025) while a UK keyboard emits
- * the straight apostrophe. Stripping ASCII apostrophes but leaving U+2019
- * meant the straight query missed the curly title and the curly query missed
- * a straight one. NFKC also folds the non-breaking spaces Word and Google
- * Docs paste in.
+ * the straight apostrophe. NFKC also folds the non-breaking spaces Word and
+ * Google Docs paste in.
+ *
+ * Three deliberate choices make the fold converge on the forms people type:
+ *
+ * - A terminal `(repealed)` status annotation is stripped from the lookup key
+ *   only. legislation.gov.uk's dc:title carries the status, but a lawyer
+ *   citing the Act never types it, so the canonical citation missed every
+ *   repealed Act. The served title keeps the annotation; only the key drops
+ *   it. No other parenthetical is stripped: `(Public Lavatories)`,
+ *   `(Digital Assets etc)` and friends are part of the short title.
+ * - Apostrophes are deleted, not replaced with a space, so a dropped-
+ *   apostrophe spelling ("Childrens") converges on the stored ("Children’s").
+ * - `&` folds to `and`, a hyphen becomes a space, and the filler token `etc`
+ *   is dropped, so the surface forms of a title converge. A hyphen deleted
+ *   entirely is left to the relaxed key below.
  */
+const terminalStatusAnnotation = /\s*\(repealed\)\s*$/i
+const titleFillerTokens = new Set(['etc'])
+
 export function normalizeActTitle(value: string): string {
   const punctuationFolded = exactMatchPunctuationFolds.reduce(
     (normalized, [from, to]) => normalized.replaceAll(from, to),
@@ -85,22 +103,81 @@ export function normalizeActTitle(value: string): string {
   )
   return punctuationFolded
     .toLowerCase()
-    .replace(/[.,;:'"()[\]]/g, ' ')
-    .replace(/\s+/g, ' ')
+    .replace(terminalStatusAnnotation, ' ')
+    .replace(/&/g, ' and ')
+    .replace(/['\u2019]/g, '')
+    .replace(/[.,;:"()[\]]/g, ' ')
+    .replace(/-/g, ' ')
+    .split(/\s+/)
+    .filter((token) => token.length > 0 && !titleFillerTokens.has(token))
+    .join(' ')
     .trim()
 }
 
 /**
- * True when the text names a single Act rather than a subject phrase: the
- * word "Act" followed by a four-digit year, e.g. "Children Act 1989".
- * Section and schedule forms are split before this test, so only the Act
- * remainder reaches it. A phrase that is not Act-shaped is not a named
- * entity, so an index miss may legitimately be a corpus keyword miss; it
- * stays `unrecognised` and is searched.
+ * The relaxed key: whitespace and the remaining punctuation are removed, so a
+ * deleted hyphen (`Cooperatives` vs `Co-operatives`) converges too. It is only
+ * consulted when the strict key misses, and a relaxed key that matches more
+ * than one stored Act is ambiguous, never a silent winner.
  */
-function looksLikeActTitle(value: string): boolean {
+export function looseActTitleKey(value: string): string {
+  return normalizeActTitle(value).replace(/[^a-z0-9]/g, '')
+}
+
+/**
+ * True when the text is a whole Act-title request: the word "Act" followed by
+ * a four-digit year, with a non-empty title run before it. Section and
+ * schedule forms are split before this test, so only the Act remainder
+ * reaches it.
+ *
+ * This is deliberately stricter than the earlier "contains act and ends in a
+ * year" gate. A sentence that merely ends in a citation ("defences under the
+ * Children Act 1989") carries a determiner inside the title run; a short
+ * title is a proper-noun phrase and does not. Rejecting the determiner keeps
+ * such sentences on the subject/keyword path instead of suppressing their
+ * provisions. A fragment with no title words ("Act 2020") is rejected too.
+ */
+const titleRunDeterminer = /\b(?:the|a|an)\b/
+
+function looksLikeWholeActTitle(value: string): boolean {
   const normalized = normalizeActTitle(value)
-  return /\bact\b/.test(normalized) && /\b\d{4}$/.test(normalized)
+  const match = normalized.match(/^(.*?)\bact\b\s*\d{4}$/)
+  if (!match) return false
+  const titleRun = (match[1] ?? '').trim()
+  if (!/[a-z]/.test(titleRun)) return false
+  return !titleRunDeterminer.test(titleRun)
+}
+
+/**
+ * Leading function words a citation remainder can carry before the title
+ * ("section 2 of the Human Rights Act 1998"). Stripped before matching so the
+ * title itself is compared, never the surrounding connector.
+ */
+const leadingTitleConnectors = new Set([
+  'the',
+  'a',
+  'an',
+  'of',
+  'to',
+  'in',
+  'on',
+  'for',
+  'and',
+  'or',
+])
+
+export function stripLeadingTitleConnectors(value: string): string {
+  const tokens = value.trim().split(/\s+/)
+  let start = 0
+  while (
+    start < tokens.length - 1 &&
+    leadingTitleConnectors.has(
+      (tokens[start] ?? '').toLowerCase().replace(/[^a-z]/g, ''),
+    )
+  ) {
+    start += 1
+  }
+  return tokens.slice(start).join(' ')
 }
 
 export interface ActDirectory {
@@ -109,6 +186,7 @@ export interface ActDirectory {
     number: number,
   ): LegislationActDirectoryEntry | null
   byNormalizedTitle(normalized: string): LegislationActDirectoryEntry[]
+  byLooseTitle(loose: string): LegislationActDirectoryEntry[]
   allTitles(): LegislationActDirectoryEntry[]
 }
 
@@ -117,17 +195,23 @@ export function createActDirectory(
 ): ActDirectory {
   const byKey = new Map<string, LegislationActDirectoryEntry>()
   const byTitle = new Map<string, LegislationActDirectoryEntry[]>()
+  const byLoose = new Map<string, LegislationActDirectoryEntry[]>()
   for (const entry of entries) {
     byKey.set(`${entry.actType}/${entry.year}/${entry.number}`, entry)
     const normalized = normalizeActTitle(entry.title)
-    const list = byTitle.get(normalized) ?? []
-    list.push(entry)
-    byTitle.set(normalized, list)
+    const titleList = byTitle.get(normalized) ?? []
+    titleList.push(entry)
+    byTitle.set(normalized, titleList)
+    const loose = looseActTitleKey(entry.title)
+    const looseList = byLoose.get(loose) ?? []
+    looseList.push(entry)
+    byLoose.set(loose, looseList)
   }
   return {
     byYearNumber: (year, number) =>
       byKey.get(`ukpga/${year}/${number}`) ?? null,
     byNormalizedTitle: (normalized) => byTitle.get(normalized) ?? [],
+    byLooseTitle: (loose) => byLoose.get(loose) ?? [],
     allTitles: () => entries,
   }
 }
@@ -224,51 +308,40 @@ function resolveActByName(
   directory: ActDirectory,
   recognisedQuery: string,
 ): LegislationCitationOutcome {
-  const normalized = expandAlias(actText)
-  const exact = directory.byNormalizedTitle(normalized)
-  if (exact.length === 1) {
-    return { kind: 'act', act: toActRef(exact[0]!), recognisedQuery }
+  const matches = new Map<string, LegislationActDirectoryEntry>()
+  for (const value of [actText, stripLeadingTitleConnectors(actText)]) {
+    const trimmed = value.trim()
+    if (!trimmed) continue
+    const normalized = expandAlias(trimmed)
+    for (const entry of directory.byNormalizedTitle(normalized)) {
+      matches.set(entry.identity, entry)
+    }
+    for (const entry of directory.byLooseTitle(
+      normalized.replace(/[^a-z0-9]/g, ''),
+    )) {
+      matches.set(entry.identity, entry)
+    }
   }
-  if (exact.length > 1) {
+  if (matches.size === 1) {
+    return {
+      kind: 'act',
+      act: toActRef([...matches.values()][0]!),
+      recognisedQuery,
+    }
+  }
+  if (matches.size > 1) {
     return {
       kind: 'ambiguous',
-      candidates: exact.map(toActRef),
+      candidates: [...matches.values()].map(toActRef),
       reason: `“${actText.trim()}” names more than one stored Act.`,
     }
   }
-  // Suffix match so "section 6 Human Rights Act 1998" finds its Act when the
-  // caller passes the whole remainder: longest stored title that ends the
-  // query remainder wins, and only when exactly one title of that length
-  // matches. A shorter rival that is also a suffix means genuine ambiguity.
-  const suffixes = directory
-    .allTitles()
-    .filter((entry) => {
-      const title = normalizeActTitle(entry.title)
-      return normalized === title || normalized.endsWith(` ${title}`)
-    })
-    .sort((a, b) => b.title.length - a.title.length)
-  // An Act-shaped title that resolves to no stored Act is a recognised
-  // citation the corpus does not hold. Returning `unrecognised` here sent
-  // "Children Act 1989" to keyword search, which served provisions of the
-  // Children's Wellbeing Act 2026 because they share the word "children".
-  // The honest answer is nothing, said visibly.
-  if (suffixes.length === 0) {
-    return looksLikeActTitle(actText)
-      ? { kind: 'not_held', recognisedQuery: actText.trim() }
-      : { kind: 'unrecognised' }
-  }
-  const longest = normalizeActTitle(suffixes[0]!.title)
-  const rivals = suffixes.filter(
-    (entry) => normalizeActTitle(entry.title) === longest,
-  )
-  if (rivals.length > 1) {
-    return {
-      kind: 'ambiguous',
-      candidates: rivals.map(toActRef),
-      reason: `“${actText.trim()}” names more than one stored Act.`,
-    }
-  }
-  return { kind: 'act', act: toActRef(suffixes[0]!), recognisedQuery }
+  // A title-shaped request the directory cannot resolve is not proof the Act
+  // is absent: the directory is partial and the fold is imperfect. Suppress
+  // unrelated keyword provisions, but say only that no exact title matched.
+  return looksLikeWholeActTitle(stripLeadingTitleConnectors(actText))
+    ? { kind: 'unresolved_title', recognisedQuery }
+    : { kind: 'unrecognised' }
 }
 
 interface SplitSectionQuery {

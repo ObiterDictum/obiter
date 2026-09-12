@@ -15,6 +15,8 @@ export interface LegislationRelevanceBaseline {
   heldPrecision: number
   absentPrecision: number
   mrr: number
+  /** Held cases that returned an authoritative not-held claim. Must be 0. */
+  heldNotHeldViolations: number
   byQuery: Record<string, CaseQueryBaseline>
 }
 
@@ -27,6 +29,15 @@ export interface LegislationRelevanceMetrics {
   /** Supporting splits: exact cases are the ones precision is computed over. */
   exactHeldRecall: number | null
   subjectRecall: number | null
+  /** Held cases that returned diagnostics.legislationNotHeld. Must be 0. */
+  heldNotHeldViolations: number
+  /** Cases whose result was the unresolved-title suppression. Reported
+   * separately so it is never counted as an authoritative not-held success. */
+  unresolvedTitleCases: number
+  /** Absent cases answered with an authoritative not-held claim. */
+  absentAuthoritativeNotHeld: number
+  /** Absent cases answered with the unresolved-title suppression. */
+  absentTitleUnresolved: number
 }
 
 export interface CaseResult {
@@ -49,6 +60,10 @@ export interface CaseResult {
   mrr: number | null
   outcome: string | null
   legislationNote: string | null
+  /** The API marked this a not-held verdict. */
+  legislationNotHeld: boolean
+  /** The API marked this an unresolved whole-title request. */
+  legislationTitleUnresolved: boolean
   failureLabels: string[]
   searchErrorMessage?: string
 }
@@ -105,11 +120,15 @@ export function scoreCase(
   options: {
     outcome?: string | null
     legislationNote?: string | null
+    legislationNotHeld?: boolean
+    legislationTitleUnresolved?: boolean
     searchErrorMessage?: string
   } = {},
 ): CaseResult {
   const failureLabels: string[] = []
   if (options.searchErrorMessage) failureLabels.push('search_error')
+  const legislationNotHeld = options.legislationNotHeld === true
+  const legislationTitleUnresolved = options.legislationTitleUnresolved === true
   const base = {
     id: testCase.id,
     kind: testCase.kind,
@@ -120,7 +139,25 @@ export function scoreCase(
     returnedHitCount: returnedIds.length,
     outcome: options.outcome ?? null,
     legislationNote: options.legislationNote ?? null,
+    legislationNotHeld,
+    legislationTitleUnresolved,
     searchErrorMessage: options.searchErrorMessage,
+  }
+
+  // A control query's right answer is a negative: it must not assert not-held
+  // or claim an exact title it could not resolve. Hit count is not scored.
+  if (testCase.kind === 'control') {
+    if (legislationNotHeld) failureLabels.push('control_false_not_held')
+    if (legislationTitleUnresolved)
+      failureLabels.push('control_title_unresolved')
+    return {
+      ...base,
+      ranks: [],
+      recall: null,
+      precision: null,
+      mrr: null,
+      failureLabels,
+    }
   }
 
   if (testCase.kind === 'absent') {
@@ -135,6 +172,11 @@ export function scoreCase(
       failureLabels,
     }
   }
+
+  // The false not-held is the defect this suite exists to catch: a held
+  // expectation must never receive an authoritative not-held verdict.
+  if (legislationNotHeld) failureLabels.push('held_false_not_held')
+  if (legislationTitleUnresolved) failureLabels.push('held_title_unresolved')
 
   const ranks = testCase.expectedIds.map((id) =>
     rankOf(returnedIds, id, testCase.scoring),
@@ -205,6 +247,17 @@ export function aggregateMetrics(
         .map((result) => result.recall)
         .filter((value): value is number => value !== null),
     ),
+    heldNotHeldViolations: held.filter((result) => result.legislationNotHeld)
+      .length,
+    unresolvedTitleCases: results.filter(
+      (result) => result.legislationTitleUnresolved,
+    ).length,
+    absentAuthoritativeNotHeld: absent.filter(
+      (result) => result.legislationNotHeld,
+    ).length,
+    absentTitleUnresolved: absent.filter(
+      (result) => result.legislationTitleUnresolved,
+    ).length,
   }
 }
 
@@ -276,6 +329,17 @@ export function regressionFailures(
     if (result.failureLabels.includes('search_error')) {
       failures.push(`search_error:${result.id}`)
     }
+    // The explicit invariant: no held expectation may return an authoritative
+    // not-held verdict, and no control may make either unsupported claim.
+    if (result.kind !== 'absent' && result.legislationNotHeld) {
+      failures.push(`false_not_held:${result.id}`)
+    }
+    if (result.kind === 'held' && result.legislationTitleUnresolved) {
+      failures.push(`held_title_unresolved:${result.id}`)
+    }
+    if (result.kind === 'control' && result.legislationTitleUnresolved) {
+      failures.push(`control_title_unresolved:${result.id}`)
+    }
   }
 
   return failures
@@ -301,6 +365,7 @@ export function baselineFromResults(
     heldPrecision: metrics.heldPrecision,
     absentPrecision: metrics.absentPrecision,
     mrr: metrics.mrr,
+    heldNotHeldViolations: metrics.heldNotHeldViolations,
     byQuery: Object.fromEntries(
       results.map((result) => [
         result.id,

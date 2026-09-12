@@ -653,6 +653,251 @@ describe('createLegalSearchProxyRoutes', () => {
     })
   })
 
+  it('preserves an authoritative not-held through the foreground-live miss', async () => {
+    // Finding 2: the foreground branch answered no_match without consulting
+    // the legislation half, so the verdict vanished on the default signed-in
+    // path. Zero live results must carry the legislation terminal.
+    legislationServeMock.resolveLegislationFetch.mockResolvedValueOnce({
+      groups: [],
+      citationRecognised: true,
+      citationHeldExact: false,
+      recognisedNotHeld: true,
+      titleUnresolved: false,
+      ambiguous: false,
+      note: '2008 c. 12 is not held.',
+      searched: true,
+      keywordSearchParameters: null,
+    })
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: '2008 c. 12',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response('<feed />'),
+    )
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: { query: vi.fn(async () => ({ rows: [] })) } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: '2008 c. 12',
+        foregroundLiveResults: true,
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [],
+      outcome: 'recognised_not_held',
+      citation: { recognised: true, status: 'not_held' },
+      diagnostics: {
+        liveProviderSearched: true,
+        legislationNotHeld: true,
+        legislationNote: '2008 c. 12 is not held.',
+      },
+    })
+  })
+
+  it('preserves an unresolved legislation title through the foreground-live miss', async () => {
+    legislationServeMock.resolveLegislationFetch.mockResolvedValueOnce({
+      groups: [],
+      citationRecognised: true,
+      citationHeldExact: false,
+      recognisedNotHeld: false,
+      titleUnresolved: true,
+      ambiguous: false,
+      note: 'No exact legislation title match was found for "Children Act 1989".',
+      searched: true,
+      keywordSearchParameters: null,
+    })
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: 'Children Act 1989',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response('<feed />'),
+    )
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: { query: vi.fn(async () => ({ rows: [] })) } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'Children Act 1989',
+        foregroundLiveResults: true,
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [],
+      outcome: 'legislation_title_unresolved',
+      diagnostics: {
+        liveProviderSearched: true,
+        legislationTitleUnresolved: true,
+        legislationNote:
+          'No exact legislation title match was found for "Children Act 1989".',
+      },
+    })
+  })
+
+  it('preserves legislation ambiguity through the foreground-live miss', async () => {
+    legislationServeMock.resolveLegislationFetch.mockResolvedValueOnce({
+      groups: [],
+      citationRecognised: true,
+      citationHeldExact: false,
+      recognisedNotHeld: false,
+      titleUnresolved: false,
+      ambiguous: true,
+      note: '“Sample Act 2020” names more than one stored Act. Candidates: A; B',
+      searched: true,
+      keywordSearchParameters: null,
+    })
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: 'Sample Act 2020',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response('<feed />'),
+    )
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: { query: vi.fn(async () => ({ rows: [] })) } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'Sample Act 2020',
+        foregroundLiveResults: true,
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [],
+      outcome: 'legislation_ambiguous',
+      diagnostics: {
+        legislationAmbiguous: true,
+        legislationNote:
+          '“Sample Act 2020” names more than one stored Act. Candidates: A; B',
+      },
+    })
+  })
+
+  it('keeps an unresolved legislation title through the hydration-queued branch', async () => {
+    // The background path has not consulted live yet, so a queue position is
+    // otherwise honest; a legislation verdict must still win.
+    legislationServeMock.resolveLegislationFetch.mockResolvedValueOnce({
+      groups: [],
+      citationRecognised: true,
+      citationHeldExact: false,
+      recognisedNotHeld: false,
+      titleUnresolved: true,
+      ambiguous: false,
+      note: 'No exact legislation title match was found for "Children Act 1989".',
+      searched: true,
+      keywordSearchParameters: null,
+    })
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: 'Children Act 1989',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: { query: vi.fn(async () => ({ rows: [] })) } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'Children Act 1989',
+        foregroundLiveResults: false,
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [],
+      outcome: 'legislation_title_unresolved',
+      diagnostics: {
+        legislationTitleUnresolved: true,
+        legislationNote:
+          'No exact legislation title match was found for "Children Act 1989".',
+      },
+    })
+  })
+
+  it('keeps an unresolved legislation title on the anonymous stored-only branch', async () => {
+    legislationServeMock.resolveLegislationFetch.mockResolvedValueOnce({
+      groups: [],
+      citationRecognised: true,
+      citationHeldExact: false,
+      recognisedNotHeld: false,
+      titleUnresolved: true,
+      ambiguous: false,
+      note: 'No exact legislation title match was found for "Children Act 1989".',
+      searched: true,
+      keywordSearchParameters: null,
+    })
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: 'Children Act 1989',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    const app = createAuthenticatedProxyApp(
+      undefined,
+      {
+        legislation: {
+          pool: { query: vi.fn(async () => ({ rows: [] })) } as never,
+          indexName: 'legislation_provisions',
+        },
+      },
+      null,
+    )
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'Children Act 1989' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [],
+      outcome: 'legislation_title_unresolved',
+      diagnostics: { legislationTitleUnresolved: true },
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('serves stored citing cases to anonymous callers, labelled not_held', async () => {
     // [2003] UKHL 1 is recognised but not held; the stored citing cases
     // must serve clearly distinguished instead of being discarded.

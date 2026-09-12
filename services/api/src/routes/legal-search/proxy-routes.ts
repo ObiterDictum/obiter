@@ -31,6 +31,7 @@ import {
   apiError,
   toFetchResponse,
   toSummaryHit,
+  type LegalFetchOutcome,
   type LegalFetchSearchHit,
 } from './response-utils'
 import {
@@ -428,11 +429,9 @@ export function createLegalSearchProxyRoutes(
       )
       return c.json(
         toFetchResponse([], parsed.data.query, true, 0, 0, false, {
-          outcome: legislationGroupsServed(legislation)
-            ? 'results'
-            : exactLookup || legislation?.recognisedNotHeld
-              ? 'recognised_not_held'
-              : 'no_match',
+          outcome:
+            legislationEmptyOutcome(legislation) ??
+            (exactLookup ? 'recognised_not_held' : 'no_match'),
           citation,
           ...legislationFetchExtras(exactLookup, legislation),
           diagnostics: {
@@ -483,9 +482,7 @@ export function createLegalSearchProxyRoutes(
       )
       return c.json(
         toFetchResponse([], parsed.data.query, false, 0, 0, true, {
-          outcome: legislationGroupsServed(legislation)
-            ? 'results'
-            : 'hydration_queued',
+          outcome: legislationEmptyOutcome(legislation) ?? 'hydration_queued',
           citation,
           ...legislationFetchExtras(exactLookup, legislation),
           diagnostics: {
@@ -590,15 +587,13 @@ export function createLegalSearchProxyRoutes(
         {
           // A recognised citation live finds nothing for is not a silent
           // no-match; live hits without the exact judgment stay results
-          // labelled by their citationMatch, with status not_held.
-          outcome:
-            legislationGroupsServed(legislation) && liveSummaries.length === 0
-              ? 'results'
-              : exactLookup && liveSummaries.length === 0
-                ? 'recognised_not_held'
-                : liveHasHits
-                  ? undefined
-                  : 'no_match',
+          // labelled by their citationMatch, with status not_held. A
+          // legislation verdict rides the same empty answer: the judgment
+          // half must not overwrite it with a generic no_match.
+          outcome: liveHasHits
+            ? undefined
+            : (legislationEmptyOutcome(legislation) ??
+              (exactLookup ? 'recognised_not_held' : 'no_match')),
           citation,
           ...legislationFetchExtras(exactLookup, legislation),
           diagnostics: {
@@ -908,6 +903,13 @@ function legislationDiagnosticsFor(legislation: LegislationFetchResult | null) {
     // A verdict, not an outage: the note alone cannot distinguish "the corpus
     // does not hold this" from "the store did not answer".
     ...(legislation.recognisedNotHeld ? { legislationNotHeld: true } : {}),
+    // A whole-title request no exact key matched, or a title two stored Acts
+    // satisfy. Neither is a not-held verdict, so each rides its own flag and
+    // the page can say only what is known.
+    ...(legislation.titleUnresolved
+      ? { legislationTitleUnresolved: true }
+      : {}),
+    ...(legislation.ambiguous ? { legislationAmbiguous: true } : {}),
     ...(legislation.note ? { legislationNote: legislation.note } : {}),
     // The parameters this server sent to the engine on this response. Emitted
     // by the layer that applied them, not by the caller's configuration, so a
@@ -917,6 +919,24 @@ function legislationDiagnosticsFor(legislation: LegislationFetchResult | null) {
       ? { legislationSearchParameters: legislation.keywordSearchParameters }
       : {}),
   }
+}
+
+/**
+ * The most specific legislation terminal for an otherwise empty answer. Used
+ * by every terminal no-judgment branch so the judgment half's generic
+ * `no_match` never overwrites a legislation verdict. `null` means the
+ * legislation half has no claim, and the caller's judgment-side outcome
+ * stands.
+ */
+function legislationEmptyOutcome(
+  legislation: LegislationFetchResult | null,
+): LegalFetchOutcome | null {
+  if (!legislation) return null
+  if (legislationGroupsServed(legislation)) return 'results'
+  if (legislation.recognisedNotHeld) return 'recognised_not_held'
+  if (legislation.titleUnresolved) return 'legislation_title_unresolved'
+  if (legislation.ambiguous) return 'legislation_ambiguous'
+  return null
 }
 
 /** Spread into a toFetchResponse options literal. Empty when no group. */

@@ -387,6 +387,112 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(container.textContent).not.toContain('No judgment held')
   })
 
+  it('surfaces an unresolved legislation title even when the outcome is no_match', async () => {
+    // Finding 2: the signed-in foreground branch answered no_match without
+    // consulting the legislation half, so this verdict vanished. The flag
+    // must drive the copy regardless of the generic outcome.
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        hits: [],
+        cached: true,
+        indexedCount: 0,
+        skippedCount: 0,
+        outcome: 'no_match',
+        diagnostics: {
+          liveProviderSearched: true,
+          legislationTitleUnresolved: true,
+          legislationNote:
+            'No exact legislation title match was found for "Children Act 1989".',
+        },
+      }),
+    } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(getSearchInput(container), 'Children Act 1989')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    expect(container.textContent).toContain('No exact legislation title match')
+    expect(container.textContent).toContain('Children Act 1989')
+    expect(container.textContent).not.toContain('No sources found')
+    expect(container.textContent).not.toContain('is not held')
+  })
+
+  it('surfaces an ambiguous legislation title instead of a generic no-match', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        hits: [],
+        cached: true,
+        indexedCount: 0,
+        skippedCount: 0,
+        outcome: 'legislation_ambiguous',
+        diagnostics: {
+          liveProviderSearched: true,
+          legislationAmbiguous: true,
+          legislationNote:
+            '“Sample Act 2020” names more than one stored Act. Candidates: Sample Act 2020; Sample Act 2020',
+        },
+      }),
+    } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(getSearchInput(container), 'Sample Act 2020')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    expect(container.textContent).toContain('More than one stored Act matches')
+    expect(container.textContent).toContain('names more than one stored Act')
+    expect(container.textContent).not.toContain('No sources found')
+    expect(container.textContent).not.toContain('is not held')
+  })
+
+  it('keeps the legislation verdict through hydration expiry', async () => {
+    // The bounded recheck path must not replace a legislation verdict with
+    // "Still no match after rechecks".
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        hits: [],
+        cached: true,
+        indexedCount: 0,
+        skippedCount: 0,
+        outcome: 'legislation_title_unresolved',
+        hydrationQueued: false,
+        diagnostics: {
+          liveProviderSearched: false,
+          legislationTitleUnresolved: true,
+          legislationNote:
+            'No exact legislation title match was found for "Children Act 1989".',
+        },
+      }),
+    } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(getSearchInput(container), 'Children Act 1989')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    expect(container.textContent).toContain('No exact legislation title match')
+    expect(container.textContent).not.toContain('Still no match after rechecks')
+  })
+
   it('tells signed-out users providers were not consulted on no_match', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
       ok: true,

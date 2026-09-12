@@ -35,6 +35,8 @@ export type LegalSearchOutcome =
   | 'stored_browse_empty'
   | 'unsupported_source_type'
   | 'recognised_not_held'
+  | 'legislation_title_unresolved'
+  | 'legislation_ambiguous'
 
 export interface LegalSearchResult {
   id: string
@@ -104,11 +106,17 @@ export interface LegalSearchFetchResponse {
     citationStatus?: LegalSearchCitationStatus
     storedIndexStatus?: 'ok' | 'unavailable'
     /** Set when the legislation half recognised a citation but served no
-     * group: an Act or chapter the corpus does not hold, or an ambiguous Act
-     * name. Names what was asked for so the page reads as not held. */
+     * group: an unheld chapter or provision. Names what was asked for so the
+     * page reads as not held. */
     legislationNote?: string
-    /** True when the note above is a not-held verdict rather than an outage. */
+    /** True when the note above is an authoritative not-held verdict rather
+     * than an outage or an unresolved-title suppression. */
     legislationNotHeld?: boolean
+    /** True when the query looked like a whole Act title but no exact title
+     * key matched. Suppresses keyword provisions without claiming absence. */
+    legislationTitleUnresolved?: boolean
+    /** True when more than one stored Act satisfies the query. */
+    legislationAmbiguous?: boolean
   }
 }
 
@@ -164,9 +172,15 @@ export type LegalSearchState =
       /** Response diagnostics.legislationNote, so the empty copy names the
        * unheld Act instead of claiming a judgment was sought. */
       legislationNote?: string
-      /** Response diagnostics.legislationNotHeld: the note is a verdict, not
-       * an outage. */
+      /** Response diagnostics.legislationNotHeld: the note is an authoritative
+       * verdict, not an outage. */
       legislationNotHeld?: boolean
+      /** Response diagnostics.legislationTitleUnresolved: a whole-title
+       * request no exact title key matched. */
+      legislationTitleUnresolved?: boolean
+      /** Response diagnostics.legislationAmbiguous: more than one stored Act
+       * satisfies the query. */
+      legislationAmbiguous?: boolean
     }
   | { status: 'error'; query: string; message: string }
 

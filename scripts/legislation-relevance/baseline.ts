@@ -11,18 +11,27 @@ import type { LegislationRelevanceBaseline } from './metrics'
 // The floors are not targets. absentPrecision is 1: every absent Act, chapter,
 // provision and concept query is answered with no hits, because a recognised
 // citation the corpus does not hold is named as not held instead of being
-// filled with provisions that merely share its words. Held recall is 0.8226;
+// filled with provisions that merely share its words. Held recall is 0.8854;
 // the remaining gap is subject recall, 0.3125, where the served top five are an
 // insertion-order tie broken on identifier path. That is what L23 has to argue
 // from.
+//
+// heldNotHeldViolations is the invariant this suite exists to protect: a held
+// expectation must never receive an authoritative not-held verdict. The
+// resolved title states (a terminal `(repealed)` annotation, dropped
+// apostrophes and hyphens, `&` as `and`, dropped `etc`) and the control queries
+// (prose clauses and the underspecified "Act 2020") are scored so a future fold
+// regression fails here rather than shipping a false claim. A control query is
+// never scored for hits; its invariant is that it makes no unsupported claim.
 
 export const legislationRelevanceBaseline: LegislationRelevanceBaseline = {
-  expectedCaseCount: 52,
+  expectedCaseCount: 72,
   expectedIndexDocumentCount: 184772,
-  heldRecall: 0.8226,
+  heldRecall: 0.8854,
   heldPrecision: 1,
   absentPrecision: 1,
-  mrr: 0.8145,
+  mrr: 0.8802,
+  heldNotHeldViolations: 0,
   byQuery: {
     'act-human-rights-1998': {
       recall: 1,
@@ -75,6 +84,86 @@ export const legislationRelevanceBaseline: LegislationRelevanceBaseline = {
       returnedHitCount: 1,
     },
     'act-renters-rights-straight': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'act-health-social-care-levy-2021': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'act-non-domestic-rating-public-lavatories-2021': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'act-trade-australia-new-zealand-2023': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'act-strikes-minimum-service-levels-2023': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'act-workers-predictable-terms-2023': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'act-safety-rwanda-2024': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'act-childrens-wellbeing-2026': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'act-carers-leave-2023': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'act-skills-post-16-2022': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'act-non-domestic-rating-lists-2021': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'act-cooperatives-mutuals-2023': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'act-compensation-london-capital-2021': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'act-property-digital-assets-2025': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'act-social-security-uprating-2020': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'act-trade-trans-pacific-2024': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'act-high-speed-rail-crewe-2021': {
       recall: 1,
       ranks: [1],
       returnedHitCount: 1,
@@ -135,6 +224,11 @@ export const legislationRelevanceBaseline: LegislationRelevanceBaseline = {
       returnedHitCount: 1,
     },
     'section-era-2025-s1': {
+      recall: 1,
+      ranks: [1],
+      returnedHitCount: 1,
+    },
+    'section-health-social-care-levy-s5': {
       recall: 1,
       ranks: [1],
       returnedHitCount: 1,
@@ -283,6 +377,21 @@ export const legislationRelevanceBaseline: LegislationRelevanceBaseline = {
       recall: null,
       ranks: [],
       returnedHitCount: 0,
+    },
+    'control-defences-children-1989': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 5,
+    },
+    'control-computer-misuse-1990': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 0,
+    },
+    'control-act-2020': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 5,
     },
   },
 }
