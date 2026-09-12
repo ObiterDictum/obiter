@@ -1,9 +1,18 @@
 // @vitest-environment jsdom
 import { QueryClient } from '@tanstack/react-query'
+import { LegalSearchView } from '@obiter/app-shell'
 import { describe, expect, it } from 'vitest'
 import { createAppRouter, DESKTOP_SHARED_VIEW_PATHS } from './router'
+import { DesktopSearchPage } from '../../pages/search'
 
 describe('desktop router parity with web shared views', () => {
+  it('renders the shared LegalSearchView on the desktop search page', () => {
+    // The schedule-corrective fix lands in app-shell; desktop must inherit it
+    // rather than carry a parallel search view (as web does at /search).
+    const element = DesktopSearchPage()
+    expect(element.type).toBe(LegalSearchView)
+  })
+
   it('registers every shared-view path the web app exposes', () => {
     const router = createAppRouter(new QueryClient())
     const registered = new Set(Object.keys(router.routesByPath))

@@ -546,6 +546,32 @@ describe('SearchResults legislation group', () => {
     expect(container.textContent).toContain('names more than one stored Act')
     expect(container.textContent).toContain(citingHit.title)
   })
+
+  it('shows an underspecified-schedule corrective above judgment results', () => {
+    const rendered = renderResults({
+      hits: [citingHit],
+      cached: true,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'results',
+      diagnostics: {
+        legislationNote: 'Sch. para. 2 of Equality Act 2010 names no schedule.',
+        legislationScheduleGuidance: {
+          example: 'Schedule 1 paragraph 2',
+          actTitle: 'Equality Act 2010',
+        },
+      },
+    })
+    root = rendered.root
+    container = rendered.container
+
+    // The corrective is a prompt, not a verdict: it must appear alongside the
+    // judgment results, never replace them, and never claim the Act is absent.
+    expect(container.textContent).toContain('Schedule 1 paragraph 2')
+    expect(container.textContent).toContain('Equality Act 2010')
+    expect(container.textContent).toContain(citingHit.title)
+    expect(container.textContent).not.toContain('is not held')
+  })
 })
 
 describe('SearchResults withheld distinction and group headings', () => {

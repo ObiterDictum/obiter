@@ -2,7 +2,10 @@ import type {
   LegalSearchCitation,
   LegalSearchCitationMatch,
   LegalSearchCitationStatus,
+  LegislationScheduleGuidance,
 } from '@obiter/contracts'
+
+export type { LegislationScheduleGuidance }
 
 export interface CaseLawParagraph {
   id: string
@@ -37,6 +40,7 @@ export type LegalSearchOutcome =
   | 'recognised_not_held'
   | 'legislation_title_unresolved'
   | 'legislation_ambiguous'
+  | 'legislation_schedule_underspecified'
 
 export interface LegalSearchResult {
   id: string
@@ -117,6 +121,9 @@ export interface LegalSearchFetchResponse {
     legislationTitleUnresolved?: boolean
     /** True when more than one stored Act satisfies the query. */
     legislationAmbiguous?: boolean
+    /** A held Act whose schedule citation names no schedule. Presence is the
+     * diagnostic; the corrective example and Act are data, not prose. */
+    legislationScheduleGuidance?: LegislationScheduleGuidance
   }
 }
 
@@ -181,6 +188,10 @@ export type LegalSearchState =
       /** Response diagnostics.legislationAmbiguous: more than one stored Act
        * satisfies the query. */
       legislationAmbiguous?: boolean
+      /** Response diagnostics.legislationScheduleGuidance: a schedule
+       * citation that names a paragraph but no schedule, with the
+       * parser-compatible example and the Act context to resubmit it. */
+      legislationScheduleGuidance?: LegislationScheduleGuidance
     }
   | { status: 'error'; query: string; message: string }
 

@@ -12,9 +12,12 @@ import {
   SearchResults,
   courtOptionGroups,
   getCourtLabel,
+  getLegislationScheduleGuidanceFeedback,
+  getLegislationScheduleResubmitQuery,
   type LegalSearchRequestFilters,
   type LegalSearchFetchResponse,
   type LegalSearchOutcome,
+  type LegislationScheduleGuidance,
   type CaseLawParagraph,
   type LegalSearchResult,
   type LegalSearchState,
@@ -174,10 +177,23 @@ export function getLegalSearchEmptyFeedback(input: {
   /** Response diagnostics.legislationAmbiguous: more than one stored Act
    * satisfies the query. */
   legislationAmbiguous?: boolean
+  /** Response diagnostics.legislationScheduleGuidance: a schedule citation
+   * that names a paragraph but no schedule. The structured example and Act
+   * context drive a corrective with a resubmission the parser accepts. */
+  legislationScheduleGuidance?: LegislationScheduleGuidance
 }) {
   const outcome =
     input.outcome ?? (input.hydrationQueued ? 'hydration_queued' : 'no_match')
   const liveSearched = input.liveProviderSearched === true
+
+  // A held Act whose schedule citation names no schedule. A corrective, not a
+  // not-held verdict: it must show the parser-compatible example with its Act
+  // context rather than fall through to the generic judgment copy.
+  if (input.legislationScheduleGuidance) {
+    return getLegislationScheduleGuidanceFeedback(
+      input.legislationScheduleGuidance,
+    )
+  }
 
   // The legislation half's honest negatives. Each rides its own flag, so a
   // terminal branch that answers no_match or hydration_queued still surfaces
@@ -549,6 +565,8 @@ export function LegalSearchView() {
         body.diagnostics?.legislationTitleUnresolved === true
       const legislationAmbiguous =
         body.diagnostics?.legislationAmbiguous === true
+      const legislationScheduleGuidance =
+        body.diagnostics?.legislationScheduleGuidance
       const outcome =
         body.outcome ?? (body.hydrationQueued ? 'hydration_queued' : 'no_match')
       const hydrationAttempt = options.hydrationAttempt ?? 0
@@ -568,6 +586,7 @@ export function LegalSearchView() {
           legislationNotHeld,
           legislationTitleUnresolved,
           legislationAmbiguous,
+          legislationScheduleGuidance,
           hydrationAttempt: nextAttempt,
         })
         setSelectedResultIndex(-1)
@@ -593,6 +612,7 @@ export function LegalSearchView() {
         legislationNotHeld,
         legislationTitleUnresolved,
         legislationAmbiguous,
+        legislationScheduleGuidance,
         hydrationAttempt:
           outcome === 'hydration_queued' ? hydrationAttempt + 1 : undefined,
         hydrationExpired: outcome === 'hydration_queued' ? true : undefined,
@@ -680,6 +700,10 @@ export function LegalSearchView() {
   }
 
   const courtLabel = getCourtLabel(court)
+  const scheduleResubmitQuery =
+    state.status === 'empty' && state.legislationScheduleGuidance
+      ? getLegislationScheduleResubmitQuery(state.legislationScheduleGuidance)
+      : null
   const activeFilterCount = countActiveLegalSearchFilters({
     court,
     dateFrom,
@@ -742,6 +766,7 @@ export function LegalSearchView() {
             browse={state.browse}
             selectedIndex={selectedResultIndex}
             onSelectIndex={setSelectedResultIndex}
+            onResubmit={(nextQuery) => void runSearch(nextQuery)}
           />
         ) : (
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -765,18 +790,25 @@ export function LegalSearchView() {
                     legislationTitleUnresolved:
                       state.legislationTitleUnresolved,
                     legislationAmbiguous: state.legislationAmbiguous,
+                    legislationScheduleGuidance:
+                      state.legislationScheduleGuidance,
                     hydrationAttempt: state.hydrationAttempt,
                     hydrationExpired: state.hydrationExpired,
                   })}
                   action={
-                    state.outcome === 'hydration_queued'
+                    scheduleResubmitQuery
                       ? {
-                          label: state.hydrationExpired
-                            ? 'Retry search'
-                            : 'Retry now',
-                          onClick: () => void runSearch(state.query),
+                          label: 'Use this citation',
+                          onClick: () => void runSearch(scheduleResubmitQuery),
                         }
-                      : undefined
+                      : state.outcome === 'hydration_queued'
+                        ? {
+                            label: state.hydrationExpired
+                              ? 'Retry search'
+                              : 'Retry now',
+                            onClick: () => void runSearch(state.query),
+                          }
+                        : undefined
                   }
                   tone="warning"
                 />

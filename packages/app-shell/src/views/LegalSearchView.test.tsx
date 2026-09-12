@@ -547,6 +547,177 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(container.textContent).not.toContain('Still no match after rechecks')
   })
 
+  function scheduleGuidanceResponse(
+    options: {
+      outcome?: string
+      hydrationQueued?: boolean
+    } = {},
+  ) {
+    return {
+      hits: [],
+      cached: false,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: options.outcome ?? 'legislation_schedule_underspecified',
+      hydrationQueued: options.hydrationQueued ?? false,
+      diagnostics: {
+        liveProviderSearched: true,
+        legislationNote:
+          'Sch. para. 2 of Equality Act 2010 names no schedule. Name the schedule to resolve it (for example "Schedule 1 paragraph 2").',
+        legislationScheduleGuidance: {
+          example: 'Schedule 1 paragraph 2',
+          actTitle: 'Equality Act 2010',
+        },
+      },
+    }
+  }
+
+  it('renders the underspecified-schedule corrective instead of a generic empty', async () => {
+    // Browser finding: the API returned parser-compatible guidance, but the
+    // signed-in UI showed the generic "No sources found" panel because the
+    // structured diagnostic was dropped on the floor.
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => scheduleGuidanceResponse(),
+    } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(
+      getSearchInput(container),
+      'Sch. para. 2 Equality Act 2010',
+    )
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    // The exact suggestion is visible as text, with the Act context needed
+    // to resubmit it.
+    expect(container.textContent).toContain('Schedule 1 paragraph 2')
+    expect(container.textContent).toContain('Equality Act 2010')
+    expect(container.textContent).not.toContain('No sources found')
+    expect(container.textContent).not.toContain('is not held')
+  })
+
+  it('resubmits the displayed schedule example with its Act context', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => scheduleGuidanceResponse(),
+      } as Response)
+      .mockResolvedValueOnce(createSearchResponse([], { outcome: 'no_match' }))
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(
+      getSearchInput(container),
+      'Sch. para. 2 Equality Act 2010',
+    )
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    await clickButton(container, 'Use this citation')
+    await flushMicrotasks()
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    const request = fetchMock.mock.calls[1]?.[1] as RequestInit | undefined
+    // The client must compose the query from the structured diagnostic, not
+    // by parsing the human-readable note.
+    expect(JSON.parse(String(request?.body))).toMatchObject({
+      query: 'Schedule 1 paragraph 2 Equality Act 2010',
+    })
+  })
+
+  it('keeps the schedule corrective while a hydration poll runs and after it expires', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () =>
+        scheduleGuidanceResponse({
+          outcome: 'hydration_queued',
+          hydrationQueued: true,
+        }),
+    } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(
+      getSearchInput(container),
+      'Sch. para. 2 Equality Act 2010',
+    )
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    // The corrective is visible while the poll runs, and the poll still runs.
+    expect(container.textContent).toContain('Schedule 1 paragraph 2')
+    expect(container.textContent).not.toContain('Still no match after rechecks')
+
+    for (
+      let attempt = 0;
+      attempt < LEGAL_SEARCH_HYDRATION_MAX_POLLS;
+      attempt++
+    ) {
+      await act(async () => {
+        vi.advanceTimersByTime(LEGAL_SEARCH_HYDRATION_POLL_MS)
+      })
+      await flushMicrotasks()
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(
+      LEGAL_SEARCH_HYDRATION_MAX_POLLS + 1,
+    )
+    // Expiry must not swap the corrective for contradictory copy.
+    expect(container.textContent).toContain('Schedule 1 paragraph 2')
+    expect(container.textContent).not.toContain('Still no match after rechecks')
+  })
+
+  it('takes hydrated judgment results over the schedule corrective once they arrive', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () =>
+          scheduleGuidanceResponse({
+            outcome: 'hydration_queued',
+            hydrationQueued: true,
+          }),
+      } as Response)
+      .mockResolvedValueOnce(
+        createSearchResponse(createTwoResultHits(), { outcome: 'results' }),
+      )
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(
+      getSearchInput(container),
+      'Sch. para. 2 Equality Act 2010',
+    )
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_HYDRATION_POLL_MS)
+    })
+    await flushMicrotasks()
+
+    expect(container.textContent).toContain('Potanina v Potanin')
+  })
+
   it('tells signed-out users providers were not consulted on no_match', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
       ok: true,

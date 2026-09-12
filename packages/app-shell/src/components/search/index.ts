@@ -11,6 +11,10 @@ export { SearchKeyboardShortcuts } from './SearchKeyboardShortcuts'
 export { SearchResults } from './SearchResults'
 export { searchResultRows } from './searchResultRows'
 export {
+  getLegislationScheduleGuidanceFeedback,
+  getLegislationScheduleResubmitQuery,
+} from './legislationGuidance'
+export {
   courtOptionGroups,
   getCourtLabel,
   type CourtOption,
@@ -19,6 +23,7 @@ export {
   type LegalSearchFetchResponse,
   type LegalSearchOutcome,
   type LegalSearchRetrievalPath,
+  type LegislationScheduleGuidance,
   type CaseLawParagraph,
   type CaseLawSnippet,
   type LegalSearchResult,

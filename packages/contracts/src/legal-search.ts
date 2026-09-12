@@ -48,5 +48,20 @@ export const legalFetchOutcomeSchema = z.enum([
   'recognised_not_held',
   'legislation_title_unresolved',
   'legislation_ambiguous',
+  'legislation_schedule_underspecified',
 ])
 export type LegalFetchOutcome = z.infer<typeof legalFetchOutcomeSchema>
+
+/**
+ * Structured corrective for a schedule citation that names a paragraph but no
+ * schedule. `example` is built from the citation's own label path, so it is a
+ * citation the parser accepts and cannot drift from it; `actTitle` retains the
+ * Act context needed to resubmit the example.
+ */
+export const legislationScheduleGuidanceSchema = z.object({
+  example: z.string().nullable(),
+  actTitle: z.string(),
+})
+export type LegislationScheduleGuidance = z.infer<
+  typeof legislationScheduleGuidanceSchema
+>

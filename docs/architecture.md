@@ -1054,7 +1054,12 @@ returns an unresolved-title suppression (`legislationTitleUnresolved`, outcome
 `legislation_title_unresolved`) that says only that no exact title matched,
 never that the Act is absent. A relaxed separator-insensitive title key that
 matches more than one stored Act is ambiguous (`legislationAmbiguous`), never
-a selected winner. The lookup key strips only the terminal `(repealed)` status
+a selected winner. A schedule citation that names a paragraph but no schedule
+(`Sch. para. 2 Equality Act 2010`) is underspecified rather than absent: the
+response carries `legislationScheduleGuidance` (the path-derived,
+parser-compatible example plus the Act) and the outcome
+`legislation_schedule_underspecified`, so the signed-in search renders a
+resubmittable citation instead of the generic no-match copy. The lookup key strips only the terminal `(repealed)` status
 annotation legislation.gov.uk appends, folds apostrophes by deletion, hyphens
 to spaces, `&` to `and`, and drops the filler token `etc`, so the canonical
 citation and the typed variant converge on the stored title.
