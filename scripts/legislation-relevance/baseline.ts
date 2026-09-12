@@ -396,27 +396,27 @@ export const legislationRelevanceBaseline: LegislationRelevanceBaseline = {
     'control-duties-equality-2010': {
       recall: null,
       ranks: [],
-      returnedHitCount: 0,
+      returnedHitCount: 5,
     },
     'control-offences-misuse-drugs-1971': {
       recall: null,
       ranks: [],
-      returnedHitCount: 0,
+      returnedHitCount: 5,
     },
     'control-sentencing-criminal-justice-2003': {
       recall: null,
       ranks: [],
-      returnedHitCount: 0,
+      returnedHitCount: 5,
     },
     'control-changes-companies-2006': {
       recall: null,
       ranks: [],
-      returnedHitCount: 0,
+      returnedHitCount: 4,
     },
     'control-defences-children-1989-plain': {
       recall: null,
       ranks: [],
-      returnedHitCount: 0,
+      returnedHitCount: 5,
     },
   },
 }
