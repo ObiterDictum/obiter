@@ -3,6 +3,7 @@ import {
   classifyLegislationCitation,
   createActDirectory,
   formatProvisionDisplayLabel,
+  formatScheduleCitation,
   parseScheduleLabelPath,
   parseSectionLabelPath,
   type LegislationActDirectoryEntry,
@@ -695,5 +696,48 @@ describe('label parsing', () => {
     expect(formatProvisionDisplayLabel('schedule/paragraph/2')).toBe(
       'Sch. para. 2',
     )
+  })
+})
+
+describe('schedule citation examples (finding 4)', () => {
+  it.each([
+    ['schedule/1/paragraph/2', 'Schedule 1 paragraph 2'],
+    ['schedule/1/paragraph/2/3', 'Schedule 1 paragraph 2(3)'],
+    ['schedule/12/paragraph/4A', 'Schedule 12 paragraph 4A'],
+    ['schedule/paragraph/2', 'Schedule 1 paragraph 2'],
+  ])('formats the label path %s as %s', (labelPath, expected) => {
+    expect(formatScheduleCitation(labelPath)).toBe(expected)
+  })
+
+  it('round-trips numbered paths through the parser', () => {
+    for (const labelPath of [
+      'schedule/1/paragraph/2',
+      'schedule/1/paragraph/2/3',
+    ]) {
+      const citation = formatScheduleCitation(labelPath)
+      expect(citation).not.toBeNull()
+      expect(parseScheduleLabelPath(citation ?? '')).toBe(labelPath)
+    }
+  })
+
+  it('names the schedule a bare paragraph citation leaves out', () => {
+    // The store only reports an unnumbered citation as underspecified on an
+    // Act holding a numbered Schedule 1, so Schedule 1 is the example to give.
+    const citation = formatScheduleCitation('schedule/paragraph/2')
+    expect(citation).not.toBeNull()
+    expect(parseScheduleLabelPath(citation ?? '')).toBe(
+      'schedule/1/paragraph/2',
+    )
+  })
+
+  it.each([
+    'section/13',
+    'schedule',
+    'schedule/1',
+    'schedule/1/part/2',
+    'schedule/paragraph',
+    'schedule/1/paragraph/2/()',
+  ])('returns null for the non-schedule-paragraph path %s', (labelPath) => {
+    expect(formatScheduleCitation(labelPath)).toBeNull()
   })
 })

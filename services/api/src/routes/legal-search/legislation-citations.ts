@@ -410,6 +410,27 @@ export function formatProvisionDisplayLabel(labelPath: string): string {
   return labelPath
 }
 
+/** The citation form of a stored schedule label path, so guidance the product
+ * emits is a citation the parser accepts. A numbered path names its own
+ * schedule. An unnumbered `schedule/paragraph/N` path is the single-schedule
+ * shape, which the store only reaches on an Act that holds a numbered
+ * Schedule 1, so the example names Schedule 1. Null for a path that is not a
+ * schedule paragraph. */
+export function formatScheduleCitation(labelPath: string): string | null {
+  const parts = labelPath.split('/')
+  const numbered = /^\d+$/.test(parts[1] ?? '')
+  const paragraphAt = numbered ? 2 : 1
+  if (parts[paragraphAt] !== 'paragraph') return null
+  const paragraphNumber = parts[paragraphAt + 1] ?? ''
+  const groups = parts.slice(paragraphAt + 2)
+  if (!/^\d+[A-Za-z]?$/.test(paragraphNumber)) return null
+  if (!groups.every((group) => /^[A-Za-z0-9]+$/.test(group))) return null
+  return (
+    `Schedule ${numbered ? parts[1] : '1'} paragraph ${paragraphNumber}` +
+    groups.map((group) => `(${group})`).join('')
+  )
+}
+
 function expandAlias(actText: string): string {
   const normalized = normalizeActTitle(actText)
   const aliased = actAliases.get(normalized)

@@ -6,6 +6,7 @@ import {
 import {
   classifyLegislationCitation,
   createActDirectory,
+  formatScheduleCitation,
   type LegislationActDirectoryEntry,
 } from './legislation-citations'
 import { createCanonicalProvisionPath } from '@obiter/contracts'
@@ -331,14 +332,15 @@ export async function resolveLegislationFetch(
       // A held Act with a paragraph citation that names no schedule: the
       // citation is underspecified, not the provision absent. Guessing
       // Schedule 1 would be a wrong-Act-class mistake at provision level.
+      const example = formatScheduleCitation(outcome.provision.labelPath)
       return {
         ...emptyResult,
         searched: true,
         citationRecognised: true,
         note:
           `${outcome.provision.label} of ${outcome.provision.title} names no ` +
-          `schedule. Name the schedule to resolve it (for example ` +
-          `"Schedule 1 ${outcome.provision.label}").`,
+          `schedule. Name the schedule to resolve it` +
+          (example ? ` (for example "${example}").` : '.'),
       }
     }
     if (resolution.status === 'missing') {

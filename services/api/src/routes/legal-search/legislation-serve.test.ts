@@ -4,6 +4,7 @@ import {
   resolveLegislationProvisionPage,
   type LegislationServeDeps,
 } from './legislation-serve'
+import { parseScheduleLabelPath } from './legislation-citations'
 
 const acts = [
   {
@@ -588,6 +589,36 @@ describe('single-schedule storage shape (adjacent board finding)', () => {
     expect(result.groups).toEqual([])
     expect(result.recognisedNotHeld).toBe(false)
     expect(result.note).toContain('names no schedule')
+  })
+
+  it('suggests an underspecified-schedule example the citation parser accepts', async () => {
+    const result = await resolveLegislationFetch(
+      createScheduleDeps(rows),
+      'Sch. para. 2 Equality Act 2010',
+    )
+    const example = result.note?.match(/for example "([^"]+)"/)?.[1]
+    // Splicing the display label onto "Schedule 1" emitted
+    // "Schedule 1 Sch. para. 2", which parseScheduleLabelPath rejects.
+    expect(example).toBe('Schedule 1 paragraph 2')
+    expect(parseScheduleLabelPath(example ?? '')).toBe('schedule/1/paragraph/2')
+  })
+
+  it('resolves its own underspecified-schedule example back to the provision', async () => {
+    const first = await resolveLegislationFetch(
+      createScheduleDeps(rows),
+      'Sch. para. 2 Equality Act 2010',
+    )
+    const example = first.note?.match(/for example "([^"]+)"/)?.[1]
+    expect(example).toBe('Schedule 1 paragraph 2')
+    const second = await resolveLegislationFetch(
+      createScheduleDeps(rows),
+      `${example} Equality Act 2010`,
+    )
+    expect(second.citationHeldExact).toBe(true)
+    expect(second.recognisedNotHeld).toBe(false)
+    expect(second.groups[0]?.hits[0]?.id).toBe(
+      'ukpga/2010/15/schedule/1/paragraph/2',
+    )
   })
 
   it('keeps the Equality Act 2010 s. 999 missing-provision message', async () => {
