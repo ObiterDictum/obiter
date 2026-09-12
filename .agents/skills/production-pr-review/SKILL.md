@@ -24,8 +24,8 @@ Do not rubber-stamp. Do not say a PR is ready unless the evidence supports it. S
 9. Review tests and run appropriate verification where possible.
 10. Prepare inline review comments for every actionable bug/security issue that has a stable diff location.
 11. Finalize the verdict, score, findings, inline targets, and verification evidence before any comment-drafting delegation.
-12. Prepare a standalone overall review comment that explains the verdict, score, findings, impact, fix direction, verification, system coverage, and remaining risk clearly enough to understand without opening inline threads.
-13. Prepare a final review summary that groups all findings by severity and category and includes a numeric review score.
+12. Prepare a standalone overall review comment that explains the verdict, findings, impact, fix direction, verification, system coverage, and remaining risk clearly enough to understand without opening inline threads.
+13. Prepare a final review summary that groups all findings by severity and category and includes a numeric review score. The score is internal: it appears in the local summary, never in the published GitHub review body or inline comments.
 14. Publish review comments to GitHub through the API when explicitly asked or when operating on a real PR with GitHub access.
 15. Record durable internal workings, invariants, and recurring review knowledge in the review knowledge repo if safe to store.
 
@@ -312,27 +312,27 @@ Use the primary reviewer model for the actual review: code inspection, security 
 After the review is complete and the findings are locked, any delegated comment-drafting subagent must be spawned with `model: "opencode-go/deepseek-v4-flash"`. Do not inherit the primary review model for this post-review prose work unless the user explicitly overrides this policy. Use the mini-model subagent only for drafting or polishing:
 
 - GitHub inline comment bodies for already validated findings.
-- The overall review body using the locked verdict and `N/100` score.
-- A concise local final summary for the user.
+- The overall review body using the locked verdict. The numeric score never appears in published GitHub text.
+- A concise local final summary for the user (the local summary does carry the `N/100` score).
 
 Give the subagent only the minimum sanitized review packet:
 
 - verdict, score, merge readiness, and confidence
 - validated findings with severity/category, exact `path:line`, problem, impact, fix direction, and verification
 - exact commands and pass/fail verification evidence
-- API publication constraints, including direct GitHub API inline comments and the selected review event
+- API publication constraints, including direct GitHub API inline comments and the selected review event, and the rule that the numeric score never appears in published GitHub text
 - any explicit wording constraints from the user
 
 Do not provide secrets, private matter data, raw legal text, raw prompts, embeddings, sensitive logs, private screenshots, or unrelated repository context. The subagent must not inspect more code unless explicitly asked by the primary reviewer for prose context.
 
-Require the subagent to return only draft text, not publication commands. The primary reviewer must validate every inline body and the overall body before posting: confirm that no severity changed, no new unverified claim was introduced, no finding was softened or exaggerated, the score stayed unchanged, and every inline target still maps to the PR diff. If the draft fails any check, edit it directly or rerun the subagent with a tighter sanitized packet.
+Require the subagent to return only draft text, not publication commands. The primary reviewer must validate every inline body and the overall body before posting: confirm that no severity changed, no new unverified claim was introduced, no finding was softened or exaggerated, the score stayed unchanged in the local summary, no score leaked into drafted GitHub text, and every inline target still maps to the PR diff. If the draft fails any check, edit it directly or rerun the subagent with a tighter sanitized packet.
 
 Example subagent prompt:
 
 ```text
 Use `model: "opencode-go/deepseek-v4-flash"` for comment drafting only. Do not perform a new PR review and do not change the verdict, score, severity, finding set, file targets, or verification claims.
 
-Draft GitHub-ready inline comment bodies and one overall review body from this locked review packet:
+Draft GitHub-ready inline comment bodies and one overall review body from this locked review packet. The score is supplied for context only: it must not appear in any GitHub-facing text.
 [verdict, score, findings, path:line targets, verification results, publication constraints]
 
 Return only:
@@ -346,9 +346,8 @@ Before publishing any GitHub review, write the top-level review body first. The 
 
 The overall comment must include:
 
-- a `Review Verdict` section that is not just a label and score. It must include:
+- a `Review Verdict` section that is not just a label. It must include:
   - `Decision`: approve, request changes, not ready, or needs more context
-  - `Score`: `N/100`
   - `Merge readiness`: whether this can merge now, and if not, the exact condition blocking merge
   - `Why`: two to five concrete sentences naming the highest-impact issue(s), affected area(s), and production risk
   - `What would change the verdict`: the smallest set of fixes or evidence needed for approval
@@ -364,6 +363,8 @@ The overall comment must include:
 - a `System / Coverage Map` section that names the System Map entries loaded, internal flows traced, direct dependents inspected, and unmapped uncertainty
 - a `Verification` section with exact commands and pass/fail results
 - a `Gaps / Follow-Ups` section for unrun checks, manual QA gaps, or non-blocking cleanup
+
+Never put the numeric score in the GitHub review body, inline comments, or any published artifact. The score is internal review output: it belongs in the local final summary and the locked review packet only. The published body carries the decision, merge readiness, reasoning, and findings — the score adds nothing a maintainer can act on and reads as opaque grading on the author's own PR.
 
 Do not make the verdict generic, diplomatic, or a teaser such as "there are two bugs below." The verdict must name the blocking bugs or the decisive reason for approval. Avoid empty phrases such as "directionally sound", "looks good overall", "solid foundation", or "needs a few fixes" unless the following sentence names the concrete risk. Do not rely on inline comments as the only explanation; GitHub UIs often collapse or reorder them.
 
@@ -429,7 +430,7 @@ Preferred GitHub review workflow:
 3. Validate every inline target is in the PR diff. Use changed-line line numbers from `nl -ba <file>` plus the PR diff. If unsure, keep the issue in the summary only.
 4. Draft the overall review comment using the `Overall Review Comment` rules. It must explain the findings directly and include enough detail to be useful if inline comments are not visible.
 5. Publish inline comments for actionable findings with valid diff positions through the GitHub API, not high-level `gh pr review` output.
-6. Submit the overall review comment as the GitHub review `body` with the verdict, numeric score, and full severity-grouped list.
+6. Submit the overall review comment as the GitHub review `body` with the verdict and full severity-grouped list. No numeric score in the published body.
 7. Confirm publication by listing PR review comments or the posted review.
 
 ### GitHub API publication rules
@@ -441,7 +442,7 @@ Prepare a UTF-8 JSON payload with ASCII-safe punctuation to avoid mojibake on Wi
 ```json
 {
   "event": "REQUEST_CHANGES",
-  "body": "## Review Verdict\n\nDecision: Request changes\n\nScore: 62/100\n\nMerge readiness: Not mergeable until [specific condition].\n\nWhy: [Name the concrete blocking issue, affected area, and production/user/security risk in two to five sentences.]\n\nWhat would change the verdict: [Smallest fix/evidence set needed for approval.]\n\nConfidence: High/Medium/Low. [Reason if not high.]\n\n## Must Fix\n\n- **High/security - Title** (`path:line`)\n  - Problem: ...\n  - Impact: ...\n  - Fix direction: ...\n  - Verification: ...\n\n## Findings\n\n- **Medium/architecture - Title** (`path:line`)\n  - Problem: ...\n  - Impact: ...\n  - Fix direction: ...\n  - Verification: ...\n\n## Security / Data / Isolation\n\n...\n\n## Verification\n\n...\n\n## Gaps / Follow-Ups\n\n...",
+  "body": "## Review Verdict\n\nDecision: Request changes\n\nMerge readiness: Not mergeable until [specific condition].\n\nWhy: [Name the concrete blocking issue, affected area, and production/user/security risk in two to five sentences.]\n\nWhat would change the verdict: [Smallest fix/evidence set needed for approval.]\n\nConfidence: High/Medium/Low. [Reason if not high.]\n\n## Must Fix\n\n- **High/security - Title** (`path:line`)\n  - Problem: ...\n  - Impact: ...\n  - Fix direction: ...\n  - Verification: ...\n\n## Findings\n\n- **Medium/architecture - Title** (`path:line`)\n  - Problem: ...\n  - Impact: ...\n  - Fix direction: ...\n  - Verification: ...\n\n## Security / Data / Isolation\n\n...\n\n## Verification\n\n...\n\n## Gaps / Follow-Ups\n\n...",
   "comments": [
     {
       "path": "services/api/src/database.ts",
@@ -469,7 +470,7 @@ Use `event` according to the evidence:
 
 If the authenticated GitHub identity is the PR author, use `event: "COMMENT"` directly as the default publication event. Keep the evidence-based `Decision` text as `Request changes`, `Approve`, `Not ready`, or `Needs more context` according to the review outcome.
 
-Do not mention GitHub author-permission limitations, fallback mechanics, or "local verdict" caveats in the GitHub review body, inline comments, or local final summary. This is known operational behavior and should stay out of PR reviews. Do not drop inline comments or shorten the overall body when using `COMMENT`; submit the same findings, score, and standalone explanation under the comment review event.
+Do not mention GitHub author-permission limitations, fallback mechanics, or "local verdict" caveats in the GitHub review body, inline comments, or local final summary. This is known operational behavior and should stay out of PR reviews. Do not drop inline comments or shorten the overall body when using `COMMENT`; submit the same findings and standalone explanation under the comment review event.
 
 If the tooling makes inline publication unsafe or ambiguous, output an `Inline comments to add` section with exact `path:line` targets and bodies, then state that comments were not posted and why.
 
