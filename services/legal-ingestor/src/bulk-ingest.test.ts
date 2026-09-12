@@ -98,7 +98,8 @@ function deps(
     fetchImpl: (async () => {
       throw new Error('fetch must be stubbed per test')
     }) as typeof fetch,
-    fetchDetail: async () => ({ status: 'skipped' }) as ProviderDocumentResult,
+    fetchDetail: async () =>
+      ({ status: 'skipped', reason: 'unparsable' }) as ProviderDocumentResult,
     ...overrides,
   }
   return { deps: base, queries, sleep }
@@ -193,19 +194,66 @@ describe('ingestOne', () => {
     expect(storedProvider.sourceUrl).toContain('/uksc/2024/1')
   })
 
-  it('stores PDF-only documents as summaries with a reason', async () => {
+  it('stores an unreadable body as a summary and stamps it', async () => {
     const { deps: testDeps, queries } = deps({
-      fetchDetail: async () => ({ status: 'skipped' }),
+      fetchDetail: async () => ({ status: 'skipped', reason: 'unparsable' }),
     })
-    const outcome = await ingestOne(testDeps, entry({ xmlUri: null }))
+    const outcome = await ingestOne(testDeps, entry())
     expect(outcome.status).toBe('skipped-no-fulltext')
     expect(
       outcome.status === 'skipped-no-fulltext' && outcome.reason,
-    ).toContain('PDF')
+    ).toContain('unparsable')
     const insert = queries.find((query) =>
       query.text.includes('insert into legal_source_documents'),
     )
     expect(insert?.text).not.toContain('document_json')
+    // Stamped: the next run must not re-fetch a body that cannot be read.
+    expect(insert?.params[3]).toBe('abc123')
+  })
+
+  it('fails and writes nothing when the provider refuses the body off-origin', async () => {
+    const { deps: testDeps, queries } = deps({
+      fetchDetail: async () => ({ status: 'skipped', reason: 'off_origin' }),
+    })
+    const outcome = await ingestOne(testDeps, entry())
+    expect(outcome).toEqual({
+      status: 'failed',
+      documentId: 'uksc-2024-1',
+      reason: 'provider document URI resolved off-origin',
+    })
+    expect(
+      queries.some((query) =>
+        query.text.includes('insert into legal_source_documents'),
+      ),
+    ).toBe(false)
+  })
+
+  it('does not store an off-origin sourceUri as the shown official URL', async () => {
+    const { deps: testDeps, queries } = deps({
+      fetchDetail: async () => ({
+        status: 'ok',
+        document: document(),
+        provider: provider({ sourceUri: '//evil.example/x' }),
+        parser: { id: 'legaldocml', version: 1 },
+      }),
+    })
+    const outcome = await ingestOne(
+      testDeps,
+      entry({ sourceUri: '//evil.example/x' }),
+    )
+    expect(outcome.status).toBe('stored')
+    const insert = queries.find((query) =>
+      query.text.includes('insert into legal_source_documents'),
+    )
+    const summary = JSON.parse(String(insert?.params[1])) as {
+      sourceUrl: string
+    }
+    const storedProvider = JSON.parse(String(insert?.params[3])) as {
+      sourceUrl: string
+    }
+    const expected = 'https://caselaw.nationalarchives.gov.uk/uksc/2024/1'
+    expect(summary.sourceUrl).toBe(expected)
+    expect(storedProvider.sourceUrl).toBe(expected)
   })
 
   it('retries instead of stamping when the body redirects', async () => {
@@ -237,8 +285,7 @@ describe('ingestOne', () => {
     expect(first).toEqual({
       status: 'failed',
       documentId: 'uksc-2024-1',
-      reason:
-        'judgment body not retrieved from provider (fetch refused or unparsable)',
+      reason: 'provider returned a non-OK body response',
     })
     // Nothing is written, so no content_hash is stamped for a later run to
     // short-circuit on.
