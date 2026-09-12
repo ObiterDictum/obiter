@@ -21,6 +21,44 @@ describe('readLegalIngestorEnv', () => {
     expect(env.legalAuthoritiesIndex).toBe('legal_authorities_fixtures')
   })
 
+  it('rejects unknown NODE_ENV values', () => {
+    process.env.NODE_ENV = 'staging'
+
+    expect(() => readLegalIngestorEnv()).toThrow(
+      'NODE_ENV must be production, test, or development; got "staging".',
+    )
+  })
+
+  it('refuses an unset NODE_ENV instead of ingesting under development defaults', () => {
+    delete process.env.NODE_ENV
+    delete process.env.OBITER_LOCAL_DEVELOPMENT
+    process.env.DATABASE_URL = 'postgres://obiter:obiter@localhost:5432/obiter'
+
+    expect(() => readLegalIngestorEnv()).toThrow(
+      'NODE_ENV must be production, test, or development.',
+    )
+  })
+
+  it('permits an unset NODE_ENV only with the local development opt-in', () => {
+    delete process.env.NODE_ENV
+    process.env.OBITER_LOCAL_DEVELOPMENT = '1'
+    delete process.env.MEILISEARCH_ADMIN_API_KEY
+
+    const env = readLegalIngestorEnv()
+
+    expect(env.nodeEnv).toBe('development')
+    expect(env.meilisearchAdminApiKey).toBe('dev-key')
+  })
+
+  it('requires an explicit admin key outside development', () => {
+    process.env.NODE_ENV = 'test'
+    delete process.env.MEILISEARCH_ADMIN_API_KEY
+
+    expect(() => readLegalIngestorEnv()).toThrow(
+      'MEILISEARCH_ADMIN_API_KEY must be configured.',
+    )
+  })
+
   it('requires hosted search values in production', () => {
     process.env.NODE_ENV = 'production'
     delete process.env.MEILISEARCH_HOST

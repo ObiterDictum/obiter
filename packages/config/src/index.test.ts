@@ -2,7 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { parseLocalEnvFile, resolveLocalEnvFile } from './index'
+import { parseLocalEnvFile, readNodeEnv, resolveLocalEnvFile } from './index'
 
 describe('resolveLocalEnvFile', () => {
   const tempDirs: string[] = []
@@ -162,5 +162,50 @@ describe('parseLocalEnvFile', () => {
       A: 'value',
       B: 'x\ny',
     })
+  })
+})
+
+describe('readNodeEnv', () => {
+  const originalEnv = { ...process.env }
+
+  afterEach(() => {
+    process.env = { ...originalEnv }
+  })
+
+  it('accepts each known mode', () => {
+    process.env.NODE_ENV = 'production'
+    expect(readNodeEnv()).toBe('production')
+
+    process.env.NODE_ENV = 'test'
+    expect(readNodeEnv()).toBe('test')
+
+    process.env.NODE_ENV = 'development'
+    expect(readNodeEnv()).toBe('development')
+  })
+
+  it('refuses an unknown mode', () => {
+    process.env.NODE_ENV = 'staging'
+
+    expect(readNodeEnv).toThrow(
+      'NODE_ENV must be production, test, or development; got "staging".',
+    )
+  })
+
+  it('refuses an unset mode without the local development opt-in', () => {
+    delete process.env.NODE_ENV
+    delete process.env.OBITER_LOCAL_DEVELOPMENT
+
+    expect(readNodeEnv).toThrow(
+      'NODE_ENV must be production, test, or development.',
+    )
+  })
+
+  it('treats an empty mode as unset and needs the exact opt-in value', () => {
+    process.env.NODE_ENV = ''
+    process.env.OBITER_LOCAL_DEVELOPMENT = '1'
+    expect(readNodeEnv()).toBe('development')
+
+    process.env.OBITER_LOCAL_DEVELOPMENT = 'true'
+    expect(readNodeEnv).toThrow(/NODE_ENV must be production/)
   })
 })

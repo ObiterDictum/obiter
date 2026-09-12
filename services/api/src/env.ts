@@ -1,4 +1,4 @@
-import { loadLocalEnvFile } from '@obiter/config'
+import { loadLocalEnvFile, readNodeEnv, type NodeEnv } from '@obiter/config'
 import {
   NER_DEFAULT_CHUNK_TOKENS,
   NER_TOKEN_BUDGET,
@@ -68,37 +68,11 @@ export interface ApiEnv {
   legalSearchHydrationPerClientMax: number
   legalSearchHydrationWindowMs: number
   port: number
-  nodeEnv: 'development' | 'test' | 'production'
+  nodeEnv: NodeEnv
   // The .env this process actually read, or null when it read none. Reported by
   // /api/health provenance so a lane can prove which configuration file it runs
   // with, the same way it proves its checkout root and commit.
   localEnvFile: string | null
-}
-
-function readNodeEnv(): ApiEnv['nodeEnv'] {
-  const raw = process.env.NODE_ENV
-
-  if (raw === 'production' || raw === 'test') {
-    return raw
-  }
-
-  if (raw === 'development') {
-    return 'development'
-  }
-
-  if (raw === undefined || raw === '') {
-    if (process.env.OBITER_LOCAL_DEVELOPMENT === '1') {
-      return 'development'
-    }
-
-    throw new Error(
-      'NODE_ENV must be production, test, or development. For local development with an unset NODE_ENV, set OBITER_LOCAL_DEVELOPMENT=1.',
-    )
-  }
-
-  throw new Error(
-    `NODE_ENV must be production, test, or development; got "${raw}".`,
-  )
 }
 
 function requireProductionEnv(nodeEnv: ApiEnv['nodeEnv']) {
@@ -204,10 +178,15 @@ function readSecret(key: string, fallback: string, nodeEnv: ApiEnv['nodeEnv']) {
   return trimmed
 }
 
-function readSearchApiKey(nodeEnv: ApiEnv['nodeEnv']) {
-  const fallback = nodeEnv === 'production' ? '' : 'dev-key'
+// `dev-key` is a working local placeholder, so it is reachable only in
+// development. Production already refused it; test now does too, because a
+// default credential that works eventually gets used somewhere real.
+function readMeilisearchKey(key: string, nodeEnv: ApiEnv['nodeEnv']) {
+  if (nodeEnv === 'development') {
+    return readSecret(key, 'dev-key', nodeEnv)
+  }
 
-  return readSecret('MEILISEARCH_SEARCH_API_KEY', fallback, nodeEnv)
+  return readConfiguredSecret(key, nodeEnv)
 }
 
 function readIndexName(key: string, fallback: string) {
@@ -279,12 +258,6 @@ function readPort() {
  */
 export function loadLocalDotEnv(): string | null {
   return loadLocalEnvFile()
-}
-
-function readAdminApiKey(nodeEnv: ApiEnv['nodeEnv']) {
-  const fallback = nodeEnv === 'production' ? '' : 'dev-key'
-
-  return readSecret('MEILISEARCH_ADMIN_API_KEY', fallback, nodeEnv)
 }
 
 function readPositiveInteger(key: string, fallback: string) {
@@ -424,8 +397,14 @@ export function readApiEnv(): ApiEnv {
       'MEILISEARCH_HOST',
       'http://localhost:7700',
     ),
-    meilisearchSearchApiKey: readSearchApiKey(nodeEnv),
-    meilisearchAdminApiKey: readAdminApiKey(nodeEnv),
+    meilisearchSearchApiKey: readMeilisearchKey(
+      'MEILISEARCH_SEARCH_API_KEY',
+      nodeEnv,
+    ),
+    meilisearchAdminApiKey: readMeilisearchKey(
+      'MEILISEARCH_ADMIN_API_KEY',
+      nodeEnv,
+    ),
     legalAuthoritiesIndex: readLegalAuthoritiesIndexName(),
     legislationProvisionsIndex: readLegislationProvisionsIndexName(),
     mojFindCaseLawBaseUrl: readRequiredUrl(
