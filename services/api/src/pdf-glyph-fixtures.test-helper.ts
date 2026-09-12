@@ -78,6 +78,31 @@ export function rawType1Pdf(content: string) {
   ])
 }
 
+/**
+ * A stray `Q` after a balanced `q Q`, under a `0.5` scale. pdf.js ignores the
+ * extra `Q` (`CanvasGraphics.restore` early-returns on an empty stack), so the
+ * page draws the text at half coordinates. A replay that pops unconditionally
+ * resets the CTM to identity and places the cover at the unscaled position,
+ * entirely above the 792pt page, where it paints nothing.
+ */
+export function rawUnbalancedRestorePdf() {
+  return rawType1Pdf(
+    '0.5 0 0 0.5 0 0 cm q Q Q BT /F1 12 Tf 1 0 0 1 120 1200 Tm (SECRETVALUE) Tj ET',
+  )
+}
+
+/**
+ * `q`/`Q` around a text-matrix change. The PDF spec keeps the text matrix out
+ * of the graphics state, but pdf.js saves and restores it with everything else,
+ * so text after `Q` returns to the pre-`q` baseline. A replay that restores
+ * only the CTM leaves it on the matrix set between `q` and `Q`.
+ */
+export function rawRestoreTextMatrixPdf() {
+  return rawType1Pdf(
+    'BT /F1 12 Tf 1 0 0 1 60 700 Tm q 1 0 0 1 200 100 Tm Q (SECRETVALUE) Tj ET',
+  )
+}
+
 export function rawFormPdf() {
   return rawPdf([
     '<< /Type /Catalog /Pages 2 0 R >>',

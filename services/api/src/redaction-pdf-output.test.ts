@@ -46,7 +46,11 @@ function aliceLayout(): DocumentTextLayout {
   }
 }
 
-function acceptedAliceInput(pdfBytes: Buffer, layout: DocumentTextLayout) {
+function acceptedSpanInput(
+  pdfBytes: Buffer,
+  layout: DocumentTextLayout,
+  spanText: string,
+) {
   return {
     pdfBytes,
     layout,
@@ -54,8 +58,8 @@ function acceptedAliceInput(pdfBytes: Buffer, layout: DocumentTextLayout) {
       {
         id: 'span_1',
         start: 0,
-        end: 5,
-        text: 'Alice',
+        end: spanText.length,
+        text: spanText,
         category: 'person_name' as const,
         source: 'rampart_model' as const,
         confidence: 'high' as const,
@@ -72,6 +76,10 @@ function acceptedAliceInput(pdfBytes: Buffer, layout: DocumentTextLayout) {
     outputMode: 'redacted' as const,
     tokenMap: {},
   }
+}
+
+function acceptedAliceInput(pdfBytes: Buffer, layout: DocumentTextLayout) {
+  return acceptedSpanInput(pdfBytes, layout, 'Alice')
 }
 
 function isNearBlack(r: number, g: number, b: number) {
@@ -228,6 +236,68 @@ describe('redaction-pdf-output', () => {
     await expect(
       buildRedactedPdf(acceptedAliceInput(pdfBytes, layout)),
     ).rejects.toBeInstanceOf(RedactionCoverGeometryError)
+  })
+
+  it('accepts a cover on a page whose box does not start at the origin', async () => {
+    // The stored layout records width/height only. A page with an offset
+    // MediaBox must not be judged against [0, width], or visible text near the
+    // right edge is refused as off-page.
+    const doc = await PDFDocument.create()
+    const font = await doc.embedFont(StandardFonts.Helvetica)
+    const page = doc.addPage([622, 802])
+    page.setMediaBox(10, 10, 622, 802)
+    page.drawText('I', { x: 625, y: 400, size: 12, font })
+    const pdfBytes = Buffer.from(await doc.save())
+    const layout: DocumentTextLayout = {
+      version: 2,
+      pages: [{ width: 622, height: 802 }],
+      segments: [
+        {
+          start: 0,
+          end: 1,
+          pageIndex: 0,
+          x: 625,
+          y: 400,
+          width: 3.996,
+          height: 12,
+          ascent: 8.196,
+          descent: 2.604,
+          advances: [3.996],
+          glyphWidthOverrides: {},
+        },
+      ],
+    }
+
+    await expect(
+      buildRedactedPdf(acceptedSpanInput(pdfBytes, layout, 'I')),
+    ).resolves.toBeInstanceOf(Uint8Array)
+  })
+
+  it('throws when an accepted span cover misses the page entirely', async () => {
+    const pdfBytes = await samplePdf()
+    const layout: DocumentTextLayout = {
+      version: 1,
+      pages: [{ width: 200, height: 200 }],
+      segments: [
+        {
+          start: 0,
+          end: 5,
+          pageIndex: 0,
+          x: 40,
+          // Above the 200pt page: the cover would paint nothing.
+          y: 400,
+          width: 30,
+          height: 12,
+        },
+      ],
+    }
+
+    await expect(
+      buildRedactedPdf(acceptedAliceInput(pdfBytes, layout)),
+    ).rejects.toMatchObject({
+      name: 'RedactionCoverGeometryError',
+      spanIds: ['span_1'],
+    })
   })
 
   it('still produces a valid PDF when every span is rejected', async () => {
