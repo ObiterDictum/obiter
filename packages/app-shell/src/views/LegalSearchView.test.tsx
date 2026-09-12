@@ -493,6 +493,60 @@ describe('LegalSearchView debounce lifecycle', () => {
     expect(container.textContent).not.toContain('Still no match after rechecks')
   })
 
+  it('polls a queued verdict query and keeps the verdict after the poll expires', async () => {
+    // Finding 2: the API now returns hydration_queued with the verdict in
+    // diagnostics while a job is pending. The client must keep polling, and
+    // when the bounded recheck expires it must show the legislation verdict,
+    // not the generic "Still no match after rechecks" copy.
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        hits: [],
+        cached: true,
+        indexedCount: 0,
+        skippedCount: 0,
+        outcome: 'hydration_queued',
+        hydrationQueued: true,
+        diagnostics: {
+          liveProviderSearched: false,
+          legislationTitleUnresolved: true,
+          legislationNote:
+            'No exact legislation title match was found for "Children Act 1989".',
+        },
+      }),
+    } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(getSearchInput(container), 'Children Act 1989')
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    // The verdict is visible while the poll runs.
+    expect(container.textContent).toContain('No exact legislation title match')
+
+    for (
+      let attempt = 0;
+      attempt < LEGAL_SEARCH_HYDRATION_MAX_POLLS;
+      attempt++
+    ) {
+      await act(async () => {
+        vi.advanceTimersByTime(LEGAL_SEARCH_HYDRATION_POLL_MS)
+      })
+      await flushMicrotasks()
+    }
+
+    expect(fetchMock).toHaveBeenCalledTimes(
+      LEGAL_SEARCH_HYDRATION_MAX_POLLS + 1,
+    )
+    expect(container.textContent).toContain('No exact legislation title match')
+    expect(container.textContent).not.toContain('Still no match after rechecks')
+  })
+
   it('tells signed-out users providers were not consulted on no_match', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
       ok: true,
