@@ -9,7 +9,10 @@ import {
   formatScheduleCitation,
   type LegislationActDirectoryEntry,
 } from './legislation-citations'
-import { createCanonicalProvisionPath } from '@obiter/contracts'
+import {
+  createCanonicalProvisionPath,
+  type LegislationScheduleGuidance,
+} from '@obiter/contracts'
 import {
   getLegislationDocument,
   getLegislationProvision,
@@ -53,6 +56,11 @@ export interface LegislationFetchResult {
   titleUnresolved: boolean
   /** More than one stored Act satisfies the query. Never a not-held verdict. */
   ambiguous: boolean
+  /** A held Act whose citation names a schedule paragraph but no schedule
+   * number. The store cannot resolve it without guessing, so this carries the
+   * parser-compatible example (built from the citation's own label path) and
+   * the Act context needed to resubmit it. Null otherwise. */
+  scheduleUnderspecified: LegislationScheduleGuidance | null
   note: string | null
   searched: boolean
   /**
@@ -94,6 +102,7 @@ const emptyResult: LegislationFetchResult = {
   recognisedNotHeld: false,
   titleUnresolved: false,
   ambiguous: false,
+  scheduleUnderspecified: null,
   note: null,
   searched: false,
   keywordSearchParameters: null,
@@ -332,11 +341,17 @@ export async function resolveLegislationFetch(
       // A held Act with a paragraph citation that names no schedule: the
       // citation is underspecified, not the provision absent. Guessing
       // Schedule 1 would be a wrong-Act-class mistake at provision level.
+      // The example and the Act are structured data so the client never has
+      // to parse the note to resubmit a citation the parser accepts.
       const example = formatScheduleCitation(outcome.provision.labelPath)
       return {
         ...emptyResult,
         searched: true,
         citationRecognised: true,
+        scheduleUnderspecified: {
+          example,
+          actTitle: outcome.provision.title,
+        },
         note:
           `${outcome.provision.label} of ${outcome.provision.title} names no ` +
           `schedule. Name the schedule to resolve it` +
@@ -372,6 +387,7 @@ export async function resolveLegislationFetch(
       recognisedNotHeld: false,
       titleUnresolved: false,
       ambiguous: false,
+      scheduleUnderspecified: null,
       note: null,
       searched: true,
       keywordSearchParameters: null,
@@ -436,6 +452,7 @@ export async function resolveLegislationFetch(
       recognisedNotHeld: false,
       titleUnresolved: false,
       ambiguous: false,
+      scheduleUnderspecified: null,
       note: null,
       searched: true,
       keywordSearchParameters: null,
@@ -461,6 +478,7 @@ export async function resolveLegislationFetch(
     recognisedNotHeld: false,
     titleUnresolved: false,
     ambiguous: false,
+    scheduleUnderspecified: null,
     note: null,
     searched: true,
     keywordSearchParameters: keyword.appliedSearchParameters,

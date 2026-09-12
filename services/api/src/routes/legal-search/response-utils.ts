@@ -4,6 +4,7 @@ import {
   type LegalSearchCitation,
   type LegalSearchCitationMatch,
   type LegalSearchCitationStatus,
+  type LegislationScheduleGuidance,
 } from '@obiter/contracts'
 
 export type LegalFetchPrimaryGroup = 'judgments' | 'legislation'
@@ -35,6 +36,7 @@ export type LegalFetchOutcome =
   | 'recognised_not_held'
   | 'legislation_title_unresolved'
   | 'legislation_ambiguous'
+  | 'legislation_schedule_underspecified'
 export interface LegalFetchSearchHit extends LegalSearchHit {
   canonicalUrl?: string
   evidenceIds?: string[]
@@ -140,6 +142,11 @@ export function toFetchResponse(
       /** True when more than one stored Act satisfies the query. Not a
        * not-held verdict. */
       legislationAmbiguous?: boolean
+      /** Structured corrective for a schedule citation that names no
+       * schedule: the parser-compatible example (from the citation's own
+       * label path) and the Act it belongs to. Presence is the diagnostic;
+       * never a not-held verdict. */
+      legislationScheduleGuidance?: LegislationScheduleGuidance
       legislationNote?: string
       /** Search-time parameters the legislation keyword search sent to the
        * engine on this response. Absent when no keyword search ran. */

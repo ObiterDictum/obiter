@@ -917,6 +917,12 @@ function legislationDiagnosticsFor(legislation: LegislationFetchResult | null) {
       ? { legislationTitleUnresolved: true }
       : {}),
     ...(legislation.ambiguous ? { legislationAmbiguous: true } : {}),
+    // A held Act whose schedule citation names no schedule: a corrective
+    // prompt, not a verdict. The structured example and Act context let the
+    // client offer a resubmission the parser accepts.
+    ...(legislation.scheduleUnderspecified
+      ? { legislationScheduleGuidance: legislation.scheduleUnderspecified }
+      : {}),
     ...(legislation.note ? { legislationNote: legislation.note } : {}),
     // The parameters this server sent to the engine on this response. Emitted
     // by the layer that applied them, not by the caller's configuration, so a
@@ -943,6 +949,8 @@ function legislationEmptyOutcome(
   if (legislation.recognisedNotHeld) return 'recognised_not_held'
   if (legislation.titleUnresolved) return 'legislation_title_unresolved'
   if (legislation.ambiguous) return 'legislation_ambiguous'
+  if (legislation.scheduleUnderspecified)
+    return 'legislation_schedule_underspecified'
   return null
 }
 

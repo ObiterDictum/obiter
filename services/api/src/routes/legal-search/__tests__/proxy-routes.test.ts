@@ -805,6 +805,185 @@ describe('createLegalSearchProxyRoutes', () => {
     })
   })
 
+  it('carries an underspecified-schedule corrective through the foreground-live miss', async () => {
+    // Browser finding: the serve layer returns the corrective only as a note
+    // for this case, so the proxy emitted legislationNote with no
+    // diagnostic and the UI fell through to "No sources found". The
+    // structured guidance must survive the signed-in default path.
+    legislationServeMock.resolveLegislationFetch.mockResolvedValueOnce({
+      groups: [],
+      citationRecognised: true,
+      citationHeldExact: false,
+      recognisedNotHeld: false,
+      titleUnresolved: false,
+      ambiguous: false,
+      scheduleUnderspecified: {
+        example: 'Schedule 1 paragraph 2',
+        actTitle: 'Equality Act 2010',
+      },
+      note: 'Sch. para. 2 of Equality Act 2010 names no schedule. Name the schedule to resolve it (for example "Schedule 1 paragraph 2").',
+      searched: true,
+      keywordSearchParameters: null,
+    })
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: 'Sch. para. 2 Equality Act 2010',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response('<feed />'),
+    )
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: { query: vi.fn(async () => ({ rows: [] })) } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'Sch. para. 2 Equality Act 2010',
+        foregroundLiveResults: true,
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [],
+      outcome: 'legislation_schedule_underspecified',
+      diagnostics: {
+        liveProviderSearched: true,
+        legislationScheduleGuidance: {
+          example: 'Schedule 1 paragraph 2',
+          actTitle: 'Equality Act 2010',
+        },
+      },
+    })
+  })
+
+  it('keeps an underspecified-schedule corrective through the hydration-queued branch', async () => {
+    legislationServeMock.resolveLegislationFetch.mockResolvedValueOnce({
+      groups: [],
+      citationRecognised: true,
+      citationHeldExact: false,
+      recognisedNotHeld: false,
+      titleUnresolved: false,
+      ambiguous: false,
+      scheduleUnderspecified: {
+        example: 'Schedule 1 paragraph 2',
+        actTitle: 'Equality Act 2010',
+      },
+      note: 'Sch. para. 2 of Equality Act 2010 names no schedule.',
+      searched: true,
+      keywordSearchParameters: null,
+    })
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: 'Sch. para. 2 Equality Act 2010',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: { query: vi.fn(async () => ({ rows: [] })) } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const body = (await (
+      await app.request('/api/search/fetch', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: 'Sch. para. 2 Equality Act 2010',
+          foregroundLiveResults: false,
+        }),
+        headers: { 'content-type': 'application/json' },
+      })
+    ).json()) as {
+      hits: unknown[]
+      hydrationQueued?: boolean
+      outcome?: string
+      diagnostics?: {
+        legislationScheduleGuidance?: {
+          example: string
+          actTitle: string
+        }
+      }
+    }
+
+    expect(body).toMatchObject({
+      hits: [],
+      hydrationQueued: true,
+      outcome: 'hydration_queued',
+      diagnostics: {
+        legislationScheduleGuidance: {
+          example: 'Schedule 1 paragraph 2',
+          actTitle: 'Equality Act 2010',
+        },
+      },
+    })
+  })
+
+  it('does not hide hydrated judgment results behind a schedule corrective', async () => {
+    legislationServeMock.resolveLegislationFetch.mockResolvedValueOnce({
+      groups: [],
+      citationRecognised: true,
+      citationHeldExact: false,
+      recognisedNotHeld: false,
+      titleUnresolved: false,
+      ambiguous: false,
+      scheduleUnderspecified: {
+        example: 'Schedule 1 paragraph 2',
+        actTitle: 'Equality Act 2010',
+      },
+      note: 'Sch. para. 2 of Equality Act 2010 names no schedule.',
+      searched: true,
+      keywordSearchParameters: null,
+    })
+    searchClientMock.search.mockResolvedValue({
+      hits: [hit],
+      query: 'Sch. para. 2 Equality Act 2010',
+      estimatedTotalHits: 1,
+      processingTimeMs: 1,
+    })
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: { query: vi.fn(async () => ({ rows: [] })) } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const body = (await (
+      await app.request('/api/search/fetch', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: 'Sch. para. 2 Equality Act 2010',
+          foregroundLiveResults: false,
+        }),
+        headers: { 'content-type': 'application/json' },
+      })
+    ).json()) as {
+      hits: unknown[]
+      outcome?: string
+      diagnostics?: {
+        legislationScheduleGuidance?: {
+          example: string
+          actTitle: string
+        }
+      }
+    }
+
+    expect(body.hits).toHaveLength(1)
+    expect(body.outcome).toBe('results')
+    expect(body.diagnostics?.legislationScheduleGuidance).toEqual({
+      example: 'Schedule 1 paragraph 2',
+      actTitle: 'Equality Act 2010',
+    })
+  })
+
   it('keeps an unresolved legislation title through the hydration-queued branch', async () => {
     // Finding 2: the transport lifecycle and the legislation diagnostic are
     // separate. A job is genuinely pending, so the outcome stays

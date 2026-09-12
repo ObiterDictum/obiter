@@ -621,6 +621,42 @@ describe('single-schedule storage shape (adjacent board finding)', () => {
     )
   })
 
+  it('returns a structured underspecified-schedule diagnostic the client can resubmit', async () => {
+    // Browser finding: the serve layer carried the corrective example only
+    // inside the free-text note, so the signed-in UI, which reads structured
+    // diagnostics, rendered nothing. The example and the Act context must be
+    // data, not prose the client has to parse.
+    const first = await resolveLegislationFetch(
+      createScheduleDeps(rows),
+      'Sch. para. 2 Equality Act 2010',
+    )
+    const guidance = first.scheduleUnderspecified
+    if (!guidance) throw new Error('expected structured schedule guidance')
+    expect(guidance.example).toBe('Schedule 1 paragraph 2')
+    expect(guidance.actTitle).toBe('Equality Act 2010')
+    // The client composes the resubmission from the structured diagnostic.
+    const second = await resolveLegislationFetch(
+      createScheduleDeps(rows),
+      `${guidance.example} ${guidance.actTitle}`,
+    )
+    expect(second.citationHeldExact).toBe(true)
+    expect(second.recognisedNotHeld).toBe(false)
+    expect(second.groups[0]?.hits[0]?.id).toBe(
+      'ukpga/2010/15/schedule/1/paragraph/2',
+    )
+  })
+
+  it('marks an underspecified schedule as a corrective, never a not-held verdict', async () => {
+    const result = await resolveLegislationFetch(
+      createScheduleDeps(rows),
+      'Sch. para. 2 Equality Act 2010',
+    )
+    expect(result.recognisedNotHeld).toBe(false)
+    expect(result.titleUnresolved).toBe(false)
+    expect(result.ambiguous).toBe(false)
+    expect(result.scheduleUnderspecified).not.toBeNull()
+  })
+
   it('keeps the Equality Act 2010 s. 999 missing-provision message', async () => {
     const result = await resolveLegislationFetch(
       createScheduleDeps(rows),
