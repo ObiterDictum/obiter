@@ -26,6 +26,7 @@ import {
 } from './html-parser'
 import type { createMojRateLimiter } from './rate-limiter'
 import type { LegalFetchRequest } from './fetch-schema'
+import { resolveProviderUrl } from './fetch-safety'
 import {
   htmlParser,
   legalDocMlParser,
@@ -91,7 +92,7 @@ export type ProviderDocumentResult =
  * provider's XML coverage has changed.
  */
 export type LegalDocMlFallbackReason =
-  'no_xml_uri' | 'xml_unavailable' | 'xml_unparsable'
+  'no_xml_uri' | 'xml_unavailable' | 'xml_unparsable' | 'xml_off_origin'
 
 export interface DetailFetchOptions {
   /**
@@ -103,6 +104,11 @@ export interface DetailFetchOptions {
    * position among extracted blocks rather than by the court's own numbering.
    */
   preferLegalDocMl?: boolean
+  /**
+   * HTTP implementation. Defaults to the global fetch; bulk ingestion passes
+   * its own so the whole ingest walk, body included, runs against one seam.
+   */
+  fetchImpl?: typeof fetch
 }
 
 /**
@@ -163,7 +169,7 @@ export async function fetchMojAuthoritySummaries(
 
     let atomResponse: Response
     try {
-      atomResponse = await fetch(nextUrl)
+      atomResponse = await fetch(nextUrl, { redirect: 'manual' })
     } catch {
       return { status: 'unavailable' }
     }
@@ -181,7 +187,11 @@ export async function fetchMojAuthoritySummaries(
     entries.push(...parseFindCaseLawAtom(xml, request))
     const nextHref =
       entries.length < limits.maxEntries ? readRelLink(xml, 'next') : null
-    nextUrl = nextHref ? new URL(nextHref, nextUrl) : null
+    // An off-origin rel="next" ends the walk rather than being fetched: a
+    // feed cannot redirect the collection walk at another host.
+    nextUrl = nextHref
+      ? resolveProviderUrl(env.mojFindCaseLawBaseUrl, nextHref)
+      : null
   }
 
   const documents = entries
@@ -233,6 +243,7 @@ async function fetchLegalDocMlParagraphs(
   env: FindCaseLawEnv,
   entry: AtomEntry,
   documentId: string,
+  fetchImpl: typeof fetch,
 ): Promise<
   | { status: 'ok'; paragraphs: LegalParagraph[] }
   | { status: 'fallback'; reason: LegalDocMlFallbackReason }
@@ -240,11 +251,12 @@ async function fetchLegalDocMlParagraphs(
 > {
   if (!entry.xmlUri) return { status: 'fallback', reason: 'no_xml_uri' }
 
-  const xmlUrl = new URL(entry.xmlUri, env.mojFindCaseLawBaseUrl)
+  const xmlUrl = resolveProviderUrl(env.mojFindCaseLawBaseUrl, entry.xmlUri)
+  if (!xmlUrl) return { status: 'fallback', reason: 'xml_off_origin' }
 
   let response: Response
   try {
-    response = await fetch(xmlUrl)
+    response = await fetchImpl(xmlUrl, { redirect: 'manual' })
   } catch {
     return { status: 'fallback', reason: 'xml_unavailable' }
   }
@@ -274,6 +286,7 @@ export async function fetchMojAuthorityDetail(
   options: DetailFetchOptions = {},
 ): Promise<ProviderDocumentResult> {
   const documentId = documentIdFromUri(entry.uri)
+  const fetchImpl = options.fetchImpl ?? fetch
   let parser: ParserIdentity = htmlParser
   let fallbackReason: LegalDocMlFallbackReason | undefined
   let legalDocMlParagraphs: LegalParagraph[] | undefined
@@ -287,7 +300,12 @@ export async function fetchMojAuthorityDetail(
       }
     }
 
-    const xmlResult = await fetchLegalDocMlParagraphs(env, entry, documentId)
+    const xmlResult = await fetchLegalDocMlParagraphs(
+      env,
+      entry,
+      documentId,
+      fetchImpl,
+    )
     if (xmlResult.status === 'rate_limited') return xmlResult
     if (xmlResult.status === 'ok') {
       legalDocMlParagraphs = xmlResult.paragraphs
@@ -297,7 +315,11 @@ export async function fetchMojAuthorityDetail(
     }
   }
 
-  const detailUrl = new URL(entry.sourceUri, env.mojFindCaseLawBaseUrl)
+  const detailUrl = resolveProviderUrl(
+    env.mojFindCaseLawBaseUrl,
+    entry.sourceUri,
+  )
+  if (!detailUrl) return { status: 'skipped' }
 
   // LegalDocML supplied the paragraphs, so the HTML page is not fetched at all.
   if (legalDocMlParagraphs) {
@@ -332,7 +354,7 @@ export async function fetchMojAuthorityDetail(
     }
   }
 
-  const detailResponse = await fetch(detailUrl)
+  const detailResponse = await fetchImpl(detailUrl, { redirect: 'manual' })
 
   const detailFailure = detailFailureFromResponse(detailResponse)
   if (detailFailure) return detailFailure
@@ -389,8 +411,9 @@ export async function fetchMojAuthorityDocumentFromRecord(
       }
     }
 
-    const detailUrl = new URL(sourceUri, env.mojFindCaseLawBaseUrl)
-    const detailResponse = await fetch(detailUrl)
+    const detailUrl = resolveProviderUrl(env.mojFindCaseLawBaseUrl, sourceUri)
+    if (!detailUrl) continue
+    const detailResponse = await fetch(detailUrl, { redirect: 'manual' })
     const detailFailure = detailFailureFromResponse(detailResponse)
     if (detailFailure) return detailFailure
 
@@ -436,8 +459,9 @@ export async function fetchMojAuthorityDocumentById(
     }
   }
 
-  const detailUrl = new URL(uri, env.mojFindCaseLawBaseUrl)
-  const detailResponse = await fetch(detailUrl)
+  const detailUrl = resolveProviderUrl(env.mojFindCaseLawBaseUrl, uri)
+  if (!detailUrl) return { status: 'skipped' }
+  const detailResponse = await fetch(detailUrl, { redirect: 'manual' })
   const detailFailure = detailFailureFromResponse(detailResponse)
   if (detailFailure) return detailFailure
 

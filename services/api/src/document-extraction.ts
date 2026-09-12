@@ -314,19 +314,37 @@ function operatorListUsesType3Font(
     | undefined,
 ) {
   if (!commonObjs) return false
-  for (let index = 0; index < operatorList.fnArray.length; index += 1) {
-    if (operatorList.fnArray[index] !== ops.setFont) continue
-    const args = operatorList.argsArray[index] as unknown[] | undefined
-    const fontName = args?.[0]
-    if (typeof fontName !== 'string' || !commonObjs.has(fontName)) continue
+  const isType3 = (fontName: unknown) => {
+    if (typeof fontName !== 'string' || !commonObjs.has(fontName)) return false
     const font = commonObjs.get(fontName)
-    if (
+    return (
       typeof font === 'object' &&
       font !== null &&
       'isType3Font' in font &&
       font.isType3Font === true
     )
-      return true
+  }
+  for (let index = 0; index < operatorList.fnArray.length; index += 1) {
+    const args = operatorList.argsArray[index] as unknown[] | undefined
+    if (operatorList.fnArray[index] === ops.setFont) {
+      if (isType3(args?.[0])) return true
+      continue
+    }
+    // A font can also arrive through setGState's /Font entry, and that reaches
+    // the renderer's setFont path too. Type 3 has to be screened on both, or a
+    // font set only through the graphics state would be replayed instead of
+    // rejected even though the glyph replay cannot read its metrics.
+    if (operatorList.fnArray[index] !== ops.setGState) continue
+    if (!Array.isArray(args?.[0])) continue
+    for (const entry of args[0] as unknown[]) {
+      if (
+        Array.isArray(entry) &&
+        entry[0] === 'Font' &&
+        Array.isArray(entry[1])
+      ) {
+        if (isType3(entry[1][0])) return true
+      }
+    }
   }
   return false
 }

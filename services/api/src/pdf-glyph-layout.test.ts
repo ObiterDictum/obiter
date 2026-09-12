@@ -20,6 +20,8 @@ import { findUncoveredPdfRegions } from './extraction-coverage'
 import {
   rawFormPdf,
   rawFreeTextPdf,
+  rawGStateFontPdf,
+  rawGStateType3Pdf,
   rawNextLinePdf,
   rawRtlPdf,
   rawType1Pdf,
@@ -403,6 +405,22 @@ describe('exact glyph geometry', () => {
     expect(covered.right).toBeGreaterThanOrEqual(ink.right)
     expect(covered.top).toBeLessThanOrEqual(ink.top)
     expect(covered.bottom).toBeGreaterThanOrEqual(ink.bottom)
+  })
+
+  it('falls back when a Type 3 font arrives through the graphics state', async () => {
+    // A setGState Font entry reaches the renderer's setFont path, so a Type 3
+    // font that is never named by `Tf` still has to be screened. Replaying it
+    // would use metrics the glyph path cannot read.
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    try {
+      await extractDocumentContent('pdf', rawGStateType3Pdf())
+      expect(warn).toHaveBeenCalledWith(
+        'PDF exact glyph geometry fallback',
+        expect.objectContaining({ reason: 'type3_font' }),
+      )
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('uses pdf.js bidi text semantics when operator glyphs are visual RTL', async () => {
@@ -821,5 +839,42 @@ describe('annotation glyph placement', () => {
       expect(secondCover.y).toBeLessThan(firstCover.y)
       expect(firstCover.y - secondCover.y).toBeCloseTo(14, 1)
     }
+  })
+
+  it('applies a graphics-state font change to glyph placement', async () => {
+    const bytes = rawGStateFontPdf()
+    const extracted = await extractDocumentContent('pdf', bytes)
+    expect(extracted.text).toContain('BODYTEXT')
+    expect(extracted.text).toContain(SECRET)
+
+    const bodyCover = spanCover({
+      layout: extracted.layout!,
+      text: extracted.text,
+      spanText: 'BODYTEXT',
+    })
+    const secretCover = spanCover({
+      layout: extracted.layout!,
+      text: extracted.text,
+      spanText: SECRET,
+    })
+    // SECRETVALUE is 24pt through /GS1: replayed at the previous 12pt state
+    // its cover would be half as tall and ~half as wide, sitting above the
+    // rendered ink rather than on it.
+    expect(secretCover.height).toBeGreaterThan(bodyCover.height * 1.6)
+    expect(secretCover.width).toBeGreaterThan(bodyCover.width * 1.6)
+    expect(secretCover.y).toBeLessThan(600)
+    expect(secretCover.y + secretCover.height).toBeGreaterThan(600)
+
+    const output = await buildRedactedPdf(
+      acceptedSpanInput(bytes, extracted.layout!, extracted.text, SECRET),
+    )
+    await expectSourceInkCovered(Buffer.from(bytes), output, {
+      x: 55,
+      y: 590,
+      width: 320,
+      height: 40,
+    })
+    await expectInkPresent(output, { x: 60, y: 698, width: 140, height: 16 })
+    await expectNoSelectableText(output, SECRET)
   })
 })

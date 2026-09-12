@@ -50,6 +50,8 @@ export {
 export type { LegalFetchRequest } from './fetch-schema'
 export { legalFetchRequestSchema, legalDocumentIdSchema } from './fetch-schema'
 
+export { resolveProviderUrl } from './fetch-safety'
+
 export {
   parseJudgmentParagraphs,
   extractJudgmentTitleFromHtml,

@@ -92,6 +92,28 @@ export function rawFormPdf() {
   ])
 }
 
+/**
+ * A graphics state carrying a Font entry: the renderer applies it through
+ * setFont, so the text after `/GS1 gs` is set at 24pt Times with no `Tf`
+ * operator of its own. A replay that ignores the entry lays it at 12pt
+ * Helvetica and paints the cover above the ink.
+ */
+export function rawGStateFontPdf() {
+  return rawPdf([
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R /F2 6 0 R >> /ExtGState << /GS1 7 0 R >> >> /Contents 4 0 R >>',
+    pdfStream(
+      'BT /F1 12 Tf 1 0 0 1 60 700 Tm (BODYTEXT) Tj ET ' +
+        '/GS1 gs ' +
+        'BT 1 0 0 1 60 600 Tm (SECRETVALUE) Tj ET',
+    ),
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Times-Roman /Encoding /WinAnsiEncoding >>',
+    '<< /Type /ExtGState /Font [ /F2 24 ] >>',
+  ])
+}
+
 export function rawType3Pdf(textMatrix = '1 0 0 1 60 700') {
   return rawPdf([
     '<< /Type /Catalog /Pages 2 0 R >>',
@@ -100,6 +122,19 @@ export function rawType3Pdf(textMatrix = '1 0 0 1 60 700') {
     pdfStream(`BT /F1 12 Tf ${textMatrix} Tm (AAA) Tj ET`),
     '<< /Type /Font /Subtype /Type3 /FontBBox [0 0 100 80] /FontMatrix [0.01 0 0 0.01 0 0] /CharProcs << /A 6 0 R >> /Encoding << /Type /Encoding /Differences [65 /A] >> /FirstChar 65 /LastChar 65 /Widths [100] /Resources << >> >>',
     pdfStream('100 0 d0 0 0 100 80 re f'),
+  ])
+}
+
+/** Type 3 font reached only through an ExtGState /Font entry, no `Tf`. */
+export function rawGStateType3Pdf() {
+  return rawPdf([
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> /ExtGState << /GS1 7 0 R >> >> /Contents 4 0 R >>',
+    pdfStream('/GS1 gs BT 1 0 0 1 60 700 Tm (AAA) Tj ET'),
+    '<< /Type /Font /Subtype /Type3 /FontBBox [0 0 100 80] /FontMatrix [0.01 0 0 0.01 0 0] /CharProcs << /A 6 0 R >> /Encoding << /Type /Encoding /Differences [65 /A] >> /FirstChar 65 /LastChar 65 /Widths [100] /Resources << >> >>',
+    pdfStream('100 0 d0 0 0 100 80 re f'),
+    '<< /Type /ExtGState /Font [ 5 0 R 24 ] >>',
   ])
 }
 

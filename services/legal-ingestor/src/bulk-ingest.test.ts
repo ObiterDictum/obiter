@@ -208,6 +208,54 @@ describe('ingestOne', () => {
     expect(insert?.text).not.toContain('document_json')
   })
 
+  it('retries instead of stamping when the body redirects', async () => {
+    // A judgment moved to a canonical URI: the provider answers every URL with
+    // a same-origin 301 and, because redirects are manual, the body is refused.
+    // This is the skipped path that used to stamp content_hash and permanently
+    // suppress the retry. The default fetchDetail from createDeps runs the real
+    // provider against the injected fetch, so the 3xx drives the whole path.
+    const redirectingFetch = vi.fn(
+      async (_input: unknown, _init?: RequestInit) =>
+        new Response(null, {
+          status: 301,
+          headers: { location: '/uksc/2024/1/canonical' },
+        }),
+    )
+    const { pool, queries } = fakePool(() => ({ rows: [] }))
+    const testDeps = createDeps(
+      pool,
+      { mojFindCaseLawBaseUrl: 'https://caselaw.nationalarchives.gov.uk' },
+      1000,
+      0,
+      {
+        sleep: async () => {},
+        fetchImpl: redirectingFetch as unknown as typeof fetch,
+      },
+    )
+
+    const first = await ingestOne(testDeps, entry())
+    expect(first).toEqual({
+      status: 'failed',
+      documentId: 'uksc-2024-1',
+      reason:
+        'judgment body not retrieved from provider (fetch refused or unparsable)',
+    })
+    // Nothing is written, so no content_hash is stamped for a later run to
+    // short-circuit on.
+    expect(
+      queries.some((query) =>
+        query.text.includes('insert into legal_source_documents'),
+      ),
+    ).toBe(false)
+
+    const fetchesAfterFirstRun = redirectingFetch.mock.calls.length
+    expect(fetchesAfterFirstRun).toBeGreaterThan(0)
+    await ingestOne(testDeps, entry())
+    expect(redirectingFetch.mock.calls.length).toBeGreaterThan(
+      fetchesAfterFirstRun,
+    )
+  })
+
   it('retries rate-limited details then stores', async () => {
     const fetchDetail = vi
       .fn<() => Promise<ProviderDocumentResult>>()
