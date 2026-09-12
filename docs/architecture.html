@@ -945,7 +945,7 @@
             Obiter is legal infrastructure: source-grounded search over UK
             judgments, reviewable redaction of sensitive material, and the
             matter workspaces those sit inside. A pnpm monorepo with four
-            running processes and eleven workspace packages.
+            running processes and twelve workspace packages.
           </p>
           <p>
             Three product surfaces carry code: <b>Search</b> over Find Case Law
@@ -1106,8 +1106,10 @@
                   href="https://github.com/ObiterDictum/obiter/tree/dev/packages/database"
                   ><b>@obiter/database</b><span>Migrations</span></a
                 >
-                <span class="node stub"
-                  ><b>@obiter/config</b><span>README only</span></span
+                <a
+                  class="node"
+                  href="https://github.com/ObiterDictum/obiter/tree/dev/packages/config/src"
+                  ><b>@obiter/config</b><span>Shared .env resolution</span></a
                 >
               </div>
             </div>
@@ -2189,8 +2191,8 @@
         <section id="packages">
           <h2>Packages</h2>
           <p class="lede">
-            Ten packages carry code. Primitives sit at the bottom of the graph
-            and import nothing internal.
+            Eleven packages carry code. Primitives sit at the bottom of the
+            graph and import nothing internal.
           </p>
 
           <h3>Domain</h3>
@@ -2464,6 +2466,32 @@
               <dl class="kv">
                 <dt>Count</dt>
                 <dd>22 migrations, 0001 to 0023, 0008 withdrawn</dd>
+              </dl>
+            </article>
+
+            <article class="module">
+              <header>
+                <h4>
+                  <a
+                    href="https://github.com/ObiterDictum/obiter/tree/dev/packages/config/src"
+                    >@obiter/config</a
+                  >
+                </h4>
+              </header>
+              <p>
+                Bounded resolution and parsing of the worktree
+                <code>.env</code>, shared by <code>services/api</code> and
+                <code>services/legal-ingestor</code>. Values come from
+                <code>node:util.parseEnv</code>, the parser Vite's
+                <code>loadEnv</code> uses, so a lane's API and web server read
+                one file the same way; a key assigned twice is refused rather
+                than collapsed.
+              </p>
+              <dl class="kv">
+                <dt>Exports</dt>
+                <dd>
+                  resolveLocalEnvFile · parseLocalEnvFile · loadLocalEnvFile
+                </dd>
               </dl>
             </article>
           </div>
@@ -3875,8 +3903,11 @@
         <section id="config">
           <h2>Configuration</h2>
           <p class="lede">
-            Read from the environment by <code>services/api</code>. There is no
-            config package yet; <code>@obiter/config</code> is a reserved name.
+            Read from the environment by <code>services/api</code> and
+            <code>services/legal-ingestor</code>, through
+            <code>@obiter/config</code>. That package owns the bounded worktree
+            <code>.env</code> search shared by both services; Vite's
+            <code>loadEnv</code> reads the same file for the web server.
           </p>
           <div class="callout">
             <b>Startup is fail-closed.</b> <code>BETTER_AUTH_SECRET</code> must
@@ -5533,6 +5564,10 @@
                   <td class="id">
                     A new numbered migration; never edit an applied one
                   </td>
+                </tr>
+                <tr>
+                  <td>Resolving a local <code>.env</code></td>
+                  <td class="id">packages/config, shared by every service</td>
                 </tr>
                 <tr>
                   <td>Span or redaction logic</td>

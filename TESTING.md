@@ -28,8 +28,9 @@ paths Vite embeds in served modules), compares it against the checkout the
 script is run from, probes the requested API, and prints a paste-ready evidence
 block. Exit is non-zero when the web server serves a different checkout or its
 provenance cannot be determined. API unreachable, HTTP-error, non-stack, root
-mismatch, env-file mismatch, and reported commit-SHA mismatch responses also
-fail. A reachable stack health response with absent development provenance
+mismatch, env-file mismatch (including a development API that resolved no
+`.env` and reports `envFile: null`), and reported commit-SHA mismatch responses
+also fail. A reachable stack health response with absent development provenance
 fields is the only non-failing API absence case; the API reports what is
 determinable and says why when it is not.
 

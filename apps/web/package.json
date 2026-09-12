@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@obiter/app-shell": "workspace:*",
+    "@obiter/config": "workspace:*",
     "@obiter/contracts": "workspace:*",
     "@obiter/redact-ui": "workspace:*",
     "@obiter/ui": "workspace:*",

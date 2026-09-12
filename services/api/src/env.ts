@@ -1,5 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { loadLocalEnvFile } from '@obiter/config'
 import {
   NER_DEFAULT_CHUNK_TOKENS,
   NER_TOKEN_BUDGET,
@@ -34,14 +33,6 @@ const requiredProductionKeys = [
   'MEILISEARCH_SEARCH_API_KEY',
   'MEILISEARCH_ADMIN_API_KEY',
 ] as const
-
-// The workspace root is where pnpm-workspace.yaml lives. It is the boundary the
-// .env search must not cross: one worktree's .env must never be resolved from
-// another's, which a fixed-depth walk cannot prevent.
-const WORKSPACE_ROOT_MARKER = 'pnpm-workspace.yaml'
-
-let localEnvLoaded = false
-let localEnvFile: string | null = null
 
 const requiredTestKeys = ['TEST_DATABASE_URL'] as const
 
@@ -280,86 +271,14 @@ function readPort() {
 }
 
 /**
- * Resolve the worktree's `.env` by walking up from `startDirectory` and
- * stopping at the workspace root. A directory carrying pnpm-workspace.yaml is
- * checked for a `.env` and then ends the search, so a lane worktree whose own
- * `.env` is missing resolves to nothing rather than silently inheriting the
- * checkout above it and connecting to another lane's database.
- */
-export function resolveLocalEnvFile(startDirectory: string): string | null {
-  let directory = startDirectory
-
-  for (;;) {
-    const envPath = join(directory, '.env')
-    if (existsSync(envPath)) return envPath
-
-    if (existsSync(join(directory, WORKSPACE_ROOT_MARKER))) return null
-
-    const parent = dirname(directory)
-    if (parent === directory) return null
-    directory = parent
-  }
-}
-
-/**
- * Parse a `.env` file into entries, refusing a key assigned more than once.
- *
- * Within one file a duplicate key is a mistake, not a precedence choice: this
- * loader is first-wins (`process.env[key] ??= value`) while Vite's loadEnv is
- * last-wins, so the same file would configure the API and the web server with
- * different values and no error. Failing here and in vite.config.ts makes that
- * loud in both halves instead.
- */
-export function parseLocalEnvFile(envPath: string): Map<string, string> {
-  const entries = new Map<string, string>()
-
-  for (const rawLine of readFileSync(envPath, 'utf8').split(/\r?\n/)) {
-    const line = rawLine.trim()
-    if (!line || line.startsWith('#')) continue
-
-    const separatorIndex = line.indexOf('=')
-    if (separatorIndex <= 0) continue
-
-    const key = line.slice(0, separatorIndex).trim()
-    if (entries.has(key)) {
-      throw new Error(
-        `${envPath} assigns ${key} more than once. Remove the duplicate: the API and web loaders resolve a repeated key differently and would run with different values.`,
-      )
-    }
-
-    entries.set(
-      key,
-      line
-        .slice(separatorIndex + 1)
-        .trim()
-        .replace(/^["']|["']$/g, ''),
-    )
-  }
-
-  return entries
-}
-
-/**
  * Load the worktree's `.env` into process.env without overriding values the
  * process already has, and return the path read (null when none was). The path
  * is reported by /api/health provenance so a lane can prove its configuration
- * file as well as its checkout.
+ * file as well as its checkout. The bounded walk and duplicate rule live once,
+ * in `@obiter/config`, shared with the legal ingestor.
  */
 export function loadLocalDotEnv(): string | null {
-  if (localEnvLoaded || process.env.NODE_ENV === 'test' || process.env.VITEST) {
-    return localEnvFile
-  }
-
-  localEnvLoaded = true
-  const envPath = resolveLocalEnvFile(process.cwd())
-  if (!envPath) return null
-
-  for (const [key, value] of parseLocalEnvFile(envPath)) {
-    process.env[key] ??= value
-  }
-
-  localEnvFile = envPath
-  return localEnvFile
+  return loadLocalEnvFile()
 }
 
 function readAdminApiKey(nodeEnv: ApiEnv['nodeEnv']) {

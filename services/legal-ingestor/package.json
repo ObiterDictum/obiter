@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "@obiter/config": "workspace:*",
     "@obiter/legal-schema": "workspace:*",
     "@obiter/legal-source-provider": "workspace:*",
     "@obiter/search-client": "workspace:*",

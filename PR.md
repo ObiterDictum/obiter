@@ -54,7 +54,8 @@ served: <path the web server resolved to>
 revision freshness: <yes|no|NOT CHECKED (no expected-marker given)>
 api checkout HEAD: <sha> (when development provenance is available)
 api served: <path> (when development provenance is available)
-api env file: <path> (when development provenance is available)
+api env file: <path> (when development provenance is available; a development
+API that resolved no .env prints `null [FAIL]` and fails the check)
 [screenshot]
 ```
 

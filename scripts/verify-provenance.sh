@@ -34,7 +34,9 @@ API check:       the default API origin is always probed. Unreachable APIs,
                  stack health response without development provenance is the
                  only non-failing absence case. When /api/health reports
                  commitSha, checkoutRoot or envFile, each reported value is
-                 compared with this checkout and a mismatch fails.
+                 compared with this checkout and a mismatch fails. A
+                 development API that resolved no .env reports envFile: null,
+                 which fails: unattributable configuration is not a pass.
 EOF
 }
 
@@ -186,6 +188,7 @@ api_note=''
 api_sha=''
 api_root=''
 api_env_file=''
+api_env_file_null='no'
 api_sha_matches='not determinable'
 api_root_matches='not determinable'
 api_env_file_matches='not determinable'
@@ -202,6 +205,7 @@ if api_response=$(curl -sS -m 5 -w $'\n%{http_code}' "$api_origin/api/health" 2>
     api_sha_pattern='"commitSha"[[:space:]]*:[[:space:]]*"([^\"]+)"'
     api_root_pattern='"checkoutRoot"[[:space:]]*:[[:space:]]*"([^\"]+)"'
     api_env_file_pattern='"envFile"[[:space:]]*:[[:space:]]*"([^\"]+)"'
+    api_env_file_null_pattern='"envFile"[[:space:]]*:[[:space:]]*null'
     if [[ $api_body =~ $api_sha_pattern ]]; then
       api_sha=${BASH_REMATCH[1]}
       api_sha_matches='yes'
@@ -217,8 +221,15 @@ if api_response=$(curl -sS -m 5 -w $'\n%{http_code}' "$api_origin/api/health" 2>
       api_env_file_matches='yes'
       [ "$api_env_file" = "$current_root/.env" ] || api_env_file_matches='no'
     fi
+    if [[ $api_body =~ $api_env_file_null_pattern ]]; then
+      api_env_file_null='yes'
+      api_env_file_matches='no'
+    fi
 
-    if [ "$api_sha_matches" = 'no' ] || [ "$api_root_matches" = 'no' ] \
+    if [ "$api_env_file_null" = 'yes' ]; then
+      api_health_pass='FAIL'
+      api_note='development API resolved no .env (envFile: null); configuration cannot be attributed to a lane'
+    elif [ "$api_sha_matches" = 'no' ] || [ "$api_root_matches" = 'no' ] \
       || [ "$api_env_file_matches" = 'no' ]; then
       api_health_pass='FAIL'
       api_note='provenance mismatch in /api/health'
@@ -291,6 +302,10 @@ if [ -n "$api_env_file" ]; then
   echo "  env file        : $api_env_file"
   echo "  env file matches: $api_env_file_matches"
 fi
+if [ "$api_env_file_null" = 'yes' ]; then
+  echo '  env file        : null (no .env resolved)'
+  echo '  env file matches: no'
+fi
 echo "  provenance      : $api_note [$api_health_pass]"
 echo
 echo 'PR evidence block (paste into the PR body) ======'
@@ -312,7 +327,11 @@ fi
 if [ -n "$api_env_file" ]; then
   echo "api env file: $api_env_file"
 fi
-if [ -z "$api_sha" ] && [ -z "$api_root" ] && [ -z "$api_env_file" ]; then
+if [ "$api_env_file_null" = 'yes' ]; then
+  echo 'api env file: null [FAIL]'
+fi
+if [ -z "$api_sha" ] && [ -z "$api_root" ] && [ -z "$api_env_file" ] \
+  && [ "$api_env_file_null" != 'yes' ]; then
   echo "api provenance: not determinable ($api_note)"
 fi
 echo "[screenshot]  (web provenance: $web_pass)"
