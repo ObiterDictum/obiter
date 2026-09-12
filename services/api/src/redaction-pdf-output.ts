@@ -29,6 +29,26 @@ interface PageRect {
   label?: string
   /** Characters covered by this rect — drives descender/ascent padding. */
   ink?: string
+  /** Span this rect redacts, so an off-page cover can be refused by id. */
+  spanId: string
+}
+
+/** Visible page box in PDF user space, origin included. */
+interface PageBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+function pageBoundsOf(view: number[] | undefined): PageBounds {
+  const [x = 0, y = 0, x2 = 0, y2 = 0] = Array.isArray(view) ? view : []
+  return {
+    x,
+    y,
+    width: Math.max((x2 ?? 0) - (x ?? 0), 0),
+    height: Math.max((y2 ?? 0) - (y ?? 0), 0),
+  }
 }
 
 /** Render scale for burned-in output. Higher = sharper, larger files. */
@@ -57,6 +77,9 @@ export class RedactionCoverGeometryError extends Error {
 export async function buildRedactedPdf(
   input: RedactedPdfInput,
 ): Promise<Uint8Array> {
+  // Layout-only failure first: an accepted span with no geometry must refuse
+  // before the source is even parsed, so stored invalid geometry reports the
+  // same reason regardless of the source bytes.
   const rectsByPage = collectRedactionRects(input)
   const CanvasFactory = await createIsomorphicCanvasFactory(
     () => import('@napi-rs/canvas'),
@@ -67,6 +90,16 @@ export async function buildRedactedPdf(
   const output = await PDFDocument.create()
 
   try {
+    // Backstop before any rendering: a cover that misses the page paints
+    // nothing, so the span would publish its source ink intact. Bounds come
+    // from the page itself, not the stored layout, which carries no origin.
+    const pageBounds: PageBounds[] = []
+    for (let pageNumber = 1; pageNumber <= source.numPages; pageNumber += 1) {
+      const page = await source.getPage(pageNumber)
+      pageBounds.push(pageBoundsOf(page.view))
+    }
+    assertCoversOnPage(rectsByPage, pageBounds)
+
     for (let pageNumber = 1; pageNumber <= source.numPages; pageNumber += 1) {
       const page = await source.getPage(pageNumber)
       const viewport = page.getViewport({ scale: RENDER_SCALE })
@@ -160,7 +193,9 @@ function paintRedaction(
 }
 
 /** @deprecated Prefer glyphCoverRect / coverRectsForSpan. */
-export function padGlyphRect(rect: PageRect): PageRect {
+export function padGlyphRect(
+  rect: Omit<PageRect, 'spanId'>,
+): Omit<PageRect, 'spanId'> {
   const covered = glyphCoverRect({
     x: rect.x,
     y: rect.y,
@@ -199,6 +234,7 @@ function collectRedactionRects(input: RedactedPdfInput) {
         height: covered.height,
         label,
         ink: covered.ink,
+        spanId: span.id,
       })
       rectsByPage.set(covered.pageIndex, list)
     }
@@ -214,6 +250,42 @@ function collectRedactionRects(input: RedactedPdfInput) {
 function mergeRects(rects: PageRect[]): PageRect[] {
   // coverRectsForSpan already union-merges per span; keep separate span bars.
   return rects
+}
+
+/**
+ * Backstop for the replay: a cover that does not intersect its page paints
+ * nothing, so the span would be published with its source ink intact. Refuse
+ * it exactly as for a span with no rects at all.
+ */
+function assertCoversOnPage(
+  rectsByPage: Map<number, PageRect[]>,
+  pageBounds: PageBounds[],
+) {
+  const missing = new Set<string>()
+  for (const [pageIndex, rects] of rectsByPage) {
+    for (const rect of rects) {
+      if (coverMissesPage(rect, pageBounds[pageIndex])) missing.add(rect.spanId)
+    }
+  }
+  if (missing.size > 0) throw new RedactionCoverGeometryError([...missing])
+}
+
+/** Whether a cover lies entirely outside the page box. */
+function coverMissesPage(rect: PageRect, page: PageBounds | undefined) {
+  if (!page || page.width <= 0 || page.height <= 0) return true
+  if (
+    !Number.isFinite(rect.x) ||
+    !Number.isFinite(rect.y) ||
+    !Number.isFinite(rect.width) ||
+    !Number.isFinite(rect.height)
+  )
+    return true
+  return (
+    rect.x >= page.x + page.width ||
+    rect.x + rect.width <= page.x ||
+    rect.y >= page.y + page.height ||
+    rect.y + rect.height <= page.y
+  )
 }
 
 export function redactedPdfFilename(sourceFilename: string) {
