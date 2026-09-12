@@ -919,6 +919,30 @@ otherwise keep a suggestion already present on a span and only call
 `suggestedAction(category)` when it is missing. Do not pass `isDateOfBirth`
 at merge time; that flag is applied upstream in `rampart-map.ts`.
 
+### Span text is re-derived from the source at the Rampart boundary (12 September 2026)
+
+Context: upstream's `mergeSpans` partial-overlap union widens `start`/`end`
+but keeps the winning span's `text`, so a merged span's text can disagree
+with its own offsets. `mapRampartSpans` trusted that text whenever it did
+not trim a person name. Finalize and the .docx burner both require
+`text.slice(start, end) === text`, so a run whose detection produced such a
+union returned `redaction_span_integrity_error` (409) on every finalize
+attempt and could never be completed.
+
+Decision: `mapRampartSpans` always derives `text` from
+`output.text.slice(start, end)`; the carried `text` is no longer trusted.
+The fix lives at the product boundary because `@obiter/rampart-inference`
+is kept byte-faithful to upstream and re-vendoring would erase a change made
+there (see `packages/rampart-inference/README.md`). Every other
+offset-changing operation in the vendored package (adjacent-connector merge,
+particle rescue, window repair, premask projection) already re-slices from
+source; the partial-overlap union was the only one that did not, so the
+invariant was enforced on one path but not its sibling. `preferred()` still
+chooses the label, source and confidence: on a cross-detector partial
+overlap the whole union is redacted under the winner's category and
+confidence, but its text is the exact union substring. The union-coverage
+decision is unchanged.
+
 ### Rampart DATE/DOB labels are aspirational (2 September 2026)
 
 Context: a finalized redaction disclosed `12 March 1979` after a date-of-birth
