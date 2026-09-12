@@ -95,6 +95,20 @@ function createSearchResponse(
   } as Response
 }
 
+/**
+ * The JSON body of a search response, loose enough for a test to assemble
+ * only the fields the assertion needs.
+ */
+interface SearchResponseBody {
+  hits: unknown[]
+  cached: boolean
+  indexedCount: number
+  skippedCount: number
+  outcome?: string
+  hydrationQueued?: boolean
+  diagnostics?: Record<string, unknown>
+}
+
 function createTwoResultHits() {
   return [
     {
@@ -166,16 +180,30 @@ async function changeInput(input: HTMLInputElement, value: string) {
   })
 }
 
-async function clickButton(container: HTMLElement, name: string) {
+function findButton(container: HTMLElement, name: string) {
   const button = [...container.querySelectorAll('button')].find(
     (candidate) =>
       candidate.textContent?.includes(name) ||
       candidate.getAttribute('aria-label')?.includes(name),
   )
   if (!button) throw new Error(`Button not found: ${name}`)
+  return button
+}
+
+async function clickButton(container: HTMLElement, name: string) {
+  const button = findButton(container, name)
 
   await act(async () => {
     button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+  })
+}
+
+async function submitSearchForm(container: HTMLElement) {
+  const form = container.querySelector('form')
+  if (!form) throw new Error('Search form was not rendered')
+
+  await act(async () => {
+    form.dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
   })
 }
 
@@ -1270,5 +1298,285 @@ describe('LegalSearchView debounce lifecycle', () => {
     await pressKey('Escape')
 
     expect(container.textContent).not.toContain('Keyboard Shortcuts')
+  })
+})
+
+describe('LegalSearchView interactive targets and query resync', () => {
+  let root: Root | null
+  let container: HTMLElement | null
+
+  beforeEach(() => {
+    globalThis.IS_REACT_ACT_ENVIRONMENT = true
+    vi.useFakeTimers()
+    routerMocks.navigate.mockReset()
+    window.sessionStorage.clear()
+    root = null
+    container = null
+  })
+
+  afterEach(() => {
+    if (root) {
+      act(() => root?.unmount())
+    }
+    container?.remove()
+    vi.unstubAllGlobals()
+    vi.useRealTimers()
+  })
+
+  const underspecifiedQuery = 'Sch. para. 2 Equality Act 2010'
+  const correctedQuery = 'Schedule 1 paragraph 2 Equality Act 2010'
+
+  function scheduleGuidanceDiagnostics() {
+    return {
+      liveProviderSearched: true,
+      legislationNote:
+        'Sch. para. 2 of Equality Act 2010 names no schedule. Name the schedule to resolve it (for example "Schedule 1 paragraph 2").',
+      legislationScheduleGuidance: {
+        example: 'Schedule 1 paragraph 2',
+        actTitle: 'Equality Act 2010',
+      },
+    }
+  }
+
+  // The schedule corrective renders above judgment results when the search
+  // half answered, and inside the empty panel when it did not. Both carry the
+  // same "Use this citation" button.
+  function resultsWithScheduleGuidance(): SearchResponseBody {
+    return {
+      hits: [createTwoResultHits()[0]],
+      cached: true,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'results',
+      diagnostics: scheduleGuidanceDiagnostics(),
+    }
+  }
+
+  function emptyWithScheduleGuidance(): SearchResponseBody {
+    return {
+      hits: [],
+      cached: false,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'legislation_schedule_underspecified',
+      hydrationQueued: false,
+      diagnostics: scheduleGuidanceDiagnostics(),
+    }
+  }
+
+  async function renderWithResponse(
+    response: SearchResponseBody,
+    query = underspecifiedQuery,
+  ) {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue({
+      ok: true,
+      json: async () => response,
+    } as Response)
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(getSearchInput(rendered.container), query)
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    return { fetchMock, ...rendered }
+  }
+
+  it('leaves Enter on the focused schedule resubmit button to the button', async () => {
+    // Browser finding: the results-surface corrective renders while
+    // `state.status === 'results'`, so the window keydown handler treated
+    // Enter on the focused button as "open the selected result" and
+    // suppressed the button's own activation.
+    const { fetchMock, container: host } = await renderWithResponse(
+      resultsWithScheduleGuidance(),
+    )
+
+    const button = findButton(host, 'Use this citation')
+    await act(async () => {
+      button.focus()
+    })
+    const requestsBeforeEnter = fetchMock.mock.calls.length
+
+    const enter = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      bubbles: true,
+      cancelable: true,
+    })
+    await act(async () => {
+      button.dispatchEvent(enter)
+    })
+
+    // Enter belongs to the button: not suppressed, and the selected result
+    // row must not open instead.
+    expect(enter.defaultPrevented).toBe(false)
+    expect(routerMocks.navigate).not.toHaveBeenCalled()
+    expect(fetchMock.mock.calls.length).toBe(requestsBeforeEnter)
+
+    // jsdom does not synthesise the browser's Enter activation, so fire the
+    // click the browser would: the resubmit happens exactly once.
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushMicrotasks()
+    expect(fetchMock.mock.calls.length).toBe(requestsBeforeEnter + 1)
+  })
+
+  it('leaves Space on the focused schedule resubmit button to the button', async () => {
+    const { fetchMock, container: host } = await renderWithResponse(
+      resultsWithScheduleGuidance(),
+    )
+
+    const button = findButton(host, 'Use this citation')
+    await act(async () => {
+      button.focus()
+    })
+    const requestsBeforeSpace = fetchMock.mock.calls.length
+
+    const space = new KeyboardEvent('keydown', {
+      key: ' ',
+      bubbles: true,
+      cancelable: true,
+    })
+    await act(async () => {
+      button.dispatchEvent(space)
+    })
+
+    expect(space.defaultPrevented).toBe(false)
+    expect(routerMocks.navigate).not.toHaveBeenCalled()
+    expect(fetchMock.mock.calls.length).toBe(requestsBeforeSpace)
+
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await flushMicrotasks()
+    expect(fetchMock.mock.calls.length).toBe(requestsBeforeSpace + 1)
+  })
+
+  it('ignores Enter from a descendant of an interactive result link', async () => {
+    const { container: host } = await renderWithResponse(
+      {
+        hits: createTwoResultHits(),
+        cached: true,
+        indexedCount: 0,
+        skippedCount: 0,
+      },
+      'Potanina',
+    )
+
+    const resultLink =
+      host.querySelector<HTMLAnchorElement>('a[href^="/case/"]')
+    const nested = resultLink?.querySelector('strong')
+    expect(nested).toBeTruthy()
+
+    const enter = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      bubbles: true,
+      cancelable: true,
+    })
+    await act(async () => {
+      nested?.dispatchEvent(enter)
+    })
+
+    // A nested icon/span must not be mistaken for the non-interactive result
+    // surface: the link owns Enter, the global shortcut stays out of it.
+    expect(enter.defaultPrevented).toBe(false)
+    expect(routerMocks.navigate).not.toHaveBeenCalled()
+  })
+
+  it('still opens the selected result from the non-interactive surface', async () => {
+    await renderWithResponse(
+      {
+        hits: createTwoResultHits(),
+        cached: true,
+        indexedCount: 0,
+        skippedCount: 0,
+      },
+      'Potanina',
+    )
+
+    // Focus is on the input, but the event target is the window itself — the
+    // result-navigation surface the shortcut exists for.
+    await pressKey('Enter')
+
+    expect(routerMocks.navigate).toHaveBeenCalledWith({
+      to: '/case/$caseSlug',
+      params: { caseSlug: 'potanina-v-potanin-2024-uksc-3' },
+    })
+  })
+
+  it('syncs the visible query when the results corrective resubmits', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => resultsWithScheduleGuidance(),
+      } as Response)
+      .mockResolvedValueOnce(createSearchResponse([], { outcome: 'no_match' }))
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(getSearchInput(container), underspecifiedQuery)
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    await clickButton(container, 'Use this citation')
+    await flushMicrotasks()
+
+    // One request for the corrective: syncing the input must not fire a
+    // second, transient search of its own.
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(getSearchInput(container).value).toBe(correctedQuery)
+    const resubmit = fetchMock.mock.calls[1]?.[1] as RequestInit | undefined
+    expect(JSON.parse(String(resubmit?.body))).toMatchObject({
+      query: correctedQuery,
+    })
+
+    // Enter in the input afterwards reruns the corrected query, not the
+    // underspecified one the command bar used to show.
+    await submitSearchForm(container)
+    await flushMicrotasks()
+    expect(fetchMock).toHaveBeenCalledTimes(3)
+    const repeat = fetchMock.mock.calls[2]?.[1] as RequestInit | undefined
+    expect(JSON.parse(String(repeat?.body))).toMatchObject({
+      query: correctedQuery,
+    })
+  })
+
+  it('syncs the visible query when the empty-state corrective resubmits', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => emptyWithScheduleGuidance(),
+      } as Response)
+      .mockResolvedValueOnce(createSearchResponse([], { outcome: 'no_match' }))
+    vi.stubGlobal('fetch', fetchMock)
+    const rendered = renderLegalSearchView()
+    root = rendered.root
+    container = rendered.container
+
+    await changeSearchInput(getSearchInput(container), underspecifiedQuery)
+    await act(async () => {
+      vi.advanceTimersByTime(LEGAL_SEARCH_DEBOUNCE_MS)
+    })
+    await flushMicrotasks()
+
+    await clickButton(container, 'Use this citation')
+    await flushMicrotasks()
+
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(getSearchInput(container).value).toBe(correctedQuery)
+    const resubmit = fetchMock.mock.calls[1]?.[1] as RequestInit | undefined
+    expect(JSON.parse(String(resubmit?.body))).toMatchObject({
+      query: correctedQuery,
+    })
   })
 })
