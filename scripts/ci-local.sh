@@ -98,6 +98,7 @@ echo "== install"      && pnpm install --frozen-lockfile
 echo "== typecheck"    && pnpm typecheck
 echo "== format:check" && pnpm format:check
 echo "== lint"         && pnpm lint
+echo "== build:web"    && pnpm --filter @obiter/web build
 echo "== test"         && TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm test
 
 echo "== benchmark:search"
