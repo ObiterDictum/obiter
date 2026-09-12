@@ -12,6 +12,7 @@ import { createCanonicalProvisionPath } from '@obiter/contracts'
 import {
   getLegislationDocument,
   getLegislationProvision,
+  legislationProvisionPathExists,
   listLegislationActs,
   provisionTextServable,
   type StoredLegislationProvision,
@@ -109,6 +110,66 @@ export function officialProvisionUrl(
   labelPath: string,
 ): string {
   return `https://www.legislation.gov.uk/${documentIdentity}/${labelPath}`
+}
+
+type StoredProvisionResolution =
+  | { status: 'held'; provision: StoredLegislationProvision }
+  | { status: 'missing'; labelPath: string }
+  | { status: 'underspecified' }
+
+/**
+ * Resolve a citation's label path against the store, tolerating the
+ * single-schedule storage shape. Some Acts leave their only schedule
+ * unnumbered, so its paragraphs store at `schedule/paragraph/N` while a
+ * citation says "Schedule 1 paragraph N". The numbered path wins when it
+ * exists; the unnumbered fallback applies only when the citation names
+ * Schedule 1 and the Act has no numbered Schedule 1. Schedule 2 is never
+ * mapped onto an unnumbered schedule, and a paragraph citation with no
+ * schedule number on a numbered-schedule Act is non-resolution, not a
+ * not-held claim.
+ */
+async function resolveStoredProvision(
+  pool: LegislationServeDeps['pool'],
+  identity: string,
+  labelPath: string,
+): Promise<StoredProvisionResolution> {
+  const exact = await withStoredTimeout(
+    getLegislationProvision(pool, `${identity}/${labelPath}`),
+  )
+  if (exact) return { status: 'held', provision: exact }
+  if (!labelPath.startsWith('schedule/')) {
+    return { status: 'missing', labelPath }
+  }
+  const numbered = labelPath.match(/^schedule\/(\d+)\//)
+  if (!numbered) {
+    // An unnumbered citation only resolves on the exact path above, which
+    // exists for the single-schedule shape. On an Act with numbered
+    // schedules the schedule number is missing: say so rather than guess.
+    const hasNumberedSchedule = await withStoredTimeout(
+      legislationProvisionPathExists(pool, identity, 'schedule/1'),
+    )
+    return hasNumberedSchedule
+      ? { status: 'underspecified' }
+      : { status: 'missing', labelPath }
+  }
+  const scheduleNumber = numbered[1]!
+  const hasNumberedSchedule = await withStoredTimeout(
+    legislationProvisionPathExists(
+      pool,
+      identity,
+      `schedule/${scheduleNumber}`,
+    ),
+  )
+  if (scheduleNumber !== '1' || hasNumberedSchedule) {
+    return { status: 'missing', labelPath }
+  }
+  const alternateLabelPath = labelPath.replace(/^schedule\/1\//, 'schedule/')
+  const alternate = await withStoredTimeout(
+    getLegislationProvision(pool, `${identity}/${alternateLabelPath}`),
+  )
+  return alternate
+    ? { status: 'held', provision: alternate }
+    : { status: 'missing', labelPath: alternateLabelPath }
 }
 
 function currentProvisionHit(
@@ -252,10 +313,12 @@ export async function resolveLegislationFetch(
   }
 
   if (outcome.kind === 'provision') {
-    let provision = null
+    let resolution: StoredProvisionResolution
     try {
-      provision = await withStoredTimeout(
-        getLegislationProvision(deps.pool, outcome.provision.provisionId),
+      resolution = await resolveStoredProvision(
+        deps.pool,
+        outcome.provision.identity,
+        outcome.provision.labelPath,
       )
     } catch {
       return {
@@ -264,7 +327,21 @@ export async function resolveLegislationFetch(
         note: 'Legislation store unavailable.',
       }
     }
-    if (!provision) {
+    if (resolution.status === 'underspecified') {
+      // A held Act with a paragraph citation that names no schedule: the
+      // citation is underspecified, not the provision absent. Guessing
+      // Schedule 1 would be a wrong-Act-class mistake at provision level.
+      return {
+        ...emptyResult,
+        searched: true,
+        citationRecognised: true,
+        note:
+          `${outcome.provision.label} of ${outcome.provision.title} names no ` +
+          `schedule. Name the schedule to resolve it (for example ` +
+          `"Schedule 1 ${outcome.provision.label}").`,
+      }
+    }
+    if (resolution.status === 'missing') {
       return {
         ...emptyResult,
         searched: true,
@@ -272,9 +349,10 @@ export async function resolveLegislationFetch(
         recognisedNotHeld: true,
         note:
           `${outcome.provision.label} of ${outcome.provision.title} is not held ` +
-          `(official text: ${officialProvisionUrl(outcome.provision.identity, outcome.provision.labelPath)}).`,
+          `(official text: ${officialProvisionUrl(outcome.provision.identity, resolution.labelPath)}).`,
       }
     }
+    const provision = resolution.provision
     // Fail-closed: only an explicit false carrying a check timestamp
     // serves text. Undefined (a row the validator would now drop, or a
     // store row predating the flag) and unchecked legacy rows (a

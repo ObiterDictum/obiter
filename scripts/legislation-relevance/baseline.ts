@@ -25,7 +25,7 @@ import type { LegislationRelevanceBaseline } from './metrics'
 // never scored for hits; its invariant is that it makes no unsupported claim.
 
 export const legislationRelevanceBaseline: LegislationRelevanceBaseline = {
-  expectedCaseCount: 72,
+  expectedCaseCount: 77,
   expectedIndexDocumentCount: 184772,
   heldRecall: 0.8854,
   heldPrecision: 1,
@@ -392,6 +392,31 @@ export const legislationRelevanceBaseline: LegislationRelevanceBaseline = {
       recall: null,
       ranks: [],
       returnedHitCount: 5,
+    },
+    'control-duties-equality-2010': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 0,
+    },
+    'control-offences-misuse-drugs-1971': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 0,
+    },
+    'control-sentencing-criminal-justice-2003': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 0,
+    },
+    'control-changes-companies-2006': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 0,
+    },
+    'control-defences-children-1989-plain': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 0,
     },
   },
 }

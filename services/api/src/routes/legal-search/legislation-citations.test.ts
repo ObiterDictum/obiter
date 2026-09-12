@@ -501,6 +501,163 @@ describe('classifyLegislationCitation', () => {
   })
 })
 
+describe('determiner-free subject queries (finding 1)', () => {
+  // The whole-title gate used to reject only runs containing the/a/an, so a
+  // determiner-free subject query passed the gate, failed title resolution,
+  // and short-circuited on unresolved_title before keyword search ran. The
+  // classification now reads the directory and the query structure instead
+  // of a determiner blacklist.
+  it.each([
+    'duties under Equality Act 2010',
+    'duties under the Equality Act 2010',
+    'remedies for breach of Human Rights Act 1998',
+    'changes introduced by Companies Act 2006',
+    'defences under Children Act 1989',
+    'offences under Misuse of Drugs Act 1971',
+    'sentencing powers in Criminal Justice Act 2003',
+    'landlord obligations under Housing Act 2004',
+  ])('keeps the realistic subject query %s on the keyword path', (query) => {
+    expect(classifyLegislationCitation(query, directory).kind).toBe(
+      'unrecognised',
+    )
+  })
+
+  it('never lets a held Act title inside a longer query be discarded', () => {
+    // A held title is directory evidence that the query names something
+    // other than (or more than) that title: the extra text is the query, so
+    // the whole query stays a subject search and is never unresolved_title.
+    for (const query of [
+      'duties under Equality Act 2010',
+      'remedies for breach of Human Rights Act 1998',
+      'the Equality Act 2010 and the Human Rights Act 1998',
+    ]) {
+      expect(classifyLegislationCitation(query, directory).kind).toBe(
+        'unrecognised',
+      )
+    }
+  })
+
+  it('does not treat an underspecified fragment as a title request', () => {
+    expect(classifyLegislationCitation('Act 2020', directory)).toEqual({
+      kind: 'unrecognised',
+    })
+    expect(classifyLegislationCitation('the Act 2020', directory)).toEqual({
+      kind: 'unrecognised',
+    })
+  })
+
+  it('still reports an unresolved whole-title request', () => {
+    // The subject-query fix must not turn a genuine whole-title request into
+    // a keyword search: the directory cannot prove the Act absent, so the
+    // state suppresses keyword neighbours without claiming absence.
+    expect(classifyLegislationCitation('Children Act 1989', directory)).toEqual(
+      { kind: 'unresolved_title', recognisedQuery: 'Children Act 1989' },
+    )
+    expect(
+      classifyLegislationCitation('Companies Act 2006', directory),
+    ).toEqual({
+      kind: 'unresolved_title',
+      recognisedQuery: 'Companies Act 2006',
+    })
+    expect(
+      classifyLegislationCitation('Landlord and Tenant Act 1985', directory),
+    ).toEqual({
+      kind: 'unresolved_title',
+      recognisedQuery: 'Landlord and Tenant Act 1985',
+    })
+  })
+
+  it('resolves a held title before classifying it as prose', () => {
+    expect(
+      classifyLegislationCitation('Equality Act 2010', directory).kind,
+    ).toBe('act')
+    expect(
+      classifyLegislationCitation('the Equality Act 2010', directory).kind,
+    ).toBe('act')
+  })
+
+  it('keeps an unheld title whose name wraps a known connector', () => {
+    // "Misuse of Drugs" is an unheld whole-title request, not prose: a
+    // directory token between two unknown nouns is how short titles are
+    // built, so the run must stay a title request.
+    expect(
+      classifyLegislationCitation('Misuse of Drugs Act 1971', directory),
+    ).toEqual({
+      kind: 'unresolved_title',
+      recognisedQuery: 'Misuse of Drugs Act 1971',
+    })
+  })
+})
+
+describe('citation form tolerance (finding 3)', () => {
+  it.each([
+    ['s. 20(3) Equality Act 2010', 'ukpga/2010/15/section/20/3'],
+    ['s. 20 (3) Equality Act 2010', 'ukpga/2010/15/section/20/3'],
+    ['s 20 (3) Equality Act 2010', 'ukpga/2010/15/section/20/3'],
+    ['section 20(3) Equality Act 2010', 'ukpga/2010/15/section/20/3'],
+    ['section 20 (3) Equality Act 2010', 'ukpga/2010/15/section/20/3'],
+    ['section 20 subsection 3 Equality Act 2010', 'ukpga/2010/15/section/20/3'],
+    ['s. 20 subsection 3 Equality Act 2010', 'ukpga/2010/15/section/20/3'],
+  ])('resolves the spaced or worded section form %s', (query, expected) => {
+    const outcome = classifyLegislationCitation(query, directory)
+    expect(outcome.kind).toBe('provision')
+    if (outcome.kind === 'provision') {
+      expect(outcome.provision.provisionId).toBe(expected)
+      expect(outcome.provision.label).toBe('s. 20(3)')
+    }
+  })
+
+  it.each([
+    ['Schedule 1 paragraph 2 Sample Act 2020', 'schedule/1/paragraph/2'],
+    ['Sch. 1 para. 2 Sample Act 2020', 'schedule/1/paragraph/2'],
+    ['Sch 1 para 2 Sample Act 2020', 'schedule/1/paragraph/2'],
+    ['paragraph 2 Schedule 1 Sample Act 2020', 'schedule/1/paragraph/2'],
+    ['para. 2 Sch. 1 Sample Act 2020', 'schedule/1/paragraph/2'],
+  ])('resolves the schedule form %s', (query, expected) => {
+    const outcome = classifyLegislationCitation(query, directory)
+    expect(outcome.kind).toBe('provision')
+    if (outcome.kind === 'provision') {
+      expect(outcome.provision.labelPath).toBe(expected)
+    }
+  })
+
+  it('resolves a schedule citation that names no schedule number', () => {
+    // The unnumbered single-schedule storage path. The serve layer decides
+    // whether the Act actually uses it; the parser must not drop the form.
+    const outcome = classifyLegislationCitation(
+      'Sch. para. 2 Sample Act 2020',
+      directory,
+    )
+    expect(outcome.kind).toBe('provision')
+    if (outcome.kind === 'provision') {
+      expect(outcome.provision.labelPath).toBe('schedule/paragraph/2')
+    }
+  })
+
+  it.each([
+    's. 20 () Equality Act 2010',
+    's. 20 (1)(2)(3)(4)(5)(6) Equality Act 2010',
+    'Sch. 1 para. Sample Act 2020',
+    'para. Schedule 1 Sample Act 2020',
+    'Schedule 1 Sample Act 2020',
+  ])('does not guess a provision for malformed input %s', (query) => {
+    expect(classifyLegislationCitation(query, directory).kind).not.toBe(
+      'provision',
+    )
+  })
+
+  it('never passes an unrecognised citation prefix into title resolution', () => {
+    // "s. 20 (3) Equalities Act 2010" has a misspelled Act: the provision
+    // path must not be rebuilt from the leftover section text, and the Act
+    // must be missing-provision, not a manufactured title.
+    const outcome = classifyLegislationCitation(
+      's. 20 (3) Equalities Act 2010',
+      directory,
+    )
+    expect(['unrecognised', 'unresolved_title']).toContain(outcome.kind)
+  })
+})
+
 describe('label parsing', () => {
   it('parses section and schedule paths', () => {
     expect(parseSectionLabelPath('13(2)(a)')).toBe('section/13/2/a')
@@ -514,10 +671,29 @@ describe('label parsing', () => {
     )
   })
 
+  it('tolerates conventional spacing and word-order variants', () => {
+    expect(parseSectionLabelPath('20 (3)')).toBe('section/20/3')
+    expect(parseSectionLabelPath('20 subsection 3')).toBe('section/20/3')
+    expect(parseScheduleLabelPath('para. 2 Sch. 1')).toBe(
+      'schedule/1/paragraph/2',
+    )
+    expect(parseScheduleLabelPath('Sch. para. 2')).toBe('schedule/paragraph/2')
+  })
+
+  it('rejects empty, over-nested and misordered citations', () => {
+    expect(parseSectionLabelPath('20 ()')).toBeNull()
+    expect(parseSectionLabelPath('20 (1)(2)(3)(4)(5)(6)')).toBeNull()
+    expect(parseScheduleLabelPath('Sch. 1 para. 2 para. 3')).toBeNull()
+    expect(parseScheduleLabelPath('para. Schedule 1')).toBeNull()
+  })
+
   it('formats display labels', () => {
     expect(formatProvisionDisplayLabel('section/13/2/a')).toBe('s. 13(2)(a)')
     expect(formatProvisionDisplayLabel('schedule/2/paragraph/4')).toBe(
       'Sch. 2 para. 4',
+    )
+    expect(formatProvisionDisplayLabel('schedule/paragraph/2')).toBe(
+      'Sch. para. 2',
     )
   })
 })

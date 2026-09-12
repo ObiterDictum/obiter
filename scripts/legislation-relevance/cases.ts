@@ -493,6 +493,24 @@ const controlQueries = control([
     'offences contrary to the Computer Misuse Act 1990',
   ],
   ['control-act-2020', 'Act 2020'],
+  // Determiner-free prose (finding 1). The old whole-title gate rejected only
+  // runs containing the/a/an, so these realistic subject queries failed title
+  // resolution and short-circuited on unresolved_title before keyword search
+  // ran. The determiner-bearing twin of the first is control-defences-children-1989.
+  ['control-duties-equality-2010', 'duties under Equality Act 2010'],
+  [
+    'control-offences-misuse-drugs-1971',
+    'offences under Misuse of Drugs Act 1971',
+  ],
+  [
+    'control-sentencing-criminal-justice-2003',
+    'sentencing powers in Criminal Justice Act 2003',
+  ],
+  [
+    'control-changes-companies-2006',
+    'changes introduced by Companies Act 2006',
+  ],
+  ['control-defences-children-1989-plain', 'defences under Children Act 1989'],
 ])
 
 export const legislationRelevanceCases: LegislationRelevanceCase[] = [

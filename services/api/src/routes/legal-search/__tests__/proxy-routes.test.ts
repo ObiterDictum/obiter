@@ -806,8 +806,13 @@ describe('createLegalSearchProxyRoutes', () => {
   })
 
   it('keeps an unresolved legislation title through the hydration-queued branch', async () => {
-    // The background path has not consulted live yet, so a queue position is
-    // otherwise honest; a legislation verdict must still win.
+    // Finding 2: the transport lifecycle and the legislation diagnostic are
+    // separate. A job is genuinely pending, so the outcome stays
+    // hydration_queued and the client keeps polling; the verdict rides
+    // diagnostics and drives the copy while the poll runs. The old response
+    // carried outcome legislation_title_unresolved with hydrationQueued true,
+    // so the client stopped while the job spent budget and indexed judgments
+    // nothing would ever surface.
     legislationServeMock.resolveLegislationFetch.mockResolvedValueOnce({
       groups: [],
       citationRecognised: true,
@@ -842,15 +847,123 @@ describe('createLegalSearchProxyRoutes', () => {
     })
 
     expect(response.status).toBe(200)
-    expect(await response.json()).toMatchObject({
+    const body = (await response.json()) as {
+      hits: unknown[]
+      hydrationQueued?: boolean
+      outcome?: string
+    }
+    expect(body).toMatchObject({
       hits: [],
-      outcome: 'legislation_title_unresolved',
+      hydrationQueued: true,
+      outcome: 'hydration_queued',
       diagnostics: {
         legislationTitleUnresolved: true,
         legislationNote:
           'No exact legislation title match was found for "Children Act 1989".',
       },
     })
+    // The explicit invariant: an empty page may not claim a queue without an
+    // outcome that makes the client poll it.
+    if (body.hydrationQueued === true && body.hits.length === 0) {
+      expect(body.outcome).toBe('hydration_queued')
+    }
+  })
+
+  it('keeps an ambiguous request polling while carrying the verdict', async () => {
+    legislationServeMock.resolveLegislationFetch.mockResolvedValueOnce({
+      groups: [],
+      citationRecognised: true,
+      citationHeldExact: false,
+      recognisedNotHeld: false,
+      titleUnresolved: false,
+      ambiguous: true,
+      note: '“Sample Act 2020” names more than one stored Act. Candidates: A; B',
+      searched: true,
+      keywordSearchParameters: null,
+    })
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: 'Sample Act 2020',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: { query: vi.fn(async () => ({ rows: [] })) } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const body = (await (
+      await app.request('/api/search/fetch', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: 'Sample Act 2020',
+          foregroundLiveResults: false,
+        }),
+        headers: { 'content-type': 'application/json' },
+      })
+    ).json()) as {
+      hits: unknown[]
+      hydrationQueued?: boolean
+      outcome?: string
+      diagnostics?: { legislationAmbiguous?: boolean }
+    }
+
+    expect(body).toMatchObject({
+      hits: [],
+      hydrationQueued: true,
+      outcome: 'hydration_queued',
+      diagnostics: { legislationAmbiguous: true },
+    })
+  })
+
+  it('does not hide hydrated judgment results behind a legislation verdict', async () => {
+    // Once hydration lands, the stored search finds the judgment and returns
+    // before the background branch: a verdict from the legislation half must
+    // not suppress it. The verdict stays in diagnostics.
+    legislationServeMock.resolveLegislationFetch.mockResolvedValueOnce({
+      groups: [],
+      citationRecognised: true,
+      citationHeldExact: false,
+      recognisedNotHeld: false,
+      titleUnresolved: false,
+      ambiguous: true,
+      note: '“Sample Act 2020” names more than one stored Act. Candidates: A; B',
+      searched: true,
+      keywordSearchParameters: null,
+    })
+    searchClientMock.search.mockResolvedValue({
+      hits: [hit],
+      query: 'Sample Act 2020',
+      estimatedTotalHits: 1,
+      processingTimeMs: 1,
+    })
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: { query: vi.fn(async () => ({ rows: [] })) } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const body = (await (
+      await app.request('/api/search/fetch', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: 'Sample Act 2020',
+          foregroundLiveResults: false,
+        }),
+        headers: { 'content-type': 'application/json' },
+      })
+    ).json()) as {
+      hits: unknown[]
+      outcome?: string
+      diagnostics?: { legislationAmbiguous?: boolean }
+    }
+
+    expect(body.hits).toHaveLength(1)
+    expect(body.outcome).toBe('results')
+    expect(body.diagnostics?.legislationAmbiguous).toBe(true)
   })
 
   it('keeps an unresolved legislation title on the anonymous stored-only branch', async () => {

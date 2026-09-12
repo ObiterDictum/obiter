@@ -475,6 +475,13 @@ export function createLegalSearchProxyRoutes(
       }
 
       // Deduped still has an in-flight job; keep hydrationQueued true so clients poll.
+      // The transport lifecycle and the legislation diagnostic are separate
+      // fields here. A job is genuinely pending, so the top-level outcome must
+      // stay hydration_queued or the client stops polling, spends the
+      // hydration budget and silently discards whatever the job later indexes.
+      // The legislation verdict rides diagnostics and drives the copy while
+      // the poll runs; once the job lands, the stored search above serves the
+      // hydrated judgments before this branch is reached.
       const { citation, citationDiagnostics } = citationFieldsWithLegislation(
         exactLookup,
         [],
@@ -482,7 +489,7 @@ export function createLegalSearchProxyRoutes(
       )
       return c.json(
         toFetchResponse([], parsed.data.query, false, 0, 0, true, {
-          outcome: legislationEmptyOutcome(legislation) ?? 'hydration_queued',
+          outcome: 'hydration_queued',
           citation,
           ...legislationFetchExtras(exactLookup, legislation),
           diagnostics: {
