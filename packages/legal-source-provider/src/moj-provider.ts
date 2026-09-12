@@ -104,6 +104,11 @@ export interface DetailFetchOptions {
    * position among extracted blocks rather than by the court's own numbering.
    */
   preferLegalDocMl?: boolean
+  /**
+   * HTTP implementation. Defaults to the global fetch; bulk ingestion passes
+   * its own so the whole ingest walk, body included, runs against one seam.
+   */
+  fetchImpl?: typeof fetch
 }
 
 /**
@@ -238,6 +243,7 @@ async function fetchLegalDocMlParagraphs(
   env: FindCaseLawEnv,
   entry: AtomEntry,
   documentId: string,
+  fetchImpl: typeof fetch,
 ): Promise<
   | { status: 'ok'; paragraphs: LegalParagraph[] }
   | { status: 'fallback'; reason: LegalDocMlFallbackReason }
@@ -250,7 +256,7 @@ async function fetchLegalDocMlParagraphs(
 
   let response: Response
   try {
-    response = await fetch(xmlUrl, { redirect: 'manual' })
+    response = await fetchImpl(xmlUrl, { redirect: 'manual' })
   } catch {
     return { status: 'fallback', reason: 'xml_unavailable' }
   }
@@ -280,6 +286,7 @@ export async function fetchMojAuthorityDetail(
   options: DetailFetchOptions = {},
 ): Promise<ProviderDocumentResult> {
   const documentId = documentIdFromUri(entry.uri)
+  const fetchImpl = options.fetchImpl ?? fetch
   let parser: ParserIdentity = htmlParser
   let fallbackReason: LegalDocMlFallbackReason | undefined
   let legalDocMlParagraphs: LegalParagraph[] | undefined
@@ -293,7 +300,12 @@ export async function fetchMojAuthorityDetail(
       }
     }
 
-    const xmlResult = await fetchLegalDocMlParagraphs(env, entry, documentId)
+    const xmlResult = await fetchLegalDocMlParagraphs(
+      env,
+      entry,
+      documentId,
+      fetchImpl,
+    )
     if (xmlResult.status === 'rate_limited') return xmlResult
     if (xmlResult.status === 'ok') {
       legalDocMlParagraphs = xmlResult.paragraphs
@@ -342,7 +354,7 @@ export async function fetchMojAuthorityDetail(
     }
   }
 
-  const detailResponse = await fetch(detailUrl, { redirect: 'manual' })
+  const detailResponse = await fetchImpl(detailUrl, { redirect: 'manual' })
 
   const detailFailure = detailFailureFromResponse(detailResponse)
   if (detailFailure) return detailFailure

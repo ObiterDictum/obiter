@@ -125,6 +125,7 @@ export function createDeps(
   overrides?: Partial<Pick<IngestDeps, 'sleep' | 'fetchImpl' | 'fetchDetail'>>,
 ): IngestDeps {
   const limiter = createMojRateLimiter(rateLimit)
+  const fetchImpl = overrides?.fetchImpl ?? fetch
   const providerEnv: FindCaseLawEnv = {
     mojFindCaseLawBaseUrl: env.mojFindCaseLawBaseUrl,
   }
@@ -136,12 +137,13 @@ export function createDeps(
     sleep:
       overrides?.sleep ??
       ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
-    fetchImpl: overrides?.fetchImpl ?? fetch,
+    fetchImpl,
     fetchDetail:
       overrides?.fetchDetail ??
       ((entry) =>
         fetchMojAuthorityDetail(providerEnv, entry, limiter, {
           preferLegalDocMl: true,
+          fetchImpl,
         })),
   }
 }
@@ -350,12 +352,29 @@ export async function ingestOne(
       )
       return { status: 'stored', documentId }
     }
-    // Skipped: PDF-only or unparsable. Stored as a summary so the rebuild
-    // still indexes it, but reported as skipped with the reason, never
-    // silently dropped. minimum_availability stays full-text.
-    const reason = !entry.xmlUri
-      ? 'no full-text XML upstream (PDF only)'
-      : 'judgment body unparsable from provider HTML/XML'
+    // Skipped with no body stored. Two unrelated situations land here and
+    // they must not get the same outcome:
+    //
+    // - no xmlUri: there is genuinely no full-text link, so store the summary
+    //   and stamp the hash. The next run can skip it safely.
+    // - an xmlUri is present: a body was fetchable but the provider refused it
+    //   (a same-origin 3xx, now that redirects are manual) or returned
+    //   something unparsable. Stamping here is what makes the content_hash
+    //   check at the top of this function short-circuit every later run, so
+    //   the judgment body is never fetched again. Report it as failed and
+    //   write nothing: the next run retries, and the operator sees it in the
+    //   failure counters instead of as a benign PDF-only skip. A summary
+    //   without the hash is not available: content_hash is not null with a
+    //   non-blank check (migration 0003), so dropping it would need a schema
+    //   change shared with the API source store.
+    if (entry.xmlUri) {
+      return {
+        status: 'failed',
+        documentId,
+        reason:
+          'judgment body not retrieved from provider (fetch refused or unparsable)',
+      }
+    }
     const summary = atomEntryToAuthoritySummary(
       { mojFindCaseLawBaseUrl: deps.baseUrl },
       entry,
@@ -378,7 +397,11 @@ export async function ingestOne(
       JSON.stringify(provider),
       provider,
     )
-    return { status: 'skipped-no-fulltext', documentId, reason }
+    return {
+      status: 'skipped-no-fulltext',
+      documentId,
+      reason: 'no full-text XML upstream (PDF only)',
+    }
   }
   return {
     status: 'failed',
