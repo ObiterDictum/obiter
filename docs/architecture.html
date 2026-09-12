@@ -2553,6 +2553,17 @@
                   </td>
                 </tr>
                 <tr>
+                  <td class="id">legislation-relevance/</td>
+                  <td class="id">pnpm benchmark:legislation-corpus</td>
+                  <td>
+                    Local served-path relevance suite for the
+                    <code>legislation_provisions</code> corpus: held recall,
+                    held precision, absent precision, MRR. Separate from the
+                    judgment suite because a short provision and a long judgment
+                    are not the same ranking problem. Not a CI gate.
+                  </td>
+                </tr>
+                <tr>
                   <td class="id">generate-pdf-fixtures.mjs</td>
                   <td class="id">node</td>
                   <td>Builds PDF test fixtures for extraction tests</td>
@@ -5368,15 +5379,16 @@
                 <tr>
                   <td class="id">pnpm test</td>
                   <td>
-                    Every workspace's own test script, then the synthetic-v2
-                    suite from the root
+                    Every workspace's own test script, then the root script
+                    suites (synthetic-v2, redact-acceptance,
+                    search-corpus-relevance, legislation-relevance)
                   </td>
                 </tr>
                 <tr>
                   <td class="id">pnpm typecheck</td>
                   <td>
-                    Every workspace, then <code>scripts/synthetic-v2</code>
-                    against its own tsconfig
+                    Every workspace, then each root script suite against its own
+                    tsconfig
                   </td>
                 </tr>
                 <tr>
@@ -5393,6 +5405,14 @@
                     Local <code>POST /api/search/fetch</code> relevance suite
                     against the product corpus. Not run in CI or
                     <code>scripts/ci-local.sh</code>.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">pnpm benchmark:legislation-corpus</td>
+                  <td>
+                    Local <code>POST /api/search/fetch</code> legislation
+                    relevance suite against the product provision corpus. Not
+                    run in CI or <code>scripts/ci-local.sh</code>.
                   </td>
                 </tr>
                 <tr>

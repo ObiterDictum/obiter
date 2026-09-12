@@ -132,6 +132,42 @@ updating `scripts/search-corpus-relevance/baseline.ts`. The baseline records
 today's numbers including failures; ranking work ratchets those floors, it
 does not tidy failing cases out of the set.
 
+## Real-corpus legislation relevance
+
+`pnpm benchmark:legislation-corpus` measures the legislation group of
+`POST /api/search/fetch` against the local product `legislation_provisions`
+index — held recall, held precision, absent precision, and MRR. It is the
+legislation counterpart of the judgment suite above, kept separate because a
+short provision and a long judgment are not the same ranking problem: a
+five-term subject query needing every term inside one provision behaves
+nothing like the same query against judgment prose.
+
+Point `LEGISLATION_RELEVANCE_API_BASE` at the API serving the checkout under
+test; the run records `/api/health` provenance and prints it. It refuses to
+measure unless `GET /api/search/readiness` reports the legislation index ready
+at the baseline document count, then re-checks every held id and every absent
+expectation against Postgres, and fails if the count moves during the run. Do
+not rebuild the index while it is running.
+
+The report records the search-time parameters the measured server reports
+applying (`diagnostics.legislationSearchParameters`), and the run refuses when
+the server states none. `matchingStrategy` is a request-time parameter, so no
+index setting reveals it: reporting the local constant would mislabel a run
+against a server on a different checkout.
+
+`heldPrecision` covers complete-answer (exact) queries only — Act titles,
+chapter numbers, section and schedule lookups. Subject-matter cases list a
+verified lower bound on the relevant set and score recall and MRR, not
+precision. Absent cases are a third of the set and are the point: an Act the
+corpus does not hold, a provision that does not exist, a chapter number with
+no stored Act, or a concept no provision states. With `matchingStrategy:
+'all'` those still serve provisions that merely mention the words.
+
+If the document count changes, re-verify the expectations before updating
+`scripts/legislation-relevance/baseline.ts`. The baseline records today's
+numbers including the failing absent cases; ranking work ratchets the floors,
+it does not tidy failing cases out of the set.
+
 ## Local CI mirror
 
 `scripts/ci-local.sh` runs the same gates as `.github/workflows/ci.yml` in the
