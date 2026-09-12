@@ -74,6 +74,29 @@ describe('legislation provision index', () => {
     expect(legislationSearchIndexSettings.rankingScoreThreshold).toBe(0.35)
   })
 
+  it('requires every query term rather than dropping the ones that miss', async () => {
+    const queries: Array<Record<string, unknown>> = []
+    const client = {
+      index: () => ({
+        search: async (_query: string, options: Record<string, unknown>) => {
+          queries.push(options)
+          return {
+            hits: [],
+            query: '',
+            estimatedTotalHits: 0,
+            processingTimeMs: 0,
+          }
+        },
+      }),
+    }
+    await searchLegislation(
+      client as unknown as Parameters<typeof searchLegislation>[0],
+      'legislation_provisions',
+      'Human Rights Act 1998 proportionality',
+    )
+    expect(queries[0]?.matchingStrategy).toBe('all')
+  })
+
   it('validates provision records at the boundary', () => {
     expect(isLegislationProvisionDocument(provision)).toBe(true)
     expect(isLegislationProvisionDocument({ ...provision, text: 42 })).toBe(
