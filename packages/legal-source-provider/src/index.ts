@@ -50,7 +50,7 @@ export {
 export type { LegalFetchRequest } from './fetch-schema'
 export { legalFetchRequestSchema, legalDocumentIdSchema } from './fetch-schema'
 
-export { resolveProviderUrl } from './fetch-safety'
+export { resolveProviderUrl, providerDocumentUrl } from './fetch-safety'
 
 export {
   parseJudgmentParagraphs,
@@ -72,6 +72,7 @@ export type {
   MojRateLimiter,
   ProviderDocumentResult,
   ProviderDocumentSource,
+  ProviderSkipReason,
   ProviderSourceMetadata,
 } from './moj-provider'
 export {

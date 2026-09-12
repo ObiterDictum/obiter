@@ -6,6 +6,7 @@ import {
   documentIdFromUri,
   fetchMojAuthorityDetail,
   parseFindCaseLawAtom,
+  providerDocumentUrl,
   resolveProviderUrl,
   toFindCaseLawCourtParam,
   type AtomEntry,
@@ -222,7 +223,11 @@ function withProvenance(provider: ProviderSourceMetadata, baseUrl: string) {
     provider: licenceProvider,
     licenceClass,
     acquiredAt: new Date().toISOString(),
-    sourceUrl: new URL(provider.sourceUri, baseUrl).toString(),
+    sourceUrl: providerDocumentUrl(
+      baseUrl,
+      provider.sourceUri,
+      provider.documentUri,
+    ),
   }
 }
 
@@ -352,29 +357,28 @@ export async function ingestOne(
       )
       return { status: 'stored', documentId }
     }
-    // Skipped with no body stored. Two unrelated situations land here and
-    // they must not get the same outcome:
-    //
-    // - no xmlUri: there is genuinely no full-text link, so store the summary
-    //   and stamp the hash. The next run can skip it safely.
-    // - an xmlUri is present: a body was fetchable but the provider refused it
-    //   (a same-origin 3xx, now that redirects are manual) or returned
-    //   something unparsable. Stamping here is what makes the content_hash
-    //   check at the top of this function short-circuit every later run, so
-    //   the judgment body is never fetched again. Report it as failed and
-    //   write nothing: the next run retries, and the operator sees it in the
-    //   failure counters instead of as a benign PDF-only skip. A summary
-    //   without the hash is not available: content_hash is not null with a
-    //   non-blank check (migration 0003), so dropping it would need a schema
-    //   change shared with the API source store.
-    if (entry.xmlUri) {
+    // Skipped: the provider said why. off_origin and http_error mean we asked
+    // for a body and did not receive one, so write nothing and let the next
+    // run retry; the failure counters show it rather than a benign skip.
+    // unparsable means the body arrived and cannot be read, which a retry
+    // cannot change.
+    if (result.reason !== 'unparsable') {
       return {
         status: 'failed',
         documentId,
         reason:
-          'judgment body not retrieved from provider (fetch refused or unparsable)',
+          result.reason === 'off_origin'
+            ? 'provider document URI resolved off-origin'
+            : 'provider returned a non-OK body response',
       }
     }
+    // An unreadable body is not worth re-fetching, but the citation, name and
+    // date are. Store the summary so the judgment stays findable by those (the
+    // index deliberately carries summary-only rows) and stamp the hash so the
+    // next run skips it. The text is lost; the record is not. Stamping the
+    // upstream content hash, not a body hash, is what makes this safe: a
+    // corrected or re-issued judgment arrives with a new hash and is fetched
+    // again on that run.
     const summary = atomEntryToAuthoritySummary(
       { mojFindCaseLawBaseUrl: deps.baseUrl },
       entry,
@@ -400,7 +404,7 @@ export async function ingestOne(
     return {
       status: 'skipped-no-fulltext',
       documentId,
-      reason: 'no full-text XML upstream (PDF only)',
+      reason: 'judgment body unparsable from provider HTML/XML',
     }
   }
   return {

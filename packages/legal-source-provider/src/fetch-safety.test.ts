@@ -1,11 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createMojRateLimiter } from './rate-limiter'
 import {
+  atomEntryToAuthoritySummary,
   fetchMojAuthorityDetail,
   fetchMojAuthorityDocumentFromRecord,
   fetchMojAuthoritySummaries,
 } from './moj-provider'
-import { resolveProviderUrl } from './fetch-safety'
+import { providerDocumentUrl, resolveProviderUrl } from './fetch-safety'
 import type { AtomEntry } from './atom-parser'
 
 const BASE = 'https://caselaw.nationalarchives.gov.uk'
@@ -146,6 +147,7 @@ describe('provider fetch sinks refuse off-origin URLs', () => {
     )
 
     expect(result.status).toBe('skipped')
+    expect(result.status === 'skipped' && result.reason).toBe('off_origin')
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -160,6 +162,7 @@ describe('provider fetch sinks refuse off-origin URLs', () => {
     )
 
     expect(result.status).toBe('skipped')
+    expect(result.status === 'skipped' && result.reason).toBe('off_origin')
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -184,7 +187,36 @@ describe('provider fetch sinks refuse off-origin URLs', () => {
     )
 
     expect(result.status).toBe('skipped')
+    expect(result.status === 'skipped' && result.reason).toBe('http_error')
     expect(fetchMock).toHaveBeenCalledTimes(1)
     expect(fetchMock.mock.calls[0]?.[1]?.redirect).toBe('manual')
+  })
+})
+
+describe('providerDocumentUrl', () => {
+  it('keeps a same-origin document link', () => {
+    expect(providerDocumentUrl(BASE, '/uksc/2024/1')).toBe(
+      `${BASE}/uksc/2024/1`,
+    )
+  })
+
+  it('refuses a protocol-relative link and falls back to the document URI', () => {
+    expect(providerDocumentUrl(BASE, '//evil.example/x', '/uksc/2024/1')).toBe(
+      `${BASE}/uksc/2024/1`,
+    )
+  })
+
+  it('falls back to the provider origin when every candidate is off-origin', () => {
+    expect(
+      providerDocumentUrl(BASE, '//evil.example/x', '/\\evil.example/y'),
+    ).toBe(`${BASE}/`)
+  })
+
+  it('does not present an off-origin sourceUri as the official summary URL', () => {
+    const summary = atomEntryToAuthoritySummary(
+      { mojFindCaseLawBaseUrl: BASE },
+      entry({ sourceUri: '//evil.example/x' }),
+    )
+    expect(summary.sourceUrl).toBe(`${BASE}/uksc/2024/1`)
   })
 })

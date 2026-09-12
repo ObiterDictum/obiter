@@ -26,7 +26,7 @@ import {
 } from './html-parser'
 import type { createMojRateLimiter } from './rate-limiter'
 import type { LegalFetchRequest } from './fetch-schema'
-import { resolveProviderUrl } from './fetch-safety'
+import { providerDocumentUrl, resolveProviderUrl } from './fetch-safety'
 import {
   htmlParser,
   legalDocMlParser,
@@ -68,6 +68,16 @@ export interface ProviderDocumentSource {
   provider: ProviderSourceMetadata
 }
 
+/**
+ * Why a judgment body could not be read from the provider.
+ *
+ * The distinction matters to callers that retry: `off_origin` and
+ * `http_error` mean a body was fetchable and was not received, while
+ * `unparsable` means the body arrived and cannot be read, so a retry will not
+ * change the outcome.
+ */
+export type ProviderSkipReason = 'off_origin' | 'http_error' | 'unparsable'
+
 export type ProviderDocumentResult =
   | {
       status: 'ok'
@@ -82,7 +92,7 @@ export type ProviderDocumentResult =
       /** Set when LegalDocML was wanted but the HTML path had to be used. */
       fallbackReason?: LegalDocMlFallbackReason
     }
-  | { status: 'skipped' }
+  | { status: 'skipped'; reason: ProviderSkipReason }
   | { status: 'rate_limited'; retryAfter: string | null }
   | { status: 'unavailable' }
 
@@ -218,7 +228,11 @@ export function atomEntryToAuthoritySummary(
     jurisdiction: findCaseLawJurisdiction,
     dateDecided: entry.dateDecided,
     sourceType: 'judgment',
-    sourceUrl: new URL(entry.sourceUri, env.mojFindCaseLawBaseUrl).toString(),
+    sourceUrl: providerDocumentUrl(
+      env.mojFindCaseLawBaseUrl,
+      entry.sourceUri,
+      entry.uri,
+    ),
   }
 }
 
@@ -319,7 +333,7 @@ export async function fetchMojAuthorityDetail(
     env.mojFindCaseLawBaseUrl,
     entry.sourceUri,
   )
-  if (!detailUrl) return { status: 'skipped' }
+  if (!detailUrl) return { status: 'skipped', reason: 'off_origin' }
 
   // LegalDocML supplied the paragraphs, so the HTML page is not fetched at all.
   if (legalDocMlParagraphs) {
@@ -335,7 +349,7 @@ export async function fetchMojAuthorityDetail(
       paragraphs: legalDocMlParagraphs,
     })
 
-    if (!document.success) return { status: 'skipped' }
+    if (!document.success) return { status: 'skipped', reason: 'unparsable' }
 
     return {
       status: 'ok',
@@ -360,7 +374,7 @@ export async function fetchMojAuthorityDetail(
   if (detailFailure) return detailFailure
 
   if (!detailResponse.ok) {
-    return { status: 'skipped' }
+    return { status: 'skipped', reason: 'http_error' }
   }
 
   const html = await detailResponse.text()
@@ -378,7 +392,7 @@ export async function fetchMojAuthorityDetail(
   })
 
   if (!document.success) {
-    return { status: 'skipped' }
+    return { status: 'skipped', reason: 'unparsable' }
   }
 
   return {
@@ -402,6 +416,10 @@ export async function fetchMojAuthorityDocumentFromRecord(
     (uri): uri is string => Boolean(uri),
   )
 
+  // Best of the failed attempts: a guard refusal outranks a bad response,
+  // which outranks a body we received but could not parse.
+  const failures: ProviderSkipReason[] = []
+
   for (const sourceUri of sourceUris) {
     const limit = rateLimiter.take()
     if (!limit.allowed) {
@@ -412,12 +430,18 @@ export async function fetchMojAuthorityDocumentFromRecord(
     }
 
     const detailUrl = resolveProviderUrl(env.mojFindCaseLawBaseUrl, sourceUri)
-    if (!detailUrl) continue
+    if (!detailUrl) {
+      failures.push('off_origin')
+      continue
+    }
     const detailResponse = await fetch(detailUrl, { redirect: 'manual' })
     const detailFailure = detailFailureFromResponse(detailResponse)
     if (detailFailure) return detailFailure
 
-    if (!detailResponse.ok) continue
+    if (!detailResponse.ok) {
+      failures.push('http_error')
+      continue
+    }
 
     const html = await detailResponse.text()
     const document = parseMojAuthorityDocument(
@@ -427,7 +451,10 @@ export async function fetchMojAuthorityDocumentFromRecord(
       record.summary,
     )
 
-    if (!document) continue
+    if (!document) {
+      failures.push('unparsable')
+      continue
+    }
 
     return {
       status: 'ok',
@@ -440,7 +467,12 @@ export async function fetchMojAuthorityDocumentFromRecord(
     }
   }
 
-  return { status: 'skipped' }
+  const reason: ProviderSkipReason = failures.includes('off_origin')
+    ? 'off_origin'
+    : failures.includes('http_error')
+      ? 'http_error'
+      : 'unparsable'
+  return { status: 'skipped', reason }
 }
 
 export async function fetchMojAuthorityDocumentById(
@@ -449,7 +481,7 @@ export async function fetchMojAuthorityDocumentById(
   rateLimiter: MojRateLimiter,
 ): Promise<ProviderDocumentResult> {
   const uri = documentUriFromId(documentId)
-  if (!uri) return { status: 'skipped' }
+  if (!uri) return { status: 'skipped', reason: 'unparsable' }
 
   const limit = rateLimiter.take()
   if (!limit.allowed) {
@@ -460,12 +492,12 @@ export async function fetchMojAuthorityDocumentById(
   }
 
   const detailUrl = resolveProviderUrl(env.mojFindCaseLawBaseUrl, uri)
-  if (!detailUrl) return { status: 'skipped' }
+  if (!detailUrl) return { status: 'skipped', reason: 'off_origin' }
   const detailResponse = await fetch(detailUrl, { redirect: 'manual' })
   const detailFailure = detailFailureFromResponse(detailResponse)
   if (detailFailure) return detailFailure
 
-  if (!detailResponse.ok) return { status: 'skipped' }
+  if (!detailResponse.ok) return { status: 'skipped', reason: 'http_error' }
 
   const html = await detailResponse.text()
   const document = parseMojAuthorityDocument(
@@ -484,7 +516,7 @@ export async function fetchMojAuthorityDocumentById(
     },
   )
 
-  if (!document) return { status: 'skipped' }
+  if (!document) return { status: 'skipped', reason: 'unparsable' }
 
   return {
     status: 'ok',

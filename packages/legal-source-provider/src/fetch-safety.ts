@@ -49,3 +49,26 @@ export function resolveProviderUrl(
   target.port = base.port
   return target
 }
+
+/**
+ * The provider URL a user is shown as a document's official source.
+ *
+ * `toDocumentUri` is not a security boundary: a protocol-relative
+ * `//evil.example/x` passes through it unchanged, and a raw
+ * `new URL(uri, base)` then resolves it to the attacker's host. That link is
+ * never fetched, so it is not SSRF, but presenting it to a solicitor as the
+ * official source of a judgment is a phishing surface. Resolve each candidate
+ * through the same guard the fetch sinks use, and fall back to the provider
+ * origin, so a feed cannot choose the host the product shows.
+ */
+export function providerDocumentUrl(
+  baseUrl: string,
+  ...candidates: Array<string | null | undefined>
+): string {
+  for (const candidate of candidates) {
+    if (!candidate) continue
+    const resolved = resolveProviderUrl(baseUrl, candidate)
+    if (resolved) return resolved.toString()
+  }
+  return new URL('/', baseUrl).toString()
+}
