@@ -349,14 +349,14 @@ describe('SearchResults legislation group', () => {
               resultGroup: 'legislation',
               legislationStatus: 'current',
               title: 'Equality Act 2010',
-              provisionLabel: 'Equality Act 2010',
+              provisionLabel: '2010 c. 15',
               labelPath: '',
               documentIdentity: 'ukpga/2010/15',
               extent: 'E+W+S',
               officialUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
               sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
               notice:
-                'Matched Equality Act 2010. Add a section number (for example s. 40) to read a provision.',
+                'Open the Act to browse its Parts, sections and schedules.',
             },
           ],
         },
@@ -370,12 +370,13 @@ describe('SearchResults legislation group', () => {
     container = rendered.container
 
     expect(container.textContent).toContain(
-      'Matched Equality Act 2010. Add a section number',
+      'Open the Act to browse its Parts, sections and schedules.',
     )
     // The Act hit is a link to the Act contents page, not static guidance.
     const actLink = container.querySelector('a[href="/ln/ukpga/2010/15"]')
     expect(actLink).not.toBeNull()
-    expect(actLink?.textContent).toContain('Equality Act 2010')
+    // Title once, chapter once — never the title twice.
+    expect(actLink?.textContent).toContain('2010 c. 15 · Equality Act 2010')
   })
 
   it('leads with legislation when the API marks the query as statute-shaped', () => {
