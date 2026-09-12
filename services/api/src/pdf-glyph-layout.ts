@@ -148,11 +148,37 @@ export function laidCharsFromOperatorList(input: {
   const chars: LaidChar[] = []
 
   let ctm: Matrix = IDENTITY
-  const ctmStack: Matrix[] = []
   let textMatrix: Matrix = IDENTITY
   let lineMatrix: Matrix = IDENTITY
   let state = initialState()
-  const stateStack: TextState[] = []
+  // The PDF graphics state stack (`q`/`Q`, Form XObjects, annotations). One
+  // stack for every saved field, not one per field: pdf.js restores the CTM,
+  // the text state and both text matrices together, and a field omitted from
+  // the snapshot is precisely how a restore desynchronised the replay.
+  const graphicsStack: Array<{
+    ctm: Matrix
+    textMatrix: Matrix
+    lineMatrix: Matrix
+    state: TextState
+  }> = []
+
+  const pushGraphicsState = () => {
+    graphicsStack.push({ ctm, textMatrix, lineMatrix, state: { ...state } })
+  }
+
+  const restoreGraphicsState = () => {
+    // pdf.js `CanvasGraphics.restore` early-returns on an empty stack
+    // (pdf.mjs:10268), so a stray `Q` is ignored by the renderer. Popping
+    // unconditionally would reset the replay to identity and place every later
+    // glyph in the wrong space while the page still draws it where the reader
+    // sees it — the P0.29 off-page cover.
+    const restored = graphicsStack.pop()
+    if (!restored) return
+    ctm = restored.ctm
+    textMatrix = restored.textMatrix
+    lineMatrix = restored.lineMatrix
+    state = restored.state
+  }
 
   const moveLine = (tx: number, ty: number) => {
     lineMatrix = multiply(translation(tx, ty), lineMatrix)
@@ -249,12 +275,10 @@ export function laidCharsFromOperatorList(input: {
 
     switch (fn) {
       case ops.save:
-        ctmStack.push(ctm)
-        stateStack.push({ ...state })
+        pushGraphicsState()
         break
       case ops.restore:
-        ctm = ctmStack.pop() ?? IDENTITY
-        state = stateStack.pop() ?? initialState()
+        restoreGraphicsState()
         break
       case ops.transform: {
         const matrix = asMatrix(args?.length === 1 ? args[0] : args)
@@ -262,22 +286,19 @@ export function laidCharsFromOperatorList(input: {
         break
       }
       case ops.paintFormXObjectBegin: {
-        ctmStack.push(ctm)
-        stateStack.push({ ...state })
+        pushGraphicsState()
         const matrix = asMatrix(args?.[0])
         if (matrix) ctm = multiply(matrix, ctm)
         break
       }
       case ops.paintFormXObjectEnd:
-        ctm = ctmStack.pop() ?? IDENTITY
-        state = stateStack.pop() ?? initialState()
+        restoreGraphicsState()
         break
       case ops.beginAnnotation: {
         // An annotation's page placement lives only in this operator's
         // transform/matrix arguments, so restart from the page base and
         // apply them in order like the renderer does.
-        ctmStack.push(ctm)
-        stateStack.push({ ...state })
+        pushGraphicsState()
         ctm = IDENTITY
         const transform = asMatrix(args?.[2])
         if (transform) ctm = multiply(transform, ctm)
@@ -286,8 +307,7 @@ export function laidCharsFromOperatorList(input: {
         break
       }
       case ops.endAnnotation:
-        ctm = ctmStack.pop() ?? IDENTITY
-        state = stateStack.pop() ?? initialState()
+        restoreGraphicsState()
         break
       case ops.beginText:
         textMatrix = IDENTITY

@@ -15,15 +15,20 @@ import {
 import { describe, expect, it, vi } from 'vitest'
 import { extractDocumentContent, prepareLaidChars } from './document-extraction'
 import type { DocumentTextLayout } from './document-layout'
-import { buildRedactedPdf } from './redaction-pdf-output'
+import {
+  buildRedactedPdf,
+  RedactionCoverGeometryError,
+} from './redaction-pdf-output'
 import { findUncoveredPdfRegions } from './extraction-coverage'
 import {
   rawFormPdf,
   rawFreeTextPdf,
   rawNextLinePdf,
+  rawRestoreTextMatrixPdf,
   rawRtlPdf,
   rawType1Pdf,
   rawType3Pdf,
+  rawUnbalancedRestorePdf,
   rawVerticalPdf,
   textFieldPdf,
 } from './pdf-glyph-fixtures.test-helper'
@@ -153,6 +158,94 @@ async function renderedInkBounds(bytes: Buffer) {
   } finally {
     await pdf.destroy()
   }
+}
+
+/** Accepted single-span input for a PDF whose extraction contains `spanText`. */
+function acceptedSpanInput(
+  pdfBytes: Buffer,
+  layout: DocumentTextLayout,
+  text: string,
+  spanText: string,
+) {
+  const spanStart = text.indexOf(spanText)
+  expect(spanStart).toBeGreaterThanOrEqual(0)
+  return {
+    pdfBytes,
+    layout,
+    spans: [
+      {
+        id: 'span_1',
+        start: spanStart,
+        end: spanStart + spanText.length,
+        text: spanText,
+        category: 'person_name' as const,
+        source: 'rampart_model' as const,
+        confidence: 'high' as const,
+        suggestion: 'redact' as const,
+      },
+    ],
+    decisions: {
+      span_1: {
+        decision: 'accept' as const,
+        decidedBy: 'test',
+        decidedAt: '2026-01-01T00:00:00.000Z',
+      },
+    },
+    outputMode: 'redacted' as const,
+    tokenMap: {},
+  }
+}
+
+async function rasterizePage(bytes: Uint8Array) {
+  const CanvasFactory = await createIsomorphicCanvasFactory(
+    () => import('@napi-rs/canvas'),
+  )
+  const pdf = await getDocumentProxy(Uint8Array.from(bytes), { CanvasFactory })
+  try {
+    const page = await pdf.getPage(1)
+    const viewport = page.getViewport({ scale: 2 })
+    const width = Math.max(1, Math.ceil(viewport.width))
+    const height = Math.max(1, Math.ceil(viewport.height))
+    const canvas = createCanvas(width, height)
+    const context = canvas.getContext('2d')
+    await page.render({
+      canvasContext: context as never,
+      viewport,
+      canvas: canvas as never,
+    }).promise
+    return {
+      width,
+      height,
+      pixels: context.getImageData(0, 0, width, height).data,
+    }
+  } finally {
+    await pdf.destroy()
+  }
+}
+
+/**
+ * Count background (non-dark) pixels inside a device-space box. A cover renders
+ * as a solid bar, so a correctly redacted region has no light pixels; a
+ * surviving glyph always leaves background around its strokes.
+ */
+function countLightPixels(
+  pixels: Uint8ClampedArray,
+  width: number,
+  box: { left: number; right: number; top: number; bottom: number },
+) {
+  let light = 0
+  for (let y = box.top; y <= box.bottom; y += 1) {
+    for (let x = box.left; x <= box.right; x += 1) {
+      const offset = (y * width + x) * 4
+      if (
+        (pixels[offset] ?? 255) >= 128 ||
+        (pixels[offset + 1] ?? 255) >= 128 ||
+        (pixels[offset + 2] ?? 255) >= 128
+      )
+        light += 1
+    }
+  }
+  return light
 }
 
 function coverBoundsInViewport(
@@ -576,41 +669,6 @@ describe('annotation glyph placement', () => {
     return covers[0]!
   }
 
-  function acceptedSpanInput(
-    pdfBytes: Buffer,
-    layout: DocumentTextLayout,
-    text: string,
-    spanText: string,
-  ) {
-    const spanStart = text.indexOf(spanText)
-    expect(spanStart).toBeGreaterThanOrEqual(0)
-    return {
-      pdfBytes,
-      layout,
-      spans: [
-        {
-          id: 'span_1',
-          start: spanStart,
-          end: spanStart + spanText.length,
-          text: spanText,
-          category: 'person_name' as const,
-          source: 'rampart_model' as const,
-          confidence: 'high' as const,
-          suggestion: 'redact' as const,
-        },
-      ],
-      decisions: {
-        span_1: {
-          decision: 'accept' as const,
-          decidedBy: 'test',
-          decidedAt: '2026-01-01T00:00:00.000Z',
-        },
-      },
-      outputMode: 'redacted' as const,
-      tokenMap: {},
-    }
-  }
-
   interface PageRect {
     x: number
     y: number
@@ -821,5 +879,90 @@ describe('annotation glyph placement', () => {
       expect(secondCover.y).toBeLessThan(firstCover.y)
       expect(firstCover.y - secondCover.y).toBeCloseTo(14, 1)
     }
+  })
+})
+
+describe('graphics state replay fidelity', () => {
+  const SECRET = 'SECRETVALUE'
+
+  async function coverFor(bytes: Buffer, spanText: string) {
+    const extracted = await extractDocumentContent('pdf', bytes)
+    const start = extracted.text.indexOf(spanText)
+    expect(start).toBeGreaterThanOrEqual(0)
+    const covers = coverRectsForSpan({
+      segments: extracted.layout!.segments,
+      spanStart: start,
+      spanEnd: start + spanText.length,
+      spanText,
+    })
+    expect(covers).toHaveLength(1)
+    return { extracted, cover: covers[0]! }
+  }
+
+  /**
+   * The renderer, not the replay, decides where ink lands. Burn the accepted
+   * span, re-render, and require the region the source actually inked to become
+   * a solid bar. A light pixel inside that region is a surviving glyph edge.
+   */
+  async function expectInkRemoved(bytes: Buffer, spanText: string) {
+    const source = await renderedInkBounds(bytes)
+    const extracted = await extractDocumentContent('pdf', bytes)
+    expect(extracted.text).toContain(spanText)
+    const output = await buildRedactedPdf(
+      acceptedSpanInput(bytes, extracted.layout!, extracted.text, spanText),
+    )
+    const burned = await rasterizePage(output)
+    expect(
+      countLightPixels(burned.pixels, burned.width, {
+        left: source.left,
+        right: source.right,
+        top: source.top,
+        bottom: source.bottom,
+      }),
+    ).toBe(0)
+  }
+
+  it('ignores a stray Q exactly as the renderer does', async () => {
+    // Pre-fix the replay reset to identity, put the cover above the page and
+    // left the glyphs in place: 620px of source ink survived as 620px in the
+    // burned output.
+    await expectInkRemoved(rawUnbalancedRestorePdf(), SECRET)
+  })
+
+  it('puts the unbalanced-Q cover on the page the reader sees', async () => {
+    const { extracted, cover } = await coverFor(
+      rawUnbalancedRestorePdf(),
+      SECRET,
+    )
+    const page = extracted.layout!.pages[0]!
+    expect(cover.x).toBeGreaterThanOrEqual(0)
+    expect(cover.y).toBeGreaterThanOrEqual(0)
+    expect(cover.x + cover.width).toBeLessThanOrEqual(page.width)
+    expect(cover.y + cover.height).toBeLessThanOrEqual(page.height)
+  })
+
+  it('restores the text matrix with the graphics state, as the renderer does', async () => {
+    // Balanced `q`/`Q`, no stray operator: pdf.js still restores the text
+    // matrix, so the text after `Q` returns to the pre-`q` baseline.
+    await expectInkRemoved(rawRestoreTextMatrixPdf(), SECRET)
+  })
+
+  it('refuses an accepted span whose cover misses the page', async () => {
+    // Defence in depth. The replay guard above is the fix; this refuses even if
+    // a future divergence places a cover entirely off the page again.
+    const bytes = rawUnbalancedRestorePdf()
+    const extracted = await extractDocumentContent('pdf', bytes)
+    const offPage: DocumentTextLayout = {
+      ...extracted.layout!,
+      segments: extracted.layout!.segments.map((segment) => ({
+        ...segment,
+        y: segment.y + 4000,
+      })),
+    }
+    await expect(
+      buildRedactedPdf(
+        acceptedSpanInput(bytes, offPage, extracted.text, SECRET),
+      ),
+    ).rejects.toBeInstanceOf(RedactionCoverGeometryError)
   })
 })
