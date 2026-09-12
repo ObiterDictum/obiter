@@ -943,6 +943,39 @@ overlap the whole union is redacted under the winner's category and
 confidence, but its text is the exact union substring. The union-coverage
 decision is unchanged.
 
+### Person-name heuristics run per detection, before the span union (12 September 2026)
+
+Context: `mapRampartSpans` applied `trimLeadingTitles` and
+`isDeniedPersonName` to whatever span it was given. Both are written for a
+span the model returned as one detection, and both are wrong once
+`policy.mergeSpans` has unioned two detections, because the union covers
+bytes from both. Trimming the union's head can advance past a losing
+detection's characters (an address detection that starts `Dr`), and denying
+the union on a newline discards both contributors when only one contains the
+break. P2.39 removed the finalize 409 that used to surface either loss, so
+they are silent. A 300-document corpus and a 50-document length probe
+produced no merged spans at all, so neither exercised the path.
+
+Decision: `normalizePersonDetections` in
+`packages/redaction-policy/src/rampart-map.ts` trims and denies each
+contributing detection before the union, and `mapRampartSpans` no longer
+applies either heuristic; its contract is now pure mapping over already
+normalised spans. The literal `Mr James Smith` and `Jones\nLaw` constructions
+in the board item do not reproduce the loss: the first trims the losing
+person detection's own honorific, the second puts the break in both
+contributors. The regression tests use a non-person loser with a
+title-shaped prefix and a break in exactly one contributor.
+
+Not changed: `policy.mergeSpans` still takes the winner's `category` and
+`confidence` for the whole union, so a `keep`-category winner can still
+disposition bytes a `redact` loser contributed. The pinned model emits no
+`keep` category except the premasked URL heuristic, so this is latent; it
+needs its own decision. `detectNer` also performs its own cross-window union
+inside `@obiter/rampart-inference` before the product boundary, so on a
+multi-window document an inner partial union still reaches this normaliser as
+a single span. The 50-document length probe produced no inner partial union,
+and the vendored package is kept byte-faithful, so that site is left alone.
+
 ### Rampart DATE/DOB labels are aspirational (2 September 2026)
 
 Context: a finalized redaction disclosed `12 March 1979` after a date-of-birth
