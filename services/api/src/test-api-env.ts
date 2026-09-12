@@ -49,6 +49,7 @@ export function createTestApiEnv(overrides: Partial<ApiEnv> = {}): ApiEnv {
     legalSearchHydrationWindowMs: DEFAULT_LEGAL_SEARCH_HYDRATION_WINDOW_MS,
     port: 8787,
     nodeEnv: 'test',
+    localEnvFile: null,
     ...overrides,
   }
 }

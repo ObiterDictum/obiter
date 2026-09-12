@@ -57,9 +57,12 @@ interface ApiAppOptions {
 interface DevelopmentApiProvenance {
   commitSha: string
   checkoutRoot: string
+  envFile: string | null
 }
 
-function readDevelopmentApiProvenance(): DevelopmentApiProvenance | null {
+function readDevelopmentApiProvenance(
+  envFile: string | null,
+): DevelopmentApiProvenance | null {
   try {
     const checkoutRoot = execFileSync('git', ['rev-parse', '--show-toplevel'], {
       cwd: process.cwd(),
@@ -70,7 +73,9 @@ function readDevelopmentApiProvenance(): DevelopmentApiProvenance | null {
       encoding: 'utf8',
     }).trim()
 
-    return checkoutRoot && commitSha ? { checkoutRoot, commitSha } : null
+    return checkoutRoot && commitSha
+      ? { checkoutRoot, commitSha, envFile }
+      : null
   } catch {
     // A source checkout is expected in development, but health must remain
     // useful when the process is started without git metadata.
@@ -121,7 +126,9 @@ export function createApiApp(
   // This is deliberately development-only: the public health route must not
   // expose filesystem paths or build metadata in production.
   const developmentProvenance =
-    env.nodeEnv === 'development' ? readDevelopmentApiProvenance() : null
+    env.nodeEnv === 'development'
+      ? readDevelopmentApiProvenance(env.localEnvFile)
+      : null
   const presence = new DocumentPresenceRegistry()
   const requestLimits = apiRequestLimitsFromEnv(env)
   const app = new Hono<{ Variables: AppVariables }>()
