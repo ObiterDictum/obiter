@@ -9,6 +9,7 @@ export {
 } from './SearchIdleState'
 export { SearchKeyboardShortcuts } from './SearchKeyboardShortcuts'
 export { SearchResults } from './SearchResults'
+export { isInteractiveTarget } from './interactiveTarget'
 export { searchResultRows } from './searchResultRows'
 export {
   getLegislationScheduleGuidanceFeedback,

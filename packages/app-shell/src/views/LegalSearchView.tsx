@@ -10,6 +10,7 @@ import {
   SearchIdleExtras,
   SearchKeyboardShortcuts,
   SearchResults,
+  isInteractiveTarget,
   courtOptionGroups,
   getCourtLabel,
   getLegislationScheduleGuidanceFeedback,
@@ -418,10 +419,10 @@ export function LegalSearchView() {
       const resultCount = rows.length
       if (resultCount === 0) return
 
-      const textEntryTarget = isTextEntryTarget(event.target)
+      const interactiveTarget = isInteractiveTarget(event.target)
 
       if (
-        !textEntryTarget &&
+        !interactiveTarget &&
         (event.key === 'ArrowDown' || event.key.toLowerCase() === 'j')
       ) {
         event.preventDefault()
@@ -432,7 +433,7 @@ export function LegalSearchView() {
       }
 
       if (
-        !textEntryTarget &&
+        !interactiveTarget &&
         (event.key === 'ArrowUp' || event.key.toLowerCase() === 'k')
       ) {
         event.preventDefault()
@@ -443,7 +444,7 @@ export function LegalSearchView() {
       }
 
       if (
-        !textEntryTarget &&
+        !interactiveTarget &&
         event.key === 'Enter' &&
         selectedResultIndex >= 0
       ) {
@@ -691,6 +692,16 @@ export function LegalSearchView() {
     scheduleAutoSearch(nextQuery)
   }
 
+  // A corrective resubmission changes the search, so it must change the
+  // command bar with it: results for the suggested citation beside the
+  // original underspecified one leave Enter in the input rerunning the stale
+  // query. runSearch is passed the query explicitly, so syncing the input
+  // here starts no second request.
+  function resubmitQuery(nextQuery: string) {
+    setQuery(nextQuery)
+    void runSearch(nextQuery)
+  }
+
   function handleCourtShortcut(nextCourt: string) {
     const nextFilters = { court: nextCourt, dateFrom, dateTo }
     setCourt(nextCourt)
@@ -766,7 +777,7 @@ export function LegalSearchView() {
             browse={state.browse}
             selectedIndex={selectedResultIndex}
             onSelectIndex={setSelectedResultIndex}
-            onResubmit={(nextQuery) => void runSearch(nextQuery)}
+            onResubmit={resubmitQuery}
           />
         ) : (
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -799,7 +810,7 @@ export function LegalSearchView() {
                     scheduleResubmitQuery
                       ? {
                           label: 'Use this citation',
-                          onClick: () => void runSearch(scheduleResubmitQuery),
+                          onClick: () => resubmitQuery(scheduleResubmitQuery),
                         }
                       : state.outcome === 'hydration_queued'
                         ? {
