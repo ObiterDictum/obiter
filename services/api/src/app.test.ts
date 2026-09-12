@@ -91,7 +91,7 @@ describe('createApiApp', () => {
     })
   })
 
-  it('exposes checkout provenance only in development', async () => {
+  it('exposes checkout and .env provenance only in development', async () => {
     const auth = {
       api: {
         getSession: async () => null,
@@ -101,7 +101,11 @@ describe('createApiApp', () => {
     const pool = createPool(async () => ({ rows: [] }))
 
     const developmentHealth = await createApiApp(
-      { ...testEnv, nodeEnv: 'development' },
+      {
+        ...testEnv,
+        nodeEnv: 'development',
+        localEnvFile: '/tmp/lane-security/.env',
+      },
       pool,
       { auth },
     ).request('/api/health')
@@ -111,6 +115,7 @@ describe('createApiApp', () => {
       provenance: {
         commitSha: expect.stringMatching(/^[0-9a-f]{40}$/),
         checkoutRoot: expect.stringContaining('/'),
+        envFile: '/tmp/lane-security/.env',
       },
     })
 

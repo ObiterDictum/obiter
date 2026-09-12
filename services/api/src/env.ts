@@ -1,5 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { loadLocalEnvFile } from '@obiter/config'
 import {
   NER_DEFAULT_CHUNK_TOKENS,
   NER_TOKEN_BUDGET,
@@ -34,8 +33,6 @@ const requiredProductionKeys = [
   'MEILISEARCH_SEARCH_API_KEY',
   'MEILISEARCH_ADMIN_API_KEY',
 ] as const
-
-let localEnvLoaded = false
 
 const requiredTestKeys = ['TEST_DATABASE_URL'] as const
 
@@ -72,6 +69,10 @@ export interface ApiEnv {
   legalSearchHydrationWindowMs: number
   port: number
   nodeEnv: 'development' | 'test' | 'production'
+  // The .env this process actually read, or null when it read none. Reported by
+  // /api/health provenance so a lane can prove which configuration file it runs
+  // with, the same way it proves its checkout root and commit.
+  localEnvFile: string | null
 }
 
 function readNodeEnv(): ApiEnv['nodeEnv'] {
@@ -269,41 +270,15 @@ function readPort() {
   return port
 }
 
-function loadLocalDotEnv() {
-  if (localEnvLoaded || process.env.NODE_ENV === 'test' || process.env.VITEST) {
-    return
-  }
-
-  localEnvLoaded = true
-  let directory = process.cwd()
-
-  for (let depth = 0; depth < 5; depth += 1) {
-    const envPath = join(directory, '.env')
-
-    if (existsSync(envPath)) {
-      for (const rawLine of readFileSync(envPath, 'utf8').split(/\r?\n/)) {
-        const line = rawLine.trim()
-        if (!line || line.startsWith('#')) continue
-
-        const separatorIndex = line.indexOf('=')
-        if (separatorIndex <= 0) continue
-
-        const key = line.slice(0, separatorIndex).trim()
-        const value = line
-          .slice(separatorIndex + 1)
-          .trim()
-          .replace(/^["']|["']$/g, '')
-
-        process.env[key] ??= value
-      }
-
-      return
-    }
-
-    const parent = dirname(directory)
-    if (parent === directory) return
-    directory = parent
-  }
+/**
+ * Load the worktree's `.env` into process.env without overriding values the
+ * process already has, and return the path read (null when none was). The path
+ * is reported by /api/health provenance so a lane can prove its configuration
+ * file as well as its checkout. The bounded walk and duplicate rule live once,
+ * in `@obiter/config`, shared with the legal ingestor.
+ */
+export function loadLocalDotEnv(): string | null {
+  return loadLocalEnvFile()
 }
 
 function readAdminApiKey(nodeEnv: ApiEnv['nodeEnv']) {
@@ -412,7 +387,7 @@ export function readRampartDetectionConfig(): RedactionDetectionConfig {
 }
 
 export function readApiEnv(): ApiEnv {
-  loadLocalDotEnv()
+  const localEnvFile = loadLocalDotEnv()
   const nodeEnv = readNodeEnv()
   requireProductionEnv(nodeEnv)
   requireTestEnv(nodeEnv)
@@ -508,5 +483,6 @@ export function readApiEnv(): ApiEnv {
     ),
     port: readPort(),
     nodeEnv,
+    localEnvFile,
   }
 }

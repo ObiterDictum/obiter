@@ -1,17 +1,32 @@
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { defineConfig, loadEnv } from 'vite'
 import react from '@vitejs/plugin-react'
 import { tanstackStart } from '@tanstack/react-start/plugin/vite'
 import tailwindcss from '@tailwindcss/vite'
+import { assertNoDuplicateEnvKeys } from '@obiter/config/env-keys'
 import { parsePort } from './serve.mjs'
 
-// The API reads the repo-root .env through its own loader (services/api/src/env.ts
-// loadLocalDotEnv), which walks up from cwd. Vite has no such loader and reads
-// process.env, so without this a lane's .env configures its API and silently
-// fails to configure its web server. Load the same file, from the same place.
+// The API and the ingestor read the repo-root .env through @obiter/config
+// (resolveLocalEnvFile), which walks up from cwd and stops at the worktree
+// root. Vite has no such walk and reads the same directory, so without this a
+// lane's .env configures its API and silently fails to configure its web
+// server. Load the same file, from the same place.
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url))
 
 export default defineConfig(({ mode }) => {
+  // A key assigned twice in the same file is a configuration mistake: parseEnv
+  // collapses it silently and a lane would run one value while reading two.
+  // Refuse it here, with the same scan the services use, before loadEnv runs.
+  for (const envFile of [
+    '.env',
+    '.env.local',
+    `.env.${mode}`,
+    `.env.${mode}.local`,
+  ]) {
+    assertNoDuplicateEnvKeys(join(repoRoot, envFile))
+  }
+
   const fileEnv = loadEnv(mode, repoRoot, '')
   const read = (key: string) => process.env[key] ?? fileEnv[key]
 

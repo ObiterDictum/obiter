@@ -1,12 +1,9 @@
-import { existsSync, readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { loadLocalEnvFile } from '@obiter/config'
 
 const requiredProductionKeys = [
   'MEILISEARCH_HOST',
   'MEILISEARCH_ADMIN_API_KEY',
 ] as const
-
-let localEnvLoaded = false
 
 export interface LegalIngestorEnv {
   meilisearchHost: string
@@ -108,43 +105,6 @@ function readLegalAuthoritiesIndexName() {
   return readIndexName('LEGAL_AUTHORITIES_INDEX', 'legal_authorities_fixtures')
 }
 
-function loadLocalDotEnv() {
-  if (localEnvLoaded || process.env.NODE_ENV === 'test' || process.env.VITEST) {
-    return
-  }
-
-  localEnvLoaded = true
-  let directory = process.cwd()
-
-  for (let depth = 0; depth < 5; depth += 1) {
-    const envPath = join(directory, '.env')
-
-    if (existsSync(envPath)) {
-      for (const rawLine of readFileSync(envPath, 'utf8').split(/\r?\n/)) {
-        const line = rawLine.trim()
-        if (!line || line.startsWith('#')) continue
-
-        const separatorIndex = line.indexOf('=')
-        if (separatorIndex <= 0) continue
-
-        const key = line.slice(0, separatorIndex).trim()
-        const value = line
-          .slice(separatorIndex + 1)
-          .trim()
-          .replace(/^["']|["']$/g, '')
-
-        process.env[key] ??= value
-      }
-
-      return
-    }
-
-    const parent = dirname(directory)
-    if (parent === directory) return
-    directory = parent
-  }
-}
-
 function readPositiveInteger(key: string, fallback: string) {
   const value = process.env[key] ?? fallback
   const parsed = Number(value)
@@ -157,7 +117,7 @@ function readPositiveInteger(key: string, fallback: string) {
 }
 
 export function readLegalIngestorEnv(): LegalIngestorEnv {
-  loadLocalDotEnv()
+  loadLocalEnvFile()
   const nodeEnv = readNodeEnv()
   requireProductionEnv(nodeEnv)
 
