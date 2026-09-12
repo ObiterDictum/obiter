@@ -21,9 +21,18 @@ const searchClientMock = vi.hoisted(() => ({
   search: vi.fn(),
 }))
 
+const legislationServeMock = vi.hoisted(() => ({
+  resolveLegislationFetch: vi.fn(),
+}))
+
 vi.mock('@obiter/search-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@obiter/search-client')>()),
   ...searchClientMock,
+}))
+
+vi.mock('../legislation-serve', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../legislation-serve')>()),
+  resolveLegislationFetch: legislationServeMock.resolveLegislationFetch,
 }))
 
 const env: ApiEnv = createTestApiEnv()
@@ -331,9 +340,41 @@ beforeEach(() => {
   searchClientMock.search.mockReset()
   searchClientMock.indexDocuments.mockReset()
   searchClientMock.getDocument.mockReset()
+  legislationServeMock.resolveLegislationFetch.mockReset()
 })
 
 describe('createLegalSearchProxyRoutes', () => {
+  it('keeps the judgment half when the legislation half rejects', async () => {
+    // The two corpora are federated so each fails independently. A rejection
+    // from the legislation half must not reject the Promise.all and lose the
+    // judgment results with it.
+    legislationServeMock.resolveLegislationFetch.mockRejectedValueOnce(
+      new Error('legislation half exploded'),
+    )
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [{ ...hit }],
+      query: 'Potanina',
+      estimatedTotalHits: 1,
+      processingTimeMs: 1,
+    })
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: { query: vi.fn(async () => ({ rows: [] })) } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'Potanina' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as { hits: Array<{ id: string }> }
+    expect(body.hits.map((entry) => entry.id)).toContain(hit.id)
+  })
+
   it('returns cached results without calling Find Case Law', async () => {
     searchClientMock.search.mockResolvedValueOnce({
       hits: [
@@ -1862,6 +1903,7 @@ describe('createLegalSearchProxyRoutes', () => {
       expect.objectContaining({
         search: expect.stringContaining('court=ewhc%2Fadmin'),
       }),
+      expect.objectContaining({ redirect: 'manual' }),
     )
   })
 
@@ -1945,6 +1987,7 @@ describe('createLegalSearchProxyRoutes', () => {
       expect.objectContaining({
         search: expect.stringContaining('court=ewhc%2Fadmin'),
       }),
+      expect.objectContaining({ redirect: 'manual' }),
     )
     await vi.waitFor(() =>
       expect(searchClientMock.indexDocuments).toHaveBeenCalledWith(
@@ -2005,6 +2048,7 @@ describe('createLegalSearchProxyRoutes', () => {
             `court=${encodeURIComponent(apiCourt)}`,
           ),
         }),
+        expect.objectContaining({ redirect: 'manual' }),
       )
       await vi.waitFor(() =>
         expect(searchClientMock.indexDocuments).toHaveBeenCalledWith(
@@ -2137,6 +2181,7 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
       expect.objectContaining({ search: expect.stringContaining('page=2') }),
+      expect.objectContaining({ redirect: 'manual' }),
     )
   })
 
@@ -2775,6 +2820,7 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(response.status).toBe(200)
     expect(fetchMock).toHaveBeenCalledWith(
       expect.objectContaining({ pathname: '/ewcop/t3/2026/23' }),
+      expect.objectContaining({ redirect: 'manual' }),
     )
     expect(await response.json()).toMatchObject({
       document: {
@@ -2831,6 +2877,7 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
       expect.objectContaining({ pathname: '/ukftt/grc/2026/754' }),
+      expect.objectContaining({ redirect: 'manual' }),
     )
     expect(await response.json()).toMatchObject({
       document: {

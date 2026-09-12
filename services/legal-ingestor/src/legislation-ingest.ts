@@ -1,5 +1,6 @@
 import { Pool } from 'pg'
 import { pathToFileURL } from 'node:url'
+import { resolveProviderUrl } from '@obiter/legal-source-provider'
 import {
   legislationBaseUrl,
   parseClmlDocument,
@@ -370,13 +371,20 @@ async function fetchPolitely(
   deps: LegislationIngestDeps,
   url: string,
 ): Promise<Response> {
+  // Every legislation URL reaching here can carry an upstream-supplied
+  // rel="next" href, and the feeds publish those as plaintext http on the same
+  // host. Resolve once, before any retry, so an off-origin link aborts
+  // instead of being retried, and so the request is never made in the clear.
+  const target = resolveProviderUrl(legislationBaseUrl, url)
+  if (!target) throw new Error(`refusing off-origin provider URL: ${url}`)
   let backoff = backoffBaseMs
   for (let attempt = 1; attempt <= maxAttemptsPerRequest; attempt += 1) {
     await politeSleep(deps)
     let response: Response
     try {
-      response = await deps.fetchImpl(url, {
+      response = await deps.fetchImpl(target, {
         headers: { 'User-Agent': ingestUserAgent },
+        redirect: 'manual',
       })
     } catch (error) {
       if (attempt === maxAttemptsPerRequest) throw error
@@ -411,9 +419,15 @@ async function fetchPolitely(
 export async function readCrawlDelaySeconds(
   fetchImpl: typeof fetch,
 ): Promise<number | null> {
+  const target = resolveProviderUrl(
+    legislationBaseUrl,
+    `${legislationBaseUrl}/robots.txt`,
+  )
+  if (!target) return null
   try {
-    const response = await fetchImpl(`${legislationBaseUrl}/robots.txt`, {
+    const response = await fetchImpl(target, {
       headers: { 'User-Agent': ingestUserAgent },
+      redirect: 'manual',
     })
     if (!response.ok) return null
     const body = await response.text()

@@ -276,6 +276,14 @@ describe('resolveLegislationFetch', () => {
     expect(result.citationRecognised).toBe(false)
   })
 
+  it('does not throw on a query naming an inherited Object property', async () => {
+    // The bare query `constructor` used to resolve through `actAliases` to
+    // `Object`, throw in normalizeActTitle, and reject the whole federation.
+    await expect(
+      resolveLegislationFetch(createDeps({}), 'constructor'),
+    ).resolves.toMatchObject({ citationRecognised: false, searched: true })
+  })
+
   it('fails open when the store is down', async () => {
     const result = await resolveLegislationFetch(
       createDeps({ actsError: true }),

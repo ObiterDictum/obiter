@@ -6,6 +6,8 @@ import {
   documentIdFromUri,
   fetchMojAuthorityDetail,
   parseFindCaseLawAtom,
+  providerDocumentUrl,
+  resolveProviderUrl,
   toFindCaseLawCourtParam,
   type AtomEntry,
   type FindCaseLawEnv,
@@ -124,6 +126,7 @@ export function createDeps(
   overrides?: Partial<Pick<IngestDeps, 'sleep' | 'fetchImpl' | 'fetchDetail'>>,
 ): IngestDeps {
   const limiter = createMojRateLimiter(rateLimit)
+  const fetchImpl = overrides?.fetchImpl ?? fetch
   const providerEnv: FindCaseLawEnv = {
     mojFindCaseLawBaseUrl: env.mojFindCaseLawBaseUrl,
   }
@@ -135,12 +138,13 @@ export function createDeps(
     sleep:
       overrides?.sleep ??
       ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
-    fetchImpl: overrides?.fetchImpl ?? fetch,
+    fetchImpl,
     fetchDetail:
       overrides?.fetchDetail ??
       ((entry) =>
         fetchMojAuthorityDetail(providerEnv, entry, limiter, {
           preferLegalDocMl: true,
+          fetchImpl,
         })),
   }
 }
@@ -180,10 +184,13 @@ export async function fetchAtomPage(
   for (let attempt = 1; attempt <= maxAttemptsPerItem; attempt += 1) {
     await takePolitely(deps)
     let response: Response
+    const pageUrl = resolveProviderUrl(
+      deps.baseUrl,
+      buildAtomPageUrl(deps.baseUrl, scope, page).toString(),
+    )
+    if (!pageUrl) return { error: `atom page ${page} resolved off-origin` }
     try {
-      response = await deps.fetchImpl(
-        buildAtomPageUrl(deps.baseUrl, scope, page),
-      )
+      response = await deps.fetchImpl(pageUrl, { redirect: 'manual' })
     } catch (error) {
       if (attempt === maxAttemptsPerItem)
         return {
@@ -216,7 +223,11 @@ function withProvenance(provider: ProviderSourceMetadata, baseUrl: string) {
     provider: licenceProvider,
     licenceClass,
     acquiredAt: new Date().toISOString(),
-    sourceUrl: new URL(provider.sourceUri, baseUrl).toString(),
+    sourceUrl: providerDocumentUrl(
+      baseUrl,
+      provider.sourceUri,
+      provider.documentUri,
+    ),
   }
 }
 
@@ -346,12 +357,28 @@ export async function ingestOne(
       )
       return { status: 'stored', documentId }
     }
-    // Skipped: PDF-only or unparsable. Stored as a summary so the rebuild
-    // still indexes it, but reported as skipped with the reason, never
-    // silently dropped. minimum_availability stays full-text.
-    const reason = !entry.xmlUri
-      ? 'no full-text XML upstream (PDF only)'
-      : 'judgment body unparsable from provider HTML/XML'
+    // Skipped: the provider said why. off_origin and http_error mean we asked
+    // for a body and did not receive one, so write nothing and let the next
+    // run retry; the failure counters show it rather than a benign skip.
+    // unparsable means the body arrived and cannot be read, which a retry
+    // cannot change.
+    if (result.reason !== 'unparsable') {
+      return {
+        status: 'failed',
+        documentId,
+        reason:
+          result.reason === 'off_origin'
+            ? 'provider document URI resolved off-origin'
+            : 'provider returned a non-OK body response',
+      }
+    }
+    // An unreadable body is not worth re-fetching, but the citation, name and
+    // date are. Store the summary so the judgment stays findable by those (the
+    // index deliberately carries summary-only rows) and stamp the hash so the
+    // next run skips it. The text is lost; the record is not. Stamping the
+    // upstream content hash, not a body hash, is what makes this safe: a
+    // corrected or re-issued judgment arrives with a new hash and is fetched
+    // again on that run.
     const summary = atomEntryToAuthoritySummary(
       { mojFindCaseLawBaseUrl: deps.baseUrl },
       entry,
@@ -374,7 +401,11 @@ export async function ingestOne(
       JSON.stringify(provider),
       provider,
     )
-    return { status: 'skipped-no-fulltext', documentId, reason }
+    return {
+      status: 'skipped-no-fulltext',
+      documentId,
+      reason: 'judgment body unparsable from provider HTML/XML',
+    }
   }
   return {
     status: 'failed',
