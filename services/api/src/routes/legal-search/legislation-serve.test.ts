@@ -109,6 +109,9 @@ describe('resolveLegislationFetch', () => {
     expect(hit?.text).toContain('Direct discrimination')
     expect(hit?.canonicalUrl).toBe('/ln/ukpga/2010/15/section/13')
     expect(hit?.year).toBe(2010)
+    // An exact provision answer never searches the index, so there are no
+    // keyword search parameters to report — and none are invented.
+    expect(result.keywordSearchParameters).toBe(null)
   })
 
   it('withholds text and links out for an amended provision', async () => {
@@ -222,6 +225,12 @@ describe('resolveLegislationFetch', () => {
     expect(result.citationRecognised).toBe(false)
     expect(result.groups[0]?.hits).toHaveLength(1)
     expect(result.groups[0]?.hits[0]?.labelPath).toBe('section/13')
+    // The parameters the engine was actually asked with, reported by the
+    // layer that asked, so a measuring caller never asserts its own.
+    expect(result.keywordSearchParameters).toEqual({
+      matchingStrategy: 'all',
+      rankingScoreThreshold: 0.35,
+    })
   })
 
   it('reports a recognised but unheld provision visibly', async () => {

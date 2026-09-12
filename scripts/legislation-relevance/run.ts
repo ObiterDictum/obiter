@@ -20,14 +20,16 @@
  * Point LEGISLATION_RELEVANCE_API_BASE at the API serving the checkout under
  * test. /api/health provenance is recorded in the report and printed to
  * stderr, because a suite run against a stale server reads as authoritative
- * and is not. It refuses to measure unless GET /api/search/readiness reports
- * the legislation index ready at the baseline document count, and it
- * re-checks every held id and every absent expectation against Postgres
- * first. Do not rebuild the index while it is running.
+ * and is not. The report records the search-time parameters the server reports
+ * applying, and the run refuses when the server reports none: matchingStrategy
+ * is request-time, so nothing else can reveal it and this checkout's constant
+ * would mislabel the run. It refuses to measure unless
+ * GET /api/search/readiness reports the legislation index ready at the baseline
+ * document count, and it re-checks every held id and every absent expectation
+ * against Postgres first. Do not rebuild the index while it is running.
  */
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
-import { legislationSearchIndexSettings } from '../../packages/search-client/src/legislation-index'
 import { legislationRelevanceBaseline } from './baseline'
 import { legislationRelevanceCases, legislationRelevanceTopK } from './cases'
 import {
@@ -112,7 +114,12 @@ async function main() {
     indexName,
   )
 
-  const results = await runCases(apiBase)
+  const { results, searchParameters } = await runCases(apiBase)
+  if (!searchParameters) {
+    throw new Error(
+      'The measured server reported no legislation search parameters (diagnostics.legislationSearchParameters). Refusing to record conditions this run never observed; point LEGISLATION_RELEVANCE_API_BASE at an API that reports them.',
+    )
+  }
   const readinessAfter = await readReadiness(apiBase)
   const indexAfter = assertReadyLegislationIndex(
     readinessAfter,
@@ -139,15 +146,15 @@ async function main() {
     index: index.index,
     indexDocumentCount: index.documentCount,
     topK: legislationRelevanceTopK,
-    // Search-time parameters are code, not index settings, so they are
-    // reported from this checkout's constants; the live index settings show
-    // what the server actually applied.
-    searchParameters: {
-      matchingStrategy: legislationSearchIndexSettings.matchingStrategy,
-      rankingScoreThreshold:
-        legislationSearchIndexSettings.rankingScoreThreshold,
-    },
-    indexSettings: legislationSearchIndexSettings,
+    // What the measured server reported applying, not this checkout's
+    // configured constants. matchingStrategy is request-time, so no index
+    // setting reveals it, and the server may be running a different checkout:
+    // an asserted constant would misstate a run against a pre-#184 server as
+    // having used 'all'.
+    searchParameters,
+    // What the shared index actually has. Fetched from Meilisearch, so it is
+    // observed rather than declared, but it is index-time only — it cannot
+    // reveal the request-time parameters above.
     liveIndexSettings,
     metrics,
     metricsByCategory: metricsByCategory(results),

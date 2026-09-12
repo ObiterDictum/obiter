@@ -177,6 +177,50 @@ describe('legislation provision index', () => {
     expect(queries[0]?.options.limit).toBe(5)
   })
 
+  it('reports the search-time parameters it actually sent', async () => {
+    // A caller measuring relevance records these instead of its own
+    // configured constants: the server that answered may be running a
+    // different checkout, and matchingStrategy is request-time, so no index
+    // setting reveals it.
+    const queries: Array<Record<string, unknown>> = []
+    const client = {
+      index: () => ({
+        search: async (_query: string, options: Record<string, unknown>) => {
+          queries.push(options)
+          return {
+            hits: [],
+            query: '',
+            estimatedTotalHits: 0,
+            processingTimeMs: 0,
+          }
+        },
+      }),
+    }
+    const applied = await searchLegislation(
+      client as unknown as Parameters<typeof searchLegislation>[0],
+      'legislation_provisions',
+      'ground rent',
+    )
+    expect(applied.appliedSearchParameters).toEqual({
+      matchingStrategy: 'all',
+      rankingScoreThreshold: 0.35,
+    })
+    expect(queries[0]?.rankingScoreThreshold).toBe(0.35)
+
+    // An empty query sends no floor, and the report says so rather than
+    // repeating the configured value.
+    const bare = await searchLegislation(
+      client as unknown as Parameters<typeof searchLegislation>[0],
+      'legislation_provisions',
+      '',
+    )
+    expect(bare.appliedSearchParameters).toEqual({
+      matchingStrategy: 'all',
+      rankingScoreThreshold: null,
+    })
+    expect(queries[1]).not.toHaveProperty('rankingScoreThreshold')
+  })
+
   it('drops index rows that fail validation instead of serving them', async () => {
     const client = {
       index: () => ({

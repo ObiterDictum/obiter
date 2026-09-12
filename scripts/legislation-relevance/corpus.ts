@@ -30,10 +30,21 @@ export interface ServedLegislationHit {
   title: string
 }
 
+/**
+ * Search-time parameters the measured server reported applying. These are
+ * request-time values, so no index setting reveals them: the only honest
+ * source is the server that sent them.
+ */
+export interface ObservedSearchParameters {
+  matchingStrategy: string
+  rankingScoreThreshold: number | null
+}
+
 export interface ServedLegislationResult {
   hits: ServedLegislationHit[]
   outcome: string | null
   legislationNote: string | null
+  searchParameters: ObservedSearchParameters | null
 }
 
 export interface ApiProvenance {
@@ -237,6 +248,24 @@ export async function readLiveIndexSettings(
   return toLiveIndexSettings(await response.json())
 }
 
+export function readAppliedSearchParameters(
+  value: unknown,
+): ObservedSearchParameters | null {
+  if (!isRecord(value)) return null
+  const matchingStrategy = readString(value.matchingStrategy)
+  if (!matchingStrategy) return null
+  if (!('rankingScoreThreshold' in value)) return null
+  const rawThreshold = value.rankingScoreThreshold
+  let rankingScoreThreshold: number | null
+  if (rawThreshold === null) rankingScoreThreshold = null
+  else if (typeof rawThreshold === 'number' && Number.isFinite(rawThreshold)) {
+    rankingScoreThreshold = rawThreshold
+  } else {
+    return null
+  }
+  return { matchingStrategy, rankingScoreThreshold }
+}
+
 /**
  * Sends one query through the served path and reads the legislation group
  * only. Judgment hits share the response and are none of this suite's
@@ -294,6 +323,11 @@ export async function fetchLegislationSearch(
     hits,
     outcome: readString(body.outcome),
     legislationNote: readString(diagnostics?.legislationNote),
+    // Only what the server reported. The suite's own constants are not
+    // evidence: the server may be running a different checkout.
+    searchParameters: readAppliedSearchParameters(
+      diagnostics?.legislationSearchParameters,
+    ),
   }
 }
 
@@ -422,29 +456,64 @@ async function absentViolation(
   }
 }
 
-export async function runCases(apiBase: string): Promise<CaseResult[]> {
+export interface LegislationRunOutcome {
+  results: CaseResult[]
+  /**
+   * The parameters the measured server reported applying, null when it
+   * reported none. Null is not silently recorded as a configuration: run.ts
+   * refuses to write a report without it.
+   */
+  searchParameters: ObservedSearchParameters | null
+}
+
+export async function runCases(
+  apiBase: string,
+): Promise<LegislationRunOutcome> {
   const results: CaseResult[] = []
+  const observed = new Map<string, ObservedSearchParameters>()
   for (const testCase of legislationRelevanceCases) {
-    results.push(await runOneCase(apiBase, testCase))
+    const outcome = await runOneCase(apiBase, testCase)
+    results.push(outcome.result)
+    if (outcome.searchParameters) {
+      observed.set(
+        JSON.stringify(outcome.searchParameters),
+        outcome.searchParameters,
+      )
+    }
   }
-  return results
+  if (observed.size > 1) {
+    const conflicts = [...observed.keys()].join(' vs ')
+    throw new Error(
+      `The measured server reported different legislation search parameters across queries (${conflicts}). Refusing to record conditions that moved during the run.`,
+    )
+  }
+  return { results, searchParameters: [...observed.values()][0] ?? null }
 }
 
 async function runOneCase(
   apiBase: string,
   testCase: (typeof legislationRelevanceCases)[number],
-): Promise<CaseResult> {
+): Promise<{
+  result: CaseResult
+  searchParameters: ObservedSearchParameters | null
+}> {
   try {
     const body = await fetchLegislationSearch(apiBase, testCase.query)
     const returnedIds = body.hits.map((hit) => canonicalLegislationId(hit))
-    return scoreCase(testCase, returnedIds, {
-      outcome: body.outcome,
-      legislationNote: body.legislationNote,
-    })
+    return {
+      result: scoreCase(testCase, returnedIds, {
+        outcome: body.outcome,
+        legislationNote: body.legislationNote,
+      }),
+      searchParameters: body.searchParameters,
+    }
   } catch (error) {
-    return scoreCase(testCase, [], {
-      searchErrorMessage:
-        error instanceof Error ? error.message : String(error),
-    })
+    return {
+      result: scoreCase(testCase, [], {
+        searchErrorMessage:
+          error instanceof Error ? error.message : String(error),
+      }),
+      searchParameters: null,
+    }
   }
 }

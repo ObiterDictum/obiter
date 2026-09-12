@@ -227,7 +227,11 @@ const subjectHeld = held('subject_matter', 'subject', [
   ],
   // Spans the Leasehold Reform (Ground Rent) Act 2022 and the Leasehold and
   // Freehold Reform Act 2024. Sections 1 and 3 of the 2022 Act define the
-  // regulated lease and prohibit the prohibited rent.
+  // regulated lease and prohibit the prohibited rent. Neither provision's
+  // text contains the word "ground": under matchingStrategy 'all' this case
+  // can never score above zero. It is a structural zero, not a ranking zero,
+  // and it is the cleanest exhibit for the recall cost of term-exact
+  // matching.
   [
     'subject-ground-rent',
     'ground rent',

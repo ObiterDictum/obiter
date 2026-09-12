@@ -147,6 +147,12 @@ at the baseline document count, then re-checks every held id and every absent
 expectation against Postgres, and fails if the count moves during the run. Do
 not rebuild the index while it is running.
 
+The report records the search-time parameters the measured server reports
+applying (`diagnostics.legislationSearchParameters`), and the run refuses when
+the server states none. `matchingStrategy` is a request-time parameter, so no
+index setting reveals it: reporting the local constant would mislabel a run
+against a server on a different checkout.
+
 `heldPrecision` covers complete-answer (exact) queries only — Act titles,
 chapter numbers, section and schedule lookups. Subject-matter cases list a
 verified lower bound on the relevant set and score recall and MRR, not
