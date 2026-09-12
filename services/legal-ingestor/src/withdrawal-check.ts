@@ -4,6 +4,7 @@ import { pathToFileURL } from 'node:url'
 import {
   createMojRateLimiter,
   readWithdrawalCandidate,
+  resolveProviderUrl,
   type MojRateLimiter,
   type WithdrawalCandidate,
   type WithdrawnInfo,
@@ -254,13 +255,8 @@ async function checkUri(
   // SSRF guard: a stored absolute URI could point anywhere, so resolve and
   // fetch only when the row stays on the provider origin. Off-origin rows
   // are inconclusive without a single byte fetched.
-  let target: URL
-  try {
-    target = new URL(uri, deps.baseUrl)
-    if (target.origin !== new URL(deps.baseUrl).origin) return failed(null)
-  } catch {
-    return failed(null)
-  }
+  const target = resolveProviderUrl(deps.baseUrl, uri)
+  if (!target) return failed(null)
   await takePolitely(deps)
   let response: Response
   try {

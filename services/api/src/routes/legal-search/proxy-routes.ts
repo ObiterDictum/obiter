@@ -93,6 +93,27 @@ const storedIndexRerankPoolLimit = 100
 /** Stored-index hits served per query; the suite measures the top 20. */
 const servedStoredHitsLimit = 20
 
+/**
+ * A rejection in one search half must not reject the other. The judgment and
+ * legislation corpora are federated precisely so each fails independently; an
+ * unhandled rejection from either half used to lose both and 500 the request.
+ * The failure is logged, not swallowed, and the half contributes no result.
+ */
+function settleSearchHalf<T>(
+  promise: Promise<T>,
+  requestId: string,
+  half: string,
+): Promise<T | null> {
+  return promise.catch((error: unknown) => {
+    console.error('Legal search half failed', {
+      requestId,
+      half,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return null
+  })
+}
+
 export function createLegalSearchProxyRoutes(
   env: ApiEnv,
   legalAuthorityStore: LegalAuthoritySourceStore = createInMemoryLegalAuthoritySourceStore(),
@@ -190,10 +211,14 @@ export function createLegalSearchProxyRoutes(
           )
         : Promise.resolve(null)
     // Overlap the two halves: neither holds the other open beyond its own
-    // 2s fail-open bounds.
+    // 2s fail-open bounds, and one half's failure cannot take the other down.
     const [exactStoredAuthority, legislation] = await Promise.all([
-      exactStoredAuthorityPromise,
-      legislationPromise,
+      settleSearchHalf(
+        exactStoredAuthorityPromise,
+        requestId,
+        'judgment_exact',
+      ),
+      settleSearchHalf(legislationPromise, requestId, 'legislation'),
     ])
 
     // Meilisearch is the sole query engine: without it there is nothing to

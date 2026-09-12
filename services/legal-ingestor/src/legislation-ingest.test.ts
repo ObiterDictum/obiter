@@ -333,6 +333,32 @@ describe('ingestYear with mocked fetch', () => {
     expect(dataXmlFetches).toHaveLength(5)
   })
 
+  it('refuses an off-origin rel="next" instead of fetching it', async () => {
+    const pool = createMockPool()
+    const fetched: string[] = []
+    const fetchImpl = (async (url: unknown) => {
+      const href = String(url)
+      fetched.push(href)
+      if (href === 'https://www.legislation.gov.uk/ukpga/2020/data.feed') {
+        return xmlResponse(feed([1], 'http://169.254.169.254/evil'))
+      }
+      throw new Error(`should not fetch ${href}`)
+    }) as unknown as typeof fetch
+    const deps = {
+      pool,
+      gapMs: 0,
+      skipEffects: true,
+      forceReparse: false,
+      sleep: async () => {},
+      fetchImpl,
+    }
+
+    await expect(ingestYear(deps, 2020)).rejects.toThrow(/off-origin/)
+    expect(fetched).toEqual([
+      'https://www.legislation.gov.uk/ukpga/2020/data.feed',
+    ])
+  })
+
   it('re-derives the count note when content is unchanged', async () => {
     // Act 7 is already stored with this exact body (hash match) but
     // carries a stale loud note from the old check. The re-ingest must
