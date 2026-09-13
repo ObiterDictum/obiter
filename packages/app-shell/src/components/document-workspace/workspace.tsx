@@ -22,15 +22,29 @@ import {
 } from './workspace-chrome'
 import type { DocumentWorkspaceLayout } from './workspace-chrome'
 
-export function DocumentWorkspace({
-  documentId,
-  version,
-  layout = 'page',
-}: {
+type DocumentWorkspaceProps = {
   documentId: string
   version: DocumentVersionRecord | null | undefined
   layout?: DocumentWorkspaceLayout
-}) {
+}
+
+/**
+ * The document is the workspace lifecycle boundary: keying the body on
+ * documentId remounts it on a switch, so no unsaved draft, pending insert,
+ * selection or caret from document A can render, mutate, save or hold focus in
+ * document B. Same-document rerenders keep their key and state. Switching is
+ * prompt-free and drafts are not persisted per document, so a switch discards
+ * A's unsaved edits rather than restoring them on return.
+ */
+export function DocumentWorkspace(props: DocumentWorkspaceProps) {
+  return <DocumentWorkspaceBody key={props.documentId} {...props} />
+}
+
+function DocumentWorkspaceBody({
+  documentId,
+  version,
+  layout = 'page',
+}: DocumentWorkspaceProps) {
   const kind = workspaceKind(version?.fileType)
   const ready = version?.documentStatus === 'ready'
 
