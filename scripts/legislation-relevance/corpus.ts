@@ -46,12 +46,35 @@ export interface ServedLegislationResult {
   legislationNote: string | null
   legislationNotHeld: boolean
   legislationTitleUnresolved: boolean
+  legislationAmbiguous: boolean
   searchParameters: ObservedSearchParameters | null
 }
 
 export interface ApiProvenance {
   checkoutRoot: string | null
   commitSha: string | null
+}
+
+/**
+ * The checkout that executes the benchmark, as distinct from the API it
+ * measures. The two can be different commits, and a report that records only
+ * one of them reads as authoritative for code the other never ran.
+ */
+export interface RunnerProvenance {
+  checkoutRoot: string | null
+  commitSha: string | null
+}
+
+/**
+ * The provenance block written to the report. Every SHA is named by owner:
+ * there is deliberately no ownerless `commitSha`, because a reader cannot tell
+ * which of the two identities an unqualified field would describe.
+ */
+export interface ReportProvenance {
+  runnerCheckoutRoot: string | null
+  runnerCommitSha: string | null
+  apiCheckoutRoot: string | null
+  apiCommitSha: string | null
 }
 
 export function defaultApiBase() {
@@ -176,6 +199,69 @@ export async function readApiProvenance(
     }
   } catch {
     return { checkoutRoot: null, commitSha: null }
+  }
+}
+
+/**
+ * The runner's own commit, read from the checkout that is executing the suite.
+ * Resolve it once at the command boundary, never per case: it cannot change
+ * during a run, and re-reading git 77 times would only add ways to fail.
+ *
+ * Nulls mean the identity could not be established (no git metadata); they are
+ * never filled in from the measured API, which would attribute the runner's
+ * behaviour to a server that did not run it.
+ */
+export async function readRunnerProvenance(
+  cwd: string = process.cwd(),
+): Promise<RunnerProvenance> {
+  try {
+    const { stdout: checkoutRoot } = await execFileAsync(
+      'git',
+      ['rev-parse', '--show-toplevel'],
+      { cwd, encoding: 'utf8' },
+    )
+    const { stdout: commitSha } = await execFileAsync(
+      'git',
+      ['rev-parse', 'HEAD'],
+      { cwd, encoding: 'utf8' },
+    )
+    return {
+      checkoutRoot: checkoutRoot.trim() || null,
+      commitSha: commitSha.trim() || null,
+    }
+  } catch {
+    return { checkoutRoot: null, commitSha: null }
+  }
+}
+
+/**
+ * Fail before measuring when the runner identity is unavailable. A report with
+ * a null `runnerCommitSha` and a populated `apiCommitSha` would look complete
+ * while silently attributing the run to the server's checkout, so run.ts
+ * refuses instead of writing one.
+ */
+export function assertRunnerProvenance(provenance: RunnerProvenance) {
+  if (!provenance.commitSha) {
+    throw new Error(
+      'Cannot establish the benchmark runner commit (git rev-parse HEAD in the runner checkout). Refusing to record a report whose runner provenance would be indistinguishable from the measured API; run the suite from a source checkout with git metadata.',
+    )
+  }
+}
+
+/**
+ * Join the two identities into the report block. The mapping is pure so the
+ * report shape is pinned by a test rather than by the run that happens to
+ * write it.
+ */
+export function legislationReportProvenance(
+  runner: RunnerProvenance,
+  api: ApiProvenance,
+): ReportProvenance {
+  return {
+    runnerCheckoutRoot: runner.checkoutRoot,
+    runnerCommitSha: runner.commitSha,
+    apiCheckoutRoot: api.checkoutRoot,
+    apiCommitSha: api.commitSha,
   }
 }
 
@@ -328,6 +414,7 @@ export async function fetchLegislationSearch(
     legislationNotHeld: diagnostics?.legislationNotHeld === true,
     legislationTitleUnresolved:
       diagnostics?.legislationTitleUnresolved === true,
+    legislationAmbiguous: diagnostics?.legislationAmbiguous === true,
     // Only what the server reported. The suite's own constants are not
     // evidence: the server may be running a different checkout.
     searchParameters: readAppliedSearchParameters(
@@ -511,6 +598,7 @@ async function runOneCase(
         legislationNote: body.legislationNote,
         legislationNotHeld: body.legislationNotHeld,
         legislationTitleUnresolved: body.legislationTitleUnresolved,
+        legislationAmbiguous: body.legislationAmbiguous,
       }),
       searchParameters: body.searchParameters,
     }

@@ -143,8 +143,11 @@ five-term subject query needing every term inside one provision behaves
 nothing like the same query against judgment prose.
 
 Point `LEGISLATION_RELEVANCE_API_BASE` at the API serving the checkout under
-test; the run records `/api/health` provenance and prints it. It refuses to
-measure unless `GET /api/search/readiness` reports the legislation index ready
+test; the run records two provenance identities and prints both: the runner
+checkout's own commit, and the measured API's `/api/health` provenance. They
+can differ, and the report names each by owner (`runnerCommitSha` /
+`apiCommitSha`) rather than one ambiguous field. It refuses to measure unless
+`GET /api/search/readiness` reports the legislation index ready
 at the baseline document count, then re-checks every held id and every absent
 expectation against Postgres, and fails if the count moves during the run. Do
 not rebuild the index while it is running.
