@@ -450,6 +450,40 @@ const absentAct = absent('absent_act', [
         'Worker Protection (Amendment of Equality Act 2010 and Human Rights Act 1998) Act 1999',
     },
   ],
+  // Fail-first on the attached-opener defect. `(Equality` is one raw token, so
+  // the token-boundary depth test read the held run as an unbracketed separate
+  // mention and served provisions of an unrelated Act; `[Equality` and
+  // `{Equality` behaved the same way. Each must now suppress with no hits, and
+  // the spaced twins must classify identically.
+  [
+    'absent-act-amendment-of-equality-2010-attached',
+    'Amendment of (Equality Act 2010) Act 2020',
+    {
+      kind: 'act_not_held',
+      title: 'Amendment of (Equality Act 2010) Act 2020',
+    },
+  ],
+  [
+    'absent-act-amendment-of-equality-2010-spaced',
+    'Amendment of ( Equality Act 2010 ) Act 2020',
+    {
+      kind: 'act_not_held',
+      title: 'Amendment of ( Equality Act 2010 ) Act 2020',
+    },
+  ],
+  [
+    'absent-act-bracket-attached-equality-2010',
+    'X [Equality Act 2010] Act 2020',
+    { kind: 'act_not_held', title: 'X [Equality Act 2010] Act 2020' },
+  ],
+  [
+    'absent-act-bracket-attached-human-rights-1998',
+    'Changes (Human Rights Act 1998) Act 2020',
+    {
+      kind: 'act_not_held',
+      title: 'Changes (Human Rights Act 1998) Act 2020',
+    },
+  ],
   [
     'absent-act-children-1989-as-amended',
     'Children Act 1989, as amended',

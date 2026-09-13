@@ -292,6 +292,40 @@ describe('resolveLegislationFetch', () => {
     expect(result.keywordSearchParameters).toBe(null)
   })
 
+  it('suppresses an attached-opener bracketed held title with zero hits', async () => {
+    // `Amendment of (Equality Act 2010) Act 2020` is a standalone outer title
+    // with a held Act inside an attached bracket pair. The opener rides the
+    // first run token, so the token-boundary depth test read the run as an
+    // unbracketed separate mention and served provisions of an unrelated Act.
+    // The keyword hits are supplied so the test proves they are withheld, and
+    // the bracket families are exercised together.
+    const neighbour = {
+      ...currentProvision,
+      id: 'ukpga/2022/32/section/166',
+      documentIdentity: 'ukpga/2022/32',
+      labelPath: 'section/166',
+      title: 'Police, Crime, Sentencing and Courts Act 2022',
+      text: 'A provision of an unrelated Act that must never serve.',
+    }
+    for (const query of [
+      'Amendment of (Equality Act 2010) Act 2020',
+      'Amendment of ( Equality Act 2010 ) Act 2020',
+      'X [Equality Act 2010] Act 2020',
+      'X {Equality Act 2010} Act 2020',
+      'X { Equality Act 2010 } Act 2020',
+    ]) {
+      const result = await resolveLegislationFetch(
+        createDeps({ keywordHits: [neighbour] }),
+        query,
+      )
+      expect(result.citationRecognised).toBe(true)
+      expect(result.titleUnresolved).toBe(true)
+      expect(result.recognisedNotHeld).toBe(false)
+      expect(result.groups).toEqual([])
+      expect(result.keywordSearchParameters).toBe(null)
+    }
+  })
+
   it('serves keyword provisions for prose about an unheld Act, in both casings', async () => {
     // L35: the sentence-initial form must reach the same keyword path as its
     // lowercase twin. Before the repair the capitalised form short-circuited

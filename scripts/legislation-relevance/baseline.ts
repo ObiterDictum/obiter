@@ -27,7 +27,7 @@ import type { LegislationRelevanceBaseline } from './metrics'
 // clauses (L35), so casing-led routing fails here rather than shipping.
 
 export const legislationRelevanceBaseline: LegislationRelevanceBaseline = {
-  expectedCaseCount: 85,
+  expectedCaseCount: 89,
   expectedIndexDocumentCount: 184772,
   heldRecall: 0.8854,
   heldPrecision: 1,
@@ -346,6 +346,26 @@ export const legislationRelevanceBaseline: LegislationRelevanceBaseline = {
       returnedHitCount: 0,
     },
     'absent-act-worker-protection-nested-multiple': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 0,
+    },
+    'absent-act-amendment-of-equality-2010-attached': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 0,
+    },
+    'absent-act-amendment-of-equality-2010-spaced': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 0,
+    },
+    'absent-act-bracket-attached-equality-2010': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 0,
+    },
+    'absent-act-bracket-attached-human-rights-1998': {
       recall: null,
       ranks: [],
       returnedHitCount: 0,

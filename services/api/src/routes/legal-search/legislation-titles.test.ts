@@ -490,3 +490,129 @@ describe('terminal ", as amended" qualifier (finding 4)', () => {
     })
   })
 })
+
+// The attached-opener defect: a held title whose first token carries the
+// opening bracket read as an unbracketed separate mention, so the query
+// reached the keyword path and served provisions of an unrelated Act while
+// the whitespace-separated form suppressed. The directory below is the
+// minimum that holds the two Acts the regression queries embed.
+describe('bracketed contained runs: attached and spaced delimiters (finding 5)', () => {
+  it.each([
+    [
+      'Amendment of (Equality Act 2010) Act 2020',
+      'Amendment of ( Equality Act 2010 ) Act 2020',
+    ],
+    [
+      'Changes (Human Rights Act 1998) Act 2020',
+      'Changes ( Human Rights Act 1998 ) Act 2020',
+    ],
+    ['X [Equality Act 2010] Act 2020', 'X [ Equality Act 2010 ] Act 2020'],
+    ['X {Equality Act 2010} Act 2020', 'X { Equality Act 2010 } Act 2020'],
+    ['X [Equality Act 2010 ] Act 2020', 'X [ Equality Act 2010] Act 2020'],
+    ['X ((Equality Act 2010)) Act 2020', 'X (( Equality Act 2010 )) Act 2020'],
+  ])(
+    'suppresses the attached and spaced forms of %s identically',
+    (attached, spaced) => {
+      // A space inside the bracket must not decide the routing. Before the
+      // fix `depthBefore` was read at the raw token boundary, so only the
+      // spaced form reached `unresolved_title`.
+      expect(classifyLegislationCitation(attached, teachesOfAndThe)).toEqual({
+        kind: 'unresolved_title',
+        recognisedQuery: attached,
+      })
+      expect(classifyLegislationCitation(spaced, teachesOfAndThe)).toEqual({
+        kind: 'unresolved_title',
+        recognisedQuery: spaced,
+      })
+    },
+  )
+
+  it('never turns the attached-opener form into an authoritative not-held', () => {
+    // The suppression must stay a suppression. It may not claim the Act is
+    // absent, because the local directory is partial.
+    const outcome = classifyLegislationCitation(
+      'Amendment of (Equality Act 2010) Act 2020',
+      teachesOfAndThe,
+    )
+    expect(outcome.kind).toBe('unresolved_title')
+    expect(
+      classifyLegislationCitation('Children Act 1989', teachesOfAndThe),
+    ).toEqual({
+      kind: 'unresolved_title',
+      recognisedQuery: 'Children Act 1989',
+    })
+  })
+
+  it.each([
+    'X ((Equality Act 2010)) Act 2020',
+    'X [[Equality Act 2010]] Act 2020',
+    'X {{Equality Act 2010}} Act 2020',
+    'X ([Equality Act 2010]) Act 2020',
+    'X [{Equality Act 2010}] Act 2020',
+  ])('suppresses the nested bracketed form %s', (query) => {
+    expect(classifyLegislationCitation(query, teachesOfAndThe)).toEqual({
+      kind: 'unresolved_title',
+      recognisedQuery: query,
+    })
+  })
+
+  it.each([
+    'X (Equality Act 2010) (Human Rights Act 1998) Act 2020',
+    'X (Equality Act 2010) [Human Rights Act 1998] Act 2020',
+    'X {Equality Act 2010} (Human Rights Act 1998) Act 2020',
+  ])('suppresses the multiple bracketed held-title runs in %s', (query) => {
+    expect(classifyLegislationCitation(query, teachesOfAndThe)).toEqual({
+      kind: 'unresolved_title',
+      recognisedQuery: query,
+    })
+  })
+
+  it.each([
+    // Balanced, but the opener sits after the title text in its own token, so
+    // it must not retroactively bracket the run.
+    'X Equality(Act 2010) Act 2020',
+    'X Equality[Act 2010] Act 2020',
+    // Balanced, but the closer precedes the title text: the earlier group does
+    // not surround the run.
+    'X (A) Equality Act 2010 Act 2020',
+  ])('leaves %s on the keyword path: no opener surrounds the run', (query) => {
+    expect(classifyLegislationCitation(query, teachesOfAndThe)).toEqual({
+      kind: 'unrecognised',
+    })
+  })
+
+  it.each([
+    // Mismatched families and unbalanced delimiters are malformed, so they
+    // fail conservatively: no unrelated provision may be served.
+    'X (Equality Act 2010] Act 2020',
+    'X [Equality Act 2010) Act 2020',
+    'X {Equality Act 2010] Act 2020',
+    'X (Equality Act 2010 Act 2020',
+    'X [Equality Act 2010 Act 2020',
+    'X {Equality Act 2010 Act 2020',
+    'X Equality Act 2010) Act 2020',
+    'X Equality Act 2010] Act 2020',
+  ])('suppresses the malformed bracket form %s', (query) => {
+    expect(classifyLegislationCitation(query, teachesOfAndThe)).toEqual({
+      kind: 'unresolved_title',
+      recognisedQuery: query,
+    })
+  })
+
+  it.each([
+    // Bracketed, but the outer words are not a title phrase, so the held-title
+    // mention is prose evidence and the query stays searchable.
+    'duties under (Equality Act 2010) Act 2020',
+    'Duties under (equality act 2010) Act 2020',
+    // The sub-word shares a raw token with the opener. Removing the whole
+    // token on partial coverage would discard `under` and read the remainder
+    // as a title phrase; the token is kept, so the prose stays searchable.
+    'Duties under(equality act 2010) Act 2020',
+    'the Equality Act 2010 and the Human Rights Act 1998',
+    'Defences under Equality Act 2010',
+  ])('keeps genuine prose on the keyword path: %s', (query) => {
+    expect(classifyLegislationCitation(query, teachesOfAndThe)).toEqual({
+      kind: 'unrecognised',
+    })
+  })
+})

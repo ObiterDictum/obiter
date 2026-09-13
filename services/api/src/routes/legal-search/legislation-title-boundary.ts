@@ -24,7 +24,38 @@ const terminalStatusAnnotation = /\s*\(repealed\)\s*$/i
 const titleFillerTokens = new Set(['etc'])
 
 /**
- * The fold applied to both a typed Act title and every stored title.
+ * Punctuation that ends a title piece. Brackets belong here with the rest:
+ * parentheses, square brackets and curly brackets are all presentation around
+ * a run, never a name, so the three fold the same way. A hyphen becomes a
+ * separator and is handled beside them.
+ */
+const titleSeparatorCharacters = new Set([
+  '.',
+  ',',
+  ';',
+  ':',
+  '"',
+  '(',
+  ')',
+  '[',
+  ']',
+  '{',
+  '}',
+  '-',
+])
+
+/** A surviving piece of the fold, with the span it occupied in the input. */
+export interface FoldedTitlePiece {
+  value: string
+  /** Character index in the input where the surviving text starts. */
+  start: number
+  /** Character index just after the surviving text. */
+  end: number
+}
+
+/**
+ * The fold applied to both a typed Act title and every stored title, piece by
+ * piece and carrying each surviving piece's character span.
  *
  * NFKC plus the shared quote/dash map (`exactMatchPunctuationFolds`, the same
  * fold neutral-citation matching uses), then case, punctuation and whitespace
@@ -41,23 +72,155 @@ const titleFillerTokens = new Set(['etc'])
  * - `&` folds to `and`, a hyphen becomes a space, and the filler token `etc`
  *   is dropped, so the surface forms of a title converge. A hyphen deleted
  *   entirely is left to the relaxed key below.
+ *
+ * The spans exist for the bracket boundary: the fold turns a bracket into a
+ * separator, so the text of `(Equality` starts *after* the `(`. A caller that
+ * asks where a piece sits in the input can see the opener that a rule reading
+ * only raw token boundaries misses, and can tell an opener that precedes the
+ * title text from one that follows it in the same token. Keeping the spans in
+ * the one fold stops them drifting from the text the matcher folds.
+ */
+export function foldTitlePieces(value: string): FoldedTitlePiece[] {
+  const source = value.normalize('NFKC')
+  // The status annotation is terminal on the string handed in, so cutting it
+  // first leaves every earlier character's offset unchanged.
+  const status = terminalStatusAnnotation.exec(source)
+  const text = status ? source.slice(0, status.index) : source
+  const characters: Array<{ character: string; offset: number }> = []
+  for (let index = 0; index < text.length; index += 1) {
+    let character = text[index]!
+    for (const [from, to] of exactMatchPunctuationFolds) {
+      character = character.replaceAll(from, to)
+    }
+    character = character.toLowerCase()
+    if (character === '&') {
+      for (const replacement of ' and ') {
+        characters.push({ character: replacement, offset: index })
+      }
+      continue
+    }
+    if (character === "'") continue
+    if (/\s/.test(character) || titleSeparatorCharacters.has(character)) {
+      characters.push({ character: ' ', offset: index })
+      continue
+    }
+    characters.push({ character, offset: index })
+  }
+  const pieces: FoldedTitlePiece[] = []
+  let current: FoldedTitlePiece | null = null
+  for (const { character, offset } of characters) {
+    if (character === ' ') {
+      if (current) pieces.push(current)
+      current = null
+      continue
+    }
+    if (!current) current = { value: '', start: offset, end: offset + 1 }
+    current.value += character
+    current.end = offset + 1
+  }
+  if (current) pieces.push(current)
+  return pieces.filter(
+    (piece) => piece.value.length > 0 && !titleFillerTokens.has(piece.value),
+  )
+}
+
+/**
+ * The fold as text: the surviving pieces joined by a single space. Defined
+ * from `foldTitlePieces` so the matcher and the span-aware bracket boundary
+ * can never fold the same input two ways.
  */
 export function normalizeActTitle(value: string): string {
-  const punctuationFolded = exactMatchPunctuationFolds.reduce(
-    (normalized, [from, to]) => normalized.replaceAll(from, to),
-    value.normalize('NFKC'),
-  )
-  return punctuationFolded
-    .toLowerCase()
-    .replace(terminalStatusAnnotation, ' ')
-    .replace(/&/g, ' and ')
-    .replace(/['\u2019]/g, '')
-    .replace(/[.,;:"()[\]]/g, ' ')
-    .replace(/-/g, ' ')
-    .split(/\s+/)
-    .filter((token) => token.length > 0 && !titleFillerTokens.has(token))
+  return foldTitlePieces(value)
+    .map((piece) => piece.value)
     .join(' ')
-    .trim()
+}
+
+/** A folded piece of a whole query, attributed to its raw token and span. */
+export interface FoldQueryPiece {
+  value: string
+  /** Index of the whitespace-separated raw token the piece came from. */
+  rawIndex: number
+  /** Character index in the query where the surviving text starts. */
+  start: number
+  /** Character index just after the surviving text. */
+  end: number
+}
+
+/**
+ * Fold a whole query into pieces, each attributed to the raw token it came
+ * from and carrying its character span. The input must already be
+ * NFKC-normalised: the spans index that string.
+ */
+export function foldQueryPieces(value: string): FoldQueryPiece[] {
+  const pieces: FoldQueryPiece[] = []
+  let rawIndex = 0
+  for (const match of value.matchAll(/\S+/g)) {
+    const text = match[0]
+    const offset = match.index ?? 0
+    for (const piece of foldTitlePieces(text)) {
+      pieces.push({
+        value: piece.value,
+        rawIndex,
+        start: offset + piece.start,
+        end: offset + piece.end,
+      })
+    }
+    rawIndex += 1
+  }
+  return pieces
+}
+
+/**
+ * Parentheses, square brackets and curly brackets pair within their own
+ * family. The depth count is shared, so an unmatched opener still reads as
+ * open and the classification errs toward suppression.
+ */
+const openingToClosing: ReadonlyMap<string, string> = new Map([
+  ['(', ')'],
+  ['[', ']'],
+  ['{', '}'],
+])
+const closingToOpening: ReadonlyMap<string, string> = new Map(
+  [...openingToClosing].map(([opening, closing]) => [closing, opening]),
+)
+
+export interface BracketStructure {
+  /** Unmatched-opener count immediately before each character of the input. */
+  depthBefore: number[]
+  /** False when a bracket is unmatched or pairs with the wrong family. */
+  balanced: boolean
+}
+
+/**
+ * Read the bracket structure of `value`. The three families are
+ * interchangeable for depth but pair only within their own family, so
+ * parentheses, square brackets and curly brackets follow one rule.
+ *
+ * `balanced` is the conservative signal: an unmatched or mismatched bracket
+ * marks the whole query malformed, and a malformed query suppresses rather
+ * than keyword-serving provisions of an unrelated Act.
+ */
+export function readBracketStructure(value: string): BracketStructure {
+  const depthBefore = Array.from({ length: value.length + 1 }, () => 0)
+  const open: string[] = []
+  let depth = 0
+  let balanced = true
+  for (let index = 0; index < value.length; index += 1) {
+    depthBefore[index] = depth
+    const character = value[index]!
+    if (openingToClosing.has(character)) {
+      open.push(character)
+      depth += 1
+      continue
+    }
+    const opening = closingToOpening.get(character)
+    if (opening === undefined) continue
+    if (open.pop() !== opening) balanced = false
+    depth = Math.max(0, depth - 1)
+  }
+  depthBefore[value.length] = depth
+  if (depth !== 0) balanced = false
+  return { depthBefore, balanced }
 }
 
 /**
