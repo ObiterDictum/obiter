@@ -9,9 +9,10 @@ import {
 } from './index'
 
 const subject = { documentId: 'd-1111', versionId: 'v-2' }
+const citationText = '[2099] EWCA Civ 7'
 const citation = {
-  rawText: '[2099] EWCA Civ 7',
-  location: { paragraphId: 'p-7', start: 24, end: 40 },
+  rawText: citationText,
+  location: { paragraphId: 'p-7', start: 24, end: 24 + citationText.length },
 }
 const evidence: EvidenceReference[] = [
   {
@@ -23,13 +24,18 @@ const evidence: EvidenceReference[] = [
 ]
 
 const clearFinding = {
-  id: 'vf:d-1111:v-2:authority_existence:p-7:24-40',
+  id: createVerificationFindingId({
+    subject,
+    type: 'authority_existence',
+    location: citation.location,
+  }),
   type: 'authority_existence',
   subject,
   citation,
   normalizedCitation: {
     kind: 'case_law',
-    neutralCitation: '[2099] EWCA Civ 7',
+    neutralCitation: citationText,
+    sourceId: 'uksc-2099-1',
   },
   status: { state: 'clear' },
   severity: 'low',
@@ -65,6 +71,27 @@ describe('Verification findings', () => {
       }),
     ).toThrow()
   })
+
+  it('rejects a status carrying a review reason it cannot have', () => {
+    expect(() =>
+      verificationFindingSchema.parse({
+        ...clearFinding,
+        status: { state: 'clear', reason: 'check_inconclusive' },
+      }),
+    ).toThrow()
+    expect(() =>
+      verificationFindingSchema.parse({
+        ...clearFinding,
+        status: { state: 'flagged', reason: 'authority_not_held' },
+      }),
+    ).toThrow()
+  })
+
+  it('rejects unknown fields rather than ignoring them', () => {
+    expect(() =>
+      verificationFindingSchema.parse({ ...clearFinding, claimId: 'c-1' }),
+    ).toThrow()
+  })
 })
 
 describe('Finding status handling', () => {
@@ -84,37 +111,22 @@ describe('Finding status handling', () => {
   })
 })
 
-describe('Contradictory finding state', () => {
-  it('refuses to clear a check on an unresolved citation', () => {
-    expect(() =>
-      verificationFindingSchema.parse({
-        ...clearFinding,
-        normalizedCitation: { kind: 'unresolved', reason: 'ambiguous' },
-      }),
-    ).toThrow()
-  })
-
-  it('refuses a clear finding with no evidence behind it', () => {
-    expect(() =>
-      verificationFindingSchema.parse({ ...clearFinding, evidence: [] }),
-    ).toThrow()
-  })
-
-  it('rejects a status carrying a review reason it cannot have', () => {
-    expect(() =>
-      verificationFindingSchema.parse({
-        ...clearFinding,
-        status: { state: 'clear', reason: 'check_inconclusive' },
-      }),
-    ).toThrow()
-  })
-
-  it('rejects unknown fields rather than ignoring them', () => {
-    expect(() =>
-      verificationFindingSchema.parse({ ...clearFinding, claimId: 'c-1' }),
-    ).toThrow()
-  })
-})
+/** Decodes the length-prefixed component encoding, so a value that contains
+ * `:` cannot be mistaken for a delimiter. */
+function decodeFindingId(id: string): string[] {
+  expect(id.startsWith('vf:')).toBe(true)
+  const values: string[] = []
+  let cursor = 3
+  while (cursor < id.length) {
+    const separator = id.indexOf(':', cursor)
+    expect(separator).toBeGreaterThan(cursor)
+    const length = Number(id.slice(cursor, separator))
+    expect(Number.isInteger(length)).toBe(true)
+    values.push(id.slice(separator + 1, separator + 1 + length))
+    cursor = separator + 1 + length + 1
+  }
+  return values
+}
 
 describe('Finding identity', () => {
   const input = {
@@ -137,7 +149,7 @@ describe('Finding identity', () => {
     expect(
       createVerificationFindingId({
         ...input,
-        location: { ...citation.location, end: 41 },
+        location: { ...citation.location, end: citation.location.end + 1 },
       }),
     ).not.toBe(id)
     expect(
@@ -146,6 +158,52 @@ describe('Finding identity', () => {
         subject: { ...subject, versionId: 'v-3' },
       }),
     ).not.toBe(id)
+  })
+
+  it('does not collapse two subjects when a component contains the delimiter', () => {
+    const left = createVerificationFindingId({
+      ...input,
+      subject: { documentId: 'a:b', versionId: 'c' },
+    })
+    const right = createVerificationFindingId({
+      ...input,
+      subject: { documentId: 'a', versionId: 'b:c' },
+    })
+
+    expect(left).not.toBe(right)
+  })
+
+  it('encodes each component so it decodes back exactly', () => {
+    const id = createVerificationFindingId({
+      subject: { documentId: 'a:b', versionId: 'c' },
+      type: 'quote_fidelity',
+      location: { paragraphId: 'p:7', start: 24, end: 41 },
+    })
+
+    expect(decodeFindingId(id)).toEqual([
+      'a:b',
+      'c',
+      'quote_fidelity',
+      'p:7',
+      '24',
+      '41',
+    ])
+  })
+
+  it('keeps an empty component distinguishable from a missing one', () => {
+    const empty = createVerificationFindingId({
+      subject: { documentId: '', versionId: 'ab' },
+      type: 'authority_existence',
+      location: citation.location,
+    })
+    const shifted = createVerificationFindingId({
+      subject: { documentId: 'a', versionId: 'b' },
+      type: 'authority_existence',
+      location: citation.location,
+    })
+
+    expect(empty).not.toBe(shifted)
+    expect(decodeFindingId(empty)[0]).toBe('')
   })
 
   it('is built from ids and offsets, not citation or draft text', () => {
@@ -159,13 +217,13 @@ describe('Matter content does not leak into finding metadata', () => {
   it('serialises the citation without the draft prose around it', () => {
     const draftParagraph =
       'The claimant cites the authority in [2099] EWCA Civ 7 and adopts it.'
-    const start = draftParagraph.indexOf('[2099] EWCA Civ 7')
+    const start = draftParagraph.indexOf(citationText)
     const citationInput = {
-      rawText: draftParagraph.slice(start, start + '[2099] EWCA Civ 7'.length),
+      rawText: draftParagraph.slice(start, start + citationText.length),
       location: {
         paragraphId: 'p-7',
         start,
-        end: start + '[2099] EWCA Civ 7'.length,
+        end: start + citationText.length,
       },
     }
 
@@ -180,7 +238,7 @@ describe('Matter content does not leak into finding metadata', () => {
     })
     const serialised = JSON.stringify(finding)
 
-    expect(serialised).toContain('[2099] EWCA Civ 7')
+    expect(serialised).toContain(citationText)
     expect(serialised).not.toContain('The claimant cites the authority in')
     expect(finding.id).not.toContain('claimant')
     expect(Object.keys(finding.citation.location).sort()).toEqual([

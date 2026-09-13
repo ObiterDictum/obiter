@@ -25,6 +25,9 @@ describe('Public package exports', () => {
       verificationCore.reviewReasonSchema,
       verificationCore.draftLocationSchema,
       verificationCore.verificationSubjectSchema,
+      verificationCore.authorityDocumentIdSchema,
+      verificationCore.legislationDocumentIdentitySchema,
+      verificationCore.legislationLabelPathSchema,
     ]
 
     for (const schema of schemas) {

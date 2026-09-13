@@ -55,6 +55,67 @@ describe('Evidence references', () => {
         labelPath: 'section/40',
       }),
     ).toThrow()
+    expect(() =>
+      evidenceReferenceSchema.parse({
+        sourceType: 'legislation_provision',
+        sourceId: 'ukpga/2010/15',
+        labelPath: 'section/40',
+        ordinal: 12,
+      }),
+    ).toThrow()
+  })
+
+  it('keeps judgment and legislation locators from crossing', () => {
+    expect(() =>
+      evidenceReferenceSchema.parse({
+        sourceType: 'legislation_provision',
+        sourceId: 'ukpga/2010/15',
+        labelPath: 'section/40',
+        paragraphNumber: null,
+      }),
+    ).toThrow()
+  })
+
+  it('rejects a source id that could collide with the id delimiter', () => {
+    expect(() =>
+      evidenceReferenceSchema.parse({
+        ...judgmentReference,
+        sourceId: 'a:judgment_paragraph:1',
+      }),
+    ).toThrow()
+    expect(() =>
+      evidenceReferenceSchema.parse({
+        sourceType: 'legislation_provision',
+        sourceId: 'a:legislation_provision:x',
+        labelPath: 'y',
+      }),
+    ).toThrow()
+    expect(() =>
+      evidenceReferenceSchema.parse({
+        sourceType: 'legislation_provision',
+        sourceId: 'ukpga/2010/15',
+        labelPath: 'section:x',
+      }),
+    ).toThrow()
+  })
+
+  it('accepts only canonical legislation identities as evidence sources', () => {
+    for (const sourceId of ['garbage', 'ukpga/2010', 'ukpga//15']) {
+      expect(() =>
+        evidenceReferenceSchema.parse({
+          sourceType: 'legislation_provision',
+          sourceId,
+          labelPath: 'section/40',
+        }),
+      ).toThrow()
+    }
+    expect(() =>
+      evidenceReferenceSchema.parse({
+        sourceType: 'legislation_provision',
+        sourceId: 'ukpga/2010/15',
+        labelPath: '../../etc/passwd',
+      }),
+    ).toThrow()
   })
 })
 
@@ -87,6 +148,27 @@ describe('Evidence reference identity', () => {
     expect(createEvidenceReferenceId(judgmentReference)).toBe(
       'uksc-2099-1:judgment_paragraph:12',
     )
+  })
+
+  it('never collapses two schema-valid references into one id', () => {
+    const references: EvidenceReference[] = [
+      judgmentReference,
+      { ...judgmentReference, sourceId: 'uksc-2099-2' },
+      { ...judgmentReference, ordinal: 1, paragraphNumber: null },
+      legislationReference,
+      { ...legislationReference, labelPath: 'section/4' },
+      {
+        sourceType: 'legislation_provision',
+        sourceId: 'ukpga/1998/42',
+        labelPath: 'section/40',
+      },
+    ]
+    const ids = references.map((reference) => {
+      expect(evidenceReferenceSchema.safeParse(reference).success).toBe(true)
+      return createEvidenceReferenceId(reference)
+    })
+
+    expect(new Set(ids).size).toBe(references.length)
   })
 
   it('is built from ids and offsets only', () => {
