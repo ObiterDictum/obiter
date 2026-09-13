@@ -1053,12 +1053,24 @@ fold is imperfect, so a whole Act-title request that resolves to no stored Act
 returns an unresolved-title suppression (`legislationTitleUnresolved`, outcome
 `legislation_title_unresolved`) that says only that no exact title matched,
 never that the Act is absent. Whether a query is a whole-title request or a
-clause about one is decided structurally, never by casing: the words before
-`Act <year>` form a title only when each is a name, a number, or a joining word
-the directory itself uses in a stored title, and a held title named inside a
-longer query always stays on the keyword path. So `Defences under Children Act
-1989` and its lowercase twin both keyword-search, while `Children Act 1989`
-alone stays suppressed. A relaxed separator-insensitive title key that
+clause about one is decided by phrase structure over a closed title grammar,
+not by sentence casing. A title run is the words before `Act <year>` in which
+each word is a name, a number, or one of the grammar's fixed joining words.
+The grammar is compiled in and never mined from the directory, so adding or
+dropping a stored title cannot move how an unrelated query classifies. The
+boundary is conservative and reads as follows: the required sentence-initial
+and lowercase prose pairs route consistently, so `Defences under Children Act
+1989` and its lowercase twin both keyword-search; a held title named inside a
+longer query is caught case-insensitively before the phrase test and always
+stays on the keyword path; a Title Case or all-caps unresolved string may
+still be suppressed when it is indistinguishable from a standalone title; and
+an unresolved title is never an authoritative not-held. A standalone request
+may arrive with sentence punctuation, balanced quotes or the terminal
+`(repealed)` annotation, which are normalised away before the shape test, so
+`Children Act 1989.` suppresses instead of keyword-serving unrelated
+provisions; arbitrary trailing words and unrecognised parentheticals are left
+in place, so `Children Act 1989 extra` stays prose. `Children Act 1989` alone
+stays suppressed. A relaxed separator-insensitive title key that
 matches more than one stored Act is ambiguous (`legislationAmbiguous`), never
 a selected winner. A schedule citation that names a paragraph but no schedule
 (`Sch. para. 2 Equality Act 2010`) is underspecified rather than absent: the

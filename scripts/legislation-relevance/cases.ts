@@ -415,6 +415,20 @@ const absentAct = absent('absent_act', [
     'Criminal Justice Act 2003',
     { kind: 'act_not_held', title: 'Criminal Justice Act 2003' },
   ],
+  // Connector-bearing unheld titles. The joining word is what makes the run a
+  // title rather than a clause, and the closed grammar must supply it from
+  // outside the stored directory, so dropping the stored title that happens to
+  // carry `the` or `from` cannot turn these into keyword searches.
+  [
+    'absent-act-offences-against-person-1861',
+    'Offences Against the Person Act 1861',
+    { kind: 'act_not_held', title: 'Offences Against the Person Act 1861' },
+  ],
+  [
+    'absent-act-protection-from-harassment-1997',
+    'Protection from Harassment Act 1997',
+    { kind: 'act_not_held', title: 'Protection from Harassment Act 1997' },
+  ],
 ])
 
 const absentChapter = absent('absent_act', [
