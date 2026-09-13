@@ -1052,7 +1052,39 @@ not-held. A failed _title_ lookup is not: the directory is partial and the
 fold is imperfect, so a whole Act-title request that resolves to no stored Act
 returns an unresolved-title suppression (`legislationTitleUnresolved`, outcome
 `legislation_title_unresolved`) that says only that no exact title matched,
-never that the Act is absent. A relaxed separator-insensitive title key that
+never that the Act is absent. Whether a query is a whole-title request or a
+clause about one is decided by phrase structure over a closed title grammar,
+not by sentence casing. A title run is the words before `Act <year>` in which
+each word is a name, a number, or one of the grammar's fixed joining words.
+The grammar is compiled in and never mined from the directory, so adding or
+dropping a stored title cannot move how an unrelated query classifies. A query
+that is a stored title with only the final year changed is a title request
+whatever its casing. Otherwise a held title inside the run is stripped and the
+remaining words are the outer enactment's own: when they are a title phrase
+and the held title is a bracketed amendment parenthetical, the query is a
+standalone outer title even though it embeds held titles
+(`Worker Protection (Amendment of Equality Act 2010) Act 2010` suppresses and
+serves nothing); when the residue is not a title phrase, or the held title is
+an unbracketed separate mention, the containment is prose evidence and the
+query stays on the keyword path (`duties under Equality Act 2010`, `the
+Equality Act 2010 and the Human Rights Act 1998`). The boundary is
+conservative: the required sentence-initial and lowercase prose pairs route
+consistently, an unresolved title is never an authoritative not-held, and the
+one residual is an all-lowercase nested outer title whose shape is not a
+stored title's year variant
+(`worker protection (amendment of equality act 2010 and human rights act 1998)
+act 1999`), which without a lexicon is indistinguishable from a lowercase
+clause. A standalone request may arrive with sentence punctuation, balanced
+quotes, the terminal `(repealed)` annotation or the conventional terminal
+`, as amended` qualifier — bounded presentation metadata normalised away
+before the shape test — so `Children Act 1989.`, `"Children Act 1989"` and
+`Children Act 1989, as amended` suppress instead of keyword-serving unrelated
+provisions; arbitrary trailing words, unrecognised parentheticals and any
+longer `as ...` clause are left in place, so `Children Act 1989 extra`,
+`Children Act 1989 (Public Lavatories)` and `Children Act 1989, as amended by
+the Courts Act 2003` stay prose. The stored-title directory hands out frozen
+snapshots of frozen entries, so no caller can mutate an array or an entry and
+reclassify a later query. A relaxed separator-insensitive title key that
 matches more than one stored Act is ambiguous (`legislationAmbiguous`), never
 a selected winner. A schedule citation that names a paragraph but no schedule
 (`Sch. para. 2 Equality Act 2010`) is underspecified rather than absent: the
