@@ -19,10 +19,15 @@ const searchClientMock = vi.hoisted(() => ({
   indexDocuments: vi.fn(),
   getDocument: vi.fn(),
   search: vi.fn(),
+  index: vi.fn(),
 }))
 
 const legislationServeMock = vi.hoisted(() => ({
   resolveLegislationFetch: vi.fn(),
+  /** The real serve function, so a route-level test can exercise the true
+   * classification instead of a hand-written verdict object. */
+  actual:
+    null as unknown as (typeof import('../legislation-serve'))['resolveLegislationFetch'],
 }))
 
 vi.mock('@obiter/search-client', async (importOriginal) => ({
@@ -30,10 +35,14 @@ vi.mock('@obiter/search-client', async (importOriginal) => ({
   ...searchClientMock,
 }))
 
-vi.mock('../legislation-serve', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../legislation-serve')>()),
-  resolveLegislationFetch: legislationServeMock.resolveLegislationFetch,
-}))
+vi.mock('../legislation-serve', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../legislation-serve')>()
+  legislationServeMock.actual = actual.resolveLegislationFetch
+  return {
+    ...actual,
+    resolveLegislationFetch: legislationServeMock.resolveLegislationFetch,
+  }
+})
 
 const env: ApiEnv = createTestApiEnv()
 
@@ -340,6 +349,7 @@ beforeEach(() => {
   searchClientMock.search.mockReset()
   searchClientMock.indexDocuments.mockReset()
   searchClientMock.getDocument.mockReset()
+  searchClientMock.index.mockReset()
   legislationServeMock.resolveLegislationFetch.mockReset()
 })
 
@@ -803,6 +813,115 @@ describe('createLegalSearchProxyRoutes', () => {
           '“Sample Act 2020” names more than one stored Act. Candidates: A; B',
       },
     })
+  })
+
+  it('keywords an unheld Act named in prose, in both casings, with no verdict', async () => {
+    // L35 through the route, against the real serve classification rather than
+    // a hand-written verdict object. The sentence-initial form must reach the
+    // same keyword path as its lowercase twin: the legislation group is
+    // served and no title-unresolved or not-held diagnostic is emitted.
+    legislationServeMock.resolveLegislationFetch.mockImplementation(
+      legislationServeMock.actual,
+    )
+    const directoryActs = [
+      {
+        identity: 'ukpga/2010/15',
+        actType: 'ukpga',
+        year: 2010,
+        number: 15,
+        title: 'Equality Act 2010',
+        sourceUrl: 'https://www.legislation.gov.uk/ukpga/2010/15',
+        extent: 'E+W+S',
+      },
+      {
+        identity: 'ukpga/2023/42',
+        actType: 'ukpga',
+        year: 2023,
+        number: 42,
+        title: 'Powers of Attorney Act 2023',
+        sourceUrl: 'https://www.legislation.gov.uk/ukpga/2023/42',
+        extent: 'E+W',
+      },
+      {
+        identity: 'ukpga/2022/32',
+        actType: 'ukpga',
+        year: 2022,
+        number: 32,
+        title: 'Police, Crime, Sentencing and Courts Act 2022',
+        sourceUrl: 'https://www.legislation.gov.uk/ukpga/2022/32',
+        extent: 'E+W',
+      },
+    ]
+    const provisionHit = {
+      id: 'ukpga/2026/21/section/12',
+      provisionRef: 'ukpga/2026/21/section/12',
+      documentIdentity: 'ukpga/2026/21',
+      labelPath: 'section/12',
+      label: 's. 12',
+      title: "Children's Wellbeing and Schools Act 2026",
+      year: 2026,
+      extent: 'E+W',
+      text: 'A provision that shares a word with the title.',
+      sourceUrl: 'https://www.legislation.gov.uk/ukpga/2026/21/section/12',
+      hasUnappliedEffects: false,
+      effectsCheckedAt: '2026-09-01T00:00:00Z',
+    }
+    searchClientMock.index.mockReturnValue({
+      search: vi.fn(async () => ({
+        hits: [provisionHit],
+        query: '',
+        estimatedTotalHits: 1,
+        processingTimeMs: 1,
+      })),
+    })
+    // A variable, not a fresh literal: the real serve reads `.index()` off the
+    // client, while the default mock client deliberately carries only an id.
+    const provisionSearchClient = {
+      id: 'meili-client',
+      index: searchClientMock.index,
+    }
+    searchClientMock.createClient.mockReturnValue(provisionSearchClient)
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: '',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: {
+          query: vi.fn(async (text: string) =>
+            text.includes('from legislation_documents')
+              ? { rows: directoryActs }
+              : { rows: [] },
+          ),
+        } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    for (const query of [
+      'Defences under Children Act 1989',
+      'defences under Children Act 1989',
+    ]) {
+      const response = await app.request('/api/search/fetch', {
+        method: 'POST',
+        body: JSON.stringify({ query }),
+        headers: { 'content-type': 'application/json' },
+      })
+      expect(response.status).toBe(200)
+      const body = (await response.json()) as {
+        outcome: string
+        diagnostics: Record<string, unknown>
+      }
+      // The verdict-free prose path leaves the transport outcome to the
+      // judgment half, but the legislation keyword group is served and no
+      // title-unresolved or not-held diagnostic is emitted.
+      expect(body.diagnostics.legislationGroupServed).toBe(true)
+      expect(body.diagnostics.legislationSearchParameters).toBeTruthy()
+      expect(body.diagnostics.legislationTitleUnresolved).toBeUndefined()
+      expect(body.diagnostics.legislationNotHeld).toBeUndefined()
+    }
   })
 
   it('carries an underspecified-schedule corrective through the foreground-live miss', async () => {

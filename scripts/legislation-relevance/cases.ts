@@ -511,6 +511,19 @@ const controlQueries = control([
     'changes introduced by Companies Act 2006',
   ],
   ['control-defences-children-1989-plain', 'defences under Children Act 1989'],
+  // L35: sentence-initial capitalisation must not decide routing. Each of these
+  // is the capitalised form of a prose query already listed above, and must
+  // reach the same keyword path. The uppercase pair exercises a held Act
+  // (Equality Act 2010) so the held-title branch is scored too.
+  [
+    'control-defences-children-1989-sentence-initial',
+    'Defences under Children Act 1989',
+  ],
+  [
+    'control-sentencing-criminal-justice-2003-sentence-initial',
+    'Sentencing powers in Criminal Justice Act 2003',
+  ],
+  ['control-duties-equality-2010-uppercase', 'DUTIES UNDER EQUALITY ACT 2010'],
 ])
 
 export const legislationRelevanceCases: LegislationRelevanceCase[] = [

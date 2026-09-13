@@ -1052,7 +1052,13 @@ not-held. A failed _title_ lookup is not: the directory is partial and the
 fold is imperfect, so a whole Act-title request that resolves to no stored Act
 returns an unresolved-title suppression (`legislationTitleUnresolved`, outcome
 `legislation_title_unresolved`) that says only that no exact title matched,
-never that the Act is absent. A relaxed separator-insensitive title key that
+never that the Act is absent. Whether a query is a whole-title request or a
+clause about one is decided structurally, never by casing: the words before
+`Act <year>` form a title only when each is a name, a number, or a joining word
+the directory itself uses in a stored title, and a held title named inside a
+longer query always stays on the keyword path. So `Defences under Children Act
+1989` and its lowercase twin both keyword-search, while `Children Act 1989`
+alone stays suppressed. A relaxed separator-insensitive title key that
 matches more than one stored Act is ambiguous (`legislationAmbiguous`), never
 a selected winner. A schedule citation that names a paragraph but no schedule
 (`Sch. para. 2 Equality Act 2010`) is underspecified rather than absent: the

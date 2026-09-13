@@ -157,21 +157,52 @@ function actTitleTokens(value: string): string[] {
 }
 
 /**
+ * True when every word of a run can sit inside an Act short title: a
+ * capitalised name, a number, or a lowercase word the directory has seen
+ * joining a title. The run must carry at least one name, so a run of bare
+ * connectives ("the") is not a title phrase.
+ *
+ * Case is read per word, never as the decision. It separates the name words
+ * from the joining words so the phrase boundary can be found; an all-uppercase
+ * run has no lowercase joining word to find and so reads as one phrase.
+ */
+function isTitlePhrase(
+  tokens: string[],
+  connectors: ReadonlySet<string>,
+): boolean {
+  let hasName = false
+  for (const token of tokens) {
+    if (/[A-Z]/.test(token)) {
+      hasName = true
+      continue
+    }
+    if (/\d/.test(token)) continue
+    if (connectors.has(normalizeActTitle(token))) continue
+    return false
+  }
+  return hasName
+}
+
+/**
  * Directory and structure evidence that an Act-shaped value is a subject
  * query that merely mentions an Act, not a whole-title request.
  *
- * The determiner test this replaces was a lexical blacklist: it caught
- * "defences under the Children Act 1989" but not "duties under Equality Act
- * 2010", and it could only ever catch the determiners someone thought of.
- * This test reads the directory and the query's own shape instead:
+ * The determiner test this replaces was a lexical blacklist, and the test that
+ * followed it still read sentence-initial capitalisation as evidence of the
+ * whole query: "Defences under Children Act 1989" was suppressed while its
+ * lowercase twin stayed on the keyword path. This test reads the directory and
+ * the query's own phrase structure instead:
  *
- * - A held Act title inside a longer query is proof the query names
- *   something more than that title. The extra text is the query, so the
- *   whole query stays a subject search. Nothing is discarded.
- * - An Act short title is a proper-noun phrase. A lowercase run before the
- *   first capitalised name is prose ("changes introduced by Companies Act
- *   2006", "defences under Children Act 1989"); the capitalised part begins
- *   the title.
+ * - A held Act title inside a longer query is proof the query names something
+ *   more than that title, so the whole query stays a subject search.
+ * - Otherwise the words before `Act <year>` are a title phrase only when every
+ *   one of them is a name, a number, or a joining word the directory itself
+ *   uses in a stored title. When the whole run is such a phrase the query is a
+ *   whole-title request. When instead only a proper suffix is, the leading
+ *   words are a clause and the citation is part of it: prose, whatever the case
+ *   of the first word. When no suffix is a phrase either, a joining word the
+ *   directory has not seen is present, which is no prose evidence, so the safe
+ *   whole-title suppression is kept.
  *
  * An underspecified fragment is handled before this: `looksLikeWholeActTitle`
  * rejects a run with no words, so "Act 2020" never reaches a claim.
@@ -181,9 +212,17 @@ function actRemainderIsProse(value: string, directory: ActDirectory): boolean {
   if (!shape) return true
   if (directory.containsTitleRun(actTitleTokens(value))) return true
 
-  const rawTokens = shape.rawRun.split(/\s+/).filter(Boolean)
-  const firstCapitalised = rawTokens.findIndex((token) => /^[A-Z]/.test(token))
-  return firstCapitalised > 0
+  // A directory carrying no lowercase title word models no title grammar, so
+  // it offers no structural prose evidence; only containment can then speak.
+  const connectors = directory.titleConnectors()
+  if (connectors.size === 0) return false
+
+  const run = shape.rawRun.split(/\s+/).filter(Boolean)
+  if (isTitlePhrase(run, connectors)) return false
+  for (let index = 1; index < run.length; index += 1) {
+    if (isTitlePhrase(run.slice(index), connectors)) return true
+  }
+  return false
 }
 
 /**
@@ -230,6 +269,11 @@ export interface ActDirectory {
    * `tokens`, shorter than the whole run. Directory evidence that a longer
    * query merely mentions an Act rather than naming it. */
   containsTitleRun(tokens: string[]): boolean
+  /** Lowercase words that join words inside a stored Act title (`of`, `and`,
+   * `the`). Mined from the directory, never a hand-written list: a short title
+   * is a noun phrase whose lowercase words are exactly this class, so a
+   * lowercase word outside it marks a phrase boundary. */
+  titleConnectors(): ReadonlySet<string>
 }
 
 export function createActDirectory(
@@ -239,6 +283,7 @@ export function createActDirectory(
   const byTitle = new Map<string, LegislationActDirectoryEntry[]>()
   const byLoose = new Map<string, LegislationActDirectoryEntry[]>()
   const titleRuns: string[][] = []
+  const connectors = new Set<string>()
   for (const entry of entries) {
     byKey.set(`${entry.actType}/${entry.year}/${entry.number}`, entry)
     const normalized = normalizeActTitle(entry.title)
@@ -250,6 +295,11 @@ export function createActDirectory(
     looseList.push(entry)
     byLoose.set(loose, looseList)
     titleRuns.push(normalized.split(' ').filter(Boolean))
+    for (const token of entry.title.split(/\s+/)) {
+      if (!/^[a-z]/.test(token)) continue
+      const connector = normalizeActTitle(token)
+      if (connector) connectors.add(connector)
+    }
   }
   return {
     byYearNumber: (year, number) =>
@@ -265,6 +315,7 @@ export function createActDirectory(
           run.length < tokens.length &&
           containsContiguousRun(tokens, run),
       ),
+    titleConnectors: () => connectors,
   }
 }
 
