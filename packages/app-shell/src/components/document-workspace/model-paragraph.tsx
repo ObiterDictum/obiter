@@ -31,7 +31,7 @@ import {
   type RunFace,
 } from '../../document-page-style'
 import { PageDrawing } from './page-drawing'
-import type { ArrowNeighbor } from './paragraph-arrow'
+import type { ArrowNeighbor, VerticalCaretColumn } from './paragraph-arrow'
 import { ParagraphEditor } from './paragraph-editor'
 
 export type ParagraphWordEdit = {
@@ -59,6 +59,7 @@ export function ModelParagraph({
   restoreCaret,
   previous,
   next,
+  verticalCaret,
   editing,
   presence,
   currentUserId,
@@ -92,6 +93,7 @@ export function ModelParagraph({
   restoreCaret?: { paragraphId: string; offset: number } | null
   previous?: ArrowNeighbor
   next?: ArrowNeighbor
+  verticalCaret?: VerticalCaretColumn
   editing?: boolean
   presence?: DocumentPresence[]
   currentUserId?: string
@@ -278,12 +280,14 @@ export function ModelParagraph({
                 {runPaint}
               </div>
               <ParagraphEditor
+                paragraphId={paragraph.id}
                 text={sliceText}
                 selected={holdsCaret}
                 restoreCaret={restore}
                 lines={lines}
                 previous={previous}
                 next={next}
+                verticalCaret={verticalCaret}
                 onMoveCaret={onMoveCaret}
                 onTextSelection={(localStart, localEnd) =>
                   onTextSelection?.(start + localStart, start + localEnd)

@@ -12,18 +12,11 @@ import {
   documentFormatToolbar,
   formattedModel,
 } from '../../document-format-edits'
-import {
-  clampFindIndex,
-  findInDocument,
-  findMatchLabel,
-  nextFindIndex,
-  previousFindIndex,
-} from '../../document-find'
-import { cursorForSelection, documentStory } from '../../document-model-text'
+import { findMatchLabel } from '../../document-find'
+import { documentStory } from '../../document-model-text'
 import { layoutDocument } from '../../document-page-engine'
 import { documentImagePartNames } from '../../document-page-media'
 import { documentDefaultFace } from '../../document-page-style'
-import { blockText } from '../../document-word-edits'
 import { handleDocumentWorkspaceKeys } from '../../document-workspace-keys'
 import {
   useCollaborationMerge,
@@ -46,6 +39,7 @@ import { DocumentWorkspaceToolbar } from './toolbar'
 import { WorkspaceSidePanels } from './workspace-side-panels'
 import { useDocumentPresenceHeartbeat } from './use-presence-heartbeat'
 import { useWorkspaceDrafts } from './use-workspace-drafts'
+import { useWorkspaceCaret } from './use-workspace-caret'
 import { DocumentDesk, DocumentPage } from './document-page'
 import {
   ConflictBanner,
@@ -97,22 +91,8 @@ export function DocxWorkspace({
   const [authoritiesOpen, setAuthoritiesOpen] = useState(false)
   const [insertAuthorityOpen, setInsertAuthorityOpen] = useState(false)
   const [trackChanges, setTrackChanges] = useState(false)
-  const [selectedParagraphId, setSelectedParagraphId] = useState<string | null>(
-    null,
-  )
-  const [restoreCaret, setRestoreCaret] = useState<{
-    paragraphId: string
-    offset: number
-  } | null>(null)
-  const [formatRange, setFormatRange] = useState<{
-    from: number
-    to: number
-  } | null>(null)
   const [banner, setBanner] = useState<string | null>(null)
   const [stale, setStale] = useState(false)
-  const [findQuery, setFindQuery] = useState('')
-  const [replaceQuery, setReplaceQuery] = useState('')
-  const [findIndex, setFindIndex] = useState(-1)
 
   const model = modelQuery.data?.model
   const painted = model ? formattedModel(model, drafts.format) : undefined
@@ -134,27 +114,31 @@ export function DocxWorkspace({
       )
     : false
   const saving = editDocument.isPending || mergeDocument.isPending
-  const cursor =
-    selectedParagraphId && model
-      ? cursorForSelection(model, selectedParagraphId)
-      : null
+  const {
+    selectedParagraphId,
+    restoreCaret,
+    formatRange,
+    setFormatRange,
+    verticalCaret,
+    cursor,
+    findQuery,
+    setFindQuery,
+    replaceQuery,
+    setReplaceQuery,
+    findHits,
+    activeFindIndex,
+    selectParagraph,
+    onNextHit,
+    onPreviousHit,
+    onReplaceOne,
+    onReplaceAll,
+    insertAuthority,
+    undoDocument,
+  } = useWorkspaceCaret({ documentId, model, drafts })
 
   useDocumentPresenceHeartbeat(documentId, cursor, true)
   const presence = syncQuery.data?.participants ?? []
   const remoteChange = syncQuery.data?.changed === true
-  const findHits = model
-    ? findInDocument(
-        model,
-        drafts.drafts,
-        drafts.inserts,
-        drafts.deletedParagraphIds,
-        drafts.extraRuns,
-        findQuery,
-      )
-    : []
-  // Clamp the stored index to the current hit set so edits that shrink the
-  // hits cannot leave the label or navigation on a stale position.
-  const activeFindIndex = clampFindIndex(findIndex, findHits.length)
   const authorities = model
     ? extractAuthorities(
         model,
@@ -164,73 +148,6 @@ export function DocxWorkspace({
         drafts.extraRuns,
       )
     : []
-
-  function selectParagraph(paragraphId: string, offset?: number) {
-    setSelectedParagraphId(paragraphId)
-    setRestoreCaret(offset == null ? null : { paragraphId, offset })
-    if (offset != null) setFormatRange({ from: offset, to: offset })
-  }
-
-  function jumpToHit(index: number) {
-    const hit = findHits[index]
-    if (!hit) return
-    setFindIndex(index)
-    selectParagraph(hit.paragraphId, hit.start)
-  }
-
-  function replaceCurrentHit() {
-    if (!model || findHits.length === 0) return
-    const index = activeFindIndex < 0 ? 0 : activeFindIndex
-    const caret = drafts.replaceHits(model, findHits, replaceQuery, index)
-    if (caret) selectParagraph(caret.paragraphId, caret.offset)
-  }
-
-  function replaceAllHits() {
-    if (!model || findHits.length === 0) return
-    const caret = drafts.replaceHits(model, findHits, replaceQuery, 'all')
-    if (caret) selectParagraph(caret.paragraphId, caret.offset)
-  }
-
-  function insertAuthority(citation: string) {
-    if (!model) return
-    const paragraphId =
-      selectedParagraphId ?? documentStory(model)?.paragraphs[0]?.id
-    if (!paragraphId) return
-    const state = {
-      drafts: drafts.drafts,
-      inserts: drafts.inserts,
-      deletedParagraphIds: drafts.deletedParagraphIds,
-      extraRuns: drafts.extraRuns,
-    }
-    const offset =
-      restoreCaret?.paragraphId === paragraphId
-        ? restoreCaret.offset
-        : blockText(model, state, paragraphId).length
-    const caret = drafts.insertText(model, paragraphId, offset, citation)
-    if (caret) selectParagraph(caret.paragraphId, caret.offset)
-  }
-
-  function undoDocument() {
-    const beforeInserts = drafts.inserts
-    const restored = drafts.undoDraft()
-    if (!restored || !model) return
-    // Undoing a split/insert removes the paragraph the caret was on. Move
-    // selection back to the paragraph the removed insert was anchored after
-    // so the user is not left with nothing selected.
-    const target = restoreCaret?.paragraphId ?? selectedParagraphId
-    if (!target) return
-    const removed = beforeInserts.find((item) => item.clientId === target)
-    // Only redirect when the insert the caret was on is actually gone after
-    // the undo. An insert that survived (e.g. undoing a text edit inside
-    // it) must keep the caret; the editor clamps the offset to its text.
-    if (!removed || restored.inserts.some((item) => item.clientId === target)) {
-      return
-    }
-    selectParagraph(
-      removed.afterParagraphId,
-      blockText(model, restored, removed.afterParagraphId).length,
-    )
-  }
 
   async function reload() {
     drafts.resetDrafts()
@@ -381,16 +298,12 @@ export function DocxWorkspace({
           replace: replaceQuery,
           matchLabel: findMatchLabel(activeFindIndex, findHits.length),
           canReplace: findHits.length > 0,
-          onQuery: (query) => {
-            setFindQuery(query)
-            setFindIndex(-1)
-          },
+          onQuery: setFindQuery,
           onReplace: setReplaceQuery,
-          onNext: () => jumpToHit(nextFindIndex(findHits, activeFindIndex)),
-          onPrevious: () =>
-            jumpToHit(previousFindIndex(findHits, activeFindIndex)),
-          onReplaceOne: replaceCurrentHit,
-          onReplaceAll: replaceAllHits,
+          onNext: onNextHit,
+          onPrevious: onPreviousHit,
+          onReplaceOne,
+          onReplaceAll,
         }}
       />
       {stale ? (
@@ -501,6 +414,7 @@ export function DocxWorkspace({
                         }
                       }}
                       restoreCaret={restoreCaret}
+                      verticalCaret={verticalCaret}
                     />
                   </DocumentPage>
                 ))}
