@@ -1,5 +1,6 @@
 import type { Pool, QueryResultRow } from 'pg'
 import { LegalAuthoritySchema, type LegalAuthority } from '@obiter/legal-schema'
+import { normalizeCitationValue } from '@obiter/search-client'
 
 // Defined alongside the provider that produces it, and re-exported here so
 // storage callers keep importing it from the store they already use.
@@ -85,7 +86,7 @@ interface LegalAuthoritySourceRow extends QueryResultRow {
 }
 
 export function createPostgresLegalAuthoritySourceStore(
-  pool: Pool,
+  pool: Pick<Pool, 'query'>,
 ): LegalAuthoritySourceStore {
   return {
     async upsertSummary(summary, provider) {
@@ -191,6 +192,43 @@ function toStoredLegalAuthorityRecord(
     provider: row.provider_json,
     withdrawn: readWithdrawnInfo(row.provider_json),
   }
+}
+
+/**
+ * Stored authority ids whose neutral citation canonically equals
+ * `neutralCitation`. The record is Postgres; the fold is search-client's
+ * `normalizeCitationValue`, the same one the search path compares with, so an
+ * exact citation lookup cannot drift from search's notion of equality. The
+ * scan reads the citation projection only, never document bodies. Withdrawn
+ * rows are returned too: a withdrawn row is a stored source the caller must
+ * not read as absent, and the caller decides by reading the record.
+ */
+export async function findStoredAuthorityIdsByNeutralCitation(
+  pool: Pick<Pool, 'query'>,
+  neutralCitation: string,
+): Promise<string[]> {
+  const normalized = normalizeCitationValue(neutralCitation)
+  if (!normalized) return []
+  // A citation carries its year, and the fold never changes it, so rows that
+  // do not contain the year cannot match. This keeps the per-row fold off the
+  // whole table without changing what matches.
+  const year = neutralCitation.match(/\[(\d{4})\]/)?.[1] ?? null
+  const result = await pool.query<{
+    documentId: string
+    neutralCitation: string | null
+  }>(
+    `select document_id as "documentId",
+            summary_json->>'neutralCitation' as "neutralCitation"
+       from legal_source_documents
+      where summary_json->>'neutralCitation' is not null`,
+  )
+  return result.rows
+    .filter((row) => {
+      if (!row.neutralCitation) return false
+      if (year && !row.neutralCitation.includes(year)) return false
+      return normalizeCitationValue(row.neutralCitation) === normalized
+    })
+    .map((row) => row.documentId)
 }
 
 export function toAuthoritySummary(document: LegalAuthority): LegalAuthority {

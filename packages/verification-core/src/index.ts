@@ -1,3 +1,4 @@
+export * from './authority-existence'
 export * from './citation'
 export * from './evidence'
 export * from './finding'

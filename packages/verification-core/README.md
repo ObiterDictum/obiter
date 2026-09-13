@@ -2,7 +2,8 @@
 
 Pure domain vocabulary for Verify. No storage, no network, no provider calls, no
 UI. It defines the values Verify passes between extraction, resolution, checks,
-persistence and reporting; it defines none of those steps itself.
+persistence and reporting, plus the pure authority-existence decision that maps
+a lookup onto them; it defines none of the surrounding steps itself.
 
 ## Responsibility
 
@@ -16,7 +17,10 @@ persistence and reporting; it defines none of those steps itself.
 - evidence references that point at public legal source material by id, so a
   finding can be traced back to the paragraph or provision it rests on;
 - finding identity, type, severity, confidence, and the conservative status
-  model, including the explicit review-required state.
+  model, including the explicit review-required state;
+- the authority-existence decision (V2): a normalized citation and a lookup
+  outcome to an accepted finding state. The store lookup itself stays in the
+  API.
 
 ## What the values hold
 
@@ -100,7 +104,6 @@ boundaries that accept these values own:
 
 Deliberately absent, and owned by later board items:
 
-- authority existence checks (V2);
 - citation resolution checks and free-text citation normalisation (V3);
 - quote comparison (V4);
 - findings UI (V5);

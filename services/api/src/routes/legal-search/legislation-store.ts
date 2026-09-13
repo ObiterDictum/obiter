@@ -160,6 +160,28 @@ export async function getLegislationProvision(
 }
 
 /**
+ * The label path of the Act's first stored provision in document order, or
+ * null when the Act holds none. A whole-Act existence check anchors its
+ * evidence here: the evidence vocabulary addresses a provision, not an Act
+ * row, so an Act with no provision has no addressable evidence. This is a
+ * read, never a guess at a provision the caller asked for.
+ */
+export async function getFirstLegislationProvisionLabelPath(
+  pool: Pick<Pool, 'query'>,
+  documentIdentity: string,
+): Promise<string | null> {
+  const result = await pool.query<{ labelPath: string }>(
+    `select label_path as "labelPath"
+       from legislation_provisions
+      where document_identity = $1
+      order by doc_order
+      limit 1`,
+    [documentIdentity],
+  )
+  return result.rows[0]?.labelPath ?? null
+}
+
+/**
  * True when a provision or container row exists at `labelPath` or beneath
  * it. The single-schedule fallback uses this to tell a numbered schedule the
  * Act holds from one it does not: a citation for Schedule 1 may only fall
