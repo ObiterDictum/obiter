@@ -30,7 +30,11 @@ import {
 } from './model-click-caret'
 import { ModelParagraph } from './model-paragraph'
 import type { ParagraphWordEdit } from './model-paragraph'
-import { arrowNeighbors } from './paragraph-arrow'
+import {
+  arrowNeighbors,
+  clearVerticalColumn,
+  type VerticalCaretColumn,
+} from './paragraph-arrow'
 import { PendingInsert } from './pending-insert'
 import { PageDrawing } from './page-drawing'
 import { PageMarginBand } from './page-margin-band'
@@ -54,6 +58,7 @@ export function DocumentModelPage({
   onJoinPrevious,
   onWordEdit,
   restoreCaret,
+  verticalCaret,
   imageUrls = {},
   pageBlocks,
   pageFloats = [],
@@ -78,6 +83,7 @@ export function DocumentModelPage({
   onJoinPrevious?: (paragraphId: string) => boolean | void
   onWordEdit?: (edit: ParagraphWordEdit) => void
   restoreCaret?: { paragraphId: string; offset: number } | null
+  verticalCaret?: VerticalCaretColumn
   imageUrls?: Record<string, string>
   pageBlocks?: LaidOutBlock[]
   pageFloats?: PageFloat[]
@@ -145,6 +151,7 @@ export function DocumentModelPage({
             endOffset,
           )
           if (caret) {
+            clearVerticalColumn(verticalCaret)
             onSelectParagraph(caret.paragraphId, caret.offset)
             return
           }
@@ -154,7 +161,10 @@ export function DocumentModelPage({
           event.clientY,
           endOffset,
         )
-        if (caret) onSelectParagraph(caret.paragraphId, caret.offset)
+        if (caret) {
+          clearVerticalColumn(verticalCaret)
+          onSelectParagraph(caret.paragraphId, caret.offset)
+        }
       }}
     >
       <PageMarginBand
@@ -211,6 +221,7 @@ export function DocumentModelPage({
                   onJoinPrevious,
                   onWordEdit,
                   restoreCaret,
+                  verticalCaret,
                   imageUrls,
                   paragraphs: story.paragraphs,
                   listMarkers,
@@ -324,6 +335,7 @@ function renderBlock(
     onJoinPrevious?: (paragraphId: string) => boolean | void
     onWordEdit?: (edit: ParagraphWordEdit) => void
     restoreCaret?: { paragraphId: string; offset: number } | null
+    verticalCaret?: VerticalCaretColumn
     imageUrls: Record<string, string>
     paragraphs: DocumentParagraphWire[]
     listMarkers: ReturnType<typeof documentListMarkers>
@@ -373,6 +385,7 @@ function renderBlock(
                 previous={adjacent.previous}
                 next={adjacent.next}
                 restoreCaret={ctx.restoreCaret}
+                verticalCaret={ctx.verticalCaret}
                 editing={ctx.editing}
                 presence={ctx.presence}
                 currentUserId={ctx.currentUserId}
@@ -402,6 +415,7 @@ function renderBlock(
         key={insert.clientId}
         insert={insert}
         selected={ctx.selectedParagraphId === insert.clientId}
+        verticalCaret={ctx.verticalCaret}
         onSelect={() => ctx.onSelectParagraph(insert.clientId)}
         onTextChange={ctx.onInsertTextChange}
         onInsertParagraph={ctx.onInsertParagraph}
@@ -431,6 +445,7 @@ function renderBlock(
       previous={adjacent.previous}
       next={adjacent.next}
       restoreCaret={ctx.restoreCaret}
+      verticalCaret={ctx.verticalCaret}
       editing={ctx.editing && !ctx.noteParagraphIds.has(paragraph.id)}
       presence={ctx.presence}
       currentUserId={ctx.currentUserId}

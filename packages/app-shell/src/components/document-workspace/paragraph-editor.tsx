@@ -1,10 +1,21 @@
 import { useEffect, useRef } from 'react'
 import type { CSSProperties } from 'react'
 import { cn } from '@obiter/ui'
-import { offsetAfterArrow, type ArrowNeighbor } from './paragraph-arrow'
+import {
+  armVerticalDelivery,
+  clearVerticalColumn,
+  consumeVerticalDelivery,
+  offsetAfterArrow,
+  offsetVertically,
+  retainVerticalColumn,
+  visualColumn,
+  type ArrowNeighbor,
+  type VerticalCaretColumn,
+} from './paragraph-arrow'
 import type { WrappedLine } from '../../document-page-flow'
 
 export function ParagraphEditor({
+  paragraphId,
   text,
   selected,
   restoreCaret,
@@ -13,6 +24,7 @@ export function ParagraphEditor({
   lines,
   previous,
   next,
+  verticalCaret,
   onSelect,
   onMoveCaret,
   onTextSelection,
@@ -22,6 +34,7 @@ export function ParagraphEditor({
   onEnter,
   onLineBreak,
 }: {
+  paragraphId: string
   text: string
   selected: boolean
   restoreCaret?: number
@@ -30,6 +43,7 @@ export function ParagraphEditor({
   lines: WrappedLine[]
   previous?: ArrowNeighbor
   next?: ArrowNeighbor
+  verticalCaret?: VerticalCaretColumn
   onSelect: () => void
   onMoveCaret?: (paragraphId: string, offset: number) => void
   onTextSelection?: (start: number, end: number) => void
@@ -42,6 +56,7 @@ export function ParagraphEditor({
   const field = useRef<HTMLTextAreaElement>(null)
   // IME composition owns key events until it ends; intercepting them loses text.
   const composing = useRef(false)
+  const clearColumn = () => clearVerticalColumn(verticalCaret)
   // Keep the caret after Enter (DOM selection).
   useEffect(() => {
     if (!selected) return
@@ -62,18 +77,39 @@ export function ParagraphEditor({
       value={text}
       rows={1}
       spellCheck={false}
-      onChange={(event) => onChangeText(event.target.value)}
-      onFocus={onSelect}
+      onChange={(event) => {
+        // Any text input, including a paste or an IME commit, ends the run.
+        clearColumn()
+        onChangeText(event.target.value)
+      }}
+      onFocus={() => {
+        // Only the paragraph a vertical move was destined for inherits the
+        // run's column; any other focus starts a fresh editing session.
+        if (!consumeVerticalDelivery(verticalCaret, paragraphId)) clearColumn()
+        onSelect()
+      }}
       onCompositionStart={() => {
         composing.current = true
+        clearColumn()
       }}
       onCompositionEnd={() => {
         composing.current = false
+        clearColumn()
+      }}
+      onMouseDown={() => {
+        clearColumn()
       }}
       onKeyDown={(event) => {
         if (event.nativeEvent.isComposing || composing.current) return
         const start = event.currentTarget.selectionStart
         const end = event.currentTarget.selectionEnd
+        const verticalKey =
+          event.key === 'ArrowUp' || event.key === 'ArrowDown'
+            ? event.key
+            : null
+        // Every key that is not a plain vertical arrow ends the column run.
+        // Shift/Ctrl/Alt/Meta arrows stay native and leave it untouched.
+        if (!verticalKey) clearColumn()
         if (event.key === 'Enter' && event.shiftKey) {
           event.preventDefault()
           onLineBreak(start)
@@ -94,11 +130,52 @@ export function ParagraphEditor({
           onDelete(start)
           return
         }
-        if (start !== end || !onMoveCaret) return
         // Only plain arrows cross paragraphs. Shift keeps native selection
         // (E52 owns cross-paragraph selection); Ctrl/Alt/Meta keep platform
         // shortcuts such as word moves and line/document jumps.
         if (event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) {
+          return
+        }
+        if (start !== end || !onMoveCaret) {
+          if (verticalKey) clearColumn()
+          return
+        }
+        if (verticalKey) {
+          const column = retainVerticalColumn(verticalCaret, lines, start)
+          // Own movement between wrapped lines too: native movement would
+          // start from the clamped caret and lose the retained column.
+          if (verticalCaret) {
+            const within = offsetVertically({
+              key: verticalKey,
+              offset: start,
+              lines,
+              column,
+            })
+            if (within != null) {
+              event.preventDefault()
+              event.currentTarget.setSelectionRange(within, within)
+              revealTypingLine(event.currentTarget)
+              return
+            }
+          }
+          const move = offsetAfterArrow({
+            key: verticalKey,
+            offset: start,
+            text,
+            lines,
+            column,
+            previous,
+            next,
+          })
+          if (!move) {
+            // A vertical press that cannot cross paragraphs ends the run
+            // rather than holding a column for a move that never happened.
+            clearColumn()
+            return
+          }
+          event.preventDefault()
+          if (verticalCaret) armVerticalDelivery(verticalCaret, move)
+          onMoveCaret(move.paragraphId, move.offset)
           return
         }
         const move = offsetAfterArrow({
@@ -106,6 +183,7 @@ export function ParagraphEditor({
           offset: start,
           text,
           lines,
+          column: visualColumn(lines, start),
           previous,
           next,
         })
@@ -115,6 +193,7 @@ export function ParagraphEditor({
       }}
       onClick={(event) => {
         event.stopPropagation()
+        clearColumn()
         onSelect()
       }}
       onSelect={(event) => {

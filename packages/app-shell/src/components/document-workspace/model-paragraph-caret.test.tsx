@@ -10,7 +10,12 @@ import { wrapLines } from '../../document-page-flow'
 import { paragraphPlainText } from '../../document-model-text'
 import { paragraphFace, paragraphLineHeightPx } from '../../document-page-style'
 import { paragraphClickCaret } from './model-click-caret'
+import type { ParagraphWordEdit } from './model-paragraph'
 import { DocumentModelPage } from './model-view'
+import {
+  createVerticalCaretColumn,
+  type VerticalCaretColumn,
+} from './paragraph-arrow'
 
 afterEach(() => {
   cleanup()
@@ -147,6 +152,73 @@ function Harness({
       editing
       onRunTextChange={() => undefined}
     />
+  )
+}
+
+// The retained column lives above the paragraph textarea so it survives the
+// remount when a vertical arrow crosses into another paragraph.
+const sticky = createVerticalCaretColumn
+
+function wrappedLines(paragraph: DocumentParagraphWire, widthPx: number) {
+  const face = paragraphFace(paragraph, [])
+  return wrapLines(
+    paragraphPlainText(paragraph),
+    face.run.fontSizePx ?? paragraphLineHeightPx(face),
+    widthPx,
+    face.run.fontFamily,
+  )
+}
+
+function VerticalHarness({
+  model,
+  startId,
+  startOffset,
+  column,
+  pages,
+  wrapWidthPx = 4000,
+  onWordEdit,
+  onRunTextChange,
+}: {
+  model: DocumentModelWire
+  startId: string
+  startOffset: number
+  column?: VerticalCaretColumn
+  pages?: DocumentParagraphWire[][]
+  wrapWidthPx?: number
+  onWordEdit?: (edit: ParagraphWordEdit) => void
+  onRunTextChange?: (runId: string, text: string) => void
+}) {
+  const [selected, setSelected] = useState<string | null>(startId)
+  const [caret, setCaret] = useState<{
+    paragraphId: string
+    offset: number
+  } | null>({ paragraphId: startId, offset: startOffset })
+  const groups = pages ?? [model.stories[0]?.paragraphs ?? []]
+  return (
+    <>
+      {groups.map((group, index) => (
+        <DocumentModelPage
+          key={`page-${index + 1}`}
+          model={model}
+          pageNumber={index + 1}
+          pageBlocks={group.map((paragraph) => ({
+            type: 'paragraph' as const,
+            paragraph,
+            wrapWidthPx,
+          }))}
+          selectedParagraphId={selected}
+          restoreCaret={caret}
+          onSelectParagraph={(id, offset) => {
+            setSelected(id)
+            setCaret(offset == null ? null : { paragraphId: id, offset })
+          }}
+          editing
+          onWordEdit={onWordEdit}
+          onRunTextChange={onRunTextChange}
+          verticalCaret={column}
+        />
+      ))}
+    </>
   )
 }
 
@@ -598,5 +670,333 @@ describe('arrow keys across paragraphs', () => {
     fireEvent.keyDown(field(), { key: 'ArrowRight' })
     expect(edits).toEqual([])
     expect(texts).toEqual([])
+  })
+})
+
+describe('sticky desired column across consecutive vertical arrows', () => {
+  const long60 = 'a'.repeat(60)
+  const short10 = 'b'.repeat(10)
+  const longC = 'c'.repeat(60)
+  const three = doc(para('p1', long60), para('p2', short10), para('p3', longC))
+
+  const field = () =>
+    screen.getByLabelText('Paragraph text') as HTMLTextAreaElement
+  const down = () => fireEvent.keyDown(field(), { key: 'ArrowDown' })
+  const up = () => fireEvent.keyDown(field(), { key: 'ArrowUp' })
+
+  function establish(model: DocumentModelWire, column: VerticalCaretColumn) {
+    render(
+      <VerticalHarness
+        model={model}
+        startId="p1"
+        startOffset={40}
+        column={column}
+      />,
+    )
+    down()
+    expect(field().value).toBe(short10)
+    expect(field().selectionStart).toBe(10)
+  }
+
+  it('returns to the column established before a short destination line', () => {
+    render(
+      <VerticalHarness
+        model={three}
+        startId="p1"
+        startOffset={40}
+        column={sticky()}
+      />,
+    )
+    down()
+    expect(field().value).toBe(short10)
+    expect(field().selectionStart).toBe(10)
+    down()
+    expect(field().value).toBe(longC)
+    expect(field().selectionStart).toBe(40)
+  })
+
+  it('returns to the established column when moving up', () => {
+    render(
+      <VerticalHarness
+        model={three}
+        startId="p3"
+        startOffset={40}
+        column={sticky()}
+      />,
+    )
+    up()
+    expect(field().value).toBe(short10)
+    expect(field().selectionStart).toBe(10)
+    up()
+    expect(field().value).toBe(long60)
+    expect(field().selectionStart).toBe(40)
+  })
+
+  it('keeps the column across three or more paragraph crossings', () => {
+    const model = doc(
+      para('p1', long60),
+      para('p2', short10),
+      para('p3', 'd'.repeat(5)),
+      para('p4', longC),
+    )
+    render(
+      <VerticalHarness
+        model={model}
+        startId="p1"
+        startOffset={40}
+        column={sticky()}
+      />,
+    )
+    down()
+    expect(field().value).toBe(short10)
+    expect(field().selectionStart).toBe(10)
+    down()
+    expect(field().value).toBe('d'.repeat(5))
+    expect(field().selectionStart).toBe(5)
+    down()
+    expect(field().value).toBe(longC)
+    expect(field().selectionStart).toBe(40)
+  })
+
+  it('keeps the column through an empty paragraph', () => {
+    const model = doc(para('p1', long60), para('p2', ''), para('p3', longC))
+    render(
+      <VerticalHarness
+        model={model}
+        startId="p1"
+        startOffset={40}
+        column={sticky()}
+      />,
+    )
+    down()
+    expect(field().value).toBe('')
+    expect(field().selectionStart).toBe(0)
+    down()
+    expect(field().value).toBe(longC)
+    expect(field().selectionStart).toBe(40)
+  })
+
+  it('keeps the column across a page boundary', () => {
+    const p1 = para('p1', long60)
+    const p2 = para('p2', short10)
+    const p3 = para('p3', longC)
+    render(
+      <VerticalHarness
+        model={doc(p1, p2, p3)}
+        startId="p1"
+        startOffset={40}
+        column={sticky()}
+        pages={[[p1], [p2, p3]]}
+      />,
+    )
+    expect(document.querySelectorAll('[data-document-page]').length).toBe(2)
+    down()
+    expect(field().value).toBe(short10)
+    expect(field().selectionStart).toBe(10)
+    down()
+    expect(field().value).toBe(longC)
+    expect(field().selectionStart).toBe(40)
+  })
+
+  it('keeps the column across consecutive wrapped visual lines', () => {
+    const paragraph = para(
+      'p1',
+      'alpha bravo charlie delta echo foxtrot golf hotel india juliet',
+    )
+    const lines = wrappedLines(paragraph, 120)
+    expect(lines.length).toBeGreaterThan(2)
+    const column = 3
+    const first = lines[0]
+    if (!first) throw new Error('expected a first wrapped line')
+    render(
+      <VerticalHarness
+        model={doc(paragraph, para('p2', 'end'))}
+        startId="p1"
+        startOffset={first.from + column}
+        column={sticky()}
+        wrapWidthPx={120}
+      />,
+    )
+    down()
+    expect(field().selectionStart).toBe(lines[1]!.from + column)
+    down()
+    expect(field().selectionStart).toBe(lines[2]!.from + column)
+  })
+
+  it('clamps on a short wrapped last line, then restores the column above it', () => {
+    const text =
+      'alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima'
+    const paragraph = para('p1', text)
+    const lines = wrappedLines(paragraph, 120)
+    expect(lines.length).toBeGreaterThan(1)
+    const last = lines[lines.length - 1]!
+    const above = lines[lines.length - 2]!
+    const desired = last.to - last.from + 1
+    expect(desired).toBeLessThanOrEqual(above.to - above.from)
+    render(
+      <VerticalHarness
+        model={doc(paragraph, para('p2', 'x'.repeat(60)))}
+        startId="p2"
+        startOffset={desired}
+        column={sticky()}
+        wrapWidthPx={120}
+      />,
+    )
+    up()
+    expect(field().value).toBe(text)
+    expect(field().selectionStart).toBe(last.to)
+    up()
+    expect(field().selectionStart).toBe(above.from + desired)
+  })
+
+  it('ArrowLeft resets the column', () => {
+    establish(three, sticky())
+    fireEvent.keyDown(field(), { key: 'ArrowLeft' })
+    field().setSelectionRange(3, 3)
+    down()
+    expect(field().value).toBe(longC)
+    expect(field().selectionStart).toBe(3)
+  })
+
+  it('ArrowRight resets the column', () => {
+    const model = doc(
+      para('p1', long60),
+      para('p2', short10),
+      para('p3', longC),
+      para('p4', 'e'.repeat(60)),
+    )
+    establish(model, sticky())
+    fireEvent.keyDown(field(), { key: 'ArrowRight' })
+    expect(field().value).toBe(longC)
+    expect(field().selectionStart).toBe(0)
+    down()
+    expect(field().value).toBe('e'.repeat(60))
+    expect(field().selectionStart).toBe(0)
+  })
+
+  it('typing resets the column', () => {
+    establish(three, sticky())
+    fireEvent.keyDown(field(), { key: 'a' })
+    field().setSelectionRange(2, 2)
+    down()
+    expect(field().selectionStart).toBe(2)
+  })
+
+  it('a non-arrow key resets the column', () => {
+    establish(three, sticky())
+    fireEvent.keyDown(field(), { key: 'Home' })
+    field().setSelectionRange(2, 2)
+    down()
+    expect(field().selectionStart).toBe(2)
+  })
+
+  for (const key of ['Enter', 'Backspace', 'Delete'] as const) {
+    it(`${key} resets the column without changing its own behaviour`, () => {
+      establish(three, sticky())
+      const prevented = fireEvent.keyDown(field(), { key }) === false
+      expect(prevented).toBe(true)
+      field().setSelectionRange(2, 2)
+      down()
+      expect(field().selectionStart).toBe(2)
+    })
+  }
+
+  it('pointer caret placement resets the column', () => {
+    establish(three, sticky())
+    fireEvent.mouseDown(field(), { clientX: 10, clientY: 10 })
+    field().setSelectionRange(2, 2)
+    down()
+    expect(field().selectionStart).toBe(2)
+  })
+
+  const modifiers = [
+    { name: 'Shift', flag: { shiftKey: true } },
+    { name: 'Ctrl', flag: { ctrlKey: true } },
+    { name: 'Alt', flag: { altKey: true } },
+    { name: 'Meta', flag: { metaKey: true } },
+  ] as const
+
+  for (const modifier of modifiers) {
+    it(`${modifier.name}+ArrowUp leaves the retained column untouched`, () => {
+      establish(three, sticky())
+      const notPrevented = fireEvent.keyDown(field(), {
+        key: 'ArrowUp',
+        ...modifier.flag,
+      })
+      expect(notPrevented).toBe(true)
+      down()
+      expect(field().value).toBe(longC)
+      expect(field().selectionStart).toBe(40)
+    })
+  }
+
+  it('composition does not use or restore a pre-composition column', () => {
+    establish(three, sticky())
+    const node = field()
+    fireEvent.compositionStart(node)
+    fireEvent.keyDown(node, { key: 'ArrowDown' })
+    expect(field().value).toBe(short10)
+    fireEvent.compositionEnd(field())
+    field().setSelectionRange(4, 4)
+    down()
+    expect(field().value).toBe(longC)
+    expect(field().selectionStart).toBe(4)
+  })
+
+  it('a new editor instance does not inherit the previous column', () => {
+    const view = render(
+      <VerticalHarness
+        model={three}
+        startId="p1"
+        startOffset={40}
+        column={sticky()}
+      />,
+    )
+    down()
+    expect(field().selectionStart).toBe(10)
+    view.unmount()
+    render(
+      <VerticalHarness
+        model={three}
+        startId="p2"
+        startOffset={10}
+        column={sticky()}
+      />,
+    )
+    down()
+    expect(field().value).toBe(longC)
+    expect(field().selectionStart).toBe(10)
+  })
+
+  it('focus entering the editor from elsewhere does not inherit the column', () => {
+    establish(three, sticky())
+    const node = field()
+    node.blur()
+    node.focus()
+    field().setSelectionRange(3, 3)
+    down()
+    expect(field().value).toBe(longC)
+    expect(field().selectionStart).toBe(3)
+  })
+
+  it('navigation alone emits no document edit', () => {
+    const texts: unknown[] = []
+    const edits: unknown[] = []
+    render(
+      <VerticalHarness
+        model={three}
+        startId="p1"
+        startOffset={40}
+        column={sticky()}
+        onRunTextChange={(runId, text) => texts.push({ runId, text })}
+        onWordEdit={(edit) => edits.push(edit)}
+      />,
+    )
+    down()
+    down()
+    up()
+    down()
+    expect(texts).toEqual([])
+    expect(edits).toEqual([])
   })
 })

@@ -17,18 +17,118 @@ export type ArrowNeighbor = {
   lines: WrappedLine[]
 }
 
+/**
+ * The visual column a run of plain ArrowUp/ArrowDown presses is trying to
+ * hold. It lives above the paragraph textarea so the remount when the caret
+ * crosses into another paragraph does not lose it. Any other interaction
+ * clears it.
+ */
+export type VerticalCaretColumn = {
+  column: number | null
+  /** The one destination a vertical move may hand the column to on focus. */
+  pending: VerticalCaretDelivery | null
+}
+
+/** The paragraph a vertical move is about to focus, and where in it. */
+export type VerticalCaretDelivery = {
+  paragraphId: string
+  offset: number
+}
+
+export function createVerticalCaretColumn(): VerticalCaretColumn {
+  return { column: null, pending: null }
+}
+
+/** Arm the one-shot delivery for the paragraph a vertical move will focus. */
+export function armVerticalDelivery(
+  state: VerticalCaretColumn | undefined,
+  delivery: VerticalCaretDelivery,
+): void {
+  if (!state) return
+  state.pending = delivery
+}
+
+/**
+ * Whether `delivery` is the exact transition the pending move armed. A
+ * programmatic selection that lands elsewhere, or at another offset of the
+ * same paragraph, is not the transition and must end the run.
+ */
+export function isVerticalDelivery(
+  state: VerticalCaretColumn | undefined,
+  delivery: VerticalCaretDelivery,
+): boolean {
+  return (
+    state?.pending?.paragraphId === delivery.paragraphId &&
+    state.pending.offset === delivery.offset
+  )
+}
+
+/**
+ * Consume the pending delivery on focus. Returns true only for the intended
+ * destination; any other paragraph clears the run. Either way the transition
+ * is spent, so it cannot leak into a later movement.
+ */
+export function consumeVerticalDelivery(
+  state: VerticalCaretColumn | undefined,
+  paragraphId: string,
+): boolean {
+  if (!state) return false
+  const intended = state.pending?.paragraphId === paragraphId
+  state.pending = null
+  return intended
+}
+
+/** The visual (wrapped-line) column the caret sits at. */
+export function visualColumn(lines: WrappedLine[], offset: number): number {
+  const line = lines[lineIndex(lines, offset)]
+  return line ? Math.max(0, offset - line.from) : offset
+}
+
+/**
+ * Establish the run's column on the first press, then read it back. A short
+ * destination line clamps the caret, never the retained column.
+ */
+export function retainVerticalColumn(
+  state: VerticalCaretColumn | undefined,
+  lines: WrappedLine[],
+  offset: number,
+): number {
+  if (!state) return visualColumn(lines, offset)
+  state.column ??= visualColumn(lines, offset)
+  return state.column
+}
+
+export function clearVerticalColumn(
+  state: VerticalCaretColumn | undefined,
+): void {
+  if (!state) return
+  state.column = null
+  state.pending = null
+}
+
+/** The offset above or below with the caret at the retained visual column. */
+export function offsetVertically(input: {
+  key: 'ArrowUp' | 'ArrowDown'
+  offset: number
+  lines: WrappedLine[]
+  column: number
+}): number | undefined {
+  const index = lineIndex(input.lines, input.offset)
+  const line = input.lines[input.key === 'ArrowUp' ? index - 1 : index + 1]
+  return line ? offsetOnLine(line, input.column) : undefined
+}
+
 export function offsetAfterArrow(input: {
   key: string
   offset: number
   text: string
   lines: WrappedLine[]
+  column: number
   previous?: ArrowNeighbor
   next?: ArrowNeighbor
 }): { paragraphId: string; offset: number } | undefined {
-  const { key, offset, text, lines, previous, next } = input
+  const { key, offset, text, lines, column, previous, next } = input
   const index = lineIndex(lines, offset)
-  const origin = lines[index]
-  const column = origin ? offset - origin.from : offset
   if (key === 'ArrowLeft' && offset === 0 && previous) {
     return { paragraphId: previous.id, offset: previous.text.length }
   }
