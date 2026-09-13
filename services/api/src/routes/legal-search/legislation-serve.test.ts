@@ -51,18 +51,21 @@ function createDeps(overrides: {
   provision?: typeof currentProvision | null
   keywordHits?: Array<Record<string, unknown>>
   actsError?: boolean
+  directoryActs?: typeof acts
 }): LegislationServeDeps {
+  const directoryActs = overrides.directoryActs ?? acts
   const pool = {
     query: vi.fn(async (text: string, values?: unknown[]) => {
       if (overrides.actsError) throw new Error('db down')
       if (text.includes('from legislation_documents order by'))
-        return { rows: acts }
-      if (text.includes('from legislation_documents\n')) return { rows: acts }
+        return { rows: directoryActs }
+      if (text.includes('from legislation_documents\n'))
+        return { rows: directoryActs }
       if (text.includes('from legislation_documents')) {
         return {
           rows:
             text.includes('year = $1') || text.includes('identity = $1')
-              ? acts
+              ? directoryActs
               : [],
         }
       }
@@ -287,6 +290,56 @@ describe('resolveLegislationFetch', () => {
     expect(result.note).toContain('Children Act 1989')
     // No keyword search ran, so nothing may report parameters for one.
     expect(result.keywordSearchParameters).toBe(null)
+  })
+
+  it('serves keyword provisions for prose about an unheld Act, in both casings', async () => {
+    // L35: the sentence-initial form must reach the same keyword path as its
+    // lowercase twin. Before the repair the capitalised form short-circuited
+    // on titleUnresolved and the neighbour provision was never served; the
+    // lowercase twin already keyword-searched.
+    const directoryActs = [
+      ...acts,
+      {
+        identity: 'ukpga/2023/42',
+        actType: 'ukpga',
+        year: 2023,
+        number: 42,
+        title: 'Powers of Attorney Act 2023',
+        sourceUrl: 'https://www.legislation.gov.uk/ukpga/2023/42',
+        extent: 'E+W',
+      },
+      {
+        identity: 'ukpga/2022/32',
+        actType: 'ukpga',
+        year: 2022,
+        number: 32,
+        title: 'Police, Crime, Sentencing and Courts Act 2022',
+        sourceUrl: 'https://www.legislation.gov.uk/ukpga/2022/32',
+        extent: 'E+W',
+      },
+    ]
+    const neighbour = {
+      ...currentProvision,
+      id: 'ukpga/2026/21/section/12',
+      provisionRef: 'ukpga/2026/21/section/12',
+      documentIdentity: 'ukpga/2026/21',
+      labelPath: 'section/12',
+      title: "Children's Wellbeing and Schools Act 2026",
+      text: 'A provision that shares a word with the title.',
+    }
+    for (const query of [
+      'Defences under Children Act 1989',
+      'defences under Children Act 1989',
+    ]) {
+      const result = await resolveLegislationFetch(
+        createDeps({ directoryActs, keywordHits: [neighbour] }),
+        query,
+      )
+      expect(result.titleUnresolved).toBe(false)
+      expect(result.recognisedNotHeld).toBe(false)
+      expect(result.groups[0]?.hits[0]?.id).toBe(neighbour.id)
+      expect(result.keywordSearchParameters).not.toBe(null)
+    }
   })
 
   it('reports an unheld chapter number as not held', async () => {
