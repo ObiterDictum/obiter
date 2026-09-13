@@ -121,8 +121,8 @@ d1 = Diagram(920, 430, "Build-time dependency graph",
              "pointing from a dependent to what it depends on.")
 d1.band(8, 8, 904, 62, "CONSUMERS", "var(--info)")
 d1.band(8, 108, 904, 62, "FEATURE UI", "var(--warning)")
-d1.band(8, 208, 904, 62, "DOMAIN", "var(--warning)")
-d1.band(8, 308, 904, 62, "PRIMITIVES", "var(--subtle)")
+d1.band(8, 208, 904, 118, "DOMAIN", "var(--warning)")
+d1.band(8, 348, 904, 62, "PRIMITIVES", "var(--subtle)")
 
 d1.node("web", 40, 26, "@obiter/web", accent="var(--info)")
 d1.node("desktop", 200, 26, "@obiter/desktop", accent="var(--info)")
@@ -136,11 +136,12 @@ d1.node("ooxml", 60, 226, "@obiter/ooxml", accent="var(--warning)")
 d1.node("policy", 330, 226, "@obiter/redaction-policy", accent="var(--warning)")
 d1.node("searchc", 560, 226, "@obiter/search-client", accent="var(--warning)")
 d1.node("rampart", 728, 226, "@obiter/rampart-inference", accent="var(--warning)")
+d1.node("verifycore", 330, 284, "@obiter/verification-core", accent="var(--warning)")
 
-d1.node("contracts", 60, 326, "@obiter/contracts", accent="var(--subtle)")
-d1.node("ui", 250, 326, "@obiter/ui", accent="var(--subtle)")
-d1.node("legalschema", 420, 326, "@obiter/legal-schema", accent="var(--subtle)")
-d1.node("database", 640, 326, "@obiter/database", accent="var(--subtle)")
+d1.node("contracts", 60, 366, "@obiter/contracts", accent="var(--subtle)")
+d1.node("ui", 250, 366, "@obiter/ui", accent="var(--subtle)")
+d1.node("legalschema", 420, 366, "@obiter/legal-schema", accent="var(--subtle)")
+d1.node("database", 640, 366, "@obiter/database", accent="var(--subtle)")
 
 for a, b in [("web", "shell"), ("desktop", "shell"), ("web", "redactui"),
              ("desktop", "redactui")]:
@@ -159,6 +160,10 @@ d1.edge("api", "policy", curve=-30)
 d1.edge("api", "searchc", curve=20)
 d1.edge("api", "rampart", curve=60)
 d1.edge("ingestor", "searchc", curve=-20)
+# verification-core is pure domain vocabulary: it depends on the shared path
+# grammar and source types, and nothing depends on it until V2-V6 land.
+d1.edge("verifycore", "contracts")
+d1.edge("verifycore", "legalschema")
 
 # ------------------------------------------------------------------- runtime
 d2 = Diagram(920, 400, "Runtime topology",

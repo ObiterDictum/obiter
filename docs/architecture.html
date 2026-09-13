@@ -935,7 +935,7 @@
             <li><b>Repo</b> ObiterDictum/obiter</li>
             <li><b>Branch</b> dev</li>
             <li><b>Licence</b> Elastic 2.0</li>
-            <li><b>Verified</b> 2026-07-27</li>
+            <li><b>Verified</b> 2026-09-13</li>
           </ul>
         </div>
 
@@ -951,8 +951,8 @@
             Three product surfaces carry code: <b>Search</b> over Find Case Law
             judgments, <b>Redact</b> for detecting and removing personal data,
             and <b>Matters</b> for private document workspaces. Two more, Verify
-            and Research, are named throughout the documentation but have no
-            implementation.
+            and Research, are documented but not yet product surfaces: Verify
+            has a pure domain package and no surface, Research has neither.
           </p>
           <div class="callout">
             <b>Reading the layers.</b> The stack below is ordered by dependency
@@ -1066,9 +1066,11 @@
                   ><b>@obiter/search-client</b
                   ><span>Meilisearch index and ranking</span></a
                 >
-                <span class="node stub"
+                <a
+                  class="node"
+                  href="https://github.com/ObiterDictum/obiter/tree/dev/packages/verification-core"
                   ><b>@obiter/verification-core</b
-                  ><span>README only</span></span
+                  ><span>Citation, evidence and finding vocabulary</span></a
                 >
               </div>
             </div>
@@ -1518,21 +1520,21 @@
                 </defs>
                 <rect
                   x="8"
-                  y="308"
+                  y="348"
                   width="904"
                   height="62"
                   rx="3"
                   fill="var(--surface)"
                   stroke="var(--line)"
                 />
-                <text x="17" y="323" class="b" fill="var(--subtle)">
+                <text x="17" y="363" class="b" fill="var(--subtle)">
                   PRIMITIVES
                 </text>
                 <rect
                   x="8"
                   y="208"
                   width="904"
-                  height="62"
+                  height="118"
                   rx="3"
                   fill="var(--surface)"
                   stroke="var(--line)"
@@ -1706,57 +1708,71 @@
                 </g>
                 <g>
                   <rect
+                    x="330"
+                    y="284"
+                    width="173.2"
+                    height="30"
+                    rx="2"
+                    fill="var(--raised)"
+                    stroke="var(--warning)"
+                  />
+                  <text x="416.6" y="302.5" text-anchor="middle" class="n">
+                    @obiter/verification-core
+                  </text>
+                </g>
+                <g>
+                  <rect
                     x="60"
-                    y="326"
+                    y="366"
                     width="124.8"
                     height="30"
                     rx="2"
                     fill="var(--raised)"
                     stroke="var(--subtle)"
                   />
-                  <text x="122.4" y="344.5" text-anchor="middle" class="n">
+                  <text x="122.4" y="384.5" text-anchor="middle" class="n">
                     @obiter/contracts
                   </text>
                 </g>
                 <g>
                   <rect
                     x="250"
-                    y="326"
+                    y="366"
                     width="82.5"
                     height="30"
                     rx="2"
                     fill="var(--raised)"
                     stroke="var(--subtle)"
                   />
-                  <text x="291.25" y="344.5" text-anchor="middle" class="n">
+                  <text x="291.25" y="384.5" text-anchor="middle" class="n">
                     @obiter/ui
                   </text>
                 </g>
                 <g>
                   <rect
                     x="420"
-                    y="326"
+                    y="366"
                     width="143.0"
                     height="30"
                     rx="2"
                     fill="var(--raised)"
                     stroke="var(--subtle)"
                   />
-                  <text x="491.5" y="344.5" text-anchor="middle" class="n">
+                  <text x="491.5" y="384.5" text-anchor="middle" class="n">
                     @obiter/legal-schema
                   </text>
                 </g>
                 <g>
                   <rect
                     x="640"
-                    y="326"
+                    y="366"
                     width="118.8"
                     height="30"
                     rx="2"
                     fill="var(--raised)"
                     stroke="var(--subtle)"
                   />
-                  <text x="699.4" y="344.5" text-anchor="middle" class="n">
+                  <text x="699.4" y="384.5" text-anchor="middle" class="n">
                     @obiter/database
                   </text>
                 </g>
@@ -1803,14 +1819,14 @@
                   marker-end="url(#ah-t-build-time-dependency-graph)"
                 />
                 <path
-                  d="M122.4,156 Q172.4,241.0 122.4,326"
+                  d="M122.4,156 Q172.4,261.0 122.4,366"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
                   marker-end="url(#ah-t-build-time-dependency-graph)"
                 />
                 <path
-                  d="M122.4,156 Q236.825,241.0 291.25,326"
+                  d="M122.4,156 Q236.825,261.0 291.25,366"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
@@ -1824,28 +1840,28 @@
                   marker-end="url(#ah-t-build-time-dependency-graph)"
                 />
                 <path
-                  d="M312.4,156 Q281.825,241.0 291.25,326"
+                  d="M312.4,156 Q281.825,261.0 291.25,366"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
                   marker-end="url(#ah-t-build-time-dependency-graph)"
                 />
                 <path
-                  d="M110.3,256 L122.4,326"
+                  d="M110.3,256 L122.4,366"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
                   marker-end="url(#ah-t-build-time-dependency-graph)"
                 />
                 <path
-                  d="M413.6,256 Q208.0,291.0 122.4,326"
+                  d="M413.6,256 Q208.0,311.0 122.4,366"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
                   marker-end="url(#ah-t-build-time-dependency-graph)"
                 />
                 <path
-                  d="M634.55,256 Q533.025,291.0 491.5,326"
+                  d="M634.55,256 Q533.025,311.0 491.5,366"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
@@ -1881,6 +1897,20 @@
                 />
                 <path
                   d="M687.55,56 Q641.05,141.0 634.55,226"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-build-time-dependency-graph)"
+                />
+                <path
+                  d="M416.6,314 L122.4,366"
+                  fill="none"
+                  stroke="var(--line-strong)"
+                  stroke-width="1"
+                  marker-end="url(#ah-t-build-time-dependency-graph)"
+                />
+                <path
+                  d="M416.6,314 L491.5,366"
                   fill="none"
                   stroke="var(--line-strong)"
                   stroke-width="1"
@@ -2191,7 +2221,7 @@
         <section id="packages">
           <h2>Packages</h2>
           <p class="lede">
-            Eleven packages carry code. Primitives sit at the bottom of the
+            Twelve packages carry code. Primitives sit at the bottom of the
             graph and import nothing internal.
           </p>
 
@@ -2304,6 +2334,46 @@
                 <dd>
                   id · title · neutralCitation · court · jurisdiction ·
                   paragraphs.text
+                </dd>
+              </dl>
+            </article>
+
+            <article class="module">
+              <header>
+                <h4>
+                  <a
+                    href="https://github.com/ObiterDictum/obiter/tree/dev/packages/verification-core/src"
+                    >@obiter/verification-core</a
+                  >
+                </h4>
+              </header>
+              <p>
+                Pure domain vocabulary for Verify: the citation and its
+                normalized identity, the immutable draft subject and its UTF-16
+                draft locations, evidence references into public source
+                material, and the conservative finding status model. No storage,
+                network, provider calls or UI.
+              </p>
+              <dl class="kv">
+                <dt>Exports</dt>
+                <dd>
+                  citationInputSchema · normalizedCitationSchema ·
+                  normalizeLegislationCitationPath · evidenceReferenceSchema ·
+                  createEvidenceReferenceId · verificationFindingSchema ·
+                  findingStatusSchema · requiresReview ·
+                  createVerificationFindingId · draftLocationSchema ·
+                  verificationSubjectSchema
+                </dd>
+                <dt>Depends on</dt>
+                <dd>
+                  @obiter/contracts (the canonical /ln/ path grammar) ·
+                  @obiter/legal-schema (LegalSourceType)
+                </dd>
+                <dt>Rule</dt>
+                <dd>
+                  a clear or flagged finding needs evidence naming its resolved
+                  source, an unrun check claims nothing, and identifiers are
+                  length-prefixed so distinct findings cannot collide
                 </dd>
               </dl>
             </article>
@@ -5608,6 +5678,13 @@
                 <tr>
                   <td>Ranking or index behaviour</td>
                   <td class="id">packages/search-client</td>
+                </tr>
+                <tr>
+                  <td>Verify vocabulary (citation, finding, evidence)</td>
+                  <td class="id">
+                    packages/verification-core, pure values; the V2+ API, worker
+                    and UI consume it
+                  </td>
                 </tr>
                 <tr>
                   <td>Platform-specific behaviour</td>
