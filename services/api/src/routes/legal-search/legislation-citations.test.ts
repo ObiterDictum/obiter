@@ -31,6 +31,23 @@ const entries: LegislationActDirectoryEntry[] = [
     identity: 'ukpga/2020/1',
     title: 'Sample Act 2020',
   },
+  // Real titles whose lowercase joining words (`of`, `and`) teach the
+  // directory what a short title may contain. Without them the classifier has
+  // no title grammar to read and can only fall back on containment.
+  {
+    actType: 'ukpga',
+    year: 2023,
+    number: 42,
+    identity: 'ukpga/2023/42',
+    title: 'Powers of Attorney Act 2023',
+  },
+  {
+    actType: 'ukpga',
+    year: 2022,
+    number: 32,
+    identity: 'ukpga/2022/32',
+    title: 'Police, Crime, Sentencing and Courts Act 2022',
+  },
 ]
 
 const directory = createActDirectory(entries)
@@ -581,6 +598,116 @@ describe('determiner-free subject queries (finding 1)', () => {
     // "Misuse of Drugs" is an unheld whole-title request, not prose: a
     // directory token between two unknown nouns is how short titles are
     // built, so the run must stay a title request.
+    expect(
+      classifyLegislationCitation('Misuse of Drugs Act 1971', directory),
+    ).toEqual({
+      kind: 'unresolved_title',
+      recognisedQuery: 'Misuse of Drugs Act 1971',
+    })
+  })
+})
+
+describe('prose classification is structural, not casing-led (L35)', () => {
+  // The determiner-free repair still read the case of the first token as
+  // evidence about the whole query, so "Defences under Children Act 1989" was
+  // a title request while its lowercase twin was prose. Each pair must route
+  // identically: a clause with leading words before the capitalised title
+  // phrase is prose whatever the sentence-initial case.
+  it.each([
+    ['Defences under Children Act 1989', 'defences under Children Act 1989'],
+    ['Duties under Equality Act 2010', 'duties under Equality Act 2010'],
+    ['DUTIES UNDER EQUALITY ACT 2010', 'duties under Equality Act 2010'],
+    [
+      'Sentencing powers in Criminal Justice Act 2003',
+      'sentencing powers in Criminal Justice Act 2003',
+    ],
+  ])(
+    'routes the sentence-initial form %s as its lowercase twin %s',
+    (sentenceInitial, lowercase) => {
+      const initial = classifyLegislationCitation(sentenceInitial, directory)
+      const plain = classifyLegislationCitation(lowercase, directory)
+      expect(initial.kind).toBe('unrecognised')
+      expect(plain.kind).toBe('unrecognised')
+      expect(initial.kind).toBe(plain.kind)
+    },
+  )
+
+  it('keeps a held Act named inside prose eligible for keyword search', () => {
+    // Directory containment alone is not the rule: the phrase boundary must
+    // leave the held title reachable in both casings.
+    for (const query of [
+      'Duties under Equality Act 2010',
+      'duties under Equality Act 2010',
+    ]) {
+      expect(classifyLegislationCitation(query, directory).kind).toBe(
+        'unrecognised',
+      )
+    }
+  })
+
+  it('still suppresses a genuine whole-title request the directory does not hold', () => {
+    // The repair must not turn every Act-shaped query into prose. A whole-title
+    // request that resolves to nothing stays on the honest suppression path, so
+    // unrelated provisions are never served as its answer.
+    for (const query of [
+      'Children Act 1989',
+      'children act 1989',
+      'Companies Act 2006',
+      'Landlord and Tenant Act 1985',
+    ]) {
+      expect(classifyLegislationCitation(query, directory)).toEqual({
+        kind: 'unresolved_title',
+        recognisedQuery: query,
+      })
+    }
+  })
+
+  it('keeps an underspecified fragment on the no-claim path', () => {
+    // "Act 2020" and "the Act 2020" carry no title words, so they can make no
+    // claim at all: not unresolved-title, not not-held.
+    for (const query of ['Act 2020', 'the Act 2020']) {
+      expect(classifyLegislationCitation(query, directory)).toEqual({
+        kind: 'unrecognised',
+      })
+    }
+  })
+
+  it('never asserts an exact Act, provision or not-held for a bare fragment', () => {
+    // These cannot be told apart from a lowercased whole-title request without
+    // a lexicon, so they stay on the safe suppression path. The invariant is
+    // the absence of a legal assertion, not the routing.
+    for (const query of [
+      'this Act 2020',
+      'section 5 applies under the Act 2020',
+    ]) {
+      const outcome = classifyLegislationCitation(query, directory)
+      expect(['not_held', 'act', 'provision']).not.toContain(outcome.kind)
+    }
+  })
+
+  it('keeps a held title that carries a terminal status annotation held', () => {
+    const repealed = createActDirectory([
+      {
+        actType: 'ukpga',
+        year: 2021,
+        number: 28,
+        identity: 'ukpga/2021/28',
+        title: 'Health and Social Care Levy Act 2021 (repealed)',
+      },
+    ])
+    const outcome = classifyLegislationCitation(
+      'Health and Social Care Levy Act 2021',
+      repealed,
+    )
+    expect(outcome.kind).toBe('act')
+    if (outcome.kind === 'act') {
+      expect(outcome.act.identity).toBe('ukpga/2021/28')
+    }
+  })
+
+  it('keeps a title whose name wraps a known connector a title request', () => {
+    // "Misuse of Drugs" is unheld, and its middle word is a directory
+    // connector, so the whole run is a title phrase, not a clause.
     expect(
       classifyLegislationCitation('Misuse of Drugs Act 1971', directory),
     ).toEqual({

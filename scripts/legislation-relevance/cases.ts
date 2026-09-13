@@ -415,6 +415,80 @@ const absentAct = absent('absent_act', [
     'Criminal Justice Act 2003',
     { kind: 'act_not_held', title: 'Criminal Justice Act 2003' },
   ],
+  // Connector-bearing unheld titles. The joining word is what makes the run a
+  // title rather than a clause, and the closed grammar must supply it from
+  // outside the stored directory, so dropping the stored title that happens to
+  // carry `the` or `from` cannot turn these into keyword searches.
+  [
+    'absent-act-offences-against-person-1861',
+    'Offences Against the Person Act 1861',
+    { kind: 'act_not_held', title: 'Offences Against the Person Act 1861' },
+  ],
+  [
+    'absent-act-protection-from-harassment-1997',
+    'Protection from Harassment Act 1997',
+    { kind: 'act_not_held', title: 'Protection from Harassment Act 1997' },
+  ],
+  // Fail-first on 846fefa. A standalone outer Act title that embeds a held
+  // Act was routed to prose by inner-title containment, so the keyword path
+  // served provisions of the held 2023 Act (or, for `, as amended`, of an
+  // unrelated Act) as the answer. Both cases must suppress with no hits.
+  [
+    'absent-act-worker-protection-nested-2010',
+    'Worker Protection (Amendment of Equality Act 2010) Act 2010',
+    {
+      kind: 'act_not_held',
+      title: 'Worker Protection (Amendment of Equality Act 2010) Act 2010',
+    },
+  ],
+  [
+    'absent-act-worker-protection-nested-multiple',
+    'Worker Protection (Amendment of Equality Act 2010 and Human Rights Act 1998) Act 1999',
+    {
+      kind: 'act_not_held',
+      title:
+        'Worker Protection (Amendment of Equality Act 2010 and Human Rights Act 1998) Act 1999',
+    },
+  ],
+  // Fail-first on the attached-opener defect. `(Equality` is one raw token, so
+  // the token-boundary depth test read the held run as an unbracketed separate
+  // mention and served provisions of an unrelated Act; `[Equality` and
+  // `{Equality` behaved the same way. Each must now suppress with no hits, and
+  // the spaced twins must classify identically.
+  [
+    'absent-act-amendment-of-equality-2010-attached',
+    'Amendment of (Equality Act 2010) Act 2020',
+    {
+      kind: 'act_not_held',
+      title: 'Amendment of (Equality Act 2010) Act 2020',
+    },
+  ],
+  [
+    'absent-act-amendment-of-equality-2010-spaced',
+    'Amendment of ( Equality Act 2010 ) Act 2020',
+    {
+      kind: 'act_not_held',
+      title: 'Amendment of ( Equality Act 2010 ) Act 2020',
+    },
+  ],
+  [
+    'absent-act-bracket-attached-equality-2010',
+    'X [Equality Act 2010] Act 2020',
+    { kind: 'act_not_held', title: 'X [Equality Act 2010] Act 2020' },
+  ],
+  [
+    'absent-act-bracket-attached-human-rights-1998',
+    'Changes (Human Rights Act 1998) Act 2020',
+    {
+      kind: 'act_not_held',
+      title: 'Changes (Human Rights Act 1998) Act 2020',
+    },
+  ],
+  [
+    'absent-act-children-1989-as-amended',
+    'Children Act 1989, as amended',
+    { kind: 'act_not_held', title: 'Children Act 1989, as amended' },
+  ],
 ])
 
 const absentChapter = absent('absent_act', [
@@ -511,6 +585,27 @@ const controlQueries = control([
     'changes introduced by Companies Act 2006',
   ],
   ['control-defences-children-1989-plain', 'defences under Children Act 1989'],
+  // L35: sentence-initial capitalisation must not decide routing. Each of these
+  // is the capitalised form of a prose query already listed above, and must
+  // reach the same keyword path. The uppercase pair exercises a held Act
+  // (Equality Act 2010) so the held-title branch is scored too.
+  [
+    'control-defences-children-1989-sentence-initial',
+    'Defences under Children Act 1989',
+  ],
+  [
+    'control-sentencing-criminal-justice-2003-sentence-initial',
+    'Sentencing powers in Criminal Justice Act 2003',
+  ],
+  ['control-duties-equality-2010-uppercase', 'DUTIES UNDER EQUALITY ACT 2010'],
+  // Attached-opener straddling token (finding 6): the prose word and the held
+  // Act share one raw token (`under(Equality`). The covered title word's
+  // capital must not promote the residue into a title phrase, or the query
+  // suppresses as an outer title instead of keyword-searching.
+  [
+    'control-duties-under-attached-equality-2010',
+    'Duties under(Equality Act 2010)',
+  ],
 ])
 
 export const legislationRelevanceCases: LegislationRelevanceCase[] = [
