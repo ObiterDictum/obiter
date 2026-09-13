@@ -1,21 +1,32 @@
 /**
- * Act short-title grammar: the fold applied to a typed title, the stored-title
- * directory, and the whole-title-versus-prose decision.
+ * Act short-title grammar and the stored-title directory: the phrase test
+ * that decides whether an Act-shaped query is a whole-title request or a
+ * clause about one, and the directory evidence it reads.
  *
- * Pure and storage-free. `legislation-citations.ts` owns citation parsing and
- * calls in here for anything about what counts as a title. Keeping the
- * decision here is why the citation module stays under its size ceiling and
- * why the grammar has one home.
+ * Pure and storage-free. The fold and the bounded trailing-presentation
+ * trimming live in `legislation-title-boundary.ts` (one home for the fold);
+ * `legislation-citations.ts` owns citation parsing and calls in here for
+ * anything about what counts as a title.
  *
  * The joining-word grammar below is closed at compile time. Nothing here reads
  * the directory to build it, so adding or removing a stored Act cannot move
- * how an unrelated query classifies. That was the defect in the previous
+ * how an unrelated query classifies. That was the defect in an earlier
  * revision: the vocabulary was mined from the stored titles, so dropping the
  * one title carrying `the` turned `Offences Against the Person Act 1861` from
  * suppression into a keyword search.
  */
 
-import { exactMatchPunctuationFolds } from '@obiter/search-client'
+import {
+  looseActTitleKey,
+  normalizeActTitle,
+  trimTitleBoundary,
+} from './legislation-title-boundary'
+
+export {
+  looseActTitleKey,
+  normalizeActTitle,
+  trimTitleBoundary,
+} from './legislation-title-boundary'
 
 export interface LegislationActDirectoryEntry {
   actType: string
@@ -71,129 +82,24 @@ const titleJoiningWordSet: ReadonlySet<string> = new Set(
 )
 
 /**
- * The one fold applied to both a typed Act title and every stored title.
- *
- * NFKC plus the shared quote/dash map (`exactMatchPunctuationFolds`, the same
- * fold neutral-citation matching uses), then case, punctuation and whitespace
- * folding. Folding one side only trades a failure for its mirror: the stored
- * title carries U+2019 (Renters’ Rights Act 2025) while a UK keyboard emits
- * the straight apostrophe. NFKC also folds the non-breaking spaces Word and
- * Google Docs paste in.
- *
- * Three deliberate choices make the fold converge on the forms people type:
- *
- * - A terminal `(repealed)` status annotation is stripped from the lookup key
- *   only. legislation.gov.uk's dc:title carries the status, but a lawyer
- *   citing the Act never types it, so the canonical citation missed every
- *   repealed Act. The served title keeps the annotation; only the key drops
- *   it. No other parenthetical is stripped: `(Public Lavatories)`,
- *   `(Digital Assets etc)` and friends are part of the short title.
- * - Apostrophes are deleted, not replaced with a space, so a dropped-
- *   apostrophe spelling ("Childrens") converges on the stored ("Children’s").
- * - `&` folds to `and`, a hyphen becomes a space, and the filler token `etc`
- *   is dropped, so the surface forms of a title converge. A hyphen deleted
- *   entirely is left to the relaxed key below.
- */
-const terminalStatusAnnotation = /\s*\(repealed\)\s*$/i
-const titleFillerTokens = new Set(['etc'])
-
-export function normalizeActTitle(value: string): string {
-  const punctuationFolded = exactMatchPunctuationFolds.reduce(
-    (normalized, [from, to]) => normalized.replaceAll(from, to),
-    value.normalize('NFKC'),
-  )
-  return punctuationFolded
-    .toLowerCase()
-    .replace(terminalStatusAnnotation, ' ')
-    .replace(/&/g, ' and ')
-    .replace(/['\u2019]/g, '')
-    .replace(/[.,;:"()[\]]/g, ' ')
-    .replace(/-/g, ' ')
-    .split(/\s+/)
-    .filter((token) => token.length > 0 && !titleFillerTokens.has(token))
-    .join(' ')
-    .trim()
-}
-
-/**
- * The relaxed key: whitespace and the remaining punctuation are removed, so a
- * deleted hyphen (`Cooperatives` vs `Co-operatives`) converges too. It is only
- * consulted when the strict key misses, and a relaxed key that matches more
- * than one stored Act is ambiguous, never a silent winner.
- */
-export function looseActTitleKey(value: string): string {
-  return normalizeActTitle(value).replace(/[^a-z0-9]/g, '')
-}
-
-/** Quote pairs whose balanced ends may wrap a whole-title request. */
-const wrappingQuotes: ReadonlyMap<string, string> = new Map([
-  ['"', '"'],
-  ["'", "'"],
-  ['\u201C', '\u201D'],
-  ['\u2018', '\u2019'],
-])
-
-/**
- * Punctuation, whitespace and unmatched closing wrappers a whole-title
- * request may trail. Bounded on purpose: only these characters, never a word,
- * so `Children Act 1989 extra` is not a standalone title.
- */
-const trailingTitlePunctuation = /[\s.,;:!?)\]}"'\u201D\u2019]+$/
-
-/**
- * The recognised terminal status annotation plus any punctuation after it.
- * Only `(repealed)` is recognised; every other parenthetical is part of a
- * short title or of the query, so it must leave the query prose.
- */
-const terminalStatusBoundary =
-  /\s*\(\s*repealed\s*\)[\s.,;:!?)\]}"'\u201D\u2019]*$/i
-
-/**
- * The whole-title core of a query: the bounded trailing noise removed.
- *
- * A bare title request may arrive as a sentence (`Children Act 1989.`), inside
- * a search-box quote (`"Children Act 1989"`), or carrying the status
- * annotation legislation.gov.uk appends (`Children Act 1989 (repealed)`).
- * Those are the same request, and none may keyword-serve unrelated provisions.
- * Words and unrecognised parentheticals are not touched, so a phrase that
- * merely resembles a title stays prose. Quotes only come off when they balance
- * around the whole string, so `Children's Rights Act` is left alone.
- */
-export function trimTitleBoundary(value: string): string {
-  let core = value.trim()
-  for (;;) {
-    const before = core
-    const first = core[0]
-    const last = core[core.length - 1]
-    if (
-      first !== undefined &&
-      last !== undefined &&
-      wrappingQuotes.get(first) === last
-    ) {
-      core = core.slice(1, -1).trim()
-    }
-    core = core.replace(terminalStatusBoundary, '').trim()
-    core = core.replace(trailingTitlePunctuation, '').trim()
-    if (core === before) return core
-  }
-}
-
-/**
  * Act-shaped detection: an Act title run followed by `Act <year>`. Section
  * and schedule forms are split before this tests, so only the Act remainder
- * reaches it. `run` is the normalized title run (directory lookup); `rawRun`
- * keeps the casing (structure). Null when the value is not Act-shaped.
+ * reaches it. `core` is the boundary-trimmed query; `run` is the normalized
+ * title run (directory lookup); `rawRun` keeps the casing (structure). Null
+ * when the value is not Act-shaped.
  */
 interface ActShape {
+  core: string
   run: string
   rawRun: string
 }
 
 function actShape(value: string): ActShape | null {
-  const match = trimTitleBoundary(value).match(/^(.*?)\bact\b\s*\d{4}\s*$/i)
+  const core = trimTitleBoundary(value)
+  const match = core.match(/^(.*?)\bact\b\s*\d{4}\s*$/i)
   if (!match) return null
   const rawRun = (match[1] ?? '').trim()
-  return { run: normalizeActTitle(rawRun), rawRun }
+  return { core, run: normalizeActTitle(rawRun), rawRun }
 }
 
 /**
@@ -220,7 +126,7 @@ function actTitleTokens(value: string): string[] {
  * from the joining words so the phrase boundary can be found; an all-uppercase
  * run has no lowercase joining word to find and so reads as one phrase.
  */
-function isTitlePhrase(tokens: string[]): boolean {
+function isTitlePhrase(tokens: readonly string[]): boolean {
   let hasName = false
   for (const token of tokens) {
     if (/[A-Z]/.test(token)) {
@@ -239,6 +145,106 @@ function isTitlePhrase(tokens: string[]): boolean {
 }
 
 /**
+ * The raw tokens of `core` left after every contained held-title run is
+ * removed, preserving each surviving token's original casing so the phrase
+ * test still separates name words from joining words.
+ *
+ * Normalisation can split one raw token (a hyphen becomes a space), so the
+ * run is matched over folded pieces and a raw token counts as removed only
+ * when every piece it folds to belongs to a contained run.
+ */
+function residueTitleTokens(
+  core: string,
+  containedRuns: readonly (readonly string[])[],
+): string[] {
+  const rawTokens = core.split(/\s+/).filter(Boolean)
+  const pieces: Array<{ value: string; rawIndex: number }> = []
+  rawTokens.forEach((raw, rawIndex) => {
+    for (const piece of normalizeActTitle(raw).split(/\s+/).filter(Boolean)) {
+      pieces.push({ value: piece, rawIndex })
+    }
+  })
+  const covered = new Set<number>()
+  for (const run of containedRuns) {
+    for (let start = 0; start + run.length <= pieces.length; start += 1) {
+      let matched = true
+      for (let offset = 0; offset < run.length; offset += 1) {
+        if (pieces[start + offset]?.value !== run[offset]) {
+          matched = false
+          break
+        }
+      }
+      if (!matched) continue
+      for (let offset = 0; offset < run.length; offset += 1) {
+        covered.add(pieces[start + offset]!.rawIndex)
+      }
+    }
+  }
+  const residue: string[] = []
+  const seen = new Set<number>()
+  for (const piece of pieces) {
+    if (covered.has(piece.rawIndex) || seen.has(piece.rawIndex)) continue
+    seen.add(piece.rawIndex)
+    residue.push(rawTokens[piece.rawIndex]!)
+  }
+  return residue
+}
+
+/**
+ * True when at least one contained held-title run sits wholly inside a
+ * balanced bracket group of the raw run — an amendment parenthetical such as
+ * `(Amendment of Equality Act 2010)`. That is the nested-title shape; an
+ * unbracketed held title is a separate mention, which is how a conjunction of
+ * Acts and an all-caps subject clause stay prose.
+ */
+function hasBracketedContainedRun(
+  core: string,
+  containedRuns: readonly (readonly string[])[],
+): boolean {
+  const rawTokens = core.split(/\s+/).filter(Boolean)
+  const depthBefore: number[] = []
+  let depth = 0
+  for (const raw of rawTokens) {
+    depthBefore.push(depth)
+    for (const character of raw) {
+      if (character === '(' || character === '[' || character === '{')
+        depth += 1
+      else if (character === ')' || character === ']' || character === '}') {
+        depth = Math.max(0, depth - 1)
+      }
+    }
+  }
+  const pieces: Array<{ value: string; rawIndex: number }> = []
+  rawTokens.forEach((raw, rawIndex) => {
+    for (const piece of normalizeActTitle(raw).split(/\s+/).filter(Boolean)) {
+      pieces.push({ value: piece, rawIndex })
+    }
+  })
+  for (const run of containedRuns) {
+    for (let start = 0; start + run.length <= pieces.length; start += 1) {
+      let matched = true
+      for (let offset = 0; offset < run.length; offset += 1) {
+        if (pieces[start + offset]?.value !== run[offset]) {
+          matched = false
+          break
+        }
+      }
+      if (!matched) continue
+      let bracketed = true
+      for (let offset = 0; offset < run.length; offset += 1) {
+        const rawIndex = pieces[start + offset]?.rawIndex
+        if (rawIndex === undefined || (depthBefore[rawIndex] ?? 0) <= 0) {
+          bracketed = false
+          break
+        }
+      }
+      if (bracketed) return true
+    }
+  }
+  return false
+}
+
+/**
  * Directory and structure evidence that an Act-shaped value is a subject
  * query that merely mentions an Act, not a whole-title request.
  *
@@ -246,18 +252,22 @@ function isTitlePhrase(tokens: string[]): boolean {
  * followed it still read sentence-initial capitalisation as evidence of the
  * whole query: "Defences under Children Act 1989" was suppressed while its
  * lowercase twin stayed on the keyword path. This test reads the directory and
- * the query's own phrase structure instead:
+ * the query's own phrase structure instead.
  *
- * - A held Act title inside a longer query is proof the query names something
- *   more than that title, so the whole query stays a subject search.
- * - Otherwise the words before `Act <year>` are a title phrase only when every
- *   one of them is a name, a number, or a word in the closed grammar. When the
- *   whole run is such a phrase the query is a whole-title request. When
- *   instead only a proper suffix is, the leading words are a clause and the
- *   citation is part of it: prose, whatever the case of the first word. When
- *   no suffix is a phrase either, a lowercase word outside the grammar is
- *   present, which is no prose evidence, so the safe whole-title suppression
- *   is kept.
+ * The order is load-bearing. A whole query that is a held title with only the
+ * final year changed is a title request whatever its casing, which is the
+ * first nested-title case exactly (`Worker Protection (Amendment of Equality
+ * Act 2010) Act 2010` for the held `... Act 2023`). Otherwise a held title
+ * inside the run is stripped, and the words left over are the outer
+ * enactment's own: when those are a title phrase and the held title is
+ * bracketed as an amendment parenthetical, the query is a standalone outer
+ * title even though it embeds held titles. When the residue is not a title
+ * phrase, or the held title is an unbracketed separate mention, the
+ * containment is prose evidence, which keeps a conjunction of two Acts (`the
+ * Equality Act 2010 and the Human Rights Act 1998`) and every clause naming
+ * one on the keyword path. A run with no contained held title is decided by
+ * the whole-run phrase test, and a proper suffix that is a phrase still marks
+ * a leading clause.
  *
  * An underspecified fragment is handled before this: `looksLikeWholeActTitle`
  * rejects a run with no words, so "Act 2020" never reaches a claim.
@@ -268,10 +278,21 @@ export function actRemainderIsProse(
 ): boolean {
   const shape = actShape(value)
   if (!shape) return true
-  if (directory.containsTitleRun(actTitleTokens(value))) return true
+
+  const tokens = actTitleTokens(shape.core)
+  if (directory.matchesTitleYearVariant(tokens)) return false
+
+  const contained = directory.containedTitleRuns(tokens)
+  const residue = residueTitleTokens(shape.core, contained)
+  if (
+    isTitlePhrase(residue) &&
+    (contained.length === 0 || hasBracketedContainedRun(shape.core, contained))
+  ) {
+    return false
+  }
+  if (contained.length > 0) return true
 
   const run = shape.rawRun.split(/\s+/).filter(Boolean)
-  if (isTitlePhrase(run)) return false
   for (let index = 1; index < run.length; index += 1) {
     if (isTitlePhrase(run.slice(index))) return true
   }
@@ -319,18 +340,45 @@ export interface ActDirectory {
     year: number,
     number: number,
   ): LegislationActDirectoryEntry | null
-  byNormalizedTitle(normalized: string): LegislationActDirectoryEntry[]
-  byLooseTitle(loose: string): LegislationActDirectoryEntry[]
-  allTitles(): LegislationActDirectoryEntry[]
-  /** True when a stored Act title occurs as a contiguous token run inside
-   * `tokens`, shorter than the whole run. Directory evidence that a longer
-   * query merely mentions an Act rather than naming it. */
-  containsTitleRun(tokens: string[]): boolean
+  /** Frozen snapshot; a caller cannot push, splice or reorder it. */
+  byNormalizedTitle(normalized: string): readonly LegislationActDirectoryEntry[]
+  /** Frozen snapshot; a caller cannot push, splice or reorder it. */
+  byLooseTitle(loose: string): readonly LegislationActDirectoryEntry[]
+  /** Frozen snapshot of the frozen entries; mutation throws. */
+  allTitles(): readonly LegislationActDirectoryEntry[]
+  /**
+   * Every stored title that occurs as a shorter contiguous run of `tokens`,
+   * each run as a fresh frozen copy. The caller subtracts them to recover the
+   * outer words of a nested title, so this never hands out a live internal
+   * array.
+   */
+  containedTitleRuns(tokens: readonly string[]): readonly (readonly string[])[]
+  /**
+   * True when `tokens` is a stored title's token run with only the final year
+   * changed. A year variant of a held title is a title request whatever its
+   * casing, so a nested outer title lowercased cannot be mistaken for prose.
+   */
+  matchesTitleYearVariant(tokens: readonly string[]): boolean
+}
+
+const emptyEntries: readonly LegislationActDirectoryEntry[] = Object.freeze([])
+
+function frozenLists(
+  source: Map<string, LegislationActDirectoryEntry[]>,
+): Map<string, readonly LegislationActDirectoryEntry[]> {
+  const frozen = new Map<string, readonly LegislationActDirectoryEntry[]>()
+  for (const [key, list] of source) frozen.set(key, Object.freeze([...list]))
+  return frozen
 }
 
 export function createActDirectory(
-  entries: LegislationActDirectoryEntry[],
+  input: LegislationActDirectoryEntry[],
 ): ActDirectory {
+  // Freeze internal copies, not the caller's objects: a lookup result cannot
+  // mutate a stored entry, and two callers cannot influence each other.
+  const entries: readonly LegislationActDirectoryEntry[] = Object.freeze(
+    input.map((entry) => Object.freeze({ ...entry })),
+  )
   const byKey = new Map<string, LegislationActDirectoryEntry>()
   const byTitle = new Map<string, LegislationActDirectoryEntry[]>()
   const byLoose = new Map<string, LegislationActDirectoryEntry[]>()
@@ -347,24 +395,63 @@ export function createActDirectory(
     byLoose.set(loose, looseList)
     titleRuns.push(normalized.split(' ').filter(Boolean))
   }
+  const frozenByTitle = frozenLists(byTitle)
+  const frozenByLoose = frozenLists(byLoose)
   return {
     byYearNumber: (year, number) =>
       byKey.get(`ukpga/${year}/${number}`) ?? null,
-    byNormalizedTitle: (normalized) => byTitle.get(normalized) ?? [],
-    byLooseTitle: (loose) => byLoose.get(loose) ?? [],
+    byNormalizedTitle: (normalized) =>
+      frozenByTitle.get(normalized) ?? emptyEntries,
+    byLooseTitle: (loose) => frozenByLoose.get(loose) ?? emptyEntries,
     allTitles: () => entries,
-    containsTitleRun: (tokens) =>
-      tokens.length > 1 &&
-      titleRuns.some(
-        (run) =>
-          run.length > 0 &&
-          run.length < tokens.length &&
-          containsContiguousRun(tokens, run),
-      ),
+    containedTitleRuns: (tokens) => findContainedRuns(tokens, titleRuns),
+    matchesTitleYearVariant: (tokens) => matchesYearVariant(tokens, titleRuns),
   }
 }
 
-function containsContiguousRun(haystack: string[], needle: string[]): boolean {
+function matchesYearVariant(
+  tokens: readonly string[],
+  titleRuns: readonly (readonly string[])[],
+): boolean {
+  const year = tokens[tokens.length - 1]
+  if (tokens.length < 2 || !/^\d{4}$/.test(year ?? '')) return false
+  for (const run of titleRuns) {
+    if (run.length !== tokens.length) continue
+    let differsOnlyByYear = true
+    for (let index = 0; index < run.length - 1; index += 1) {
+      if (run[index] !== tokens[index]) {
+        differsOnlyByYear = false
+        break
+      }
+    }
+    const runYear = run[run.length - 1]
+    if (
+      differsOnlyByYear &&
+      runYear !== year &&
+      /^\d{4}$/.test(runYear ?? '')
+    ) {
+      return true
+    }
+  }
+  return false
+}
+
+function findContainedRuns(
+  tokens: readonly string[],
+  titleRuns: readonly (readonly string[])[],
+): readonly (readonly string[])[] {
+  const found: Array<readonly string[]> = []
+  for (const run of titleRuns) {
+    if (run.length === 0 || run.length >= tokens.length) continue
+    if (containsContiguousRun(tokens, run)) found.push(Object.freeze([...run]))
+  }
+  return Object.freeze(found)
+}
+
+function containsContiguousRun(
+  haystack: readonly string[],
+  needle: readonly string[],
+): boolean {
   for (let start = 0; start + needle.length <= haystack.length; start += 1) {
     let matched = true
     for (let index = 0; index < needle.length; index += 1) {

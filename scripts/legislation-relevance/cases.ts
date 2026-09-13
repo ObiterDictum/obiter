@@ -429,6 +429,32 @@ const absentAct = absent('absent_act', [
     'Protection from Harassment Act 1997',
     { kind: 'act_not_held', title: 'Protection from Harassment Act 1997' },
   ],
+  // Fail-first on 846fefa. A standalone outer Act title that embeds a held
+  // Act was routed to prose by inner-title containment, so the keyword path
+  // served provisions of the held 2023 Act (or, for `, as amended`, of an
+  // unrelated Act) as the answer. Both cases must suppress with no hits.
+  [
+    'absent-act-worker-protection-nested-2010',
+    'Worker Protection (Amendment of Equality Act 2010) Act 2010',
+    {
+      kind: 'act_not_held',
+      title: 'Worker Protection (Amendment of Equality Act 2010) Act 2010',
+    },
+  ],
+  [
+    'absent-act-worker-protection-nested-multiple',
+    'Worker Protection (Amendment of Equality Act 2010 and Human Rights Act 1998) Act 1999',
+    {
+      kind: 'act_not_held',
+      title:
+        'Worker Protection (Amendment of Equality Act 2010 and Human Rights Act 1998) Act 1999',
+    },
+  ],
+  [
+    'absent-act-children-1989-as-amended',
+    'Children Act 1989, as amended',
+    { kind: 'act_not_held', title: 'Children Act 1989, as amended' },
+  ],
 ])
 
 const absentChapter = absent('absent_act', [

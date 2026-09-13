@@ -203,3 +203,290 @@ describe('grammar mutation', () => {
     ).toEqual({ kind: 'unrecognised' })
   })
 })
+
+// A held amending Act whose own short title embeds another held Act. The
+// real corpus holds ukpga/2023/51:
+// `Worker Protection (Amendment of Equality Act 2010) Act 2023`.
+const nestedHeldEntries = [
+  ...held,
+  entry(
+    2023,
+    51,
+    'Worker Protection (Amendment of Equality Act 2010) Act 2023',
+  ),
+]
+const nested = createActDirectory(nestedHeldEntries)
+
+describe('nested held-title containment (finding 1)', () => {
+  it.each([
+    'Worker Protection (Amendment of Equality Act 2010) Act 2010',
+    'Worker Protection (Amendment of Equality Act 2010) Act 1901',
+    'Worker Protection (Amendment of Equality Act 2010 and Human Rights Act 1998) Act 1999',
+    'worker protection (amendment of equality act 2010) act 2010',
+    'WORKER PROTECTION (AMENDMENT OF EQUALITY ACT 2010) ACT 2010',
+    'Worker Protection (Amendment of Equality Act 2010) Act 2010.',
+    '"Worker Protection (Amendment of Equality Act 2010) Act 2010"',
+    'Worker Protection (Amendment of Equality Act 2010) Act 2010 (repealed)',
+    'Worker Safety (Amendment of Equality Act 2010) Act 2011',
+  ])('suppresses the standalone outer title %s', (query) => {
+    // The complete run is itself a title phrase, so it is a whole-title
+    // request even though a held title sits inside it. Routing it to the
+    // keyword path used to serve provisions of the 2023 Act for the 2010
+    // (unheld) outer title.
+    expect(classifyLegislationCitation(query, nested)).toEqual({
+      kind: 'unresolved_title',
+      recognisedQuery: query,
+    })
+  })
+
+  it.each([
+    'Worker Protection (Amendment of Equality Act 2010) Act 2023',
+    'Worker Protection (Amendment of Equality Act 2010) Act 2023.',
+    '"Worker Protection (Amendment of Equality Act 2010) Act 2023"',
+    'Worker Protection (Amendment of Equality Act 2010) Act 2023 (repealed)',
+  ])('still resolves the held real-world outer title %s', (query) => {
+    const outcome = classifyLegislationCitation(query, nested)
+    expect(outcome.kind).toBe('act')
+    if (outcome.kind === 'act')
+      expect(outcome.act.identity).toBe('ukpga/2023/51')
+  })
+
+  it('still reports an ambiguous outer title as ambiguous', () => {
+    const ambiguousOuter = createActDirectory([
+      ...nestedHeldEntries,
+      entry(
+        2022,
+        2,
+        'Worker Protection (Amendment of Equality Act 2010) Act 2023',
+      ),
+    ])
+    const outcome = classifyLegislationCitation(
+      'Worker Protection (Amendment of Equality Act 2010) Act 2023',
+      ambiguousOuter,
+    )
+    expect(outcome.kind).toBe('ambiguous')
+  })
+
+  it.each([
+    'defences under Worker Protection (Amendment of Equality Act 2010) Act 1999',
+    'duties under Worker Protection (Amendment of Equality Act 2010) Act 2023',
+    'obligations under Equality Act 2010',
+    'the Equality Act 2010 and the Human Rights Act 1998',
+    'DUTIES UNDER EQUALITY ACT 2010',
+  ])(
+    'keeps genuine prose naming a held Act on the keyword path: %s',
+    (query) => {
+      expect(classifyLegislationCitation(query, nested).kind).toBe(
+        'unrecognised',
+      )
+    },
+  )
+})
+
+describe('directory lookups are immutable (finding 2)', () => {
+  it('returns frozen arrays and frozen entries from every lookup', () => {
+    const directory = createActDirectory(teachesOfAndTheEntries)
+    const titleList = directory.byNormalizedTitle('equality act 2010')
+    expect(titleList).toHaveLength(1)
+    expect(Object.isFrozen(titleList)).toBe(true)
+    expect(Object.isFrozen(titleList[0])).toBe(true)
+    expect(Object.isFrozen(directory.byLooseTitle('equalityact2010'))).toBe(
+      true,
+    )
+    expect(Object.isFrozen(directory.allTitles())).toBe(true)
+  })
+
+  it('cannot flip a held title to ambiguous by pushing a fake entry', () => {
+    const directory = createActDirectory(teachesOfAndTheEntries)
+    const before = classifyLegislationCitation('Equality Act 2010', directory)
+    const titleList = directory.byNormalizedTitle('equality act 2010')
+    const fake = entry(2020, 99, 'Equality Act 2010')
+    const mutable = titleList as LegislationActDirectoryEntry[]
+    expect(() => mutable.push(fake)).toThrow()
+    expect(() => mutable.splice(0, 0, fake)).toThrow()
+    expect(classifyLegislationCitation('Equality Act 2010', directory)).toEqual(
+      before,
+    )
+  })
+
+  it('cannot alter a returned entry or reorder the snapshot', () => {
+    const directory = createActDirectory(teachesOfAndTheEntries)
+    const before = classifyLegislationCitation('Equality Act 2010', directory)
+    const titleList = directory.byNormalizedTitle('equality act 2010')
+    const mutable = titleList as LegislationActDirectoryEntry[]
+    expect(() => {
+      ;(mutable[0] as LegislationActDirectoryEntry).title = 'Fake Act 1999'
+    }).toThrow()
+    expect(() => {
+      mutable[0] = entry(1999, 1, 'Fake Act 1999')
+    }).toThrow()
+    expect(classifyLegislationCitation('Equality Act 2010', directory)).toEqual(
+      before,
+    )
+  })
+
+  it('cannot fabricate a held resolution through allTitles()', () => {
+    const directory = createActDirectory(teachesOfAndTheEntries)
+    const all = directory.allTitles() as LegislationActDirectoryEntry[]
+    expect(() => all.push(entry(1901, 1, 'Children Act 1901'))).toThrow()
+    expect(classifyLegislationCitation('Children Act 1989', directory)).toEqual(
+      { kind: 'unresolved_title', recognisedQuery: 'Children Act 1989' },
+    )
+  })
+
+  it('one caller cannot affect another caller', () => {
+    const directory = createActDirectory(teachesOfAndTheEntries)
+    const first = directory.byNormalizedTitle('equality act 2010')
+    const second = directory.byNormalizedTitle('equality act 2010')
+    expect(() =>
+      (first as LegislationActDirectoryEntry[]).push(
+        entry(2020, 99, 'Equality Act 2010'),
+      ),
+    ).toThrow()
+    expect(second).toHaveLength(1)
+    expect(second[0]?.identity).toBe('ukpga/2010/15')
+  })
+
+  it('leaves ambiguous lookups ambiguous after attempted mutation', () => {
+    const ambiguous = createActDirectory([
+      ...teachesOfAndTheEntries,
+      entry(2020, 99, 'Equality Act 2010'),
+    ])
+    const before = classifyLegislationCitation('Equality Act 2010', ambiguous)
+    expect(before.kind).toBe('ambiguous')
+    const list = ambiguous.byNormalizedTitle('equality act 2010')
+    expect(() =>
+      (list as LegislationActDirectoryEntry[]).splice(0, 1),
+    ).toThrow()
+    expect(classifyLegislationCitation('Equality Act 2010', ambiguous)).toEqual(
+      before,
+    )
+  })
+})
+
+describe('repeated terminal (repealed) annotation (finding 3)', () => {
+  const annotatedEntries = [
+    ...held,
+    entry(
+      2024,
+      8,
+      'Safety of Rwanda (Asylum and Immigration) Act 2024 (repealed)',
+    ),
+  ]
+  const annotated = createActDirectory(annotatedEntries)
+
+  it.each([
+    'Safety of Rwanda (Asylum and Immigration) Act 2024',
+    'Safety of Rwanda (Asylum and Immigration) Act 2024 (repealed)',
+    'Safety of Rwanda (Asylum and Immigration) Act 2024 (repealed) (repealed)',
+    'Safety of Rwanda (Asylum and Immigration) Act 2024 (repealed) (repealed).',
+    '"Safety of Rwanda (Asylum and Immigration) Act 2024 (repealed) (repealed)"',
+    'Safety of Rwanda (Asylum and Immigration) Act 2024 (REPEALED) ( repealed )',
+    'Safety of Rwanda (Asylum and Immigration) Act 2024 (repealed)(repealed)(repealed)',
+  ])('resolves a stored annotated title queried as %s', (query) => {
+    const outcome = classifyLegislationCitation(query, annotated)
+    expect(outcome.kind).toBe('act')
+    if (outcome.kind === 'act')
+      expect(outcome.act.identity).toBe('ukpga/2024/8')
+  })
+
+  it.each([
+    'Children Act 1989 (repealed) (repealed)',
+    'Children Act 1989 (repealed)(repealed)(repealed)',
+    'Children Act 1989 (REPEALED)',
+    'Children Act 1989 (repealed) (repealed).',
+  ])('keeps the unheld repeated annotation a suppression: %s', (query) => {
+    expect(classifyLegislationCitation(query, teachesOfAndThe)).toEqual({
+      kind: 'unresolved_title',
+      recognisedQuery: query,
+    })
+  })
+
+  it.each([
+    'Children Act 1989 (Public Lavatories)',
+    'Children Act 1989 (amended)',
+    'Children Act 1989 (repealed by the Courts Act 2003)',
+  ])('leaves an arbitrary terminal parenthetical untouched: %s', (query) => {
+    expect(classifyLegislationCitation(query, teachesOfAndThe)).toEqual({
+      kind: 'unrecognised',
+    })
+  })
+
+  it('resolves all six real annotated titles queried with another annotation', () => {
+    const six = createActDirectory([
+      entry(2021, 28, 'Health and Social Care Levy Act 2021 (repealed)'),
+      entry(
+        2021,
+        13,
+        'Non-Domestic Rating (Public Lavatories) Act 2021 (repealed)',
+      ),
+      entry(2023, 9, 'Trade (Australia and New Zealand) Act 2023 (repealed)'),
+      entry(2023, 39, 'Strikes (Minimum Service Levels) Act 2023 (repealed)'),
+      entry(
+        2023,
+        46,
+        'Workers (Predictable Terms and Conditions) Act 2023 (repealed)',
+      ),
+      entry(
+        2024,
+        8,
+        'Safety of Rwanda (Asylum and Immigration) Act 2024 (repealed)',
+      ),
+    ])
+    for (const query of [
+      'Health and Social Care Levy Act 2021 (repealed)',
+      'Non-Domestic Rating (Public Lavatories) Act 2021 (repealed)',
+      'Trade (Australia and New Zealand) Act 2023 (repealed)',
+      'Strikes (Minimum Service Levels) Act 2023 (repealed)',
+      'Workers (Predictable Terms and Conditions) Act 2023 (repealed)',
+      'Safety of Rwanda (Asylum and Immigration) Act 2024 (repealed)',
+    ]) {
+      expect(classifyLegislationCitation(query, six).kind).toBe('act')
+    }
+  })
+})
+
+describe('terminal ", as amended" qualifier (finding 4)', () => {
+  it.each([
+    'Children Act 1989, as amended',
+    'Children Act 1989, as amended.',
+    '"Children Act 1989, as amended"',
+    'Children Act 1989 ,  As Amended',
+    'Children Act 1989, as amended;',
+    'Children Act 1989, as amended (repealed)',
+  ])('suppresses the unheld qualified title %s', (query) => {
+    // A standalone whole-title request with the conventional terminal
+    // qualifier must not keyword-serve provisions of unrelated Acts.
+    expect(classifyLegislationCitation(query, teachesOfAndThe)).toEqual({
+      kind: 'unresolved_title',
+      recognisedQuery: query,
+    })
+  })
+
+  it.each([
+    'Equality Act 2010, as amended',
+    'Equality Act 2010, as amended.',
+    '"Equality Act 2010, as amended"',
+    'Equality Act 2010 , As Amended',
+  ])('resolves a held title carrying the qualifier %s', (query) => {
+    const outcome = classifyLegislationCitation(query, teachesOfAndThe)
+    expect(outcome.kind).toBe('act')
+    if (outcome.kind === 'act')
+      expect(outcome.act.identity).toBe('ukpga/2010/15')
+  })
+
+  it.each([
+    'Children Act 1989, as applied',
+    'Children Act 1989, as interpreted',
+    'Children Act 1989, as discussed',
+    'Children Act 1989, as amended by the Equality Act 2010',
+    'Children Act 1989, as amended by Parliament',
+    'Children Act 1989, as amended, subject to savings',
+  ])('leaves the arbitrary trailing clause %s as prose', (query) => {
+    // The supported qualifier is terminal and bounded. A longer clause that
+    // merely begins with it is not presentation metadata.
+    expect(classifyLegislationCitation(query, teachesOfAndThe)).toEqual({
+      kind: 'unrecognised',
+    })
+  })
+})

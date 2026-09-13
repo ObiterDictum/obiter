@@ -342,6 +342,65 @@ describe('resolveLegislationFetch', () => {
     }
   })
 
+  it('suppresses a standalone nested outer title without serving keyword provisions', async () => {
+    // `Worker Protection (Amendment of Equality Act 2010) Act 2010` is a
+    // complete title phrase that embeds a held Act. Before the repair it was
+    // routed by containment to the keyword path and served provisions of the
+    // 2023 Act for the unheld 2010 outer title.
+    const directoryActs = [
+      ...acts,
+      {
+        identity: 'ukpga/2023/51',
+        actType: 'ukpga',
+        year: 2023,
+        number: 51,
+        title: 'Worker Protection (Amendment of Equality Act 2010) Act 2023',
+        sourceUrl: 'https://www.legislation.gov.uk/ukpga/2023/51',
+        extent: 'E+W+S',
+      },
+    ]
+    const neighbour = {
+      ...currentProvision,
+      id: 'ukpga/2023/51/section/1',
+      provisionRef: 'ukpga/2023/51/section/1',
+      documentIdentity: 'ukpga/2023/51',
+      labelPath: 'section/1',
+      title: 'Worker Protection (Amendment of Equality Act 2010) Act 2023',
+      text: 'A provision of the 2023 Act that must not answer the 2010 outer title.',
+    }
+    const result = await resolveLegislationFetch(
+      createDeps({ directoryActs, keywordHits: [neighbour] }),
+      'Worker Protection (Amendment of Equality Act 2010) Act 2010',
+    )
+    expect(result.titleUnresolved).toBe(true)
+    expect(result.citationHeldExact).toBe(false)
+    expect(result.groups).toEqual([])
+    expect(result.keywordSearchParameters).toBe(null)
+  })
+
+  it('suppresses an unheld title carrying the terminal ", as amended" qualifier', async () => {
+    // `Children Act 1989, as amended` is a standalone whole-title request with
+    // the conventional terminal qualifier. It must suppress, not serve
+    // provisions of an unrelated Act that merely shares a word.
+    const neighbour = {
+      ...currentProvision,
+      id: 'ukpga/2026/21/section/12',
+      provisionRef: 'ukpga/2026/21/section/12',
+      documentIdentity: 'ukpga/2026/21',
+      labelPath: 'section/12',
+      title: "Children's Wellbeing and Schools Act 2026",
+      text: 'A provision that shares a word with the title is not an answer.',
+    }
+    const result = await resolveLegislationFetch(
+      createDeps({ keywordHits: [neighbour] }),
+      'Children Act 1989, as amended',
+    )
+    expect(result.titleUnresolved).toBe(true)
+    expect(result.citationHeldExact).toBe(false)
+    expect(result.groups).toEqual([])
+    expect(result.keywordSearchParameters).toBe(null)
+  })
+
   it('reports an unheld chapter number as not held', async () => {
     const result = await resolveLegislationFetch(
       createDeps({ keywordHits: [currentProvision] }),
