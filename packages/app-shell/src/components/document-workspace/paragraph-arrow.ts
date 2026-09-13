@@ -149,12 +149,28 @@ export function offsetAfterArrow(input: {
   }
 }
 
+/**
+ * The visual line that owns `offset`, following the projection convention
+ * `wrapLines` encodes: each line carries the display code units `[from, to)`
+ * and the newline of a hard break is dropped between lines. That leaves two
+ * boundary shapes, and ownership follows where the caret renders:
+ *
+ * - a soft wrap shares its boundary (`line.to === next.from`), so the offset
+ *   is the next line's column 0;
+ * - a hard break sits its newline at `line.to` and starts the next line at
+ *   `line.to + 1`, so the newline slot belongs to the line it terminates and
+ *   the caret stays at that line's visual end rather than skipping forward.
+ *
+ * The final line owns any offset at or past its end, which clamps a caret
+ * pushed beyond the text.
+ */
 function lineIndex(lines: WrappedLine[], offset: number): number {
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index]
     if (!line) continue
-    const last = index === lines.length - 1
-    if (offset < line.to || last) return index
+    const next = lines[index + 1]
+    if (offset < line.to) return index
+    if (offset === line.to && (!next || next.from > line.to)) return index
   }
   return Math.max(0, lines.length - 1)
 }
