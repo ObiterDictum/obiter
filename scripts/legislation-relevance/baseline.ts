@@ -23,9 +23,11 @@ import type { LegislationRelevanceBaseline } from './metrics'
 // (prose clauses and the underspecified "Act 2020") are scored so a future fold
 // regression fails here rather than shipping a false claim. A control query is
 // never scored for hits; its invariant is that it makes no unsupported claim.
+// The controls include the sentence-initial and uppercase twins of prose
+// clauses (L35), so casing-led routing fails here rather than shipping.
 
 export const legislationRelevanceBaseline: LegislationRelevanceBaseline = {
-  expectedCaseCount: 77,
+  expectedCaseCount: 90,
   expectedIndexDocumentCount: 184772,
   heldRecall: 0.8854,
   heldPrecision: 1,
@@ -328,6 +330,51 @@ export const legislationRelevanceBaseline: LegislationRelevanceBaseline = {
       ranks: [],
       returnedHitCount: 0,
     },
+    'absent-act-offences-against-person-1861': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 0,
+    },
+    'absent-act-protection-from-harassment-1997': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 0,
+    },
+    'absent-act-worker-protection-nested-2010': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 0,
+    },
+    'absent-act-worker-protection-nested-multiple': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 0,
+    },
+    'absent-act-amendment-of-equality-2010-attached': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 0,
+    },
+    'absent-act-amendment-of-equality-2010-spaced': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 0,
+    },
+    'absent-act-bracket-attached-equality-2010': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 0,
+    },
+    'absent-act-bracket-attached-human-rights-1998': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 0,
+    },
+    'absent-act-children-1989-as-amended': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 0,
+    },
     'absent-chapter-2008-c12': {
       recall: null,
       ranks: [],
@@ -414,6 +461,26 @@ export const legislationRelevanceBaseline: LegislationRelevanceBaseline = {
       returnedHitCount: 4,
     },
     'control-defences-children-1989-plain': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 5,
+    },
+    'control-defences-children-1989-sentence-initial': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 5,
+    },
+    'control-sentencing-criminal-justice-2003-sentence-initial': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 5,
+    },
+    'control-duties-equality-2010-uppercase': {
+      recall: null,
+      ranks: [],
+      returnedHitCount: 5,
+    },
+    'control-duties-under-attached-equality-2010': {
       recall: null,
       ranks: [],
       returnedHitCount: 5,

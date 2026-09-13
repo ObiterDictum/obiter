@@ -51,18 +51,21 @@ function createDeps(overrides: {
   provision?: typeof currentProvision | null
   keywordHits?: Array<Record<string, unknown>>
   actsError?: boolean
+  directoryActs?: typeof acts
 }): LegislationServeDeps {
+  const directoryActs = overrides.directoryActs ?? acts
   const pool = {
     query: vi.fn(async (text: string, values?: unknown[]) => {
       if (overrides.actsError) throw new Error('db down')
       if (text.includes('from legislation_documents order by'))
-        return { rows: acts }
-      if (text.includes('from legislation_documents\n')) return { rows: acts }
+        return { rows: directoryActs }
+      if (text.includes('from legislation_documents\n'))
+        return { rows: directoryActs }
       if (text.includes('from legislation_documents')) {
         return {
           rows:
             text.includes('year = $1') || text.includes('identity = $1')
-              ? acts
+              ? directoryActs
               : [],
         }
       }
@@ -286,6 +289,218 @@ describe('resolveLegislationFetch', () => {
     expect(result.note).toContain('No exact legislation title match')
     expect(result.note).toContain('Children Act 1989')
     // No keyword search ran, so nothing may report parameters for one.
+    expect(result.keywordSearchParameters).toBe(null)
+  })
+
+  it('suppresses an attached-opener bracketed held title with zero hits', async () => {
+    // `Amendment of (Equality Act 2010) Act 2020` is a standalone outer title
+    // with a held Act inside an attached bracket pair. The opener rides the
+    // first run token, so the token-boundary depth test read the run as an
+    // unbracketed separate mention and served provisions of an unrelated Act.
+    // The keyword hits are supplied so the test proves they are withheld, and
+    // the bracket families are exercised together.
+    const neighbour = {
+      ...currentProvision,
+      id: 'ukpga/2022/32/section/166',
+      documentIdentity: 'ukpga/2022/32',
+      labelPath: 'section/166',
+      title: 'Police, Crime, Sentencing and Courts Act 2022',
+      text: 'A provision of an unrelated Act that must never serve.',
+    }
+    for (const query of [
+      'Amendment of (Equality Act 2010) Act 2020',
+      'Amendment of ( Equality Act 2010 ) Act 2020',
+      'X [Equality Act 2010] Act 2020',
+      'X {Equality Act 2010} Act 2020',
+      'X { Equality Act 2010 } Act 2020',
+    ]) {
+      const result = await resolveLegislationFetch(
+        createDeps({ keywordHits: [neighbour] }),
+        query,
+      )
+      expect(result.citationRecognised).toBe(true)
+      expect(result.titleUnresolved).toBe(true)
+      expect(result.recognisedNotHeld).toBe(false)
+      expect(result.groups).toEqual([])
+      expect(result.keywordSearchParameters).toBe(null)
+    }
+  })
+
+  it('serves keyword provisions for attached-opener prose about a held Act', async () => {
+    // `Duties under(Equality Act 2010)` shares a raw token between the prose
+    // word and the held title. The covered title word's capital must not
+    // promote the residue into a title phrase, and the trimmed-away closer
+    // must not read as a malformed bracket: the query is genuine prose and
+    // must reach keyword search. A fabricated outer title with its own year
+    // must still suppress with zero legislation hits.
+    const directoryActs = [
+      ...acts,
+      {
+        identity: 'ukpga/1998/42',
+        actType: 'ukpga',
+        year: 1998,
+        number: 42,
+        title: 'Human Rights Act 1998',
+        sourceUrl: 'https://www.legislation.gov.uk/ukpga/1998/42',
+        extent: 'E+W+S',
+      },
+      {
+        identity: 'ukpga/2023/51',
+        actType: 'ukpga',
+        year: 2023,
+        number: 51,
+        title: 'Worker Protection (Amendment of Equality Act 2010) Act 2023',
+        sourceUrl: 'https://www.legislation.gov.uk/ukpga/2023/51',
+        extent: 'E+W+S',
+      },
+    ]
+    const neighbour = {
+      ...currentProvision,
+      id: 'ukpga/2022/32/section/166',
+      provisionRef: 'ukpga/2022/32/section/166',
+      documentIdentity: 'ukpga/2022/32',
+      labelPath: 'section/166',
+      title: 'Police, Crime, Sentencing and Courts Act 2022',
+      text: 'A provision served only for genuine prose.',
+    }
+    for (const query of [
+      'Duties under(Equality Act 2010)',
+      'Duties under (Equality Act 2010)',
+      'Defences under[Children Act 1989]',
+      'Provisions of{Human Rights Act 1998}',
+      'Duties under(Equality Act 2010) Act 2020',
+    ]) {
+      const result = await resolveLegislationFetch(
+        createDeps({ directoryActs, keywordHits: [neighbour] }),
+        query,
+      )
+      expect(result.titleUnresolved).toBe(false)
+      expect(result.recognisedNotHeld).toBe(false)
+      expect(result.groups[0]?.hits[0]?.id).toBe(neighbour.id)
+      expect(result.keywordSearchParameters).not.toBe(null)
+    }
+    for (const query of [
+      'Worker Protection (Amendment of Equality Act 2010) Act 2010',
+      'X ((Equality Act 2010)) Act 2020',
+      'X (Equality Act 2010 Act 2020',
+    ]) {
+      const result = await resolveLegislationFetch(
+        createDeps({ directoryActs, keywordHits: [neighbour] }),
+        query,
+      )
+      expect(result.titleUnresolved).toBe(true)
+      expect(result.recognisedNotHeld).toBe(false)
+      expect(result.groups).toEqual([])
+      expect(result.keywordSearchParameters).toBe(null)
+    }
+  })
+
+  it('serves keyword provisions for prose about an unheld Act, in both casings', async () => {
+    // L35: the sentence-initial form must reach the same keyword path as its
+    // lowercase twin. Before the repair the capitalised form short-circuited
+    // on titleUnresolved and the neighbour provision was never served; the
+    // lowercase twin already keyword-searched.
+    const directoryActs = [
+      ...acts,
+      {
+        identity: 'ukpga/2023/42',
+        actType: 'ukpga',
+        year: 2023,
+        number: 42,
+        title: 'Powers of Attorney Act 2023',
+        sourceUrl: 'https://www.legislation.gov.uk/ukpga/2023/42',
+        extent: 'E+W',
+      },
+      {
+        identity: 'ukpga/2022/32',
+        actType: 'ukpga',
+        year: 2022,
+        number: 32,
+        title: 'Police, Crime, Sentencing and Courts Act 2022',
+        sourceUrl: 'https://www.legislation.gov.uk/ukpga/2022/32',
+        extent: 'E+W',
+      },
+    ]
+    const neighbour = {
+      ...currentProvision,
+      id: 'ukpga/2026/21/section/12',
+      provisionRef: 'ukpga/2026/21/section/12',
+      documentIdentity: 'ukpga/2026/21',
+      labelPath: 'section/12',
+      title: "Children's Wellbeing and Schools Act 2026",
+      text: 'A provision that shares a word with the title.',
+    }
+    for (const query of [
+      'Defences under Children Act 1989',
+      'defences under Children Act 1989',
+    ]) {
+      const result = await resolveLegislationFetch(
+        createDeps({ directoryActs, keywordHits: [neighbour] }),
+        query,
+      )
+      expect(result.titleUnresolved).toBe(false)
+      expect(result.recognisedNotHeld).toBe(false)
+      expect(result.groups[0]?.hits[0]?.id).toBe(neighbour.id)
+      expect(result.keywordSearchParameters).not.toBe(null)
+    }
+  })
+
+  it('suppresses a standalone nested outer title without serving keyword provisions', async () => {
+    // `Worker Protection (Amendment of Equality Act 2010) Act 2010` is a
+    // complete title phrase that embeds a held Act. Before the repair it was
+    // routed by containment to the keyword path and served provisions of the
+    // 2023 Act for the unheld 2010 outer title.
+    const directoryActs = [
+      ...acts,
+      {
+        identity: 'ukpga/2023/51',
+        actType: 'ukpga',
+        year: 2023,
+        number: 51,
+        title: 'Worker Protection (Amendment of Equality Act 2010) Act 2023',
+        sourceUrl: 'https://www.legislation.gov.uk/ukpga/2023/51',
+        extent: 'E+W+S',
+      },
+    ]
+    const neighbour = {
+      ...currentProvision,
+      id: 'ukpga/2023/51/section/1',
+      provisionRef: 'ukpga/2023/51/section/1',
+      documentIdentity: 'ukpga/2023/51',
+      labelPath: 'section/1',
+      title: 'Worker Protection (Amendment of Equality Act 2010) Act 2023',
+      text: 'A provision of the 2023 Act that must not answer the 2010 outer title.',
+    }
+    const result = await resolveLegislationFetch(
+      createDeps({ directoryActs, keywordHits: [neighbour] }),
+      'Worker Protection (Amendment of Equality Act 2010) Act 2010',
+    )
+    expect(result.titleUnresolved).toBe(true)
+    expect(result.citationHeldExact).toBe(false)
+    expect(result.groups).toEqual([])
+    expect(result.keywordSearchParameters).toBe(null)
+  })
+
+  it('suppresses an unheld title carrying the terminal ", as amended" qualifier', async () => {
+    // `Children Act 1989, as amended` is a standalone whole-title request with
+    // the conventional terminal qualifier. It must suppress, not serve
+    // provisions of an unrelated Act that merely shares a word.
+    const neighbour = {
+      ...currentProvision,
+      id: 'ukpga/2026/21/section/12',
+      provisionRef: 'ukpga/2026/21/section/12',
+      documentIdentity: 'ukpga/2026/21',
+      labelPath: 'section/12',
+      title: "Children's Wellbeing and Schools Act 2026",
+      text: 'A provision that shares a word with the title is not an answer.',
+    }
+    const result = await resolveLegislationFetch(
+      createDeps({ keywordHits: [neighbour] }),
+      'Children Act 1989, as amended',
+    )
+    expect(result.titleUnresolved).toBe(true)
+    expect(result.citationHeldExact).toBe(false)
+    expect(result.groups).toEqual([])
     expect(result.keywordSearchParameters).toBe(null)
   })
 
