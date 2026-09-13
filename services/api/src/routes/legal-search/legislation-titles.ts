@@ -17,12 +17,12 @@
  */
 
 import {
-  foldQueryPieces,
+  foldTitlePieces,
   readBracketStructure,
   looseActTitleKey,
   normalizeActTitle,
   trimTitleBoundary,
-  type FoldQueryPiece,
+  type FoldedTitlePiece,
 } from './legislation-title-boundary'
 
 export {
@@ -131,20 +131,32 @@ function actTitleTokens(value: string): string[] {
  */
 function isTitlePhrase(tokens: readonly string[]): boolean {
   let hasName = false
+  let endsWithJoiningWord = false
   for (const token of tokens) {
     if (/[A-Z]/.test(token)) {
       hasName = true
+      endsWithJoiningWord = false
       continue
     }
-    if (/\d/.test(token)) continue
+    if (/\d/.test(token)) {
+      endsWithJoiningWord = false
+      continue
+    }
     // A standalone separator (`Midlands - Crewe`) folds to nothing and is
     // punctuation, not a joining word the grammar can reject the run for.
     const folded = normalizeActTitle(token)
     if (!folded) continue
-    if (titleJoiningWordSet.has(folded)) continue
+    if (titleJoiningWordSet.has(folded)) {
+      endsWithJoiningWord = true
+      continue
+    }
     return false
   }
-  return hasName
+  // A title run cannot end on a joining word: the word before `Act <year>` in
+  // a short title is its final name word. A residue that ends in one
+  // (`Provisions of`, with the Act inside the brackets) is a clause about the
+  // Act, not a standalone outer title.
+  return hasName && !endsWithJoiningWord
 }
 
 /**
@@ -153,7 +165,7 @@ function isTitlePhrase(tokens: readonly string[]): boolean {
  * the same matches, so they cannot disagree about what the contained run is.
  */
 function containedRunMatches(
-  pieces: readonly FoldQueryPiece[],
+  pieces: readonly FoldedTitlePiece[],
   containedRuns: readonly (readonly string[])[],
 ): Array<{ start: number; end: number }> {
   const matches: Array<{ start: number; end: number }> = []
@@ -173,48 +185,36 @@ function containedRunMatches(
 }
 
 /**
- * The raw tokens of `core` left after every contained held-title run is
- * removed, preserving each surviving token's original casing so the phrase
- * test still separates name words from joining words.
+ * The uncovered words of `core` left after every contained held-title run is
+ * removed, each still carrying its own casing.
  *
- * Normalisation can split one raw token into several pieces (a hyphen or a
- * bracket becomes a separator), and a run is matched over those pieces. A
- * token that holds only part of a run cannot be split back into outer text and
- * title text, so it is dropped only when *every* piece it folds to belongs to
- * a contained run. Dropping it on a single covered piece would discard outer
- * words that share the token (`under(equality ...)`), letting genuine prose
- * read as a title phrase and be suppressed. Keeping a straddling token leaves
- * some run words in the residue, which can only make the residue less
- * title-shaped, never more.
+ * A raw token can straddle the boundary (`under(Equality`, `of{Human`): part
+ * prose, part contained run. The residue is therefore the folded pieces, not
+ * the raw tokens. A covered piece is dropped, so the run word's capital
+ * (`Equality`, `Children`) cannot count as a name word and promote a clause
+ * into a title phrase; an uncovered piece keeps the casing at its character
+ * span (`normalized.slice(start, end)`), so genuine prose casing still decides
+ * the phrase test. Brackets and other separators fold to nothing and are not
+ * words, so they do not appear here; `readBracketStructure` reads them from
+ * `core` directly.
  */
 function residueTitleTokens(
   core: string,
   containedRuns: readonly (readonly string[])[],
 ): string[] {
   const normalized = core.normalize('NFKC')
-  const rawTokens = normalized.split(/\s+/).filter(Boolean)
-  const pieces = foldQueryPieces(normalized)
+  const pieces = foldTitlePieces(normalized)
   const covered: boolean[] = Array.from({ length: pieces.length }, () => false)
   for (const match of containedRunMatches(pieces, containedRuns)) {
     for (let index = match.start; index < match.end; index += 1) {
       covered[index] = true
     }
   }
-  const totalPerToken = new Map<number, number>()
-  const coveredPerToken = new Map<number, number>()
-  for (let index = 0; index < pieces.length; index += 1) {
-    const rawIndex = pieces[index]!.rawIndex
-    totalPerToken.set(rawIndex, (totalPerToken.get(rawIndex) ?? 0) + 1)
-    if (covered[index]) {
-      coveredPerToken.set(rawIndex, (coveredPerToken.get(rawIndex) ?? 0) + 1)
-    }
-  }
   const residue: string[] = []
-  for (let rawIndex = 0; rawIndex < rawTokens.length; rawIndex += 1) {
-    const total = totalPerToken.get(rawIndex) ?? 0
-    if (total === 0) continue
-    if ((coveredPerToken.get(rawIndex) ?? 0) >= total) continue
-    residue.push(rawTokens[rawIndex]!)
+  for (let index = 0; index < pieces.length; index += 1) {
+    if (covered[index]) continue
+    const piece = pieces[index]!
+    residue.push(normalized.slice(piece.start, piece.end))
   }
   return residue
 }
@@ -239,7 +239,7 @@ function hasBracketedContainedRun(
   containedRuns: readonly (readonly string[])[],
 ): boolean {
   const normalized = core.normalize('NFKC')
-  const pieces = foldQueryPieces(normalized)
+  const pieces = foldTitlePieces(normalized)
   const { depthBefore, balanced } = readBracketStructure(normalized)
   // A malformed bracket cannot be reasoned about, so the run is read as
   // bracketed and the query suppresses rather than serving provisions of an

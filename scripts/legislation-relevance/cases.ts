@@ -598,6 +598,14 @@ const controlQueries = control([
     'Sentencing powers in Criminal Justice Act 2003',
   ],
   ['control-duties-equality-2010-uppercase', 'DUTIES UNDER EQUALITY ACT 2010'],
+  // Attached-opener straddling token (finding 6): the prose word and the held
+  // Act share one raw token (`under(Equality`). The covered title word's
+  // capital must not promote the residue into a title phrase, or the query
+  // suppresses as an outer title instead of keyword-searching.
+  [
+    'control-duties-under-attached-equality-2010',
+    'Duties under(Equality Act 2010)',
+  ],
 ])
 
 export const legislationRelevanceCases: LegislationRelevanceCase[] = [

@@ -135,41 +135,6 @@ export function normalizeActTitle(value: string): string {
     .join(' ')
 }
 
-/** A folded piece of a whole query, attributed to its raw token and span. */
-export interface FoldQueryPiece {
-  value: string
-  /** Index of the whitespace-separated raw token the piece came from. */
-  rawIndex: number
-  /** Character index in the query where the surviving text starts. */
-  start: number
-  /** Character index just after the surviving text. */
-  end: number
-}
-
-/**
- * Fold a whole query into pieces, each attributed to the raw token it came
- * from and carrying its character span. The input must already be
- * NFKC-normalised: the spans index that string.
- */
-export function foldQueryPieces(value: string): FoldQueryPiece[] {
-  const pieces: FoldQueryPiece[] = []
-  let rawIndex = 0
-  for (const match of value.matchAll(/\S+/g)) {
-    const text = match[0]
-    const offset = match.index ?? 0
-    for (const piece of foldTitlePieces(text)) {
-      pieces.push({
-        value: piece.value,
-        rawIndex,
-        start: offset + piece.start,
-        end: offset + piece.end,
-      })
-    }
-    rawIndex += 1
-  }
-  return pieces
-}
-
 /**
  * Parentheses, square brackets and curly brackets pair within their own
  * family. The depth count is shared, so an unmatched opener still reads as

@@ -326,6 +326,75 @@ describe('resolveLegislationFetch', () => {
     }
   })
 
+  it('serves keyword provisions for attached-opener prose about a held Act', async () => {
+    // `Duties under(Equality Act 2010)` shares a raw token between the prose
+    // word and the held title. The covered title word's capital must not
+    // promote the residue into a title phrase, and the trimmed-away closer
+    // must not read as a malformed bracket: the query is genuine prose and
+    // must reach keyword search. A fabricated outer title with its own year
+    // must still suppress with zero legislation hits.
+    const directoryActs = [
+      ...acts,
+      {
+        identity: 'ukpga/1998/42',
+        actType: 'ukpga',
+        year: 1998,
+        number: 42,
+        title: 'Human Rights Act 1998',
+        sourceUrl: 'https://www.legislation.gov.uk/ukpga/1998/42',
+        extent: 'E+W+S',
+      },
+      {
+        identity: 'ukpga/2023/51',
+        actType: 'ukpga',
+        year: 2023,
+        number: 51,
+        title: 'Worker Protection (Amendment of Equality Act 2010) Act 2023',
+        sourceUrl: 'https://www.legislation.gov.uk/ukpga/2023/51',
+        extent: 'E+W+S',
+      },
+    ]
+    const neighbour = {
+      ...currentProvision,
+      id: 'ukpga/2022/32/section/166',
+      provisionRef: 'ukpga/2022/32/section/166',
+      documentIdentity: 'ukpga/2022/32',
+      labelPath: 'section/166',
+      title: 'Police, Crime, Sentencing and Courts Act 2022',
+      text: 'A provision served only for genuine prose.',
+    }
+    for (const query of [
+      'Duties under(Equality Act 2010)',
+      'Duties under (Equality Act 2010)',
+      'Defences under[Children Act 1989]',
+      'Provisions of{Human Rights Act 1998}',
+      'Duties under(Equality Act 2010) Act 2020',
+    ]) {
+      const result = await resolveLegislationFetch(
+        createDeps({ directoryActs, keywordHits: [neighbour] }),
+        query,
+      )
+      expect(result.titleUnresolved).toBe(false)
+      expect(result.recognisedNotHeld).toBe(false)
+      expect(result.groups[0]?.hits[0]?.id).toBe(neighbour.id)
+      expect(result.keywordSearchParameters).not.toBe(null)
+    }
+    for (const query of [
+      'Worker Protection (Amendment of Equality Act 2010) Act 2010',
+      'X ((Equality Act 2010)) Act 2020',
+      'X (Equality Act 2010 Act 2020',
+    ]) {
+      const result = await resolveLegislationFetch(
+        createDeps({ directoryActs, keywordHits: [neighbour] }),
+        query,
+      )
+      expect(result.titleUnresolved).toBe(true)
+      expect(result.recognisedNotHeld).toBe(false)
+      expect(result.groups).toEqual([])
+      expect(result.keywordSearchParameters).toBe(null)
+    }
+  })
+
   it('serves keyword provisions for prose about an unheld Act, in both casings', async () => {
     // L35: the sentence-initial form must reach the same keyword path as its
     // lowercase twin. Before the repair the capitalised form short-circuited

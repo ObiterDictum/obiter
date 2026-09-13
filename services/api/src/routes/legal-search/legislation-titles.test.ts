@@ -616,3 +616,134 @@ describe('bracketed contained runs: attached and spaced delimiters (finding 5)',
     })
   })
 })
+
+// A raw token can straddle the residue and a contained held-title run:
+// `under(Equality`, `of{Human`, `under[Children`. The residue must be the
+// whole query's folded pieces with the covered run pieces removed, each still
+// carrying its own casing. Reading the raw token instead let the covered run
+// word's capital (`Equality`, `Children`) count as a name word, and the
+// trimmed-away closer then read as an unbalanced bracket, so genuine prose was
+// suppressed as a standalone outer title.
+describe('straddling-token residue (finding 6)', () => {
+  it.each([
+    'Duties under(Equality Act 2010)',
+    'Duties under (Equality Act 2010)',
+    'Duties under(equality act 2010)',
+    'Rights under(Equality Act 2010)',
+    'Rights under[Equality Act 2010]',
+    'Rights under{Equality Act 2010}',
+    'Duties under[Equality Act 2010]',
+    'Duties under{Equality Act 2010}',
+    'Duties under(Equality Act 2010) Act 2020',
+    'Duties under[Equality Act 2010] Act 2020',
+    'Duties under{Equality Act 2010} Act 2020',
+    'Provisions of(Equality Act 2010)',
+    'Provisions of (Equality Act 2010)',
+    'Provisions of(Human Rights Act 1998)',
+    'Provisions of (Human Rights Act 1998)',
+    'Provisions of{Human Rights Act 1998}',
+    'Provisions of {Human Rights Act 1998}',
+  ])('keeps attached-opener prose on the keyword path: %s', (query) => {
+    expect(classifyLegislationCitation(query, teachesOfAndThe)).toEqual({
+      kind: 'unrecognised',
+    })
+  })
+
+  it.each([
+    // A non-held Act glued to the prose word has no covered piece to remove,
+    // so the word split, not the casing exclusion, is what keeps it prose.
+    'Defences under[Children Act 1989]',
+    'Defences under [Children Act 1989]',
+    'Defences under(Children Act 1989)',
+    'Defences under (Children Act 1989)',
+    'Duties under[Children Act 1989] Act 2020',
+  ])('keeps a glued non-held mention on the keyword path: %s', (query) => {
+    expect(classifyLegislationCitation(query, teachesOfAndThe)).toEqual({
+      kind: 'unrecognised',
+    })
+  })
+
+  it('reads casing from the uncovered residue only', () => {
+    // The covered `Equality` piece must not contribute its capital: the
+    // uncovered `under` decides, and it is not a title word.
+    expect(
+      classifyLegislationCitation(
+        'Duties under(Equality Act 2010)',
+        teachesOfAndThe,
+      ).kind,
+    ).toBe('unrecognised')
+    // An uncovered capitalised prose word still counts as a name word, so the
+    // residue stays a title phrase and the unbalanced opener suppresses it.
+    // This is the documented residual: casing still decides when nothing in
+    // the residue separates a clause from a title.
+    expect(
+      classifyLegislationCitation(
+        'Duties Under(Equality Act 2010)',
+        teachesOfAndThe,
+      ).kind,
+    ).toBe('unresolved_title')
+  })
+
+  it.each([
+    // Fabricated outer titles the residue rule must keep suppressing.
+    'Worker Safety (Amendment of Equality Act 2010) Act 2011',
+    'X ((Equality Act 2010)) Act 2020',
+    'X ([Equality Act 2010]) Act 2020',
+    'X (Equality Act 2010] Act 2020',
+    'X [Equality Act 2010) Act 2020',
+    'X {Equality Act 2010] Act 2020',
+    'X (Equality Act 2010 Act 2020',
+    'X [Equality Act 2010 Act 2020',
+    'X Equality Act 2010) Act 2020',
+    'X Equality Act 2010] Act 2020',
+    'X (Equality Act 2010) (Human Rights Act 1998) Act 2020',
+    // Containment on both sides of the held-title span.
+    'X(Equality Act 2010)Y Act 2020',
+    // Punctuation and quotes around a fabricated outer title.
+    '"Worker Safety (Amendment of Equality Act 2010) Act 2011"',
+    'Worker Safety (Amendment of Equality Act 2010) Act 2011.',
+    // A fragment with no outer year is still title-shaped and stays
+    // conservatively suppressed rather than keyword-serving.
+    'X (Equality Act 2010)',
+  ])('still suppresses the fabricated title-shaped form %s', (query) => {
+    expect(classifyLegislationCitation(query, teachesOfAndThe)).toEqual({
+      kind: 'unresolved_title',
+      recognisedQuery: query,
+    })
+  })
+
+  it.each([
+    ['Duties under(Equality Act 2010)', 'Duties under (Equality Act 2010)'],
+    ['Rights under[Equality Act 2010]', 'Rights under [Equality Act 2010]'],
+    [
+      'Provisions of{Human Rights Act 1998}',
+      'Provisions of {Human Rights Act 1998}',
+    ],
+    [
+      'Duties under(Equality Act 2010) Act 2020',
+      'Duties under [Equality Act 2010] Act 2020',
+    ],
+  ])(
+    'classifies the attached and spaced forms of %s alike',
+    (attached, spaced) => {
+      expect(classifyLegislationCitation(attached, teachesOfAndThe)).toEqual(
+        classifyLegislationCitation(spaced, teachesOfAndThe),
+      )
+      expect(classifyLegislationCitation(attached, teachesOfAndThe)).toEqual({
+        kind: 'unrecognised',
+      })
+    },
+  )
+
+  it('never turns straddling-token prose into an authoritative not-held', () => {
+    for (const query of [
+      'Duties under(Equality Act 2010)',
+      'Defences under[Children Act 1989]',
+      'Provisions of{Human Rights Act 1998}',
+    ]) {
+      expect(classifyLegislationCitation(query, teachesOfAndThe).kind).not.toBe(
+        'not_held',
+      )
+    }
+  })
+})
