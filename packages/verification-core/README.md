@@ -14,8 +14,9 @@ a lookup onto them; it defines none of the surrounding steps itself.
 - the verification subject (the immutable draft version under check) and draft
   locations (paragraph id plus UTF-16 offsets into the paragraph's plain-text
   projection, never text);
-- evidence references that point at public legal source material by id, so a
-  finding can be traced back to the paragraph or provision it rests on;
+- evidence references that point at public legal source material by id at one
+  of two granularities: the stored document itself, or an addressable paragraph
+  or provision of it, so a finding rests on the kind of proof it actually has;
 - finding identity, type, severity, confidence, and the conservative status
   model, including the explicit review-required state;
 - the authority-existence decision (V2): a normalized citation and a lookup
@@ -23,6 +24,24 @@ a lookup onto them; it defines none of the surrounding steps itself.
   API.
 
 ## What the values hold
+
+Evidence has two granularities, and they are not interchangeable:
+
+- a **document reference** names a whole stored judgment or Act (its source id
+  and nothing inside it). It proves the stored authority's identity and
+  availability, which is exactly what a whole-authority existence finding
+  claims, and it is the only form that works for a source whose paragraph or
+  provision array is empty. It carries no location.
+- a **fragment reference** names one paragraph (ordinal plus printed number) or
+  one provision (label path). A quote, proposition or provision-specific
+  finding needs a fragment, because the document alone cannot say where the
+  supported text lives.
+
+`finding.ts` enforces which granularity each finding type accepts: a quote check
+needs a fragment, a whole-authority check needs the document, and a fragment may
+never substitute for the document identity (or the reverse). A `sourceType` is
+part of the union so both granularities stay anchored to the shared
+`LegalSourceType` vocabulary and cannot cross source families.
 
 Two kinds of field are deliberately different, and the distinction is the point:
 
@@ -55,6 +74,10 @@ showing bounded citation text to a reviewer.
 - **Evidence and source agree.** A clear or flagged finding must cite at least
   one evidence reference, and every reference must name the same public source as
   its resolved citation. Judgment and legislation references cannot cross.
+- **Evidence granularity matches the finding type.** A whole-authority finding
+  (case law, or a whole Act) rests on document-level evidence; a provision-level
+  or quote-fidelity finding rests on a fragment. A fragment cannot stand in for
+  the document identity, and the document cannot stand in for supported text.
 - **Finding identity.** `createVerificationFindingId` is a deterministic
   idempotency key for one immutable version, check type and draft span, encoded
   with length-prefixed components so distinct inputs cannot collide on `:`.
@@ -81,6 +104,17 @@ showing bounded citation text to a reviewer.
   (`<documentId>:judgment_paragraph:<ordinal>`). This package does not parse
   free-text citations and does not query Meilisearch, Postgres or Atlas. V2 and
   V3 call those layers and hand the results to this vocabulary.
+- **V2 store boundary and V3 batching.** The V2 authority-existence lookup lives
+  in `services/api/src/authority-existence.ts` and reads the public legal-source
+  record through the existing Search store helpers. Provision resolution shares
+  `resolveStoredProvisionPath` in
+  `services/api/src/routes/legal-search/legislation-store.ts` with the serving
+  path, so the single-schedule alias has one owner and a held provision cannot
+  read as not-held to one caller and held to the other. The case-law candidate
+  lookup is a batch
+  (`findStoredAuthorityIdsByNeutralCitations`): its SQL pushes the citation year
+  into the query and returns only the citation projection, and V3 should call it
+  once per document rather than once per citation.
 - **Future Verify API, worker and UI** (V2 onwards) validate untrusted input with
   contracts schemas at the boundary, run checks in the worker, and render
   findings in the UI. All three consume this package and none add a parallel
@@ -97,8 +131,10 @@ boundaries that accept these values own:
   against the stored immutable version (the schema only checks the unit and
   length);
 - tenant/organisation/matter scoping and authorisation;
-- source-version pinning for evidence, which the shared
-  `<documentId>:judgment_paragraph:<ordinal>` format does not carry.
+- source-version pinning for evidence. The fragment forms can repoint (a
+  judgment paragraph by ordinal, a provision by label path); the document forms
+  carry no location and so cannot. V5 owns any pinning before these become
+  durable rows.
 
 ## Non-goals
 

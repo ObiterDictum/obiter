@@ -7,6 +7,8 @@ import {
 import {
   createEvidenceReferenceId,
   evidenceReferenceSchema,
+  isDocumentEvidenceReference,
+  isFragmentEvidenceReference,
   type EvidenceReference,
 } from './evidence'
 import type { DraftLocation } from './subject'
@@ -114,7 +116,9 @@ function reviewReasonContradictsType(
  * citation. Judgment and legislation references cannot cross, and the source id
  * must match exactly; a label path within the source is not required to match,
  * because a quote-fidelity check can legitimately evidence a different
- * provision of the same Act. */
+ * provision of the same Act. A document-level reference and a fragment-level
+ * reference of the same source both match here; which granularity a finding
+ * type accepts is enforced separately. */
 function evidenceMatchesCitation(
   citation: NormalizedCitation,
   reference: EvidenceReference,
@@ -127,13 +131,31 @@ function evidenceMatchesCitation(
       )
     case 'legislation':
       return (
-        reference.sourceType === 'legislation_provision' &&
+        reference.sourceType !== 'judgment' &&
         reference.sourceId === citation.documentIdentity
       )
     case 'unresolved':
     case 'not_checked':
       return false
   }
+}
+
+/**
+ * Whether a finding type needs fragment-level evidence, or is satisfied by the
+ * document identity itself.
+ *
+ * - A quote or proposition check supports text inside a source, so it needs a
+ *   fragment; a document reference cannot say where the supported text lives.
+ * - A provision-specific finding (`legislation` with a `labelPath`) needs the
+ *   provision fragment it names.
+ * - Everything else, including a whole-authority existence check and a
+ *   whole-Act one, rests on the document identity and so needs document-level
+ *   evidence rather than an arbitrary fragment of the document.
+ */
+function requiresFragmentEvidence(finding: FindingShape): boolean {
+  if (finding.type === 'quote_fidelity') return true
+  const citation = finding.normalizedCitation
+  return citation.kind === 'legislation' && citation.labelPath !== null
 }
 
 /** The accepted finding states, as one invariant. Every rule is stated in both
@@ -251,6 +273,24 @@ function findingViolations(finding: FindingShape): FindingViolation[] {
       add(
         ['evidence'],
         'A clear or flagged finding must cite the evidence it rests on.',
+      )
+    }
+    // A finding type that supports text inside a source needs a fragment; one
+    // that claims the source itself needs the document. A fragment cannot
+    // stand in for the document identity, and the document cannot stand in for
+    // the supported text, so neither granularity may substitute for the other.
+    const hasFragment = finding.evidence.some(isFragmentEvidenceReference)
+    const hasDocument = finding.evidence.some(isDocumentEvidenceReference)
+    if (requiresFragmentEvidence(finding) && !hasFragment) {
+      add(
+        ['evidence'],
+        'This finding type requires fragment-level evidence; document-level evidence cannot satisfy it.',
+      )
+    }
+    if (!requiresFragmentEvidence(finding) && !hasDocument) {
+      add(
+        ['evidence'],
+        'A whole-authority finding requires document-level evidence; a fragment cannot substitute for the authority identity.',
       )
     }
   }

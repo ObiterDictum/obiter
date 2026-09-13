@@ -85,6 +85,22 @@ interface LegalAuthoritySourceRow extends QueryResultRow {
   provider_json: ProviderSourceMetadata
 }
 
+/**
+ * A stored row whose JSON is valid JSON but not a legal-source record. It is a
+ * store-boundary failure with its own category so the caller can tell a
+ * schema-invalid row from a database that is unavailable, without the detail
+ * ever reaching a finding.
+ */
+export class MalformedStoredRecordError extends Error {
+  constructor(documentId: string, options?: { cause?: unknown }) {
+    super(
+      `Stored legal source record ${documentId} failed schema validation.`,
+      options,
+    )
+    this.name = 'MalformedStoredRecordError'
+  }
+}
+
 export function createPostgresLegalAuthoritySourceStore(
   pool: Pick<Pool, 'query'>,
 ): LegalAuthoritySourceStore {
@@ -171,37 +187,120 @@ export function createPostgresLegalAuthoritySourceStore(
         [documentId],
       )
 
-      return toStoredLegalAuthorityRecord(result.rows[0])
+      return toStoredLegalAuthorityRecord(result.rows[0], documentId)
     },
   }
 }
 
 function toStoredLegalAuthorityRecord(
-  row?: LegalAuthoritySourceRow,
+  row: LegalAuthoritySourceRow | undefined,
+  documentId: string,
 ): StoredLegalAuthorityRecord | null {
   if (!row) return null
 
-  const summary = LegalAuthoritySchema.parse(row.summary_json)
-  const document = row.document_json
-    ? LegalAuthoritySchema.parse(row.document_json)
-    : undefined
+  try {
+    const summary = LegalAuthoritySchema.parse(row.summary_json)
+    const document = row.document_json
+      ? LegalAuthoritySchema.parse(row.document_json)
+      : undefined
 
-  return {
-    summary,
-    document,
-    provider: row.provider_json,
-    withdrawn: readWithdrawnInfo(row.provider_json),
+    return {
+      summary,
+      document,
+      provider: row.provider_json,
+      withdrawn: readWithdrawnInfo(row.provider_json),
+    }
+  } catch (error) {
+    throw new MalformedStoredRecordError(documentId, { cause: error })
   }
 }
 
+interface StoredAuthorityCitationRow extends QueryResultRow {
+  documentId: string
+  neutralCitation: string | null
+}
+
 /**
- * Stored authority ids whose neutral citation canonically equals
- * `neutralCitation`. The record is Postgres; the fold is search-client's
- * `normalizeCitationValue`, the same one the search path compares with, so an
- * exact citation lookup cannot drift from search's notion of equality. The
- * scan reads the citation projection only, never document bodies. Withdrawn
- * rows are returned too: a withdrawn row is a stored source the caller must
- * not read as absent, and the caller decides by reading the record.
+ * Stored authority ids whose neutral citation canonically equals one of
+ * `neutralCitations`, keyed by the normalized form of the citation they match.
+ * The record is Postgres; the fold is search-client's `normalizeCitationValue`,
+ * the same one the search path compares with, so an exact citation lookup
+ * cannot drift from search's notion of equality.
+ *
+ * The query transfers the citation projection only, never document bodies, and
+ * it pushes the citation's year into SQL: the fold never changes the year, so a
+ * row whose citation does not contain it cannot match, and rejecting those rows
+ * in the database removes the bulk of the transfer (91-97% on the lane corpus,
+ * year-dependent). The database predicate is a superset of the fold (a `like`
+ * can match the digits anywhere), so the exact comparison still runs in Node
+ * and SQL is never trusted for equality.
+ *
+ * The API is a batch: a caller with many citations pays one query for the year
+ * set instead of one full-table transfer per citation, which is what V3's
+ * per-document caller needs. Rows are ordered by `document_id` and each id list
+ * is sorted, so the result does not depend on table or scan order. Withdrawn
+ * rows are returned too: a withdrawn row is a stored source the caller must not
+ * read as absent, and the caller decides by reading the record.
+ */
+export async function findStoredAuthorityIdsByNeutralCitations(
+  pool: Pick<Pool, 'query'>,
+  neutralCitations: string[],
+): Promise<Map<string, string[]>> {
+  const matches = new Map<string, string[]>()
+  const years = new Set<string>()
+  let includesUnparseableYear = false
+  for (const neutralCitation of neutralCitations) {
+    const normalized = normalizeCitationValue(neutralCitation)
+    if (!normalized) continue
+    if (!matches.has(normalized)) matches.set(normalized, [])
+    const year = neutralCitation.match(/\[(\d{4})\]/)?.[1] ?? null
+    if (year) years.add(year)
+    else includesUnparseableYear = true
+  }
+  if (matches.size === 0) return matches
+
+  const rows: StoredAuthorityCitationRow[] = []
+  if (years.size > 0) {
+    const result = await pool.query<StoredAuthorityCitationRow>(
+      `select document_id as "documentId",
+              summary_json->>'neutralCitation' as "neutralCitation"
+         from legal_source_documents
+        where summary_json->>'neutralCitation' is not null
+          and summary_json->>'neutralCitation' like any($1::text[])
+        order by document_id`,
+      [[...years].map((year) => `%${year}%`)],
+    )
+    rows.push(...result.rows)
+  }
+  if (includesUnparseableYear) {
+    // A citation with no parsable year cannot use the year predicate, so it
+    // scans the citation projection. That is the pre-existing cost for that
+    // input, not the common path.
+    const result = await pool.query<StoredAuthorityCitationRow>(
+      `select document_id as "documentId",
+              summary_json->>'neutralCitation' as "neutralCitation"
+         from legal_source_documents
+        where summary_json->>'neutralCitation' is not null
+        order by document_id`,
+    )
+    rows.push(...result.rows)
+  }
+
+  for (const row of rows) {
+    if (!row.neutralCitation) continue
+    const ids = matches.get(normalizeCitationValue(row.neutralCitation))
+    if (!ids || ids.includes(row.documentId)) continue
+    ids.push(row.documentId)
+  }
+  for (const ids of matches.values()) ids.sort()
+  return matches
+}
+
+/**
+ * The single-citation form of {@link findStoredAuthorityIdsByNeutralCitations}.
+ * A caller with several citations should use the batch function: the year
+ * predicate is shared, so one query covers all of them instead of one
+ * full-table transfer per citation.
  */
 export async function findStoredAuthorityIdsByNeutralCitation(
   pool: Pick<Pool, 'query'>,
@@ -209,26 +308,10 @@ export async function findStoredAuthorityIdsByNeutralCitation(
 ): Promise<string[]> {
   const normalized = normalizeCitationValue(neutralCitation)
   if (!normalized) return []
-  // A citation carries its year, and the fold never changes it, so rows that
-  // do not contain the year cannot match. This keeps the per-row fold off the
-  // whole table without changing what matches.
-  const year = neutralCitation.match(/\[(\d{4})\]/)?.[1] ?? null
-  const result = await pool.query<{
-    documentId: string
-    neutralCitation: string | null
-  }>(
-    `select document_id as "documentId",
-            summary_json->>'neutralCitation' as "neutralCitation"
-       from legal_source_documents
-      where summary_json->>'neutralCitation' is not null`,
-  )
-  return result.rows
-    .filter((row) => {
-      if (!row.neutralCitation) return false
-      if (year && !row.neutralCitation.includes(year)) return false
-      return normalizeCitationValue(row.neutralCitation) === normalized
-    })
-    .map((row) => row.documentId)
+  const matches = await findStoredAuthorityIdsByNeutralCitations(pool, [
+    neutralCitation,
+  ])
+  return matches.get(normalized) ?? []
 }
 
 export function toAuthoritySummary(document: LegalAuthority): LegalAuthority {

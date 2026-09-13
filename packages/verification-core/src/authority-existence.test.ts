@@ -26,12 +26,20 @@ const caseLaw: NormalizedCitation = {
   neutralCitation: caseLawText,
   sourceId: 'uksc-2099-1',
 }
-const judgmentEvidence: EvidenceReference[] = [
+const judgmentFragmentEvidence: EvidenceReference[] = [
   {
     sourceType: 'judgment',
+    granularity: 'fragment',
     sourceId: 'uksc-2099-1',
     ordinal: 1,
     paragraphNumber: 1,
+  },
+]
+const judgmentDocumentEvidence: EvidenceReference[] = [
+  {
+    sourceType: 'judgment',
+    granularity: 'document',
+    sourceId: 'uksc-2099-1',
   },
 ]
 
@@ -45,6 +53,7 @@ const legislation: NormalizedCitation = {
 const provisionEvidence: EvidenceReference[] = [
   {
     sourceType: 'legislation_provision',
+    granularity: 'fragment',
     sourceId: 'ukpga/2010/15',
     labelPath: 'section/40',
   },
@@ -64,17 +73,39 @@ function decide(overrides: {
 }
 
 describe('authority existence decision', () => {
-  it('clears a case law citation when exactly one stored source matches', () => {
+  it('clears a case law citation with document-level evidence, not a paragraph', () => {
     const finding = decide({
-      outcome: { outcome: 'held', evidence: judgmentEvidence },
+      outcome: { outcome: 'held', evidence: judgmentDocumentEvidence },
     })
 
     expect(finding.status).toEqual({ state: 'clear' })
     expect(finding.type).toBe('authority_existence')
-    expect(finding.evidence).toEqual(judgmentEvidence)
+    expect(finding.evidence).toEqual(judgmentDocumentEvidence)
     expect(finding.evidence[0]?.sourceId).toBe(caseLaw.sourceId)
     expect(requiresReview(finding.status)).toBe(false)
     expect(() => verificationFindingSchema.parse(finding)).not.toThrow()
+  })
+
+  it('refuses to clear a whole-authority finding on a fragment alone', () => {
+    // A paragraph the check never read is not proof of the document, so a
+    // fragment cannot substitute for the document identity.
+    expect(() =>
+      decide({
+        outcome: { outcome: 'held', evidence: judgmentFragmentEvidence },
+      }),
+    ).toThrow()
+  })
+
+  it('allows a fragment in addition to the document identity', () => {
+    const finding = decide({
+      outcome: {
+        outcome: 'held',
+        evidence: [...judgmentDocumentEvidence, ...judgmentFragmentEvidence],
+      },
+    })
+
+    expect(finding.status).toEqual({ state: 'clear' })
+    expect(finding.evidence).toHaveLength(2)
   })
 
   it('clears a held legislation provision with matching evidence', () => {
@@ -86,6 +117,30 @@ describe('authority existence decision', () => {
 
     expect(finding.status).toEqual({ state: 'clear' })
     expect(finding.evidence).toEqual(provisionEvidence)
+  })
+
+  it('clears a whole Act with document-level evidence', () => {
+    const wholeAct: NormalizedCitation = {
+      kind: 'legislation',
+      documentIdentity: 'ukpga/2010/15',
+      labelPath: null,
+    }
+    const finding = decide({
+      normalizedCitation: wholeAct,
+      citation: citation('/ln/ukpga/2010/15'),
+      outcome: {
+        outcome: 'held',
+        evidence: [
+          {
+            sourceType: 'legislation_document',
+            granularity: 'document',
+            sourceId: 'ukpga/2010/15',
+          },
+        ],
+      },
+    })
+
+    expect(finding.status).toEqual({ state: 'clear' })
   })
 
   it('requires review for authority_not_held without claiming nonexistence', () => {
@@ -119,6 +174,14 @@ describe('authority existence decision', () => {
     expect(finding.explanation.toLowerCase()).toContain('held')
   })
 
+  it('rejects the impossible case law missing-provision pairing', () => {
+    // Case law has no provisions, so this pairing is contradictory rather than
+    // an unreachable branch waiting to be emitted for a judgment.
+    expect(() =>
+      decide({ outcome: { outcome: 'not_held', missing: 'provision' } }),
+    ).toThrow()
+  })
+
   it('treats multiple stored sources as inconclusive, never a winner', () => {
     const finding = decide({ outcome: { outcome: 'ambiguous' } })
 
@@ -144,6 +207,21 @@ describe('authority existence decision', () => {
     })
   })
 
+  it('reports a malformed stored record as inconclusive with its own wording', () => {
+    const malformed = decide({
+      outcome: { outcome: 'unavailable', reason: 'malformed_record' },
+    })
+    const storeError = decide({
+      outcome: { outcome: 'unavailable', reason: 'store_error' },
+    })
+
+    expect(malformed.status).toEqual({
+      state: 'review_required',
+      reason: 'check_inconclusive',
+    })
+    expect(malformed.explanation).not.toBe(storeError.explanation)
+  })
+
   it('reports a withdrawn source as evidence unavailable', () => {
     const finding = decide({
       outcome: { outcome: 'unavailable', reason: 'source_withdrawn' },
@@ -154,6 +232,25 @@ describe('authority existence decision', () => {
       reason: 'evidence_unavailable',
     })
     expect(finding.evidence).toEqual([])
+    // Correct for one withdrawn match and for several.
+    expect(finding.explanation.toLowerCase()).toContain('every')
+  })
+
+  it('reports an underspecified schedule citation as inconclusive, not not-held', () => {
+    const finding = decide({
+      normalizedCitation: legislation,
+      citation: legislationRaw,
+      outcome: { outcome: 'unavailable', reason: 'citation_underspecified' },
+    })
+
+    expect(finding.status).toEqual({
+      state: 'review_required',
+      reason: 'check_inconclusive',
+    })
+    expect(finding.status).not.toEqual({
+      state: 'review_required',
+      reason: 'authority_not_held',
+    })
   })
 
   it('fails closed when the stored identity disagrees with the citation', () => {
@@ -167,7 +264,7 @@ describe('authority existence decision', () => {
     })
   })
 
-  it('does not clear a held source with no addressable evidence', () => {
+  it('does not clear a held source with no evidence at all', () => {
     const finding = decide({ outcome: { outcome: 'held', evidence: [] } })
 
     expect(finding.status).toEqual({
@@ -180,14 +277,54 @@ describe('authority existence decision', () => {
     const wrongSource: EvidenceReference[] = [
       {
         sourceType: 'judgment',
+        granularity: 'document',
         sourceId: 'uksc-2099-9',
-        ordinal: 1,
-        paragraphNumber: 1,
       },
     ]
 
     expect(() =>
       decide({ outcome: { outcome: 'held', evidence: wrongSource } }),
+    ).toThrow()
+  })
+
+  it('rejects cross-source document evidence', () => {
+    const crossSource: EvidenceReference[] = [
+      {
+        sourceType: 'legislation_document',
+        granularity: 'document',
+        sourceId: 'ukpga/2010/15',
+      },
+    ]
+
+    expect(() =>
+      decide({ outcome: { outcome: 'held', evidence: crossSource } }),
+    ).toThrow()
+  })
+
+  it('rejects document evidence on a citation with no identity', () => {
+    expect(() =>
+      decide({
+        normalizedCitation: { kind: 'unresolved', reason: 'not_a_citation' },
+        outcome: { outcome: 'skipped' },
+      }),
+    ).not.toThrow()
+    expect(() =>
+      verificationFindingSchema.parse({
+        id: createVerificationFindingId({
+          subject,
+          type: 'authority_existence',
+          location: caseLawRaw.location,
+        }),
+        type: 'authority_existence',
+        subject,
+        citation: caseLawRaw,
+        normalizedCitation: { kind: 'unresolved', reason: 'not_a_citation' },
+        status: { state: 'clear' },
+        severity: 'low',
+        confidence: 'high',
+        evidence: judgmentDocumentEvidence,
+        explanation: 'Cleared without an identity.',
+      }),
     ).toThrow()
   })
 
@@ -247,7 +384,7 @@ describe('authority existence decision', () => {
 
   it('uses a deterministic finding id independent of citation text', () => {
     const first = decide({
-      outcome: { outcome: 'held', evidence: judgmentEvidence },
+      outcome: { outcome: 'held', evidence: judgmentDocumentEvidence },
     })
     const other = decideAuthorityExistence({
       subject,
@@ -257,7 +394,7 @@ describe('authority existence decision', () => {
         neutralCitation: '[2099] EWCA Civ 8',
         sourceId: 'uksc-2099-1',
       },
-      outcome: { outcome: 'held', evidence: judgmentEvidence },
+      outcome: { outcome: 'held', evidence: judgmentDocumentEvidence },
     })
 
     expect(first.id).toBe(

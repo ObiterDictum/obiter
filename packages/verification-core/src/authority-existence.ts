@@ -15,16 +15,22 @@ import type { VerificationSubject } from './subject'
  * evidence a finding rests on, so a store boundary can build it without this
  * package importing a database or a provider.
  *
- * - `held`: a trustworthy stored source matches. `evidence` is empty when the
- *   source is held but has no addressable paragraph or provision; the decision
- *   withholds the clear rather than inventing an anchor.
+ * - `held`: a trustworthy stored source matches. `evidence` names the stored
+ *   source: the document identity itself for a whole-authority match, or the
+ *   provision for a provision-level one. The decision withholds the clear if a
+ *   caller reports a held source with no evidence at all rather than inventing
+ *   an anchor.
  * - `not_held`: no trustworthy stored source matches. `missing` separates an
  *   absent authority from an absent provision of a held Act, because the two
  *   read differently to a reviewer. Neither claims the authority is fictitious.
  * - `ambiguous`: more than one stored source matches. There is no winner.
- * - `unavailable`: the lookup could not answer, because the store failed, the
- *   only matching source is withdrawn upstream, or the citation's stored
- *   identity disagrees with the record. This is not an absence.
+ * - `unavailable`: the lookup could not answer, because the store failed, a
+ *   stored row failed its schema, the only matching source is withdrawn
+ *   upstream, the citation's stored identity disagrees with the record, or a
+ *   schedule citation is underspecified. This is not an absence. The `reason`
+ *   is the operational category: a database that is down and a schema-invalid
+ *   row both make the check inconclusive, but they are different failures and
+ *   a caller must be able to tell them apart without reading the explanation.
  * - `skipped`: no lookup ran, because the citation never resolved to an
  *   identity.
  */
@@ -34,7 +40,12 @@ export type AuthorityExistenceOutcome =
   | { outcome: 'ambiguous' }
   | {
       outcome: 'unavailable'
-      reason: 'store_error' | 'source_withdrawn' | 'identity_mismatch'
+      reason:
+        | 'store_error'
+        | 'malformed_record'
+        | 'source_withdrawn'
+        | 'identity_mismatch'
+        | 'citation_underspecified'
     }
   | { outcome: 'skipped' }
 
@@ -136,6 +147,17 @@ function decide(input: AuthorityExistenceDecisionInput): DecidedOutcome {
         explanation: 'One stored public source matches the citation.',
       }
     case 'not_held':
+      if (
+        citation.kind === 'case_law' &&
+        input.outcome.missing === 'provision'
+      ) {
+        // Case law has no provisions, so a "missing provision of a held case"
+        // is a contradiction, not an outcome. Reject it here rather than emit
+        // the Act-worded explanation for a judgment citation.
+        throw new Error(
+          'A case-law citation cannot be missing a provision; only a held Act has provisions.',
+        )
+      }
       return {
         status: { state: 'review_required', reason: 'authority_not_held' },
         severity: 'high',
@@ -163,7 +185,7 @@ function decide(input: AuthorityExistenceDecisionInput): DecidedOutcome {
           confidence: 'low',
           evidence: [],
           explanation:
-            'The only stored public source for the citation is withdrawn upstream, so the check is inconclusive.',
+            'Every stored public source matching the citation is withdrawn upstream, so the check is inconclusive.',
         }
       }
       if (input.outcome.reason === 'identity_mismatch') {
@@ -174,6 +196,26 @@ function decide(input: AuthorityExistenceDecisionInput): DecidedOutcome {
           evidence: [],
           explanation:
             "The citation's stored identity does not agree with the stored public record, so the check is inconclusive.",
+        }
+      }
+      if (input.outcome.reason === 'malformed_record') {
+        return {
+          status: { state: 'review_required', reason: 'check_inconclusive' },
+          severity: 'medium',
+          confidence: 'low',
+          evidence: [],
+          explanation:
+            'A stored public source record could not be validated, so the check is inconclusive. This is not a not-held result.',
+        }
+      }
+      if (input.outcome.reason === 'citation_underspecified') {
+        return {
+          status: { state: 'review_required', reason: 'check_inconclusive' },
+          severity: 'medium',
+          confidence: 'low',
+          evidence: [],
+          explanation:
+            'The Act is held, but the citation names no schedule and the store cannot resolve it without guessing, so the check is inconclusive.',
         }
       }
       return {

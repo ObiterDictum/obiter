@@ -4,6 +4,7 @@ import {
   checkAuthorityExistence,
   lookupAuthorityExistence,
 } from './authority-existence'
+import { findStoredAuthorityIdsByNeutralCitations } from './routes/legal-search/source-store'
 import type {
   CitationInput,
   NormalizedCitation,
@@ -13,8 +14,8 @@ import type {
 /**
  * Authority existence against the real Postgres public legal-source record.
  * The lookup is exact source identity, not a keyword search, and a store
- * failure or a withdrawn source must never read as not held. Requires
- * TEST_DATABASE_URL.
+ * failure, a corrupt stored row or a withdrawn source must never read as not
+ * held. Requires TEST_DATABASE_URL.
  */
 
 const subject: VerificationSubject = { documentId: 'd-v2-db', versionId: 'v-1' }
@@ -63,18 +64,96 @@ const judgmentFixtures: AuthorityFixture[] = [
     neutralCitation: '[2099] UKSC 4',
     paragraphs: false,
   },
+  {
+    id: 'db-test-v2-withdrawn-a',
+    neutralCitation: '[2099] UKSC 5',
+    withdrawn: true,
+  },
+  {
+    id: 'db-test-v2-withdrawn-b',
+    neutralCitation: '[2099] UKSC 5',
+    withdrawn: true,
+  },
+  { id: 'db-test-v2-live-dup', neutralCitation: '[2099] UKSC 6' },
+  {
+    id: 'db-test-v2-withdrawn-dup',
+    neutralCitation: '[2099] UKSC 6',
+    withdrawn: true,
+  },
 ]
 
-const legislationFixture = {
-  identity: 'ukpga/2099/1',
-  title: 'Test Authority Act 2099',
-  provisions: [
-    { id: 'ukpga/2099/1/section/1', labelPath: 'section/1', label: 's. 1' },
-    { id: 'ukpga/2099/1/section/40', labelPath: 'section/40', label: 's. 40' },
-  ],
+/** Valid JSON that is not a legal-source record: enough for the citation
+ * projection to match, not enough for the record schema. */
+const corruptAuthorities = [
+  {
+    id: 'db-test-v2-corrupt',
+    neutralCitation: '[2099] UKSC 7',
+  },
+  {
+    id: 'db-test-v2-corrupt-other',
+    neutralCitation: '[2088] UKSC 9',
+  },
+]
+
+interface ProvisionFixture {
+  labelPath: string
+  label: string
+  kind?: string
 }
 
+interface LegislationFixture {
+  identity: string
+  title: string
+  number: number
+  provisions: ProvisionFixture[]
+}
+
+const legislationFixtures: LegislationFixture[] = [
+  {
+    identity: 'ukpga/2099/1',
+    title: 'Test Authority Act 2099',
+    number: 1,
+    provisions: [
+      { labelPath: 'section/1', label: 's. 1' },
+      { labelPath: 'section/40', label: 's. 40' },
+    ],
+  },
+  {
+    identity: 'ukpga/2099/2',
+    title: 'Empty Test Act 2099',
+    number: 2,
+    provisions: [],
+  },
+  {
+    identity: 'ukpga/2099/4',
+    title: 'Single Schedule Test Act 2099',
+    number: 4,
+    provisions: [{ labelPath: 'schedule/paragraph/4', label: 'Sch. para. 4' }],
+  },
+  {
+    identity: 'ukpga/2099/5',
+    title: 'Numbered Schedules Test Act 2099',
+    number: 5,
+    provisions: [
+      { labelPath: 'schedule/1/paragraph/1', label: 'Sch. 1 para. 1' },
+      { labelPath: 'schedule/2/paragraph/1', label: 'Sch. 2 para. 1' },
+    ],
+  },
+  {
+    identity: 'ukpga/2099/6',
+    title: 'Container First Test Act 2099',
+    number: 6,
+    provisions: [
+      { labelPath: 'part/1', label: 'Part 1', kind: 'part' },
+      { labelPath: 'section/1', label: 's. 1' },
+    ],
+  },
+]
+
 const emptyActIdentity = 'ukpga/2099/2'
+const singleScheduleAct = 'ukpga/2099/4'
+const numberedSchedulesAct = 'ukpga/2099/5'
+const containerFirstAct = 'ukpga/2099/6'
 
 describe('authority existence against the stored legal source record', () => {
   const connectionString = process.env.TEST_DATABASE_URL
@@ -89,43 +168,42 @@ describe('authority existence against the stored legal source record', () => {
     for (const fixture of judgmentFixtures) {
       await insertAuthority(pool, fixture)
     }
-    await pool.query(
-      `insert into legislation_documents
-         (identity, act_type, year, number, title, source_url, content_hash)
-       values ($1, 'ukpga', 2099, 1, $2, $3, 'dbtest-v2-act')`,
-      [
-        legislationFixture.identity,
-        legislationFixture.title,
-        `https://www.legislation.gov.uk/${legislationFixture.identity}`,
-      ],
-    )
-    for (const [index, provision] of legislationFixture.provisions.entries()) {
+    for (const corrupt of corruptAuthorities) {
+      await insertCorruptAuthority(pool, corrupt.id, corrupt.neutralCitation)
+    }
+    for (const act of legislationFixtures) {
       await pool.query(
-        `insert into legislation_provisions
-           (id, document_identity, label_path, label, provision_text,
-            source_hash, doc_order, has_unapplied_effects, effects_checked_at)
-         values ($1, $2, $3, $4, $5, $6, $7, false, now())`,
+        `insert into legislation_documents
+           (identity, act_type, year, number, title, source_url, content_hash)
+         values ($1, 'ukpga', 2099, $2, $3, $4, $5)`,
         [
-          provision.id,
-          legislationFixture.identity,
-          provision.labelPath,
-          provision.label,
-          `Text of ${provision.label}.`,
-          `dbtest-v2-${index}`,
-          index,
+          act.identity,
+          act.number,
+          act.title,
+          `https://www.legislation.gov.uk/${act.identity}`,
+          `dbtest-v2-${act.number}`,
         ],
       )
+      for (const [index, provision] of act.provisions.entries()) {
+        await pool.query(
+          `insert into legislation_provisions
+             (id, document_identity, label_path, label, provision_text,
+              source_hash, doc_order, has_unapplied_effects, effects_checked_at,
+              kind)
+           values ($1, $2, $3, $4, $5, $6, $7, false, now(), $8)`,
+          [
+            `${act.identity}/${provision.labelPath}`,
+            act.identity,
+            provision.labelPath,
+            provision.label,
+            `Text of ${provision.label}.`,
+            `dbtest-v2-${act.number}-${index}`,
+            index,
+            provision.kind ?? 'P1',
+          ],
+        )
+      }
     }
-    await pool.query(
-      `insert into legislation_documents
-         (identity, act_type, year, number, title, source_url, content_hash)
-       values ($1, 'ukpga', 2099, 2, $2, $3, 'dbtest-v2-empty')`,
-      [
-        emptyActIdentity,
-        'Empty Test Act 2099',
-        `https://www.legislation.gov.uk/${emptyActIdentity}`,
-      ],
-    )
   })
 
   afterAll(async () => {
@@ -133,7 +211,7 @@ describe('authority existence against the stored legal source record', () => {
       `delete from legal_source_documents where document_id like 'db-test-v2-%'`,
     )
     await pool.query(`delete from legislation_provisions where id like $1`, [
-      'ukpga/2099/1/%',
+      'ukpga/2099/%',
     ])
     await pool.query(
       `delete from legislation_documents where identity like 'ukpga/2099/%'`,
@@ -141,7 +219,7 @@ describe('authority existence against the stored legal source record', () => {
     await pool.end()
   })
 
-  it('clears an exact neutral citation match and preserves its source id', async () => {
+  it('clears an exact neutral citation match with document-level evidence', async () => {
     const finding = await checkAuthorityExistence(pool, {
       subject,
       citation: citation('[2099] UKSC 1'),
@@ -155,9 +233,8 @@ describe('authority existence against the stored legal source record', () => {
     expect(finding.evidence).toEqual([
       {
         sourceType: 'judgment',
+        granularity: 'document',
         sourceId: 'db-test-v2-uksc-1',
-        ordinal: 1,
-        paragraphNumber: 1,
       },
     ])
   })
@@ -225,6 +302,32 @@ describe('authority existence against the stored legal source record', () => {
     })
   })
 
+  it('clears on the live record when a withdrawn duplicate also matches', async () => {
+    const finding = await checkAuthorityExistence(pool, {
+      subject,
+      citation: citation('[2099] UKSC 6'),
+      normalizedCitation: caseLaw('[2099] UKSC 6', 'db-test-v2-live-dup'),
+    })
+
+    expect(finding.status).toEqual({ state: 'clear' })
+    expect(finding.evidence[0]?.sourceId).toBe('db-test-v2-live-dup')
+  })
+
+  it('uses cardinality-neutral wording when several records are withdrawn', async () => {
+    const finding = await checkAuthorityExistence(pool, {
+      subject,
+      citation: citation('[2099] UKSC 5'),
+      normalizedCitation: caseLaw('[2099] UKSC 5', 'db-test-v2-withdrawn-a'),
+    })
+
+    expect(finding.status).toEqual({
+      state: 'review_required',
+      reason: 'evidence_unavailable',
+    })
+    expect(finding.explanation.toLowerCase()).toContain('every')
+    expect(finding.explanation.toLowerCase()).not.toContain('the only')
+  })
+
   it('does not treat a keyword query as an exact authority', async () => {
     const finding = await checkAuthorityExistence(pool, {
       subject,
@@ -238,30 +341,89 @@ describe('authority existence against the stored legal source record', () => {
     })
   })
 
-  it('withholds a clear when a held judgment has no addressable paragraph', async () => {
+  it('clears a held judgment with no addressable paragraph via the document', async () => {
+    // Existence is a claim about the document, so a summary-only record is
+    // sufficient evidence and no longer degrades to inconclusive.
     const finding = await checkAuthorityExistence(pool, {
       subject,
       citation: citation('[2099] UKSC 4'),
       normalizedCitation: caseLaw('[2099] UKSC 4', 'db-test-v2-summary-only'),
     })
 
+    expect(finding.status).toEqual({ state: 'clear' })
+    expect(finding.evidence).toEqual([
+      {
+        sourceType: 'judgment',
+        granularity: 'document',
+        sourceId: 'db-test-v2-summary-only',
+      },
+    ])
+  })
+
+  it('classifies a corrupt stored record as malformed, not a store outage', async () => {
+    const outcome = await lookupAuthorityExistence(
+      pool,
+      caseLaw('[2099] UKSC 7', 'db-test-v2-corrupt'),
+    )
+    expect(outcome).toEqual({
+      outcome: 'unavailable',
+      reason: 'malformed_record',
+    })
+
+    const finding = await checkAuthorityExistence(pool, {
+      subject,
+      citation: citation('[2099] UKSC 7'),
+      normalizedCitation: caseLaw('[2099] UKSC 7', 'db-test-v2-corrupt'),
+    })
     expect(finding.status).toEqual({
       state: 'review_required',
-      reason: 'evidence_unavailable',
+      reason: 'check_inconclusive',
+    })
+    expect(finding.status).not.toEqual({
+      state: 'review_required',
+      reason: 'authority_not_held',
     })
   })
 
-  it('clears a held whole Act and anchors its evidence in the Act', async () => {
+  it('keeps an unrelated check healthy while a corrupt record exists', async () => {
     const finding = await checkAuthorityExistence(pool, {
       subject,
-      citation: citation('/ln/ukpga/2099/1'),
-      normalizedCitation: legislation(legislationFixture.identity, null),
+      citation: citation('[2099] UKSC 1'),
+      normalizedCitation: caseLaw('[2099] UKSC 1', 'db-test-v2-uksc-1'),
     })
 
     expect(finding.status).toEqual({ state: 'clear' })
-    expect(finding.evidence[0]).toMatchObject({
-      sourceType: 'legislation_provision',
-      sourceId: legislationFixture.identity,
+  })
+
+  it('clears a held whole Act with document-level evidence', async () => {
+    const finding = await checkAuthorityExistence(pool, {
+      subject,
+      citation: citation('/ln/ukpga/2099/1'),
+      normalizedCitation: legislation('ukpga/2099/1', null),
+    })
+
+    expect(finding.status).toEqual({ state: 'clear' })
+    expect(finding.evidence).toEqual([
+      {
+        sourceType: 'legislation_document',
+        granularity: 'document',
+        sourceId: 'ukpga/2099/1',
+      },
+    ])
+  })
+
+  it('anchors a whole Act on the document even when its first row is a container', async () => {
+    const finding = await checkAuthorityExistence(pool, {
+      subject,
+      citation: citation(`/ln/${containerFirstAct}`),
+      normalizedCitation: legislation(containerFirstAct, null),
+    })
+
+    expect(finding.status).toEqual({ state: 'clear' })
+    expect(finding.evidence[0]).toEqual({
+      sourceType: 'legislation_document',
+      granularity: 'document',
+      sourceId: containerFirstAct,
     })
   })
 
@@ -269,20 +431,142 @@ describe('authority existence against the stored legal source record', () => {
     const finding = await checkAuthorityExistence(pool, {
       subject,
       citation: citation('/ln/ukpga/2099/1/section/40'),
-      normalizedCitation: legislation(
-        legislationFixture.identity,
-        'section/40',
-      ),
+      normalizedCitation: legislation('ukpga/2099/1', 'section/40'),
     })
 
     expect(finding.status).toEqual({ state: 'clear' })
     expect(finding.evidence).toEqual([
       {
         sourceType: 'legislation_provision',
-        sourceId: legislationFixture.identity,
+        granularity: 'fragment',
+        sourceId: 'ukpga/2099/1',
         labelPath: 'section/40',
       },
     ])
+  })
+
+  it('clears a held Act that holds no provisions', async () => {
+    const finding = await checkAuthorityExistence(pool, {
+      subject,
+      citation: citation(`/ln/${emptyActIdentity}`),
+      normalizedCitation: legislation(emptyActIdentity, null),
+    })
+
+    expect(finding.status).toEqual({ state: 'clear' })
+  })
+
+  it('resolves a numbered Schedule 1 citation onto the unnumbered stored schedule', async () => {
+    const finding = await checkAuthorityExistence(pool, {
+      subject,
+      citation: citation(`/ln/${singleScheduleAct}/schedule/1/paragraph/4`),
+      normalizedCitation: legislation(
+        singleScheduleAct,
+        'schedule/1/paragraph/4',
+      ),
+    })
+
+    expect(finding.status).toEqual({ state: 'clear' })
+    // Evidence names the stored path, so it opens what the Act actually holds.
+    expect(finding.evidence).toEqual([
+      {
+        sourceType: 'legislation_provision',
+        granularity: 'fragment',
+        sourceId: singleScheduleAct,
+        labelPath: 'schedule/paragraph/4',
+      },
+    ])
+  })
+
+  it('resolves the unnumbered stored form directly', async () => {
+    const finding = await checkAuthorityExistence(pool, {
+      subject,
+      citation: citation(`/ln/${singleScheduleAct}/schedule/paragraph/4`),
+      normalizedCitation: legislation(
+        singleScheduleAct,
+        'schedule/paragraph/4',
+      ),
+    })
+
+    expect(finding.status).toEqual({ state: 'clear' })
+  })
+
+  it('never maps Schedule 2 onto an unnumbered single schedule', async () => {
+    const finding = await checkAuthorityExistence(pool, {
+      subject,
+      citation: citation(`/ln/${singleScheduleAct}/schedule/2/paragraph/4`),
+      normalizedCitation: legislation(
+        singleScheduleAct,
+        'schedule/2/paragraph/4',
+      ),
+    })
+
+    expect(finding.status).toEqual({
+      state: 'review_required',
+      reason: 'authority_not_held',
+    })
+  })
+
+  it('keeps a missing paragraph of the single schedule distinct', async () => {
+    const finding = await checkAuthorityExistence(pool, {
+      subject,
+      citation: citation(`/ln/${singleScheduleAct}/schedule/1/paragraph/999`),
+      normalizedCitation: legislation(
+        singleScheduleAct,
+        'schedule/1/paragraph/999',
+      ),
+    })
+
+    expect(finding.status).toEqual({
+      state: 'review_required',
+      reason: 'authority_not_held',
+    })
+    expect(finding.explanation.toLowerCase()).toContain('act')
+    expect(finding.explanation.toLowerCase()).toContain('held')
+  })
+
+  it('keeps the numbered path when the Act holds it', async () => {
+    const finding = await checkAuthorityExistence(pool, {
+      subject,
+      citation: citation(`/ln/${numberedSchedulesAct}/schedule/1/paragraph/1`),
+      normalizedCitation: legislation(
+        numberedSchedulesAct,
+        'schedule/1/paragraph/1',
+      ),
+    })
+
+    expect(finding.status).toEqual({ state: 'clear' })
+    expect(finding.evidence[0]).toMatchObject({
+      labelPath: 'schedule/1/paragraph/1',
+    })
+  })
+
+  it('resolves Schedule 2 on an Act that holds a numbered Schedule 2', async () => {
+    const finding = await checkAuthorityExistence(pool, {
+      subject,
+      citation: citation(`/ln/${numberedSchedulesAct}/schedule/2/paragraph/1`),
+      normalizedCitation: legislation(
+        numberedSchedulesAct,
+        'schedule/2/paragraph/1',
+      ),
+    })
+
+    expect(finding.status).toEqual({ state: 'clear' })
+  })
+
+  it('reports an underspecified schedule citation as inconclusive, not not-held', async () => {
+    const finding = await checkAuthorityExistence(pool, {
+      subject,
+      citation: citation(`/ln/${numberedSchedulesAct}/schedule/paragraph/1`),
+      normalizedCitation: legislation(
+        numberedSchedulesAct,
+        'schedule/paragraph/1',
+      ),
+    })
+
+    expect(finding.status).toEqual({
+      state: 'review_required',
+      reason: 'check_inconclusive',
+    })
   })
 
   it('reports a missing Act as not held', async () => {
@@ -302,10 +586,7 @@ describe('authority existence against the stored legal source record', () => {
     const finding = await checkAuthorityExistence(pool, {
       subject,
       citation: citation('/ln/ukpga/2099/1/section/99'),
-      normalizedCitation: legislation(
-        legislationFixture.identity,
-        'section/99',
-      ),
+      normalizedCitation: legislation('ukpga/2099/1', 'section/99'),
     })
 
     expect(finding.status).toEqual({
@@ -314,19 +595,6 @@ describe('authority existence against the stored legal source record', () => {
     })
     expect(finding.explanation.toLowerCase()).toContain('act')
     expect(finding.explanation.toLowerCase()).toContain('held')
-  })
-
-  it('withholds a clear when a held Act has no addressable provision', async () => {
-    const finding = await checkAuthorityExistence(pool, {
-      subject,
-      citation: citation('/ln/ukpga/2099/2'),
-      normalizedCitation: legislation(emptyActIdentity, null),
-    })
-
-    expect(finding.status).toEqual({
-      state: 'review_required',
-      reason: 'evidence_unavailable',
-    })
   })
 
   it('turns a store failure into an inconclusive check, never not-held', async () => {
@@ -416,6 +684,18 @@ describe('authority existence against the stored legal source record', () => {
 
     expect(first.id).toBe(second.id)
   })
+
+  it('batches several citations into one candidate lookup with stable grouping', async () => {
+    const matches = await findStoredAuthorityIdsByNeutralCitations(pool, [
+      '[2099] UKSC 1',
+      '[2099] UKSC 2',
+      '[2099] UKSC 1',
+    ])
+
+    expect(matches.get('[2099] uksc 1')).toEqual(['db-test-v2-uksc-1'])
+    expect(matches.get('[2099] uksc 2')).toEqual(['db-test-v2-uksc-2'])
+    expect(matches.size).toBe(2)
+  })
 })
 
 async function insertAuthority(pool: Pool, fixture: AuthorityFixture) {
@@ -467,6 +747,26 @@ async function insertAuthority(pool: Pool, fixture: AuthorityFixture) {
       JSON.stringify(provider),
       provider.contentHash,
       provider.sourceUri,
+    ],
+  )
+}
+
+async function insertCorruptAuthority(
+  pool: Pool,
+  id: string,
+  neutralCitation: string,
+) {
+  await pool.query(
+    `insert into legal_source_documents
+       (document_id, summary_json, document_json, provider_json,
+        content_hash, source_uri)
+     values ($1, $2::jsonb, null, '{}'::jsonb, $3, $4)`,
+    [
+      id,
+      // Valid JSON, missing every required record field but the citation.
+      JSON.stringify({ id, neutralCitation }),
+      `dbtest-v2-${id}`,
+      `/${id}`,
     ],
   )
 }

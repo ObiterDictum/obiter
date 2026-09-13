@@ -17,9 +17,8 @@ const citation = {
 const evidence: EvidenceReference[] = [
   {
     sourceType: 'judgment',
+    granularity: 'document',
     sourceId: 'uksc-2099-1',
-    ordinal: 12,
-    paragraphNumber: 9,
   },
 ]
 

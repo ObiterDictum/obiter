@@ -59,23 +59,42 @@ the source of truth for names and intent.
 
 ## Evidence references
 
-A reference points at public source material by id:
+A reference points at public source material by id, at one of two
+granularities. The granularity is the discriminator, so a document reference
+and a fragment reference of the same source are different values and neither
+carries the other's fields.
 
-- `judgment`: `sourceId` (the authority document id), `ordinal` (1-based
-  position in the paragraph array), and `paragraphNumber` (`null` when the
-  judgment prints none, display only). The printed number and the position can
-  differ for a block-quoted paragraph, so they are separate fields. Its stable
-  id is `<sourceId>:judgment_paragraph:<ordinal>`, byte-identical to
+- `judgment` at `fragment`: `sourceId` (the authority document id), `ordinal`
+  (1-based position in the paragraph array), and `paragraphNumber` (`null` when
+  the judgment prints none, display only). The printed number and the position
+  can differ for a block-quoted paragraph, so they are separate fields. Its
+  stable id is `<sourceId>:judgment_paragraph:<ordinal>`, byte-identical to
   `createJudgmentParagraphEvidenceId` in `packages/search-client`.
-- `legislation_provision`: `sourceId` (the Act identity, `ukpga/2010/15`) and
-  `labelPath` (`section/40`). Its stable id is
+- `judgment` at `document`: `sourceId` only. It names the stored judgment and
+  nothing inside it, so it is the honest anchor for a whole-authority existence
+  claim and the only anchor a judgment with no paragraphs can carry. Its stable
+  id is `<sourceId>:judgment_document`.
+- `legislation_provision` at `fragment`: `sourceId` (the Act identity,
+  `ukpga/2010/15`) and `labelPath` (`section/40`). Its stable id is
   `<sourceId>:legislation_provision:<labelPath>`.
+- `legislation_document` at `document`: `sourceId` (the Act identity). It names
+  the stored Act and nothing inside it, so a whole-Act finding rests on the Act
+  identity even when the Act holds no provisions. Its stable id is
+  `<sourceId>:legislation_document`.
+
+Granularity is enforced by finding type, not chosen by the caller: a
+whole-authority `clear` or `flagged` finding must carry document-level evidence,
+a `quote_fidelity` finding and any finding on a provision citation must carry a
+fragment, and the two may not substitute for one another. A valid finding may
+carry a fragment in addition to the document identity (the document is still
+present), but not instead of it.
 
 No reference holds source text or any matter content. Both forms are constrained
 to canonical components that cannot contain `:`, because the shared
 `search-client` judgment id format joins on it and cannot change. Evidence is not
-source-version aware: an ordinal repoints if a source document is re-ingested,
-and V5 owns any pinning before these become durable rows.
+source-version aware: a judgment ordinal or a legislation label path can repoint
+if a source document is re-ingested, whereas the document forms carry no location
+and therefore cannot. V5 owns any pinning before these become durable rows.
 
 ## Findings
 
@@ -102,8 +121,8 @@ The schema admits exactly these combinations; anything else fails to parse.
 
 | status            | reason                 | citation state                       | evidence                                |
 | ----------------- | ---------------------- | ------------------------------------ | --------------------------------------- |
-| `clear`           | -                      | resolved (case law or legislation)   | one or more, naming the resolved source |
-| `flagged`         | -                      | resolved (case law or legislation)   | one or more, naming the resolved source |
+| `clear`           | -                      | resolved (case law or legislation)   | required granularity, naming the source |
+| `flagged`         | -                      | resolved (case law or legislation)   | required granularity, naming the source |
 | `review_required` | `citation_unresolved`  | `unresolved`                         | none                                    |
 | `review_required` | `citation_ambiguous`   | `unresolved` with reason `ambiguous` | none                                    |
 | `review_required` | `authority_not_held`   | resolved                             | none                                    |
@@ -119,6 +138,10 @@ The schema admits exactly these combinations; anything else fails to parse.
   citation-shaped reason, an unresolved citation cannot be `clear` or `flagged`
   (normalisation failure forces review), evidence cannot name a source other than
   the resolved citation, and duplicate references are refused.
+- Evidence granularity is derived from the finding, not chosen by the caller: a
+  case-law or whole-Act finding needs document-level evidence, a provision
+  citation or `quote_fidelity` finding needs a fragment, and a fragment cannot
+  stand in for the document identity (nor the document for supported text).
 - Finding identity is
   `vf:<len>:<documentId>:<len>:<versionId>:<len>:<type>:<len>:<paragraphId>:<len>:<start>:<len>:<end>`,
   where `<len>` is the UTF-16 length of the component that follows. It is a
@@ -130,6 +153,57 @@ The schema admits exactly these combinations; anything else fails to parse.
   is excluded, so a later normaliser change does not re-key existing findings, and
   no citation text, quote, explanation, filename, matter name or user text enters
   it.
+
+## Authority existence (V2)
+
+V2 answers one question: does Obiter's stored public legal-source record hold a
+trustworthy source for this normalized citation? It is not a claim that the
+authority exists, is good law, or that the raw citation is correct. It reads
+Postgres only and never writes.
+
+### V2 / V3 boundary
+
+- V3 owns parsing raw citation text into a `NormalizedCitation` (splitting a
+  neutral citation, resolving free-text Act citations). V2 never sees prose.
+- V2 owns checking that normalized identity against the stored substrate. It
+  does not re-parse, re-normalize or correct the citation.
+- Once V3 hands V2 a canonical label path, V2 resolves it with the same store
+  semantics the serving path uses (`resolveStoredProvisionPath`), including the
+  single-schedule alias. There is one owner of that alias, and a citation the
+  Act page resolves cannot read as not-held to verification.
+
+### Lookup outcomes
+
+| store outcome                                  | finding status                             | evidence                                                                             |
+| ---------------------------------------------- | ------------------------------------------ | ------------------------------------------------------------------------------------ |
+| exactly one live match                         | `clear`                                    | document evidence for a whole authority, provision fragment for a provision citation |
+| no match                                       | `review_required` / `authority_not_held`   | none                                                                                 |
+| Act held, cited provision absent               | `review_required` / `authority_not_held`   | none                                                                                 |
+| more than one live match                       | `review_required` / `check_inconclusive`   | none                                                                                 |
+| store error (`store_error`)                    | `review_required` / `check_inconclusive`   | none                                                                                 |
+| schema-invalid stored row (`malformed_record`) | `review_required` / `check_inconclusive`   | none                                                                                 |
+| only match(es) withdrawn                       | `review_required` / `evidence_unavailable` | none                                                                                 |
+| schedule citation with no schedule number      | `review_required` / `check_inconclusive`   | none                                                                                 |
+| stored identity disagrees with the citation    | `review_required` / `check_inconclusive`   | none                                                                                 |
+| citation unresolved / not checked              | `review_required` or `not_checked`         | none                                                                                 |
+
+The `store_error`, `malformed_record`, `source_withdrawn`, `identity_mismatch`
+and `citation_underspecified` categories are distinct so an operational caller
+can tell a database outage from a corrupt row from invalid input without
+reading the finding explanation. None of them is `authority_not_held`, and the
+user-facing explanation never carries raw error text.
+
+### Performance and batching
+
+The case-law candidate lookup (`findStoredAuthorityIdsByNeutralCitations`) is a
+batch: it pushes the citation year into SQL and returns only the citation
+projection, and a caller with many citations issues one query for the year set.
+V3 should call it once per document, not once per citation. An index is
+deliberately not added: the year predicate is a `like` superset the exact
+normalized comparison still filters, and the measured single-call path is
+dominated by the sequential scan for either shape, so batching is the durable
+fix. The store API accepts a normalized-citation array so V3 does not need a
+redesign to batch.
 
 ### Payload text and boundary limits
 
