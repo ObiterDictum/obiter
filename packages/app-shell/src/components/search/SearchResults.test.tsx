@@ -459,6 +459,119 @@ describe('SearchResults legislation group', () => {
     )
     expect(headings).toEqual(['Case law', 'Legislation'])
   })
+
+  it('names an unheld Act instead of a not-held judgment citation', () => {
+    const rendered = renderResults({
+      hits: [citingHit],
+      cached: true,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'recognised_not_held',
+      citation: { recognised: true, status: 'not_held' },
+      diagnostics: {
+        legislationNote: 'Children Act 1989 is not held.',
+        legislationNotHeld: true,
+      },
+    })
+    root = rendered.root
+    container = rendered.container
+
+    // The legislation half recognised the Act and served nothing. The page
+    // must say the Act is not held, not that a judgment citation is not held.
+    expect(container.textContent).toContain('Children Act 1989 is not held.')
+    expect(container.textContent).not.toContain('Citation not held')
+  })
+
+  it('does not surface a legislation outage as a not-held notice', () => {
+    const rendered = renderResults({
+      hits: [citingHit],
+      cached: true,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'results',
+      diagnostics: { legislationNote: 'Legislation store unavailable.' },
+    })
+    root = rendered.root
+    container = rendered.container
+
+    // An outage note is not a not-held verdict; the legislation half still
+    // fails open and the judgment results still stand.
+    expect(container.textContent).not.toContain(
+      'Legislation store unavailable.',
+    )
+    expect(container.textContent).toContain(citingHit.title)
+  })
+
+  it('names an unresolved legislation title above judgment results', () => {
+    const rendered = renderResults({
+      hits: [citingHit],
+      cached: true,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'results',
+      diagnostics: {
+        legislationNote:
+          'No exact legislation title match was found for "Children Act 1989".',
+        legislationTitleUnresolved: true,
+      },
+    })
+    root = rendered.root
+    container = rendered.container
+
+    // The note says only what is known; it must never claim the Act is
+    // absent while judgment results are on the page.
+    expect(container.textContent).toContain(
+      'No exact legislation title match was found for "Children Act 1989".',
+    )
+    expect(container.textContent).not.toContain('is not held')
+    expect(container.textContent).toContain(citingHit.title)
+  })
+
+  it('names an ambiguous legislation title above judgment results', () => {
+    const rendered = renderResults({
+      hits: [citingHit],
+      cached: true,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'legislation_ambiguous',
+      diagnostics: {
+        legislationNote:
+          '“Sample Act 2020” names more than one stored Act. Candidates: A; B',
+        legislationAmbiguous: true,
+      },
+    })
+    root = rendered.root
+    container = rendered.container
+
+    expect(container.textContent).toContain('names more than one stored Act')
+    expect(container.textContent).toContain(citingHit.title)
+  })
+
+  it('shows an underspecified-schedule corrective above judgment results', () => {
+    const rendered = renderResults({
+      hits: [citingHit],
+      cached: true,
+      indexedCount: 0,
+      skippedCount: 0,
+      outcome: 'results',
+      diagnostics: {
+        legislationNote: 'Sch. para. 2 of Equality Act 2010 names no schedule.',
+        legislationScheduleGuidance: {
+          example: 'Schedule 1 paragraph 2',
+          actTitle: 'Equality Act 2010',
+        },
+      },
+    })
+    root = rendered.root
+    container = rendered.container
+
+    // The corrective is a prompt, not a verdict: it must appear alongside the
+    // judgment results, never replace them, and never claim the Act is absent.
+    expect(container.textContent).toContain('Schedule 1 paragraph 2')
+    expect(container.textContent).toContain('Equality Act 2010')
+    expect(container.textContent).toContain(citingHit.title)
+    expect(container.textContent).not.toContain('is not held')
+  })
 })
 
 describe('SearchResults withheld distinction and group headings', () => {

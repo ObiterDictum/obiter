@@ -2,7 +2,10 @@ import type {
   LegalSearchCitation,
   LegalSearchCitationMatch,
   LegalSearchCitationStatus,
+  LegislationScheduleGuidance,
 } from '@obiter/contracts'
+
+export type { LegislationScheduleGuidance }
 
 export interface CaseLawParagraph {
   id: string
@@ -35,6 +38,9 @@ export type LegalSearchOutcome =
   | 'stored_browse_empty'
   | 'unsupported_source_type'
   | 'recognised_not_held'
+  | 'legislation_title_unresolved'
+  | 'legislation_ambiguous'
+  | 'legislation_schedule_underspecified'
 
 export interface LegalSearchResult {
   id: string
@@ -103,6 +109,21 @@ export interface LegalSearchFetchResponse {
     citationRecognised?: boolean
     citationStatus?: LegalSearchCitationStatus
     storedIndexStatus?: 'ok' | 'unavailable'
+    /** Set when the legislation half recognised a citation but served no
+     * group: an unheld chapter or provision. Names what was asked for so the
+     * page reads as not held. */
+    legislationNote?: string
+    /** True when the note above is an authoritative not-held verdict rather
+     * than an outage or an unresolved-title suppression. */
+    legislationNotHeld?: boolean
+    /** True when the query looked like a whole Act title but no exact title
+     * key matched. Suppresses keyword provisions without claiming absence. */
+    legislationTitleUnresolved?: boolean
+    /** True when more than one stored Act satisfies the query. */
+    legislationAmbiguous?: boolean
+    /** A held Act whose schedule citation names no schedule. Presence is the
+     * diagnostic; the corrective example and Act are data, not prose. */
+    legislationScheduleGuidance?: LegislationScheduleGuidance
   }
 }
 
@@ -155,6 +176,22 @@ export type LegalSearchState =
       hydrationAttempt?: number
       /** True once the bounded hydration recheck gives up waiting. */
       hydrationExpired?: boolean
+      /** Response diagnostics.legislationNote, so the empty copy names the
+       * unheld Act instead of claiming a judgment was sought. */
+      legislationNote?: string
+      /** Response diagnostics.legislationNotHeld: the note is an authoritative
+       * verdict, not an outage. */
+      legislationNotHeld?: boolean
+      /** Response diagnostics.legislationTitleUnresolved: a whole-title
+       * request no exact title key matched. */
+      legislationTitleUnresolved?: boolean
+      /** Response diagnostics.legislationAmbiguous: more than one stored Act
+       * satisfies the query. */
+      legislationAmbiguous?: boolean
+      /** Response diagnostics.legislationScheduleGuidance: a schedule
+       * citation that names a paragraph but no schedule, with the
+       * parser-compatible example and the Act context to resubmit it. */
+      legislationScheduleGuidance?: LegislationScheduleGuidance
     }
   | { status: 'error'; query: string; message: string }
 

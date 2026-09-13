@@ -3,6 +3,10 @@ import { ArrowRight } from '@phosphor-icons/react'
 import { caseResultLocation } from '../../case-navigation'
 import { LegislationHit } from './LegislationHit'
 import { legislationHits } from './searchResultRows'
+import {
+  getLegislationScheduleGuidanceFeedback,
+  getLegislationScheduleResubmitQuery,
+} from './legislationGuidance'
 import type {
   LegalSearchBrowseContext,
   LegalSearchFetchResponse,
@@ -14,6 +18,7 @@ interface SearchResultsProps {
   browse?: LegalSearchBrowseContext
   selectedIndex: number
   onSelectIndex: (index: number) => void
+  onResubmit?: (query: string) => void
 }
 
 /**
@@ -25,11 +30,32 @@ export function SearchResults({
   browse,
   selectedIndex,
   onSelectIndex,
+  onResubmit,
 }: SearchResultsProps) {
   const legislationLead = response.primaryGroup === 'legislation'
   const legislation = legislationHits(response)
   const showJudgments = response.hits.length > 0
   const showLegislation = legislation.length > 0
+  const legislationNote = response.diagnostics?.legislationNote
+  const legislationScheduleGuidance =
+    response.diagnostics?.legislationScheduleGuidance
+  const scheduleFeedback = legislationScheduleGuidance
+    ? getLegislationScheduleGuidanceFeedback(legislationScheduleGuidance)
+    : null
+  const scheduleResubmitQuery = legislationScheduleGuidance
+    ? getLegislationScheduleResubmitQuery(legislationScheduleGuidance)
+    : null
+  // Every legislation verdict the API marks explicitly: an authoritative
+  // not-held, a whole-title request no exact key matched, a title two stored
+  // Acts satisfy, or a schedule citation that names no schedule. An outage
+  // note carries none of these flags, so the page cannot mistake "the store
+  // did not answer" for a verdict.
+  const legislationVerdict =
+    Boolean(legislationScheduleGuidance) ||
+    ((response.diagnostics?.legislationNotHeld === true ||
+      response.diagnostics?.legislationTitleUnresolved === true ||
+      response.diagnostics?.legislationAmbiguous === true) &&
+      Boolean(legislationNote))
   const legislationOffset = legislationLead ? 0 : response.hits.length
   const judgmentOffset = legislationLead ? legislation.length : 0
 
@@ -43,6 +69,26 @@ export function SearchResults({
         <p className="pb-3 text-[11px] font-medium tracking-wide text-muted">
           {formatResultMeta(response, browse)}
         </p>
+        {legislationVerdict && !showLegislation ? (
+          // The legislation half reached a verdict but served no group. Say so
+          // by name, above any judgment results, so an empty legislation group
+          // never reads as "we found nothing about this".
+          <div
+            role="status"
+            className="mb-3 rounded-md border border-warning/30 bg-raised px-3 py-2 text-sm text-muted"
+          >
+            <p>{scheduleFeedback ? scheduleFeedback.body : legislationNote}</p>
+            {scheduleResubmitQuery && onResubmit ? (
+              <button
+                className="mt-1 font-medium text-brand hover:underline"
+                type="button"
+                onClick={() => onResubmit(scheduleResubmitQuery)}
+              >
+                Use this citation
+              </button>
+            ) : null}
+          </div>
+        ) : null}
         {legislationLead ? (
           <>
             {showLegislation ? (
@@ -238,7 +284,14 @@ function formatResultMeta(
     return `${response.hits.length} recent ${caseLabel} for ${browse.courtLabel} from stored legal sources`
   }
 
-  if (response.citation?.status === 'not_held' && response.hits.length > 0) {
+  if (
+    response.citation?.status === 'not_held' &&
+    response.hits.length > 0 &&
+    // A legislation not-held is reported by the legislation notice, not as a
+    // judgment citation: the query asked for an Act, not a case. An outage
+    // note is not a not-held verdict either.
+    response.diagnostics?.legislationNotHeld !== true
+  ) {
     const resultLabel = response.hits.length === 1 ? 'result' : 'results'
     if (response.hits.every((hit) => hit.citationMatch === 'citing')) {
       return `Citation not held · ${response.hits.length} citing ${resultLabel} from Find Case Law`
