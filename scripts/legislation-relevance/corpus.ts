@@ -46,6 +46,7 @@ export interface ServedLegislationResult {
   legislationNote: string | null
   legislationNotHeld: boolean
   legislationTitleUnresolved: boolean
+  legislationAmbiguous: boolean
   searchParameters: ObservedSearchParameters | null
 }
 
@@ -328,6 +329,7 @@ export async function fetchLegislationSearch(
     legislationNotHeld: diagnostics?.legislationNotHeld === true,
     legislationTitleUnresolved:
       diagnostics?.legislationTitleUnresolved === true,
+    legislationAmbiguous: diagnostics?.legislationAmbiguous === true,
     // Only what the server reported. The suite's own constants are not
     // evidence: the server may be running a different checkout.
     searchParameters: readAppliedSearchParameters(
@@ -511,6 +513,7 @@ async function runOneCase(
         legislationNote: body.legislationNote,
         legislationNotHeld: body.legislationNotHeld,
         legislationTitleUnresolved: body.legislationTitleUnresolved,
+        legislationAmbiguous: body.legislationAmbiguous,
       }),
       searchParameters: body.searchParameters,
     }

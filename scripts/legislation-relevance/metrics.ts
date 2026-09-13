@@ -64,6 +64,8 @@ export interface CaseResult {
   legislationNotHeld: boolean
   /** The API marked this an unresolved whole-title request. */
   legislationTitleUnresolved: boolean
+  /** The API marked this an ambiguous title served by more than one Act. */
+  legislationAmbiguous: boolean
   failureLabels: string[]
   searchErrorMessage?: string
 }
@@ -122,6 +124,7 @@ export function scoreCase(
     legislationNote?: string | null
     legislationNotHeld?: boolean
     legislationTitleUnresolved?: boolean
+    legislationAmbiguous?: boolean
     searchErrorMessage?: string
   } = {},
 ): CaseResult {
@@ -129,6 +132,7 @@ export function scoreCase(
   if (options.searchErrorMessage) failureLabels.push('search_error')
   const legislationNotHeld = options.legislationNotHeld === true
   const legislationTitleUnresolved = options.legislationTitleUnresolved === true
+  const legislationAmbiguous = options.legislationAmbiguous === true
   const base = {
     id: testCase.id,
     kind: testCase.kind,
@@ -141,15 +145,19 @@ export function scoreCase(
     legislationNote: options.legislationNote ?? null,
     legislationNotHeld,
     legislationTitleUnresolved,
+    legislationAmbiguous,
     searchErrorMessage: options.searchErrorMessage,
   }
 
   // A control query's right answer is a negative: it must not assert not-held
-  // or claim an exact title it could not resolve. Hit count is not scored.
+  // or claim an exact title it could not resolve. Ambiguity is another
+  // unsupported legislation terminal, not a not-held verdict. Hit count is not
+  // scored, so a growing result set is not a control failure.
   if (testCase.kind === 'control') {
     if (legislationNotHeld) failureLabels.push('control_false_not_held')
     if (legislationTitleUnresolved)
       failureLabels.push('control_title_unresolved')
+    if (legislationAmbiguous) failureLabels.push('control_ambiguous')
     return {
       ...base,
       ranks: [],
@@ -177,6 +185,7 @@ export function scoreCase(
   // expectation must never receive an authoritative not-held verdict.
   if (legislationNotHeld) failureLabels.push('held_false_not_held')
   if (legislationTitleUnresolved) failureLabels.push('held_title_unresolved')
+  if (legislationAmbiguous) failureLabels.push('held_ambiguous')
 
   const ranks = testCase.expectedIds.map((id) =>
     rankOf(returnedIds, id, testCase.scoring),
@@ -321,7 +330,10 @@ export function regressionFailures(
           )
         }
       }
-    } else if (result.returnedHitCount > expected.returnedHitCount) {
+    } else if (
+      result.kind === 'absent' &&
+      result.returnedHitCount > expected.returnedHitCount
+    ) {
       failures.push(
         `absent_hits_up:${result.id}:${result.returnedHitCount}>previous:${expected.returnedHitCount}`,
       )
@@ -329,16 +341,31 @@ export function regressionFailures(
     if (result.failureLabels.includes('search_error')) {
       failures.push(`search_error:${result.id}`)
     }
-    // The explicit invariant: no held expectation may return an authoritative
-    // not-held verdict, and no control may make either unsupported claim.
-    if (result.kind !== 'absent' && result.legislationNotHeld) {
-      failures.push(`false_not_held:${result.id}`)
+    // The explicit invariant, one branch per case kind rather than a shared
+    // negation. An absent case is the only kind for which an authoritative
+    // not-held is the correct answer; held and control must make no
+    // unsupported legislation claim, and each terminal names which one fired.
+    if (result.kind === 'held') {
+      if (result.legislationNotHeld) {
+        failures.push(`false_not_held:${result.id}`)
+      }
+      if (result.legislationTitleUnresolved) {
+        failures.push(`held_title_unresolved:${result.id}`)
+      }
+      if (result.legislationAmbiguous) {
+        failures.push(`held_ambiguous:${result.id}`)
+      }
     }
-    if (result.kind === 'held' && result.legislationTitleUnresolved) {
-      failures.push(`held_title_unresolved:${result.id}`)
-    }
-    if (result.kind === 'control' && result.legislationTitleUnresolved) {
-      failures.push(`control_title_unresolved:${result.id}`)
+    if (result.kind === 'control') {
+      if (result.legislationNotHeld) {
+        failures.push(`false_not_held:${result.id}`)
+      }
+      if (result.legislationTitleUnresolved) {
+        failures.push(`control_title_unresolved:${result.id}`)
+      }
+      if (result.legislationAmbiguous) {
+        failures.push(`control_ambiguous:${result.id}`)
+      }
     }
   }
 

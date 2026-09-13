@@ -38,6 +38,15 @@ const absentCase: LegislationRelevanceCase = {
   absentCheck: { kind: 'act_not_held', title: 'Children Act 1989' },
 }
 
+const controlCase: LegislationRelevanceCase = {
+  id: 'control-example',
+  kind: 'control',
+  category: 'subject_matter',
+  query: 'defences under the Children Act 1989',
+  expectedIds: [],
+  scoring: 'exact',
+}
+
 function baseline(
   overrides: Partial<LegislationRelevanceBaseline> = {},
 ): LegislationRelevanceBaseline {
@@ -225,14 +234,6 @@ describe('legislation relevance metrics', () => {
   })
 
   it('scores a control query as a negative, never for hits', () => {
-    const controlCase: LegislationRelevanceCase = {
-      id: 'control-example',
-      kind: 'control',
-      category: 'subject_matter',
-      query: 'defences under the Children Act 1989',
-      expectedIds: [],
-      scoring: 'exact',
-    }
     const clean = scoreCase(controlCase, ['serve anything'])
     expect(clean.recall).toBe(null)
     expect(clean.precision).toBe(null)
@@ -243,6 +244,81 @@ describe('legislation relevance metrics', () => {
       legislationTitleUnresolved: true,
     })
     expect(unresolved.failureLabels).toContain('control_title_unresolved')
+  })
+
+  it('does not score a control on its keyword hit count', () => {
+    // A control's result set is not enumerable, so growth in the served hits
+    // is not a regression. Only the absent case is scored on hit count.
+    const current = baseline({
+      expectedCaseCount: 1,
+      byQuery: {
+        'control-example': { recall: null, ranks: [], returnedHitCount: 2 },
+      },
+    })
+    const grown = scoreCase(controlCase, ['a', 'b', 'c', 'd', 'e'])
+    const failures = regressionFailures(current, aggregateMetrics([grown]), [
+      grown,
+    ])
+    expect(
+      failures.filter((failure) => failure.startsWith('absent_hits_up')),
+    ).toEqual([])
+    // The only failures left are the headline-metric no_data entries a
+    // control-only result set always produces; nothing names the control.
+    expect(
+      failures.filter((failure) => failure.includes('control-example')),
+    ).toEqual([])
+    expect(grown.failureLabels).toEqual([])
+  })
+
+  it('keeps the held regression checks when a held query serves more hits', () => {
+    const current = baseline({
+      expectedCaseCount: 1,
+      byQuery: {
+        'section-example': { recall: 1, ranks: [1], returnedHitCount: 1 },
+      },
+    })
+    const worse = scoreCase(exactCase, [
+      'other',
+      'another',
+      'ukpga/1998/42/section/6',
+    ])
+    const failures = regressionFailures(current, aggregateMetrics([worse]), [
+      worse,
+    ])
+    expect(
+      failures.some((failure) =>
+        failure.startsWith('rank_drop:section-example'),
+      ),
+    ).toBe(true)
+    expect(
+      failures.filter((failure) => failure.startsWith('absent_hits_up')),
+    ).toEqual([])
+  })
+
+  it('fails a control that receives an ambiguous legislation terminal', () => {
+    const ambiguous = scoreCase(controlCase, [], {
+      legislationAmbiguous: true,
+    })
+    expect(ambiguous.failureLabels).toEqual(['control_ambiguous'])
+    const current = baseline({
+      expectedCaseCount: 1,
+      byQuery: {
+        'control-example': { recall: null, ranks: [], returnedHitCount: 0 },
+      },
+    })
+    const failures = regressionFailures(
+      current,
+      aggregateMetrics([ambiguous]),
+      [ambiguous],
+    )
+    expect(failures).toContain('control_ambiguous:control-example')
+    expect(
+      failures.filter(
+        (failure) =>
+          failure.includes('false_not_held') ||
+          failure.includes('title_unresolved'),
+      ),
+    ).toEqual([])
   })
 
   it('rounds to four decimal places', () => {
