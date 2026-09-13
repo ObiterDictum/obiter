@@ -118,6 +118,11 @@ export function countLines(
   return Math.max(1, lines)
 }
 
+/**
+ * Display spans for a paragraph. Each line covers `[from, to)` and omits the
+ * newline of a hard break, which `lineIndex` in `paragraph-arrow.ts` relies on
+ * to decide caret ownership at a break.
+ */
 export function wrapLines(
   text: string,
   fontSizePx: number,
