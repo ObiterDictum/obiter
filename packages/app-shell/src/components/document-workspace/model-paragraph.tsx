@@ -131,20 +131,23 @@ export function ModelParagraph({
         run,
         text: drafts?.[run.id] ?? run.text,
       }))
+  // A block that places the paragraph's final row reaches the end of the text;
+  // a block that stops at a hard break ends one code unit before it. The caret
+  // at that break's offset still renders at the end of this block's last row,
+  // so this block owns it rather than the fragment that resumes after it.
+  const ownsBreak = end < fullText.length && fullText[end] === '\n'
   const restore =
     restoreCaret?.paragraphId === paragraph.id &&
-    sliceContainsOffset(restoreCaret.offset, start, end, fullText.length)
+    (sliceContainsOffset(restoreCaret.offset, start, end, fullText.length) ||
+      (ownsBreak && restoreCaret.offset === end))
       ? restoreCaret.offset - start
       : undefined
-  const lines =
-    wrapWidthPx && wrapWidthPx > 0
-      ? wrapLines(
-          sliceText,
-          face.run.fontSizePx ?? linePx,
-          wrapWidthPx,
-          face.run.fontFamily,
-        )
-      : [{ text: sliceText, from: 0, to: sliceText.length }]
+  const lines = wrapLines(
+    sliceText,
+    face.run.fontSizePx ?? linePx,
+    wrapWidthPx && wrapWidthPx > 0 ? wrapWidthPx : Number.POSITIVE_INFINITY,
+    face.run.fontFamily,
+  )
   const editorHeight = lines.length * linePx
   const holdsCaret =
     Boolean(editing) &&

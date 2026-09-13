@@ -5,7 +5,11 @@ import type {
   DocumentParagraphWire,
 } from '@obiter/contracts'
 import { flowParagraphIds } from './document-edits'
-import { layoutDocument } from './document-page-engine'
+import { contentFrame, layoutDocument } from './document-page-engine'
+import { wrapLines } from './document-page-flow'
+import { documentPageBox } from './document-page-layout'
+import { marginBandHeights } from './document-page-margin'
+import { paragraphFace, paragraphLineHeightPx } from './document-page-style'
 import { applySplitParagraph, emptyEditorState } from './document-word-edits'
 
 const SHORT_PAGE =
@@ -14,6 +18,21 @@ const TWO_COLS =
   '<w:sectPr><w:pgSz w:w="11906" w:h="4000"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/><w:cols w:num="2" w:space="720"/></w:sectPr>'
 const A4_LETTER =
   '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/><w:pgMar w:top="2325" w:right="1797" w:bottom="2041" w:left="1797" w:header="708" w:footer="708"/></w:sectPr>'
+const NO_WIDOW = '<w:pPr><w:widowControl w:val="0"/></w:pPr>'
+
+function breakParagraph(id: string, breaks: number): DocumentParagraphWire {
+  return {
+    id,
+    runs: [
+      {
+        id: `${id}-r`,
+        text: 'line\n'.repeat(breaks),
+        preservedXmlFragments: [],
+      },
+    ],
+    preservedXmlFragments: [NO_WIDOW],
+  }
+}
 
 function paragraph(
   id: string,
@@ -459,5 +478,61 @@ describe('layoutDocument', () => {
         split.state.deletedParagraphIds,
       ),
     ).toEqual(layoutIds)
+  })
+
+  it('draws the browser row list across a page split, with no row lost or repeated', () => {
+    const text = 'line\n'.repeat(30)
+    const model = modelOf([breakParagraph('p1', 30)], SHORT_PAGE)
+    const pages = layoutDocument(model)
+    expect(pages.length).toBeGreaterThan(1)
+    const drawn = pages
+      .flatMap((page) => page.blocks)
+      .flatMap((block) => {
+        if (block.type !== 'paragraph') return []
+        const from = block.from ?? 0
+        return wrapLines(
+          text.slice(from, block.to),
+          16,
+          block.wrapWidthPx ?? 1,
+        ).map((line) => ({ from: from + line.from, to: from + line.to }))
+      })
+    // `String.split` is the browser row list for a textarea: one row per
+    // segment plus the empty row a trailing break opens.
+    expect(drawn.length).toBe(text.split('\n').length)
+    const covered = Array.from({ length: text.length }, () => 0)
+    for (const row of drawn) {
+      for (let index = row.from; index < row.to; index += 1) {
+        covered[index] = (covered[index] ?? 0) + 1
+      }
+    }
+    for (let index = 0; index < text.length; index += 1) {
+      expect(covered[index]).toBe(text[index] === '\n' ? 0 : 1)
+    }
+  })
+
+  it('reserves the trailing empty row when deciding whether the next paragraph fits', () => {
+    const linePx = paragraphLineHeightPx(
+      paragraphFace(breakParagraph('p1', 0), []),
+    )
+    // A page ten and a half default lines tall: ten body rows fit after the
+    // trailing empty row, an eleventh does not.
+    const pageTwips = Math.round(1440 + 15 * 10.5 * linePx)
+    const sectPr = `<w:sectPr><w:pgSz w:w="11906" w:h="${pageTwips}"/><w:pgMar w:top="720" w:right="720" w:bottom="720" w:left="720"/></w:sectPr>`
+    const model = modelOf(
+      [breakParagraph('p1', 9), paragraph('tail', 'Tail')],
+      sectPr,
+    )
+    const frame = contentFrame(documentPageBox(model), marginBandHeights(model))
+    expect(Math.floor(frame.heightPx / linePx)).toBe(10)
+    const pages = layoutDocument(model)
+    const pageOfTail = pages.findIndex((page) =>
+      page.blocks.some(
+        (block) => block.type === 'paragraph' && block.paragraph.id === 'tail',
+      ),
+    )
+    // Nine breaks and the empty row the last one opens fill ten lines, leaving
+    // half a line: the tail paragraph cannot share it. A model without the
+    // trailing row thinks a line and a half remain and keeps the tail here.
+    expect(pageOfTail).toBe(1)
   })
 })
