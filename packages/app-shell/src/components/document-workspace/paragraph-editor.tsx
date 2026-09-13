@@ -40,6 +40,8 @@ export function ParagraphEditor({
   onLineBreak: (offset: number) => void
 }) {
   const field = useRef<HTMLTextAreaElement>(null)
+  // IME composition owns key events until it ends; intercepting them loses text.
+  const composing = useRef(false)
   // Keep the caret after Enter (DOM selection).
   useEffect(() => {
     if (!selected) return
@@ -62,7 +64,14 @@ export function ParagraphEditor({
       spellCheck={false}
       onChange={(event) => onChangeText(event.target.value)}
       onFocus={onSelect}
+      onCompositionStart={() => {
+        composing.current = true
+      }}
+      onCompositionEnd={() => {
+        composing.current = false
+      }}
       onKeyDown={(event) => {
+        if (event.nativeEvent.isComposing || composing.current) return
         const start = event.currentTarget.selectionStart
         const end = event.currentTarget.selectionEnd
         if (event.key === 'Enter' && event.shiftKey) {
@@ -86,6 +95,12 @@ export function ParagraphEditor({
           return
         }
         if (start !== end || !onMoveCaret) return
+        // Only plain arrows cross paragraphs. Shift keeps native selection
+        // (E52 owns cross-paragraph selection); Ctrl/Alt/Meta keep platform
+        // shortcuts such as word moves and line/document jumps.
+        if (event.shiftKey || event.ctrlKey || event.altKey || event.metaKey) {
+          return
+        }
         const move = offsetAfterArrow({
           key: event.key,
           offset: start,
