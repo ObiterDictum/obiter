@@ -479,4 +479,120 @@ describe('arrow keys across paragraphs', () => {
     expect(moved).toEqual([])
     expect(field().value).toBe(text)
   })
+
+  const modifiers = [
+    { name: 'Shift', flag: { shiftKey: true } },
+    { name: 'Ctrl', flag: { ctrlKey: true } },
+    { name: 'Alt', flag: { altKey: true } },
+    { name: 'Meta', flag: { metaKey: true } },
+    { name: 'Ctrl+Shift', flag: { ctrlKey: true, shiftKey: true } },
+    { name: 'Alt+Shift', flag: { altKey: true, shiftKey: true } },
+  ] as const
+
+  const edges = [
+    { key: 'ArrowLeft', startId: 'p2', startOffset: 0, stays: 'ghijkl' },
+    { key: 'ArrowRight', startId: 'p1', startOffset: 6, stays: 'abcdef' },
+    { key: 'ArrowUp', startId: 'p2', startOffset: 3, stays: 'ghijkl' },
+    { key: 'ArrowDown', startId: 'p1', startOffset: 3, stays: 'abcdef' },
+  ] as const
+
+  for (const modifier of modifiers) {
+    for (const edge of edges) {
+      it(`${modifier.name}+${edge.key} at a paragraph edge keeps native behaviour`, () => {
+        render(
+          <Harness
+            model={two}
+            startId={edge.startId}
+            startOffset={edge.startOffset}
+          />,
+        )
+        const notPrevented = fireEvent.keyDown(field(), {
+          key: edge.key,
+          ...modifier.flag,
+        })
+        expect(notPrevented).toBe(true)
+        expect(field().value).toBe(edge.stays)
+      })
+    }
+  }
+
+  it('ignores an arrow while the keydown event is composing', () => {
+    render(<Harness model={two} startId="p2" startOffset={3} />)
+    const notPrevented = fireEvent.keyDown(field(), {
+      key: 'ArrowUp',
+      isComposing: true,
+    })
+    expect(notPrevented).toBe(true)
+    expect(field().value).toBe('ghijkl')
+  })
+
+  it('ignores arrows during an IME composition, then resumes after it ends', () => {
+    render(<Harness model={two} startId="p1" startOffset={3} />)
+    const node = field()
+    fireEvent.compositionStart(node)
+    fireEvent.keyDown(node, { key: 'ArrowDown' })
+    expect(field().value).toBe('abcdef')
+    fireEvent.compositionEnd(node)
+    fireEvent.keyDown(field(), { key: 'ArrowDown' })
+    expect(field().value).toBe('ghijkl')
+    expect(field().selectionStart).toBe(3)
+  })
+
+  it('does not split the paragraph on Enter during an IME composition', () => {
+    const inserted: string[] = []
+    render(
+      <DocumentModelPage
+        model={two}
+        selectedParagraphId="p1"
+        restoreCaret={{ paragraphId: 'p1', offset: 3 }}
+        onSelectParagraph={() => undefined}
+        editing
+        onRunTextChange={() => undefined}
+        onInsertParagraph={(id) => inserted.push(id)}
+      />,
+    )
+    const node = field()
+    fireEvent.compositionStart(node)
+    fireEvent.keyDown(node, { key: 'Enter' })
+    fireEvent.keyDown(node, { key: 'Enter', isComposing: true })
+    expect(inserted).toEqual([])
+  })
+
+  it('does not join paragraphs on Backspace at the start during composition', () => {
+    const joined: string[] = []
+    render(
+      <DocumentModelPage
+        model={two}
+        selectedParagraphId="p2"
+        restoreCaret={{ paragraphId: 'p2', offset: 0 }}
+        onSelectParagraph={() => undefined}
+        editing
+        onRunTextChange={() => undefined}
+        onJoinPrevious={(id) => joined.push(id)}
+      />,
+    )
+    const node = field()
+    fireEvent.compositionStart(node)
+    fireEvent.keyDown(node, { key: 'Backspace' })
+    expect(joined).toEqual([])
+  })
+
+  it('emits no document edit or text change while navigating', () => {
+    const edits: unknown[] = []
+    const texts: unknown[] = []
+    render(
+      <DocumentModelPage
+        model={two}
+        selectedParagraphId="p1"
+        restoreCaret={{ paragraphId: 'p1', offset: 6 }}
+        onSelectParagraph={() => undefined}
+        editing
+        onWordEdit={(edit) => edits.push(edit)}
+        onRunTextChange={(runId, text) => texts.push({ runId, text })}
+      />,
+    )
+    fireEvent.keyDown(field(), { key: 'ArrowRight' })
+    expect(edits).toEqual([])
+    expect(texts).toEqual([])
+  })
 })
