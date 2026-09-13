@@ -2,7 +2,9 @@ import { useEffect, useRef } from 'react'
 import type { CSSProperties } from 'react'
 import { cn } from '@obiter/ui'
 import {
+  armVerticalDelivery,
   clearVerticalColumn,
+  consumeVerticalDelivery,
   offsetAfterArrow,
   offsetVertically,
   retainVerticalColumn,
@@ -13,6 +15,7 @@ import {
 import type { WrappedLine } from '../../document-page-flow'
 
 export function ParagraphEditor({
+  paragraphId,
   text,
   selected,
   restoreCaret,
@@ -31,6 +34,7 @@ export function ParagraphEditor({
   onEnter,
   onLineBreak,
 }: {
+  paragraphId: string
   text: string
   selected: boolean
   restoreCaret?: number
@@ -79,10 +83,9 @@ export function ParagraphEditor({
         onChangeText(event.target.value)
       }}
       onFocus={() => {
-        // The focus a vertical move hands to the next paragraph belongs to
-        // the run; any other focus starts a fresh editing session.
-        if (verticalCaret?.pendingFocus) verticalCaret.pendingFocus = false
-        else clearColumn()
+        // Only the paragraph a vertical move was destined for inherits the
+        // run's column; any other focus starts a fresh editing session.
+        if (!consumeVerticalDelivery(verticalCaret, paragraphId)) clearColumn()
         onSelect()
       }}
       onCompositionStart={() => {
@@ -164,9 +167,14 @@ export function ParagraphEditor({
             previous,
             next,
           })
-          if (!move) return
+          if (!move) {
+            // A vertical press that cannot cross paragraphs ends the run
+            // rather than holding a column for a move that never happened.
+            clearColumn()
+            return
+          }
           event.preventDefault()
-          if (verticalCaret) verticalCaret.pendingFocus = true
+          if (verticalCaret) armVerticalDelivery(verticalCaret, move)
           onMoveCaret(move.paragraphId, move.offset)
           return
         }

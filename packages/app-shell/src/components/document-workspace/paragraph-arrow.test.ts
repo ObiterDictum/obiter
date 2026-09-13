@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { wrapLines, type WrappedLine } from '../../document-page-flow'
 import {
+  armVerticalDelivery,
   clearVerticalColumn,
+  consumeVerticalDelivery,
   createVerticalCaretColumn,
+  isVerticalDelivery,
   offsetAfterArrow,
   offsetVertically,
   retainVerticalColumn,
@@ -180,5 +183,54 @@ describe('retainVerticalColumn', () => {
 
   it('reads a fresh column when no run state is owned', () => {
     expect(retainVerticalColumn(undefined, lines([0, 60]), 40)).toBe(40)
+  })
+})
+
+describe('vertical caret delivery', () => {
+  it('consumes once, and only for the paragraph the move armed', () => {
+    const state = createVerticalCaretColumn()
+    armVerticalDelivery(state, { paragraphId: 'p2', offset: 40 })
+    expect(consumeVerticalDelivery(state, 'p2')).toBe(true)
+    expect(consumeVerticalDelivery(state, 'p2')).toBe(false)
+  })
+
+  it('does not let another paragraph consume the armed delivery', () => {
+    const state = createVerticalCaretColumn()
+    armVerticalDelivery(state, { paragraphId: 'p2', offset: 40 })
+    expect(consumeVerticalDelivery(state, 'p3')).toBe(false)
+    // The mismatch spent the transition, so the intended destination cannot
+    // pick it up later either.
+    expect(consumeVerticalDelivery(state, 'p2')).toBe(false)
+  })
+
+  it('treats only an exact paragraph/offset transition as the delivery', () => {
+    const state = createVerticalCaretColumn()
+    armVerticalDelivery(state, { paragraphId: 'p2', offset: 40 })
+    expect(isVerticalDelivery(state, { paragraphId: 'p2', offset: 40 })).toBe(
+      true,
+    )
+    expect(isVerticalDelivery(state, { paragraphId: 'p2', offset: 5 })).toBe(
+      false,
+    )
+    expect(isVerticalDelivery(state, { paragraphId: 'p3', offset: 40 })).toBe(
+      false,
+    )
+  })
+
+  it('arms nothing when no run state is owned', () => {
+    expect(() =>
+      armVerticalDelivery(undefined, { paragraphId: 'p2', offset: 0 }),
+    ).not.toThrow()
+    expect(consumeVerticalDelivery(undefined, 'p2')).toBe(false)
+  })
+
+  it('clears a pending delivery with the column', () => {
+    const state = createVerticalCaretColumn()
+    retainVerticalColumn(state, lines([0, 60]), 40)
+    armVerticalDelivery(state, { paragraphId: 'p2', offset: 40 })
+    clearVerticalColumn(state)
+    expect(state.column).toBeNull()
+    expect(state.pending).toBeNull()
+    expect(consumeVerticalDelivery(state, 'p2')).toBe(false)
   })
 })

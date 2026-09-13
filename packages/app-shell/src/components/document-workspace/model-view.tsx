@@ -415,6 +415,7 @@ function renderBlock(
         key={insert.clientId}
         insert={insert}
         selected={ctx.selectedParagraphId === insert.clientId}
+        verticalCaret={ctx.verticalCaret}
         onSelect={() => ctx.onSelectParagraph(insert.clientId)}
         onTextChange={ctx.onInsertTextChange}
         onInsertParagraph={ctx.onInsertParagraph}

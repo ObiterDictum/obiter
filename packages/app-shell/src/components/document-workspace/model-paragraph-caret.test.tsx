@@ -12,6 +12,10 @@ import { paragraphFace, paragraphLineHeightPx } from '../../document-page-style'
 import { paragraphClickCaret } from './model-click-caret'
 import type { ParagraphWordEdit } from './model-paragraph'
 import { DocumentModelPage } from './model-view'
+import {
+  createVerticalCaretColumn,
+  type VerticalCaretColumn,
+} from './paragraph-arrow'
 
 afterEach(() => {
   cleanup()
@@ -153,8 +157,7 @@ function Harness({
 
 // The retained column lives above the paragraph textarea so it survives the
 // remount when a vertical arrow crosses into another paragraph.
-type StickyColumn = { column: number | null; pendingFocus: boolean }
-const sticky = (): StickyColumn => ({ column: null, pendingFocus: false })
+const sticky = createVerticalCaretColumn
 
 function wrappedLines(paragraph: DocumentParagraphWire, widthPx: number) {
   const face = paragraphFace(paragraph, [])
@@ -179,7 +182,7 @@ function VerticalHarness({
   model: DocumentModelWire
   startId: string
   startOffset: number
-  column?: StickyColumn
+  column?: VerticalCaretColumn
   pages?: DocumentParagraphWire[][]
   wrapWidthPx?: number
   onWordEdit?: (edit: ParagraphWordEdit) => void
@@ -681,7 +684,7 @@ describe('sticky desired column across consecutive vertical arrows', () => {
   const down = () => fireEvent.keyDown(field(), { key: 'ArrowDown' })
   const up = () => fireEvent.keyDown(field(), { key: 'ArrowUp' })
 
-  function establish(model: DocumentModelWire, column: StickyColumn) {
+  function establish(model: DocumentModelWire, column: VerticalCaretColumn) {
     render(
       <VerticalHarness
         model={model}

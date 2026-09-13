@@ -2,11 +2,16 @@ import { useEffect, useRef } from 'react'
 import { insertPlainText, type LocalInsert } from '../../document-edits'
 import { textDiff } from '../../document-model-text'
 import type { ParagraphWordEdit } from './model-paragraph'
+import {
+  clearVerticalColumn,
+  type VerticalCaretColumn,
+} from './paragraph-arrow'
 import { revealTypingLine } from './paragraph-editor'
 
 export function PendingInsert({
   insert,
   selected,
+  verticalCaret,
   onSelect,
   onTextChange,
   onInsertParagraph,
@@ -17,6 +22,7 @@ export function PendingInsert({
 }: {
   insert: LocalInsert
   selected: boolean
+  verticalCaret?: VerticalCaretColumn
   onSelect: () => void
   onTextChange?: (clientId: string, text: string) => void
   onInsertParagraph?: (afterParagraphId: string) => void
@@ -26,6 +32,9 @@ export function PendingInsert({
   restoreCaret?: { paragraphId: string; offset: number } | null
 }) {
   const field = useRef<HTMLTextAreaElement>(null)
+  // A pending insert cannot continue a vertical-column run, so every way of
+  // entering or editing it ends the run rather than holding a stale column.
+  const clearColumn = () => clearVerticalColumn(verticalCaret)
   const text = insertPlainText(insert)
   const restore =
     restoreCaret?.paragraphId === insert.clientId
@@ -58,6 +67,7 @@ export function PendingInsert({
         value={text}
         rows={1}
         onChange={(event) => {
+          clearColumn()
           const next = event.target.value
           if (onWordEdit) {
             const diff = textDiff(text, next)
@@ -73,8 +83,15 @@ export function PendingInsert({
           }
           onTextChange?.(insert.clientId, next)
         }}
-        onFocus={onSelect}
+        onFocus={() => {
+          clearColumn()
+          onSelect()
+        }}
+        onCompositionStart={clearColumn}
+        onCompositionEnd={clearColumn}
+        onMouseDown={clearColumn}
         onKeyDown={(event) => {
+          clearColumn()
           const start = event.currentTarget.selectionStart
           const end = event.currentTarget.selectionEnd
           if (event.key === 'Enter' && !event.shiftKey) {
@@ -123,6 +140,7 @@ export function PendingInsert({
           }
         }}
         onClick={(event) => {
+          clearColumn()
           event.stopPropagation()
           onSelect()
         }}

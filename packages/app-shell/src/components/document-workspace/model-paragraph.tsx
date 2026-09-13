@@ -280,6 +280,7 @@ export function ModelParagraph({
                 {runPaint}
               </div>
               <ParagraphEditor
+                paragraphId={paragraph.id}
                 text={sliceText}
                 selected={holdsCaret}
                 restoreCaret={restore}

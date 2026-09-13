@@ -25,12 +25,57 @@ export type ArrowNeighbor = {
  */
 export type VerticalCaretColumn = {
   column: number | null
-  /** Set while a vertical move is expected to hand focus to the next paragraph. */
-  pendingFocus: boolean
+  /** The one destination a vertical move may hand the column to on focus. */
+  pending: VerticalCaretDelivery | null
+}
+
+/** The paragraph a vertical move is about to focus, and where in it. */
+export type VerticalCaretDelivery = {
+  paragraphId: string
+  offset: number
 }
 
 export function createVerticalCaretColumn(): VerticalCaretColumn {
-  return { column: null, pendingFocus: false }
+  return { column: null, pending: null }
+}
+
+/** Arm the one-shot delivery for the paragraph a vertical move will focus. */
+export function armVerticalDelivery(
+  state: VerticalCaretColumn | undefined,
+  delivery: VerticalCaretDelivery,
+): void {
+  if (!state) return
+  state.pending = delivery
+}
+
+/**
+ * Whether `delivery` is the exact transition the pending move armed. A
+ * programmatic selection that lands elsewhere, or at another offset of the
+ * same paragraph, is not the transition and must end the run.
+ */
+export function isVerticalDelivery(
+  state: VerticalCaretColumn | undefined,
+  delivery: VerticalCaretDelivery,
+): boolean {
+  return (
+    state?.pending?.paragraphId === delivery.paragraphId &&
+    state.pending.offset === delivery.offset
+  )
+}
+
+/**
+ * Consume the pending delivery on focus. Returns true only for the intended
+ * destination; any other paragraph clears the run. Either way the transition
+ * is spent, so it cannot leak into a later movement.
+ */
+export function consumeVerticalDelivery(
+  state: VerticalCaretColumn | undefined,
+  paragraphId: string,
+): boolean {
+  if (!state) return false
+  const intended = state.pending?.paragraphId === paragraphId
+  state.pending = null
+  return intended
 }
 
 /** The visual (wrapped-line) column the caret sits at. */
@@ -58,7 +103,7 @@ export function clearVerticalColumn(
 ): void {
   if (!state) return
   state.column = null
-  state.pendingFocus = false
+  state.pending = null
 }
 
 /** The offset above or below with the caret at the retained visual column. */
