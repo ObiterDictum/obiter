@@ -18,9 +18,12 @@
  * the index directly would score a result set no caller receives.
  *
  * Point LEGISLATION_RELEVANCE_API_BASE at the API serving the checkout under
- * test. /api/health provenance is recorded in the report and printed to
- * stderr, because a suite run against a stale server reads as authoritative
- * and is not. The report records the search-time parameters the server reports
+ * test. The report records two identities, printed to stderr as well: the
+ * runner checkout's own commit, and the measured API's /api/health provenance.
+ * They can differ, and each is named by owner, because a suite run against a
+ * stale server - or a report whose runner commit is missing - reads as
+ * authoritative and is not. The run refuses when the runner commit cannot be
+ * established. The report records the search-time parameters the server reports
  * applying, and the run refuses when the server reports none: matchingStrategy
  * is request-time, so nothing else can reveal it and this checkout's constant
  * would mislabel the run. It refuses to measure unless
@@ -34,12 +37,15 @@ import { legislationRelevanceBaseline } from './baseline'
 import { legislationRelevanceCases, legislationRelevanceTopK } from './cases'
 import {
   assertReadyLegislationIndex,
+  assertRunnerProvenance,
   defaultApiBase,
   defaultDatabaseUrl,
   defaultLegislationIndexName,
+  legislationReportProvenance,
   readApiProvenance,
   readLiveIndexSettings,
   readReadiness,
+  readRunnerProvenance,
   runCases,
   verifyLegislationExpectations,
 } from './corpus'
@@ -95,6 +101,12 @@ async function main() {
   const indexName = defaultLegislationIndexName()
   const databaseUrl = defaultDatabaseUrl()
 
+  // The runner identity is resolved once, at the command boundary, before a
+  // single case is measured. It cannot change during the run and a failure to
+  // read it must stop the run rather than produce an ambiguous report.
+  const runnerProvenance = await readRunnerProvenance()
+  assertRunnerProvenance(runnerProvenance)
+
   const readiness = await readReadiness(apiBase)
   const index = assertReadyLegislationIndex(
     readiness,
@@ -103,9 +115,9 @@ async function main() {
   )
   await verifyLegislationExpectations(databaseUrl)
 
-  const provenance = await readApiProvenance(apiBase)
+  const apiProvenance = await readApiProvenance(apiBase)
   console.error(
-    `Measuring ${apiBase} (${provenance.checkoutRoot ?? 'provenance not reported'} @ ${provenance.commitSha ?? 'unknown'}) against ${indexName}.`,
+    `Runner ${runnerProvenance.checkoutRoot ?? 'provenance not reported'} @ ${runnerProvenance.commitSha ?? 'unknown'}; measuring API ${apiBase} (${apiProvenance.checkoutRoot ?? 'provenance not reported'} @ ${apiProvenance.commitSha ?? 'unknown'}) against ${indexName}.`,
   )
 
   const liveIndexSettings = await readLiveIndexSettings(
@@ -142,7 +154,9 @@ async function main() {
     benchmark: 'legislation-relevance',
     generatedAt: new Date().toISOString(),
     apiBase,
-    provenance,
+    // Two identities, each named by owner. `runnerCommitSha` is the checkout
+    // that scored the cases; `apiCommitSha` is the server that answered them.
+    provenance: legislationReportProvenance(runnerProvenance, apiProvenance),
     index: index.index,
     indexDocumentCount: index.documentCount,
     topK: legislationRelevanceTopK,

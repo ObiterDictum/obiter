@@ -295,6 +295,76 @@ describe('legislation relevance metrics', () => {
     ).toEqual([])
   })
 
+  it('fails an absent case that receives an ambiguous legislation terminal', () => {
+    // Ambiguity is the polarity opposite of an absent expectation: it claims
+    // more than one stored Act satisfied the title. It is neither a not-held
+    // verdict nor an unresolved title, so it must not borrow either label.
+    const ambiguous = scoreCase(absentCase, [], {
+      legislationAmbiguous: true,
+    })
+    expect(ambiguous.failureLabels).toEqual(['absent_ambiguous'])
+    expect(ambiguous.precision).toBe(1)
+    expect(ambiguous.legislationNotHeld).toBe(false)
+    expect(ambiguous.legislationTitleUnresolved).toBe(false)
+    expect(aggregateMetrics([ambiguous]).absentAmbiguous).toBe(1)
+
+    const current = baseline()
+    const failures = regressionFailures(
+      current,
+      aggregateMetrics([ambiguous]),
+      [ambiguous],
+    )
+    expect(failures).toContain('absent_ambiguous:absent-example')
+    expect(
+      failures.filter(
+        (failure) =>
+          failure.includes('false_not_held') ||
+          failure.includes('title_unresolved'),
+      ),
+    ).toEqual([])
+    // The absent hit-count ceiling is untouched: no noise was served.
+    expect(
+      failures.filter((failure) =>
+        failure.startsWith('absent_hits_up:absent-example'),
+      ),
+    ).toEqual([])
+  })
+
+  it('names only absent_ambiguous when an absent case is also served noise', () => {
+    const noisy = scoreCase(absentCase, ['ukpga/2026/21/section/12'], {
+      legislationAmbiguous: true,
+    })
+    expect(noisy.failureLabels).toEqual(['absent_hits', 'absent_ambiguous'])
+    expect(noisy.precision).toBe(0)
+  })
+
+  it('fails a held case that receives an ambiguous legislation terminal', () => {
+    const ambiguous = scoreCase(exactCase, [], {
+      legislationAmbiguous: true,
+    })
+    expect(ambiguous.failureLabels).toContain('held_ambiguous')
+    // The held path keeps its recall/rank checks, and ambiguity must not be
+    // relabelled as an unsupported not-held or an unresolved title.
+    expect(ambiguous.failureLabels).toContain('held_miss')
+    expect(ambiguous.failureLabels).not.toContain('held_false_not_held')
+    expect(ambiguous.failureLabels).not.toContain('held_title_unresolved')
+    expect(ambiguous.failureLabels).not.toContain('control_ambiguous')
+    expect(ambiguous.failureLabels).not.toContain('absent_ambiguous')
+
+    const current = baseline()
+    const failures = regressionFailures(
+      current,
+      aggregateMetrics([ambiguous]),
+      [ambiguous],
+    )
+    expect(failures).toContain('held_ambiguous:section-example')
+    expect(
+      failures.some((failure) =>
+        failure.startsWith('recall_drop:section-example'),
+      ),
+    ).toBe(true)
+  })
+
   it('fails a control that receives an ambiguous legislation terminal', () => {
     const ambiguous = scoreCase(controlCase, [], {
       legislationAmbiguous: true,
@@ -312,6 +382,8 @@ describe('legislation relevance metrics', () => {
       [ambiguous],
     )
     expect(failures).toContain('control_ambiguous:control-example')
+    expect(ambiguous.failureLabels).not.toContain('absent_ambiguous')
+    expect(aggregateMetrics([ambiguous]).absentAmbiguous).toBe(0)
     expect(
       failures.filter(
         (failure) =>

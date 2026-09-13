@@ -38,6 +38,8 @@ export interface LegislationRelevanceMetrics {
   absentAuthoritativeNotHeld: number
   /** Absent cases answered with the unresolved-title suppression. */
   absentTitleUnresolved: number
+  /** Absent cases answered with an ambiguous-title terminal. */
+  absentAmbiguous: number
 }
 
 export interface CaseResult {
@@ -171,6 +173,11 @@ export function scoreCase(
   if (testCase.kind === 'absent') {
     const noiseFree = returnedIds.length === 0
     if (!noiseFree) failureLabels.push('absent_hits')
+    // An ambiguous terminal is the polarity opposite of an absent expectation:
+    // it asserts more than one stored Act satisfied the title, where absence
+    // was just verified. It is neither a not-held verdict nor an unresolved
+    // title, so it gets its own label rather than borrowing either.
+    if (legislationAmbiguous) failureLabels.push('absent_ambiguous')
     return {
       ...base,
       ranks: [],
@@ -267,6 +274,8 @@ export function aggregateMetrics(
     absentTitleUnresolved: absent.filter(
       (result) => result.legislationTitleUnresolved,
     ).length,
+    absentAmbiguous: absent.filter((result) => result.legislationAmbiguous)
+      .length,
   }
 }
 
@@ -355,6 +364,12 @@ export function regressionFailures(
       if (result.legislationAmbiguous) {
         failures.push(`held_ambiguous:${result.id}`)
       }
+    }
+    if (result.kind === 'absent' && result.legislationAmbiguous) {
+      // The absent expectation was verified against Postgres, so an ambiguous
+      // terminal means the expectation drifted or the classifier over-folded.
+      // Both are loud failures, never a silent pass.
+      failures.push(`absent_ambiguous:${result.id}`)
     }
     if (result.kind === 'control') {
       if (result.legislationNotHeld) {

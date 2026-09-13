@@ -1,5 +1,12 @@
+import { tmpdir } from 'node:os'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fetchLegislationSearch, readAppliedSearchParameters } from './corpus'
+import {
+  assertRunnerProvenance,
+  fetchLegislationSearch,
+  legislationReportProvenance,
+  readAppliedSearchParameters,
+  readRunnerProvenance,
+} from './corpus'
 
 function stubFetch(body: unknown) {
   vi.stubGlobal(
@@ -20,12 +27,12 @@ afterEach(() => {
 
 describe('legislation relevance corpus boundary', () => {
   it('observes an ambiguous legislation terminal from the served response', async () => {
-    // The serve path answers an ambiguous title with no legislation group and
-    // no not-held verdict. Reading only the other two flags would record the
+    // The serve path answers an ambiguous title with no legislation group at
+    // all (the emitted `groups` array is empty, so the key is absent) and no
+    // not-held verdict. Reading only the other two flags would record the
     // response as an ordinary empty keyword result.
     stubFetch({
       outcome: 'legislation_ambiguous',
-      groups: [{ key: 'legislation', hits: [] }],
       diagnostics: {
         legislationAmbiguous: true,
         legislationNote:
@@ -37,8 +44,37 @@ describe('legislation relevance corpus boundary', () => {
       'Renters Rights Act 2025',
     )
     expect(result.legislationAmbiguous).toBe(true)
+    expect(result.hits).toEqual([])
     expect(result.legislationNotHeld).toBe(false)
     expect(result.legislationTitleUnresolved).toBe(false)
+  })
+
+  it('still reads a normal response that carries a legislation group', async () => {
+    stubFetch({
+      outcome: 'ok',
+      groups: [
+        {
+          key: 'legislation',
+          hits: [
+            {
+              id: 'hit-1',
+              documentIdentity: 'ukpga/1998/42',
+              labelPath: 'section/6',
+              title: 'Human Rights Act 1998',
+            },
+          ],
+        },
+      ],
+      diagnostics: { legislationSearchParameters: { matchingStrategy: 'all' } },
+    })
+    const result = await fetchLegislationSearch(
+      'http://127.0.0.1:8787',
+      's. 6 Human Rights Act 1998',
+    )
+    expect(result.hits.map((hit) => hit.documentIdentity)).toEqual([
+      'ukpga/1998/42',
+    ])
+    expect(result.legislationAmbiguous).toBe(false)
   })
 
   it('reads the parameters the server reported applying', () => {
@@ -72,5 +108,59 @@ describe('legislation relevance corpus boundary', () => {
         rankingScoreThreshold: 'none',
       }),
     ).toBe(null)
+  })
+})
+
+describe('legislation relevance report provenance', () => {
+  it('records the runner and the measured API as distinct identities', () => {
+    const provenance = legislationReportProvenance(
+      { checkoutRoot: '/src/runner', commitSha: 'a96918c' },
+      { checkoutRoot: '/src/api', commitSha: '231508a' },
+    )
+    expect(provenance.runnerCommitSha).toBe('a96918c')
+    expect(provenance.apiCommitSha).toBe('231508a')
+    expect(provenance.runnerCheckoutRoot).toBe('/src/runner')
+    expect(provenance.apiCheckoutRoot).toBe('/src/api')
+    // Neither SHA may be collapsed into an ownerless field.
+    expect(provenance.runnerCommitSha).not.toBe(provenance.apiCommitSha)
+    expect('commitSha' in provenance).toBe(false)
+  })
+
+  it('labels both identities independently even when the SHAs coincide', () => {
+    const provenance = legislationReportProvenance(
+      { checkoutRoot: '/src/runner', commitSha: 'a96918c' },
+      { checkoutRoot: '/src/api', commitSha: 'a96918c' },
+    )
+    // Equal-by-coincidence is still labelled twice; the report never infers
+    // one from the other.
+    expect(provenance.runnerCommitSha).toBe('a96918c')
+    expect(provenance.apiCommitSha).toBe('a96918c')
+    expect(provenance.runnerCheckoutRoot).toBe('/src/runner')
+    expect(provenance.apiCheckoutRoot).toBe('/src/api')
+  })
+
+  it('cannot let missing runner provenance masquerade as API provenance', async () => {
+    // A runner with no git metadata records null, not the API's SHA.
+    const unavailable = legislationReportProvenance(
+      { checkoutRoot: null, commitSha: null },
+      { checkoutRoot: '/src/api', commitSha: '231508a' },
+    )
+    expect(unavailable.runnerCommitSha).toBe(null)
+    expect(unavailable.runnerCheckoutRoot).toBe(null)
+    expect(unavailable.apiCommitSha).toBe('231508a')
+    expect(() =>
+      assertRunnerProvenance({ checkoutRoot: null, commitSha: null }),
+    ).toThrow(/runner commit/i)
+    // Reading a directory that is not a git checkout yields no identity at
+    // all rather than borrowing one.
+    const observed = await readRunnerProvenance(tmpdir())
+    expect(observed.commitSha).toBe(null)
+    expect(observed.checkoutRoot).toBe(null)
+  })
+
+  it('records the runner commit it actually read from the checkout', async () => {
+    const observed = await readRunnerProvenance(process.cwd())
+    expect(observed.commitSha).toMatch(/^[0-9a-f]{40}$/)
+    expect(observed.checkoutRoot).toBeTruthy()
   })
 })
