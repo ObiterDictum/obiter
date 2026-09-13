@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { ApiError } from '../../api'
 import { useCurrentUser } from '../../current-user'
 import {
@@ -41,6 +41,10 @@ import {
 } from '../../document-workspace-api'
 import { extractAuthorities } from '../../document-authorities'
 import { DocumentModelPage } from './model-view'
+import {
+  clearVerticalColumn,
+  createVerticalCaretColumn,
+} from './paragraph-arrow'
 import { InsertAuthorityDialog } from './insert-authority-dialog'
 import { DocumentWorkspaceToolbar } from './toolbar'
 import { WorkspaceSidePanels } from './workspace-side-panels'
@@ -104,6 +108,14 @@ export function DocxWorkspace({
     paragraphId: string
     offset: number
   } | null>(null)
+  const [verticalCaret] = useState(createVerticalCaretColumn)
+  // A column run never spans documents, and this workspace is reused when the
+  // selected document changes.
+  const caretDocument = useRef<string | null>(null)
+  if (caretDocument.current !== documentId) {
+    caretDocument.current = documentId
+    clearVerticalColumn(verticalCaret)
+  }
   const [formatRange, setFormatRange] = useState<{
     from: number
     to: number
@@ -166,6 +178,11 @@ export function DocxWorkspace({
     : []
 
   function selectParagraph(paragraphId: string, offset?: number) {
+    // Any caret placement with an offset ends a column run. A vertical move
+    // sets pendingFocus just before it moves, so its own crossing survives.
+    if (offset != null && !verticalCaret.pendingFocus) {
+      clearVerticalColumn(verticalCaret)
+    }
     setSelectedParagraphId(paragraphId)
     setRestoreCaret(offset == null ? null : { paragraphId, offset })
     if (offset != null) setFormatRange({ from: offset, to: offset })
@@ -501,6 +518,7 @@ export function DocxWorkspace({
                         }
                       }}
                       restoreCaret={restoreCaret}
+                      verticalCaret={verticalCaret}
                     />
                   </DocumentPage>
                 ))}
