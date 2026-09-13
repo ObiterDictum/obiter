@@ -24,10 +24,12 @@ describe('visualColumn', () => {
     expect(visualColumn(wrapped, 12)).toBe(2)
   })
 
-  it('clamps a gap between lines, as an explicit newline leaves', () => {
-    // from/to exclude the newline, so offset 10 sits in the gap before line 1
+  it('keeps a hard-break newline code unit with the line it terminates', () => {
+    // A hard break leaves line 0's `to` on the newline, one short of line 1's
+    // `from`; a caret at that offset still renders at the end of line 0.
     const wrapped = lines([0, 10], [11, 20])
-    expect(visualColumn(wrapped, 10)).toBe(0)
+    expect(visualColumn(wrapped, 10)).toBe(10)
+    expect(visualColumn(wrapped, 11)).toBe(0)
   })
 
   it('counts UTF-16 code units, matching the model offsets', () => {
