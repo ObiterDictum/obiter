@@ -44,6 +44,8 @@ export interface ServedLegislationResult {
   hits: ServedLegislationHit[]
   outcome: string | null
   legislationNote: string | null
+  legislationNotHeld: boolean
+  legislationTitleUnresolved: boolean
   searchParameters: ObservedSearchParameters | null
 }
 
@@ -323,6 +325,9 @@ export async function fetchLegislationSearch(
     hits,
     outcome: readString(body.outcome),
     legislationNote: readString(diagnostics?.legislationNote),
+    legislationNotHeld: diagnostics?.legislationNotHeld === true,
+    legislationTitleUnresolved:
+      diagnostics?.legislationTitleUnresolved === true,
     // Only what the server reported. The suite's own constants are not
     // evidence: the server may be running a different checkout.
     searchParameters: readAppliedSearchParameters(
@@ -504,6 +509,8 @@ async function runOneCase(
       result: scoreCase(testCase, returnedIds, {
         outcome: body.outcome,
         legislationNote: body.legislationNote,
+        legislationNotHeld: body.legislationNotHeld,
+        legislationTitleUnresolved: body.legislationTitleUnresolved,
       }),
       searchParameters: body.searchParameters,
     }

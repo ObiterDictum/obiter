@@ -159,6 +159,29 @@ export async function getLegislationProvision(
   return result.rows[0] ?? null
 }
 
+/**
+ * True when a provision or container row exists at `labelPath` or beneath
+ * it. The single-schedule fallback uses this to tell a numbered schedule the
+ * Act holds from one it does not: a citation for Schedule 1 may only fall
+ * back to an unnumbered schedule when the Act has no numbered Schedule 1
+ * container at all.
+ */
+export async function legislationProvisionPathExists(
+  pool: Pick<Pool, 'query'>,
+  documentIdentity: string,
+  labelPath: string,
+): Promise<boolean> {
+  const result = await pool.query<{ exists: boolean }>(
+    `select exists(
+       select 1 from legislation_provisions
+        where document_identity = $1
+          and (label_path = $2 or label_path like $2 || '/%')
+     ) as exists`,
+    [documentIdentity, labelPath],
+  )
+  return result.rows[0]?.exists ?? false
+}
+
 /** Whole act directory for citation suffix matching (~200 rows in scope). */
 export async function listLegislationActs(
   pool: Pick<Pool, 'query'>,

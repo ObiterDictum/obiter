@@ -7,8 +7,6 @@ Use this shape for request-changes or comment reviews. Adapt the details; do not
 
 Decision: Request changes
 
-Score: 68/100
-
 Merge readiness: Not mergeable until indexing only reports success after Meilisearch confirms the write task succeeded.
 
 Why: The ingestor currently treats an accepted Meilisearch task as completed indexing, so deployment logs and exit codes can claim Atlas data is searchable while the provider later fails the task. That is a correctness bug in the foundation layer because later Atlas, Verify, and Research workflows will trust these indexed-count reports. I also found a response-shape issue where search can return full paragraph payloads instead of summary results, which should be corrected before real corpus records are indexed.

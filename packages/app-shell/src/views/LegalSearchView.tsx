@@ -10,11 +10,15 @@ import {
   SearchIdleExtras,
   SearchKeyboardShortcuts,
   SearchResults,
+  isInteractiveTarget,
   courtOptionGroups,
   getCourtLabel,
+  getLegislationScheduleGuidanceFeedback,
+  getLegislationScheduleResubmitQuery,
   type LegalSearchRequestFilters,
   type LegalSearchFetchResponse,
   type LegalSearchOutcome,
+  type LegislationScheduleGuidance,
   type CaseLawParagraph,
   type LegalSearchResult,
   type LegalSearchState,
@@ -162,10 +166,68 @@ export function getLegalSearchEmptyFeedback(input: {
   hydrationAttempt?: number
   /** True once the bounded recheck gives up waiting. */
   hydrationExpired?: boolean
+  /** Response diagnostics.legislationNote: the legislation half recognised a
+   * citation but served nothing. Names what was asked for. */
+  legislationNote?: string
+  /** Response diagnostics.legislationNotHeld: an authoritative not-held
+   * verdict, not an outage. */
+  legislationNotHeld?: boolean
+  /** Response diagnostics.legislationTitleUnresolved: a whole-title request no
+   * exact title key matched. */
+  legislationTitleUnresolved?: boolean
+  /** Response diagnostics.legislationAmbiguous: more than one stored Act
+   * satisfies the query. */
+  legislationAmbiguous?: boolean
+  /** Response diagnostics.legislationScheduleGuidance: a schedule citation
+   * that names a paragraph but no schedule. The structured example and Act
+   * context drive a corrective with a resubmission the parser accepts. */
+  legislationScheduleGuidance?: LegislationScheduleGuidance
 }) {
   const outcome =
     input.outcome ?? (input.hydrationQueued ? 'hydration_queued' : 'no_match')
   const liveSearched = input.liveProviderSearched === true
+
+  // A held Act whose schedule citation names no schedule. A corrective, not a
+  // not-held verdict: it must show the parser-compatible example with its Act
+  // context rather than fall through to the generic judgment copy.
+  if (input.legislationScheduleGuidance) {
+    return getLegislationScheduleGuidanceFeedback(
+      input.legislationScheduleGuidance,
+    )
+  }
+
+  // The legislation half's honest negatives. Each rides its own flag, so a
+  // terminal branch that answers no_match or hydration_queued still surfaces
+  // the verdict, and the generic judgment copy below never stands in for it.
+  // The not-held copy is reserved for an authoritative verdict (a chapter or
+  // provision the store proves absent), never a failed title lookup.
+  if (input.legislationNotHeld && input.legislationNote) {
+    return {
+      eyebrow: 'Legislation not held',
+      title: 'No stored legislation matches this search',
+      body: `${input.legislationNote} Nothing that merely shares words with the title is shown in its place.`,
+    }
+  }
+
+  // A whole-title request the directory could not resolve. Say only what is
+  // known: no exact title matched. Never claim the Act itself is absent, and
+  // suppress the unrelated keyword provisions the exact path would otherwise
+  // fall through to.
+  if (input.legislationTitleUnresolved && input.legislationNote) {
+    return {
+      eyebrow: 'Legislation title not matched',
+      title: 'No exact legislation title match',
+      body: `${input.legislationNote} Try the chapter citation (for example "2010 c. 15") or the Act's exact short title.`,
+    }
+  }
+
+  if (input.legislationAmbiguous && input.legislationNote) {
+    return {
+      eyebrow: 'Legislation ambiguous',
+      title: 'More than one stored Act matches',
+      body: `${input.legislationNote} Choose the Act you meant by its chapter citation.`,
+    }
+  }
 
   // Honest empty for a well-formed citation no source holds. Names the
   // citation so the failure reads as not-held rather than not-searched.
@@ -357,10 +419,10 @@ export function LegalSearchView() {
       const resultCount = rows.length
       if (resultCount === 0) return
 
-      const textEntryTarget = isTextEntryTarget(event.target)
+      const interactiveTarget = isInteractiveTarget(event.target)
 
       if (
-        !textEntryTarget &&
+        !interactiveTarget &&
         (event.key === 'ArrowDown' || event.key.toLowerCase() === 'j')
       ) {
         event.preventDefault()
@@ -371,7 +433,7 @@ export function LegalSearchView() {
       }
 
       if (
-        !textEntryTarget &&
+        !interactiveTarget &&
         (event.key === 'ArrowUp' || event.key.toLowerCase() === 'k')
       ) {
         event.preventDefault()
@@ -382,7 +444,7 @@ export function LegalSearchView() {
       }
 
       if (
-        !textEntryTarget &&
+        !interactiveTarget &&
         event.key === 'Enter' &&
         selectedResultIndex >= 0
       ) {
@@ -492,11 +554,20 @@ export function LegalSearchView() {
         return
       }
       // Empty: carry liveProviderSearched so no_match copy never claims a
-      // provider was consulted when the API stayed stored-only. A queued
-      // outcome rechecks on a bound (timer-driven from this handler, not a
-      // fetching effect) and expires plainly at the bound instead of
-      // spinning forever.
+      // provider was consulted when the API stayed stored-only, and
+      // legislationNote so an unheld Act is named rather than reported as a
+      // missing judgment. A queued outcome rechecks on a bound (timer-driven
+      // from this handler, not a fetching effect) and expires plainly at the
+      // bound instead of spinning forever.
       const liveProviderSearched = body.diagnostics?.liveProviderSearched
+      const legislationNote = body.diagnostics?.legislationNote
+      const legislationNotHeld = body.diagnostics?.legislationNotHeld === true
+      const legislationTitleUnresolved =
+        body.diagnostics?.legislationTitleUnresolved === true
+      const legislationAmbiguous =
+        body.diagnostics?.legislationAmbiguous === true
+      const legislationScheduleGuidance =
+        body.diagnostics?.legislationScheduleGuidance
       const outcome =
         body.outcome ?? (body.hydrationQueued ? 'hydration_queued' : 'no_match')
       const hydrationAttempt = options.hydrationAttempt ?? 0
@@ -512,6 +583,11 @@ export function LegalSearchView() {
           hydrationQueued: body.hydrationQueued,
           browse,
           liveProviderSearched,
+          legislationNote,
+          legislationNotHeld,
+          legislationTitleUnresolved,
+          legislationAmbiguous,
+          legislationScheduleGuidance,
           hydrationAttempt: nextAttempt,
         })
         setSelectedResultIndex(-1)
@@ -533,6 +609,11 @@ export function LegalSearchView() {
         hydrationQueued: body.hydrationQueued,
         browse,
         liveProviderSearched,
+        legislationNote,
+        legislationNotHeld,
+        legislationTitleUnresolved,
+        legislationAmbiguous,
+        legislationScheduleGuidance,
         hydrationAttempt:
           outcome === 'hydration_queued' ? hydrationAttempt + 1 : undefined,
         hydrationExpired: outcome === 'hydration_queued' ? true : undefined,
@@ -611,6 +692,16 @@ export function LegalSearchView() {
     scheduleAutoSearch(nextQuery)
   }
 
+  // A corrective resubmission changes the search, so it must change the
+  // command bar with it: results for the suggested citation beside the
+  // original underspecified one leave Enter in the input rerunning the stale
+  // query. runSearch is passed the query explicitly, so syncing the input
+  // here starts no second request.
+  function resubmitQuery(nextQuery: string) {
+    setQuery(nextQuery)
+    void runSearch(nextQuery)
+  }
+
   function handleCourtShortcut(nextCourt: string) {
     const nextFilters = { court: nextCourt, dateFrom, dateTo }
     setCourt(nextCourt)
@@ -620,6 +711,10 @@ export function LegalSearchView() {
   }
 
   const courtLabel = getCourtLabel(court)
+  const scheduleResubmitQuery =
+    state.status === 'empty' && state.legislationScheduleGuidance
+      ? getLegislationScheduleResubmitQuery(state.legislationScheduleGuidance)
+      : null
   const activeFilterCount = countActiveLegalSearchFilters({
     court,
     dateFrom,
@@ -682,6 +777,7 @@ export function LegalSearchView() {
             browse={state.browse}
             selectedIndex={selectedResultIndex}
             onSelectIndex={setSelectedResultIndex}
+            onResubmit={resubmitQuery}
           />
         ) : (
           <div className="min-h-0 flex-1 overflow-y-auto">
@@ -700,18 +796,30 @@ export function LegalSearchView() {
                     hydrationQueued: state.hydrationQueued,
                     browse: state.browse,
                     liveProviderSearched: state.liveProviderSearched,
+                    legislationNote: state.legislationNote,
+                    legislationNotHeld: state.legislationNotHeld,
+                    legislationTitleUnresolved:
+                      state.legislationTitleUnresolved,
+                    legislationAmbiguous: state.legislationAmbiguous,
+                    legislationScheduleGuidance:
+                      state.legislationScheduleGuidance,
                     hydrationAttempt: state.hydrationAttempt,
                     hydrationExpired: state.hydrationExpired,
                   })}
                   action={
-                    state.outcome === 'hydration_queued'
+                    scheduleResubmitQuery
                       ? {
-                          label: state.hydrationExpired
-                            ? 'Retry search'
-                            : 'Retry now',
-                          onClick: () => void runSearch(state.query),
+                          label: 'Use this citation',
+                          onClick: () => resubmitQuery(scheduleResubmitQuery),
                         }
-                      : undefined
+                      : state.outcome === 'hydration_queued'
+                        ? {
+                            label: state.hydrationExpired
+                              ? 'Retry search'
+                              : 'Retry now',
+                            onClick: () => void runSearch(state.query),
+                          }
+                        : undefined
                   }
                   tone="warning"
                 />

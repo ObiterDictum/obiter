@@ -1045,6 +1045,25 @@ recorded unapplied effects serves an amended-not-held notice with the
 official link and never its text; ambiguity resolves visibly, never to a
 silent winner. Secondary legislation is explicitly next, not dropped.
 
+Fix-up: the negative result distinguishes what is proved from what is merely
+unresolved. A parsed chapter citation (`2099 c. 1`) is authoritative: year and
+number are the canonical identity, so an absent chapter is a genuine
+not-held. A failed _title_ lookup is not: the directory is partial and the
+fold is imperfect, so a whole Act-title request that resolves to no stored Act
+returns an unresolved-title suppression (`legislationTitleUnresolved`, outcome
+`legislation_title_unresolved`) that says only that no exact title matched,
+never that the Act is absent. A relaxed separator-insensitive title key that
+matches more than one stored Act is ambiguous (`legislationAmbiguous`), never
+a selected winner. A schedule citation that names a paragraph but no schedule
+(`Sch. para. 2 Equality Act 2010`) is underspecified rather than absent: the
+response carries `legislationScheduleGuidance` (the path-derived,
+parser-compatible example plus the Act) and the outcome
+`legislation_schedule_underspecified`, so the signed-in search renders a
+resubmittable citation instead of the generic no-match copy. The lookup key strips only the terminal `(repealed)` status
+annotation legislation.gov.uk appends, folds apostrophes by deletion, hyphens
+to spaces, `&` to `and`, and drops the filler token `etc`, so the canonical
+citation and the typed variant converge on the stored title.
+
 Fix-up: extraction completeness is validated, not assumed. Each CLML
 `Legislation` tag declares `NumberOfProvisions`, verified against a real
 Act to count every `P1` open including `BlockAmendment` inserts (quoted

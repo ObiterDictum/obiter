@@ -4,6 +4,7 @@ import {
   type LegalSearchCitation,
   type LegalSearchCitationMatch,
   type LegalSearchCitationStatus,
+  type LegislationScheduleGuidance,
 } from '@obiter/contracts'
 
 export type LegalFetchPrimaryGroup = 'judgments' | 'legislation'
@@ -33,6 +34,9 @@ export type LegalFetchOutcome =
   | 'stored_browse_empty'
   | 'unsupported_source_type'
   | 'recognised_not_held'
+  | 'legislation_title_unresolved'
+  | 'legislation_ambiguous'
+  | 'legislation_schedule_underspecified'
 export interface LegalFetchSearchHit extends LegalSearchHit {
   canonicalUrl?: string
   evidenceIds?: string[]
@@ -125,6 +129,24 @@ export function toFetchResponse(
       citationStatus?: LegalSearchCitationStatus
       legislationSearched?: boolean
       legislationGroupServed?: boolean
+      /** True when the legislation half recognised the citation but held no
+       * answer: an unheld chapter, or an unheld provision. Never set from a
+       * failed title lookup alone. The note names it. Distinct from a
+       * legislation outage, which also sets a note but is not a not-held
+       * verdict. */
+      legislationNotHeld?: boolean
+      /** True when the query looked like a whole Act title but the directory
+       * could not resolve it. Suppresses unrelated keyword provisions
+       * without claiming the Act is absent. */
+      legislationTitleUnresolved?: boolean
+      /** True when more than one stored Act satisfies the query. Not a
+       * not-held verdict. */
+      legislationAmbiguous?: boolean
+      /** Structured corrective for a schedule citation that names no
+       * schedule: the parser-compatible example (from the citation's own
+       * label path) and the Act it belongs to. Presence is the diagnostic;
+       * never a not-held verdict. */
+      legislationScheduleGuidance?: LegislationScheduleGuidance
       legislationNote?: string
       /** Search-time parameters the legislation keyword search sent to the
        * engine on this response. Absent when no keyword search ran. */

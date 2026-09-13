@@ -604,6 +604,592 @@ describe('createLegalSearchProxyRoutes', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
+  it('names an unheld Act in diagnostics instead of a judgment citation', async () => {
+    // The legislation half recognised the Act and held nothing: the response
+    // must carry a not-held verdict, not just a free-text note that an outage
+    // could also set.
+    legislationServeMock.resolveLegislationFetch.mockResolvedValueOnce({
+      groups: [],
+      citationRecognised: true,
+      citationHeldExact: false,
+      recognisedNotHeld: true,
+      note: 'Children Act 1989 is not held.',
+      searched: true,
+      keywordSearchParameters: null,
+    })
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: 'Children Act 1989',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const app = createAuthenticatedProxyApp(
+      undefined,
+      {
+        legislation: {
+          pool: { query: vi.fn(async () => ({ rows: [] })) } as never,
+          indexName: 'legislation_provisions',
+        },
+      },
+      null,
+    )
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'Children Act 1989' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [],
+      outcome: 'recognised_not_held',
+      citation: { recognised: true, status: 'not_held' },
+      diagnostics: {
+        legislationNotHeld: true,
+        legislationNote: 'Children Act 1989 is not held.',
+        legislationGroupServed: false,
+      },
+    })
+  })
+
+  it('preserves an authoritative not-held through the foreground-live miss', async () => {
+    // Finding 2: the foreground branch answered no_match without consulting
+    // the legislation half, so the verdict vanished on the default signed-in
+    // path. Zero live results must carry the legislation terminal.
+    legislationServeMock.resolveLegislationFetch.mockResolvedValueOnce({
+      groups: [],
+      citationRecognised: true,
+      citationHeldExact: false,
+      recognisedNotHeld: true,
+      titleUnresolved: false,
+      ambiguous: false,
+      note: '2008 c. 12 is not held.',
+      searched: true,
+      keywordSearchParameters: null,
+    })
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: '2008 c. 12',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response('<feed />'),
+    )
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: { query: vi.fn(async () => ({ rows: [] })) } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: '2008 c. 12',
+        foregroundLiveResults: true,
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [],
+      outcome: 'recognised_not_held',
+      citation: { recognised: true, status: 'not_held' },
+      diagnostics: {
+        liveProviderSearched: true,
+        legislationNotHeld: true,
+        legislationNote: '2008 c. 12 is not held.',
+      },
+    })
+  })
+
+  it('preserves an unresolved legislation title through the foreground-live miss', async () => {
+    legislationServeMock.resolveLegislationFetch.mockResolvedValueOnce({
+      groups: [],
+      citationRecognised: true,
+      citationHeldExact: false,
+      recognisedNotHeld: false,
+      titleUnresolved: true,
+      ambiguous: false,
+      note: 'No exact legislation title match was found for "Children Act 1989".',
+      searched: true,
+      keywordSearchParameters: null,
+    })
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: 'Children Act 1989',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response('<feed />'),
+    )
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: { query: vi.fn(async () => ({ rows: [] })) } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'Children Act 1989',
+        foregroundLiveResults: true,
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [],
+      outcome: 'legislation_title_unresolved',
+      diagnostics: {
+        liveProviderSearched: true,
+        legislationTitleUnresolved: true,
+        legislationNote:
+          'No exact legislation title match was found for "Children Act 1989".',
+      },
+    })
+  })
+
+  it('preserves legislation ambiguity through the foreground-live miss', async () => {
+    legislationServeMock.resolveLegislationFetch.mockResolvedValueOnce({
+      groups: [],
+      citationRecognised: true,
+      citationHeldExact: false,
+      recognisedNotHeld: false,
+      titleUnresolved: false,
+      ambiguous: true,
+      note: '“Sample Act 2020” names more than one stored Act. Candidates: A; B',
+      searched: true,
+      keywordSearchParameters: null,
+    })
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: 'Sample Act 2020',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response('<feed />'),
+    )
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: { query: vi.fn(async () => ({ rows: [] })) } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'Sample Act 2020',
+        foregroundLiveResults: true,
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [],
+      outcome: 'legislation_ambiguous',
+      diagnostics: {
+        legislationAmbiguous: true,
+        legislationNote:
+          '“Sample Act 2020” names more than one stored Act. Candidates: A; B',
+      },
+    })
+  })
+
+  it('carries an underspecified-schedule corrective through the foreground-live miss', async () => {
+    // Browser finding: the serve layer returns the corrective only as a note
+    // for this case, so the proxy emitted legislationNote with no
+    // diagnostic and the UI fell through to "No sources found". The
+    // structured guidance must survive the signed-in default path.
+    legislationServeMock.resolveLegislationFetch.mockResolvedValueOnce({
+      groups: [],
+      citationRecognised: true,
+      citationHeldExact: false,
+      recognisedNotHeld: false,
+      titleUnresolved: false,
+      ambiguous: false,
+      scheduleUnderspecified: {
+        example: 'Schedule 1 paragraph 2',
+        actTitle: 'Equality Act 2010',
+      },
+      note: 'Sch. para. 2 of Equality Act 2010 names no schedule. Name the schedule to resolve it (for example "Schedule 1 paragraph 2").',
+      searched: true,
+      keywordSearchParameters: null,
+    })
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: 'Sch. para. 2 Equality Act 2010',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(
+      new Response('<feed />'),
+    )
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: { query: vi.fn(async () => ({ rows: [] })) } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'Sch. para. 2 Equality Act 2010',
+        foregroundLiveResults: true,
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [],
+      outcome: 'legislation_schedule_underspecified',
+      diagnostics: {
+        liveProviderSearched: true,
+        legislationScheduleGuidance: {
+          example: 'Schedule 1 paragraph 2',
+          actTitle: 'Equality Act 2010',
+        },
+      },
+    })
+  })
+
+  it('keeps an underspecified-schedule corrective through the hydration-queued branch', async () => {
+    legislationServeMock.resolveLegislationFetch.mockResolvedValueOnce({
+      groups: [],
+      citationRecognised: true,
+      citationHeldExact: false,
+      recognisedNotHeld: false,
+      titleUnresolved: false,
+      ambiguous: false,
+      scheduleUnderspecified: {
+        example: 'Schedule 1 paragraph 2',
+        actTitle: 'Equality Act 2010',
+      },
+      note: 'Sch. para. 2 of Equality Act 2010 names no schedule.',
+      searched: true,
+      keywordSearchParameters: null,
+    })
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: 'Sch. para. 2 Equality Act 2010',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: { query: vi.fn(async () => ({ rows: [] })) } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const body = (await (
+      await app.request('/api/search/fetch', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: 'Sch. para. 2 Equality Act 2010',
+          foregroundLiveResults: false,
+        }),
+        headers: { 'content-type': 'application/json' },
+      })
+    ).json()) as {
+      hits: unknown[]
+      hydrationQueued?: boolean
+      outcome?: string
+      diagnostics?: {
+        legislationScheduleGuidance?: {
+          example: string
+          actTitle: string
+        }
+      }
+    }
+
+    expect(body).toMatchObject({
+      hits: [],
+      hydrationQueued: true,
+      outcome: 'hydration_queued',
+      diagnostics: {
+        legislationScheduleGuidance: {
+          example: 'Schedule 1 paragraph 2',
+          actTitle: 'Equality Act 2010',
+        },
+      },
+    })
+  })
+
+  it('does not hide hydrated judgment results behind a schedule corrective', async () => {
+    legislationServeMock.resolveLegislationFetch.mockResolvedValueOnce({
+      groups: [],
+      citationRecognised: true,
+      citationHeldExact: false,
+      recognisedNotHeld: false,
+      titleUnresolved: false,
+      ambiguous: false,
+      scheduleUnderspecified: {
+        example: 'Schedule 1 paragraph 2',
+        actTitle: 'Equality Act 2010',
+      },
+      note: 'Sch. para. 2 of Equality Act 2010 names no schedule.',
+      searched: true,
+      keywordSearchParameters: null,
+    })
+    searchClientMock.search.mockResolvedValue({
+      hits: [hit],
+      query: 'Sch. para. 2 Equality Act 2010',
+      estimatedTotalHits: 1,
+      processingTimeMs: 1,
+    })
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: { query: vi.fn(async () => ({ rows: [] })) } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const body = (await (
+      await app.request('/api/search/fetch', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: 'Sch. para. 2 Equality Act 2010',
+          foregroundLiveResults: false,
+        }),
+        headers: { 'content-type': 'application/json' },
+      })
+    ).json()) as {
+      hits: unknown[]
+      outcome?: string
+      diagnostics?: {
+        legislationScheduleGuidance?: {
+          example: string
+          actTitle: string
+        }
+      }
+    }
+
+    expect(body.hits).toHaveLength(1)
+    expect(body.outcome).toBe('results')
+    expect(body.diagnostics?.legislationScheduleGuidance).toEqual({
+      example: 'Schedule 1 paragraph 2',
+      actTitle: 'Equality Act 2010',
+    })
+  })
+
+  it('keeps an unresolved legislation title through the hydration-queued branch', async () => {
+    // Finding 2: the transport lifecycle and the legislation diagnostic are
+    // separate. A job is genuinely pending, so the outcome stays
+    // hydration_queued and the client keeps polling; the verdict rides
+    // diagnostics and drives the copy while the poll runs. The old response
+    // carried outcome legislation_title_unresolved with hydrationQueued true,
+    // so the client stopped while the job spent budget and indexed judgments
+    // nothing would ever surface.
+    legislationServeMock.resolveLegislationFetch.mockResolvedValueOnce({
+      groups: [],
+      citationRecognised: true,
+      citationHeldExact: false,
+      recognisedNotHeld: false,
+      titleUnresolved: true,
+      ambiguous: false,
+      note: 'No exact legislation title match was found for "Children Act 1989".',
+      searched: true,
+      keywordSearchParameters: null,
+    })
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: 'Children Act 1989',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: { query: vi.fn(async () => ({ rows: [] })) } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'Children Act 1989',
+        foregroundLiveResults: false,
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    const body = (await response.json()) as {
+      hits: unknown[]
+      hydrationQueued?: boolean
+      outcome?: string
+    }
+    expect(body).toMatchObject({
+      hits: [],
+      hydrationQueued: true,
+      outcome: 'hydration_queued',
+      diagnostics: {
+        legislationTitleUnresolved: true,
+        legislationNote:
+          'No exact legislation title match was found for "Children Act 1989".',
+      },
+    })
+    // The explicit invariant: an empty page may not claim a queue without an
+    // outcome that makes the client poll it.
+    if (body.hydrationQueued === true && body.hits.length === 0) {
+      expect(body.outcome).toBe('hydration_queued')
+    }
+  })
+
+  it('keeps an ambiguous request polling while carrying the verdict', async () => {
+    legislationServeMock.resolveLegislationFetch.mockResolvedValueOnce({
+      groups: [],
+      citationRecognised: true,
+      citationHeldExact: false,
+      recognisedNotHeld: false,
+      titleUnresolved: false,
+      ambiguous: true,
+      note: '“Sample Act 2020” names more than one stored Act. Candidates: A; B',
+      searched: true,
+      keywordSearchParameters: null,
+    })
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: 'Sample Act 2020',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: { query: vi.fn(async () => ({ rows: [] })) } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const body = (await (
+      await app.request('/api/search/fetch', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: 'Sample Act 2020',
+          foregroundLiveResults: false,
+        }),
+        headers: { 'content-type': 'application/json' },
+      })
+    ).json()) as {
+      hits: unknown[]
+      hydrationQueued?: boolean
+      outcome?: string
+      diagnostics?: { legislationAmbiguous?: boolean }
+    }
+
+    expect(body).toMatchObject({
+      hits: [],
+      hydrationQueued: true,
+      outcome: 'hydration_queued',
+      diagnostics: { legislationAmbiguous: true },
+    })
+  })
+
+  it('does not hide hydrated judgment results behind a legislation verdict', async () => {
+    // Once hydration lands, the stored search finds the judgment and returns
+    // before the background branch: a verdict from the legislation half must
+    // not suppress it. The verdict stays in diagnostics.
+    legislationServeMock.resolveLegislationFetch.mockResolvedValueOnce({
+      groups: [],
+      citationRecognised: true,
+      citationHeldExact: false,
+      recognisedNotHeld: false,
+      titleUnresolved: false,
+      ambiguous: true,
+      note: '“Sample Act 2020” names more than one stored Act. Candidates: A; B',
+      searched: true,
+      keywordSearchParameters: null,
+    })
+    searchClientMock.search.mockResolvedValue({
+      hits: [hit],
+      query: 'Sample Act 2020',
+      estimatedTotalHits: 1,
+      processingTimeMs: 1,
+    })
+    const app = createAuthenticatedProxyApp(undefined, {
+      legislation: {
+        pool: { query: vi.fn(async () => ({ rows: [] })) } as never,
+        indexName: 'legislation_provisions',
+      },
+    })
+
+    const body = (await (
+      await app.request('/api/search/fetch', {
+        method: 'POST',
+        body: JSON.stringify({
+          query: 'Sample Act 2020',
+          foregroundLiveResults: false,
+        }),
+        headers: { 'content-type': 'application/json' },
+      })
+    ).json()) as {
+      hits: unknown[]
+      outcome?: string
+      diagnostics?: { legislationAmbiguous?: boolean }
+    }
+
+    expect(body.hits).toHaveLength(1)
+    expect(body.outcome).toBe('results')
+    expect(body.diagnostics?.legislationAmbiguous).toBe(true)
+  })
+
+  it('keeps an unresolved legislation title on the anonymous stored-only branch', async () => {
+    legislationServeMock.resolveLegislationFetch.mockResolvedValueOnce({
+      groups: [],
+      citationRecognised: true,
+      citationHeldExact: false,
+      recognisedNotHeld: false,
+      titleUnresolved: true,
+      ambiguous: false,
+      note: 'No exact legislation title match was found for "Children Act 1989".',
+      searched: true,
+      keywordSearchParameters: null,
+    })
+    searchClientMock.search.mockResolvedValue({
+      hits: [],
+      query: 'Children Act 1989',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+    const fetchMock = vi.spyOn(globalThis, 'fetch')
+    const app = createAuthenticatedProxyApp(
+      undefined,
+      {
+        legislation: {
+          pool: { query: vi.fn(async () => ({ rows: [] })) } as never,
+          indexName: 'legislation_provisions',
+        },
+      },
+      null,
+    )
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'Children Act 1989' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [],
+      outcome: 'legislation_title_unresolved',
+      diagnostics: { legislationTitleUnresolved: true },
+    })
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
   it('serves stored citing cases to anonymous callers, labelled not_held', async () => {
     // [2003] UKHL 1 is recognised but not held; the stored citing cases
     // must serve clearly distinguished instead of being discarded.

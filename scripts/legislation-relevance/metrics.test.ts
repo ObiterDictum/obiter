@@ -48,6 +48,7 @@ function baseline(
     heldPrecision: 1,
     absentPrecision: 0,
     mrr: 1,
+    heldNotHeldViolations: 0,
     byQuery: {
       'section-example': { recall: 1, ranks: [1], returnedHitCount: 1 },
       'absent-example': { recall: null, ranks: [], returnedHitCount: 5 },
@@ -208,6 +209,40 @@ describe('legislation relevance metrics', () => {
         quieter,
       ]),
     ).toEqual([])
+  })
+
+  it('fails the invariant when a held case reports a not-held verdict', () => {
+    const current = baseline()
+    const falseNotHeld = scoreCase(exactCase, ['ukpga/1998/42/section/6'], {
+      legislationNotHeld: true,
+    })
+    expect(falseNotHeld.failureLabels).toContain('held_false_not_held')
+    expect(
+      regressionFailures(current, aggregateMetrics([falseNotHeld]), [
+        falseNotHeld,
+      ]).some((failure) => failure.startsWith('false_not_held:')),
+    ).toBe(true)
+  })
+
+  it('scores a control query as a negative, never for hits', () => {
+    const controlCase: LegislationRelevanceCase = {
+      id: 'control-example',
+      kind: 'control',
+      category: 'subject_matter',
+      query: 'defences under the Children Act 1989',
+      expectedIds: [],
+      scoring: 'exact',
+    }
+    const clean = scoreCase(controlCase, ['serve anything'])
+    expect(clean.recall).toBe(null)
+    expect(clean.precision).toBe(null)
+    expect(clean.failureLabels).toEqual([])
+    const claimed = scoreCase(controlCase, [], { legislationNotHeld: true })
+    expect(claimed.failureLabels).toContain('control_false_not_held')
+    const unresolved = scoreCase(controlCase, [], {
+      legislationTitleUnresolved: true,
+    })
+    expect(unresolved.failureLabels).toContain('control_title_unresolved')
   })
 
   it('rounds to four decimal places', () => {

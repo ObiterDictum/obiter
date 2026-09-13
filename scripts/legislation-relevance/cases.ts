@@ -26,7 +26,7 @@
  * provisions that merely mention the words, and on a short provision those
  * mentions are how a plausible non-answer gets served as if it were one.
  */
-export type LegislationRelevanceKind = 'held' | 'absent'
+export type LegislationRelevanceKind = 'held' | 'absent' | 'control'
 
 export type LegislationRelevanceCategory =
   | 'act_name'
@@ -103,6 +103,25 @@ function absent(
   }))
 }
 
+/**
+ * A control query's correct behaviour is a *negative*: it must not make a
+ * legislation claim it cannot support. It is not scored for hits, because the
+ * right outcome is an ordinary keyword search whose result set is not
+ * enumerable here. The invariant is checked by the metrics module.
+ */
+function control(
+  rows: readonly [id: string, query: string][],
+): LegislationRelevanceCase[] {
+  return rows.map(([id, query]) => ({
+    id,
+    kind: 'control',
+    category: 'subject_matter',
+    query,
+    expectedIds: [],
+    scoring: 'exact',
+  }))
+}
+
 const actNameHeld = held('act_name', 'exact', [
   ['act-human-rights-1998', 'Human Rights Act 1998', ['ukpga/1998/42']],
   ['act-equality-2010', 'Equality Act 2010', ['ukpga/2010/15']],
@@ -137,6 +156,88 @@ const actNameHeld = held('act_name', 'exact', [
     'act-renters-rights-straight',
     "Renters' Rights Act 2025",
     ['ukpga/2025/26'],
+  ],
+  // Finding 1: stored titles carrying a terminal `(repealed)` status
+  // annotation the canonical citation never has. Each chapter citation
+  // resolves the same document, so a title miss is unambiguously false.
+  [
+    'act-health-social-care-levy-2021',
+    'Health and Social Care Levy Act 2021',
+    ['ukpga/2021/28'],
+  ],
+  [
+    'act-non-domestic-rating-public-lavatories-2021',
+    'Non-Domestic Rating (Public Lavatories) Act 2021',
+    ['ukpga/2021/13'],
+  ],
+  [
+    'act-trade-australia-new-zealand-2023',
+    'Trade (Australia and New Zealand) Act 2023',
+    ['ukpga/2023/9'],
+  ],
+  [
+    'act-strikes-minimum-service-levels-2023',
+    'Strikes (Minimum Service Levels) Act 2023',
+    ['ukpga/2023/39'],
+  ],
+  [
+    'act-workers-predictable-terms-2023',
+    'Workers (Predictable Terms and Conditions) Act 2023',
+    ['ukpga/2023/46'],
+  ],
+  [
+    'act-safety-rwanda-2024',
+    'Safety of Rwanda (Asylum and Immigration) Act 2024',
+    ['ukpga/2024/8'],
+  ],
+  // Orthographic variants a lawyer types that must converge on the stored
+  // title: a dropped apostrophe, a dropped or spaced hyphen, `&` as `and`,
+  // and a dropped `etc`.
+  [
+    'act-childrens-wellbeing-2026',
+    'Childrens Wellbeing and Schools Act 2026',
+    ['ukpga/2026/21'],
+  ],
+  ['act-carers-leave-2023', 'Carers Leave Act 2023', ['ukpga/2023/18']],
+  [
+    'act-skills-post-16-2022',
+    'Skills and Post 16 Education Act 2022',
+    ['ukpga/2022/21'],
+  ],
+  [
+    'act-non-domestic-rating-lists-2021',
+    'Non Domestic Rating (Lists) Act 2021',
+    ['ukpga/2021/8'],
+  ],
+  [
+    'act-cooperatives-mutuals-2023',
+    'Cooperatives, Mutuals and Friendly Societies Act 2023',
+    ['ukpga/2023/23'],
+  ],
+  [
+    'act-compensation-london-capital-2021',
+    'Compensation (London Capital and Finance plc and Fraud Compensation Fund) Act 2021',
+    ['ukpga/2021/29'],
+  ],
+  [
+    'act-property-digital-assets-2025',
+    'Property (Digital Assets) Act 2025',
+    ['ukpga/2025/29'],
+  ],
+  [
+    'act-social-security-uprating-2020',
+    'Social Security (Uprating of Benefits) Act 2020',
+    ['ukpga/2020/23'],
+  ],
+  [
+    'act-trade-trans-pacific-2024',
+    'Trade (Comprehensive and Progressive Agreement for Trans Pacific Partnership) Act 2024',
+    ['ukpga/2024/6'],
+  ],
+  [
+    'act-high-speed-rail-crewe-2021',
+    'High Speed Rail (West Midlands Crewe) Act 2021',
+    ['ukpga/2021/2'],
   ],
 ])
 
@@ -183,6 +284,13 @@ const sectionHeld = held('section_lookup', 'exact', [
     'section-era-2025-s1',
     's. 1 Employment Rights Act 2025',
     ['ukpga/2025/36/section/1'],
+  ],
+  // Finding 1: the section form inherits the title miss. The Act resolves
+  // before the provision is checked, so the held provision is served.
+  [
+    'section-health-social-care-levy-s5',
+    's. 5 Health and Social Care Levy Act 2021',
+    ['ukpga/2021/28/section/5'],
   ],
 ])
 
@@ -375,6 +483,36 @@ const absentConcept = absent('absent_concept', [
   ],
 ])
 
+// A sentence that merely contains an Act and a trailing year is not a
+// whole-title request. It must stay on the keyword path and must never make a
+// not-held claim about an Act it cannot verify.
+const controlQueries = control([
+  ['control-defences-children-1989', 'defences under the Children Act 1989'],
+  [
+    'control-computer-misuse-1990',
+    'offences contrary to the Computer Misuse Act 1990',
+  ],
+  ['control-act-2020', 'Act 2020'],
+  // Determiner-free prose (finding 1). The old whole-title gate rejected only
+  // runs containing the/a/an, so these realistic subject queries failed title
+  // resolution and short-circuited on unresolved_title before keyword search
+  // ran. The determiner-bearing twin of the first is control-defences-children-1989.
+  ['control-duties-equality-2010', 'duties under Equality Act 2010'],
+  [
+    'control-offences-misuse-drugs-1971',
+    'offences under Misuse of Drugs Act 1971',
+  ],
+  [
+    'control-sentencing-criminal-justice-2003',
+    'sentencing powers in Criminal Justice Act 2003',
+  ],
+  [
+    'control-changes-companies-2006',
+    'changes introduced by Companies Act 2006',
+  ],
+  ['control-defences-children-1989-plain', 'defences under Children Act 1989'],
+])
+
 export const legislationRelevanceCases: LegislationRelevanceCase[] = [
   ...actNameHeld,
   ...chapterHeld,
@@ -384,6 +522,7 @@ export const legislationRelevanceCases: LegislationRelevanceCase[] = [
   ...absentChapter,
   ...absentProvision,
   ...absentConcept,
+  ...controlQueries,
 ]
 
 /**

@@ -9,7 +9,12 @@ export {
 } from './SearchIdleState'
 export { SearchKeyboardShortcuts } from './SearchKeyboardShortcuts'
 export { SearchResults } from './SearchResults'
+export { isInteractiveTarget } from './interactiveTarget'
 export { searchResultRows } from './searchResultRows'
+export {
+  getLegislationScheduleGuidanceFeedback,
+  getLegislationScheduleResubmitQuery,
+} from './legislationGuidance'
 export {
   courtOptionGroups,
   getCourtLabel,
@@ -19,6 +24,7 @@ export {
   type LegalSearchFetchResponse,
   type LegalSearchOutcome,
   type LegalSearchRetrievalPath,
+  type LegislationScheduleGuidance,
   type CaseLawParagraph,
   type CaseLawSnippet,
   type LegalSearchResult,
