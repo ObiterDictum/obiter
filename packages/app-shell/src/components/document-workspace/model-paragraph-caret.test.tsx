@@ -548,7 +548,9 @@ describe('arrow keys across paragraphs', () => {
         onSelectParagraph={() => undefined}
         editing
         onRunTextChange={() => undefined}
-        onInsertParagraph={(id) => inserted.push(id)}
+        onInsertParagraph={(id) => {
+          inserted.push(id)
+        }}
       />,
     )
     const node = field()
@@ -568,7 +570,9 @@ describe('arrow keys across paragraphs', () => {
         onSelectParagraph={() => undefined}
         editing
         onRunTextChange={() => undefined}
-        onJoinPrevious={(id) => joined.push(id)}
+        onJoinPrevious={(id) => {
+          joined.push(id)
+        }}
       />,
     )
     const node = field()
