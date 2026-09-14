@@ -183,9 +183,42 @@ describe('Finding identity', () => {
       'a:b',
       'c',
       'quote_fidelity',
+      '',
+      '',
       'p:7',
       '24',
       '41',
+    ])
+  })
+
+  it('separates findings whose paragraph ids collide across stories', () => {
+    const document = createVerificationFindingId({
+      subject,
+      type: 'authority_existence',
+      location: {
+        paragraphId: 'p1',
+        storyKind: 'document',
+        storyPartName: 'word/document.xml',
+        start: 0,
+        end: 13,
+      },
+    })
+    const footnote = createVerificationFindingId({
+      subject,
+      type: 'authority_existence',
+      location: {
+        paragraphId: 'p1',
+        storyKind: 'footnotes',
+        storyPartName: 'word/footnotes.xml',
+        start: 0,
+        end: 13,
+      },
+    })
+    expect(document).not.toBe(footnote)
+    expect(decodeFindingId(footnote).slice(3, 6)).toEqual([
+      'footnotes',
+      'word/footnotes.xml',
+      'p1',
     ])
   })
 

@@ -390,7 +390,9 @@ function encodeIdComponent(value: string | number): string {
  * its own key by run id (for example a unique `(run_id, finding_id)`) rather
  * than use this value as a per-run primary key. The components are the subject,
  * type and location ids and offsets, so no citation text, quote, explanation,
- * filename, matter name or user text enters it.
+ * filename, matter name or user text enters it. Story identity, when the
+ * caller traverses more than one story, is a location component: a paragraph
+ * id alone collides across the main document, footnotes and endnotes.
  */
 export function createVerificationFindingId(input: {
   subject: VerificationSubject
@@ -403,6 +405,8 @@ export function createVerificationFindingId(input: {
     encodeIdComponent(subject.documentId),
     encodeIdComponent(subject.versionId),
     encodeIdComponent(type),
+    encodeIdComponent(location.storyKind ?? ''),
+    encodeIdComponent(location.storyPartName ?? ''),
     encodeIdComponent(location.paragraphId),
     encodeIdComponent(location.start),
     encodeIdComponent(location.end),

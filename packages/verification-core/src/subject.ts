@@ -34,10 +34,17 @@ export type VerificationSubject = z.infer<typeof verificationSubjectSchema>
  *   `end > start`. Zero-length and reversed spans are rejected.
  * - `paragraphId` names the paragraph. Run, page, and section coordinates are
  *   not part of a location; a paragraph is the resolution this layer needs.
+ * - A paragraph id is only unique within its story, so `storyKind` and
+ *   `storyPartName` are part of the location when a caller traverses more than
+ *   one story. They are optional because the single-story callers predate
+ *   story coverage; a location that carries them is still a reference, never a
+ *   filename or matter name.
  */
 export const draftLocationSchema = z
   .object({
     paragraphId: z.string().trim().min(1),
+    storyKind: z.string().trim().min(1).optional(),
+    storyPartName: z.string().trim().min(1).optional(),
     start: z.number().int().nonnegative(),
     end: z.number().int().positive(),
   })
