@@ -99,6 +99,24 @@ export function isDescendantOf(element: XmlElement, ancestor: XmlElement) {
   return false
 }
 
+export function elementRange(element: XmlElement) {
+  return {
+    start: element.start,
+    startTagEnd: element.startTagEnd,
+    endTagStart: element.endTagStart,
+    end: element.end,
+  }
+}
+
+export function nearestWordAncestor(element: XmlElement, localName: string) {
+  let parent = element.parent
+  while (parent) {
+    if (isWord(parent, localName)) return parent
+    parent = parent.parent
+  }
+  return undefined
+}
+
 export function childValue(
   elements: readonly XmlElement[],
   parent: XmlElement,
