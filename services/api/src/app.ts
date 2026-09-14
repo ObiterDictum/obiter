@@ -36,6 +36,7 @@ import { createRedactLifecycleRoutes } from './routes/redact-lifecycle'
 import { apiRequestLimitsFromEnv } from './request-limits'
 import { createRequestBodyLimitMiddleware } from './request-body-limit'
 import { createTrackedChangeRoutes } from './routes/tracked-changes'
+import { createVerificationRunRoutes } from './routes/verification-runs'
 import { DocumentPresenceRegistry } from './document-presence'
 import { createLocalStorage, type StorageService } from './storage'
 
@@ -236,6 +237,7 @@ export function createApiApp(
   app.route('/', createRedactRunCreationRoutes(pool, storage, requestLimits))
   app.route('/', createRedactReviewRoutes(pool, storage))
   app.route('/', createRedactLifecycleRoutes(pool, storage))
+  app.route('/', createVerificationRunRoutes(pool, storage))
   app.route('/', createLegalSearchRoutes(env))
   app.route(
     '/',

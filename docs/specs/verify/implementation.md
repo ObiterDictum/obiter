@@ -18,14 +18,12 @@
 
 ## Status
 
-V1 (#199), V2 (#202), V3 (#204) and V4 are delivered as domain and store
-machinery. V4 is `compareQuoteText`/`decideQuoteFidelity` in
-`packages/verification-core` plus the store-scoped retrieval in
-`services/api/src/quote-fidelity.ts`. None of the three is wired to a route,
-worker or UI; V5 owns the run, persistence and the findings surface. The quote
-normalisation, word-boundary and mismatch policy, and the V4 batch contract, are
-recorded in `quote-fidelity.md`, with the package-level summary in
-`packages/verification-core/README.md`.
+V1 (#199), V2 (#202), V3 (#204) and V4 (#206) are delivered as domain and store
+machinery. V5 wires those checks to an immutable document version: it extracts
+citations and quotations from the stored model, runs V3 then V2 then V4,
+persists `verification_runs` / `verification_findings`, and renders findings in
+the shared app shell. Execution is request-scoped in this slice (no BullMQ
+worker). Report export remains V6.
 
 ## Stack
 

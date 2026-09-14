@@ -18,6 +18,7 @@ import {
 import { useCurrentUser } from '../current-user'
 import { useDeleteDocument, useDocument } from '../documents'
 import { DocumentWorkspace } from '../components/document-workspace/workspace'
+import { VerificationRunPanel } from '../components/verification-run-panel'
 
 /**
  * Document detail — the contract route (PRD FR4). Receives route params as
@@ -177,6 +178,17 @@ export function DocumentDetailLayoutView({
           />
         </>
       ) : null}
+
+      <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
+        <div className="flex flex-col gap-0.5">
+          <h2 className="text-base font-semibold text-ink">Verification</h2>
+          <p className="text-sm text-muted">
+            Run citation, authority, and quote checks against this stored
+            document version.
+          </p>
+        </div>
+        <VerificationRunPanel documentId={documentId} />
+      </section>
 
       <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
         <div className="flex items-center justify-between gap-3">

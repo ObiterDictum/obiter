@@ -1,36 +1,88 @@
+import { Link } from '@tanstack/react-router'
 import { ListChecks } from '@phosphor-icons/react'
-import { EmptyState } from '@obiter/ui'
+import { Badge, EmptyState, Skeleton } from '@obiter/ui'
+import { useCurrentUser } from '../current-user'
+import {
+  verificationRunStatusLabel,
+} from '../verification-copy'
+import { useOrganisationVerificationRuns } from '../verification-runs'
 
-/**
- * Verify mode stub. Chrome is live so the mode tab is honest; verification
- * product work is still on the roadmap.
- */
 export function VerifyRouteView() {
+  const { data: me } = useCurrentUser()
+  const runs = useOrganisationVerificationRuns(me?.organisation != null)
+
   return (
     <div className="flex h-full min-h-[24rem] flex-col">
       <div className="flex items-center justify-between border-b border-line px-6 py-3">
         <div className="flex flex-col gap-0.5">
           <h1 className="text-sm font-semibold text-ink">Verify</h1>
-          <p className="text-xs text-muted">Claim and source checking</p>
+          <p className="text-xs text-muted">
+            Citation, authority, and quote checks on stored document versions
+          </p>
         </div>
-        <span className="rounded-md bg-raised px-2 py-1 text-[11px] font-medium text-subtle">
-          In development
-        </span>
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-2">
-        <section className="border-b border-line p-6 lg:border-b-0 lg:border-r">
+      <div className="min-h-0 flex-1 p-6">
+        {runs.isPending ? (
+          <Skeleton className="h-24" aria-label="Loading verification runs" />
+        ) : runs.isError ? (
+          <EmptyState
+            icon={<ListChecks size={28} className="text-muted" />}
+            title="Verification runs are unavailable"
+            body={runs.error.message}
+          />
+        ) : !runs.data?.runs.length ? (
           <EmptyState
             icon={<ListChecks size={28} className="text-muted" />}
             title="No verification runs yet"
-            body="Verify will list claims from matter documents and check them against sources. This surface is not shipping yet."
+            body="Open a matter document and start a verification run to check citations and quotations against stored sources."
           />
-        </section>
-        <section className="p-6">
-          <EmptyState
-            title="Source check"
-            body="When a claim is selected, source evidence and review status will appear here."
-          />
-        </section>
+        ) : (
+          <ul className="flex flex-col divide-y divide-line">
+            {runs.data.runs.map((run) => (
+              <li
+                key={run.id}
+                className="flex items-center justify-between gap-3 py-3"
+              >
+                <div className="min-w-0">
+                  <p className="truncate font-mono text-xs text-ink">{run.id}</p>
+                  <p className="text-[11px] text-muted">
+                    Version {run.documentVersionId}
+                    {run.stale ? ' (earlier than current)' : ''}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Badge
+                    tone={
+                      run.status === 'failed'
+                        ? 'danger'
+                        : run.status === 'completed' &&
+                            run.summary.reviewRequiredCount > 0
+                          ? 'warning'
+                          : run.status === 'completed'
+                            ? 'success'
+                            : 'info'
+                    }
+                  >
+                    {run.status === 'completed' &&
+                    run.summary.reviewRequiredCount > 0
+                      ? 'Needs review'
+                      : verificationRunStatusLabel(run.status)}
+                  </Badge>
+                  <Link
+                    to="/matters/$matterId/documents/$documentId"
+                    params={{
+                      matterId: run.matterId,
+                      documentId: run.documentId,
+                    }}
+                    className="text-sm font-medium text-brand hover:text-brand-pressed"
+                  >
+                    Open document
+                  </Link>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
     </div>
   )
