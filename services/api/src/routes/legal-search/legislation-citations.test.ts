@@ -193,6 +193,7 @@ describe('classifyLegislationCitation', () => {
     // prove what was requested, so the store proves it is absent.
     expect(classifyLegislationCitation('2008 c. 12', directory)).toEqual({
       kind: 'not_held',
+      identity: 'ukpga/2008/12',
       recognisedQuery: '2008 c. 12',
     })
   })
@@ -237,6 +238,7 @@ describe('classifyLegislationCitation', () => {
   it('reports an unheld chapter number as not held', () => {
     expect(classifyLegislationCitation('2008 c. 12', directory)).toEqual({
       kind: 'not_held',
+      identity: 'ukpga/2008/12',
       recognisedQuery: '2008 c. 12',
     })
   })

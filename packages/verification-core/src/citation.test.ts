@@ -325,3 +325,31 @@ describe('Canonical legislation path normalisation', () => {
     expect(normalizeLegislationCitationPath('/ln/ukpga/2010')).toBeNull()
   })
 })
+
+describe('citation unresolved reasons', () => {
+  it('names every distinct way an identity can fail to appear', () => {
+    // Resolution (V3) can fail in ways the first three reasons cannot express:
+    // a citation-shaped candidate no canonical identity matches, and a
+    // resolution that could not complete because a dependency failed. Both must
+    // be nameable, because a store outage recorded as "no match" would be a
+    // negative result the check never established.
+    for (const reason of [
+      'not_a_citation',
+      'ambiguous',
+      'unsupported_source_type',
+      'no_canonical_match',
+      'resolution_unavailable',
+    ]) {
+      expect(
+        normalizedCitationSchema.safeParse({ kind: 'unresolved', reason })
+          .success,
+      ).toBe(true)
+    }
+    expect(
+      normalizedCitationSchema.safeParse({
+        kind: 'unresolved',
+        reason: 'held_nowhere',
+      }).success,
+    ).toBe(false)
+  })
+})

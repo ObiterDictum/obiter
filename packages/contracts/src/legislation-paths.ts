@@ -20,6 +20,16 @@ export function createCanonicalActPath(documentIdentity: string) {
   return `/ln/${documentIdentity}`
 }
 
+/**
+ * True when the act type is one this repository stores. The URL grammar below
+ * accepts a broader act-type segment because `legislation.gov.uk` identities
+ * share the shape, so the supported set is stated once here and both parsers
+ * apply it. Secondary legislation has its own tables and is out of scope.
+ */
+export function isSupportedLegislationActType(actType: string): boolean {
+  return actType === 'ukpga'
+}
+
 export function parseLegislationActPath(path: string): {
   documentIdentity: string
 } | null {
@@ -27,7 +37,7 @@ export function parseLegislationActPath(path: string): {
   const parts = trimmed.split('/').filter(Boolean)
   if (parts.length !== 3) return null
   const [actType, year, number] = parts
-  if (actType !== 'ukpga') return null
+  if (!actType || !isSupportedLegislationActType(actType)) return null
   if (!year || !/^\d{4}$/.test(year)) return null
   if (!number || !/^\d+$/.test(number)) return null
   return { documentIdentity: `${actType}/${year}/${number}` }
@@ -42,7 +52,7 @@ export function parseLegislationProvisionPath(path: string): {
   const parts = trimmed.split('/').filter(Boolean)
   if (parts.length < 4) return null
   const [actType, year, number, ...labelParts] = parts
-  if (actType !== 'ukpga') return null
+  if (!actType || !isSupportedLegislationActType(actType)) return null
   if (!year || !/^\d{4}$/.test(year)) return null
   if (!number || !/^\d+$/.test(number)) return null
   if (labelParts.length === 0) return null

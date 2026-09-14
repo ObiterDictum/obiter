@@ -1,6 +1,7 @@
-import type {
-  DocumentModelWire,
-  DocumentParagraphWire,
+import {
+  neutralCitationPatternSource,
+  type DocumentModelWire,
+  type DocumentParagraphWire,
 } from '@obiter/contracts'
 import {
   flowParagraphIds,
@@ -17,8 +18,10 @@ export type AuthorityHit = {
   citation: string
 }
 
-const NEUTRAL_CITATION =
-  /\[(?:18|19|20)\d{2}]\s+(?:UKSC|UKHL|UKPC|EWCA(?:\s+Civ|\s+Crim)?|EWHC(?:\s+\([A-Za-z]+\))?|EWFC|EWCOP|UKUT(?:\s+\([A-Za-z]+\))?|UKFTT(?:\s+\([A-Za-z]+\))?|CSIH|CSOH|NICA|NIQB)\s+\d+(?:\s+\([A-Za-z]+\))?/g
+// Built from the shared grammar in `@obiter/contracts` so extraction and
+// Verify's citation resolution cannot disagree about what a neutral citation
+// is. Compiled once at module load, not inside the scan loop.
+const NEUTRAL_CITATION = new RegExp(neutralCitationPatternSource, 'g')
 
 export function extractAuthorities(
   model: DocumentModelWire,

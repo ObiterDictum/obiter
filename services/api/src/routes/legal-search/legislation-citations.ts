@@ -60,9 +60,11 @@ export type LegislationCitationOutcome =
   | { kind: 'ambiguous'; candidates: LegislationActRef[]; reason: string }
   // A well-formed chapter citation for a year and number the corpus does not
   // hold. This is authoritative: the year and number are the canonical
-  // identity, so an absent chapter proves the Act is absent. A failed *title*
-  // lookup does not (see `unresolved_title`).
-  | { kind: 'not_held'; recognisedQuery: string }
+  // identity, so an absent chapter proves the Act is absent. `identity` is that
+  // canonical identity, so a caller that needs one (verification's resolution
+  // step) does not have to re-parse the citation or invent it. A failed *title*
+  // lookup does not prove absence (see `unresolved_title`).
+  | { kind: 'not_held'; identity: string; recognisedQuery: string }
   // The query is a whole Act-title request, but the directory cannot resolve
   // it. The local directory is partial and title resolution is imperfect, so
   // this state suppresses unrelated keyword provisions without claiming the
@@ -374,8 +376,14 @@ export function classifyLegislationCitation(
     if (found)
       return { kind: 'act', act: toActRef(found), recognisedQuery: trimmed }
     // A chapter number the directory does not hold is a recognised citation
-    // with no answer in the corpus, not a phrase to keyword-search.
-    return { kind: 'not_held', recognisedQuery: trimmed }
+    // with no answer in the corpus, not a phrase to keyword-search. The
+    // identity is derived here, where the chapter form is parsed, so no caller
+    // re-derives it from the digits.
+    return {
+      kind: 'not_held',
+      identity: `ukpga/${chapter.year}/${chapter.number}`,
+      recognisedQuery: trimmed,
+    }
   }
 
   const schedule = splitScheduleQuery(trimmed)
