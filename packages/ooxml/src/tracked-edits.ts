@@ -32,6 +32,7 @@ import {
 import {
   lineBreakRunReplacements,
   preserveTextElementXmlSpace,
+  textBreakReplacements,
 } from './text-run-edit'
 
 export type TrackedEditContext = {
@@ -505,25 +506,28 @@ function styleInstruction(prefix: string, name: string, styleId: string) {
 }
 
 function replaceRunText(source: string, anchor: TextRunAnchor, text: string) {
+  const origin = anchor.runRange.start
   const breakReplacements = lineBreakRunReplacements(
     anchor,
     text,
     source,
-    anchor.runRange.start,
+    origin,
   )
+  const consumedBreaks = textBreakReplacements(anchor, origin)
   if (breakReplacements) {
     const broken = applyFragmentReplacements(
       source.slice(anchor.runRange.start, anchor.runRange.end),
-      breakReplacements,
+      [...breakReplacements, ...consumedBreaks],
     )
     if (broken === undefined) throw new OoxmlError('model-node-not-editable')
     return broken
   }
   const replacements = anchor.textRanges.map((range, index) => ({
-    start: range.start - anchor.runRange.start,
-    end: range.end - anchor.runRange.start,
+    start: range.start - origin,
+    end: range.end - origin,
     value: index === 0 ? escapeXmlText(text) : '',
   }))
+  replacements.push(...consumedBreaks)
   const first = anchor.textElements[0]
   if (first) {
     const opening = source.slice(first.start, first.startTagEnd)

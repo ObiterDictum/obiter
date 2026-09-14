@@ -17,6 +17,7 @@ import { elementFragment, parseXmlElements } from './overlay'
 import {
   attributeValue,
   isDescendantOf,
+  isTextWrappingBreak,
   isWord,
   WORD_NAMESPACE,
   type XmlElement,
@@ -236,6 +237,12 @@ function parseRun(
   const anchoredTextElements = textElements
     .filter((element) => !element.selfClosing)
     .map(elementRange)
+  const textBreaks = elements
+    .filter(
+      (element) =>
+        element.parent === runElement && isTextWrappingBreak(element),
+    )
+    .map(elementRange)
   const textRanges = anchoredTextElements.map((element) => ({
     start: element.startTagEnd,
     end: element.endTagStart,
@@ -263,6 +270,7 @@ function parseRun(
       runRange: elementRange(runElement),
       textRanges,
       textElements: anchoredTextElements,
+      textBreaks,
       runProperties: propertiesElements.map((element) =>
         elementFragment(source, element),
       ),
@@ -281,12 +289,6 @@ function elementRange(element: XmlElement) {
     endTagStart: element.endTagStart,
     end: element.end,
   }
-}
-
-function isTextWrappingBreak(element: XmlElement) {
-  if (!isWord(element, 'br')) return false
-  const type = attributeValue(element, WORD_NAMESPACE, 'type')
-  return type === undefined || type === 'textWrapping'
 }
 
 function runPlainText(

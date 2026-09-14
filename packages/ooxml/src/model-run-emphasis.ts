@@ -25,6 +25,7 @@ import {
   setOverlayReplacement,
   type XmlOverlay,
 } from './parts/overlay'
+import { isTextWrappingBreak } from './parts/xml-elements'
 import { decodeXmlReferences } from './xml-lexemes'
 
 export type RunEmphasisRange = RunEmphasis & { from: number; to: number }
@@ -35,6 +36,12 @@ type RunSplitView = {
   paragraph: ParagraphAnchor
   offsetBase: number
   fragments: readonly string[]
+  // Overlay keys folded into `source`; the caller removes them once every run
+  // in the paragraph has planned, so a rejected edit mutates nothing.
+  consumedKeys: readonly string[]
+  // Set when the split has to map offsets past a text-wrapping break, which
+  // comment-anchors.locateInsideRun cannot do yet (board E57).
+  mappableOffsetLimit?: number
 }
 
 /**
@@ -74,6 +81,7 @@ export function applyRunEmphasisRanges(
     runIndex: number
     xml: string
     wires: DocumentTextRunWire[]
+    consumedKeys: readonly string[]
   }> = []
   let runStart = 0
   paragraph.runs.forEach((run, runIndex) => {
@@ -112,6 +120,8 @@ export function applyRunEmphasisRanges(
     runStart = runEnd
   })
 
+  const consumedKeys = pending.flatMap((item) => item.consumedKeys)
+  for (const key of consumedKeys) part.overlay.replacements.delete(key)
   for (const item of pending.reverse()) {
     const run = paragraph.runs[item.runIndex]
     if (!run) throw new OoxmlError('invalid-document-edit')
@@ -135,7 +145,11 @@ function splitRun(
   local: readonly LocalRange[],
   materialise: boolean,
   nextId: () => string,
-): { xml: string; wires: DocumentTextRunWire[] } {
+): {
+  xml: string
+  wires: DocumentTextRunWire[]
+  consumedKeys: readonly string[]
+} {
   const view = materialise
     ? effectiveView(overlay, run, paragraph)
     : sourceView(overlay.source, run, paragraph, runStart)
@@ -145,6 +159,16 @@ function splitRun(
     bounds.add(range.to)
   }
   const ordered = [...bounds].sort((left, right) => left - right)
+  const limit = view.mappableOffsetLimit
+  if (
+    limit !== undefined &&
+    ordered.some((offset) => offset > limit && offset < run.wire.text.length)
+  ) {
+    // The run holds a text-wrapping break, which occupies one text offset that
+    // locateInsideRun does not yet map (board E57). Splitting past it would
+    // silently emphasise the wrong characters, so fail closed instead.
+    throw new OoxmlError('invalid-document-edit')
+  }
   const parts: Array<{
     xml: string
     text: string
@@ -183,7 +207,11 @@ function splitRun(
       ? emphasisFragments(view.fragments, part.emphasis)
       : [...view.fragments],
   }))
-  return { xml: parts.map((part) => part.xml).join(''), wires }
+  return {
+    xml: parts.map((part) => part.xml).join(''),
+    wires,
+    consumedKeys: view.consumedKeys,
+  }
 }
 
 function sourceView(
@@ -198,6 +226,7 @@ function sourceView(
     paragraph,
     offsetBase: runStart,
     fragments: run.wire.preservedXmlFragments,
+    consumedKeys: [],
   }
 }
 
@@ -206,7 +235,8 @@ function effectiveView(
   run: TextRunAnchor,
   paragraph: ParagraphAnchor,
 ): RunSplitView {
-  const source = materialiseRun(overlay, run)
+  const folded = materialiseRun(overlay, run)
+  const source = folded.xml
   const elements = parseWrappedRun(overlay.source, source)
   const root = elements.find((element) => element.depth === 0)
   if (!root) throw new OoxmlError('invalid-document-edit')
@@ -214,22 +244,29 @@ function effectiveView(
   const textElements = children
     .filter((element) => element.localName === 't' && !element.selfClosing)
     .map(elementRange)
-  const effectiveText = children
-    .map((element) => {
-      if (element.localName === 't' && !element.selfClosing) {
-        return decodeXmlReferences(
-          source.slice(element.startTagEnd, element.endTagStart),
-        )
-      }
-      return element.localName === 'br' ? '\n' : ''
-    })
-    .join('')
+  const textBreaks = children
+    .filter((element) => isTextWrappingBreak(element))
+    .map(elementRange)
+  // Mirror the parser: a w:br contributes one text character only when it is a
+  // text-wrapping break. A page or column break is structure and consumes none.
+  let effectiveText = ''
+  let mappableOffsetLimit: number | undefined
+  for (const element of children) {
+    if (element.localName === 't' && !element.selfClosing) {
+      effectiveText += decodeXmlReferences(
+        source.slice(element.startTagEnd, element.endTagStart),
+      )
+    } else if (isTextWrappingBreak(element)) {
+      mappableOffsetLimit ??= effectiveText.length
+      effectiveText += '\n'
+    }
+  }
   if (effectiveText !== run.wire.text) {
     throw new OoxmlError('invalid-document-edit')
   }
   const fragments = children
     .filter(
-      (element) => element.localName !== 't' && element.localName !== 'br',
+      (element) => element.localName !== 't' && !isTextWrappingBreak(element),
     )
     .map((element) => elementFragment(source, element))
   const effectiveRun: TextRunAnchor = {
@@ -241,6 +278,7 @@ function effectiveView(
       end: endTagStart,
     })),
     textElements,
+    textBreaks,
     runProperties: fragments.filter((fragment) => /<w:rPr\b/u.test(fragment)),
   }
   return {
@@ -253,14 +291,17 @@ function effectiveView(
     },
     offsetBase: 0,
     fragments,
+    consumedKeys: folded.keys,
+    ...(mappableOffsetLimit !== undefined ? { mappableOffsetLimit } : {}),
   }
 }
 
 /**
- * Fold every overlay replacement inside the run into its source slice and
- * remove those replacements, so the returned XML is the run exactly as it
- * would serialise today. Callers then split that text and write a single
- * replacement covering the run, which cannot overlap the folded ones.
+ * Fold every overlay replacement inside the run into its source slice, so the
+ * returned XML is the run exactly as it would serialise today. Callers then
+ * split that text and write a single replacement covering the run, which
+ * cannot overlap the folded ones. The consumed keys come back with the fold so
+ * the caller removes them only once the paragraph has planned successfully.
  */
 function materialiseRun(overlay: XmlOverlay, run: TextRunAnchor) {
   const { start, end } = run.runRange
@@ -271,6 +312,7 @@ function materialiseRun(overlay: XmlOverlay, run: TextRunAnchor) {
     .sort((left, right) => left[1].start - right[1].start)
   let cursor = start
   let result = ''
+  const keys: string[] = []
   for (const [key, replacement] of replacements) {
     if (replacement.start < cursor) {
       throw new OoxmlError('invalid-document-edit')
@@ -278,10 +320,10 @@ function materialiseRun(overlay: XmlOverlay, run: TextRunAnchor) {
     result += overlay.source.slice(cursor, replacement.start)
     result += replacement.value
     cursor = replacement.end
-    overlay.replacements.delete(key)
+    keys.push(key)
   }
   result += overlay.source.slice(cursor, end)
-  return result
+  return { xml: result, keys }
 }
 
 function hasPendingOverlay(overlay: XmlOverlay, runId: string) {

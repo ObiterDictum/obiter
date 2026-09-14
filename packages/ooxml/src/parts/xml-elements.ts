@@ -80,6 +80,16 @@ export function isWord(element: XmlElement, localName: string) {
   )
 }
 
+// One owner for break classification: the parser's text extraction, the model
+// anchors and the text-replacement path must all agree that a w:br is text
+// (bears a newline) only when its type is textWrapping or absent. Every other
+// type is structure: it consumes no text offset and must survive a text edit.
+export function isTextWrappingBreak(element: XmlElement) {
+  if (!isWord(element, 'br')) return false
+  const type = attributeValue(element, WORD_NAMESPACE, 'type')
+  return type === undefined || type === 'textWrapping'
+}
+
 export function isDescendantOf(element: XmlElement, ancestor: XmlElement) {
   let parent = element.parent
   while (parent) {
