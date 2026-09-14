@@ -194,7 +194,7 @@ const verifyRoute = createRoute({
   component: DesktopVerifyRoute,
 })
 
-function DesktopVerifyRoute() {
+export function DesktopVerifyRoute() {
   return <VerifyRouteView />
 }
 

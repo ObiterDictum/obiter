@@ -1,8 +1,12 @@
 // @vitest-environment jsdom
 import { QueryClient } from '@tanstack/react-query'
-import { LegalSearchView } from '@obiter/app-shell'
+import { LegalSearchView, VerifyRouteView } from '@obiter/app-shell'
 import { describe, expect, it } from 'vitest'
-import { createAppRouter, DESKTOP_SHARED_VIEW_PATHS } from './router'
+import {
+  createAppRouter,
+  DESKTOP_SHARED_VIEW_PATHS,
+  DesktopVerifyRoute,
+} from './router'
 import { DesktopSearchPage } from '../../pages/search'
 
 describe('desktop router parity with web shared views', () => {
@@ -11,6 +15,13 @@ describe('desktop router parity with web shared views', () => {
     // rather than carry a parallel search view (as web does at /search).
     const element = DesktopSearchPage()
     expect(element.type).toBe(LegalSearchView)
+  })
+
+  it('renders the shared VerifyRouteView on the desktop verify page', () => {
+    // Verification is one surface: the run panel and findings list must be the
+    // app-shell implementation on desktop, not a desktop copy.
+    const element = DesktopVerifyRoute()
+    expect(element.type).toBe(VerifyRouteView)
   })
 
   it('registers every shared-view path the web app exposes', () => {
