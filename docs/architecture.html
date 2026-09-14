@@ -1086,7 +1086,7 @@
                   class="node"
                   href="https://github.com/ObiterDictum/obiter/blob/dev/packages/contracts/src/index.ts"
                   ><b>@obiter/contracts</b
-                  ><span>Zod schemas, error codes</span></a
+                  ><span>Zod schemas, error codes, citation grammar</span></a
                 >
                 <a
                   class="node"
@@ -2360,8 +2360,10 @@
                 Pure domain vocabulary for Verify: the citation and its
                 normalized identity, the immutable draft subject and its UTF-16
                 draft locations, evidence references into public source
-                material, and the conservative finding status model. No storage,
-                network, provider calls or UI.
+                material, the conservative finding status model, and the two
+                pure decisions (V2 authority existence, V3 citation resolution)
+                that map a lookup or a resolution onto it. No storage, network,
+                provider calls or UI.
               </p>
               <dl class="kv">
                 <dt>Exports</dt>
@@ -2371,7 +2373,8 @@
                   createEvidenceReferenceId · verificationFindingSchema ·
                   findingStatusSchema · requiresReview ·
                   createVerificationFindingId · draftLocationSchema ·
-                  verificationSubjectSchema
+                  verificationSubjectSchema · decideAuthorityExistence ·
+                  decideCitationResolution · normalizedCitationFromResolution
                 </dd>
                 <dt>Depends on</dt>
                 <dd>
@@ -2473,14 +2476,18 @@
               <p>
                 Single source of truth for request and response shapes, enums
                 and error codes. Never copy a shape between an app and a
-                service; put it here.
+                service; put it here. Also owns the two citation grammars, the
+                canonical <code>/ln/</code> path and the neutral citation, so
+                draft extraction and verification resolution cannot disagree
+                about what a citation is.
               </p>
               <dl class="kv">
                 <dt>Holds</dt>
                 <dd>
                   apiErrorCodeSchema · apiErrorResponseSchema ·
                   spanCategorySchema · redactionRunStatusSchema · MeResponse ·
-                  UserRole
+                  UserRole · parseLegislationActPath ·
+                  parseLegislationProvisionPath · parseNeutralCitationCandidate
                 </dd>
               </dl>
             </article>
@@ -5693,6 +5700,15 @@
                   <td class="id">
                     packages/verification-core, pure values; the V2+ API, worker
                     and UI consume it
+                  </td>
+                </tr>
+                <tr>
+                  <td>Raw citation text to a canonical identity</td>
+                  <td class="id">
+                    packages/verification-core for the result vocabulary and
+                    decision; the store-backed resolver is
+                    services/api/src/citation-resolution.ts, and the grammars
+                    are packages/contracts
                   </td>
                 </tr>
                 <tr>

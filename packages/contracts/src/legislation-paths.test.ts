@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   createCanonicalActPath,
   createCanonicalProvisionPath,
+  firstUkpgaYear,
+  isCanonicalActYear,
   parseLegislationActPath,
   parseLegislationProvisionPath,
 } from './legislation-paths'
@@ -56,5 +58,48 @@ describe('legislation provision paths', () => {
     expect(parseLegislationActPath('/ln/uksi/2020/1')).toBeNull()
     expect(parseLegislationActPath('/ln/ukpga/2010')).toBeNull()
     expect(parseLegislationActPath('/ln/not-an-id')).toBeNull()
+  })
+
+  it('refuses a non-canonical Act year in a pasted path', () => {
+    // The canonical identity grammar is the same one the free-text chapter
+    // classifier applies, so a zero-padded or pre-1801 year is not canonical
+    // here either rather than producing an identity Number() would rewrite.
+    for (const path of [
+      '/ln/ukpga/0204/1',
+      '/ln/ukpga/0000/1',
+      '/ln/ukpga/1800/1',
+      '/ln/ukpga/0204/1/section/2',
+    ]) {
+      expect(parseLegislationActPath(path)).toBeNull()
+      expect(parseLegislationProvisionPath(path)).toBeNull()
+    }
+  })
+})
+
+describe('canonical Act years', () => {
+  it('states the first supported year once', () => {
+    expect(firstUkpgaYear).toBe(1801)
+  })
+
+  it.each(['1801', '1998', '2024', '2066', '9999'])(
+    'accepts the four-digit year %s',
+    (year) => {
+      expect(isCanonicalActYear(year)).toBe(true)
+    },
+  )
+
+  it.each([
+    '0204',
+    '0000',
+    '0999',
+    '1800',
+    '999',
+    '10000',
+    '20 4',
+    'abcd',
+    '',
+    ' 2024',
+  ])('refuses %j', (year) => {
+    expect(isCanonicalActYear(year)).toBe(false)
   })
 })
