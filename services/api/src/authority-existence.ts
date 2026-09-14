@@ -11,7 +11,8 @@ import {
   createPostgresLegalAuthoritySourceStore,
   findStoredAuthorityIdsByNeutralCitation,
   MalformedStoredRecordError,
-  type StoredLegalAuthorityRecord,
+  selectAuthorityCarriers,
+  type StoredAuthorityCarrier,
 } from './routes/legal-search/source-store'
 import {
   getLegislationDocument,
@@ -145,32 +146,41 @@ async function lookupCaseLaw(
     if (ids.length === 0) return { outcome: 'not_held', missing: 'authority' }
 
     const store = createPostgresLegalAuthoritySourceStore(pool)
-    const records: StoredLegalAuthorityRecord[] = []
+    const carriers: StoredAuthorityCarrier[] = []
     for (const id of ids) {
       const record = await readStore(() => store.get(id))
-      if (record) records.push(record)
+      if (record) {
+        carriers.push({
+          id: record.summary.id,
+          withdrawn: record.withdrawn != null,
+        })
+      }
     }
 
-    const live = records.filter((record) => !record.withdrawn)
-    const [only, ...rest] = live
-    if (!only) {
-      return records.length > 0
-        ? { outcome: 'unavailable', reason: 'source_withdrawn' }
-        : { outcome: 'not_held', missing: 'authority' }
-    }
-    if (rest.length > 0) return { outcome: 'ambiguous' }
-    if (only.summary.id !== citation.sourceId) {
-      return { outcome: 'unavailable', reason: 'identity_mismatch' }
-    }
-    return {
-      outcome: 'held',
-      evidence: [
-        {
-          sourceType: 'judgment',
-          granularity: 'document',
-          sourceId: only.summary.id,
-        },
-      ],
+    // One rule, shared with V3, decides what a live or withdrawn carrier set
+    // means; this function only maps the selection onto its verdict.
+    const selection = selectAuthorityCarriers(carriers)
+    switch (selection.kind) {
+      case 'none':
+        return { outcome: 'not_held', missing: 'authority' }
+      case 'ambiguous':
+        return { outcome: 'ambiguous' }
+      case 'no_live':
+        return { outcome: 'unavailable', reason: 'source_withdrawn' }
+      case 'single_live':
+        if (selection.id !== citation.sourceId) {
+          return { outcome: 'unavailable', reason: 'identity_mismatch' }
+        }
+        return {
+          outcome: 'held',
+          evidence: [
+            {
+              sourceType: 'judgment',
+              granularity: 'document',
+              sourceId: selection.id,
+            },
+          ],
+        }
     }
   } catch (error) {
     if (!(error instanceof StoreReadError)) throw error

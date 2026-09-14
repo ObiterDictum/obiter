@@ -1,5 +1,6 @@
 export * from './authority-existence'
 export * from './citation'
+export * from './citation-resolution'
 export * from './evidence'
 export * from './finding'
 export * from './identity'
