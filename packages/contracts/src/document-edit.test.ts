@@ -392,6 +392,26 @@ describe('document edit contracts', () => {
     ).toBe(false)
   })
 
+  it('normalises CRLF and lone CR edit text to LF', () => {
+    const parsed = documentEditRequestSchema.parse({
+      baseVersionId: 'ver_1',
+      operations: [
+        { type: 'replace_run_text', runId: 'run_1', text: 'a\r\nb\rc' },
+        {
+          type: 'insert_paragraph_after',
+          paragraphId: 'para_1',
+          runs: [{ text: 'x\r\ny' }],
+        },
+      ],
+    })
+    expect(parsed.operations[0]).toEqual({
+      type: 'replace_run_text',
+      runId: 'run_1',
+      text: 'a\nb\nc',
+    })
+    expect(parsed.operations[1]).toMatchObject({ runs: [{ text: 'x\ny' }] })
+  })
+
   it('replays a persisted pre-property-family emphasis operation', () => {
     expect(
       documentEditRequestSchema.parse({

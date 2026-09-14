@@ -58,6 +58,17 @@ const editTextSchema = z
   .refine(isValidXmlText, {
     message: 'Document edit text contains an unsupported XML character.',
   })
+  .transform(normaliseEditText)
+
+/**
+ * One text representation at the boundary. A CRLF pair and a lone CR are the
+ * same logical break as LF, so the model never carries a \r that serialised
+ * OOXML cannot reproduce. See docs/architecture.md, "Document edit operation
+ * batches".
+ */
+export function normaliseEditText(value: string) {
+  return value.replace(/\r\n?/gu, '\n')
+}
 
 const styleIdSchema = editIdSchema.nullable()
 const colourSchema = z
@@ -331,6 +342,11 @@ export function insertParagraphRuns(
   return operation.runs ?? [{ text: operation.text ?? '' }]
 }
 
+/**
+ * Batch semantics - the coordinate space operations address, replacement
+ * precedence, overlap resolution and atomic failure - are normative in
+ * docs/architecture.md, "Document edit operation batches".
+ */
 export const documentEditOperationsSchema = z
   .array(documentEditOperationSchema)
   .min(1)
