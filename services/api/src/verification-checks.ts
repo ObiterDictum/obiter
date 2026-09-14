@@ -21,8 +21,10 @@ import type {
   ExtractedQuote,
 } from './verification-extraction'
 
-function unresolvedCitation(): NormalizedCitation {
-  return { kind: 'unresolved', reason: 'not_a_citation' }
+function unresolvedCitation(
+  reason: 'not_a_citation' | 'ambiguous' = 'not_a_citation',
+): NormalizedCitation {
+  return { kind: 'unresolved', reason }
 }
 
 function quoteFinding(result: QuoteCheckResult, request: QuoteFidelityRequest) {
@@ -48,8 +50,10 @@ export async function collectVerificationFindings(
   subject: VerificationSubject,
   citations: ExtractedCitation[],
   quotes: ExtractedQuote[],
+  options: { onBoundary?: () => Promise<void> } = {},
 ) {
   const findings: VerificationFinding[] = []
+  await options.onBoundary?.()
   const resolutions = await resolveCitationCandidates(
     pool,
     citations.map((citation) => ({
@@ -64,6 +68,8 @@ export async function collectVerificationFindings(
   for (const citation of citations) {
     const location = {
       paragraphId: citation.paragraphId,
+      storyKind: citation.storyKind,
+      storyPartName: citation.storyPartName,
       start: citation.start,
       end: citation.end,
     }
@@ -94,15 +100,20 @@ export async function collectVerificationFindings(
       rawText: quote.rawText,
       location: {
         paragraphId: quote.paragraphId,
+        storyKind: quote.storyKind,
+        storyPartName: quote.storyPartName,
         start: quote.start,
         end: quote.end,
       },
     },
     normalizedCitation: quote.attributedCitationId
       ? (normalizedById.get(quote.attributedCitationId) ?? unresolvedCitation())
-      : unresolvedCitation(),
+      : unresolvedCitation(
+          quote.attribution === 'ambiguous' ? 'ambiguous' : 'not_a_citation',
+        ),
   }))
   for (let index = 0; index < quoteRequests.length;) {
+    await options.onBoundary?.()
     const batch = quoteRequests.slice(index, index + maxQuoteFidelityBatchSize)
     const results = await checkQuoteFidelities(pool, batch)
     for (const [offset, result] of results.entries()) {

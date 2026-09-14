@@ -3,6 +3,7 @@ import type { VerificationFindingView } from '@obiter/contracts'
 import {
   verificationReasonLabel,
   verificationStateLabel,
+  verificationStoryLabel,
   verificationTypeLabel,
 } from '../verification-copy'
 
@@ -43,6 +44,11 @@ export function VerificationFindingsList({
         <li key={finding.id} className="flex flex-col gap-2 py-3">
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge tone="neutral">{verificationTypeLabel(finding.type)}</Badge>
+            {verificationStoryLabel(finding.location.storyKind) ? (
+              <Badge tone="neutral">
+                {verificationStoryLabel(finding.location.storyKind)}
+              </Badge>
+            ) : null}
             <Badge tone={stateTone(finding.state)}>
               {verificationStateLabel(finding.state)}
             </Badge>

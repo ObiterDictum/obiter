@@ -16,8 +16,11 @@ import { collectVerificationFindings } from './verification-checks'
 import {
   completeVerificationRun,
   insertVerificationRun,
-  lockVerificationRunForVersion,
+  interruptVerificationRun,
+  leaseIsLive,
+  lockLiveVerificationRunForVersion,
   markVerificationRunRunning,
+  renewVerificationRunLease,
   replaceVerificationFindings,
 } from './verification-database'
 import {
@@ -86,12 +89,14 @@ function auditMetadata(
   versionId: string,
   status: string,
   findingCount: number | null,
+  failureCode: VerificationFailureCode | null = null,
 ) {
   return {
     documentId,
     versionId,
     status,
     findingCount,
+    failureCode,
   }
 }
 
@@ -108,6 +113,7 @@ export async function createAndExecuteVerificationRun(input: {
   const client = await input.pool.connect()
   let runId: string | null = null
   let locked: LockedVersion | VerificationRunDenied
+  const leaseToken = crypto.randomUUID()
   try {
     await client.query('begin')
     locked = await lockRunnableVersion(
@@ -120,27 +126,56 @@ export async function createAndExecuteVerificationRun(input: {
       await client.query('rollback')
       return { ok: false, denied: locked }
     }
-    const existing = await lockVerificationRunForVersion(client, {
+    const existing = await lockLiveVerificationRunForVersion(client, {
       organisationId: input.user.organisationId,
       documentId: locked.documentId,
       documentVersionId: locked.versionId,
     })
-    if (existing?.status === 'completed' || existing?.status === 'running') {
+    if (existing?.status === 'running' && leaseIsLive(existing)) {
+      // A genuinely active request is never stolen: its lease still covers now.
       await client.query('commit')
       return { ok: true, runId: existing.id }
     }
-    runId =
-      existing?.id ??
-      (await insertVerificationRun(client, {
+    if (existing?.status === 'running') {
+      // A `running` row whose lease has expired has no live executor. Mark it
+      // interrupted (monotonic, findings dropped) and start a fresh run rather
+      // than silently reusing partially executed state.
+      await interruptVerificationRun(client, {
+        organisationId: input.user.organisationId,
+        runId: existing.id,
+      })
+      await appendAuditLog(client, {
+        organisationId: input.user.organisationId,
+        userId: input.user.id,
+        entityType: 'verification_run',
+        entityId: existing.id,
+        action: 'verification.run_fail',
+        metadata: auditMetadata(
+          locked.documentId,
+          locked.versionId,
+          'failed',
+          null,
+          'interrupted',
+        ),
+        requestId: input.requestId,
+      })
+    }
+    if (existing?.status === 'queued') {
+      // A queued row has no execution behind it yet, so it is resumed rather
+      // than replaced.
+      runId = existing.id
+    } else {
+      runId = await insertVerificationRun(client, {
         id: `vrun_${crypto.randomUUID()}`,
         organisationId: input.user.organisationId,
         matterId: locked.matterId,
         documentId: locked.documentId,
         documentVersionId: locked.versionId,
         createdBy: input.user.id,
-      }))
+      })
+    }
     if (!runId) {
-      const raced = await lockVerificationRunForVersion(client, {
+      const raced = await lockLiveVerificationRunForVersion(client, {
         organisationId: input.user.organisationId,
         documentId: locked.documentId,
         documentVersionId: locked.versionId,
@@ -149,7 +184,7 @@ export async function createAndExecuteVerificationRun(input: {
       if (!raced) return { ok: false, denied: { reason: 'not_found' } }
       return { ok: true, runId: raced.id }
     }
-    if (!existing) {
+    if (!existing || existing.status === 'running') {
       await appendAuditLog(client, {
         organisationId: input.user.organisationId,
         userId: input.user.id,
@@ -165,7 +200,12 @@ export async function createAndExecuteVerificationRun(input: {
         requestId: input.requestId,
       })
     }
-    await markVerificationRunRunning(client, input.user.organisationId, runId)
+    await markVerificationRunRunning(
+      client,
+      input.user.organisationId,
+      runId,
+      leaseToken,
+    )
     await client.query('commit')
   } catch (error) {
     await client.query('rollback')
@@ -183,6 +223,7 @@ export async function createAndExecuteVerificationRun(input: {
     storage: input.storage,
     user: input.user,
     runId,
+    leaseToken,
     version: locked,
     requestId: input.requestId,
   })
@@ -193,6 +234,7 @@ async function executeVerificationRun(input: {
   storage: StorageService
   user: AuthenticatedOrgUser
   runId: string
+  leaseToken: string
   version: LockedVersion
   requestId: string
 }): Promise<{ ok: true; runId: string }> {
@@ -200,6 +242,12 @@ async function executeVerificationRun(input: {
     documentId: input.version.documentId,
     versionId: input.version.versionId,
   }
+  const renew = () =>
+    renewVerificationRunLease(input.pool, {
+      organisationId: input.user.organisationId,
+      runId: input.runId,
+      leaseToken: input.leaseToken,
+    })
   let failureCode: VerificationFailureCode | null = null
   let findings: VerificationFinding[] = []
   try {
@@ -210,12 +258,17 @@ async function executeVerificationRun(input: {
       matterDocumentId: input.version.documentId,
       objectKey: input.version.objectKey,
     })
+    // Renew after the model read, the slowest dependency, and then at each
+    // batch boundary inside the checks. Renewal happens at explicit execution
+    // boundaries, never on an interval, so a hung process cannot hold the lease.
+    await renew()
     const extracted = extractVerificationCandidates(model)
     findings = await collectVerificationFindings(
       input.pool,
       subject,
       extracted.citations,
       extracted.quotes,
+      { onBoundary: renew },
     )
   } catch (error) {
     if (error instanceof VerificationExtractionLimitError) {
@@ -235,18 +288,29 @@ async function executeVerificationRun(input: {
   const client = await input.pool.connect()
   try {
     await client.query('begin')
+    const completed = await completeVerificationRun(client, {
+      organisationId: input.user.organisationId,
+      runId: input.runId,
+      status: failureCode ? 'failed' : 'completed',
+      failureCode,
+      leaseToken: input.leaseToken,
+    })
+    if (!completed) {
+      // This executor's lease was reclaimed while it ran. The replacement owns
+      // the version now; this attempt must not overwrite it or write findings.
+      await client.query('rollback')
+      console.warn('verification_run_reclaimed', {
+        runId: input.runId,
+        requestId: input.requestId,
+      })
+      return { ok: true, runId: input.runId }
+    }
     await replaceVerificationFindings(
       client,
       input.user.organisationId,
       input.runId,
       failureCode ? [] : findings,
     )
-    await completeVerificationRun(client, {
-      organisationId: input.user.organisationId,
-      runId: input.runId,
-      status: failureCode ? 'failed' : 'completed',
-      failureCode,
-    })
     await appendAuditLog(client, {
       organisationId: input.user.organisationId,
       userId: input.user.id,
@@ -260,6 +324,7 @@ async function executeVerificationRun(input: {
         input.version.versionId,
         failureCode ? 'failed' : 'completed',
         failureCode ? null : findings.length,
+        failureCode,
       ),
       requestId: input.requestId,
     })

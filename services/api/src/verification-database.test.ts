@@ -73,31 +73,80 @@ describe('verification database access', () => {
 
   it('binds the viewer id to $2 when listing, and the document to $3', async () => {
     const withoutDocument = capturingPool()
-    await listVerificationRuns(withoutDocument.pool, user)
+    await listVerificationRuns(withoutDocument.pool, user, {
+      limit: 25,
+      cursor: null,
+    })
     const [listCall] = withoutDocument.calls
-    expect(listCall?.values).toEqual(['org_1', 'usr_1'])
+    expect(listCall?.values).toEqual(['org_1', 'usr_1', 26])
     expect(listCall?.text).toContain('run.organisation_id = $1')
     expect(listCall?.text).toContain('matter.created_by = $2')
     expect(listCall?.text).toContain('share.grantee_user_id = $2')
     expect(listCall?.text).not.toContain('run.document_id = $3')
+    // Deterministic keyset ordering with an id tiebreaker, bounded server-side.
+    expect(listCall?.text).toContain(
+      'order by run.created_at desc, run.id desc',
+    )
+    expect(listCall?.text).toContain('limit $3')
 
     const withDocument = capturingPool()
-    await listVerificationRuns(withDocument.pool, user, 'doc_1')
+    await listVerificationRuns(withDocument.pool, user, {
+      documentId: 'doc_1',
+      limit: 25,
+      cursor: null,
+    })
     const [documentCall] = withDocument.calls
-    expect(documentCall?.values).toEqual(['org_1', 'usr_1', 'doc_1'])
+    expect(documentCall?.values).toEqual(['org_1', 'usr_1', 'doc_1', 26])
     expect(documentCall?.text).toContain('matter.created_by = $2')
     expect(documentCall?.text).toContain('run.document_id = $3')
+  })
+
+  it('scopes a keyset page after the cursor with the id tiebreaker', async () => {
+    const { pool, calls } = capturingPool()
+    await listVerificationRuns(pool, user, {
+      documentId: 'doc_1',
+      limit: 10,
+      cursor: { createdAt: '2026-09-14T00:00:00.000Z', id: 'vrun_9' },
+    })
+    const [call] = calls
+    expect(call?.values).toEqual([
+      'org_1',
+      'usr_1',
+      'doc_1',
+      '2026-09-14T00:00:00.000Z',
+      'vrun_9',
+      11,
+    ])
+    expect(call?.text).toContain(
+      '(run.created_at, run.id) < ($4::timestamptz, $5)',
+    )
+  })
+
+  it('never folds the findings table into a run-list aggregate', async () => {
+    const { pool, calls } = capturingPool()
+    await listVerificationRuns(pool, user, { limit: 25, cursor: null })
+    const [call] = calls
+    expect(call?.text).not.toContain('group by run_id, organisation_id')
+    expect(call?.text).toContain('left join lateral')
+    expect(call?.text).toContain('finding.run_id = run.id')
   })
 
   it('parses persisted finding payloads through the V1 schema', async () => {
     const finding = clearCaseLawFinding()
     const { pool, calls } = capturingPool([{ payload_json: finding }])
-    const findings = await listVerificationFindings(pool, user, 'vrun_1')
-    expect(findings).toEqual([finding])
+    const page = await listVerificationFindings(pool, user, 'vrun_1', {
+      limit: 50,
+      cursor: null,
+    })
+    expect(page.findings).toEqual([finding])
+    expect(page.nextCursor).toBeNull()
     const [call] = calls
-    expect(call?.values).toEqual(['vrun_1', 'org_1', 'usr_1'])
+    expect(call?.values).toEqual(['vrun_1', 'org_1', 'usr_1', 51])
     expect(call?.text).toContain('matter.created_by = $3')
     expect(call?.text).toContain('share.grantee_user_id = $3')
+    expect(call?.text).toContain(
+      'order by finding.created_at, finding.finding_id',
+    )
   })
 
   it('refuses a persisted payload that is not a V1 finding', async () => {
@@ -105,7 +154,10 @@ describe('verification database access', () => {
       { payload_json: { ...clearCaseLawFinding(), explanation: '' } },
     ])
     await expect(
-      listVerificationFindings(pool, user, 'vrun_1'),
+      listVerificationFindings(pool, user, 'vrun_1', {
+        limit: 50,
+        cursor: null,
+      }),
     ).rejects.toThrow()
   })
 })

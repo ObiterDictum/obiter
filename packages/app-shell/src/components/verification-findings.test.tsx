@@ -46,6 +46,34 @@ describe('VerificationFindingsList', () => {
     expect(screen.queryByText('quote_fidelity')).toBeNull()
   })
 
+  it('names the story a footnote or endnote finding comes from', () => {
+    const footnote: VerificationFindingView = {
+      ...finding,
+      id: 'vf:footnote',
+      location: {
+        paragraphId: 'p1',
+        storyKind: 'footnotes',
+        storyPartName: 'word/footnotes.xml',
+        start: 0,
+        end: 22,
+      },
+    }
+    const endnote: VerificationFindingView = {
+      ...footnote,
+      id: 'vf:endnote',
+      location: {
+        paragraphId: 'p1',
+        storyKind: 'endnotes',
+        storyPartName: 'word/endnotes.xml',
+        start: 0,
+        end: 22,
+      },
+    }
+    render(<VerificationFindingsList findings={[footnote, endnote]} />)
+    expect(screen.getByText('Footnote')).toBeTruthy()
+    expect(screen.getByText('Endnote')).toBeTruthy()
+  })
+
   it('explains an empty completed run without claiming correctness', () => {
     render(<VerificationFindingsList findings={[]} />)
     expect(

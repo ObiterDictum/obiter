@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 import type {
   VerificationFindingsResponse,
   VerificationRun,
@@ -21,6 +26,10 @@ export function verificationFindingsQueryKey(runId: string) {
   return [...verificationRunsQueryKey, 'findings', runId] as const
 }
 
+function pageQuery(cursor: string | null) {
+  return cursor ? `?cursor=${encodeURIComponent(cursor)}` : ''
+}
+
 export function useDocumentVerificationRuns(documentId: string) {
   return useQuery({
     queryKey: documentVerificationRunsQueryKey(documentId),
@@ -37,25 +46,44 @@ export function useDocumentVerificationRuns(documentId: string) {
   })
 }
 
+/**
+ * The organisation run list is keyset-paginated, so it is an infinite query:
+ * the first page loads with the view and each continuation is an explicit,
+ * accessible "Load more" action rather than an unbounded response.
+ */
 export function useOrganisationVerificationRuns(enabled: boolean) {
-  return useQuery({
+  const query = useInfiniteQuery({
     queryKey: verificationRunsQueryKey,
-    queryFn: () =>
-      apiFetch<VerificationRunListResponse>('/api/verification-runs'),
+    queryFn: ({ pageParam }) =>
+      apiFetch<VerificationRunListResponse>(
+        `/api/verification-runs${pageQuery(pageParam)}`,
+      ),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
     enabled,
     staleTime: 15_000,
   })
+  return {
+    ...query,
+    runs: query.data?.pages.flatMap((page) => page.runs) ?? [],
+  }
 }
 
 export function useVerificationFindings(runId: string | null) {
-  return useQuery({
+  const query = useInfiniteQuery({
     queryKey: verificationFindingsQueryKey(runId ?? ''),
-    queryFn: () =>
+    queryFn: ({ pageParam }) =>
       apiFetch<VerificationFindingsResponse>(
-        `/api/verification-runs/${runId}/findings`,
+        `/api/verification-runs/${runId}/findings${pageQuery(pageParam)}`,
       ),
+    initialPageParam: null as string | null,
+    getNextPageParam: (last) => last.nextCursor,
     enabled: runId != null,
   })
+  return {
+    ...query,
+    findings: query.data?.pages.flatMap((page) => page.findings) ?? [],
+  }
 }
 
 export function useCreateVerificationRun(documentId: string) {

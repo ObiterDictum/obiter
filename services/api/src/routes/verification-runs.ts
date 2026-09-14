@@ -12,8 +12,31 @@ import {
   listVerificationRuns,
 } from '../verification-database'
 import { createAndExecuteVerificationRun } from '../verification-execution'
+import {
+  decodeVerificationCursor,
+  parseRunListLimit,
+  resolveFindingsListLimit,
+  resolveRunListLimit,
+  VerificationListLimitError,
+} from '../verification-pagination'
 import { toPublicFinding } from '../verification-present'
 import { errorResponse } from './redact-shared'
+
+/** The run and finding list pagination contract, validated together so a
+ * malformed limit or cursor is a 400 rather than an unbounded query. */
+function listQuery(c: { req: { query: (key: string) => string | undefined } }) {
+  const rawCursor = c.req.query('cursor')
+  const cursor =
+    rawCursor === undefined || rawCursor === ''
+      ? null
+      : decodeVerificationCursor(rawCursor)
+  if (rawCursor && !cursor) return { ok: false as const }
+  return {
+    ok: true as const,
+    cursor,
+    rawLimit: parseRunListLimit(c.req.query('limit')),
+  }
+}
 
 export function createVerificationRunRoutes(
   pool: Pool,
@@ -69,19 +92,54 @@ export function createVerificationRunRoutes(
   routes.get('/api/documents/:documentId/verification-runs', async (c) => {
     const user = await ensureOrgUser(c, pool)
     if (user instanceof Response) return user
-    const runs = await listVerificationRuns(
-      pool,
-      user,
-      c.req.param('documentId'),
-    )
-    return c.json({ runs })
+    const query = listQuery(c)
+    let limit: number
+    try {
+      limit = resolveRunListLimit(query.ok ? query.rawLimit : undefined)
+    } catch (error) {
+      if (!(error instanceof VerificationListLimitError)) throw error
+      return errorResponse(c, 'validation_failed', error.message, 400)
+    }
+    if (!query.ok) {
+      return errorResponse(
+        c,
+        'validation_failed',
+        'The cursor is malformed.',
+        400,
+      )
+    }
+    const page = await listVerificationRuns(pool, user, {
+      documentId: c.req.param('documentId'),
+      limit,
+      cursor: query.cursor,
+    })
+    return c.json(page)
   })
 
   routes.get('/api/verification-runs', async (c) => {
     const user = await ensureOrgUser(c, pool)
     if (user instanceof Response) return user
-    const runs = await listVerificationRuns(pool, user)
-    return c.json({ runs })
+    const query = listQuery(c)
+    let limit: number
+    try {
+      limit = resolveRunListLimit(query.ok ? query.rawLimit : undefined)
+    } catch (error) {
+      if (!(error instanceof VerificationListLimitError)) throw error
+      return errorResponse(c, 'validation_failed', error.message, 400)
+    }
+    if (!query.ok) {
+      return errorResponse(
+        c,
+        'validation_failed',
+        'The cursor is malformed.',
+        400,
+      )
+    }
+    const page = await listVerificationRuns(pool, user, {
+      limit,
+      cursor: query.cursor,
+    })
+    return c.json(page)
   })
 
   routes.get('/api/verification-runs/:runId', async (c) => {
@@ -111,14 +169,35 @@ export function createVerificationRunRoutes(
         404,
       )
     }
-    const findings = await listVerificationFindings(
+    const query = listQuery(c)
+    let limit: number
+    try {
+      limit = resolveFindingsListLimit(query.ok ? query.rawLimit : undefined)
+    } catch (error) {
+      if (!(error instanceof VerificationListLimitError)) throw error
+      return errorResponse(c, 'validation_failed', error.message, 400)
+    }
+    if (!query.ok) {
+      return errorResponse(
+        c,
+        'validation_failed',
+        'The cursor is malformed.',
+        400,
+      )
+    }
+    const page = await listVerificationFindings(
       pool,
       user,
       c.req.param('runId'),
+      {
+        limit,
+        cursor: query.cursor,
+      },
     )
     return c.json({
       run,
-      findings: findings.map(toPublicFinding),
+      findings: page.findings.map(toPublicFinding),
+      nextCursor: page.nextCursor,
     })
   })
 

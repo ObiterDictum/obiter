@@ -36,6 +36,7 @@ import { extractAuthorities } from '../../document-authorities'
 import { DocumentModelPage } from './model-view'
 import { InsertAuthorityDialog } from './insert-authority-dialog'
 import { DocumentWorkspaceToolbar } from './toolbar'
+import { usePublishDocumentDirty } from './document-draft-status'
 import { WorkspaceSidePanels } from './workspace-side-panels'
 import { useDocumentPresenceHeartbeat } from './use-presence-heartbeat'
 import { useWorkspaceDrafts } from './use-workspace-drafts'
@@ -114,6 +115,7 @@ export function DocxWorkspace({
       )
     : false
   const saving = editDocument.isPending || mergeDocument.isPending
+  usePublishDocumentDirty(dirty)
   const {
     selectedParagraphId,
     restoreCaret,

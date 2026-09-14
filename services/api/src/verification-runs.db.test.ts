@@ -154,7 +154,7 @@ describe('verification run persistence', () => {
            status, created_by, created_at
          ) values ($1, $2, $3, $4, $5, 'queued', $6, now())
          on conflict (organisation_id, document_id, document_version_id)
-           where deleted_at is null
+           where deleted_at is null and status in ('queued', 'running')
          do nothing`,
         [
           `vrun_${seed.suffix}_b${index}`,
@@ -183,7 +183,7 @@ describe('verification run persistence', () => {
          status, created_by, created_at, started_at, completed_at
        ) values ($1, $2, $3, $4, $5, 'completed', $6, now(), now(), now())
        on conflict (organisation_id, document_id, document_version_id)
-         where deleted_at is null
+         where deleted_at is null and status in ('queued', 'running')
        do nothing`,
       [
         runId,
@@ -228,7 +228,7 @@ describe('verification run persistence', () => {
     expect(createBody).not.toContain(seed.orgB)
   })
 
-  it('collapses duplicate creates onto one run for the immutable version', async () => {
+  it('creates one run per attempt and leaves no live row behind', async () => {
     const version = `ver_iso_${seed.suffix}_a2`
     await insertReadyVersion(pool, seed, version, 2)
     extraVersions.push(version)
@@ -248,9 +248,12 @@ describe('verification run persistence', () => {
     )
 
     expect(first.run.documentVersionId).toBe(version)
-    expect(first.run.id).toBe(second.run.id)
+    // A terminal attempt leaves the live index, so the next request is a fresh
+    // run rather than a reuse of completed state.
+    expect(first.run.id).not.toBe(second.run.id)
     expect(first.run.status).toBe('failed')
     expect(first.run.failureCode).toBe('model_unavailable')
+    expect(second.run.status).toBe('failed')
 
     const rows = await pool.query<{ id: string }>(
       `select id from verification_runs
@@ -259,16 +262,26 @@ describe('verification run persistence', () => {
          and deleted_at is null`,
       [seed.orgA, version],
     )
-    expect(rows.rows).toHaveLength(1)
-
-    const creates = await pool.query<{ count: string }>(
-      `select count(*)::text as count from audit_logs
-       where entity_type = 'verification_run'
-         and entity_id = $1
-         and action = 'verification.run_create'`,
-      [first.run.id],
+    expect(rows.rows).toHaveLength(2)
+    const live = await pool.query(
+      `select id from verification_runs
+       where organisation_id = $1
+         and document_version_id = $2
+         and status in ('queued', 'running')`,
+      [seed.orgA, version],
     )
-    expect(creates.rows[0]?.count).toBe('1')
+    expect(live.rows).toHaveLength(0)
+
+    for (const run of [first.run, second.run]) {
+      const creates = await pool.query<{ count: string }>(
+        `select count(*)::text as count from audit_logs
+         where entity_type = 'verification_run'
+           and entity_id = $1
+           and action = 'verification.run_create'`,
+        [run.id],
+      )
+      expect(creates.rows[0]?.count).toBe('1')
+    }
   })
 
   it('refuses a version id that belongs to another document', async () => {
@@ -342,6 +355,7 @@ describe('verification run persistence', () => {
     for (const row of audit.rows) {
       expect(Object.keys(row.metadata_json).sort()).toEqual([
         'documentId',
+        'failureCode',
         'findingCount',
         'status',
         'versionId',

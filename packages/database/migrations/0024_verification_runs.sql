@@ -10,6 +10,12 @@ create table if not exists verification_runs (
   created_at timestamptz not null default now(),
   started_at timestamptz,
   completed_at timestamptz,
+  -- A live run owns a bounded lease. `lease_expires_at` says when the current
+  -- executor's claim stops being trustworthy, and `lease_token` is the fence
+  -- that stops a reclaimed executor from completing over its replacement. A
+  -- terminal row carries no lease.
+  lease_expires_at timestamptz,
+  lease_token text,
   deleted_at timestamptz,
   deleted_by text references users(id),
   constraint verification_runs_id_prefix_check check (id like 'vrun_%'),
@@ -21,7 +27,8 @@ create table if not exists verification_runs (
     or failure_code in (
       'model_unavailable',
       'version_not_ready',
-      'execution_failed'
+      'execution_failed',
+      'interrupted'
     )
   ),
   constraint verification_runs_status_shape_check check (
@@ -58,13 +65,13 @@ create table if not exists verification_runs (
 
 create unique index if not exists verification_runs_one_live_per_version_idx
   on verification_runs (organisation_id, document_id, document_version_id)
-  where deleted_at is null;
+  where deleted_at is null and status in ('queued', 'running');
 
 create index if not exists verification_runs_organisation_created_idx
-  on verification_runs (organisation_id, created_at desc);
+  on verification_runs (organisation_id, created_at desc, id desc);
 
 create index if not exists verification_runs_document_idx
-  on verification_runs (organisation_id, document_id, created_at desc);
+  on verification_runs (organisation_id, document_id, created_at desc, id desc);
 
 create table if not exists verification_findings (
   run_id text not null,
@@ -120,3 +127,6 @@ create table if not exists verification_findings (
 
 create index if not exists verification_findings_organisation_idx
   on verification_findings (organisation_id, run_id);
+
+create index if not exists verification_findings_pagination_idx
+  on verification_findings (organisation_id, run_id, created_at, finding_id);

@@ -12,6 +12,23 @@ import type {
   VerificationRunSummary,
 } from '@obiter/contracts'
 import type { VerificationFailureCode } from '@obiter/contracts'
+import type { DocumentStoryKind } from '@obiter/contracts'
+
+const storyKinds: DocumentStoryKind[] = [
+  'document',
+  'header',
+  'footer',
+  'footnotes',
+  'endnotes',
+  'comments',
+]
+
+/** The domain location carries the story as an opaque string; the view's
+ * contract types it. Narrow rather than assert, so an unknown story is dropped
+ * instead of reaching the response untyped. */
+function asStoryKind(value: string | undefined) {
+  return storyKinds.find((kind) => kind === value)
+}
 
 export type VerificationRunRow = {
   id: string
@@ -120,7 +137,13 @@ export function toPublicFinding(
     requiresReview: requiresReview(finding.status),
     explanation: finding.explanation,
     excerpt: finding.citation.rawText,
-    location: finding.citation.location,
+    location: {
+      paragraphId: finding.citation.location.paragraphId,
+      storyKind: asStoryKind(finding.citation.location.storyKind),
+      storyPartName: finding.citation.location.storyPartName,
+      start: finding.citation.location.start,
+      end: finding.citation.location.end,
+    },
     authorityLabel: authorityLabel(finding.normalizedCitation),
     evidence: finding.evidence.map((reference): VerificationEvidenceView => ({
       id: createEvidenceReferenceId(reference),

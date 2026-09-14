@@ -4,7 +4,65 @@ import type {
   VerificationFindingType,
   VerificationReviewReason,
   VerificationRunStatus,
+  VerificationRunSummary,
 } from '@obiter/contracts'
+import type { DocumentStoryKind } from '@obiter/contracts'
+
+export function verificationStoryLabel(kind: DocumentStoryKind | undefined) {
+  switch (kind) {
+    case 'document':
+      return 'Main document'
+    case 'footnotes':
+      return 'Footnote'
+    case 'endnotes':
+      return 'Endnote'
+    case 'header':
+      return 'Header'
+    case 'footer':
+      return 'Footer'
+    case 'comments':
+      return 'Comment'
+    default:
+      return null
+  }
+}
+
+/**
+ * The finding outcome, kept separate from run completion so a completed run
+ * with a proven mismatch is not presented as a plain success. Flagged is the
+ * most serious outcome and is never less prominent than review-required.
+ */
+export function verificationOutcomeTone(
+  summary: VerificationRunSummary,
+): 'danger' | 'warning' | 'success' {
+  if (summary.flaggedCount > 0) return 'danger'
+  if (summary.reviewRequiredCount > 0) return 'warning'
+  return 'success'
+}
+
+export function verificationOutcomeLabel(summary: VerificationRunSummary) {
+  if (summary.flaggedCount > 0) {
+    return `Flagged findings (${summary.flaggedCount})`
+  }
+  if (summary.reviewRequiredCount > 0) {
+    return `Review required (${summary.reviewRequiredCount})`
+  }
+  return 'No findings need attention'
+}
+
+/** The screen-reader wording for the same outcome, so the result is never
+ * carried by colour alone. */
+export function verificationOutcomeAnnouncement(
+  summary: VerificationRunSummary,
+) {
+  if (summary.flaggedCount > 0) {
+    return 'Attention required: flagged findings were found.'
+  }
+  if (summary.reviewRequiredCount > 0) {
+    return 'Some findings require review.'
+  }
+  return 'No findings require attention.'
+}
 
 export function verificationTypeLabel(type: VerificationFindingType) {
   switch (type) {
@@ -41,7 +99,7 @@ export function verificationStateLabel(state: VerificationFindingState) {
 export function verificationReasonLabel(reason: VerificationReviewReason) {
   switch (reason) {
     case 'citation_ambiguous':
-      return 'The citation matches more than one stored authority.'
+      return 'This text could be associated with more than one authority, so no single one was chosen.'
     case 'citation_unresolved':
       return 'The citation did not resolve to a stored authority.'
     case 'authority_not_held':
@@ -82,6 +140,8 @@ export function verificationFailureLabel(code: VerificationFailureCode) {
       return 'This document version is not ready to verify.'
     case 'execution_failed':
       return 'Verification could not finish. No successful result was recorded.'
+    case 'interrupted':
+      return 'Verification was interrupted before it finished. Start a new run to check this version.'
     default: {
       const unhandled: never = code
       return unhandled

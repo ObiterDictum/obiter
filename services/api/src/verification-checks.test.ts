@@ -15,6 +15,9 @@ describe('collectVerificationFindings', () => {
         {
           id: 'p1:4:17',
           paragraphId: 'p1',
+          storyKind: 'document',
+          storyPartName: 'word/document.xml',
+          locationParagraphId: 'document\u001fword/document.xml\u001fp1',
           start: 4,
           end: 17,
           rawText: '[2024] UKSC 1',
@@ -44,11 +47,16 @@ describe('collectVerificationFindings', () => {
       [],
       [
         {
+          id: 'document\u001fword/document.xml\u001fp1:0:23',
           paragraphId: 'p1',
+          storyKind: 'document',
+          storyPartName: 'word/document.xml',
+          locationParagraphId: 'document\u001fword/document.xml\u001fp1',
           start: 0,
           end: 23,
           rawText: 'the court must consider',
           attributedCitationId: null,
+          attribution: 'none',
         },
       ],
     )
@@ -56,6 +64,37 @@ describe('collectVerificationFindings', () => {
     expect(findings[0]?.type).toBe('quote_fidelity')
     expect(findings[0]?.status.state).not.toBe('flagged')
     expect(findings[0]?.id).not.toContain('the court must consider')
+  })
+
+  it('turns an ambiguous quote association into review-required, not a guess', async () => {
+    const { pool } = fakePool({ authorities: [] })
+    const findings = await collectVerificationFindings(
+      pool,
+      subject,
+      [],
+      [
+        {
+          id: 'document\u001fword/document.xml\u001fp1:0:23',
+          paragraphId: 'p1',
+          storyKind: 'document',
+          storyPartName: 'word/document.xml',
+          locationParagraphId: 'document\u001fword/document.xml\u001fp1',
+          start: 0,
+          end: 23,
+          rawText: 'the court must consider',
+          attributedCitationId: null,
+          attribution: 'ambiguous',
+        },
+      ],
+    )
+    expect(findings).toHaveLength(1)
+    expect(findings[0]?.type).toBe('quote_fidelity')
+    // The structured reason reaches the UI, so the quote is visibly not checked
+    // against a guessed authority.
+    expect(findings[0]?.status).toEqual({
+      state: 'review_required',
+      reason: 'citation_ambiguous',
+    })
   })
 
   it('confines a failed store read to the finding that needed it', async () => {
@@ -84,6 +123,9 @@ describe('collectVerificationFindings', () => {
         {
           id: 'p1:4:17',
           paragraphId: 'p1',
+          storyKind: 'document',
+          storyPartName: 'word/document.xml',
+          locationParagraphId: 'document\u001fword/document.xml\u001fp1',
           start: 4,
           end: 17,
           rawText: '[2024] UKSC 1',
@@ -91,11 +133,16 @@ describe('collectVerificationFindings', () => {
       ],
       [
         {
+          id: 'document\u001fword/document.xml\u001fp1:18:41',
           paragraphId: 'p1',
+          storyKind: 'document',
+          storyPartName: 'word/document.xml',
+          locationParagraphId: 'document\u001fword/document.xml\u001fp1',
           start: 18,
           end: 41,
           rawText: 'the court must consider',
           attributedCitationId: 'p1:4:17',
+          attribution: 'attributed',
         },
       ],
     )

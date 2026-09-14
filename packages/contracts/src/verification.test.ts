@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  verificationFailureCodeSchema,
   verificationFindingViewSchema,
   verificationRunCreateRequestSchema,
+  verificationRunListResponseSchema,
   verificationRunSchema,
 } from './verification'
 
@@ -50,6 +52,54 @@ describe('verification contracts', () => {
         authorityLabel: '[2024] UKSC 1',
         evidence: [{ id: 'src:judgment_paragraph:1', sourceId: 'src' }],
       }).success,
+    ).toBe(false)
+  })
+
+  it('records an interrupted execution as its own failure code', () => {
+    expect(verificationFailureCodeSchema.parse('interrupted')).toBe(
+      'interrupted',
+    )
+  })
+
+  it('carries story identity on a finding location', () => {
+    const parsed = verificationFindingViewSchema.parse({
+      id: 'vf:1',
+      type: 'quote_fidelity',
+      state: 'review_required',
+      reviewReason: 'citation_ambiguous',
+      severity: null,
+      confidence: null,
+      requiresReview: true,
+      explanation: 'No single citation could be shown to own the quotation.',
+      excerpt: 'the court must consider',
+      location: {
+        paragraphId: 'p1',
+        storyKind: 'footnotes',
+        storyPartName: 'word/footnotes.xml',
+        start: 0,
+        end: 23,
+      },
+      authorityLabel: 'Unresolved citation',
+      evidence: [],
+    })
+    expect(parsed.location.storyKind).toBe('footnotes')
+    expect(
+      verificationFindingViewSchema.safeParse({
+        ...parsed,
+        location: { ...parsed.location, storyKind: 'not-a-story' },
+      }).success,
+    ).toBe(false)
+  })
+
+  it('requires an explicit next cursor on a run list page', () => {
+    const empty = verificationRunListResponseSchema.parse({
+      runs: [],
+      nextCursor: null,
+    })
+    expect(empty.runs).toEqual([])
+    expect(empty.nextCursor).toBeNull()
+    expect(
+      verificationRunListResponseSchema.safeParse({ runs: [] }).success,
     ).toBe(false)
   })
 })

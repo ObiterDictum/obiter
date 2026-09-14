@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { documentStoryKindSchema } from './document-model'
 
 export const verificationRunStatusSchema = z.enum([
   'queued',
@@ -12,6 +13,7 @@ export const verificationFailureCodeSchema = z.enum([
   'model_unavailable',
   'version_not_ready',
   'execution_failed',
+  'interrupted',
 ])
 export type VerificationFailureCode = z.infer<
   typeof verificationFailureCodeSchema
@@ -53,6 +55,12 @@ export type VerificationSeverity = z.infer<typeof verificationSeveritySchema>
 const draftLocationSchema = z
   .object({
     paragraphId: z.string().min(1),
+    // Paragraph ids are only unique inside their story, so the story kind and
+    // part name are part of a location's identity. They are optional here so
+    // V1-V4 findings, whose fixtures predate story coverage, still parse; V5
+    // extraction always sets both.
+    storyKind: documentStoryKindSchema.optional(),
+    storyPartName: z.string().min(1).optional(),
     start: z.number().int().nonnegative(),
     end: z.number().int().positive(),
   })
@@ -142,9 +150,33 @@ export type VerificationRunResponse = z.infer<
   typeof verificationRunResponseSchema
 >
 
+export const verificationListDefaultLimit = 25
+export const verificationListMaxLimit = 100
+export const verificationFindingsDefaultLimit = 50
+export const verificationFindingsMaxLimit = 200
+
+/**
+ * A run and finding list is keyset-paginated on `(created_at desc, id desc)`.
+ * The cursor is an opaque base64url token the API encodes and validates; the
+ * client only echoes it back, so the shape may change without a contract bump.
+ */
+export const verificationCursorSchema = z.string().min(1)
+export type VerificationCursor = z.infer<typeof verificationCursorSchema>
+
+export const verificationRunListQuerySchema = z
+  .object({
+    limit: z.number().int().min(1).max(verificationListMaxLimit).optional(),
+    cursor: verificationCursorSchema.optional(),
+  })
+  .strict()
+export type VerificationRunListQuery = z.infer<
+  typeof verificationRunListQuerySchema
+>
+
 export const verificationRunListResponseSchema = z
   .object({
     runs: z.array(verificationRunSchema),
+    nextCursor: verificationCursorSchema.nullable(),
   })
   .strict()
 export type VerificationRunListResponse = z.infer<
@@ -155,6 +187,7 @@ export const verificationFindingsResponseSchema = z
   .object({
     run: verificationRunSchema,
     findings: z.array(verificationFindingViewSchema),
+    nextCursor: verificationCursorSchema.nullable(),
   })
   .strict()
 export type VerificationFindingsResponse = z.infer<

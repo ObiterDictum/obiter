@@ -18,6 +18,7 @@ import {
 import { useCurrentUser } from '../current-user'
 import { useDeleteDocument, useDocument } from '../documents'
 import { DocumentWorkspace } from '../components/document-workspace/workspace'
+import { DocumentDraftStatusProvider } from '../components/document-workspace/document-draft-status'
 import { VerificationRunPanel } from '../components/verification-run-panel'
 
 /**
@@ -53,164 +54,168 @@ export function DocumentDetailLayoutView({
     loaded.document.matterId !== matterId
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <Link
-          to="/matters/$matterId"
-          params={{ matterId: String(matterId) }}
-          className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-ink"
-        >
-          <ArrowLeft size={16} aria-hidden="true" />
-          Back to matter
-        </Link>
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex flex-col gap-1">
-            <p className="text-xs font-medium uppercase tracking-wider text-subtle">
-              Document
-            </p>
-            {document.isLoading ? (
-              <Skeleton className="h-7 w-64" />
-            ) : document.isError || !loaded ? (
-              <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-ink">
-                <FileText size={24} aria-hidden="true" />
+    <DocumentDraftStatusProvider>
+      <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-2">
+          <Link
+            to="/matters/$matterId"
+            params={{ matterId: String(matterId) }}
+            className="inline-flex items-center gap-1.5 text-sm text-muted hover:text-ink"
+          >
+            <ArrowLeft size={16} aria-hidden="true" />
+            Back to matter
+          </Link>
+          <div className="flex items-start justify-between gap-4">
+            <div className="flex flex-col gap-1">
+              <p className="text-xs font-medium uppercase tracking-wider text-subtle">
                 Document
-              </h1>
-            ) : (
-              <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-ink">
-                <FileText size={24} aria-hidden="true" />
-                {loaded.document.currentVersion?.filename ??
-                  loaded.document.logicalKey}
-              </h1>
-            )}
-            <p className="text-sm text-muted">
-              Matter <span className="font-mono text-ink">{matterId}</span>
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge tone="neutral">Immutable versions</Badge>
-            {canManage ? (
-              <Dialog>
-                <DialogTrigger
-                  render={
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      aria-label="Delete document"
-                    >
-                      <Trash aria-hidden /> Delete
-                    </Button>
-                  }
-                />
-                <DialogContent size="md">
-                  <DialogTitle>Delete document</DialogTitle>
-                  <DialogDescription>
-                    Deleting this document also removes its redaction runs.
-                    Removals are soft — rows persist for audit and can be
-                    restored by an operator.
-                  </DialogDescription>
-                  <div className="flex justify-end gap-2">
-                    <DialogClose
-                      render={<Button variant="ghost">Cancel</Button>}
-                    />
-                    <Button
-                      variant="danger"
-                      loading={deleteDocument.isPending}
-                      onClick={async () => {
-                        await deleteDocument.mutateAsync({
-                          documentId,
-                          matterId,
-                        })
-                        toast({ title: 'Document deleted' })
-                        navigate({
-                          to: '/matters/$matterId',
-                          params: { matterId: String(matterId) },
-                        })
-                      }}
-                    >
-                      Delete document
-                    </Button>
-                  </div>
-                  <DialogCloseButton />
-                </DialogContent>
-              </Dialog>
-            ) : null}
-          </div>
-        </div>
-      </div>
-
-      {matterMismatch && loaded ? (
-        <EmptyState
-          title="This document belongs to a different matter"
-          body="The document exists, but it is not part of the matter in this URL. Open it from its own matter to see it in the right context."
-          action={
-            <Link
-              className="font-semibold text-brand hover:text-brand-pressed"
-              to="/matters/$matterId/documents/$documentId"
-              params={{ matterId: loaded.document.matterId, documentId }}
-            >
-              Open under the correct matter
-            </Link>
-          }
-        />
-      ) : document.isError ? (
-        <EmptyState
-          title="Document not found"
-          body="This document does not exist in your organisation, or your session may have expired."
-        />
-      ) : document.isLoading ? (
-        <div
-          className="flex flex-col gap-3"
-          aria-busy="true"
-          aria-label="Loading document"
-        >
-          <Skeleton className="h-24 w-full rounded-lg" />
-          <Skeleton className="h-24 w-full rounded-lg" />
-        </div>
-      ) : loaded ? (
-        <>
-          <DocumentMetadata
-            document={loaded.document}
-            versions={loaded.versions}
-          />
-          <DocumentWorkspace
-            documentId={documentId}
-            version={loaded.document.currentVersion}
-          />
-        </>
-      ) : null}
-
-      <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
-        <div className="flex flex-col gap-0.5">
-          <h2 className="text-base font-semibold text-ink">Verification</h2>
-          <p className="text-sm text-muted">
-            Run citation, authority, and quote checks against this stored
-            document version.
-          </p>
-        </div>
-        <VerificationRunPanel documentId={documentId} />
-      </section>
-
-      <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex flex-col gap-0.5">
-            <h2 className="text-base font-semibold text-ink">Redaction runs</h2>
-            <p className="text-sm text-muted">
-              Create a run to detect and review sensitive information before
-              this document enters AI-assisted workflows.
-            </p>
+              </p>
+              {document.isLoading ? (
+                <Skeleton className="h-7 w-64" />
+              ) : document.isError || !loaded ? (
+                <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-ink">
+                  <FileText size={24} aria-hidden="true" />
+                  Document
+                </h1>
+              ) : (
+                <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-ink">
+                  <FileText size={24} aria-hidden="true" />
+                  {loaded.document.currentVersion?.filename ??
+                    loaded.document.logicalKey}
+                </h1>
+              )}
+              <p className="text-sm text-muted">
+                Matter <span className="font-mono text-ink">{matterId}</span>
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge tone="neutral">Immutable versions</Badge>
+              {canManage ? (
+                <Dialog>
+                  <DialogTrigger
+                    render={
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        aria-label="Delete document"
+                      >
+                        <Trash aria-hidden /> Delete
+                      </Button>
+                    }
+                  />
+                  <DialogContent size="md">
+                    <DialogTitle>Delete document</DialogTitle>
+                    <DialogDescription>
+                      Deleting this document also removes its redaction runs.
+                      Removals are soft — rows persist for audit and can be
+                      restored by an operator.
+                    </DialogDescription>
+                    <div className="flex justify-end gap-2">
+                      <DialogClose
+                        render={<Button variant="ghost">Cancel</Button>}
+                      />
+                      <Button
+                        variant="danger"
+                        loading={deleteDocument.isPending}
+                        onClick={async () => {
+                          await deleteDocument.mutateAsync({
+                            documentId,
+                            matterId,
+                          })
+                          toast({ title: 'Document deleted' })
+                          navigate({
+                            to: '/matters/$matterId',
+                            params: { matterId: String(matterId) },
+                          })
+                        }}
+                      >
+                        Delete document
+                      </Button>
+                    </div>
+                    <DialogCloseButton />
+                  </DialogContent>
+                </Dialog>
+              ) : null}
+            </div>
           </div>
         </div>
-        {redactionRunsRegion ?? (
+
+        {matterMismatch && loaded ? (
           <EmptyState
-            title="No redaction runs yet"
-            body="When a run is created it appears here for review. This region is the contract surface the Redact review UI fills in."
+            title="This document belongs to a different matter"
+            body="The document exists, but it is not part of the matter in this URL. Open it from its own matter to see it in the right context."
+            action={
+              <Link
+                className="font-semibold text-brand hover:text-brand-pressed"
+                to="/matters/$matterId/documents/$documentId"
+                params={{ matterId: loaded.document.matterId, documentId }}
+              >
+                Open under the correct matter
+              </Link>
+            }
           />
-        )}
-      </section>
+        ) : document.isError ? (
+          <EmptyState
+            title="Document not found"
+            body="This document does not exist in your organisation, or your session may have expired."
+          />
+        ) : document.isLoading ? (
+          <div
+            className="flex flex-col gap-3"
+            aria-busy="true"
+            aria-label="Loading document"
+          >
+            <Skeleton className="h-24 w-full rounded-lg" />
+            <Skeleton className="h-24 w-full rounded-lg" />
+          </div>
+        ) : loaded ? (
+          <>
+            <DocumentMetadata
+              document={loaded.document}
+              versions={loaded.versions}
+            />
+            <DocumentWorkspace
+              documentId={documentId}
+              version={loaded.document.currentVersion}
+            />
+          </>
+        ) : null}
 
-      {/* Feature sub-routes (e.g. redact/$runId) render here. */}
-      <Outlet />
-    </div>
+        <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
+          <div className="flex flex-col gap-0.5">
+            <h2 className="text-base font-semibold text-ink">Verification</h2>
+            <p className="text-sm text-muted">
+              Run citation, authority, and quote checks against this stored
+              document version.
+            </p>
+          </div>
+          <VerificationRunPanel documentId={documentId} />
+        </section>
+
+        <section className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-0.5">
+              <h2 className="text-base font-semibold text-ink">
+                Redaction runs
+              </h2>
+              <p className="text-sm text-muted">
+                Create a run to detect and review sensitive information before
+                this document enters AI-assisted workflows.
+              </p>
+            </div>
+          </div>
+          {redactionRunsRegion ?? (
+            <EmptyState
+              title="No redaction runs yet"
+              body="When a run is created it appears here for review. This region is the contract surface the Redact review UI fills in."
+            />
+          )}
+        </section>
+
+        {/* Feature sub-routes (e.g. redact/$runId) render here. */}
+        <Outlet />
+      </div>
+    </DocumentDraftStatusProvider>
   )
 }
 
