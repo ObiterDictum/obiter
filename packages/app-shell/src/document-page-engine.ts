@@ -249,10 +249,7 @@ function layoutParagraph(
   const paragraph = {
     ...item.paragraph,
     runs: [...item.paragraph.runs, ...(extraRuns[item.paragraph.id] ?? [])].map(
-      (run) => ({
-        ...run,
-        text: drafts?.[run.id] ?? run.text,
-      }),
+      (run) => ({ ...run, text: drafts?.[run.id] ?? run.text }),
     ),
   }
   const text = paragraphPlainText(paragraph)
@@ -269,6 +266,7 @@ function layoutParagraph(
   let placed = false
   let offset = 0
   let continuation = false
+  let complete = false
 
   const place = () => {
     if (placed) return
@@ -292,7 +290,7 @@ function layoutParagraph(
     return
   }
 
-  while (offset < text.length || text.length === 0) {
+  while (!complete) {
     const pageStart = session.y === 0 && session.broken && !continuation
     const before = continuation || pageStart ? 0 : face.marginTopPx
     const remaining = frame.heightPx - session.y
@@ -331,23 +329,23 @@ function layoutParagraph(
       frame,
       floats: [...session.page.floats, ...session.page.textBoxes],
     })
-    if (fragment.skipTo !== undefined && fragment.consumed === 0) {
+    if (fragment.skipTo !== undefined && fragment.lines === 0) {
       session.y = fragment.skipTo
       if (session.y >= frame.heightPx) advance()
       continue
     }
-    if (fragment.consumed === 0 && text.length > 0) {
+    if (fragment.lines === 0 && text.length > 0) {
       if (session.y === 0) {
+        // No row fits at the top of a page: step one code unit on, or stop.
+        if (offset >= text.length) break
         offset += 1
         continue
       }
       advance()
       continue
     }
-    const from = offset
-    const to = text.length === 0 ? 0 : offset + fragment.consumed
-    const continues = to < text.length
-    const used = fragment.heightPx + (continues ? 0 : face.marginBottomPx)
+    const used =
+      fragment.heightPx + (fragment.complete ? face.marginBottomPx : 0)
     if (
       session.y > 0 &&
       (continuation
@@ -358,11 +356,13 @@ function layoutParagraph(
       placed = false
       continue
     }
+    // The block draws exactly the rows placed here, so a break that ends its
+    // last row is resumed by the next fragment rather than drawn by this one.
     session.page.blocks.push({
       type: 'paragraph',
       paragraph,
-      from,
-      to,
+      from: offset,
+      to: offset + fragment.shown,
       column: session.col,
       padLeftPx: fragment.padLeftPx,
       padRightPx: fragment.padRightPx,
@@ -374,9 +374,9 @@ function layoutParagraph(
       pageStart,
     })
     session.y = startY + used
-    offset = to
+    offset += fragment.consumed
+    complete = fragment.complete
     continuation = true
-    if (text.length === 0) break
   }
 }
 
