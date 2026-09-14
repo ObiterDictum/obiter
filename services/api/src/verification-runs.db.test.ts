@@ -6,7 +6,6 @@ import {
   verificationRunResponseSchema,
 } from '@obiter/contracts'
 import type { AuthzVariables } from './authz'
-import { runMigrations } from './migrate'
 import { createVerificationRunRoutes } from './routes/verification-runs'
 import {
   cleanupOrganisationIsolation,
@@ -58,7 +57,12 @@ describe('verification run persistence', () => {
   let seed: OrganisationIsolationSeed
 
   beforeAll(async () => {
-    await runMigrations(pool)
+    // The test database is migrated before the suite runs (CI applies the SQL
+    // files directly), so this suite assumes the schema, like the other
+    // database-backed suites here. It must not call runMigrations: that would
+    // re-apply 0003 against a schema 0019 has already dropped search_vector
+    // from, because the pre-applied migrations are absent from
+    // schema_migrations.
     seed = await seedOrganisationIsolation(pool)
   })
 
