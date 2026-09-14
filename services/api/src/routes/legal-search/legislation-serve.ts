@@ -19,6 +19,8 @@ import {
   legislationProvisionPathExists,
   listLegislationActs,
   provisionTextServable,
+  resolveStoredProvisionPath,
+  type StoredProvisionPathResolution,
   type StoredLegislationProvision,
 } from './legislation-store'
 import {
@@ -122,64 +124,28 @@ export function officialProvisionUrl(
   return `https://www.legislation.gov.uk/${documentIdentity}/${labelPath}`
 }
 
-type StoredProvisionResolution =
-  | { status: 'held'; provision: StoredLegislationProvision }
-  | { status: 'missing'; labelPath: string }
-  | { status: 'underspecified' }
-
 /**
- * Resolve a citation's label path against the store, tolerating the
- * single-schedule storage shape. Some Acts leave their only schedule
- * unnumbered, so its paragraphs store at `schedule/paragraph/N` while a
- * citation says "Schedule 1 paragraph N". The numbered path wins when it
- * exists; the unnumbered fallback applies only when the citation names
- * Schedule 1 and the Act has no numbered Schedule 1. Schedule 2 is never
- * mapped onto an unnumbered schedule, and a paragraph citation with no
- * schedule number on a numbered-schedule Act is non-resolution, not a
- * not-held claim.
+ * The serving path's stored-provision resolution: the shared single-schedule
+ * algorithm with each store read bounded by the serve timeout, so a slow store
+ * fails this half open instead of holding the route.
  */
 async function resolveStoredProvision(
   pool: LegislationServeDeps['pool'],
   identity: string,
   labelPath: string,
-): Promise<StoredProvisionResolution> {
-  const exact = await withStoredTimeout(
-    getLegislationProvision(pool, `${identity}/${labelPath}`),
+): Promise<StoredProvisionPathResolution> {
+  return resolveStoredProvisionPath(
+    {
+      getProvision: (provisionId) =>
+        withStoredTimeout(getLegislationProvision(pool, provisionId)),
+      pathExists: (documentIdentity, path) =>
+        withStoredTimeout(
+          legislationProvisionPathExists(pool, documentIdentity, path),
+        ),
+    },
+    identity,
+    labelPath,
   )
-  if (exact) return { status: 'held', provision: exact }
-  if (!labelPath.startsWith('schedule/')) {
-    return { status: 'missing', labelPath }
-  }
-  const numbered = labelPath.match(/^schedule\/(\d+)\//)
-  if (!numbered) {
-    // An unnumbered citation only resolves on the exact path above, which
-    // exists for the single-schedule shape. On an Act with numbered
-    // schedules the schedule number is missing: say so rather than guess.
-    const hasNumberedSchedule = await withStoredTimeout(
-      legislationProvisionPathExists(pool, identity, 'schedule/1'),
-    )
-    return hasNumberedSchedule
-      ? { status: 'underspecified' }
-      : { status: 'missing', labelPath }
-  }
-  const scheduleNumber = numbered[1]!
-  const hasNumberedSchedule = await withStoredTimeout(
-    legislationProvisionPathExists(
-      pool,
-      identity,
-      `schedule/${scheduleNumber}`,
-    ),
-  )
-  if (scheduleNumber !== '1' || hasNumberedSchedule) {
-    return { status: 'missing', labelPath }
-  }
-  const alternateLabelPath = labelPath.replace(/^schedule\/1\//, 'schedule/')
-  const alternate = await withStoredTimeout(
-    getLegislationProvision(pool, `${identity}/${alternateLabelPath}`),
-  )
-  return alternate
-    ? { status: 'held', provision: alternate }
-    : { status: 'missing', labelPath: alternateLabelPath }
 }
 
 function currentProvisionHit(
@@ -323,7 +289,7 @@ export async function resolveLegislationFetch(
   }
 
   if (outcome.kind === 'provision') {
-    let resolution: StoredProvisionResolution
+    let resolution: StoredProvisionPathResolution
     try {
       resolution = await resolveStoredProvision(
         deps.pool,

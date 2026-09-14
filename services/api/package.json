@@ -21,6 +21,7 @@
     "@obiter/rampart-inference": "workspace:*",
     "@obiter/redaction-policy": "workspace:*",
     "@obiter/search-client": "workspace:*",
+    "@obiter/verification-core": "workspace:*",
     "better-auth": "^1.6.8",
     "hono": "^4.12.14",
     "jszip": "^3.10.1",
