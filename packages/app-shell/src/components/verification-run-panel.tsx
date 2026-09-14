@@ -66,7 +66,8 @@ export function VerificationRunPanel({ documentId }: { documentId: string }) {
 
   const run = latest
   const needsReview = (run?.summary.reviewRequiredCount ?? 0) > 0
-  const busy = create.isPending || run?.status === 'queued' || run?.status === 'running'
+  const busy =
+    create.isPending || run?.status === 'queued' || run?.status === 'running'
 
   return (
     <div className="flex flex-col gap-3">
@@ -97,8 +98,7 @@ export function VerificationRunPanel({ documentId }: { documentId: string }) {
       </div>
       {create.error ? (
         <p className="text-sm text-danger">
-          {create.error instanceof ApiError &&
-          create.error.code === 'forbidden'
+          {create.error instanceof ApiError && create.error.code === 'forbidden'
             ? 'You do not have permission to start verification on this document.'
             : create.error.message}
         </p>
@@ -116,7 +116,10 @@ export function VerificationRunPanel({ documentId }: { documentId: string }) {
         <div className="flex flex-col gap-3">
           <div className="flex flex-wrap items-center gap-1.5">
             <Badge
-              tone={statusTone(run.status, needsReview && run.status === 'completed')}
+              tone={statusTone(
+                run.status,
+                needsReview && run.status === 'completed',
+              )}
             >
               {run.status === 'completed' && needsReview
                 ? 'Completed with review required'

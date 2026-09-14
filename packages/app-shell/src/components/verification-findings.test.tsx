@@ -33,7 +33,9 @@ describe('VerificationFindingsList', () => {
     expect(screen.getByText('Severity medium')).toBeTruthy()
     expect(screen.getByText('Confidence low')).toBeTruthy()
     expect(
-      screen.getByText('The quotation could not be located in the stored source.'),
+      screen.getByText(
+        'The quotation could not be located in the stored source.',
+      ),
     ).toBeTruthy()
     expect(screen.getByText('the court must consider')).toBeTruthy()
     expect(screen.getByText(/uksc-1:judgment_paragraph:4/)).toBeTruthy()
@@ -47,7 +49,47 @@ describe('VerificationFindingsList', () => {
   it('explains an empty completed run without claiming correctness', () => {
     render(<VerificationFindingsList findings={[]} />)
     expect(
-      screen.getByText(/found nothing to list. That is not a statement of legal correctness/),
+      screen.getByText(
+        /found nothing to list. That is not a statement of legal correctness/,
+      ),
     ).toBeTruthy()
+  })
+
+  it('distinguishes clear, flagged, and not-checked outcomes', () => {
+    const clear: VerificationFindingView = {
+      ...finding,
+      id: 'vf:clear',
+      type: 'authority_existence',
+      state: 'clear',
+      reviewReason: null,
+      requiresReview: false,
+      explanation: 'The stored sources hold this authority.',
+    }
+    const flagged: VerificationFindingView = {
+      ...finding,
+      id: 'vf:flagged',
+      state: 'flagged',
+      reviewReason: null,
+      requiresReview: false,
+      explanation: 'The stored source does not contain the quoted words.',
+    }
+    const notChecked: VerificationFindingView = {
+      ...finding,
+      id: 'vf:not_checked',
+      type: 'citation_resolution',
+      state: 'not_checked',
+      reviewReason: null,
+      severity: null,
+      confidence: null,
+      requiresReview: true,
+      explanation: 'The check did not run.',
+      evidence: [],
+    }
+    render(<VerificationFindingsList findings={[clear, flagged, notChecked]} />)
+    expect(screen.getByText('Clear')).toBeTruthy()
+    expect(screen.getByText('Flagged')).toBeTruthy()
+    expect(screen.getByText('Not checked')).toBeTruthy()
+    // A check that did not run must say so rather than imply an absent source.
+    expect(screen.getAllByText('No source evidence attached.')).toHaveLength(1)
   })
 })

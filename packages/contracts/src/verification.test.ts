@@ -7,9 +7,7 @@ import {
 
 describe('verification contracts', () => {
   it('requires an explicit version id on create', () => {
-    expect(verificationRunCreateRequestSchema.safeParse({}).success).toBe(
-      false,
-    )
+    expect(verificationRunCreateRequestSchema.safeParse({}).success).toBe(false)
     expect(
       verificationRunCreateRequestSchema.parse({ versionId: 'ver_1' }),
     ).toEqual({ versionId: 'ver_1' })

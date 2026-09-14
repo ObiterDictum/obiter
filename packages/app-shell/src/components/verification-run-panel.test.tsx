@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { VerificationRunPanel } from './verification-run-panel'
+import { ApiError } from '../api'
 import type { VerificationRun } from '@obiter/contracts'
 
 const documentHook = vi.hoisted(() => ({ useDocument: vi.fn() }))
@@ -81,14 +82,20 @@ describe('VerificationRunPanel', () => {
     })
     runsHook.latestVerificationRun.mockReturnValue(null)
     const { rerender } = render(<VerificationRunPanel documentId="doc_1" />)
+    expect(screen.getByText(/Verification has not been started/)).toBeTruthy()
     expect(
-      screen.getByText(/Verification has not been started/),
+      screen.getByRole('button', { name: 'Run verification' }),
     ).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Run verification' })).toBeTruthy()
 
-    const running = run({ status: 'running', completedAt: null, summary: {
-      findingCount: 0, flaggedCount: 0, reviewRequiredCount: 0,
-    } })
+    const running = run({
+      status: 'running',
+      completedAt: null,
+      summary: {
+        findingCount: 0,
+        flaggedCount: 0,
+        reviewRequiredCount: 0,
+      },
+    })
     runsHook.useDocumentVerificationRuns.mockReturnValue({
       isPending: false,
       isError: false,
@@ -129,5 +136,109 @@ describe('VerificationRunPanel', () => {
     })
     rerender(<VerificationRunPanel documentId="doc_1" />)
     expect(screen.getByText('Verification is unavailable')).toBeTruthy()
+  })
+
+  it('renders a loading skeleton while the document is pending', () => {
+    documentHook.useDocument.mockReturnValue({
+      isPending: true,
+      isError: false,
+      data: undefined,
+    })
+    runsHook.useDocumentVerificationRuns.mockReturnValue({
+      isPending: true,
+      isError: false,
+      data: undefined,
+    })
+    runsHook.useCreateVerificationRun.mockReturnValue({
+      isPending: false,
+      mutate: vi.fn(),
+      error: null,
+    })
+    runsHook.useVerificationFindings.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { findings: [] },
+    })
+    runsHook.latestVerificationRun.mockReturnValue(null)
+    const { container } = render(<VerificationRunPanel documentId="doc_1" />)
+    expect(container.querySelector('.h-24')).toBeTruthy()
+  })
+
+  it('surfaces a run-list failure rather than an empty state', () => {
+    documentHook.useDocument.mockReturnValue(readyDocument())
+    runsHook.useDocumentVerificationRuns.mockReturnValue({
+      isPending: false,
+      isError: true,
+      error: new Error('verification runs are unavailable'),
+      data: undefined,
+    })
+    runsHook.useCreateVerificationRun.mockReturnValue({
+      isPending: false,
+      mutate: vi.fn(),
+      error: null,
+    })
+    runsHook.useVerificationFindings.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { findings: [] },
+    })
+    runsHook.latestVerificationRun.mockReturnValue(null)
+    render(<VerificationRunPanel documentId="doc_1" />)
+    expect(screen.getByText('Verification runs are unavailable')).toBeTruthy()
+    expect(screen.getByText('verification runs are unavailable')).toBeTruthy()
+  })
+
+  it('explains a denied start without the raw error message', () => {
+    documentHook.useDocument.mockReturnValue(readyDocument())
+    runsHook.useDocumentVerificationRuns.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { runs: [] },
+    })
+    runsHook.useCreateVerificationRun.mockReturnValue({
+      isPending: false,
+      mutate: vi.fn(),
+      error: new ApiError('forbidden', 'forbidden', 403, 'req_1'),
+    })
+    runsHook.useVerificationFindings.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { findings: [] },
+    })
+    runsHook.latestVerificationRun.mockReturnValue(null)
+    render(<VerificationRunPanel documentId="doc_1" />)
+    expect(
+      screen.getByText(
+        'You do not have permission to start verification on this document.',
+      ),
+    ).toBeTruthy()
+  })
+
+  it('moves focus to the live status region after a start settles', () => {
+    const mutate = vi.fn(
+      (_versionId: string, options?: { onSuccess?: () => void }) => {
+        options?.onSuccess?.()
+      },
+    )
+    documentHook.useDocument.mockReturnValue(readyDocument())
+    runsHook.useDocumentVerificationRuns.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { runs: [] },
+    })
+    runsHook.useCreateVerificationRun.mockReturnValue({
+      isPending: false,
+      mutate,
+      error: null,
+    })
+    runsHook.useVerificationFindings.mockReturnValue({
+      isPending: false,
+      isError: false,
+      data: { findings: [] },
+    })
+    runsHook.latestVerificationRun.mockReturnValue(null)
+    render(<VerificationRunPanel documentId="doc_1" />)
+    fireEvent.click(screen.getByRole('button', { name: 'Run verification' }))
+    expect(document.activeElement).toBe(screen.getByRole('status'))
   })
 })

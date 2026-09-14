@@ -1,9 +1,15 @@
 import type { Pool } from 'pg'
-import type { VerificationFinding, VerificationSubject } from '@obiter/verification-core'
+import type {
+  VerificationFinding,
+  VerificationSubject,
+} from '@obiter/verification-core'
 import type { VerificationFailureCode } from '@obiter/contracts'
 import type { AuthenticatedOrgUser } from './authz'
 import { appendAuditLog } from './database'
-import { getDocumentModel, DocumentModelStoreError } from './document-model-store'
+import {
+  getDocumentModel,
+  DocumentModelStoreError,
+} from './document-model-store'
 import { matterAccessPredicate } from './matter-access-boundary'
 import type { StorageService } from './storage'
 import { collectVerificationFindings } from './verification-checks'
@@ -27,8 +33,7 @@ type LockedVersion = {
 }
 
 export type VerificationRunDenied =
-  | { reason: 'not_found' }
-  | { reason: 'version_not_ready' }
+  { reason: 'not_found' } | { reason: 'version_not_ready' }
 
 async function lockRunnableVersion(
   client: Pick<Pool, 'query'>,
@@ -98,8 +103,7 @@ export async function createAndExecuteVerificationRun(input: {
   versionId: string
   requestId: string
 }): Promise<
-  | { ok: true; runId: string }
-  | { ok: false; denied: VerificationRunDenied }
+  { ok: true; runId: string } | { ok: false; denied: VerificationRunDenied }
 > {
   const client = await input.pool.connect()
   let runId: string | null = null
@@ -161,11 +165,7 @@ export async function createAndExecuteVerificationRun(input: {
         requestId: input.requestId,
       })
     }
-    await markVerificationRunRunning(
-      client,
-      input.user.organisationId,
-      runId,
-    )
+    await markVerificationRunRunning(client, input.user.organisationId, runId)
     await client.query('commit')
   } catch (error) {
     await client.query('rollback')

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { collectVerificationFindings } from './verification-checks'
 import { fakePool } from './citation-resolution.test-support'
+import { queryDouble, queryResult } from './query-double.test-support'
 
 const subject = { documentId: 'doc_1', versionId: 'ver_1' }
 
@@ -29,7 +30,8 @@ describe('collectVerificationFindings', () => {
     expect(
       findings.some(
         (finding) =>
-          finding.status.state === 'clear' || finding.status.state === 'flagged',
+          finding.status.state === 'clear' ||
+          finding.status.state === 'flagged',
       ),
     ).toBe(false)
   })
@@ -54,5 +56,59 @@ describe('collectVerificationFindings', () => {
     expect(findings[0]?.type).toBe('quote_fidelity')
     expect(findings[0]?.status.state).not.toBe('flagged')
     expect(findings[0]?.id).not.toContain('the court must consider')
+  })
+
+  it('confines a failed store read to the finding that needed it', async () => {
+    // Resolution succeeds, so the citation has an identity; the authority
+    // lookup for that identity fails to read, and so does the quotation's
+    // source. Neither failure may abort the batch or turn into a pass.
+    const { pool } = queryDouble((text) => {
+      if (text.includes('like any')) {
+        return queryResult([
+          {
+            documentId: 'uksc-1',
+            neutralCitation: '[2024] UKSC 1',
+            providerJson: {},
+          },
+        ])
+      }
+      if (text.includes('where document_id = $1')) {
+        throw new Error('source store is down')
+      }
+      throw new Error(`Unexpected query: ${text}`)
+    })
+    const findings = await collectVerificationFindings(
+      pool,
+      subject,
+      [
+        {
+          id: 'p1:4:17',
+          paragraphId: 'p1',
+          start: 4,
+          end: 17,
+          rawText: '[2024] UKSC 1',
+        },
+      ],
+      [
+        {
+          paragraphId: 'p1',
+          start: 18,
+          end: 41,
+          rawText: 'the court must consider',
+          attributedCitationId: 'p1:4:17',
+        },
+      ],
+    )
+
+    // The resolution check completed on its own facts; the two checks that
+    // needed a source read stayed uncertain rather than aborting the batch or
+    // inventing a verdict.
+    expect(
+      findings.map((finding) => `${finding.type}:${finding.status.state}`),
+    ).toEqual([
+      'citation_resolution:clear',
+      'authority_existence:review_required',
+      'quote_fidelity:review_required',
+    ])
   })
 })

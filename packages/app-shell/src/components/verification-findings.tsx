@@ -58,7 +58,9 @@ export function VerificationFindingsList({
             <span className="text-xs font-medium uppercase tracking-wider text-subtle">
               Draft excerpt
             </span>
-            <span className="mt-0.5 block font-mono text-xs">{finding.excerpt}</span>
+            <span className="mt-0.5 block font-mono text-xs">
+              {finding.excerpt}
+            </span>
           </p>
           <p className="text-sm text-muted">
             Authority: {finding.authorityLabel}

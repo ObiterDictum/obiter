@@ -4,10 +4,7 @@ import {
   type VerificationFinding,
 } from '@obiter/verification-core'
 import { matterAccessPredicate } from './matter-access-boundary'
-import {
-  toPublicRun,
-  type VerificationRunRow,
-} from './verification-present'
+import { toPublicRun, type VerificationRunRow } from './verification-present'
 import type { AuthenticatedOrgUser } from './authz'
 import type { VerificationFailureCode } from '@obiter/contracts'
 
@@ -48,7 +45,7 @@ const runFrom = `
    and stats.organisation_id = run.organisation_id
 `
 
-function liveRunPredicate(access: AccessLevel, userParameter: '$3' | '$4') {
+function liveRunPredicate(access: AccessLevel, userParameter: '$2' | '$3') {
   const required = access === 'edit' ? "'edit'" : "'view'"
   return `
     run.deleted_at is null
@@ -225,9 +222,7 @@ export async function replaceVerificationFindings(
   )
   for (const finding of findings) {
     const statusReason =
-      finding.status.state === 'review_required'
-        ? finding.status.reason
-        : null
+      finding.status.state === 'review_required' ? finding.status.reason : null
     await client.query(
       `insert into verification_findings (
          run_id, finding_id, organisation_id, finding_type, status_state,

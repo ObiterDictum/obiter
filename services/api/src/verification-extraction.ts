@@ -21,8 +21,7 @@ export type ExtractedQuote = DraftSpan & {
 export const maxVerificationCandidates = 500
 
 const NEUTRAL_CITATION = new RegExp(neutralCitationPatternSource, 'g')
-const LEGISLATION_PATH =
-  /\/ln\/ukpga\/[0-9]{4}\/[0-9]+(?:\/[A-Za-z0-9._-]+)*/g
+const LEGISLATION_PATH = /\/ln\/ukpga\/[0-9]{4}\/[0-9]+(?:\/[A-Za-z0-9._-]+)*/g
 const CURLY_QUOTE = /\u201C([^\u201D]+)\u201D/g
 const STRAIGHT_QUOTE = /"([^"]+)"/g
 
@@ -87,7 +86,10 @@ function collectQuoted(text: string, pattern: RegExp) {
 function legislationSpan(rawText: string) {
   let candidate = rawText.replace(/\.+$/, '')
   while (candidate.length >= '/ln/ukpga/1801/1'.length) {
-    if (parseLegislationProvisionPath(candidate) || parseLegislationActPath(candidate)) {
+    if (
+      parseLegislationProvisionPath(candidate) ||
+      parseLegislationActPath(candidate)
+    ) {
       return candidate
     }
     candidate = candidate.slice(0, -1)

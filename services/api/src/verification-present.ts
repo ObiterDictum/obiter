@@ -122,12 +122,10 @@ export function toPublicFinding(
     excerpt: finding.citation.rawText,
     location: finding.citation.location,
     authorityLabel: authorityLabel(finding.normalizedCitation),
-    evidence: finding.evidence.map(
-      (reference): VerificationEvidenceView => ({
-        id: createEvidenceReferenceId(reference),
-        sourceId: reference.sourceId,
-        label: evidenceLabel(reference),
-      }),
-    ),
+    evidence: finding.evidence.map((reference): VerificationEvidenceView => ({
+      id: createEvidenceReferenceId(reference),
+      sourceId: reference.sourceId,
+      label: evidenceLabel(reference),
+    })),
   }
 }

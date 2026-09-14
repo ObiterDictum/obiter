@@ -2,9 +2,7 @@ import { Link } from '@tanstack/react-router'
 import { ListChecks } from '@phosphor-icons/react'
 import { Badge, EmptyState, Skeleton } from '@obiter/ui'
 import { useCurrentUser } from '../current-user'
-import {
-  verificationRunStatusLabel,
-} from '../verification-copy'
+import { verificationRunStatusLabel } from '../verification-copy'
 import { useOrganisationVerificationRuns } from '../verification-runs'
 
 export function VerifyRouteView() {
@@ -44,7 +42,9 @@ export function VerifyRouteView() {
                 className="flex items-center justify-between gap-3 py-3"
               >
                 <div className="min-w-0">
-                  <p className="truncate font-mono text-xs text-ink">{run.id}</p>
+                  <p className="truncate font-mono text-xs text-ink">
+                    {run.id}
+                  </p>
                   <p className="text-[11px] text-muted">
                     Version {run.documentVersionId}
                     {run.stale ? ' (earlier than current)' : ''}

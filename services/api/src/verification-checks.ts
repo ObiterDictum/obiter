@@ -102,7 +102,7 @@ export async function collectVerificationFindings(
       ? (normalizedById.get(quote.attributedCitationId) ?? unresolvedCitation())
       : unresolvedCitation(),
   }))
-  for (let index = 0; index < quoteRequests.length; ) {
+  for (let index = 0; index < quoteRequests.length;) {
     const batch = quoteRequests.slice(index, index + maxQuoteFidelityBatchSize)
     const results = await checkQuoteFidelities(pool, batch)
     for (const [offset, result] of results.entries()) {
