@@ -1,5 +1,6 @@
 import {
   documentEditOperationSchema,
+  normaliseEditText,
   type DocumentChangeWire,
   type DocumentModelWire,
   type DocumentParagraphWire,
@@ -63,6 +64,9 @@ export type TextRunAnchor = {
   runRange: XmlElementRange
   textRanges: TextRange[]
   textElements: XmlElementRange[]
+  // Ranges of the run's own text-wrapping w:br elements, in source order. They
+  // are text (a newline the parser counts), so a text replacement consumes them.
+  textBreaks: XmlElementRange[]
   runProperties: string[]
   runPropertiesRange?: XmlElementRange
   runStyleRange?: XmlElementRange
@@ -115,7 +119,7 @@ export function replaceTextRunText(
   if (!operation.success) throw new OoxmlError('invalid-document-edit')
   const anchor = document.textRunAnchors.get(textRunId)
   if (!anchor) throw new OoxmlError('model-node-not-found')
-  if (!replaceTextRunAtAnchor(document, anchor, text)) {
+  if (!replaceTextRunAtAnchor(document, anchor, normaliseEditText(text))) {
     throw new OoxmlError('model-node-not-editable')
   }
 }

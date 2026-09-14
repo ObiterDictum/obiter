@@ -23,27 +23,27 @@ export function replaceTextRunAtAnchor(
     overlay.source,
     0,
   )
-  if (breakReplacements) {
-    breakReplacements.forEach((replacement, index) => {
-      setOverlayReplacement(
-        overlay,
-        `${anchor.wire.id}:text:${index}`,
-        replacement,
-      )
-    })
-    anchor.wire.text = text
-    part.dirty = true
-    return true
-  }
-
-  anchor.textRanges.forEach((range, index) => {
-    setOverlayReplacement(overlay, `${anchor.wire.id}:text:${index}`, {
+  const replacements =
+    breakReplacements ??
+    anchor.textRanges.map((range, index) => ({
       ...range,
       value: index === 0 ? escapeXmlText(text) : '',
-    })
+    }))
+  // Positional keys keep a later replacement of the same run overwriting the
+  // earlier ranges instead of leaving a stale one behind.
+  const overlayReplacements = [
+    ...replacements,
+    ...textBreakReplacements(anchor, 0),
+  ]
+  overlayReplacements.forEach((replacement, index) => {
+    setOverlayReplacement(
+      overlay,
+      `${anchor.wire.id}:text:${index}`,
+      replacement,
+    )
   })
   const firstTextElement = anchor.textElements[0]
-  if (firstTextElement) {
+  if (!breakReplacements && firstTextElement) {
     const opening = overlay.source.slice(
       firstTextElement.start,
       firstTextElement.startTagEnd,
@@ -60,6 +60,23 @@ export function replaceTextRunAtAnchor(
   anchor.wire.text = text
   part.dirty = true
   return true
+}
+
+/**
+ * The run's own text-wrapping breaks are text the replacement supersedes: the
+ * new text re-emits its own w:br elements, so leaving the old ones behind both
+ * duplicates breaks and desynchronises wire.text from the saved XML. Breaks of
+ * any other type are structure and stay where they are.
+ */
+export function textBreakReplacements(
+  anchor: TextRunAnchor,
+  origin: number,
+): OverlayReplacement[] {
+  return anchor.textBreaks.map(({ start, end }) => ({
+    start: start - origin,
+    end: end - origin,
+    value: '',
+  }))
 }
 
 export function wordRunInnerTextXml(prefix: string, text: string) {

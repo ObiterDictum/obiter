@@ -1020,6 +1020,51 @@ Track Changes is on. Whole-run emphasis under tracking is unchanged.
 Rejected: a parallel range operation type; renaming `set_run_emphasis`;
 attaching a character range to `runId`.
 
+### Document edit operation batches: one coordinate space (14 September 2026)
+
+Context: `replace_run_text` updates a run's model text but not its source
+anchors, so a later range emphasis in the same request addressed offsets that
+no longer described the run and the save was rejected as invalid (#205, E44).
+Composition needed a stated contract rather than an incidental property of
+operation order.
+
+Decision: a `DocumentEditRequest` operation list is a batch, not an ordered
+program. Every operation addresses the paragraph text as it stands after all
+`replace_run_text` operations in that batch, so listing an emphasis before its
+replacement does not change what it emphasises. `replace_run_text` is the only
+operation that establishes replacement text; `insert_paragraph_after`
+establishes text for a paragraph that did not exist and is addressed by
+`paragraphId` alone. `set_run_emphasis` addresses a paragraph through
+`paragraphId` plus half-open `from`/`to` character offsets in that
+post-replacement text, or a whole run through `runId`. A `runId` addresses a
+run of the stored version, never a run an earlier split in the same batch
+created.
+
+Text is normalised once, at the contract boundary: a CRLF pair and a lone CR
+are the same logical break as LF and are stored as LF, because a break
+serialises to one `w:br` element and re-parses as one character. A
+text-wrapping `w:br` is that character; a page or column break is structure:
+it occupies no text offset and survives a text edit unchanged. Classification
+has one owner, `isTextWrappingBreak`, shared by the parser, the model anchors
+and the text-replacement path.
+
+Within a batch, several replacements touching one run apply in list order and
+each replaces the whole run text, so the last one wins. Overlapping emphasis
+ranges merge per property with the later operation as the last write, which is
+why an explicit `w:val="0"` can appear where an earlier range had set that
+property. Third-party and direct API clients must treat offsets as addressing
+this one space, not the pre-replacement document. Validation rejects an
+inverted or empty range, an offset beyond the paragraph text, a range that
+would split a surrogate pair, and an operation list that is empty or larger
+than the operation cap, all as `validation_failed` (400).
+
+Failure is atomic: the API parses, applies and serialises the whole batch
+before any database work, so a rejected batch writes no version, no audit row
+and no stored object. A batch whose split boundary cannot be mapped faithfully
+fails closed with `validation_failed` rather than misformatting; a range that
+crosses a text-wrapping break is currently such a case, because the offset
+mapping in `comment-anchors.ts` does not yet consume the break character.
+
 ### Stage 1 legislation search: stored Acts with withheld amended text (September 2026)
 
 Context: search covered judgments only. Stage 1 adds UK Public General Acts
