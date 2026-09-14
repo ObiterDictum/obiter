@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  classifyNeutralCitationCandidate,
   neutralCitationPatternSource,
   parseNeutralCitationCandidate,
 } from './neutral-citation'
@@ -84,6 +85,65 @@ describe('parseNeutralCitationCandidate', () => {
     expect(parseNeutralCitationCandidate('[2024]\u00a0UKSC 22 ')).toBe(
       '[2024]\u00a0UKSC 22',
     )
+  })
+})
+
+describe('classifyNeutralCitationCandidate', () => {
+  it.each([
+    '[2024] UKSC 22',
+    '[2024] EWCA Civ 7',
+    '[2024] EWHC 22 (Admin)',
+    '[2024] UKUT 00236 (IAC)',
+    '[2024] CSIH 9',
+  ])('classifies the supported citation %s as a citation', (candidate) => {
+    expect(classifyNeutralCitationCandidate(candidate)).toBe('citation')
+  })
+
+  it.each([
+    '[2024] EAT 12',
+    '[2024] NICh 3',
+    '[2024] ScotCS 7',
+    '[2024] ZZZ 12',
+    '[2024] EAT 12 (Costs)',
+    '[2024] eat 12',
+    '[2024]\tEAT\t12',
+  ])('classifies the unlisted court in %j as unsupported', (candidate) => {
+    expect(classifyNeutralCitationCandidate(candidate)).toBe(
+      'unsupported_court',
+    )
+  })
+
+  it.each([
+    '[2024 EAT 12',
+    '[[2024]] EAT 12',
+    '[2024) EAT 12',
+    '[2024] EAT',
+    '[2024] 12',
+    '[024] EAT 12',
+    '[2024] EAT 12 appended prose',
+    '[2024] EAT 12 and [2024] EAT 13',
+    'Carroll v Taylor [2024] EAT 12',
+    '[2024] Foo Bar 12',
+    'the policy in [2024] and 12 files',
+    '; drop table legal_source_documents',
+  ])('classifies the non-citation %j as not a citation', (candidate) => {
+    expect(classifyNeutralCitationCandidate(candidate)).toBe('not_a_citation')
+  })
+
+  it.each([
+    '[２０２４] EAT 12',
+    '[2024] EAT １２',
+    '[2024] EAT\u202e 12',
+    '[2024] EAT\u000012',
+  ])('still refuses the lookalike or hidden character in %j', (candidate) => {
+    expect(classifyNeutralCitationCandidate(candidate)).toBe('not_a_citation')
+  })
+
+  it('keeps the unsupported court out of the supported parse', () => {
+    // The classifier is the only place that distinguishes the two; the older
+    // parse entry point still returns null for an unlisted court.
+    expect(parseNeutralCitationCandidate('[2024] EAT 12')).toBeNull()
+    expect(classifyNeutralCitationCandidate('[2024] UKSC 22')).toBe('citation')
   })
 })
 

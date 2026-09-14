@@ -264,7 +264,12 @@ identity, and the map throws nowhere a caller can quietly bypass it.
   folds may differ from the stored string: case, whitespace, punctuation and
   leading zeros in the number. Nothing beyond those folds is applied, so a
   fullwidth bracket, a fullwidth digit, a Unicode lookalike or a hidden control
-  character is refused rather than folded into a match.
+  character is refused rather than folded into a match. The court codes are a
+  closed list of the courts the corpus is drawn from, so a well-formed citation
+  for a court outside it (`[2024] EAT 12`) is `unsupported`, not `malformed`:
+  it is a citation of a family this layer does not resolve, which is a different
+  answer from prose that merely contains brackets and digits. An unlisted court
+  is never queried against the store as though it were supported.
 - **Legislation by canonical path**: `/ln/ukpga/YYYY/N[/label/path]`, resolved by
   the shared path grammar with no store read. A canonical-shaped path naming an
   act type this repository does not store is `unsupported`, not `malformed`.
@@ -272,18 +277,40 @@ identity, and the map throws nowhere a caller can quietly bypass it.
   short titles, chapter citations (`1998 c. 42`), the curated aliases, and
   section and schedule forms in either supported order, with the stored title
   fold (case, quote, hyphen and punctuation folding, `(repealed)` annotations).
+  A chapter citation's year must be a canonical Act year: four ASCII digits and
+  no earlier than 1801, the first year of the Parliament of the United Kingdom,
+  whose Public General Acts are the `ukpga` corpus. A zero-padded year (`0204`)
+  or a pre-1801 one is not a chapter citation, so it never becomes the
+  non-canonical identity `Number()` would derive from it. The chapter number is
+  a positive safe integer and its canonical form drops leading zeros, so `042`
+  names the same chapter as `42`; a number too large to be a safe integer is
+  refused rather than rounded. The rule is stated once in
+  `packages/contracts/src/legislation-paths.ts` and applied by both the
+  free-text classifier and the pasted-path parser, so they cannot disagree.
 
 ### Case-law semantics
 
 The canonical identity of a judgment citation is the stored document id, so a
-case-law candidate takes one batch store read. Zero stored records carrying the
-citation is `unresolved`, never a claim that the authority does not exist. Two or
-more is `ambiguous`, and the withdrawn flag is deliberately not consulted:
-choosing between duplicate carriers means reading their records and judging which
-is trustworthy, which is V2's authority-existence decision. Resolution therefore
-never picks a winner by row order, and a withdrawn record never silently beats a
-live one. A single carrier resolves even when it is withdrawn; V2 then reports
-`evidence_unavailable` for it.
+case-law candidate takes one batch store read. Zero stored carriers is
+`unresolved`, never a claim that the authority does not exist.
+
+The live/withdrawn disposition of the carriers is decided by one rule shared
+with V2 (`selectAuthorityCarriers`), so the two adjacent stages cannot disagree
+about the same store state. A withdrawn row is a source that was once minted and
+is no longer trustworthy, not a second candidate identity:
+
+- one live carrier resolves, whatever withdrawn history sits beside it;
+- two or more live carriers are `ambiguous`, and no carrier wins by row order;
+- a single withdrawn carrier resolves and V2 then reports `evidence_unavailable`;
+- two or more withdrawn carriers are not representable through one `sourceId`,
+  and resolution never picks by row order, so it fails closed as `ambiguous`.
+
+That last case is the one state where V3 and V2 answer differently: V2's own
+outcome for the same store state is `source_withdrawn` (`evidence_unavailable`),
+but V3 has no single identity to hand it. Both answers are review-required and
+neither is a pass, and the gap is the V1 storage-identity constraint tracked as a
+separate board item (`Decouple canonical case-law identity from stored source
+identity`), not a carrier-selection rule V3 is allowed to invent.
 
 ### Legislation semantics
 

@@ -1,6 +1,10 @@
 import { Pool } from 'pg'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import type { VerificationSubject } from '@obiter/verification-core'
+import type {
+  CitationResolution,
+  VerificationFinding,
+  VerificationSubject,
+} from '@obiter/verification-core'
 import { checkAuthorityExistence } from './authority-existence'
 import { resolveCitationCandidates } from './citation-resolution'
 import {
@@ -45,6 +49,11 @@ const judgmentFixtures: Fixture[] = [
   },
   { id: 'db-test-v3-dup-a', neutralCitation: '[2066] UKSC 77' },
   { id: 'db-test-v3-dup-b', neutralCitation: '[2066] UKSC 77' },
+  { id: 'db-test-v3-live8', neutralCitation: '[2066] UKSC 8' },
+  { id: 'db-test-v3-wd8a', neutralCitation: '[2066] UKSC 8', withdrawn: true },
+  { id: 'db-test-v3-wd8b', neutralCitation: '[2066] UKSC 8', withdrawn: true },
+  { id: 'db-test-v3-wd9a', neutralCitation: '[2066] UKSC 9', withdrawn: true },
+  { id: 'db-test-v3-wd9b', neutralCitation: '[2066] UKSC 9', withdrawn: true },
 ]
 
 describe('case law resolution against the stored record', () => {
@@ -64,6 +73,23 @@ describe('case law resolution against the stored record', () => {
     for (const fixture of judgmentFixtures) {
       await insertAuthority(pool, fixture)
     }
+    // A stored carrier row that is valid JSON with a citation but not a valid
+    // legal-source record. The batch lookup matches its citation; V2's schema
+    // check on the record rejects it, so it cannot create a false resolution.
+    await pool.query(
+      `insert into legal_source_documents
+         (document_id, summary_json, provider_json, content_hash, source_uri)
+       values ($1, $2::jsonb, '{}'::jsonb, $3, $4)`,
+      [
+        'db-test-v3-malformed',
+        JSON.stringify({
+          id: 'db-test-v3-malformed',
+          neutralCitation: '[2066] UKSC 10',
+        }),
+        'dbtest-v3-malformed',
+        '/db-test-v3-malformed',
+      ],
+    )
   })
 
   afterAll(async () => {
@@ -141,12 +167,18 @@ describe('case law resolution against the stored record', () => {
     expect(await resolveOne('[2066] UKSC 77')).toEqual({ outcome: 'ambiguous' })
   })
 
-  it('refuses to choose between a live and a withdrawn carrier', async () => {
-    // Resolution does not read the withdrawn flag: choosing between duplicate
-    // carriers means judging which record is trustworthy, which is the
-    // authority-existence check's decision. Given the live identity directly,
-    // V2 still clears on it, so its semantics are unchanged.
-    expect(await resolveOne('[2066] UKSC 6')).toEqual({ outcome: 'ambiguous' })
+  it('resolves the live carrier beside a withdrawn one and clears on it', async () => {
+    // A withdrawn row is not a second candidate identity. V3 resolves the one
+    // live source and V2 clears on it, which is V2's documented answer for this
+    // store state, rather than resolution inventing an ambiguity.
+    expect(await resolveOne('[2066] UKSC 6')).toEqual({
+      outcome: 'resolved',
+      citation: {
+        kind: 'case_law',
+        neutralCitation: '[2066] UKSC 6',
+        sourceId: 'db-test-v3-live-dup',
+      },
+    })
 
     const finding = await checkAuthorityExistence(pool, {
       subject,
@@ -221,6 +253,140 @@ describe('case law resolution against the stored record', () => {
 
   it('is safe for an empty batch', async () => {
     expect(await resolveCitationCandidates(pool, [])).toEqual([])
+  })
+
+  /**
+   * Every carrier state, with what V3 resolves it to and what the V3 to V2
+   * pipeline concludes. Both stages read the one shared carrier rule, so this
+   * table is where they are proven not to disagree.
+   */
+  const carrierStates: Array<{
+    state: string
+    citation: string
+    v3: CitationResolution
+    v2Status: VerificationFinding['status']
+  }> = [
+    {
+      state: 'no carrier',
+      citation: '[2066] UKSC 100',
+      v3: { outcome: 'unresolved' },
+      v2Status: { state: 'review_required', reason: 'citation_unresolved' },
+    },
+    {
+      state: 'one live carrier',
+      citation: '[2066] UKSC 1',
+      v3: {
+        outcome: 'resolved',
+        citation: {
+          kind: 'case_law',
+          neutralCitation: '[2066] UKSC 1',
+          sourceId: 'db-test-v3-uksc-1',
+        },
+      },
+      v2Status: { state: 'clear' },
+    },
+    {
+      state: 'one withdrawn carrier',
+      citation: '[2066] UKSC 3',
+      v3: {
+        outcome: 'resolved',
+        citation: {
+          kind: 'case_law',
+          neutralCitation: '[2066] UKSC 3',
+          sourceId: 'db-test-v3-withdrawn',
+        },
+      },
+      v2Status: {
+        state: 'review_required',
+        reason: 'evidence_unavailable',
+      },
+    },
+    {
+      state: 'one live plus one withdrawn',
+      citation: '[2066] UKSC 6',
+      v3: {
+        outcome: 'resolved',
+        citation: {
+          kind: 'case_law',
+          neutralCitation: '[2066] UKSC 6',
+          sourceId: 'db-test-v3-live-dup',
+        },
+      },
+      v2Status: { state: 'clear' },
+    },
+    {
+      state: 'one live plus multiple withdrawn',
+      citation: '[2066] UKSC 8',
+      v3: {
+        outcome: 'resolved',
+        citation: {
+          kind: 'case_law',
+          neutralCitation: '[2066] UKSC 8',
+          sourceId: 'db-test-v3-live8',
+        },
+      },
+      v2Status: { state: 'clear' },
+    },
+    {
+      state: 'multiple live',
+      citation: '[2066] UKSC 77',
+      v3: { outcome: 'ambiguous' },
+      v2Status: { state: 'review_required', reason: 'citation_ambiguous' },
+    },
+    {
+      state: 'multiple withdrawn',
+      citation: '[2066] UKSC 9',
+      v3: { outcome: 'ambiguous' },
+      v2Status: { state: 'review_required', reason: 'citation_ambiguous' },
+    },
+    {
+      state: 'malformed carrier row',
+      citation: '[2066] UKSC 10',
+      v3: {
+        outcome: 'resolved',
+        citation: {
+          kind: 'case_law',
+          neutralCitation: '[2066] UKSC 10',
+          sourceId: 'db-test-v3-malformed',
+        },
+      },
+      v2Status: { state: 'review_required', reason: 'check_inconclusive' },
+    },
+  ]
+
+  it.each(carrierStates)(
+    'agrees on $state',
+    async ({ citation, v3, v2Status }) => {
+      const { resolution, finding } = await resolveThenCheck(citation)
+
+      expect(resolution).toEqual(v3)
+      expect(finding.status).toEqual(v2Status)
+    },
+  )
+
+  it('documents the multiple-withdrawn limitation instead of picking one', async () => {
+    // V3 cannot hand V2 one sourceId for two withdrawn carriers and never picks
+    // by row order, so it fails closed as ambiguous. V2's own answer for the
+    // same store state, handed either identity, is evidence_unavailable. Both
+    // are review-required, neither is a pass, and the gap is the V1
+    // sourceId-identity constraint tracked as a separate board item.
+    expect(await resolveOne('[2066] UKSC 9')).toEqual({ outcome: 'ambiguous' })
+
+    for (const sourceId of ['db-test-v3-wd9a', 'db-test-v3-wd9b']) {
+      const finding = await checkAuthorityExistence(pool, {
+        subject,
+        citation: citationOf('[2066] UKSC 9'),
+        normalizedCitation: {
+          kind: 'case_law',
+          neutralCitation: '[2066] UKSC 9',
+          sourceId,
+        },
+      })
+      expect(finding.status).toEqual({
+        state: 'review_required',
+        reason: 'evidence_unavailable',
+      })
+    }
   })
 })
 

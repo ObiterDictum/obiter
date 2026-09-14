@@ -32,6 +32,22 @@ const neutralCitationCandidatePattern = new RegExp(
 )
 
 /**
+ * The same `[YEAR] COURT NUMBER` frame with a court token outside the closed
+ * list above. `EAT` is a real Find Case Law court, so "not a citation at all"
+ * would be the wrong answer for `[2024] EAT 12`: it is a well-formed citation
+ * of a court this layer does not resolve.
+ *
+ * The court token is one alphabetic run, not arbitrary prose, and the whole
+ * candidate must match: a line that merely contains brackets and digits, or a
+ * citation with appended prose, stays outside the grammar. Kept in step with
+ * the supported pattern's year window, optional chamber and allowed whitespace.
+ */
+const unsupportedCourtCandidatePattern = new RegExp(
+  String.raw`^\[(?:18|19|20)\d{2}]\s+[A-Za-z]{2,8}\s+\d+(?:\s+\([A-Za-z]+\))?$`,
+  'i',
+)
+
+/**
  * Control, format, surrogate and private-use characters, all of which can make
  * a string that is not the citation it appears to be: a bidi override can
  * reverse what a reviewer reads, and a zero-width joiner can hide a missing
@@ -48,6 +64,31 @@ function hasRefusedCharacter(value: string): boolean {
 }
 
 /**
+ * What a candidate is against the shared grammar. `unsupported_court` is
+ * deliberately separate from `not_a_citation`: a syntactically citation-shaped
+ * candidate naming a court this layer does not resolve is a different answer
+ * from prose that merely contains brackets and digits, and a caller reports it
+ * as an unsupported source family rather than a malformed citation.
+ */
+export type NeutralCitationCandidateKind =
+  'citation' | 'unsupported_court' | 'not_a_citation'
+
+/**
+ * Classify a raw candidate against the shared grammar. The supported grammar is
+ * tried first, so an unlisted court can never shadow a supported one.
+ */
+export function classifyNeutralCitationCandidate(
+  value: string,
+): NeutralCitationCandidateKind {
+  const trimmed = value.trim()
+  if (hasRefusedCharacter(trimmed)) return 'not_a_citation'
+  if (neutralCitationCandidatePattern.test(trimmed)) return 'citation'
+  return unsupportedCourtCandidatePattern.test(trimmed)
+    ? 'unsupported_court'
+    : 'not_a_citation'
+}
+
+/**
  * A raw candidate as a single neutral citation, or null when the candidate is
  * outside the grammar (a malformed bracket, a missing year, court or number,
  * appended prose, two citations in one candidate, non-ASCII digits, a Unicode
@@ -58,9 +99,13 @@ function hasRefusedCharacter(value: string): boolean {
  * store comparison later NFKC-folds its input, so a fullwidth bracket or a
  * fullwidth digit would otherwise be accepted here and silently matched
  * against a citation nobody typed.
+ *
+ * A citation for an unlisted court returns null here; a caller that needs to
+ * tell that apart from prose calls {@link classifyNeutralCitationCandidate}.
  */
 export function parseNeutralCitationCandidate(value: string): string | null {
   const trimmed = value.trim()
-  if (hasRefusedCharacter(trimmed)) return null
-  return neutralCitationCandidatePattern.test(trimmed) ? trimmed : null
+  return classifyNeutralCitationCandidate(trimmed) === 'citation'
+    ? trimmed
+    : null
 }

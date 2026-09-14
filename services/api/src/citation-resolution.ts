@@ -1,7 +1,7 @@
 import type { Pool } from 'pg'
 import {
+  classifyNeutralCitationCandidate,
   isSupportedLegislationActType,
-  parseNeutralCitationCandidate,
 } from '@obiter/contracts'
 import { normalizeCitationValue } from '@obiter/search-client'
 import {
@@ -15,7 +15,11 @@ import {
   createActDirectory,
   type ActDirectory,
 } from './routes/legal-search/legislation-citations'
-import { findStoredAuthorityIdsByNeutralCitations } from './routes/legal-search/source-store'
+import {
+  findStoredAuthorityCarriersByNeutralCitations,
+  selectAuthorityCarriers,
+  type StoredAuthorityCarrier,
+} from './routes/legal-search/source-store'
 import { listLegislationActs } from './routes/legal-search/legislation-store'
 
 /**
@@ -58,7 +62,11 @@ export interface CitationCandidateResolution {
  * title run.
  */
 type CandidateShape =
-  'blank' | 'legislation_path' | 'case_law' | 'legislation_text'
+  | 'blank'
+  | 'legislation_path'
+  | 'case_law'
+  | 'case_law_unsupported_court'
+  | 'legislation_text'
 
 function candidateShape(rawText: string): CandidateShape {
   // A blank candidate is decided by its own grammar, not by the store: it is
@@ -66,7 +74,9 @@ function candidateShape(rawText: string): CandidateShape {
   // must never become inconclusive because a read failed.
   if (rawText === '') return 'blank'
   if (rawText.startsWith('/ln/')) return 'legislation_path'
-  if (parseNeutralCitationCandidate(rawText) !== null) return 'case_law'
+  const neutral = classifyNeutralCitationCandidate(rawText)
+  if (neutral === 'citation') return 'case_law'
+  if (neutral === 'unsupported_court') return 'case_law_unsupported_court'
   return 'legislation_text'
 }
 
@@ -93,10 +103,10 @@ export async function resolveCitationCandidates(
   const caseLawCitations = prepared
     .filter((candidate) => candidate.shape === 'case_law')
     .map((candidate) => candidate.text)
-  let caseLawMatches: Map<string, string[]> | null = null
+  let caseLawMatches: Map<string, StoredAuthorityCarrier[]> | null = null
   if (caseLawCitations.length > 0) {
     caseLawMatches = await readStoreDependency('case_law_lookup', () =>
-      findStoredAuthorityIdsByNeutralCitations(pool, caseLawCitations),
+      findStoredAuthorityCarriersByNeutralCitations(pool, caseLawCitations),
     )
   }
 
@@ -155,7 +165,7 @@ async function readStoreDependency<T>(
 }
 
 interface ResolutionDependencies {
-  caseLawMatches: Map<string, string[]> | null
+  caseLawMatches: Map<string, StoredAuthorityCarrier[]> | null
   directory: ActDirectory | null
 }
 
@@ -171,6 +181,12 @@ function resolveOne(
       return resolveLegislationPath(rawText)
     case 'case_law':
       return resolveCaseLaw(rawText, dependencies.caseLawMatches)
+    case 'case_law_unsupported_court':
+      // A well-formed neutral citation for a court this grammar does not carry
+      // is an unsupported source family, not a malformed citation. It is
+      // decided from the grammar alone, so an unlisted court is never looked up
+      // as though it were supported.
+      return { outcome: 'unsupported' }
     case 'legislation_text':
       return resolveLegislationText(rawText, dependencies.directory)
     default: {
@@ -201,15 +217,19 @@ function resolveLegislationPath(rawText: string): CitationResolution {
 /**
  * The one canonical identity for a neutral citation is the stored authority
  * document id, so it takes a store read (one batch call for the whole
- * document). Zero candidates is `unresolved`: it is not evidence that the
+ * document). Zero carriers is `unresolved`: it is not evidence that the
  * authority does not exist, and it must not be presented as one.
  *
- * Two or more stored records carrying the citation is `ambiguous`, and the
- * withdrawn flag is deliberately not consulted. Choosing between duplicate
- * carriers means reading their records and judging which is the trustworthy
- * one, which is the authority-existence check's decision; resolution refuses to
- * make it, so a withdrawn record never silently beats a live one and no
- * duplicate wins by arriving first.
+ * The live/withdrawn carrier rule is shared with the authority-existence check
+ * (`selectAuthorityCarriers`), so the two stages cannot disagree about the same
+ * store state: one live carrier resolves even when withdrawn historical
+ * carriers sit beside it, and two or more live carriers are `ambiguous`. The
+ * flag is read through that one rule, not re-derived here.
+ *
+ * A single withdrawn carrier is still an unambiguous identity and resolves; V2
+ * then reports `evidence_unavailable` for it. Two or more withdrawn carriers
+ * are not representable through one `sourceId`, and resolution never picks by
+ * row order, so it fails closed as `ambiguous` rather than choosing a carrier.
  *
  * `neutralCitation` is the candidate as the caller wrote it, after the trim.
  * The documented folds are applied at comparison, so the identity here is the
@@ -217,17 +237,36 @@ function resolveLegislationPath(rawText: string): CitationResolution {
  */
 function resolveCaseLaw(
   rawText: string,
-  matches: Map<string, string[]> | null,
+  matches: Map<string, StoredAuthorityCarrier[]> | null,
 ): CitationResolution {
   if (matches === null)
     return { outcome: 'inconclusive', reason: 'store_error' }
-  const [sourceId, ...duplicates] =
-    matches.get(normalizeCitationValue(rawText)) ?? []
-  if (!sourceId) return { outcome: 'unresolved' }
-  if (duplicates.length > 0) return { outcome: 'ambiguous' }
+  const selection = selectAuthorityCarriers(
+    matches.get(normalizeCitationValue(rawText)) ?? [],
+  )
+  switch (selection.kind) {
+    case 'none':
+      return { outcome: 'unresolved' }
+    case 'ambiguous':
+      return { outcome: 'ambiguous' }
+    case 'no_live': {
+      const [only, ...rest] = selection.ids
+      return only && rest.length === 0
+        ? resolvedCaseLaw(rawText, only)
+        : { outcome: 'ambiguous' }
+    }
+    case 'single_live':
+      return resolvedCaseLaw(rawText, selection.id)
+  }
+}
+
+function resolvedCaseLaw(
+  neutralCitation: string,
+  sourceId: string,
+): CitationResolution {
   return {
     outcome: 'resolved',
-    citation: { kind: 'case_law', neutralCitation: rawText, sourceId },
+    citation: { kind: 'case_law', neutralCitation, sourceId },
   }
 }
 

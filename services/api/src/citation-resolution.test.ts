@@ -73,21 +73,66 @@ describe('case law resolution', () => {
     }
   })
 
-  it('does not consult the withdrawn flag when duplicate carriers exist', async () => {
-    // Choosing between duplicate carriers means reading their records and
-    // judging which is trustworthy, which is the authority-existence check's
-    // decision. Resolution refuses to make it, so a withdrawn record never
-    // silently beats a live one, and a live one never silently beats a
-    // withdrawn one.
+  it('resolves the one live carrier beside withdrawn history, never ambiguous', async () => {
+    // A withdrawn row is a source that was once minted and is no longer
+    // trustworthy, not a second candidate identity. One live carrier resolves
+    // whatever withdrawn history sits beside it, which is what the
+    // authority-existence check documents for the same store state.
+    expect(
+      await resolveOne('[2066] UKSC 8', {
+        authorities: [
+          { documentId: 'live', neutralCitation: '[2066] UKSC 8' },
+          {
+            documentId: 'withdrawn',
+            neutralCitation: '[2066] UKSC 8',
+            withdrawn: true,
+          },
+        ],
+      }),
+    ).toEqual({
+      kind: 'case_law',
+      neutralCitation: '[2066] UKSC 8',
+      sourceId: 'live',
+    })
+  })
+
+  it('stays ambiguous for two live carriers, in either row order', async () => {
+    const live: AuthorityRow[] = [
+      { documentId: 'live-a', neutralCitation: '[2066] UKSC 8' },
+      { documentId: 'live-b', neutralCitation: '[2066] UKSC 8' },
+    ]
+    for (const rows of [live, [...live].reverse()]) {
+      expect(await resolveOne('[2066] UKSC 8', { authorities: rows })).toEqual({
+        kind: 'unresolved',
+        reason: 'ambiguous',
+      })
+    }
+  })
+
+  it('resolves a single withdrawn carrier and lets V2 judge its trustworthiness', async () => {
+    expect(
+      await resolveOne('[2066] UKSC 8', {
+        authorities: [
+          {
+            documentId: 'withdrawn',
+            neutralCitation: '[2066] UKSC 8',
+            withdrawn: true,
+          },
+        ],
+      }),
+    ).toEqual({
+      kind: 'case_law',
+      neutralCitation: '[2066] UKSC 8',
+      sourceId: 'withdrawn',
+    })
+  })
+
+  it('fails closed on two withdrawn carriers it cannot represent as one id', async () => {
+    // One sourceId cannot name two withdrawn carriers, and resolution never
+    // picks by row order. V2 would report source_withdrawn for the same state;
+    // both answers are review-required, so resolution refuses to choose rather
+    // than selecting arbitrarily.
     for (const rows of [
-      [
-        { documentId: 'live', neutralCitation: '[2066] UKSC 8' },
-        {
-          documentId: 'withdrawn',
-          neutralCitation: '[2066] UKSC 8',
-          withdrawn: true,
-        },
-      ],
       [
         {
           documentId: 'withdrawn-a',
@@ -96,6 +141,18 @@ describe('case law resolution', () => {
         },
         {
           documentId: 'withdrawn-b',
+          neutralCitation: '[2066] UKSC 8',
+          withdrawn: true,
+        },
+      ],
+      [
+        {
+          documentId: 'withdrawn-b',
+          neutralCitation: '[2066] UKSC 8',
+          withdrawn: true,
+        },
+        {
+          documentId: 'withdrawn-a',
           neutralCitation: '[2066] UKSC 8',
           withdrawn: true,
         },
@@ -214,6 +271,10 @@ describe('legislation path resolution', () => {
     '/ln/ukpga/2066/1/',
     '/ln/ukpga/2066/1/../../x',
     '/ln/ukpga/2066/1/section/%2e%2e',
+    // A non-canonical Act year is not a canonical path, so it is malformed
+    // rather than resolving to an identity Number() would rewrite.
+    '/ln/ukpga/0204/1',
+    '/ln/ukpga/1800/1',
     'ukpga/2066/1/section/40',
     '/ln/',
     '/ln',

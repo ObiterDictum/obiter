@@ -102,15 +102,15 @@ candidate, or a batch of them, into the identity V2 accepts.
 `CitationResolution` is the resolution layer's own result model, deliberately
 separate from the finding vocabulary:
 
-| outcome        | meaning                                                                      |
-| -------------- | ---------------------------------------------------------------------------- |
-| `resolved`     | exactly one canonical identity, in the resolved arms of `NormalizedCitation` |
-| `unresolved`   | citation-shaped and inside the grammar, but no canonical identity matched    |
-| `ambiguous`    | more than one canonical identity remains possible, and none wins             |
-| `malformed`    | outside the accepted citation grammar                                        |
-| `unsupported`  | a citation of a source family this layer does not resolve                    |
-| `inconclusive` | an operational dependency failed, so resolution could not complete           |
-| `not_checked`  | resolution did not run                                                       |
+| outcome        | meaning                                                                                                                                                                                                     |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `resolved`     | exactly one canonical identity, in the resolved arms of `NormalizedCitation`                                                                                                                                |
+| `unresolved`   | citation-shaped and inside the grammar, but no canonical identity matched                                                                                                                                   |
+| `ambiguous`    | more than one canonical identity remains possible, and none wins                                                                                                                                            |
+| `malformed`    | outside the accepted citation grammar                                                                                                                                                                       |
+| `unsupported`  | a citation of a source family this layer does not resolve: a canonical-shaped `/ln/` path naming an unheld act type, or a well-formed neutral citation for a court outside the shared grammar's closed list |
+| `inconclusive` | an operational dependency failed, so resolution could not complete                                                                                                                                          |
+| `not_checked`  | resolution did not run                                                                                                                                                                                      |
 
 `decideCitationResolution` maps that onto a `citation_resolution` finding. Every
 non-resolved outcome is review-required; none is a pass, and none is a claim
@@ -169,8 +169,13 @@ draft, remain V5's wiring.
   path, so the single-schedule alias has one owner and a held provision cannot
   read as not-held to one caller and held to the other. The case-law candidate
   lookup is a batch
-  (`findStoredAuthorityIdsByNeutralCitations`): its SQL pushes the citation year
-  into the query and returns only the citation projection.
+  (`findStoredAuthorityCarriersByNeutralCitations`): its SQL pushes the citation
+  year into the query and returns only the citation projection and the provider
+  block. One pure rule, `selectAuthorityCarriers`, turns a carrier set into its
+  live/withdrawn disposition, and both V2 and V3 read it, so the two stages
+  cannot drift on the same store state. A case-law citation for a court outside
+  the shared grammar's closed list is `unsupported` and takes no store read at
+  all.
 - **V3 resolution boundary.** `services/api/src/citation-resolution.ts` owns the
   store-backed resolution. It batches rather than looping: one candidate lookup
   covers every case-law citation in the call, one Act-directory read covers the

@@ -31,7 +31,8 @@ export function citationOf(rawText: string): CitationInput {
 export interface AuthorityRow extends QueryResultRow {
   documentId: string
   neutralCitation: string
-  /** Not read by resolution. Present so a test can prove it is not read. */
+  /** Projected into `provider_json`, the column the store reads withdrawal
+   * from, so resolution exercises the same live/withdrawn rule as the record. */
   withdrawn?: boolean
 }
 
@@ -91,13 +92,27 @@ export function fakePool(options: FakePoolOptions = {}) {
           throw new Error('connection terminated unexpectedly')
         }
         const patterns = (values[0] as string[] | undefined) ?? []
-        const rows = (options.authorities ?? []).filter((row) =>
-          patterns.length === 0
-            ? true
-            : patterns.some((pattern) =>
-                row.neutralCitation.includes(pattern.replaceAll('%', '')),
-              ),
-        )
+        const rows = (options.authorities ?? [])
+          .filter((row) =>
+            patterns.length === 0
+              ? true
+              : patterns.some((pattern) =>
+                  row.neutralCitation.includes(pattern.replaceAll('%', '')),
+                ),
+          )
+          .map((row) => ({
+            documentId: row.documentId,
+            neutralCitation: row.neutralCitation,
+            providerJson: row.withdrawn
+              ? {
+                  withdrawn: {
+                    at: '2066-09-01T00:00:00.000Z',
+                    checkedUris: [row.documentId],
+                    runIds: ['run-0'],
+                  },
+                }
+              : {},
+          }))
         return { rows }
       }
       if (text.includes('legislation_documents')) {
