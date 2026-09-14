@@ -208,11 +208,20 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
    * change, so the next save cannot resend it and the user can still see and
    * discard it. Content is preserved, never silently dropped. The split always
    * reads the latest bundle so typing during a request is not overwritten.
+   *
+   * When `sent` (the state the rejected request was planned from) is given
+   * and the slot changed after planning, the held record keeps the sent
+   * content while the newer typing stays editable: holding the slot's latest
+   * content would swallow text the rejection never saw, stranding it in held
+   * limbo with no reapply path. The next save may re-send that newer text and
+   * be rejected again, which then holds it cleanly; that round trip costs a
+   * request, silently eating the typing would cost the work.
    */
   function holdSlot(
     slot: DraftSlot,
     label: string,
     reason: string,
+    sent?: DraftState,
   ): HeldChange | null {
     const record: HeldChange = {
       id: crypto.randomUUID(),
@@ -222,9 +231,14 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
       state: emptyDraftState(),
     }
     setBundle((current) => {
-      const { remaining, removed } = splitDraftSlots(current.state, [slot])
+      const base = sent ?? current.state
+      const { removed } = splitDraftSlots(base, [slot])
       if (!hasDraftState(removed)) return current
       record.state = removed
+      if (sent && clearableSlots([slot], sent, current.state).length === 0) {
+        return { state: current.state, held: [...current.held, record] }
+      }
+      const { remaining } = splitDraftSlots(current.state, [slot])
       return {
         state: remaining,
         held: [...current.held, record],

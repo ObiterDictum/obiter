@@ -158,12 +158,14 @@ export function useDocumentSave({
   async function containRejection(
     source: DocumentModelWire,
     candidates: readonly DraftSlot[],
+    sent: DraftState,
   ) {
     if (candidates.length === 1 && candidates[0]) {
       drafts.holdSlot(
         candidates[0],
         slotLabel(candidates[0]),
         'The server rejected this change.',
+        sent,
       )
       return true
     }
@@ -178,6 +180,7 @@ export function useDocumentSave({
           candidate,
           slotLabel(candidate),
           'The server rejected this change.',
+          sent,
         )
         commit(attempt.covered, without, result.versionId, result.merged)
         return true
@@ -223,6 +226,7 @@ export function useDocumentSave({
         const isolated = await containRejection(
           model,
           [...current.covered].reverse(),
+          sent,
         )
         if (!isolated) {
           setFailure(

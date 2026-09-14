@@ -1,210 +1,15 @@
 // @vitest-environment jsdom
-import { createElement, type PropsWithChildren } from 'react'
-import {
-  act,
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from '@testing-library/react'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  DocumentEditOperation,
-  DocumentModelWire,
-  DocumentParagraphWire,
-} from '@obiter/contracts'
+import { act, fireEvent, screen, waitFor } from '@testing-library/react'
+import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api'
-import { DocxWorkspace } from './docx-workspace'
-
-const hooks = vi.hoisted(() => ({
-  useDocumentModel: vi.fn(),
-  useDocumentComments: vi.fn(),
-  useDocumentTrackedChanges: vi.fn(),
-  useDocumentCollaborationSync: vi.fn(),
-  useCreateDocumentComment: vi.fn(),
-  useResolveDocumentComment: vi.fn(),
-  useEditDocument: vi.fn(),
-  useCollaborationMerge: vi.fn(),
-  useTrackedChangeDecision: vi.fn(),
-  usePresenceUpdate: vi.fn(),
-  useCurrentUser: vi.fn(),
-  fetchDocumentExport: vi.fn(),
-}))
-
-vi.mock('../../document-workspace-api', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('../../document-workspace-api')>()
-  return {
-    ...actual,
-    useDocumentModel: hooks.useDocumentModel,
-    useDocumentComments: hooks.useDocumentComments,
-    useDocumentTrackedChanges: hooks.useDocumentTrackedChanges,
-    useDocumentCollaborationSync: hooks.useDocumentCollaborationSync,
-    useCreateDocumentComment: hooks.useCreateDocumentComment,
-    useResolveDocumentComment: hooks.useResolveDocumentComment,
-    useEditDocument: hooks.useEditDocument,
-    useCollaborationMerge: hooks.useCollaborationMerge,
-    useTrackedChangeDecision: hooks.useTrackedChangeDecision,
-    usePresenceUpdate: hooks.usePresenceUpdate,
-    fetchDocumentExport: hooks.fetchDocumentExport,
-  }
-})
-
-vi.mock('../../document-edits', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../document-edits')>()
-  return { ...actual, downloadBlob: vi.fn() }
-})
-
-vi.mock('../../current-user', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../current-user')>()
-  return { ...actual, useCurrentUser: hooks.useCurrentUser }
-})
-
-const STYLE_ID = 'Heading1'
-
-function model(text = 'Hello', styleId?: string): DocumentModelWire {
-  const paragraph: DocumentParagraphWire = {
-    id: 'p1',
-    ...(styleId ? { styleId } : {}),
-    runs: [{ id: 'r1', text, preservedXmlFragments: [] }],
-    preservedXmlFragments: [],
-  }
-  return {
-    version: 1,
-    stories: [
-      {
-        partName: 'word/document.xml',
-        kind: 'document',
-        paragraphs: [paragraph],
-        preservedXmlFragments: [],
-      },
-    ],
-    styles: [
-      {
-        styleId: STYLE_ID,
-        sourceFragment:
-          '<w:style w:type="paragraph"><w:name w:val="Heading 1"/></w:style>',
-      },
-    ],
-    numbering: [],
-    relationships: [],
-    preservedXmlFragments: [],
-    changes: [],
-  }
-}
-
-const validationFailed = new ApiError(
-  'validation_failed',
-  'The document edit request is invalid.',
-  400,
-  'req_1',
-)
-
-function wrapper({ children }: PropsWithChildren) {
-  return createElement(
-    QueryClientProvider,
-    {
-      client: new QueryClient({
-        defaultOptions: { queries: { retry: false } },
-      }),
-    },
-    children,
-  )
-}
-
-function idleMutation(overrides: Record<string, unknown> = {}) {
-  return {
-    mutate: vi.fn(),
-    mutateAsync: vi.fn(),
-    isPending: false,
-    error: null,
-    ...overrides,
-  }
-}
-
-function mount(options: {
-  editAsync?: ReturnType<typeof vi.fn>
-  mergeAsync?: ReturnType<typeof vi.fn>
-  versionId?: string
-  body?: string
-}) {
-  hooks.useCurrentUser.mockReturnValue({
-    data: {
-      user: {
-        id: 'usr_1',
-        name: 'Lex',
-        email: 'lex@obiter.dev',
-        role: 'owner',
-      },
-      organisation: { id: 'org_1', name: 'Chambers', plan: 'private_beta' },
-    },
-  })
-  hooks.useDocumentModel.mockImplementation((id: string) => ({
-    isLoading: false,
-    isError: false,
-    data: {
-      documentId: id,
-      versionId: options.versionId ?? 'ver_1',
-      versionNumber: 1,
-      model: model(options.body ?? 'Hello'),
-    },
-  }))
-  hooks.useDocumentComments.mockReturnValue({ data: { comments: [] } })
-  hooks.useDocumentTrackedChanges.mockReturnValue({ data: { changes: [] } })
-  hooks.useDocumentCollaborationSync.mockReturnValue({
-    data: {
-      changed: false,
-      participants: [],
-      currentVersionId: options.versionId ?? 'ver_1',
-    },
-  })
-  hooks.useCreateDocumentComment.mockReturnValue(idleMutation())
-  hooks.useResolveDocumentComment.mockReturnValue(idleMutation())
-  hooks.useEditDocument.mockReturnValue(
-    idleMutation({ mutateAsync: options.editAsync ?? vi.fn() }),
-  )
-  hooks.useCollaborationMerge.mockReturnValue(
-    idleMutation({ mutateAsync: options.mergeAsync ?? vi.fn() }),
-  )
-  hooks.useTrackedChangeDecision.mockReturnValue(idleMutation())
-  hooks.usePresenceUpdate.mockReturnValue(idleMutation())
-
-  return render(
-    <DocxWorkspace
-      documentId="doc_1"
-      versionId={options.versionId ?? 'ver_1'}
-      matterId="mtr_1"
-      filename="brief.docx"
-    />,
-    { wrapper },
-  )
-}
-
-function bodyEditor(): HTMLTextAreaElement {
-  const node = screen.getByLabelText('Paragraph text')
-  if (!(node instanceof HTMLTextAreaElement)) {
-    throw new Error('expected a paragraph editor')
-  }
-  return node
-}
-
-function saveState() {
-  return document
-    .querySelector('[data-save-state]')
-    ?.getAttribute('data-save-state')
-}
-
-beforeEach(() => {
-  window.localStorage.clear()
-  window.sessionStorage.clear()
-})
-
-afterEach(() => {
-  cleanup()
-  vi.clearAllMocks()
-})
+import {
+  bodyEditor,
+  mountSaveWorkspace,
+  openReviewTab,
+  STYLE_ID,
+  saveState,
+  validationFailed,
+} from './docx-workspace-save-harness'
 
 describe('E45 a rejected save must not poison later saves', () => {
   it('addresses a style applied to an unsaved paragraph to that paragraph', async () => {
@@ -213,7 +18,7 @@ describe('E45 a rejected save must not poison later saves', () => {
       versionId: 'ver_2',
       versionNumber: 2,
     })
-    mount({ editAsync })
+    mountSaveWorkspace({ editAsync })
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.click(screen.getByRole('button', { name: 'Insert paragraph' }))
     fireEvent.change(screen.getByLabelText('Pending paragraph text'), {
@@ -270,7 +75,7 @@ describe('E45 a rejected save must not poison later saves', () => {
         return { documentId: 'doc_1', versionId: version, versionNumber: 2 }
       },
     )
-    mount({ editAsync })
+    mountSaveWorkspace({ editAsync })
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello world' } })
     fireEvent.click(screen.getByRole('button', { name: 'Delete paragraph' }))
@@ -293,7 +98,7 @@ describe('E45 a rejected save must not poison later saves', () => {
         versionId: 'ver_2',
         versionNumber: 2,
       })
-    mount({ editAsync })
+    mountSaveWorkspace({ editAsync })
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello world' } })
     openReviewTab()
@@ -324,7 +129,7 @@ describe('E45 a rejected save must not poison later saves', () => {
         versionId: 'ver_3',
         versionNumber: 3,
       })
-    mount({ editAsync })
+    mountSaveWorkspace({ editAsync })
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello first' } })
     openReviewTab()
@@ -357,7 +162,7 @@ describe('E45 a rejected save must not poison later saves', () => {
       versionId: 'ver_2',
       versionNumber: 2,
     })
-    mount({ editAsync })
+    mountSaveWorkspace({ editAsync })
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello world' } })
 
@@ -381,7 +186,7 @@ describe('E45 a rejected save must not poison later saves', () => {
         originalSetItem.call(this, key, value)
       })
     try {
-      mount({ editAsync: vi.fn() })
+      mountSaveWorkspace({ editAsync: vi.fn() })
       fireEvent.click(screen.getByText('Hello'))
       fireEvent.change(bodyEditor(), { target: { value: 'Hello unstored' } })
 
@@ -396,7 +201,7 @@ describe('E45 a rejected save must not poison later saves', () => {
 
   it('explains that work is unsaved and offers a retry instead of a generic invalid-request message', async () => {
     const editAsync = vi.fn().mockRejectedValue(validationFailed)
-    mount({ editAsync })
+    mountSaveWorkspace({ editAsync })
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello world' } })
     openReviewTab()
@@ -411,7 +216,7 @@ describe('E45 a rejected save must not poison later saves', () => {
 
   it('holds a single rejected slot and does not resend it on retry', async () => {
     const editAsync = vi.fn().mockRejectedValue(validationFailed)
-    mount({ editAsync })
+    mountSaveWorkspace({ editAsync })
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello edited' } })
     openReviewTab()
@@ -439,7 +244,7 @@ describe('E45 a rejected save must not poison later saves', () => {
         })
       },
     )
-    mount({ editAsync })
+    mountSaveWorkspace({ editAsync })
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello world' } })
     fireEvent.click(screen.getByRole('button', { name: 'Heading 1' }))
@@ -462,6 +267,42 @@ describe('E45 a rejected save must not poison later saves', () => {
     expect(bodyEditor().value).toBe('Hello typed during probe')
   })
 
+  it('keeps same-slot text typed while a rejected save settles', async () => {
+    let rejectFirst: (reason: unknown) => void = () => undefined
+    const editAsync = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((_, reject) => {
+            rejectFirst = reject
+          }),
+      )
+      .mockResolvedValue({
+        documentId: 'doc_1',
+        versionId: 'ver_2',
+        versionNumber: 2,
+      })
+    mountSaveWorkspace({ editAsync })
+    fireEvent.click(screen.getByText('Hello'))
+    fireEvent.change(bodyEditor(), { target: { value: 'Hello doomed' } })
+    openReviewTab()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(1))
+
+    // The same rejected slot is extended while the request is in flight.
+    // Holding the slot must keep the newer typing editable, not swallow it.
+    fireEvent.change(bodyEditor(), {
+      target: { value: 'Hello doomed plus newer typing' },
+    })
+    await act(async () => {
+      rejectFirst(validationFailed)
+    })
+
+    await waitFor(() => expect(screen.getByText(/held here/i)).toBeTruthy())
+    expect(bodyEditor().value).toBe('Hello doomed plus newer typing')
+    expect(saveState()).toBe('unsaved')
+  })
+
   it('asks for confirmation before reload-and-discard destroys unsaved work', async () => {
     const editAsync = vi
       .fn()
@@ -473,7 +314,7 @@ describe('E45 a rejected save must not poison later saves', () => {
           'req_2',
         ),
       )
-    mount({ editAsync })
+    mountSaveWorkspace({ editAsync })
     fireEvent.click(screen.getByText('Hello'))
     fireEvent.change(bodyEditor(), { target: { value: 'Hello keep me' } })
     openReviewTab()
@@ -506,81 +347,3 @@ describe('E45 a rejected save must not poison later saves', () => {
     expect(bodyEditor().value).toBe('Hello')
   })
 })
-
-describe('E45 unsaved drafts must survive a reload', () => {
-  it('restores typed text after the workspace remounts', async () => {
-    mount({ editAsync: vi.fn() })
-    fireEvent.click(screen.getByText('Hello'))
-    fireEvent.change(bodyEditor(), { target: { value: 'Hello restored' } })
-
-    cleanup()
-    mount({ editAsync: vi.fn() })
-    fireEvent.click(screen.getByText('Hello restored'))
-
-    await waitFor(() => {
-      expect(bodyEditor().value).toBe('Hello restored')
-    })
-    expect(screen.getByText(/restored from this browser/i)).toBeTruthy()
-    expect(saveState()).toBe('unsaved')
-  })
-
-  it('clears the stored draft once the server has committed it', async () => {
-    const editAsync = vi.fn().mockResolvedValue({
-      documentId: 'doc_1',
-      versionId: 'ver_2',
-      versionNumber: 2,
-    })
-    mount({ editAsync })
-    fireEvent.click(screen.getByText('Hello'))
-    fireEvent.change(bodyEditor(), { target: { value: 'Hello world' } })
-    openReviewTab()
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
-    await waitFor(() => expect(saveState()).toBe('saved'))
-
-    cleanup()
-    mount({ editAsync: vi.fn() })
-    fireEvent.click(screen.getByText('Hello'))
-    await waitFor(() => {
-      expect(bodyEditor().value).toBe('Hello')
-    })
-  })
-
-  it('does not apply a draft recorded against an older stored version', async () => {
-    mount({ editAsync: vi.fn() })
-    fireEvent.click(screen.getByText('Hello'))
-    fireEvent.change(bodyEditor(), { target: { value: 'Hello stale' } })
-
-    cleanup()
-    mount({ editAsync: vi.fn(), versionId: 'ver_2', body: 'Hello' })
-    fireEvent.click(screen.getByText('Hello'))
-
-    await waitFor(() => {
-      expect(bodyEditor().value).toBe('Hello')
-    })
-    expect(screen.getByText(/earlier version of this document/i)).toBeTruthy()
-  })
-
-  it('restores a draft after the tab is closed and the document is reopened', async () => {
-    mount({ editAsync: vi.fn() })
-    fireEvent.click(screen.getByText('Hello'))
-    fireEvent.change(bodyEditor(), { target: { value: 'Hello after close' } })
-    await waitFor(() => {
-      expect(window.localStorage.length).toBeGreaterThan(0)
-    })
-
-    cleanup()
-    window.sessionStorage.clear()
-    mount({ editAsync: vi.fn() })
-    fireEvent.click(screen.getByText('Hello after close'))
-
-    await waitFor(() => {
-      expect(bodyEditor().value).toBe('Hello after close')
-    })
-    expect(saveState()).toBe('unsaved')
-    expect(screen.queryByText('All changes saved')).toBeNull()
-  })
-})
-
-function openReviewTab() {
-  fireEvent.click(screen.getByRole('tab', { name: 'Review' }))
-}
