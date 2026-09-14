@@ -396,6 +396,9 @@ importers:
       '@obiter/search-client':
         specifier: workspace:*
         version: link:../../packages/search-client
+      '@obiter/verification-core':
+        specifier: workspace:*
+        version: link:../../packages/verification-core
       better-auth:
         specifier: ^1.6.8
         version: 1.6.8(@tanstack/react-start@1.167.44(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(vite@8.0.10(@types/node@22.19.17)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.0)))(pg@8.20.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(vitest@3.2.4(@types/debug@4.1.13)(@types/node@22.19.17)(jiti@2.7.0)(jsdom@29.1.1(@noble/hashes@2.2.0))(lightningcss@1.32.0)(tsx@4.23.0))

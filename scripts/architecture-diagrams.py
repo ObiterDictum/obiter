@@ -159,9 +159,10 @@ d1.edge("api", "ooxml", curve=-60)
 d1.edge("api", "policy", curve=-30)
 d1.edge("api", "searchc", curve=20)
 d1.edge("api", "rampart", curve=60)
+d1.edge("api", "verifycore", curve=-140)
 d1.edge("ingestor", "searchc", curve=-20)
 # verification-core is pure domain vocabulary: it depends on the shared path
-# grammar and source types, and nothing depends on it until V2-V6 land.
+# grammar and source types. V2 landed its first consumer, services/api.
 d1.edge("verifycore", "contracts")
 d1.edge("verifycore", "legalschema")
 
