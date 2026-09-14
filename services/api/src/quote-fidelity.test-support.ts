@@ -2,9 +2,10 @@ import type { Pool } from 'pg'
 import type {
   CitationInput,
   NormalizedCitation,
+  VerificationFinding,
   VerificationSubject,
 } from '@obiter/verification-core'
-import type { QuoteFidelityRequest } from './quote-fidelity'
+import type { QuoteCheckResult, QuoteFidelityRequest } from './quote-fidelity'
 
 /**
  * Shared fixtures for the quote-fidelity tests. The injected fake answers the
@@ -30,6 +31,38 @@ export function request(
   normalizedCitation: NormalizedCitation,
 ): QuoteFidelityRequest {
   return { subject, quote: quote(quoteText), normalizedCitation }
+}
+
+/** The findings of a batch, so a test asserts on findings rather than unwrapping
+ * the per-request result at every call site. A rejection is a test failure:
+ * use `rejections` where the test expects one. */
+export function findings(
+  results: readonly QuoteCheckResult[],
+): VerificationFinding[] {
+  return results.map((result) => {
+    if (result.outcome !== 'finding') {
+      throw new Error(`Expected a finding, got a rejection: ${result.reason}`)
+    }
+    return result.finding
+  })
+}
+
+/** The rejection reasons of a batch, `null` where a candidate produced a
+ * finding, so a test can assert the full shape in input order. */
+export function rejections(
+  results: readonly QuoteCheckResult[],
+): Array<string | null> {
+  return results.map((result) =>
+    result.outcome === 'rejected' ? result.reason : null,
+  )
+}
+
+/** Each candidate's status state or rejection reason, in input order, so a test
+ * can assert a whole batch in one comparison. */
+export function outcomes(results: readonly QuoteCheckResult[]): string[] {
+  return results.map((result) =>
+    result.outcome === 'finding' ? result.finding.status.state : result.reason,
+  )
 }
 
 export const caseLaw: NormalizedCitation = {
@@ -75,6 +108,14 @@ export interface ActFixture {
   number: number
   title: string
   provisions: ProvisionFixture[]
+  /** A store defect: the row asked for under `asked` comes back claiming the
+   * key it was requested by but carrying `returned`'s label path and text, and
+   * optionally another Act's identity. */
+  mislabelledProvision?: {
+    asked: string
+    returned: string
+    documentIdentity?: string
+  }
 }
 
 export function authoritySummary(id: string) {
@@ -206,27 +247,37 @@ export function fakeQuotePool(options: {
           const provision = current.provisions.find(
             (entry) => `${current.identity}/${entry.labelPath}` === id,
           )
-          if (provision) {
-            return {
-              rows: [
-                {
-                  id,
-                  documentIdentity: current.identity,
-                  labelPath: provision.labelPath,
-                  label: provision.labelPath,
-                  extent: '',
-                  text: provision.text,
-                  hasUnappliedEffects: provision.hasUnappliedEffects ?? false,
-                  effectsCheckedAt:
-                    provision.effectsCheckedAt === undefined
-                      ? '2066-01-01T00:00:00.000Z'
-                      : provision.effectsCheckedAt,
-                  title: current.title,
-                  year: current.year,
-                  sourceUrl: `https://www.legislation.gov.uk/${current.identity}`,
-                },
-              ],
-            }
+          if (!provision) continue
+          const defect = current.mislabelledProvision
+          const mislabelled =
+            defect !== undefined && id === `${current.identity}/${defect.asked}`
+          const labelPath = mislabelled ? defect.returned : provision.labelPath
+          const provisionText = mislabelled
+            ? (current.provisions.find(
+                (entry) => entry.labelPath === defect.returned,
+              )?.text ?? provision.text)
+            : provision.text
+          return {
+            rows: [
+              {
+                id,
+                documentIdentity:
+                  (mislabelled ? defect.documentIdentity : undefined) ??
+                  current.identity,
+                labelPath,
+                label: labelPath,
+                extent: '',
+                text: provisionText,
+                hasUnappliedEffects: provision.hasUnappliedEffects ?? false,
+                effectsCheckedAt:
+                  provision.effectsCheckedAt === undefined
+                    ? '2066-01-01T00:00:00.000Z'
+                    : provision.effectsCheckedAt,
+                title: current.title,
+                year: current.year,
+                sourceUrl: `https://www.legislation.gov.uk/${current.identity}`,
+              },
+            ],
           }
         }
         return { rows: [] }

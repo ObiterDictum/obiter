@@ -2,14 +2,19 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   checkQuoteFidelity,
   checkQuoteFidelities,
+  maxQuoteFidelityBatchSize,
   maxQuoteLength,
   maxSourceFragments,
+  QuoteBatchTooLargeError,
   QuoteRequestTooLargeError,
 } from './quote-fidelity'
 import {
   caseLaw,
   fakeQuotePool,
   judgmentAuthority,
+  judgmentCitation,
+  outcomes,
+  rejections,
   request,
 } from './quote-fidelity.test-support'
 
@@ -18,6 +23,21 @@ import {
  * fake answers the real judgment query; the real SQL is exercised in
  * `quote-fidelity.db.test.ts`.
  */
+
+/** Counts source preparations, to prove a batch prepares each authority once. */
+const prepareCalls = vi.hoisted(() => ({ count: 0 }))
+
+vi.mock('@obiter/verification-core', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@obiter/verification-core')>()
+  return {
+    ...actual,
+    prepareQuoteSource: (texts: readonly string[]) => {
+      prepareCalls.count += 1
+      return actual.prepareQuoteSource(texts)
+    },
+  }
+})
 
 describe('quote fidelity judgment retrieval', () => {
   it('clears an exact judgment quotation with its paragraph evidence', async () => {
@@ -55,17 +75,13 @@ describe('quote fidelity judgment retrieval', () => {
   it('reads one judgment once for every quotation that cites it', async () => {
     const fake = fakeQuotePool({ authorities: [judgmentAuthority] })
 
-    const findings = await checkQuoteFidelities(fake.pool, [
+    const results = await checkQuoteFidelities(fake.pool, [
       request('the court must consider the point', caseLaw),
       request('The court began here.', caseLaw),
       request('the court must consider the point', caseLaw),
     ])
 
-    expect(findings.map((finding) => finding.status.state)).toEqual([
-      'clear',
-      'clear',
-      'clear',
-    ])
+    expect(outcomes(results)).toEqual(['clear', 'clear', 'clear'])
     expect(fake.queryCount()).toBe(1)
   })
 
@@ -187,5 +203,175 @@ describe('quote fidelity judgment retrieval', () => {
     const read = fake.calls[0]
     expect(read?.values).toEqual(['db-test-v4-uksc'])
     expect(JSON.stringify(fake.calls)).not.toContain('must consider')
+  })
+})
+
+describe('quote fidelity candidate isolation', () => {
+  it('keeps valid siblings when one candidate is blank', async () => {
+    const fake = fakeQuotePool({ authorities: [judgmentAuthority] })
+
+    const results = await checkQuoteFidelities(fake.pool, [
+      request('the court must consider the point', caseLaw),
+      request('   ', caseLaw),
+      request('the court must reject the point', caseLaw),
+    ])
+
+    expect(outcomes(results)).toEqual(['clear', 'quote_blank', 'flagged'])
+    expect(rejections(results)).toEqual([null, 'quote_blank', null])
+    // The rejected candidate is never read from the store.
+    expect(fake.queryCount()).toBe(1)
+  })
+
+  it.each([
+    ['spaces', '   '],
+    ['tabs and newlines', '\t\r\n'],
+    ['Unicode whitespace', '\u00a0\u2003'],
+  ])(
+    'rejects a quotation of %s without losing its siblings',
+    async (_name, text) => {
+      const fake = fakeQuotePool({ authorities: [judgmentAuthority] })
+
+      const results = await checkQuoteFidelities(fake.pool, [
+        request(text, caseLaw),
+        request('The court began here.', caseLaw),
+      ])
+
+      expect(outcomes(results)).toEqual(['quote_blank', 'clear'])
+    },
+  )
+
+  it('keeps valid siblings when one candidate is not the slice its location names', async () => {
+    const fake = fakeQuotePool({ authorities: [judgmentAuthority] })
+    const misSliced = {
+      ...request('The court began here.', caseLaw),
+      quote: {
+        rawText: 'The court began here.',
+        location: { paragraphId: 'p-1', start: 0, end: 5 },
+      },
+    }
+
+    const results = await checkQuoteFidelities(fake.pool, [
+      misSliced,
+      request('The court began here.', caseLaw),
+    ])
+
+    expect(outcomes(results)).toEqual(['quote_span_mismatch', 'clear'])
+  })
+
+  it('keeps valid siblings when one candidate exceeds the quote bound', async () => {
+    const fake = fakeQuotePool({ authorities: [judgmentAuthority] })
+
+    const results = await checkQuoteFidelities(fake.pool, [
+      request('the court must consider the point', caseLaw),
+      request('x'.repeat(maxQuoteLength + 1), caseLaw),
+      request('The court began here.', caseLaw),
+    ])
+
+    expect(outcomes(results)).toEqual(['clear', 'quote_too_large', 'clear'])
+  })
+})
+
+describe('quote fidelity batch bounds', () => {
+  it('accepts a batch one below the limit and reads the source once', async () => {
+    const fake = fakeQuotePool({ authorities: [judgmentAuthority] })
+    const requests = Array.from({ length: maxQuoteFidelityBatchSize - 1 }, () =>
+      request('the court must consider the point', caseLaw),
+    )
+
+    const results = await checkQuoteFidelities(fake.pool, requests)
+
+    expect(results).toHaveLength(maxQuoteFidelityBatchSize - 1)
+    expect(outcomes(results).every((state) => state === 'clear')).toBe(true)
+    expect(fake.queryCount()).toBe(1)
+  })
+
+  it('accepts a batch exactly at the limit', async () => {
+    const fake = fakeQuotePool({ authorities: [judgmentAuthority] })
+    const requests = Array.from({ length: maxQuoteFidelityBatchSize }, () =>
+      request('the court must consider the point', caseLaw),
+    )
+
+    const results = await checkQuoteFidelities(fake.pool, requests)
+
+    expect(results).toHaveLength(maxQuoteFidelityBatchSize)
+    expect(fake.queryCount()).toBe(1)
+  })
+
+  it('refuses a batch one over the limit before reading anything', async () => {
+    const fake = fakeQuotePool({ authorities: [judgmentAuthority] })
+    const requests = Array.from({ length: maxQuoteFidelityBatchSize + 1 }, () =>
+      request('the court must consider the point', caseLaw),
+    )
+
+    await expect(checkQuoteFidelities(fake.pool, requests)).rejects.toThrow(
+      QuoteBatchTooLargeError,
+    )
+    expect(fake.queryCount()).toBe(0)
+  })
+})
+
+describe('quote fidelity source preparation', () => {
+  it('prepares one authority once for several quotations', async () => {
+    prepareCalls.count = 0
+    const fake = fakeQuotePool({ authorities: [judgmentAuthority] })
+
+    await checkQuoteFidelities(fake.pool, [
+      request('the court must consider the point', caseLaw),
+      request('The court began here.', caseLaw),
+      request('the court must consider the point', caseLaw),
+    ])
+
+    expect(prepareCalls.count).toBe(1)
+  })
+
+  it('prepares each distinct authority identity separately', async () => {
+    prepareCalls.count = 0
+    const second = {
+      id: 'db-test-v4-second',
+      paragraphs: [{ paragraphNumber: 1, text: 'A second judgment text.' }],
+    }
+    const fake = fakeQuotePool({
+      authorities: [judgmentAuthority, second],
+    })
+
+    await checkQuoteFidelities(fake.pool, [
+      request('the court must consider the point', caseLaw),
+      request('A second judgment text.', judgmentCitation('db-test-v4-second')),
+      request('The court began here.', caseLaw),
+    ])
+
+    expect(prepareCalls.count).toBe(2)
+  })
+
+  it('prepares nothing for an empty batch', async () => {
+    prepareCalls.count = 0
+    const fake = fakeQuotePool({ authorities: [judgmentAuthority] })
+
+    await checkQuoteFidelities(fake.pool, [])
+
+    expect(prepareCalls.count).toBe(0)
+  })
+})
+
+describe('quote fidelity determinism', () => {
+  it('returns the same batch in the same order for the same input', async () => {
+    const fake = fakeQuotePool({ authorities: [judgmentAuthority] })
+    const requests = [
+      request('the court must consider the point', caseLaw),
+      request('   ', caseLaw),
+      request('the points', caseLaw),
+      request('The court began here.', caseLaw),
+    ]
+
+    const first = await checkQuoteFidelities(fake.pool, requests)
+    const second = await checkQuoteFidelities(fake.pool, requests)
+
+    expect(outcomes(first)).toEqual([
+      'clear',
+      'quote_blank',
+      'review_required',
+      'clear',
+    ])
+    expect(JSON.stringify(second)).toEqual(JSON.stringify(first))
   })
 })

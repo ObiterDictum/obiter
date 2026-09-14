@@ -2,8 +2,13 @@ import { describe, expect, it, vi } from 'vitest'
 import { checkQuoteFidelity, checkQuoteFidelities } from './quote-fidelity'
 import {
   act,
+  caseLaw,
   fakeQuotePool,
+  findings,
+  judgmentAuthority,
   legislation,
+  outcomes,
+  rejections,
   request,
   type ActFixture,
 } from './quote-fidelity.test-support'
@@ -11,9 +16,34 @@ import {
 /**
  * The quote-fidelity store boundary for legislation, against an injected pool.
  * The point is the scoping: a provision citation is compared against its own
- * provision, the single-schedule alias has one owner, and provision text that
- * is not a verified current version is never compared against.
+ * provision, the single-schedule alias has one owner, provision text that is
+ * not a verified current version is never compared against, and a store that
+ * contradicts the citation it resolved fails closed.
  */
+
+/**
+ * A source-integrity conflict is a typed error raised by the comparison when
+ * the boundary's fragments contradict the citation it resolved. A correct
+ * boundary cannot produce one, so the branch is exercised here by making the
+ * comparison raise it for one sentinel quotation.
+ */
+vi.mock('@obiter/verification-core', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@obiter/verification-core')>()
+  return {
+    ...actual,
+    decideQuoteFidelity: (
+      input: Parameters<typeof actual.decideQuoteFidelity>[0],
+    ) => {
+      if (input.quote.rawText.includes('integrity sentinel')) {
+        throw new actual.QuoteSourceMismatchError(
+          'The fragment is not the provision the citation resolved to.',
+        )
+      }
+      return actual.decideQuoteFidelity(input)
+    },
+  }
+})
 
 describe('quote fidelity legislation retrieval', () => {
   it('clears a provision quotation on the cited provision', async () => {
@@ -33,6 +63,35 @@ describe('quote fidelity legislation retrieval', () => {
         labelPath: 'section/40',
       },
     ])
+  })
+
+  it('evidences the resolved canonical path for every quotation against it', async () => {
+    const scheduleAct: ActFixture = {
+      ...act,
+      provisions: [
+        {
+          labelPath: 'schedule/paragraph/4',
+          text: 'The schedule provision text.',
+        },
+      ],
+    }
+    const fake = fakeQuotePool({ acts: [scheduleAct] })
+    const citation = {
+      kind: 'legislation',
+      documentIdentity: 'ukpga/2066/1',
+      labelPath: 'schedule/1/paragraph/4',
+    } as const
+
+    const results = await checkQuoteFidelities(fake.pool, [
+      request('The schedule provision text.', citation),
+      request('schedule provision', citation),
+    ])
+
+    const [first, second] = findings(results)
+    expect(first?.evidence).toEqual(second?.evidence)
+    expect(first?.evidence[0]).toMatchObject({
+      labelPath: 'schedule/paragraph/4',
+    })
   })
 
   it('reports a missing provision as evidence unavailable, not a mismatch', async () => {
@@ -103,6 +162,34 @@ describe('quote fidelity legislation retrieval', () => {
     ])
   })
 
+  it('reports a citation for another schedule as unavailable, never a clear', async () => {
+    const scheduleAct: ActFixture = {
+      ...act,
+      provisions: [
+        {
+          labelPath: 'schedule/paragraph/4',
+          text: 'The schedule provision text.',
+        },
+      ],
+    }
+    const { pool } = fakeQuotePool({ acts: [scheduleAct] })
+
+    const finding = await checkQuoteFidelity(
+      pool,
+      request('The schedule provision text.', {
+        kind: 'legislation',
+        documentIdentity: 'ukpga/2066/1',
+        labelPath: 'schedule/2/paragraph/4',
+      }),
+    )
+
+    expect(finding.status).toEqual({
+      state: 'review_required',
+      reason: 'evidence_unavailable',
+    })
+    expect(finding.evidence).toEqual([])
+  })
+
   it('does not compare against provision text that is not a verified current version', async () => {
     const staleAct: ActFixture = {
       ...act,
@@ -130,15 +217,12 @@ describe('quote fidelity legislation retrieval', () => {
   it('reads one provision once for every quotation that cites it', async () => {
     const fake = fakeQuotePool({ acts: [act] })
 
-    const findings = await checkQuoteFidelities(fake.pool, [
+    const results = await checkQuoteFidelities(fake.pool, [
       request('must not act incompatibly', legislation),
       request('with the Convention', legislation),
     ])
 
-    expect(findings.map((finding) => finding.status.state)).toEqual([
-      'clear',
-      'clear',
-    ])
+    expect(outcomes(results)).toEqual(['clear', 'clear'])
     expect(
       fake.calls.filter((call) =>
         call.text.includes('from legislation_documents where identity'),
@@ -160,5 +244,93 @@ describe('quote fidelity legislation retrieval', () => {
       reason: 'check_inconclusive',
     })
     warn.mockRestore()
+  })
+})
+
+describe('quote fidelity legislation source integrity', () => {
+  const defectiveAct: ActFixture = {
+    identity: 'ukpga/2066/1',
+    year: 2066,
+    number: 1,
+    title: 'Test Authority Act 2066',
+    provisions: [
+      {
+        labelPath: 'section/40',
+        text: 'A public authority must not act incompatibly with the Convention.',
+      },
+      { labelPath: 'section/41', text: 'A different provision entirely.' },
+    ],
+    mislabelledProvision: { asked: 'section/40', returned: 'section/41' },
+  }
+
+  it('fails closed when the store returns another provision for the citation', async () => {
+    const { pool } = fakeQuotePool({ acts: [defectiveAct] })
+
+    const finding = await checkQuoteFidelity(
+      pool,
+      request('A different provision entirely.', legislation),
+    )
+
+    expect(finding.status.state).not.toBe('clear')
+    expect(finding.status.state).not.toBe('flagged')
+    expect(finding.status).toEqual({
+      state: 'review_required',
+      reason: 'check_inconclusive',
+    })
+    expect(finding.evidence).toEqual([])
+  })
+
+  it('fails closed when the store returns another Act for the citation', async () => {
+    const { pool } = fakeQuotePool({
+      acts: [
+        {
+          ...defectiveAct,
+          mislabelledProvision: {
+            asked: 'section/40',
+            returned: 'section/41',
+            documentIdentity: 'ukpga/2066/9',
+          },
+        },
+      ],
+    })
+
+    const finding = await checkQuoteFidelity(
+      pool,
+      request('A different provision entirely.', legislation),
+    )
+
+    expect(finding.status).toEqual({
+      state: 'review_required',
+      reason: 'check_inconclusive',
+    })
+  })
+
+  it('confines a source-integrity conflict to its own candidate', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const fake = fakeQuotePool({ acts: [act] })
+
+    const results = await checkQuoteFidelities(fake.pool, [
+      request('integrity sentinel quotation', legislation),
+      request('must not act incompatibly', legislation),
+    ])
+
+    expect(rejections(results)).toEqual(['source_identity_conflict', null])
+    expect(outcomes(results)).toEqual(['source_identity_conflict', 'clear'])
+    expect(JSON.stringify(warn.mock.calls)).not.toContain('integrity sentinel')
+    warn.mockRestore()
+  })
+
+  it('does not let a legislation failure affect a case-law sibling', async () => {
+    const fake = fakeQuotePool({
+      acts: [defectiveAct],
+      authorities: [judgmentAuthority],
+    })
+
+    const results = await checkQuoteFidelities(fake.pool, [
+      request('A different provision entirely.', legislation),
+      request('the court must consider the point', caseLaw),
+    ])
+
+    expect(outcomes(results)).toEqual(['review_required', 'clear'])
   })
 })

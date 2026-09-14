@@ -5,6 +5,7 @@ import {
   insertJudgment,
   judgmentCitation,
   judgments,
+  outcomes,
   request,
 } from './quote-fidelity.test-support'
 
@@ -198,6 +199,32 @@ describe('quote fidelity judgments against the stored record', () => {
     warn.mockRestore()
   })
 
+  it('does not clear a quotation clipped inside a stored word', async () => {
+    const finding = await checkQuoteFidelity(
+      pool,
+      request(
+        'he court must consider the point',
+        judgmentCitation('db-test-v4-uksc'),
+      ),
+    )
+
+    expect(finding.status.state).not.toBe('clear')
+    expect(finding.status.state).not.toBe('flagged')
+    expect(finding.evidence).toEqual([])
+  })
+
+  it('keeps valid siblings when one candidate is blank, against the stored record', async () => {
+    const results = await checkQuoteFidelities(pool, [
+      request(
+        'The court must consider the point carefully.',
+        judgmentCitation('db-test-v4-uksc'),
+      ),
+      request('\u00a0   ', judgmentCitation('db-test-v4-uksc')),
+    ])
+
+    expect(outcomes(results)).toEqual(['clear', 'quote_blank'])
+  })
+
   it('reads one judgment once for a batch of quotations', async () => {
     let reads = 0
     const counting = {
@@ -207,7 +234,7 @@ describe('quote fidelity judgments against the stored record', () => {
       },
     } as unknown as Pick<Pool, 'query'>
 
-    const findings = await checkQuoteFidelities(counting, [
+    const results = await checkQuoteFidelities(counting, [
       request(
         'The court must consider the point carefully.',
         judgmentCitation('db-test-v4-uksc'),
@@ -222,11 +249,7 @@ describe('quote fidelity judgments against the stored record', () => {
       ),
     ])
 
-    expect(findings.map((finding) => finding.status.state)).toEqual([
-      'clear',
-      'clear',
-      'clear',
-    ])
+    expect(outcomes(results)).toEqual(['clear', 'clear', 'clear'])
     expect(reads).toBe(1)
   })
 })

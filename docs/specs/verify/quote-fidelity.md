@@ -76,7 +76,14 @@ The permitted folds are explicit, deterministic and applied to both sides:
 Unicode NFC; CRLF/CR to LF; any Unicode whitespace run (including NBSP, tabs,
 line breaks and the Ogham space) to one space, trimmed; soft hyphen removed; the
 ellipsis character to three periods; curly quotation marks and apostrophes to
-their straight forms. Nothing else is folded. Case is not folded because
+their straight forms. The apostrophe set is owned in one place
+(`APOSTROPHE_FOLDS` in `packages/verification-core/src/quote-text.ts`) and is the
+ASCII apostrophe, U+2018, U+2019, U+201A, U+201B, U+2032, U+02BC (modifier
+letter apostrophe) and U+FF07 (fullwidth apostrophe); the word-boundary model
+below reads the same set. Deliberately excluded: U+02BB (the `okina`, a letter
+in several orthographies), U+02B9 (a transliteration prime) and U+2039/U+203A
+(single guillemets, the single partners of the double guillemets this policy
+does not fold). Nothing else is folded. Case is not folded because
 capitalisation can be legally meaningful. Dashes are not folded because a hyphen
 and an en/em dash are different marks. No punctuation, word, negation or number
 is removed, so a punctuation or number difference is a substantive difference
@@ -84,14 +91,49 @@ rather than a silent pass. NFC is used rather than NFKC so fullwidth digits,
 ligatures and other compatibility forms are not unified. The Search highlighting
 normaliser is not reused: it lowercases and serves retrieval recall, not proof.
 
+### Word-boundary model
+
+A quotation only matches where it stands as whole words. An occurrence is
+accepted only when a word-character edge of the quotation is not glued to a word
+character of the source:
+
+- a quotation that begins or ends inside a longer word does not match, so
+  `he court must consider` does not clear inside `the court must consider the
+point`, `the point` does not clear inside `the points were argued`, and `act`
+  does not clear inside `exact`;
+- a valid occurrence later in the source wins over an earlier clipped one;
+- a quotation whose edge is punctuation, whitespace or a bracket has nothing to
+  glue to, so a quotation taken from inside `(parentheses)` or from inside
+  `"quotation marks"` still clears, and a quotation that begins or ends with
+  punctuation is unaffected.
+
+The word class is Unicode letters, numbers and combining marks. NFC runs first,
+so a composed and a decomposed word compare equal, and a combining mark that
+survives NFC belongs to the word it modifies rather than starting a new one.
+
+An apostrophe mark that touches a word character is part of that word, so
+`court's`, `courts'` and `don't` are each one word and a quotation that stops
+inside one is a partial-word match rather than a clear. Because the threshold
+reads the same apostrophe set as the folds, `court's`, `court’s` and `courtʼs`
+bound identically. One documented consequence: a passage quoted from inside
+single quotation marks in the source is inconclusive rather than clear, because
+the mark touches a word and the comparison does not guess whether it opens a
+quotation. Double quotation marks are unaffected.
+
 ### What constitutes a proven mismatch
 
 Only a unique anchored alignment produces a `flagged` mismatch:
 
-- the quotation is not an exact or normalised substring of the source;
+- the quotation is not an exact or normalised occurrence of the source at a
+  word boundary (see "Word-boundary model")
 - exactly one contiguous source span has the quotation's first and last word,
   allowing at most one word more or fewer;
 - the aligned span differs from the quotation.
+
+A quotation that exists in the source only inside a longer word falls through to
+this comparison like any other non-match; it ordinarily becomes
+`passage_not_located` (`review_required`), and only becomes `flagged` when that
+comparison proves a unique corresponding passage.
 
 The difference is classified as a punctuation, reorder, substitution, omission
 or insertion, and the finding carries the fragment that shows it. Zero candidate
@@ -115,6 +157,34 @@ from another source or another family is a programmer error
 exactly one provision, so matching text from another provision cannot verify a
 provision citation. Multiple fragments for a cross-fragment match are
 ordered and deduplicated, and source text never enters an evidence identity.
+
+A legislation fragment must also be the provision the citation resolved to, not
+merely a provision of the same Act. The `ready` source outcome carries the
+canonical identity the single owner of citation resolution returned, and the
+comparison refuses a fragment that is not that provision. The canonical stored
+path is compared, never the citation's own label path, so the single-schedule
+alias maps onto its stored path without V4 re-implementing the alias. A boundary
+that contradicts the citation it resolved fails closed and never clears or flags
+by the wrong provision.
+
+### Empty and blank quotations
+
+Where a quotation carries no comparable text, the comparison never reports a
+match and never produces fragment evidence:
+
+- A quotation that is non-blank but reduces to nothing under the permitted folds
+  (soft hyphens, or whitespace the folds collapse) is a representable finding:
+  `empty_quote`, `review_required` / `check_inconclusive`.
+- A blank quotation — empty, or nothing but whitespace after trimming — has no
+  representable finding, because V1's `citationInputSchema` refuses a blank
+  `rawText` and a finding records the quotation in its `citation` field. The
+  store boundary refuses it as a rejected candidate (`quote_blank`) before any
+  source is read. `quoteSpanViolation` in `packages/verification-core` is the one
+  owner of that contract, and `decideQuoteFidelity` raises the typed
+  `QuoteSpanInvalidError` rather than a schema error if a caller bypasses it.
+
+Emptiness is decided from the quotation alone, before any source is consulted,
+so it takes precedence over an absent source.
 
 ### Cross-fragment support
 
@@ -146,11 +216,25 @@ them.
 `services/api/src/quote-fidelity.ts` owns retrieval and batching. It is scoped
 to the resolved citation (one judgment document, or the one provision lineage),
 reads each distinct source once for any number of quotations from it, and
-issues no query for an empty batch. Request size and source fragment count and
-size are bounded at that boundary before the pure comparison runs, so the
-comparison is linear in the source and never an unbounded edit-distance or
-quadratic scan over attacker-controlled text. A partial source failure makes
-only the quotations that needed that source inconclusive.
+prepares that source's comparison representation once
+(`prepareQuoteSource`), so a document of many quotations pays one read, one
+normalisation and one tokenisation rather than one per quotation. The prepared
+representation is keyed by the resolved source identity, carries the fragment
+count it was built from, and is checked against the fragments it is used with,
+so it cannot carry one source's text behind another source's indexes. Request
+size, source fragment count and size are bounded at that boundary before the
+pure comparison runs, so the comparison is linear in the source and never an
+unbounded edit-distance or quadratic scan over attacker-controlled text.
+
+One call accepts at most `maxQuoteFidelityBatchSize` (200) candidates. A larger
+batch is a caller-level contract violation and is refused before any read; V5
+chunks a document's quotations into batches of at most that size and
+concatenates the results, which is why results come back one per request in
+input order. A candidate the boundary cannot check does not fail the call: it
+comes back as a rejected entry (`quote_blank`, `quote_span_mismatch`,
+`quote_too_large`, or `source_identity_conflict` for a store that contradicts
+the citation it resolved) beside its siblings' findings. A partial source
+failure makes only the quotations that needed that source inconclusive.
 
 ### V5 wiring boundary
 

@@ -1,4 +1,4 @@
-import type { CitationInput, NormalizedCitation } from './citation'
+import type { NormalizedCitation } from './citation'
 import type { EvidenceReference } from './evidence'
 import {
   createVerificationFindingId,
@@ -8,22 +8,24 @@ import {
   type VerificationFinding,
 } from './finding'
 import {
-  compareQuoteText,
+  compareQuoteTextAgainstPrepared,
+  prepareQuoteSource,
+  type PreparedQuoteSource,
   type QuoteDifference,
   type QuoteTextOutcome,
 } from './quote-text'
+import {
+  quoteSpanViolation,
+  QuoteSpanInvalidError,
+  type QuoteSpan,
+} from './quote-span'
 import type { VerificationSubject } from './subject'
 
 /**
- * The quotation's own draft span. It is the same verbatim half-open slice
- * `CitationInput` describes (raw text plus a UTF-16 `DraftLocation`, length
- * pinned), reused rather than redefined so a quotation cannot carry a different
- * offset convention. V4's finding records the quotation in its `citation`
- * field: V1 keys `createVerificationFindingId` on that field's location, and
- * keying a quotation on the citation's location instead would collide for two
- * quotations attributed to the same citation occurrence.
+ * The V4 decision: a quotation and a store read onto a V1 `quote_fidelity`
+ * finding, with the source-identity guard it rests on (`quote-span.ts`,
+ * `quote-text.ts`).
  */
-export type QuoteSpan = CitationInput
 
 /**
  * One addressable stored source fragment, already read by the store boundary.
@@ -73,7 +75,19 @@ export type QuoteSourceUnavailableReason =
  * ambiguous or malformed source cannot enter the comparison.
  */
 export type QuoteSourceOutcome =
-  | { outcome: 'ready'; fragments: QuoteFragment[] }
+  | {
+      outcome: 'ready'
+      fragments: QuoteFragment[]
+      /** The canonical identity the citation resolved to, as the one owner of
+       * citation resolution returned it. A legislation comparison refuses a
+       * fragment that is not this provision, so the single-schedule alias maps
+       * onto its stored path without V4 re-implementing the alias. */
+      resolvedProvision?: { documentIdentity: string; labelPath: string }
+      /** The bounded source representation, prepared once for every quotation
+       * citing it. Optional: a one-quotation caller may let the comparison
+       * prepare its own. */
+      preparedSource?: PreparedQuoteSource
+    }
   | { outcome: 'unavailable'; reason: QuoteSourceUnavailableReason }
   | { outcome: 'not_checked' }
 
@@ -137,10 +151,19 @@ export class QuoteSourceMismatchError extends Error {
  * document's paragraphs, or exactly one provision. A whole-document reference
  * cannot satisfy a quote check because a quote needs inside the document, and a
  * provision citation is scoped to the one provision it names.
+ *
+ * A legislation fragment must also be the provision the citation resolved to,
+ * not merely a provision of the same Act. `resolvedProvision` is the canonical
+ * identity the resolver returned, so the schedule alias maps onto its stored
+ * path without V4 re-implementing the alias; a boundary that emitted another
+ * provision's text fails here rather than clearing or flagging by the wrong
+ * provision.
  */
 function assertFragmentsMatchCitation(
   citation: ResolvedCitation,
   fragments: readonly QuoteFragment[],
+  resolvedProvision:
+    { documentIdentity: string; labelPath: string } | undefined,
 ): void {
   for (const fragment of fragments) {
     if (citation.kind === 'case_law') {
@@ -163,9 +186,31 @@ function assertFragmentsMatchCitation(
     }
   }
 
-  if (citation.kind === 'legislation' && fragments.length !== 1) {
+  if (citation.kind !== 'legislation') return
+
+  if (fragments.length !== 1) {
     throw new QuoteSourceMismatchError(
       'A legislation quote comparison must be scoped to exactly one provision fragment.',
+    )
+  }
+  if (resolvedProvision === undefined) {
+    throw new QuoteSourceMismatchError(
+      'A legislation quote comparison must carry the provision identity the citation resolved to.',
+    )
+  }
+  if (resolvedProvision.documentIdentity !== citation.documentIdentity) {
+    throw new QuoteSourceMismatchError(
+      'A legislation quote comparison must resolve to a provision of the resolved Act.',
+    )
+  }
+  const only = fragments[0]
+  if (
+    only === undefined ||
+    only.sourceType !== 'legislation_provision' ||
+    only.labelPath !== resolvedProvision.labelPath
+  ) {
+    throw new QuoteSourceMismatchError(
+      'A quote fragment must be the provision the citation resolved to, not another provision of the same Act.',
     )
   }
 }
@@ -248,13 +293,29 @@ export function compareQuote(input: QuoteFidelityInput): QuoteComparison {
     return { outcome: 'inconclusive', reason: input.source.reason }
   }
 
-  assertFragmentsMatchCitation(citation, input.source.fragments)
+  const fragments = input.source.fragments
+  assertFragmentsMatchCitation(
+    citation,
+    fragments,
+    input.source.resolvedProvision,
+  )
+  const prepared =
+    input.source.preparedSource ??
+    prepareQuoteSource(fragments.map((fragment) => fragment.text))
+  if (prepared === null) {
+    return { outcome: 'inconclusive', reason: 'no_source_fragments' }
+  }
+  // A prepared source that does not describe the fragments it was paired with
+  // would put one source's text behind another's indexes. Fail closed rather
+  // than compare across sources.
+  if (prepared.fragmentCount !== fragments.length) {
+    throw new QuoteSourceMismatchError(
+      'A prepared quote source must describe the fragments it is compared with.',
+    )
+  }
   return toComparison(
-    compareQuoteText(
-      input.quote.rawText,
-      input.source.fragments.map((fragment) => fragment.text),
-    ),
-    input.source.fragments,
+    compareQuoteTextAgainstPrepared(input.quote.rawText, prepared),
+    fragments,
   )
 }
 
@@ -411,6 +472,8 @@ function decide(comparison: QuoteComparison): DecidedQuote {
 export function decideQuoteFidelity(
   input: QuoteFidelityInput,
 ): VerificationFinding {
+  const violation = quoteSpanViolation(input.quote)
+  if (violation !== null) throw new QuoteSpanInvalidError(violation)
   const decided = decide(compareQuote(input))
   return verificationFindingSchema.parse({
     id: createVerificationFindingId({

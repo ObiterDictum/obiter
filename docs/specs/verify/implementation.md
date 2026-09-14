@@ -23,7 +23,8 @@ machinery. V4 is `compareQuoteText`/`decideQuoteFidelity` in
 `packages/verification-core` plus the store-scoped retrieval in
 `services/api/src/quote-fidelity.ts`. None of the three is wired to a route,
 worker or UI; V5 owns the run, persistence and the findings surface. The quote
-normalisation and mismatch policy is recorded in `domain-model.md` and
+normalisation, word-boundary and mismatch policy, and the V4 batch contract, are
+recorded in `quote-fidelity.md`, with the package-level summary in
 `packages/verification-core/README.md`.
 
 ## Stack

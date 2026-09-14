@@ -161,22 +161,51 @@ Two pure functions make the check testable without a store:
   already-retrieved fragment texts. It returns `match` (with exact versus
   normalised), `mismatch` (with the kind of difference), or an inconclusive
   outcome (`no_fragments`, `empty_quote`, `no_match`, `ambiguous`, `elided`).
+- `prepareQuoteSource(fragmentTexts)` plus
+  `compareQuoteTextAgainstPrepared(quote, source)` are the same comparison with
+  the source's normalisation and tokenisation done once, for a caller comparing
+  many quotations against one authority.
 - `compareQuote`/`decideQuoteFidelity` add the citation and source-readiness
   vocabulary and produce the finding. `QuoteComparison` is the comparison's own
   result model, deliberately separate from the finding vocabulary.
+- `quoteSpanViolation`/`QuoteSpanInvalidError` are the one owner of the
+  quotation-span contract: a blank quotation and a quotation that is not the
+  draft slice its location names are refusals, not comparison outcomes, because
+  V1's `citationInputSchema` cannot carry a blank `rawText` in the finding's
+  `citation` field.
 
 ### Normalisation policy
 
 The permitted folds are explicit, deterministic and applied to both sides:
 Unicode NFC; CRLF/CR to LF; any Unicode whitespace run to one space, trimmed;
 soft hyphen removed; the ellipsis character to three periods; curly quotation
-marks and apostrophes to their straight forms. Nothing else is folded. Case is
+marks and apostrophes to their straight forms. The apostrophe set is owned in
+one place (`APOSTROPHE_FOLDS`) and is the ASCII apostrophe, U+2018, U+2019,
+U+201A, U+201B, U+2032, U+02BC and U+FF07; U+02BB (the `okina`, a letter),
+U+02B9 (a transliteration prime) and U+2039/U+203A (single guillemets) are
+deliberately not apostrophes here. Nothing else is folded. Case is
 not folded (capitalisation can be legally meaningful), dashes are not folded
 (hyphen and en/em dash are different marks), and no punctuation, word, negation
 or number is removed. NFC is used rather than NFKC so fullwidth digits and
 ligatures are not silently unified. The Search highlighting normaliser
 (`normalizeExactMatchValue`) is deliberately not reused: it lowercases and its
 purpose is retrieval recall, not proof.
+
+### Word boundaries
+
+A quotation only matches where it stands as whole words: an occurrence is
+rejected when a word-character edge of the quotation is glued to a word
+character of the source. `he court must consider`, `the point` inside
+`the points were argued`, and `act` inside `exact` therefore do not clear, and a
+later whole-word occurrence wins over an earlier clipped one. Punctuation edges
+have nothing to glue to, so quotations inside `(parentheses)` or `"quotation
+marks"` and quotations that begin or end with punctuation are unaffected. The
+word class is Unicode letters, numbers and combining marks. An apostrophe mark
+touching a word character is part of that word, so `court's`, `courts'` and
+`don't` are each one word and a quotation stopping inside one is a partial-word
+match; the same apostrophe set drives the folds and the boundary test.
+Emptiness is decided from the quotation before any source is consulted, so a
+blank or fold-empty quotation is never a match and never carries evidence.
 
 ### What a mismatch means
 
@@ -197,7 +226,11 @@ A `quote_fidelity` finding rests on fragment evidence: a judgment paragraph
 citation's own source; a fragment from another source or family is a
 `QuoteSourceMismatchError`, a programmer error rather than a finding. A
 legislation quote is scoped to exactly one provision, so matching text from
-another provision can never verify it. Multiple fragments for a cross-fragment
+another provision can never verify it, and the fragment must be the provision
+the citation resolved to: the `ready` source outcome carries the canonical
+identity the single owner of citation resolution returned, so the
+single-schedule alias maps onto its stored path without this package
+re-implementing the alias. Multiple fragments for a cross-fragment
 match are deduplicated and ordered.
 
 ### Cross-fragment support
@@ -280,9 +313,15 @@ catch.
   `resolveStoredProvisionPath` for legislation so the single-schedule alias has
   one owner, refuses provision text that is not a verified current version, and
   batches: `checkQuoteFidelities` reads each distinct source once for any
-  number of quotations from it and issues no query for an empty batch. It
-  enforces the request-size and source-size bounds the pure package does not
-  set.
+  number of quotations from it, prepares that source's comparison
+  representation once (`prepareQuoteSource`), and issues no query for an empty
+  batch. It enforces the request-size, source-size and batch-size bounds the
+  pure package does not set, and returns one outcome per request in input
+  order, so a candidate it cannot check (`quote_blank`, `quote_span_mismatch`,
+  `quote_too_large`, `source_identity_conflict`) is a rejected entry beside its
+  siblings' findings rather than a thrown error that would discard them. A
+  batch larger than `maxQuoteFidelityBatchSize` is a caller contract violation
+  and is refused before any read; V5 chunks accordingly.
 - **Future Verify API, worker and UI** (V2 onwards) validate untrusted input with
   contracts schemas at the boundary, run checks in the worker, and render
   findings in the UI. All three consume this package and none add a parallel
