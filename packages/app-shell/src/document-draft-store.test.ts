@@ -9,57 +9,16 @@ import {
   documentDraftKey,
   documentDraftTabId,
   listDocumentDrafts,
-  listRecoverableDocumentDrafts,
   readDocumentDraft,
   rememberDocumentDraftUser,
-  resolveDocumentDraftWriter,
   touchDocumentDraftWriterClaim,
   writeDocumentDraft,
-  type DraftScope,
-  type DraftStorage,
 } from './document-draft-store'
-import { emptyDraftState } from './document-save-plan'
-import { emptyFormatDrafts } from './document-format-edits'
-import type { DraftState } from './document-save-plan'
-
-class MapStorage implements DraftStorage {
-  readonly entries = new Map<string, string>()
-  failWrites = false
-  failReads = false
-
-  get length() {
-    return this.entries.size
-  }
-  key(index: number) {
-    return [...this.entries.keys()][index] ?? null
-  }
-  getItem(key: string): string | null {
-    if (this.failReads) throw new Error('storage unavailable')
-    return this.entries.get(key) ?? null
-  }
-  setItem(key: string, value: string) {
-    if (this.failWrites) throw new Error('QuotaExceededError')
-    this.entries.set(key, value)
-  }
-  removeItem(key: string) {
-    this.entries.delete(key)
-  }
-}
-
-const scope: DraftScope = {
-  organisationId: 'org_1',
-  userId: 'usr_1',
-  documentId: 'doc_1',
-  tabId: 'tab_1',
-}
-
-function stateWithText(text: string): DraftState {
-  return {
-    ...emptyDraftState(),
-    drafts: { r1: text },
-    format: { ...emptyFormatDrafts, paragraphStyles: { p1: 'Heading1' } },
-  }
-}
+import {
+  MapStorage,
+  scope,
+  stateWithText,
+} from './document-draft-store-test-support'
 
 describe('document draft keys', () => {
   beforeEach(() => {
@@ -347,162 +306,5 @@ describe('document draft persistence', () => {
     window.localStorage.setItem(documentDraftKey(scope), 'a draft')
     clearStoredDocumentDrafts()
     expect(window.localStorage.getItem(documentDraftKey(scope))).toBe('a draft')
-  })
-
-  it('discovers a draft after the tab that wrote it has gone', () => {
-    const storage = new MapStorage()
-    writeDocumentDraft(
-      storage,
-      { ...scope, tabId: 'closed-tab' },
-      {
-        baseVersionId: 'ver_1',
-        state: stateWithText('closed tab work'),
-        held: [],
-      },
-    )
-
-    const restored = readDocumentDraft(
-      storage,
-      { ...scope, tabId: 'new-tab' },
-      'ver_1',
-    )
-    expect(restored.status).toBe('restored')
-    if (restored.status !== 'restored') throw new Error('expected restored')
-    expect(restored.state.drafts).toEqual({ r1: 'closed tab work' })
-  })
-
-  it('does not let a duplicated session identity write the original draft key', () => {
-    const storage = new MapStorage()
-    const session = new MapStorage()
-    const originalWriter = resolveDocumentDraftWriter(
-      session,
-      storage,
-      'instance-a',
-      1_000,
-    )
-    writeDocumentDraft(
-      storage,
-      { ...scope, tabId: originalWriter },
-      {
-        baseVersionId: 'ver_1',
-        state: stateWithText('from the original tab'),
-        held: [],
-      },
-    )
-
-    const duplicatedSession = new MapStorage()
-    duplicatedSession.setItem('obiter.document-draft.tab', originalWriter)
-    const duplicateWriter = resolveDocumentDraftWriter(
-      duplicatedSession,
-      storage,
-      'instance-b',
-      1_500,
-    )
-    expect(duplicateWriter).not.toBe(originalWriter)
-
-    writeDocumentDraft(
-      storage,
-      { ...scope, tabId: duplicateWriter },
-      {
-        baseVersionId: 'ver_1',
-        state: stateWithText('from the duplicate tab'),
-        held: [],
-      },
-    )
-
-    const original = readDocumentDraft(
-      storage,
-      { ...scope, tabId: originalWriter },
-      'ver_1',
-    )
-    expect(original.status === 'restored' && original.state.drafts).toEqual({
-      r1: 'from the original tab',
-    })
-  })
-
-  it('asks which draft to restore when two abandoned writers exist', () => {
-    const storage = new MapStorage()
-    writeDocumentDraft(
-      storage,
-      { ...scope, tabId: 'gone-a' },
-      {
-        baseVersionId: 'ver_1',
-        state: stateWithText('draft a'),
-        held: [],
-      },
-    )
-    writeDocumentDraft(
-      storage,
-      { ...scope, tabId: 'gone-b' },
-      {
-        baseVersionId: 'ver_1',
-        state: stateWithText('draft b'),
-        held: [],
-      },
-    )
-
-    const result = readDocumentDraft(
-      storage,
-      { ...scope, tabId: 'new-tab' },
-      'ver_1',
-    )
-    expect(result.status).toBe('choice')
-    if (result.status !== 'choice') throw new Error('expected choice')
-    expect(result.drafts.map((item) => item.writerId).sort()).toEqual([
-      'gone-a',
-      'gone-b',
-    ])
-  })
-
-  it('does not offer a live sibling tab as recoverable', () => {
-    const storage = new MapStorage()
-    const tabA = { ...scope, tabId: 'tab_a' }
-    const tabB = { ...scope, tabId: 'tab_b' }
-    writeDocumentDraft(storage, tabA, {
-      baseVersionId: 'ver_1',
-      state: stateWithText('from tab a'),
-      held: [],
-    })
-    touchDocumentDraftWriterClaim(storage, 'tab_a', 'instance-a')
-
-    expect(listRecoverableDocumentDrafts(storage, tabB)).toEqual([])
-  })
-
-  it('rebuilds recovery from payloads when the registry is corrupt', () => {
-    const storage = new MapStorage()
-    writeDocumentDraft(storage, scope, {
-      baseVersionId: 'ver_1',
-      state: stateWithText('payload wins'),
-      held: [],
-    })
-    storage.setItem(
-      'obiter.document-draft.registry.1.org_1.usr_1.doc_1',
-      '{not json',
-    )
-    const restored = readDocumentDraft(storage, scope, 'ver_1')
-    expect(restored.status === 'restored' && restored.state.drafts).toEqual({
-      r1: 'payload wins',
-    })
-  })
-
-  it('discards a parked draft without deleting live work', () => {
-    const storage = new MapStorage()
-    writeDocumentDraft(storage, scope, {
-      baseVersionId: 'ver_1',
-      state: stateWithText('parked'),
-      held: [],
-    })
-    expect(readDocumentDraft(storage, scope, 'ver_2').status).toBe('stale')
-    writeDocumentDraft(storage, scope, {
-      baseVersionId: 'ver_2',
-      state: stateWithText('live work'),
-      held: [],
-    })
-
-    discardDocumentDrafts(storage, scope)
-    const live = readDocumentDraft(storage, scope, 'ver_2')
-    expect(live.status === 'restored' && live.state.drafts).toEqual({
-      r1: 'live work',
-    })
   })
 })

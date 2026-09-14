@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import type { DocumentEditOperation } from '@obiter/contracts'
 import { ApiError } from '../../api'
 import {
   bodyEditor,
