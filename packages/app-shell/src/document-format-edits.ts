@@ -49,6 +49,12 @@ export function collectFormatOperations(
   model: DocumentModelWire,
   format: FormatDrafts,
   deletedParagraphIds: readonly string[],
+  /**
+   * Addresses that must not become their own operation because they belong to
+   * something else in the same batch; a pending insert's style rides on the
+   * insert operation. See document-edits collectEditOperations.
+   */
+  omitParagraphIds: ReadonlySet<string> = new Set(),
 ): DocumentEditOperation[] {
   const deleted = new Set(deletedParagraphIds)
   const deletedRuns = new Set(
@@ -94,7 +100,7 @@ export function collectFormatOperations(
     })
   }
   for (const [paragraphId, styleId] of Object.entries(format.paragraphStyles)) {
-    if (deleted.has(paragraphId)) continue
+    if (deleted.has(paragraphId) || omitParagraphIds.has(paragraphId)) continue
     operations.push({
       type: 'set_paragraph_style',
       paragraphId,
@@ -102,7 +108,7 @@ export function collectFormatOperations(
     })
   }
   for (const [paragraphId, numbering] of Object.entries(format.numbering)) {
-    if (deleted.has(paragraphId)) continue
+    if (deleted.has(paragraphId) || omitParagraphIds.has(paragraphId)) continue
     operations.push({
       type: 'set_paragraph_numbering',
       paragraphId,
@@ -538,7 +544,12 @@ export function formatControlState(
   )
   return {
     paragraph,
-    paragraphStyleId: paragraph?.styleId ?? '',
+    // A pending insert is not part of the stored story, so its style lives only
+    // in the format drafts until the insert is saved. Report it so the style
+    // control shows the chosen style instead of "No direct style".
+    paragraphStyleId:
+      paragraph?.styleId ??
+      (paragraphId ? (format.paragraphStyles[paragraphId] ?? '') : ''),
     paragraphStyles: paragraphStyleOptions(model),
     bold: flagOnCoveredRuns(covered, format, 'bold'),
     italic: flagOnCoveredRuns(covered, format, 'italic'),

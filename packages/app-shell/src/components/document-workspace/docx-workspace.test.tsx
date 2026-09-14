@@ -8,7 +8,7 @@ import {
   waitFor,
 } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   DocumentModelWire,
   DocumentParagraphWire,
@@ -203,6 +203,13 @@ function mountWorkspace(
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
+})
+
+// Unsaved drafts are persisted per tab, so each test starts without the
+// previous test's draft of the same document.
+beforeEach(() => {
+  window.localStorage.clear()
+  window.sessionStorage.clear()
 })
 
 function openRibbonTab(

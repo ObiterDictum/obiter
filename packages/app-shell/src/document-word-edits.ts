@@ -355,13 +355,16 @@ function writeRuns(
   for (const id of originalIds) {
     drafts[id] = runs.find((run) => run.id === id)?.text ?? ''
   }
+  // An edit that stays inside the stored runs adds no extra run. Storing an
+  // empty list would make the paragraph look dirty and persist an empty entry.
+  const extra = runs.filter((run) => !originalIds.has(run.id))
   return {
     ...state,
     drafts,
-    extraRuns: {
-      ...state.extraRuns,
-      [paragraphId]: runs.filter((run) => !originalIds.has(run.id)),
-    },
+    extraRuns:
+      extra.length > 0
+        ? { ...state.extraRuns, [paragraphId]: extra }
+        : omitKey(state.extraRuns, paragraphId),
   }
 }
 

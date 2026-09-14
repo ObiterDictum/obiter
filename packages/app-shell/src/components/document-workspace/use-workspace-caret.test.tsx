@@ -10,7 +10,12 @@ const lines = (...spans: Array<[number, number]>): WrappedLine[] =>
   spans.map(([from, to]) => ({ text: 'x'.repeat(to - from), from, to }))
 
 function useCaretHarness(documentId: string) {
-  const drafts = useWorkspaceDrafts()
+  const drafts = useWorkspaceDrafts({
+    organisationId: 'org_1',
+    userId: 'usr_1',
+    documentId,
+    baseVersionId: 'ver_1',
+  })
   return useWorkspaceCaret({ documentId, model: undefined, drafts })
 }
 

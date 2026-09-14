@@ -1,6 +1,7 @@
 import { createAuthClient } from 'better-auth/react'
 import { magicLinkClient } from 'better-auth/client/plugins'
 import { useQueryClient } from '@tanstack/react-query'
+import { clearStoredDocumentDrafts } from './document-draft-store'
 import { resolvePackagedApiOrigin } from './lib/api-url'
 import {
   clearDesktopAuthToken,
@@ -206,6 +207,9 @@ export function useAuth(): UseAuthReturn {
       try {
         await clearDesktopAuthToken()
       } finally {
+        // Unsaved document drafts are matter text keyed to the signed-in user;
+        // they must not survive into the next session on this machine.
+        clearStoredDocumentDrafts()
         // Drop cached /api/me (and org-scoped data) so a subsequent sign-in as
         // a different user never gates routes on the previous user's organisation
         // state. The current-user query has a 60s staleTime, so without this a
