@@ -162,7 +162,8 @@ export function offsetAfterArrow(input: {
  *   the caret stays at that line's visual end rather than skipping forward.
  *
  * The final line owns any offset at or past its end, which clamps a caret
- * pushed beyond the text.
+ * pushed beyond the text and puts the empty row a trailing hard break opens at
+ * `text.length` on the line that draws it.
  */
 function lineIndex(lines: WrappedLine[], offset: number): number {
   for (let index = 0; index < lines.length; index += 1) {
@@ -225,9 +226,13 @@ function arrowNeighbor(
     ? paragraphFace(paragraph, ctx.model.styles)
     : undefined
   const fontSizePx = face?.run.fontSizePx ?? 16
-  const lines =
-    wrapWidthPx && wrapWidthPx > 0
-      ? wrapLines(text, fontSizePx, wrapWidthPx, face?.run.fontFamily)
-      : [{ text, from: 0, to: text.length }]
+  // Without a column width the projection still owns the break structure: a
+  // row per hard-break segment, and the empty row a trailing break opens.
+  const lines = wrapLines(
+    text,
+    fontSizePx,
+    wrapWidthPx && wrapWidthPx > 0 ? wrapWidthPx : Number.POSITIVE_INFINITY,
+    face?.run.fontFamily,
+  )
   return { id, text, lines }
 }
