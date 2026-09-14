@@ -8,8 +8,12 @@ import {
   discardDocumentDrafts,
   documentDraftKey,
   documentDraftTabId,
-  documentStaleDraftKey,
+  listDocumentDrafts,
+  listRecoverableDocumentDrafts,
   readDocumentDraft,
+  rememberDocumentDraftUser,
+  resolveDocumentDraftWriter,
+  touchDocumentDraftWriterClaim,
   writeDocumentDraft,
   type DraftScope,
   type DraftStorage,
@@ -123,8 +127,11 @@ describe('document draft persistence', () => {
     })
     const restored = readDocumentDraft(storage, scope, 'ver_2')
     expect(restored).toEqual({ status: 'stale', baseVersionId: 'ver_1' })
-    // Not applied and not destroyed: the user has to discard it.
-    expect(storage.getItem(documentStaleDraftKey(scope))).not.toBeNull()
+    expect(
+      listDocumentDrafts(storage, scope).some(
+        (item) => item.status === 'parked',
+      ),
+    ).toBe(true)
     discardDocumentDrafts(storage, scope)
     expect(readDocumentDraft(storage, scope, 'ver_2')).toEqual({
       status: 'empty',
@@ -154,9 +161,14 @@ describe('document draft persistence', () => {
     // A successful save clears the active draft and leaves the parked one for
     // the user to discard.
     clearDocumentDraft(storage, scope)
-    expect(storage.getItem(documentStaleDraftKey(scope))).not.toBeNull()
+    expect(
+      listDocumentDrafts(storage, scope).some(
+        (item) => item.status === 'parked',
+      ),
+    ).toBe(true)
     expect(readDocumentDraft(storage, scope, 'ver_2')).toEqual({
-      status: 'empty',
+      status: 'stale',
+      baseVersionId: 'ver_1',
     })
   })
 
@@ -231,6 +243,8 @@ describe('document draft persistence', () => {
       state: stateWithText('from tab b'),
       held: [],
     })
+    touchDocumentDraftWriterClaim(storage, 'tab_a', 'instance-a')
+    touchDocumentDraftWriterClaim(storage, 'tab_b', 'instance-b')
 
     const a = readDocumentDraft(storage, tabA, 'ver_1')
     const b = readDocumentDraft(storage, tabB, 'ver_1')
@@ -308,12 +322,187 @@ describe('document draft persistence', () => {
   })
 
   it('clears browser drafts on sign-out', () => {
+    rememberDocumentDraftUser('usr_1')
     window.localStorage.setItem(documentDraftKey(scope), 'a draft')
+    window.localStorage.setItem(
+      documentDraftKey({ ...scope, userId: 'usr_2', tabId: 'tab_2' }),
+      'other user',
+    )
     window.localStorage.setItem('obiter.something-else', 'keep')
 
     clearStoredDocumentDrafts()
 
     expect(window.localStorage.getItem(documentDraftKey(scope))).toBeNull()
+    expect(
+      window.localStorage.getItem(
+        documentDraftKey({ ...scope, userId: 'usr_2', tabId: 'tab_2' }),
+      ),
+    ).toBe('other user')
     expect(window.localStorage.getItem('obiter.something-else')).toBe('keep')
+    rememberDocumentDraftUser(null)
+  })
+
+  it('does not wipe every account when no user is remembered', () => {
+    rememberDocumentDraftUser(null)
+    window.localStorage.setItem(documentDraftKey(scope), 'a draft')
+    clearStoredDocumentDrafts()
+    expect(window.localStorage.getItem(documentDraftKey(scope))).toBe('a draft')
+  })
+
+  it('discovers a draft after the tab that wrote it has gone', () => {
+    const storage = new MapStorage()
+    writeDocumentDraft(
+      storage,
+      { ...scope, tabId: 'closed-tab' },
+      {
+        baseVersionId: 'ver_1',
+        state: stateWithText('closed tab work'),
+        held: [],
+      },
+    )
+
+    const restored = readDocumentDraft(
+      storage,
+      { ...scope, tabId: 'new-tab' },
+      'ver_1',
+    )
+    expect(restored.status).toBe('restored')
+    if (restored.status !== 'restored') throw new Error('expected restored')
+    expect(restored.state.drafts).toEqual({ r1: 'closed tab work' })
+  })
+
+  it('does not let a duplicated session identity write the original draft key', () => {
+    const storage = new MapStorage()
+    const session = new MapStorage()
+    const originalWriter = resolveDocumentDraftWriter(
+      session,
+      storage,
+      'instance-a',
+      1_000,
+    )
+    writeDocumentDraft(
+      storage,
+      { ...scope, tabId: originalWriter },
+      {
+        baseVersionId: 'ver_1',
+        state: stateWithText('from the original tab'),
+        held: [],
+      },
+    )
+
+    const duplicatedSession = new MapStorage()
+    duplicatedSession.setItem('obiter.document-draft.tab', originalWriter)
+    const duplicateWriter = resolveDocumentDraftWriter(
+      duplicatedSession,
+      storage,
+      'instance-b',
+      1_500,
+    )
+    expect(duplicateWriter).not.toBe(originalWriter)
+
+    writeDocumentDraft(
+      storage,
+      { ...scope, tabId: duplicateWriter },
+      {
+        baseVersionId: 'ver_1',
+        state: stateWithText('from the duplicate tab'),
+        held: [],
+      },
+    )
+
+    const original = readDocumentDraft(
+      storage,
+      { ...scope, tabId: originalWriter },
+      'ver_1',
+    )
+    expect(original.status === 'restored' && original.state.drafts).toEqual({
+      r1: 'from the original tab',
+    })
+  })
+
+  it('asks which draft to restore when two abandoned writers exist', () => {
+    const storage = new MapStorage()
+    writeDocumentDraft(
+      storage,
+      { ...scope, tabId: 'gone-a' },
+      {
+        baseVersionId: 'ver_1',
+        state: stateWithText('draft a'),
+        held: [],
+      },
+    )
+    writeDocumentDraft(
+      storage,
+      { ...scope, tabId: 'gone-b' },
+      {
+        baseVersionId: 'ver_1',
+        state: stateWithText('draft b'),
+        held: [],
+      },
+    )
+
+    const result = readDocumentDraft(
+      storage,
+      { ...scope, tabId: 'new-tab' },
+      'ver_1',
+    )
+    expect(result.status).toBe('choice')
+    if (result.status !== 'choice') throw new Error('expected choice')
+    expect(result.drafts.map((item) => item.writerId).sort()).toEqual([
+      'gone-a',
+      'gone-b',
+    ])
+  })
+
+  it('does not offer a live sibling tab as recoverable', () => {
+    const storage = new MapStorage()
+    const tabA = { ...scope, tabId: 'tab_a' }
+    const tabB = { ...scope, tabId: 'tab_b' }
+    writeDocumentDraft(storage, tabA, {
+      baseVersionId: 'ver_1',
+      state: stateWithText('from tab a'),
+      held: [],
+    })
+    touchDocumentDraftWriterClaim(storage, 'tab_a', 'instance-a')
+
+    expect(listRecoverableDocumentDrafts(storage, tabB)).toEqual([])
+  })
+
+  it('rebuilds recovery from payloads when the registry is corrupt', () => {
+    const storage = new MapStorage()
+    writeDocumentDraft(storage, scope, {
+      baseVersionId: 'ver_1',
+      state: stateWithText('payload wins'),
+      held: [],
+    })
+    storage.setItem(
+      'obiter.document-draft.registry.1.org_1.usr_1.doc_1',
+      '{not json',
+    )
+    const restored = readDocumentDraft(storage, scope, 'ver_1')
+    expect(restored.status === 'restored' && restored.state.drafts).toEqual({
+      r1: 'payload wins',
+    })
+  })
+
+  it('discards a parked draft without deleting live work', () => {
+    const storage = new MapStorage()
+    writeDocumentDraft(storage, scope, {
+      baseVersionId: 'ver_1',
+      state: stateWithText('parked'),
+      held: [],
+    })
+    expect(readDocumentDraft(storage, scope, 'ver_2').status).toBe('stale')
+    writeDocumentDraft(storage, scope, {
+      baseVersionId: 'ver_2',
+      state: stateWithText('live work'),
+      held: [],
+    })
+
+    discardDocumentDrafts(storage, scope)
+    const live = readDocumentDraft(storage, scope, 'ver_2')
+    expect(live.status === 'restored' && live.state.drafts).toEqual({
+      r1: 'live work',
+    })
   })
 })

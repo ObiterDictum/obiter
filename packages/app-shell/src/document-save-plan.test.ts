@@ -212,4 +212,38 @@ describe('draft slot removal', () => {
       clearableSlots(covered, sent, current).map((slot) => slot.key),
     ).toEqual(['run:r1'])
   })
+
+  it('addresses emphasis by target identity, not array position', () => {
+    const first = { runId: 'r1', bold: true }
+    const second = { paragraphId: 'p1', from: 0, to: 2, italic: true }
+    const state: DraftState = {
+      ...emptyDraftState(),
+      format: { ...emptyFormatDrafts, emphasis: [first, second] },
+    }
+    const source = model(['p1'], ['r1'])
+    const planned = planDocumentSave(source, state)
+    const reordered: DraftState = {
+      ...state,
+      format: { ...state.format, emphasis: [second, first] },
+    }
+    const plannedAgain = planDocumentSave(source, reordered)
+    const firstKeys = planned.covered
+      .filter((slot) => slot.kind === 'emphasis')
+      .map((slot) => slot.key)
+      .sort()
+    const reorderedKeys = plannedAgain.covered
+      .filter((slot) => slot.kind === 'emphasis')
+      .map((slot) => slot.key)
+      .sort()
+    expect(firstKeys).toEqual(reorderedKeys)
+    expect(new Set(firstKeys).size).toBe(firstKeys.length)
+
+    const holdSecond = planned.covered.find(
+      (slot) => slot.kind === 'emphasis' && slot.key.includes('p1'),
+    )
+    if (!holdSecond) throw new Error('expected a range emphasis slot')
+    const { remaining, removed } = splitDraftSlots(reordered, [holdSecond])
+    expect(remaining.format.emphasis).toEqual([first])
+    expect(removed.format.emphasis).toEqual([second])
+  })
 })

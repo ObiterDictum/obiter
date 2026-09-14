@@ -159,14 +159,21 @@ export function useDocumentSave({
     source: DocumentModelWire,
     candidates: readonly DraftSlot[],
   ) {
+    if (candidates.length === 1 && candidates[0]) {
+      drafts.holdSlot(
+        candidates[0],
+        slotLabel(candidates[0]),
+        'The server rejected this change.',
+      )
+      return true
+    }
     for (const candidate of candidates.slice(0, MAX_ISOLATION_ATTEMPTS)) {
-      const without = removeDraftSlots(drafts.state, [candidate])
+      const latest = drafts.latestState()
+      const without = removeDraftSlots(latest, [candidate])
       const attempt = planDocumentSave(source, without)
       if (attempt.operations.length === 0) continue
       try {
         const result = await sendBatch(attempt.operations)
-        // Hold first, then clear. Both updates land in one commit, and clearing
-        // composes on top of the held state rather than replacing it.
         drafts.holdSlot(
           candidate,
           slotLabel(candidate),
@@ -236,7 +243,11 @@ export function useDocumentSave({
       ? { status: 'saving' }
       : failure
         ? { status: 'failed' }
-        : dirty || blocked.length > 0 || held.length > 0
+        : dirty ||
+            blocked.length > 0 ||
+            held.length > 0 ||
+            drafts.recoverable.length > 0 ||
+            Boolean(drafts.staleDraft)
           ? { status: 'unsaved' }
           : { status: 'saved' }
 

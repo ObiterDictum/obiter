@@ -1,19 +1,48 @@
 import { z } from 'zod'
 import { documentTextRunWireSchema } from '@obiter/contracts'
 import type { DraftState } from './document-save-plan'
+import {
+  CLAIM_PREFIX,
+  DOCUMENT_DRAFT_KEY_PREFIX,
+  DOCUMENT_DRAFT_SCHEMA_VERSION,
+  REGISTRY_PREFIX,
+  allKeys,
+  clearDocumentDraftsMatching,
+  documentDraftKey,
+  documentStaleDraftKey,
+  keyIncludesUser,
+  newTabId,
+  removeKey,
+  writerIsLive,
+  writeRegistry,
+  type DraftScope,
+  type DraftStorage,
+  type RecoverableDraft,
+} from './document-draft-identity'
+
+export {
+  DOCUMENT_DRAFT_CLAIM_TTL_MS,
+  DOCUMENT_DRAFT_KEY_PREFIX,
+  DOCUMENT_DRAFT_SCHEMA_VERSION,
+  documentDraftKey,
+  documentDraftTabId,
+  documentStaleDraftKey,
+  releaseDocumentDraftWriterClaim,
+  resolveDocumentDraftWriter,
+  touchDocumentDraftWriterClaim,
+  type DraftScope,
+  type DraftStorage,
+  type RecoverableDraft,
+} from './document-draft-identity'
 
 /**
  * Browser persistence for unsaved document drafts.
  *
- * E45: drafts lived only in React state, so a reload destroyed an afternoon of
- * typing with no warning. The stored payload is privileged matter text, so it
- * is deliberately minimal (only changed runs and pending edits, never the
- * document model), versioned, scope-keyed, and validated on every read. A
- * payload that fails validation is dropped rather than applied.
+ * Draft payloads are privileged matter text. They are keyed by organisation,
+ * user, document and a unique draft id; a per-tab writer id is stored only as
+ * an occupant, never as the only way to find the payload. Document ids are
+ * globally unique (`matter_documents.id` is a primary key).
  */
-export const DOCUMENT_DRAFT_SCHEMA_VERSION = 1
-export const DOCUMENT_DRAFT_KEY_PREFIX = 'obiter.document-draft'
-const TAB_ID_KEY = 'obiter.document-draft.tab'
 const EXPIRY_MS = 7 * 24 * 60 * 60 * 1000
 
 export const localInsertSchema = z
@@ -76,6 +105,9 @@ const snapshotSchema = z
     organisationId: z.string().min(1),
     userId: z.string().min(1),
     documentId: z.string().min(1),
+    draftId: z.string().min(1).optional(),
+    writerId: z.string().min(1).optional(),
+    status: z.enum(['active', 'parked']).optional(),
     baseVersionId: z.string().min(1),
     updatedAt: z.string(),
     state: draftStateSchema,
@@ -86,123 +118,164 @@ const snapshotSchema = z
 export type HeldChange = z.infer<typeof heldChangeSchema>
 export type DocumentDraftSnapshot = z.infer<typeof snapshotSchema>
 
-export type DraftScope = {
-  organisationId: string
-  userId: string
-  documentId: string
-  tabId: string
+let writesSuspended = false
+let rememberedUserId: string | null = null
+
+export function suspendDocumentDraftWrites() {
+  writesSuspended = true
 }
 
-/** The subset of the Web Storage API this module needs. */
-export interface DraftStorage {
-  readonly length: number
-  key(index: number): string | null
-  getItem(key: string): string | null
-  setItem(key: string, value: string): void
-  removeItem(key: string): void
+export function resumeDocumentDraftWrites() {
+  writesSuspended = false
 }
 
-export function documentDraftKey(scope: DraftScope) {
-  return [
-    DOCUMENT_DRAFT_KEY_PREFIX,
-    String(DOCUMENT_DRAFT_SCHEMA_VERSION),
-    scope.organisationId,
-    scope.userId,
-    scope.documentId,
-    scope.tabId,
-  ].join('.')
-}
-
-/**
- * Where a draft recorded against a version the server has moved past is parked.
- * It is kept out of the active key so new unsaved work in the same tab can still
- * be preserved, and it is removed only when the user discards it.
- */
-export function documentStaleDraftKey(scope: DraftScope) {
-  return `${documentDraftKey(scope)}.stale`
-}
-
-/**
- * A per-tab id keeps two tabs on one document from overwriting each other's
- * draft, and lets a reload in the same tab find its own. sessionStorage is the
- * right lifetime: closing the tab drops it, so nothing is shared afterwards.
- */
-export function documentDraftTabId(storage: DraftStorage | null) {
-  if (storage) {
-    try {
-      const existing = storage.getItem(TAB_ID_KEY)
-      if (existing) return existing
-      const created = newTabId()
-      storage.setItem(TAB_ID_KEY, created)
-      return created
-    } catch {
-      // Fall through to a per-page id when sessionStorage is unavailable.
-    }
-  }
-  memoryTabId ??= newTabId()
-  return memoryTabId
-}
-
-let memoryTabId: string | null = null
-
-function newTabId() {
-  return typeof crypto !== 'undefined' && 'randomUUID' in crypto
-    ? crypto.randomUUID()
-    : `${String(Date.now())}-${String(Math.random())}`
+export function rememberDocumentDraftUser(userId: string | null) {
+  rememberedUserId = userId
 }
 
 export type DraftRestore =
   | { status: 'empty' }
-  | { status: 'restored'; state: DraftState; held: HeldChange[] }
+  | {
+      status: 'restored'
+      state: DraftState
+      held: HeldChange[]
+      draftId: string
+    }
   | { status: 'stale'; baseVersionId: string }
+  | { status: 'choice'; drafts: RecoverableDraft[] }
   | { status: 'unavailable' }
 
-/**
- * Reads the draft for this scope. A draft recorded against a different stored
- * version is never applied: the operations address nodes from that version, so
- * applying them to a newer one is how drafts silently corrupt a document. It is
- * reported as `stale` so the caller can disclose it and offer a discard.
- */
+export function listDocumentDrafts(
+  storage: DraftStorage,
+  scope: Omit<DraftScope, 'tabId'>,
+): RecoverableDraft[] {
+  const listed: RecoverableDraft[] = []
+  for (const record of scanPayloads(storage, scope)) {
+    if (expired(record.snapshot.updatedAt)) {
+      removeKey(storage, record.key)
+      continue
+    }
+    listed.push(toRecoverable(record))
+  }
+  writeRegistry(
+    storage,
+    scope.organisationId,
+    scope.userId,
+    scope.documentId,
+    listed,
+  )
+  return listed
+}
+
+/** Parked drafts and abandoned writers only; a live sibling tab is not offered. */
+export function listRecoverableDocumentDrafts(
+  storage: DraftStorage,
+  scope: DraftScope,
+  excludeDraftId?: string,
+): RecoverableDraft[] {
+  return listDocumentDrafts(storage, scope).filter((item) => {
+    if (item.draftId === excludeDraftId) return false
+    if (item.writerId === scope.tabId && item.status === 'active') return false
+    if (item.status === 'parked') return true
+    return !writerIsLive(storage, item.writerId)
+  })
+}
+
 export function readDocumentDraft(
   storage: DraftStorage,
   scope: DraftScope,
   currentVersionId: string,
 ): DraftRestore {
-  let raw: string | null
   try {
-    raw = storage.getItem(documentDraftKey(scope))
+    storage.getItem(documentDraftKey(scope))
+    const records = scanPayloads(storage, scope).filter((record) => {
+      if (expired(record.snapshot.updatedAt)) {
+        removeKey(storage, record.key)
+        return false
+      }
+      return true
+    })
+    writeRegistry(
+      storage,
+      scope.organisationId,
+      scope.userId,
+      scope.documentId,
+      records.map(toRecoverable),
+    )
+
+    const own = records.filter((record) => record.writerId === scope.tabId)
+    const ownActive = own.find((record) => record.status === 'active')
+    if (ownActive) {
+      if (ownActive.snapshot.baseVersionId !== currentVersionId) {
+        parkRecord(storage, ownActive)
+        return {
+          status: 'stale',
+          baseVersionId: ownActive.snapshot.baseVersionId,
+        }
+      }
+      return {
+        status: 'restored',
+        state: ownActive.snapshot.state,
+        held: ownActive.snapshot.held,
+        draftId: ownActive.draftId,
+      }
+    }
+
+    const ownParked = own.find((record) => record.status === 'parked')
+    const abandoned = records.filter(
+      (record) =>
+        record.status === 'active' &&
+        record.snapshot.baseVersionId === currentVersionId &&
+        record.writerId !== scope.tabId &&
+        !writerIsLive(storage, record.writerId),
+    )
+    if (abandoned.length === 1 && abandoned[0]) {
+      const adopted = adoptRecord(storage, abandoned[0], scope.tabId)
+      return {
+        status: 'restored',
+        state: adopted.snapshot.state,
+        held: adopted.snapshot.held,
+        draftId: adopted.draftId,
+      }
+    }
+    if (abandoned.length > 1) {
+      return { status: 'choice', drafts: abandoned.map(toRecoverable) }
+    }
+    if (ownParked) {
+      return {
+        status: 'stale',
+        baseVersionId: ownParked.snapshot.baseVersionId,
+      }
+    }
+    const parked = records.filter((record) => record.status === 'parked')
+    if (parked[0]) {
+      return {
+        status: 'stale',
+        baseVersionId: parked[0].snapshot.baseVersionId,
+      }
+    }
+    return { status: 'empty' }
   } catch {
     return { status: 'unavailable' }
   }
-  if (raw === null) return { status: 'empty' }
-  const parsed = parseSnapshot(raw)
-  if (
-    !parsed ||
-    parsed.organisationId !== scope.organisationId ||
-    parsed.userId !== scope.userId ||
-    parsed.documentId !== scope.documentId
-  ) {
-    clearDocumentDraft(storage, scope)
-    return { status: 'empty' }
+}
+
+export function adoptDocumentDraft(
+  storage: DraftStorage,
+  scope: DraftScope,
+  draftId: string,
+): DraftRestore {
+  const match = scanPayloads(storage, scope).find(
+    (record) => record.draftId === draftId,
+  )
+  if (!match) return { status: 'empty' }
+  const adopted = adoptRecord(storage, match, scope.tabId)
+  return {
+    status: 'restored',
+    state: adopted.snapshot.state,
+    held: adopted.snapshot.held,
+    draftId: adopted.draftId,
   }
-  if (expired(parsed.updatedAt)) {
-    clearDocumentDraft(storage, scope)
-    return { status: 'empty' }
-  }
-  if (parsed.baseVersionId !== currentVersionId) {
-    // Park it rather than leaving it in the active key: the tab can still
-    // accumulate new unsaved work, and the stale draft must survive until the
-    // user discards it.
-    try {
-      storage.setItem(documentStaleDraftKey(scope), raw)
-      storage.removeItem(documentDraftKey(scope))
-    } catch {
-      // A store that refuses the move leaves the draft in place; it is still
-      // reported as stale and still never applied.
-    }
-    return { status: 'stale', baseVersionId: parsed.baseVersionId }
-  }
-  return { status: 'restored', state: parsed.state, held: parsed.held }
 }
 
 function parseSnapshot(raw: string): DocumentDraftSnapshot | null {
@@ -219,7 +292,6 @@ function expired(updatedAt: string) {
   return !Number.isFinite(written) || Date.now() - written > EXPIRY_MS
 }
 
-/** Returns false when storage refused the write (quota, disabled, private mode). */
 export function writeDocumentDraft(
   storage: DraftStorage,
   scope: DraftScope,
@@ -229,72 +301,189 @@ export function writeDocumentDraft(
     held: HeldChange[]
   },
 ): boolean {
+  if (writesSuspended) return false
+  const active = scanPayloads(storage, scope).find(
+    (record) => record.writerId === scope.tabId && record.status === 'active',
+  )
+  const draftId = active?.draftId ?? newTabId()
   const payload: DocumentDraftSnapshot = {
     schemaVersion: DOCUMENT_DRAFT_SCHEMA_VERSION,
     organisationId: scope.organisationId,
     userId: scope.userId,
     documentId: scope.documentId,
+    draftId,
+    writerId: scope.tabId,
+    status: 'active',
     baseVersionId: snapshot.baseVersionId,
     updatedAt: new Date().toISOString(),
     state: snapshot.state,
     held: snapshot.held,
   }
   try {
-    storage.setItem(documentDraftKey(scope), JSON.stringify(payload))
+    storage.setItem(documentDraftKey(scope, draftId), JSON.stringify(payload))
     return true
   } catch {
-    // Never log the payload: it contains matter text.
     return false
   }
 }
 
 export function clearDocumentDraft(storage: DraftStorage, scope: DraftScope) {
-  try {
-    storage.removeItem(documentDraftKey(scope))
-  } catch {
-    // A storage that refuses removal leaves a draft that expiry will drop.
+  for (const record of scanPayloads(storage, scope)) {
+    if (record.writerId !== scope.tabId || record.status !== 'active') continue
+    removeKey(storage, record.key)
   }
+  listDocumentDrafts(storage, scope)
 }
 
-/**
- * Removes the active draft and any parked draft for this scope. This is the
- * explicit discard path, so it is the one place that drops both.
- */
+/** Removes only parked drafts for this document; live work stays. */
 export function discardDocumentDrafts(
   storage: DraftStorage,
   scope: DraftScope,
 ) {
-  clearDocumentDraft(storage, scope)
-  try {
-    storage.removeItem(documentStaleDraftKey(scope))
-  } catch {
-    // As above: expiry still bounds anything left behind.
+  for (const record of scanPayloads(storage, scope)) {
+    if (record.status !== 'parked') continue
+    removeKey(storage, record.key)
   }
+  removeKey(storage, documentStaleDraftKey(scope))
+  listDocumentDrafts(storage, scope)
 }
 
-/**
- * Drops every stored draft. Called on sign-out so one user's matter text can
- * never be offered to the next session that opens the same document.
- */
+export function discardRecoverableDraft(
+  storage: DraftStorage,
+  scope: Omit<DraftScope, 'tabId'>,
+  draftId: string,
+) {
+  removeKey(storage, documentDraftKey({ ...scope, tabId: draftId }, draftId))
+  listDocumentDrafts(storage, scope)
+}
+
 export function clearAllDocumentDrafts(storage: DraftStorage) {
-  try {
-    const keys: string[] = []
-    for (let index = 0; index < storage.length; index += 1) {
-      const key = storage.key(index)
-      if (key?.startsWith(`${DOCUMENT_DRAFT_KEY_PREFIX}.`)) keys.push(key)
-    }
-    keys.forEach((key) => storage.removeItem(key))
-  } catch {
-    // Best effort: expiry still bounds anything left behind.
-  }
+  clearDocumentDraftsMatching(storage, () => true)
 }
 
-/** Sign-out entry point; a browser without local storage has nothing to clear. */
+export function clearDocumentDraftsForUser(
+  storage: DraftStorage,
+  userId: string,
+) {
+  clearDocumentDraftsMatching(storage, (key) => keyIncludesUser(key, userId))
+}
+
 export function clearStoredDocumentDrafts() {
   if (typeof window === 'undefined') return
   try {
-    clearAllDocumentDrafts(window.localStorage)
+    if (rememberedUserId) {
+      clearDocumentDraftsForUser(window.localStorage, rememberedUserId)
+    }
   } catch {
     // Storage access can throw in locked-down browser modes.
   }
+}
+
+export function clearStoredDocumentDraftsForUser(userId: string) {
+  if (typeof window === 'undefined') return
+  try {
+    clearDocumentDraftsForUser(window.localStorage, userId)
+  } catch {
+    // As above.
+  }
+}
+
+type Scanned = {
+  key: string
+  draftId: string
+  writerId: string
+  status: 'active' | 'parked'
+  snapshot: DocumentDraftSnapshot
+}
+
+function scanPayloads(
+  storage: DraftStorage,
+  scope: Omit<DraftScope, 'tabId'>,
+): Scanned[] {
+  const prefix = [
+    DOCUMENT_DRAFT_KEY_PREFIX,
+    String(DOCUMENT_DRAFT_SCHEMA_VERSION),
+    scope.organisationId,
+    scope.userId,
+    scope.documentId,
+    '',
+  ].join('.')
+  const found: Scanned[] = []
+  for (const key of allKeys(storage)) {
+    if (
+      key.startsWith(`${CLAIM_PREFIX}.`) ||
+      key.startsWith(`${REGISTRY_PREFIX}.`)
+    ) {
+      continue
+    }
+    if (!key.startsWith(prefix)) continue
+    const suffix = key.slice(prefix.length)
+    const parkedBySuffix = suffix.endsWith('.stale')
+    const draftId = parkedBySuffix ? suffix.slice(0, -'.stale'.length) : suffix
+    if (!draftId || draftId.includes('.')) continue
+    const raw = storage.getItem(key)
+    if (raw === null) continue
+    const parsed = parseSnapshot(raw)
+    if (
+      !parsed ||
+      parsed.organisationId !== scope.organisationId ||
+      parsed.userId !== scope.userId ||
+      parsed.documentId !== scope.documentId
+    ) {
+      removeKey(storage, key)
+      continue
+    }
+    found.push({
+      key,
+      draftId: parsed.draftId ?? draftId,
+      writerId: parsed.writerId ?? draftId,
+      status:
+        parkedBySuffix || parsed.status === 'parked' ? 'parked' : 'active',
+      snapshot: parsed,
+    })
+  }
+  return found
+}
+
+function toRecoverable(record: Scanned): RecoverableDraft {
+  return {
+    draftId: record.draftId,
+    writerId: record.writerId,
+    baseVersionId: record.snapshot.baseVersionId,
+    updatedAt: record.snapshot.updatedAt,
+    status: record.status,
+  }
+}
+
+function parkRecord(storage: DraftStorage, record: Scanned) {
+  const parked: DocumentDraftSnapshot = {
+    ...record.snapshot,
+    draftId: record.draftId,
+    writerId: record.writerId,
+    status: 'parked',
+  }
+  try {
+    storage.setItem(record.key, JSON.stringify(parked))
+  } catch {
+    // Leave the payload; it is still never applied to a newer version.
+  }
+}
+
+function adoptRecord(
+  storage: DraftStorage,
+  record: Scanned,
+  writerId: string,
+): Scanned {
+  const next: DocumentDraftSnapshot = {
+    ...record.snapshot,
+    draftId: record.draftId,
+    writerId,
+    status: 'active',
+  }
+  try {
+    storage.setItem(record.key, JSON.stringify(next))
+  } catch {
+    // Adoption is still returned from memory; the next write retries.
+  }
+  return { ...record, writerId, snapshot: next, status: 'active' }
 }

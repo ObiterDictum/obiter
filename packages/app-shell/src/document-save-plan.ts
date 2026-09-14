@@ -44,7 +44,7 @@ export type DraftSlot =
   | { kind: 'delete'; key: string; paragraphId: string }
   | { kind: 'paragraph-style'; key: string; paragraphId: string }
   | { kind: 'numbering'; key: string; paragraphId: string }
-  | { kind: 'emphasis'; key: string; index: number }
+  | { kind: 'emphasis'; key: string }
 
 export type BlockedDraft = {
   slot: DraftSlot
@@ -231,7 +231,7 @@ export function planDocumentSave(
     })
   }
 
-  state.format.emphasis.forEach((item, index) => {
+  state.format.emphasis.forEach((item) => {
     const addressable =
       item.runId !== undefined
         ? runIds.has(item.runId)
@@ -240,21 +240,14 @@ export function planDocumentSave(
           item.from !== undefined &&
           item.to !== undefined &&
           item.from < item.to
+    const key = emphasisSlotKey(item)
     if (addressable) {
       keep.format.emphasis.push(item)
-      covered.push({
-        kind: 'emphasis',
-        key: `emph:${item.runId ?? item.paragraphId ?? index}:${item.from ?? ''}:${item.to ?? ''}`,
-        index,
-      })
+      covered.push({ kind: 'emphasis', key })
       return
     }
     blocked.push({
-      slot: {
-        kind: 'emphasis',
-        key: `emph:${item.runId ?? item.paragraphId ?? index}`,
-        index,
-      },
+      slot: { kind: 'emphasis', key },
       reason:
         'The text this formatting applied to is no longer in the document.',
       label: 'formatting',
@@ -293,9 +286,6 @@ export function splitDraftSlots(
   slots: readonly DraftSlot[],
 ): { remaining: DraftState; removed: DraftState } {
   const drop = new Set(slots.map((slot) => slot.key))
-  const emphasisIndexes = new Set(
-    slots.flatMap((slot) => (slot.kind === 'emphasis' ? [slot.index] : [])),
-  )
   const drafts = splitKeys(state.drafts, drop, (key) => `run:${key}`)
   const extraRuns = splitKeys(state.extraRuns, drop, (key) => `extra:${key}`)
   const paragraphStyles = splitKeys(
@@ -310,10 +300,10 @@ export function splitDraftSlots(
   )
   const emphasis = {
     kept: state.format.emphasis.filter(
-      (_, index) => !emphasisIndexes.has(index),
+      (item) => !drop.has(emphasisSlotKey(item)),
     ),
-    taken: state.format.emphasis.filter((_, index) =>
-      emphasisIndexes.has(index),
+    taken: state.format.emphasis.filter((item) =>
+      drop.has(emphasisSlotKey(item)),
     ),
   }
   const insertIds = new Set(
@@ -413,8 +403,12 @@ function slotFingerprint(state: DraftState, slot: DraftSlot): string {
       return JSON.stringify(state.format.paragraphStyles[slot.paragraphId])
     case 'numbering':
       return JSON.stringify(state.format.numbering[slot.paragraphId])
-    case 'emphasis':
-      return JSON.stringify(state.format.emphasis[slot.index])
+    case 'emphasis': {
+      const match = [...state.format.emphasis]
+        .reverse()
+        .find((item) => emphasisSlotKey(item) === slot.key)
+      return JSON.stringify(match)
+    }
   }
 }
 
@@ -436,4 +430,14 @@ export function slotLabel(slot: DraftSlot): string {
     case 'emphasis':
       return 'formatting'
   }
+}
+
+function emphasisSlotKey(item: {
+  runId?: string
+  paragraphId?: string
+  from?: number
+  to?: number
+}) {
+  if (item.runId) return `emph:run:${item.runId}`
+  return `emph:range:${item.paragraphId ?? ''}:${String(item.from ?? '')}:${String(item.to ?? '')}`
 }

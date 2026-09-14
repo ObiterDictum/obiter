@@ -299,15 +299,14 @@ describe('E45 a rejected save must not poison later saves', () => {
     openReviewTab()
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Retry save' })).toBeTruthy()
+      expect(screen.getByText(/rejected typed text/i)).toBeTruthy()
     })
-
-    fireEvent.click(screen.getByRole('button', { name: 'Retry save' }))
-
-    await waitFor(() => expect(saveState()).toBe('saved'))
-    expect(editAsync.mock.calls[1]?.[0].operations).toEqual([
-      { type: 'replace_run_text', runId: 'r1', text: 'Hello world' },
-    ])
+    expect(editAsync).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(editAsync).toHaveBeenCalledTimes(1)
+    expect(bodyEditor().value).toBe('Hello')
+    expect(screen.getByText(/rejected typed text/i)).toBeTruthy()
   })
 
   it('keeps text typed while a save was in flight', async () => {
@@ -404,11 +403,107 @@ describe('E45 a rejected save must not poison later saves', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => {
-      expect(screen.getByText(/have not been saved/i)).toBeTruthy()
+      expect(screen.getByText(/rejected typed text/i)).toBeTruthy()
     })
-    expect(screen.getByText(/still in this tab/i)).toBeTruthy()
-    expect(screen.getByRole('button', { name: 'Retry save' })).toBeTruthy()
-    expect(saveState()).toBe('failed')
+    expect(screen.getByText(/not been saved|held here/i)).toBeTruthy()
+    expect(saveState()).toBe('unsaved')
+  })
+
+  it('holds a single rejected slot and does not resend it on retry', async () => {
+    const editAsync = vi.fn().mockRejectedValue(validationFailed)
+    mount({ editAsync })
+    fireEvent.click(screen.getByText('Hello'))
+    fireEvent.change(bodyEditor(), { target: { value: 'Hello edited' } })
+    openReviewTab()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/rejected typed text/i)).toBeTruthy()
+    })
+    expect(editAsync).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(editAsync).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText(/could not be identified/i)).toBeNull()
+  })
+
+  it('keeps text typed while a containment probe is in flight', async () => {
+    let resolveProbe: (value: unknown) => void = () => undefined
+    const editAsync = vi.fn(
+      async (input: { operations: DocumentEditOperation[] }) => {
+        if (input.operations.some((op) => op.type === 'set_paragraph_style')) {
+          throw validationFailed
+        }
+        return new Promise((resolve) => {
+          resolveProbe = resolve
+        })
+      },
+    )
+    mount({ editAsync })
+    fireEvent.click(screen.getByText('Hello'))
+    fireEvent.change(bodyEditor(), { target: { value: 'Hello world' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Heading 1' }))
+    openReviewTab()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(2))
+
+    fireEvent.change(bodyEditor(), {
+      target: { value: 'Hello typed during probe' },
+    })
+    await act(async () => {
+      resolveProbe({
+        documentId: 'doc_1',
+        versionId: 'ver_2',
+        versionNumber: 2,
+      })
+    })
+
+    await waitFor(() => expect(saveState()).toBe('unsaved'))
+    expect(bodyEditor().value).toBe('Hello typed during probe')
+  })
+
+  it('asks for confirmation before reload-and-discard destroys unsaved work', async () => {
+    const editAsync = vi
+      .fn()
+      .mockRejectedValue(
+        new ApiError(
+          'storage_unavailable',
+          'The request failed.',
+          503,
+          'req_2',
+        ),
+      )
+    mount({ editAsync })
+    fireEvent.click(screen.getByText('Hello'))
+    fireEvent.change(bodyEditor(), { target: { value: 'Hello keep me' } })
+    openReviewTab()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => {
+      expect(
+        screen.getByRole('button', { name: 'Reload and discard' }),
+      ).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reload and discard' }))
+    expect(bodyEditor().value).toBe('Hello keep me')
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeTruthy()
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(bodyEditor().value).toBe('Hello keep me')
+    expect(screen.queryByRole('dialog')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reload and discard' }))
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeTruthy()
+    })
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Discard unsaved work' }),
+    )
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog')).toBeNull()
+    })
+    expect(bodyEditor().value).toBe('Hello')
   })
 })
 
@@ -463,6 +558,26 @@ describe('E45 unsaved drafts must survive a reload', () => {
       expect(bodyEditor().value).toBe('Hello')
     })
     expect(screen.getByText(/earlier version of this document/i)).toBeTruthy()
+  })
+
+  it('restores a draft after the tab is closed and the document is reopened', async () => {
+    mount({ editAsync: vi.fn() })
+    fireEvent.click(screen.getByText('Hello'))
+    fireEvent.change(bodyEditor(), { target: { value: 'Hello after close' } })
+    await waitFor(() => {
+      expect(window.localStorage.length).toBeGreaterThan(0)
+    })
+
+    cleanup()
+    window.sessionStorage.clear()
+    mount({ editAsync: vi.fn() })
+    fireEvent.click(screen.getByText('Hello after close'))
+
+    await waitFor(() => {
+      expect(bodyEditor().value).toBe('Hello after close')
+    })
+    expect(saveState()).toBe('unsaved')
+    expect(screen.queryByText('All changes saved')).toBeNull()
   })
 })
 
