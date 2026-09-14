@@ -42,12 +42,27 @@ export type CitationInput = z.infer<typeof citationInputSchema>
 /**
  * Why a citation could not be reduced to a source identity. Normalisation
  * failing is not a finding on its own; it forces a check to `review_required`
- * rather than a pass.
+ * rather than a pass. The reasons are the distinct ways normalisation can
+ * fail, so an operational caller can tell them apart without reading the
+ * finding explanation:
+ *
+ * - `not_a_citation`: the input is outside the accepted citation grammar.
+ * - `ambiguous`: the input names more than one canonical authority.
+ * - `unsupported_source_type`: the input is a citation of a source family
+ *   Verify does not resolve.
+ * - `no_canonical_match`: the input is citation-shaped and inside the grammar,
+ *   but no canonical identity could be established for it. It is not proof the
+ *   authority is absent; that is the authority-existence check's question.
+ * - `resolution_unavailable`: resolution could not complete because an
+ *   operational dependency failed. This is not a negative result, and it must
+ *   not be read as one.
  */
 export const citationUnresolvedReasonSchema = z.enum([
   'not_a_citation',
   'ambiguous',
   'unsupported_source_type',
+  'no_canonical_match',
+  'resolution_unavailable',
 ])
 export type CitationUnresolvedReason = z.infer<
   typeof citationUnresolvedReasonSchema
@@ -103,6 +118,12 @@ export type NormalizedCitation = z.infer<typeof normalizedCitationSchema>
  * the `/ln/` prefix is required, and empty, `.`/`..` and percent-encoded
  * segments are refused (see `isCanonicalLegislationPath`).
  *
+ * Null covers two different failures a caller may need to separate: a path that
+ * is not canonical at all, and a canonical-shaped path naming an act type this
+ * repository does not store. Resolution tells them apart with
+ * `isSupportedLegislationActType`, so this function stays a parser and does not
+ * guess at the caller's policy.
+ *
  * Free-text legislation citations (`s 6 HRA 1998`) are recognised by search, in
  * `services/api/src/routes/legal-search/legislation-citations.ts`, against a
  * stored Act directory. That is resolution and it stays out of this layer.
@@ -110,7 +131,7 @@ export type NormalizedCitation = z.infer<typeof normalizedCitationSchema>
  */
 export function normalizeLegislationCitationPath(
   path: string,
-): NormalizedCitation | null {
+): Extract<NormalizedCitation, { kind: 'legislation' }> | null {
   if (!path.startsWith('/ln/')) return null
   const rest = path.slice('/ln/'.length)
   if (!isCanonicalLegislationPath(rest)) return null

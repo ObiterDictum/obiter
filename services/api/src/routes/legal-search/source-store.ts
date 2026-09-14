@@ -22,6 +22,62 @@ export interface StoredLegalAuthorityRecord {
   withdrawn?: WithdrawnInfo | null
 }
 
+/**
+ * One stored carrier of a neutral citation: the document id and whether the row
+ * carries upstream withdrawal evidence. It is the whole input the live/withdrawn
+ * rule needs, so resolution and the existence check classify the same shape.
+ */
+export interface StoredAuthorityCarrier {
+  id: string
+  withdrawn: boolean
+}
+
+/**
+ * What a set of stored carriers means for identity selection. It states which
+ * identities exist and which are trustworthy, and nothing about whether the
+ * authority is held: that stays the existence check's decision.
+ */
+export type AuthorityCarrierSelection =
+  | { kind: 'none' }
+  | { kind: 'single_live'; id: string }
+  | { kind: 'ambiguous' }
+  | { kind: 'no_live'; ids: string[] }
+
+/**
+ * The one live/withdrawn carrier rule, shared by V2 (authority existence) and V3
+ * (citation resolution) so the two adjacent stages cannot disagree about the
+ * same store state again.
+ *
+ * One live carrier is `single_live` whatever withdrawn history sits beside it: a
+ * withdrawn row is a source that was once minted and is no longer trustworthy,
+ * not a second candidate identity, so a live source plus withdrawn duplicates is
+ * not ambiguous. Two or more live carriers are `ambiguous` and no carrier wins by
+ * arriving first. With no live carrier, every withdrawn id is returned so the
+ * caller decides; a single withdrawn id is still a usable identity, while more
+ * than one is not, and that gap is a documented V1 limitation, not a reason to
+ * pick one.
+ *
+ * `document_id` is the store's primary key, so a duplicate id is not reachable
+ * from the store; it is deduped here so a direct caller cannot make the outcome
+ * depend on how many times it passed the same id, and a conflicting duplicate is
+ * treated as withdrawn, which fails closed rather than clearing on it.
+ */
+export function selectAuthorityCarriers(
+  carriers: readonly StoredAuthorityCarrier[],
+): AuthorityCarrierSelection {
+  const byId = new Map<string, boolean>()
+  for (const carrier of carriers) {
+    byId.set(carrier.id, (byId.get(carrier.id) ?? false) || carrier.withdrawn)
+  }
+  const live = [...byId.entries()].filter(([, withdrawn]) => !withdrawn)
+  if (live.length > 1) return { kind: 'ambiguous' }
+  const [only] = live
+  if (only) return { kind: 'single_live', id: only[0] }
+  const withdrawn = [...byId.keys()].sort()
+  if (withdrawn.length === 0) return { kind: 'none' }
+  return { kind: 'no_live', ids: withdrawn }
+}
+
 export interface LegalAuthoritySourceStore {
   upsertSummary(
     summary: LegalAuthority,
@@ -218,35 +274,37 @@ function toStoredLegalAuthorityRecord(
 interface StoredAuthorityCitationRow extends QueryResultRow {
   documentId: string
   neutralCitation: string | null
+  providerJson: unknown
 }
 
 /**
- * Stored authority ids whose neutral citation canonically equals one of
+ * Stored authority carriers whose neutral citation canonically equals one of
  * `neutralCitations`, keyed by the normalized form of the citation they match.
  * The record is Postgres; the fold is search-client's `normalizeCitationValue`,
  * the same one the search path compares with, so an exact citation lookup
  * cannot drift from search's notion of equality.
  *
- * The query transfers the citation projection only, never document bodies, and
- * it pushes the citation's year into SQL: the fold never changes the year, so a
- * row whose citation does not contain it cannot match, and rejecting those rows
- * in the database removes the bulk of the transfer (91-97% on the lane corpus,
- * year-dependent). The database predicate is a superset of the fold (a `like`
- * can match the digits anywhere), so the exact comparison still runs in Node
- * and SQL is never trusted for equality.
+ * The query transfers the citation projection and the provider block only,
+ * never document bodies, and it pushes the citation's year into SQL: the fold
+ * never changes the year, so a row whose citation does not contain it cannot
+ * match, and rejecting those rows in the database removes the bulk of the
+ * transfer (91-97% on the lane corpus, year-dependent). The database predicate
+ * is a superset of the fold (a `like` can match the digits anywhere), so the
+ * exact comparison still runs in Node and SQL is never trusted for equality.
  *
  * The API is a batch: a caller with many citations pays one query for the year
  * set instead of one full-table transfer per citation, which is what V3's
- * per-document caller needs. Rows are ordered by `document_id` and each id list
- * is sorted, so the result does not depend on table or scan order. Withdrawn
- * rows are returned too: a withdrawn row is a stored source the caller must not
- * read as absent, and the caller decides by reading the record.
+ * per-document caller needs. Rows are ordered by `document_id` and each carrier
+ * list is sorted, so the result does not depend on table or scan order. The
+ * withdrawn flag is carried too: it is the difference between a live source and
+ * a withdrawal, and {@link selectAuthorityCarriers} is the one rule that reads
+ * it.
  */
-export async function findStoredAuthorityIdsByNeutralCitations(
+export async function findStoredAuthorityCarriersByNeutralCitations(
   pool: Pick<Pool, 'query'>,
   neutralCitations: string[],
-): Promise<Map<string, string[]>> {
-  const matches = new Map<string, string[]>()
+): Promise<Map<string, StoredAuthorityCarrier[]>> {
+  const matches = new Map<string, StoredAuthorityCarrier[]>()
   const years = new Set<string>()
   let includesUnparseableYear = false
   for (const neutralCitation of neutralCitations) {
@@ -263,7 +321,8 @@ export async function findStoredAuthorityIdsByNeutralCitations(
   if (years.size > 0) {
     const result = await pool.query<StoredAuthorityCitationRow>(
       `select document_id as "documentId",
-              summary_json->>'neutralCitation' as "neutralCitation"
+              summary_json->>'neutralCitation' as "neutralCitation",
+              provider_json as "providerJson"
          from legal_source_documents
         where summary_json->>'neutralCitation' is not null
           and summary_json->>'neutralCitation' like any($1::text[])
@@ -278,7 +337,8 @@ export async function findStoredAuthorityIdsByNeutralCitations(
     // input, not the common path.
     const result = await pool.query<StoredAuthorityCitationRow>(
       `select document_id as "documentId",
-              summary_json->>'neutralCitation' as "neutralCitation"
+              summary_json->>'neutralCitation' as "neutralCitation",
+              provider_json as "providerJson"
          from legal_source_documents
         where summary_json->>'neutralCitation' is not null
         order by document_id`,
@@ -288,12 +348,41 @@ export async function findStoredAuthorityIdsByNeutralCitations(
 
   for (const row of rows) {
     if (!row.neutralCitation) continue
-    const ids = matches.get(normalizeCitationValue(row.neutralCitation))
-    if (!ids || ids.includes(row.documentId)) continue
-    ids.push(row.documentId)
+    const carriers = matches.get(normalizeCitationValue(row.neutralCitation))
+    if (!carriers || carriers.some((carrier) => carrier.id === row.documentId))
+      continue
+    carriers.push({
+      id: row.documentId,
+      withdrawn: readWithdrawnInfo(row.providerJson) !== null,
+    })
   }
-  for (const ids of matches.values()) ids.sort()
+  for (const carriers of matches.values()) {
+    carriers.sort((left, right) => left.id.localeCompare(right.id))
+  }
   return matches
+}
+
+/**
+ * The id-only projection of {@link findStoredAuthorityCarriersByNeutralCitations},
+ * for a caller that needs the stored ids and makes its own record reads. The
+ * batch carrier function is the one implementation; this narrows it.
+ */
+export async function findStoredAuthorityIdsByNeutralCitations(
+  pool: Pick<Pool, 'query'>,
+  neutralCitations: string[],
+): Promise<Map<string, string[]>> {
+  const carriers = await findStoredAuthorityCarriersByNeutralCitations(
+    pool,
+    neutralCitations,
+  )
+  const ids = new Map<string, string[]>()
+  for (const [normalized, match] of carriers) {
+    ids.set(
+      normalized,
+      match.map((carrier) => carrier.id),
+    )
+  }
+  return ids
 }
 
 /**

@@ -21,7 +21,11 @@ a lookup onto them; it defines none of the surrounding steps itself.
   model, including the explicit review-required state;
 - the authority-existence decision (V2): a normalized citation and a lookup
   outcome to an accepted finding state. The store lookup itself stays in the
-  API.
+  API;
+- the citation-resolution result model and decision (V3): a raw candidate to a
+  canonical identity, or a reason it did not resolve, plus the pure decision
+  that maps that onto the finding vocabulary. Reading the store stays in the
+  API, and so does parsing.
 
 ## What the values hold
 
@@ -71,6 +75,11 @@ showing bounded citation text to a reviewer.
   `ukpga/YYYY/N` form with canonical label paths; judgment source ids are
   `LegalAuthority.id`. Both schemas reject values the canonical grammar would
   reject, including traversal-shaped and percent-encoded path segments.
+- **Resolution hands V2 its own input.** A resolved V3 result carries the
+  resolved arms of `NormalizedCitation`, so `normalizedCitationFromResolution`
+  is the whole V3 to V2 boundary. Every other outcome maps to an `unresolved`
+  or `not_checked` citation, which V2 can only skip, so a malformed, ambiguous,
+  unresolved or inconclusive result cannot enter V2 as a resolved identity.
 - **Evidence and source agree.** A clear or flagged finding must cite at least
   one evidence reference, and every reference must name the same public source as
   its resolved citation. Judgment and legislation references cannot cross.
@@ -83,6 +92,47 @@ showing bounded citation text to a reviewer.
   with length-prefixed components so distinct inputs cannot collide on `:`.
   `verificationFindingSchema` accepts only that derivation, so an arbitrary
   string (or matter text) is not a valid finding id.
+
+## Citation resolution (V3)
+
+V3 answers one question: does this already-extracted citation candidate resolve
+unambiguously to the canonical authority it purports to name? It turns one
+candidate, or a batch of them, into the identity V2 accepts.
+
+`CitationResolution` is the resolution layer's own result model, deliberately
+separate from the finding vocabulary:
+
+| outcome        | meaning                                                                                                                                                                                                     |
+| -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `resolved`     | exactly one canonical identity, in the resolved arms of `NormalizedCitation`                                                                                                                                |
+| `unresolved`   | citation-shaped and inside the grammar, but no canonical identity matched                                                                                                                                   |
+| `ambiguous`    | more than one canonical identity remains possible, and none wins                                                                                                                                            |
+| `malformed`    | outside the accepted citation grammar                                                                                                                                                                       |
+| `unsupported`  | a citation of a source family this layer does not resolve: a canonical-shaped `/ln/` path naming an unheld act type, or a well-formed neutral citation for a court outside the shared grammar's closed list |
+| `inconclusive` | an operational dependency failed, so resolution could not complete                                                                                                                                          |
+| `not_checked`  | resolution did not run                                                                                                                                                                                      |
+
+`decideCitationResolution` maps that onto a `citation_resolution` finding. Every
+non-resolved outcome is review-required; none is a pass, and none is a claim
+about whether an authority exists. `authority_not_held` is unreachable here
+because the finding schema reserves it for the existence check, so the two
+checks cannot be confused by construction.
+
+Two invariants are worth stating because they are easy to get wrong:
+
+- **Zero candidates is `unresolved`, not absence.** A citation that matches no
+  stored record has no canonical identity to check. Reporting that as "not
+  held" would decide V2's question from V3's evidence, and the store is partial.
+- **A failed dependency is `inconclusive`, not absence.** Resolution reads
+  Postgres, so it can be unavailable; a database outage must never be recorded
+  as a citation that did not resolve.
+
+V3 does not extract citations from a document, scan matter prose, use a search
+rank as identity, compare quotations, classify proposition support, or decide
+whether an authority is held. Free-text legislation recognition, title folding
+and section and schedule parsing stay with the Search classifier V3 calls.
+Extraction itself, and any route, worker or UI that runs resolution over a
+draft, remain V5's wiring.
 
 ## Ownership boundaries
 
@@ -98,12 +148,19 @@ showing bounded citation text to a reviewer.
   source kinds.
 - **Search and Atlas code** owns retrieval, citation recognition and authority
   resolution. `services/api/src/routes/legal-search/legislation-citations.ts`
-  recognises free-text legislation citations, the editor's neutral-citation
-  regex in `packages/app-shell/src/document-authorities.ts` recognises case
-  citations, and `packages/search-client` owns the judgment evidence id format
-  (`<documentId>:judgment_paragraph:<ordinal>`). This package does not parse
-  free-text citations and does not query Meilisearch, Postgres or Atlas. V2 and
-  V3 call those layers and hand the results to this vocabulary.
+  recognises free-text legislation citations, and
+  `packages/search-client` owns the judgment evidence id format
+  (`<documentId>:judgment_paragraph:<ordinal>`) and the exact citation fold
+  (`normalizeCitationValue`). This package does not parse free-text citations
+  and does not query Meilisearch, Postgres or Atlas. V2 and V3 call those layers
+  and hand the results to this vocabulary.
+- **`packages/contracts` owns the citation grammars.** The canonical `/ln/`
+  legislation path grammar and the neutral citation grammar live there, because
+  each has two consumers that must agree: the app shell scans draft prose for
+  neutral citations (`packages/app-shell/src/document-authorities.ts`) while V3
+  validates a single already-extracted candidate against the same source, and
+  the `/ln/` grammar is shared with the web route. Neither grammar is copied
+  into this package or into the resolver.
 - **V2 store boundary and V3 batching.** The V2 authority-existence lookup lives
   in `services/api/src/authority-existence.ts` and reads the public legal-source
   record through the existing Search store helpers. Provision resolution shares
@@ -112,9 +169,22 @@ showing bounded citation text to a reviewer.
   path, so the single-schedule alias has one owner and a held provision cannot
   read as not-held to one caller and held to the other. The case-law candidate
   lookup is a batch
-  (`findStoredAuthorityIdsByNeutralCitations`): its SQL pushes the citation year
-  into the query and returns only the citation projection, and V3 should call it
-  once per document rather than once per citation.
+  (`findStoredAuthorityCarriersByNeutralCitations`): its SQL pushes the citation
+  year into the query and returns only the citation projection and the provider
+  block. One pure rule, `selectAuthorityCarriers`, turns a carrier set into its
+  live/withdrawn disposition, and both V2 and V3 read it, so the two stages
+  cannot drift on the same store state. A case-law citation for a court outside
+  the shared grammar's closed list is `unsupported` and takes no store read at
+  all.
+- **V3 resolution boundary.** `services/api/src/citation-resolution.ts` owns the
+  store-backed resolution. It batches rather than looping: one candidate lookup
+  covers every case-law citation in the call, one Act-directory read covers the
+  free-text legislation candidates, and a canonical `/ln/` path needs no read at
+  all because the identity is in the path. The Act title grammar, the title fold,
+  the `(repealed)` handling, section and schedule parsing and the chapter
+  identity all stay in the Search classifier it calls; a provision citation is
+  resolved to an identity here and its existence is V2's question, so the
+  single-schedule alias is still applied in exactly one place.
 - **Future Verify API, worker and UI** (V2 onwards) validate untrusted input with
   contracts schemas at the boundary, run checks in the worker, and render
   findings in the UI. All three consume this package and none add a parallel
@@ -140,7 +210,8 @@ boundaries that accept these values own:
 
 Deliberately absent, and owned by later board items:
 
-- citation resolution checks and free-text citation normalisation (V3);
+- citation extraction from a document, and any route, worker or UI that runs
+  resolution over a draft (V5);
 - quote comparison (V4);
 - findings UI (V5);
 - verification artifact export (V6);

@@ -43,7 +43,14 @@ the source of truth for names and intent.
     reject values the canonical grammar rejects, and additionally reject empty,
     `.`/`..` and percent-encoded segments.
   - `unresolved`: normalisation ran and could not produce an identity, with a
-    `reason` of `not_a_citation`, `ambiguous` or `unsupported_source_type`.
+    `reason`: `not_a_citation` (outside the accepted grammar),
+    `unsupported_source_type` (a citation of a family Verify does not resolve),
+    `no_canonical_match` (citation-shaped and inside the grammar, but no
+    canonical identity matched), `ambiguous` (more than one), or
+    `resolution_unavailable` (resolution could not complete because a dependency
+    failed). The last two exist because V3 can fail in ways the first two
+    cannot express, and a store outage recorded as `no_canonical_match` would be
+    a negative result the check never established.
   - `not_checked`: normalisation has not run. It is the only citation state that
     pairs with an unrun check.
 - The one normalisation this layer owns is a canonical legislation path
@@ -212,6 +219,144 @@ both can carry matter. They are the only fields that can, and they are not
 identifiers. This package sets no length or count limits: the API, queue and
 persistence boundaries own input sizes, the check that `rawText` matches the
 stored version's projection, and tenant scoping.
+
+## Citation resolution (V3)
+
+V3 answers one question: does this already-extracted citation candidate resolve
+unambiguously to the canonical authority it purports to name? It turns one raw
+candidate, or a batch of them, into the canonical identity V2 consumes, and it
+is the only layer that turns raw text into a `NormalizedCitation`.
+
+A raw citation candidate is an already-extracted string plus the caller's stable
+identifier for it (for example a paragraph id and offsets). V3 does not extract
+candidates from a document and does not scan matter prose: the app shell already
+extracts, and V5 wires extraction to this layer. A canonical identity is a
+resolved `NormalizedCitation`: a neutral citation with its stored judgment
+`sourceId`, or a canonical Act identity with its structured label path.
+
+### Result model
+
+`CitationResolution` is V3's public outcome. It is deliberately larger than the
+finding vocabulary, because the finding vocabulary has one axis (a citation state
+plus a review reason) and resolution failures are not all the same failure.
+
+| resolution outcome | V1 citation state                        | `citation_resolution` finding                 |
+| ------------------ | ---------------------------------------- | --------------------------------------------- |
+| `resolved`         | `case_law` or `legislation`              | `clear`, with the resolved source as evidence |
+| `unresolved`       | `unresolved` / `no_canonical_match`      | `review_required` / `citation_unresolved`     |
+| `ambiguous`        | `unresolved` / `ambiguous`               | `review_required` / `citation_ambiguous`      |
+| `malformed`        | `unresolved` / `not_a_citation`          | `review_required` / `citation_unresolved`     |
+| `unsupported`      | `unresolved` / `unsupported_source_type` | `review_required` / `citation_unresolved`     |
+| `inconclusive`     | `unresolved` / `resolution_unavailable`  | `review_required` / `check_inconclusive`      |
+| `not_checked`      | `not_checked`                            | `not_checked`                                 |
+
+`normalizedCitationFromResolution` is the whole V3 to V2 boundary: it returns the
+resolved identity for a `resolved` result and an `unresolved` or `not_checked`
+citation for every other result. V2 can only skip those, so a malformed,
+ambiguous, unresolved or inconclusive result cannot enter V2 as a resolved
+identity, and the map throws nowhere a caller can quietly bypass it.
+
+### Supported forms
+
+- **Case law**: a whole candidate matching the shared neutral-citation grammar in
+  `packages/contracts/src/neutral-citation.ts` (the same grammar draft extraction
+  scans prose with), resolved by exact neutral-citation comparison. The documented
+  folds may differ from the stored string: case, whitespace, punctuation and
+  leading zeros in the number. Nothing beyond those folds is applied, so a
+  fullwidth bracket, a fullwidth digit, a Unicode lookalike or a hidden control
+  character is refused rather than folded into a match. The court codes are a
+  closed list of the courts the corpus is drawn from, so a well-formed citation
+  for a court outside it (`[2024] EAT 12`) is `unsupported`, not `malformed`:
+  it is a citation of a family this layer does not resolve, which is a different
+  answer from prose that merely contains brackets and digits. An unlisted court
+  is never queried against the store as though it were supported.
+- **Legislation by canonical path**: `/ln/ukpga/YYYY/N[/label/path]`, resolved by
+  the shared path grammar with no store read. A canonical-shaped path naming an
+  act type this repository does not store is `unsupported`, not `malformed`.
+- **Legislation by free text**: the forms the Search classifier recognises, namely
+  short titles, chapter citations (`1998 c. 42`), the curated aliases, and
+  section and schedule forms in either supported order, with the stored title
+  fold (case, quote, hyphen and punctuation folding, `(repealed)` annotations).
+  A chapter citation's year must be a canonical Act year: four ASCII digits and
+  no earlier than 1801, the first year of the Parliament of the United Kingdom,
+  whose Public General Acts are the `ukpga` corpus. A zero-padded year (`0204`)
+  or a pre-1801 one is not a chapter citation, so it never becomes the
+  non-canonical identity `Number()` would derive from it. The chapter number is
+  a positive safe integer and its canonical form drops leading zeros, so `042`
+  names the same chapter as `42`; a number too large to be a safe integer is
+  refused rather than rounded. The rule is stated once in
+  `packages/contracts/src/legislation-paths.ts` and applied by both the
+  free-text classifier and the pasted-path parser, so they cannot disagree.
+
+### Case-law semantics
+
+The canonical identity of a judgment citation is the stored document id, so a
+case-law candidate takes one batch store read. Zero stored carriers is
+`unresolved`, never a claim that the authority does not exist.
+
+The live/withdrawn disposition of the carriers is decided by one rule shared
+with V2 (`selectAuthorityCarriers`), so the two adjacent stages cannot disagree
+about the same store state. A withdrawn row is a source that was once minted and
+is no longer trustworthy, not a second candidate identity:
+
+- one live carrier resolves, whatever withdrawn history sits beside it;
+- two or more live carriers are `ambiguous`, and no carrier wins by row order;
+- a single withdrawn carrier resolves and V2 then reports `evidence_unavailable`;
+- two or more withdrawn carriers are not representable through one `sourceId`,
+  and resolution never picks by row order, so it fails closed as `ambiguous`.
+
+That last case is the one state where V3 and V2 answer differently: V2's own
+outcome for the same store state is `source_withdrawn` (`evidence_unavailable`),
+but V3 has no single identity to hand it. Both answers are review-required and
+neither is a pass, and the gap is the V1 storage-identity constraint tracked as a
+separate board item (`Decouple canonical case-law identity from stored source
+identity`), not a carrier-selection rule V3 is allowed to invent.
+
+### Legislation semantics
+
+A chapter citation proves its own canonical identity (`1998 c. 42` is
+`ukpga/1998/42`), so an unheld chapter still resolves and V2 reports the honest
+`authority_not_held` for it. That is the negative protection delivered by #194
+and #196 and it is preserved here. A title the stored directory cannot resolve
+is `unresolved`, not absent: the directory is partial, so a failed title lookup
+is not proof. A provision citation resolves to the Act identity plus the label
+path the citation names; whether that provision is held is V2's question, so a
+missing provision of a held Act is a resolution success followed by an existence
+finding. The single-schedule alias stays in `resolveStoredProvisionPath`, which
+V2 calls, and is not duplicated here.
+
+### Batching ownership
+
+`resolveCitationCandidates` in `services/api/src/citation-resolution.ts` is the
+batch boundary, and it issues at most one candidate lookup for every case-law
+citation in the call and one Act-directory read for the free-text legislation
+candidates. A canonical `/ln/` path needs no read. Results are returned in input
+order and echo each candidate's identifier, and a dependency that fails makes
+only the candidates that needed it `inconclusive`, so a partial failure is
+reported as a partial failure. No migration or index was added: the existing
+batch query already pushes the citation year into SQL, so the document-level
+cost is one round trip rather than one query per citation, which is why the
+batch is the durable fix rather than a new index.
+
+### Limitations and deferred work
+
+- Resolution is wired to no route, worker or UI. V5 owns the run, the batching
+  call site against a real document, and persistence.
+- Secondary legislation and any non-`ukpga` act type are out of scope and resolve
+  only as `unsupported` when they arrive as a canonical-shaped `/ln/` path. A
+  free-text secondary citation is `malformed`, because no repository grammar
+  recognises it.
+- A case name without a neutral citation never resolves: there is no canonical
+  mechanism that maps a party name to a neutral citation, so inventing one would
+  be a guess.
+- A resolved case-law identity carries the candidate's own spelling of the
+  neutral citation, after the trim. Its durable identity is `sourceId`; the
+  stored printed form is not re-read, and the documented folds are applied at
+  comparison rather than written back into the string.
+- A case-law citation is resolved from the store, so a store outage makes its
+  resolution `inconclusive`. Legislation by canonical `/ln/` path is unaffected,
+  because its identity is in the path.
+- Meilisearch rank is never used as identity. Resolution reads Postgres only.
 
 ## Deliberately absent
 

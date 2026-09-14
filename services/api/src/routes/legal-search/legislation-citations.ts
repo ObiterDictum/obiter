@@ -19,6 +19,7 @@
  * No network, no storage. Callers supply the act directory from Postgres.
  */
 
+import { isCanonicalActYear } from '@obiter/contracts'
 import {
   actRemainderIsProse,
   looksLikeWholeActTitle,
@@ -60,9 +61,11 @@ export type LegislationCitationOutcome =
   | { kind: 'ambiguous'; candidates: LegislationActRef[]; reason: string }
   // A well-formed chapter citation for a year and number the corpus does not
   // hold. This is authoritative: the year and number are the canonical
-  // identity, so an absent chapter proves the Act is absent. A failed *title*
-  // lookup does not (see `unresolved_title`).
-  | { kind: 'not_held'; recognisedQuery: string }
+  // identity, so an absent chapter proves the Act is absent. `identity` is that
+  // canonical identity, so a caller that needs one (verification's resolution
+  // step) does not have to re-parse the citation or invent it. A failed *title*
+  // lookup does not prove absence (see `unresolved_title`).
+  | { kind: 'not_held'; identity: string; recognisedQuery: string }
   // The query is a whole Act-title request, but the directory cannot resolve
   // it. The local directory is partial and title resolution is imperfect, so
   // this state suppresses unrelated keyword provisions without claiming the
@@ -79,12 +82,33 @@ const actAliases = new Map<string, string>([
   ['hra 1998', 'Human Rights Act 1998'],
 ])
 
-function parseChapterNumber(
-  query: string,
-): { year: number; number: number } | null {
-  const match = query.match(/^\s*(\d{4})\s*,?\s*c\.?\s*(\d+)\s*$/i)
+function parseChapterNumber(query: string): {
+  year: number
+  number: number
+  /** Canonical `ukpga/YYYY/N` identity, built from the validated year text and
+   * the unpadded chapter number, never from `Number()` output, which drops a
+   * leading zero from the year and would fabricate `ukpga/204/N` for `0204`. */
+  identity: string
+} | null {
+  const match = query.match(/^\s*([0-9]{4})\s*,?\s*c\.?\s*([0-9]+)\s*$/i)
   if (!match) return null
-  return { year: Number(match[1]), number: Number(match[2]) }
+  const yearText = match[1]
+  const numberText = match[2]
+  if (!yearText || !numberText) return null
+  // A zero-padded or pre-1801 year is not a chapter citation, so it is refused
+  // before any numeric conversion can turn `0204` into `204`.
+  if (!isCanonicalActYear(yearText)) return null
+  const number = Number(numberText)
+  // A chapter number is at least one; a digit run too large to be a safe
+  // integer cannot be looked up or echoed without losing precision, so it is
+  // refused rather than rounded. Leading zeros are harmless for a count and
+  // are dropped, so `042` names the same chapter as `42`.
+  if (!Number.isSafeInteger(number) || number < 1) return null
+  return {
+    year: Number(yearText),
+    number,
+    identity: `ukpga/${yearText}/${number}`,
+  }
 }
 
 /** s. 13(2)(a) to section/13/2/a; 6 to section/6. Null when not a section form.
@@ -374,8 +398,15 @@ export function classifyLegislationCitation(
     if (found)
       return { kind: 'act', act: toActRef(found), recognisedQuery: trimmed }
     // A chapter number the directory does not hold is a recognised citation
-    // with no answer in the corpus, not a phrase to keyword-search.
-    return { kind: 'not_held', recognisedQuery: trimmed }
+    // with no answer in the corpus, not a phrase to keyword-search. The
+    // identity is derived here, where the chapter form is parsed and its
+    // year and number are validated, so no caller re-derives it from the
+    // digits.
+    return {
+      kind: 'not_held',
+      identity: chapter.identity,
+      recognisedQuery: trimmed,
+    }
   }
 
   const schedule = splitScheduleQuery(trimmed)
