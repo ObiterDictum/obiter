@@ -22,19 +22,40 @@ const legislation = {
   documentIdentity: 'ukpga/2010/15',
   labelPath: 'section/40',
 }
+const wholeAct = {
+  kind: 'legislation',
+  documentIdentity: 'ukpga/2010/15',
+  labelPath: null,
+}
 const judgmentEvidence: EvidenceReference[] = [
   {
     sourceType: 'judgment',
+    granularity: 'fragment',
     sourceId: 'uksc-2099-1',
     ordinal: 12,
     paragraphNumber: 9,
   },
 ]
+const judgmentDocumentEvidence: EvidenceReference[] = [
+  {
+    sourceType: 'judgment',
+    granularity: 'document',
+    sourceId: 'uksc-2099-1',
+  },
+]
 const legislationEvidence: EvidenceReference[] = [
   {
     sourceType: 'legislation_provision',
+    granularity: 'fragment',
     sourceId: 'ukpga/2010/15',
     labelPath: 'section/40',
+  },
+]
+const legislationDocumentEvidence: EvidenceReference[] = [
+  {
+    sourceType: 'legislation_document',
+    granularity: 'document',
+    sourceId: 'ukpga/2010/15',
   },
 ]
 
@@ -58,19 +79,26 @@ function finding(overrides: FindingInput = {}): FindingInput {
     status: { state: 'clear' },
     severity: 'low',
     confidence: 'high',
-    evidence: judgmentEvidence,
+    evidence: judgmentDocumentEvidence,
     explanation: 'The cited authority is held and the citation matches it.',
     ...overrides,
   }
 }
 
 const acceptedStates: Array<[string, FindingInput]> = [
-  ['clear on resolved case law with its own judgment evidence', finding()],
+  ['clear on resolved case law with its document evidence', finding()],
   [
     'clear on resolved legislation with its own provision evidence',
     finding({
       normalizedCitation: legislation,
       evidence: legislationEvidence,
+    }),
+  ],
+  [
+    'clear on a whole Act with its document evidence',
+    finding({
+      normalizedCitation: wholeAct,
+      evidence: legislationDocumentEvidence,
     }),
   ],
   [
@@ -285,11 +313,37 @@ const rejectedStates: Array<[string, FindingInput]> = [
       evidence: [
         {
           sourceType: 'judgment',
+          granularity: 'fragment',
           sourceId: 'uksc-2099-2',
           ordinal: 12,
           paragraphNumber: 9,
         },
       ],
+    }),
+  ],
+  [
+    'a clear whole-authority finding resting only on a fragment',
+    finding({ evidence: judgmentEvidence }),
+  ],
+  [
+    'a clear whole-Act finding resting only on a provision',
+    finding({
+      normalizedCitation: wholeAct,
+      evidence: legislationEvidence,
+    }),
+  ],
+  [
+    'a clear quote check resting only on the document',
+    finding({
+      type: 'quote_fidelity',
+      evidence: judgmentDocumentEvidence,
+    }),
+  ],
+  [
+    'document evidence on a citation that never resolved',
+    finding({
+      normalizedCitation: { kind: 'unresolved', reason: 'not_a_citation' },
+      evidence: judgmentDocumentEvidence,
     }),
   ],
   [
@@ -310,6 +364,7 @@ const rejectedStates: Array<[string, FindingInput]> = [
       evidence: [
         {
           sourceType: 'legislation_provision',
+          granularity: 'fragment',
           sourceId: 'ukpga/1998/42',
           labelPath: 'section/40',
         },

@@ -159,6 +159,75 @@ export async function getLegislationProvision(
   return result.rows[0] ?? null
 }
 
+export type StoredProvisionPathResolution =
+  | { status: 'held'; provision: StoredLegislationProvision }
+  | { status: 'missing'; labelPath: string }
+  | { status: 'underspecified' }
+
+/**
+ * The two reads the single-schedule resolution needs. Injecting them lets the
+ * serving path wrap each read in its store timeout and the authority-existence
+ * path read the pool directly, while both run the same algorithm.
+ */
+export interface StoredProvisionPathLookup {
+  getProvision(provisionId: string): Promise<StoredLegislationProvision | null>
+  pathExists(documentIdentity: string, labelPath: string): Promise<boolean>
+}
+
+/**
+ * Resolve a citation's label path against the store, tolerating the
+ * single-schedule storage shape. Some Acts leave their only schedule
+ * unnumbered, so its paragraphs store at `schedule/paragraph/N` while a
+ * citation says "Schedule 1 paragraph N". The numbered path wins when it
+ * exists; the unnumbered fallback applies only when the citation names
+ * Schedule 1 and the Act has no numbered Schedule 1. Schedule 2 is never
+ * mapped onto an unnumbered schedule, and a paragraph citation with no
+ * schedule number on a numbered-schedule Act is non-resolution, not a
+ * not-held claim.
+ *
+ * This is the one owner of the alias. The serving layer and the
+ * authority-existence check both call it, so a citation the Act page resolves
+ * cannot read as not-held to verification, or the reverse. It never crosses
+ * documents and never loosens the canonical path: the alias only rewrites the
+ * schedule prefix of the path the caller already gave.
+ */
+export async function resolveStoredProvisionPath(
+  lookup: StoredProvisionPathLookup,
+  identity: string,
+  labelPath: string,
+): Promise<StoredProvisionPathResolution> {
+  const exact = await lookup.getProvision(`${identity}/${labelPath}`)
+  if (exact) return { status: 'held', provision: exact }
+  if (!labelPath.startsWith('schedule/')) {
+    return { status: 'missing', labelPath }
+  }
+  const numbered = labelPath.match(/^schedule\/(\d+)\//)
+  if (!numbered) {
+    // An unnumbered citation only resolves on the exact path above, which
+    // exists for the single-schedule shape. On an Act with numbered
+    // schedules the schedule number is missing: say so rather than guess.
+    const hasNumberedSchedule = await lookup.pathExists(identity, 'schedule/1')
+    return hasNumberedSchedule
+      ? { status: 'underspecified' }
+      : { status: 'missing', labelPath }
+  }
+  const scheduleNumber = numbered[1]!
+  const hasNumberedSchedule = await lookup.pathExists(
+    identity,
+    `schedule/${scheduleNumber}`,
+  )
+  if (scheduleNumber !== '1' || hasNumberedSchedule) {
+    return { status: 'missing', labelPath }
+  }
+  const alternateLabelPath = labelPath.replace(/^schedule\/1\//, 'schedule/')
+  const alternate = await lookup.getProvision(
+    `${identity}/${alternateLabelPath}`,
+  )
+  return alternate
+    ? { status: 'held', provision: alternate }
+    : { status: 'missing', labelPath: alternateLabelPath }
+}
+
 /**
  * True when a provision or container row exists at `labelPath` or beneath
  * it. The single-schedule fallback uses this to tell a numbered schedule the
