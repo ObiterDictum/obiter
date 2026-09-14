@@ -2360,10 +2360,10 @@
                 Pure domain vocabulary for Verify: the citation and its
                 normalized identity, the immutable draft subject and its UTF-16
                 draft locations, evidence references into public source
-                material, the conservative finding status model, and the two
-                pure decisions (V2 authority existence, V3 citation resolution)
-                that map a lookup or a resolution onto it. No storage, network,
-                provider calls or UI.
+                material, the conservative finding status model, and the three
+                pure decisions (V2 authority existence, V3 citation resolution,
+                V4 quote fidelity) that map a lookup, a resolution or a
+                comparison onto it. No storage, network, provider calls or UI.
               </p>
               <dl class="kv">
                 <dt>Exports</dt>
@@ -2374,7 +2374,9 @@
                   findingStatusSchema · requiresReview ·
                   createVerificationFindingId · draftLocationSchema ·
                   verificationSubjectSchema · decideAuthorityExistence ·
-                  decideCitationResolution · normalizedCitationFromResolution
+                  decideCitationResolution · normalizedCitationFromResolution ·
+                  normalizeQuoteText · compareQuoteText · compareQuote ·
+                  decideQuoteFidelity
                 </dd>
                 <dt>Depends on</dt>
                 <dd>

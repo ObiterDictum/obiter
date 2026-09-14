@@ -2,8 +2,9 @@
 
 Pure domain vocabulary for Verify. No storage, no network, no provider calls, no
 UI. It defines the values Verify passes between extraction, resolution, checks,
-persistence and reporting, plus the pure authority-existence decision that maps
-a lookup onto them; it defines none of the surrounding steps itself.
+persistence and reporting, plus the pure decisions (authority existence,
+citation resolution, quote fidelity) that map an outcome onto them; it defines
+none of the surrounding steps itself.
 
 ## Responsibility
 
@@ -25,7 +26,11 @@ a lookup onto them; it defines none of the surrounding steps itself.
 - the citation-resolution result model and decision (V3): a raw candidate to a
   canonical identity, or a reason it did not resolve, plus the pure decision
   that maps that onto the finding vocabulary. Reading the store stays in the
-  API, and so does parsing.
+  API, and so does parsing;
+- the quote-fidelity comparison (V4): the permitted typographic folds, the
+  bounded anchored comparison of a quotation against stored source fragments,
+  and the decision that maps a match, a proven mismatch or an inconclusive
+  comparison onto a `quote_fidelity` finding.
 
 ## What the values hold
 
@@ -59,9 +64,15 @@ Two kinds of field are deliberately different, and the distinction is the point:
   explaining a finding. Neither is an identifier, and neither is bounded here.
 
 So the package is not "free of matter content". Its identifiers are; its two
-text payloads are not, by design. `docs/specs/verify/domain-model.md` records the
-accepted finding states, and `docs/specs/verification-evidence.md` sanctions
-showing bounded citation text to a reviewer.
+text payloads are not, by design. For a `quote_fidelity` finding the `citation`
+field carries the **quotation** rather than the citation token: V1 keys
+`createVerificationFindingId` on that field's location, and a quotation's
+identity must be its own draft span, not the citation's, or two quotations
+attributed to one citation occurrence would collide. `normalizedCitation` still
+carries the authority the quotation is attributed to.
+`docs/specs/verify/domain-model.md` records the accepted finding states, and
+`docs/specs/verification-evidence.md` sanctions showing bounded citation text to
+a reviewer.
 
 ## Contracts this package pins
 
@@ -134,6 +145,83 @@ and section and schedule parsing stay with the Search classifier V3 calls.
 Extraction itself, and any route, worker or UI that runs resolution over a
 draft, remain V5's wiring.
 
+## Quote fidelity (V4)
+
+V4 answers one question: does the quoted passage appear in the resolved
+authority as quoted? It consumes an immutable `VerificationSubject`, the
+quotation's exact draft text and `DraftLocation`, the citation identity V3
+resolved, and the stored fragments of a source V2 judged trustworthy. It
+answers nothing else: it extracts no quotation, resolves no citation, decides
+no heldness, compares no proposition, and never treats an inability to compare
+as a mismatch.
+
+Two pure functions make the check testable without a store:
+
+- `compareQuoteText(quote, fragmentTexts)` compares one quotation against
+  already-retrieved fragment texts. It returns `match` (with exact versus
+  normalised), `mismatch` (with the kind of difference), or an inconclusive
+  outcome (`no_fragments`, `empty_quote`, `no_match`, `ambiguous`, `elided`).
+- `compareQuote`/`decideQuoteFidelity` add the citation and source-readiness
+  vocabulary and produce the finding. `QuoteComparison` is the comparison's own
+  result model, deliberately separate from the finding vocabulary.
+
+### Normalisation policy
+
+The permitted folds are explicit, deterministic and applied to both sides:
+Unicode NFC; CRLF/CR to LF; any Unicode whitespace run to one space, trimmed;
+soft hyphen removed; the ellipsis character to three periods; curly quotation
+marks and apostrophes to their straight forms. Nothing else is folded. Case is
+not folded (capitalisation can be legally meaningful), dashes are not folded
+(hyphen and en/em dash are different marks), and no punctuation, word, negation
+or number is removed. NFC is used rather than NFKC so fullwidth digits and
+ligatures are not silently unified. The Search highlighting normaliser
+(`normalizeExactMatchValue`) is deliberately not reused: it lowercases and its
+purpose is retrieval recall, not proof.
+
+### What a mismatch means
+
+Only a unique anchored alignment produces a mismatch: the comparison finds a
+single contiguous source span whose first and last word equal the quotation's,
+allowing at most one word more or fewer, and that span differs from the
+quotation. Zero candidate spans, more than one, a larger edit, an unmatched
+ellipsis or a quotation that is merely absent all return an inconclusive
+result. No nearest-neighbour, first-fragment or similarity score is used, and a
+similarity score never chooses a status. A mismatch is a positive claim and
+always carries the fragment that shows it.
+
+### Evidence
+
+A `quote_fidelity` finding rests on fragment evidence: a judgment paragraph
+(`sourceId`, `ordinal`, printed `paragraphNumber`) or a legislation provision
+(`sourceId`, stored `labelPath`). The fragments must belong to the resolved
+citation's own source; a fragment from another source or family is a
+`QuoteSourceMismatchError`, a programmer error rather than a finding. A
+legislation quote is scoped to exactly one provision, so matching text from
+another provision can never verify it. Multiple fragments for a cross-fragment
+match are deduplicated and ordered.
+
+### Cross-fragment support
+
+A case-law quotation spanning contiguous stored paragraphs is matched across
+the normalised join and names every paragraph it touches. A quotation spanning
+non-contiguous paragraphs, or a legislation quotation that would span more than
+the resolved provision, is inconclusive (`passage_not_located` or a source
+reason), never a mismatch. Paragraph-number prefixes are not folded away,
+because removing a number is exactly the kind of change the check exists to
+catch.
+
+### Failure outcomes
+
+- `match` maps to `clear` with fragment evidence, confidence high when the
+  match is exact and medium when a permitted fold produced it.
+- a proven `mismatch` maps to `flagged` with fragment evidence, severity high.
+- an unavailable, ambiguous or unaddressable comparison maps to
+  `review_required` (`evidence_unavailable` for a source that is absent,
+  withdrawn, unverified or has no fragment; `check_inconclusive` for a store
+  failure, a malformed record, an identity mismatch or an unlocated or
+  ambiguous passage).
+- a check that did not run maps to `not_checked`.
+
 ## Ownership boundaries
 
 - **`packages/contracts`** owns wire shapes: HTTP request and response bodies,
@@ -185,6 +273,16 @@ draft, remain V5's wiring.
   identity all stay in the Search classifier it calls; a provision citation is
   resolved to an identity here and its existence is V2's question, so the
   single-schedule alias is still applied in exactly one place.
+- **V4 retrieval boundary.** `services/api/src/quote-fidelity.ts` owns the
+  store-scoped fragment read. It is scoped to the resolved citation (one
+  judgment document, or the one provision the citation names), reuses
+  `createPostgresLegalAuthoritySourceStore` for judgments and
+  `resolveStoredProvisionPath` for legislation so the single-schedule alias has
+  one owner, refuses provision text that is not a verified current version, and
+  batches: `checkQuoteFidelities` reads each distinct source once for any
+  number of quotations from it and issues no query for an empty batch. It
+  enforces the request-size and source-size bounds the pure package does not
+  set.
 - **Future Verify API, worker and UI** (V2 onwards) validate untrusted input with
   contracts schemas at the boundary, run checks in the worker, and render
   findings in the UI. All three consume this package and none add a parallel
@@ -199,7 +297,10 @@ boundaries that accept these values own:
   `evidence` array;
 - the check that `citation.rawText` equals the draft slice at its location
   against the stored immutable version (the schema only checks the unit and
-  length);
+  length). For a quote-fidelity finding the same rule applies to the quotation;
+  V5 owns reading it from the stored version;
+- the request-size and source-size bounds the V4 service applies before the
+  pure comparison runs.
 - tenant/organisation/matter scoping and authorisation;
 - source-version pinning for evidence. The fragment forms can repoint (a
   judgment paragraph by ordinal, a provision by label path); the document forms
@@ -211,8 +312,7 @@ boundaries that accept these values own:
 Deliberately absent, and owned by later board items:
 
 - citation extraction from a document, and any route, worker or UI that runs
-  resolution over a draft (V5);
-- quote comparison (V4);
+  resolution or quote checking over a draft (V5);
 - findings UI (V5);
 - verification artifact export (V6);
 - proposition extraction and claim support classification (V7, V8);

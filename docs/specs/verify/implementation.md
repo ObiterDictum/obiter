@@ -16,6 +16,16 @@
 4. implement proposition extraction and support scoring
 5. persist findings and render findings UI
 
+## Status
+
+V1 (#199), V2 (#202), V3 (#204) and V4 are delivered as domain and store
+machinery. V4 is `compareQuoteText`/`decideQuoteFidelity` in
+`packages/verification-core` plus the store-scoped retrieval in
+`services/api/src/quote-fidelity.ts`. None of the three is wired to a route,
+worker or UI; V5 owns the run, persistence and the findings surface. The quote
+normalisation and mismatch policy is recorded in `domain-model.md` and
+`packages/verification-core/README.md`.
+
 ## Stack
 
 - Node.js
