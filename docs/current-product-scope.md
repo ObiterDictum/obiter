@@ -61,6 +61,21 @@ Redaction owns:
 - `/redact/:runId`
 - `GET /api/redaction-runs/:runId/audit`
 
+- Verification: `/verify` lists organisation runs. A matter document can start
+  a run bound to one immutable version and inspect structured findings from
+  citation resolution, authority existence, and quote fidelity checks, including
+  evidence identities and review-required states.
+
+Verification owns:
+
+- `/verify`
+- `/matters/:matterId/documents/:documentId` (verification panel)
+- `POST /api/documents/:documentId/verification-runs`
+- `GET /api/documents/:documentId/verification-runs`
+- `GET /api/verification-runs`
+- `GET /api/verification-runs/:runId`
+- `GET /api/verification-runs/:runId/findings`
+
 ### API implemented, UI is demo fixture
 
 (None. The fixture layer (`createPhaseZeroShellSnapshot`, demo `MeResponse`) was deleted in the app shell rebuild M2; these surfaces are now wired to real data. To populate any environment, including development, register an account through the sign-up screen — registration is org-less, so the new user then creates an organisation from Home, after which matters and documents are created through the UI.)
@@ -72,7 +87,6 @@ These entries can appear in the sidebar to show product direction, but they must
 - Drafting
 - Research
 - Documents
-- Verification
 - Review Queue
 - Deadlines
 - Uploads

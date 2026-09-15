@@ -337,6 +337,14 @@ export async function cleanupOrganisationIsolation(
   const orgIds = [seed.orgA, seed.orgB]
 
   await pool.query(
+    `delete from verification_findings where organisation_id = any($1::text[])`,
+    [orgIds],
+  )
+  await pool.query(
+    `delete from verification_runs where organisation_id = any($1::text[])`,
+    [orgIds],
+  )
+  await pool.query(
     `delete from organisation_invites where id = any($1::text[])`,
     [inviteIds],
   )

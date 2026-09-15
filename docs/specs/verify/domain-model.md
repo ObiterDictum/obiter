@@ -29,7 +29,12 @@ the source of truth for names and intent.
   in the draft, and where it appears. `rawText` is the citation only, not the
   paragraph around it, and it is stored verbatim: it is the draft slice the
   location names, and the schema requires its UTF-16 length to equal
-  `end - start`.
+  `end - start`. For a `quote_fidelity` finding the same shape carries the
+  **quotation** instead: `rawText` is the quoted draft slice and `location` its
+  span, while `normalizedCitation` carries the authority it is attributed to.
+  V1 keys `createVerificationFindingId` on this field's location, and a
+  quotation's identity is its own span, not the citation's, or two quotations
+  attributed to one citation occurrence would collide.
 - `NormalizedCitation` is a discriminated union on `kind`, the citation state:
   - `case_law`: the canonical neutral citation string plus `sourceId`, the
     stored authority document id (`LegalAuthority.id`) that evidence also names.
@@ -357,6 +362,14 @@ batch is the durable fix rather than a new index.
   resolution `inconclusive`. Legislation by canonical `/ln/` path is unaffected,
   because its identity is in the path.
 - Meilisearch rank is never used as identity. Resolution reads Postgres only.
+
+## Quote fidelity (V4)
+
+The V4 quote-fidelity check (input model, normalisation policy, what a
+proven mismatch means, fragment-evidence requirements, cross-fragment
+support, failure outcomes and the V5 wiring boundary) is recorded in
+[quote-fidelity.md](quote-fidelity.md). V4 produces a `quote_fidelity`
+finding using V1's finding and fragment-evidence model.
 
 ## Deliberately absent
 

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { createElement, type PropsWithChildren } from 'react'
+import { createElement, type PropsWithChildren, type ReactNode } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, vi } from 'vitest'
@@ -8,6 +8,7 @@ import type {
   DocumentParagraphWire,
 } from '@obiter/contracts'
 import { ApiError } from '../../api'
+import { DocumentDraftStatusProvider } from './document-draft-status'
 import { DocxWorkspace } from './docx-workspace'
 
 const hooks = vi.hoisted(() => ({
@@ -121,6 +122,8 @@ export function mountSaveWorkspace(options: {
   mergeAsync?: ReturnType<typeof vi.fn>
   versionId?: string
   body?: string
+  /** Rendered next to the workspace, inside the draft-status provider. */
+  beside?: ReactNode
 }) {
   hooks.useCurrentUser.mockReturnValue({
     data: {
@@ -164,12 +167,15 @@ export function mountSaveWorkspace(options: {
   hooks.usePresenceUpdate.mockReturnValue(idleMutation())
 
   return render(
-    <DocxWorkspace
-      documentId="doc_1"
-      versionId={options.versionId ?? 'ver_1'}
-      matterId="mtr_1"
-      filename="brief.docx"
-    />,
+    <DocumentDraftStatusProvider>
+      <DocxWorkspace
+        documentId="doc_1"
+        versionId={options.versionId ?? 'ver_1'}
+        matterId="mtr_1"
+        filename="brief.docx"
+      />
+      {options.beside}
+    </DocumentDraftStatusProvider>,
     { wrapper },
   )
 }

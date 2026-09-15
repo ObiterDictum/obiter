@@ -27,6 +27,7 @@ import { DocumentModelPage } from './model-view'
 import { DocumentSaveBanners } from './save-banners'
 import { InsertAuthorityDialog } from './insert-authority-dialog'
 import { DocumentWorkspaceToolbar } from './toolbar'
+import { usePublishDocumentDirty } from './document-draft-status'
 import { WorkspaceSidePanels } from './workspace-side-panels'
 import { useDocumentPresenceHeartbeat } from './use-presence-heartbeat'
 import { useDocumentSave } from './use-document-save'
@@ -112,6 +113,11 @@ export function DocxWorkspace({
     documentId,
     model ? documentImagePartNames(model) : [],
   )
+  // Verification reads the stored version, so it must stay disabled while any
+  // work is off-server: editable operations, a blocked or held change, or a
+  // recoverable draft. `useDocumentSave` owns that truth as `saveState`; the
+  // E45 recovery paths keep it unsaved until the work is actually covered.
+  usePublishDocumentDirty(save.saveState.status !== 'saved')
   const {
     selectedParagraphId,
     restoreCaret,
