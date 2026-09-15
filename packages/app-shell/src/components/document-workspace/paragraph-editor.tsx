@@ -100,6 +100,12 @@ export function ParagraphEditor({
   const field = useRef<HTMLTextAreaElement>(null)
   // IME composition owns key events until it ends; intercepting them loses text.
   const composing = useRef(false)
+  // The DOM range this editor last wrote itself. A select event that still
+  // reports that range is our own write arriving late, after the model may
+  // already have moved on (Escape clearing the selection, say); mirroring it
+  // back would resurrect a selection the user did not make. A user-made
+  // selection always differs from the range we last wrote.
+  const written = useRef<{ from: number; to: number } | null>(null)
   const clearColumn = () => clearVerticalColumn(verticalCaret)
   const selectionFrom = selection?.range?.from
   const selectionTo = selection?.range?.to
@@ -114,14 +120,18 @@ export function ParagraphEditor({
     if (!node) return
     node.focus({ preventScroll: true })
     if (selectionFrom != null && selectionTo != null) {
+      const from = Math.min(selectionFrom, node.value.length)
+      const to = Math.min(selectionTo, node.value.length)
       node.setSelectionRange(
-        Math.min(selectionFrom, node.value.length),
-        Math.min(selectionTo, node.value.length),
+        from,
+        to,
         selectionDirection === 'none' ? undefined : selectionDirection,
       )
+      written.current = { from, to }
     } else if (restoreCaret != null) {
       const offset = Math.min(restoreCaret, node.value.length)
       node.setSelectionRange(offset, offset)
+      written.current = { from: offset, to: offset }
     }
     revealTypingLine(node)
   }, [selected, restoreCaret, selectionFrom, selectionTo, selectionDirection])
@@ -326,6 +336,7 @@ export function ParagraphEditor({
         event.preventDefault()
         if (step.paragraphId === paragraphId) {
           node.setSelectionRange(step.offset, step.offset)
+          written.current = { from: step.offset, to: step.offset }
           revealTypingLine(node)
           return
         }
@@ -355,9 +366,13 @@ export function ParagraphEditor({
         onSelect()
       }}
       onSelect={(event) => {
+        const from = event.currentTarget.selectionStart
+        const to = event.currentTarget.selectionEnd
+        const last = written.current
+        if (last && last.from === from && last.to === to) return
         onTextSelection?.(
-          event.currentTarget.selectionStart,
-          event.currentTarget.selectionEnd,
+          from,
+          to,
           event.currentTarget.selectionDirection === 'backward'
             ? 'backward'
             : 'forward',

@@ -95,7 +95,7 @@ describe('tracked emphasis from the client path', () => {
       (update) => {
         format = update(format)
       },
-      [{ paragraphId: 'p1', from: 1, to: 4 }],
+      { kind: 'selection', ranges: [{ paragraphId: 'p1', from: 1, to: 4 }] },
       true,
     )
     expect(toolbar.emphasisUnavailable).toMatch(
@@ -114,7 +114,7 @@ describe('tracked emphasis from the client path', () => {
       (update) => {
         format = update(format)
       },
-      [{ paragraphId: 'p1', from: 2, to: 2 }],
+      { kind: 'caret', paragraphId: 'p1', from: 2, to: 2 },
       true,
     )
     expect(toolbar.emphasisUnavailable).toBeUndefined()
@@ -329,7 +329,10 @@ describe('formatControlState from the selection', () => {
     const source = modelWithRuns([
       { id: 'r1', text: 'Hello world', preservedXmlFragments: plainXml },
     ])
-    const selection = [{ paragraphId: 'p1', from: 6, to: 11 }]
+    const selection = {
+      kind: 'selection' as const,
+      ranges: [{ paragraphId: 'p1', from: 6, to: 11 }],
+    }
     let format: FormatDrafts = emptyFormatDrafts
     const toolbar = (view: DocumentModelWire) =>
       documentFormatToolbar(

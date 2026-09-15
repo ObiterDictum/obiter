@@ -4,6 +4,7 @@ import { downloadBlob, selectedParagraphLength } from '../../document-edits'
 import {
   documentFormatToolbar,
   formattedModel,
+  type FormatTarget,
 } from '../../document-format-edits'
 import { findMatchLabel } from '../../document-find'
 import { documentStory } from '../../document-model-text'
@@ -169,15 +170,14 @@ export function DocxWorkspace({
 
   // The toolbar acts on the document selection's ranges, or on the caret's
   // own paragraph when there is none.
-  const formatRanges = selectionActive
-    ? [...selectionSegments.values()]
-    : [
-        {
-          paragraphId: selectedParagraphId ?? '',
-          from: formatRange?.from ?? 0,
-          to: formatRange?.to ?? 0,
-        },
-      ]
+  const formatTarget: FormatTarget = selectionActive
+    ? { kind: 'selection', ranges: [...selectionSegments.values()] }
+    : {
+        kind: 'caret',
+        paragraphId: selectedParagraphId ?? '',
+        from: formatRange?.from ?? 0,
+        to: formatRange?.to ?? 0,
+      }
   const selectionHandlers: ParagraphSelectionHandlers = {
     active: selectionActive,
     direction: selectionDirection,
@@ -255,7 +255,7 @@ export function DocxWorkspace({
                 drafts.format,
                 selectedParagraphId,
                 drafts.setFormat,
-                formatRanges,
+                formatTarget,
                 trackChanges,
               )
             : undefined

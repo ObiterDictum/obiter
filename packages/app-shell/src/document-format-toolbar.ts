@@ -14,37 +14,57 @@ import {
 } from './document-format-controls'
 import type { FormatDrafts } from './document-format-types'
 
-/**
- * The selection a formatting command acts on: one range per paragraph, in
- * document order. A collapsed range addresses the run the caret sits in, so a
- * caret click, a native within-paragraph selection and a selection spanning
- * paragraphs all go through the same path.
- */
-export type FormatRanges = ReadonlyArray<{
+export type ParagraphRange = {
   paragraphId: string
   from: number
   to: number
-}>
+}
+
+/**
+ * What a formatting command acts on. A caret addresses the run it sits in, so
+ * a click, a native within-paragraph selection and a selection spanning
+ * paragraphs all reach the same controls; a document selection carries one
+ * range per paragraph it covers.
+ */
+export type FormatTarget =
+  | { kind: 'caret'; paragraphId: string; from: number; to: number }
+  | { kind: 'selection'; ranges: ReadonlyArray<ParagraphRange> }
+
+const NOTHING_TO_FORMAT = 'Select text to format'
 
 export function documentFormatToolbar(
   model: DocumentModelWire,
   format: FormatDrafts,
   paragraphId: string | null,
   setFormat: (update: (current: FormatDrafts) => FormatDrafts) => void,
-  ranges: FormatRanges = [],
+  target: FormatTarget = {
+    kind: 'caret',
+    paragraphId: paragraphId ?? '',
+    from: 0,
+    to: 0,
+  },
   trackChanges = false,
 ) {
-  const controls = formatControlState(model, format, paragraphId, ranges)
+  const ranges: ReadonlyArray<ParagraphRange> =
+    target.kind === 'selection'
+      ? target.ranges
+      : [{ paragraphId: target.paragraphId, from: target.from, to: target.to }]
+  const emphasis =
+    target.kind === 'selection'
+      ? ranges.filter((range) => range.from !== range.to)
+      : ranges
+  const controls = formatControlState(model, format, paragraphId, ranges, emphasis)
   const paragraph = controls.paragraph
+  const nothingSelected = target.kind === 'selection' && emphasis.length === 0
   // A tracked change records a single run, so partial formatting of a range is
   // not representable yet; fail closed rather than dropping the tracking.
   const trackedRange =
-    trackChanges && ranges.some((range) => range.from !== range.to)
+    trackChanges && emphasis.some((range) => range.from !== range.to)
   const toggle = (flag: 'bold' | 'italic' | 'underline', value: boolean) => {
-    if (trackedRange || ranges.length === 0) return
+    if (trackedRange || emphasis.length === 0) return
     setFormat((current) => {
       let next = current
-      for (const range of ranges) {
+      for (const range of emphasis) {
         const target = selectedParagraph(model, range.paragraphId)
         if (!target) continue
         next = toggleEmphasisAtAddress(
@@ -70,7 +90,9 @@ export function documentFormatToolbar(
           emphasisUnavailable:
             'Partial formatting is not yet recorded as a tracked change',
         }
-      : {}),
+      : nothingSelected
+        ? { emphasisUnavailable: NOTHING_TO_FORMAT }
+        : {}),
     paragraphStyleId: controls.paragraphStyleId,
     paragraphStyles: controls.paragraphStyles,
     bold: controls.bold,

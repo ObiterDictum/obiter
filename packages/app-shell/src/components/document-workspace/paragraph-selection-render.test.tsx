@@ -63,6 +63,7 @@ function renderPage(
     from?: number
     to?: number
     wrapWidthPx?: number
+    continuation?: boolean
   }>,
 ) {
   return render(

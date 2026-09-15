@@ -23,6 +23,10 @@ export {
 } from './document-format-controls'
 export { formattedModel, paragraphStyleOptions } from './document-format-paint'
 export { documentFormatToolbar } from './document-format-toolbar'
+export type {
+  FormatTarget,
+  ParagraphRange,
+} from './document-format-toolbar'
 
 export function collectFormatOperations(
   model: DocumentModelWire,

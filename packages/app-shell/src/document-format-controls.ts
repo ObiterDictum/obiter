@@ -104,10 +104,21 @@ export function formatControlState(
   format: FormatDrafts,
   paragraphId: string | null,
   ranges: ReadonlyArray<{ paragraphId: string; from: number; to: number }> = [],
+  /**
+   * The ranges that carry text to format. A selection of only paragraph
+   * breaks covers paragraphs but no code units, and addressing a paragraph
+   * mark is not something the edit contract can express, so those ranges are
+   * excluded rather than silently formatting a whole run under them.
+   */
+  emphasisRanges: ReadonlyArray<{
+    paragraphId: string
+    from: number
+    to: number
+  }> = ranges,
 ) {
   const view = formattedModel(model, format)
   const paragraph = selectedParagraph(view, paragraphId)
-  const covered = coveredRuns(view, ranges)
+  const covered = coveredRuns(view, emphasisRanges)
   const numPr = paragraph
     ? (format.numbering[paragraph.id] ?? paragraphNumPr(paragraph, view.styles))
     : undefined
