@@ -93,10 +93,7 @@ export function VerificationEvidencePanel() {
       position={`${verification.activeIndex + 1} of ${total}`}
       storedVersionNote={verificationStoredVersionNote(
         verification.checkedVersionId ?? 'unknown',
-        {
-          unsaved: verification.dirty,
-          stale: verification.run?.stale ?? false,
-        },
+        { unsaved: verification.dirty, stale: verification.stale },
       )}
       unmappedReason={unmappedReasonFor(verification, finding)}
       canGoPrevious={verification.activeIndex > 0}
@@ -289,9 +286,7 @@ function PanelBody({
               ))}
             </ul>
           ) : (
-            <p className="text-xs text-muted">
-              No source evidence is attached to this finding.
-            </p>
+            <p className="text-xs text-muted">No source evidence attached.</p>
           )}
           <p className="text-xs text-subtle">{storedVersionNote}</p>
         </div>
