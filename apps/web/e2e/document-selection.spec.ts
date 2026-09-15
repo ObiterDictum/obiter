@@ -27,12 +27,22 @@ const fixture = process.env.E52_E2E_DOCX
 const shots = process.env.E52_E2E_SHOTS ?? '/tmp/e52-shots'
 const matterName = 'E52 Selection Matter'
 const ready = Boolean(email && password && fixture)
+/*
+ * Before-capture mode runs the same journey against a checkout where the
+ * feature is absent: every stage assertion is soft and every screenshot is
+ * still taken, so the Before column shows the same stages as the After one.
+ */
+const capturing = process.env.E52_E2E_CAPTURE === '1'
+const check = capturing
+  ? expect.configure({ soft: true, timeout: 1_000 })
+  : expect
 
 test.use({ viewport: { width: 1440, height: 900 } })
 
 test.skip(!ready, 'set E52_E2E_EMAIL, E52_E2E_PASSWORD and E52_E2E_DOCX to run')
 
 function shot(page: Page, name: string) {
+  if (capturing) console.log('stage', name)
   return page.screenshot({ path: path.join(shots, `${name}.png`) })
 }
 
@@ -83,7 +93,7 @@ async function openFixtureDocument(page: Page) {
   const matterLink = page.getByRole('link', { name: matterName }).first()
   if ((await matterLink.count()) === 0) {
     await page.getByRole('button', { name: 'Create matter' }).first().click()
-    await expect(page.getByRole('dialog')).toBeVisible({ timeout: 20_000 })
+    await check(page.getByRole('dialog')).toBeVisible({ timeout: 20_000 })
     await page.getByLabel('Matter name').fill(matterName)
     await page.getByLabel('Primary jurisdiction').fill('England & Wales')
     await page
@@ -93,7 +103,7 @@ async function openFixtureDocument(page: Page) {
     await page.keyboard.press('Escape')
   }
   await page.getByRole('link', { name: matterName }).first().click()
-  await expect(page).toHaveURL(/\/matters\//, { timeout: 20_000 })
+  await check(page).toHaveURL(/\/matters\//, { timeout: 20_000 })
 
   const fixtureName = path.basename(fixture ?? '')
   if ((await page.getByText(fixtureName).count()) === 0) {
@@ -107,7 +117,7 @@ async function openFixtureDocument(page: Page) {
 
   // The workspace renders the body without a caret; a paragraph click is what
   // focuses one.
-  await expect(page.locator('[data-paragraph-id]').first()).toBeVisible({
+  await check(page.locator('[data-paragraph-id]').first()).toBeVisible({
     timeout: 30_000,
   })
 }
@@ -125,7 +135,7 @@ const paragraph = (page: Page, text: string) =>
  * remount would land on the body instead.
  */
 async function press(page: Page, key: string) {
-  await expect(editor(page)).toBeFocused({ timeout: 10_000 })
+  await check(editor(page)).toBeFocused()
   await page.keyboard.press(key)
 }
 
@@ -134,12 +144,13 @@ async function focusParagraph(page: Page, text: string) {
   const target = paragraph(page, text)
   for (let attempt = 0; attempt < 3; attempt += 1) {
     await target.click()
-    const focused = await expect(editor(page))
-      .toBeFocused({ timeout: 4_000 })
+    const focused = await check(editor(page))
+      .toBeFocused()
       .then(() => true)
       .catch(() => false)
     if (focused) return
   }
+  if (capturing) return
   throw new Error(`could not focus the paragraph containing "${text}"`)
 }
 
@@ -167,7 +178,7 @@ test.describe('the document selection in a browser', () => {
     await openFixtureDocument(page)
     // The synthetic fixture parses to four paragraphs, one empty and one with
     // a hard break in it.
-    await expect(page.locator('[data-paragraph-id]')).toHaveCount(4)
+    await check(page.locator('[data-paragraph-id]')).toHaveCount(4)
 
     const editRequests: string[] = []
     page.on('request', (request) => {
@@ -183,42 +194,47 @@ test.describe('the document selection in a browser', () => {
     await caretAfter(page, 'Northgate Holdings', 40)
     await pressMany(page, 'Shift+ArrowDown', 3)
     await shot(page, '01-extends-across-a-paragraph-boundary')
-    await expect(status(page)).toContainText('3 paragraphs selected')
+    await check(status(page)).toContainText('3 paragraphs selected')
 
     // Every paragraph in the body, then contraction from the end.
     await press(page, 'Control+a')
     await shot(page, '02-selection-across-every-paragraph')
-    await expect(status(page)).toContainText('4 paragraphs selected')
+    await check(status(page)).toContainText('4 paragraphs selected')
 
     await pressMany(page, 'Shift+ArrowLeft', 25)
     await shot(page, '03-backwards-selection-contracting')
-    await expect(status(page)).toContainText('paragraphs selected')
+    await check(status(page)).toContainText('paragraphs selected')
 
     // Ctrl/Alt/Meta modified arrows stay native: with a document selection
     // active they must not move or extend it.
-    const beforeModifier = await status(page).textContent()
+    const hasStatus = (await status(page).count()) > 0
+    const beforeModifier = hasStatus ? await status(page).textContent() : null
     await press(page, 'Control+Shift+ArrowLeft')
     await press(page, 'Alt+Shift+ArrowLeft')
-    await expect(status(page)).toHaveText(beforeModifier ?? '')
+    if (beforeModifier !== null) {
+      await check(status(page)).toHaveText(beforeModifier)
+    }
 
     // Escape leaves a collapsed caret at the focus end and no selection.
     await press(page, 'Escape')
     await shot(page, '04-escape-collapses-at-the-focus-end')
-    await expect(status(page)).toBeEmpty()
-    await expect(marks(page)).toHaveCount(0)
+    if (hasStatus) {
+      await check(status(page)).toBeEmpty()
+      await check(marks(page)).toHaveCount(0)
+    }
 
     // A backwards selection into the paragraph above, in a narrow viewport.
     await caretAtEnd(page, 'Rowan v Aster')
     await pressMany(page, 'Shift+ArrowUp', 2)
     await page.setViewportSize({ width: 480, height: 900 })
     await shot(page, '05-narrow-viewport-selection')
-    await expect(status(page)).toContainText('paragraphs selected')
+    await check(status(page)).toContainText('paragraphs selected')
     await page.setViewportSize({ width: 1440, height: 900 })
 
     // Selecting must not mutate the document or call the edit endpoint.
     expect(editRequests).toEqual([])
-    await expect(page.locator('[data-paragraph-id]')).toHaveCount(4)
-    await expect(paragraph(page, 'Northgate Holdings')).toContainText(
+    await check(page.locator('[data-paragraph-id]')).toHaveCount(4)
+    await check(paragraph(page, 'Northgate Holdings')).toContainText(
       'schedule of works',
     )
   })
@@ -236,13 +252,13 @@ test.describe('the document selection in a browser', () => {
     // one that applies.
     await caretAfter(page, 'Northgate Holdings', 40)
     await pressMany(page, 'Shift+ArrowDown', 3)
-    await expect(status(page)).toContainText('3 paragraphs selected')
+    await check(status(page)).toContainText('3 paragraphs selected')
 
     const bold = page.getByRole('button', {
       name: 'Bold: Partial formatting is not yet recorded as a tracked change',
     })
     await shot(page, '06-unsupported-formatting-disabled')
-    await expect(bold).toBeDisabled()
+    await check(bold).toBeDisabled()
   })
 
   test('declines to cross an unsaved inserted paragraph', async ({ page }) => {
@@ -253,7 +269,7 @@ test.describe('the document selection in a browser', () => {
     await caretAtEnd(page, 'Northgate Holdings')
     await press(page, 'Shift+ArrowRight')
     await shot(page, '07-inserted-paragraph-blocks-the-selection')
-    await expect(status(page)).toContainText(
+    await check(status(page)).toContainText(
       'cannot cross an unsaved inserted paragraph',
     )
   })
@@ -274,15 +290,15 @@ test.describe('the document selection in a browser', () => {
     await caretAfter(page, 'Northgate Holdings', 40)
     await pressMany(page, 'Shift+ArrowDown', 3)
     await shot(page, '08-supported-edit-selection')
-    await expect(status(page)).toContainText('3 paragraphs selected')
+    await check(status(page)).toContainText('3 paragraphs selected')
 
     await press(page, 'Backspace')
     await shot(page, '09-supported-edit-merged')
-    await expect(status(page)).toBeEmpty()
-    await expect(editor(page)).toHaveValue(/^Northgate Holdings/)
+    await check(status(page)).toBeEmpty()
+    await check(editor(page)).toHaveValue(/^Northgate Holdings/)
 
     await page.getByRole('button', { name: 'Save' }).click()
-    await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled({
+    await check(page.getByRole('button', { name: 'Save' })).toBeDisabled({
       timeout: 30_000,
     })
     expect(edited.length).toBeGreaterThan(0)
@@ -294,11 +310,11 @@ test.describe('the document selection in a browser', () => {
     try {
       await openFixtureDocument(reloaded)
       await paragraph(reloaded, 'Northgate Holdings').click()
-      await expect(editor(reloaded)).toHaveValue(/^Northgate Holdings/)
-      await expect(editor(reloaded)).not.toHaveValue(/^Rowan v Aster/)
+      await check(editor(reloaded)).toHaveValue(/^Northgate Holdings/)
+      await check(editor(reloaded)).not.toHaveValue(/^Rowan v Aster/)
       // The range deleted one paragraph break and merged two paragraphs, so
       // the stored version holds two.
-      await expect(reloaded.locator('[data-paragraph-id]')).toHaveCount(2)
+      await check(reloaded.locator('[data-paragraph-id]')).toHaveCount(2)
       await shot(reloaded, '10-supported-edit-after-reload')
     } finally {
       await fresh.close()
