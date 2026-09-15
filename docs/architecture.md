@@ -1065,6 +1065,56 @@ fails closed with `validation_failed` rather than misformatting; a range that
 crosses a text-wrapping break is currently such a case, because the offset
 mapping in `comment-anchors.ts` does not yet consume the break character.
 
+### Document drafts: addressability, containment and reload persistence (14 September 2026)
+
+Context: applying a paragraph style to a paragraph that had been inserted but
+not yet saved produced `set_paragraph_style` against the client-side insert id,
+which has no server identity. The API rejected the batch as
+`validation_failed` (400), but the draft stayed in React state, so
+`collectEditOperations` recomputed and resent the same unaddressable operation
+on every later save while legitimate work accumulated behind it. No save ever
+succeeded, the message named no risk, and a reload discarded the draft because
+unsaved edits lived only in `useState` (E45).
+
+Decision: three rules, each owned in one place.
+
+_One: every operation is addressable._ `planDocumentSave` partitions draft
+state into slots the loaded model can address and slots it cannot, before any
+batch is built. An `insert_paragraph_after` carries its own paragraph style, so
+a style chosen on a pending paragraph rides on the insert rather than becoming a
+separate operation against a client id. A slot whose target is absent from the
+model is reported and withheld, never sent. The API validation is unchanged.
+
+_Two: a rejected batch is contained, not retried verbatim._ A
+`validation_failed` for a batch that passed addressability triggers
+`containRejection`, which removes one slot at a time from the end of the covered
+list and re-sends the rest, capped at twelve attempts. A rejected batch writes
+no version, so probing costs requests but never history; the first batch that
+commits is the only one recorded. The removed slot moves to a held list, still
+visible and still present in local storage, and is cleared only by an explicit
+discard. The save state machine is `saved | unsaved | saving | failed | stale`,
+and only a resolved API response advances it.
+
+_Three: unsaved drafts survive a reload._ A minimal payload — changed run text,
+pending inserts, deletions, emphasis and paragraph style, plus held changes — is
+written to `localStorage` under
+`obiter.document-draft.<schemaVersion>.<organisationId>.<userId>.<documentId>.<tabId>`.
+The versioned zod schema is validated on every read; a payload that fails, names
+another scope, or is older than seven days is removed rather than applied. The
+payload records the `baseVersionId` it was built against: on load, a mismatch is
+reported as stale and never applied to the newer version. The per-tab key keeps
+two tabs on one document independent. Sign-out clears every stored draft.
+
+Rejected: clearing the whole draft on a 400 (destroys valid work and typed
+text); a server dry-run endpoint and operation-index reporting (new API surface
+for a client-side addressing error the client can decide); client-side
+duplication of the OOXML validator (two validators drift).
+
+Consequence: `DocumentEditOperation` and the edit route are unchanged. The
+boundary added is browser storage, which holds privileged matter text, so it is
+versioned, scope-keyed, validated on read and cleared on save, discard and
+sign-out.
+
 ### Stage 1 legislation search: stored Acts with withheld amended text (September 2026)
 
 Context: search covered judgments only. Stage 1 adds UK Public General Acts

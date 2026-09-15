@@ -1,6 +1,10 @@
 import { createAuthClient } from 'better-auth/react'
 import { magicLinkClient } from 'better-auth/client/plugins'
 import { useQueryClient } from '@tanstack/react-query'
+import {
+  clearStoredDocumentDraftsForUser,
+  suspendDocumentDraftWrites,
+} from './document-draft-store'
 import { resolvePackagedApiOrigin } from './lib/api-url'
 import {
   clearDesktopAuthToken,
@@ -200,18 +204,21 @@ export function useAuth(): UseAuthReturn {
   }
 
   async function signOut() {
+    const userId = realSession.data?.user?.id
+    const result = await authClient.signOut()
+    if (result.error) {
+      throw new Error(result.error.message ?? 'Could not sign out.')
+    }
     try {
-      await authClient.signOut()
+      await clearDesktopAuthToken()
     } finally {
-      try {
-        await clearDesktopAuthToken()
-      } finally {
-        // Drop cached /api/me (and org-scoped data) so a subsequent sign-in as
-        // a different user never gates routes on the previous user's organisation
-        // state. The current-user query has a 60s staleTime, so without this a
-        // fresh sign-in could read a stale org-less/owning entry.
-        queryClient.clear()
-      }
+      // Unsaved document drafts are matter text keyed to the signed-in user;
+      // they must not survive into the next session on this machine. A failed
+      // sign-out leaves the session valid, so drafts stay. Another user's
+      // recoverable drafts on a shared browser are left alone.
+      suspendDocumentDraftWrites()
+      if (userId) clearStoredDocumentDraftsForUser(userId)
+      queryClient.clear()
     }
   }
 

@@ -1,7 +1,6 @@
-import type { FormatDrafts } from './document-format-edits'
-import type { EditorState } from './document-word-edits'
+import type { DraftState } from './document-save-plan'
 
-export type WorkspaceDraftSnapshot = EditorState & { format: FormatDrafts }
+export type WorkspaceDraftSnapshot = DraftState
 
 const HISTORY_LIMIT = 50
 

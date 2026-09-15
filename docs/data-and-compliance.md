@@ -116,6 +116,35 @@ Initial focus areas:
 - England and Wales
 - International Humanitarian Law as a legal domain, not a jurisdiction bucket
 
+## Unsaved Document Drafts In The Browser
+
+A document editor that keeps unsaved work only in memory loses it to a
+reload. Obiter therefore persists unsaved DOCX drafts in `localStorage`, which
+means privileged matter text is written to browser storage on the user's
+device. That is a deliberate, bounded exception, and the bounds are:
+
+- the minimum needed to restore the work: changed run text, pending inserts,
+  deletions, emphasis and paragraph style, and any change held back after a
+  server rejection — never the document model, never file bytes, never comments;
+- an explicit `schemaVersion` in the payload and in the storage key, so a
+  future shape change cannot be read as the current one;
+- a deterministic key scoping schema version, organisation, user, document and
+  tab, so one user's or one document's draft cannot be offered to another;
+- validation of everything read from storage; a payload that fails validation,
+  names another scope, is malformed, or is older than seven days is removed
+  rather than applied;
+- the stored version the draft was built against is recorded, and a mismatch is
+  reported as stale and never applied to a newer version;
+- cleanup on successful save (only the slots that request covered), explicit
+  discard, and sign-out, which clears every stored draft;
+- draft contents are never logged, and a storage write that fails (quota,
+  private mode) degrades to in-memory only and is reported in the UI.
+
+Browser storage is not a substitute for the server as the system of record.
+The workspace never reports content saved before the API commits it. See
+`docs/architecture.md`, "Document drafts: addressability, containment and reload
+persistence".
+
 ## Learning And Model Behavior
 
 Phase 1 should rely on:

@@ -8,7 +8,7 @@ import {
   waitFor,
 } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   DocumentModelWire,
   DocumentParagraphWire,
@@ -216,6 +216,13 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+// Unsaved drafts are persisted per tab, so each test starts without the
+// previous test's draft of the same document.
+beforeEach(() => {
+  window.localStorage.clear()
+  window.sessionStorage.clear()
+})
+
 describe('document-scoped editor state', () => {
   it('does not render document A draft text in document B', () => {
     const { view } = mount('doc_a')
@@ -306,17 +313,25 @@ describe('document-scoped editor state', () => {
     expect(mergeAsync).not.toHaveBeenCalled()
   })
 
-  it('discards document A transient edits rather than restoring them on return', () => {
+  it('restores document A unsaved edits when returning to it, without showing them in document B', () => {
     const { view } = mount('doc_a')
     editSharedParagraph('Alpha edited')
     expect(screen.queryByText('Alpha first')).toBeNull()
 
     switchTo(view, 'doc_b')
+    // B shares the paragraph id and must never render A's draft.
+    expect(screen.queryByText('Alpha edited')).toBeNull()
+    expect(screen.getByText('Beta first')).toBeTruthy()
+
     switchTo(view, 'doc_a')
 
-    // Unsaved drafts are not persisted per document and there is no navigation
-    // guard, so leaving A discards them; returning renders server state.
-    expect(screen.getAllByText('Alpha first').length).toBeGreaterThan(0)
-    expect(screen.queryAllByText('Alpha edited')).toHaveLength(0)
+    // E45: returning to A restores its unsaved draft from this tab rather than
+    // destroying typed work. It is still unsaved, so the workspace says so.
+    expect(screen.getByText('Alpha edited')).toBeTruthy()
+    expect(
+      document
+        .querySelector('[data-save-state]')
+        ?.getAttribute('data-save-state'),
+    ).toBe('unsaved')
   })
 })

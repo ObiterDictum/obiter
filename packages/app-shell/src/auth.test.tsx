@@ -390,6 +390,54 @@ describe('useAuth — signOut clears the current-user cache', () => {
     // The cache is cleared so a fresh sign-in never reads the previous user.
     expect(client.getQueryData(['current-user'])).toBeUndefined()
   })
+
+  it('does not destroy stored drafts when the sign-out request fails', async () => {
+    window.localStorage.setItem(
+      'obiter.document-draft.1.org_1.usr_1.doc_1.tab_1',
+      'keep me',
+    )
+    signOutFn.mockRejectedValueOnce(new Error('network'))
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: createWrapper(new QueryClient()),
+    })
+
+    await expect(
+      act(async () => {
+        await result.current.signOut()
+      }),
+    ).rejects.toThrow('network')
+
+    expect(
+      window.localStorage.getItem(
+        'obiter.document-draft.1.org_1.usr_1.doc_1.tab_1',
+      ),
+    ).toBe('keep me')
+  })
+
+  it('does not destroy stored drafts when sign-out returns an error result', async () => {
+    window.localStorage.setItem(
+      'obiter.document-draft.1.org_1.usr_1.doc_1.tab_1',
+      'keep me',
+    )
+    signOutFn.mockResolvedValueOnce({ error: { message: 'unavailable' } })
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: createWrapper(new QueryClient()),
+    })
+
+    await expect(
+      act(async () => {
+        await result.current.signOut()
+      }),
+    ).rejects.toThrow('unavailable')
+
+    expect(
+      window.localStorage.getItem(
+        'obiter.document-draft.1.org_1.usr_1.doc_1.tab_1',
+      ),
+    ).toBe('keep me')
+  })
 })
 
 describe('useAuth — resend verification email', () => {

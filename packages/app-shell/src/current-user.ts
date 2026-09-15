@@ -7,6 +7,12 @@ import {
 } from '@tanstack/react-query'
 import type { CurrentOrganisation, MeResponse } from '@obiter/contracts'
 import { apiFetch, ApiError } from './api'
+import {
+  clearStoredDocumentDrafts,
+  rememberDocumentDraftUser,
+  resumeDocumentDraftWrites,
+  suspendDocumentDraftWrites,
+} from './document-draft-store'
 
 /**
  * Current-user data is always backed by the authenticated `GET /api/me` API.
@@ -15,7 +21,22 @@ import { apiFetch, ApiError } from './api'
 export function currentUserQueryOptions() {
   return queryOptions({
     queryKey: ['current-user'],
-    queryFn: async () => apiFetch<MeResponse>('/api/me'),
+    queryFn: async () => {
+      try {
+        const me = await apiFetch<MeResponse>('/api/me')
+        rememberDocumentDraftUser(me.user.id)
+        resumeDocumentDraftWrites()
+        return me
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 401) {
+          suspendDocumentDraftWrites()
+          // Only the remembered user: a shared browser may hold another
+          // account's recoverable drafts, and a 401 must not wipe those.
+          clearStoredDocumentDrafts()
+        }
+        throw error
+      }
+    },
     staleTime: 60 * 1000,
   })
 }
