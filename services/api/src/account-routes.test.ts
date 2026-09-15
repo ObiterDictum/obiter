@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { type Auth, createConnectedPool, testEnv } from './app-test-support'
+import {
+  type Auth,
+  createConnectedPool,
+  createHybridPool,
+  testEnv,
+} from './app-test-support'
 import { createApiApp } from './app'
 
 /**
@@ -202,7 +207,12 @@ describe('PATCH /api/me — account name', () => {
   // Audit records are append-only (docs/prds/archive/platform-deletion.md §2):
   // no route may delete or rewrite them. This pins that for the write paths
   // this surface adds, so a future cleanup cannot quietly reach the table.
-  it('issues no statement that deletes or updates audit records', async () => {
+  //
+  // Both pools are wired because the two legs reach the table differently: the
+  // PATCH runs inside a transaction (`connect`), while the change-password audit
+  // is appended through the pool directly (`query`). A double missing either
+  // half would make its assertion pass without the statement existing.
+  it('appends audit records but never deletes or updates them', async () => {
     const queries: unknown[] = []
     const auth = {
       api: {
@@ -221,31 +231,37 @@ describe('PATCH /api/me — account name', () => {
     } as unknown as Auth
     const app = createApiApp(
       testEnv,
-      createConnectedPool(async (...args) => {
-        queries.push(args)
-        if (String(args[0]).includes('update users')) {
-          return {
-            rows: [
-              {
-                id: 'usr_1',
-                email: 'user@example.test',
-                name: 'Ada Lovelace',
-                role: 'owner',
-              },
-            ],
+      createHybridPool(
+        async (...args) => {
+          queries.push(args)
+          return { rows: [] }
+        },
+        async (...args) => {
+          queries.push(args)
+          if (String(args[0]).includes('update users')) {
+            return {
+              rows: [
+                {
+                  id: 'usr_1',
+                  email: 'user@example.test',
+                  name: 'Ada Lovelace',
+                  role: 'owner',
+                },
+              ],
+            }
           }
-        }
-        return { rows: [] }
-      }),
+          return { rows: [] }
+        },
+      ),
       { auth },
     )
 
-    await app.request('/api/me', {
+    const patch = await app.request('/api/me', {
       method: 'PATCH',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ name: 'Ada Lovelace' }),
     })
-    await app.request('/api/auth/change-password', {
+    const password = await app.request('/api/auth/change-password', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -254,8 +270,25 @@ describe('PATCH /api/me — account name', () => {
       }),
     })
 
+    expect(patch.status).toBe(200)
+    expect(password.status).toBe(200)
+
     const statements = queries.map((args) => String((args as unknown[])[0]))
     expect(statements.length).toBeGreaterThan(0)
+
+    // Both append-only inserts were actually issued, so the guard cannot pass
+    // because a pool double lacked the method the audit path calls.
+    const appends = queries.filter((args) =>
+      String((args as unknown[])[0]).includes('insert into audit_logs'),
+    ) as unknown[][]
+    const actions = appends.map((args) => JSON.stringify(args[1]))
+    expect(
+      actions.some((params) => params.includes('user.profile_update')),
+    ).toBe(true)
+    expect(
+      actions.some((params) => params.includes('auth.password_changed')),
+    ).toBe(true)
+
     expect(
       statements.filter((sql) =>
         /\b(?:delete\s+from|update|truncate)\s+audit_logs\b/i.test(sql),

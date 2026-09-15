@@ -2743,7 +2743,12 @@
                     session. The request body is never read by the API, so no
                     credential material can reach an audit row or a log; a
                     successful change is audited as
-                    <code>auth.password_changed</code>.
+                    <code>auth.password_changed</code>. The change commits
+                    inside better-auth before this route appends the audit row,
+                    so the append is non-fatal by design: a failed insert is
+                    logged with identifiers only and never rewrites the
+                    successful response, while a rejected change is never
+                    audited.
                   </td>
                 </tr>
                 <tr>

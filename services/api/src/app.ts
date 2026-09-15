@@ -10,6 +10,7 @@ import type {
 } from '@obiter/contracts'
 import { updateProfileInputSchema } from '@obiter/contracts'
 import { updateUserName } from './account-database'
+import { appendPasswordChangedAudit } from './auth-change-audit'
 import { appendAuditLog, findOrganisation, toCurrentUser } from './database'
 import type { ApiEnv } from './env'
 import { createAuth } from './auth'
@@ -215,19 +216,22 @@ export function createApiApp(
     // change returns a user object, not a session. Audited here, at the same
     // boundary, after the change has been applied. The request body is never
     // read, so no password material can reach the audit row or the logs.
+    //
+    // The change is already committed inside `auth.handler` — password
+    // updated, other sessions revoked, replacement session minted — so the
+    // audit append is deliberately non-fatal: `appendPasswordChangedAudit`
+    // reports its own failure without turning a completed credential mutation
+    // into a false 500. Invariant kept: this branch is reached only on
+    // `response.ok`, so a rejected change can never mint a success event.
     if (
       c.req.method === 'POST' &&
       c.req.path === '/api/auth/change-password' &&
       response.ok &&
       sessionUser
     ) {
-      await appendAuditLog(pool, {
+      await appendPasswordChangedAudit(pool, {
         organisationId: sessionUser.organisationId ?? null,
         userId: sessionUser.id,
-        entityType: 'user',
-        entityId: sessionUser.id,
-        action: 'auth.password_changed',
-        metadata: {},
         requestId,
       })
     }

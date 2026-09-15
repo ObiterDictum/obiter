@@ -1347,6 +1347,34 @@ not implemented: no verified-email-change flow exists, and a mutation without
 verification, session handling and collision protection would be worse than the
 read-only field it replaces.
 
+The password-change audit is deliberately non-fatal, and the boundary is real
+rather than atomic. better-auth changes the password, revokes the other sessions
+and mints the replacement session inside its own handler, committing each write
+through the pool before it produces the 200 the route returns; the audit insert
+is a later, separate statement and there is no shared transaction to join. A
+failed append therefore cannot roll the change back, so it must not rewrite a
+completed credential mutation as a failure. `appendPasswordChangedAudit`
+(`services/api/src/auth-change-audit.ts`) appends when it can and, when it
+cannot, reports a structured error carrying identifiers only — action, user id,
+organisation id, request id, message — with the request body never read and
+`metadata_json` left empty. Rejections are still audited never: the branch is
+gated on the handler's own success response, so a wrong current password cannot
+mint an event.
+
+Name-form state: the account and organisation name fields share one policy,
+`useCanonicalNameField` (`packages/app-shell/src/views/use-canonical-name-field.ts`).
+It owns the draft, the saved baseline and the mutation result together, so a
+resolved save cannot discard text typed while the request was in flight, a
+refetched or cross-tab canonical value advances a clean field and is preserved
+as Reset's baseline when the field is dirty, a stale response cannot regress a
+later canonical value, and a failure keeps both the draft and the previous
+baseline. The canonical value is the mounted query cache's, not the input's.
+Reconciliation runs during render against the stored previous prop rather than
+in an effect, which is what keeps the field from painting a stale value first.
+The identity (user id, organisation id) is part of the model, so switching
+account or organisation discards the draft instead of carrying it into another
+record's form.
+
 Draft retention: every Settings section stays mounted and is hidden when
 inactive, so a half-typed change survives moving between sections. The
 alternative — a stash or a navigation blocker — would either duplicate the form
@@ -1361,10 +1389,14 @@ revocation the password change performs.
 
 Structural note (same change): the account write path, `updateUserName`, lives
 in `services/api/src/account-database.ts` rather than in `database.ts`, which is
-far past the 500-line ceiling. The Settings, app-shell auth and API route tests
-are split into focused suites: `views/settings-{navigation,account,security,organisation}.test.tsx`,
-`views/settings-test-support.tsx`, `auth-change-password.test.tsx`,
-`account-routes.test.ts`, `auth-audit.test.ts`, `password-policy.test.ts` and
+far past the 500-line ceiling, and the non-fatal password audit lives in
+`services/api/src/auth-change-audit.ts` for the same reason. The Settings,
+app-shell auth and API route tests are split into focused suites:
+`views/settings-{navigation,account,security,organisation}.test.tsx`,
+`views/settings-name-policy.test.tsx`,
+`views/use-canonical-name-field.test.tsx`, `views/settings-test-support.tsx`,
+`auth-change-password.test.tsx`, `account-routes.test.ts`, `auth-audit.test.ts`,
+`auth-password.db.test.ts`, `password-policy.test.ts` and
 `app-test-support.ts`. `services/api/src/database.ts` (1531 lines) and
 `services/api/src/app.test.ts` (3759 lines) remain above the ceiling: both are
 pre-existing modules covering many unrelated concerns, and splitting them is a

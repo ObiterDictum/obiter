@@ -16,6 +16,7 @@ import {
   roleLabel,
 } from './settings-fields'
 import { OrganisationPeople } from './settings-members'
+import { useCanonicalNameField } from './use-canonical-name-field'
 
 /**
  * Organisation settings: the tenant name, who may change it, and the members
@@ -106,54 +107,22 @@ function OrganisationNameForm({
 }) {
   const renameOrganisation = useRenameOrganisation()
   const inputRef = useRef<HTMLInputElement>(null)
-  const submittingRef = useRef(false)
-  const [name, setName] = useState(organisation.name)
-  const [savedName, setSavedName] = useState(organisation.name)
-  const [error, setError] = useState<string | null>(null)
-  const [saved, setSaved] = useState(false)
-  const [submitting, setSubmitting] = useState(false)
-
-  const trimmed = name.trim()
-  const dirty = trimmed !== savedName
-  const canSave = dirty && trimmed.length > 0 && !submitting
-  // See the account form: a disabled Save has to be explained by the field.
-  const blankError =
-    dirty && trimmed.length === 0 ? 'Organisation name is required.' : null
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    if (submittingRef.current || !dirty) return
-    setError(null)
-    setSaved(false)
-    if (trimmed.length === 0) {
-      setError('Organisation name is required.')
-      inputRef.current?.focus()
-      return
-    }
-    submittingRef.current = true
-    setSubmitting(true)
-    try {
-      const stored = await renameOrganisation.mutateAsync({ name: trimmed })
-      setName(stored.name)
-      setSavedName(stored.name)
-      setSaved(true)
-    } catch (cause) {
-      setError(
-        cause instanceof ApiError
-          ? cause.message
-          : 'Could not rename the organisation. Try again.',
-      )
-      inputRef.current?.focus()
-    } finally {
-      submittingRef.current = false
-      setSubmitting(false)
-    }
-  }
+  // Same policy as the account name: see `useCanonicalNameField`. The identity
+  // is the organisation id, so a different organisation never inherits this
+  // form's draft or baseline.
+  const field = useCanonicalNameField({
+    identity: organisation.id,
+    canonical: organisation.name,
+    requiredMessage: 'Organisation name is required.',
+    failureMessage: 'Could not rename the organisation. Try again.',
+    save: async (name) => (await renameOrganisation.mutateAsync({ name })).name,
+    focusField: () => inputRef.current?.focus(),
+  })
 
   return (
     <form
       className="flex max-w-lg flex-col gap-4"
-      onSubmit={handleSubmit}
+      onSubmit={field.submit}
       noValidate
     >
       <Input
@@ -163,34 +132,29 @@ function OrganisationNameForm({
         autoComplete="organization"
         required
         maxLength={ORGANISATION_NAME_MAX_LENGTH}
-        value={name}
-        error={error ?? blankError ?? undefined}
-        onChange={(event) => {
-          setName(event.target.value)
-          setSaved(false)
-          setError(null)
-        }}
+        value={field.value}
+        error={field.error ?? field.blankError ?? undefined}
+        onChange={(event) => field.setValue(event.target.value)}
       />
       <div className="flex items-center gap-3">
-        <Button type="submit" loading={submitting} disabled={!canSave}>
+        <Button
+          type="submit"
+          loading={field.submitting}
+          disabled={!field.canSave}
+        >
           Save name
         </Button>
         <Button
           type="button"
           variant="secondary"
-          disabled={!dirty || submitting}
-          onClick={() => {
-            setName(savedName)
-            setError(null)
-            setSaved(false)
-            inputRef.current?.focus()
-          }}
+          disabled={!field.dirty || field.submitting}
+          onClick={field.reset}
         >
           Reset
         </Button>
-        <SavedNotice message="Organisation name saved." show={saved} />
+        <SavedNotice message="Organisation name saved." show={field.saved} />
       </div>
-      {error ? <ErrorNotice message={error} /> : null}
+      {field.error ? <ErrorNotice message={field.error} /> : null}
     </form>
   )
 }
