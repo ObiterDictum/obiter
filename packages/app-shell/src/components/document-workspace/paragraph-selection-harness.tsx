@@ -84,9 +84,7 @@ export function nativeSelect(from: number, to: number) {
  * document order.
  */
 export function selectedText(paragraphId: string): string {
-  return [
-    ...document.querySelectorAll(`[data-paragraph-id="${paragraphId}"]`),
-  ]
+  return [...document.querySelectorAll(`[data-paragraph-id="${paragraphId}"]`)]
     .flatMap((root) => [...root.querySelectorAll('[data-selected-text]')])
     .map((node) => node.textContent ?? '')
     .join('')
@@ -98,8 +96,6 @@ export function selectedMarkCount(): number {
 
 export function selectionStatus(): string {
   return (
-    document
-      .querySelector('[data-selection-status]')
-      ?.textContent?.trim() ?? ''
+    document.querySelector('[data-selection-status]')?.textContent?.trim() ?? ''
   )
 }

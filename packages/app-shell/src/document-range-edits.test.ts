@@ -8,7 +8,11 @@ import {
   applyReplaceDocumentRange,
   applySplitOverDocumentRange,
 } from './document-range-edits'
-import { blockText, emptyEditorState, type EditorState } from './document-word-edits'
+import {
+  blockText,
+  emptyEditorState,
+  type EditorState,
+} from './document-word-edits'
 
 function para(id: string, text: string): DocumentParagraphWire {
   return {
@@ -82,7 +86,11 @@ describe('replacing a range inside one paragraph', () => {
 
 describe('replacing a range across paragraphs', () => {
   it('keeps the head, the tail and the inserted text, and deletes the rest', () => {
-    const model = doc(para('p1', 'alpha'), para('p2', 'bravo'), para('p3', 'charlie'))
+    const model = doc(
+      para('p1', 'alpha'),
+      para('p2', 'bravo'),
+      para('p3', 'charlie'),
+    )
     const result = applyReplaceDocumentRange(
       model,
       emptyEditorState(),
@@ -102,7 +110,11 @@ describe('replacing a range across paragraphs', () => {
   })
 
   it('joins across an empty middle paragraph', () => {
-    const model = doc(para('p1', 'alpha'), para('p2', ''), para('p3', 'charlie'))
+    const model = doc(
+      para('p1', 'alpha'),
+      para('p2', ''),
+      para('p3', 'charlie'),
+    )
     const result = applyReplaceDocumentRange(
       model,
       emptyEditorState(),
@@ -119,7 +131,11 @@ describe('replacing a range across paragraphs', () => {
   })
 
   it('deletes a fully selected hard-break paragraph between the endpoints', () => {
-    const model = doc(para('p1', 'alpha'), para('p2', 'one\ntwo'), para('p3', 'zulu'))
+    const model = doc(
+      para('p1', 'alpha'),
+      para('p2', 'one\ntwo'),
+      para('p3', 'zulu'),
+    )
     const result = applyReplaceDocumentRange(
       model,
       emptyEditorState(),

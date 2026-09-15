@@ -61,7 +61,10 @@ export function ParagraphRunPaint({
   const paint = (slices: RunSlice[]) => {
     if (slices.length === 0) {
       return (
-        <span data-empty-line data-selected-text={selection ? 'true' : undefined}>
+        <span
+          data-empty-line
+          data-selected-text={selection ? 'true' : undefined}
+        >
           &nbsp;
         </span>
       )

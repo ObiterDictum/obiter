@@ -169,7 +169,10 @@ export function useWorkspaceCaret({
     setSelectedParagraphId(paragraphId)
   }
 
-  function extendSelection(focus: SelectionEndpoint, anchor: SelectionEndpoint) {
+  function extendSelection(
+    focus: SelectionEndpoint,
+    anchor: SelectionEndpoint,
+  ) {
     if (insertIds.has(focus.paragraphId)) {
       setSelectionNotice(INSERT_BLOCKS_SELECTION)
       return
@@ -247,7 +250,12 @@ export function useWorkspaceCaret({
   function replaceSelectionRange(text: string) {
     const range = selectedRange()
     if (!model || !range) return
-    const caret = drafts.replaceDocumentRange(model, range.start, range.end, text)
+    const caret = drafts.replaceDocumentRange(
+      model,
+      range.start,
+      range.end,
+      text,
+    )
     if (caret) selectParagraph(caret.paragraphId, caret.offset)
   }
 

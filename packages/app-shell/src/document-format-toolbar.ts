@@ -53,8 +53,13 @@ export function documentFormatToolbar(
     target.kind === 'selection'
       ? ranges.filter((range) => range.from !== range.to)
       : ranges
-  const controls = formatControlState(model, format, paragraphId, ranges, emphasis)
-  const paragraph = controls.paragraph
+  const controls = formatControlState(
+    model,
+    format,
+    paragraphId,
+    ranges,
+    emphasis,
+  )
   const nothingSelected = target.kind === 'selection' && emphasis.length === 0
   // A tracked change records a single run, so partial formatting of a range is
   // not representable yet; fail closed rather than dropping the tracking.
@@ -138,7 +143,9 @@ export function documentFormatToolbar(
     onToggleList: (kind: ListKind) =>
       forEachParagraph((current, id) => {
         const target = selectedParagraph(model, id)
-        return target ? toggleParagraphList(current, model, target, kind) : current
+        return target
+          ? toggleParagraphList(current, model, target, kind)
+          : current
       }),
   }
 }

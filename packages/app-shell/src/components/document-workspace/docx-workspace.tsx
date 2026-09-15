@@ -191,7 +191,8 @@ export function DocxWorkspace({
     onCutRange: cutSelection,
     onClear: clearSelection,
   }
-  const selectionStatus = selectionNotice ?? selectionAnnouncement(selectionSegments.size)
+  const selectionStatus =
+    selectionNotice ?? selectionAnnouncement(selectionSegments.size)
 
   async function exportDocx() {
     try {

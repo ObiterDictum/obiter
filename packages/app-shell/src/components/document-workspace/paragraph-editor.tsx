@@ -9,15 +9,12 @@ import {
   armVerticalDelivery,
   clearVerticalColumn,
   consumeVerticalDelivery,
-  offsetAfterArrow,
-  offsetVertically,
   retainVerticalColumn,
   visualColumn,
   type ArrowNeighbor,
   type VerticalCaretColumn,
 } from './paragraph-arrow'
 import type { WrappedLine } from '../../document-page-flow'
-import { SELECTION_PAINT } from './model-run'
 
 /**
  * What the editor needs to take part in a document selection. `range` is the
@@ -346,9 +343,7 @@ export function ParagraphEditor({
       onPaste={(event) => {
         if (!selection?.active) return
         event.preventDefault()
-        selection.onReplaceRange(
-          event.clipboardData.getData('text/plain'),
-        )
+        selection.onReplaceRange(event.clipboardData.getData('text/plain'))
       }}
       onCopy={(event) => {
         if (!selection?.active) return

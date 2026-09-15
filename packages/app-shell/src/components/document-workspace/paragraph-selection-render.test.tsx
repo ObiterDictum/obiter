@@ -109,7 +109,11 @@ describe('painting a document selection', () => {
   it('marks the empty row of an empty paragraph in the range', () => {
     const container = renderPage(
       doc(para('p1', 'Alpha'), para('p2', ''), para('p3', 'Charlie')),
-      { p1: { from: 5, to: 5 }, p2: { from: 0, to: 0 }, p3: { from: 0, to: 0 } },
+      {
+        p1: { from: 5, to: 5 },
+        p2: { from: 0, to: 0 },
+        p3: { from: 0, to: 0 },
+      },
     )
     // The empty paragraph paints one blank row; the other two cover no text.
     expect(container.querySelectorAll('[data-selected-text]')).toHaveLength(1)
@@ -117,7 +121,7 @@ describe('painting a document selection', () => {
   })
 
   it('splits a wrapped paragraph mark across its visual rows', () => {
-    const text = ('lorem ipsum dolor sit amet '.repeat(4)).trim()
+    const text = 'lorem ipsum dolor sit amet '.repeat(4).trim()
     const model = doc(para('p1', text))
     // The range is chosen from the rendered rows, so the test does not depend
     // on where the projection decides to wrap.
@@ -132,11 +136,12 @@ describe('painting a document selection', () => {
     const to = Number(second.getAttribute('data-line-to')) - 3
 
     const container = renderPage(model, { p1: { from, to } })
-    const markedPerRow = [...container.querySelectorAll('[data-line-from]')].map(
-      (row) =>
-        [...row.querySelectorAll('[data-selected-text]')]
-          .map((node) => node.textContent ?? '')
-          .join(''),
+    const markedPerRow = [
+      ...container.querySelectorAll('[data-line-from]'),
+    ].map((row) =>
+      [...row.querySelectorAll('[data-selected-text]')]
+        .map((node) => node.textContent ?? '')
+        .join(''),
     )
     expect(markedPerRow.join('')).toBe(text.slice(from, to))
     expect(markedPerRow.filter((row) => row.length > 0)).toHaveLength(2)
@@ -165,21 +170,17 @@ describe('painting a document selection', () => {
 
   it('marks only the code units a page fragment owns', () => {
     const paragraph = para('p1', 'Alpha')
-    const container = renderPage(
-      doc(paragraph),
-      { p1: { from: 1, to: 4 } },
-      [
-        { type: 'paragraph', paragraph, from: 0, to: 2, wrapWidthPx: 420 },
-        {
-          type: 'paragraph',
-          paragraph,
-          from: 2,
-          to: 5,
-          wrapWidthPx: 420,
-          continuation: true,
-        },
-      ],
-    )
+    const container = renderPage(doc(paragraph), { p1: { from: 1, to: 4 } }, [
+      { type: 'paragraph', paragraph, from: 0, to: 2, wrapWidthPx: 420 },
+      {
+        type: 'paragraph',
+        paragraph,
+        from: 2,
+        to: 5,
+        wrapWidthPx: 420,
+        continuation: true,
+      },
+    ])
     // Each block paints only the part of the range inside its own slice.
     expect(container.querySelectorAll('[data-selected-text]')).toHaveLength(2)
     expect(selectedText('p1')).toBe('lph')

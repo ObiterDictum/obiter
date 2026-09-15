@@ -76,10 +76,15 @@ describe('selection endpoints and direction', () => {
     expect(orderedSelection(context.order, backward).start.paragraphId).toBe(
       'p1',
     )
-    expect(selectionDirection(context.order, selection(
-      { paragraphId: 'p2', offset: 2 },
-      { paragraphId: 'p2', offset: 2 },
-    ))).toBe('none')
+    expect(
+      selectionDirection(
+        context.order,
+        selection(
+          { paragraphId: 'p2', offset: 2 },
+          { paragraphId: 'p2', offset: 2 },
+        ),
+      ),
+    ).toBe('none')
     expect(
       selectionCollapsed(
         selection(
@@ -272,9 +277,9 @@ describe('stepping the focus through arrow geometry', () => {
   })
 
   it('steps one code unit inside the paragraph', () => {
-    expect(stepSelectionFocus({ ...base, key: 'ArrowRight', offset: 3 })).toEqual(
-      { paragraphId: 'p2', offset: 4 },
-    )
+    expect(
+      stepSelectionFocus({ ...base, key: 'ArrowRight', offset: 3 }),
+    ).toEqual({ paragraphId: 'p2', offset: 4 })
   })
 
   it('follows the retained column across a wrapped boundary', () => {

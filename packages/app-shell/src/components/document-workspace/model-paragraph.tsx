@@ -16,7 +16,7 @@ import { paragraphInlineXml } from '../../document-page-floats'
 import { wrapLines } from '../../document-page-flow'
 import type { ListMarker } from '../../document-page-lists'
 import { imagePartNameForDrawing } from '../../document-page-media'
-import { runNoteRefs, type NoteKind } from '../../document-page-notes'
+import type { NoteKind } from '../../document-page-notes'
 import {
   paragraphCss,
   paragraphFace,
@@ -30,10 +30,7 @@ import type {
   ParagraphSelectionHandlers,
 } from './paragraph-editor'
 import { ParagraphEditor } from './paragraph-editor'
-import {
-  ParagraphRunPaint,
-  type ParagraphSelectionRange,
-} from './model-run'
+import { ParagraphRunPaint, type ParagraphSelectionRange } from './model-run'
 
 export type ParagraphWordEdit = {
   type: 'replace' | 'deleteBackward' | 'deleteForward' | 'split' | 'lineBreak'

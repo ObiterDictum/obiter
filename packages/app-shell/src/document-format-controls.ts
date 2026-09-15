@@ -5,10 +5,7 @@ import type {
 import { documentStory } from './document-model-text'
 import { paragraphNumPr } from './document-page-lists'
 import { paragraphListKind, pickNumberingId } from './document-list-toggle'
-import {
-  formattedModel,
-  paragraphStyleOptions,
-} from './document-format-paint'
+import { formattedModel, paragraphStyleOptions } from './document-format-paint'
 import type { FormatDrafts, PendingEmphasis } from './document-format-types'
 
 export function selectedParagraph(

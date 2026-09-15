@@ -52,7 +52,9 @@ function shiftKey(
   return { field, notPrevented }
 }
 
-function plainKey(key: 'ArrowLeft' | 'ArrowRight' | 'ArrowUp' | 'ArrowDown' | 'Escape') {
+function plainKey(
+  key: 'ArrowLeft' | 'ArrowRight' | 'ArrowUp' | 'ArrowDown' | 'Escape',
+) {
   const field = bodyField()
   const notPrevented = fireEvent.keyDown(field, { key })
   return { field, notPrevented }
@@ -212,9 +214,7 @@ describe('selections and the sticky visual column', () => {
   })
 
   it('extends through a wrapped line and crosses into the next paragraph', () => {
-    mount(
-      multiParagraphModel([paragraph('p1', long), paragraph('p2', 'next')]),
-    )
+    mount(multiParagraphModel([paragraph('p1', long), paragraph('p2', 'next')]))
     clickParagraph('p1')
     const rows = renderedLines('p1')
     const second = rows[1]
@@ -222,7 +222,9 @@ describe('selections and the sticky visual column', () => {
     // A wrapped line is extended natively inside the paragraph; the model is
     // told through the textarea's own selection event.
     nativeSelect(second.from - 1, second.from + 2)
-    expect(selectedText('p1')).toBe(long.slice(second.from - 1, second.from + 2))
+    expect(selectedText('p1')).toBe(
+      long.slice(second.from - 1, second.from + 2),
+    )
     placeCaret(long.length)
     shiftKey('ArrowDown')
     expect(bodyField().value).toBe('next')

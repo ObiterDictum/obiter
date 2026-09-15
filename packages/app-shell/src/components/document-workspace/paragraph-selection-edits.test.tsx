@@ -48,8 +48,7 @@ function selectAcrossBoundary() {
 
 function saveOperations(editAsync: ReturnType<typeof vi.fn>) {
   const call = editAsync.mock.calls[0]?.[0] as
-    | { operations?: Array<Record<string, unknown>> }
-    | undefined
+    { operations?: Array<Record<string, unknown>> } | undefined
   return call?.operations ?? []
 }
 
@@ -279,7 +278,9 @@ describe('an unsaved inserted paragraph blocks a selection', () => {
     clickParagraph('p1')
     placeCaret(5)
     fireEvent.keyDown(bodyField(), { key: 'ArrowRight', shiftKey: true })
-    expect(selectionStatus()).toMatch(/cannot cross an unsaved inserted paragraph/)
+    expect(selectionStatus()).toMatch(
+      /cannot cross an unsaved inserted paragraph/,
+    )
     expect(selectedText('p1')).toBe('')
   })
 
@@ -290,7 +291,9 @@ describe('an unsaved inserted paragraph blocks a selection', () => {
     fireEvent.keyDown(bodyField(), { key: 'Enter' })
     clickParagraph('p1')
     fireEvent.keyDown(bodyField(), { key: 'a', ctrlKey: true })
-    expect(selectionStatus()).toMatch(/cannot cross an unsaved inserted paragraph/)
+    expect(selectionStatus()).toMatch(
+      /cannot cross an unsaved inserted paragraph/,
+    )
     expect(document.querySelectorAll('[data-selected-text]')).toHaveLength(0)
   })
 })

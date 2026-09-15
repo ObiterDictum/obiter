@@ -152,7 +152,9 @@ export function selectionPlainText(
   selection: DocumentSelection,
 ): string {
   return selectionSegments(context, selection)
-    .map((segment) => context.textOf(segment.paragraphId).slice(segment.from, segment.to))
+    .map((segment) =>
+      context.textOf(segment.paragraphId).slice(segment.from, segment.to),
+    )
     .join('\n')
 }
 
@@ -171,7 +173,10 @@ export function reconcileSelection(
   const anchor = reconcileEndpoint(context, selection.anchor)
   const focus = reconcileEndpoint(context, selection.focus)
   if (!anchor || !focus) return null
-  if (sameEndpoint(anchor, selection.anchor) && sameEndpoint(focus, selection.focus)) {
+  if (
+    sameEndpoint(anchor, selection.anchor) &&
+    sameEndpoint(focus, selection.focus)
+  ) {
     return selection
   }
   return { anchor, focus }

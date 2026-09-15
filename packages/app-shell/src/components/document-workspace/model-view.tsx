@@ -1,8 +1,4 @@
-import type {
-  DocumentModelWire,
-  DocumentParagraphWire,
-  DocumentPresence,
-} from '@obiter/contracts'
+import type { DocumentModelWire, DocumentPresence } from '@obiter/contracts'
 import type { LocalInsert } from '../../document-edits'
 import {
   documentPageBox,
@@ -20,7 +16,6 @@ import {
   paragraphClickCaret,
   pageClickCaret,
 } from './model-click-caret'
-import { ModelParagraph } from './model-paragraph'
 import type { ParagraphWordEdit } from './model-paragraph'
 import type { ParagraphSelectionRange } from './model-run'
 import { PageOverlays, renderBlock } from './model-page-blocks'
