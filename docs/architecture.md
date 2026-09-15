@@ -1060,10 +1060,19 @@ than the operation cap, all as `validation_failed` (400).
 
 Failure is atomic: the API parses, applies and serialises the whole batch
 before any database work, so a rejected batch writes no version, no audit row
-and no stored object. A batch whose split boundary cannot be mapped faithfully
-fails closed with `validation_failed` rather than misformatting; a range that
-crosses a text-wrapping break is currently such a case, because the offset
-mapping in `comment-anchors.ts` does not yet consume the break character.
+and no stored object. The coordinate space above is shared by every path that
+reads an offset: the parser, the shared edit contract, replacement
+composition, the formatting-range locator, comment and text anchors, and the
+serialiser all read a text-wrapping `w:br` as exactly one `\n` and a page,
+column or unrecognised break as structure that consumes no editable offset.
+`comment-anchors.ts` owns the one source-order traversal over a run's `w:t`
+elements and text-wrapping breaks, so a range boundary after a break lands on
+the character the user selected rather than one short per break. A range that
+covers only a text-wrapping break styles the run carrying the break; it never
+reaches the neighbouring text. A range whose boundary cannot be mapped
+faithfully, including a run whose anchors do not reconstruct its model text,
+fails closed with `validation_failed` rather than misformatting; invalid
+bounds are never clamped to nearby text.
 
 ### Document drafts: addressability, containment and reload persistence (14 September 2026)
 

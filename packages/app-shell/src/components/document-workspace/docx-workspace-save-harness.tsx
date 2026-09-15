@@ -8,8 +8,10 @@ import type {
   DocumentParagraphWire,
 } from '@obiter/contracts'
 import { ApiError } from '../../api'
+import type { DocumentVersionRecord } from '../../documents'
 import { DocumentDraftStatusProvider } from './document-draft-status'
 import { DocxWorkspace } from './docx-workspace'
+import { DocumentWorkspace } from './workspace'
 
 const hooks = vi.hoisted(() => ({
   useDocumentModel: vi.fn(),
@@ -117,14 +119,21 @@ function idleMutation(overrides: Record<string, unknown> = {}) {
   }
 }
 
-export function mountSaveWorkspace(options: {
+export type SaveWorkspaceOptions = {
   editAsync?: ReturnType<typeof vi.fn>
   mergeAsync?: ReturnType<typeof vi.fn>
   versionId?: string
   body?: string
   /** Rendered next to the workspace, inside the draft-status provider. */
   beside?: ReactNode
-}) {
+}
+
+/**
+ * Point every workspace hook at a ready one-paragraph document. Exported
+ * separately so a test can render a different boundary around the same
+ * workspace without restating the fixtures.
+ */
+export function configureSaveWorkspaceHooks(options: SaveWorkspaceOptions) {
   hooks.useCurrentUser.mockReturnValue({
     data: {
       user: {
@@ -165,7 +174,10 @@ export function mountSaveWorkspace(options: {
   )
   hooks.useTrackedChangeDecision.mockReturnValue(idleMutation())
   hooks.usePresenceUpdate.mockReturnValue(idleMutation())
+}
 
+export function mountSaveWorkspace(options: SaveWorkspaceOptions) {
+  configureSaveWorkspaceHooks(options)
   return render(
     <DocumentDraftStatusProvider>
       <DocxWorkspace
@@ -178,6 +190,44 @@ export function mountSaveWorkspace(options: {
     </DocumentDraftStatusProvider>,
     { wrapper },
   )
+}
+
+/**
+ * The same workspace inside its real route boundary. The verification dock and
+ * the draft-status provider live in `DocumentWorkspace`, so a gate test has to
+ * mount that boundary rather than the viewer alone.
+ */
+export function mountSaveDocumentWorkspace(options: SaveWorkspaceOptions) {
+  configureSaveWorkspaceHooks(options)
+  return render(
+    <DocumentWorkspace
+      documentId="doc_1"
+      version={versionRecord(options.versionId ?? 'ver_1')}
+    />,
+    { wrapper },
+  )
+}
+
+function versionRecord(id: string): DocumentVersionRecord {
+  return {
+    id,
+    organisationId: 'org_1',
+    matterId: 'mtr_1',
+    matterDocumentId: 'doc_1',
+    filename: 'brief.docx',
+    fileType: 'docx',
+    sizeBytes: '1024',
+    objectKey: `org/org_1/matters/mtr_1/documents/doc_1/versions/${id}/source`,
+    textObjectKey: null,
+    documentStatus: 'ready',
+    failureReason: null,
+    versionNumber: 1,
+    contentSha256: 'a'.repeat(64),
+    syncState: 'synced',
+    createdBy: 'usr_1',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  }
 }
 
 export function bodyEditor(): HTMLTextAreaElement {
