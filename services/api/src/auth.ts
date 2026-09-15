@@ -4,6 +4,7 @@ import { magicLink } from 'better-auth/plugins'
 import { bearer } from 'better-auth/plugins/bearer'
 import { Resend } from 'resend'
 import type { Pool } from 'pg'
+import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from '@obiter/contracts'
 import { appendAuditLog } from './database'
 import { authTrustedOrigins } from './client-origins'
 import type { ApiEnv } from './env'
@@ -235,6 +236,12 @@ export function emailAndPasswordOptions(env: ApiEnv) {
     enabled: true,
     disableSignUp: false,
     requireEmailVerification: true,
+    // The password-length policy the Settings and reset forms state before
+    // submission. Configured explicitly from the shared contract constants
+    // rather than left to better-auth's defaults, so the promise the form makes
+    // and the rule the API applies cannot drift apart.
+    minPasswordLength: MIN_PASSWORD_LENGTH,
+    maxPasswordLength: MAX_PASSWORD_LENGTH,
     // Revoke every existing session when a password is reset: an attacker
     // who holds a stolen session cookie is signed out the moment the victim
     // resets their password, so the stolen credential stops working.
