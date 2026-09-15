@@ -61,12 +61,34 @@ export type UpdateOrganisationInput = z.infer<
 >
 
 /**
+ * A display name people read back: the account name and the organisation name.
+ * One builder for both, because two name paths that strip different characters
+ * disagree about what an empty name is, and that disagreement stores names
+ * nobody can see. Strips Unicode format characters (category Cf — zero-width
+ * spaces, joiners, directional marks) that `trim()` leaves behind, then applies
+ * the emptiness and length rules to the cleaned value.
+ */
+export function displayNameField(label: string, maxLength: number) {
+  return z
+    .string()
+    .transform((value) => value.replace(/\p{Cf}/gu, '').trim())
+    .pipe(
+      z
+        .string()
+        .min(1, `${label} is required.`)
+        .max(maxLength, `${label} must be at most ${maxLength} characters.`),
+    )
+}
+
+export const organisationNameFieldSchema = displayNameField(
+  'Organisation name',
+  ORGANISATION_NAME_MAX_LENGTH,
+)
+
+/**
  * Shared organisation-name validation for create + rename + sign-up stash
- * consumption: strip Unicode format characters (category Cf — zero-width
- * spaces, joiners, directional marks) as well as ASCII whitespace before
- * the emptiness check, so a name of only ZWSPs cannot pass trim() as
- * non-empty and store an invisible organisation name. Enforces the shared
- * length ceiling.
+ * consumption. Non-string input keeps its own message rather than Zod's
+ * "expected string", so a body with no `name` reads the same as an empty one.
  */
 export function parseOrganisationName(
   rawName: unknown,
@@ -74,17 +96,15 @@ export function parseOrganisationName(
   if (typeof rawName !== 'string') {
     return { ok: false, message: 'Organisation name is required.' }
   }
-  const name = rawName.replace(/\p{Cf}/gu, '').trim()
-  if (name.length === 0) {
-    return { ok: false, message: 'Organisation name is required.' }
-  }
-  if (name.length > ORGANISATION_NAME_MAX_LENGTH) {
+  const parsed = organisationNameFieldSchema.safeParse(rawName)
+  if (!parsed.success) {
     return {
       ok: false,
-      message: `Organisation name must be at most ${ORGANISATION_NAME_MAX_LENGTH} characters.`,
+      message:
+        parsed.error.issues[0]?.message ?? 'Organisation name is required.',
     }
   }
-  return { ok: true, name }
+  return { ok: true, name: parsed.data }
 }
 
 export const createOrganisationInviteInputSchema = z.object({

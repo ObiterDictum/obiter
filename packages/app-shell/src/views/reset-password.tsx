@@ -2,6 +2,7 @@ import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { ArrowRight } from '@phosphor-icons/react'
 import { Button, Input } from '@obiter/ui'
 import { useState, type FormEvent } from 'react'
+import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from '@obiter/contracts'
 import { useAuth } from '../auth'
 import { Wordmark } from '../wordmark'
 import { useForceNightTheme } from './sign-in'
@@ -34,12 +35,12 @@ export function ResetPasswordRouteView() {
     event.preventDefault()
     if (submitting) return
     setError(null)
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters.')
+    if (password.length < MIN_PASSWORD_LENGTH) {
+      setError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`)
       return
     }
-    if (password.length > 128) {
-      setError('Password must be at most 128 characters.')
+    if (password.length > MAX_PASSWORD_LENGTH) {
+      setError(`Password must be at most ${MAX_PASSWORD_LENGTH} characters.`)
       return
     }
     if (password !== confirm) {
@@ -106,8 +107,8 @@ export function ResetPasswordRouteView() {
                 type="password"
                 autoComplete="new-password"
                 required
-                minLength={8}
-                maxLength={128}
+                minLength={MIN_PASSWORD_LENGTH}
+                maxLength={MAX_PASSWORD_LENGTH}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 error={error ?? undefined}
@@ -117,8 +118,8 @@ export function ResetPasswordRouteView() {
                 type="password"
                 autoComplete="new-password"
                 required
-                minLength={8}
-                maxLength={128}
+                minLength={MIN_PASSWORD_LENGTH}
+                maxLength={MAX_PASSWORD_LENGTH}
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
               />

@@ -1,4 +1,9 @@
-import { useId, type InputHTMLAttributes, type ReactNode } from 'react'
+import {
+  useId,
+  type InputHTMLAttributes,
+  type ReactNode,
+  type Ref,
+} from 'react'
 import { cn } from './lib/cn'
 
 export interface InputProps extends Omit<
@@ -11,6 +16,8 @@ export interface InputProps extends Omit<
   invalid?: boolean
   /** Right-aligned affordance slot (e.g. a show/hide toggle). */
   trailing?: ReactNode
+  /** React 19 passes `ref` as a prop; declared so a form can focus the field. */
+  ref?: Ref<HTMLInputElement>
 }
 
 /**

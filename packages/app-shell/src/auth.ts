@@ -1,6 +1,7 @@
 import { createAuthClient } from 'better-auth/react'
 import { magicLinkClient } from 'better-auth/client/plugins'
 import { useQueryClient } from '@tanstack/react-query'
+import { MAX_PASSWORD_LENGTH, MIN_PASSWORD_LENGTH } from '@obiter/contracts'
 import {
   clearStoredDocumentDraftsForUser,
   suspendDocumentDraftWrites,
@@ -100,6 +101,16 @@ export interface UseAuthReturn {
     token: string,
     newPassword: string,
   ) => Promise<{ ok: boolean; message?: string; code?: string }>
+  /**
+   * Changes the signed-in account's password. The current password is verified
+   * by better-auth server-side; every other session is revoked and the current
+   * one is replaced, so a stolen session stops working. Desktop gets the
+   * replacement bearer token from the response header, which the client stores.
+   */
+  changePassword: (input: {
+    currentPassword: string
+    newPassword: string
+  }) => Promise<{ ok: boolean; message?: string; code?: string }>
   resendVerificationEmail: (
     email: string,
     callbackURL?: string,
@@ -111,6 +122,29 @@ export interface UseAuthReturn {
 interface AuthSessionPresence {
   user: { id: string; email?: string }
   session: { id: string }
+}
+
+/**
+ * User-facing text for a rejected password change. The transport message is
+ * deliberately not passed through: it is an API error string ("Invalid
+ * password", "Internal error") and an unexpected failure must not surface
+ * internal detail. `code` selects a message and is never echoed, and no branch
+ * contains either password. An unmapped code reads as a retryable failure,
+ * which is the honest description of a state the client cannot explain.
+ */
+function changePasswordMessage(code: string | undefined): string {
+  switch (code) {
+    case 'INVALID_PASSWORD':
+      return 'Your current password is incorrect.'
+    case 'PASSWORD_TOO_SHORT':
+      return `Password must be at least ${MIN_PASSWORD_LENGTH} characters.`
+    case 'PASSWORD_TOO_LONG':
+      return `Password must be at most ${MAX_PASSWORD_LENGTH} characters.`
+    case 'CREDENTIAL_ACCOUNT_NOT_FOUND':
+      return 'This account does not sign in with a password.'
+    default:
+      return 'Could not change your password. Try again.'
+  }
 }
 
 /**
@@ -222,6 +256,36 @@ export function useAuth(): UseAuthReturn {
     }
   }
 
+  /**
+   * better-auth's change-password endpoint verifies the current password and
+   * hashes the new one server-side; nothing here touches password material
+   * beyond passing it through. `revokeOtherSessions` matches the reset path's
+   * policy so an attacker holding a stolen session cookie is signed out.
+   * better-auth deletes every session, then issues a new one for this client,
+   * which is why the session store is refetched: the old session id is gone.
+   */
+  async function changePassword(input: {
+    currentPassword: string
+    newPassword: string
+  }) {
+    const result = await authClient.changePassword({
+      ...input,
+      revokeOtherSessions: true,
+    })
+    if (result.error) {
+      return {
+        ok: false,
+        code:
+          typeof result.error.code === 'string' ? result.error.code : undefined,
+        message: changePasswordMessage(
+          typeof result.error.code === 'string' ? result.error.code : undefined,
+        ),
+      }
+    }
+    await refreshSessionAfterAuth()
+    return { ok: true }
+  }
+
   // better-auth 1.6.x password reset: POST /request-password-reset never
   // reveals whether the email exists (it returns the same message and runs a
   // timing-attack mitigation). The reset link is derived server-side from the
@@ -268,6 +332,7 @@ export function useAuth(): UseAuthReturn {
     requestMagicLink,
     requestPasswordReset,
     resetPassword,
+    changePassword,
     resendVerificationEmail,
     signOut,
   }
