@@ -7,6 +7,7 @@ import type {
   VerificationRunSummary,
 } from '@obiter/contracts'
 import type { DocumentStoryKind } from '@obiter/contracts'
+import type { UnmappedReason } from './components/verification/verification-mapping'
 
 export function verificationStoryLabel(kind: DocumentStoryKind | undefined) {
   switch (kind) {
@@ -147,4 +148,77 @@ export function verificationFailureLabel(code: VerificationFailureCode) {
       return unhandled
     }
   }
+}
+
+/**
+ * The tone for a finding outcome, defined once so the findings index, the
+ * markers and the evidence panel cannot disagree.
+ */
+export function verificationStateTone(
+  state: VerificationFindingState,
+): 'success' | 'danger' | 'warning' | 'neutral' {
+  switch (state) {
+    case 'clear':
+      return 'success'
+    case 'flagged':
+      return 'danger'
+    case 'not_checked':
+      return 'neutral'
+    case 'review_required':
+      return 'warning'
+    default: {
+      const unhandled: never = state
+      return unhandled
+    }
+  }
+}
+
+/**
+ * Why a finding is not shown beside document text. Each value states a limit of
+ * the evidence, never an outcome, so a reviewer reads it as "look here" rather
+ * than "nothing to see".
+ */
+export function verificationUnmappedLabel(reason: UnmappedReason) {
+  switch (reason) {
+    case 'story_not_in_document':
+      return 'Not shown in the document: this finding belongs to a story the open document does not contain.'
+    case 'paragraph_not_in_document':
+      return 'Not shown in the document: the paragraph it names is not in the open document.'
+    case 'range_not_in_document':
+      return 'Not shown in the document: the recorded range does not fit the paragraph it names.'
+    case 'text_changed_since_check':
+      return 'Not shown in the document: the text at this location differs from the text that was checked.'
+    case 'range_spans_line_break':
+      return 'Not shown in the document: the checked text contains a line break, which the page does not draw as text.'
+    case 'range_split_across_fragments':
+      return 'Not shown in the document: the checked range crosses a page or column boundary, so the page cannot draw it as one range.'
+    case 'rendered_anchor_unavailable':
+      return 'Not shown in the document: the page did not render an anchor for this location, so the check cannot be drawn beside it.'
+    case 'document_not_mappable':
+      return 'Not shown in the document: this file type has no document model, so findings are listed here only.'
+    default: {
+      const unhandled: never = reason
+      return unhandled
+    }
+  }
+}
+
+/**
+ * The stored-version boundary, stated wherever evidence is shown. A reader must
+ * never take a checked result as covering work that has not been saved.
+ */
+export function verificationStoredVersionNote(
+  versionId: string,
+  options: { unsaved: boolean; stale: boolean },
+) {
+  const parts = [`Checked stored version ${versionId}.`]
+  if (options.stale) {
+    parts.push('A newer version is stored, so this evidence is earlier.')
+  }
+  if (options.unsaved) {
+    parts.push(
+      'Unsaved edits are not part of the stored version and are not covered by this evidence.',
+    )
+  }
+  return parts.join(' ')
 }

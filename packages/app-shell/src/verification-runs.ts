@@ -4,6 +4,7 @@ import {
   useQuery,
   useQueryClient,
 } from '@tanstack/react-query'
+import { useMemo } from 'react'
 import type {
   VerificationFindingsResponse,
   VerificationRun,
@@ -63,10 +64,14 @@ export function useOrganisationVerificationRuns(enabled: boolean) {
     enabled,
     staleTime: 15_000,
   })
-  return {
-    ...query,
-    runs: query.data?.pages.flatMap((page) => page.runs) ?? [],
-  }
+  // Flattened once per page state: a new array every render would make every
+  // consumer of the list look like it changed, and measurement effects keyed on
+  // that list would re-run forever.
+  const runs = useMemo(
+    () => query.data?.pages.flatMap((page) => page.runs) ?? [],
+    [query.data],
+  )
+  return { ...query, runs }
 }
 
 export function useVerificationFindings(runId: string | null) {
@@ -80,10 +85,11 @@ export function useVerificationFindings(runId: string | null) {
     getNextPageParam: (last) => last.nextCursor,
     enabled: runId != null,
   })
-  return {
-    ...query,
-    findings: query.data?.pages.flatMap((page) => page.findings) ?? [],
-  }
+  const findings = useMemo(
+    () => query.data?.pages.flatMap((page) => page.findings) ?? [],
+    [query.data],
+  )
+  return { ...query, findings }
 }
 
 export function useCreateVerificationRun(documentId: string) {

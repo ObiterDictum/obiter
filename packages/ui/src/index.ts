@@ -17,6 +17,12 @@ export { Tabs, TabsList, TabsTrigger, TabsContent } from './tabs'
 export { Badge, type BadgeTone, type BadgeProps } from './badge'
 export { Tooltip, TooltipTrigger, TooltipContent } from './tooltip'
 export {
+  Popover,
+  PopoverPortal,
+  PopoverPositioner,
+  PopoverPopup,
+} from './popover'
+export {
   ToastProvider,
   Toaster,
   useToast,

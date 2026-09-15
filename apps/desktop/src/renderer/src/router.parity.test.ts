@@ -1,4 +1,7 @@
 // @vitest-environment jsdom
+import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { QueryClient } from '@tanstack/react-query'
 import { LegalSearchView, VerifyRouteView } from '@obiter/app-shell'
 import { describe, expect, it } from 'vitest'
@@ -33,6 +36,20 @@ describe('desktop router parity with web shared views', () => {
         true,
       )
     }
+  })
+
+  it('renders the shared document detail view, with verification inside it', () => {
+    // The verification interaction lives in the shared document workspace, so
+    // the desktop document route must delegate to the app-shell view rather
+    // than grow its own findings UI.
+    const source = readFileSync(
+      resolve(dirname(fileURLToPath(import.meta.url)), './router.tsx'),
+      'utf8',
+    )
+    expect(source).toContain('<DocumentDetailLayoutView')
+    expect(source).not.toMatch(
+      /VerificationRunPanel|VerificationDock|VerificationEvidencePanel|verification-findings/,
+    )
   })
 
   it('registers /case/$caseSlug so canonical search links do not fall through', () => {
