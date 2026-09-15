@@ -32,9 +32,9 @@ type DocumentWorkspaceProps = {
  * The document is the workspace lifecycle boundary: keying the body on
  * documentId remounts it on a switch, so no unsaved draft, pending insert,
  * selection or caret from document A can render, mutate, save or hold focus in
- * document B. Same-document rerenders keep their key and state. Switching is
- * prompt-free and drafts are not persisted per document, so a switch discards
- * A's unsaved edits rather than restoring them on return.
+ * document B. Same-document rerenders keep their key and state. A switch is
+ * prompt-free and unsaved drafts are persisted per tab (E45), so returning to A
+ * restores A's unsaved work instead of destroying it.
  */
 export function DocumentWorkspace(props: DocumentWorkspaceProps) {
   return <DocumentWorkspaceBody key={props.documentId} {...props} />

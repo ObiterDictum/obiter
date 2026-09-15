@@ -5895,6 +5895,23 @@
             </li>
             <li>
               <span
+                ><b
+                  >Unsaved document drafts are browser state with a boundary.</b
+                >
+                The DOCX workspace persists unsaved edits to
+                <code>localStorage</code> so a reload cannot destroy them. The
+                payload is a versioned schema, keyed by schema version,
+                organisation, user, document and tab, validated on every read,
+                held against a recorded <code>baseVersionId</code> and cleared
+                on successful save, explicit discard and sign-out. Matter text
+                in it is never logged, and a payload that fails validation or
+                names another scope is dropped rather than applied. See
+                <code>document-draft-store.ts</code> and
+                <code>document-save-plan.ts</code>.</span
+              >
+            </li>
+            <li>
+              <span
                 ><b>The Electron renderer gets no privileges.</b> No Node,
                 filesystem or secret access except across an explicit preload
                 bridge.</span

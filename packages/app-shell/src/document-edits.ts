@@ -153,10 +153,16 @@ export function collectEditOperations(
   for (const id of flowParagraphIds(model, inserts, deletedParagraphIds)) {
     const insert = insertById.get(id)
     if (!insert) continue
+    // A pending insert's paragraph style is set by the insert operation itself:
+    // its server paragraph id does not exist until the batch runs, so a
+    // separate set_paragraph_style addressed to the client id would be rejected
+    // and would then fail every later save (E45).
+    const style = format.paragraphStyles[insert.clientId]
     operations.push({
       type: 'insert_paragraph_after',
       paragraphId: resolveInsertAnchor(insert, insertById, realIds),
       ...insertPayload(insert),
+      ...(style ? { styleId: style } : {}),
     })
   }
 
@@ -167,7 +173,12 @@ export function collectEditOperations(
     operations.push({ type: 'delete_paragraph', paragraphId })
   }
   operations.push(
-    ...collectFormatOperations(model, format, deletedParagraphIds),
+    ...collectFormatOperations(
+      model,
+      format,
+      deletedParagraphIds,
+      new Set(insertById.keys()),
+    ),
   )
 
   return operations
@@ -281,7 +292,7 @@ function isVertAlign(
   )
 }
 
-function resolveInsertAnchor(
+export function resolveInsertAnchor(
   insert: LocalInsert,
   insertById: ReadonlyMap<string, LocalInsert>,
   realIds: ReadonlySet<string>,

@@ -1,13 +1,6 @@
-import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { ApiError } from '../../api'
 import { useCurrentUser } from '../../current-user'
-import {
-  collectEditOperations,
-  downloadBlob,
-  isDraftDirty,
-  selectedParagraphLength,
-} from '../../document-edits'
+import { downloadBlob, selectedParagraphLength } from '../../document-edits'
 import {
   documentFormatToolbar,
   formattedModel,
@@ -19,26 +12,25 @@ import { documentImagePartNames } from '../../document-page-media'
 import { documentDefaultFace } from '../../document-page-style'
 import { handleDocumentWorkspaceKeys } from '../../document-workspace-keys'
 import {
-  useCollaborationMerge,
-  useCreateDocumentComment,
-  useDocumentCollaborationSync,
   useDocumentComments,
   useDocumentModel,
   useDocumentTrackedChanges,
-  useEditDocument,
+  useDocumentCollaborationSync,
   useDocumentImageUrls,
   useResolveDocumentComment,
+  useCreateDocumentComment,
   useTrackedChangeDecision,
   fetchDocumentExport,
-  workspaceKeys,
 } from '../../document-workspace-api'
 import { extractAuthorities } from '../../document-authorities'
 import { DocumentModelPage } from './model-view'
+import { DocumentSaveBanners } from './save-banners'
 import { InsertAuthorityDialog } from './insert-authority-dialog'
 import { DocumentWorkspaceToolbar } from './toolbar'
 import { usePublishDocumentDirty } from './document-draft-status'
 import { WorkspaceSidePanels } from './workspace-side-panels'
 import { useDocumentPresenceHeartbeat } from './use-presence-heartbeat'
+import { useDocumentSave } from './use-document-save'
 import { useWorkspaceDrafts } from './use-workspace-drafts'
 import { useWorkspaceCaret } from './use-workspace-caret'
 import { DocumentDesk, DocumentPage } from './document-page'
@@ -65,7 +57,6 @@ export function DocxWorkspace({
   filename: string
   layout?: DocumentWorkspaceLayout
 }) {
-  const queryClient = useQueryClient()
   const { data: me } = useCurrentUser()
   const modelQuery = useDocumentModel(documentId)
   const commentsQuery = useDocumentComments(documentId)
@@ -81,10 +72,13 @@ export function DocxWorkspace({
   const syncQuery = useDocumentCollaborationSync(documentId, baseVersionId)
   const createComment = useCreateDocumentComment(documentId)
   const resolveComment = useResolveDocumentComment(documentId)
-  const editDocument = useEditDocument(documentId, matterId)
-  const mergeDocument = useCollaborationMerge(documentId, matterId)
   const decideChange = useTrackedChangeDecision(documentId, matterId)
-  const drafts = useWorkspaceDrafts()
+  const drafts = useWorkspaceDrafts({
+    organisationId: me?.organisation?.id ?? 'no-organisation',
+    userId: me?.user.id ?? 'anonymous',
+    documentId,
+    baseVersionId: modelQuery.data?.versionId,
+  })
 
   const [zoom, setZoom] = useState(100)
   const [commentsOpen, setCommentsOpen] = useState(false)
@@ -93,9 +87,24 @@ export function DocxWorkspace({
   const [insertAuthorityOpen, setInsertAuthorityOpen] = useState(false)
   const [trackChanges, setTrackChanges] = useState(false)
   const [banner, setBanner] = useState<string | null>(null)
-  const [stale, setStale] = useState(false)
 
   const model = modelQuery.data?.model
+  const presence = syncQuery.data?.participants ?? []
+  const remoteChange = syncQuery.data?.changed === true
+  const save = useDocumentSave({
+    documentId,
+    matterId,
+    model,
+    drafts,
+    baseVersionId,
+    trackChanges,
+    presence,
+    currentUserId: me?.user.id,
+    remoteChange,
+    onSaved: (version) =>
+      setSavedVersion(version ? { documentId, versionId: version } : null),
+  })
+
   const painted = model ? formattedModel(model, drafts.format) : undefined
   const pages = painted
     ? layoutDocument(painted, drafts.drafts, drafts.inserts, drafts.extraRuns)
@@ -104,18 +113,11 @@ export function DocxWorkspace({
     documentId,
     model ? documentImagePartNames(model) : [],
   )
-  const dirty = model
-    ? isDraftDirty(
-        model,
-        drafts.drafts,
-        drafts.inserts,
-        drafts.deletedParagraphIds,
-        drafts.extraRuns,
-        drafts.format,
-      )
-    : false
-  const saving = editDocument.isPending || mergeDocument.isPending
-  usePublishDocumentDirty(dirty)
+  // Verification reads the stored version, so it must stay disabled while any
+  // work is off-server: editable operations, a blocked or held change, or a
+  // recoverable draft. `useDocumentSave` owns that truth as `saveState`; the
+  // E45 recovery paths keep it unsaved until the work is actually covered.
+  usePublishDocumentDirty(save.saveState.status !== 'saved')
   const {
     selectedParagraphId,
     restoreCaret,
@@ -139,8 +141,6 @@ export function DocxWorkspace({
   } = useWorkspaceCaret({ documentId, model, drafts })
 
   useDocumentPresenceHeartbeat(documentId, cursor, true)
-  const presence = syncQuery.data?.participants ?? []
-  const remoteChange = syncQuery.data?.changed === true
   const authorities = model
     ? extractAuthorities(
         model,
@@ -150,19 +150,6 @@ export function DocxWorkspace({
         drafts.extraRuns,
       )
     : []
-
-  async function reload() {
-    drafts.resetDrafts()
-    setStale(false)
-    setBanner(null)
-    setSavedVersion(null)
-    await queryClient.invalidateQueries({
-      queryKey: workspaceKeys.model(documentId),
-    })
-    await queryClient.invalidateQueries({
-      queryKey: workspaceKeys.sync(documentId),
-    })
-  }
 
   async function exportDocx() {
     try {
@@ -180,78 +167,14 @@ export function DocxWorkspace({
     }
   }
 
-  async function save() {
-    if (!model || !dirty) return
-    const operations = collectEditOperations(
-      model,
-      drafts.drafts,
-      drafts.inserts,
-      drafts.deletedParagraphIds,
-      drafts.extraRuns,
-      drafts.format,
-    )
-    const collaborators = presence.some((item) => item.userId !== me?.user.id)
-    const merge = collaborators || remoteChange
-    try {
-      let versionIdAfterSave: string
-      let mergedToAvoidOverwrite = false
-      if (merge) {
-        const saved = await mergeDocument.mutateAsync({
-          baseVersionId,
-          syncId: crypto.randomUUID(),
-          operations,
-          trackChanges,
-        })
-        versionIdAfterSave = saved.versionId
-        mergedToAvoidOverwrite = remoteChange
-      } else {
-        try {
-          const saved = await editDocument.mutateAsync({
-            baseVersionId,
-            operations,
-            trackChanges,
-          })
-          versionIdAfterSave = saved.versionId
-        } catch (error) {
-          if (
-            !(error instanceof ApiError) ||
-            error.code !== 'conflict_detected'
-          ) {
-            throw error
-          }
-          const saved = await mergeDocument.mutateAsync({
-            baseVersionId,
-            syncId: crypto.randomUUID(),
-            operations,
-            trackChanges,
-          })
-          versionIdAfterSave = saved.versionId
-          mergedToAvoidOverwrite = true
-        }
-      }
-      setSavedVersion({ documentId, versionId: versionIdAfterSave })
-      drafts.resetDrafts()
-      setStale(false)
-      if (mergedToAvoidOverwrite) {
-        setBanner(
-          "Your changes were saved as a new version to avoid overwriting a colleague's work",
-        )
-      }
-    } catch (error) {
-      if (error instanceof ApiError && error.code === 'conflict_detected') {
-        setStale(true)
-        return
-      }
-      setBanner(error instanceof Error ? error.message : 'Save failed.')
-    }
-  }
+  const transientBanner = save.notice ?? banner
 
   const ribbon = (
     <WorkspaceRibbon>
       <DocumentWorkspaceToolbar
         kind="docx"
-        dirty={dirty}
-        saving={saving}
+        dirty={save.dirty}
+        saving={save.saving}
         trackChanges={trackChanges}
         zoom={zoom}
         commentsOpen={commentsOpen}
@@ -272,7 +195,7 @@ export function DocxWorkspace({
         onExportText={() => {
           void exportDocx()
         }}
-        onSave={() => void save()}
+        onSave={save.save}
         onUndo={undoDocument}
         onInsertParagraph={() => {
           if (!selectedParagraphId) return
@@ -308,27 +231,28 @@ export function DocxWorkspace({
           onReplaceAll,
         }}
       />
-      {stale ? (
+      <DocumentSaveBanners save={save} drafts={drafts} />
+      {save.stale ? (
         <div className="px-3 pb-2">
           <ConflictBanner
             body="The document has changed since editing began."
             actionLabel="Reload"
-            onAction={() => void reload()}
+            onAction={save.reload}
           />
         </div>
       ) : null}
-      {remoteChange && dirty && !stale ? (
+      {remoteChange && save.dirty && !save.stale ? (
         <div className="px-3 pb-2">
           <ConflictBanner
             body="A colleague saved a newer version. Reload before saving, or save to merge disjoint edits."
             actionLabel="Reload"
-            onAction={() => void reload()}
+            onAction={save.reload}
           />
         </div>
       ) : null}
-      {banner ? (
+      {transientBanner ? (
         <p className="px-3 pb-2 text-sm text-ink" role="status">
-          {banner}
+          {transientBanner}
         </p>
       ) : null}
     </WorkspaceRibbon>
@@ -339,7 +263,7 @@ export function DocxWorkspace({
       layout={layout}
       onKeyDown={(event) =>
         handleDocumentWorkspaceKeys(event, {
-          save: () => void save(),
+          save: save.save,
           undo: undoDocument,
           focusFind: () => document.getElementById('document-find')?.focus(),
         })
@@ -457,7 +381,7 @@ export function DocxWorkspace({
                   resolveComment.mutate(commentId)
                 }
                 changes={changesQuery.data?.changes ?? []}
-                changesPending={decideChange.isPending || saving}
+                changesPending={decideChange.isPending || save.saving}
                 changesError={mutationError(decideChange.error)}
                 onDecideChange={(action, changeId) => {
                   decideChange.mutate({

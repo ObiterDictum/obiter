@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import type { DocumentModelWire } from '@obiter/contracts'
 import {
@@ -380,6 +382,26 @@ describe('formatControlState from the selection', () => {
     expect(
       formatControlState(source, format, 'p1', { from: 4, to: 18 }),
     ).toMatchObject({ bold: false })
+  })
+})
+
+describe('document-format-edits module size', () => {
+  it('stays within the source line ceiling', () => {
+    const files = [
+      './document-format-edits.ts',
+      './document-format-paint.ts',
+      './document-format-toolbar.ts',
+      './document-format-types.ts',
+      './document-draft-store.ts',
+      './document-draft-identity.ts',
+    ]
+    for (const file of files) {
+      const source = readFileSync(
+        fileURLToPath(new URL(file, import.meta.url)),
+        'utf8',
+      )
+      expect(source.split('\n').length, file).toBeLessThanOrEqual(500)
+    }
   })
 })
 
