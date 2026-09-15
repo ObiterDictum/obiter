@@ -39,9 +39,6 @@ type RunSplitView = {
   // Overlay keys folded into `source`; the caller removes them once every run
   // in the paragraph has planned, so a rejected edit mutates nothing.
   consumedKeys: readonly string[]
-  // Set when the split has to map offsets past a text-wrapping break, which
-  // comment-anchors.locateInsideRun cannot do yet (board E57).
-  mappableOffsetLimit?: number
 }
 
 /**
@@ -159,16 +156,6 @@ function splitRun(
     bounds.add(range.to)
   }
   const ordered = [...bounds].sort((left, right) => left - right)
-  const limit = view.mappableOffsetLimit
-  if (
-    limit !== undefined &&
-    ordered.some((offset) => offset > limit && offset < run.wire.text.length)
-  ) {
-    // The run holds a text-wrapping break, which occupies one text offset that
-    // locateInsideRun does not yet map (board E57). Splitting past it would
-    // silently emphasise the wrong characters, so fail closed instead.
-    throw new OoxmlError('invalid-document-edit')
-  }
   const parts: Array<{
     xml: string
     text: string
@@ -250,14 +237,12 @@ function effectiveView(
   // Mirror the parser: a w:br contributes one text character only when it is a
   // text-wrapping break. A page or column break is structure and consumes none.
   let effectiveText = ''
-  let mappableOffsetLimit: number | undefined
   for (const element of children) {
     if (element.localName === 't' && !element.selfClosing) {
       effectiveText += decodeXmlReferences(
         source.slice(element.startTagEnd, element.endTagStart),
       )
     } else if (isTextWrappingBreak(element)) {
-      mappableOffsetLimit ??= effectiveText.length
       effectiveText += '\n'
     }
   }
@@ -292,7 +277,6 @@ function effectiveView(
     offsetBase: 0,
     fragments,
     consumedKeys: folded.keys,
-    ...(mappableOffsetLimit !== undefined ? { mappableOffsetLimit } : {}),
   }
 }
 

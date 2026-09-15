@@ -87,6 +87,22 @@ export async function documentWithRunProperties() {
   return parseDocx(await zip.generateAsync({ type: 'uint8array' }))
 }
 
+export async function documentWithTextWrappingBreak() {
+  const zip = await JSZip.loadAsync(
+    await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+  )
+  const part = zip.file('word/document.xml')
+  if (!part) throw new Error('Fixture part is missing.')
+  zip.file(
+    'word/document.xml',
+    (await part.async('string')).replace(
+      '<w:r><w:t>Alice Example overview</w:t></w:r>',
+      '<w:r><w:t>Alice</w:t><w:br/><w:t xml:space="preserve"> Example overview</w:t></w:r>',
+    ),
+  )
+  return parseDocx(await zip.generateAsync({ type: 'uint8array' }))
+}
+
 export async function documentWithEmoji() {
   const zip = await JSZip.loadAsync(
     await buildOoxmlFixture('full-fidelity-with-w14-ids'),

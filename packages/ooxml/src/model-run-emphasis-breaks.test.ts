@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { applyDocumentEdits, OoxmlError } from './index'
+import { applyDocumentEdits } from './index'
 import {
   documentXml,
   flag,
@@ -285,23 +285,24 @@ describe('replacement text and text-wrapping breaks', () => {
     expect(emphasised(runs)).toEqual(['ab'])
   })
 
-  it('fails closed when a range boundary falls past a text-wrapping break', async () => {
-    // The offset defect in comment-anchors.locateInsideRun (see board E57)
-    // cannot honour this boundary, so it must reject rather than misformat.
+  it('formats text after a retained text-wrapping break', async () => {
     const { document, paragraph, run } = await loadRun(TEXT_BREAK)
 
-    expect(() =>
-      applyDocumentEdits(document, [
-        { type: 'replace_run_text', runId: run.id, text: 'abXY\ncd' },
-        {
-          type: 'set_run_emphasis',
-          paragraphId: paragraph.id,
-          from: 3,
-          to: 5,
-          bold: true,
-        },
-      ]),
-    ).toThrow(OoxmlError)
+    applyDocumentEdits(document, [
+      { type: 'replace_run_text', runId: run.id, text: 'abXY\ncd' },
+      {
+        type: 'set_run_emphasis',
+        paragraphId: paragraph.id,
+        from: 5,
+        to: 7,
+        bold: true,
+      },
+    ])
+
+    const reparsed = await save(document)
+    const runs = paragraphs(reparsed)[0]?.runs ?? []
+    expect(runs.map((item) => item.text).join('')).toBe('abXY\ncd')
+    expect(emphasised(runs)).toEqual(['cd'])
   })
 
   it('normalises a CRLF replacement to one logical break', async () => {

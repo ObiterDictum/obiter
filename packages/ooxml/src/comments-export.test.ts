@@ -7,6 +7,7 @@ import {
   documentState,
   documentWithEmoji,
   documentWithRunProperties,
+  documentWithTextWrappingBreak,
   expectedTouchedCommentParts,
   fixtureDocument,
   requiredXml,
@@ -100,6 +101,24 @@ describe('product comment DOCX export', () => {
       /<w:p><w:commentRangeStart w:id="1"\/><w:commentRangeEnd w:id="1"\/><w:r><w:rPr><w:rStyle w:val="CommentReference"\/><\/w:rPr><w:commentReference w:id="1"\/><\/w:r><\/w:p>/u,
     )
     expect(story).not.toContain('<w:p/><w:commentRangeStart w:id="1"/>')
+  })
+
+  it('places a comment after a text-wrapping break', async () => {
+    const document = await documentWithTextWrappingBreak()
+    const paragraph = document.model.stories[0]?.paragraphs[0]
+    if (!paragraph) throw new Error('Fixture paragraph is missing.')
+    expect(paragraph.runs.map((run) => run.text).join('')).toBe(
+      'Alice\n Example overview',
+    )
+
+    const output = await serialiseDocxWithComments(document, [
+      comment('cmt_break', paragraph.id, 7, 14, 'After a line break'),
+    ])
+    const story = requiredXml(await zipParts(output), 'word/document.xml')
+
+    expect(story.match(/<w:br\/>/gu)).toHaveLength(1)
+    expect(story).toContain('<w:commentRangeStart w:id="1"/>')
+    expect(story).toContain('<w:commentRangeEnd w:id="1"/>')
   })
 
   it('retains run properties and preserved fragments when splitting a run', async () => {
