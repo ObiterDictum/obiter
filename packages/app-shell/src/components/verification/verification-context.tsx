@@ -56,6 +56,9 @@ export type VerificationWorkspaceValue = {
   findings: VerificationFindingView[]
   findingsPending: boolean
   findingsError: Error | null
+  /** Retry a failed findings continuation or refetch, without dropping the
+   * pages that already loaded. */
+  retryFindings: () => void
   hasNextPage: boolean
   loadingMore: boolean
   loadMore: () => void
@@ -132,9 +135,9 @@ export function VerificationWorkspaceProvider({
   const dirty = draftStatus?.dirty ?? false
   const model = useDocumentModel(documentId, { enabled: mappable })
   const latest = latestVerificationRun(runs.data?.runs ?? [])
-  const findingsQuery = useVerificationFindings(
-    latest && latest.status === 'completed' ? latest.id : null,
-  )
+  const findingsRunId =
+    latest && latest.status === 'completed' ? latest.id : null
+  const findingsQuery = useVerificationFindings(findingsRunId)
   const findings = findingsQuery.findings
   const [activeId, setActiveId] = useState<string | null>(null)
   const [panelOpen, setPanelOpen] = useState(false)
@@ -149,17 +152,28 @@ export function VerificationWorkspaceProvider({
   // not only the pages fetched so far. The endpoint is keyset-paginated, so the
   // provider walks the remaining pages once a completed run is selected; each
   // completed page re-runs this effect and starts the next. It is a real
-  // network boundary, so the guard and the cleanup are deliberate.
+  // network boundary, so the guard and the cleanup are deliberate. A failed page
+  // stops the walk and surfaces through findingsError instead of retrying on
+  // every render.
   const hasNextPage = findingsQuery.hasNextPage
   const fetchingNextPage = findingsQuery.isFetchingNextPage
   const findingsFailed = findingsQuery.isError
   const fetchNextPage = findingsQuery.fetchNextPage
+  const refetchFindings = findingsQuery.refetch
   useEffect(() => {
-    // A failed page stops the walk and surfaces through findingsError instead of
-    // retrying on every render.
     if (!hasNextPage || fetchingNextPage || findingsFailed) return
     void fetchNextPage()
   }, [hasNextPage, fetchingNextPage, findingsFailed, fetchNextPage])
+
+  // Retry keeps the loaded pages: a continuation is re-attempted from the last
+  // cursor, and a failed first page or refetch re-runs the query. Nothing is
+  // reset, so the selection and every already-loaded finding survive.
+  const retryFindings = () => {
+    const attempt =
+      findings.length > 0 && hasNextPage ? fetchNextPage() : refetchFindings()
+    // The query owns the error state; without this the rejection is unhandled.
+    void attempt.catch(() => undefined)
+  }
 
   const version = document.data?.document.currentVersion
   const ready = version?.documentStatus === 'ready'
@@ -212,6 +226,7 @@ export function VerificationWorkspaceProvider({
     findingsError: findingsQuery.isError
       ? (findingsQuery.error as Error)
       : null,
+    retryFindings,
     hasNextPage: findingsQuery.hasNextPage,
     loadingMore: findingsQuery.isFetchingNextPage,
     loadMore: () => void findingsQuery.fetchNextPage(),

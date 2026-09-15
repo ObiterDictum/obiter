@@ -61,13 +61,33 @@ export function VerificationFindingsIndex({
           Checks cover the main document, footnotes and endnotes. Headers,
           footers and comments are not checked.
         </DialogDescription>
-        {verification.findingsPending ? (
-          <p className="text-sm text-muted">Loading findings…</p>
-        ) : verification.findingsError ? (
-          <p className="text-sm text-danger">
-            Findings are unavailable: {verification.findingsError.message}
+        {verification.findingsError ? (
+          <div
+            role="alert"
+            className="flex flex-wrap items-center gap-2 text-sm text-danger"
+          >
+            <span>
+              Could not load every finding: {verification.findingsError.message}
+            </span>
+            <Button
+              size="sm"
+              variant="secondary"
+              loading={verification.loadingMore}
+              onClick={() => verification.retryFindings()}
+            >
+              Retry
+            </Button>
+          </div>
+        ) : null}
+        {verification.hasNextPage && !verification.findingsError ? (
+          <p className="text-sm text-muted">
+            Showing the first {verification.findings.length} of{' '}
+            {verification.totalFindings} findings.
           </p>
-        ) : (
+        ) : null}
+        {verification.findingsPending && verification.findings.length === 0 ? (
+          <p className="text-sm text-muted">Loading findings…</p>
+        ) : verification.findings.length > 0 || !verification.findingsError ? (
           <VerificationFindingsList
             findings={verification.findings}
             notes={notes}
@@ -76,8 +96,8 @@ export function VerificationFindingsIndex({
               onOpenChange(false)
             }}
           />
-        )}
-        {verification.hasNextPage ? (
+        ) : null}
+        {verification.hasNextPage && !verification.findingsError ? (
           <div className="pt-3">
             <Button
               size="sm"

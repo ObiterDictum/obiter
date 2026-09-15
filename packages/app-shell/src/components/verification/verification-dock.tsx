@@ -178,9 +178,22 @@ export function VerificationDock() {
           </p>
         ) : null}
         {verification.findingsError ? (
-          <p className="text-xs text-danger">
-            Findings are unavailable: {verification.findingsError.message}
-          </p>
+          <div
+            role="alert"
+            className="flex flex-wrap items-center gap-2 text-xs text-danger"
+          >
+            <span>
+              Could not load every finding: {verification.findingsError.message}
+            </span>
+            <Button
+              variant="secondary"
+              size="sm"
+              loading={verification.loadingMore}
+              onClick={() => verification.retryFindings()}
+            >
+              Retry
+            </Button>
+          </div>
         ) : null}
       </div>
       <div
@@ -233,7 +246,10 @@ export function VerificationDock() {
       {verification.findingsPending ? (
         <Skeleton className="w-full" aria-label="Loading findings" />
       ) : null}
-      {run?.status === 'completed' && findings.length === 0 ? (
+      {run?.status === 'completed' &&
+      findings.length === 0 &&
+      !verification.findingsError &&
+      !verification.hasNextPage ? (
         <p className="w-full text-sm text-muted">
           This run finished and found nothing to list. That is not a statement
           of legal correctness.
