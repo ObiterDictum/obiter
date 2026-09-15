@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
+import { createElement, type PropsWithChildren } from 'react'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DocumentWorkspace } from './workspace'
 import type { DocumentVersionRecord } from '../../documents'
 
@@ -10,11 +12,57 @@ const workspaceApi = vi.hoisted(() => ({
   useDocumentText: vi.fn(),
 }))
 
-vi.mock('../../document-workspace-api', () => workspaceApi)
+vi.mock('../../document-workspace-api', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../document-workspace-api')>()
+  return { ...actual, ...workspaceApi }
+})
 
 vi.mock('./docx-workspace', () => ({
   DocxWorkspace: () => <div>Word workspace</div>,
 }))
+
+// The workspace carries the document-level Verify control, so it reads server
+// state through TanStack Query.
+const verification = vi.hoisted(() => ({
+  useDocument: vi.fn(),
+  useDocumentVerificationRuns: vi.fn(),
+  useCreateVerificationRun: vi.fn(),
+  useVerificationFindings: vi.fn(),
+  latestVerificationRun: vi.fn(),
+}))
+vi.mock('../../documents', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../documents')>()
+  return { ...actual, useDocument: verification.useDocument }
+})
+vi.mock('../../verification-runs', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../verification-runs')>()
+  return {
+    ...actual,
+    useDocumentVerificationRuns: verification.useDocumentVerificationRuns,
+    useCreateVerificationRun: verification.useCreateVerificationRun,
+    useVerificationFindings: verification.useVerificationFindings,
+    latestVerificationRun: verification.latestVerificationRun,
+  }
+})
+
+function wrapper({ children }: PropsWithChildren) {
+  return createElement(
+    QueryClientProvider,
+    {
+      client: new QueryClient({
+        defaultOptions: { queries: { retry: false } },
+      }),
+    },
+    children,
+  )
+}
+
+/** Render the workspace inside the query provider its verification dock needs. */
+function renderWorkspace(element: React.ReactElement) {
+  return render(element, { wrapper })
+}
 
 function version(
   overrides: Partial<DocumentVersionRecord> = {},
@@ -46,9 +94,37 @@ afterEach(() => {
   vi.clearAllMocks()
 })
 
+beforeEach(() => {
+  verification.useDocument.mockReturnValue({
+    isPending: false,
+    isError: false,
+    data: {
+      document: { currentVersion: { id: 'ver_1', documentStatus: 'ready' } },
+    },
+  })
+  verification.useDocumentVerificationRuns.mockReturnValue({
+    isPending: false,
+    isError: false,
+    data: { runs: [] },
+  })
+  verification.useCreateVerificationRun.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+    error: null,
+  })
+  verification.useVerificationFindings.mockReturnValue({
+    isPending: false,
+    isError: false,
+    findings: [],
+  })
+  verification.latestVerificationRun.mockReturnValue(null)
+})
+
 describe('DocumentWorkspace', () => {
   it('opens the Word workspace for a ready docx version', () => {
-    render(<DocumentWorkspace documentId="doc_1" version={version()} />)
+    renderWorkspace(
+      <DocumentWorkspace documentId="doc_1" version={version()} />,
+    )
     expect(screen.getByText('Word workspace')).toBeTruthy()
   })
 
@@ -78,7 +154,7 @@ describe('DocumentWorkspace', () => {
         },
       },
     })
-    render(
+    renderWorkspace(
       <DocumentWorkspace
         documentId="doc_1"
         version={version({ filename: 'bundle.pdf', fileType: 'pdf' })}
@@ -105,7 +181,7 @@ describe('DocumentWorkspace', () => {
         },
       },
     })
-    render(
+    renderWorkspace(
       <DocumentWorkspace
         documentId="doc_1"
         version={version({ filename: 'bundle.pdf', fileType: 'pdf' })}
@@ -127,7 +203,7 @@ describe('DocumentWorkspace', () => {
         text: 'Plain retrieval text.',
       },
     })
-    render(
+    renderWorkspace(
       <DocumentWorkspace
         documentId="doc_1"
         version={version({ filename: 'notes.txt', fileType: 'txt' })}
@@ -152,19 +228,19 @@ describe('DocumentWorkspace', () => {
     workspaceApi.fetchDocumentDownload.mockRejectedValue(
       new Error('Download failed.'),
     )
-    render(
+    renderWorkspace(
       <DocumentWorkspace
         documentId="doc_1"
         version={version({ filename: 'notes.txt', fileType: 'txt' })}
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: 'Download' }))
-    const status = await screen.findByRole('status')
-    expect(status.textContent).toBe('Download failed.')
+    const status = await screen.findByText('Download failed.')
+    expect(status.closest('[role="status"]')).toBeTruthy()
   })
 
   it('explains when the version is not ready', () => {
-    render(
+    renderWorkspace(
       <DocumentWorkspace
         documentId="doc_1"
         version={version({ documentStatus: 'processing' })}
@@ -174,7 +250,7 @@ describe('DocumentWorkspace', () => {
   })
 
   it('shows the stored failure reason in full when extraction failed', () => {
-    render(
+    renderWorkspace(
       <DocumentWorkspace
         documentId="doc_1"
         version={version({
@@ -193,7 +269,7 @@ describe('DocumentWorkspace', () => {
   })
 
   it('falls back to a generic message when a failed version has no reason', () => {
-    render(
+    renderWorkspace(
       <DocumentWorkspace
         documentId="doc_1"
         version={version({ documentStatus: 'failed' })}
@@ -207,7 +283,7 @@ describe('DocumentWorkspace', () => {
   })
 
   it('offers a download instead of a dead end for an unsupported type', () => {
-    render(
+    renderWorkspace(
       <DocumentWorkspace
         documentId="doc_1"
         version={version({ fileType: 'odt', filename: 'legacy.odt' })}

@@ -7,10 +7,9 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DocumentEditOperation } from '@obiter/contracts'
-import { VerificationRunPanel } from '../verification-run-panel'
 import {
   bodyEditor,
-  mountSaveWorkspace,
+  mountSaveDocumentWorkspace,
   saveState,
   validationFailed,
 } from './docx-workspace-save-harness'
@@ -23,19 +22,28 @@ const runsHook = vi.hoisted(() => ({
   latestVerificationRun: vi.fn(),
 }))
 
-vi.mock('../../documents', () => ({ useDocument: documentHook.useDocument }))
-vi.mock('../../verification-runs', () => ({
-  useDocumentVerificationRuns: runsHook.useDocumentVerificationRuns,
-  useCreateVerificationRun: runsHook.useCreateVerificationRun,
-  useVerificationFindings: runsHook.useVerificationFindings,
-  latestVerificationRun: runsHook.latestVerificationRun,
-}))
+vi.mock('../../documents', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../documents')>()
+  return { ...actual, useDocument: documentHook.useDocument }
+})
+vi.mock('../../verification-runs', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('../../verification-runs')>()
+  return {
+    ...actual,
+    useDocumentVerificationRuns: runsHook.useDocumentVerificationRuns,
+    useCreateVerificationRun: runsHook.useCreateVerificationRun,
+    useVerificationFindings: runsHook.useVerificationFindings,
+    latestVerificationRun: runsHook.latestVerificationRun,
+  }
+})
 
+/**
+ * The whole document workspace, so the unsaved gate is exercised against the
+ * real provider boundary the dock reads rather than a panel mounted beside it.
+ */
 function mountGate(options: { editAsync?: ReturnType<typeof vi.fn> }) {
-  return mountSaveWorkspace({
-    ...options,
-    beside: <VerificationRunPanel documentId="doc_1" />,
-  })
+  return mountSaveDocumentWorkspace(options)
 }
 
 function verifyButton() {

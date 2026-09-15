@@ -77,6 +77,7 @@ export function ModelParagraph({
   listMarker,
   noteMark,
   noteKind,
+  story,
 }: {
   paragraph: DocumentParagraphWire
   changes: DocumentChangeWire[]
@@ -111,6 +112,10 @@ export function ModelParagraph({
   listMarker?: ListMarker
   noteMark?: string
   noteKind?: NoteKind
+  /** The story this paragraph belongs to as rendered. Paragraph ids are only
+   * unique inside their story, so verification anchoring needs the story on the
+   * element, not only the paragraph. */
+  story?: { kind: string; partName: string }
 }) {
   const carets = (presence ?? []).filter(
     (item) =>
@@ -168,6 +173,8 @@ export function ModelParagraph({
           key={`${paragraph.id}-${start}-${line.from}-${index}`}
           className="whitespace-pre"
           style={{ height: linePx, lineHeight: `${linePx}px` }}
+          data-line-from={start + line.from}
+          data-line-to={start + line.to}
         >
           {line.text ? (
             sliceParagraphRuns(
@@ -186,7 +193,7 @@ export function ModelParagraph({
               />
             ))
           ) : (
-            <span>&nbsp;</span>
+            <span data-empty-line>&nbsp;</span>
           )}
         </div>
       ))
@@ -207,6 +214,9 @@ export function ModelParagraph({
     <div
       data-paragraph-id={paragraph.id}
       data-paragraph-from={from ?? 0}
+      data-paragraph-to={end}
+      data-paragraph-story={story?.kind}
+      data-paragraph-part={story?.partName}
       aria-current={selected ? 'true' : undefined}
       aria-label={`Paragraph ${paragraph.id}`}
       className={cn(
@@ -435,6 +445,7 @@ function ModelRun({
       {notes.map((note) => (
         <sup
           key={`${note.kind}-${note.noteId}-${note.runId}`}
+          data-note-mark
           className="text-[0.75em] leading-none"
         >
           {note.mark}
