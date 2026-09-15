@@ -29,8 +29,13 @@ import {
   applyInsertText,
   applyWordEdit,
   replaceFindHits,
+  type EditorCaret,
   type EditorResult,
 } from '../../document-word-edits'
+import {
+  applyReplaceDocumentRange,
+  applySplitOverDocumentRange,
+} from '../../document-range-edits'
 import {
   clearableSlots,
   emptyDraftState,
@@ -310,6 +315,48 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     return result.caret
   }
 
+  /**
+   * Replaces a selection that spans paragraphs. It is one draft-state change,
+   * so a rejected or impossible range leaves the document exactly as it was.
+   */
+  function replaceDocumentRange(
+    model: DocumentModelWire,
+    from: EditorCaret,
+    to: EditorCaret,
+    text: string,
+  ): { paragraphId: string; offset: number } | null {
+    const result = applyReplaceDocumentRange(
+      model,
+      bundle.state,
+      from,
+      to,
+      text,
+    )
+    if (!result) return null
+    checkpoint()
+    commitEditor(result)
+    return result.caret
+  }
+
+  /** Enter over a selection: collapse the range, then split where it was. */
+  function splitDocumentRange(
+    model: DocumentModelWire,
+    from: EditorCaret,
+    to: EditorCaret,
+  ): { paragraphId: string; offset: number } | null {
+    const result = applySplitOverDocumentRange(
+      model,
+      bundle.state,
+      from,
+      to,
+      crypto.randomUUID(),
+    )
+    if (!result) return null
+    checkpoint()
+    commitEditor(result)
+    return result.caret
+  }
+
   function replaceHits(
     model: DocumentModelWire,
     hits: ReadonlyArray<{ paragraphId: string; start: number; end: number }>,
@@ -411,6 +458,8 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     discardRecoverable,
     undoDraft,
     handleWordEdit,
+    replaceDocumentRange,
+    splitDocumentRange,
     replaceHits,
     insertText,
     insertAfter,

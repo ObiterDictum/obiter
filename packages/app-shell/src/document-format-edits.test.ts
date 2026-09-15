@@ -95,7 +95,7 @@ describe('tracked emphasis from the client path', () => {
       (update) => {
         format = update(format)
       },
-      { from: 1, to: 4 },
+      [{ paragraphId: 'p1', from: 1, to: 4 }],
       true,
     )
     expect(toolbar.emphasisUnavailable).toMatch(
@@ -114,7 +114,7 @@ describe('tracked emphasis from the client path', () => {
       (update) => {
         format = update(format)
       },
-      { from: 2, to: 2 },
+      [{ paragraphId: 'p1', from: 2, to: 2 }],
       true,
     )
     expect(toolbar.emphasisUnavailable).toBeUndefined()
@@ -277,14 +277,18 @@ describe('formatControlState from the selection', () => {
       { id: 'r1', text: 'The Claimant seeks', preservedXmlFragments: boldXml },
     ])
     expect(
-      formatControlState(allOn, emptyFormatDrafts, 'p1', { from: 4, to: 13 }),
+      formatControlState(allOn, emptyFormatDrafts, 'p1', [
+        { paragraphId: 'p1', from: 4, to: 13 },
+      ]),
     ).toMatchObject({ bold: true, italic: true, underline: true })
 
     const allOff = modelWithRuns([
       { id: 'r1', text: 'The Claimant seeks', preservedXmlFragments: plainXml },
     ])
     expect(
-      formatControlState(allOff, emptyFormatDrafts, 'p1', { from: 4, to: 13 }),
+      formatControlState(allOff, emptyFormatDrafts, 'p1', [
+        { paragraphId: 'p1', from: 4, to: 13 },
+      ]),
     ).toMatchObject({ bold: false, italic: false, underline: false })
 
     const mixed = modelWithRuns([
@@ -293,10 +297,14 @@ describe('formatControlState from the selection', () => {
       { id: 'r3', text: ' seeks', preservedXmlFragments: boldXml },
     ])
     expect(
-      formatControlState(mixed, emptyFormatDrafts, 'p1', { from: 0, to: 18 }),
+      formatControlState(mixed, emptyFormatDrafts, 'p1', [
+        { paragraphId: 'p1', from: 0, to: 18 },
+      ]),
     ).toMatchObject({ bold: false, italic: false, underline: false })
     expect(
-      formatControlState(mixed, emptyFormatDrafts, 'p1', { from: 0, to: 4 }),
+      formatControlState(mixed, emptyFormatDrafts, 'p1', [
+        { paragraphId: 'p1', from: 0, to: 4 },
+      ]),
     ).toMatchObject({ bold: true, italic: true, underline: true })
   })
 
@@ -306,10 +314,14 @@ describe('formatControlState from the selection', () => {
       { id: 'r2', text: 'Claimant', preservedXmlFragments: plainXml },
     ])
     expect(
-      formatControlState(mixed, emptyFormatDrafts, 'p1', { from: 1, to: 1 }),
+      formatControlState(mixed, emptyFormatDrafts, 'p1', [
+        { paragraphId: 'p1', from: 1, to: 1 },
+      ]),
     ).toMatchObject({ bold: true })
     expect(
-      formatControlState(mixed, emptyFormatDrafts, 'p1', { from: 6, to: 6 }),
+      formatControlState(mixed, emptyFormatDrafts, 'p1', [
+        { paragraphId: 'p1', from: 6, to: 6 },
+      ]),
     ).toMatchObject({ bold: false })
   })
 
@@ -317,7 +329,7 @@ describe('formatControlState from the selection', () => {
     const source = modelWithRuns([
       { id: 'r1', text: 'Hello world', preservedXmlFragments: plainXml },
     ])
-    const selection = { from: 6, to: 11 }
+    const selection = [{ paragraphId: 'p1', from: 6, to: 11 }]
     let format: FormatDrafts = emptyFormatDrafts
     const toolbar = (view: DocumentModelWire) =>
       documentFormatToolbar(
@@ -348,16 +360,24 @@ describe('formatControlState from the selection', () => {
       numbering: {},
     }
     expect(
-      formatControlState(source, format, 'p1', { from: 4, to: 13 }),
+      formatControlState(source, format, 'p1', [
+        { paragraphId: 'p1', from: 4, to: 13 },
+      ]),
     ).toMatchObject({ bold: false })
     expect(
-      formatControlState(source, format, 'p1', { from: 13, to: 18 }),
+      formatControlState(source, format, 'p1', [
+        { paragraphId: 'p1', from: 13, to: 18 },
+      ]),
     ).toMatchObject({ bold: true })
     expect(
-      formatControlState(source, format, 'p1', { from: 0, to: 4 }),
+      formatControlState(source, format, 'p1', [
+        { paragraphId: 'p1', from: 0, to: 4 },
+      ]),
     ).toMatchObject({ bold: true })
     expect(
-      formatControlState(source, format, 'p1', { from: 4, to: 18 }),
+      formatControlState(source, format, 'p1', [
+        { paragraphId: 'p1', from: 4, to: 18 },
+      ]),
     ).toMatchObject({ bold: false })
   })
 
@@ -371,16 +391,24 @@ describe('formatControlState from the selection', () => {
       numbering: {},
     }
     expect(
-      formatControlState(source, format, 'p1', { from: 4, to: 13 }),
+      formatControlState(source, format, 'p1', [
+        { paragraphId: 'p1', from: 4, to: 13 },
+      ]),
     ).toMatchObject({ bold: true })
     expect(
-      formatControlState(source, format, 'p1', { from: 13, to: 18 }),
+      formatControlState(source, format, 'p1', [
+        { paragraphId: 'p1', from: 13, to: 18 },
+      ]),
     ).toMatchObject({ bold: false })
     expect(
-      formatControlState(source, format, 'p1', { from: 0, to: 4 }),
+      formatControlState(source, format, 'p1', [
+        { paragraphId: 'p1', from: 0, to: 4 },
+      ]),
     ).toMatchObject({ bold: false })
     expect(
-      formatControlState(source, format, 'p1', { from: 4, to: 18 }),
+      formatControlState(source, format, 'p1', [
+        { paragraphId: 'p1', from: 4, to: 18 },
+      ]),
     ).toMatchObject({ bold: false })
   })
 })
@@ -390,10 +418,23 @@ describe('document-format-edits module size', () => {
     const files = [
       './document-format-edits.ts',
       './document-format-paint.ts',
+      './document-format-controls.ts',
       './document-format-toolbar.ts',
       './document-format-types.ts',
       './document-draft-store.ts',
       './document-draft-identity.ts',
+      './document-selection.ts',
+      './document-range-edits.ts',
+      './document-word-edits.ts',
+      './components/document-workspace/model-view.tsx',
+      './components/document-workspace/model-page-blocks.tsx',
+      './components/document-workspace/model-paragraph.tsx',
+      './components/document-workspace/model-run.tsx',
+      './components/document-workspace/paragraph-editor.tsx',
+      './components/document-workspace/paragraph-arrow.ts',
+      './components/document-workspace/use-workspace-caret.ts',
+      './components/document-workspace/use-workspace-drafts.ts',
+      './components/document-workspace/docx-workspace.tsx',
     ]
     for (const file of files) {
       const source = readFileSync(

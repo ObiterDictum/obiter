@@ -240,7 +240,7 @@ export function applyLineBreak(
   return applyInsertText(model, state, caret, '\n')
 }
 
-function joinIntoPrevious(
+export function joinIntoPrevious(
   model: DocumentModelWire,
   state: EditorState,
   paragraphId: string,
@@ -312,7 +312,7 @@ function appendRuns(
   }
 }
 
-function writeRange(
+export function writeRange(
   model: DocumentModelWire,
   state: EditorState,
   paragraphId: string,

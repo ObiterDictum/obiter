@@ -9,30 +9,31 @@ import { cn } from '@obiter/ui'
 import {
   deleteCharBeforeOffset,
   paragraphPlainText,
-  runChangeKinds,
   sliceContainsOffset,
-  sliceParagraphRuns,
   textDiff,
 } from '../../document-model-text'
 import { paragraphInlineXml } from '../../document-page-floats'
 import { wrapLines } from '../../document-page-flow'
 import type { ListMarker } from '../../document-page-lists'
-import {
-  imagePartNameForDrawing,
-  readableRunColor,
-} from '../../document-page-media'
+import { imagePartNameForDrawing } from '../../document-page-media'
 import { runNoteRefs, type NoteKind } from '../../document-page-notes'
 import {
   paragraphCss,
   paragraphFace,
   paragraphLineHeightPx,
-  runCss,
-  runFace,
-  type RunFace,
 } from '../../document-page-style'
+import type { SelectionEndpoint } from '../../document-selection'
 import { PageDrawing } from './page-drawing'
 import type { ArrowNeighbor, VerticalCaretColumn } from './paragraph-arrow'
+import type {
+  ParagraphSelectionBinding,
+  ParagraphSelectionHandlers,
+} from './paragraph-editor'
 import { ParagraphEditor } from './paragraph-editor'
+import {
+  ParagraphRunPaint,
+  type ParagraphSelectionRange,
+} from './model-run'
 
 export type ParagraphWordEdit = {
   type: 'replace' | 'deleteBackward' | 'deleteForward' | 'split' | 'lineBreak'
@@ -60,7 +61,10 @@ export function ModelParagraph({
   previous,
   next,
   verticalCaret,
+  selectionHandlers,
+  selectionSegment,
   editing,
+  onFocusParagraph,
   presence,
   currentUserId,
   storyPartName,
@@ -90,11 +94,19 @@ export function ModelParagraph({
   onJoinPrevious?: (paragraphId: string) => boolean | void
   onWordEdit?: (edit: ParagraphWordEdit) => void
   onMoveCaret?: (paragraphId: string, offset: number) => void
-  onTextSelection?: (from: number, to: number) => void
+  onTextSelection?: (
+    paragraphId: string,
+    from: number,
+    to: number,
+    direction: 'forward' | 'backward',
+  ) => void
   restoreCaret?: { paragraphId: string; offset: number } | null
   previous?: ArrowNeighbor
   next?: ArrowNeighbor
   verticalCaret?: VerticalCaretColumn
+  selectionHandlers?: ParagraphSelectionHandlers
+  selectionSegment?: ParagraphSelectionRange | null
+  onFocusParagraph?: () => void
   editing?: boolean
   presence?: DocumentPresence[]
   currentUserId?: string
@@ -126,16 +138,9 @@ export function ModelParagraph({
   const fullText = paragraphPlainText(paragraph, drafts)
   const start = from ?? 0
   const end = to ?? fullText.length
-  const sliced = start !== 0 || end !== fullText.length
   const sliceText = fullText.slice(start, end)
   const linePx = paragraphLineHeightPx(face)
   const images = continuation ? [] : paragraphInlineXml(paragraph)
-  const runs = sliced
-    ? sliceParagraphRuns(paragraph, start, end, drafts)
-    : paragraph.runs.map((run) => ({
-        run,
-        text: drafts?.[run.id] ?? run.text,
-      }))
   // A block that places the paragraph's final row reaches the end of the text;
   // a block that stops at a hard break ends one code unit before it. The caret
   // at that break's offset still renders at the end of this block's last row,
@@ -164,51 +169,59 @@ export function ModelParagraph({
     ? Math.max(0, listMarker.leftPx - listMarker.hangingPx)
     : (face.indentLeftPx ?? 0)
   const markerWidth = listMarker?.hangingPx ?? 0
-  const runPaint =
-    runs.length === 0 ? (
-      <span>&nbsp;</span>
-    ) : wrapWidthPx && wrapWidthPx > 0 ? (
-      lines.map((line, index) => (
-        <div
-          key={`${paragraph.id}-${start}-${line.from}-${index}`}
-          className="whitespace-pre"
-          style={{ height: linePx, lineHeight: `${linePx}px` }}
-          data-line-from={start + line.from}
-          data-line-to={start + line.to}
-        >
-          {line.text ? (
-            sliceParagraphRuns(
-              paragraph,
-              start + line.from,
-              start + line.to,
-              drafts,
-            ).map(({ run, text }) => (
-              <ModelRun
-                key={`${run.id}-${start}-${line.from}`}
-                text={text}
-                face={runFace(run, face, styles)}
-                kinds={runChangeKinds(changes, run.id)}
-                caret={carets.find((item) => item.cursor?.runId === run.id)}
-                notes={runEndNotes(run, text, drafts)}
-              />
-            ))
-          ) : (
-            <span data-empty-line>&nbsp;</span>
-          )}
-        </div>
-      ))
-    ) : (
-      runs.map(({ run, text }) => (
-        <ModelRun
-          key={`${run.id}-${start}`}
-          text={text}
-          face={runFace(run, face, styles)}
-          kinds={runChangeKinds(changes, run.id)}
-          caret={carets.find((item) => item.cursor?.runId === run.id)}
-          notes={runEndNotes(run, text, drafts)}
-        />
-      ))
-    )
+  // The focused editor paints the document selection through the same run
+  // overlay the static paint uses, so a selection reads alike in every
+  // paragraph. A block only shows the part of the segment that it owns, so the
+  // range is clamped to this block: the paint reads it in paragraph-model
+  // offsets and the editor in block-local ones.
+  const paintSelection: ParagraphSelectionRange | undefined = selectionSegment
+    ? {
+        from: Math.max(selectionSegment.from, start),
+        to: Math.min(selectionSegment.to, end),
+      }
+    : undefined
+  const localSelection: ParagraphSelectionRange | undefined = paintSelection
+    ? {
+        from: paintSelection.from - start,
+        to: paintSelection.to - start,
+      }
+    : undefined
+  const selectionBinding: ParagraphSelectionBinding | undefined =
+    selectionHandlers
+      ? {
+          ...selectionHandlers,
+          range: localSelection ?? null,
+          // The workspace places the caret at the focus endpoint, so its
+          // slice-local offset is the moving end while this paragraph holds
+          // the caret. Another paragraph of the same block never does.
+          focus:
+            selectionHandlers.active &&
+            restoreCaret?.paragraphId === paragraph.id
+              ? restoreCaret.offset - start
+              : null,
+          onExtend: (focus, anchor) =>
+            selectionHandlers.onExtend(
+              toModelEndpoint(focus, paragraph.id, start),
+              toModelEndpoint(anchor, paragraph.id, start),
+            ),
+        }
+      : undefined
+  const runPaint = (
+    <ParagraphRunPaint
+      paragraph={paragraph}
+      drafts={drafts}
+      changes={changes}
+      styles={styles}
+      face={face}
+      start={start}
+      end={end}
+      lines={lines}
+      linePx={linePx}
+      wrapWidthPx={wrapWidthPx}
+      selection={paintSelection}
+      carets={carets}
+    />
+  )
 
   return (
     <div
@@ -301,9 +314,16 @@ export function ModelParagraph({
                 previous={previous}
                 next={next}
                 verticalCaret={verticalCaret}
+                selection={selectionBinding}
+                onFocusParagraph={onFocusParagraph}
                 onMoveCaret={onMoveCaret}
-                onTextSelection={(localStart, localEnd) =>
-                  onTextSelection?.(start + localStart, start + localEnd)
+                onTextSelection={(localStart, localEnd, direction) =>
+                  onTextSelection?.(
+                    paragraph.id,
+                    start + localStart,
+                    start + localEnd,
+                    direction,
+                  )
                 }
                 style={{
                   ...paragraphCss(face),
@@ -412,65 +432,17 @@ export function ModelParagraph({
   )
 }
 
-function ModelRun({
-  text,
-  face,
-  kinds,
-  caret,
-  notes = [],
-}: {
-  text: string
-  face: RunFace
-  kinds: Set<DocumentChangeWire['kind']>
-  caret?: DocumentPresence
-  notes?: ReturnType<typeof runNoteRefs>
-}) {
-  const color = readableRunColor(face.color)
-  return (
-    <span
-      className={cn(
-        'relative',
-        kinds.has('insert') &&
-          'underline decoration-[#3d7a52] underline-offset-4',
-        kinds.has('delete') &&
-          'text-[#9a4f3c] line-through decoration-[#9a4f3c]',
-        kinds.has('move') && 'underline decoration-dotted decoration-[#4a6f8a]',
-        kinds.has('property') &&
-          'underline decoration-dotted decoration-[#8a6a2a]',
-      )}
-      style={runCss({ ...face, color })}
-    >
-      {caret ? <PresenceCaret userId={caret.userId} /> : null}
-      {text}
-      {notes.map((note) => (
-        <sup
-          key={`${note.kind}-${note.noteId}-${note.runId}`}
-          data-note-mark
-          className="text-[0.75em] leading-none"
-        >
-          {note.mark}
-        </sup>
-      ))}
-    </span>
-  )
-}
-
-function PresenceCaret({ userId }: { userId: string }) {
-  return (
-    <span
-      className="absolute top-0 -left-px h-full w-px bg-[#4a6f8a]"
-      title={userId}
-      aria-hidden="true"
-    />
-  )
-}
-
-function runEndNotes(
-  run: { id: string; text: string; preservedXmlFragments: string[] },
-  visible: string,
-  drafts?: Record<string, string>,
-) {
-  const full = drafts?.[run.id] ?? run.text
-  if (full.length > 0 && !full.endsWith(visible)) return []
-  return runNoteRefs(run.preservedXmlFragments.join(''), run.id)
+/**
+ * The editor emits offsets local to the block it renders. A step that stays in
+ * this paragraph is therefore base-relative; a step into a neighbour already
+ * names a model offset, and the two are told apart by the paragraph id.
+ */
+function toModelEndpoint(
+  endpoint: SelectionEndpoint,
+  paragraphId: string,
+  base: number,
+): SelectionEndpoint {
+  return endpoint.paragraphId === paragraphId
+    ? { paragraphId, offset: base + endpoint.offset }
+    : endpoint
 }

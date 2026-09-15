@@ -15,6 +15,9 @@ export type ArrowNeighbor = {
   id: string
   text: string
   lines: WrappedLine[]
+  /** A pending inserted paragraph: a neighbour for the caret, not for the
+   * selection, which the workspace refuses to extend into. */
+  insert?: boolean
 }
 
 /**
@@ -234,5 +237,5 @@ function arrowNeighbor(
     wrapWidthPx && wrapWidthPx > 0 ? wrapWidthPx : Number.POSITIVE_INFINITY,
     face?.run.fontFamily,
   )
-  return { id, text, lines }
+  return { id, text, lines, ...(insert ? { insert: true } : {}) }
 }

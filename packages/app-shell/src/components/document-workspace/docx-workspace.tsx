@@ -33,6 +33,7 @@ import { useDocumentPresenceHeartbeat } from './use-presence-heartbeat'
 import { useDocumentSave } from './use-document-save'
 import { useWorkspaceDrafts } from './use-workspace-drafts'
 import { useWorkspaceCaret } from './use-workspace-caret'
+import type { ParagraphSelectionHandlers } from './paragraph-editor'
 import { VerificationMarkerLayer } from '../verification/verification-marker-layer'
 import { DocumentDesk, DocumentPage } from './document-page'
 import {
@@ -126,6 +127,20 @@ export function DocxWorkspace({
     setFormatRange,
     verticalCaret,
     cursor,
+    selectionActive,
+    selectionDirection,
+    selectionSegments,
+    selectionNotice,
+    selectAll,
+    extendSelection,
+    collapseSelection,
+    focusParagraph,
+    replaceSelectionRange,
+    splitSelectionRange,
+    copySelection,
+    cutSelection,
+    clearSelection,
+    mirrorSelection,
     findQuery,
     setFindQuery,
     replaceQuery,
@@ -151,6 +166,32 @@ export function DocxWorkspace({
         drafts.extraRuns,
       )
     : []
+
+  // The toolbar acts on the document selection's ranges, or on the caret's
+  // own paragraph when there is none.
+  const formatRanges = selectionActive
+    ? [...selectionSegments.values()]
+    : [
+        {
+          paragraphId: selectedParagraphId ?? '',
+          from: formatRange?.from ?? 0,
+          to: formatRange?.to ?? 0,
+        },
+      ]
+  const selectionHandlers: ParagraphSelectionHandlers = {
+    active: selectionActive,
+    direction: selectionDirection,
+    onExtend: extendSelection,
+    onCollapse: collapseSelection,
+    onSelectAll: selectAll,
+    onReplaceRange: replaceSelectionRange,
+    onDeleteRange: () => replaceSelectionRange(''),
+    onSplitRange: splitSelectionRange,
+    onCopyRange: copySelection,
+    onCutRange: cutSelection,
+    onClear: clearSelection,
+  }
+  const selectionStatus = selectionNotice ?? selectionAnnouncement(selectionSegments.size)
 
   async function exportDocx() {
     try {
@@ -214,7 +255,7 @@ export function DocxWorkspace({
                 drafts.format,
                 selectedParagraphId,
                 drafts.setFormat,
-                formatRange ?? undefined,
+                formatRanges,
                 trackChanges,
               )
             : undefined
@@ -256,6 +297,12 @@ export function DocxWorkspace({
           {transientBanner}
         </p>
       ) : null}
+      {/* A document selection is custom rather than the textarea's own, so its
+          state and any refusal is announced rather than only painted. No
+          role="status" so the transient banner stays the only status region. */}
+      <p className="sr-only" aria-live="polite" data-selection-status>
+        {selectionStatus}
+      </p>
     </WorkspaceRibbon>
   )
 
@@ -302,9 +349,13 @@ export function DocxWorkspace({
                       onSelectParagraph={(paragraphId, offset) =>
                         selectParagraph(paragraphId, offset)
                       }
-                      onTextSelection={(from, to) =>
+                      onTextSelection={(paragraphId, from, to, direction) => {
                         setFormatRange({ from, to })
-                      }
+                        mirrorSelection(paragraphId, from, to, direction)
+                      }}
+                      selectionSegments={selectionSegments}
+                      selectionHandlers={selectionHandlers}
+                      onFocusParagraph={focusParagraph}
                       drafts={drafts.drafts}
                       onRunTextChange={(runId, text) =>
                         drafts.setDrafts((current) => ({
@@ -411,6 +462,12 @@ export function DocxWorkspace({
       ) : null}
     </WorkspaceShell>
   )
+}
+
+function selectionAnnouncement(paragraphCount: number) {
+  if (paragraphCount <= 0) return ''
+  if (paragraphCount === 1) return '1 paragraph selected.'
+  return `${String(paragraphCount)} paragraphs selected. Bold, italic and underline apply to the whole selection.`
 }
 
 function skippedCommentsMessage(count: number) {
