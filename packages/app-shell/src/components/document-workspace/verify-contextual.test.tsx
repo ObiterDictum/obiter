@@ -359,7 +359,7 @@ describe('contextual verification evidence', () => {
     // The document target follows the selection.
     await waitFor(() => {
       const active = document.querySelector('[data-verification-active]')
-      expect(active?.getAttribute('data-paragraph-id')).toBe('p2')
+      expect(active?.getAttribute('data-verification-paragraph-id')).toBe('p2')
     })
     fireEvent.click(
       await screen.findByRole('button', { name: 'Previous finding' }),

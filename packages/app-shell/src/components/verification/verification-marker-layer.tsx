@@ -244,7 +244,7 @@ export function VerificationMarkerLayer({
               key={`box-${item.findings[0]!.id}-${index}`}
               aria-hidden="true"
               data-verification-highlight={item.findings[0]!.id}
-              data-paragraph-id={item.target.paragraphId}
+              data-verification-paragraph-id={item.target.paragraphId}
               data-verification-active={active ? 'true' : undefined}
               className={cn(
                 'absolute rounded-[2px]',
@@ -268,7 +268,7 @@ export function VerificationMarkerLayer({
               )
             }
             data-verification-marker={item.finding.id}
-            data-paragraph-id={item.target.paragraphId}
+            data-verification-paragraph-id={item.target.paragraphId}
             data-verification-active={active ? 'true' : undefined}
             aria-label={label}
             aria-haspopup="dialog"
