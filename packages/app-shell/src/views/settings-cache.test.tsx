@@ -23,8 +23,8 @@ import { SettingsRouteView } from './settings'
 /**
  * Drives the real TanStack Query hooks against a mocked `apiFetch`, so the
  * account form is exercised with the mutation that refreshes `GET /api/me`
- * rather than a stub of that mutation. `settings.test.tsx` mocks the hooks to
- * cover the UI states; this file proves the cache contract.
+ * rather than a stub of that mutation. The `settings-*.test.tsx` suites mock the
+ * hooks to cover the UI states; this file proves the cache contract.
  */
 const api = vi.hoisted(() => ({ apiFetch: vi.fn() }))
 

@@ -2,12 +2,16 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import type { Pool } from 'pg'
+import {
+  createConnectedPool,
+  createHybridPool,
+  createPool,
+  testEnv,
+  type Auth,
+  type ErrorBody,
+} from './app-test-support'
 import { createApiApp } from './app'
-import type { createAuth } from './auth'
 import { SCANNED_PDF_MESSAGE } from './document-extraction'
-import type { ApiEnv } from './env'
-import { createTestApiEnv } from './test-api-env'
 import type { RedactionRunRow } from './redaction-database'
 import { createLocalStorage } from './storage'
 
@@ -31,44 +35,6 @@ vi.mock('./redaction-detection', () => ({
     degraded ? 'heuristics+supplement' : 'model+supplement',
   detectRedactionSpans: detectRedactionSpansMock,
 }))
-
-type Auth = ReturnType<typeof createAuth>
-type QueryMock = (...args: unknown[]) => Promise<{ rows: unknown[] }>
-
-interface ErrorBody {
-  error: {
-    code: string
-    message: string
-    requestId: string
-  }
-}
-
-const testEnv: ApiEnv = createTestApiEnv()
-
-function createPool(query: QueryMock): Pool {
-  return {
-    query,
-  } as unknown as Pool
-}
-
-function createConnectedPool(query: QueryMock): Pool {
-  return {
-    connect: async () => ({
-      query,
-      release: () => undefined,
-    }),
-  } as unknown as Pool
-}
-
-function createHybridPool(query: QueryMock, transactionQuery: QueryMock): Pool {
-  return {
-    query,
-    connect: async () => ({
-      query: transactionQuery,
-      release: () => undefined,
-    }),
-  } as unknown as Pool
-}
 
 describe('createApiApp', () => {
   it('configures redaction detection from ApiEnv while building the app', () => {
@@ -324,196 +290,6 @@ describe('createApiApp', () => {
       user: { id: 'usr_2', role: null },
       organisation: null,
     })
-  })
-
-  it('updates the signed-in account name through PATCH /api/me', async () => {
-    const queries: unknown[] = []
-    const auth = {
-      api: {
-        getSession: async () => ({
-          user: {
-            id: 'usr_1',
-            email: 'user@example.test',
-            name: 'Old Name',
-            organisationId: 'org_1',
-            role: 'owner',
-          },
-          session: { id: 'ses_1' },
-        }),
-      },
-      handler: async () => new Response(null, { status: 404 }),
-    } as unknown as Auth
-    const app = createApiApp(
-      testEnv,
-      createConnectedPool(async (...args) => {
-        queries.push(args)
-        if (String(args[0]).includes('update users')) {
-          return {
-            rows: [
-              {
-                id: 'usr_1',
-                email: 'user@example.test',
-                name: 'Ada Lovelace',
-                role: 'owner',
-              },
-            ],
-          }
-        }
-        return { rows: [] }
-      }),
-      { auth },
-    )
-
-    const response = await app.request('/api/me', {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: '  Ada Lovelace  ', id: 'usr_2' }),
-    })
-
-    expect(response.status).toBe(200)
-    await expect(response.json()).resolves.toEqual({
-      user: {
-        id: 'usr_1',
-        email: 'user@example.test',
-        name: 'Ada Lovelace',
-        role: 'owner',
-      },
-    })
-
-    const update = queries.find((args) =>
-      String((args as unknown[])[0]).includes('update users'),
-    ) as unknown[]
-    // A client-supplied id in the body must never widen the update scope.
-    expect(update[1]).toEqual(['usr_1', 'Ada Lovelace'])
-    expect(JSON.stringify(update[1])).not.toContain('usr_2')
-  })
-
-  it('refuses a blank or over-long account name at PATCH /api/me', async () => {
-    const queries: unknown[] = []
-    const auth = {
-      api: {
-        getSession: async () => ({
-          user: {
-            id: 'usr_1',
-            email: 'user@example.test',
-            name: 'User',
-            organisationId: 'org_1',
-            role: 'owner',
-          },
-          session: { id: 'ses_1' },
-        }),
-      },
-      handler: async () => new Response(null, { status: 404 }),
-    } as unknown as Auth
-    const app = createApiApp(
-      testEnv,
-      createConnectedPool(async (...args) => {
-        queries.push(args)
-        return { rows: [] }
-      }),
-      { auth },
-    )
-
-    for (const name of ['   ', '\u200b\u200b', 'x'.repeat(121)]) {
-      const response = await app.request('/api/me', {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ name }),
-      })
-
-      expect(response.status).toBe(400)
-      await expect(response.json()).resolves.toMatchObject({
-        error: { code: 'validation_failed' },
-      })
-    }
-
-    expect(
-      queries.some((args) =>
-        String((args as unknown[])[0]).includes('update users'),
-      ),
-    ).toBe(false)
-  })
-
-  it('refuses an account name update without a session', async () => {
-    const auth = {
-      api: { getSession: async () => null },
-      handler: async () => new Response(null, { status: 404 }),
-    } as unknown as Auth
-    const app = createApiApp(
-      testEnv,
-      createConnectedPool(async () => {
-        throw new Error(
-          'An unauthenticated request must not reach the database.',
-        )
-      }),
-      { auth },
-    )
-
-    const response = await app.request('/api/me', {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Ada Lovelace' }),
-    })
-
-    expect(response.status).toBe(401)
-    await expect(response.json()).resolves.toMatchObject({
-      error: { code: 'unauthenticated' },
-    })
-  })
-
-  it('audits an account name change without recording either name', async () => {
-    const queries: unknown[] = []
-    const auth = {
-      api: {
-        getSession: async () => ({
-          user: {
-            id: 'usr_1',
-            email: 'user@example.test',
-            name: 'Old Name',
-            organisationId: 'org_1',
-            role: 'owner',
-          },
-          session: { id: 'ses_1' },
-        }),
-      },
-      handler: async () => new Response(null, { status: 404 }),
-    } as unknown as Auth
-    const app = createApiApp(
-      testEnv,
-      createConnectedPool(async (...args) => {
-        queries.push(args)
-        if (String(args[0]).includes('update users')) {
-          return {
-            rows: [
-              {
-                id: 'usr_1',
-                email: 'user@example.test',
-                name: 'Ada Lovelace',
-                role: 'owner',
-              },
-            ],
-          }
-        }
-        return { rows: [] }
-      }),
-      { auth },
-    )
-
-    const response = await app.request('/api/me', {
-      method: 'PATCH',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'Ada Lovelace' }),
-    })
-
-    expect(response.status).toBe(200)
-    const audit = queries.find((args) =>
-      String((args as unknown[])[0]).includes('insert into audit_logs'),
-    ) as unknown[]
-    expect(audit).toBeDefined()
-    expect(audit[1]).toContain('user.profile_update')
-    expect(audit[1]).toContain('usr_1')
-    expect(JSON.stringify(audit[1])).not.toContain('Ada Lovelace')
-    expect(JSON.stringify(audit[1])).not.toContain('Old Name')
   })
 
   it('auto-provisions a personal workspace when an org-less user hits Matters', async () => {
@@ -1218,101 +994,6 @@ describe('createApiApp', () => {
         'auth.sign_out',
       ]),
     ])
-  })
-
-  it('audits a password change without recording any credential material', async () => {
-    const queries: unknown[] = []
-    const auth = {
-      api: {
-        getSession: async () => ({
-          user: {
-            id: 'usr_1',
-            email: 'user@example.com',
-            name: 'User Example',
-            organisationId: 'org_1',
-            role: 'owner',
-          },
-          session: { id: 'ses_1' },
-        }),
-      },
-      handler: async () => Response.json({ user: { id: 'usr_1' } }),
-    } as unknown as Auth
-
-    const app = createApiApp(
-      testEnv,
-      createPool(async (...args) => {
-        queries.push(args)
-        return { rows: [] }
-      }),
-      { auth },
-    )
-
-    const response = await app.request('/api/auth/change-password', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        currentPassword: 'current-secret-value',
-        newPassword: 'replacement-secret-value',
-        revokeOtherSessions: true,
-      }),
-    })
-
-    expect(response.status).toBe(200)
-    expect(queries).toHaveLength(1)
-    expect(queries[0]).toEqual([
-      expect.stringContaining('insert into audit_logs'),
-      expect.arrayContaining([
-        'org_1',
-        'usr_1',
-        'user',
-        'usr_1',
-        'auth.password_changed',
-      ]),
-    ])
-    const params = JSON.stringify(queries[0])
-    expect(params).not.toContain('current-secret-value')
-    expect(params).not.toContain('replacement-secret-value')
-  })
-
-  it('does not audit a password change the auth layer rejects', async () => {
-    const queries: unknown[] = []
-    const auth = {
-      api: {
-        getSession: async () => ({
-          user: {
-            id: 'usr_1',
-            email: 'user@example.com',
-            name: 'User Example',
-            organisationId: 'org_1',
-            role: 'owner',
-          },
-          session: { id: 'ses_1' },
-        }),
-      },
-      handler: async () =>
-        Response.json({ message: 'Invalid password' }, { status: 400 }),
-    } as unknown as Auth
-
-    const app = createApiApp(
-      testEnv,
-      createPool(async (...args) => {
-        queries.push(args)
-        return { rows: [] }
-      }),
-      { auth },
-    )
-
-    const response = await app.request('/api/auth/change-password', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        currentPassword: 'wrong',
-        newPassword: 'replacement-secret-value',
-      }),
-    })
-
-    expect(response.status).toBe(400)
-    expect(queries).toHaveLength(0)
   })
 
   it('does not serve a second Meilisearch-shaped GET search route', async () => {

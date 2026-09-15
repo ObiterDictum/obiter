@@ -1358,3 +1358,14 @@ retention behaviour, route namespace or dependency was added, so
 and theme preferences (the shell's own control owns the theme, and there is no
 notification system to own), email change, and any session list beyond the
 revocation the password change performs.
+
+Structural note (same change): the account write path, `updateUserName`, lives
+in `services/api/src/account-database.ts` rather than in `database.ts`, which is
+far past the 500-line ceiling. The Settings, app-shell auth and API route tests
+are split into focused suites: `views/settings-{navigation,account,security,organisation}.test.tsx`,
+`views/settings-test-support.tsx`, `auth-change-password.test.tsx`,
+`account-routes.test.ts`, `auth-audit.test.ts`, `password-policy.test.ts` and
+`app-test-support.ts`. `services/api/src/database.ts` (1531 lines) and
+`services/api/src/app.test.ts` (3759 lines) remain above the ceiling: both are
+pre-existing modules covering many unrelated concerns, and splitting them is a
+separate, behaviour-preserving change rather than part of this one.

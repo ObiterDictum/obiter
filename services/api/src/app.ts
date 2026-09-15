@@ -9,12 +9,8 @@ import type {
   UpdateProfileResponse,
 } from '@obiter/contracts'
 import { updateProfileInputSchema } from '@obiter/contracts'
-import {
-  appendAuditLog,
-  findOrganisation,
-  toCurrentUser,
-  updateUserName,
-} from './database'
+import { updateUserName } from './account-database'
+import { appendAuditLog, findOrganisation, toCurrentUser } from './database'
 import type { ApiEnv } from './env'
 import { createAuth } from './auth'
 import { corsAllowedOrigin } from './client-origins'

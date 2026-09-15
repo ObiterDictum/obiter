@@ -117,18 +117,17 @@ describe('account and organisation settings (Postgres)', () => {
   afterAll(async () => {
     if (!seed) return
     const userIds = [seed.ownerA, seed.memberA, seed.ownerB]
-    const organisationIds = [seed.orgA, seed.orgB]
-    await pool.query(
-      `delete from audit_logs
-       where user_id = any($1::text[]) or organisation_id = any($2::text[])`,
-      [userIds, organisationIds],
-    )
+    // Audit records are append-only (docs/prds/archive/platform-deletion.md
+    // §2): this teardown does not delete them. It does not null their subject
+    // links either — the repository's only policy-compliant cleanup path
+    // (`moveUserAndDeleteEmptyOrganisation`) nulls a vacated organisation
+    // because its user is moving to another tenant, which is not this case.
+    // The seeded users and organisations therefore stay as well: every audit
+    // row they produced references them, and removing the parents would mean
+    // removing the rows. Only the synthetic sessions go; a session is not an
+    // audit record.
     await pool.query(`delete from sessions where "userId" = any($1::text[])`, [
       userIds,
-    ])
-    await pool.query(`delete from users where id = any($1::text[])`, [userIds])
-    await pool.query(`delete from organisations where id = any($1::text[])`, [
-      organisationIds,
     ])
     await pool.end()
   })
