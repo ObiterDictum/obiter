@@ -1,14 +1,12 @@
 // @vitest-environment jsdom
+// Shared support for the contextual verification suites. It owns the workspace
+// hook mocks, the synthetic finding fixtures and the mount helper, so the two
+// suites can each read as the behaviour they cover instead of restating setup.
+// It is deliberately not named `*.test.*`: only the suites are collected.
 import { createElement, type PropsWithChildren } from 'react'
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  waitFor,
-} from '@testing-library/react'
+import { cleanup, render } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, vi } from 'vitest'
 import type {
   DocumentModelWire,
   VerificationFindingView,
@@ -135,7 +133,7 @@ function location(paragraphId: string, text: string, needle: string) {
   }
 }
 
-function finding(
+export function finding(
   overrides: Partial<VerificationFindingView> = {},
 ): VerificationFindingView {
   return {
@@ -161,7 +159,7 @@ function finding(
   }
 }
 
-function quoteFinding(): VerificationFindingView {
+export function quoteFinding(): VerificationFindingView {
   return finding({
     id: 'vf_2',
     type: 'quote_fidelity',
@@ -180,7 +178,7 @@ function quoteFinding(): VerificationFindingView {
   })
 }
 
-function unmappableFinding(): VerificationFindingView {
+export function unmappableFinding(): VerificationFindingView {
   return finding({
     id: 'vf_3',
     type: 'authority_existence',
@@ -260,7 +258,17 @@ function idleMutation() {
 
 let storedVersionId = 'ver_1'
 
-function mount(findings: VerificationFindingView[]) {
+/** The stored version the open document reports, for stale-evidence cases. */
+export function setStoredVersionId(id: string) {
+  storedVersionId = id
+}
+
+/** Report unsaved editor work, as the E45 save owner would. */
+export function setUnsavedWork(dirty: boolean) {
+  draftHook.useDocumentDraftStatus.mockReturnValue({ dirty })
+}
+
+export function mount(findings: VerificationFindingView[]) {
   modelHook.useDocumentModel.mockReturnValue({
     isLoading: false,
     isError: false,
@@ -324,210 +332,4 @@ beforeEach(() => {
 afterEach(() => {
   cleanup()
   vi.clearAllMocks()
-})
-
-describe('contextual verification evidence', () => {
-  it('opens contextual evidence from a mapped citation', async () => {
-    mount([finding()])
-    const marker = await screen.findByRole('button', {
-      name: /Citation resolution, Clear/,
-    })
-    expect(marker.tagName).toBe('BUTTON')
-    fireEvent.click(marker)
-    const panel = await screen.findByRole('dialog')
-    expect(panel.textContent).toContain('[2012] UKSC 7')
-    expect(panel.textContent).toContain('Clear')
-    expect(panel.textContent).toContain('stored version ver_1')
-  })
-
-  it('opens a quotation finding from the document', async () => {
-    mount([quoteFinding()])
-    const marker = await screen.findByRole('button', {
-      name: /Quote fidelity, Flagged/,
-    })
-    fireEvent.click(marker)
-    const panel = await screen.findByRole('dialog')
-    expect(panel.textContent).toContain('Flagged')
-    expect(panel.textContent).toContain('[2012] UKSC 40')
-  })
-
-  it('navigates between mapped findings while keeping the document context', async () => {
-    mount([finding(), quoteFinding()])
-    fireEvent.click(
-      await screen.findByRole('button', { name: /Citation resolution, Clear/ }),
-    )
-    const panel = await screen.findByRole('dialog')
-    fireEvent.click(await screen.findByRole('button', { name: 'Next finding' }))
-    await waitFor(() => {
-      expect(panel.textContent).toContain('[2012] UKSC 40')
-    })
-    // The document target follows the selection.
-    await waitFor(() => {
-      const active = document.querySelector('[data-verification-active]')
-      expect(active?.getAttribute('data-verification-paragraph-id')).toBe('p2')
-    })
-    fireEvent.click(
-      await screen.findByRole('button', { name: 'Previous finding' }),
-    )
-    await waitFor(() => {
-      expect(panel.textContent).toContain('[2012] UKSC 7')
-    })
-  })
-
-  it('closes on Escape and restores focus to the originating marker', async () => {
-    mount([finding()])
-    const marker = await screen.findByRole('button', {
-      name: /Citation resolution, Clear/,
-    })
-    fireEvent.click(marker)
-    await screen.findByRole('dialog')
-    fireEvent.keyDown(document.activeElement ?? document.body, {
-      key: 'Escape',
-    })
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog')).toBeNull()
-    })
-    expect(document.activeElement).toBe(marker)
-  })
-
-  it('keeps the panel out of the document layout so the page cannot reflow', async () => {
-    mount([finding()])
-    const desk = document.querySelector('[data-document-desk]')
-    const flowBefore = desk?.children.length ?? 0
-    fireEvent.click(
-      await screen.findByRole('button', { name: /Citation resolution, Clear/ }),
-    )
-    const panel = await screen.findByRole('dialog')
-    expect(panel.closest('[data-document-desk]')).toBeNull()
-    expect(desk?.children.length).toBe(flowBefore)
-    // The marker layer is out of flow, so it cannot add a line, a margin or a
-    // scroll height to the page it decorates.
-    const layer = document.querySelector('[data-verification-layer]')
-    expect(layer?.className).toContain('absolute')
-  })
-
-  it('keeps an unmappable finding reachable with a stated reason', async () => {
-    mount([finding(), unmappableFinding()])
-    await screen.findByRole('button', { name: /Citation resolution, Clear/ })
-    expect(
-      screen.queryByRole('button', { name: /Authority existence.*2099/ }),
-    ).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'View all findings' }))
-    const index = await screen.findByRole('dialog')
-    expect(index.textContent).toContain('Not shown in the document')
-  })
-
-  it('does not present text edited since the check as verified', async () => {
-    draftHook.useDocumentDraftStatus.mockReturnValue({ dirty: true })
-    mount([finding()])
-    const dock = await screen.findByRole('region', {
-      name: 'Verification',
-    })
-    expect(dock.textContent).toContain('Stored version')
-    expect(dock.textContent).toContain('unsaved')
-    expect(
-      (
-        screen.getByRole('button', {
-          name: 'Run verification',
-        }) as HTMLButtonElement
-      ).disabled,
-    ).toBe(true)
-    fireEvent.click(
-      await screen.findByRole('button', { name: /Citation resolution, Clear/ }),
-    )
-    const panel = await screen.findByRole('dialog')
-    expect(panel.textContent).toContain('stored version ver_1')
-    expect(panel.textContent).toContain(
-      'Unsaved edits are not part of the stored version',
-    )
-  })
-
-  it('never attaches a finding to text that no longer matches what was checked', async () => {
-    mount([finding({ excerpt: '[2012] UKSC 9' })])
-    await screen.findByRole('region', { name: 'Verification' })
-    await waitFor(() => {
-      expect(
-        screen.queryByRole('button', { name: /Citation resolution, Clear/ }),
-      ).toBeNull()
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'View all findings' }))
-    const index = await screen.findByRole('dialog')
-    expect(index.textContent).toContain('Not shown in the document')
-  })
-
-  it('falls back to a drawer when the viewport cannot fit the panel', async () => {
-    mount([finding()])
-    fireEvent.click(
-      await screen.findByRole('button', { name: /Citation resolution, Clear/ }),
-    )
-    await screen.findByRole('dialog')
-    Object.defineProperty(window, 'innerWidth', {
-      configurable: true,
-      value: 420,
-    })
-    fireEvent(window, new Event('resize'))
-    await waitFor(() => {
-      expect(screen.getByRole('dialog').getAttribute('data-placement')).toBe(
-        'drawer',
-      )
-    })
-  })
-
-  it('shows one marker per place, with the most serious outcome there', async () => {
-    mount([
-      finding(),
-      finding({
-        id: 'vf_1-existence',
-        type: 'authority_existence',
-        state: 'flagged',
-        explanation: 'The stored sources do not hold this authority.',
-      }),
-    ])
-    const markers = await screen.findAllByRole('button', {
-      name: /Citation resolution|Authority existence/,
-    })
-    expect(markers).toHaveLength(1)
-    expect(markers[0]!.getAttribute('aria-label')).toContain('Flagged')
-    expect(markers[0]!.getAttribute('aria-label')).toContain('2 findings here')
-  })
-
-  it('keeps the selected finding when the index opens and returns', async () => {
-    mount([finding(), quoteFinding()])
-    fireEvent.click(
-      await screen.findByRole('button', { name: /Citation resolution, Clear/ }),
-    )
-    await screen.findByRole('dialog')
-    fireEvent.click(screen.getByRole('button', { name: 'View all findings' }))
-    const index = await screen.findByRole('dialog')
-    expect(index.textContent).toContain('All findings')
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
-    const panel = await screen.findByRole('dialog')
-    expect(panel.textContent).toContain('[2012] UKSC 7')
-  })
-
-  it('marks evidence as earlier than the document once a newer version is stored', async () => {
-    storedVersionId = 'ver_2'
-    mount([finding()])
-    const dock = await screen.findByRole('region', { name: 'Verification' })
-    expect(await screen.findByText('Earlier version')).toBeTruthy()
-    expect(dock.textContent).toContain('Stored version ver_1')
-  })
-
-  it('moves focus to the run status when a run starts', async () => {
-    mount([finding()])
-    const start = await screen.findByRole('button', {
-      name: 'Run verification',
-    })
-    fireEvent.click(start)
-    expect(document.activeElement?.getAttribute('role')).toBe('status')
-  })
-
-  it('shows totals, the next actionable finding and the stored version', async () => {
-    mount([finding(), quoteFinding(), unmappableFinding()])
-    const dock = await screen.findByRole('region', { name: 'Verification' })
-    expect(dock.textContent).toContain('1 clear · 1 flagged · 1 needs review')
-    expect(dock.textContent).toContain('ver_1')
-    fireEvent.click(screen.getByRole('button', { name: 'Go to next finding' }))
-    expect(await screen.findByRole('dialog')).toBeTruthy()
-  })
 })
