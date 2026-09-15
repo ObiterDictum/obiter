@@ -3,31 +3,23 @@ import type { VerificationFindingView } from '@obiter/contracts'
 import {
   verificationReasonLabel,
   verificationStateLabel,
+  verificationStateTone,
   verificationStoryLabel,
   verificationTypeLabel,
 } from '../verification-copy'
 
-function stateTone(state: VerificationFindingView['state']) {
-  switch (state) {
-    case 'clear':
-      return 'success' as const
-    case 'flagged':
-      return 'danger' as const
-    case 'not_checked':
-      return 'neutral' as const
-    case 'review_required':
-      return 'warning' as const
-    default: {
-      const unhandled: never = state
-      return unhandled
-    }
-  }
-}
-
+/**
+ * The full findings list. It is the evidence index: every persisted finding is
+ * listed with its outcome and evidence, and one the document cannot show beside
+ * the text carries the reason it is not shown rather than disappearing.
+ */
 export function VerificationFindingsList({
   findings,
+  notes,
 }: {
   findings: VerificationFindingView[]
+  /** Finding id to the reason it is not shown beside the document text. */
+  notes?: Map<string, string>
 }) {
   if (findings.length === 0) {
     return (
@@ -49,7 +41,7 @@ export function VerificationFindingsList({
                 {verificationStoryLabel(finding.location.storyKind)}
               </Badge>
             ) : null}
-            <Badge tone={stateTone(finding.state)}>
+            <Badge tone={verificationStateTone(finding.state)}>
               {verificationStateLabel(finding.state)}
             </Badge>
             {finding.severity ? (
@@ -61,7 +53,7 @@ export function VerificationFindingsList({
           </div>
           <p className="text-sm text-ink">{finding.explanation}</p>
           <p className="text-sm text-ink">
-            <span className="text-xs font-medium uppercase tracking-wider text-subtle">
+            <span className="text-xs font-medium tracking-wider text-subtle uppercase">
               Draft excerpt
             </span>
             <span className="mt-0.5 block font-mono text-xs">
@@ -71,6 +63,11 @@ export function VerificationFindingsList({
           <p className="text-sm text-muted">
             Authority: {finding.authorityLabel}
           </p>
+          {notes?.get(finding.id) ? (
+            <p className="text-xs text-muted" role="note">
+              {notes.get(finding.id)}
+            </p>
+          ) : null}
           {finding.reviewReason ? (
             <p className="text-sm text-muted">
               {verificationReasonLabel(finding.reviewReason)}

@@ -124,6 +124,24 @@ export function DocumentModelPage({
         : []
     }),
   )
+  // A footnote or endnote paragraph is rendered inside the same page flow as
+  // the body, so its story has to travel with the element: verification
+  // locations are story-scoped, and a paragraph id alone is not unique.
+  const storyByParagraph = new Map<string, { kind: string; partName: string }>()
+  for (const note of notes) {
+    const kind = note.kind === 'footnote' ? 'footnotes' : 'endnotes'
+    const partName =
+      model.stories.find((item) => item.kind === kind)?.partName ??
+      story.partName
+    for (const paragraph of note.paragraphs) {
+      storyByParagraph.set(paragraph.id, { kind, partName })
+    }
+  }
+  const storyOf = (paragraphId: string) =>
+    storyByParagraph.get(paragraphId) ?? {
+      kind: 'document',
+      partName: story.partName,
+    }
 
   return (
     <div
@@ -227,6 +245,7 @@ export function DocumentModelPage({
                   listMarkers,
                   noteMarks,
                   noteParagraphIds,
+                  storyOf,
                   columnWidthPx: column.widthPx,
                 }),
               )}
@@ -284,6 +303,7 @@ export function DocumentModelPage({
                   drafts={drafts}
                   editing={false}
                   storyPartName={story.partName}
+                  story={storyOf(paragraph.id)}
                   relationships={model.relationships}
                   imageUrls={imageUrls}
                   styles={model.styles}
@@ -341,6 +361,7 @@ function renderBlock(
     listMarkers: ReturnType<typeof documentListMarkers>
     noteMarks: Map<string, { mark: string; kind: NoteKind }>
     noteParagraphIds: Set<string>
+    storyOf: (paragraphId: string) => { kind: string; partName: string }
     columnWidthPx: number
   },
 ) {
@@ -397,6 +418,7 @@ function renderBlock(
                 wrapWidthPx={wrapWidthPx}
                 noteMark={ctx.noteMarks.get(paragraph.id)?.mark}
                 noteKind={ctx.noteMarks.get(paragraph.id)?.kind}
+                story={ctx.storyOf(paragraph.id)}
               />,
             ]
           })
@@ -463,6 +485,7 @@ function renderBlock(
       listMarker={ctx.listMarkers.get(paragraph.id)}
       noteMark={ctx.noteMarks.get(paragraph.id)?.mark}
       noteKind={ctx.noteMarks.get(paragraph.id)?.kind}
+      story={ctx.storyOf(paragraph.id)}
     />,
   ]
 }

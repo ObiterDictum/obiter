@@ -33,6 +33,7 @@ import { useDocumentPresenceHeartbeat } from './use-presence-heartbeat'
 import { useDocumentSave } from './use-document-save'
 import { useWorkspaceDrafts } from './use-workspace-drafts'
 import { useWorkspaceCaret } from './use-workspace-caret'
+import { VerificationMarkerLayer } from '../verification/verification-marker-layer'
 import { DocumentDesk, DocumentPage } from './document-page'
 import {
   ConflictBanner,
@@ -396,6 +397,7 @@ export function DocxWorkspace({
                 }
               />
             </div>
+            <VerificationMarkerLayer model={model} />
           </DocumentDesk>
           <InsertAuthorityDialog
             open={insertAuthorityOpen}

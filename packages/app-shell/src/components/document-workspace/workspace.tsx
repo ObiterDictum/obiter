@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { FileArrowDown } from '@phosphor-icons/react'
 import { EmptyState } from '@obiter/ui'
 import { downloadBlob, downloadPlainText } from '../../document-edits'
@@ -9,6 +9,9 @@ import {
   useDocumentText,
 } from '../../document-workspace-api'
 import type { DocumentVersionRecord } from '../../documents'
+import { DocumentDraftStatusProvider } from './document-draft-status'
+import { VerificationWorkspaceProvider } from '../verification/verification-context'
+import { VerificationDock } from '../verification/verification-dock'
 import { DocxWorkspace } from './docx-workspace'
 import { DocumentDesk } from './document-page'
 import { DocumentPdfPages } from './pdf-view'
@@ -37,7 +40,17 @@ type DocumentWorkspaceProps = {
  * restores A's unsaved work instead of destroying it.
  */
 export function DocumentWorkspace(props: DocumentWorkspaceProps) {
-  return <DocumentWorkspaceBody key={props.documentId} {...props} />
+  const kind = workspaceKind(props.version?.fileType)
+  return (
+    <DocumentDraftStatusProvider>
+      <VerificationWorkspaceProvider
+        documentId={props.documentId}
+        mappable={kind === 'docx'}
+      >
+        <DocumentWorkspaceBody key={props.documentId} {...props} />
+      </VerificationWorkspaceProvider>
+    </DocumentDraftStatusProvider>
+  )
 }
 
 function DocumentWorkspaceBody({
@@ -54,24 +67,30 @@ function DocumentWorkspaceBody({
   // persisting), so it is shown verbatim rather than as an error code.
   if (version.documentStatus === 'failed') {
     return (
-      <div className="flex h-full items-center justify-center p-6">
-        <EmptyState
-          title="This document could not be opened"
-          body={
-            version.failureReason ??
-            'The document text could not be read. Try uploading it again.'
-          }
-        />
+      <div className="flex h-full flex-col">
+        <VerificationDock />
+        <div className="flex flex-1 items-center justify-center p-6">
+          <EmptyState
+            title="This document could not be opened"
+            body={
+              version.failureReason ??
+              'The document text could not be read. Try uploading it again.'
+            }
+          />
+        </div>
       </div>
     )
   }
   if (!ready) {
     return (
-      <div className="flex h-full items-center justify-center p-6">
-        <EmptyState
-          title="Document is not ready to open"
-          body={`Status is ${version.documentStatus}. The workspace opens when extraction finishes.`}
-        />
+      <div className="flex h-full flex-col">
+        <VerificationDock />
+        <div className="flex flex-1 items-center justify-center p-6">
+          <EmptyState
+            title="Document is not ready to open"
+            body={`Status is ${version.documentStatus}. The workspace opens when extraction finishes.`}
+          />
+        </div>
       </div>
     )
   }
@@ -79,39 +98,62 @@ function DocumentWorkspaceBody({
   // row, but it must still be downloadable, never a dead end.
   if (kind === 'other') {
     return (
-      <UnsupportedWorkspace
-        documentId={documentId}
-        filename={version.filename}
-        layout={layout}
-      />
+      <VerifiedViewer>
+        <UnsupportedWorkspace
+          documentId={documentId}
+          filename={version.filename}
+          layout={layout}
+        />
+      </VerifiedViewer>
     )
   }
   if (kind === 'txt') {
     return (
-      <TxtWorkspace
-        documentId={documentId}
-        filename={version.filename}
-        layout={layout}
-      />
+      <VerifiedViewer>
+        <TxtWorkspace
+          documentId={documentId}
+          filename={version.filename}
+          layout={layout}
+        />
+      </VerifiedViewer>
     )
   }
   if (kind === 'pdf') {
     return (
-      <PdfWorkspace
-        documentId={documentId}
-        filename={version.filename}
-        layout={layout}
-      />
+      <VerifiedViewer>
+        <PdfWorkspace
+          documentId={documentId}
+          filename={version.filename}
+          layout={layout}
+        />
+      </VerifiedViewer>
     )
   }
   return (
-    <DocxWorkspace
-      documentId={documentId}
-      versionId={version.id}
-      matterId={version.matterId}
-      filename={version.filename}
-      layout={layout}
-    />
+    <VerifiedViewer>
+      <DocxWorkspace
+        documentId={documentId}
+        versionId={version.id}
+        matterId={version.matterId}
+        filename={version.filename}
+        layout={layout}
+      />
+    </VerifiedViewer>
+  )
+}
+
+/**
+ * A viewer with the document-level Verify control above it. The control is part
+ * of the document workspace rather than a separate route region, so every
+ * surface that opens a document gets the same interaction and none can quietly
+ * lose it.
+ */
+function VerifiedViewer({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      <VerificationDock />
+      <div className="flex min-h-0 flex-1 flex-col">{children}</div>
+    </div>
   )
 }
 
