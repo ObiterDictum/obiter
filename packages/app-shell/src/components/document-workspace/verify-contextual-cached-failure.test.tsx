@@ -268,9 +268,14 @@ describe('cached-document findings failure', () => {
     expect(panel.textContent).toContain('Authority 1')
 
     network.failContinuation = false
-    fireEvent.click(
-      within(verificationRegion()).getByRole('button', { name: /retry/i }),
-    )
+    const dockRetry = within(verificationRegion()).getByRole('button', {
+      name: /retry/i,
+    })
+    // A real pointer press on Retry must not count as an outside press: the
+    // panel's document-level dismissal has to leave the selection open.
+    fireEvent.pointerDown(dockRetry)
+    expect(panel.isConnected).toBe(true)
+    fireEvent.click(dockRetry)
     await waitFor(() => {
       expect(within(verificationRegion()).queryByRole('alert')).toBeNull()
     })

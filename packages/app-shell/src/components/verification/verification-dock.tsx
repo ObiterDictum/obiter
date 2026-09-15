@@ -180,6 +180,7 @@ export function VerificationDock() {
         {verification.findingsError ? (
           <div
             role="alert"
+            data-verification-controls
             className="flex flex-wrap items-center gap-2 text-xs text-danger"
           >
             <span>
