@@ -11,6 +11,7 @@ const mock = vi.hoisted(() => ({
   signUpEmail: vi.fn(),
   signOutFn: vi.fn(),
   sendVerificationEmail: vi.fn(),
+  changePasswordFn: vi.fn(),
   useSession: vi.fn(),
   refetch: vi.fn(),
 }))
@@ -22,6 +23,7 @@ vi.mock('better-auth/react', () => ({
     signUp: { email: mock.signUpEmail },
     signOut: mock.signOutFn,
     sendVerificationEmail: mock.sendVerificationEmail,
+    changePassword: mock.changePasswordFn,
   }),
 }))
 
@@ -35,6 +37,7 @@ const {
   useSession,
   signOutFn,
   sendVerificationEmail,
+  changePasswordFn,
   refetch,
 } = mock
 
@@ -437,6 +440,106 @@ describe('useAuth — signOut clears the current-user cache', () => {
         'obiter.document-draft.1.org_1.usr_1.doc_1.tab_1',
       ),
     ).toBe('keep me')
+  })
+})
+
+describe('useAuth — change password', () => {
+  it('revokes other sessions and refreshes the session store on success', async () => {
+    changePasswordFn.mockResolvedValueOnce({
+      error: null,
+      data: { token: 'new-token', user: { id: 'usr_1' } },
+    })
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: createWrapper(new QueryClient()),
+    })
+
+    let outcome
+    await act(async () => {
+      outcome = await result.current.changePassword({
+        currentPassword: 'current-secret',
+        newPassword: 'replacement-secret',
+      })
+    })
+
+    expect(changePasswordFn).toHaveBeenCalledWith({
+      currentPassword: 'current-secret',
+      newPassword: 'replacement-secret',
+      // Other sessions are revoked so a stolen session stops working, which
+      // matches revokeSessionsOnPasswordReset for the reset path.
+      revokeOtherSessions: true,
+    })
+    expect(outcome).toEqual({ ok: true })
+    expect(refetch).toHaveBeenCalled()
+  })
+
+  it('reports a rejected current password without echoing credential detail', async () => {
+    changePasswordFn.mockResolvedValueOnce({
+      error: { message: 'Invalid password', code: 'INVALID_PASSWORD' },
+      data: null,
+    })
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: createWrapper(new QueryClient()),
+    })
+
+    let outcome
+    await act(async () => {
+      outcome = await result.current.changePassword({
+        currentPassword: 'wrong-secret',
+        newPassword: 'replacement-secret',
+      })
+    })
+
+    expect(outcome).toEqual({
+      ok: false,
+      code: 'INVALID_PASSWORD',
+      message: 'Your current password is incorrect.',
+    })
+    expect(JSON.stringify(outcome)).not.toContain('wrong-secret')
+    expect(JSON.stringify(outcome)).not.toContain('replacement-secret')
+  })
+
+  it('passes through a policy rejection and an unmapped failure', async () => {
+    changePasswordFn.mockResolvedValueOnce({
+      error: { message: 'Password too short', code: 'PASSWORD_TOO_SHORT' },
+      data: null,
+    })
+
+    const { result } = renderHook(() => useAuth(), {
+      wrapper: createWrapper(new QueryClient()),
+    })
+
+    let tooShort
+    await act(async () => {
+      tooShort = await result.current.changePassword({
+        currentPassword: 'current-secret',
+        newPassword: 'short',
+      })
+    })
+    expect(tooShort).toEqual({
+      ok: false,
+      code: 'PASSWORD_TOO_SHORT',
+      message: 'Password must be at least 8 characters.',
+    })
+
+    changePasswordFn.mockResolvedValueOnce({
+      error: { message: 'Internal error', code: 'INTERNAL' },
+      data: null,
+    })
+
+    let internal
+    await act(async () => {
+      internal = await result.current.changePassword({
+        currentPassword: 'current-secret',
+        newPassword: 'replacement-secret',
+      })
+    })
+    expect(internal).toEqual({
+      ok: false,
+      code: 'INTERNAL',
+      message: 'Could not change your password. Try again.',
+    })
   })
 })
 
