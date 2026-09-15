@@ -57,6 +57,9 @@ export type VerificationWorkspaceValue = {
   dirty: boolean
   ready: boolean
   checkedVersionId: string | null
+  /** The checked version is no longer the stored one: either the API says so or
+   * the open document has moved on since the run. */
+  stale: boolean
   startRun: () => void
   startPending: boolean
   startError: Error | null
@@ -125,6 +128,13 @@ export function VerificationWorkspaceProvider({
   const version = document.data?.document.currentVersion
   const ready = version?.documentStatus === 'ready'
   const checkedVersionId = latest?.documentVersionId ?? version?.id ?? null
+  // The run row reports staleness against the stored pointer. The open
+  // document's own version is the faster and, after a save, the truer signal,
+  // so either one marks the evidence as earlier than the document.
+  const stale =
+    latest != null &&
+    (latest.stale ||
+      (version != null && latest.documentVersionId !== version.id))
 
   const targets = useMemo(() => {
     const map = new Map<string, FindingTarget>()
@@ -170,6 +180,7 @@ export function VerificationWorkspaceProvider({
     dirty,
     ready,
     checkedVersionId,
+    stale,
     startRun: () => {
       if (!ready || !version || create.isPending || dirty) return
       create.mutate(version.id)

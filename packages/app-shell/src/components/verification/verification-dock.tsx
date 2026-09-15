@@ -102,7 +102,9 @@ export function VerificationDock() {
               {verificationOutcomeLabel(run.summary)}
             </Badge>
           ) : null}
-          {run?.stale ? <Badge tone="warning">Earlier version</Badge> : null}
+          {verification.stale ? (
+            <Badge tone="warning">Earlier version</Badge>
+          ) : null}
           {run?.failureCode ? (
             <Badge tone="danger">
               {verificationFailureLabel(run.failureCode)}

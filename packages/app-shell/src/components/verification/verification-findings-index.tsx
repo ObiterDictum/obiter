@@ -54,7 +54,7 @@ export function VerificationFindingsIndex({
             verification.checkedVersionId ?? 'unknown',
             {
               unsaved: verification.dirty,
-              stale: verification.run.stale,
+              stale: verification.stale,
             },
           )}{' '}
           Checks cover the main document, footnotes and endnotes. Headers,

@@ -258,6 +258,8 @@ function idleMutation() {
   }
 }
 
+let storedVersionId = 'ver_1'
+
 function mount(findings: VerificationFindingView[]) {
   modelHook.useDocumentModel.mockReturnValue({
     isLoading: false,
@@ -291,7 +293,9 @@ function mount(findings: VerificationFindingView[]) {
     isPending: false,
     isError: false,
     data: {
-      document: { currentVersion: { id: 'ver_1', documentStatus: 'ready' } },
+      document: {
+        currentVersion: { id: storedVersionId, documentStatus: 'ready' },
+      },
     },
   })
   const completed = run()
@@ -314,6 +318,7 @@ function mount(findings: VerificationFindingView[]) {
 
 beforeEach(() => {
   draftHook.useDocumentDraftStatus.mockReturnValue(null)
+  storedVersionId = 'ver_1'
 })
 
 afterEach(() => {
@@ -498,6 +503,14 @@ describe('contextual verification evidence', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Close' }))
     const panel = await screen.findByRole('dialog')
     expect(panel.textContent).toContain('[2012] UKSC 7')
+  })
+
+  it('marks evidence as earlier than the document once a newer version is stored', async () => {
+    storedVersionId = 'ver_2'
+    mount([finding()])
+    const dock = await screen.findByRole('region', { name: 'Verification' })
+    expect(await screen.findByText('Earlier version')).toBeTruthy()
+    expect(dock.textContent).toContain('Stored version ver_1')
   })
 
   it('moves focus to the run status when a run starts', async () => {
