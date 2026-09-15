@@ -16,6 +16,7 @@ import {
   createRouter,
   RouterProvider,
 } from '@tanstack/react-router'
+import type { MeResponse } from '@obiter/contracts'
 import { ApiError } from '../api'
 import { SettingsRouteView } from './settings'
 
@@ -111,7 +112,7 @@ function idleMutation() {
   return { mutateAsync: vi.fn(), isPending: false, isError: false }
 }
 
-function signedIn(user = OWNER_ME) {
+function signedIn(user: MeResponse = OWNER_ME) {
   mocks.useCurrentUser.mockReturnValue({ data: user })
   mocks.useCreateOrganisation.mockReturnValue(idleMutation())
   mocks.useRenameOrganisation.mockReturnValue(idleMutation())
@@ -137,6 +138,11 @@ function renderSettings() {
       <RouterProvider router={router} />
     </QueryClientProvider>,
   )
+}
+
+/** The value of a read-only field, by its label: <dt>label</dt><dd>value</dd>. */
+function readOnlyValue(scope: HTMLElement, label: string) {
+  return within(scope).getByText(label).nextElementSibling?.textContent
 }
 
 async function openSection(name: 'Account' | 'Security' | 'Organisation') {
@@ -578,7 +584,7 @@ describe('SettingsRouteView — security', () => {
     const changePassword = vi.fn().mockResolvedValue({
       ok: false,
       code: 'CREDENTIAL_ACCOUNT_NOT_FOUND',
-      message: 'Credential account not found.',
+      message: 'This account does not sign in with a password.',
     })
     mocks.useAuth.mockReturnValue({ changePassword })
     const security = await renderSecurity()
@@ -661,17 +667,15 @@ describe('SettingsRouteView — organisation', () => {
     renderSettings()
     const organisation = await openSection('Organisation')
 
-    expect(
-      within(organisation).getByText(/applies to everyone in/i),
-    ).toBeTruthy()
+    expect(within(organisation).getByText(/apply to everyone in/i)).toBeTruthy()
   })
 
   it('shows the role and the stable identifier as read-only context', async () => {
     renderSettings()
     const organisation = await openSection('Organisation')
 
-    expect(within(organisation).getByText('Owner')).toBeTruthy()
-    expect(within(organisation).getByText('org_1')).toBeTruthy()
+    expect(readOnlyValue(organisation, 'Your role')).toBe('Owner')
+    expect(readOnlyValue(organisation, 'Organisation ID')).toBe('org_1')
   })
 
   it('shows a member the organisation without an editing control', async () => {
@@ -680,7 +684,7 @@ describe('SettingsRouteView — organisation', () => {
     const organisation = await openSection('Organisation')
 
     expect(within(organisation).getByText('Ashcombe Chambers')).toBeTruthy()
-    expect(within(organisation).getByText('Member')).toBeTruthy()
+    expect(readOnlyValue(organisation, 'Your role')).toBe('Member')
     expect(
       within(organisation).queryByLabelText('Organisation name'),
     ).toBeNull()
@@ -700,7 +704,7 @@ describe('SettingsRouteView — organisation', () => {
     renderSettings()
     const organisation = await openSection('Organisation')
 
-    expect(within(organisation).getByText('Admin')).toBeTruthy()
+    expect(readOnlyValue(organisation, 'Your role')).toBe('Admin')
     expect(
       within(organisation).queryByLabelText('Organisation name'),
     ).toBeNull()

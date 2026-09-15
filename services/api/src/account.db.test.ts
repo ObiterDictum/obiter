@@ -43,12 +43,25 @@ describe('account and organisation settings (Postgres)', () => {
    * organization-membership.db.test.ts and by the browser pass.
    */
   function app() {
+    const account =
+      currentUserId === seed.ownerB
+        ? { organisationId: seed.orgB, role: 'owner' }
+        : currentUserId === seed.memberA
+          ? { organisationId: seed.orgA, role: 'member' }
+          : currentUserId
+            ? { organisationId: seed.orgA, role: 'owner' }
+            : null
     const auth = {
       api: {
         getSession: async () =>
-          currentUserId
+          account && currentUserId
             ? {
-                user: { id: currentUserId, name: 'Actor' },
+                user: {
+                  id: currentUserId,
+                  name: 'Actor',
+                  organisationId: account.organisationId,
+                  role: account.role,
+                },
                 session: { id: `ses_${currentUserId}` },
               }
             : null,

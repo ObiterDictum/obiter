@@ -1,5 +1,6 @@
 import { z } from 'zod'
 
+export * from './account'
 export * from './api-error'
 export * from './document-collaboration'
 export * from './document-comments'

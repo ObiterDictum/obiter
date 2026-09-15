@@ -2152,11 +2152,13 @@
           </div>
           <p>
             Two routes are new in both routers:
-            <code>/settings</code>, where an organisation can optionally be
-            created and named, members invited, and pending invites revoked; and
-            <code>/verify</code>, which lists organisation verification runs and
-            opens the document they were bound to. Web and desktop routers are
-            kept at parity and <code>routeTree.gen.ts</code> carries both.
+            <code>/settings</code>, which holds the account name, the password
+            change and the organisation (name, members, invites), in three
+            sections that keep an unsaved draft while the user moves between
+            them; and <code>/verify</code>, which lists organisation
+            verification runs and opens the document they were bound to. Web and
+            desktop routers are kept at parity and
+            <code>routeTree.gen.ts</code> carries both.
           </p>
         </section>
 
@@ -2704,6 +2706,45 @@
                   <td class="id">GET /api/me</td>
                   <td class="id">app.ts</td>
                   <td>Session user and organisation</td>
+                </tr>
+                <tr>
+                  <td class="id">PATCH /api/me</td>
+                  <td class="id">app.ts</td>
+                  <td>
+                    Updates the signed-in account&apos;s own display name and
+                    returns the canonical stored user. The update scope is the
+                    session&apos;s user: there is no user id in the path or the
+                    body, so a modified request cannot reach another account.
+                    Blank, whitespace-only and format-character-only names are
+                    refused by the shared contract schema; the audit row records
+                    the action and identifier and never the names.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">
+                    PATCH /api/organisations · PATCH
+                    /api/organisations/:organisationId
+                  </td>
+                  <td class="id">organisations.ts</td>
+                  <td>
+                    Owner-only rename. The bare path renames the caller&apos;s
+                    own organisation; the addressed path proves ownership first,
+                    so a foreign id is a 403 and the transaction never touches
+                    it. The clients call the bare path.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">POST /api/auth/change-password</td>
+                  <td class="id">auth.ts</td>
+                  <td>
+                    better-auth endpoint, mounted at the auth boundary. Verifies
+                    the current password server-side, hashes the new one with
+                    better-auth&apos;s own hasher, and revokes every other
+                    session. The request body is never read by the API, so no
+                    credential material can reach an audit row or a log; a
+                    successful change is audited as
+                    <code>auth.password_changed</code>.
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">POST /api/organisations</td>
@@ -3373,7 +3414,15 @@
             matter-first share-revocation prefix. Deleted runs stay out of
             direct reads and lists; only the known-id audit route uses an
             organisation-scoped deleted-run resolver after an owner/admin role
-            check, while members are gated before the deleted lookup.
+            check, while members are gated before the deleted lookup. The
+            account and organisation settings mutations carry no client-supplied
+            scope: <code>PATCH /api/me</code> writes the session&apos;s user,
+            and the settings client calls the bare
+            <code>PATCH /api/organisations</code>, which resolves the tenant
+            from the session rather than from the request. Organisation rename
+            is owner-only on both paths, enforced by
+            <code>requireOwnerRole</code>
+            and an ownership check, not by hiding the control.
             <code>POST /api/search/fetch</code>,
             <code>GET /api/search/readiness</code>,
             <code>GET /api/search/documents/:documentId</code>,

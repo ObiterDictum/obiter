@@ -1319,3 +1319,42 @@ lost: member removal writes no audit row at all, so an owner eviction is
 currently invisible in the audit log — the highest-value low-risk follow-up.
 It is reported, not fixed, to keep this change to the escalation decision; the
 decision to leave it is explicit rather than silent.
+
+### Account and organisation settings — session-scoped mutations, retained drafts (15 September 2026)
+
+Context: Settings rendered a read-only profile (name, email, role) and an
+owner-only organisation rename. There was no way to change the account name and
+no password-change UI at all, although `emailAndPassword` mounts
+`POST /api/auth/change-password`. Considered a `PATCH /api/users/:userId` route,
+a client-side draft stash, and a route-change blocker for unsaved edits.
+
+Decision: account mutations are scoped by the session, not by a request field.
+`PATCH /api/me` carries no user id in the path or body, so "update the wrong
+account" is not a reachable state rather than a validation to remember; the
+Settings client calls the bare `PATCH /api/organisations` for the same reason,
+leaving the addressed path as the only route that has to prove ownership.
+`packages/contracts/src/account.ts` owns the name rule and the password length
+policy, and `services/api/src/auth.ts` configures better-auth from those same
+constants, so a form cannot state a rule the API does not apply.
+`displayNameField` in `organisation.ts` is the one name rule behind both the
+account and the organisation name, including the format-character strip.
+
+Password change reuses better-auth's endpoint unchanged: the API does not read
+the request body, and a successful change is audited at the auth boundary as
+`auth.password_changed` with the actor and no credential material. Other
+sessions are revoked, matching `revokeSessionsOnPasswordReset`. Email change is
+not implemented: no verified-email-change flow exists, and a mutation without
+verification, session handling and collision protection would be worse than the
+read-only field it replaces.
+
+Draft retention: every Settings section stays mounted and is hidden when
+inactive, so a half-typed change survives moving between sections. The
+alternative — a stash or a navigation blocker — would either duplicate the form
+state or add a mechanism the repository does not have elsewhere.
+
+Outcome: no migration. `users.name` already exists; no new personal-data field,
+retention behaviour, route namespace or dependency was added, so
+`docs/data-and-compliance.md` is unchanged. Omitted deliberately: notification
+and theme preferences (the shell's own control owns the theme, and there is no
+notification system to own), email change, and any session list beyond the
+revocation the password change performs.
