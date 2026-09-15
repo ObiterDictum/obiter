@@ -219,6 +219,35 @@ describe('buildRedactedDocx', () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
+  it('redacts a name after a text-wrapping break without moving the break', async () => {
+    const source = await makeDocx({
+      body: `<w:p><w:r><w:t>Dear </w:t></w:r><w:r><w:t>Intro</w:t><w:br/><w:t>${NAME}</w:t></w:r></w:p>`,
+      footnotes: null,
+    })
+    const text = `Dear Intro\n${NAME}`
+    const spans = [spanAt(text, NAME, 1)]
+    const decisions = {
+      [spans[0]!.id]: {
+        decision: 'accept' as const,
+        decidedBy: 'usr_1',
+        decidedAt: '2026-01-01T00:00:00.000Z',
+      },
+    }
+    const output = await buildRedactedDocx({
+      docxBytes: source,
+      text,
+      spans,
+      decisions,
+      outputMode: 'redacted',
+      tokenMap: {},
+    })
+    const document = (await zipEntries(output)).get('word/document.xml') ?? ''
+
+    expect(document).not.toContain(NAME)
+    expect(document).toContain('[REDACTED]')
+    expect(document.match(/<w:br\/>/g)?.length).toBe(1)
+  })
+
   it('refuses when redacted text sits inside a tracked deletion', async () => {
     const source = await makeDocx({
       body: `<w:p><w:r><w:t>Kept text</w:t></w:r></w:p><w:p><w:del w:id="0" w:author="A" w:date="2026-01-01T00:00:00Z"><w:r><w:delText>${NAME}</w:delText></w:r></w:del></w:p>`,

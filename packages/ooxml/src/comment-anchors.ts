@@ -163,10 +163,15 @@ function validateSourceText(
   if (!part?.overlay || part.kind !== 'xml') {
     throw new OoxmlError('comment-anchor-unresolved')
   }
+  const source = part.overlay.source
   for (const run of paragraph.runs) {
-    const sourceText = run.textRanges
-      .map(({ start, end }) =>
-        decodeXmlReferences(part.overlay?.source.slice(start, end) ?? ''),
+    const sourceText = editableTextNodes(run)
+      .map(({ range, textBreak }) =>
+        textBreak
+          ? '\n'
+          : decodeXmlReferences(
+              source.slice(range.startTagEnd, range.endTagStart),
+            ),
       )
       .join('')
     if (sourceText !== run.wire.text) {
@@ -239,39 +244,79 @@ export function locateOffset(
   throw new OoxmlError('comment-anchor-unresolved')
 }
 
+// The run's editable text as source-order nodes. A `w:t` contributes its
+// decoded text; a text-wrapping `w:br` contributes exactly one `\n`, matching
+// the parser's `runPlainText` and `DocumentTextRunWire.text`. Everything else
+// in a run is structure and contributes no offset. One traversal owner so the
+// formatting locator, range validation and the comment-anchor validator cannot
+// disagree about a break.
+type EditableTextNode = { range: XmlElementRange; textBreak: boolean }
+
+function editableTextNodes(run: TextRunAnchor): EditableTextNode[] {
+  return [
+    ...run.textElements.map((range) => ({ range, textBreak: false })),
+    ...run.textBreaks.map((range) => ({ range, textBreak: true })),
+  ].sort((left, right) => left.range.start - right.range.start)
+}
+
 function locateInsideRun(
   source: string,
   run: TextRunAnchor,
   localOffset: number,
 ): InsertionPoint {
+  const nodes = editableTextNodes(run).map((node) => ({
+    ...node,
+    raw: node.textBreak
+      ? ''
+      : source.slice(node.range.startTagEnd, node.range.endTagStart),
+  }))
+  const decoded = nodes.map((node) => ({
+    ...node,
+    text: node.textBreak ? '\n' : decodeXmlReferences(node.raw),
+  }))
+  // A run whose anchors do not reconstruct its model text, such as a break the
+  // parser counted but did not anchor, cannot be split faithfully. Refuse
+  // rather than place a boundary by guesswork.
+  if (decoded.map((node) => node.text).join('') !== run.wire.text) {
+    throw new OoxmlError('comment-anchor-unresolved')
+  }
+
   let textStart = 0
-  for (const textElement of run.textElements) {
-    const raw = source.slice(textElement.startTagEnd, textElement.endTagStart)
-    const text = decodeXmlReferences(raw)
-    const textEnd = textStart + text.length
+  for (const node of decoded) {
+    const textEnd = textStart + node.text.length
     if (localOffset === textStart) {
       return {
-        sourceOffset: textElement.start,
+        sourceOffset: node.range.start,
         split: {
           kind: 'run',
           run,
-          textElement,
+          textElement: node.range,
           position: 'before-element',
         },
       }
     }
-    if (localOffset > textStart && localOffset < textEnd) {
+    if (!node.textBreak && localOffset > textStart && localOffset < textEnd) {
       return {
         sourceOffset:
-          textElement.startTagEnd +
-          rawOffsetAtDecodedBoundary(raw, localOffset - textStart),
-        split: { kind: 'run', run, textElement, position: 'content' },
+          node.range.startTagEnd +
+          rawOffsetAtDecodedBoundary(node.raw, localOffset - textStart),
+        split: {
+          kind: 'run',
+          run,
+          textElement: node.range,
+          position: 'content',
+        },
       }
     }
     if (localOffset === textEnd) {
       return {
-        sourceOffset: textElement.end,
-        split: { kind: 'run', run, textElement, position: 'after-element' },
+        sourceOffset: node.range.end,
+        split: {
+          kind: 'run',
+          run,
+          textElement: node.range,
+          position: 'after-element',
+        },
       }
     }
     textStart = textEnd
