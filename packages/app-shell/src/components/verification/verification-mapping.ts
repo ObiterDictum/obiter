@@ -16,6 +16,9 @@ export type UnmappedReason =
   | 'paragraph_not_in_document'
   | 'range_not_in_document'
   | 'text_changed_since_check'
+  | 'range_spans_line_break'
+  | 'range_split_across_fragments'
+  | 'rendered_anchor_unavailable'
   | 'document_not_mappable'
 
 /**

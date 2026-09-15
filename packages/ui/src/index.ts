@@ -21,8 +21,6 @@ export {
   PopoverPortal,
   PopoverPositioner,
   PopoverPopup,
-  PopoverArrow,
-  PopoverClose,
 } from './popover'
 export {
   ToastProvider,

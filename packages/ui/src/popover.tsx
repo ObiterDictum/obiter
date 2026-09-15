@@ -58,25 +58,3 @@ export function PopoverPopup({
     />
   )
 }
-
-export function PopoverArrow({
-  className,
-  ...props
-}: ComponentPropsWithoutRef<typeof BasePopover.Arrow>) {
-  return (
-    <BasePopover.Arrow
-      className={cn(
-        'data-[side=bottom]:-top-1.5 data-[side=top]:-bottom-1.5',
-        'data-[side=left]:-right-1.5 data-[side=right]:-left-1.5',
-        className,
-      )}
-      {...props}
-    />
-  )
-}
-
-export function PopoverClose(
-  props: ComponentPropsWithoutRef<typeof BasePopover.Close>,
-) {
-  return <BasePopover.Close {...props} />
-}

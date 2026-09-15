@@ -76,5 +76,12 @@ describe('contextual verification evidence', () => {
     expect(markers).toHaveLength(1)
     expect(markers[0]!.getAttribute('aria-label')).toContain('Flagged')
     expect(markers[0]!.getAttribute('aria-label')).toContain('2 findings here')
+    // The marker must open the most serious member it advertises, not whichever
+    // member the API happened to list first.
+    fireEvent.click(markers[0]!)
+    const panel = await screen.findByRole('dialog')
+    expect(panel.textContent).toContain('Flagged')
+    expect(panel.textContent).toContain('Authority existence')
+    expect(panel.textContent).not.toContain('Clear')
   })
 })

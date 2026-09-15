@@ -13,6 +13,7 @@ import {
   useVerificationWorkspace,
   type VerificationWorkspaceValue,
 } from './verification-context'
+import type { UnmappedReason } from './verification-mapping'
 import {
   verificationReasonLabel,
   verificationStateLabel,
@@ -50,8 +51,13 @@ export function VerificationEvidencePanel() {
   // marker that never took focus, and it restores focus to what opened the
   // panel. Document-level listeners are a browser boundary with cleanup.
   const panelOpen = verification?.panelOpen ?? false
+  const indexOpen = verification?.indexOpen ?? false
   useEffect(() => {
-    if (!panelOpen) return
+    // While the modal findings index is open it owns dismissal: it is not
+    // "outside" the panel, and Escape belongs to the dialog. Registering the
+    // listeners only outside the index keeps one Escape from closing two
+    // surfaces.
+    if (!panelOpen || indexOpen) return
     const onPointerDown = (event: PointerEvent) => {
       const target = event.target
       if (!(target instanceof Element)) return
@@ -67,7 +73,7 @@ export function VerificationEvidencePanel() {
       latest.current?.closePanel()
     }
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return
+      if (event.key !== 'Escape' || event.isComposing) return
       latest.current?.closePanel()
       anchorRef.current?.focus()
     }
@@ -77,10 +83,10 @@ export function VerificationEvidencePanel() {
       document.removeEventListener('pointerdown', onPointerDown)
       document.removeEventListener('keydown', onKeyDown)
     }
-  }, [panelOpen])
+  }, [panelOpen, indexOpen])
 
   if (!verification?.panelOpen || !finding) return null
-  const total = verification.findings.length
+  const total = verification.totalFindings
   const close = (restoreFocus: boolean) => {
     verification.closePanel()
     if (restoreFocus) anchor?.focus()
@@ -121,7 +127,18 @@ export function VerificationEvidencePanel() {
   }
 
   return (
-    <Popover open onOpenChange={(open) => !open && close(false)}>
+    <Popover
+      open
+      onOpenChange={(open, details) => {
+        if (open) return
+        // The panel owns its dismissal. Base UI's dismissals are cancelled and
+        // the document listener below performs the one rule (a real click
+        // outside the panel, markers or controls, or Escape, both restoring
+        // focus). Without this, opening the modal findings index counts as an
+        // outside press and silently destroys the panel it was opened from.
+        details.cancel()
+      }}
+    >
       <PopoverPortal>
         <PopoverPositioner
           anchor={anchor ?? undefined}
@@ -146,21 +163,24 @@ export function VerificationEvidencePanel() {
 }
 
 /**
- * Why the page did not draw this finding. A stored-model mapping that the
- * document layer did not render means the text at that location is no longer
- * the text that was checked, which is reported rather than guessed at.
+ * Why the page did not draw this finding. A stored-model mapping that the page
+ * did not render is reported with the renderer's own reason: a hard break, a
+ * range split across fragments, or an anchor the page did not paint are not
+ * changes to the document's text.
  */
 function unmappedReasonFor(
   verification: VerificationWorkspaceValue,
   finding: VerificationFindingView,
-) {
+): UnmappedReason | null {
+  if (!verification.mappable) return 'document_not_mappable'
   const target = verification.targets.get(finding.id)
   if (target?.kind === 'unmapped') return target.reason
   if (target?.kind !== 'mapped') return null
-  if (verification.visibleIds && !verification.visibleIds.has(finding.id)) {
-    return 'text_changed_since_check' as const
-  }
-  return null
+  if (!verification.rendered) return null
+  if (verification.rendered.visibleIds.has(finding.id)) return null
+  return (
+    verification.rendered.reasons.get(finding.id) ?? 'text_changed_since_check'
+  )
 }
 
 function PanelBody({
@@ -193,7 +213,7 @@ function PanelBody({
     <div
       className="flex flex-col gap-3"
       onKeyDown={(event) => {
-        if (event.key !== 'Escape') return
+        if (event.key !== 'Escape' || event.nativeEvent.isComposing) return
         event.stopPropagation()
         onEscape()
       }}

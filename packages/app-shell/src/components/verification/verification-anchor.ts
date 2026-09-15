@@ -1,4 +1,4 @@
-import type { FindingTarget } from './verification-mapping'
+import type { FindingTarget, UnmappedReason } from './verification-mapping'
 
 /**
  * DOM anchoring for verification findings.
@@ -79,14 +79,25 @@ function lineFor(fragment: Element, offset: number): HTMLElement | null {
   return found ?? lines[0] ?? null
 }
 
-/** Every rendered fragment of a paragraph, in page order. */
-function fragmentsFor(root: ParentNode, paragraphId: string): HTMLElement[] {
+/** Every rendered fragment of the paragraph this target names, in page order.
+ * The filter also matches the story the target names: paragraph ids are only
+ * unique inside a story, so a same-id body paragraph must never satisfy a
+ * footnote finding. */
+function fragmentsFor(
+  root: ParentNode,
+  target: Extract<FindingTarget, { kind: 'mapped' }>,
+): HTMLElement[] {
   // Filtered in JS rather than by selector: a paragraph id is model data and
   // needs no escaping rule, and a miss must be a miss rather than a selector
   // error.
   return Array.from(
     root.querySelectorAll<HTMLElement>('[data-paragraph-id]'),
-  ).filter((element) => element.dataset.paragraphId === paragraphId)
+  ).filter(
+    (element) =>
+      element.dataset.paragraphId === target.paragraphId &&
+      element.dataset.paragraphStory === target.storyKind &&
+      element.dataset.paragraphPart === target.storyPartName,
+  )
 }
 
 function pointInFragment(
@@ -113,33 +124,135 @@ function fragmentBounds(fragment: HTMLElement) {
 }
 
 /**
- * The rendered range for a mapped finding, or null when the text is not
- * rendered here. A paragraph split across pages keeps its id on every fragment;
- * the range is anchored in the fragment that holds its start and clamped to
- * that fragment's end.
+ * How a mapped finding's rendered range failed, or that it was built. These
+ * are renderer limits, not statements about the document: a hard break is not
+ * painted, and a range the renderer split across page fragments cannot always
+ * be reassembled. Only `text_changed_since_check` means the text differs.
  */
-export function rangeForTarget(root: ParentNode, target: FindingTarget) {
+export type RenderedRangeReason = Extract<
+  UnmappedReason,
+  | 'range_spans_line_break'
+  | 'range_split_across_fragments'
+  | 'rendered_anchor_unavailable'
+  | 'text_changed_since_check'
+>
+
+export type RenderedRange =
+  | { kind: 'attached'; range: Range; spansFragments: boolean }
+  | { kind: 'unavailable'; reason: RenderedRangeReason }
+
+function fragmentHolding(
+  fragments: HTMLElement[],
+  offset: number,
+): HTMLElement | undefined {
+  return fragments.find((fragment) => {
+    const { from, to } = fragmentBounds(fragment)
+    return offset >= from && offset < to
+  })
+}
+
+/**
+ * The full rendered range for a mapped finding, or a stated reason it cannot be
+ * expressed. A paragraph split across pages keeps its id on every fragment; a
+ * range that crosses a fragment boundary is built across the fragments in page
+ * order rather than clamped to the first one, so a finding is never attached to
+ * a shorter excerpt than the one checked. The caller compares the range text to
+ * the excerpt; this function only decides whether the range exists.
+ */
+export function rangeForTarget(
+  root: ParentNode,
+  target: FindingTarget,
+): RenderedRange | null {
   if (target.kind !== 'mapped') return null
-  const fragments = fragmentsFor(root, target.paragraphId)
-  if (fragments.length === 0) return null
-  const fragment =
-    fragments.find((item) => {
-      const { from, to } = fragmentBounds(item)
-      return target.start >= from && target.start < to
-    }) ?? fragments[fragments.length - 1]!
-  const { to } = fragmentBounds(fragment)
-  const end = Math.min(target.end, to)
-  const startPoint = pointInFragment(fragment, target.start)
-  const endPoint = pointInFragment(fragment, end)
-  if (!startPoint || !endPoint) return null
+  const fragments = fragmentsFor(root, target)
+  if (fragments.length === 0) {
+    return { kind: 'unavailable', reason: 'rendered_anchor_unavailable' }
+  }
+  const startFragment = fragmentHolding(fragments, target.start)
+  if (!startFragment) {
+    return { kind: 'unavailable', reason: 'rendered_anchor_unavailable' }
+  }
+  // The end is exclusive, so place it after the range's last character. If that
+  // character is not rendered, the tail is not on the page either: refuse
+  // rather than clamp the range to what is drawn.
+  const endFragment = fragmentHolding(fragments, target.end - 1)
+  if (!endFragment) {
+    return { kind: 'unavailable', reason: 'range_split_across_fragments' }
+  }
+  const startPoint = pointInFragment(startFragment, target.start)
+  const endPoint = pointInFragment(endFragment, target.end)
+  if (!startPoint || !endPoint) {
+    return {
+      kind: 'unavailable',
+      reason:
+        startFragment === endFragment
+          ? 'rendered_anchor_unavailable'
+          : 'range_split_across_fragments',
+    }
+  }
   const range = document.createRange()
   try {
     range.setStart(startPoint.node, startPoint.offset)
     range.setEnd(endPoint.node, endPoint.offset)
   } catch {
-    return null
+    return {
+      kind: 'unavailable',
+      reason:
+        startFragment === endFragment
+          ? 'rendered_anchor_unavailable'
+          : 'range_split_across_fragments',
+    }
   }
-  return range
+  return {
+    kind: 'attached',
+    range,
+    spansFragments: startFragment !== endFragment,
+  }
+}
+
+/**
+ * Why a built range does not carry a finding's excerpt. A hard break is a
+ * renderer limit, not a change to the document, and a range the renderer split
+ * across fragments is a limit too; only a genuine text difference is reported
+ * as one.
+ */
+export function renderedRangeMismatchReason(
+  excerpt: string,
+  spansFragments: boolean,
+): RenderedRangeReason {
+  if (excerpt.includes('\n') || excerpt.includes('\r'))
+    return 'range_spans_line_break'
+  if (spansFragments) return 'range_split_across_fragments'
+  return 'text_changed_since_check'
+}
+
+/**
+ * The one decision the marker layer and its tests share: either the page
+ * carries this finding's exact excerpt, or it does not and there is a stated
+ * reason. The range is built across fragments first, so a finding is never
+ * attached to a clamped, shorter excerpt.
+ */
+export function renderedRangeFor(
+  root: ParentNode,
+  target: FindingTarget,
+  excerpt: string,
+): RenderedRange {
+  const result = rangeForTarget(root, target)
+  if (!result) {
+    return { kind: 'unavailable', reason: 'rendered_anchor_unavailable' }
+  }
+  if (result.kind === 'unavailable') return result
+  if (result.range.toString() === excerpt) {
+    return {
+      kind: 'attached',
+      range: result.range,
+      spansFragments: result.spansFragments,
+    }
+  }
+  return {
+    kind: 'unavailable',
+    reason: renderedRangeMismatchReason(excerpt, result.spansFragments),
+  }
 }
 
 /** The geometry a marker needs, without depending on the DOMRect class. */

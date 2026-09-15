@@ -1,4 +1,4 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useRef, type ReactNode } from 'react'
 import { ListChecks } from '@phosphor-icons/react'
 import { Badge, Button, EmptyState, Skeleton } from '@obiter/ui'
 import { ApiError } from '../../api'
@@ -34,8 +34,6 @@ function statusTone(status: 'queued' | 'running' | 'completed' | 'failed') {
 export function VerificationDock() {
   const verification = useVerificationWorkspace()
   const statusRef = useRef<HTMLParagraphElement>(null)
-  const [indexOpen, setIndexOpen] = useState(false)
-  const reopenPanel = useRef(false)
 
   if (!verification) return null
   if (verification.runsPending) {
@@ -73,8 +71,36 @@ export function VerificationDock() {
   const findings = verification.findings
   const nextIndex = nextActionableIndex(findings)
   const nextFinding = nextIndex >= 0 ? findings[nextIndex] : undefined
-  const stateCount = (state: 'clear' | 'flagged' | 'review_required') =>
-    findings.filter((finding) => finding.state === state).length
+  // Counts come from the run summary, which the server computes over every
+  // finding, not from the pages loaded so far. The API folds `not_checked` into
+  // `reviewRequiredCount`, so the not-checked findings are counted from the
+  // (eagerly loaded) set and separated back out: a run of unchecked findings
+  // must never read as all-clear, and the strip must agree with the badge.
+  const notChecked = findings.filter(
+    (finding) => finding.state === 'not_checked',
+  ).length
+  const summary = run?.summary
+  const counts = summary
+    ? {
+        clear: Math.max(
+          0,
+          summary.findingCount -
+            summary.flaggedCount -
+            summary.reviewRequiredCount,
+        ),
+        flagged: summary.flaggedCount,
+        needsReview: Math.max(0, summary.reviewRequiredCount - notChecked),
+        notChecked,
+      }
+    : {
+        clear: findings.filter((finding) => finding.state === 'clear').length,
+        flagged: findings.filter((finding) => finding.state === 'flagged')
+          .length,
+        needsReview: findings.filter(
+          (finding) => finding.state === 'review_required',
+        ).length,
+        notChecked,
+      }
   const statusMessage = !run
     ? 'Verification has not been started for this stored version.'
     : busy
@@ -112,8 +138,11 @@ export function VerificationDock() {
           ) : null}
           {run?.status === 'completed' ? (
             <span className="text-xs text-subtle">
-              {stateCount('clear')} clear · {stateCount('flagged')} flagged ·{' '}
-              {stateCount('review_required')} needs review
+              {counts.clear} clear · {counts.flagged} flagged ·{' '}
+              {counts.needsReview} needs review
+              {counts.notChecked > 0 ? (
+                <> · {counts.notChecked} not checked</>
+              ) : null}
             </span>
           ) : null}
         </div>
@@ -144,7 +173,7 @@ export function VerificationDock() {
         ) : null}
         {nextFinding ? (
           <p className="text-xs text-subtle">
-            Next actionable: {nextFinding.authorityLabel} —{' '}
+            Next actionable: {nextFinding.authorityLabel} -{' '}
             {verificationStateLabel(nextFinding.state)}
           </p>
         ) : null}
@@ -172,12 +201,7 @@ export function VerificationDock() {
           variant="secondary"
           size="sm"
           disabled={!run}
-          onClick={() => {
-            // The index is a modal list, so the panel steps aside for it and
-            // returns with the same finding selected when it closes.
-            reopenPanel.current = verification.panelOpen
-            setIndexOpen(true)
-          }}
+          onClick={() => verification.openIndex()}
           iconStart={<ListChecks size={14} aria-hidden />}
         >
           View all findings
@@ -227,7 +251,12 @@ export function VerificationDock() {
           />
         </div>
       ) : null}
-      <VerificationFindingsIndex open={indexOpen} onOpenChange={setIndexOpen} />
+      <VerificationFindingsIndex
+        open={verification.indexOpen}
+        onOpenChange={(open) =>
+          open ? verification.openIndex() : verification.closeIndex()
+        }
+      />
     </VerificationStrip>
   )
 }

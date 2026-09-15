@@ -22,7 +22,19 @@ import { panelPlacement } from './verification-anchor'
 import {
   resolveFindingTarget,
   type FindingTarget,
+  type UnmappedReason,
 } from './verification-mapping'
+
+/**
+ * What the document layer actually drew for the current document. `null` means
+ * the layer has not measured yet or this document has no mapped layer. The
+ * visible ids and the per-finding reasons are one value so a render can never
+ * read half of one document's measurement with half of another's.
+ */
+export type RenderedFindings = {
+  visibleIds: ReadonlySet<string>
+  reasons: ReadonlyMap<string, UnmappedReason>
+}
 
 /**
  * One owner for the contextual verification interaction: which run and findings
@@ -67,10 +79,16 @@ export type VerificationWorkspaceValue = {
   markerFor: (findingId: string) => HTMLElement | null
   dockAnchor: HTMLElement | null
   setDockAnchor: (element: HTMLElement | null) => void
-  /** Findings the document layer actually rendered a marker for. `null` means
-   * the layer has not measured yet or this document has no mapped layer. */
-  visibleIds: ReadonlySet<string> | null
-  setVisibleIds: (ids: ReadonlySet<string> | null) => void
+  /** What the document layer drew, once it has measured. */
+  rendered: RenderedFindings | null
+  setRendered: (value: RenderedFindings | null) => void
+  /** The server's total for the selected run, not the loaded page count. */
+  totalFindings: number
+  /** The findings index is a modal list; while it is open the panel's own
+   * outside-dismissal rule is suspended so the dialog is not "outside". */
+  indexOpen: boolean
+  openIndex: () => void
+  closeIndex: () => void
   placement: 'floating' | 'drawer'
 }
 
@@ -120,10 +138,28 @@ export function VerificationWorkspaceProvider({
   const findings = findingsQuery.findings
   const [activeId, setActiveId] = useState<string | null>(null)
   const [panelOpen, setPanelOpen] = useState(false)
+  const [indexOpen, setIndexOpen] = useState(false)
   const [dockAnchor, setDockAnchor] = useState<HTMLElement | null>(null)
-  const [visibleIds, setVisibleIds] = useState<ReadonlySet<string> | null>(null)
+  const [rendered, setRendered] = useState<RenderedFindings | null>(null)
   const markers = useRef(new Map<string, HTMLElement>())
+  const pendingStep = useRef<number | null>(null)
   const placement = panelPlacement(useViewportWidth())
+
+  // Mapping, navigation and marker coverage must span the whole finding set,
+  // not only the pages fetched so far. The endpoint is keyset-paginated, so the
+  // provider walks the remaining pages once a completed run is selected; each
+  // completed page re-runs this effect and starts the next. It is a real
+  // network boundary, so the guard and the cleanup are deliberate.
+  const hasNextPage = findingsQuery.hasNextPage
+  const fetchingNextPage = findingsQuery.isFetchingNextPage
+  const findingsFailed = findingsQuery.isError
+  const fetchNextPage = findingsQuery.fetchNextPage
+  useEffect(() => {
+    // A failed page stops the walk and surfaces through findingsError instead of
+    // retrying on every render.
+    if (!hasNextPage || fetchingNextPage || findingsFailed) return
+    void fetchNextPage()
+  }, [hasNextPage, fetchingNextPage, findingsFailed, fetchNextPage])
 
   const version = document.data?.document.currentVersion
   const ready = version?.documentStatus === 'ready'
@@ -146,6 +182,23 @@ export function VerificationWorkspaceProvider({
   }, [findings, mappable, model.data])
 
   const activeIndex = findings.findIndex((finding) => finding.id === activeId)
+  // The run summary is computed server-side over every finding, so it, not the
+  // loaded page, is the truthful total. Fall back to the loaded set only while
+  // the run summary is not yet available.
+  const totalFindings = latest?.summary.findingCount ?? findings.length
+
+  // A Next/Previous that lands on a page that is not loaded yet is remembered
+  // and applied when the page arrives, so navigation is never silently bounded
+  // by whichever pages happen to be resident.
+  useEffect(() => {
+    const pending = pendingStep.current
+    if (pending == null) return
+    const target = findings[pending]
+    if (!target) return
+    pendingStep.current = null
+    setActiveId(target.id)
+    setPanelOpen(true)
+  }, [findings])
 
   const value: VerificationWorkspaceValue = {
     documentId,
@@ -172,13 +225,23 @@ export function VerificationWorkspaceProvider({
     },
     closePanel: () => setPanelOpen(false),
     step: (delta) => {
+      if (activeIndex < 0) return
       const next = activeIndex + delta
-      if (activeIndex < 0 || next < 0 || next >= findings.length) return
-      setActiveId(findings[next]!.id)
-      setPanelOpen(true)
+      if (next < 0 || next >= totalFindings) return
+      const target = findings[next]
+      if (target) {
+        setActiveId(target.id)
+        setPanelOpen(true)
+        return
+      }
+      // The next finding is on a page that has not arrived yet: request it and
+      // let the effect above land on it once it does.
+      pendingStep.current = next
+      void fetchNextPage()
     },
     dirty,
     ready,
+    totalFindings,
     checkedVersionId,
     stale,
     startRun: () => {
@@ -194,8 +257,11 @@ export function VerificationWorkspaceProvider({
     markerFor: (findingId) => markers.current.get(findingId) ?? null,
     dockAnchor,
     setDockAnchor,
-    visibleIds,
-    setVisibleIds,
+    rendered,
+    setRendered,
+    indexOpen,
+    openIndex: () => setIndexOpen(true),
+    closeIndex: () => setIndexOpen(false),
     placement,
   }
 

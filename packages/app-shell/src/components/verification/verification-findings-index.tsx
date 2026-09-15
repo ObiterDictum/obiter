@@ -38,9 +38,10 @@ export function VerificationFindingsIndex({
       : target?.kind === 'unmapped'
         ? target.reason
         : target?.kind === 'mapped' &&
-            verification.visibleIds &&
-            !verification.visibleIds.has(finding.id)
-          ? 'text_changed_since_check'
+            verification.rendered &&
+            !verification.rendered.visibleIds.has(finding.id)
+          ? (verification.rendered.reasons.get(finding.id) ??
+            'text_changed_since_check')
           : null
     if (reason) notes.set(finding.id, verificationUnmappedLabel(reason))
   }
@@ -70,6 +71,10 @@ export function VerificationFindingsIndex({
           <VerificationFindingsList
             findings={verification.findings}
             notes={notes}
+            onSelectFinding={(findingId) => {
+              verification.openFinding(findingId)
+              onOpenChange(false)
+            }}
           />
         )}
         {verification.hasNextPage ? (

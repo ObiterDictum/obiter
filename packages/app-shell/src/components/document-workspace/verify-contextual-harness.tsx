@@ -110,6 +110,17 @@ function model(): DocumentModelWire {
             ],
             preservedXmlFragments: [],
           },
+          {
+            id: 'p3',
+            runs: [
+              {
+                id: 'r3',
+                text: 'Line one\nLine two',
+                preservedXmlFragments: [],
+              },
+            ],
+            preservedXmlFragments: [],
+          },
         ],
         preservedXmlFragments: [],
       },
@@ -193,6 +204,24 @@ export function unmappableFinding(): VerificationFindingView {
   })
 }
 
+const HARD_BREAK_TEXT = 'Line one\nLine two'
+
+/** A finding whose recorded excerpt contains a hard break. The model range is
+ * byte-identical, but the page does not paint the newline as text. */
+export function hardBreakFinding(): VerificationFindingView {
+  return finding({
+    id: 'vf_hb',
+    type: 'quote_fidelity',
+    state: 'flagged',
+    severity: 'high',
+    explanation: 'The quotation spans a line break in the draft.',
+    excerpt: HARD_BREAK_TEXT,
+    location: location('p3', HARD_BREAK_TEXT, HARD_BREAK_TEXT),
+    authorityLabel: '[2012] UKSC 41',
+    evidence: [],
+  })
+}
+
 function run(overrides: Partial<VerificationRun> = {}): VerificationRun {
   return {
     id: 'vrun_1',
@@ -247,6 +276,12 @@ function wrapper({ children }: PropsWithChildren) {
   )
 }
 
+/** The workspace element the suites render, exposed so a test can rerender the
+ * same pane with a different document id. */
+export function workspaceElement(documentId: string) {
+  return <DocumentWorkspace documentId={documentId} version={version()} />
+}
+
 function idleMutation() {
   return {
     mutate: vi.fn(),
@@ -268,15 +303,23 @@ export function setUnsavedWork(dirty: boolean) {
   draftHook.useDocumentDraftStatus.mockReturnValue({ dirty })
 }
 
-export function mount(findings: VerificationFindingView[]) {
+export function mount(
+  findings: VerificationFindingView[],
+  options: {
+    documentId?: string
+    model?: DocumentModelWire
+    summary?: Partial<VerificationRun['summary']>
+  } = {},
+) {
+  const documentId = options.documentId ?? 'doc_1'
   modelHook.useDocumentModel.mockReturnValue({
     isLoading: false,
     isError: false,
     data: {
-      documentId: 'doc_1',
+      documentId,
       versionId: 'ver_1',
       versionNumber: 1,
-      model: model(),
+      model: options.model ?? model(),
     },
   })
   modelHook.useDocumentComments.mockReturnValue({ data: { comments: [] } })
@@ -306,7 +349,18 @@ export function mount(findings: VerificationFindingView[]) {
       },
     },
   })
-  const completed = run()
+  const completed = run(
+    options.summary
+      ? {
+          summary: {
+            findingCount: 3,
+            flaggedCount: 1,
+            reviewRequiredCount: 1,
+            ...options.summary,
+          },
+        }
+      : {},
+  )
   runsHook.useDocumentVerificationRuns.mockReturnValue({
     isPending: false,
     isError: false,
@@ -319,9 +373,7 @@ export function mount(findings: VerificationFindingView[]) {
     isError: false,
     findings,
   })
-  return render(<DocumentWorkspace documentId="doc_1" version={version()} />, {
-    wrapper,
-  })
+  return render(workspaceElement(documentId), { wrapper })
 }
 
 beforeEach(() => {

@@ -188,6 +188,12 @@ export function verificationUnmappedLabel(reason: UnmappedReason) {
       return 'Not shown in the document: the recorded range does not fit the paragraph it names.'
     case 'text_changed_since_check':
       return 'Not shown in the document: the text at this location differs from the text that was checked.'
+    case 'range_spans_line_break':
+      return 'Not shown in the document: the checked text contains a line break, which the page does not draw as text.'
+    case 'range_split_across_fragments':
+      return 'Not shown in the document: the checked range crosses a page or column boundary, so the page cannot draw it as one range.'
+    case 'rendered_anchor_unavailable':
+      return 'Not shown in the document: the page did not render an anchor for this location, so the check cannot be drawn beside it.'
     case 'document_not_mappable':
       return 'Not shown in the document: this file type has no document model, so findings are listed here only.'
     default: {

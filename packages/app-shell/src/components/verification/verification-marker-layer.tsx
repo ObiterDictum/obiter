@@ -6,8 +6,8 @@ import type {
 } from '@obiter/contracts'
 import { cn } from '@obiter/ui'
 import { useVerificationWorkspace } from './verification-context'
-import { rangeForTarget, rectsOfRange } from './verification-anchor'
-import type { FindingTarget } from './verification-mapping'
+import { rectsOfRange, renderedRangeFor } from './verification-anchor'
+import type { FindingTarget, UnmappedReason } from './verification-mapping'
 import {
   verificationStateLabel,
   verificationTypeLabel,
@@ -109,10 +109,16 @@ function placementSignature(placed: PlacedFinding[]) {
     .join('|')
 }
 
-function sameIds(left: ReadonlySet<string> | null, right: ReadonlySet<string>) {
-  if (!left || left.size !== right.size) return false
-  for (const id of right) if (!left.has(id)) return false
-  return true
+function renderedSignature(
+  visible: ReadonlySet<string>,
+  reasons: ReadonlyMap<string, UnmappedReason>,
+) {
+  const visiblePart = [...visible].sort().join(',')
+  const reasonPart = [...reasons.entries()]
+    .map(([id, reason]) => `${id}:${reason}`)
+    .sort()
+    .join(',')
+  return `${visiblePart}|${reasonPart}`
 }
 
 /**
@@ -135,10 +141,10 @@ export function VerificationMarkerLayer({
   const [revision, setRevision] = useState(0)
   const [placed, setPlaced] = useState<PlacedFinding[]>([])
   const lastSignature = useRef('')
-  const lastVisible = useRef<ReadonlySet<string> | null>(null)
+  const lastRenderedSignature = useRef('')
   const findings = verification?.findings
   const targets = verification?.targets
-  const setVisibleIds = verification?.setVisibleIds
+  const setRendered = verification?.setRendered
 
   // Re-measure when the page reflows: zoom, image or font loading, and a
   // re-laid-out document all change the box of the scroll content.
@@ -167,21 +173,44 @@ export function VerificationMarkerLayer({
       else groups.set(key, [finding])
     }
     const next: PlacedFinding[] = []
+    const reasons = new Map<string, UnmappedReason>()
     for (const group of groups.values()) {
       const target = targets.get(group[0]!.id)
       if (!target || target.kind !== 'mapped') continue
-      const range = rangeForTarget(desk, target)
-      if (!range) continue
-      // The page, not the stored model, is the last word on whether this range
-      // still carries the checked text: an unsaved edit before the range moves
-      // it, and a highlight over the wrong words is worse than no highlight.
-      if (!group.every((finding) => range.toString() === finding.excerpt))
-        continue
-      const rects = rectsOfRange(range)
+      const decisions = group.map((finding) => ({
+        finding,
+        result: renderedRangeFor(desk, target, finding.excerpt),
+      }))
+      const attached = decisions.find(
+        (
+          item,
+        ): item is {
+          finding: VerificationFindingView
+          result: { kind: 'attached'; range: Range; spansFragments: boolean }
+        } => item.result.kind === 'attached',
+      )
+      for (const item of decisions) {
+        // Record why rather than dropping silently: the panel and the index
+        // must state the renderer's limit, not call it a text change.
+        if (item.result.kind === 'unavailable')
+          reasons.set(item.finding.id, item.result.reason)
+      }
+      if (!attached) continue
+      const matching = decisions
+        .filter(
+          (
+            item,
+          ): item is {
+            finding: VerificationFindingView
+            result: { kind: 'attached'; range: Range; spansFragments: boolean }
+          } => item.result.kind === 'attached',
+        )
+        .map((item) => item.finding)
+      const rects = rectsOfRange(attached.result.range)
       const last = rects[rects.length - 1]!
       next.push({
-        findings: group,
-        finding: worstOf(group),
+        findings: matching,
+        finding: worstOf(matching),
         target,
         boxes: rects.map((rect) => ({
           left: rect.left - originLeft,
@@ -202,16 +231,19 @@ export function VerificationMarkerLayer({
       lastSignature.current = signature
       setPlaced(next)
     }
-    // Only the ids the layer actually drew are "in the document"; the index
-    // must not claim a marker that the page did not render.
+    // Only the ids the layer actually drew are "in the document", and every
+    // mapped finding the page could not draw carries its real reason. The two
+    // are written together so no render can pair one document's markers with
+    // another's reasons.
     const visible = new Set(
       next.flatMap((item) => item.findings.map((finding) => finding.id)),
     )
-    if (!sameIds(lastVisible.current, visible)) {
-      lastVisible.current = visible
-      setVisibleIds?.(visible)
+    const nextRenderedSignature = renderedSignature(visible, reasons)
+    if (nextRenderedSignature !== lastRenderedSignature.current) {
+      lastRenderedSignature.current = nextRenderedSignature
+      setRendered?.({ visibleIds: visible, reasons })
     }
-  }, [targets, findings, revision, model, setVisibleIds])
+  }, [targets, findings, revision, model, setRendered])
 
   // Keeping the selection visible must not move the caret: the marker is
   // scrolled, the paragraph editor keeps its selection.
@@ -274,7 +306,7 @@ export function VerificationMarkerLayer({
             aria-haspopup="dialog"
             aria-expanded={active && verification.panelOpen}
             title={`${verificationTypeLabel(item.finding.type)}: ${verificationStateLabel(item.finding.state)}`}
-            onClick={() => verification.openFinding(item.findings[0]!.id)}
+            onClick={() => verification.openFinding(item.finding.id)}
             onKeyDown={(event) => {
               if (event.key !== 'Escape' || !active) return
               event.stopPropagation()

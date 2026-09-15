@@ -42,7 +42,11 @@ type DocumentWorkspaceProps = {
 export function DocumentWorkspace(props: DocumentWorkspaceProps) {
   const kind = workspaceKind(props.version?.fileType)
   return (
-    <DocumentDraftStatusProvider>
+    // The providers own document-scoped interaction state: the verification
+    // selection, open panel, index, marker map and measured reasons. Keying the
+    // outermost provider on the document id means a switch remounts them too,
+    // so no marker, reason or panel from document A can render for document B.
+    <DocumentDraftStatusProvider key={props.documentId}>
       <VerificationWorkspaceProvider
         documentId={props.documentId}
         mappable={kind === 'docx'}

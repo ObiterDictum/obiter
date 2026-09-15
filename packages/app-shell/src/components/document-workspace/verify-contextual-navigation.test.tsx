@@ -1,15 +1,17 @@
 // @vitest-environment jsdom
 // Moving between findings, reaching the ones the document cannot show, the
 // keyboard path, the responsive fallback and the stored-version boundary.
-import { fireEvent, screen, waitFor } from '@testing-library/react'
+import { fireEvent, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import {
   finding,
+  hardBreakFinding,
   mount,
   quoteFinding,
   setStoredVersionId,
   setUnsavedWork,
   unmappableFinding,
+  workspaceElement,
 } from './verify-contextual-harness'
 
 describe('contextual verification evidence', () => {
@@ -36,20 +38,99 @@ describe('contextual verification evidence', () => {
     })
   })
 
-  it('closes on Escape and restores focus to the originating marker', async () => {
+  it('closes on a document-level Escape and restores focus to the originating marker', async () => {
     mount([finding()])
     const marker = await screen.findByRole('button', {
       name: /Citation resolution, Clear/,
     })
     fireEvent.click(marker)
-    await screen.findByRole('dialog')
-    fireEvent.keyDown(document.activeElement ?? document.body, {
-      key: 'Escape',
-    })
+    const panel = await screen.findByRole('dialog')
+    // Move focus into the panel as a keyboard user would. The document-level
+    // listener, not the marker's own handler, must close it and restore focus.
+    ;(panel.querySelector('button') as HTMLButtonElement).focus()
+    expect(document.activeElement).not.toBe(marker)
+    fireEvent.keyDown(document, { key: 'Escape' })
     await waitFor(() => {
       expect(screen.queryByRole('dialog')).toBeNull()
     })
     expect(document.activeElement).toBe(marker)
+  })
+
+  it('keeps the panel through a real pointerdown inside the findings index', async () => {
+    mount([finding(), quoteFinding()])
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Citation resolution, Clear/ }),
+    )
+    await screen.findByRole('dialog')
+    fireEvent.click(screen.getByRole('button', { name: 'View all findings' }))
+    const index = await screen.findByRole('dialog')
+    // A real pointerdown, not a click: the panel's dismissal listener must not
+    // treat the modal index as outside it. The modal aria-hides the panel while
+    // it is open, so assert the element survives rather than staying exposed.
+    fireEvent.pointerDown(index)
+    expect(document.querySelector('[data-verification-panel]')).toBeTruthy()
+    expect(screen.queryByText('All findings')).toBeTruthy()
+    // Escape inside the index closes only the index; the panel returns with the
+    // same finding selected.
+    fireEvent.keyDown(document, { key: 'Escape' })
+    await waitFor(() => {
+      expect(screen.queryByText('All findings')).toBeNull()
+    })
+    const panel = await screen.findByRole('dialog')
+    expect(panel.textContent).toContain('[2012] UKSC 7')
+  })
+
+  it('opens a finding from an index row and closes the index', async () => {
+    mount([finding(), quoteFinding()])
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'View all findings' }),
+    )
+    const index = await screen.findByRole('dialog')
+    fireEvent.click(within(index).getByText(quoteFinding().explanation))
+    await waitFor(() => {
+      expect(screen.queryByText('All findings')).toBeNull()
+    })
+    const panel = await screen.findByRole('dialog')
+    expect(panel.textContent).toContain('[2012] UKSC 40')
+  })
+
+  it('does not carry selection or markers across a same-pane document switch', async () => {
+    const view = mount([finding()])
+    const marker = await screen.findByRole('button', {
+      name: /Citation resolution, Clear/,
+    })
+    fireEvent.click(marker)
+    await screen.findByRole('dialog')
+    expect(document.querySelector('[data-verification-active]')).toBeTruthy()
+    view.rerender(workspaceElement('doc_2'))
+    // The panel and the active marker from document A must not survive into
+    // document B, even though the finding and paragraph ids overlap.
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.querySelector('[data-verification-active]')).toBeNull()
+  })
+
+  it('does not present a hard-break excerpt as a text change', async () => {
+    mount([hardBreakFinding()])
+    await screen.findByRole('region', { name: 'Verification' })
+    expect(
+      screen.queryByRole('button', { name: /Quote fidelity, Flagged/ }),
+    ).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'View all findings' }))
+    const index = await screen.findByRole('dialog')
+    expect(index.textContent).toContain('line break')
+    expect(index.textContent).not.toContain(
+      'differs from the text that was checked',
+    )
+  })
+
+  it('does not read a run of not-checked findings as all-clear', async () => {
+    mount([finding({ state: 'not_checked' })], {
+      summary: { findingCount: 1, flaggedCount: 0, reviewRequiredCount: 1 },
+    })
+    const dock = await screen.findByRole('region', { name: 'Verification' })
+    expect(dock.textContent).toContain('1 not checked')
+    expect(dock.textContent).toContain('Review required (1)')
+    expect(dock.textContent).not.toContain('No findings need attention')
   })
 
   it('keeps an unmappable finding reachable with a stated reason', async () => {
