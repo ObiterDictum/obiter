@@ -29,8 +29,15 @@ import {
   applyInsertText,
   applyWordEdit,
   replaceFindHits,
+  wordEditJoinRefusal,
+  type EditorCaret,
   type EditorResult,
+  type WordEditOutcome,
 } from '../../document-word-edits'
+import {
+  applyReplaceDocumentRange,
+  applySplitOverDocumentRange,
+} from '../../document-range-edits'
 import {
   clearableSlots,
   emptyDraftState,
@@ -302,8 +309,55 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
   function handleWordEdit(
     model: DocumentModelWire,
     edit: ParagraphWordEdit,
-  ): { paragraphId: string; offset: number } | null {
+  ): WordEditOutcome | null {
     const result = applyWordEdit(model, bundle.state, edit, crypto.randomUUID())
+    if (result) {
+      checkpoint()
+      commitEditor(result)
+      return { status: 'applied', caret: result.caret }
+    }
+    // No result means the edit could not join a neighbour; say which boundary
+    // refused it rather than leaving the keystroke silent.
+    const refusal = wordEditJoinRefusal(model, bundle.state, edit)
+    return refusal ? { status: 'refused', refusal } : null
+  }
+
+  /**
+   * Replaces a selection that spans paragraphs. It is one draft-state change,
+   * so a rejected or impossible range leaves the document exactly as it was.
+   */
+  function replaceDocumentRange(
+    model: DocumentModelWire,
+    from: EditorCaret,
+    to: EditorCaret,
+    text: string,
+  ): { paragraphId: string; offset: number } | null {
+    const result = applyReplaceDocumentRange(
+      model,
+      bundle.state,
+      from,
+      to,
+      text,
+    )
+    if (!result) return null
+    checkpoint()
+    commitEditor(result)
+    return result.caret
+  }
+
+  /** Enter over a selection: collapse the range, then split where it was. */
+  function splitDocumentRange(
+    model: DocumentModelWire,
+    from: EditorCaret,
+    to: EditorCaret,
+  ): { paragraphId: string; offset: number } | null {
+    const result = applySplitOverDocumentRange(
+      model,
+      bundle.state,
+      from,
+      to,
+      crypto.randomUUID(),
+    )
     if (!result) return null
     checkpoint()
     commitEditor(result)
@@ -411,6 +465,8 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     discardRecoverable,
     undoDraft,
     handleWordEdit,
+    replaceDocumentRange,
+    splitDocumentRange,
     replaceHits,
     insertText,
     insertAfter,

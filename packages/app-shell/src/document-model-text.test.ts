@@ -82,6 +82,7 @@ describe('sliceParagraphRuns', () => {
       {
         run: paragraph.runs[1],
         text: 'there',
+        from: 6,
       },
     ])
   })

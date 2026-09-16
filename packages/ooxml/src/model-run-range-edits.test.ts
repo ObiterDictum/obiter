@@ -152,6 +152,50 @@ describe('set_run_emphasis paragraph range', () => {
   })
 })
 
+describe('a cross-paragraph join persists its tail formatting', () => {
+  it('keeps the appended tail italic through save and reload', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const paragraph = mainParagraphs(document)[0]
+    const lastRun = paragraph?.runs[paragraph.runs.length - 1]
+    if (!paragraph || !lastRun) throw new Error('Fixture run is missing.')
+    const base = paragraph.runs.map((run) => run.text).join('').length
+    const originalText = paragraph.runs.map((run) => run.text).join('')
+    const appended = 'avo'
+    // The shape a join emits: the tail text is folded onto the head
+    // paragraph's last run, then its formatting is restated as a range
+    // emphasis over the appended slice (server-side, after the text edit).
+    applyDocumentEdits(document, [
+      {
+        type: 'replace_run_text',
+        runId: lastRun.id,
+        text: `${lastRun.text}${appended}`,
+      },
+      {
+        type: 'set_run_emphasis',
+        paragraphId: paragraph.id,
+        from: base,
+        to: base + appended.length,
+        italic: true,
+      },
+    ])
+    const reparsed = mainParagraphs(
+      await parseDocx(await serialiseDocx(document)),
+    )[0]
+    expect(reparsed?.runs.map((run) => run.text).join('')).toBe(
+      `${originalText}${appended}`,
+    )
+    // The appended characters are italic in the saved document, not just in
+    // the editor's paint.
+    const italicText = (reparsed?.runs ?? [])
+      .filter((run) => runItalic(run))
+      .map((run) => run.text)
+      .join('')
+    expect(italicText).toBe(appended)
+  })
+})
+
 async function applyRange(
   runs: Array<{ text: string; bold?: boolean }>,
   from: number,
@@ -190,6 +234,12 @@ async function applyRange(
 
 function runBold(run: { preservedXmlFragments: string[] } | undefined) {
   return /<w:b\b(?![^>]*w:val="0")/i.test(
+    run?.preservedXmlFragments.join('') ?? '',
+  )
+}
+
+function runItalic(run: { preservedXmlFragments: string[] } | undefined) {
+  return /<w:i\b(?![^>]*w:val="0")/i.test(
     run?.preservedXmlFragments.join('') ?? '',
   )
 }
