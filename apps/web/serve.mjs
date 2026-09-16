@@ -28,6 +28,7 @@ import { createServer } from 'node:http'
 import { readFile } from 'node:fs/promises'
 import { Readable } from 'node:stream'
 import { pipeline } from 'node:stream/promises'
+import { createGzip, gzipSync } from 'node:zlib'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 import { dirname, join } from 'node:path'
 
@@ -84,6 +85,59 @@ const MIME = {
   '.txt': 'text/plain; charset=utf-8',
 }
 
+/*
+ * Vite writes every file under /assets with a content hash in its name, so the
+ * bytes behind a given URL never change. Without a cache directive the browser
+ * refetches all of them on every navigation and reload (measured: the warm-cache
+ * run transferred the same 1.4 MB as the cold one), which is the largest
+ * repeat-visit cost in the app. `immutable` also stops the browser revalidating
+ * on reload. Non-hashed paths (the PDF worker is hashed too, but a future
+ * unhashed file would not be) fall back to a short revalidating policy.
+ */
+export const IMMUTABLE_CACHE_CONTROL = 'public, max-age=31536000, immutable'
+export const REVALIDATE_CACHE_CONTROL = 'public, max-age=0, must-revalidate'
+
+// Text-like assets that compress well. Fonts are already compressed; images
+// are not worth the CPU here.
+const COMPRESSIBLE_EXTENSIONS = new Set([
+  '.js',
+  '.mjs',
+  '.css',
+  '.html',
+  '.json',
+  '.svg',
+  '.txt',
+])
+
+/** True when the client advertised gzip in Accept-Encoding. */
+export function acceptsGzip(header) {
+  if (typeof header !== 'string') return false
+  return header
+    .split(',')
+    .some((part) => part.trim().split(';')[0].toLowerCase() === 'gzip')
+}
+
+/**
+ * Cache directive for a served file. `hashed` is whether the path carries a
+ * Vite content hash, which is what makes an immutable directive honest.
+ */
+export function cacheControlFor(hashed) {
+  return hashed ? IMMUTABLE_CACHE_CONTROL : REVALIDATE_CACHE_CONTROL
+}
+
+const gzipCache = new Map()
+const GZIP_CACHE_LIMIT = 128
+
+/** Gzip an asset once per process; the bytes are immutable for a given path. */
+function gzipAsset(path, body) {
+  const cached = gzipCache.get(path)
+  if (cached) return cached
+  const compressed = gzipSync(body)
+  if (gzipCache.size >= GZIP_CACHE_LIMIT) gzipCache.clear()
+  gzipCache.set(path, compressed)
+  return compressed
+}
+
 /**
  * Apply a Web Response's headers onto a Node ServerResponse, then write the
  * status line. Set-Cookie is handled specially: a Response may carry multiple
@@ -93,7 +147,7 @@ const MIME = {
  * Other headers are set individually via setHeader before writeHead. Returns
  * the ServerResponse for chaining.
  */
-export function applyResponseHeaders(res, webRes) {
+export function applyResponseHeaders(res, webRes, extraHeaders) {
   const setCookies =
     typeof webRes.headers.getSetCookie === 'function'
       ? webRes.headers.getSetCookie()
@@ -115,6 +169,11 @@ export function applyResponseHeaders(res, webRes) {
     res.setHeader(key, value)
   })
 
+  for (const [key, value] of Object.entries(extraHeaders ?? {})) {
+    if (value === undefined) continue
+    res.setHeader(key, value)
+  }
+
   res.writeHead(webRes.status, webRes.statusText)
   return res
 }
@@ -128,12 +187,15 @@ export function applyResponseHeaders(res, webRes) {
  * Resolves on a clean end; rejects on a stream/socket error (caller logs and
  * destroys the response).
  */
-export function streamResponse(res, webRes) {
+export function streamResponse(res, webRes, { compress = false } = {}) {
   if (!webRes.body) {
     res.end()
     return Promise.resolve()
   }
   const nodeStream = Readable.fromWeb(webRes.body)
+  if (compress) {
+    return pipeline(nodeStream, createGzip(), res, { end: true })
+  }
   return pipeline(nodeStream, res, { end: true })
 }
 
@@ -160,10 +222,12 @@ export function createRequestHandler(handle, { clientDir, webOrigin } = {}) {
       return
     }
 
+    const gzipOk = acceptsGzip(req.headers['accept-encoding'])
+
     try {
       // Serve client static assets directly; anything else is SSR.
       if (url.pathname.startsWith('/assets/') && clientDir) {
-        const staticRes = await serveStatic(url.pathname, clientDir)
+        const staticRes = await serveStatic(url.pathname, clientDir, gzipOk)
         if (staticRes) {
           applyResponseHeaders(res, staticRes)
           await streamResponse(res, staticRes)
@@ -174,8 +238,18 @@ export function createRequestHandler(handle, { clientDir, webOrigin } = {}) {
       const headers = nodeRequestHeaders(req)
       const webReq = new Request(url, { method: req.method, headers })
       const webRes = await handle(webReq)
-      applyResponseHeaders(res, webRes)
-      await streamResponse(res, webRes)
+      // SSR output is per-session; never let a shared cache keep it. Compress
+      // the HTML stream because it is sent on every navigation.
+      const isHtml = (webRes.headers.get('content-type') ?? '').includes(
+        'text/html',
+      )
+      const compress = isHtml && gzipOk
+      applyResponseHeaders(res, webRes, {
+        'cache-control': 'private, no-store',
+        vary: 'Accept-Encoding',
+        ...(compress ? { 'content-encoding': 'gzip' } : {}),
+      })
+      await streamResponse(res, webRes, { compress })
     } catch (error) {
       if (!res.headersSent) {
         res.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' })
@@ -195,19 +269,30 @@ function nodeRequestHeaders(req) {
   return headers
 }
 
-async function serveStatic(pathname, clientDir) {
+async function serveStatic(pathname, clientDir, gzipOk) {
   // Guard against path traversal.
   if (pathname.includes('..') || pathname.includes('\0')) return null
   const filePath = join(clientDir, pathname)
+  let body
   try {
-    const body = await readFile(filePath)
-    const ext = filePath.slice(filePath.lastIndexOf('.')).toLowerCase()
-    return new Response(body, {
-      headers: { 'content-type': MIME[ext] ?? 'application/octet-stream' },
-    })
+    body = await readFile(filePath)
   } catch {
     return null
   }
+  const ext = filePath.slice(filePath.lastIndexOf('.')).toLowerCase()
+  const headers = {
+    'content-type': MIME[ext] ?? 'application/octet-stream',
+    // Vite hashes every filename under /assets, so the bytes for a URL are
+    // immutable; a hashed-layout path is the only one served here.
+    'cache-control': cacheControlFor(/-[0-9a-zA-Z_-]{8,}\./.test(filePath)),
+    vary: 'Accept-Encoding',
+  }
+  if (gzipOk && COMPRESSIBLE_EXTENSIONS.has(ext)) {
+    return new Response(gzipAsset(filePath, body), {
+      headers: { ...headers, 'content-encoding': 'gzip' },
+    })
+  }
+  return new Response(body, { headers })
 }
 
 /**

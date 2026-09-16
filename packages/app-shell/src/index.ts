@@ -101,18 +101,20 @@ export {
 export {
   LegalSearchView,
   LEGAL_SEARCH_DEBOUNCE_MS,
-  LEGAL_SEARCH_RECENT_SEARCHES_LIMIT,
   courtOptionGroups,
   countActiveLegalSearchFilters,
   createLegalSearchFetchRequest,
   getCourtLabel,
   getLegalSearchEmptyFeedback,
-  getRecentLegalSearches,
   getLegalSearchStateAfterInputChange,
   getLegalSearchStateLabel,
   selectJudgmentParagraphs,
   selectParagraphExcerpts,
   shouldRunLegalSearch,
   shouldRunLegalSearchRequest,
-  writeRecentLegalSearch,
 } from './views/LegalSearchView'
+export {
+  LEGAL_SEARCH_RECENT_SEARCHES_LIMIT,
+  getRecentLegalSearches,
+  writeRecentLegalSearch,
+} from './legal-search-recents'

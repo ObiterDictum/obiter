@@ -9,11 +9,20 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { createServer } from 'node:http'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   DEFAULT_PORT,
+  IMMUTABLE_CACHE_CONTROL,
+  REVALIDATE_CACHE_CONTROL,
+  acceptsGzip,
+  applyResponseHeaders,
+  cacheControlFor,
+  createRequestHandler,
   parsePort,
   resolveBaseUrl,
-  applyResponseHeaders,
 } from './serve.mjs'
 
 test('parsePort', async (t) => {
@@ -141,4 +150,83 @@ test('applyResponseHeaders — Set-Cookie handling (B6)', async (t) => {
       assert.equal(res.headerValues.__status, 201)
     },
   )
+})
+
+test('cache and compression helpers', async (t) => {
+  await t.test('acceptsGzip only matches a gzip token', () => {
+    assert.equal(acceptsGzip('gzip'), true)
+    assert.equal(acceptsGzip('br, gzip;q=1.0'), true)
+    assert.equal(acceptsGzip('GZIP'), true)
+    assert.equal(acceptsGzip('br, deflate'), false)
+    assert.equal(acceptsGzip(''), false)
+    assert.equal(acceptsGzip(undefined), false)
+  })
+
+  await t.test('cacheControlFor is immutable only for hashed paths', () => {
+    assert.equal(cacheControlFor(true), IMMUTABLE_CACHE_CONTROL)
+    assert.equal(cacheControlFor(false), REVALIDATE_CACHE_CONTROL)
+    assert.match(IMMUTABLE_CACHE_CONTROL, /immutable/)
+  })
+})
+
+test('createRequestHandler', async (t) => {
+  const dir = await mkdtemp(join(tmpdir(), 'obiter-serve-'))
+  await mkdir(join(dir, 'assets'), { recursive: true })
+  await writeFile(
+    join(dir, 'assets', 'app-12345678.js'),
+    'export const x = 1\n',
+  )
+  const ssrHtml = '<!doctype html><html><body>hi</body></html>'
+  const handler = createRequestHandler(
+    () =>
+      new Response(ssrHtml, {
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+      }),
+    { clientDir: dir },
+  )
+  const server = createServer(handler)
+  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const origin = `http://127.0.0.1:${server.address().port}`
+
+  try {
+    await t.test('hashed assets are immutable and gzipped', async () => {
+      const res = await fetch(`${origin}/assets/app-12345678.js`, {
+        headers: { 'accept-encoding': 'gzip' },
+      })
+      assert.equal(res.status, 200)
+      assert.equal(res.headers.get('content-encoding'), 'gzip')
+      assert.equal(res.headers.get('cache-control'), IMMUTABLE_CACHE_CONTROL)
+      assert.match(res.headers.get('vary') ?? '', /Accept-Encoding/i)
+      assert.equal(await res.text(), 'export const x = 1\n')
+    })
+
+    await t.test(
+      'a missing asset falls through to SSR, not a 404',
+      async () => {
+        const res = await fetch(`${origin}/assets/missing-99999999.js`)
+        assert.equal(res.status, 200)
+        assert.match(res.headers.get('content-type') ?? '', /text\/html/)
+      },
+    )
+
+    await t.test('SSR HTML is private and gzipped', async () => {
+      const res = await fetch(`${origin}/sign-in`, {
+        headers: { 'accept-encoding': 'gzip' },
+      })
+      assert.equal(res.headers.get('cache-control'), 'private, no-store')
+      assert.equal(res.headers.get('content-encoding'), 'gzip')
+      assert.equal(await res.text(), ssrHtml)
+    })
+
+    await t.test('a client without gzip gets identity bytes', async () => {
+      const res = await fetch(`${origin}/sign-in`, {
+        headers: { 'accept-encoding': 'identity' },
+      })
+      assert.equal(res.headers.get('content-encoding'), null)
+      assert.equal(await res.text(), ssrHtml)
+    })
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+    await rm(dir, { recursive: true, force: true })
+  }
 })
