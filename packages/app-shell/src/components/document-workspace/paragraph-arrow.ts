@@ -15,6 +15,9 @@ export type ArrowNeighbor = {
   id: string
   text: string
   lines: WrappedLine[]
+  /** A pending inserted paragraph: a neighbour for the caret, not for the
+   * selection, which the workspace refuses to extend into. */
+  insert?: boolean
 }
 
 /**
@@ -176,9 +179,40 @@ function lineIndex(lines: WrappedLine[], offset: number): number {
   return Math.max(0, lines.length - 1)
 }
 
+/**
+ * The offset a retained visual column resolves to on a line, clamped to the
+ * line. Columns are counted in the same UTF-16 code units as the model and the
+ * edit operations, so on a line holding an astral character a column can point
+ * at the low half of a surrogate pair, where no caret can sit. Such a column
+ * resolves to the pair's start: the pair is one glyph, the two boundaries are
+ * equidistant, and rounding down (not up) is what keeps the desired column
+ * (E34) and the line's ownership (E54/E56) without ever splitting the pair.
+ */
 function offsetOnLine(line: WrappedLine | undefined, column: number): number {
   if (!line) return column
-  return Math.min(line.from + column, line.to)
+  const candidate = Math.min(line.from + column, line.to)
+  const local = candidate - line.from
+  if (local < line.text.length && isLowSurrogate(line.text.charCodeAt(local))) {
+    return Math.max(0, candidate - 1)
+  }
+  // A wrap that ends between a pair's halves leaves the line's `to` on the low
+  // surrogate, so the offset the column resolves to belongs to the line's end
+  // and is not a valid caret position. Step back onto the high surrogate.
+  if (
+    candidate === line.to &&
+    isHighSurrogate(line.text.charCodeAt(line.text.length - 1))
+  ) {
+    return candidate - 1
+  }
+  return candidate
+}
+
+function isHighSurrogate(code: number): boolean {
+  return code >= 0xd800 && code <= 0xdbff
+}
+
+function isLowSurrogate(code: number): boolean {
+  return code >= 0xdc00 && code <= 0xdfff
 }
 
 export function arrowNeighbors(
@@ -234,5 +268,5 @@ function arrowNeighbor(
     wrapWidthPx && wrapWidthPx > 0 ? wrapWidthPx : Number.POSITIVE_INFINITY,
     face?.run.fontFamily,
   )
-  return { id, text, lines }
+  return { id, text, lines, ...(insert ? { insert: true } : {}) }
 }

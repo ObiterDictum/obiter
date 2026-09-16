@@ -96,13 +96,24 @@ export function sliceContainsOffset(
   return to === fullLength && offset >= to
 }
 
+/**
+ * A slice of one run, carrying the paragraph-model offset it starts at. The
+ * renderer needs `from` to decide which part of the run a document selection
+ * covers, which a bare text slice cannot answer on its own.
+ */
+export type RunSlice = {
+  run: DocumentTextRunWire
+  text: string
+  from: number
+}
+
 export function sliceParagraphRuns(
   paragraph: DocumentParagraphWire,
   from: number,
   to: number,
   drafts?: Record<string, string>,
-): Array<{ run: DocumentTextRunWire; text: string }> {
-  const slices: Array<{ run: DocumentTextRunWire; text: string }> = []
+): RunSlice[] {
+  const slices: RunSlice[] = []
   let cursor = 0
   for (const run of paragraph.runs) {
     const text = drafts?.[run.id] ?? run.text
@@ -110,9 +121,11 @@ export function sliceParagraphRuns(
     const end = cursor + text.length
     cursor = end
     if (end <= from || start >= to) continue
+    const sliceFrom = start + Math.max(0, from - start)
     slices.push({
       run,
       text: text.slice(Math.max(0, from - start), Math.max(0, to - start)),
+      from: sliceFrom,
     })
   }
   return slices

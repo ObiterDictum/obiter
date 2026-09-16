@@ -17,12 +17,13 @@ export type {
 export { emptyFormatDrafts } from './document-format-types'
 export {
   formatControlState,
-  formattedModel,
-  paragraphStyleOptions,
   runFlagOn,
   selectedParagraph,
-} from './document-format-paint'
+  selectedParagraphIds,
+} from './document-format-controls'
+export { formattedModel, paragraphStyleOptions } from './document-format-paint'
 export { documentFormatToolbar } from './document-format-toolbar'
+export type { FormatTarget, ParagraphRange } from './document-format-toolbar'
 
 export function collectFormatOperations(
   model: DocumentModelWire,

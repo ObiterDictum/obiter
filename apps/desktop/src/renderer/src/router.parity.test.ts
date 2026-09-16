@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { QueryClient } from '@tanstack/react-query'
@@ -11,6 +11,15 @@ import {
   DesktopVerifyRoute,
 } from './router'
 import { DesktopSearchPage } from '../../pages/search'
+
+function collectSources(directory: string): string[] {
+  return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
+    const path = resolve(directory, entry.name)
+    if (entry.isDirectory()) return collectSources(path)
+    if (!entry.isFile() || !/\.tsx?$/u.test(entry.name)) return []
+    return /\.test\.tsx?$/u.test(entry.name) ? [] : [path]
+  })
+}
 
 describe('desktop router parity with web shared views', () => {
   it('renders the shared LegalSearchView on the desktop search page', () => {
@@ -50,6 +59,20 @@ describe('desktop router parity with web shared views', () => {
     expect(source).not.toMatch(
       /VerificationRunPanel|VerificationDock|VerificationEvidencePanel|verification-findings/,
     )
+  })
+
+  it('inherits the shared document selection instead of a desktop copy', () => {
+    // A cross-paragraph selection has one owner in the shared workspace: the
+    // desktop renderer must not grow a parallel selection model, paragraph
+    // editor or selection painting.
+    const root = resolve(dirname(fileURLToPath(import.meta.url)), '../../..')
+    const files = collectSources(resolve(root, './src'))
+    for (const file of files) {
+      const source = readFileSync(file, 'utf8')
+      expect(source, file).not.toMatch(
+        /data-selected-text|document-selection|ParagraphSelection[Bb]inding/,
+      )
+    }
   })
 
   it('registers /case/$caseSlug so canonical search links do not fall through', () => {

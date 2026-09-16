@@ -143,6 +143,41 @@ export function multiParagraphModel(
   }
 }
 
+/**
+ * Body p1, a two-cell table, then body p4. The cell paragraphs are part of the
+ * story's paragraph list (as a parsed table is) but not of its body flow, which
+ * is exactly the boundary the document selection must not cross.
+ */
+export function tabledBodyModel(
+  before = 'Alpha',
+  after = 'Delta',
+): DocumentModelWire {
+  return withTable(
+    multiParagraphModel([
+      paragraph('p1', before),
+      paragraph('para-w14-CELL0001', 'Cell one'),
+      paragraph('para-w14-CELL0002', 'Cell two'),
+      paragraph('p4', after),
+    ]),
+  )
+}
+
+function withTable(model: DocumentModelWire): DocumentModelWire {
+  const story = model.stories[0]
+  if (!story) return model
+  return {
+    ...model,
+    stories: [
+      {
+        ...story,
+        preservedXmlFragments: [
+          '<w:tbl><w:tr><w:tc><w:p w14:paraId="CELL0001"><w:r><w:t>Cell one</w:t></w:r></w:p></w:tc><w:tc><w:p w14:paraId="CELL0002"><w:r><w:t>Cell two</w:t></w:r></w:p></w:tc></w:tr></w:tbl>',
+        ],
+      },
+    ],
+  }
+}
+
 export function mountWorkspace(
   options: {
     documentId?: string

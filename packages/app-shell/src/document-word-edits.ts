@@ -6,6 +6,9 @@ import {
   type LocalInsert,
 } from './document-edits'
 import { documentStory } from './document-model-text'
+import { canJoinParagraphRuns } from './document-run-fidelity'
+import { omitKey, replaceRunRange, splitRuns } from './document-run-range'
+import { storyBodyParagraphIds } from './document-story-flow'
 
 export type ExtraRuns = Record<string, DocumentTextRunWire[]>
 
@@ -144,14 +147,23 @@ export function applyDeleteForward(
       caret,
     }
   }
+  const nextId = nextParagraphId(model, state, caret.paragraphId)
+  if (!nextId) return undefined
+  return joinIntoPrevious(model, state, nextId)
+}
+
+/** The paragraph after `paragraphId` in the editable flow, if any. */
+function nextParagraphId(
+  model: DocumentModelWire,
+  state: EditorState,
+  paragraphId: string,
+): string | undefined {
   const order = flowParagraphIds(
     model,
     state.inserts,
     state.deletedParagraphIds,
   )
-  const nextId = order[order.indexOf(caret.paragraphId) + 1]
-  if (!nextId) return undefined
-  return joinIntoPrevious(model, state, nextId)
+  return order[order.indexOf(paragraphId) + 1]
 }
 
 export function applyReplaceRange(
@@ -240,11 +252,12 @@ export function applyLineBreak(
   return applyInsertText(model, state, caret, '\n')
 }
 
-function joinIntoPrevious(
+export function joinIntoPrevious(
   model: DocumentModelWire,
   state: EditorState,
   paragraphId: string,
 ): EditorResult | undefined {
+  if (paragraphJoinRefusal(model, state, paragraphId)) return undefined
   const order = flowParagraphIds(
     model,
     state.inserts,
@@ -273,6 +286,73 @@ function joinIntoPrevious(
     state: next,
     caret: { paragraphId: previousId, offset: caretOffset },
   }
+}
+
+export type JoinRefusal = 'structure' | 'join-formatting'
+
+/** The outcome of a word edit: it applied (with the caret to place), or it
+ * could not join a neighbour for a stated structural/formatting reason. */
+export type WordEditOutcome =
+  | { status: 'applied'; caret: EditorCaret }
+  | { status: 'refused'; refusal: JoinRefusal }
+
+/**
+ * The reason a join into the paragraph before `paragraphId` is refused, or
+ * null when it can proceed. This is the shared structural boundary a range
+ * edit and a single-caret delete both pass through: only ordinary body
+ * paragraphs (or a pending insert) may join, so a table cell or text-box
+ * paragraph cannot be bridged, and a tail whose runs the save cannot restate
+ * is refused before any draft state changes. A paragraph with no previous
+ * neighbour has nothing to join and is not a refusal.
+ */
+export function paragraphJoinRefusal(
+  model: DocumentModelWire,
+  state: EditorState,
+  paragraphId: string,
+): JoinRefusal | null {
+  const order = flowParagraphIds(
+    model,
+    state.inserts,
+    state.deletedParagraphIds,
+  )
+  const index = order.indexOf(paragraphId)
+  if (index <= 0) return null
+  const previousId = order[index - 1]
+  if (!previousId) return null
+  const story = documentStory(model)
+  const body = story ? storyBodyParagraphIds(story) : new Set<string>()
+  const inserts = new Set(state.inserts.map((item) => item.clientId))
+  const joinable = (id: string) => body.has(id) || inserts.has(id)
+  if (!joinable(paragraphId) || !joinable(previousId)) return 'structure'
+  const head = blockRuns(model, state, previousId)
+  const moving = blockRuns(model, state, paragraphId)
+  if (!canJoinParagraphRuns(head, moving)) return 'join-formatting'
+  return null
+}
+
+/**
+ * The reason a word edit cannot join, or null when it does not attempt a join
+ * or the join is safe. Backspace joins the paragraph before the caret and
+ * Delete joins the paragraph after it, so the target is resolved the same way
+ * the two delete edits resolve it.
+ */
+export function wordEditJoinRefusal(
+  model: DocumentModelWire,
+  state: EditorState,
+  edit: WordEdit,
+): JoinRefusal | null {
+  if (edit.type === 'deleteBackward') {
+    if (edit.offset > 0) return null
+    return paragraphJoinRefusal(model, state, edit.paragraphId)
+  }
+  if (edit.type === 'deleteForward') {
+    if (edit.offset < blockText(model, state, edit.paragraphId).length) {
+      return null
+    }
+    const nextId = nextParagraphId(model, state, edit.paragraphId)
+    return nextId ? paragraphJoinRefusal(model, state, nextId) : null
+  }
+  return null
 }
 
 function appendRuns(
@@ -312,7 +392,7 @@ function appendRuns(
   }
 }
 
-function writeRange(
+export function writeRange(
   model: DocumentModelWire,
   state: EditorState,
   paragraphId: string,
@@ -366,85 +446,6 @@ function writeRuns(
         ? { ...state.extraRuns, [paragraphId]: extra }
         : omitKey(state.extraRuns, paragraphId),
   }
-}
-
-function replaceRunRange(
-  runs: DocumentTextRunWire[],
-  from: number,
-  to: number,
-  insert: string,
-): DocumentTextRunWire[] {
-  if (runs.length === 0) {
-    return [{ id: 'empty', text: insert, preservedXmlFragments: [] }]
-  }
-  let cursor = 0
-  let written = false
-  const next: DocumentTextRunWire[] = []
-  for (const run of runs) {
-    const start = cursor
-    const end = cursor + run.text.length
-    cursor = end
-    if (end < from || start > to) {
-      next.push(run)
-      continue
-    }
-    const localFrom = Math.max(0, from - start)
-    const localTo = Math.min(run.text.length, Math.max(0, to - start))
-    const prefix = run.text.slice(0, localFrom)
-    const suffix = run.text.slice(localTo)
-    const piece = written ? '' : insert
-    written = true
-    next.push({ ...run, text: prefix + piece + suffix })
-  }
-  if (!written) {
-    const last = next[next.length - 1]
-    if (last) next[next.length - 1] = { ...last, text: last.text + insert }
-  }
-  return next
-}
-
-function splitRuns(
-  runs: DocumentTextRunWire[],
-  offset: number,
-  newId: string,
-): { left: DocumentTextRunWire[]; right: DocumentTextRunWire[] } {
-  let cursor = 0
-  const left: DocumentTextRunWire[] = []
-  const right: DocumentTextRunWire[] = []
-  let tail = 0
-  for (const run of runs) {
-    const start = cursor
-    const end = cursor + run.text.length
-    cursor = end
-    if (end <= offset) left.push({ ...run })
-    else if (start >= offset) {
-      right.push({ ...run, id: `${newId}-r${tail}` })
-      tail += 1
-    } else {
-      const at = offset - start
-      if (at > 0) left.push({ ...run, text: run.text.slice(0, at) })
-      right.push({
-        ...run,
-        id: `${newId}-r${tail}`,
-        text: run.text.slice(at),
-      })
-      tail += 1
-    }
-  }
-  if (left.length === 0) {
-    left.push({ id: `${newId}-left`, text: '', preservedXmlFragments: [] })
-  }
-  if (right.length === 0) {
-    right.push({ id: `${newId}-r0`, text: '', preservedXmlFragments: [] })
-  }
-  return { left, right }
-}
-
-function omitKey(record: ExtraRuns, key: string): ExtraRuns {
-  if (!(key in record)) return record
-  const next = { ...record }
-  delete next[key]
-  return next
 }
 
 export type WordEdit = {
