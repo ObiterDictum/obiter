@@ -138,6 +138,7 @@ export function DocxWorkspace({
     focusParagraph,
     moveCaret,
     rejectSelectionInput,
+    reportJoinRefusal,
     blurParagraph,
     replaceSelectionRange,
     splitSelectionRange,
@@ -393,9 +394,14 @@ export function DocxWorkspace({
                         if (selectId) selectParagraph(selectId)
                       }}
                       onWordEdit={(edit) => {
-                        const caret = drafts.handleWordEdit(model, edit)
-                        if (caret) {
-                          selectParagraph(caret.paragraphId, caret.offset)
+                        const outcome = drafts.handleWordEdit(model, edit)
+                        if (outcome?.status === 'applied') {
+                          selectParagraph(
+                            outcome.caret.paragraphId,
+                            outcome.caret.offset,
+                          )
+                        } else if (outcome?.status === 'refused') {
+                          reportJoinRefusal(outcome.refusal)
                         }
                       }}
                       restoreCaret={restoreCaret}

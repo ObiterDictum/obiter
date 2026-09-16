@@ -398,7 +398,13 @@ export function ParagraphEditor({
       onPaste={(event) => {
         if (!selection?.active) return
         event.preventDefault()
-        selection.onReplaceRange(event.clipboardData.getData('text/plain'))
+        // An empty or text-less clipboard payload (an image-only copy, a
+        // format-only clipboard) must not replace a live selection with an
+        // empty string, which would read as an accidental delete. Whitespace
+        // and newlines are meaningful text and pass the length check.
+        const data = event.clipboardData?.getData('text/plain') ?? ''
+        if (data.length > 0) selection.onReplaceRange(data)
+        else selection.onRejectInput()
       }}
       onCopy={(event) => {
         if (!selection?.active) return

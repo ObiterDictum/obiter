@@ -29,8 +29,10 @@ import {
   applyInsertText,
   applyWordEdit,
   replaceFindHits,
+  wordEditJoinRefusal,
   type EditorCaret,
   type EditorResult,
+  type WordEditOutcome,
 } from '../../document-word-edits'
 import {
   applyReplaceDocumentRange,
@@ -307,12 +309,17 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
   function handleWordEdit(
     model: DocumentModelWire,
     edit: ParagraphWordEdit,
-  ): { paragraphId: string; offset: number } | null {
+  ): WordEditOutcome | null {
     const result = applyWordEdit(model, bundle.state, edit, crypto.randomUUID())
-    if (!result) return null
-    checkpoint()
-    commitEditor(result)
-    return result.caret
+    if (result) {
+      checkpoint()
+      commitEditor(result)
+      return { status: 'applied', caret: result.caret }
+    }
+    // No result means the edit could not join a neighbour; say which boundary
+    // refused it rather than leaving the keystroke silent.
+    const refusal = wordEditJoinRefusal(model, bundle.state, edit)
+    return refusal ? { status: 'refused', refusal } : null
   }
 
   /**

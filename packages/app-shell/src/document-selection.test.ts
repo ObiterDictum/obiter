@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import type { WrappedLine } from './document-page-flow'
+import type { DocumentModelWire } from '@obiter/contracts'
+import { wrapLines, type WrappedLine } from './document-page-flow'
+import { applyDeleteBackward, emptyEditorState } from './document-word-edits'
 import {
   compareEndpoints,
   orderedSelection,
@@ -391,5 +393,141 @@ describe('stepping across astral characters', () => {
         column: 1,
       }),
     ).toEqual({ paragraphId: 'p1', offset: 0 })
+  })
+})
+
+function hasLoneSurrogate(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index)
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = value.charCodeAt(index + 1)
+      if (!(next >= 0xdc00 && next <= 0xdfff)) return true
+      index += 1
+    } else if (code >= 0xdc00 && code <= 0xdfff) {
+      return true
+    }
+  }
+  return false
+}
+
+describe('vertical movement across astral characters', () => {
+  // 'xy' hard-breaks to 'ab🙂c'; the pair occupies offsets 5..7, so the visual
+  // column counted in code units can point at the low surrogate.
+  const text = `xy\nab\u{1f600}c`
+
+  it('resolves a retained column inside a pair to the pair start', () => {
+    const wrapped = wrapLines(text, 16, 10_000)
+    expect(wrapped).toEqual([
+      { text: 'xy', from: 0, to: 2 },
+      { text: 'ab\u{1f600}c', from: 3, to: 8 },
+    ])
+    expect(
+      stepSelectionFocus({
+        paragraphId: 'p2',
+        key: 'ArrowDown',
+        offset: 0,
+        text,
+        lines: wrapped,
+        column: 3,
+      }),
+    ).toEqual({ paragraphId: 'p2', offset: 5 })
+  })
+
+  it('resolves a cross-paragraph retained column inside a pair', () => {
+    const nextText = 'ab\u{1f600}c'
+    expect(
+      stepSelectionFocus({
+        paragraphId: 'p1',
+        key: 'ArrowDown',
+        offset: 1,
+        text: 'ab',
+        lines: wrapLines('ab', 16, 10_000),
+        column: 3,
+        next: {
+          id: 'p2',
+          text: nextText,
+          lines: wrapLines(nextText, 16, 10_000),
+        },
+      }),
+    ).toEqual({ paragraphId: 'p2', offset: 2 })
+  })
+
+  it('clamps a column inside adjacent pairs to the pair start', () => {
+    const pairs = '\u{1f600}\u{1f601}'
+    expect(
+      stepSelectionFocus({
+        paragraphId: 'p1',
+        key: 'ArrowDown',
+        offset: 0,
+        text: 'ab',
+        lines: wrapLines('ab', 16, 10_000),
+        column: 3,
+        next: {
+          id: 'p2',
+          text: pairs,
+          lines: wrapLines(pairs, 16, 10_000),
+        },
+      }),
+    ).toEqual({ paragraphId: 'p2', offset: 2 })
+  })
+
+  it('keeps a short destination line clamp a valid boundary', () => {
+    const short = '\u{1f600}'
+    expect(
+      stepSelectionFocus({
+        paragraphId: 'p1',
+        key: 'ArrowDown',
+        offset: 0,
+        text: 'ab',
+        lines: wrapLines('ab', 16, 10_000),
+        column: 9,
+        next: {
+          id: 'p2',
+          text: short,
+          lines: wrapLines(short, 16, 10_000),
+        },
+      }),
+    ).toEqual({ paragraphId: 'p2', offset: 2 })
+  })
+
+  it('never splits the pair on the edit that follows the clamped move', () => {
+    const wrapped = wrapLines(text, 16, 10_000)
+    const step = stepSelectionFocus({
+      paragraphId: 'p2',
+      key: 'ArrowDown',
+      offset: 0,
+      text,
+      lines: wrapped,
+      column: 3,
+    })
+    expect(step).toEqual({ paragraphId: 'p2', offset: 5 })
+    const model: DocumentModelWire = {
+      version: 1,
+      stories: [
+        {
+          kind: 'document',
+          partName: 'word/document.xml',
+          paragraphs: [
+            {
+              id: 'p2',
+              runs: [{ id: 'p2-r', text, preservedXmlFragments: [] }],
+              preservedXmlFragments: [],
+            },
+          ],
+          preservedXmlFragments: [],
+        },
+      ],
+      styles: [],
+      numbering: [],
+      relationships: [],
+      preservedXmlFragments: [],
+      changes: [],
+    }
+    const result = step
+      ? applyDeleteBackward(model, emptyEditorState(), step)
+      : undefined
+    const edited = result?.state.drafts['p2-r'] ?? text
+    expect(edited).toBe(`xy\na\u{1f600}c`)
+    expect(hasLoneSurrogate(edited)).toBe(false)
   })
 })

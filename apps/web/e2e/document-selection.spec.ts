@@ -205,23 +205,30 @@ test.describe('the document selection in a browser', () => {
     await shot(page, '03-backwards-selection-contracting')
     await check(status(page)).toContainText('paragraphs selected')
 
-    // Ctrl/Alt/Meta modified arrows stay native: with a document selection
-    // active they must not move or extend it.
-    const hasStatus = (await status(page).count()) > 0
-    const beforeModifier = hasStatus ? await status(page).textContent() : null
-    await press(page, 'Control+Shift+ArrowLeft')
-    await press(page, 'Alt+Shift+ArrowLeft')
-    if (beforeModifier !== null) {
-      await check(status(page)).toHaveText(beforeModifier)
-    }
+    // Ctrl/Alt/Meta modified arrows are native for the platform shortcut, but
+    // not while a document selection is live: the first modified arrow
+    // collapses the model to the matching edge, so the DOM caret and the model
+    // agree. The keystroke that follows then lands at the visible caret
+    // instead of replacing the range that was selected a moment ago.
+    await check(status(page)).toContainText('paragraphs selected')
+    await press(page, 'Control+ArrowLeft')
+    await check(status(page)).toBeEmpty()
+    await check(marks(page)).toHaveCount(0)
+    // Control+ArrowLeft collapsed to the ordered start, the head of the first
+    // paragraph: typing there inserts and the old range survives.
+    await page.keyboard.type('!')
+    await check(editor(page)).toHaveValue(/^!/)
+    await check(paragraph(page, 'Northgate Holdings')).toContainText(
+      'schedule of works',
+    )
+    await press(page, 'Backspace')
+    await check(editor(page)).toHaveValue(/^Northgate Holdings/)
 
     // Escape leaves a collapsed caret at the focus end and no selection.
     await press(page, 'Escape')
     await shot(page, '04-escape-collapses-at-the-focus-end')
-    if (hasStatus) {
-      await check(status(page)).toBeEmpty()
-      await check(marks(page)).toHaveCount(0)
-    }
+    await check(status(page)).toBeEmpty()
+    await check(marks(page)).toHaveCount(0)
 
     // A backwards selection into the paragraph above, in a narrow viewport.
     await caretAtEnd(page, 'Rowan v Aster')

@@ -2,7 +2,10 @@ import { useRef, useState } from 'react'
 import type { DocumentModelWire } from '@obiter/contracts'
 import { flowParagraphIds } from '../../document-edits'
 import { cursorForSelection, documentStory } from '../../document-model-text'
-import { documentRangeRefusal } from '../../document-range-edits'
+import {
+  documentRangeRefusal,
+  type DocumentRangeRefusal,
+} from '../../document-range-edits'
 import { storyBodyParagraphIds } from '../../document-story-flow'
 import {
   orderedSelection,
@@ -314,6 +317,13 @@ export function useWorkspaceCaret({
     setSelectionRefusal('input')
   }
 
+  /** A single-caret delete could not join its neighbour. Say why in the same
+   * live region the selection refusals use, so a refused table-boundary join
+   * is announced rather than silent. */
+  function reportJoinRefusal(refusal: DocumentRangeRefusal) {
+    setSelectionRefusal(refusal)
+  }
+
   /** Escape with no live selection: leave the paragraph. Drafts are separate
    * from the caret, so nothing unsaved is discarded. */
   function blurParagraph() {
@@ -434,6 +444,7 @@ export function useWorkspaceCaret({
     mirrorSelection,
     moveCaret,
     rejectSelectionInput,
+    reportJoinRefusal,
     blurParagraph,
     // Derived from the refusal and the condition that produced it, so the
     // message cannot outlive the reason it was shown for.

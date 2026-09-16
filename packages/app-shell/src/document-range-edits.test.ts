@@ -10,8 +10,11 @@ import {
   applySplitOverDocumentRange,
 } from './document-range-edits'
 import {
+  applyDeleteBackward,
+  applyDeleteForward,
   blockText,
   emptyEditorState,
+  joinIntoPrevious,
   type EditorState,
 } from './document-word-edits'
 
@@ -343,6 +346,101 @@ describe('a range that would cross a table', () => {
     expect(blockText(model, result?.state ?? emptyEditorState(), 'p1')).toBe(
       'Omega',
     )
+  })
+})
+
+function emptyCellDoc(): DocumentModelWire {
+  const model = tabledDoc()
+  const story = model.stories[0]
+  if (!story) return model
+  return {
+    ...model,
+    stories: [
+      {
+        ...story,
+        paragraphs: story.paragraphs.map((paragraph) =>
+          paragraph.id === 'para-w14-CELL0001'
+            ? para(paragraph.id, '')
+            : paragraph,
+        ),
+      },
+    ],
+  }
+}
+
+/*
+ * A single caret (no document selection) reaches the same join primitive a
+ * range edit uses. It has to pass the same structural boundary: a Delete at
+ * the end of the body paragraph before a table, or a Backspace at the start
+ * of the body paragraph after it, must not pull a cell's text across the
+ * table and must not emit delete_paragraph for a cell paragraph.
+ */
+describe('a single-caret join at a structural boundary', () => {
+  it('refuses Delete at the end of the body paragraph before a table', () => {
+    const model = tabledDoc()
+    const state = emptyEditorState()
+    expect(
+      applyDeleteForward(model, state, { paragraphId: 'p1', offset: 5 }),
+    ).toBeUndefined()
+    expect(blockText(model, state, 'p1')).toBe('Alpha')
+    expect(blockText(model, state, 'para-w14-CELL0001')).toBe('Cell one')
+    expect(operations(model, state)).toEqual([])
+  })
+
+  it('refuses Backspace at the start of the body paragraph after a table', () => {
+    const model = tabledDoc()
+    const state = emptyEditorState()
+    expect(
+      applyDeleteBackward(model, state, { paragraphId: 'p4', offset: 0 }),
+    ).toBeUndefined()
+    expect(blockText(model, state, 'p4')).toBe('Delta')
+    expect(blockText(model, state, 'para-w14-CELL0002')).toBe('Cell two')
+    expect(operations(model, state)).toEqual([])
+  })
+
+  it('refuses a join from one cell into the cell before it', () => {
+    const model = tabledDoc()
+    const state = emptyEditorState()
+    expect(
+      applyDeleteBackward(model, state, {
+        paragraphId: 'para-w14-CELL0002',
+        offset: 0,
+      }),
+    ).toBeUndefined()
+    expect(blockText(model, state, 'para-w14-CELL0002')).toBe('Cell two')
+    expect(operations(model, state)).toEqual([])
+  })
+
+  it('refuses a join into an empty cell', () => {
+    const model = emptyCellDoc()
+    const state = emptyEditorState()
+    expect(
+      applyDeleteForward(model, state, { paragraphId: 'p1', offset: 5 }),
+    ).toBeUndefined()
+    expect(blockText(model, state, 'p1')).toBe('Alpha')
+    expect(operations(model, state)).toEqual([])
+  })
+
+  it('refuses the primitive directly as well as through the caret edits', () => {
+    const model = tabledDoc()
+    const state = emptyEditorState()
+    expect(joinIntoPrevious(model, state, 'para-w14-CELL0002')).toBeUndefined()
+    expect(operations(model, state)).toEqual([])
+  })
+
+  it('still joins ordinary body paragraphs and keeps the moved runs', () => {
+    const model = doc(para('p1', 'Alpha'), para('p2', 'Bravo'))
+    const result = applyDeleteBackward(model, emptyEditorState(), {
+      paragraphId: 'p2',
+      offset: 0,
+    })
+    const state = result?.state ?? emptyEditorState()
+    expect(blockText(model, state, 'p1')).toBe('AlphaBravo')
+    expect(state.deletedParagraphIds).toEqual(['p2'])
+    expect(operations(model, state)).toEqual([
+      { type: 'replace_run_text', runId: 'p1-r', text: 'AlphaBravo' },
+      { type: 'delete_paragraph', paragraphId: 'p2' },
+    ])
   })
 })
 

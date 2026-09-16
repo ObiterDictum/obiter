@@ -459,6 +459,79 @@ describe('cut ordering and non-keydown input', () => {
   })
 })
 
+describe('pasting over a document selection', () => {
+  it('refuses an empty clipboard instead of deleting the selection', () => {
+    const { editAsync } = mount()
+    selectAcrossBoundary()
+    fireEvent.paste(bodyField(), { clipboardData: { getData: () => '' } })
+    expect(selectionStatus()).toMatch(/cannot replace a document selection/)
+    // The range is still live, painted, and untouched.
+    expect(selectedText('p1')).toBe('pha')
+    expect(selectedText('p2')).toBe('Br')
+    save()
+    expect(editAsync).not.toHaveBeenCalled()
+  })
+
+  it('refuses a clipboard with no text/plain payload', () => {
+    const { editAsync } = mount()
+    selectAcrossBoundary()
+    fireEvent.paste(bodyField(), { clipboardData: { getData: () => '' } })
+    expect(selectionStatus()).toMatch(/cannot replace a document selection/)
+    save()
+    expect(editAsync).not.toHaveBeenCalled()
+  })
+
+  it('accepts a whitespace-only payload rather than treating it as empty', () => {
+    const { editAsync } = mount()
+    selectAcrossBoundary()
+    fireEvent.paste(bodyField(), { clipboardData: { getData: () => '   ' } })
+    save()
+    expect(saveOperations(editAsync)).toEqual([
+      { type: 'replace_run_text', runId: 'p1-r', text: 'Al   avo' },
+      { type: 'delete_paragraph', paragraphId: 'p2' },
+    ])
+  })
+
+  it('accepts a newline-only payload', () => {
+    const { editAsync } = mount()
+    selectAcrossBoundary()
+    fireEvent.paste(bodyField(), { clipboardData: { getData: () => '\n' } })
+    save()
+    expect(saveOperations(editAsync)).toEqual([
+      { type: 'replace_run_text', runId: 'p1-r', text: 'Al\navo' },
+      { type: 'delete_paragraph', paragraphId: 'p2' },
+    ])
+  })
+
+  it('replaces the range with an astral character', () => {
+    const { editAsync } = mount()
+    selectAcrossBoundary()
+    fireEvent.paste(bodyField(), {
+      clipboardData: { getData: () => '\u{1f600}' },
+    })
+    save()
+    expect(saveOperations(editAsync)).toEqual([
+      { type: 'replace_run_text', runId: 'p1-r', text: 'Al\u{1f600}avo' },
+      { type: 'delete_paragraph', paragraphId: 'p2' },
+    ])
+  })
+
+  it('applies one replacement when a paste is followed by an input event', () => {
+    const { editAsync } = mount()
+    selectAcrossBoundary()
+    const field = bodyField()
+    fireEvent.paste(field, { clipboardData: { getData: () => 'zed' } })
+    // The paste path preventDefaults, so a browser that still dispatches the
+    // input event must not insert the same text a second time.
+    fireEvent.change(field, { target: { value: 'Alzedavo' } })
+    save()
+    expect(saveOperations(editAsync)).toEqual([
+      { type: 'replace_run_text', runId: 'p1-r', text: 'Alzedavo' },
+      { type: 'delete_paragraph', paragraphId: 'p2' },
+    ])
+  })
+})
+
 describe('an unsaved inserted paragraph blocks a selection', () => {
   it('refuses to extend into the inserted paragraph', () => {
     mount()

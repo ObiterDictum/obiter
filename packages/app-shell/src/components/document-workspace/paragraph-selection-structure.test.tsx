@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { fireEvent } from '@testing-library/react'
+import { fireEvent, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import {
   mountWorkspace,
@@ -120,6 +120,48 @@ describe('plain arrow navigation at a table', () => {
     shiftRight()
     expect(selectionStatus()).toMatch(/cannot cross a table/)
     expect(selectedMarkCount()).toBe(0)
+  })
+})
+
+/*
+ * A single caret reaches the same join primitive a range edit uses. Delete at
+ * the end of the body paragraph before a table and Backspace at the start of
+ * the body paragraph after it must refuse the join with the structural reason:
+ * no cell text crosses the table, no cell paragraph is deleted, and the draft
+ * is untouched.
+ */
+describe('a single caret at a table boundary', () => {
+  function save() {
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+  }
+
+  it('refuses Delete at the end of the body paragraph before the table', () => {
+    const { editAsync } = mount()
+    clickParagraph('p1')
+    placeCaret(5)
+    const notPrevented = fireEvent.keyDown(bodyField(), { key: 'Delete' })
+    expect(notPrevented).toBe(false)
+    expect(selectionStatus()).toMatch(/cannot cross a table/)
+    expect(bodyField().value).toBe('Alpha')
+    // Nothing entered the draft, so Save has nothing to send.
+    expect(screen.getByRole('button', { name: 'Save' })).toHaveProperty(
+      'disabled',
+      true,
+    )
+    save()
+    expect(editAsync).not.toHaveBeenCalled()
+  })
+
+  it('refuses Backspace at the start of the body paragraph after the table', () => {
+    const { editAsync } = mount()
+    clickParagraph('p4')
+    placeCaret(0)
+    const notPrevented = fireEvent.keyDown(bodyField(), { key: 'Backspace' })
+    expect(notPrevented).toBe(false)
+    expect(selectionStatus()).toMatch(/cannot cross a table/)
+    expect(bodyField().value).toBe('Delta')
+    save()
+    expect(editAsync).not.toHaveBeenCalled()
   })
 })
 
