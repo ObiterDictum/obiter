@@ -17,6 +17,8 @@
     "lint": "oxlint && eslint .",
     "prefetch:rampart": "tsx scripts/prefetch-rampart-model.ts",
     "bench:guard": "tsx scripts/bench-guard.ts",
+    "perf:bundle-budget": "node scripts/perf/bundle-budget.mjs",
+    "perf:web-load": "node scripts/perf/web-load-runner.mjs",
     "benchmark:search": "tsx packages/search-client/src/benchmark/run.ts",
     "benchmark:search-corpus": "tsx scripts/search-corpus-relevance/run.ts",
     "benchmark:legislation-corpus": "tsx scripts/legislation-relevance/run.ts",
