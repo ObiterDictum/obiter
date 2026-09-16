@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
+import { createRef } from 'react'
 import { Input } from '../input'
 
 describe('Input', () => {
@@ -14,6 +15,12 @@ describe('Input', () => {
     const input = screen.getByLabelText('Email')
     expect(input.getAttribute('aria-invalid')).toBe('true')
     expect(screen.getByText('Invalid address').tagName).toBe('P')
+  })
+
+  it('forwards a ref to the input element so a form can focus it', () => {
+    const ref = createRef<HTMLInputElement>()
+    render(<Input label="Name" ref={ref} />)
+    expect(ref.current).toBe(screen.getByLabelText('Name'))
   })
 
   it('renders helper text when there is no error', () => {

@@ -2,12 +2,16 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import type { Pool } from 'pg'
+import {
+  createConnectedPool,
+  createHybridPool,
+  createPool,
+  testEnv,
+  type Auth,
+  type ErrorBody,
+} from './app-test-support'
 import { createApiApp } from './app'
-import type { createAuth } from './auth'
 import { SCANNED_PDF_MESSAGE } from './document-extraction'
-import type { ApiEnv } from './env'
-import { createTestApiEnv } from './test-api-env'
 import type { RedactionRunRow } from './redaction-database'
 import { createLocalStorage } from './storage'
 
@@ -31,44 +35,6 @@ vi.mock('./redaction-detection', () => ({
     degraded ? 'heuristics+supplement' : 'model+supplement',
   detectRedactionSpans: detectRedactionSpansMock,
 }))
-
-type Auth = ReturnType<typeof createAuth>
-type QueryMock = (...args: unknown[]) => Promise<{ rows: unknown[] }>
-
-interface ErrorBody {
-  error: {
-    code: string
-    message: string
-    requestId: string
-  }
-}
-
-const testEnv: ApiEnv = createTestApiEnv()
-
-function createPool(query: QueryMock): Pool {
-  return {
-    query,
-  } as unknown as Pool
-}
-
-function createConnectedPool(query: QueryMock): Pool {
-  return {
-    connect: async () => ({
-      query,
-      release: () => undefined,
-    }),
-  } as unknown as Pool
-}
-
-function createHybridPool(query: QueryMock, transactionQuery: QueryMock): Pool {
-  return {
-    query,
-    connect: async () => ({
-      query: transactionQuery,
-      release: () => undefined,
-    }),
-  } as unknown as Pool
-}
 
 describe('createApiApp', () => {
   it('configures redaction detection from ApiEnv while building the app', () => {

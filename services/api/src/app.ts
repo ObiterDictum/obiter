@@ -6,7 +6,11 @@ import type {
   ApiErrorCode,
   ApiErrorResponse,
   MeResponse,
+  UpdateProfileResponse,
 } from '@obiter/contracts'
+import { updateProfileInputSchema } from '@obiter/contracts'
+import { updateUserName } from './account-database'
+import { appendPasswordChangedAudit } from './auth-change-audit'
 import { appendAuditLog, findOrganisation, toCurrentUser } from './database'
 import type { ApiEnv } from './env'
 import { createAuth } from './auth'
@@ -92,7 +96,7 @@ function errorResponse(
   code: ApiErrorCode,
   message: string,
   requestId: string,
-  status: 401 | 404 | 500,
+  status: 400 | 401 | 404 | 500,
 ) {
   return {
     response: {
@@ -207,6 +211,31 @@ export function createApiApp(
       })
     }
 
+    // A password change is the one auth outcome the session hooks above cannot
+    // see: better-auth's after-hook reports sign-in/sign-up, and a successful
+    // change returns a user object, not a session. Audited here, at the same
+    // boundary, after the change has been applied. The request body is never
+    // read, so no password material can reach the audit row or the logs.
+    //
+    // The change is already committed inside `auth.handler` — password
+    // updated, other sessions revoked, replacement session minted — so the
+    // audit append is deliberately non-fatal: `appendPasswordChangedAudit`
+    // reports its own failure without turning a completed credential mutation
+    // into a false 500. Invariant kept: this branch is reached only on
+    // `response.ok`, so a rejected change can never mint a success event.
+    if (
+      c.req.method === 'POST' &&
+      c.req.path === '/api/auth/change-password' &&
+      response.ok &&
+      sessionUser
+    ) {
+      await appendPasswordChangedAudit(pool, {
+        organisationId: sessionUser.organisationId ?? null,
+        userId: sessionUser.id,
+        requestId,
+      })
+    }
+
     return response
   })
 
@@ -304,6 +333,62 @@ export function createApiApp(
       organisation,
     }
 
+    return c.json(response)
+  })
+
+  /**
+   * The signed-in account's own display name. There is no user id in the path
+   * or the body: the update scope is the session's user, so a request cannot
+   * name a different account. The response is the canonical stored user, so the
+   * client shows what the server kept rather than what it typed.
+   */
+  app.patch('/api/me', async (c) => {
+    const requestId = c.get('requestId')
+    const sessionUser = c.get('user')
+    const session = c.get('session')
+
+    if (!sessionUser || !session) {
+      const error = errorResponse(
+        'unauthenticated',
+        'Sign in is required.',
+        requestId,
+        401,
+      )
+      return c.json(error.response, error.status)
+    }
+
+    const body: unknown = await c.req.json().catch(() => null)
+    const parsed = updateProfileInputSchema.safeParse(body)
+    if (!parsed.success) {
+      const error = errorResponse(
+        'validation_failed',
+        parsed.error.issues[0]?.message ?? 'Name is required.',
+        requestId,
+        400,
+      )
+      return c.json(error.response, error.status)
+    }
+
+    const user = await updateUserName(pool, {
+      userId: sessionUser.id,
+      organisationId: sessionUser.organisationId ?? null,
+      name: parsed.data.name,
+      requestId,
+    })
+
+    // The session user exists, so a missing row means the session outlived its
+    // user; the session is no longer usable.
+    if (!user) {
+      const error = errorResponse(
+        'unauthenticated',
+        'Your account is no longer available.',
+        requestId,
+        401,
+      )
+      return c.json(error.response, error.status)
+    }
+
+    const response: UpdateProfileResponse = { user }
     return c.json(response)
   })
 
