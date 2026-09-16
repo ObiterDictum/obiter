@@ -1,7 +1,7 @@
 import { defineConfig, devices } from '@playwright/test'
 
 const apiPort = Number(process.env.PORT ?? 8787)
-const webPort = 3000
+const webPort = Number(process.env.OBITER_WEB_PORT ?? 3000)
 const apiOrigin = `http://127.0.0.1:${apiPort}`
 const webOrigin = `http://localhost:${webPort}`
 
