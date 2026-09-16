@@ -67,12 +67,43 @@ function isModeActive(item: ModeItem, mode: ModeId) {
   return item.to === `/${mode}`
 }
 
+// Wheel events arrive in pixels, lines or pages. A line is one mouse-wheel
+// notch; 16px per notch keeps a wheel's travel close to the rendered row height.
+const WHEEL_DELTA_LINE = 1
+const WHEEL_DELTA_PAGE = 2
+const WHEEL_LINE_HEIGHT = 16
+
+/**
+ * The horizontal distance a wheel event should move the mode rail, or null when
+ * the browser must keep the event. Separated from the listener so the delta
+ * modes and the gestures we must not consume are unit-tested directly.
+ */
+export function wheelScrollDelta(
+  wheel: Pick<WheelEvent, 'deltaX' | 'deltaY' | 'deltaMode' | 'ctrlKey'>,
+  viewportWidth: number,
+): number | null {
+  // Pinch-zoom arrives as ctrl+wheel. Browser zoom is not ours to consume.
+  if (wheel.ctrlKey) return null
+  // A trackpad's horizontal gesture must scroll the rail natively; only a
+  // vertical-dominant wheel is translated.
+  if (Math.abs(wheel.deltaX) >= Math.abs(wheel.deltaY)) return null
+  if (wheel.deltaMode === WHEEL_DELTA_LINE) {
+    return wheel.deltaY * WHEEL_LINE_HEIGHT
+  }
+  if (wheel.deltaMode === WHEEL_DELTA_PAGE) {
+    return wheel.deltaY * viewportWidth
+  }
+  return wheel.deltaY
+}
+
 /**
  * Primary mode navigation. The rail is contained and scrolls horizontally when
  * the header cannot fit every mode: without that, the four controls widened the
  * header past the viewport and drew over the account controls at narrow widths.
- * The scrollbar is hidden because a visible bar would take a third of the 44px
- * header and clip the controls; wheel, drag, touch and keyboard still scroll.
+ * The scrollbar is hidden because a visible bar reserves layout height inside
+ * the 44px header that the 32px mode controls already fill. A vertical wheel is
+ * translated into horizontal scroll instead, so an ordinary mouse reaches every
+ * clipped mode; `onFocus` still brings a keyboard-revealed mode fully inside.
  */
 export function TopModeNav({ mode }: { mode: ModeId }) {
   const railRef = useRef<HTMLDivElement | null>(null)
@@ -85,6 +116,36 @@ export function TopModeNav({ mode }: { mode: ModeId }) {
       ?.querySelector('[aria-current="page"]')
       ?.scrollIntoView({ inline: 'nearest', block: 'nearest' })
   }, [mode])
+
+  useEffect(() => {
+    const rail = railRef.current
+    if (!rail) return
+
+    // Chromium leaves a vertical wheel over an `overflow-x` container to the
+    // page, and with the scrollbar hidden that left a mouse user no way to
+    // reach a clipped mode. Translate it here. React's `onWheel` is passive,
+    // where `preventDefault()` is ignored and the page would scroll as well, so
+    // this is a native non-passive listener.
+    function onWheel(event: WheelEvent) {
+      const rail = railRef.current
+      if (!rail) return
+
+      const delta = wheelScrollDelta(event, rail.clientWidth)
+      if (delta === null) return
+
+      const max = rail.scrollWidth - rail.clientWidth
+      const next = Math.max(0, Math.min(max, rail.scrollLeft + delta))
+      // At either end leave the event alone: the page keeps scrolling instead of
+      // the rail swallowing a gesture it cannot use.
+      if (next === rail.scrollLeft) return
+
+      event.preventDefault()
+      rail.scrollLeft = next
+    }
+
+    rail.addEventListener('wheel', onWheel, { passive: false })
+    return () => rail.removeEventListener('wheel', onWheel)
+  }, [])
 
   return (
     <div

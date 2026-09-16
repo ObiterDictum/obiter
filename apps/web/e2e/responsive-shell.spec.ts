@@ -1,62 +1,28 @@
-import { test, expect, type Page } from '@playwright/test'
+import { test, expect } from '@playwright/test'
+import {
+  documentWidths,
+  LONG_NAME,
+  LONG_ORG,
+  mockSession,
+  MODES,
+  modeNav,
+  WIDTHS,
+} from './shell-harness'
 
 /**
- * Shell chrome responsive regression.
+ * Shell chrome layout regression.
  *
  * The shell mode bar used to be wider than a narrow viewport: the four mode
  * controls could not shrink, the nav had no scroll containment, and the header
  * grew the document (scrollWidth 450 at a 390px viewport) and drew the last
  * modes over the account controls. This measures the real rendered layout at
- * every supported width and fails if the document widens beyond the viewport,
- * if a mode is covered by other chrome, or if a mode cannot be activated.
+ * every supported width and fails if the document widens beyond the viewport, if
+ * a mode is covered by other chrome, if a mode cannot be activated, or if a
+ * floating panel leaves the viewport.
  *
- * Auth is mocked at the network boundary so the test needs no account, no
- * database and no email; the layout under measurement is the app's own.
+ * The pointer and keyboard paths into the mode bar and the left rail, which are
+ * the mechanisms the narrow-viewport fix rests on, live in mode-rail.spec.ts.
  */
-const WIDTHS = [320, 390, 768, 1024, 1440]
-const MODES = [
-  { name: 'Search', path: '/search' },
-  { name: 'Matters', path: '/matters' },
-  { name: 'Verify', path: '/verify' },
-  { name: 'Redact', path: '/redact' },
-] as const
-
-const LONG_NAME = 'Alexandra-Cassandra Montgomery-Fitzwilliam III'
-const LONG_ORG = 'Montgomery, Fitzwilliam and Partners International LLP'
-
-async function mockSession(page: Page, name = 'Shell Nominal', org = 'Obiter') {
-  await page.route('**/api/auth/get-session', (route) =>
-    route.fulfill({
-      json: {
-        session: { id: 'sess_shell_test', userId: 'usr_shell_test' },
-        user: {
-          id: 'usr_shell_test',
-          name,
-          email: 'shell-test@obiter.test',
-          emailVerified: true,
-        },
-      },
-    }),
-  )
-  await page.route('**/api/me', (route) =>
-    route.fulfill({
-      json: {
-        user: {
-          id: 'usr_shell_test',
-          name,
-          email: 'shell-test@obiter.test',
-          role: 'owner',
-        },
-        organisation: { id: 'org_shell_test', name: org, plan: 'private_beta' },
-      },
-    }),
-  )
-}
-
-function modeNav(page: Page) {
-  return page.getByRole('navigation', { name: 'Modes' })
-}
-
 test('shell chrome fits every supported width and every mode stays reachable', async ({
   page,
 }) => {
@@ -101,16 +67,16 @@ test('shell chrome fits every supported width and every mode stays reachable', a
       // A focused mode must be on-screen inside its rail, not covered by the
       // account controls, and must activate. Covering is what made the last
       // modes unreachable before the fix, so hit-test rather than trust CSS.
-      const state = await link.evaluate((el) => {
-        const r = el.getBoundingClientRect()
+      const state = await link.evaluate((element) => {
+        const rect = element.getBoundingClientRect()
         const top = document.elementFromPoint(
-          r.left + r.width / 2,
-          r.top + r.height / 2,
+          rect.left + rect.width / 2,
+          rect.top + rect.height / 2,
         )
         return {
-          left: r.left,
-          right: r.right,
-          covered: !(el === top || el.contains(top)),
+          left: rect.left,
+          right: rect.right,
+          covered: !(element === top || element.contains(top)),
         }
       })
       expect(
@@ -144,30 +110,60 @@ test('every mode is announced as current when its route is active', async ({
   }
 })
 
+test('the expanded search panel stays inside the viewport', async ({
+  page,
+}) => {
+  await mockSession(page)
+
+  for (const width of [768, 1024]) {
+    await page.setViewportSize({ width, height: 800 })
+    await page.goto('/search')
+
+    const field = page.getByRole('textbox', { name: 'Search Obiter' })
+    await field.click()
+    await field.fill('arbitration clause enforcement in the commercial court')
+
+    const dialog = page.getByRole('dialog', { name: 'Expanded search' })
+    await expect(dialog).toBeVisible()
+
+    const box = await dialog.boundingBox()
+    expect(box, `no expanded search panel at ${width}px`).not.toBeNull()
+    expect(box!.x).toBeGreaterThanOrEqual(-1)
+    expect(box!.x + box!.width).toBeLessThanOrEqual(width + 1)
+
+    const widths = await documentWidths(page)
+    expect(widths.scrollWidth).toBeLessThanOrEqual(widths.clientWidth)
+  }
+})
+
 test('the account menu opens inside a narrow viewport with long names', async ({
   page,
 }) => {
   await mockSession(page, LONG_NAME, LONG_ORG)
   await page.goto('/search')
   await expect(modeNav(page)).toBeVisible()
-  await page.setViewportSize({ width: 320, height: 800 })
 
-  await page.locator('button[aria-haspopup="menu"]').click()
-  const menu = page.getByRole('menu')
-  await expect(menu).toBeVisible()
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 800 })
+    await page.locator('button[aria-haspopup="menu"]').click()
+    const menu = page.getByRole('menu')
+    await expect(menu).toBeVisible()
 
-  const layout = await page.evaluate(() => {
-    const doc = document.documentElement
-    const menu = document.querySelector('[role="menu"]')
-    const r = menu?.getBoundingClientRect()
-    return {
-      scrollWidth: doc.scrollWidth,
-      clientWidth: doc.clientWidth,
-      menuLeft: r?.left ?? null,
-      menuRight: r?.right ?? null,
-    }
-  })
-  expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth)
-  expect(layout.menuLeft).toBeGreaterThanOrEqual(-1)
-  expect(layout.menuRight).toBeLessThanOrEqual(321)
+    const layout = await page.evaluate(() => {
+      const doc = document.documentElement
+      const menu = document.querySelector('[role="menu"]')
+      const rect = menu?.getBoundingClientRect()
+      return {
+        scrollWidth: doc.scrollWidth,
+        clientWidth: doc.clientWidth,
+        menuLeft: rect?.left ?? null,
+        menuRight: rect?.right ?? null,
+      }
+    })
+    expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth)
+    expect(layout.menuLeft).toBeGreaterThanOrEqual(-1)
+    expect(layout.menuRight).toBeLessThanOrEqual(width + 1)
+
+    await page.locator('button[aria-label="Close menu"]').click()
+  }
 })

@@ -9,6 +9,13 @@ import { ObiterMark } from './wordmark'
  * Left icon rail. Compact at narrow widths: it only expands on hover/focus at
  * `md` and up, because a 256px rail widening a 320px viewport pushed the page
  * past its own edge. The top mode nav carries the labels at narrow widths.
+ *
+ * Below `md` the header's minimum width (home control, theme and account group,
+ * padding - about 144px) plus 256px does not fit a 320px viewport, so the
+ * keyboard reveal is capped at half the viewport on `:focus-visible`. That
+ * keeps a focused row, its focus ring and its label inside the viewport with no
+ * document overflow and no reflow, while a pointer click (which does not match
+ * `:focus-visible`) never opens the rail under a tap.
  */
 export function ModeRail({ mode }: { mode: ModeId }) {
   const navigate = useNavigate()
@@ -34,12 +41,14 @@ export function ModeRail({ mode }: { mode: ModeId }) {
       className={cn(
         'group/rail relative z-10 flex h-full shrink-0 flex-col overflow-hidden border-r border-line bg-canvas',
         'w-12 transition-[width] duration-200 ease-[cubic-bezier(0.32,0.72,0,1)]',
-        expandable && 'md:hover:w-64 md:focus-within:w-64',
+        expandable &&
+          'md:hover:w-64 md:focus-within:w-64 max-md:has-[:focus-visible]:w-[min(16rem,50vw)]',
       )}
       aria-label={expandable ? 'Mode shortcuts' : 'Obiter'}
     >
-      {/* Fixed inner width so icons stay left-aligned while the rail clips/expands. */}
-      <div className="flex h-full w-64 flex-col">
+      {/* Full-width inner column so a row is exactly as wide as the rail is
+          revealed at, in the collapsed, hover and keyboard-revealed states. */}
+      <div className="flex h-full w-full flex-col">
         <div className="flex h-11 shrink-0 items-center gap-2.5 border-b border-line px-3.5">
           <Link to="/" aria-label="Home" className="shrink-0">
             <ObiterMark className="h-5 w-5" />
@@ -49,7 +58,7 @@ export function ModeRail({ mode }: { mode: ModeId }) {
               'truncate text-[11px] font-semibold tracking-[0.14em] text-muted uppercase',
               'opacity-0 transition-opacity duration-200',
               expandable &&
-                'md:group-hover/rail:opacity-100 md:group-focus-within/rail:opacity-100',
+                'md:group-hover/rail:opacity-100 md:group-focus-within/rail:opacity-100 max-md:group-has-[:focus-visible]/rail:opacity-100',
             )}
           >
             {modeLabel(mode)}
@@ -72,7 +81,7 @@ export function ModeRail({ mode }: { mode: ModeId }) {
                 className={cn(
                   'h-5 overflow-hidden whitespace-nowrap px-2.5 text-[10px] font-medium tracking-wider text-subtle uppercase',
                   'opacity-0 transition-opacity duration-200',
-                  'md:group-hover/rail:opacity-100 md:group-focus-within/rail:opacity-100',
+                  'md:group-hover/rail:opacity-100 md:group-focus-within/rail:opacity-100 max-md:group-has-[:focus-visible]/rail:opacity-100',
                 )}
               >
                 {section.title}
