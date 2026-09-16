@@ -325,3 +325,71 @@ describe('stepping the focus through arrow geometry', () => {
     ).toEqual({ paragraphId: 'p1', offset: 2 })
   })
 })
+
+describe('stepping across astral characters', () => {
+  // 'a' + emoji (two code units) + 'b', so the pair occupies offsets 1..3.
+  const astral = `a\u{1f600}b`
+
+  it('steps over a whole surrogate pair moving right', () => {
+    expect(
+      stepSelectionFocus({
+        paragraphId: 'p1',
+        key: 'ArrowRight',
+        offset: 1,
+        text: astral,
+        lines: lines([0, astral.length]),
+        column: 1,
+      }),
+    ).toEqual({ paragraphId: 'p1', offset: 3 })
+  })
+
+  it('steps over a whole surrogate pair moving left', () => {
+    expect(
+      stepSelectionFocus({
+        paragraphId: 'p1',
+        key: 'ArrowLeft',
+        offset: 3,
+        text: astral,
+        lines: lines([0, astral.length]),
+        column: 3,
+      }),
+    ).toEqual({ paragraphId: 'p1', offset: 1 })
+  })
+
+  it('never lands between two adjacent pairs', () => {
+    const two = '\u{1f600}\u{1f601}'
+    expect(
+      stepSelectionFocus({
+        paragraphId: 'p1',
+        key: 'ArrowRight',
+        offset: 0,
+        text: two,
+        lines: lines([0, two.length]),
+        column: 0,
+      }),
+    ).toEqual({ paragraphId: 'p1', offset: 2 })
+    expect(
+      stepSelectionFocus({
+        paragraphId: 'p1',
+        key: 'ArrowRight',
+        offset: 2,
+        text: two,
+        lines: lines([0, two.length]),
+        column: 2,
+      }),
+    ).toEqual({ paragraphId: 'p1', offset: 4 })
+  })
+
+  it('keeps a boundary at a code-point edge', () => {
+    expect(
+      stepSelectionFocus({
+        paragraphId: 'p1',
+        key: 'ArrowLeft',
+        offset: 1,
+        text: astral,
+        lines: lines([0, astral.length]),
+        column: 1,
+      }),
+    ).toEqual({ paragraphId: 'p1', offset: 0 })
+  })
+})

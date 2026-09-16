@@ -20,6 +20,61 @@ export type LocalInsert = {
   runs?: DocumentTextRunWire[]
 }
 
+/**
+ * The run properties the edit contract can restate, read from a run's preserved
+ * fragments. `null` means the run does not set the property directly, which is
+ * the value a range emphasis needs to strip an inherited direct setting. One
+ * extractor serves both the insert payload (compacted, absent properties
+ * omitted) and the emphasis a joined tail run needs, so the two cannot drift.
+ */
+export type RunEditProperties = {
+  bold: boolean | null
+  italic: boolean | null
+  underline: boolean | null
+  fontFamily: string | null
+  fontSize: number | null
+  colour: string | null
+  highlight: (typeof documentEditHighlightSchema.options)[number] | null
+  strikethrough: boolean | null
+  vertAlign: (typeof documentEditVertAlignSchema.options)[number] | null
+  smallCaps: boolean | null
+}
+
+export function runPropertiesFromFragments(
+  fragments: readonly string[],
+): RunEditProperties {
+  const xml = fragments.join('')
+  return {
+    bold: toggleValue(xml, 'b'),
+    italic: toggleValue(xml, 'i'),
+    underline: underlineValue(xml),
+    fontFamily: fontFamilyValue(xml),
+    fontSize: fontSizeValue(xml),
+    colour: colourValue(xml),
+    highlight: highlightValue(xml),
+    strikethrough: toggleValue(xml, 'strike'),
+    vertAlign: vertAlignValue(xml),
+    smallCaps: toggleValue(xml, 'smallCaps'),
+  }
+}
+
+/** The set properties only, for an operation that creates a fresh run. */
+export function compactRunProperties(properties: RunEditProperties) {
+  return Object.fromEntries(
+    Object.entries(properties).filter(([, value]) => value !== null),
+  )
+}
+
+/** Whether two runs set the same representable properties. */
+export function sameRunProperties(
+  a: RunEditProperties,
+  b: RunEditProperties,
+): boolean {
+  return (Object.keys(a) as Array<keyof RunEditProperties>).every(
+    (key) => a[key] === b[key],
+  )
+}
+
 export function insertPlainText(insert: LocalInsert): string {
   if (insert.runs && insert.runs.length > 0) {
     const joined = insert.runs.map((run) => run.text).join('')
@@ -115,15 +170,14 @@ export function collectEditOperations(
 
   for (const paragraph of story?.paragraphs ?? []) {
     if (deleted.has(paragraph.id)) continue
-    const extraText = (extraRuns[paragraph.id] ?? [])
-      .map((run) => drafts[run.id] ?? run.text)
-      .join('')
+    const extra = extraRuns[paragraph.id] ?? []
+    const extraText = extra.map((run) => drafts[run.id] ?? run.text).join('')
     if (paragraph.runs.length === 0) {
       if (extraText) {
         operations.push({
           type: 'insert_paragraph_after',
           paragraphId: paragraph.id,
-          text: extraText,
+          ...extraParagraphPayload(extra, drafts),
           ...(paragraph.styleId ? { styleId: paragraph.styleId } : {}),
         })
         emptyReplacements.push(paragraph.id)
@@ -144,6 +198,10 @@ export function collectEditOperations(
         })
       }
     }
+    // The appended tail is folded into the head paragraph's last run, which
+    // would paint it with that run's formatting. Restate each moved run's own
+    // properties over its slice so the save keeps what the editor painted.
+    operations.push(...appendedRunEmphasis(paragraph, extra, drafts))
   }
 
   const realIds = new Set(
@@ -191,24 +249,77 @@ export function collectEditOperations(
 function insertPayload(insert: LocalInsert) {
   if (!insert.runs || insert.runs.length === 0) return { text: insert.text }
   return {
-    runs: insertRuns(insert).map((run) => {
-      const xml = run.preservedXmlFragments.join('')
-      return {
-        text: run.text,
-        ...(run.styleId ? { styleId: run.styleId } : {}),
-        ...toggleField(xml, 'b', 'bold'),
-        ...toggleField(xml, 'i', 'italic'),
-        ...underlineField(xml),
-        ...toggleField(xml, 'strike', 'strikethrough'),
-        ...toggleField(xml, 'smallCaps', 'smallCaps'),
-        ...fontFamilyField(xml),
-        ...fontSizeField(xml),
-        ...namedAttr(xml, 'color', 'val', 'colour', isEditColour),
-        ...namedAttr(xml, 'highlight', 'val', 'highlight', isHighlight),
-        ...namedAttr(xml, 'vertAlign', 'val', 'vertAlign', isVertAlign),
-      }
-    }),
+    runs: insertRuns(insert).map((run) => ({
+      text: run.text,
+      ...(run.styleId ? { styleId: run.styleId } : {}),
+      ...compactRunProperties(
+        runPropertiesFromFragments(run.preservedXmlFragments),
+      ),
+    })),
   }
+}
+
+/**
+ * The payload for a paragraph that has no runs of its own and is built entirely
+ * from appended runs. Plain text keeps the compact `text` shape; anything that
+ * carries formatting or a character style becomes `runs`, so a join can never
+ * leave the appended text plainer than it was painted.
+ */
+function extraParagraphPayload(
+  runs: readonly DocumentTextRunWire[],
+  drafts: Record<string, string>,
+) {
+  const payload = runs.map((run) => ({
+    text: drafts[run.id] ?? run.text,
+    ...(run.styleId ? { styleId: run.styleId } : {}),
+    ...compactRunProperties(
+      runPropertiesFromFragments(run.preservedXmlFragments),
+    ),
+  }))
+  const formatted = payload.some((run) => Object.keys(run).length > 1)
+  return formatted
+    ? { runs: payload }
+    : { text: payload.map((run) => run.text).join('') }
+}
+
+/**
+ * The emphasis operations that restate each appended tail run's own properties
+ * over its slice of the joined paragraph. The head's last run receives the
+ * appended text, so a slice whose properties differ from its predecessor needs
+ * an operation whether it sets a property or clears one the predecessor had.
+ * Ranges are post-text-edit offsets, which is the space the server applies
+ * range emphasis in.
+ */
+function appendedRunEmphasis(
+  paragraph: { id: string; runs: DocumentTextRunWire[] },
+  extra: readonly DocumentTextRunWire[],
+  drafts: Record<string, string>,
+): DocumentEditOperation[] {
+  if (extra.length === 0) return []
+  const last = paragraph.runs[paragraph.runs.length - 1]
+  if (!last) return []
+  const operations: DocumentEditOperation[] = []
+  let cursor = paragraph.runs.reduce(
+    (sum, run) => sum + (drafts[run.id] ?? run.text).length,
+    0,
+  )
+  let previous = runPropertiesFromFragments(last.preservedXmlFragments)
+  for (const run of extra) {
+    const text = drafts[run.id] ?? run.text
+    const properties = runPropertiesFromFragments(run.preservedXmlFragments)
+    if (text.length > 0 && !sameRunProperties(properties, previous)) {
+      operations.push({
+        type: 'set_run_emphasis',
+        paragraphId: paragraph.id,
+        from: cursor,
+        to: cursor + text.length,
+        ...properties,
+      })
+    }
+    cursor += text.length
+    previous = properties
+  }
+  return operations
 }
 
 function xmlPrefix(xml: string) {
@@ -224,52 +335,51 @@ function wordAttr(attrs: string | undefined, name: string, prefix: string) {
   return attrs?.match(new RegExp(`(?:${prefix}:)?${name}="([^"]+)"`, 'i'))?.[1]
 }
 
-function toggleField(
-  xml: string,
-  localName: string,
-  field: 'bold' | 'italic' | 'strikethrough' | 'smallCaps',
-) {
+function toggleValue(xml: string, localName: string): boolean | null {
   const tag = wordTag(xml, localName)
-  if (!tag) return {}
+  if (!tag) return null
   const value = wordAttr(tag[1], 'val', xmlPrefix(xml))?.toLowerCase()
-  const on = value !== '0' && value !== 'false' && value !== 'off'
-  return { [field]: on }
+  return value !== '0' && value !== 'false' && value !== 'off'
 }
 
-function underlineField(xml: string) {
+function underlineValue(xml: string): boolean | null {
   const tag = wordTag(xml, 'u')
-  if (!tag) return {}
+  if (!tag) return null
   const value = wordAttr(tag[1], 'val', xmlPrefix(xml))?.toLowerCase()
-  return {
-    underline: value !== 'none' && value !== '0' && value !== 'false',
-  }
+  return value !== 'none' && value !== '0' && value !== 'false'
 }
 
-function namedAttr(
-  xml: string,
-  localName: string,
-  attr: string,
-  field: string,
-  ok: (value: string) => boolean = () => true,
-) {
-  const tag = wordTag(xml, localName)
-  const value = wordAttr(tag?.[1], attr, xmlPrefix(xml))
-  if (!value || !ok(value)) return {}
-  return { [field]: value }
-}
-
-function fontFamilyField(xml: string) {
+function fontFamilyValue(xml: string): string | null {
   const attrs = wordTag(xml, 'rFonts')?.[1]
   const prefix = xmlPrefix(xml)
-  const name =
-    wordAttr(attrs, 'ascii', prefix) ?? wordAttr(attrs, 'hAnsi', prefix)
-  return name ? { fontFamily: name } : {}
+  return (
+    wordAttr(attrs, 'ascii', prefix) ?? wordAttr(attrs, 'hAnsi', prefix) ?? null
+  )
 }
 
-function fontSizeField(xml: string) {
+function fontSizeValue(xml: string): number | null {
   const raw = wordAttr(wordTag(xml, 'sz')?.[1], 'val', xmlPrefix(xml))
   const size = raw === undefined ? Number.NaN : Number(raw)
-  return Number.isInteger(size) ? { fontSize: size } : {}
+  return Number.isInteger(size) ? size : null
+}
+
+function colourValue(xml: string): string | null {
+  const value = wordAttr(wordTag(xml, 'color')?.[1], 'val', xmlPrefix(xml))
+  return value && isEditColour(value) ? value : null
+}
+
+function highlightValue(
+  xml: string,
+): (typeof documentEditHighlightSchema.options)[number] | null {
+  const value = wordAttr(wordTag(xml, 'highlight')?.[1], 'val', xmlPrefix(xml))
+  return value && isHighlight(value) ? value : null
+}
+
+function vertAlignValue(
+  xml: string,
+): (typeof documentEditVertAlignSchema.options)[number] | null {
+  const value = wordAttr(wordTag(xml, 'vertAlign')?.[1], 'val', xmlPrefix(xml))
+  return value && isVertAlign(value) ? value : null
 }
 
 function isEditColour(value: string) {

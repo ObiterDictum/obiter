@@ -25,6 +25,8 @@ const handlers: ParagraphSelectionHandlers = {
   onCopyRange: () => undefined,
   onCutRange: () => undefined,
   onClear: () => undefined,
+  onRejectInput: () => undefined,
+  onEscapeBlur: () => undefined,
 }
 
 function para(id: string, text: string): DocumentParagraphWire {

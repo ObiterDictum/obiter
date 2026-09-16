@@ -6,6 +6,7 @@ import {
   type LocalInsert,
 } from './document-edits'
 import { documentStory } from './document-model-text'
+import { canJoinParagraphRuns } from './document-run-fidelity'
 
 export type ExtraRuns = Record<string, DocumentTextRunWire[]>
 
@@ -255,6 +256,11 @@ export function joinIntoPrevious(
   const previousId = order[index - 1]
   if (!previousId) return undefined
   const moving = blockRuns(model, state, paragraphId)
+  const head = blockRuns(model, state, previousId)
+  // Refuse before touching the head when the moved runs cannot be restated on
+  // save; a join that dropped a character style or a structural child would
+  // paint formatting persistence silently discards.
+  if (!canJoinParagraphRuns(head, moving)) return undefined
   const caretOffset = blockText(model, state, previousId).length
   let next = appendRuns(state, previousId, moving)
   const removed = removeInsert(next.inserts, paragraphId)

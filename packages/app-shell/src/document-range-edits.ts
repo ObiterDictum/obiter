@@ -1,5 +1,8 @@
 import type { DocumentModelWire } from '@obiter/contracts'
 import { flowParagraphIds, removeInsert } from './document-edits'
+import { documentStory } from './document-model-text'
+import { storyBodyParagraphIds } from './document-story-flow'
+import { canJoinParagraphRuns } from './document-run-fidelity'
 import {
   applyReplaceRange,
   applySplitParagraph,
@@ -12,6 +15,51 @@ import {
   type EditorState,
 } from './document-word-edits'
 
+/** Why a document range cannot be replaced. `structure` means the range would
+ * cross a paragraph that is not ordinary body text (a table cell, say), which
+ * the editor cannot paint and a join would corrupt. `join-formatting` means the
+ * surviving tail cannot be restated on save, so the join is refused rather than
+ * painting formatting persistence would discard. */
+export type DocumentRangeRefusal = 'structure' | 'join-formatting'
+
+/**
+ * The reason `applyReplaceDocumentRange` would refuse this range, or null when
+ * it can apply. The caret uses this to say why a range edit was refused instead
+ * of failing silently; the apply function calls it so the two cannot disagree.
+ */
+export function documentRangeRefusal(
+  model: DocumentModelWire,
+  state: EditorState,
+  from: EditorCaret,
+  to: EditorCaret,
+): DocumentRangeRefusal | null {
+  const story = documentStory(model)
+  if (!story) return 'structure'
+  const order = flowParagraphIds(
+    model,
+    state.inserts,
+    state.deletedParagraphIds,
+  )
+  const startIndex = order.indexOf(from.paragraphId)
+  const endIndex = order.indexOf(to.paragraphId)
+  if (startIndex === -1 || endIndex === -1 || startIndex > endIndex) {
+    return 'structure'
+  }
+  const body = storyBodyParagraphIds(story)
+  const insertIds = new Set(state.inserts.map((item) => item.clientId))
+  for (let index = startIndex; index <= endIndex; index += 1) {
+    const id = order[index]
+    if (id === undefined) return 'structure'
+    if (!body.has(id) && !insertIds.has(id)) return 'structure'
+  }
+  if (startIndex !== endIndex) {
+    const head = blockRuns(model, state, from.paragraphId)
+    const moving = blockRuns(model, state, to.paragraphId)
+    if (!canJoinParagraphRuns(head, moving)) return 'join-formatting'
+  }
+  return null
+}
+
 /**
  * Replaces the range between two paragraph endpoints with plain text, spanning
  * as many paragraphs as the range covers. It is composed from the existing
@@ -20,7 +68,9 @@ import {
  * it, every paragraph selected whole between them is deleted, and the two
  * survivors are joined the way Backspace-at-start joins them. The batch
  * therefore serialises as ordinary replace_run_text and delete_paragraph
- * operations, and a range that cannot be resolved mutates nothing.
+ * operations, and a range that cannot be resolved mutates nothing. A range that
+ * would cross a structural paragraph, or move runs the save cannot restate, is
+ * refused up front by `documentRangeRefusal`.
  */
 export function applyReplaceDocumentRange(
   model: DocumentModelWire,
@@ -29,6 +79,7 @@ export function applyReplaceDocumentRange(
   to: EditorCaret,
   insert: string,
 ): EditorResult | undefined {
+  if (documentRangeRefusal(model, state, from, to)) return undefined
   const order = flowParagraphIds(
     model,
     state.inserts,

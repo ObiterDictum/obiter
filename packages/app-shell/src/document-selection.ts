@@ -220,11 +220,17 @@ function sameEndpoint(a: SelectionEndpoint, b: SelectionEndpoint): boolean {
 
 /**
  * The endpoint one arrow press moves the focus to, in the same geometry the
- * caret suites establish: horizontal steps move one code unit and cross a
+ * caret suites establish: horizontal steps move one code point and cross a
  * paragraph edge, vertical steps follow the retained visual column through
  * wrapped lines and then cross into the neighbouring paragraph. Returns
  * undefined when the press cannot move, which is what keeps Shift+Arrow at the
  * document edge a no-op instead of a selection of nothing.
+ *
+ * Movement follows code points, not graphemes: a step enters or leaves a whole
+ * surrogate pair so a focus can never land inside one, and the offsets stay in
+ * the UTF-16 code units the rest of the document model uses. That matches the
+ * code-unit offsets the repository's spans and edit operations are written in,
+ * and it is what a native textarea does with an astral character.
  */
 export function stepSelectionFocus(input: {
   key: 'ArrowLeft' | 'ArrowRight' | 'ArrowUp' | 'ArrowDown'
@@ -239,13 +245,17 @@ export function stepSelectionFocus(input: {
   const { key, paragraphId, offset, text, lines, column, previous, next } =
     input
   if (key === 'ArrowLeft') {
-    if (offset > 0) return { paragraphId, offset: offset - 1 }
+    if (offset > 0) {
+      return { paragraphId, offset: stepCodePoint(text, offset, -1) }
+    }
     return previous
       ? { paragraphId: previous.id, offset: previous.text.length }
       : undefined
   }
   if (key === 'ArrowRight') {
-    if (offset < text.length) return { paragraphId, offset: offset + 1 }
+    if (offset < text.length) {
+      return { paragraphId, offset: stepCodePoint(text, offset, 1) }
+    }
     return next ? { paragraphId: next.id, offset: 0 } : undefined
   }
   const within = offsetVertically({ key, offset, lines, column })
@@ -259,4 +269,29 @@ export function stepSelectionFocus(input: {
     previous,
     next,
   })
+}
+
+/**
+ * One horizontal step from `offset`, never landing inside a surrogate pair.
+ * A low surrogate is stepped over when moving left and a high surrogate when
+ * moving right, so the focus always sits on a code point boundary.
+ */
+function stepCodePoint(
+  text: string,
+  offset: number,
+  direction: -1 | 1,
+): number {
+  if (direction < 0) {
+    const previous = offset - 1
+    return isLowSurrogate(text.charCodeAt(previous)) ? previous - 1 : previous
+  }
+  return isHighSurrogate(text.charCodeAt(offset)) ? offset + 2 : offset + 1
+}
+
+function isHighSurrogate(code: number): boolean {
+  return code >= 0xd800 && code <= 0xdbff
+}
+
+function isLowSurrogate(code: number): boolean {
+  return code >= 0xdc00 && code <= 0xdfff
 }

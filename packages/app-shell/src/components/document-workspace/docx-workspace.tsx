@@ -136,6 +136,9 @@ export function DocxWorkspace({
     extendSelection,
     collapseSelection,
     focusParagraph,
+    moveCaret,
+    rejectSelectionInput,
+    blurParagraph,
     replaceSelectionRange,
     splitSelectionRange,
     copySelection,
@@ -190,6 +193,8 @@ export function DocxWorkspace({
     onCopyRange: copySelection,
     onCutRange: cutSelection,
     onClear: clearSelection,
+    onRejectInput: rejectSelectionInput,
+    onEscapeBlur: blurParagraph,
   }
   const selectionStatus =
     selectionNotice ?? selectionAnnouncement(selectionSegments.size)
@@ -357,6 +362,7 @@ export function DocxWorkspace({
                       selectionSegments={selectionSegments}
                       selectionHandlers={selectionHandlers}
                       onFocusParagraph={focusParagraph}
+                      onMoveCaret={moveCaret}
                       drafts={drafts.drafts}
                       onRunTextChange={(runId, text) =>
                         drafts.setDrafts((current) => ({

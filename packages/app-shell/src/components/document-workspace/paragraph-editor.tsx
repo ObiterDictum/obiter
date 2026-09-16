@@ -1,10 +1,8 @@
 import { useEffect, useRef } from 'react'
 import type { CSSProperties } from 'react'
 import { cn } from '@obiter/ui'
-import {
-  stepSelectionFocus,
-  type SelectionEndpoint,
-} from '../../document-selection'
+import { stepSelectionFocus } from '../../document-selection'
+import { textDiff } from '../../document-model-text'
 import {
   armVerticalDelivery,
   clearVerticalColumn,
@@ -15,38 +13,12 @@ import {
   type VerticalCaretColumn,
 } from './paragraph-arrow'
 import type { WrappedLine } from '../../document-page-flow'
-
-/**
- * What the editor needs to take part in a document selection. `range` is the
- * selection's slice of this textarea, in this editor's local offsets; `active`
- * says a non-collapsed document selection exists, which is when the editor owns
- * Shift+Arrow and the edit keys instead of leaving them to the textarea.
- */
-export type ParagraphSelectionBinding = {
-  range: { from: number; to: number } | null
-  /**
-   * Slice-local offset of the moving end. The model owns it, so an extension
-   * never has to guess from a DOM range whose direction a programmatic write
-   * has already reset.
-   */
-  focus: number | null
-  direction: 'forward' | 'backward' | 'none'
-  active: boolean
-  onExtend: (focus: SelectionEndpoint, anchor: SelectionEndpoint) => void
-  onCollapse: (edge: 'start' | 'end' | 'focus') => void
-  onSelectAll: () => void
-  onReplaceRange: (text: string) => void
-  onDeleteRange: () => void
-  onSplitRange: () => void
-  onCopyRange: (clipboard: DataTransfer | null) => void
-  onCutRange: (clipboard: DataTransfer | null) => void
-  onClear: () => void
-}
-
-export type ParagraphSelectionHandlers = Omit<
+import type {
   ParagraphSelectionBinding,
-  'range' | 'focus'
->
+  ParagraphSelectionHandlers,
+} from './paragraph-selection-binding'
+
+export type { ParagraphSelectionBinding, ParagraphSelectionHandlers }
 export function ParagraphEditor({
   paragraphId,
   text,
@@ -145,6 +117,24 @@ export function ParagraphEditor({
       : { anchor: node.selectionStart, focus: node.selectionEnd }
   }
 
+  /**
+   * Apply a DOM value the key handler did not intercept - a paste, a drop, an
+   * IME commit, any beforeinput-only edit - as a replacement of the document
+   * selection. The insertion the DOM gained becomes the text that replaces the
+   * whole range, so a cross-paragraph selection is replaced coherently rather
+   * than silently reverted. A change that only removed text cannot be expressed
+   * that way and is refused with a notice.
+   */
+  function applyDomInput(next: string) {
+    if (!selection?.active) return
+    const diff = textDiff(text, next)
+    if (diff.insert.length === 0) {
+      selection.onRejectInput()
+      return
+    }
+    selection.onReplaceRange(diff.insert)
+  }
+
   return (
     <textarea
       ref={field}
@@ -155,11 +145,33 @@ export function ParagraphEditor({
       onChange={(event) => {
         // Any text input, including a paste or an IME commit, ends the run.
         clearColumn()
-        // A document selection is replaced by the model operation the
-        // beforeinput handler planned; a change that arrives anyway must not be
-        // applied to one paragraph of it.
-        if (selection?.active) return
+        // A composition's own changes are not the commit; the commit arrives
+        // at compositionEnd and is applied once from there.
+        if (composing.current) return
+        // With a document selection the change is a replacement of the whole
+        // range, not an edit of one paragraph of it.
+        if (selection?.active) {
+          applyDomInput(event.target.value)
+          return
+        }
         onChangeText(event.target.value)
+      }}
+      onBeforeInput={(event) => {
+        if (!selection?.active) return
+        const input = event.nativeEvent as InputEvent
+        const inputType = input.inputType ?? ''
+        // The composition's own text is not the commit and must not be
+        // intercepted while the IME still owns the field.
+        if (inputType === 'insertCompositionText') return
+        if (!inputType.startsWith('insert')) return
+        // A paste, drop or replacement that reached the input layer rather
+        // than a key event still replaces the document selection. Formatted
+        // paste carries its text on the data transfer rather than data.
+        event.preventDefault()
+        const data =
+          input.data ?? input.dataTransfer?.getData('text/plain') ?? ''
+        if (data.length > 0) selection.onReplaceRange(data)
+        else selection.onRejectInput()
       }}
       onFocus={() => {
         // Only the paragraph a vertical move was destined for inherits the
@@ -172,9 +184,24 @@ export function ParagraphEditor({
         composing.current = true
         clearColumn()
       }}
-      onCompositionEnd={() => {
+      onCompositionEnd={(event) => {
         composing.current = false
         clearColumn()
+        // The composition commits once, here. A document selection is replaced
+        // by the committed text; without one the normal change path applies it.
+        if (selection?.active) applyDomInput(event.currentTarget.value)
+      }}
+      onDrop={(event) => {
+        if (!selection?.active) return
+        event.preventDefault()
+        const data = event.dataTransfer.getData('text/plain')
+        if (data.length > 0) selection.onReplaceRange(data)
+        else selection.onRejectInput()
+      }}
+      onDragOver={(event) => {
+        // A drop over a live selection is ours to handle; refusing the default
+        // keeps the browser from inserting into one paragraph of the range.
+        if (selection?.active) event.preventDefault()
       }}
       onMouseDown={() => {
         clearColumn()
@@ -187,6 +214,8 @@ export function ParagraphEditor({
         const node = event.currentTarget
         const start = node.selectionStart
         const end = node.selectionEnd
+        const arrow = arrowKey(event.key)
+        const lineJump = event.key === 'Home' || event.key === 'End'
         const verticalKey =
           event.key === 'ArrowUp' || event.key === 'ArrowDown'
             ? event.key
@@ -195,9 +224,17 @@ export function ParagraphEditor({
         // Shift/Ctrl/Alt/Meta arrows keep their own rules below.
         if (!verticalKey) clearColumn()
         if (event.key === 'Escape') {
-          if (!selection?.active) return
-          event.preventDefault()
-          selection.onCollapse('focus')
+          if (selection?.active) {
+            event.preventDefault()
+            selection.onCollapse('focus')
+            return
+          }
+          // With no live selection, Escape leaves the paragraph: the card's
+          // second half. The draft is untouched, so no unsaved work is lost.
+          if (selection?.onEscapeBlur) {
+            event.preventDefault()
+            selection.onEscapeBlur()
+          }
           return
         }
         if (
@@ -208,6 +245,25 @@ export function ParagraphEditor({
           if (!selection) return
           event.preventDefault()
           selection.onSelectAll()
+          return
+        }
+        // A modified arrow or a line jump would otherwise collapse the DOM
+        // caret natively while the model still reported the range. Collapse
+        // the model first, so the shortcut then runs from a caret the two
+        // agree on; the platform shortcut is unchanged from that point.
+        if (
+          selection?.active &&
+          (arrow != null || lineJump) &&
+          (event.ctrlKey || event.altKey || event.metaKey || lineJump)
+        ) {
+          event.preventDefault()
+          selection.onCollapse(
+            event.key === 'ArrowLeft' ||
+              event.key === 'ArrowUp' ||
+              event.key === 'Home'
+              ? 'start'
+              : 'end',
+          )
           return
         }
         if (
@@ -257,7 +313,6 @@ export function ParagraphEditor({
         // Ctrl/Alt/Meta keep platform shortcuts such as word moves and
         // line/document jumps; a document selection does not change them.
         if (event.ctrlKey || event.altKey || event.metaKey) return
-        const arrow = arrowKey(event.key)
         if (selection?.active && !event.shiftKey) {
           // A plain arrow collapses the document selection to the end it
           // points at, the way it collapses a native one.
@@ -399,7 +454,9 @@ function printableKey(event: {
   metaKey: boolean
 }): boolean {
   if (event.ctrlKey || event.altKey || event.metaKey) return false
-  return event.key.length === 1
+  // A single code point, not a single UTF-16 code unit: an astral character
+  // such as an emoji is one printable key even though `length` is two.
+  return [...event.key].length === 1
 }
 
 function arrowKey(

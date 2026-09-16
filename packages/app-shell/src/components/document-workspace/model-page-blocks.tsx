@@ -64,6 +64,9 @@ export type BlockContext = {
   selectionSegments: ReadonlyMap<string, ParagraphSelectionRange>
   selectionHandlers?: ParagraphSelectionHandlers
   onFocusParagraph?: (paragraphId: string) => void
+  /** A plain-arrow crossing. Distinct from a click, which may place the caret
+   * in a table cell that the selection flow does not cover. */
+  onMoveCaret?: (paragraphId: string, offset: number) => void
 }
 
 export function renderBlock(
@@ -107,7 +110,7 @@ export function renderBlock(
                 onDeleteParagraph={ctx.onDeleteParagraph}
                 onJoinPrevious={ctx.onJoinPrevious}
                 onWordEdit={ctx.onWordEdit}
-                onMoveCaret={ctx.onSelectParagraph}
+                onMoveCaret={ctx.onMoveCaret ?? ctx.onSelectParagraph}
                 onTextSelection={ctx.onTextSelection}
                 previous={adjacent.previous}
                 next={adjacent.next}
@@ -168,7 +171,7 @@ export function renderBlock(
       onDeleteParagraph={ctx.onDeleteParagraph}
       onJoinPrevious={ctx.onJoinPrevious}
       onWordEdit={ctx.onWordEdit}
-      onMoveCaret={ctx.onSelectParagraph}
+      onMoveCaret={ctx.onMoveCaret ?? ctx.onSelectParagraph}
       onTextSelection={ctx.onTextSelection}
       previous={adjacent.previous}
       next={adjacent.next}

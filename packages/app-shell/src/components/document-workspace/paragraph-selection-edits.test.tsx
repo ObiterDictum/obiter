@@ -92,12 +92,42 @@ describe('editing across a cross-paragraph selection', () => {
     ])
   })
 
-  it('does not apply a text change that slips past the key handler', () => {
+  it('edits from the collapsed caret after a modified arrow', () => {
     const { editAsync } = mount()
     selectAcrossBoundary()
-    // Whatever produced it, a change arriving with a document selection must
-    // not be applied to one paragraph of it.
-    fireEvent.change(bodyField(), { target: { value: 'Al' } })
+    // Ctrl+Arrow moves natively; the model collapses first so the two agree.
+    fireEvent.keyDown(bodyField(), { key: 'ArrowRight', ctrlKey: true })
+    expect(selectionStatus()).toBe('')
+    // The ordered end of the range is p2 offset 2, so typing must extend p2
+    // rather than replace the range that was selected a moment ago.
+    fireEvent.change(bodyField(), { target: { value: 'BraXvo' } })
+    save()
+    expect(saveOperations(editAsync)).toEqual([
+      { type: 'replace_run_text', runId: 'p2-r', text: 'BraXvo' },
+    ])
+  })
+
+  it('applies a non-keydown change as a replacement of the range', () => {
+    const { editAsync } = mount()
+    selectAcrossBoundary()
+    // A change that reaches the field without a key event (an IME commit, a
+    // drop, a paste path the key handler missed) is the inserted text that
+    // replaces the whole range, not an edit of one paragraph of it.
+    fireEvent.change(bodyField(), { target: { value: 'X' } })
+    save()
+    expect(saveOperations(editAsync)).toEqual([
+      { type: 'replace_run_text', runId: 'p1-r', text: 'AlXavo' },
+      { type: 'delete_paragraph', paragraphId: 'p2' },
+    ])
+  })
+
+  it('refuses a non-keydown change that only removes text', () => {
+    const { editAsync } = mount()
+    selectAcrossBoundary()
+    fireEvent.change(bodyField(), { target: { value: '' } })
+    // A pure deletion through the value cannot be expressed as a replacement,
+    // so it is refused with a spoken reason rather than silently discarded.
+    expect(selectionStatus()).toMatch(/cannot replace a document selection/)
     save()
     expect(editAsync).not.toHaveBeenCalled()
   })
@@ -265,6 +295,167 @@ describe('formatting a cross-paragraph selection', () => {
       ]),
     )
     expect(operations).toHaveLength(2)
+  })
+})
+
+describe('a formatted tail keeps its formatting through the join', () => {
+  function formattedTailModel() {
+    return multiParagraphModel([
+      paragraph('p1', 'Alpha'),
+      {
+        id: 'p2',
+        runs: [
+          { id: 'p2-a', text: 'Br', preservedXmlFragments: [] },
+          {
+            id: 'p2-b',
+            text: 'av',
+            preservedXmlFragments: ['<w:rPr><w:i/></w:rPr>'],
+          },
+          {
+            id: 'p2-c',
+            text: 'o',
+            preservedXmlFragments: ['<w:rPr><w:b/></w:rPr>'],
+          },
+        ],
+        preservedXmlFragments: [],
+      },
+    ])
+  }
+
+  it('queues an emphasis range for each appended run that differs', () => {
+    const { editAsync } = mount(formattedTailModel())
+    selectAcrossBoundary()
+    fireEvent.keyDown(bodyField(), { key: 'Backspace' })
+    save()
+    const operations = saveOperations(editAsync)
+    // The italic tail run and the bold tail run are restated over their slices
+    // of the merged paragraph, so the save keeps what the editor painted.
+    expect(operations).toContainEqual(
+      expect.objectContaining({
+        type: 'set_run_emphasis',
+        paragraphId: 'p1',
+        from: 2,
+        to: 4,
+        italic: true,
+      }),
+    )
+    expect(operations).toContainEqual(
+      expect.objectContaining({
+        type: 'set_run_emphasis',
+        paragraphId: 'p1',
+        from: 4,
+        to: 5,
+        bold: true,
+        italic: null,
+      }),
+    )
+  })
+
+  it('refuses a tail it cannot restate rather than saving a plainer one', () => {
+    const model = multiParagraphModel([
+      paragraph('p1', 'Alpha'),
+      {
+        id: 'p2',
+        runs: [
+          {
+            id: 'p2-r',
+            text: 'Bravo',
+            preservedXmlFragments: [],
+            styleId: 'Emphasis',
+          },
+        ],
+        preservedXmlFragments: [],
+      },
+    ])
+    const { editAsync } = mount(model)
+    selectAcrossBoundary()
+    fireEvent.keyDown(bodyField(), { key: 'Backspace' })
+    // The join cannot carry the tail's character style, so nothing changes and
+    // the reason is announced.
+    expect(selectionStatus()).toMatch(/cannot save/)
+    save()
+    expect(editAsync).not.toHaveBeenCalled()
+  })
+})
+
+describe('cut ordering and non-keydown input', () => {
+  it('does not write the clipboard when the range edit is refused', () => {
+    const model = multiParagraphModel([
+      paragraph('p1', 'Alpha'),
+      {
+        id: 'p2',
+        runs: [
+          {
+            id: 'p2-r',
+            text: 'Bravo',
+            preservedXmlFragments: [],
+            styleId: 'Emphasis',
+          },
+        ],
+        preservedXmlFragments: [],
+      },
+    ])
+    const { editAsync } = mount(model)
+    selectAcrossBoundary()
+    const setData = vi.fn()
+    fireEvent.cut(bodyField(), { clipboardData: { setData } })
+    expect(setData).not.toHaveBeenCalled()
+    expect(selectionStatus()).toMatch(/cannot save/)
+    save()
+    expect(editAsync).not.toHaveBeenCalled()
+  })
+
+  it('leaves the text in place when the clipboard cannot be written', () => {
+    const { editAsync } = mount()
+    selectAcrossBoundary()
+    const setData = vi.fn(() => {
+      throw new Error('clipboard denied')
+    })
+    fireEvent.cut(bodyField(), { clipboardData: { setData } })
+    expect(setData).toHaveBeenCalled()
+    expect(selectionStatus()).toMatch(/clipboard could not be written/)
+    save()
+    expect(editAsync).not.toHaveBeenCalled()
+  })
+
+  it('replaces the range with dropped text', () => {
+    const { editAsync } = mount()
+    selectAcrossBoundary()
+    fireEvent.drop(bodyField(), {
+      dataTransfer: { getData: () => 'zed' },
+    })
+    save()
+    expect(saveOperations(editAsync)).toEqual([
+      { type: 'replace_run_text', runId: 'p1-r', text: 'Alzedavo' },
+      { type: 'delete_paragraph', paragraphId: 'p2' },
+    ])
+  })
+
+  it('refuses an empty drop with a reason rather than swallowing it', () => {
+    const { editAsync } = mount()
+    selectAcrossBoundary()
+    fireEvent.drop(bodyField(), { dataTransfer: { getData: () => '' } })
+    expect(selectionStatus()).toMatch(/cannot replace a document selection/)
+    save()
+    expect(editAsync).not.toHaveBeenCalled()
+  })
+
+  it('applies an IME commit once as a range replacement', () => {
+    const { editAsync } = mount()
+    selectAcrossBoundary()
+    const field = bodyField()
+    // Synthetic composition events, not a real OS IME pass: the commit is the
+    // value the field holds when composition ends.
+    fireEvent.compositionStart(field)
+    // A change during the composition is not the commit and is not applied.
+    fireEvent.change(field, { target: { value: 'Z' } })
+    field.value = 'X'
+    fireEvent.compositionEnd(field)
+    save()
+    expect(saveOperations(editAsync)).toEqual([
+      { type: 'replace_run_text', runId: 'p1-r', text: 'AlXavo' },
+      { type: 'delete_paragraph', paragraphId: 'p2' },
+    ])
   })
 })
 

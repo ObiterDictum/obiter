@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import { describe, expect, it } from 'vitest'
 import type {
   DocumentModelWire,
@@ -242,5 +243,203 @@ describe('splitting over a range', () => {
     expect((inserted?.runs ?? []).map((run) => run.text).join('')).toBe('vo')
     expect(state.deletedParagraphIds).toEqual(['p2'])
     expect(result?.caret).toEqual({ paragraphId: 'new_1', offset: 0 })
+  })
+})
+
+function run(
+  id: string,
+  text: string,
+  preservedXmlFragments: string[] = [],
+  styleId?: string,
+): DocumentParagraphWire['runs'][number] {
+  return { id, text, preservedXmlFragments, ...(styleId ? { styleId } : {}) }
+}
+
+/** Body p1, a two-cell table, then body p4. Cell paragraphs are structural. */
+function tabledDoc(): DocumentModelWire {
+  return {
+    version: 1,
+    stories: [
+      {
+        kind: 'document',
+        partName: 'word/document.xml',
+        paragraphs: [
+          { id: 'p1', runs: [run('p1-r', 'Alpha')], preservedXmlFragments: [] },
+          {
+            id: 'para-w14-CELL0001',
+            runs: [run('c1-r', 'Cell one')],
+            preservedXmlFragments: [],
+          },
+          {
+            id: 'para-w14-CELL0002',
+            runs: [run('c2-r', 'Cell two')],
+            preservedXmlFragments: [],
+          },
+          { id: 'p4', runs: [run('p4-r', 'Delta')], preservedXmlFragments: [] },
+        ],
+        preservedXmlFragments: [
+          '<w:tbl><w:tr><w:tc><w:p w14:paraId="CELL0001"><w:r><w:t>Cell one</w:t></w:r></w:p></w:tc><w:tc><w:p w14:paraId="CELL0002"><w:r><w:t>Cell two</w:t></w:r></w:p></w:tc></w:tr></w:tbl>',
+        ],
+      },
+    ],
+    styles: [],
+    numbering: [],
+    relationships: [],
+    preservedXmlFragments: [],
+    changes: [],
+  }
+}
+
+describe('a range that would cross a table', () => {
+  it('is refused rather than merging body paragraphs around the cells', () => {
+    const model = tabledDoc()
+    const state = emptyEditorState()
+    expect(
+      applyReplaceDocumentRange(
+        model,
+        state,
+        { paragraphId: 'p1', offset: 2 },
+        { paragraphId: 'p4', offset: 2 },
+        '',
+      ),
+    ).toBeUndefined()
+    // Nothing was mutated, and no operation targets a cell paragraph.
+    const ops = operations(model, state)
+    expect(ops).toEqual([])
+    expect(
+      ops.some(
+        (op) =>
+          op.type === 'delete_paragraph' &&
+          op.paragraphId.startsWith('para-w14-'),
+      ),
+    ).toBe(false)
+  })
+
+  it('refuses a range that ends inside a cell', () => {
+    const model = tabledDoc()
+    const state = emptyEditorState()
+    expect(
+      applyReplaceDocumentRange(
+        model,
+        state,
+        { paragraphId: 'p1', offset: 0 },
+        { paragraphId: 'para-w14-CELL0002', offset: 4 },
+        '',
+      ),
+    ).toBeUndefined()
+    expect(blockText(model, state, 'p1')).toBe('Alpha')
+    expect(blockText(model, state, 'para-w14-CELL0001')).toBe('Cell one')
+  })
+
+  it('still replaces a range that stays inside the body', () => {
+    const model = tabledDoc()
+    const result = applyReplaceDocumentRange(
+      model,
+      emptyEditorState(),
+      { paragraphId: 'p1', offset: 0 },
+      { paragraphId: 'p1', offset: 5 },
+      'Omega',
+    )
+    expect(blockText(model, result?.state ?? emptyEditorState(), 'p1')).toBe(
+      'Omega',
+    )
+  })
+})
+
+describe('a join preserves the surviving tail run formatting', () => {
+  it('restates an italic tail run as a range emphasis on the merged paragraph', () => {
+    const model = doc(para('p1', 'alpha'), {
+      id: 'p2',
+      runs: [run('p2-r', 'bravo', ['<w:rPr><w:i/></w:rPr>'])],
+      preservedXmlFragments: [],
+    })
+    const result = applyReplaceDocumentRange(
+      model,
+      emptyEditorState(),
+      { paragraphId: 'p1', offset: 2 },
+      { paragraphId: 'p2', offset: 3 },
+      '',
+    )
+    const state = result?.state ?? emptyEditorState()
+    expect(blockText(model, state, 'p1')).toBe('alvo')
+    const ops = operations(model, state)
+    expect(ops).toContainEqual(
+      expect.objectContaining({
+        type: 'set_run_emphasis',
+        paragraphId: 'p1',
+        from: 2,
+        to: 4,
+        italic: true,
+      }),
+    )
+  })
+
+  it('clears the head run formatting the tail run does not set', () => {
+    const model = doc(
+      {
+        id: 'p1',
+        runs: [run('p1-r', 'alpha', ['<w:rPr><w:b/></w:rPr>'])],
+        preservedXmlFragments: [],
+      },
+      para('p2', 'bravo'),
+    )
+    const result = applyReplaceDocumentRange(
+      model,
+      emptyEditorState(),
+      { paragraphId: 'p1', offset: 5 },
+      { paragraphId: 'p2', offset: 2 },
+      '',
+    )
+    const state = result?.state ?? emptyEditorState()
+    const ops = operations(model, state)
+    // The appended 'vo' is not bold even though the head run it folds into is,
+    // so the emphasis strips the head run's direct bold rather than keeping it.
+    expect(ops).toContainEqual(
+      expect.objectContaining({
+        type: 'set_run_emphasis',
+        paragraphId: 'p1',
+        from: 5,
+        to: 8,
+        bold: null,
+        italic: null,
+      }),
+    )
+  })
+
+  it('refuses a tail whose structural child the save cannot restate', () => {
+    const model = doc(para('p1', 'alpha'), {
+      id: 'p2',
+      runs: [run('p2-r', 'bravo', ['<w:bookmarkStart w:id="1"/>'])],
+      preservedXmlFragments: [],
+    })
+    const state = emptyEditorState()
+    expect(
+      applyReplaceDocumentRange(
+        model,
+        state,
+        { paragraphId: 'p1', offset: 2 },
+        { paragraphId: 'p2', offset: 3 },
+        '',
+      ),
+    ).toBeUndefined()
+    expect(operations(model, state)).toEqual([])
+  })
+
+  it('refuses a tail whose character style it cannot restate', () => {
+    const model = doc(para('p1', 'alpha'), {
+      id: 'p2',
+      runs: [run('p2-r', 'bravo', [], 'Emphasis')],
+      preservedXmlFragments: [],
+    })
+    const state = emptyEditorState()
+    expect(
+      applyReplaceDocumentRange(
+        model,
+        state,
+        { paragraphId: 'p1', offset: 2 },
+        { paragraphId: 'p2', offset: 3 },
+        '',
+      ),
+    ).toBeUndefined()
   })
 })

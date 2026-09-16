@@ -325,21 +325,39 @@ describe('select all and platform modifiers', () => {
     expect(selectionStatus()).toMatch(/3 paragraphs selected/)
   })
 
-  it('leaves Ctrl/Alt/Meta modified arrows native and unchanged', () => {
-    mount()
-    clickParagraph('p1')
-    placeCaret(5)
-    shiftKey('ArrowRight')
-    const before = selectionStatus()
-    for (const options of [
-      { ctrlKey: true },
-      { altKey: true },
-      { metaKey: true },
-    ]) {
+  it.each([
+    ['Ctrl', { ctrlKey: true }],
+    ['Alt', { altKey: true }],
+    ['Meta', { metaKey: true }],
+  ])(
+    'collapses the selection on %s+Arrow instead of leaving it live',
+    (_name, options) => {
+      mount()
+      clickParagraph('p1')
+      placeCaret(5)
+      shiftKey('ArrowRight')
+      expect(selectionStatus()).toMatch(/2 paragraphs selected/)
+      // The first modified arrow collapses the model selection so the native
+      // move and the model agree; the shortcut is native after that.
       const { notPrevented } = shiftKey('ArrowRight', options)
-      expect(notPrevented).toBe(true)
+      expect(notPrevented).toBe(false)
+      expect(selectionStatus()).toBe('')
+      expect(document.querySelectorAll('[data-selected-text]')).toHaveLength(0)
+    },
+  )
+
+  it('collapses the selection on Home and End instead of leaving it live', () => {
+    for (const key of ['Home', 'End'] as const) {
+      mount()
+      clickParagraph('p1')
+      placeCaret(5)
+      shiftKey('ArrowRight')
+      expect(selectionStatus()).toMatch(/2 paragraphs selected/)
+      const notPrevented = fireEvent.keyDown(bodyField(), { key })
+      expect(notPrevented).toBe(false)
+      expect(selectionStatus()).toBe('')
+      expect(document.querySelectorAll('[data-selected-text]')).toHaveLength(0)
     }
-    expect(selectionStatus()).toBe(before)
   })
 
   it('ignores Shift+Arrow during an IME composition, then resumes', () => {
@@ -373,21 +391,130 @@ describe('select all and platform modifiers', () => {
   })
 })
 
+describe('a collapsed selection hands the caret back to native movement', () => {
+  // A selection shrunk back onto its anchor must be treated as gone: the caret
+  // the user then puts somewhere with a native move is the anchor the next
+  // extension uses, not the anchor of the ghost selection.
+  const short = () =>
+    multiParagraphModel([paragraph('p1', 'ha'), paragraph('p2', 'Bravo')])
+
+  function collapseAtStart() {
+    clickParagraph('p1')
+    nativeSelect(0, 2)
+    shiftKey('ArrowRight')
+    shiftKey('ArrowLeft')
+    shiftKey('ArrowLeft')
+    shiftKey('ArrowLeft')
+    expect(selectionStatus()).toBe('')
+  }
+
+  it('anchors a later extension at the real caret, not the stale anchor', () => {
+    mount(short())
+    collapseAtStart()
+    // Native movement inside the paragraph; no select event reaches the model.
+    placeCaret(2)
+    shiftKey('ArrowRight')
+    // The anchor is the caret at the paragraph end, so nothing of p1 is
+    // covered. Reusing the collapsed anchor would paint 'ha'.
+    expect(selectedText('p1')).toBe('')
+    expect(selectionStatus()).toMatch(/2 paragraphs selected/)
+    // Backspace then joins the two paragraphs, keeping 'ha'.
+    fireEvent.keyDown(bodyField(), { key: 'Backspace' })
+    expect(bodyField().value).toBe('haBravo')
+  })
+
+  it('mirrors a native selection made after the collapse', () => {
+    mount(
+      multiParagraphModel([paragraph('p1', 'hands'), paragraph('p2', 'Bravo')]),
+    )
+    collapseAtStart()
+    // A mouse drag made after the collapse must be mirrored again, not blocked
+    // by the collapsed selection object the model still held.
+    nativeSelect(1, 3)
+    expect(selectionStatus()).toMatch(/1 paragraph selected/)
+    expect(selectedText('p1')).toBe('an')
+  })
+
+  it('re-anchors after reversing back through the anchor', () => {
+    mount(
+      multiParagraphModel([paragraph('p1', 'hands'), paragraph('p2', 'Bravo')]),
+    )
+    clickParagraph('p1')
+    nativeSelect(2, 5)
+    shiftKey('ArrowRight')
+    expect(selectedText('p1')).toBe('nds')
+    // Reverse the extension back through the anchor, one position at a time.
+    shiftKey('ArrowLeft')
+    shiftKey('ArrowLeft')
+    shiftKey('ArrowLeft')
+    shiftKey('ArrowLeft')
+    expect(selectionStatus()).toBe('')
+    // A native move then puts the caret at the paragraph end, and the next
+    // crossing must anchor there, not at the collapsed anchor 2 (which would
+    // paint 'nds').
+    placeCaret(5)
+    shiftKey('ArrowRight')
+    expect(selectedText('p1')).toBe('')
+    expect(selectionStatus()).toMatch(/2 paragraphs selected/)
+  })
+})
+
+describe('Escape leaves the paragraph', () => {
+  it('collapses a live selection first, then blurs on the next press', () => {
+    mount()
+    clickParagraph('p1')
+    placeCaret(5)
+    shiftKey('ArrowRight')
+    expect(selectionStatus()).toMatch(/2 paragraphs selected/)
+    // First Escape collapses rather than leaving the selection and the caret
+    // disagreeing.
+    plainKey('Escape')
+    expect(selectionStatus()).toBe('')
+    expect(screen.getByLabelText('Paragraph text')).toBeTruthy()
+    // Second Escape leaves the paragraph.
+    plainKey('Escape')
+    expect(screen.queryByLabelText('Paragraph text')).toBeNull()
+  })
+
+  it('keeps an unsaved edit when it leaves the paragraph', () => {
+    mount()
+    clickParagraph('p1')
+    placeCaret(5)
+    fireEvent.change(bodyField(), { target: { value: 'Alpha!' } })
+    plainKey('Escape')
+    expect(screen.queryByLabelText('Paragraph text')).toBeNull()
+    // Re-entering the paragraph shows the edit; nothing unsaved was discarded.
+    clickParagraph('p1')
+    expect(bodyField().value).toBe('Alpha!')
+  })
+})
+
 describe('selection navigation mutates nothing', () => {
   it('issues no document edit while extending and collapsing', () => {
     const { editAsync } = mount()
     clickParagraph('p1')
-    placeCaret(3)
+    placeCaret(5)
     shiftKey('ArrowRight')
-    shiftKey('ArrowRight')
-    shiftKey('ArrowRight')
+    // Contracting back onto the anchor collapses the selection rather than
+    // keeping a live range, and the plain arrow then moves the caret natively.
     shiftKey('ArrowLeft')
-    plainKey('Escape')
     plainKey('ArrowRight')
     expect(editAsync).not.toHaveBeenCalled()
+    // The plain arrow crossed into the next paragraph, so the caret moved but
+    // the document did not change.
+    expect(selectionStatus()).toBe('')
     expect(screen.getByLabelText('Paragraph text')).toHaveProperty(
       'value',
-      'Alpha',
+      'Bravo',
     )
+  })
+
+  it('leaves the paragraph on Escape when nothing is selected', () => {
+    mount()
+    clickParagraph('p1')
+    placeCaret(3)
+    plainKey('Escape')
+    // Focus left the paragraph; no editor owns the caret any more.
+    expect(screen.queryByLabelText('Paragraph text')).toBeNull()
   })
 })

@@ -54,6 +54,7 @@ export function DocumentModelPage({
   selectionSegments = new Map(),
   selectionHandlers,
   onFocusParagraph,
+  onMoveCaret,
 }: {
   model: DocumentModelWire
   selectedParagraphId: string | null
@@ -87,6 +88,7 @@ export function DocumentModelPage({
   selectionSegments?: ReadonlyMap<string, ParagraphSelectionRange>
   selectionHandlers?: ParagraphSelectionHandlers
   onFocusParagraph?: (paragraphId: string) => void
+  onMoveCaret?: (paragraphId: string, offset: number) => void
 }) {
   const story = model.stories.find((item) => item.kind === 'document')
   const headers = marginStories(model, 'header')
@@ -247,6 +249,7 @@ export function DocumentModelPage({
                   selectionSegments,
                   selectionHandlers,
                   onFocusParagraph,
+                  onMoveCaret,
                 }),
               )}
           </div>
