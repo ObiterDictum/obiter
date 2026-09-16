@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./env-keys": "./src/env-keys.mjs"
+    "./env-keys": "./src/env-keys.mjs",
+    "./local-env": "./src/local-env.mjs"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
