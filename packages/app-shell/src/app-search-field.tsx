@@ -189,7 +189,10 @@ export function AppSearchField() {
   }
 
   return (
-    <div ref={shellRef} className="relative hidden w-full max-w-sm sm:block">
+    <div
+      ref={shellRef}
+      className="relative hidden w-full max-w-[14rem] sm:block xl:max-w-sm"
+    >
       <form
         className={cn(
           'flex h-8 items-center gap-2 rounded-pill border bg-surface px-3 transition-[border-color,box-shadow,background-color] duration-200 ease-[cubic-bezier(0.32,0.72,0,1)]',

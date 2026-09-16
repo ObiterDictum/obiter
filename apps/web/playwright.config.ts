@@ -1,9 +1,21 @@
+/*
+ * Lane targeting for the Playwright suite.
+ *
+ * Port resolution, the shared-port refusal and checkout verification live in
+ * lane-target.mjs so the config, the global setup and the node:test suite all
+ * use the same rules. In short: ports come from the process environment first
+ * and this worktree's .env second, a local run refuses the shared 3000/8787
+ * ports, and e2e/global-setup.ts proves the servers serve this checkout before
+ * any browser starts.
+ */
 import { defineConfig, devices } from '@playwright/test'
+import { assertLaneTargets, resolveLaneTargets } from './lane-target.mjs'
 
-const apiPort = Number(process.env.PORT ?? 8787)
-const webPort = 3000
-const apiOrigin = `http://127.0.0.1:${apiPort}`
-const webOrigin = `http://localhost:${webPort}`
+const targets = resolveLaneTargets()
+const reuseExistingServer = !process.env.CI
+assertLaneTargets(targets, { reuseExistingServer })
+
+const { apiOrigin, apiPort, webOrigin, webPort } = targets
 
 export default defineConfig({
   testDir: './e2e',
@@ -30,7 +42,7 @@ export default defineConfig({
     {
       command: 'pnpm --filter @obiter/api dev',
       url: `${apiOrigin}/api/health`,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer,
       timeout: 60_000,
       env: {
         // Override a stale .env DATABASE_URL (postgres:saskiA123) so the
@@ -52,10 +64,14 @@ export default defineConfig({
     {
       command: 'pnpm --filter @obiter/web dev',
       url: webOrigin,
-      reuseExistingServer: !process.env.CI,
+      reuseExistingServer,
       timeout: 60_000,
       env: {
         OBITER_API_ORIGIN: apiOrigin,
+        // Pinned from the resolved targets so a start-here run agrees with the
+        // baseURL Playwright uses, whether the port came from the environment
+        // or from this worktree's .env.
+        OBITER_WEB_PORT: String(webPort),
       },
     },
   ],

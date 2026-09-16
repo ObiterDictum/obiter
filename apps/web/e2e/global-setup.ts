@@ -1,4 +1,9 @@
 import net from 'node:net'
+import {
+  headSha,
+  resolveLaneTargets,
+  verifyServedCheckout,
+} from '../lane-target.mjs'
 
 const MEILI_HOST = process.env.MEILISEARCH_HOST ?? 'http://127.0.0.1:7700'
 
@@ -42,4 +47,17 @@ async function checkPostgres() {
 export default async function globalSetup() {
   await checkPostgres()
   await checkMeilisearch()
+
+  // Runs after the web servers are up (Playwright sets up webServer plugins
+  // before global setup) and before any browser: a suite that measures another
+  // worktree's code must fail here, not produce a plausible wrong result.
+  const targets = resolveLaneTargets()
+  const served = await verifyServedCheckout(targets, {
+    headSha: headSha() ?? undefined,
+  })
+  console.log(
+    `e2e targets: web ${targets.webOrigin} (${served.webRoot}), ` +
+      `api ${targets.apiOrigin} (${served.apiRoot}), ` +
+      `env ${served.envFile ?? 'none'}`,
+  )
 }
