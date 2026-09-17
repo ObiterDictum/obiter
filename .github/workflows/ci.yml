@@ -96,6 +96,22 @@ jobs:
       - name: Build provenance
         run: node apps/web/build-provenance.mjs verify --expect-commit "$GITHUB_SHA" --allow-dirty
 
+      # Desktop had the same gap P1.32 had for web: electron-vite build ran only
+      # on push to main, so a broken desktop entry point could merge green. The
+      # budget below needs the build on every PR anyway, and the build resolves
+      # the Electron package the frozen-lockfile install already fetched, so it
+      # adds no dependency install of its own.
+      - name: Build desktop
+        run: pnpm --filter @obiter/desktop build
+
+      # Deterministic desktop size budget over that build: the initial renderer
+      # graph, lazy chunks and largest lazy chunk, the PDF worker, product font
+      # assets, main/preload, and the application payload the packager reads.
+      # Raw bytes, not gzip: the packaged renderer is read from the local asar
+      # over obiter://, never downloaded. See scripts/perf/desktop-budget.mjs.
+      - name: Desktop budget
+        run: pnpm perf:desktop-budget
+
       - name: Apply database migrations
         env:
           PGPASSWORD: obiter
