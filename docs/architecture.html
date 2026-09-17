@@ -4311,9 +4311,11 @@
             themselves — commit, dirty state, whether the bytes contain the
             development React runtime, and a sha256 digest over the client
             assets. <code>serve.mjs</code> verifies that digest at startup and
-            refuses a dist that no longer matches it, and the page-load harness
-            requires the marker to name the commit under test. See
-            <a href="#infra">Deployment</a>.
+            refuses a dist whose client assets no longer match it, and the
+            page-load harness requires the marker to name the commit under test.
+            The digest covers <code>dist/client/assets</code> only; the emitted
+            server bundle is not digested (known limitation, see
+            <a href="#infra">Deployment</a>).
           </div>
         </section>
 
@@ -5800,8 +5802,13 @@
             and is run by the package's <code>build</code> script; the Docker
             build stage cannot read <code>.git</code>, so it takes
             <code>OBITER_BUILD_COMMIT</code> and <code>OBITER_BUILD_DIRTY</code>
-            build arguments and records them instead. A marker with a null
-            commit is served but refuses to measure as a named commit.
+            build arguments and records them instead. The CI
+            <code>docker-web</code> job passes both (<code>$GITHUB_SHA</code>,
+            <code>0</code>) in its supported <code>docker build</code>
+            invocation, and the local invocation is documented in
+            <code>docs/specs/deployment.md</code>. A Dokploy-built image is an
+            external boundary: unless its build args are set it records a null
+            commit and can be served but not measured as a named commit.
           </div>
         </section>
 

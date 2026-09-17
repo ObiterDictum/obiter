@@ -174,4 +174,14 @@ jobs:
       # workspace, and the root .dockerignore (with its .env* exclusions) only
       # applies at the context root. See docs/specs/deployment.md.
       - name: Build apps/web image
-        run: docker build -f apps/web/Dockerfile -t obiter-web:ci .
+        # Pass the checked-out commit and a truthful clean flag so the image's
+        # dist/.obiter-build.json names the artifact it was built from. Without
+        # these the marker records commit:null and no deployed image can ever
+        # satisfy the measurement harness's --expect-artifact-commit.
+        # GITHUB_SHA is the pushed commit and the Actions checkout is clean, so
+        # OBITER_BUILD_DIRTY=0. See docs/specs/deployment.md.
+        run: |
+          docker build -f apps/web/Dockerfile -t obiter-web:ci \
+            --build-arg OBITER_BUILD_COMMIT="$GITHUB_SHA" \
+            --build-arg OBITER_BUILD_DIRTY=0 \
+            .

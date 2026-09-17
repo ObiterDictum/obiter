@@ -8,8 +8,10 @@
  *
  * The marker describes the artifact, not the checkout: the commit, whether the
  * worktree was dirty when the files were written, and a sha256 digest over the
- * emitted client bytes are captured together, after the build, from the files
+ * emitted client assets are captured together, after the build, from the files
  * themselves. Nothing here copies the current checkout SHA at server start.
+ * The digest covers `dist/client/assets`; the emitted server bundle
+ * (`dist/server/server.js`) is not digested (known limitation, follow-up).
  *
  * `serve.mjs` uses the recorded asset names to decide which files are
  * content-hashed (and therefore safe to cache immutably) and fails closed when
@@ -18,8 +20,11 @@
  *
  * In an image build `.git` is absent (see the repo-root .dockerignore), so the
  * commit is taken from OBITER_BUILD_COMMIT and the dirty flag from
- * OBITER_BUILD_DIRTY. When neither git nor the environment can supply them the
- * fields are null and the harness refuses the artifact rather than guessing.
+ * OBITER_BUILD_DIRTY. A present commit must be a SHA-shaped git hash and a
+ * present dirty flag must be 0/1/true/false; a malformed value fails the build
+ * rather than writing a marker that can never be matched. When neither git nor
+ * the environment can supply them the fields are null and the harness refuses
+ * the artifact rather than guessing.
  */
 import { execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
@@ -104,10 +109,21 @@ export function buildIdentity(repoRoot) {
   const envDirty = process.env.OBITER_BUILD_DIRTY?.trim()
   const gitCommit = gitField(repoRoot, ['rev-parse', 'HEAD'])
   const gitStatus = gitField(repoRoot, ['status', '--porcelain'])
+  // Reject a malformed explicit identity rather than recording a marker that
+  // can never satisfy an --expect-artifact-commit check. Absent values stay
+  // null and the harness refuses them, which is the documented contract.
+  if (envCommit && !/^[0-9a-f]{7,40}$/i.test(envCommit))
+    throw new Error(
+      `OBITER_BUILD_COMMIT is not a git commit SHA: ${JSON.stringify(envCommit)}`,
+    )
+  if (envDirty && !/^(0|1|true|false)$/i.test(envDirty))
+    throw new Error(
+      `OBITER_BUILD_DIRTY must be 0/1/true/false, got ${JSON.stringify(envDirty)}`,
+    )
   const commit = envCommit || gitCommit
   const dirty =
     envDirty !== undefined && envDirty !== ''
-      ? envDirty !== '0'
+      ? /^(1|true)$/i.test(envDirty)
       : gitStatus === null
         ? null
         : gitStatus.length > 0
@@ -154,7 +170,9 @@ export async function readBuildProvenance(distDir) {
 /**
  * Recompute the artifact digest and compare it with the marker. Throws when the
  * marker is missing or the bytes no longer match, so a dist replaced or edited
- * after the build cannot be served or measured as the built artifact.
+ * after the build cannot be served or measured as the built artifact. The
+ * digest covers `dist/client/assets`; a post-build edit to the server bundle is
+ * not caught (known limitation, follow-up).
  */
 export async function verifyArtifactIntegrity(distDir) {
   const marker = await readBuildProvenance(distDir)

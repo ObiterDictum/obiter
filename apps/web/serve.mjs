@@ -368,8 +368,9 @@ export async function start() {
 
   // The marker describes what was built. A missing marker is warned about (an
   // ad-hoc build without the supported command); a marker whose digest does not
-  // match the bytes on disk is refused, because serving it would present files
-  // as an artifact they are not.
+  // match the client bytes on disk is refused, because serving it would present
+  // files as an artifact they are not. The digest covers dist/client/assets
+  // only; the emitted server bundle is not digested (known limitation).
   let marker = null
   try {
     marker = await verifyArtifactIntegrity(distDir)

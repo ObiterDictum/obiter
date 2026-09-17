@@ -49,11 +49,13 @@ identities separately because they can diverge:
 - **runner** — this harness's own checkout and commit.
 - **artifact** — the web build marker written by the package `build` script.
   With `--serve-prod` the marker's commit must equal `--expect-artifact-commit`,
-  its dirty flag must be false, it must be a production React build, its sha256
-  must match the bytes on disk, and it must match the marker the running server
-  reported at `/.well-known/obiter-build`. A stale Before dist under an After
-  checkout, a dist replaced after startup, a missing marker and a dirty build
-  presented as clean are all refused.
+  its dirty flag must be false, it must be a production React build, the
+  sha256 over its `dist/client/assets` must match the bytes on disk, and it must
+  match the marker the running server reported at `/.well-known/obiter-build`.
+  A stale Before dist under an After checkout, a dist replaced after startup, a
+  missing marker and a dirty build presented as clean are all refused. The
+  digest covers client assets only; a post-build edit to the server bundle
+  (`dist/server/server.js`) is a known limitation, not covered.
 - **API** — `/api/health` provenance must name the expected checkout root.
 
 Every sample is gated on the journey's route-ready control and final path. A

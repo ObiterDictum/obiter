@@ -2,13 +2,20 @@
 #
 # Production image for @obiter/web (TanStack Start SSR).
 #
-# BUILD INVOCATION — build from the REPO ROOT with the context set to it:
+# BUILD INVOCATION — build from the REPO ROOT with the context set to it, and
+# pass the build provenance so the emitted marker names the artifact:
 #
-#     docker build -f apps/web/Dockerfile -t obiter-web .
+#     docker build -f apps/web/Dockerfile -t obiter-web \
+#       --build-arg OBITER_BUILD_COMMIT="$(git rev-parse HEAD)" \
+#       --build-arg OBITER_BUILD_DIRTY="$(test -n "$(git status --porcelain)" && echo 1 || echo 0)" \
+#       .
 #
 # The context must be the repo root because the COPY paths span the monorepo
 # workspace (packages/*, the root lockfile, etc.). In Dokploy: set "Build
-# Context" to the repository root and "Dockerfile path" to apps/web/Dockerfile.
+# Context" to the repository root and "Dockerfile path" to apps/web/Dockerfile,
+# and set the two build args above (Dokploy must supply the commit, since .git
+# is excluded from the build context). Omitting the args is not fatal: the
+# marker records null and the measurement harness refuses the image.
 #
 # Docker consults ONLY the .dockerignore at the build-context root, so all
 # exclusions (including the .env* secret exclusions) live in the REPO-ROOT
@@ -35,9 +42,10 @@ ARG NODE_VERSION=24.19.0
 FROM node:${NODE_VERSION}-slim AS build
 ENV CI=1
 # Build provenance for the emitted artifact. .git is excluded from the build
-# context, so the commit cannot be read here; the CI build passes it. Without
-# the arguments the marker records null and the measurement harness refuses the
-# artifact rather than guessing a commit.
+# context, so the commit cannot be read here; the CI workflow passes it as
+# --build-arg. A missing arg leaves the marker's fields null (the measurement
+# harness then refuses the artifact); a malformed one fails the build in
+# build-provenance.mjs rather than writing an unmatchable marker.
 ARG OBITER_BUILD_COMMIT=""
 ARG OBITER_BUILD_DIRTY=""
 # corepack pnpm — the repo pins pnpm@10.14.0 via packageManager.
