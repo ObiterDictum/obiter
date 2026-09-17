@@ -4317,6 +4317,23 @@
             server bundle is not digested (known limitation, see
             <a href="#infra">Deployment</a>).
           </div>
+          <div class="callout note">
+            <b>The desktop build has a size budget of its own.</b>
+            <code>pnpm --filter @obiter/desktop build</code> emits a Vite chunk
+            manifest, and
+            <a
+              href="https://github.com/ObiterDictum/obiter/blob/dev/scripts/perf/desktop-budget.mjs"
+              ><code>scripts/perf/desktop-budget.mjs</code></a
+            >
+            walks it to budget the initial renderer graph, lazy chunks and the
+            largest lazy chunk, the PDF worker, product font assets, the
+            main/preload bundles, and the application payload the packager
+            reads. Sizes are raw bytes, because a packaged renderer is read from
+            the local asar over the custom <code>obiter://</code> protocol and
+            never downloaded. The Electron runtime and the platform installer
+            are not covered; the installer is platform-specific and is built
+            only on <code>push: main</code>.
+          </div>
         </section>
 
         <section id="search-flow">
@@ -5700,8 +5717,9 @@
                   <td class="id">checks</td>
                   <td>Pull request and push</td>
                   <td>
-                    Typecheck, format check, lint, test. This is the gate: a red
-                    check here blocks the merge.
+                    Typecheck, format check, lint, test, and the web and desktop
+                    production builds with their size budgets. This is the gate:
+                    a red check here blocks the merge.
                   </td>
                 </tr>
                 <tr>
