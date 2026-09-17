@@ -40,11 +40,14 @@ export async function runLoad({
   const perCell = []
   const skipped = []
   let samplerErrors = 0
+  let observationCount = 0
 
   const observe = async () => {
     if (!observer) return null
     try {
-      return await observer.sample()
+      const sample = await observer.sample()
+      observationCount += 1
+      return sample
     } catch {
       samplerErrors += 1
       return null
@@ -113,6 +116,7 @@ export async function runLoad({
     baselineResources,
     recoverySamples,
     samplerErrors,
+    observationCount,
     perCell,
     skipped,
     uploads,

@@ -9,6 +9,7 @@ import {
   expectedLaneDatabase,
   readEnvAssignment,
   resolveLoadTarget,
+  resolveStorageRoot,
 } from './target.mjs'
 
 const scratch = await mkdtemp(join(tmpdir(), 'q3-target-test-'))
@@ -118,6 +119,49 @@ describe('env resolution', () => {
   })
 })
 
+describe('storage root resolution', () => {
+  const worktreeRoot = '/work/lane-security'
+
+  it('defaults to the root the API writes to when nothing is configured', () => {
+    expect(resolveStorageRoot({ worktreeRoot })).toBe(
+      '/work/lane-security/services/api/.obiter-storage',
+    )
+  })
+
+  it('resolves a configured relative root the way the API does', () => {
+    expect(
+      resolveStorageRoot({ worktreeRoot, configured: 'var/objects' }),
+    ).toBe('/work/lane-security/services/api/var/objects')
+  })
+
+  it('accepts an absolute root inside the worktree', () => {
+    expect(
+      resolveStorageRoot({
+        worktreeRoot,
+        configured: '/work/lane-security/data/objects',
+      }),
+    ).toBe('/work/lane-security/data/objects')
+  })
+
+  it('refuses a root outside the worktree even when its name looks like test storage', () => {
+    expect(() =>
+      resolveStorageRoot({
+        worktreeRoot,
+        configured: '/work/other-lane/services/api/.obiter-storage',
+      }),
+    ).toThrow(TargetRefusal)
+  })
+
+  it('refuses a root that would read another lane through a parent path', () => {
+    expect(() =>
+      resolveStorageRoot({
+        worktreeRoot,
+        configured: '/work/lane-security/../../lane-verify/services/api',
+      }),
+    ).toThrow(TargetRefusal)
+  })
+})
+
 describe('loopback targeting', () => {
   it.each([
     'http://127.0.0.1:8791',
@@ -144,6 +188,40 @@ describe('resolveLoadTarget', () => {
     expect(target.databaseName).toBe('obiter_lane_security')
     expect(target.envFile).toBe(envFile)
     expect(target.commitSha).toBe('abc123')
+    expect(target.storageRoot).toBe(
+      join(root, 'services', 'api', '.obiter-storage'),
+    )
+    expect(target.storageRootSource).toBe('default')
+  })
+
+  it('uses the storage root the lane configured, not the default', async () => {
+    const { root, envFile } = await laneWorktree('lane-security', {
+      OBITER_STORAGE_ROOT: '/var/lib/obiter/lane-security',
+    })
+    const target = resolveFor(root, envFile, {
+      fetchImpl: async () => healthResponse({ checkoutRoot: root, envFile }),
+    })
+    // The configured root is outside the worktree, so the target refuses it
+    // rather than verify object keys in another lane's or the host's storage.
+    await expect(target).rejects.toThrow(TargetRefusal)
+  })
+
+  it('accepts a configured root inside the worktree', async () => {
+    const { root, envFile } = await laneWorktree('lane-security', {
+      OBITER_STORAGE_ROOT: '.obiter-storage',
+    })
+    const target = await resolveFor(root, envFile)
+    expect(target.storageRoot).toBe(
+      join(root, 'services', 'api', '.obiter-storage'),
+    )
+    expect(target.storageRootSource).toBe('configured')
+  })
+
+  it('refuses the shared ports as a refusal, not a harness error', async () => {
+    const { root, envFile } = await laneWorktree('lane-security', {
+      PORT: '8787',
+    })
+    await expect(resolveFor(root, envFile)).rejects.toThrow(TargetRefusal)
   })
 
   it('refuses the shared API port', async () => {

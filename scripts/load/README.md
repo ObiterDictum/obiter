@@ -80,16 +80,31 @@ whole-window figure is recorded and a run whose window another unit contested
 over `--max-window-neighbour-cpu-ms` (default 5000 ms) exits non-zero rather
 than publish numbers that describe the machine. A unit that restarts mid-window
 has its cgroup counter reset, which is reported as an unknown window rather than
-as a quiet zero.
+as a quiet zero. A unit that starts mid-window has no baseline at all; it is
+reported as having appeared and it invalidates the run, because that is
+activity the pre-run gate could not have seen. A host whose unit list cannot be
+read at all is refused rather than treated as quiet.
+
+Host and cgroup sampling is a first-class part of the run, not a backdrop. A
+first sample that cannot be taken refuses the run before any load, because
+without a baseline no memory or disk bound can be stated. A sample that fails
+during the run does not stop the load, but it invalidates the run: the report
+records `observations.availability: degraded` with the failure count, the
+memory and disk bounds are treated as unapplied rather than unbreached, and the
+run exits non-zero. A degraded run is never reported as verified.
 
 There is no ramp-until-failure mode. Concurrency is capped at 4, requests at 64,
 cells at 8, and a fixture at 8 MiB by default (the API's multipart cap is 25
 MiB). A near-cap payload burst and an OOM experiment are out of scope.
 
 Exit codes: `0` clean, `1` a failure or a breached bound, `2` refused before the
-run, `3` harness error. A refused run cleans up too: fixtures are soft-deleted
-through the product's own routes on the failure path as well, and anything left
-behind is named on stderr and recorded in the report.
+run, `3` harness error. A refusal writes a minimal report to `--out`
+(`refused: true`, the refusal `code` and `reason`) when that path is valid and
+writable; a missing, in-checkout or unwritable path writes nothing and says so
+on stderr rather than writing to an unvalidated location. Credentials never
+appear in a refusal report. A refused run cleans up too: fixtures are
+soft-deleted through the product's own routes on the failure path as well, and
+anything left behind is named on stderr and recorded in the report.
 
 ## Fixtures
 
@@ -150,6 +165,21 @@ no data would show almost nothing.
 - Fixtures are provisioned and soft-deleted through the product's own routes.
   Audit rows are never modified or deleted, storage objects are retained, and
   the report names what remains.
+- The audit shape is asserted, not only recorded: `document.upload` and
+  `document.version_create` must equal the accepted upload count and
+  `matter.create` must be exactly one, scoped to the fixture organisation this
+  run created.
+- Verification asserts the counts line up: one version per document, as many
+  documents as accepted uploads, and no `failed` version. A run where any of
+  those, the ready count, storage presence or the audit shape disagrees exits
+  non-zero.
+- Storage is verified against the root the API itself resolves, from
+  `OBITER_STORAGE_ROOT` or its `.obiter-storage` default. A root outside the
+  lane worktree is refused, because confirming objects there would read across
+  the boundary this harness exists to keep.
+- `psql` runs with a bounded duration and output cap. A wedged query or a
+  runaway result fails the run with an explicit `query_timeout` or
+  `query_output_limit` code rather than hanging or returning a truncated one.
 
 ## Isolation checks
 

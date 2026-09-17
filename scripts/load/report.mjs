@@ -8,10 +8,12 @@
  */
 import { cpus, release, totalmem } from 'node:os'
 import { summarise } from './metrics.mjs'
-import { activeObiterUnits, resourceSummary } from './host-observation.mjs'
+import { resourceSummary } from './host-observation.mjs'
 
 export const EXIT_OK = 0
 export const EXIT_RUN_FAILED = 1
+
+const HARNESS = { name: 'obiter upload/extraction load harness', version: 1 }
 
 export const LIMITATIONS = [
   'One API process, one Postgres, one machine. Nothing here predicts multi-instance or production topology.',
@@ -29,8 +31,7 @@ export function buildReport(context) {
   const recovery = summarise(phase('recovery').map((probe) => probe.latencyMs))
   return {
     harness: {
-      name: 'obiter upload/extraction load harness',
-      version: 1,
+      ...HARNESS,
       worktreeRoot: context.worktreeRoot,
       laneUnit: context.unitName,
       runTag: context.runTag,
@@ -54,7 +55,11 @@ export function buildReport(context) {
       memTotalBytes: totalmem(),
       apiCgroup: context.cgroupPath,
       apiBaseline: context.baseline,
-      activeObiterUnits: activeObiterUnits(),
+      // Captured once around the load, never re-read here: the report says what
+      // was observed, and a systemctl call at report time could disagree with
+      // the window it is describing (or fail after the fact).
+      activeObiterUnits: context.activeUnits ?? [],
+      activeObiterUnitsAfter: context.activeUnitsAfter ?? [],
       neighbourLaneUsage: {
         units: context.neighbours,
         contendedDuringWindow: context.contended,
@@ -85,6 +90,13 @@ export function buildReport(context) {
         'the highest concurrency whose cell finished with no failures, no failed probes and no breached bound',
     },
     bounds: options.bounds,
+    observations: {
+      availability: observationAvailability(load),
+      samplerErrors: load.samplerErrors ?? 0,
+      samples: load.observationCount ?? 0,
+      baselineCaptured: load.baselineResources != null,
+      note: 'host and cgroup sampling; a missing sample fails the run rather than being read as no breach, so a degraded run is never reported as verified',
+    },
     cellsRequested: context.cells,
     fixtures: context.fixtures.map(({ size, bytes, sha256, paragraphs }) => ({
       size,
@@ -140,15 +152,38 @@ export function decideExitCode({
   if (options.checkOnly) return EXIT_OK
   // A contended window measured the machine, not this lane.
   if (contended) return EXIT_RUN_FAILED
+  if (observationAvailability(load) !== 'complete') return EXIT_RUN_FAILED
   if (load.cancelled || load.perCell.length === 0) return EXIT_RUN_FAILED
   if (load.perCell.some((cell) => !cell.accepted)) return EXIT_RUN_FAILED
   if (!verification.readyMatchesExpected) return EXIT_RUN_FAILED
+  // The upload path writes one document, one version and one version-create
+  // audit row per accepted upload, so any gap is a partial or duplicated write
+  // even when the ready count happens to line up.
+  if (verification.versionCount !== verification.documentCount)
+    return EXIT_RUN_FAILED
+  if (verification.documentCount !== verification.expectedReady)
+    return EXIT_RUN_FAILED
+  if (verification.failedCount > 0) return EXIT_RUN_FAILED
+  if (verification.auditMatchesExpected !== true) return EXIT_RUN_FAILED
   if (!verification.allStoragePresent) return EXIT_RUN_FAILED
   if (verification.documentsWithoutVersion > 0) return EXIT_RUN_FAILED
   if (verification.readyWithoutTextKey > 0) return EXIT_RUN_FAILED
   if (verification.duplicateDocumentIds.length > 0) return EXIT_RUN_FAILED
   if (verification.duplicateVersionNumbers.length > 0) return EXIT_RUN_FAILED
   return EXIT_OK
+}
+
+/**
+ * Whether host/cgroup observation is trustworthy enough to state a resource
+ * bound. `resourceBreach(null)` deliberately fails open, so a missing sample
+ * has to be visible here instead: a run with any failed sample, or with no
+ * baseline at all, never claims its memory and disk bounds were verified.
+ */
+export function observationAvailability(load) {
+  if ((load.samplerErrors ?? 0) > 0) return 'degraded'
+  if (!load.baselineResources) return 'unavailable'
+  if ((load.observationCount ?? 0) === 0) return 'unavailable'
+  return 'complete'
 }
 
 function recoverySummary(load, baseline) {
@@ -170,11 +205,24 @@ function round(value) {
     : null
 }
 
-export function refusalReport() {
+/**
+ * The report written when a run is refused before any observation. It carries
+ * the refusal code and reason so automation can tell a refusal from a run that
+ * never started, and it never carries a connection URL: a psql or target
+ * message can name one, and a report is not the place for a password.
+ */
+export function refusalReport(error = null) {
   return {
     refused: true,
+    code: typeof error?.code === 'string' ? error.code : (error?.name ?? null),
+    reason: error instanceof Error ? redact(error.message) : null,
+    harness: HARNESS,
     note: 'the run was refused before observations were recorded',
   }
+}
+
+function redact(text) {
+  return String(text).replace(/:\/\/[^@\s/]+@/g, '://<redacted>@')
 }
 
 export function printSummary(report) {

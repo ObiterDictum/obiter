@@ -23,6 +23,7 @@ import { basename, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { monitorEventLoopDelay } from 'node:perf_hooks'
 import {
+  activeObiterUnits,
   assertNeighboursQuiet,
   busyFraction,
   contendedUnits,
@@ -42,7 +43,6 @@ import {
 } from './fixtures.mjs'
 import {
   ProvisionError,
-  createQuerier,
   createScratchDirectory,
   fixtureIds,
   newRunTag,
@@ -53,6 +53,7 @@ import {
   verifyRun,
   versionRowsSql,
 } from './provision.mjs'
+import { createQuerier } from './psql.mjs'
 import { TargetRefusal, resolveLoadTarget } from './target.mjs'
 import {
   UsageError,
@@ -81,27 +82,19 @@ export async function main({
 
   const worktreeRoot = options.expectCheckout ?? WORKTREE_ROOT
   const outPath = assertOutPathOutsideCheckout(options.out, worktreeRoot)
-  const cells = buildCells(options)
   const unitName = `obiter-${basename(worktreeRoot)}-api`
-
-  const target = await resolveLoadTarget({
-    worktreeRoot,
-    expectCommit: options.expectCommit ?? headSha(worktreeRoot) ?? undefined,
-    allowDatabase: options.allowDatabase,
-  })
 
   const runTag = newRunTag()
   const ids = fixtureIds(runTag)
-  const querier = createQuerier({ databaseUrl: target.databaseUrl })
+  // Resolved inside the try so a target refusal is written to `--out` like any
+  // other refusal; before that point the path itself is unvalidated.
+  let cells = []
+  let target = null
+  let querier = null
   // Created inside the try, so a failure anywhere in setup still runs the
   // cleanup that removes it.
   let scratch = null
   const controller = new AbortController()
-  for (const signal of ['SIGINT', 'SIGTERM'])
-    process.once(signal, () => {
-      console.error(`\n${signal}: stopping the run and cleaning up.`)
-      controller.abort()
-    })
 
   let fixtures = []
   let provisioned = null
@@ -109,6 +102,7 @@ export async function main({
   let cleanup = { softDeletedMatters: [], failed: false }
   let fixturesDeleted = false
   let report = null
+  let failure = null
   let exitCode = EXIT_OK
 
   /**
@@ -118,7 +112,7 @@ export async function main({
    * behind for someone else's run to trip over.
    */
   async function deleteFixtures() {
-    if (fixturesDeleted) return
+    if (fixturesDeleted || !target) return
     // `provisioned` is null when provisioning itself failed, but the SQL
     // fixtures (including tenant B's matter) may already exist, so the base
     // ids are the fallback rather than a reason to skip cleanup.
@@ -139,7 +133,29 @@ export async function main({
     fixturesDeleted = true
   }
 
+  // A first signal stops the run and cleans up; a second exits. A synchronous
+  // psql call blocks the event loop, so a `once` handler would leave the
+  // interrupt queued and a second signal ignored, and a hung run needs SIGKILL.
+  let signals = 0
+  const onSignal = (signal) => {
+    signals += 1
+    if (signals > 1) {
+      console.error(`${signal}: second signal, exiting without cleanup.`)
+      process.exit(EXIT_HARNESS_ERROR)
+    }
+    console.error(`\n${signal}: stopping the run and cleaning up.`)
+    controller.abort()
+  }
+  for (const signal of ['SIGINT', 'SIGTERM']) process.on(signal, onSignal)
+
   try {
+    cells = buildCells(options)
+    target = await resolveLoadTarget({
+      worktreeRoot,
+      expectCommit: options.expectCommit ?? headSha(worktreeRoot) ?? undefined,
+      allowDatabase: options.allowDatabase,
+    })
+    querier = createQuerier({ databaseUrl: target.databaseUrl })
     scratch = await createScratchDirectory()
     fixtures = await buildFixtures({
       sizes: [...new Set(cells.map((cell) => cell.size))],
@@ -162,12 +178,18 @@ export async function main({
 
     const cgroupPath = await resolveUnitCgroup(unitName)
     const observer = createHostObserver({ cgroupPath, diskPath: worktreeRoot })
-    const baseline = await observer.sample()
+    // Refused rather than degraded: without a first sample there is no
+    // resource bound and no recovery comparison, so a run here would publish a
+    // number with none of its conditions.
+    const baseline = await firstSample(observer)
     // Captured either side of the load, not at report time: a 1-minute load
     // average read twice afterwards would describe nothing.
     const loadAverageBefore = loadavg()
     const hostCpuBefore = await hostCpuTicks()
-    const neighboursBefore = await neighbourUsage(`${unitName}.service`)
+    const activeUnitsBefore = activeObiterUnits()
+    const neighboursBefore = await neighbourUsage(`${unitName}.service`, {
+      listUnits: () => activeUnitsBefore,
+    })
     await assertNeighboursQuiet({
       unitName,
       before: neighboursBefore,
@@ -178,7 +200,7 @@ export async function main({
     const loopDelay = monitorEventLoopDelay({ resolution: 20 })
     loopDelay.enable()
     const load = options.checkOnly
-      ? checkOnlyLoad(cells)
+      ? checkOnlyLoad(cells, baseline)
       : await runLoad({
           cells: cells.map((cell) => ({
             fixture: findFixture(fixtures, cell.size),
@@ -197,7 +219,10 @@ export async function main({
           log: (line) => console.error(`[load] ${line}`),
         })
     loopDelay.disable()
-    const neighboursAfter = await neighbourUsage(`${unitName}.service`)
+    const activeUnitsAfter = activeObiterUnits()
+    const neighboursAfter = await neighbourUsage(`${unitName}.service`, {
+      listUnits: () => activeUnitsAfter,
+    })
     const neighbours = neighbourReport(neighboursBefore, neighboursAfter)
     const contended =
       contendedUnits(
@@ -205,9 +230,17 @@ export async function main({
         neighboursAfter,
         options.bounds.maxWindowNeighbourCpuMs,
       ).length > 0
-    if (neighbours.some((entry) => entry.counterReset))
+    if (
+      neighbours.some(
+        (entry) => entry.counterReset || entry.disappearedDuringWindow,
+      )
+    )
       console.error(
-        'note: an Obiter unit restarted during the window, so its CPU over the window is reported as unknown.',
+        'note: an Obiter unit restarted or stopped during the window, so its CPU over the window is reported as unknown.',
+      )
+    if (neighbours.some((entry) => entry.appearedDuringWindow))
+      console.error(
+        'note: an Obiter unit started during the window; that is activity the pre-run gate could not see.',
       )
     if (contended)
       console.error(
@@ -221,7 +254,7 @@ export async function main({
     const verification = await verifyRun({
       querier,
       ids: provisioned,
-      worktreeRoot,
+      storageRoot: target.storageRoot,
       expectedReady,
     })
 
@@ -243,6 +276,8 @@ export async function main({
       loopDelay,
       neighbours,
       contended,
+      activeUnits: activeUnitsBefore,
+      activeUnitsAfter,
       hostLoad: {
         before: loadAverageBefore,
         after: loadavg(),
@@ -262,37 +297,70 @@ export async function main({
       contended,
     })
   } catch (error) {
+    // Recorded rather than rethrown: the report has to be written either way,
+    // and the refusal is rethrown once it has been.
+    failure = error
     await deleteFixtures()
-    throw error
   } finally {
+    for (const signal of ['SIGINT', 'SIGTERM'])
+      process.removeListener(signal, onSignal)
     if (scratch) await removeScratchDirectory(scratch)
+  }
+
+  let writeError = null
+  try {
     await writeReport(
       outPath,
-      `${JSON.stringify(report ?? refusalReport(), null, 2)}\n`,
+      `${JSON.stringify(report ?? refusalReport(failure), null, 2)}\n`,
     )
-    if ((sqlWritten || provisioned) && (!fixturesDeleted || cleanup.failed)) {
-      // Say exactly what remains rather than let a reader assume the run
-      // cleaned up after itself.
-      console.error(
-        `retained for run tag ${runTag}: synthetic organisation, user, session and matter rows ` +
-          '(soft delete did not complete); audit rows and stored objects are retained by design',
-      )
-    }
+  } catch (error) {
+    writeError = error
+    console.error(
+      `could not write the report to ${outPath}: ${error instanceof Error ? error.message : String(error)}`,
+    )
   }
+  if ((sqlWritten || provisioned) && (!fixturesDeleted || cleanup.failed)) {
+    // Say exactly what remains rather than let a reader assume the run
+    // cleaned up after itself.
+    console.error(
+      `retained for run tag ${runTag}: synthetic organisation, user, session and matter rows ` +
+        '(soft delete did not complete); audit rows and stored objects are retained by design',
+    )
+  }
+  // A refusal is the more useful failure and keeps its documented exit code;
+  // an unwritable report is reported on stderr above either way.
+  if (failure) throw failure
+  if (writeError) throw writeError
 
   printSummary(report)
   console.error(`report: ${outPath}`)
   return exitCode
 }
 
-function checkOnlyLoad(cells) {
+function checkOnlyLoad(cells, baseline) {
   return {
+    baselineResources: baseline,
+    recoverySamples: [],
     skipped: cells.map((cell) => ({ ...cell, reason: 'check_only' })),
     perCell: [],
     uploads: [],
     probes: [],
     cancelled: false,
     samplerErrors: 0,
+    observationCount: baseline ? 1 : 0,
+  }
+}
+
+/** The baseline sample, refused rather than skipped when it cannot be taken. */
+async function firstSample(observer) {
+  try {
+    return await observer.sample()
+  } catch (error) {
+    throw new TargetRefusal(
+      'host_observation_failed',
+      `The host/API observer could not take its first sample: ${error instanceof Error ? error.message : String(error)}. ` +
+        'Without a baseline no resource bound or recovery comparison can be stated, so the run is refused.',
+    )
   }
 }
 

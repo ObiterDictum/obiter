@@ -9,7 +9,12 @@
  * Every parsing function is exported and pure so the arithmetic is unit-tested
  * against captured `/proc` text rather than trusted from a live read.
  */
+import { execFileSync } from 'node:child_process'
 import { readFile, statfs } from 'node:fs/promises'
+import { TargetRefusal } from './target.mjs'
+
+/** Bounds the `systemctl` call so a wedged systemd cannot hang the harness. */
+const UNIT_LIST_TIMEOUT_MS = 5000
 
 export function parseMeminfo(text) {
   const match = text.match(/^MemAvailable:\s+(\d+) kB$/m)
@@ -67,14 +72,17 @@ export async function resolveUnitCgroup(unitName, { execFile } = {}) {
     run(
       'systemctl',
       ['--user', 'show', '-p', 'ControlGroup', '--value', unitName],
-      { encoding: 'utf8' },
+      { encoding: 'utf8', timeout: UNIT_LIST_TIMEOUT_MS },
       (error, stdout) =>
         error ? reject(error) : resolve(String(stdout).trim()),
     )
   })
   if (!controlGroup.startsWith('/'))
-    throw new Error(
-      `${unitName} is not running (systemd reported ControlGroup "${controlGroup}").`,
+    throw Object.assign(
+      new Error(
+        `${unitName} is not running (systemd reported ControlGroup "${controlGroup}").`,
+      ),
+      { code: 'unit_not_running' },
     )
   return `/sys/fs/cgroup${controlGroup}`
 }
@@ -170,9 +178,16 @@ export function resourceSummary(baseline, samples) {
   }
 }
 
-export function activeObiterUnits() {
+/**
+ * The running Obiter units. Throws rather than returning [] when systemd
+ * cannot be asked: "nothing is running" and "could not look" must not be the
+ * same answer, or a broken observation reads as a quiet host and a contended
+ * window publishes as clean.
+ */
+export function activeObiterUnits({ exec = execFileSync } = {}) {
+  let output
   try {
-    return execFileSync(
+    output = exec(
       'systemctl',
       [
         '--user',
@@ -183,14 +198,19 @@ export function activeObiterUnits() {
         '--no-legend',
         '--plain',
       ],
-      { encoding: 'utf8' },
+      { encoding: 'utf8', timeout: UNIT_LIST_TIMEOUT_MS },
     )
-      .split('\n')
-      .map((line) => line.trim().split(/\s+/)[0])
-      .filter(Boolean)
-  } catch {
-    return []
+  } catch (error) {
+    throw new TargetRefusal(
+      'neighbour_observation_failed',
+      `Could not list the running Obiter units: ${error instanceof Error ? error.message : String(error)}. ` +
+        'A host that cannot be shown quiet is not a quiet host, so the run is refused.',
+    )
   }
+  return String(output)
+    .split('\n')
+    .map((line) => line.trim().split(/\s+/)[0])
+    .filter(Boolean)
 }
 
 /**
@@ -198,21 +218,35 @@ export function activeObiterUnits() {
  * vCPUs invalidates a capacity number, so the window has to be described, not
  * assumed clean.
  */
-export async function neighbourUsage(ownUnitName) {
+export async function neighbourUsage(
+  ownUnitName,
+  {
+    listUnits = activeObiterUnits,
+    resolveCgroup = resolveUnitCgroup,
+    readUsage = readUnitUsage,
+  } = {},
+) {
   const neighbours = []
-  for (const name of activeObiterUnits().filter(
-    (unit) => unit !== ownUnitName,
-  )) {
+  for (const name of listUnits().filter((unit) => unit !== ownUnitName)) {
     try {
-      const cgroupPath = await resolveUnitCgroup(name)
-      neighbours.push({
-        name,
-        cgroupPath,
-        usage: await readUnitUsage(cgroupPath),
-      })
-    } catch {
+      const cgroupPath = await resolveCgroup(name)
+      neighbours.push({ name, cgroupPath, usage: await readUsage(cgroupPath) })
+    } catch (error) {
       // A unit that stopped between listing and reading is simply not there;
-      // leaving it out is accurate and nothing else is inferred from it.
+      // omitting it is accurate and nothing else is inferred from it. Anything
+      // else means the neighbour set is not fully observable, and a window
+      // that cannot be seen is not a quiet one.
+      if (
+        error?.code === 'unit_not_running' ||
+        error?.code === 'ENOENT' ||
+        error?.code === 'ENOTDIR'
+      )
+        continue
+      throw new TargetRefusal(
+        'neighbour_observation_failed',
+        `Could not read usage for ${name}: ${error instanceof Error ? error.message : String(error)}. ` +
+          'The window cannot be shown quiet, so the run is refused.',
+      )
     }
   }
   return neighbours
@@ -225,22 +259,34 @@ function round(value) {
 }
 
 export function neighbourReport(before, after) {
-  return before.map((entry) => {
-    const later = after.find((candidate) => candidate.name === entry.name)
-    const cpuUsec = entry.usage.cpuUsec
+  const names = [
+    ...new Set([
+      ...before.map((entry) => entry.name),
+      ...after.map((entry) => entry.name),
+    ]),
+  ]
+  return names.map((name) => {
+    const earlier = before.find((entry) => entry.name === name) ?? null
+    const later = after.find((entry) => entry.name === name) ?? null
+    const cpuUsec = earlier?.usage.cpuUsec
     const laterUsec = later?.usage.cpuUsec
     const delta =
       typeof cpuUsec === 'number' && typeof laterUsec === 'number'
         ? laterUsec - cpuUsec
         : null
     return {
-      name: entry.name,
+      name,
       // A negative delta means the unit restarted and its cgroup counter was
       // reset; that is an unknown window, never a negative or a zero one.
       cpuMsDuringWindow:
         delta !== null && delta >= 0 ? round(delta / 1000) : null,
       counterReset: delta !== null && delta < 0,
-      memoryCurrentBytesBefore: entry.usage.memoryCurrentBytes,
+      // The union of both listings, not `before` alone: a unit that starts
+      // mid-window has no baseline and would otherwise be invisible, which is
+      // exactly the case a contended window check exists to catch.
+      appearedDuringWindow: earlier === null,
+      disappearedDuringWindow: later === null,
+      memoryCurrentBytesBefore: earlier?.usage.memoryCurrentBytes ?? null,
       memoryCurrentBytesAfter: later?.usage.memoryCurrentBytes ?? null,
     }
   })
@@ -252,7 +298,11 @@ export function neighbourReport(before, after) {
  */
 export function contendedUnits(before, after, maxCpuMs) {
   return neighbourReport(before, after).filter(
-    (entry) => (entry.cpuMsDuringWindow ?? 0) > maxCpuMs,
+    (entry) =>
+      // A unit that starts mid-window is activity during the measurement even
+      // though it has no baseline to difference against, so it invalidates the
+      // run rather than being counted as a quiet zero.
+      entry.appearedDuringWindow || (entry.cpuMsDuringWindow ?? 0) > maxCpuMs,
   )
 }
 
@@ -266,23 +316,26 @@ export async function assertNeighboursQuiet({
   before,
   windowMs,
   maxCpuMs,
+  after = () => neighbourUsage(`${unitName}.service`),
+  wait = sleepFor,
 }) {
-  await new Promise((resolve) => setTimeout(resolve, windowMs))
-  const busy = contendedUnits(
-    before,
-    await neighbourUsage(`${unitName}.service`),
-    maxCpuMs,
-  )
+  await wait(windowMs)
+  const busy = contendedUnits(before, await after(), maxCpuMs)
   if (busy.length > 0)
     throw new TargetRefusal(
       'neighbour_lane_busy',
       'Refusing to measure while another Obiter unit is working: ' +
         busy
-          .map(
-            (entry) =>
-              `${entry.name} used ${entry.cpuMsDuringWindow} ms of CPU in ${windowMs} ms`,
+          .map((entry) =>
+            entry.appearedDuringWindow
+              ? `${entry.name} started during the window`
+              : `${entry.name} used ${entry.cpuMsDuringWindow} ms of CPU in ${windowMs} ms`,
           )
           .join(', ') +
         '. Re-run when the box is quiet; contended numbers do not describe this lane.',
     )
+}
+
+function sleepFor(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
 }

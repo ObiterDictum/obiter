@@ -17,7 +17,7 @@
  * against that API or the run stops. See `provision.mjs`.
  */
 import { readFile } from 'node:fs/promises'
-import { basename } from 'node:path'
+import { basename, join, resolve, sep } from 'node:path'
 import {
   assertLaneTargets,
   resolveLaneTargets,
@@ -30,6 +30,37 @@ export class TargetRefusal extends Error {
     this.name = 'TargetRefusal'
     this.code = code
   }
+}
+
+export const STORAGE_ROOT_KEY = 'OBITER_STORAGE_ROOT'
+const DEFAULT_STORAGE_ROOT_NAME = '.obiter-storage'
+
+/**
+ * The storage root the API writes to, resolved the way the API resolves it:
+ * `OBITER_STORAGE_ROOT` from the process environment first (a lane `.env` is
+ * loaded into that environment) then its `.obiter-storage` default, both
+ * relative to the API package directory the lane's unit starts it from.
+ *
+ * The resolved root must stay inside the lane worktree. Verification reads
+ * object keys this run generated, and a root outside the worktree is the shared
+ * stack's or another lane's storage, so verifying there would confirm another
+ * writer's objects across a boundary this harness exists to keep.
+ */
+export function resolveStorageRoot({ worktreeRoot, configured = null }) {
+  const value = typeof configured === 'string' ? configured.trim() : ''
+  const apiDirectory = join(worktreeRoot, 'services', 'api')
+  const resolved = resolve(
+    apiDirectory,
+    value === '' ? DEFAULT_STORAGE_ROOT_NAME : value,
+  )
+  const root = resolve(worktreeRoot)
+  if (resolved !== root && !resolved.startsWith(`${root}${sep}`))
+    throw new TargetRefusal(
+      'storage_root_outside_lane',
+      `The storage root resolves to ${resolved}, outside ${root}. Refusing to verify: ` +
+        'a root outside this lane is another writer’s storage.',
+    )
+  return resolved
 }
 
 /** `lane-security` owns the `obiter_lane_security` database. */
@@ -107,11 +138,22 @@ export async function resolveLoadTarget({
   processEnv = process.env,
   read = readFile,
 } = {}) {
-  const targets = resolveLaneTargets({
-    startDirectory: worktreeRoot,
-    processEnv,
-  })
-  assertLaneTargets(targets, { reuseExistingServer: true })
+  let targets
+  try {
+    targets = resolveLaneTargets({
+      startDirectory: worktreeRoot,
+      processEnv,
+    })
+    assertLaneTargets(targets, { reuseExistingServer: true })
+  } catch (error) {
+    // The lane resolver and the shared-port guard throw plain errors, but both
+    // are refusals: a shared port or an unparseable port means the target is
+    // not this lane's, and a refusal has to exit 2 rather than 3.
+    throw new TargetRefusal(
+      'lane_target_invalid',
+      error instanceof Error ? error.message : String(error),
+    )
+  }
   assertLoopbackOrigin(targets.apiOrigin)
 
   if (!targets.envFile)
@@ -162,6 +204,16 @@ export async function resolveLoadTarget({
         `${provenance.envFile ?? 'no .env'} but this lane's is ${targets.envFile}.`,
     )
 
+  const configuredStorageRoot = readEnvAssignment(
+    envText,
+    STORAGE_ROOT_KEY,
+    processEnv,
+  )
+  const storageRoot = resolveStorageRoot({
+    worktreeRoot,
+    configured: configuredStorageRoot,
+  })
+
   return {
     worktreeRoot,
     apiOrigin: targets.apiOrigin,
@@ -171,6 +223,8 @@ export async function resolveLoadTarget({
     databaseName,
     databaseSource:
       allowDatabase !== databaseName ? 'lane-derived' : 'explicit-flag',
+    storageRoot,
+    storageRootSource: configuredStorageRoot ? 'configured' : 'default',
     commitSha: provenance.commitSha,
     health,
   }

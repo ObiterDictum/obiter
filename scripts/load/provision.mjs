@@ -18,20 +18,16 @@
  * psql is invoked synchronously and only outside the measured window; the
  * blocking call must never run while uploads are in flight.
  */
-import { execFileSync } from 'node:child_process'
 import { randomBytes } from 'node:crypto'
 import { mkdtemp, rm, stat } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { duplicates } from './metrics.mjs'
+import { ProvisionError } from './psql.mjs'
 
-export class ProvisionError extends Error {
-  constructor(code, message) {
-    super(message)
-    this.name = 'ProvisionError'
-    this.code = code
-  }
-}
+// Re-exported so existing consumers keep importing the harness's error type
+// from the module that describes the operation they were running.
+export { ProvisionError }
 
 const TAG_PATTERN = /^[a-z0-9]{4,32}$/
 
@@ -130,57 +126,6 @@ from (
 ) rows`.trim()
 }
 
-/** PG* environment from a connection URL: no credential ever reaches argv. */
-export function psqlEnvironment(databaseUrl, baseEnv = process.env) {
-  const parsed = new URL(databaseUrl)
-  return {
-    PATH: baseEnv.PATH ?? '',
-    HOME: baseEnv.HOME ?? '',
-    LANG: baseEnv.LANG ?? 'C',
-    PGHOST: parsed.hostname,
-    PGPORT: parsed.port || '5432',
-    PGUSER: decodeURIComponent(parsed.username),
-    PGPASSWORD: decodeURIComponent(parsed.password),
-    PGDATABASE: parsed.pathname.replace(/^\//, ''),
-    PGCONNECT_TIMEOUT: '5',
-    PGAPPNAME: 'obiter-q3-load-harness',
-  }
-}
-
-/** psql, with the SQL on stdin so no fixture value ever reaches argv. */
-function defaultRunner(sql, environment) {
-  return execFileSync(
-    'psql',
-    ['-X', '-q', '-v', 'ON_ERROR_STOP=1', '-t', '-A', '-f', '-'],
-    {
-      input: sql,
-      encoding: 'utf8',
-      env: environment,
-      stdio: ['pipe', 'pipe', 'pipe'],
-    },
-  )
-}
-
-export function createQuerier({
-  databaseUrl,
-  baseEnv = process.env,
-  run,
-} = {}) {
-  const environment = psqlEnvironment(databaseUrl, baseEnv)
-  const execute = run ?? defaultRunner
-  return {
-    /** Rows from a `json_agg` query; empty array when nothing matched. */
-    rows(sql) {
-      const text = execute(sql, environment)
-      return JSON.parse(text.trim() === '' ? 'null' : text.trim()) ?? []
-    },
-    exec(sql) {
-      execute(sql, environment)
-    },
-    environment,
-  }
-}
-
 /**
  * Create the fixtures, then prove the session works against the API under
  * test. Returns the ids the run reports (never the tokens).
@@ -271,21 +216,25 @@ async function fetchJson(url, { token, fetchImpl, method = 'GET', body } = {}) {
 
 /**
  * Post-run verification from the database, independent of what the API
- * claimed. `storageRoot` is the API's own storage directory (`createLocalStorage`
- * resolves `.obiter-storage` against the API process's working directory,
- * which for a lane is `<worktree>/services/api`).
+ * claimed. `storageRoot` is the root the API itself resolves, from
+ * `OBITER_STORAGE_ROOT` or its default (`resolveStorageRoot` in `target.mjs`).
+ *
+ * Counts are scoped to rows this run created: the matter for documents and
+ * versions, the organisation for audit rows. The expected audit shape is
+ * asserted here rather than left to a reader, because a run where
+ * `document.upload` or `document.version_create` stopped being written would
+ * otherwise exit clean.
  */
 export async function verifyRun({
   querier,
   ids,
-  worktreeRoot,
+  storageRoot,
   expectedReady,
   statFile = stat,
 }) {
   const versions = querier.rows(versionRowsSql(ids.matterId))
   const documents = querier.rows(documentRowsSql(ids.matterId))
   const audit = querier.rows(auditCountsSql(ids.organisationId))
-  const storageRoot = join(worktreeRoot, 'services', 'api', '.obiter-storage')
 
   const ready = versions.filter((row) => row.document_status === 'ready')
   const storage = []
@@ -303,6 +252,16 @@ export async function verifyRun({
   }
 
   const versionedDocumentIds = new Set(versions.map((row) => row.document_id))
+  const auditByAction = Object.fromEntries(
+    audit.map((row) => [row.action, row.count]),
+  )
+  // One upload writes one document, one version and one version-create row;
+  // the fixture organisation exists only for this run, so the shape is exact.
+  const auditExpected = {
+    'document.upload': expectedReady,
+    'document.version_create': expectedReady,
+    'matter.create': 1,
+  }
   return {
     documentCount: documents.length,
     versionCount: versions.length,
@@ -311,6 +270,7 @@ export async function verifyRun({
       .length,
     expectedReady,
     readyMatchesExpected: ready.length === expectedReady,
+    versionCountMatchesDocuments: versions.length === documents.length,
     // A document with no version row, or a document carrying two versions of
     // one upload run, is a partial or duplicated write even when the counts
     // happen to add up.
@@ -335,6 +295,11 @@ export async function verifyRun({
       ),
     ],
     audit,
+    auditByAction,
+    auditExpected,
+    auditMatchesExpected: Object.entries(auditExpected).every(
+      ([action, count]) => auditByAction[action] === count,
+    ),
   }
 }
 

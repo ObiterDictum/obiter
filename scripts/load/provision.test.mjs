@@ -1,20 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
   ProvisionError,
-  createQuerier,
   documentRowsSql,
   fixtureIds,
   provisionFixtures,
   provisionSql,
-  psqlEnvironment,
   softDeleteFixtures,
   sqlLiteral,
   verifyIsolation,
   verifyRun,
 } from './provision.mjs'
-
-const connections =
-  'postgresql://obiter:s3cret@localhost:5432/obiter_lane_security'
 
 describe('sqlLiteral', () => {
   it('quotes and escapes so a value cannot end the literal', () => {
@@ -68,44 +63,6 @@ describe('provisionSql', () => {
   })
 })
 
-describe('psqlEnvironment', () => {
-  it('passes credentials through the environment, never through arguments', () => {
-    const environment = psqlEnvironment(connections, {
-      PATH: '/usr/bin',
-      HOME: '/home/x',
-    })
-    expect(environment.PGDATABASE).toBe('obiter_lane_security')
-    expect(environment.PGHOST).toBe('localhost')
-    expect(environment.PGPORT).toBe('5432')
-    expect(environment.PGUSER).toBe('obiter')
-    expect(environment.PGPASSWORD).toBe('s3cret')
-    expect(Object.values(environment)).not.toContain(connections)
-  })
-})
-
-describe('createQuerier', () => {
-  it('runs SQL through the injected runner and parses the JSON aggregate', () => {
-    const seen = []
-    const querier = createQuerier({
-      databaseUrl: connections,
-      run: (sql, environment) => {
-        seen.push({ sql, environment })
-        return '[{"action":"document.upload","count":2}]'
-      },
-    })
-    expect(querier.rows('select 1')).toEqual([
-      { action: 'document.upload', count: 2 },
-    ])
-    expect(seen[0].sql).toBe('select 1')
-    expect(seen[0].environment.PGPASSWORD).toBe('s3cret')
-  })
-
-  it('treats an empty result as no rows', () => {
-    const querier = createQuerier({ databaseUrl: connections, run: () => '\n' })
-    expect(querier.rows('select 1')).toEqual([])
-  })
-})
-
 describe('verifyRun', () => {
   const ids = fixtureIds('abc12345')
   const querier = {
@@ -140,7 +97,11 @@ describe('verifyRun', () => {
             failure_reason: null,
           },
         ]
-      return [{ action: 'document.upload', count: 2 }]
+      return [
+        { action: 'document.upload', count: 2 },
+        { action: 'document.version_create', count: 2 },
+        { action: 'matter.create', count: 1 },
+      ]
     },
   }
 
@@ -148,7 +109,7 @@ describe('verifyRun', () => {
     const verification = await verifyRun({
       querier,
       ids,
-      worktreeRoot: '/work/lane-security',
+      storageRoot: '/work/lane-security/services/api/.obiter-storage',
       expectedReady: 2,
       statFile: async () => ({ size: 1 }),
     })
@@ -158,19 +119,66 @@ describe('verifyRun', () => {
     expect(verification.allStoragePresent).toBe(true)
     expect(verification.documentsWithoutVersion).toBe(0)
     expect(verification.duplicateDocumentIds).toEqual([])
+    expect(verification.versionCountMatchesDocuments).toBe(true)
+    expect(verification.auditMatchesExpected).toBe(true)
     expect(verification.audit).toEqual([
       { action: 'document.upload', count: 2 },
+      { action: 'document.version_create', count: 2 },
+      { action: 'matter.create', count: 1 },
     ])
     expect(verification.storageRoot).toBe(
       '/work/lane-security/services/api/.obiter-storage',
     )
   })
 
+  it('fails the audit assertion when the expected rows are missing', async () => {
+    const shortAudit = {
+      rows: (sql) =>
+        sql.includes('audit_logs')
+          ? [{ action: 'document.upload', count: 1 }]
+          : querier.rows(sql),
+    }
+    const verification = await verifyRun({
+      querier: shortAudit,
+      ids,
+      storageRoot: '/work/lane-security/services/api/.obiter-storage',
+      expectedReady: 2,
+      statFile: async () => ({ size: 1 }),
+    })
+    expect(verification.auditMatchesExpected).toBe(false)
+    expect(verification.auditExpected).toEqual({
+      'document.upload': 2,
+      'document.version_create': 2,
+      'matter.create': 1,
+    })
+  })
+
+  it('passes the audit assertion only for the exact expected shape', async () => {
+    const exactAudit = {
+      rows: (sql) =>
+        sql.includes('audit_logs')
+          ? [
+              { action: 'document.upload', count: 2 },
+              { action: 'document.version_create', count: 2 },
+              { action: 'matter.create', count: 1 },
+            ]
+          : querier.rows(sql),
+    }
+    const verification = await verifyRun({
+      querier: exactAudit,
+      ids,
+      storageRoot: '/work/lane-security/services/api/.obiter-storage',
+      expectedReady: 2,
+      statFile: async () => ({ size: 1 }),
+    })
+    expect(verification.auditMatchesExpected).toBe(true)
+  })
+
   it('fails the storage check when an object is missing', async () => {
     const verification = await verifyRun({
       querier,
       ids,
-      worktreeRoot: '/work/lane-security',
+      storageRoot: '/work/lane-security/services/api/.obiter-storage',
       expectedReady: 2,
       statFile: async (path) => {
         if (String(path).endsWith('/ver_2/text')) throw new Error('ENOENT')
@@ -190,7 +198,7 @@ describe('verifyRun', () => {
     const verification = await verifyRun({
       querier: partial,
       ids,
-      worktreeRoot: '/work/lane-security',
+      storageRoot: '/work/lane-security/services/api/.obiter-storage',
       expectedReady: 2,
       statFile: async () => ({ size: 1 }),
     })
@@ -227,11 +235,12 @@ describe('verifyRun', () => {
     const verification = await verifyRun({
       querier: duplicated,
       ids,
-      worktreeRoot: '/work/lane-security',
+      storageRoot: '/work/lane-security/services/api/.obiter-storage',
       expectedReady: 2,
       statFile: async () => ({ size: 1 }),
     })
     expect(verification.duplicateVersionNumbers).toEqual(['doc_1#1'])
+    expect(verification.versionCountMatchesDocuments).toBe(false)
   })
 })
 

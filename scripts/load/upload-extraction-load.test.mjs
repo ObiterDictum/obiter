@@ -1,10 +1,15 @@
-import { describe, expect, it } from 'vitest'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 import {
   UsageError,
   assertOutPathOutsideCheckout,
   buildCells,
   parseArgs,
 } from './plan.mjs'
+import { main } from './upload-extraction-load.mjs'
+import { WORKTREE_ROOT } from '../../apps/web/lane-target.mjs'
 import { contendedUnits, neighbourReport } from './host-observation.mjs'
 import {
   DEFAULT_MAX_FIXTURE_BYTES,
@@ -326,5 +331,91 @@ describe('host CPU utilisation', () => {
     expect(
       busyFraction({ total: 0, idle: 0 }, { total: 1000, idle: 250 }),
     ).toBe(0.75)
+  })
+})
+
+const scratch = await mkdtemp(join(tmpdir(), 'q3-cli-test-'))
+afterAll(() => rm(scratch, { recursive: true, force: true }))
+
+describe('refusal reporting', () => {
+  function recorder() {
+    const written = []
+    return {
+      written,
+      writeReport: async (path, contents) => {
+        written.push({ path, contents })
+      },
+    }
+  }
+
+  it('writes a truthful refusal report for an argument refusal', async () => {
+    const { written, writeReport } = recorder()
+    await expect(
+      main({
+        argv: ['--out', '/tmp/q3-refusal.json', '--ramp', '8'],
+        writeReport,
+      }),
+    ).rejects.toThrow(/out of range/)
+
+    expect(written).toHaveLength(1)
+    const report = JSON.parse(written[0].contents)
+    expect(report.refused).toBe(true)
+    expect(report.reason).toMatch(/out of range/)
+  })
+
+  it('writes a refusal report when the target is refused', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'q3-target-refusal-'))
+    const { written, writeReport } = recorder()
+    await expect(
+      main({
+        argv: [
+          '--out',
+          join(scratch, 'target-refusal.json'),
+          '--expect-checkout',
+          root,
+          // Skips the git lookup in `headSha`, which a scratch directory is
+          // not and which would only add stderr noise.
+          '--expect-commit',
+          'deadbeef',
+        ],
+        writeReport,
+      }),
+    ).rejects.toThrow()
+
+    expect(written).toHaveLength(1)
+    const report = JSON.parse(written[0].contents)
+    expect(report.refused).toBe(true)
+    expect(report.reason.length).toBeGreaterThan(0)
+    await rm(root, { recursive: true, force: true })
+  })
+
+  it('writes no report when --out is missing or unsafe', async () => {
+    const { written, writeReport } = recorder()
+    await expect(main({ argv: [], writeReport })).rejects.toThrow(/--out/)
+    await expect(
+      main({
+        argv: ['--out', join(WORKTREE_ROOT, 'report.json')],
+        writeReport,
+      }),
+    ).rejects.toThrow(/inside the checkout/)
+    expect(written).toEqual([])
+  })
+
+  it('fails clearly on stderr when the report cannot be written', async () => {
+    const reported = vi.spyOn(console, 'error').mockImplementation(() => {})
+    // The refusal is still the failure the exit code reflects; the write
+    // failure is surfaced on stderr rather than replacing it.
+    await expect(
+      main({
+        argv: ['--out', '/tmp/q3-unwritable.json', '--ramp', '8'],
+        writeReport: async () => {
+          throw new Error('EACCES: permission denied')
+        },
+      }),
+    ).rejects.toThrow(/out of range/)
+    expect(reported).toHaveBeenCalledWith(
+      expect.stringContaining('could not write the report'),
+    )
+    reported.mockRestore()
   })
 })
