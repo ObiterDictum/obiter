@@ -135,3 +135,48 @@ with a placeholder and no matching key is a hard failure before measurement.
 Point `--fixtures` at a local file containing real ids from the lane database.
 Do not commit that file: it identifies test data, and the point of the runner is
 that it can be pointed at any target.
+
+The `document-editor` journey also reads `documentName` for its client-navigation
+sample, which clicks the document's link in the matter workspace rail.
+
+## Editor interaction
+
+Opening a document is not the same as using one. `editor-interaction.mjs`
+measures the second thing, and reuses the runner's target lifecycle so the same
+provenance gates apply:
+
+```bash
+Q18_PERF_EMAIL=... Q18_PERF_PASSWORD=... \
+  node scripts/perf/editor-interaction.mjs \
+    --serve-prod "$PWD" --expect-artifact-commit "$(git rev-parse HEAD)" \
+    --web-url http://localhost:3003 --api-url http://localhost:8790 \
+    --expect-checkout "$PWD" --fixtures /path/to/fixtures.json \
+    --modes typing,scroll,save --samples 5 --keys 30 --out /tmp/interaction.json
+```
+
+- **typing** — input latency from each keydown to the second animation frame
+  after its keyup, plus long tasks and frame gaps during the run. The typed text
+  is fixed, so Before and After pay the same edit cost.
+- **scroll** — frame gaps through a scripted wheel over the document desk.
+- **save** — click the document toolbar's **Save** control and wait for the
+  response, then reload to check the saved text is actually there. This one
+  mutates the document, so point `saveDocumentId` at a separate fixture from the
+  one whose opening time you are reporting.
+
+Each sample opens a paragraph, waits for the field to accept the edit, and only
+then measures: a document that is painted but not editable is not yet usable,
+and the interval between the two is reported as `paintedMs` to `editableMs`.
+The click is forced because a page that is still relaying out never reports a
+stable box.
+
+Before any probe runs, `matterId` and every document id the selected modes read
+are resolved and then confirmed against the API through the signed-in session,
+so a missing key or a target the user cannot read fails named instead of
+appearing as a slow document.
+
+Each sample is bounded by `--sample-timeout` (seconds, default 600). A sample
+that exceeds its bound is recorded as a failure, and the browser context it
+created is closed and awaited before the next sample is scheduled: an abandoned
+sample still repaginating would otherwise be measured as contention in every
+sample after it. If that close cannot be confirmed, the run stops rather than
+measuring on. `aborted` in the report names the sample that ended the campaign.

@@ -48,6 +48,11 @@ export const JOURNEYS = [
     id: 'document-editor',
     path: '/matters/{matterId}/documents/{documentId}',
     ready: '[aria-label="Document page"]',
+    // The document route is reached from the matter workspace's rail, which
+    // labels each document with its filename, so the click target is a fixture
+    // value rather than fixed copy.
+    clientNavFrom: '/matters/{matterId}',
+    clientNavName: '{documentName}',
   },
   {
     id: 'redact-list',
@@ -73,9 +78,10 @@ export const JOURNEYS = [
 ]
 
 /**
- * Substitute `{placeholders}` in a path from the run's fixture map. A missing
- * placeholder is a hard failure, not an empty route: measuring `/matters//`
- * would silently measure a 404 and report it as a fast page.
+ * Substitute `{placeholders}` in a path or accessible name from the run's
+ * fixture map. A missing placeholder is a hard failure, not an empty route:
+ * measuring `/matters//` would silently measure a 404 and report it as a fast
+ * page, and an unresolved name would match the wrong link or none at all.
  */
 export function resolvePath(path, fixtures) {
   return path.replace(/\{(\w+)\}/g, (_match, key) => {

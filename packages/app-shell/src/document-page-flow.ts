@@ -245,7 +245,15 @@ function textWidthPx(
   if (!text) return 0
   const ctx = measureContext()
   if (ctx) {
-    ctx.font = `${fontSizePx}px ${fontFamily}`
+    // Assigning `ctx.font` parses the CSS font shorthand and re-resolves the
+    // fallback stack every time, and line wrapping measures the same font
+    // thousands of times per layout (tens of thousands on a long document), so
+    // assign only when the font actually changes.
+    const font = `${fontSizePx}px ${fontFamily}`
+    if (measuredFont !== font) {
+      ctx.font = font
+      measuredFont = font
+    }
     const width = ctx.measureText(text).width
     if (width > 0) return width
   }
@@ -253,6 +261,8 @@ function textWidthPx(
 }
 
 let measureCtx: CanvasRenderingContext2D | null | undefined
+/** The font `measureCtx` currently carries, so it is not re-parsed per call. */
+let measuredFont = ''
 
 function measureContext(): CanvasRenderingContext2D | null {
   if (measureCtx !== undefined) return measureCtx

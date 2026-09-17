@@ -3,13 +3,10 @@ import { useCurrentUser } from '../../current-user'
 import { downloadBlob, selectedParagraphLength } from '../../document-edits'
 import {
   documentFormatToolbar,
-  formattedModel,
   type FormatTarget,
 } from '../../document-format-edits'
 import { findMatchLabel } from '../../document-find'
 import { documentStory } from '../../document-model-text'
-import { layoutDocument } from '../../document-page-engine'
-import { documentImagePartNames } from '../../document-page-media'
 import { documentDefaultFace } from '../../document-page-style'
 import { handleDocumentWorkspaceKeys } from '../../document-workspace-keys'
 import {
@@ -17,13 +14,11 @@ import {
   useDocumentModel,
   useDocumentTrackedChanges,
   useDocumentCollaborationSync,
-  useDocumentImageUrls,
   useResolveDocumentComment,
   useCreateDocumentComment,
   useTrackedChangeDecision,
   fetchDocumentExport,
 } from '../../document-workspace-api'
-import { extractAuthorities } from '../../document-authorities'
 import { DocumentModelPage } from './model-view'
 import { DocumentSaveBanners } from './save-banners'
 import { InsertAuthorityDialog } from './insert-authority-dialog'
@@ -32,6 +27,7 @@ import { usePublishDocumentDirty } from './document-draft-status'
 import { WorkspaceSidePanels } from './workspace-side-panels'
 import { useDocumentPresenceHeartbeat } from './use-presence-heartbeat'
 import { useDocumentSave } from './use-document-save'
+import { useWorkspaceDerivations } from './use-workspace-derivations'
 import { useWorkspaceDrafts } from './use-workspace-drafts'
 import { useWorkspaceCaret } from './use-workspace-caret'
 import type { ParagraphSelectionHandlers } from './paragraph-editor'
@@ -108,19 +104,18 @@ export function DocxWorkspace({
       setSavedVersion(version ? { documentId, versionId: version } : null),
   })
 
-  const painted = model ? formattedModel(model, drafts.format) : undefined
-  const pages = painted
-    ? layoutDocument(painted, drafts.drafts, drafts.inserts, drafts.extraRuns)
-    : []
-  const imageUrls = useDocumentImageUrls(
+  const { painted, pages, authorities, imageUrls } = useWorkspaceDerivations({
     documentId,
-    model ? documentImagePartNames(model) : [],
-  )
+    model,
+    drafts,
+  })
+
   // Verification reads the stored version, so it must stay disabled while any
   // work is off-server: editable operations, a blocked or held change, or a
   // recoverable draft. `useDocumentSave` owns that truth as `saveState`; the
   // E45 recovery paths keep it unsaved until the work is actually covered.
   usePublishDocumentDirty(save.saveState.status !== 'saved')
+
   const {
     selectedParagraphId,
     restoreCaret,
@@ -162,15 +157,6 @@ export function DocxWorkspace({
   } = useWorkspaceCaret({ documentId, model, drafts })
 
   useDocumentPresenceHeartbeat(documentId, cursor, true)
-  const authorities = model
-    ? extractAuthorities(
-        model,
-        drafts.drafts,
-        drafts.inserts,
-        drafts.deletedParagraphIds,
-        drafts.extraRuns,
-      )
-    : []
 
   // The toolbar acts on the document selection's ranges, or on the caret's
   // own paragraph when there is none.

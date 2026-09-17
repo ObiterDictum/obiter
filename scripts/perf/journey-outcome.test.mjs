@@ -4,6 +4,7 @@
  */
 import { expect, test } from 'vitest'
 import {
+  clientNavProblem,
   evaluateJourney,
   expectedFinalPaths,
   journeyNeedsAuth,
@@ -23,6 +24,23 @@ test('requiredFixtureKeys lists the placeholders a path needs', () => {
   expect(
     requiredFixtureKeys({ path: '/matters/{matterId}/documents/{documentId}' }),
   ).toEqual(['matterId', 'documentId'])
+})
+
+test('a client-navigation sample refuses a journey it would mislabel', () => {
+  // Without an originating route the runner falls back to page.goto, which is a
+  // hard navigation reported under the client-navigation label.
+  expect(clientNavProblem(home, 'client')).toMatch(/clientNavFrom/)
+  expect(
+    clientNavProblem({ path: '/x', clientNavFrom: '/y' }, 'client'),
+  ).toMatch(/clientNavName/)
+  expect(
+    clientNavProblem(
+      { path: '/x', clientNavFrom: '/y', clientNavName: 'Z' },
+      'client',
+    ),
+  ).toBeNull()
+  // A hard-navigation run is unaffected.
+  expect(clientNavProblem(home, 'hard')).toBeNull()
 })
 
 test('journeyNeedsAuth is false only for public journeys', () => {
