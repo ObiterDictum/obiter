@@ -119,13 +119,27 @@ const changedFrom = (value, before) => value !== before
 const contains = (value, want) => value.includes(want)
 
 export function makeProbes({ webUrl, fixtures, authState, browser }) {
-  async function newPage() {
-    const context = await browser.newContext({
-      viewport: { width: 1440, height: 900 },
-      storageState: authState,
-    })
+  // The context is registered with the sample's ownership ledger as soon as it
+  // exists, so a probe abandoned at the bound still has it closed and awaited
+  // by the caller. A probe that fails before its own `finally` runs is covered
+  // by the ledger for the same reason.
+  async function newPage(ownership) {
+    const context = await ownership.create(() =>
+      browser.newContext({
+        viewport: { width: 1440, height: 900 },
+        storageState: authState,
+      }),
+    )
     await context.addInitScript(COLLECT_INIT_SCRIPT)
     return { context, page: await context.newPage() }
+  }
+
+  // Release only after a confirmed close: a close that throws leaves the
+  // context owned, so the caller's abandon() retries it and reports the failure
+  // instead of assuming cleanup happened.
+  async function closePage(ownership, context) {
+    await context.close()
+    ownership.release(context)
   }
 
   async function openEditor(page, documentId) {
@@ -158,8 +172,8 @@ export function makeProbes({ webUrl, fixtures, authState, browser }) {
     return { paintedMs, editableMs, acceptedKeystroke: accepted }
   }
 
-  async function typingSample(documentId, keys) {
-    const { context, page } = await newPage()
+  async function typingSample(documentId, keys, ownership) {
+    const { context, page } = await newPage(ownership)
     try {
       const open = await openEditor(page, documentId)
       await page.evaluate(TYPING_PROBE)
@@ -188,12 +202,12 @@ export function makeProbes({ webUrl, fixtures, authState, browser }) {
         framesOver50ms: frames.filter((f) => f > 50).length,
       }
     } finally {
-      await context.close()
+      await closePage(ownership, context)
     }
   }
 
-  async function scrollSample(documentId) {
-    const { context, page } = await newPage()
+  async function scrollSample(documentId, ownership) {
+    const { context, page } = await newPage(ownership)
     try {
       await openEditor(page, documentId)
       await page.evaluate(TYPING_PROBE)
@@ -216,15 +230,10 @@ export function makeProbes({ webUrl, fixtures, authState, browser }) {
         ),
       }
     } finally {
-      await context.close()
+      await closePage(ownership, context)
     }
   }
 
-  /**
-   * Save round-trip and persisted reload. The text must still be there after a
-   * reload of the same document, so this reports the saved version rather than
-   * the round-trip alone.
-   */
   /**
    * Save round-trip and persisted reload.
    *
@@ -235,8 +244,8 @@ export function makeProbes({ webUrl, fixtures, authState, browser }) {
    * reason the typing payload is: mixed-case keystrokes go through modifier
    * handling that is not what this probe is measuring.
    */
-  async function saveSample(documentId) {
-    const { context, page } = await newPage()
+  async function saveSample(documentId, ownership) {
+    const { context, page } = await newPage(ownership)
     try {
       const open = await openEditor(page, documentId)
       const marker = `zzmarker${Date.now()}`
@@ -277,7 +286,7 @@ export function makeProbes({ webUrl, fixtures, authState, browser }) {
         persisted: paragraphs.some((text) => text.includes(marker)),
       }
     } finally {
-      await context.close()
+      await closePage(ownership, context)
     }
   }
 

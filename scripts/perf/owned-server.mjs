@@ -55,6 +55,17 @@ export function installSignalCleanup() {
 }
 
 /**
+ * Register an owned resource — the browser the interaction runner launched, for
+ * example — in the same ledger as the spawned servers, so `stopOwned()` and
+ * signal cleanup tear it down with them. Returns the deregistration function.
+ * Nothing outside this ledger has a handle on an owned resource.
+ */
+export function ownResource(stop) {
+  ownedStops.add(stop)
+  return () => ownedStops.delete(stop)
+}
+
+/**
  * Start the worktree's built `serve.mjs` behind the local gateway and return a
  * `stop` that closes the gateway and terminates the child this run created.
  * `stop` is idempotent, waits for the child to exit, gives it a bounded SIGTERM

@@ -15,7 +15,7 @@ citation-bearing paragraphs, so the model parser sees more than one story
 shape. Sizes are chosen to sit well inside the 25 MiB upload cap.
 
 Usage:
-  python3 scripts/generate-editor-fixtures.py --out <dir>
+  python3 scripts/perf/generate-editor-fixtures.py --out <dir>
 """
 from __future__ import annotations
 
