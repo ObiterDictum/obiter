@@ -44,6 +44,7 @@ import { JOURNEYS, resolvePath } from './journeys.mjs'
 import {
   COLLECT_INIT_SCRIPT,
   NETWORK_PROFILES,
+  assertPortFree,
   collect,
   milestones,
   signIn,
@@ -279,6 +280,9 @@ async function withTarget(options) {
   if (!options.serveProd)
     return { identity: await assertTargetIdentity(), stop: async () => {} }
   const port = Number(new URL(options.webUrl).port)
+  // A leftover SSR server from an earlier run would satisfy waitForPort below
+  // and be measured as this run's artifact; refuse it instead.
+  await assertPortFree(3102)
   const ssr = spawn(process.execPath, ['serve.mjs'], {
     cwd: `${options.serveProd}/apps/web`,
     env: {

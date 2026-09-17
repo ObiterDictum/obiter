@@ -90,6 +90,12 @@ jobs:
       - name: Bundle budget
         run: pnpm perf:bundle-budget
 
+      # The build wrote dist/.obiter-build.json. Verify it names this commit and
+      # a production React build, so a marker that silently rots fails here
+      # rather than at measurement time.
+      - name: Build provenance
+        run: node apps/web/build-provenance.mjs verify --expect-commit "$GITHUB_SHA" --allow-dirty
+
       - name: Apply database migrations
         env:
           PGPASSWORD: obiter

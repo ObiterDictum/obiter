@@ -238,3 +238,26 @@ export async function waitForPort(port, timeoutMs = 20_000) {
     await new Promise((resolve) => setTimeout(resolve, 250))
   }
 }
+
+/**
+ * Refuse to measure a port this run did not bind. `waitForPort` alone would
+ * accept any listener already there, so a leftover server from an earlier run
+ * would be measured as this run's artifact.
+ */
+export async function assertPortFree(port) {
+  const occupied = await new Promise((resolve) => {
+    const socket = net.createConnection({ host: '127.0.0.1', port }, () => {
+      socket.end()
+      resolve(true)
+    })
+    socket.on('error', () => resolve(false))
+    socket.setTimeout(1000, () => {
+      socket.destroy()
+      resolve(false)
+    })
+  })
+  if (occupied)
+    throw new Error(
+      `port ${port} is already in use; refusing to measure a server this run did not start`,
+    )
+}

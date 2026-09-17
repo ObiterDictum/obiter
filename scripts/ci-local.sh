@@ -100,6 +100,7 @@ echo "== format:check" && pnpm format:check
 echo "== lint"         && pnpm lint
 echo "== build:web"    && pnpm --filter @obiter/web build
 echo "== bundle:budget" && pnpm perf:bundle-budget
+echo "== build:provenance" && node apps/web/build-provenance.mjs verify --allow-dirty
 echo "== test"         && TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm test
 
 echo "== benchmark:search"
