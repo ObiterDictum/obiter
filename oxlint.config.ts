@@ -58,4 +58,17 @@ export default defineConfig({
   jsPlugins: [
     { name: 'anti-slop', specifier: './tools/oxlint/anti-slop/index.ts' },
   ],
+  overrides: [
+    {
+      // The load harness is plain `.mjs`, so `pnpm typecheck` never sees it and
+      // the default rule set does not resolve identifiers. `no-undef` with the
+      // Node environment is the static check that catches an unimported name:
+      // #215 shipped `execFileSync` and `TargetRefusal` missing from
+      // host-observation.mjs and both reached CI green, because the try/catch
+      // that referenced them swallowed the ReferenceError into an empty result.
+      files: ['scripts/load/*.mjs'],
+      env: { node: true, builtin: true, es2024: true },
+      rules: { 'no-undef': 'error' },
+    },
+  ],
 })

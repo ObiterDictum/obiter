@@ -29,6 +29,13 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()],
   },
   renderer: {
+    // Emit Vite's chunk manifest next to the renderer assets. It is measurement
+    // metadata, not runtime content: scripts/perf/desktop-budget.mjs walks it to
+    // classify the initial graph, lazy chunks, worker and assets, and
+    // electron-builder.yml excludes it from the asar.
+    build: {
+      manifest: true,
+    },
     resolve: {
       alias: {
         '@renderer': resolve(__dirname, './src/renderer/src'),
