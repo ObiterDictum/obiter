@@ -13,6 +13,8 @@
  *   --emulate-network     none, or a labelled CDP profile (fast3g, slow4g)
  *   --serve-prod <dir>    start apps/web/serve.mjs behind a local gateway that
  *                         mirrors production's same-origin /api split
+ *   --ssr-port <port>     the internal serve.mjs listener (default 3102); set
+ *                         it so two runs never contend for one port
  *
  * It refuses to measure unless it can attribute the run: the API's /api/health
  * must name the expected checkout, and the served web artifact must match the
@@ -35,23 +37,21 @@
  *       --fixtures scripts/perf/fixtures.example.json \
  *       --journeys sign-in,home,matters --samples 5 --out /tmp/perf.json
  */
-import { execFileSync, spawn } from 'node:child_process'
+import { execFileSync } from 'node:child_process'
 import { readFile, writeFile } from 'node:fs/promises'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 import { join } from 'node:path'
 import { chromium } from '@playwright/test'
 import { JOURNEYS, resolvePath } from './journeys.mjs'
 import {
   COLLECT_INIT_SCRIPT,
   NETWORK_PROFILES,
-  assertPortFree,
   collect,
   milestones,
   signIn,
-  waitForPort,
 } from './page-metrics.mjs'
 import { evaluateJourney, journeyNeedsAuth } from './journey-outcome.mjs'
-import { startGateway } from './gateway.mjs'
+import { installSignalCleanup, startOwnedServer } from './owned-server.mjs'
 import { verifyBuildProvenance } from '../../apps/web/build-provenance.mjs'
 
 function arg(name, fallback) {
@@ -74,6 +74,9 @@ const navMode = arg('nav', 'hard')
 const network = arg('emulate-network', 'none')
 const journeyIds = arg('journeys')
 const fixturesPath = arg('fixtures')
+// The internal SSR port is overridable so two runs (or a test) never contend
+// for the same listener.
+const ssrPort = Number(arg('ssr-port', '3102'))
 const email = process.env.Q18_PERF_EMAIL
 const password = process.env.Q18_PERF_PASSWORD
 
@@ -87,6 +90,8 @@ if (serveProd && !expectArtifactCommit && !allowUnverifiedArtifact)
   throw new Error(
     '--serve-prod needs --expect-artifact-commit <sha> so a stale dist cannot measure as current',
   )
+if (!Number.isInteger(ssrPort) || ssrPort <= 0 || ssrPort > 65535)
+  throw new Error('--ssr-port must be an integer in 1-65535')
 
 /** The harness's own checkout, recorded so a report names what ran the run. */
 function runnerIdentity() {
@@ -110,7 +115,7 @@ function runnerIdentity() {
 }
 
 /** Fail loudly rather than polling an API target whose identity is unknown. */
-async function assertApiIdentity() {
+async function assertApiIdentity({ apiUrl, expectCheckout }) {
   const healthUrl = `${apiUrl}/api/health`
   const res = await fetch(healthUrl).catch((error) => {
     throw new Error(
@@ -132,7 +137,7 @@ async function assertApiIdentity() {
   }
 }
 
-async function assertWebRenders() {
+async function assertWebRenders({ webUrl }) {
   const signInUrl = `${webUrl}/sign-in`
   const page = await fetch(signInUrl).catch((error) => {
     throw new Error(`web fetch failed for ${signInUrl}: ${error.message}`)
@@ -144,7 +149,7 @@ async function assertWebRenders() {
 }
 
 /** Build provenance the running process loaded (serve.mjs holds it in memory). */
-async function servedProvenance() {
+async function servedProvenance(webUrl) {
   const res = await fetch(`${webUrl}/.well-known/obiter-build`).catch(
     () => null,
   )
@@ -158,7 +163,12 @@ async function servedProvenance() {
  * reported, so a stale Before dist under an After checkout, a dist replaced
  * after startup, or a dirty build presented as clean all refuse to measure.
  */
-async function assertArtifactIdentity() {
+async function assertArtifactIdentity({
+  serveProd,
+  webUrl,
+  expectArtifactCommit,
+  allowUnverifiedArtifact,
+}) {
   let disk = null
   if (serveProd) {
     disk = await verifyBuildProvenance(join(serveProd, 'apps', 'web', 'dist'), {
@@ -166,7 +176,7 @@ async function assertArtifactIdentity() {
       requireClean: true,
     })
   }
-  const served = await servedProvenance()
+  const served = await servedProvenance(webUrl)
   if (serveProd && !served && !allowUnverifiedArtifact)
     throw new Error(
       'the running server reported no build provenance; only an artifact built by this worktree can be measured',
@@ -194,9 +204,12 @@ async function assertArtifactIdentity() {
   }
 }
 
-async function assertTargetIdentity() {
-  const [api] = await Promise.all([assertApiIdentity(), assertWebRenders()])
-  const artifact = await assertArtifactIdentity()
+async function assertTargetIdentity(config) {
+  const [api] = await Promise.all([
+    assertApiIdentity(config),
+    assertWebRenders(config),
+  ])
+  const artifact = await assertArtifactIdentity(config)
   return { runner: runnerIdentity(), api, artifact }
 }
 
@@ -276,44 +289,23 @@ function summarise(rows) {
   return out
 }
 
-async function withTarget(options) {
-  if (!options.serveProd)
-    return { identity: await assertTargetIdentity(), stop: async () => {} }
-  const port = Number(new URL(options.webUrl).port)
-  // A leftover SSR server from an earlier run would satisfy waitForPort below
-  // and be measured as this run's artifact; refuse it instead.
-  await assertPortFree(3102)
-  const ssr = spawn(process.execPath, ['serve.mjs'], {
-    cwd: `${options.serveProd}/apps/web`,
-    env: {
-      ...process.env,
-      PORT: '3102',
-      HOST: '127.0.0.1',
-      OBITER_WEB_ORIGIN: options.webUrl,
-      OBITER_API_ORIGIN: options.apiUrl,
-      // Ask the server to expose the marker it loaded, so the harness can prove
-      // the running process serves the artifact on disk.
-      OBITER_BUILD_PROVENANCE: '1',
-    },
-    stdio: 'ignore',
-  })
-  await waitForPort(3102)
-  const gateway = await startGateway({
-    port,
-    ssrOrigin: 'http://127.0.0.1:3102',
-    apiOrigin: options.apiUrl,
-  })
-  const identity = await assertTargetIdentity()
-  return {
-    identity,
-    stop: async () => {
-      await new Promise((resolve) => gateway.close(resolve))
-      ssr.kill('SIGTERM')
-    },
+async function withTarget(config) {
+  if (!config.serveProd)
+    return {
+      identity: await assertTargetIdentity(config),
+      stop: async () => {},
+    }
+  const stop = await startOwnedServer(config)
+  try {
+    return { identity: await assertTargetIdentity(config), stop }
+  } catch (error) {
+    await stop()
+    throw error
   }
 }
 
 async function main() {
+  installSignalCleanup()
   const fixtures = fixturesPath
     ? JSON.parse(await readFile(fixturesPath, 'utf8'))
     : {}
@@ -321,106 +313,125 @@ async function main() {
   const journeys = JOURNEYS.filter((j) => !selected || selected.includes(j.id))
   if (journeys.length === 0) throw new Error('no journeys selected')
 
-  const target = await withTarget({ serveProd, webUrl, apiUrl })
-  const browser = await chromium.launch()
+  const target = await withTarget({
+    serveProd,
+    webUrl,
+    apiUrl,
+    expectCheckout,
+    expectArtifactCommit,
+    allowUnverifiedArtifact,
+    ssrPort,
+  })
   const results = []
   const failures = []
+  let browser = null
   try {
-    // Credentials are only required by journeys that need them, so a public-only
-    // run (sign-in, and any future public route) measures without them.
-    let auth = { state: 'not-needed', storageState: null, error: null }
-    if (journeys.some(journeyNeedsAuth)) {
-      try {
-        const authContext = await browser.newContext()
-        await authContext.addInitScript(COLLECT_INIT_SCRIPT)
-        await signIn(await authContext.newPage(), {
-          webUrl,
-          email,
-          password,
-        })
-        auth = {
-          state: 'ok',
-          storageState: await authContext.storageState(),
-          error: null,
-        }
-        await authContext.close()
-      } catch (error) {
-        auth = { state: 'failed', storageState: null, error: error.message }
-      }
-    }
-    if (auth.state === 'failed')
-      console.error(`perf runner: no authenticated session: ${auth.error}`)
-
+    // Validate the fixture placeholders before starting a browser: a missing id
+    // would otherwise measure /matters// and report it as a fast page. Only the
+    // journeys that can actually be measured are run; the browser is not
+    // started at all when none survive, which keeps a fixture error from
+    // leaving an owned server behind without a measurement to attribute it to.
+    const measurable = []
     for (const journey of journeys) {
-      if (journeyNeedsAuth(journey) && auth.state !== 'ok') {
-        results.push({
-          id: journey.id,
-          status: 'failed',
-          error: auth.error ?? 'no authenticated session',
-        })
-        failures.push(journey.id)
-        continue
-      }
-      // Validate the fixture placeholders before measuring: a missing id would
-      // otherwise measure /matters// and report it as a fast page.
       try {
         resolvePath(journey.path, fixtures)
+        measurable.push(journey)
       } catch (error) {
         results.push({ id: journey.id, status: 'failed', error: error.message })
         failures.push(journey.id)
-        continue
       }
+    }
 
-      const contextOptions = {
-        storageState: journey.public ? undefined : auth.storageState,
-        viewport: { width: 1440, height: 900 },
-      }
-      const context =
-        cacheMode === 'warm' ? await browser.newContext(contextOptions) : null
-      if (context) await context.addInitScript(COLLECT_INIT_SCRIPT)
-      // Warm the cache with one navigation; failures here are recorded by the
-      // measured samples below rather than aborting the whole run.
-      if (context) {
+    if (measurable.length > 0) {
+      browser = await chromium.launch()
+      // Credentials are only required by journeys that need them, so a
+      // public-only run (sign-in, and any future public route) measures without
+      // them.
+      let auth = { state: 'not-needed', storageState: null, error: null }
+      if (measurable.some(journeyNeedsAuth)) {
         try {
-          await sample({ context, journey, fixtures })
-        } catch {
-          // The measured samples report the reason.
-        }
-      }
-      const rows = []
-      const failedSamples = []
-      for (let i = 0; i < samples; i++) {
-        const scoped = context ?? (await browser.newContext(contextOptions))
-        if (!context) await scoped.addInitScript(COLLECT_INIT_SCRIPT)
-        try {
-          rows.push(await sample({ context: scoped, journey, fixtures }))
+          const authContext = await browser.newContext()
+          await authContext.addInitScript(COLLECT_INIT_SCRIPT)
+          await signIn(await authContext.newPage(), {
+            webUrl,
+            email,
+            password,
+          })
+          auth = {
+            state: 'ok',
+            storageState: await authContext.storageState(),
+            error: null,
+          }
+          await authContext.close()
         } catch (error) {
-          failedSamples.push({ index: i, reason: error.message })
-        } finally {
-          if (!context) await scoped.close()
+          auth = { state: 'failed', storageState: null, error: error.message }
         }
       }
-      if (context) await context.close()
-      if (rows.length === 0) {
-        results.push({
-          id: journey.id,
-          status: 'failed',
-          error: failedSamples[0]?.reason ?? 'no usable samples',
-          failedSamples,
-        })
-        failures.push(journey.id)
-      } else {
-        results.push({
-          id: journey.id,
-          status: failedSamples.length > 0 ? 'partial' : 'ok',
-          ...summarise(rows),
-          failedSamples,
-        })
-        if (failedSamples.length > 0) failures.push(journey.id)
+      if (auth.state === 'failed')
+        console.error(`perf runner: no authenticated session: ${auth.error}`)
+
+      for (const journey of measurable) {
+        if (journeyNeedsAuth(journey) && auth.state !== 'ok') {
+          results.push({
+            id: journey.id,
+            status: 'failed',
+            error: auth.error ?? 'no authenticated session',
+          })
+          failures.push(journey.id)
+          continue
+        }
+
+        const contextOptions = {
+          storageState: journey.public ? undefined : auth.storageState,
+          viewport: { width: 1440, height: 900 },
+        }
+        const context =
+          cacheMode === 'warm' ? await browser.newContext(contextOptions) : null
+        if (context) await context.addInitScript(COLLECT_INIT_SCRIPT)
+        // Warm the cache with one navigation; failures here are recorded by the
+        // measured samples below rather than aborting the whole run.
+        if (context) {
+          try {
+            await sample({ context, journey, fixtures })
+          } catch {
+            // The measured samples report the reason.
+          }
+        }
+        const rows = []
+        const failedSamples = []
+        for (let i = 0; i < samples; i++) {
+          const scoped = context ?? (await browser.newContext(contextOptions))
+          if (!context) await scoped.addInitScript(COLLECT_INIT_SCRIPT)
+          try {
+            rows.push(await sample({ context: scoped, journey, fixtures }))
+          } catch (error) {
+            failedSamples.push({ index: i, reason: error.message })
+          } finally {
+            if (!context) await scoped.close()
+          }
+        }
+        if (context) await context.close()
+        if (rows.length === 0) {
+          results.push({
+            id: journey.id,
+            status: 'failed',
+            error: failedSamples[0]?.reason ?? 'no usable samples',
+            failedSamples,
+          })
+          failures.push(journey.id)
+        } else {
+          results.push({
+            id: journey.id,
+            status: failedSamples.length > 0 ? 'partial' : 'ok',
+            ...summarise(rows),
+            failedSamples,
+          })
+          if (failedSamples.length > 0) failures.push(journey.id)
+        }
       }
     }
   } finally {
-    await browser.close()
+    if (browser) await browser.close()
     await target.stop()
   }
 
@@ -444,7 +455,14 @@ async function main() {
   if (failures.length > 0) process.exitCode = 1
 }
 
-main().catch((error) => {
-  console.error(`perf runner failed: ${error.message}`)
-  process.exit(1)
-})
+const invokedScript = process.argv[1]
+const isMain =
+  invokedScript && pathToFileURL(invokedScript).href === import.meta.url
+if (isMain) {
+  main().catch((error) => {
+    console.error(`perf runner failed: ${error.message}`)
+    process.exit(1)
+  })
+}
+
+export { withTarget }
