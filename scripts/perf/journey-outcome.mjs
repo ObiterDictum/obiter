@@ -20,6 +20,20 @@ export function journeyNeedsAuth(journey) {
   return journey.public !== true
 }
 
+/**
+ * Why a client-navigation sample cannot be taken for this journey, or null.
+ * Without the originating route and the control to click, the runner falls back
+ * to `page.goto` — measuring a hard navigation and reporting it under the
+ * client-navigation label. Refuse instead.
+ */
+export function clientNavProblem(journey, navMode) {
+  if (navMode !== 'client') return null
+  if (!journey.clientNavFrom)
+    return 'no clientNavFrom: --nav client would measure a hard navigation'
+  if (!journey.clientNavName) return 'no clientNavName: the link to click'
+  return null
+}
+
 function matchesExpected(expected, actualPath) {
   return expected instanceof RegExp
     ? expected.test(actualPath)
