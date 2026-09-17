@@ -34,6 +34,12 @@ ARG NODE_VERSION=24.19.0
 # --- Build stage -------------------------------------------------------------
 FROM node:${NODE_VERSION}-slim AS build
 ENV CI=1
+# Build provenance for the emitted artifact. .git is excluded from the build
+# context, so the commit cannot be read here; the CI build passes it. Without
+# the arguments the marker records null and the measurement harness refuses the
+# artifact rather than guessing a commit.
+ARG OBITER_BUILD_COMMIT=""
+ARG OBITER_BUILD_DIRTY=""
 # corepack pnpm — the repo pins pnpm@10.14.0 via packageManager.
 ENV COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 RUN corepack enable
@@ -52,7 +58,8 @@ RUN --mount=type=cache,id=pnpm-store,target=/root/.local/share/pnpm/store \
 # install resolution; bring in the app sources needed to build).
 COPY apps/web ./apps/web
 
-RUN pnpm --filter @obiter/web build
+RUN OBITER_BUILD_COMMIT="$OBITER_BUILD_COMMIT" OBITER_BUILD_DIRTY="$OBITER_BUILD_DIRTY" \
+    pnpm --filter @obiter/web build
 
 # --- Runtime stage -----------------------------------------------------------
 FROM node:${NODE_VERSION}-slim AS runtime

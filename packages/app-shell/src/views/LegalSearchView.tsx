@@ -19,8 +19,6 @@ import {
   type LegalSearchFetchResponse,
   type LegalSearchOutcome,
   type LegislationScheduleGuidance,
-  type CaseLawParagraph,
-  type LegalSearchResult,
   type LegalSearchState,
 } from '../components/search'
 import { searchResultRows } from '../components/search/searchResultRows'
@@ -61,29 +59,12 @@ export function getLegalSearchStateLabel(state: LegalSearchState) {
   }
 }
 
-export function selectParagraphExcerpts(
-  result: LegalSearchResult,
-  query: string,
-): CaseLawParagraph[] {
-  const normalizedQuery = query.trim().toLowerCase()
-  const paragraphs = result.paragraphs ?? []
-
-  if (!normalizedQuery) {
-    return paragraphs.slice(0, 3)
-  }
-
-  const matches = paragraphs.filter((paragraph) =>
-    paragraph.text.toLowerCase().includes(normalizedQuery),
-  )
-
-  return (matches.length > 0 ? matches : paragraphs).slice(0, 3)
-}
-
-export function selectJudgmentParagraphs(
-  result: LegalSearchResult,
-): CaseLawParagraph[] {
-  return result.paragraphs ?? []
-}
+// Re-exported for existing importers. The implementations live outside this
+// module so a case view can select paragraphs without pulling in the search UI.
+export {
+  selectJudgmentParagraphs,
+  selectParagraphExcerpts,
+} from '../legal-search-selection'
 
 export function createLegalSearchFetchRequest(
   query: string,

@@ -65,7 +65,10 @@ export const JOURNEYS = [
   {
     id: 'case-law-document',
     path: '/cases/{caseDocumentId}',
-    ready: 'main',
+    ready: 'main h1',
+    // The id route resolves to its canonical slug and redirects there; either
+    // landing is the same document.
+    redirectsTo: [/^\/case\/[^/]+$/],
   },
 ]
 

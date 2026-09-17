@@ -1,60 +1,23 @@
-import { queryOptions, useSuspenseQuery } from '@tanstack/react-query'
+import { useSuspenseQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { useState } from 'react'
 import { EmptyState } from '@obiter/ui'
-import { apiUrl } from '../lib/api-url'
-import { selectJudgmentParagraphs } from './LegalSearchView'
-import { getCourtLabel } from '../components/search'
+import { selectJudgmentParagraphs } from '../legal-search-selection'
+import { getCourtLabel } from '../components/search/searchTypes'
+import {
+  caseLawDocumentQueryOptions,
+  type CaseLawDocument,
+  type CaseLawParagraph,
+} from './case-law-document-query'
 
-interface CaseLawParagraph {
-  id: string
-  paragraphNumber: number
-  text: string
-}
-
-interface CaseLawDocument {
-  id: string
-  title: string
-  neutralCitation: string | null
-  court: string
-  dateDecided: string
-  sourceUrl: string
-  paragraphs?: CaseLawParagraph[]
-}
-
-interface CaseLawWithdrawnNotice {
-  withdrawn: true
-  withdrawnAt: string
-  officialUrl: string
-  message: string
-}
-
-export interface CaseLawDocumentResponse {
-  document: CaseLawDocument
-  withdrawn?: CaseLawWithdrawnNotice
-}
-
-export function caseLawDocumentQueryOptions(caseId: string) {
-  return queryOptions({
-    queryKey: ['case-law-document', caseId],
-    // Withdrawal banners must appear without a reload: never serve this
-    // from cache on mount, so a judgment withdrawn since the last visit
-    // revalidates and the banner renders on fresh data.
-    staleTime: 0,
-    refetchOnMount: 'always',
-    queryFn: async () => {
-      const response = await fetch(
-        apiUrl(`/api/search/documents/${encodeURIComponent(caseId)}`),
-      )
-
-      if (!response.ok) {
-        throw new Error('Case law document was not found.')
-      }
-
-      return (await response.json()) as CaseLawDocumentResponse
-    },
-  })
-}
+// Kept on this module's surface for importers that expect the view and its
+// query together; the query itself is owned by case-law-document-query.
+export { caseLawDocumentQueryOptions }
+export type {
+  CaseLawDocument,
+  CaseLawDocumentResponse,
+  CaseLawParagraph,
+} from './case-law-document-query'
 
 export function CaseLawDocumentView({ caseId }: { caseId: string }) {
   const [caseQuery, setCaseQuery] = useState('')

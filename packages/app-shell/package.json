@@ -5,7 +5,10 @@
   "type": "module",
   "sideEffects": false,
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./views/legal-search": "./src/views/LegalSearchView.tsx",
+    "./views/case-law-document": "./src/views/CaseLawDocumentView.tsx",
+    "./views/case-law-document-query": "./src/views/case-law-document-query.ts"
   },
   "dependencies": {
     "@obiter/contracts": "workspace:*",

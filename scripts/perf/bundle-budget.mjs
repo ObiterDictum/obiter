@@ -39,6 +39,19 @@ export const BUDGETS = {
 // total and hiding a route-chunk regression.
 const PDF_WORKER_PREFIX = 'pdf.worker'
 
+/*
+ * Distinctive strings from route views that must not be reachable from the root
+ * preloads. A view that a lazy route imports through the barrel becomes part of
+ * the entry chunk without changing any source import, so the emitted membership
+ * is the only honest check. These two are the largest surfaces the initial-load
+ * change moved off the entry; if either reappears, the split has regressed even
+ * though the byte budget may still pass.
+ */
+const FORBIDDEN_INITIAL_MARKERS = [
+  ['Checking legal sources', 'LegalSearchView'],
+  ['Search within case', 'CaseLawDocumentView'],
+]
+
 function arg(name, fallback) {
   const i = process.argv.indexOf(`--${name}`)
   return i === -1 ? fallback : process.argv[i + 1]
@@ -74,6 +87,11 @@ async function main() {
   const clientAssets = join(dist, 'client', 'assets')
   const initialNames = await rootPreloads(dist)
   const initial = new Set(initialNames)
+
+  const initialSources = new Map()
+  for (const name of initialNames) {
+    initialSources.set(name, await readFile(join(clientAssets, name), 'utf8'))
+  }
 
   let initialGzip = 0
   for (const name of initialNames) {
@@ -113,6 +131,21 @@ async function main() {
     failures.push(
       `initial bundle is ${kb(initialGzip)}, over the ${kb(BUDGETS.initialGzipBytes)} budget`,
     )
+  for (const [marker, view] of FORBIDDEN_INITIAL_MARKERS) {
+    const hit = [...initialSources].find(([, source]) =>
+      source.includes(marker),
+    )
+    if (hit)
+      failures.push(
+        `${view} is in the initial graph (${hit[0]}); it must load from its route chunk`,
+      )
+  }
+  if (
+    [...initialSources.values()].some((source) =>
+      source.includes('jsx-dev-runtime'),
+    )
+  )
+    failures.push('the initial graph contains the React development runtime')
   if (lazyGzip > BUDGETS.lazyGzipBytes)
     failures.push(
       `lazy chunks total ${kb(lazyGzip)}, over the ${kb(BUDGETS.lazyGzipBytes)} budget`,

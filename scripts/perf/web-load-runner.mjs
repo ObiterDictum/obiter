@@ -14,40 +14,44 @@
  *   --serve-prod <dir>    start apps/web/serve.mjs behind a local gateway that
  *                         mirrors production's same-origin /api split
  *
- * It refuses to measure unless the target's API reports the expected checkout
- * root and commit, so a stale or shared server cannot be measured by accident.
- * Credentials come from the environment and never enter the report.
+ * It refuses to measure unless it can attribute the run: the API's /api/health
+ * must name the expected checkout, and the served web artifact must match the
+ * build provenance written into its dist (commit, clean state, integrity).
+ * Runner, artifact and API identities are recorded separately because a current
+ * checkout does not prove the bytes being served were built from it.
+ *
+ * Every sample is gated on the journey's final path and route-ready control; a
+ * redirect to sign-in, an error screen or a wrong document fails the journey and
+ * is recorded rather than reported under the target's name. Public journeys need
+ * no credentials; authenticated ones need Q18_PERF_EMAIL/Q18_PERF_PASSWORD and
+ * their fixtures. Nothing read from the environment enters the report.
  *
  * Usage:
  *   Q18_PERF_EMAIL=... Q18_PERF_PASSWORD=... \
  *     node scripts/perf/web-load-runner.mjs \
- *       --serve-prod /path/to/worktree \
+ *       --serve-prod /path/to/worktree --expect-artifact-commit <sha> \
  *       --web-url http://localhost:3002 --api-url http://localhost:8789 \
  *       --expect-checkout /path/to/worktree \
  *       --fixtures scripts/perf/fixtures.example.json \
  *       --journeys sign-in,home,matters --samples 5 --out /tmp/perf.json
  */
+import { execFileSync, spawn } from 'node:child_process'
 import { readFile, writeFile } from 'node:fs/promises'
-import { spawn } from 'node:child_process'
-import net from 'node:net'
+import { fileURLToPath } from 'node:url'
+import { join } from 'node:path'
 import { chromium } from '@playwright/test'
 import { JOURNEYS, resolvePath } from './journeys.mjs'
+import {
+  COLLECT_INIT_SCRIPT,
+  NETWORK_PROFILES,
+  collect,
+  milestones,
+  signIn,
+  waitForPort,
+} from './page-metrics.mjs'
+import { evaluateJourney, journeyNeedsAuth } from './journey-outcome.mjs'
 import { startGateway } from './gateway.mjs'
-
-const NETWORK_PROFILES = {
-  fast3g: {
-    offline: false,
-    latency: 150,
-    downloadThroughput: (1.6 * 1024 * 1024) / 8,
-    uploadThroughput: (750 * 1024) / 8,
-  },
-  slow4g: {
-    offline: false,
-    latency: 100,
-    downloadThroughput: (4 * 1024 * 1024) / 8,
-    uploadThroughput: (3 * 1024 * 1024) / 8,
-  },
-}
+import { verifyBuildProvenance } from '../../apps/web/build-provenance.mjs'
 
 function arg(name, fallback) {
   const i = process.argv.indexOf(`--${name}`)
@@ -57,6 +61,10 @@ const webUrl = arg('web-url', 'http://localhost:3002')
 const apiUrl = arg('api-url', 'http://localhost:8789')
 const expectCheckout = arg('expect-checkout')
 const serveProd = arg('serve-prod')
+const expectArtifactCommit = arg('expect-artifact-commit')
+const allowUnverifiedArtifact = process.argv.includes(
+  '--allow-unverified-artifact',
+)
 const outPath = arg('out')
 const label = arg('label', 'run')
 const samples = Number(arg('samples', '5'))
@@ -74,31 +82,34 @@ if (navMode !== 'hard' && navMode !== 'client')
   throw new Error('--nav hard|client')
 if (network !== 'none' && !NETWORK_PROFILES[network])
   throw new Error(`unknown --emulate-network "${network}"`)
+if (serveProd && !expectArtifactCommit && !allowUnverifiedArtifact)
+  throw new Error(
+    '--serve-prod needs --expect-artifact-commit <sha> so a stale dist cannot measure as current',
+  )
 
-const INIT_SCRIPT = () => {
-  window.__perf = { cls: 0, longTasks: [], lcp: 0 }
-  try {
-    new PerformanceObserver((list) => {
-      for (const e of list.getEntries()) {
-        if (!e.hadRecentInput) window.__perf.cls += e.value
-      }
-    }).observe({ type: 'layout-shift', buffered: true })
-    new PerformanceObserver((list) => {
-      for (const e of list.getEntries())
-        window.__perf.longTasks.push(e.duration)
-    }).observe({ type: 'longtask', buffered: true })
-    new PerformanceObserver((list) => {
-      const entries = list.getEntries()
-      const last = entries[entries.length - 1]
-      if (last) window.__perf.lcp = last.startTime
-    }).observe({ type: 'largest-contentful-paint', buffered: true })
-  } catch {
-    // A browser without a given observer type still yields the rest.
+/** The harness's own checkout, recorded so a report names what ran the run. */
+function runnerIdentity() {
+  const repoRoot = fileURLToPath(new URL('../../', import.meta.url))
+  const git = (args) => {
+    try {
+      return execFileSync('git', ['-C', repoRoot, ...args], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim()
+    } catch {
+      return null
+    }
+  }
+  const status = git(['status', '--porcelain'])
+  return {
+    checkoutRoot: repoRoot,
+    commitSha: git(['rev-parse', 'HEAD']),
+    dirty: status === null ? null : status.length > 0,
   }
 }
 
-/** Fail loudly rather than polling a target whose identity is unknown. */
-async function assertTargetIdentity() {
+/** Fail loudly rather than polling an API target whose identity is unknown. */
+async function assertApiIdentity() {
   const healthUrl = `${apiUrl}/api/health`
   const res = await fetch(healthUrl).catch((error) => {
     throw new Error(
@@ -114,6 +125,13 @@ async function assertTargetIdentity() {
     throw new Error(
       `API checkout root is ${provenance.checkoutRoot}, expected ${expectCheckout}`,
     )
+  return {
+    checkoutRoot: provenance.checkoutRoot,
+    commitSha: provenance.commitSha,
+  }
+}
+
+async function assertWebRenders() {
   const signInUrl = `${webUrl}/sign-in`
   const page = await fetch(signInUrl).catch((error) => {
     throw new Error(`web fetch failed for ${signInUrl}: ${error.message}`)
@@ -122,233 +140,121 @@ async function assertTargetIdentity() {
   const html = await page.text()
   if (!html.includes('Sign in to Obiter'))
     throw new Error('web target did not render the sign-in page')
-  return {
-    checkoutRoot: provenance.checkoutRoot,
-    commitSha: provenance.commitSha,
-  }
+}
+
+/** Build provenance the running process loaded (serve.mjs holds it in memory). */
+async function servedProvenance() {
+  const res = await fetch(`${webUrl}/.well-known/obiter-build`).catch(
+    () => null,
+  )
+  if (!res || !res.ok) return null
+  return res.json().catch(() => null)
 }
 
 /**
- * Two milestones for one navigation:
- *   contentMs — the primary control for this route is present and enabled. A
- *               skeleton alone does not count.
- *   readyMs   — the same control, after React has hydrated the document. The
- *               hydration marker is used rather than the `load` event, because
- *               the client entry is an async module script and `load` can fire
- *               while it is still in flight. The control is interactive by
- *               this point, not merely painted.
- * Both are measured from navigation start via performance.now().
+ * Pin the artifact being served, not just the checkout it sits in. The marker is
+ * verified against the bytes on disk and against what the running server
+ * reported, so a stale Before dist under an After checkout, a dist replaced
+ * after startup, or a dirty build presented as clean all refuse to measure.
  */
-async function milestones(page, selector) {
-  const content = await page.waitForFunction(
-    (sel) => {
-      const el = document.querySelector(sel)
-      if (!el || el.disabled === true) return false
-      return performance.now()
-    },
-    selector,
-    { timeout: 45_000 },
-  )
-  const contentMs = await content.jsonValue()
-  const ready = await page.waitForFunction(
-    (sel) => {
-      const el = document.querySelector(sel)
-      if (!el || el.disabled === true) return false
-      // hydrateRoot marks its container with a React fiber/props key.
-      const hydrated =
-        Object.keys(document.body).some((k) => k.startsWith('__react')) ||
-        Object.keys(document.documentElement).some((k) =>
-          k.startsWith('__react'),
-        )
-      return hydrated ? performance.now() : false
-    },
-    selector,
-    { timeout: 45_000 },
-  )
-  const readyMs = await ready.jsonValue()
-  await page.evaluate(
-    () =>
-      new Promise((resolve) =>
-        requestAnimationFrame(() => requestAnimationFrame(resolve)),
-      ),
-  )
-  return { contentMs, readyMs }
-}
-
-/**
- * Read the metrics for the navigation just finished. `sinceMs` scopes the
- * resource list to work done after a client-side navigation started; without
- * it a client-navigation sample would report the initial document's payload.
- */
-async function collect(page, contentMs, readyMs, sinceMs) {
-  return page.evaluate(
-    ({ content, ready, since }) => {
-      const nav = performance.getEntriesByType('navigation')[0]
-      const resources = performance
-        .getEntriesByType('resource')
-        .filter((e) => e.startTime >= since)
-      const sum = (list, key) => list.reduce((a, e) => a + (e[key] || 0), 0)
-      // Module scripts and modulepreload requests report initiatorType
-      // 'other', so classify by extension rather than by that field.
-      const byExtension = (suffixes) =>
-        resources.filter((e) =>
-          suffixes.some((s) => new URL(e.name).pathname.endsWith(s)),
-        )
-      const scripts = byExtension(['.js', '.mjs'])
-      const styles = byExtension(['.css'])
-      const fonts = byExtension(['.woff', '.woff2'])
-      const api = resources.filter((e) => e.name.includes('/api/'))
-      const longTasks = window.__perf.longTasks
-      const fcp = performance.getEntriesByName('first-contentful-paint')[0]
-      return {
-        contentMs: Math.round(content),
-        readyMs: Math.round(ready),
-        finalPath: location.pathname,
-        ttfbMs: Math.round(nav.responseStart),
-        domContentLoadedMs: Math.round(nav.domContentLoadedEventEnd),
-        loadMs: Math.round(nav.loadEventEnd),
-        fcpMs: fcp ? Math.round(fcp.startTime) : null,
-        lcpMs: Math.round(window.__perf.lcp) || null,
-        cls: Number(window.__perf.cls.toFixed(4)),
-        longTaskCount: longTasks.length,
-        longTaskTotalMs: Math.round(longTasks.reduce((a, d) => a + d, 0)),
-        totalBlockingMs: Math.round(
-          longTasks.reduce((a, d) => a + Math.max(0, d - 50), 0),
-        ),
-        resourceCount: resources.length,
-        scriptCount: scripts.length,
-        scriptTransferBytes: sum(scripts, 'transferSize'),
-        scriptDecodedBytes: sum(scripts, 'decodedBodySize'),
-        styleCount: styles.length,
-        styleTransferBytes: sum(styles, 'transferSize'),
-        fontCount: fonts.length,
-        fontTransferBytes: sum(fonts, 'transferSize'),
-        totalTransferBytes: sum(resources, 'transferSize'),
-        largestScripts: scripts
-          .map((e) => ({
-            name: e.name.split('/').pop(),
-            transferBytes: e.transferSize,
-            decodedBytes: e.decodedBodySize,
-          }))
-          .sort((a, b) => b.decodedBytes - a.decodedBytes)
-          .slice(0, 6),
-        apiRequests: api.map((e) => ({
-          path: new URL(e.name).pathname,
-          durationMs: Math.round(e.duration),
-          transferBytes: e.transferSize,
-        })),
-      }
-    },
-    { content: contentMs, ready: readyMs, since: sinceMs },
-  )
-}
-
-async function signIn(page) {
-  if (!email || !password)
-    throw new Error('set Q18_PERF_EMAIL and Q18_PERF_PASSWORD')
-  await page.goto(`${webUrl}/sign-in`, { waitUntil: 'domcontentloaded' })
-  // Wait for hydration before touching the form: a click on a pre-hydration
-  // button fires no request, and a hydration pass resets values typed before
-  // it. A blank or absent submit reads as a slow page and is neither.
-  const hydrated = () =>
-    Object.keys(document.body).some((k) => k.startsWith('__react')) ||
-    Object.keys(document.documentElement).some((k) => k.startsWith('__react'))
-  await page.waitForFunction(hydrated, null, { timeout: 60_000 })
-  for (let attempt = 0; attempt < 3; attempt += 1) {
-    await page.getByLabel('Email').fill(email)
-    await page.getByLabel('Password').fill(password)
-    const stuck = await page
-      .waitForFunction(
-        () => {
-          const emailInput = document.querySelector('input[type="email"]')
-          const passwordInput = document.querySelector('input[type="password"]')
-          return Boolean(
-            emailInput?.value &&
-            passwordInput?.value &&
-            emailInput.value.length,
-          )
-        },
-        null,
-        { timeout: 4_000 },
-      )
-      .then(() => true)
-      .catch(() => false)
-    if (!stuck) {
-      await page.reload({ waitUntil: 'domcontentloaded' })
-      continue
-    }
-    const [response] = await Promise.all([
-      page.waitForResponse((r) => r.url().includes('/api/auth/sign-in/email')),
-      page.getByRole('button', { name: 'Continue' }).click(),
-    ])
-    if (response.ok()) {
-      await page.waitForURL((url) => !url.pathname.startsWith('/sign-in'), {
-        timeout: 30_000,
-      })
-      return
-    }
-    await page.reload({ waitUntil: 'domcontentloaded' })
-  }
-  throw new Error('sign-in did not succeed after 3 attempts')
-}
-
-async function waitForPort(port, timeoutMs = 20_000) {
-  const deadline = Date.now() + timeoutMs
-  for (;;) {
-    const open = await new Promise((resolve) => {
-      const socket = net.createConnection({ host: '127.0.0.1', port }, () => {
-        socket.end()
-        resolve(true)
-      })
-      socket.on('error', () => resolve(false))
-      socket.setTimeout(1000, () => {
-        socket.destroy()
-        resolve(false)
-      })
+async function assertArtifactIdentity() {
+  let disk = null
+  if (serveProd) {
+    disk = await verifyBuildProvenance(join(serveProd, 'apps', 'web', 'dist'), {
+      expectCommit: expectArtifactCommit,
+      requireClean: true,
     })
-    if (open) return
-    if (Date.now() > deadline)
-      throw new Error(
-        `SSR server did not listen on ${port} within ${timeoutMs}ms`,
-      )
-    await new Promise((resolve) => setTimeout(resolve, 250))
   }
-}
-
-async function sample({ context, journey, fixtures }) {
-  const page = await context.newPage()
-  if (network !== 'none') {
-    const client = await context.newCDPSession(page)
-    await client.send('Network.enable')
-    await client.send(
-      'Network.emulateNetworkConditions',
-      NETWORK_PROFILES[network],
+  const served = await servedProvenance()
+  if (serveProd && !served && !allowUnverifiedArtifact)
+    throw new Error(
+      'the running server reported no build provenance; only an artifact built by this worktree can be measured',
+    )
+  if (disk && served && disk.integrity !== served.integrity)
+    throw new Error(
+      'the running server loaded a different artifact than dist on disk (replaced after startup)',
+    )
+  const marker = disk ?? served
+  if (!marker) {
+    if (allowUnverifiedArtifact) return { verified: false }
+    throw new Error(
+      'no build provenance for the served artifact; pass --allow-unverified-artifact to measure an unverifiable target',
     )
   }
-  let contentMs
-  let readyMs
-  let sinceMs = 0
-  if (navMode === 'client' && journey.clientNavFrom) {
-    const from = resolvePath(journey.clientNavFrom, fixtures)
-    await page.goto(`${webUrl}${from}`, { waitUntil: 'domcontentloaded' })
-    await milestones(page, 'main')
-    const link = page.getByRole('link', { name: journey.clientNavName }).first()
-    sinceMs = await page.evaluate(() => performance.now())
-    await link.click()
-    const mark = await milestones(page, journey.ready)
-    contentMs = mark.contentMs - sinceMs
-    readyMs = mark.readyMs - sinceMs
-  } else {
-    const target = resolvePath(journey.path, fixtures)
-    await page.goto(`${webUrl}${target}`, { waitUntil: 'domcontentloaded' })
-    const mark = await milestones(page, journey.ready)
-    contentMs = mark.contentMs
-    readyMs = mark.readyMs
-    sinceMs = 0
+  return {
+    verified: true,
+    source: disk && served ? 'disk+process' : disk ? 'disk' : 'process',
+    commit: marker.commit,
+    commitSource: marker.commitSource,
+    dirty: marker.dirty,
+    reactProduction: marker.reactProduction,
+    integrity: marker.integrity,
+    assetCount: marker.assetCount,
   }
-  const metrics = await collect(page, contentMs, readyMs, sinceMs)
-  await page.close()
-  return metrics
+}
+
+async function assertTargetIdentity() {
+  const [api] = await Promise.all([assertApiIdentity(), assertWebRenders()])
+  const artifact = await assertArtifactIdentity()
+  return { runner: runnerIdentity(), api, artifact }
+}
+
+/** One sample, gated on landing on the journey that was asked for. */
+async function sample({ context, journey, fixtures }) {
+  const page = await context.newPage()
+  const targetPath = resolvePath(journey.path, fixtures)
+  try {
+    if (network !== 'none') {
+      const client = await context.newCDPSession(page)
+      await client.send('Network.enable')
+      await client.send(
+        'Network.emulateNetworkConditions',
+        NETWORK_PROFILES[network],
+      )
+    }
+    let contentMs
+    let readyMs
+    let sinceMs = 0
+    let error = null
+    try {
+      if (navMode === 'client' && journey.clientNavFrom) {
+        const from = resolvePath(journey.clientNavFrom, fixtures)
+        await page.goto(`${webUrl}${from}`, { waitUntil: 'domcontentloaded' })
+        await milestones(page, 'main')
+        const link = page
+          .getByRole('link', { name: journey.clientNavName })
+          .first()
+        sinceMs = await page.evaluate(() => performance.now())
+        await link.click()
+        const mark = await milestones(page, journey.ready)
+        contentMs = mark.contentMs - sinceMs
+        readyMs = mark.readyMs - sinceMs
+      } else {
+        await page.goto(`${webUrl}${targetPath}`, {
+          waitUntil: 'domcontentloaded',
+        })
+        const mark = await milestones(page, journey.ready)
+        contentMs = mark.contentMs
+        readyMs = mark.readyMs
+      }
+    } catch (caught) {
+      error = caught.message.split('\n')[0]
+    }
+    const finalPath = await page
+      .evaluate(() => location.pathname)
+      .catch(() => null)
+    const outcome = evaluateJourney({
+      journey,
+      targetPath,
+      finalPath,
+      ready: error === null,
+      error,
+    })
+    if (!outcome.ok) throw new Error(outcome.reason)
+    return await collect(page, contentMs, readyMs, sinceMs)
+  } finally {
+    await page.close()
+  }
 }
 
 function median(values) {
@@ -381,6 +287,9 @@ async function withTarget(options) {
       HOST: '127.0.0.1',
       OBITER_WEB_ORIGIN: options.webUrl,
       OBITER_API_ORIGIN: options.apiUrl,
+      // Ask the server to expose the marker it loaded, so the harness can prove
+      // the running process serves the artifact on disk.
+      OBITER_BUILD_PROVENANCE: '1',
     },
     stdio: 'ignore',
   })
@@ -411,31 +320,100 @@ async function main() {
   const target = await withTarget({ serveProd, webUrl, apiUrl })
   const browser = await chromium.launch()
   const results = []
+  const failures = []
   try {
-    const authContext = await browser.newContext()
-    await authContext.addInitScript(INIT_SCRIPT)
-    await signIn(await authContext.newPage())
-    const storageState = await authContext.storageState()
-    await authContext.close()
+    // Credentials are only required by journeys that need them, so a public-only
+    // run (sign-in, and any future public route) measures without them.
+    let auth = { state: 'not-needed', storageState: null, error: null }
+    if (journeys.some(journeyNeedsAuth)) {
+      try {
+        const authContext = await browser.newContext()
+        await authContext.addInitScript(COLLECT_INIT_SCRIPT)
+        await signIn(await authContext.newPage(), {
+          webUrl,
+          email,
+          password,
+        })
+        auth = {
+          state: 'ok',
+          storageState: await authContext.storageState(),
+          error: null,
+        }
+        await authContext.close()
+      } catch (error) {
+        auth = { state: 'failed', storageState: null, error: error.message }
+      }
+    }
+    if (auth.state === 'failed')
+      console.error(`perf runner: no authenticated session: ${auth.error}`)
 
     for (const journey of journeys) {
+      if (journeyNeedsAuth(journey) && auth.state !== 'ok') {
+        results.push({
+          id: journey.id,
+          status: 'failed',
+          error: auth.error ?? 'no authenticated session',
+        })
+        failures.push(journey.id)
+        continue
+      }
+      // Validate the fixture placeholders before measuring: a missing id would
+      // otherwise measure /matters// and report it as a fast page.
+      try {
+        resolvePath(journey.path, fixtures)
+      } catch (error) {
+        results.push({ id: journey.id, status: 'failed', error: error.message })
+        failures.push(journey.id)
+        continue
+      }
+
       const contextOptions = {
-        storageState: journey.public ? undefined : storageState,
+        storageState: journey.public ? undefined : auth.storageState,
         viewport: { width: 1440, height: 900 },
       }
       const context =
         cacheMode === 'warm' ? await browser.newContext(contextOptions) : null
-      if (context) await context.addInitScript(INIT_SCRIPT)
-      if (context) await sample({ context, journey, fixtures })
+      if (context) await context.addInitScript(COLLECT_INIT_SCRIPT)
+      // Warm the cache with one navigation; failures here are recorded by the
+      // measured samples below rather than aborting the whole run.
+      if (context) {
+        try {
+          await sample({ context, journey, fixtures })
+        } catch {
+          // The measured samples report the reason.
+        }
+      }
       const rows = []
+      const failedSamples = []
       for (let i = 0; i < samples; i++) {
         const scoped = context ?? (await browser.newContext(contextOptions))
-        if (!context) await scoped.addInitScript(INIT_SCRIPT)
-        rows.push(await sample({ context: scoped, journey, fixtures }))
-        if (!context) await scoped.close()
+        if (!context) await scoped.addInitScript(COLLECT_INIT_SCRIPT)
+        try {
+          rows.push(await sample({ context: scoped, journey, fixtures }))
+        } catch (error) {
+          failedSamples.push({ index: i, reason: error.message })
+        } finally {
+          if (!context) await scoped.close()
+        }
       }
       if (context) await context.close()
-      results.push({ id: journey.id, ...summarise(rows) })
+      if (rows.length === 0) {
+        results.push({
+          id: journey.id,
+          status: 'failed',
+          error: failedSamples[0]?.reason ?? 'no usable samples',
+          failedSamples,
+        })
+        failures.push(journey.id)
+      } else {
+        results.push({
+          id: journey.id,
+          status: failedSamples.length > 0 ? 'partial' : 'ok',
+          ...summarise(rows),
+          failedSamples,
+        })
+        if (failedSamples.length > 0) failures.push(journey.id)
+      }
     }
   } finally {
     await browser.close()
@@ -453,11 +431,13 @@ async function main() {
       apiUrl,
     },
     target: target.identity,
+    failures,
     results,
   }
   const json = JSON.stringify(report, null, 2)
   if (outPath) await writeFile(outPath, json)
   console.log(json)
+  if (failures.length > 0) process.exitCode = 1
 }
 
 main().catch((error) => {

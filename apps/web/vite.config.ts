@@ -16,6 +16,22 @@ const repoRoot = fileURLToPath(new URL('../../', import.meta.url))
 
 export default defineConfig(({ command, mode }) => {
   const isBuild = command === 'build'
+  // React's production runtime is selected from NODE_ENV, not from `mode`, and
+  // Vite checks that variable before anything in this config runs. An exported
+  // NODE_ENV=development (a shell, a CI job, or a tool wrapping the build) would
+  // therefore compile the development runtime into the bundle; refuse before
+  // any output is written rather than producing a misleading artifact. The
+  // Docker build stage sets no NODE_ENV, and neither does `pnpm build`.
+  if (
+    isBuild &&
+    process.env.NODE_ENV &&
+    process.env.NODE_ENV !== 'production'
+  ) {
+    throw new Error(
+      `Refusing to build: NODE_ENV=${process.env.NODE_ENV}. A production build must compile ` +
+        'React\'s production runtime; unset NODE_ENV or set it to "production".',
+    )
+  }
   // A key assigned twice in the same file is a configuration mistake: parseEnv
   // collapses it silently and a lane would run one value while reading two.
   // Refuse it here, with the same scan the services use, before loadEnv runs.

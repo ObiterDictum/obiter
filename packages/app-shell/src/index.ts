@@ -108,11 +108,13 @@ export {
   getLegalSearchEmptyFeedback,
   getLegalSearchStateAfterInputChange,
   getLegalSearchStateLabel,
-  selectJudgmentParagraphs,
-  selectParagraphExcerpts,
   shouldRunLegalSearch,
   shouldRunLegalSearchRequest,
 } from './views/LegalSearchView'
+export {
+  selectJudgmentParagraphs,
+  selectParagraphExcerpts,
+} from './legal-search-selection'
 export {
   LEGAL_SEARCH_RECENT_SEARCHES_LIMIT,
   getRecentLegalSearches,
