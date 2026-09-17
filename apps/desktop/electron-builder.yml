@@ -30,6 +30,9 @@ files:
   - out/renderer/**
   - package.json
   - '!**/node_modules/**'
+  # Vite's chunk manifest is measurement metadata for scripts/perf/desktop-budget.mjs,
+  # not runtime content; keep it out of the asar.
+  - '!**/.vite/**'
   - '!**/*.{iml,o,hprof,orig,pyc,pyo,rbc,swp,csproj,sln,xproj}'
   - '!**/._*'
 

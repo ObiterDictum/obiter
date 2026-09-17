@@ -18,6 +18,7 @@
     "prefetch:rampart": "tsx scripts/prefetch-rampart-model.ts",
     "bench:guard": "tsx scripts/bench-guard.ts",
     "perf:bundle-budget": "node scripts/perf/bundle-budget.mjs",
+    "perf:desktop-budget": "node scripts/perf/desktop-budget.mjs",
     "perf:web-load": "node scripts/perf/web-load-runner.mjs",
     "load:upload-extraction": "node scripts/load/upload-extraction-load.mjs",
     "benchmark:search": "tsx packages/search-client/src/benchmark/run.ts",

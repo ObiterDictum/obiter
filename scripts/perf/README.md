@@ -1,11 +1,12 @@
-# Web page-load measurement
+# Bundle and page-load measurement
 
-Reproducible production page-load measurement and a deterministic bundle-size
-budget. Read this before quoting a load number: most wrong performance claims
-come from measuring development mode, a stale checkout, or a warm cache while
-calling it cold.
+Reproducible production measurement of what ships and how fast it loads: a
+deterministic web bundle budget, a deterministic desktop size budget, and a
+page-load runner. Read this before quoting a load number: most wrong performance
+claims come from measuring development mode, a stale checkout, or a warm cache
+while calling it cold.
 
-## Bundle budget
+## Web bundle budget
 
 ```bash
 pnpm --filter @obiter/web build
@@ -23,6 +24,49 @@ client entry):
 
 Budgets live in `scripts/perf/bundle-budget.mjs` with the measured baseline and
 roughly 10% headroom. They are a ratchet against regression, not a target.
+
+## Desktop size budget
+
+```bash
+pnpm --filter @obiter/desktop build
+pnpm perf:desktop-budget
+```
+
+Counts, from the renderer's Vite manifest
+(`apps/desktop/out/renderer/.vite/manifest.json`) and from the build output on
+disk:
+
+- **renderer initial** — the entry chunk, its static-import closure, and the CSS
+  those chunks use. Every open window pays it.
+- **lazy chunks** — chunks reached only through dynamic imports (the PDF viewer),
+  and their lazy CSS.
+- **largest lazy chunk** — catches one lazy surface ballooning.
+- **worker payload** — scripts referenced as assets (the PDF worker), parsed only
+  when a worker is constructed.
+- **product assets** — fonts, shipped in the asar but fetched by CSS only when a
+  face is used.
+- **main / preload** — the Electron entry bundles.
+- **application payload** — every emitted file the packager reads, so a bucket
+  the script does not name still cannot grow unnoticed.
+
+Sizes are raw bytes on disk, not gzip. A packaged renderer is read from the local
+asar over the custom `obiter://` protocol, never transferred over HTTP, so
+compression is not part of the cost; the web budget above uses gzip because the
+browser downloads it. The two numbers must not be compared as if they measured
+the same thing. `main` and `preload` are contract-sized entry bundles and get
+absolute ceilings rather than a percentage.
+
+Budgets live in `scripts/perf/desktop-budget.mjs` with the measured baseline and
+roughly 10% headroom. A missing build, a missing or malformed manifest, a
+manifest entry with no file on disk, or a zero-byte file fails the check rather
+than measuring as a passing zero. CI builds the desktop app immediately before
+running it; run it on a fresh build locally too.
+
+Not covered: the Electron runtime and the platform installer. That figure is
+platform-specific — Windows NSIS is the primary target and is built only by
+`desktop-release.yml` on `push: main` on `windows-latest` — so a Linux number
+must not be presented as a Windows or macOS one. Measuring the installer is the
+remaining open part of X25; see board D10 and P1.37.
 
 ## Page-load runner
 
