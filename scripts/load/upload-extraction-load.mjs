@@ -93,7 +93,9 @@ export async function main({
   const runTag = newRunTag()
   const ids = fixtureIds(runTag)
   const querier = createQuerier({ databaseUrl: target.databaseUrl })
-  const scratch = await createScratchDirectory()
+  // Created inside the try, so a failure anywhere in setup still runs the
+  // cleanup that removes it.
+  let scratch = null
   const controller = new AbortController()
   for (const signal of ['SIGINT', 'SIGTERM'])
     process.once(signal, () => {
@@ -138,6 +140,7 @@ export async function main({
   }
 
   try {
+    scratch = await createScratchDirectory()
     fixtures = await buildFixtures({
       sizes: [...new Set(cells.map((cell) => cell.size))],
       outDir: scratch,
@@ -262,7 +265,7 @@ export async function main({
     await deleteFixtures()
     throw error
   } finally {
-    await removeScratchDirectory(scratch)
+    if (scratch) await removeScratchDirectory(scratch)
     await writeReport(
       outPath,
       `${JSON.stringify(report ?? refusalReport(), null, 2)}\n`,
