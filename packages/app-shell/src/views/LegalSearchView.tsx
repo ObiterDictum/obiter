@@ -19,16 +19,17 @@ import {
   type LegalSearchFetchResponse,
   type LegalSearchOutcome,
   type LegislationScheduleGuidance,
-  type CaseLawParagraph,
-  type LegalSearchResult,
   type LegalSearchState,
 } from '../components/search'
 import { searchResultRows } from '../components/search/searchResultRows'
+import {
+  getRecentLegalSearches,
+  writeRecentLegalSearch,
+} from '../legal-search-recents'
 
 export { courtOptionGroups, getCourtLabel }
 
 export const LEGAL_SEARCH_DEBOUNCE_MS = 300
-export const LEGAL_SEARCH_RECENT_SEARCHES_LIMIT = 5
 // Bounded recheck for hydration_queued: the background path has not
 // consulted live yet, so a queue position is honest there but cannot
 // resolve itself. Five rechecks at 2s (~10s total) covers a normal
@@ -37,7 +38,6 @@ export const LEGAL_SEARCH_RECENT_SEARCHES_LIMIT = 5
 // says so plainly instead of spinning on.
 export const LEGAL_SEARCH_HYDRATION_POLL_MS = 2000
 export const LEGAL_SEARCH_HYDRATION_MAX_POLLS = 5
-const legalSearchRecentSearchesKey = 'obiter.search.recentSearches'
 const courtShortcuts = [
   { code: 'uksc', label: 'UKSC' },
   { code: 'ewca/civ', label: 'EWCA Civ' },
@@ -59,29 +59,12 @@ export function getLegalSearchStateLabel(state: LegalSearchState) {
   }
 }
 
-export function selectParagraphExcerpts(
-  result: LegalSearchResult,
-  query: string,
-): CaseLawParagraph[] {
-  const normalizedQuery = query.trim().toLowerCase()
-  const paragraphs = result.paragraphs ?? []
-
-  if (!normalizedQuery) {
-    return paragraphs.slice(0, 3)
-  }
-
-  const matches = paragraphs.filter((paragraph) =>
-    paragraph.text.toLowerCase().includes(normalizedQuery),
-  )
-
-  return (matches.length > 0 ? matches : paragraphs).slice(0, 3)
-}
-
-export function selectJudgmentParagraphs(
-  result: LegalSearchResult,
-): CaseLawParagraph[] {
-  return result.paragraphs ?? []
-}
+// Re-exported for existing importers. The implementations live outside this
+// module so a case view can select paragraphs without pulling in the search UI.
+export {
+  selectJudgmentParagraphs,
+  selectParagraphExcerpts,
+} from '../legal-search-selection'
 
 export function createLegalSearchFetchRequest(
   query: string,
@@ -293,59 +276,6 @@ export function shouldRunLegalSearchRequest(
   filters: LegalSearchRequestFilters,
 ) {
   return shouldRunLegalSearch(query) || Boolean(filters.court.trim())
-}
-
-export function getRecentLegalSearches(
-  storage: Pick<Storage, 'getItem'> | undefined,
-) {
-  if (!storage) return []
-
-  const storedSearches = storage.getItem(legalSearchRecentSearchesKey)
-  if (!storedSearches) return []
-
-  try {
-    const parsedSearches = JSON.parse(storedSearches) as unknown
-    if (!Array.isArray(parsedSearches)) return []
-
-    return dedupeRecentLegalSearches(
-      parsedSearches.filter(
-        (search): search is string => typeof search === 'string',
-      ),
-    )
-  } catch {
-    return []
-  }
-}
-
-export function writeRecentLegalSearch(
-  storage: Pick<Storage, 'getItem' | 'setItem'> | undefined,
-  query: string,
-) {
-  if (!storage) return []
-
-  const recentSearches = dedupeRecentLegalSearches([
-    query,
-    ...getRecentLegalSearches(storage),
-  ])
-  storage.setItem(legalSearchRecentSearchesKey, JSON.stringify(recentSearches))
-  return recentSearches
-}
-
-function dedupeRecentLegalSearches(searches: string[]) {
-  const seen = new Set<string>()
-  const recentSearches: string[] = []
-
-  for (const search of searches) {
-    const trimmedSearch = search.trim()
-    const normalizedSearch = trimmedSearch.toLowerCase()
-    if (!trimmedSearch || seen.has(normalizedSearch)) continue
-
-    seen.add(normalizedSearch)
-    recentSearches.push(trimmedSearch)
-    if (recentSearches.length >= LEGAL_SEARCH_RECENT_SEARCHES_LIMIT) break
-  }
-
-  return recentSearches
 }
 
 export function LegalSearchView() {

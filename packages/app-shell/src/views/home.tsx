@@ -38,7 +38,7 @@ import {
   useRedactionRunsList,
   type RedactionRunListItem,
 } from '../redaction-runs'
-import { getRecentLegalSearches } from './LegalSearchView'
+import { getRecentLegalSearches } from '../legal-search-recents'
 import {
   readWorkspaceLastPlace,
   type WorkspaceLastPlace,

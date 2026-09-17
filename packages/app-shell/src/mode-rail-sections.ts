@@ -14,7 +14,7 @@ import { useMatterDocuments } from './documents'
 import { useMattersList } from './matters'
 import type { ModeId, PhosphorIcon } from './mode-navigation'
 import { isAttentionRun, useRedactionRunsList } from './redaction-runs'
-import { getRecentLegalSearches } from './views/LegalSearchView'
+import { getRecentLegalSearches } from './legal-search-recents'
 
 export type RailItem = {
   id: string

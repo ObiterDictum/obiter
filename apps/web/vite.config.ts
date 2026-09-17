@@ -14,7 +14,24 @@ import { parsePort } from './serve.mjs'
 // server. Load the same file, from the same place.
 const repoRoot = fileURLToPath(new URL('../../', import.meta.url))
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
+  const isBuild = command === 'build'
+  // React's production runtime is selected from NODE_ENV, not from `mode`, and
+  // Vite checks that variable before anything in this config runs. An exported
+  // NODE_ENV=development (a shell, a CI job, or a tool wrapping the build) would
+  // therefore compile the development runtime into the bundle; refuse before
+  // any output is written rather than producing a misleading artifact. The
+  // Docker build stage sets no NODE_ENV, and neither does `pnpm build`.
+  if (
+    isBuild &&
+    process.env.NODE_ENV &&
+    process.env.NODE_ENV !== 'production'
+  ) {
+    throw new Error(
+      `Refusing to build: NODE_ENV=${process.env.NODE_ENV}. A production build must compile ` +
+        'React\'s production runtime; unset NODE_ENV or set it to "production".',
+    )
+  }
   // A key assigned twice in the same file is a configuration mistake: parseEnv
   // collapses it silently and a lane would run one value while reading two.
   // Refuse it here, with the same scan the services use, before loadEnv runs.
@@ -27,10 +44,21 @@ export default defineConfig(({ mode }) => {
     assertNoDuplicateEnvKeys(join(repoRoot, envFile))
   }
 
+  // A production build must not take its mode from the worktree's .env. Vite
+  // honours a `NODE_ENV` key in a .env file through VITE_USER_NODE_ENV and
+  // compiles React's development build into the bundle; the Docker build
+  // copies no .env and therefore does not. Reading no env file during a build
+  // and dropping the key Vite already harvested makes the two agree. Runtime
+  // configuration is still read through `read()` below, and the web app reads
+  // no VITE_ variables at build time.
   const fileEnv = loadEnv(mode, repoRoot, '')
+  if (isBuild) delete process.env.VITE_USER_NODE_ENV
   const read = (key: string) => process.env[key] ?? fileEnv[key]
 
   return {
+    // See the note above: a build reads no env file, so a worktree .env cannot
+    // choose the build mode.
+    envDir: isBuild ? false : undefined,
     resolve: {
       tsconfigPaths: true,
     },

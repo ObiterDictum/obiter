@@ -11,7 +11,7 @@ import {
 } from '@tanstack/react-router'
 import { documentsKeys } from './documents'
 import { writeWorkspaceLastPlace } from './workspace-continuity'
-import { writeRecentLegalSearch } from './views/LegalSearchView'
+import { writeRecentLegalSearch } from './legal-search-recents'
 import { HomeRouteView } from './views/home'
 
 // Control the data hooks independently.

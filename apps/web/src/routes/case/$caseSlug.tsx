@@ -1,7 +1,5 @@
-import {
-  CaseLawDocumentView,
-  caseLawDocumentQueryOptions,
-} from '@obiter/app-shell'
+import { CaseLawDocumentView } from '@obiter/app-shell/views/case-law-document'
+import { caseLawDocumentQueryOptions } from '@obiter/app-shell/views/case-law-document-query'
 import { resolveCaseDocumentIdFromSlug } from '@obiter/contracts'
 import { createFileRoute } from '@tanstack/react-router'
 
