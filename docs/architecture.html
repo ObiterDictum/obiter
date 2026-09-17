@@ -4299,6 +4299,24 @@
             review UI labels. <code>pnpm prefetch:rampart</code> fills the same
             cache without booting the API.
           </div>
+          <div class="callout note">
+            <b>The web build fixes its own mode and records what it built.</b>
+            <code>pnpm --filter @obiter/web build</code> refuses to run while
+            <code>NODE_ENV</code> is set to anything other than
+            <code>production</code>: Vite selects React's production runtime
+            from that variable, so an inherited
+            <code>NODE_ENV=development</code> would ship the development build.
+            The same command then writes
+            <code>apps/web/dist/.obiter-build.json</code> from the emitted files
+            themselves — commit, dirty state, whether the bytes contain the
+            development React runtime, and a sha256 digest over the client
+            assets. <code>serve.mjs</code> verifies that digest at startup and
+            refuses a dist whose client assets no longer match it, and the
+            page-load harness requires the marker to name the commit under test.
+            The digest covers <code>dist/client/assets</code> only; the emitted
+            server bundle is not digested (known limitation, see
+            <a href="#infra">Deployment</a>).
+          </div>
         </section>
 
         <section id="search-flow">
@@ -5768,6 +5786,30 @@
             There are no deployments yet. Data residency is committed to the EU,
             which constrains hosting choices when that changes.
           </p>
+          <div class="callout note">
+            <b>The web serving boundary.</b>
+            <code>apps/web/serve.mjs</code> is the production host for the
+            TanStack Start build. It serves <code>dist/client</code> assets
+            directly and forwards everything else to the SSR handler, and it
+            owns the response policy: <code>Vary</code> tokens are merged rather
+            than replaced, gzip follows RFC 9110 Accept-Encoding negotiation
+            (including <code>q=0</code> refusal and a 406 when nothing is
+            acceptable), only asset names the build recorded as content-hashed
+            get <code>immutable</code>, the per-process gzip cache is bounded
+            and keyed by file size and mtime, and SSR output is always
+            <code>private, no-store</code>.
+            <code>apps/web/build-provenance.mjs</code> writes the build marker
+            and is run by the package's <code>build</code> script; the Docker
+            build stage cannot read <code>.git</code>, so it takes
+            <code>OBITER_BUILD_COMMIT</code> and <code>OBITER_BUILD_DIRTY</code>
+            build arguments and records them instead. The CI
+            <code>docker-web</code> job passes both (<code>$GITHUB_SHA</code>,
+            <code>0</code>) in its supported <code>docker build</code>
+            invocation, and the local invocation is documented in
+            <code>docs/specs/deployment.md</code>. A Dokploy-built image is an
+            external boundary: unless its build args are set it records a null
+            commit and can be served but not measured as a named commit.
+          </div>
         </section>
 
         <section id="where">

@@ -83,6 +83,19 @@ jobs:
       - name: Build web
         run: pnpm --filter @obiter/web build
 
+      # Deterministic bundle budget over the build output the step above just
+      # produced: the files the root route preloads on every page, and the lazy
+      # chunks. Measured budgets with documented headroom; see
+      # scripts/perf/bundle-budget.mjs for what is counted.
+      - name: Bundle budget
+        run: pnpm perf:bundle-budget
+
+      # The build wrote dist/.obiter-build.json. Verify it names this commit and
+      # a production React build, so a marker that silently rots fails here
+      # rather than at measurement time.
+      - name: Build provenance
+        run: node apps/web/build-provenance.mjs verify --expect-commit "$GITHUB_SHA" --allow-dirty
+
       - name: Apply database migrations
         env:
           PGPASSWORD: obiter
@@ -161,4 +174,14 @@ jobs:
       # workspace, and the root .dockerignore (with its .env* exclusions) only
       # applies at the context root. See docs/specs/deployment.md.
       - name: Build apps/web image
-        run: docker build -f apps/web/Dockerfile -t obiter-web:ci .
+        # Pass the checked-out commit and a truthful clean flag so the image's
+        # dist/.obiter-build.json names the artifact it was built from. Without
+        # these the marker records commit:null and no deployed image can ever
+        # satisfy the measurement harness's --expect-artifact-commit.
+        # GITHUB_SHA is the pushed commit and the Actions checkout is clean, so
+        # OBITER_BUILD_DIRTY=0. See docs/specs/deployment.md.
+        run: |
+          docker build -f apps/web/Dockerfile -t obiter-web:ci \
+            --build-arg OBITER_BUILD_COMMIT="$GITHUB_SHA" \
+            --build-arg OBITER_BUILD_DIRTY=0 \
+            .

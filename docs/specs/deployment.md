@@ -5,7 +5,7 @@ Status: planned (July 2026). PostgreSQL 16 already runs on the Hetzner VPS under
 ## Verified current state
 
 - **Database**: running on the server (Dokploy). Local dev expects `postgres://obiter:obiter@localhost:5432/obiter` (default in `services/api/src/env.ts`).
-- **Web Dockerfile exists** at `apps/web/Dockerfile` (added in the app shell rebuild M3), with a dependency-free SSR host (`apps/web/serve.mjs`) and a repo-root `.dockerignore`. It has not been `docker build`-verified in the dev environment (no Docker there) but is standard Node 22 + corepack pnpm and CI-verifiable; see the Implementation section below.
+- **Web Dockerfile exists** at `apps/web/Dockerfile` (added in the app shell rebuild M3), with a dependency-free SSR host (`apps/web/serve.mjs`) and a repo-root `.dockerignore`. It has been `docker build`-verified locally: a build with `--build-arg OBITER_BUILD_COMMIT=<sha> --build-arg OBITER_BUILD_DIRTY=0` produces an image whose `apps/web/dist/.obiter-build.json` names that commit with `dirty: false`, and the image's `serve.mjs` serves the same marker at `/.well-known/obiter-build` (with `OBITER_BUILD_PROVENANCE=1`). See the Implementation section below.
 - **No API Dockerfile** exists yet. Migrations in `packages/database/migrations/*.sql` are applied by `pnpm db:migrate` (`services/api/src/migrate.ts`, tracked in `schema_migrations`) and at API startup; the server schema is no longer applied manually. The Dockerfile remains a precondition for automated API deploys and is Redact-track owned.
 - `apps/web` is a TanStack Start app — it has an SSR server component, so it deploys as a Node service, not a static bundle.
 - Auth is better-auth with cookie sessions, which constrains routing (below).
@@ -46,7 +46,21 @@ Three Dokploy applications on the existing VPS, plus the existing database:
 
 Artifacts shipped:
 
-- `apps/web/Dockerfile` — multi-stage Node 22 slim build. Corepack-enabled pnpm (pinned via the repo `packageManager` field) installs `@obiter/web` and its workspace deps with `--frozen-lockfile`, then `pnpm --filter @obiter/web build` produces `dist/client` (static assets) and `dist/server/server.js` (the SSR fetch handler). **Build invocation:** `docker build -f apps/web/Dockerfile -t obiter-web .` from the **repo root** — the context must be the root because COPY paths span the workspace. In Dokploy: Build Context = repository root, Dockerfile path = `apps/web/Dockerfile`.
+- `apps/web/Dockerfile` — multi-stage Node 22 slim build. Corepack-enabled pnpm (pinned via the repo `packageManager` field) installs `@obiter/web` and its workspace deps with `--frozen-lockfile`, then `pnpm --filter @obiter/web build` produces `dist/client` (static assets) and `dist/server/server.js` (the SSR fetch handler). **Build invocation** from the **repo root** — the context must be the root because COPY paths span the workspace:
+
+  ```sh
+  docker build -f apps/web/Dockerfile -t obiter-web \
+    --build-arg OBITER_BUILD_COMMIT="$(git rev-parse HEAD)" \
+    --build-arg OBITER_BUILD_DIRTY="$(test -n "$(git status --porcelain)" && echo 1 || echo 0)" \
+    .
+  ```
+
+  The two build args are the artifact's provenance: `.git` is excluded from the build context, so the build stage cannot read the commit itself and takes it from `OBITER_BUILD_COMMIT` (a git SHA) and `OBITER_BUILD_DIRTY` (`0`/`1`) instead. They are written into `dist/.obiter-build.json` by `apps/web/build-provenance.mjs`, and the runner's `--expect-artifact-commit` refuses any image whose marker does not name the expected commit. Pass the truthful dirty flag: a dirty local build records `dirty: true` and is refused by the harness, which is what distinguishes it from a clean CI checkout. A malformed value fails the build; an omitted one records `null` and the image is served but cannot be measured.
+
+  **External boundary:** Dokploy builds this image from the repository without this repository's CI, so it does not know the commit. Set `OBITER_BUILD_COMMIT` and `OBITER_BUILD_DIRTY` as build args in the Dokploy application (Dokploy's build-args setting, or a deploy hook that exports the commit). Until that is configured, a Dokploy-built image records `commit: null` and cannot satisfy `--expect-artifact-commit`; the CI `docker-web` job is the only invocation in this repository that passes them.
+
+  In Dokploy: Build Context = repository root, Dockerfile path = `apps/web/Dockerfile`.
+
 - `apps/web/serve.mjs` — dependency-free production SSR host. TanStack Start's built server module exports a Web Fetch handler (`{ fetch }`) and binds no port itself; `serve.mjs` is a `node:http` server that serves `dist/client` static assets directly and forwards everything else to the SSR handler. Streaming uses Node core (`Readable.fromWeb` + `stream/promises` `pipeline`), so error propagation, client-disconnect cancellation, and backpressure are handled natively — no hand-rolled pump. Multiple `Set-Cookie` headers (better-auth session + related cookies) are preserved as an array via `getSetCookie()`. Runtime config from env:
   - `PORT` — TCP port; invalid values (non-decimal, out of 1–65535) fall back to 3000 with a logged warning.
   - `HOST` — bind address (default 0.0.0.0).
@@ -56,7 +70,7 @@ Artifacts shipped:
 - `apps/web/package.json` gains a `start` script (`node serve.mjs`) so the serve path is reproducible outside Docker too.
 - **Repo-root `.dockerignore`** — Docker consults only the `.dockerignore` at the build-context root, so all exclusions live here (including `**/.env*` so secrets are never baked into layers). `apps/web/.dockerignore` is a comment-only pointer, not protective, to avoid the trap of a nested file that looks effective but isn't.
 
-**Verification status:** `apps/web/serve.mjs` has been exercised against a local `vite build` output — it serves static assets (CSS/JS/PNG with correct content-types, large JS streamed through the Node core pipeline with backpressure) and SSR routes (`/search`, `/sign-in`) return 200; multiple `Set-Cookie` headers survive end-to-end as distinct lines; `PORT=abc` correctly falls back to 3000 with a warning. The `serve.test.mjs` suite (17 tests) is green. `docker build` itself has **not** been run (no Docker in the development environment); the Dockerfile is standard Node 22 + corepack pnpm and is CI-verifiable.
+**Verification status:** `apps/web/serve.mjs` has been exercised against a local `vite build` output — it serves static assets (CSS/JS/PNG with correct content-types, large JS streamed through the Node core pipeline with backpressure) and SSR routes (`/search`, `/sign-in`) return 200; multiple `Set-Cookie` headers survive end-to-end as distinct lines; `PORT=abc` correctly falls back to 3000 with a warning. The `serve.test.mjs` suite (17 tests) is green. `docker build` has been run and verified: with the provenance build args the image marker names the built commit, without them it records `null` (served but not measurable), and a malformed commit fails the build.
 
 **Same-domain routing (Dokploy/Traefik):** deploy the `api` and `web` apps as two Dokploy applications on the same host. Configure the domain with two Traefik rules: `/api/*` → the `api` application (higher priority), `/*` → the `web` application. The web app then calls the API with relative URLs (`apiFetch` already uses `credentials: 'include'`), so better-auth cookie sessions work without third-party-cookie workarounds. This matches the spec's hard requirement above.
 
