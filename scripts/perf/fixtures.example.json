@@ -1,6 +1,8 @@
 {
   "matterId": "mtr_replace-with-lane-fixture",
   "documentId": "doc_replace-with-lane-fixture",
+  "documentName": "the-filename-as-the-rail-shows-it.docx",
+  "saveDocumentId": "doc_replace-with-a-second-lane-fixture",
   "redactionRunId": "red_replace-with-lane-fixture",
   "caseDocumentId": "d_replace-with-lane-fixture"
 }

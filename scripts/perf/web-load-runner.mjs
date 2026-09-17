@@ -50,7 +50,11 @@ import {
   milestones,
   signIn,
 } from './page-metrics.mjs'
-import { evaluateJourney, journeyNeedsAuth } from './journey-outcome.mjs'
+import {
+  evaluateJourney,
+  journeyNeedsAuth,
+  clientNavProblem,
+} from './journey-outcome.mjs'
 import { installSignalCleanup, startOwnedServer } from './owned-server.mjs'
 import { verifyBuildProvenance } from '../../apps/web/build-provenance.mjs'
 
@@ -236,7 +240,9 @@ async function sample({ context, journey, fixtures }) {
         await page.goto(`${webUrl}${from}`, { waitUntil: 'domcontentloaded' })
         await milestones(page, 'main')
         const link = page
-          .getByRole('link', { name: journey.clientNavName })
+          .getByRole('link', {
+            name: resolvePath(journey.clientNavName, fixtures),
+          })
           .first()
         sinceMs = await page.evaluate(() => performance.now())
         await link.click()
@@ -335,6 +341,8 @@ async function main() {
     for (const journey of journeys) {
       try {
         resolvePath(journey.path, fixtures)
+        const problem = clientNavProblem(journey, navMode)
+        if (problem) throw new Error(problem)
         measurable.push(journey)
       } catch (error) {
         results.push({ id: journey.id, status: 'failed', error: error.message })
