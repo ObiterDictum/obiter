@@ -19,7 +19,10 @@ import type { NoteKind } from '../../document-page-notes'
 import type { ParagraphSelectionRange } from './model-run'
 import { ModelParagraph, type ParagraphWordEdit } from './model-paragraph'
 import type { ParagraphSelectionHandlers } from './paragraph-editor'
-import { arrowNeighbors, type VerticalCaretColumn } from './paragraph-arrow'
+import {
+  type ParagraphNeighborResolver,
+  type VerticalCaretColumn,
+} from './paragraph-arrow'
 import { PageTable } from './page-table'
 import { PendingInsert } from './pending-insert'
 import { PageDrawing } from './page-drawing'
@@ -63,6 +66,7 @@ export type BlockContext = {
   columnWidthPx: number
   selectionSegments: ReadonlyMap<string, ParagraphSelectionRange>
   selectionHandlers?: ParagraphSelectionHandlers
+  neighbors?: ParagraphNeighborResolver
   onFocusParagraph?: (paragraphId: string) => void
   /** A plain-arrow crossing. Distinct from a click, which may place the caret
    * in a table cell that the selection flow does not cover. */
@@ -96,14 +100,13 @@ export function renderBlock(
               ctx.columnWidthPx,
               cellColumnCounts.get(cell) ?? 1,
             )
-            const adjacent = arrowNeighbors(ctx, paragraph.id, wrapWidthPx)
             return [
               <ModelParagraph
                 key={paragraph.id}
                 paragraph={paragraph}
                 changes={ctx.model.changes}
                 selected={ctx.selectedParagraphId === paragraph.id}
-                onSelect={() => ctx.onSelectParagraph(paragraph.id)}
+                onSelectParagraph={ctx.onSelectParagraph}
                 drafts={ctx.drafts}
                 onRunTextChange={ctx.onRunTextChange}
                 onInsertParagraph={ctx.onInsertParagraph}
@@ -112,8 +115,7 @@ export function renderBlock(
                 onWordEdit={ctx.onWordEdit}
                 onMoveCaret={ctx.onMoveCaret ?? ctx.onSelectParagraph}
                 onTextSelection={ctx.onTextSelection}
-                previous={adjacent.previous}
-                next={adjacent.next}
+                neighbors={ctx.neighbors}
                 restoreCaret={ctx.restoreCaret}
                 verticalCaret={ctx.verticalCaret}
                 editing={ctx.editing}
@@ -157,14 +159,13 @@ export function renderBlock(
       />,
     ]
   }
-  const adjacent = arrowNeighbors(ctx, paragraph.id, block.wrapWidthPx)
   return [
     <ModelParagraph
       key={`${paragraph.id}-${block.from ?? 0}`}
       paragraph={paragraph}
       changes={ctx.model.changes}
       selected={ctx.selectedParagraphId === paragraph.id}
-      onSelect={() => ctx.onSelectParagraph(paragraph.id)}
+      onSelectParagraph={ctx.onSelectParagraph}
       drafts={ctx.drafts}
       onRunTextChange={ctx.onRunTextChange}
       onInsertParagraph={ctx.onInsertParagraph}
@@ -173,8 +174,7 @@ export function renderBlock(
       onWordEdit={ctx.onWordEdit}
       onMoveCaret={ctx.onMoveCaret ?? ctx.onSelectParagraph}
       onTextSelection={ctx.onTextSelection}
-      previous={adjacent.previous}
-      next={adjacent.next}
+      neighbors={ctx.neighbors}
       selectionSegment={ctx.selectionSegments.get(paragraph.id) ?? null}
       selectionHandlers={ctx.selectionHandlers}
       onFocusParagraph={
@@ -287,7 +287,7 @@ export function PageOverlays({
                 paragraph={paragraph}
                 changes={model.changes}
                 selected={false}
-                onSelect={() => undefined}
+                onSelectParagraph={() => undefined}
                 selectionSegment={selectionSegments.get(paragraph.id) ?? null}
                 selectionHandlers={selectionHandlers}
                 drafts={drafts}

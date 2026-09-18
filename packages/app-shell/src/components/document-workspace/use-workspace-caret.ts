@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { DocumentModelWire } from '@obiter/contracts'
 import { flowParagraphIds } from '../../document-edits'
 import { cursorForSelection, documentStory } from '../../document-model-text'
@@ -102,7 +102,12 @@ export function useWorkspaceCaret({
   // text-box paragraph is not one, so the selection stops at it rather than
   // covering content the document selection cannot paint or edit.
   const story = model ? documentStory(model) : undefined
-  const bodyIds = story ? storyBodyParagraphIds(story) : new Set<string>()
+  // The body/structure partition walks every table in the story and is a pure
+  // function of the model, so it is derived once rather than on each render.
+  const bodyIds = useMemo(
+    () => (story ? storyBodyParagraphIds(story) : new Set<string>()),
+    [story],
+  )
   const structuralIds = new Set(
     order.filter((id) => !bodyIds.has(id) && !insertIds.has(id)),
   )

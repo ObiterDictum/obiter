@@ -1,8 +1,10 @@
+import { useMemo } from 'react'
 import type {
   DocumentChangeWire,
   DocumentParagraphWire,
   DocumentPresence,
   DocumentStyleWire,
+  DocumentTextRunWire,
 } from '@obiter/contracts'
 import { cn } from '@obiter/ui'
 import {
@@ -14,7 +16,7 @@ import type { WrappedLine } from '../../document-page-flow'
 import { readableRunColor } from '../../document-page-media'
 import { runNoteRefs } from '../../document-page-notes'
 import { runCss, runFace } from '../../document-page-style'
-import type { ParagraphFace, RunFace } from '../../document-page-style'
+import type { ParagraphFace } from '../../document-page-style'
 
 /**
  * The colour a selected run paints with both in the run overlay and in the
@@ -72,13 +74,15 @@ export function ParagraphRunPaint({
     return slices.map(({ run, text, from }) => (
       <ModelRun
         key={`${run.id}-${from}`}
+        run={run}
         text={text}
         from={from}
         selection={selection}
-        face={runFace(run, face, styles)}
-        kinds={runChangeKinds(changes, run.id)}
+        paragraphFace={face}
+        changes={changes}
+        styles={styles}
+        drafts={drafts}
         caret={carets.find((item) => item.cursor?.runId === run.id)}
-        notes={runEndNotes(run, text, drafts)}
       />
     ))
   }
@@ -108,22 +112,40 @@ export function ParagraphRunPaint({
 }
 
 function ModelRun({
+  run,
   text,
   from,
   selection,
-  face,
-  kinds,
+  paragraphFace,
+  changes,
+  styles,
+  drafts,
   caret,
-  notes = [],
 }: {
+  run: DocumentTextRunWire
   text: string
   from: number
   selection?: ParagraphSelectionRange
-  face: RunFace
-  kinds: Set<DocumentChangeWire['kind']>
+  paragraphFace: ParagraphFace
+  changes: DocumentChangeWire[]
+  styles: DocumentStyleWire[]
+  drafts?: Record<string, string>
   caret?: DocumentPresence
-  notes?: ReturnType<typeof runNoteRefs>
 }) {
+  // The run's own formatting and note refs depend on the run XML, not its
+  // text, so they survive a keystroke elsewhere in the document.
+  const face = useMemo(
+    () => runFace(run, paragraphFace, styles),
+    [run.preservedXmlFragments, run.styleId, paragraphFace, styles],
+  )
+  const kinds = useMemo(
+    () => runChangeKinds(changes, run.id),
+    [changes, run.id],
+  )
+  const notes = useMemo(
+    () => runEndNotes(run, text, drafts),
+    [run.preservedXmlFragments, run.id, run.text, text, drafts?.[run.id]],
+  )
   const color = readableRunColor(face.color)
   return (
     <span

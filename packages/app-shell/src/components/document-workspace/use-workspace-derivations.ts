@@ -5,7 +5,9 @@ import {
   type AuthorityHit,
 } from '../../document-authorities'
 import { formattedModel } from '../../document-format-edits'
+import { documentStory } from '../../document-model-text'
 import { layoutDocument, type LaidOutPage } from '../../document-page-engine'
+import { storyBlocks } from '../../document-page-tables'
 import { documentImagePartNames } from '../../document-page-media'
 import { useDocumentImageUrls } from '../../document-workspace-api'
 import type { useWorkspaceDrafts } from './use-workspace-drafts'
@@ -54,6 +56,12 @@ export function useWorkspaceDerivations({
     () => (model ? formattedModel(model, drafts.format) : undefined),
     [model, drafts.format],
   )
+  // The story's block partition is a pure function of the painted model, so it
+  // is scanned once per model rather than once per pagination pass.
+  const blocks = useMemo(() => {
+    const story = painted ? documentStory(painted) : undefined
+    return story ? storyBlocks(story) : []
+  }, [painted])
   const pages = useMemo(
     () =>
       painted
@@ -62,9 +70,10 @@ export function useWorkspaceDerivations({
             drafts.drafts,
             drafts.inserts,
             drafts.extraRuns,
+            blocks,
           )
         : [],
-    [painted, drafts.drafts, drafts.inserts, drafts.extraRuns],
+    [painted, blocks, drafts.drafts, drafts.inserts, drafts.extraRuns],
   )
   const imageParts = useMemo(
     () => (model ? documentImagePartNames(model) : []),
