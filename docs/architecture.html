@@ -4290,6 +4290,22 @@
             rather than changing detection silently.
           </div>
           <div class="callout note">
+            <b>The ONNX Runtime install is CPU-only.</b> The repo-root
+            <code>.npmrc</code> sets
+            <code>onnxruntime-node-install-cuda=skip</code>, because
+            <code>onnxruntime-node</code>'s postinstall would otherwise fetch
+            the optional CUDA and TensorRT execution providers
+            (onnxruntime-linux-x64-gpu, ~343 MB unpacked) on Linux x64. Nothing
+            shipped consumes them: detection loads with
+            <code>device: 'cpu'</code>, the browser path uses onnxruntime-web,
+            and the desktop bundle excludes <code>node_modules</code>. A GPU
+            host opts in per install with
+            <code>ONNXRUNTIME_NODE_INSTALL_CUDA=v12 pnpm install</code>. Any
+            image build that runs <code>pnpm install</code> must copy the
+            repo-root <code>.npmrc</code> into its build context to inherit the
+            setting.
+          </div>
+          <div class="callout note">
             <b>The model is loaded at startup, not on first use.</b>
             <code>server.ts</code> warms the detector once the port is bound, so
             the one-off ~15 MB Hugging Face download happens where a failure is
