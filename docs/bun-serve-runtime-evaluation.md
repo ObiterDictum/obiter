@@ -1,162 +1,331 @@
 # Native `Bun.serve` runtime evaluation
 
-**Status: evaluation complete, packaged for independent review. No migration
-has been performed and this document does not approve one. Every
-recommendation below is provisional pending that review.**
+**Status: evaluation repaired and re-run. No migration has been performed and
+this document does not approve one. Every recommendation below is provisional
+pending independent review.**
 
-Headline: serving the identical API on native `Bun.serve` used **47% less
-idle memory than the shipping Node + tsx path and approximately 30% less than
-compiled Node** (378 MB and 285 MB down to 199 MB), with 1 second faster
-readiness, ~13% less server CPU for the same journeys, and lower p50 latency
-on most measured routes. The earlier shorthand of "47%" alone compared
-against the wrong baseline: tsx inflates the shipping figure, so compiled
-Node is the honest primary comparison.
+This revision answers review
+[#220 (review 5251661270)](https://github.com/ObiterDictum/obiter/pull/220).
+The evaluation's method is unchanged; what changed is that the compiled rows
+are now measured as a paired, alternating campaign, the two adverse tails are
+re-measured at a sample size where p95 is not the maximum, memory is sampled on
+an interval instead of at journey boundaries, and the search attribution is
+limited to what the decomposition shows. Every number below is re-derivable
+from a checksummed artifact; see
+[Evidence revision 2](#evidence-revision-2) for the mapping.
+
+Three independent questions are separated deliberately, because "the
+experiment is sound", "this PR is mergeable" and "Bun is ready for production"
+have different answers:
+
+| Question                      | Answer                                                                                       |
+| ----------------------------- | -------------------------------------------------------------------------------------------- |
+| Experimental validity         | Repaired. Paired compiled rows, tails at n=120, interval-sampled memory.                     |
+| Evaluation-PR merge readiness | The document and evidence now reproduce. Two claims were withdrawn, not repaired (below).    |
+| Production readiness          | **Not established.** No migration is approved; the proxy deadlines are proposed, not tested. |
 
 ## Provenance
 
 - **Evaluated commit:** `67afb9fa8cdfc0f28729d218cdbb76fc9738329a`
   (`origin/dev`, "Repaginate a document only when its inputs change (#216)").
-- **Host:** 4 vCPU AMD EPYC-Rome, 7.5 GiB RAM. Node v24.20.0, Bun 1.4.2
+- **Host:** 4 vCPU AMD EPYC-Rome, 7.5 GiB RAM, Node v24.20.0, Bun 1.4.2
   (`1.4.2+744846f84`, sha256-verified release zip), tsx 4.23.0, esbuild
-  0.25.12, PostgreSQL 16, shared Meilisearch at `127.0.0.1:7700`.
-- **Raw evidence:** preserved outside the product tree at
-  https://github.com/ObiterDictum/obiter-ops/tree/5284e82/evaluations/2026-09-18-bun-serve-runtime
-  with `SHA256SUMS.txt` covering every file (verify with `sha256sum -c`).
-  That bundle holds the run's own `FINDINGS.md`, every raw measurement JSON,
-  a byte-identical harness snapshot and the reproduce pipeline.
-- **Harness:** `scripts/bun-runtime-eval/` in this branch; isolated from the
-  application, build, CI and deployment (see its README).
+  0.25.12, PostgreSQL 16, shared Meilisearch v1.53.1 at `127.0.0.1:7700`.
+- **Harness:** `scripts/bun-runtime-eval/` in this branch, split into
+  `lib/` modules so no file exceeds the RULES.md ceiling. `analyze.mjs` derives
+  every published table from the raw JSON and emits the artifact-to-table
+  mapping.
+- **Evidence revision 2 (primary):** the repaired raw artifacts, harness
+  snapshot and derived tables, preserved in the private ops repository with a
+  `SHA256SUMS.txt` over every file:
+  `https://github.com/ObiterDictum/obiter-ops/tree/d7dd3320fdcee7cfdc94ba123e41a7919ed64ab3/evaluations/2026-09-18-bun-serve-runtime/revision-2`.
+- **Evidence revision 1 (retained, partially superseded):**
+  `https://github.com/ObiterDictum/obiter-ops/tree/5284e82/evaluations/2026-09-18-bun-serve-runtime`.
+  Revision 1 remains byte-identical. Its Node+tsx measurements are still the
+  only measurement of the shipping `tsx` path and are kept, labelled as
+  revision 1. Its single-run compiled latency table is **superseded** by
+  revision 2 and must not be quoted.
 
-## The three configurations
+## What revision 2 changed, and why
 
-| Row                      | Entry point                                  | Socket layer              | Transform                                   |
-| ------------------------ | -------------------------------------------- | ------------------------- | ------------------------------------------- |
-| 1. Node + tsx (shipping) | `services/api/src/server.ts`                 | `@hono/node-server` 2.0.0 | `tsx` on-the-fly, as `pnpm dev:api` runs it |
-| 2. Compiled Node         | `dist/server.js`                             | `@hono/node-server` 2.0.0 | esbuild, ahead of time                      |
-| 3. Native Bun            | `dist-bun/server-bun.js` (and Bun-native TS) | `Bun.serve`               | esbuild, ahead of time                      |
+Review 5251661270 found the primary baseline untraceable and the tails
+under-sampled. Concretely:
 
-Rows 2 and 3 come from one esbuild pass that bundles first-party source and
-leaves every `node_modules` dependency external, so they execute identical
-first-party JavaScript and differ only in the socket layer. `@hono/node-server`
-was never run under Bun.
+- The revision-1 latency table mixed rows from different runs and rounds of
+  one-off campaign. Re-derived against the retained `raw/compiled-node.json`,
+  `matters` is −16%, not −45%, and `documents` is −15%, not +7%. Revision 2
+  replaces the whole table with one paired campaign whose cells are generated
+  by `analyze.mjs` from the checksummed JSON.
+- The revision-1 compiled rows were one process each, run back-to-back outside
+  the alternating design, **before** the paired sweep (retained timestamps
+  17:54–17:56 vs 17:56–18:01). Revision 2 runs `node-compiled` and
+  `bun-compiled` as a pair in both orders for three rounds.
+- `percentile()` uses nearest-rank, `ceil(0.95·n) − 1`, so for n ≤ 19 the
+  "p95" is the sample maximum. Revision 1's verification (n=8), ONNX (n=12),
+  upload (n=8/10/12) and slow-reader (n=6) tails were max comparisons.
+  Revision 2 re-measures verification and ONNX at n=120 per runtime per round,
+  where p95 is the 114th of 120 samples, and labels the remaining small-n
+  journeys as max comparisons.
+- Peak memory was the maximum of ~15 boundary reads. Revision 2 samples the
+  whole process tree every 250 ms across the sweep and reports the sampled
+  peak together with the interval, observation count and process-tree size.
+- The search delta was attributed to Bun from probes that accounted for a few
+  milliseconds of a ~200 ms delta. Revision 2 exercises the route's actual
+  stored-search fan-out; the claim is now limited to what that shows.
 
-The only application change the experiment needed was a behaviour-preserving
-extraction of `server.ts` into `createApiRuntime()` (kept at
-`scripts/bun-runtime-eval/overlay/runtime.ts`), plus an identical
-SIGTERM/SIGINT drain added to both adapters because the shipping `server.ts`
-installs no signal handler. Everything else is the same code, routes,
-middleware, contracts and database access.
+## The configurations
 
-## Measurement procedure
+| Row                   | Entry point                  | Socket layer              | Transform              |
+| --------------------- | ---------------------------- | ------------------------- | ---------------------- |
+| Node + tsx (shipping) | `services/api/src/server.ts` | `@hono/node-server` 2.0.0 | `tsx` on-the-fly       |
+| Compiled Node         | `dist/server.js`             | `@hono/node-server` 2.0.0 | esbuild, ahead of time |
+| Compiled Bun          | `dist-bun/server-bun.js`     | `Bun.serve`               | same esbuild pass      |
+| Native Bun + TS       | `src/server-bun.ts`          | `Bun.serve`               | Bun-native TS          |
 
-Three paired rounds alternating `node,bun` / `bun,node` start order, same
-commit, lockfile, fixtures and database rows, sequential processes with a 5 s
-quiet window, warm-up before measurement, and the load generator outside the
-measured process. Sample counts: 40 requests at concurrency 4 for
-account/matter reads, 24 at 2 for search, 20 at 2 for readiness, 10 and 8 at
-2 for the two upload sizes, 8 at 1 for verification, 12 at 1 for inference,
-12 and 6 at 2 for downloads, one 30-request keep-alive sequence.
+**The primary comparison is compiled Node vs compiled Bun.** Rows 2 and 3 come
+from one esbuild pass that bundles first-party source and leaves every
+`node_modules` dependency external, so they execute identical first-party
+JavaScript and differ only in the socket layer and the runtime.
+`@hono/node-server` was never run under Bun. The only application change the
+experiment needed was the behaviour-preserving extraction of `server.ts` into
+`createApiRuntime()` (`overlay/runtime.ts`), plus an identical SIGTERM/SIGINT
+drain on both adapters, because the shipping `server.ts` installs no signal
+handler.
 
-**Contention evidence:** `neighbourContended: []` in every run; the shared
-API and web units consumed 27-34 ms and 0.4 ms of CPU across each window;
-whole-host busy fraction 0.61-0.75 recorded per run as the "load actually
-reached the box" check. Compiled rows were single-run after the paired rounds
-established spread.
+## Method
 
-## Results against compiled Node (primary comparison)
+**Primary sweep and tail sweep.** Two paired campaigns, both
+`node-compiled` vs `bun-compiled`, both three rounds alternating start order:
 
-| Metric                                | Compiled Node   | Native `Bun.serve` | Delta       |
-| ------------------------------------- | --------------- | ------------------ | ----------- |
-| Startup readiness                     | 1056 ms         | 591 ms (549-696)   | -44%        |
-| Idle RSS after model warm             | 284.7 MB        | 199.4 MB           | -30%        |
-| Peak RSS during sweep                 | 571.2 MB        | 491.7 MB           | -14%        |
-| Server CPU, identical sweep           | 78 600 ms       | 68 220 ms          | -13%        |
-| `GET /api/matters` p50 / p95          | 12.25 / 22.59   | 6.74 / 10.35       | -45% / -54% |
-| `GET /api/matters/:id` p50 / p95      | 8.06 / 10.71    | 5.72 / 9.12        | -29% / -15% |
-| `GET /api/me` p50 / p95               | 10.41 / 24.00   | 8.24 / 27.14       | -21% / +13% |
-| `:id/documents` p50 / p95             | 12.64 / 21.10   | 13.56 / 21.02      | +7% / -0%   |
-| `POST /api/search/fetch` p50 / p95    | 934.4 / 969.3   | 769.7 / 818.4      | -18% / -16% |
-| `GET /api/search/readiness` p50 / p95 | 5.15 / 9.58     | 3.02 / 4.39        | -41% / -54% |
-| Upload+extract 47 KB p50 / p95        | 136.7 / 160.2   | 116.6 / 138.1      | -15% / -14% |
-| Upload+extract 503 KB p50 / p95       | 286.7 / 310.2   | 213.6 / 244.1      | -25% / -21% |
-| Verification run p50 / p95            | 41.68 / 51.67   | 41.28 / 58.54      | -1% / +13%  |
-| Redaction ONNX run p50 / p95          | 1015.0 / 1120.2 | 1019.4 / 1314.0    | +0% / +17%  |
-| Download 47 KB p50 / p95              | 11.34 / 16.89   | 8.23 / 14.51       | -27% / -14% |
-| Slow-reader download p50 / p95        | 186.4 / 187.4   | 184.0 / 210.6      | -1% / +12%  |
-| Keep-alive, 30 req median             | 4.01 ms         | 3.15 ms            | -21%        |
-| Errors across the sweep               | 0               | 0                  |             |
+- **Primary sweep** (`paired-compiled-rounds3-default.json`): the full journey
+  matrix at the same sample counts as revision 1, so memory/CPU/readiness are
+  comparable with revision 1 and with the shipping path.
+- **Tail sweep** (`paired-compiled-rounds3-n120.json`): the same matrix with
+  `verification_run` and `redaction_run_inference` raised to **120 requests per
+  runtime per round** (from 8 and 12). Everything else is unchanged.
 
-For scale, row 1 vs row 2 isolates the tsx transform cost: readiness 1631 to
-1056 ms, idle 378 to 285 MB. Bun still beats compiled Node on both. Two p95
-tails (verification, ONNX inference) are slightly worse under Bun and within
-run-to-run spread; ONNX itself is runtime-neutral. Decomposition runs show
-the search delta is client-side runtime cost, not Meilisearch or Postgres,
-and the ~950 ms search figure is dominated by the product's own fan-out
-(`storedIndexRerankPoolLimit = 100` through a 10-connection pool), which is a
-product observation, not a runtime one.
+Both campaigns: one fixture tenant and one set of database rows created once
+and reused every round; the load generator outside the measured process;
+warm-up (3 requests) on every journey before measurement; sequential
+processes with a 5 s quiet gap; a 5 s quiet-host probe before the campaign;
+process-tree RSS and CPU summed from `/proc` (both compiled rows are a single
+process, `maxTreePids: 1`).
 
-## Compatibility checks, failures, limitations
+**Quiet window and load evidence.** Before each campaign the host was idle
+(`hostBusyFraction` 0.18–0.19 with no measured process running). During every
+measured window `neighbourContended` was empty; the shared API and web units
+consumed 33.4 ms and 0.4 ms of CPU across a primary-sweep window; whole-host
+busy fraction was 0.72–0.76 (primary) and 0.92–0.94 (tail, ONNX-bound). The
+load generator used 11–12% of the CPU the server did (`driverCpuShare`
+0.11–0.12 primary, 0.07 tail), so the harness was not the bottleneck.
 
-- Gate suite: **57/59 under Bun, 56/59 under Node**. The two failures are
+**Percentile method.** Nearest-rank: sort ascending, take index
+`ceil(fraction · n) − 1`. Reported with `n`, the per-round distribution and a
+`p95IsMax` flag. For n ≤ 19 the 0.95 quantile is the maximum, so those rows are
+comparisons of maxima, not tails; that is stated wherever it applies.
+
+**What is not measured.** TLS/HTTP2/HTTP3, IPv6 reachability, container images,
+multi-instance behind a load balancer, real reverse-proxy conditions, sustained
+load, the Electron desktop runtime, macOS/Windows, and the search lane's
+ingestion workers.
+
+## Results — primary sweep (compiled Node vs compiled Bun)
+
+Scalars are the median of the three per-round values; per-round values are in
+the artifact and reproduced in
+`derived-default.md` in evidence revision 2.
+
+| Metric                            | Compiled Node | Compiled Bun | Delta |
+| --------------------------------- | ------------- | ------------ | ----- |
+| Startup readiness                 | 1063.6 ms     | 539.1 ms     | −49%  |
+| Idle RSS after model warm         | 284.9 MB      | 197.7 MB     | −31%  |
+| Sampled peak RSS, 250 ms interval | 584.6 MB      | 558.7 MB     | −4%   |
+| Server CPU, identical sweep       | 74 860 ms     | 66 250 ms    | −12%  |
+| Load-generator CPU, for scale     | 8 969 ms      | 8 086 ms     | —     |
+
+| Journey                     | n/round | Compiled Node p50 / p95 | Compiled Bun p50 / p95 | Δp50 / Δp95 |
+| --------------------------- | ------- | ----------------------- | ---------------------- | ----------- |
+| `GET /api/matters`          | 40      | 12.48 / 22.81           | 8.36 / 13.33           | −33% / −42% |
+| `GET /api/matters/:id`      | 40      | 11.19 / 16.15           | 6.82 / 10.61           | −39% / −34% |
+| `GET /api/me`               | 40      | 11.38 / 29.83           | 8.42 / 27.89           | −26% / −7%  |
+| `:id/documents`             | 40      | 17.66 / 26.88           | 13.76 / 22.71          | −22% / −16% |
+| `POST /api/search/fetch`    | 24      | 975.5 / 1106.9          | 761.2 / 851.8          | −22% / −23% |
+| `GET /api/search/readiness` | 20      | 5.55 / 8.21             | 2.80 / 4.11            | −50% / −50% |
+| Upload+extract 47 KB        | 10      | 140.7 / 159.5           | 106.2 / 126.4          | −25% / −21% |
+| Upload+extract 503 KB       | 8       | 298.6 / 355.0           | 234.2 / 261.8          | −22% / −26% |
+| Document text read          | 12      | 9.83 / 31.36            | 6.38 / 19.80           | −35% / −37% |
+| Download 47 KB              | 12      | 12.17 / 15.82           | 7.58 / 16.38           | −38% / +4%  |
+| Slow-reader download        | 6       | 184.70 / 213.91         | 184.45 / 190.72        | −0% / −11%  |
+| Keep-alive, 30 req median   | 1       | 3.62                    | 2.99                   | −17%        |
+| `GET /api/health` (control) | 40      | 3.33 / 6.58             | 2.02 / 9.15            | −39% / +39% |
+| Errors across the sweep     | —       | 0                       | 0                      | —           |
+
+Every row except the `health` control has n ≤ 40; the n ≤ 19 rows (uploads,
+slow-reader, downloads, text read) compare maxima at p95, not tails. The
+`health` control is in the table only because it isolates the socket layer; its
+p95 regression is the one adverse row and says nothing about a real journey.
+
+**Compared with revision 1.** The direction of every result survives, and the
+magnitudes are close where revision 1 was traceable: readiness −49% (v1 −44%),
+idle RSS −31% (v1 −30%), CPU −12% (v1 −13%). The one material change is the
+peak: revision 1 reported −15% from sparse boundary samples; the
+interval-sampled primary sweep shows −4%, and the tail sweep (which repeats
+ONNX 120 times) shows **+2%**, i.e. neutral. Peak memory is not a Bun
+advantage at this sampling resolution. Idle RSS is.
+
+## Tail question: verification and ONNX at n = 120
+
+This is the campaign the document's own earlier condition 2 asked for. Both
+journeys ran 120 requests per runtime per round; p95 is the 114th of 120
+samples, so it is a quantile, not the maximum (`p95IsMax: false` in all six
+runs).
+
+| Round  | Verification p50 / p95 (Node → Bun)           | ONNX inference p50 / p95 (Node → Bun)                 |
+| ------ | --------------------------------------------- | ----------------------------------------------------- |
+| 1      | 39.41 / 49.96 → 41.04 / 54.41                 | 1050.94 / 1838.81 → 1037.07 / 1249.30                 |
+| 2      | 40.65 / 49.87 → 41.66 / 54.37                 | 1007.59 / 1235.91 → 997.40 / 1137.40                  |
+| 3      | 37.19 / 49.00 → 40.02 / 51.82                 | 985.49 / 1141.93 → 1006.90 / 1148.84                  |
+| Median | 39.41 / 49.87 → 41.04 / 54.37 (**+4% / +9%**) | 1007.59 / 1235.91 → 1006.90 / 1148.84 (**−0% / −7%**) |
+
+**Verification:** a small but consistent adverse difference. Compiled Bun is
+slower on p50 in all three rounds (+4 to +6%) and on p95 in all three (+4 to
++9%). n=120 makes this a real, reproducible separation; it is small enough that
+it should be treated as a characteristic to watch, not a blocker.
+
+**ONNX inference:** the adverse tail **does not reproduce**. Revision 1
+reported Bun's p95 above Node's in all three rounds (1314/1772/1118 vs
+1067/1028/1054 ms) — but that was max-vs-max on 12 samples. At n=120 Node's
+p95 is at or above Bun's in every round (round 1 by 47%, with a Node maximum of
+2114 ms), and the medians are −0% p50 / −7% p95. The revision-1 separation was
+an artefact of the small sample; the honest statement is that ONNX inference is
+runtime-neutral at p50 and its tail is at least as good under Bun _in this
+campaign_. It remains CPU-heavy and therefore dominates any whole-sweep CPU
+total that includes it (see the tail-sweep CPU delta of −2%, versus −12% in the
+primary sweep).
+
+## Memory measurement
+
+- **Idle RSS** is a single process-tree read after the model has warmed and the
+  heap has settled: 284.9 MB → 197.7 MB (−31%). It is the most stable memory
+  figure in the study and the basis of the memory claim.
+- **Sampled peak RSS** is the maximum of a 250 ms interval series over the
+  sweep, with the interval, observation count, coverage and process-tree size
+  recorded (`sampling` in the artifact). It is an **observed sampled peak, not
+  a guaranteed maximum**: a short allocation between two samples is invisible.
+  Primary sweep −4%; tail sweep +2%. Revision 1's −15% was the maximum of
+  ~15 boundary reads and overstated the resolution.
+- Both runtimes are sampled identically, from the same `/proc` tree walk, and
+  both compiled rows are a single process.
+
+## Search delta: what the decomposition supports
+
+The end-to-end `POST /api/search/fetch` p50 delta in the primary sweep is
+975.5 → 761.2 ms (−214 ms). The route's own work was then decomposed with no
+HTTP server in the path, run under plain Node and plain Bun in alternating
+order over three rounds. Medians of the per-round p50:
+
+| Component                                                       | Node    | Bun     | Delta    |
+| --------------------------------------------------------------- | ------- | ------- | -------- |
+| Meilisearch `processingTimeMs` (engine service time)            | 40 ms   | 38 ms   | −2 ms    |
+| Client-side Meilisearch call (HTTP + parse of the 100-hit pool) | 545 ms  | 457 ms  | −88 ms   |
+| Postgres fan-out, 100 concurrent `store.get` + Zod parse        | 11.7 ms | 11.6 ms | −0.1 ms  |
+| Same fan-out, sequential                                        | 33.8 ms | 31.1 ms | −2.7 ms  |
+| `select count(*)` control                                       | 0.33 ms | 0.27 ms | −0.06 ms |
+| `JSON.stringify` control                                        | 0.01 ms | 0.01 ms | 0        |
+
+Meilisearch's _own_ processing time is runtime-neutral, so the delta is not
+engine service time. The Postgres fan-out — including the Zod parse of the 100
+rows — is runtime-neutral too. The largest identified component is the
+client-side engine call, where Bun is 88 ms faster transferring and parsing the
+100-hit paragraph payload. Those probes account for about 90 ms of the ~214 ms
+end-to-end delta; the remainder (route middleware, session lookup, and
+serialising the 20 served hits with snippet extraction) is **not isolated by
+them and is not attributed to Bun**. The earlier claim that the whole delta was
+"client-side runtime cost" is withdrawn. What the evidence supports is
+narrower: the delta is not Meilisearch service time or Postgres execution time,
+and a large identified share is client-side work in the engine client.
+
+The ~1 s absolute figure is dominated by the product's own fan-out
+(`storedIndexRerankPoolLimit = 100` through a 10-connection pool) on both
+runtimes — a product observation, not a runtime one.
+
+## Compatibility, failures, limitations
+
+- **Gate suite: 57/59 under Bun, 56/59 under Node.** The two failures are
   malformed-multipart paths answering 500 on _both_ runtimes (pre-existing,
-  runtime-independent). The only check where runtimes differ favours Bun:
+  runtime-independent). The one check where the runtimes differ favours Bun:
   a half-sent header is closed at 12 s under Bun versus a 408 at 81 s under
   Node.
 - Native ONNX inference (`onnxruntime-node` N-API, CPU-only install) passes
   identically; `pg`, `better-auth`, `@napi-rs/canvas`, `mammoth`, `jszip`,
-  `unpdf`, `pdf-lib`, `resend`, `meilisearch`, `zod` and `execFileSync` all
+  `unpdf`, `pdf-lib`, `resend`, `meilisearch`, `zod` and `execFileSync` are all
   exercised through real routes.
 - Adapter defaults differ and were pinned explicitly: `idleTimeout: 30`,
-  `maxRequestBodySize: 64 MiB` (app-level 48 KiB/25 MiB limits stay
-  authoritative), `hostname: '0.0.0.0'` (Bun binds IPv4-only by default where
-  Node binds dual-stack), and `Expect: 100-continue` verified on both.
-- Not measured: TLS/HTTP2/HTTP3, IPv6 reachability, container images,
-  multi-instance behind a load balancer, real reverse-proxy conditions,
-  sustained load, the Electron desktop runtime, macOS/Windows, and the search
-  lane's ingestion workers.
+  `maxRequestBodySize: 64 MiB` (the app's 48 KiB/25 MiB limits stay
+  authoritative), `hostname: '0.0.0.0'`, and `Expect: 100-continue` verified on
+  both. The Bun error hook now mints a real `req_<uuid>` id in the
+  application's format instead of one shared placeholder.
 
-## Operational blockers
+## Operational blockers and deployment protections
 
-1. Bun exposes no request-header or whole-request deadline (Node's
-   `headersTimeout`/`requestTimeout` produce a 408). Enforce at the reverse
-   proxy; in-process deadlines would need Hono middleware.
-2. `idleTimeout` is one knob covering three Node concepts, including silent
+1. **Bun exposes no request-header or whole-request deadline.** Node's
+   `headersTimeout`/`requestTimeout` produce a 408; Bun exposes neither. A
+   half-open connection is closed at 12 s (better than Node's 81 s), but the
+   application cannot express "answer 408 in 60 s" itself. The replacement is
+   the reverse proxy; the concrete, version-checked Traefik configuration is
+   now specified in
+   [`docs/specs/deployment.md`](specs/deployment.md#proposed-reverse-proxy-request-deadlines-conditional-on-a-bun-migration).
+   It is **proposed and untested** — no Traefik, Dokploy or production service
+   was modified while producing this evaluation.
+2. **`idleTimeout` is one knob covering three Node concepts**, including silent
    handlers and quiet response streams; long-lived responses would need
    per-request `server.timeout(req, 0)`.
-3. No configurable header-size limit (measured 431 at 64 KiB; threshold and
-   shape are Bun internals).
-4. Bun renders a source-and-stack error page unless `NODE_ENV=production` /
-   `development: false`; any Bun image must pin both.
-5. Ongoing cost: a pinned Bun version and upgrade policy, a Bun-runtime CI
-   job, and a second deployment image to maintain.
+3. **No configurable header-size limit** (measured 431 at 64 KiB; the threshold
+   and shape are Bun internals).
+4. **Bun renders a source-and-stack error page** unless `NODE_ENV=production`
+   / `development: false`; any Bun image must pin both.
+5. **Ongoing cost:** a pinned Bun version and upgrade policy, a Bun-runtime CI
+   job, and a second deployment image.
+
+## Evidence revision 2
+
+Every published cell maps to a checksummed artifact. `scripts/bun-runtime-eval/analyze.mjs`
+generates the tables and the mapping; the bundle's `revision-2/README.md`
+repeats it, and `SHA256SUMS.txt` covers every file.
+
+| Table                                     | Artifact                                                                   |
+| ----------------------------------------- | -------------------------------------------------------------------------- |
+| Primary scalars and journeys              | `revision-2/raw/paired-compiled-rounds3-default.json`                      |
+| Tail table                                | `revision-2/raw/paired-compiled-rounds3-n120.json`                         |
+| Per-round distributions, artifact mapping | `revision-2/derived/derived-default.{json,md}`, `derived-tables.{json,md}` |
+| Search decomposition                      | `revision-2/raw/decompose-{node,bun}-r{1,2,3}.json`                        |
+| Gate counts                               | `revision-2/raw/gates-{node,bun}.json`                                     |
+| Transport timeouts                        | `revision-2/raw/timeouts-{node,bun}.json`                                  |
+| Superseded revision-1 compiled rows       | revision 1 `raw/compiled-{node,bun}.json` (retained, not quoted)           |
 
 ## Proposed migration conditions (provisional)
 
-Provisionally, the evidence supports a migration worth approving: the gain is
-on memory and readiness where this host's binding constraint lives, no
-functional blocker exists, and the differences are configuration work. Before
-any migration PR is opened:
+Before any separately approved migration PR:
 
-1. Independent review of this document and the raw evidence.
-2. Re-measure the two worse p95 tails (verification, ONNX inference) with
-   larger samples.
-3. Pin Bun exactly (`1.4.2`), treat bumps as changes that re-run gates and
-   the paired sweep, and add a Bun-runtime CI job running the API suite plus
-   `gates.mjs`.
-4. Ship `NODE_ENV=production` and `development: false`, explicit `hostname`,
-   `maxRequestBodySize` and `idleTimeout`, and proxy-enforced header/request
-   deadlines.
-5. Select the adapter by entry point, not an env flag; keep `server.ts` as
-   the rollback path.
-6. Roll out behind the same route as a canary instance first, comparing
-   error rate, p95 and RSS per instance for a fixed window.
+1. Independent review of this document and the revision-2 evidence.
+2. Confirm the verification regression is acceptable or bound it with a
+   per-route budget; it is consistent and reproducible at n=120.
+3. Pin Bun exactly (`1.4.2`), treat bumps as changes that re-run gates and the
+   paired sweep, and add a Bun-runtime CI job.
+4. Pin the reverse-proxy deadlines in `docs/specs/deployment.md` after testing
+   them against a slow upload and a long download on staging.
+5. Ship `NODE_ENV=production` and `development: false`, explicit `hostname`,
+   `maxRequestBodySize` and `idleTimeout`.
+6. Select the adapter by entry point, not an env flag; keep `server.ts` as the
+   rollback path.
+7. Canary behind the same route, comparing error rate, p95 and RSS per
+   instance for a fixed window.
 
 ## Rollback plan
 
-Rollback is redeploying the previous Node image. The application code is
-identical in both adapters (same `createApiRuntime()`), there is no schema or
-data migration involved, and `services/api/src/server.ts` remains the
-shipping entry point throughout.
+Redeploying the previous Node image. The application code is identical in both
+adapters (same `createApiRuntime()`), there is no schema or data migration, and
+`services/api/src/server.ts` remains the shipping entry point throughout.
 
 ## Reproduce
 
@@ -165,6 +334,6 @@ scripts/bun-runtime-eval/reproduce.sh
 ```
 
 Recreates a detached scratch worktree at the evaluated commit, overlays the
-harness, builds both compiled rows and re-runs every measurement and gate
-into `$BUN_EVAL_ROOT/raw` (default `/tmp/obiter-bun-eval`), against the
-throwaway `obiter_bun_eval` database only.
+harness, builds both compiled rows and re-runs the paired campaigns,
+decomposition, gates, timeout probes and derived-table generation into
+`$BUN_EVAL_ROOT/r2`, against the throwaway `obiter_bun_eval` database only.

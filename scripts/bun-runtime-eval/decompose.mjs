@@ -1,16 +1,35 @@
 #!/usr/bin/env node
 /*
- * Decompose the runtime delta: how much of a journey's time is the inbound HTTP
- * server, and how much is the outbound work both runtimes do identically
- * (Meilisearch over the search client, Postgres over node-postgres).
+ * Decompose the /api/search/fetch delta into the parts a runtime can and
+ * cannot influence, with no HTTP server in the path.
  *
- * Runs the same loops under Node and under Bun with no HTTP server in the path,
- * so a difference here is client-side runtime cost, not the server.
+ * The first version of this probe measured the Meilisearch call, a
+ * `select count(*)` and JSON.stringify, then attributed the ~180 ms
+ * end-to-end search delta to "client-side runtime cost". Those three probes
+ * account for only a few milliseconds, so the attribution was asserted rather
+ * than shown. This version exercises the actual stored-search path the route
+ * takes for a keyword query:
  *
- *   node node_modules/tsx/dist/cli.mjs scripts/bun-runtime-eval/decompose.mjs --out /tmp/d-node.json
- *   /tmp/obiter-bun-eval/tools/bun-linux-x64/bun run scripts/bun-runtime-eval/decompose.mjs --out /tmp/d-bun.json
+ *   1. search() with the route's own pool options (limit 100, paragraphs, no
+ *      snippets) — the Meilisearch engine call, identical service for both
+ *      runtimes, so it isolates the engine;
+ *   2. the withdrawn-check fan-out the route then runs: one
+ *      legal_source_documents row (summary_json + document_json + provider_json)
+ *      fetched per hit through the same pool, 100 concurrent via Promise.all,
+ *      with the same Zod parse on the way out — the client-side share;
+ *   3. the same fan-out sequentially, which separates per-call client cost
+ *      from concurrency/pool scheduling;
+ *   4. `select count(*)` and JSON.stringify as controls.
+ *
+ * The first Meilisearch call is reported separately as cold; the rest are warm.
+ * Every figure is a p50 over its own loop, and the run is executed once per
+ * runtime and repeated in alternating order by reproduce.sh, so engine and
+ * host effects are visible across rounds rather than assumed away.
+ *
+ *   node node_modules/tsx/dist/cli.mjs scripts/bun-runtime-eval/decompose.mjs --runtime node --out /tmp/d-node.json
+ *   /tmp/obiter-bun-eval/tools/bun-linux-x64/bun run scripts/bun-runtime-eval/decompose.mjs --runtime bun --out /tmp/d-bun.json
  */
-import { readFile } from 'node:fs/promises'
+import { readFile, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { performance } from 'node:perf_hooks'
 // Relative paths rather than workspace specifiers: the root package.json does
@@ -18,14 +37,18 @@ import { performance } from 'node:perf_hooks'
 import { createClient, search } from '../../packages/search-client/src/index'
 import { createPool } from '../../services/api/src/database'
 import { readApiEnv } from '../../services/api/src/env'
+import { createPostgresLegalAuthoritySourceStore } from '../../services/api/src/routes/legal-search/source-store'
 import { readEnvAssignment } from '../load/target.mjs'
 
 const WORKTREE = resolve(import.meta.dirname, '..', '..')
+const SEARCH_QUERY = 'duty of care negligence'
+const FANOUT_LOOPS = 15
 
 function parseArgs(argv) {
-  const out = { out: null }
+  const out = { out: null, runtime: null }
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === '--out') out.out = argv[++i]
+    else if (argv[i] === '--runtime') out.runtime = argv[++i]
     else throw new Error(`unknown argument ${argv[i]}`)
   }
   if (!out.out) throw new Error('--out is required')
@@ -42,6 +65,7 @@ function summarise(values) {
     ) / 100
   return {
     count: sorted.length,
+    method: 'nearest-rank ceil(fraction*n)',
     p50: at(0.5),
     p95: at(0.95),
     min: Math.round(sorted[0] * 100) / 100,
@@ -61,33 +85,106 @@ async function main() {
   const env = readApiEnv()
   const client = createClient(env.meilisearchHost, env.meilisearchSearchApiKey)
   const pool = createPool({ ...env, databaseUrl })
+  const store = createPostgresLegalAuthoritySourceStore(pool)
 
   const report = {
     runtime:
-      typeof Bun === 'undefined'
+      args.runtime ??
+      (typeof Bun === 'undefined'
         ? `node ${process.version}`
-        : `bun ${Bun.version}`,
-    samples: 30,
+        : `bun ${Bun.version}`),
+    engine: {
+      host: env.meilisearchHost,
+      index: env.legalAuthoritiesIndex,
+      // The single Meilisearch service is shared by both runtimes; naming it
+      // here is what lets a reader see an engine change between rounds.
+      shared: true,
+    },
+    query: SEARCH_QUERY,
+    fanoutLoops: FANOUT_LOOPS,
   }
 
-  // Outbound Meilisearch through the product's own search client.
+  // 1. The engine call the route makes to build its 100-hit pool, with the
+  //    route's own options. Cold (first call) and warm are separated because
+  //    Meilisearch may cache the first query.
+  const poolOptions = {
+    includeSnippets: false,
+    includeParagraphs: true,
+    limit: 100,
+  }
+  const coldStarted = performance.now()
+  const poolFetch = await search(
+    client,
+    env.legalAuthoritiesIndex,
+    SEARCH_QUERY,
+    {},
+    poolOptions,
+  )
+  report.meilisearchPoolFetchColdMs =
+    Math.round((performance.now() - coldStarted) * 100) / 100
+  report.meilisearchPoolFetchColdProcessingMs =
+    poolFetch?.processingTimeMs ?? null
+  report.poolHits = poolFetch?.hits?.length ?? null
+  const hitIds = (poolFetch?.hits ?? []).map((hit) => hit.id)
+
+  // The engine's own processingTimeMs separates Meilisearch service time from
+  // the client-side HTTP + JSON-parse cost that `search()` also includes.
   const searchTimes = []
-  for (let i = 0; i < 30; i += 1) {
+  const engineTimes = []
+  for (let i = 0; i < 10; i += 1) {
     const started = performance.now()
     const result = await search(
       client,
       env.legalAuthoritiesIndex,
-      'duty of care negligence',
+      SEARCH_QUERY,
       {},
-      { limit: 20 },
+      poolOptions,
     )
     searchTimes.push(performance.now() - started)
-    if (i === 0) report.searchHits = result?.hits?.length ?? null
+    if (Number.isFinite(result?.processingTimeMs))
+      engineTimes.push(result.processingTimeMs)
   }
-  report.meilisearchSearch = summarise(searchTimes)
+  report.meilisearchPoolFetchWarm = summarise(searchTimes)
+  report.meilisearchEngineWarm = summarise(engineTimes)
 
-  // Outbound Postgres through the same pool and the same kind of query the
-  // authenticated list routes run.
+  // The shared engine's version, so a round where the engine changed is
+  // visible in the artifact rather than assumed constant. `/version` requires
+  // the search key on this instance, so go through the product's own client.
+  report.meilisearchVersion = await client
+    .getVersion()
+    .then((version) => version?.pkgVersion ?? null)
+    .catch(() => null)
+
+  // 2. The withdrawn-check fan-out, exactly as the route runs it: one row per
+  //    hit through the pool, all concurrent, Zod parse included.
+  const fanoutTimes = []
+  let fanoutRows = 0
+  let fanoutWithdrawn = 0
+  for (let i = 0; i < FANOUT_LOOPS; i += 1) {
+    const started = performance.now()
+    const records = await Promise.all(hitIds.map((id) => store.get(id)))
+    fanoutTimes.push(performance.now() - started)
+    fanoutRows = records.length
+    fanoutWithdrawn = records.filter((record) => record?.withdrawn).length
+  }
+  report.fanoutRows = fanoutRows
+  report.fanoutWithdrawn = fanoutWithdrawn
+  report.storeFanoutConcurrent = summarise(fanoutTimes)
+
+  // 3. The same fan-out one call at a time, which removes concurrency and pool
+  //    scheduling from the comparison and leaves per-call client cost.
+  if (hitIds.length > 0) {
+    const sequentialTimes = []
+    for (let i = 0; i < FANOUT_LOOPS; i += 1) {
+      const started = performance.now()
+      for (const id of hitIds) await store.get(id)
+      sequentialTimes.push(performance.now() - started)
+    }
+    report.storeFanoutSequential = summarise(sequentialTimes)
+  }
+
+  // 4. Controls: a trivial Postgres round-trip and JSON serialisation of a
+  //    realistic payload.
   const pgTimes = []
   for (let i = 0; i < 30; i += 1) {
     const started = performance.now()
@@ -99,8 +196,6 @@ async function main() {
   }
   report.postgresCount = summarise(pgTimes)
 
-  // JSON serialisation of a realistic payload, which is what the server does
-  // with every response body.
   const payload = {
     matters: Array.from({ length: 40 }, (_, index) => ({
       id: `mtr_${index}`,
@@ -118,7 +213,6 @@ async function main() {
   report.jsonStringify = summarise(jsonTimes)
 
   await pool.end()
-  const { writeFile } = await import('node:fs/promises')
   await writeFile(args.out, JSON.stringify(report, null, 2), 'utf8')
   console.log(JSON.stringify(report, null, 2))
 }

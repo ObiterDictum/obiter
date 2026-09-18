@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { createApiRuntime } from './runtime'
 
 /**
@@ -15,6 +16,16 @@ import { createApiRuntime } from './runtime'
 interface BunServer {
   port: number
   stop(closeActiveRequests?: boolean): Promise<void>
+}
+
+/**
+ * The application's request-id shape (`services/api/src/app.ts`). The error
+ * hook below runs outside Hono's context, so it mints its own id in the same
+ * format rather than emitting one shared placeholder; correlated logs stay
+ * joinable with the rest of the API's output. No request content is logged.
+ */
+function createRequestId() {
+  return `req_${randomUUID()}`
 }
 
 declare const Bun: {
@@ -48,7 +59,9 @@ async function main() {
     // deadline.
     idleTimeout: 30,
     error(error) {
+      const requestId = createRequestId()
       console.error('Bun.serve handler error', {
+        requestId,
         error: error instanceof Error ? error.message : String(error),
       })
       return Response.json(
@@ -56,7 +69,7 @@ async function main() {
           error: {
             code: 'storage_unavailable',
             message: 'The API could not complete the request.',
-            requestId: 'req_bun_serve_error',
+            requestId,
           },
         },
         { status: 500 },
