@@ -88,6 +88,8 @@ Redaction detection runs a local ONNX model that is downloaded from Hugging Face
 
 Without the model, redaction still runs but only with the deterministic heuristics, and the review UI marks those runs as limited detection. If you see that, check the API startup log for the load failure.
 
+The ONNX Runtime install is CPU-only. `onnxruntime-node`'s postinstall would otherwise download the optional CUDA and TensorRT execution providers (~343 MB unpacked) on Linux x64, and no Obiter surface uses them: detection runs with `device: 'cpu'`, the browser path uses onnxruntime-web, and the desktop bundle excludes `node_modules`. The repo-root `.npmrc` skips that download. A host that does need the GPU providers opts in for one install with `ONNXRUNTIME_NODE_INSTALL_CUDA=v12 pnpm install`.
+
 Useful product context:
 
 - [Current Product Scope](docs/current-product-scope.md)
