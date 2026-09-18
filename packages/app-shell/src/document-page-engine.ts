@@ -82,6 +82,10 @@ export function layoutDocument(
   drafts?: Record<string, string>,
   inserts: LocalInsert[] = [],
   extraRuns: ExtraRuns = {},
+  /** The document story's blocks, when the caller already holds them. They are
+   * a pure function of the model, so re-deriving them inside every pagination
+   * pass re-parsed the table structure on each keystroke for no change. */
+  blocks?: StoryBlock[],
 ): LaidOutPage[] {
   const box = documentPageBox(model)
   const frame = contentFrame(box, marginBandHeights(model))
@@ -102,7 +106,7 @@ export function layoutDocument(
     }
   }
   const source = withInserts(
-    storyBlocks(story).filter(
+    (blocks ?? storyBlocks(story)).filter(
       (block) => block.type === 'table' || !boxed.has(block.paragraph.id),
     ),
     inserts,
