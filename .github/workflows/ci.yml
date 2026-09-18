@@ -226,6 +226,13 @@ jobs:
             psql -h localhost -U obiter -d obiter_test -v ON_ERROR_STOP=1 -f "$f"
           done
 
+      # The harness generates genuine python-docx fixtures through
+      # scripts/load/make-upload-fixtures.py, the same generator the load harness
+      # uses. Ubuntu 24.04 marks the system Python externally managed, hence the
+      # explicit flag; nothing else in CI needs it.
+      - name: Install fixture generator dependency
+        run: python3 -m pip install --break-system-packages python-docx
+
       # Starts both entry points on their own ports against obiter_test and
       # asserts auth, tenancy, body limits, transactions, streaming,
       # verification, native CPU inference and bounded SIGTERM shutdown. The

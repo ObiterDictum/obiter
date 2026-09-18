@@ -35,7 +35,10 @@ failure (bad database, no Bun, no database URL).
 
 - Postgres reachable at the URL, with `packages/database/migrations` applied.
 - The pinned Bun (`../.bun-version`) on `PATH`, or `--bun-bin`.
-- `python3` for the synthetic DOCX fixtures (`scripts/load/make-upload-fixtures.mjs`).
+- `python3` with `python-docx` for the synthetic DOCX fixtures
+  (`scripts/load/make-upload-fixtures.py`). Install with
+  `python3 -m pip install python-docx` (CI adds `--break-system-packages`, since
+  Ubuntu 24.04 marks the system Python externally managed).
 - Network access on a cold model cache: the harness prefetches the Rampart
   model with the product's own `scripts/prefetch-rampart-model.ts` into a
   task-owned cache directory before starting either server, because the API
