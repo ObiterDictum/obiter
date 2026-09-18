@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/server.ts",
+    "dev:bun": "bun --watch src/server-bun.ts",
     "build": "tsc --noEmit -p tsconfig.json",
     "start": "tsx src/server.ts",
+    "start:bun": "bun src/server-bun.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "vitest run"
   },
