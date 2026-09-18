@@ -88,7 +88,11 @@ Dokploy writes its own Traefik main config to `/etc/dokploy/traefik/traefik.yml`
 `address` (plus `http3` and the TLS cert resolver on `websecure`) and no
 `transport` block, so Traefik's own defaults apply. Dokploy's default image is
 `traefik:v3.6.25` (overridable with `TRAEFIK_VERSION`); the timeout keys below
-are stable across Traefik v3.4–v3.6:
+match the published Traefik reference for v3.5 and v3.6. The deployed
+`TRAEFIK_VERSION` was not readable from the evaluation host, so the version
+here is Dokploy's default, not a confirmed production version, and the keys
+should be re-checked against whatever version the server actually runs before
+they are pinned.
 
 | Traefik key (`entryPoints.<name>.transport.*`) | Traefik default | Effect when left at the default                                 |
 | ---------------------------------------------- | --------------- | --------------------------------------------------------------- |
