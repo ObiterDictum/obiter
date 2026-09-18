@@ -111,5 +111,28 @@ SEARCH_BENCHMARK_HOST="$MEILI_HOST" \
 SEARCH_BENCHMARK_REPORT_PATH=/tmp/search-benchmark.json \
   pnpm benchmark:search
 
+# Mirrors the bun-api CI job. The API ships on Bun, so a green vitest run under
+# Node does not prove the server that is deployed. Requires the pinned Bun; set
+# BUN_BIN to a non-PATH install (for example BUN_BIN="$HOME/.bun/bin/bun").
+BUN_BIN=${BUN_BIN:-bun}
+PINNED_BUN=$(cat .bun-version)
+if ! command -v "$BUN_BIN" >/dev/null 2>&1; then
+  echo "Bun not found as \"$BUN_BIN\" (required for the Bun API runtime gate)" >&2
+  echo "Install the pinned version from .bun-version, or set BUN_BIN." >&2
+  exit 1
+fi
+RUNNING_BUN=$("$BUN_BIN" --version)
+if [ "$RUNNING_BUN" != "$PINNED_BUN" ]; then
+  echo "Bun version mismatch: running $RUNNING_BUN but .bun-version pins $PINNED_BUN" >&2
+  exit 1
+fi
+
+echo "== bun:api-runtime"
+node scripts/api-runtime/runtime-integration.mjs \
+  --runtime both \
+  --database-url "$TEST_DATABASE_URL" \
+  --bun-bin "$BUN_BIN" \
+  --json-out /tmp/api-runtime-integration.json
+
 echo
 echo "All gates passed."

@@ -6,7 +6,7 @@ Status: planned (July 2026). PostgreSQL 16 already runs on the Hetzner VPS under
 
 - **Database**: running on the server (Dokploy). Local dev expects `postgres://obiter:obiter@localhost:5432/obiter` (default in `services/api/src/env.ts`).
 - **Web Dockerfile exists** at `apps/web/Dockerfile` (added in the app shell rebuild M3), with a dependency-free SSR host (`apps/web/serve.mjs`) and a repo-root `.dockerignore`. It has been `docker build`-verified locally: a build with `--build-arg OBITER_BUILD_COMMIT=<sha> --build-arg OBITER_BUILD_DIRTY=0` produces an image whose `apps/web/dist/.obiter-build.json` names that commit with `dirty: false`, and the image's `serve.mjs` serves the same marker at `/.well-known/obiter-build` (with `OBITER_BUILD_PROVENANCE=1`). See the Implementation section below.
-- **No API Dockerfile** exists yet. Migrations in `packages/database/migrations/*.sql` are applied by `pnpm db:migrate` (`services/api/src/migrate.ts`, tracked in `schema_migrations`) and at API startup; the server schema is no longer applied manually. The Dockerfile remains a precondition for automated API deploys and is Redact-track owned.
+- **No API Dockerfile** exists yet on `dev`; it lands with the Bun migration below (`services/api/Dockerfile`). Migrations in `packages/database/migrations/*.sql` are applied by `pnpm db:migrate` (`services/api/src/migrate.ts`, tracked in `schema_migrations`) and at API startup; the server schema is no longer applied manually.
 - `apps/web` is a TanStack Start app — it has an SSR server component, so it deploys as a Node service, not a static bundle.
 - Auth is better-auth with cookie sessions, which constrains routing (below).
 
@@ -14,11 +14,11 @@ Status: planned (July 2026). PostgreSQL 16 already runs on the Hetzner VPS under
 
 Three Dokploy applications on the existing VPS, plus the existing database:
 
-| App        | Source                    | Runtime | Notes                                                                                        |
-| ---------- | ------------------------- | ------- | -------------------------------------------------------------------------------------------- |
-| `api`      | `services/api` Dockerfile | Node 22 | Hono server; serves `/api/*` including all better-auth routes. Runs migrations before start. |
-| `web`      | `apps/web` Dockerfile     | Node 22 | TanStack Start SSR server.                                                                   |
-| `postgres` | already deployed          | —       | Existing Dokploy service; API connects via internal network `DATABASE_URL`.                  |
+| App        | Source                    | Runtime                          | Notes                                                                                        |
+| ---------- | ------------------------- | -------------------------------- | -------------------------------------------------------------------------------------------- |
+| `api`      | `services/api` Dockerfile | Bun 1.4.2 (Node rollback target) | Hono server; serves `/api/*` including all better-auth routes. Runs migrations before start. |
+| `web`      | `apps/web` Dockerfile     | Node 22                          | TanStack Start SSR server.                                                                   |
+| `postgres` | already deployed          | —                                | Existing Dokploy service; API connects via internal network `DATABASE_URL`.                  |
 
 **Same-domain routing is a hard requirement.** better-auth uses cookie sessions; serving web and API from different origins forces third-party-cookie workarounds that break quietly. Route one domain through Dokploy's Traefik: `/*` → `web`, `/api/*` → `api`. The web app then calls the API with relative URLs and `credentials: 'include'` just works (this matches the contract's `apiFetch` design).
 
@@ -28,13 +28,29 @@ Three Dokploy applications on the existing VPS, plus the existing database:
 
 `services/api/src/migrate.ts`: applies `packages/database/migrations/*.sql` in filename order, tracked in a `schema_migrations` table (filename + applied_at), idempotent, each file in its own transaction, stops at the first failure naming the file. Wired as `pnpm db:migrate --database-url=<url>` (the URL must be passed explicitly — no default — so the wrong database is never migrated by accident). The API runs it at startup behind a Postgres advisory lock and refuses to start when migrations cannot be applied. Used identically for local dev, tests, and as the API container's pre-start step. The Redact agent needs this anyway to apply `0005_redaction.sql` repeatably.
 
-### API Dockerfile — owned by the Redact track
+### API Dockerfile — delivered with the Bun runtime work
 
-- Node 22 slim base, corepack-enabled pnpm, monorepo build via `pnpm --filter @obiter/api deploy` (or fetch + prune pattern).
-- Entrypoint: run migrations, then start the server.
-- Persistent volume for the HuggingFace model cache (the Rampart ONNX download from Redact PRD 1) so restarts don't re-download. Mount it and point `OBITER_RAMPART_CACHE_DIR` at it; the default (`~/.cache/obiter/rampart-models`, `%LOCALAPPDATA%\Obiter\rampart-models` on Windows) is a per-user path chosen so developer machines keep the model across `pnpm install`, not a container-appropriate location. `pnpm prefetch:rampart` warms whichever directory is configured and is the right pre-start or image-build step.
-- Env (from `services/api/src/env.ts` + better-auth): `DATABASE_URL` (Dokploy internal network), better-auth secret/base-URL, CORS origin, and the optional detection settings `OBITER_RAMPART_MODEL`, `OBITER_RAMPART_REVISION`, `OBITER_RAMPART_CACHE_DIR`, `OBITER_RAMPART_MIN_SCORE` and `OBITER_RAMPART_CHUNK_TOKENS`. Detection settings are validated once at API startup; defaults pin the shipped model/revision, minimum confidence `0.4` and chunk size `400`.
-- The API loads the model once at startup rather than on the first redaction request. A load failure is logged with its cause and leaves the service running — detection degrades per run to `heuristics+supplement`, which the review UI already labels — so an unreachable Hugging Face does not take the whole API down.
+The image now exists at `services/api/Dockerfile`. The Bun migration section
+below is the canonical description of its targets, proxy limits and rollback;
+what remains true from the original plan:
+
+- `services/api/src/runtime.ts` runs migrations before the socket binds, so there
+  is no separate pre-start step for the container.
+- Env (from `services/api/src/env.ts` + better-auth): `DATABASE_URL` (Dokploy
+  internal network), better-auth secret/base-URL, CORS origin, and the optional
+  detection settings `OBITER_RAMPART_MODEL`, `OBITER_RAMPART_REVISION`,
+  `OBITER_RAMPART_CACHE_DIR`, `OBITER_RAMPART_MIN_SCORE` and
+  `OBITER_RAMPART_CHUNK_TOKENS`. Detection settings are validated once at API
+  startup; defaults pin the shipped model/revision, minimum confidence `0.4` and
+  chunk size `400`.
+- The API loads the model once at startup rather than on the first redaction
+  request. A load failure is logged with its cause and leaves the service
+  running — detection degrades per run to `heuristics+supplement`, which the
+  review UI already labels — so an unreachable Hugging Face does not take the
+  whole API down.
+- The model weights are baked into the image at `/opt/obiter/rampart-models`, so
+  a fresh container needs no download. Mounting a volume over that path shadows
+  the baked weights; warm the volume with `pnpm prefetch:rampart` first.
 
 ### Web Dockerfile + Traefik routing — owned by the shell track (Milestone 3)
 
@@ -77,6 +93,89 @@ Artifacts shipped:
 **Fonts (resolved):** the Satoshi / JetBrains-Mono typefaces are now self-hosted (woff2 vendored in `packages/ui/src/fonts/`, served via `@font-face`) — no Fontshare CDN dependency in web or desktop. See [desktop-release.md](./desktop-release.md) for the packaging and licensing notes.
 
 **Desktop packaging** (installers, the packaged API origin, and the packaged Origin/trust story) is covered in [desktop-release.md](./desktop-release.md).
+
+### API runtime and image — native Bun.serve with a Node rollback
+
+Owned by the security lane (board `P1.40`). Implementation is complete;
+production rollout is **not** authorised. The evaluation is
+`ObiterDictum/obiter#220` (open, unmerged), with durable evidence at
+`obiter-ops d7dd3320fdcee7cfdc94ba123e41a7919ed64ab3`,
+`evaluations/2026-09-18-bun-serve-runtime/revision-2`.
+
+**Runtime.** The API is built once by `services/api/src/runtime.ts`
+(`createApiRuntime()`) and served by one of two adapters, selected by entry
+point rather than an environment flag:
+
+| Entry point                      | Adapter             | Image target                        |
+| -------------------------------- | ------------------- | ----------------------------------- |
+| `services/api/src/server-bun.ts` | native `Bun.serve`  | default (`services/api/Dockerfile`) |
+| `services/api/src/server.ts`     | `@hono/node-server` | `--target runtime-node`             |
+
+- Bun is pinned to **1.4.2** in `.bun-version` and as the
+  `oven/bun:1.4.2-slim` image base. It was the current release when the pin was
+  set; a version bump must re-run the Bun-runtime CI job before it merges.
+- `Bun.serve` is configured explicitly: `hostname: '0.0.0.0'`,
+  `maxRequestBodySize: 64 MiB` (a transport backstop; the app's 48 KiB JSON and
+  25 MiB upload limits stay authoritative and produce the contract 413),
+  `idleTimeout: 30`, and **`development: false`** so Bun's source-and-stack
+  error page cannot render, whatever `NODE_ENV` says.
+- `NODE_ENV=production` is set in the image. `readNodeEnv` (`@obiter/config`)
+  already refuses an unset or unknown `NODE_ENV`, so a container without it
+  stops at boot instead of serving in development mode.
+- The image is built from the repo root:
+  `docker build -f services/api/Dockerfile -t obiter-api .` (Bun) and
+  `docker build -f services/api/Dockerfile --target runtime-node -t obiter-api-node .`
+  (rollback). The Rampart model is prefetched into
+  `/opt/obiter/rampart-models` at build time and `OBITER_RAMPART_CACHE_DIR`
+  points there; mounting a volume over that path shadows the baked weights, so
+  warm the volume with `pnpm prefetch:rampart` first if you do.
+
+**Startup, health and readiness.** `createApiRuntime()` validates the
+environment, applies migrations behind a Postgres advisory lock (and refuses to
+start if any fail), builds the app, probes the stored search index without
+blocking, and warms the detection model without blocking. `/api/health` is the
+liveness/readiness probe; it also reports `runtime: 'bun' | 'node'` so a canary
+or an operator can confirm which adapter answered.
+
+**Request limits and proxy prerequisites.** Bun exposes no request-header or
+whole-request deadline and no configurable header-size limit. What was measured
+and where it must be enforced:
+
+| Concern                 | Node                         | Bun 1.4.2                             | Where enforced                |
+| ----------------------- | ---------------------------- | ------------------------------------- | ----------------------------- |
+| request-header deadline | 408 after `headersTimeout`   | connection closed ~12 s, no response  | reverse proxy                 |
+| whole-request deadline  | `requestTimeout` 300 s       | none                                  | reverse proxy (or middleware) |
+| request header size     | 16 KiB, connection destroyed | 431 at 64 KiB (threshold is internal) | reverse proxy                 |
+| keep-alive idle         | `keepAliveTimeout` 5 s       | `idleTimeout` 30 s                    | app (`idleTimeout`)           |
+
+**These proxy settings are proposed, not deployed and not tested.** No Traefik,
+Dokploy or production configuration was changed, and no request was sent through
+Traefik. Verify them in staging against a slow upload and a long download before
+the runtime is switched for real traffic.
+
+**Shutdown.** Both adapters use `installGracefulShutdown` in
+`services/api/src/lifecycle.ts`: SIGTERM/SIGINT stops accepting new work
+(`server.close()` + `closeIdleConnections()` on Node, `server.stop(false)` on
+Bun), lets in-flight requests finish, closes the Postgres pool, logs
+`drained and database pool closed`, and exits 0. A 10 s deadline forces exit 1 if
+the drain does not finish; a second signal is ignored. The Bun-runtime CI job
+asserts this with a real in-flight download.
+
+**Rollback.** Redeploy the Node image (`--target runtime-node`) or point the
+process at `services/api/src/server.ts`. The application code is identical, so no
+schema or data migration is involved; migrations are additive and are applied at
+startup from either runtime. The Node entry point is exercised by the same CI
+job, so rollback is tested, not just documented.
+
+**Staged rollout (proposed, not performed).** Canary the Bun image behind the
+same Traefik route while the Node image still exists; compare error rate, p95 and
+RSS per instance for a fixed window; roll back by redeploying the Node image.
+
+**Owner decision still pending.** The evaluation measured the verification route
+slightly slower under Bun: +1.6 ms p50 / +4.5 ms p95 absolute on a ~40–50 ms
+route, consistent across rounds at n=120 rather than within run-to-run spread. No
+route budget exists, so accepting that regression is an owner decision. It has
+**not** been made, and this work does not authorise production rollout.
 
 ### Explicitly deferred
 
