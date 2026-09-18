@@ -96,6 +96,36 @@ describe('createApiApp', () => {
     })
   })
 
+  it('reports the serving adapter when the entry point declares one', async () => {
+    const auth = {
+      api: {
+        getSession: async () => null,
+      },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const pool = createPool(async () => ({ rows: [] }))
+
+    const bunHealth = await createApiApp(testEnv, pool, {
+      auth,
+      runtime: 'bun',
+    }).request('/api/health')
+    expect(await bunHealth.json()).toEqual({
+      status: 'ok',
+      service: 'obiter-api',
+      runtime: 'bun',
+    })
+
+    // No entry point declared one (a test building the app directly), so the
+    // body stays minimal rather than guessing a runtime.
+    const undeclared = await createApiApp(testEnv, pool, { auth }).request(
+      '/api/health',
+    )
+    expect(await undeclared.json()).toEqual({
+      status: 'ok',
+      service: 'obiter-api',
+    })
+  })
+
   it('returns changelog entries from GitHub releases', async () => {
     const auth = {
       api: {

@@ -1467,9 +1467,11 @@
             </div>
             <figcaption>
               Both clients reach the same API, differing only in how they carry
-              a session. The model runs in-process rather than as a service.
-              Find Case Law sits in the request path today, which the Search PRD
-              removes.
+              a session. The API has one bootstrap and two adapters — native
+              <code>Bun.serve</code> by default, <code>@hono/node-server</code>
+              retained for rollback — so the application is identical either
+              way. The model runs in-process rather than as a service. Find Case
+              Law sits in the request path today, which the Search PRD removes.
             </figcaption>
           </figure>
         </section>
@@ -2176,11 +2178,21 @@
                 <span class="pill live">Live</span>
               </header>
               <p>
-                The entire HTTP surface. Hono on Node, better-auth for sessions
-                and organisations, direct <code>pg</code> access through typed
+                The entire HTTP surface. One bootstrap
+                (<code>src/runtime.ts</code>) and two adapters: native
+                <code>Bun.serve</code> (<code>src/server-bun.ts</code>) and
+                <code>@hono/node-server</code> (<code>src/server.ts</code>),
+                kept as the rollback path. better-auth for sessions and
+                organisations, direct <code>pg</code> access through typed
                 helpers rather than an ORM.
               </p>
               <dl class="kv">
+                <dt>Runtime</dt>
+                <dd>
+                  Bun 1.4.2 (<code>Bun.serve</code>, default) · Node
+                  (<code>@hono/node-server</code>, rollback) — pinned in
+                  <code>.bun-version</code>
+                </dd>
                 <dt>Routes</dt>
                 <dd>
                   <a
@@ -5723,6 +5735,19 @@
                   </td>
                 </tr>
                 <tr>
+                  <td class="id">bun-api</td>
+                  <td>Pull request and push</td>
+                  <td>
+                    Starts the real API under native <code>Bun.serve</code> at
+                    the pinned <code>.bun-version</code>, and the Node rollback
+                    entry point, then drives
+                    <code>scripts/api-runtime/runtime-integration.mjs</code>
+                    against both: auth, tenancy, body limits, transactions,
+                    streaming, verification, CPU inference and SIGTERM shutdown.
+                    Vitest under Node does not cover this server.
+                  </td>
+                </tr>
+                <tr>
                   <td class="id">docker-web</td>
                   <td>Push only</td>
                   <td>
@@ -5731,6 +5756,16 @@
                     and the root <code>.dockerignore</code> only applies at the
                     context root. Skipped on pull requests, which is why a clean
                     PR reports it skipped rather than passing.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">docker-api</td>
+                  <td>Push only</td>
+                  <td>
+                    Builds both <code>services/api</code> image targets from one
+                    Dockerfile: the Bun image (default) and the Node rollback
+                    (<code>--target runtime-node</code>). Same skip-on-PR rule
+                    as <code>docker-web</code>.
                   </td>
                 </tr>
                 <tr>
@@ -5744,8 +5779,9 @@
           <div class="callout">
             <b>Branch strategy.</b> <code>dev</code> is the integration branch
             and <code>main</code> is the release branch; promoting
-            <code>dev</code> to <code>main</code> is what cuts a deploy. Only
-            <code>apps/web</code> has a Dockerfile. The API image is deferred,
+            <code>dev</code> to <code>main</code> is what cuts a deploy. Both
+            <code>apps/web</code> and <code>services/api</code> have Dockerfiles
+            (the API builds a Bun image by default and a Node rollback target);
             marketing lives in its own repository, and desktop ships as Electron
             installers rather than server images. See
             <a
@@ -6177,6 +6213,22 @@
                     equivalent) as a deployment requirement.
                   </td>
                   <td class="id">architecture.html</td>
+                </tr>
+                <tr>
+                  <td>Bun serving has no header or whole-request deadline</td>
+                  <td>
+                    Node's <code>headersTimeout</code>/<code
+                      >requestTimeout</code
+                    >
+                    have no <code>Bun.serve</code> equivalent, and there is no
+                    configurable header-size limit. The deferred proxying must
+                    supply those bounds; see
+                    <a
+                      href="https://github.com/ObiterDictum/obiter/blob/dev/docs/specs/deployment.md"
+                      >specs/deployment.md</a
+                    >.
+                  </td>
+                  <td class="id">deployment.md</td>
                 </tr>
                 <tr>
                   <td>Search matching is substring-based</td>

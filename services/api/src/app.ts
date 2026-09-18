@@ -54,9 +54,13 @@ interface AppVariables {
   session: SessionRecord | null
 }
 
+/** The adapter serving the app, declared by the entry point that built it. */
+export type ApiRuntimeKind = 'node' | 'bun'
+
 interface ApiAppOptions {
   auth?: Auth
   storage?: StorageService
+  runtime?: ApiRuntimeKind
 }
 
 interface DevelopmentApiProvenance {
@@ -243,6 +247,11 @@ export function createApiApp(
     const health = {
       status: 'ok' as const,
       service: 'obiter-api' as const,
+      // Reported only when an entry point declared it, so a test that builds
+      // the app directly keeps the minimal body. This is what lets a canary or
+      // an integration check confirm which adapter answered rather than
+      // inferring it from a process name.
+      ...(options.runtime ? { runtime: options.runtime } : {}),
     }
 
     return developmentProvenance
