@@ -145,7 +145,7 @@ the artifact and reproduced in
 | Idle RSS after model warm         | 284.9 MB      | 197.7 MB     | −31%  |
 | Sampled peak RSS, 250 ms interval | 584.6 MB      | 558.7 MB     | −4%   |
 | Server CPU, identical sweep       | 74 860 ms     | 66 250 ms    | −12%  |
-| Load-generator CPU, for scale     | 8 969 ms      | 8 086 ms     | —     |
+| Load-generator CPU, for scale     | 8 969 ms      | 8 096 ms     | —     |
 
 | Journey                     | n/round | Compiled Node p50 / p95 | Compiled Bun p50 / p95 | Δp50 / Δp95 |
 | --------------------------- | ------- | ----------------------- | ---------------------- | ----------- |
@@ -200,13 +200,14 @@ it should be treated as a characteristic to watch, not a blocker.
 **ONNX inference:** the adverse tail **does not reproduce**. Revision 1
 reported Bun's p95 above Node's in all three rounds (1314/1772/1118 vs
 1067/1028/1054 ms) — but that was max-vs-max on 12 samples. At n=120 Node's
-p95 is at or above Bun's in every round (round 1 by 47%, with a Node maximum of
-2114 ms), and the medians are −0% p50 / −7% p95. The revision-1 separation was
-an artefact of the small sample; the honest statement is that ONNX inference is
-runtime-neutral at p50 and its tail is at least as good under Bun _in this
-campaign_. It remains CPU-heavy and therefore dominates any whole-sweep CPU
-total that includes it (see the tail-sweep CPU delta of −2%, versus −12% in the
-primary sweep).
+p95 is at or above Bun's in two of the three rounds (round 1 by 47%, with a Node
+maximum of 2114 ms); round 3 is the exception, where Bun's p95 is 1148.84 ms
+against Node's 1141.93 ms — 0.6% higher for Bun and within noise. The medians
+are −0% p50 / −7% p95. The revision-1 separation was an artefact of the small
+sample; the honest statement is that ONNX inference is runtime-neutral at p50
+and its tail is at least as good under Bun _in this campaign_. It remains
+CPU-heavy and therefore dominates any whole-sweep CPU total that includes it
+(see the tail-sweep CPU delta of −2%, versus −12% in the primary sweep).
 
 ## Memory measurement
 
