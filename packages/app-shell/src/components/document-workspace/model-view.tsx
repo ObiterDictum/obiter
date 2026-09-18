@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import type { DocumentModelWire, DocumentPresence } from '@obiter/contracts'
 import type { LocalInsert } from '../../document-edits'
+import type { ExtraRuns } from '../../document-word-edits'
 import {
   documentPageBox,
   marginStories,
@@ -37,6 +38,7 @@ import { PageMarginBand } from './page-margin-band'
  */
 const NO_INSERTS: LocalInsert[] = []
 const NO_DELETED_PARAGRAPH_IDS: string[] = []
+const NO_EXTRA_RUNS: ExtraRuns = {}
 
 export function DocumentModelPage({
   model,
@@ -50,6 +52,7 @@ export function DocumentModelPage({
   currentUserId,
   inserts = NO_INSERTS,
   deletedParagraphIds = NO_DELETED_PARAGRAPH_IDS,
+  extraRuns = NO_EXTRA_RUNS,
   onInsertTextChange,
   onInsertParagraph,
   onDeleteParagraph,
@@ -84,6 +87,8 @@ export function DocumentModelPage({
   currentUserId?: string
   inserts?: LocalInsert[]
   deletedParagraphIds?: string[]
+  /** Text held outside the painted runs, which the layout merges back in. */
+  extraRuns?: ExtraRuns
   onInsertTextChange?: (clientId: string, text: string) => void
   onInsertParagraph?: (afterParagraphId: string) => void
   onDeleteParagraph?: (paragraphId: string) => void
@@ -147,6 +152,7 @@ export function DocumentModelPage({
     // and made a render O(n^2) on a long document.
     const neighbors = paragraphNeighborResolver({
       model,
+      extraRuns,
       inserts,
       deletedParagraphIds,
       paragraphs: story?.paragraphs ?? [],
@@ -163,7 +169,7 @@ export function DocumentModelPage({
       storyOf,
       neighbors,
     }
-  }, [model, inserts, deletedParagraphIds])
+  }, [model, extraRuns, inserts, deletedParagraphIds])
   const {
     story,
     headers,
@@ -206,7 +212,7 @@ export function DocumentModelPage({
         delete event.currentTarget.dataset.pointerDown
         if (down && down !== `${event.clientX},${event.clientY}`) return
         const endOffset = (id: string) =>
-          blockEndOffset(id, story.paragraphs, drafts, inserts)
+          blockEndOffset(id, story.paragraphs, drafts, inserts, extraRuns)
         const paragraphEl = event.target.closest('[data-paragraph-id]')
         if (paragraphEl instanceof HTMLElement) {
           const caret = paragraphClickCaret(
