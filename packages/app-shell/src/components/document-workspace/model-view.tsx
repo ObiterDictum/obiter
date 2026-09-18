@@ -28,6 +28,16 @@ import {
 import type { ParagraphSelectionHandlers } from './paragraph-editor'
 import { PageMarginBand } from './page-margin-band'
 
+/**
+ * The omitted-prop defaults for the structural draft inputs. A `[]` in the
+ * signature would mint a fresh array on every render and re-derive this page's
+ * whole derived set for a caller that omits the prop, with no warning: the
+ * `derived` memo below is keyed on those identities, so they have to survive a
+ * render that changes nothing structural. Nothing in this module mutates them.
+ */
+const NO_INSERTS: LocalInsert[] = []
+const NO_DELETED_PARAGRAPH_IDS: string[] = []
+
 export function DocumentModelPage({
   model,
   selectedParagraphId,
@@ -38,8 +48,8 @@ export function DocumentModelPage({
   editing,
   presence,
   currentUserId,
-  inserts = [],
-  deletedParagraphIds = [],
+  inserts = NO_INSERTS,
+  deletedParagraphIds = NO_DELETED_PARAGRAPH_IDS,
   onInsertTextChange,
   onInsertParagraph,
   onDeleteParagraph,
