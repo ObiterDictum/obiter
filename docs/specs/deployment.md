@@ -74,6 +74,54 @@ Artifacts shipped:
 
 **Same-domain routing (Dokploy/Traefik):** deploy the `api` and `web` apps as two Dokploy applications on the same host. Configure the domain with two Traefik rules: `/api/*` → the `api` application (higher priority), `/*` → the `web` application. The web app then calls the API with relative URLs (`apiFetch` already uses `credentials: 'include'`), so better-auth cookie sessions work without third-party-cookie workarounds. This matches the spec's hard requirement above.
 
+#### Proposed reverse-proxy request deadlines (conditional on a Bun migration)
+
+Status: **proposed, not deployed and not tested.** This is the configuration a
+Bun migration PR must pin; it is recorded here because the evaluation in
+[`docs/bun-serve-runtime-evaluation.md`](../bun-serve-runtime-evaluation.md)
+found that `Bun.serve` exposes no request-header or whole-request deadline
+(only a single `idleTimeout`), so the deadlines Node's `http.Server` enforces
+in-process (`headersTimeout`, `requestTimeout`) have to move to the edge.
+
+Dokploy writes its own Traefik main config to `/etc/dokploy/traefik/traefik.yml`
+(mounted at `/etc/traefik/traefik.yml`). Its generated `entryPoints` set only
+`address` (plus `http3` and the TLS cert resolver on `websecure`) and no
+`transport` block, so Traefik's own defaults apply. Dokploy's default image is
+`traefik:v3.6.25` (overridable with `TRAEFIK_VERSION`); the timeout keys below
+match the published Traefik reference for v3.5 and v3.6. The deployed
+`TRAEFIK_VERSION` was not readable from the evaluation host, so the version
+here is Dokploy's default, not a confirmed production version, and the keys
+should be re-checked against whatever version the server actually runs before
+they are pinned.
+
+| Traefik key (`entryPoints.<name>.transport.*`) | Traefik default | Effect when left at the default                                 |
+| ---------------------------------------------- | --------------- | --------------------------------------------------------------- |
+| `respondingTimeouts.readTimeout`               | `60s`           | bounds reading the whole request, body included (`0s` disables) |
+| `respondingTimeouts.writeTimeout`              | `0s` (none)     | response writes are unbounded                                   |
+| `respondingTimeouts.idleTimeout`               | `180s`          | idle keep-alive connections close after 180s                    |
+| `lifeCycle.graceTimeOut`                       | `10s`           | drain window when Traefik itself stops                          |
+| `lifeCycle.requestAcceptGraceTimeout`          | `0s`            | no pre-drain period for upstream load balancers                 |
+
+Proposed, to be set explicitly on both `web` and `websecure` rather than left
+to defaults: `readTimeout: 60s` (matching Node's `headersTimeout` and bounding
+a half-open header at the edge), `idleTimeout: 180s`, `writeTimeout: 0s` left
+disabled so a streaming download or a long-lived response is not cut mid-body,
+and `lifeCycle.graceTimeOut` no shorter than the API's own 10 s drain. Two
+consequences have to be settled against real traffic before the values are
+pinned, and neither has been tested here:
+
+- `readTimeout` covers the request _body_, not just the header. A 25 MiB upload
+  from a slow client can exceed 60 s; the value must be checked against the
+  slowest upload the product accepts, or the upload route given its own rule.
+- `writeTimeout` is the only proxy knob that bounds a response stream, and it
+  is a total budget, not an idle timeout. Any value shorter than the longest
+  legitimate stream (large download, future export or SSE) truncates it;
+  leaving it at `0` means the edge does not bound response duration at all —
+  the same gap as Bun's `idleTimeout`, moved to the proxy.
+
+This is configuration work, not an application change: no Traefik, Dokploy or
+production service was modified while producing the evaluation.
+
 **Fonts (resolved):** the Satoshi / JetBrains-Mono typefaces are now self-hosted (woff2 vendored in `packages/ui/src/fonts/`, served via `@font-face`) — no Fontshare CDN dependency in web or desktop. See [desktop-release.md](./desktop-release.md) for the packaging and licensing notes.
 
 **Desktop packaging** (installers, the packaged API origin, and the packaged Origin/trust story) is covered in [desktop-release.md](./desktop-release.md).
