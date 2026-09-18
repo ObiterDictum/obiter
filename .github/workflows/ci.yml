@@ -217,21 +217,18 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Apply database migrations
-        env:
-          PGPASSWORD: obiter
+      # The API applies its own migrations at startup behind an advisory lock,
+      # which is the production path and what this job should exercise. Applying
+      # them here with psql -f first would leave schema_migrations empty and make
+      # the API re-run migrations that are not idempotent. psql itself is still
+      # needed: the harness provisions fixtures through scripts/load/psql.mjs.
+      - name: Install harness prerequisites
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
-          for f in packages/database/migrations/*.sql; do
-            psql -h localhost -U obiter -d obiter_test -v ON_ERROR_STOP=1 -f "$f"
-          done
-
-      # The harness generates genuine python-docx fixtures through
-      # scripts/load/make-upload-fixtures.py, the same generator the load harness
-      # uses. Ubuntu 24.04 marks the system Python externally managed, hence the
-      # explicit flag; nothing else in CI needs it.
-      - name: Install fixture generator dependency
-        run: python3 -m pip install --break-system-packages python-docx
+          # The harness generates genuine python-docx fixtures through
+          # scripts/load/make-upload-fixtures.py. Ubuntu 24.04 marks the system
+          # Python externally managed, hence the explicit flag.
+          python3 -m pip install --break-system-packages python-docx
 
       # Starts both entry points on their own ports against obiter_test and
       # asserts auth, tenancy, body limits, transactions, streaming,
