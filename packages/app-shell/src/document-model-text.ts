@@ -21,6 +21,31 @@ export function paragraphPlainText(
   return paragraph.runs.map((run) => drafts?.[run.id] ?? run.text).join('')
 }
 
+/**
+ * The paragraph the layout and caret paths read: the stored runs plus runs an
+ * edit holds outside them (`extraRuns`, which a join stores so the saved
+ * operation keeps its original run ids), with the text drafts applied.
+ *
+ * One mapping, so a paragraph cannot say one thing to the paint and another to
+ * the caret. `drafts` absent and no extra runs returns the paragraph itself;
+ * identity is not part of the result, this only avoids rebuilding every
+ * paragraph's runs on each pagination pass.
+ */
+export function effectiveParagraph(
+  paragraph: DocumentParagraphWire,
+  drafts: Record<string, string> | undefined,
+  extraRuns: readonly DocumentTextRunWire[] = [],
+): DocumentParagraphWire {
+  if (extraRuns.length === 0 && !drafts) return paragraph
+  return {
+    ...paragraph,
+    runs: [...paragraph.runs, ...extraRuns].map((run) => ({
+      ...run,
+      text: drafts?.[run.id] ?? run.text,
+    })),
+  }
+}
+
 export function paragraphRunStart(
   paragraph: DocumentParagraphWire,
   runId: string,
