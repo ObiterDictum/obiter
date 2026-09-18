@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import type { DocumentModelWire, DocumentPresence } from '@obiter/contracts'
 import type { LocalInsert } from '../../document-edits'
 import {
@@ -21,10 +22,21 @@ import type { ParagraphSelectionRange } from './model-run'
 import { PageOverlays, renderBlock } from './model-page-blocks'
 import {
   clearVerticalColumn,
+  paragraphNeighborResolver,
   type VerticalCaretColumn,
 } from './paragraph-arrow'
 import type { ParagraphSelectionHandlers } from './paragraph-editor'
 import { PageMarginBand } from './page-margin-band'
+
+/**
+ * The omitted-prop defaults for the structural draft inputs. A `[]` in the
+ * signature would mint a fresh array on every render and re-derive this page's
+ * whole derived set for a caller that omits the prop, with no warning: the
+ * `derived` memo below is keyed on those identities, so they have to survive a
+ * render that changes nothing structural. Nothing in this module mutates them.
+ */
+const NO_INSERTS: LocalInsert[] = []
+const NO_DELETED_PARAGRAPH_IDS: string[] = []
 
 export function DocumentModelPage({
   model,
@@ -36,8 +48,8 @@ export function DocumentModelPage({
   editing,
   presence,
   currentUserId,
-  inserts = [],
-  deletedParagraphIds = [],
+  inserts = NO_INSERTS,
+  deletedParagraphIds = NO_DELETED_PARAGRAPH_IDS,
   onInsertTextChange,
   onInsertParagraph,
   onDeleteParagraph,
@@ -90,10 +102,80 @@ export function DocumentModelPage({
   onFocusParagraph?: (paragraphId: string) => void
   onMoveCaret?: (paragraphId: string, offset: number) => void
 }) {
-  const story = model.stories.find((item) => item.kind === 'document')
-  const headers = marginStories(model, 'header')
-  const footers = marginStories(model, 'footer')
-  const page = documentPageBox(model)
+  const derived = useMemo(() => {
+    const story = model.stories.find((item) => item.kind === 'document')
+    const headers = marginStories(model, 'header')
+    const footers = marginStories(model, 'footer')
+    const page = documentPageBox(model)
+    const bands = marginBandHeights(model)
+    const frame = contentFrame(page, bands)
+    const listMarkers = documentListMarkers(model)
+    const notes = documentNotes(model)
+    const noteParagraphIds = new Set(
+      notes.flatMap((note) => note.paragraphs.map((paragraph) => paragraph.id)),
+    )
+    const noteMarks = new Map(
+      notes.flatMap((note) => {
+        const first = note.paragraphs[0]
+        return first
+          ? [[first.id, { mark: note.mark, kind: note.kind }] as const]
+          : []
+      }),
+    )
+    // A footnote or endnote paragraph is rendered inside the same page flow as
+    // the body, so its story has to travel with the element: verification
+    // locations are story-scoped, and a paragraph id alone is not unique.
+    const storyByParagraph = new Map<
+      string,
+      { kind: string; partName: string }
+    >()
+    for (const note of notes) {
+      const kind = note.kind === 'footnote' ? 'footnotes' : 'endnotes'
+      const partName =
+        model.stories.find((item) => item.kind === kind)?.partName ??
+        story?.partName ??
+        ''
+      for (const paragraph of note.paragraphs) {
+        storyByParagraph.set(paragraph.id, { kind, partName })
+      }
+    }
+    const bodyStory = { kind: 'document', partName: story?.partName ?? '' }
+    const storyOf = (paragraphId: string) =>
+      storyByParagraph.get(paragraphId) ?? bodyStory
+    // One resolver over the story's flow order per model. Building it inside
+    // the per-paragraph render walked the whole document for every paragraph
+    // and made a render O(n^2) on a long document.
+    const neighbors = paragraphNeighborResolver({
+      model,
+      inserts,
+      deletedParagraphIds,
+      paragraphs: story?.paragraphs ?? [],
+    })
+    return {
+      story,
+      headers,
+      footers,
+      page,
+      frame,
+      listMarkers,
+      noteParagraphIds,
+      noteMarks,
+      storyOf,
+      neighbors,
+    }
+  }, [model, inserts, deletedParagraphIds])
+  const {
+    story,
+    headers,
+    footers,
+    page,
+    frame,
+    listMarkers,
+    noteParagraphIds,
+    noteMarks,
+    storyOf,
+    neighbors,
+  } = derived
   if (!story || story.paragraphs.length === 0) {
     return (
       <p className="px-24 py-24 text-[15px] leading-[1.15] text-[#6b6862]">
@@ -103,44 +185,11 @@ export function DocumentModelPage({
   }
 
   const blocks: LaidOutBlock[] = pageBlocks ?? storyBlocks(story)
-  const bands = marginBandHeights(model)
-  const frame = contentFrame(page, bands)
   const columns = pageColumns ?? [{ left: 0, widthPx: frame.widthPx }]
   const firstColumn = columns[0]
   const nextColumn = columns[1]
   const gap =
     firstColumn && nextColumn ? nextColumn.left - firstColumn.widthPx : 0
-  const listMarkers = documentListMarkers(model)
-  const notes = documentNotes(model)
-  const noteParagraphIds = new Set(
-    notes.flatMap((note) => note.paragraphs.map((paragraph) => paragraph.id)),
-  )
-  const noteMarks = new Map(
-    notes.flatMap((note) => {
-      const first = note.paragraphs[0]
-      return first
-        ? [[first.id, { mark: note.mark, kind: note.kind }] as const]
-        : []
-    }),
-  )
-  // A footnote or endnote paragraph is rendered inside the same page flow as
-  // the body, so its story has to travel with the element: verification
-  // locations are story-scoped, and a paragraph id alone is not unique.
-  const storyByParagraph = new Map<string, { kind: string; partName: string }>()
-  for (const note of notes) {
-    const kind = note.kind === 'footnote' ? 'footnotes' : 'endnotes'
-    const partName =
-      model.stories.find((item) => item.kind === kind)?.partName ??
-      story.partName
-    for (const paragraph of note.paragraphs) {
-      storyByParagraph.set(paragraph.id, { kind, partName })
-    }
-  }
-  const storyOf = (paragraphId: string) =>
-    storyByParagraph.get(paragraphId) ?? {
-      kind: 'document',
-      partName: story.partName,
-    }
 
   return (
     <div
@@ -248,6 +297,7 @@ export function DocumentModelPage({
                   columnWidthPx: column.widthPx,
                   selectionSegments,
                   selectionHandlers,
+                  neighbors,
                   onFocusParagraph,
                   onMoveCaret,
                 }),

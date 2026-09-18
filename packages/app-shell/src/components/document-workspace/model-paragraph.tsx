@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import type {
   DocumentChangeWire,
   DocumentParagraphWire,
@@ -24,7 +25,10 @@ import {
 } from '../../document-page-style'
 import type { SelectionEndpoint } from '../../document-selection'
 import { PageDrawing } from './page-drawing'
-import type { ArrowNeighbor, VerticalCaretColumn } from './paragraph-arrow'
+import type {
+  ParagraphNeighborResolver,
+  VerticalCaretColumn,
+} from './paragraph-arrow'
 import type {
   ParagraphSelectionBinding,
   ParagraphSelectionHandlers,
@@ -45,7 +49,7 @@ export function ModelParagraph({
   paragraph,
   changes,
   selected,
-  onSelect,
+  onSelectParagraph,
   drafts,
   onRunTextChange,
   onInsertParagraph,
@@ -55,8 +59,7 @@ export function ModelParagraph({
   onMoveCaret,
   onTextSelection,
   restoreCaret,
-  previous,
-  next,
+  neighbors,
   verticalCaret,
   selectionHandlers,
   selectionSegment,
@@ -83,7 +86,7 @@ export function ModelParagraph({
   paragraph: DocumentParagraphWire
   changes: DocumentChangeWire[]
   selected: boolean
-  onSelect: () => void
+  onSelectParagraph: (paragraphId: string, offset?: number) => void
   drafts?: Record<string, string>
   onRunTextChange?: (runId: string, text: string) => void
   onInsertParagraph?: (afterParagraphId: string) => void
@@ -98,8 +101,7 @@ export function ModelParagraph({
     direction: 'forward' | 'backward',
   ) => void
   restoreCaret?: { paragraphId: string; offset: number } | null
-  previous?: ArrowNeighbor
-  next?: ArrowNeighbor
+  neighbors?: ParagraphNeighborResolver
   verticalCaret?: VerticalCaretColumn
   selectionHandlers?: ParagraphSelectionHandlers
   selectionSegment?: ParagraphSelectionRange | null
@@ -131,7 +133,14 @@ export function ModelParagraph({
       item.userId !== currentUserId &&
       item.cursor?.paragraphId === paragraph.id,
   )
-  const face = paragraphFace(paragraph, styles)
+  const face = useMemo(
+    // `paragraphFace` reads only the paragraph's style id and its own XML, and
+    // both keep their identity when only the paragraph's text changes. Keying
+    // on those rather than the rebuilt paragraph object means an untouched
+    // paragraph does not re-parse its formatting on every keystroke.
+    () => paragraphFace(paragraph, styles),
+    [paragraph.preservedXmlFragments, paragraph.styleId, styles],
+  )
   const fullText = paragraphPlainText(paragraph, drafts)
   const start = from ?? 0
   const end = to ?? fullText.length
@@ -149,11 +158,18 @@ export function ModelParagraph({
       (ownsBreak && restoreCaret.offset === end))
       ? restoreCaret.offset - start
       : undefined
-  const lines = wrapLines(
-    sliceText,
-    face.run.fontSizePx ?? linePx,
-    wrapWidthPx && wrapWidthPx > 0 ? wrapWidthPx : Number.POSITIVE_INFINITY,
-    face.run.fontFamily,
+  // Wrapping measures every line through the canvas. An unchanged paragraph's
+  // slice text is an equal string, so the measurement survives the keystroke
+  // even though the paragraph object was rebuilt.
+  const lines = useMemo(
+    () =>
+      wrapLines(
+        sliceText,
+        face.run.fontSizePx ?? linePx,
+        wrapWidthPx && wrapWidthPx > 0 ? wrapWidthPx : Number.POSITIVE_INFINITY,
+        face.run.fontFamily,
+      ),
+    [sliceText, face, linePx, wrapWidthPx],
   )
   const editorHeight = lines.length * linePx
   const holdsCaret =
@@ -162,6 +178,12 @@ export function ModelParagraph({
     (restore !== undefined ||
       restoreCaret == null ||
       restoreCaret.paragraphId !== paragraph.id)
+  // Only the paragraph holding the caret reads a neighbour, and the resolver
+  // only then wraps the neighbour's text. Everything else pays a lookup.
+  const adjacent =
+    editing && holdsCaret && neighbors
+      ? neighbors(paragraph.id, wrapWidthPx, drafts)
+      : undefined
   const indentLeftPx = listMarker
     ? Math.max(0, listMarker.leftPx - listMarker.hangingPx)
     : (face.indentLeftPx ?? 0)
@@ -308,8 +330,8 @@ export function ModelParagraph({
                 selected={holdsCaret}
                 restoreCaret={restore}
                 lines={lines}
-                previous={previous}
-                next={next}
+                previous={adjacent?.previous}
+                next={adjacent?.next}
                 verticalCaret={verticalCaret}
                 selection={selectionBinding}
                 onFocusParagraph={onFocusParagraph}
@@ -335,7 +357,7 @@ export function ModelParagraph({
                   color: 'transparent',
                   backgroundColor: 'transparent',
                 }}
-                onSelect={onSelect}
+                onSelect={() => onSelectParagraph(paragraph.id)}
                 onChangeText={(next) => {
                   const diff = textDiff(sliceText, next)
                   if (onWordEdit) {
