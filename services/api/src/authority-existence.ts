@@ -8,7 +8,7 @@ import {
   type VerificationSubject,
 } from '@obiter/verification-core'
 import {
-  createPostgresLegalAuthoritySourceStore,
+  createPostgresLegalAuthorityReadStore,
   findStoredAuthorityIdsByNeutralCitation,
   MalformedStoredRecordError,
   selectAuthorityCarriers,
@@ -145,7 +145,7 @@ async function lookupCaseLaw(
     )
     if (ids.length === 0) return { outcome: 'not_held', missing: 'authority' }
 
-    const store = createPostgresLegalAuthoritySourceStore(pool)
+    const store = createPostgresLegalAuthorityReadStore(pool)
     const carriers: StoredAuthorityCarrier[] = []
     for (const id of ids) {
       const record = await readStore(() => store.get(id))
