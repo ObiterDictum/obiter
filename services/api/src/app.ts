@@ -13,12 +13,14 @@ import { updateUserName } from './account-database'
 import { appendPasswordChangedAudit } from './auth-change-audit'
 import { appendAuditLog, findOrganisation, toCurrentUser } from './database'
 import type { ApiEnv } from './env'
+import type { CorpusAccess } from './database-pools'
 import { createAuth } from './auth'
 import { corsAllowedOrigin } from './client-origins'
 import { createLegalSearchRoutes } from './routes/legal-search/search-routes'
 import {
   createLegalSearchProxyRoutes,
-  createPostgresLegalAuthoritySourceStore,
+  createPostgresLegalAuthorityReadStore,
+  createPostgresLegalAuthorityWriteStore,
 } from './routes/legal-search/proxy-routes'
 import { createChangelogRoutes } from './routes/changelog'
 import { createCommentsRoutes } from './routes/comments'
@@ -57,6 +59,13 @@ interface AppVariables {
 interface ApiAppOptions {
   auth?: Auth
   storage?: StorageService
+  /**
+   * Legal-corpus access. Omitted in the default configuration, where the
+   * corpus is the application database and reads and writes both use `pool`.
+   * A read-only corpus access is what a process pointed at a separate corpus
+   * has: reads run there, and no corpus write is reachable from this app.
+   */
+  corpus?: CorpusAccess
 }
 
 interface DevelopmentApiProvenance {
@@ -128,6 +137,9 @@ export function createApiApp(
   })
   const auth = options.auth ?? createAuth(env, pool)
   const storage = options.storage ?? createLocalStorage()
+  // The default is the compatibility seam: corpus reads and writes are the
+  // application pool, exactly as they were before the seam existed.
+  const corpusAccess = options.corpus ?? { pool, readOnly: false }
   // This is deliberately development-only: the public health route must not
   // expose filesystem paths or build metadata in production.
   const developmentProvenance =
@@ -243,6 +255,21 @@ export function createApiApp(
     const health = {
       status: 'ok' as const,
       service: 'obiter-api' as const,
+      // The corpus access mode: whether corpus reads share the application pool
+      // (`colocated`, the compatibility default) and whether this process may
+      // write the corpus. `colocated: true` means no separate corpus target was
+      // configured, so there is one database and corpus writes behave exactly
+      // as they did before the seam. The mode follows configuration, not URL
+      // equality: a configured target is read-only even when it names the same
+      // database. It says nothing about whether a shared corpus exists; no
+      // shared corpus is deployed, and this reports only what this process is
+      // configured to do. Deliberately no host, port or database name: the
+      // booleans are enough to tell the modes apart and disclose no connection
+      // detail.
+      corpus: {
+        colocated: corpusAccess.pool === pool,
+        readOnly: corpusAccess.readOnly,
+      },
     }
 
     return developmentProvenance
@@ -266,16 +293,22 @@ export function createApiApp(
   app.route('/', createRedactRunCreationRoutes(pool, storage, requestLimits))
   app.route('/', createRedactReviewRoutes(pool, storage))
   app.route('/', createRedactLifecycleRoutes(pool, storage))
-  app.route('/', createVerificationRunRoutes(pool, storage))
+  app.route('/', createVerificationRunRoutes(pool, storage, corpusAccess.pool))
   app.route('/', createLegalSearchRoutes(env))
   app.route(
     '/',
     createLegalSearchProxyRoutes(
       env,
-      createPostgresLegalAuthoritySourceStore(pool),
+      createPostgresLegalAuthorityReadStore(corpusAccess.pool),
       {
+        // The write half is handed over only when the corpus is writable here.
+        // A read-only process is never given one, so no route can attempt a
+        // corpus write and then have to swallow the failure.
+        corpusWrites: corpusAccess.readOnly
+          ? null
+          : createPostgresLegalAuthorityWriteStore(corpusAccess.pool),
         legislation: {
-          pool,
+          pool: corpusAccess.pool,
           indexName: env.legislationProvisionsIndex,
         },
       },

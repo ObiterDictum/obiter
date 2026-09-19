@@ -29,6 +29,81 @@ afterEach(() => {
   process.env = { ...originalEnv }
 })
 
+describe('corpus database resolution', () => {
+  function seedTestEnv() {
+    process.env.NODE_ENV = 'test'
+    process.env.BETTER_AUTH_SECRET = TEST_AUTH_SECRET
+    process.env.MEILISEARCH_SEARCH_API_KEY = 'test-search-key'
+    process.env.MEILISEARCH_ADMIN_API_KEY = 'test-admin-key'
+    delete process.env.DATABASE_URL
+    delete process.env.CORPUS_DATABASE_URL
+    process.env.TEST_DATABASE_URL =
+      'postgres://obiter:obiter@localhost:5432/obiter_test'
+  }
+
+  it('defaults corpus reads to the application database', () => {
+    seedDevelopmentEnv()
+    process.env.DATABASE_URL = 'postgres://obiter:obiter@localhost:5432/obiter'
+    delete process.env.CORPUS_DATABASE_URL
+
+    const env = readApiEnv()
+
+    // The compatibility seam: with no new variable set, there is no separate
+    // corpus target and the corpus is the application database.
+    expect(env.corpusDatabaseUrl).toBeNull()
+  })
+
+  it('reads a dedicated corpus database when one is configured', () => {
+    seedDevelopmentEnv()
+    process.env.DATABASE_URL = 'postgres://obiter:obiter@localhost:5432/obiter'
+    process.env.CORPUS_DATABASE_URL =
+      'postgres://obiter_corpus_reader@localhost:5432/obiter_corpus'
+
+    const env = readApiEnv()
+
+    expect(env.corpusDatabaseUrl).toContain('/obiter_corpus')
+    expect(env.corpusDatabaseUrl).not.toBe(env.databaseUrl)
+  })
+
+  it('refuses a test database that is not a *_test database', () => {
+    seedTestEnv()
+    process.env.TEST_DATABASE_URL =
+      'postgres://obiter:obiter@localhost:5432/obiter_lane_security'
+
+    expect(() => readApiEnv()).toThrow(
+      'TEST_DATABASE_URL must name a *_test database.',
+    )
+  })
+
+  it('resolves corpus reads to the isolated test database', () => {
+    seedTestEnv()
+
+    const env = readApiEnv()
+
+    expect(env.corpusDatabaseUrl).toBeNull()
+    expect(env.databaseUrl).toContain('/obiter_test')
+  })
+
+  it('accepts a corpus URL that is the test database', () => {
+    seedTestEnv()
+    process.env.CORPUS_DATABASE_URL = process.env.TEST_DATABASE_URL
+
+    expect(readApiEnv().corpusDatabaseUrl).toBe(
+      'postgres://obiter:obiter@localhost:5432/obiter_test',
+    )
+  })
+
+  it('refuses a corpus URL that points a test run at another database', () => {
+    seedTestEnv()
+    process.env.CORPUS_DATABASE_URL =
+      'postgres://obiter:obiter@localhost:5432/obiter_corpus'
+
+    expect(() => readApiEnv()).toThrow(
+      'CORPUS_DATABASE_URL must match TEST_DATABASE_URL.',
+    )
+  })
+})
+
 describe('readApiEnv', () => {
   it('uses local development defaults when BETTER_AUTH_SECRET is configured', () => {
     seedDevelopmentEnv()

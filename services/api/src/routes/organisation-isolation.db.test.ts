@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { Pool } from 'pg'
+import { createTestPool } from '../test-database.test-support'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { AuthzVariables } from '../authz'
 import { createTestApiEnv } from '../test-api-env'
@@ -87,14 +88,7 @@ const json = (body: unknown, method: 'POST' | 'PATCH' = 'POST') => ({
 })
 
 describe('organisation isolation against Postgres (V10)', () => {
-  const connectionString = process.env.TEST_DATABASE_URL
-  if (!connectionString) {
-    throw new Error(
-      'TEST_DATABASE_URL is required for organisation-isolation.db.test.ts',
-    )
-  }
-
-  const pool = new Pool({ connectionString })
+  const pool = createTestPool()
   let seed: OrganisationIsolationSeed
 
   beforeAll(async () => {

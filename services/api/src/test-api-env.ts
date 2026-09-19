@@ -15,8 +15,14 @@ import {
 } from '@obiter/ooxml'
 
 export function createTestApiEnv(overrides: Partial<ApiEnv> = {}): ApiEnv {
+  const databaseUrl = 'postgres://obiter:obiter@localhost:5432/obiter'
+
   return {
-    databaseUrl: 'postgres://obiter:obiter@localhost:5432/obiter',
+    databaseUrl,
+    // Null is the compatibility seam: no separate corpus target is configured,
+    // so the corpus is the application database and tests exercise the writable
+    // configuration unless they override it to cover read-only access.
+    corpusDatabaseUrl: null,
     authSecret: 'dev-only-better-auth-secret',
     authBaseUrl: 'http://localhost:8787',
     webOrigin: 'http://localhost:3000',

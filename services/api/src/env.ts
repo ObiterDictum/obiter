@@ -7,6 +7,7 @@ import {
   RAMPART_MODEL_REVISION,
 } from '@obiter/rampart-inference'
 import { defaultRampartCacheDir } from './rampart-cache'
+import { readDatabaseIdentity } from './database-identity'
 import type { RedactionDetectionConfig } from './redaction-detection'
 import {
   DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES,
@@ -35,9 +36,15 @@ const requiredProductionKeys = [
 ] as const
 
 const requiredTestKeys = ['TEST_DATABASE_URL'] as const
+// Corpus reads fall back to this database, so its name is what separates
+// throwaway test data from a populated database.
+const testDatabaseSuffix = '_test'
 
 export interface ApiEnv {
   databaseUrl: string
+  /** Legal-corpus reads. Null means no separate corpus target was configured,
+   * so the corpus is `databaseUrl`: the compatibility seam. */
+  corpusDatabaseUrl: string | null
   authSecret: string
   authBaseUrl: string
   webOrigin: string
@@ -147,6 +154,29 @@ function readDatabaseUrl(nodeEnv: ApiEnv['nodeEnv']) {
   }
 
   return testDatabaseUrl
+}
+
+/** Legal-corpus resolution: null means no separate corpus target, so the
+ * corpus is the application database. Test runs must stay on `*_test`. */
+function readCorpusDatabaseUrl(
+  nodeEnv: ApiEnv['nodeEnv'],
+  databaseUrl: string,
+): string | null {
+  const configured = process.env.CORPUS_DATABASE_URL
+  const corpusDatabaseUrl = configured
+    ? parseUrl('CORPUS_DATABASE_URL', configured)
+    : null
+  if (nodeEnv !== 'test') return corpusDatabaseUrl
+
+  const { database } = readDatabaseIdentity(databaseUrl, 'TEST_DATABASE_URL')
+  if (!database.endsWith(testDatabaseSuffix)) {
+    throw new Error('TEST_DATABASE_URL must name a *_test database.')
+  }
+  if (corpusDatabaseUrl === null) return null
+  if (corpusDatabaseUrl !== databaseUrl) {
+    throw new Error('CORPUS_DATABASE_URL must match TEST_DATABASE_URL.')
+  }
+  return corpusDatabaseUrl
 }
 
 function readOptionalUrl(key: string): string | null {
@@ -365,6 +395,7 @@ export function readApiEnv(): ApiEnv {
   requireProductionEnv(nodeEnv)
   requireTestEnv(nodeEnv)
   const resendApiKey = readOptionalSecret('OBITER_RESEND_API_KEY', nodeEnv)
+  const databaseUrl = readDatabaseUrl(nodeEnv)
 
   if (nodeEnv === 'production' && !resendApiKey) {
     throw new Error('OBITER_RESEND_API_KEY must be configured in production.')
@@ -377,7 +408,8 @@ export function readApiEnv(): ApiEnv {
   const rampart = readRampartDetectionConfig()
 
   return {
-    databaseUrl: readDatabaseUrl(nodeEnv),
+    databaseUrl,
+    corpusDatabaseUrl: readCorpusDatabaseUrl(nodeEnv, databaseUrl),
     authSecret: readAuthSecret(nodeEnv),
     authBaseUrl: readRequiredUrl(
       'BETTER_AUTH_URL',

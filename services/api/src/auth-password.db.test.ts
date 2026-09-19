@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { Pool } from 'pg'
+import { createTestPool } from './test-database.test-support'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { createApiApp } from './app'
 import { createAuth } from './auth'
@@ -24,14 +25,7 @@ import { createTestApiEnv } from './test-api-env'
  * synthetic sessions are removed.
  */
 describe('password change end to end (Postgres + better-auth)', () => {
-  const connectionString = process.env.TEST_DATABASE_URL
-  if (!connectionString) {
-    throw new Error(
-      'TEST_DATABASE_URL is required for auth-password.db.test.ts (see TESTING.md).',
-    )
-  }
-
-  const pool = new Pool({ connectionString })
+  const pool = createTestPool()
   const env = createTestApiEnv()
   const auth = createAuth(env, pool)
   const seededUserIds: string[] = []

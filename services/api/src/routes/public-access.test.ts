@@ -98,6 +98,10 @@ describe('deliberately public routes', () => {
       expect(await health.json()).toEqual({
         status: 'ok',
         service: 'obiter-api',
+        // Booleans derived from configuration: which database corpus reads use
+        // and whether this process may write it. No host, port, database name
+        // or credential, so the public route still discloses nothing.
+        corpus: { colocated: true, readOnly: false },
       })
     } finally {
       vi.unstubAllGlobals()
