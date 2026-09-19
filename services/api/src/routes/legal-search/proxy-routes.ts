@@ -55,7 +55,7 @@ import {
   getStoredAuthorityDocument,
   hydrateMojAuthoritiesFromSearch,
   hydrateAndIndexMojAuthorities,
-  indexFetchedAuthorities,
+  indexFetchedAuthoritiesAfterWrite,
   atomEntryToAuthoritySummary,
   providerMetadataFromAtomEntry,
   upsertLegalAuthoritySummary,
@@ -152,6 +152,9 @@ export function createLegalSearchProxyRoutes(
     env.meilisearchAdminApiKey,
   )
   const mojRateLimiter = createMojRateLimiter(env.mojFindCaseLawRateLimit)
+  // Process-lifetime soft cache of public provider records, capped at 100 by
+  // `rememberForegroundSourceRecord`. It is the only persistence in read-only
+  // mode and it holds no matter data, only the fetched judgment record.
   const foregroundSourceRecords = new Map<string, StoredLegalAuthorityRecord>()
 
   app.post('/api/search/fetch', async (c) => {
@@ -560,8 +563,10 @@ export function createLegalSearchProxyRoutes(
       const existing = await getLegalAuthoritySourceRecord(reads, summary.id)
       if (existing?.withdrawn) continue
       // The in-memory foreground record is what makes a live result usable for
-      // the rest of this request, whether or not it can be stored. It is not a
-      // substitute for the store and does not outlive the request.
+      // the rest of this request, whether or not it can be stored. It is a
+      // soft cache, not a substitute for the store: it lives for the life of
+      // the app instance, holds at most 100 public provider records, and
+      // evicts the least recently written on overflow.
       rememberForegroundSourceRecord(foregroundSourceRecords, summary, provider)
       if (corpusWrites) {
         await upsertLegalAuthoritySummary(corpusWrites, summary, provider)
@@ -734,10 +739,11 @@ export function createLegalSearchProxyRoutes(
         })
       }
       if (!corpusWrites) {
-        // Read-only corpus. The fetched document answers this request from the
-        // in-memory foreground record; nothing is persisted and nothing is
-        // indexed, so a later lookup asks the provider again rather than
-        // finding a stored copy.
+        // Read-only corpus. The fetched document answers this request and is
+        // kept in the process-lifetime foreground cache (at most 100 records),
+        // so a later lookup in this process is served from memory. Nothing is
+        // persisted to Postgres and nothing is indexed; the cache is the only
+        // persistence in this mode and it ends with the process.
         rememberForegroundSourceRecord(
           foregroundSourceRecords,
           toAuthoritySummary(liveDocument.document),
@@ -781,12 +787,16 @@ export function createLegalSearchProxyRoutes(
         liveDocument.provider,
         liveDocument.document,
       )
-      // The write reported the merged row's withdrawal state, so a withdrawal
-      // that serialised with it keeps this document out of the index.
+      // The write reported the merged row's withdrawal state, and the helper
+      // re-reads the record after indexing so a withdrawal whose index delete
+      // landed between the write and the index call does not survive.
       if (written.indexable) {
-        void indexFetchedAuthorities(indexClient, env.legalAuthoritiesIndex, [
-          liveDocument.document,
-        ])
+        void indexFetchedAuthoritiesAfterWrite(
+          reads,
+          indexClient,
+          env.legalAuthoritiesIndex,
+          [liveDocument.document],
+        )
       }
       return c.json({ document: liveDocument.document })
     }

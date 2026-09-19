@@ -48,9 +48,9 @@ describe('corpus database resolution', () => {
 
     const env = readApiEnv()
 
-    // The compatibility seam: with no new variable set, there is one database
-    // and corpus writes behave exactly as they did before it existed.
-    expect(env.corpusDatabaseUrl).toBe(env.databaseUrl)
+    // The compatibility seam: with no new variable set, there is no separate
+    // corpus target and the corpus is the application database.
+    expect(env.corpusDatabaseUrl).toBeNull()
   })
 
   it('reads a dedicated corpus database when one is configured', () => {
@@ -80,8 +80,8 @@ describe('corpus database resolution', () => {
 
     const env = readApiEnv()
 
-    expect(env.corpusDatabaseUrl).toBe(env.databaseUrl)
-    expect(env.corpusDatabaseUrl).toContain('/obiter_test')
+    expect(env.corpusDatabaseUrl).toBeNull()
+    expect(env.databaseUrl).toContain('/obiter_test')
   })
 
   it('accepts a corpus URL that is the test database', () => {

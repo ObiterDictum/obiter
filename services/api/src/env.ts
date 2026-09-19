@@ -7,6 +7,7 @@ import {
   RAMPART_MODEL_REVISION,
 } from '@obiter/rampart-inference'
 import { defaultRampartCacheDir } from './rampart-cache'
+import { readDatabaseIdentity } from './database-identity'
 import type { RedactionDetectionConfig } from './redaction-detection'
 import {
   DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES,
@@ -41,8 +42,9 @@ const testDatabaseSuffix = '_test'
 
 export interface ApiEnv {
   databaseUrl: string
-  /** Legal-corpus reads. Unset means `databaseUrl`, the compatibility seam. */
-  corpusDatabaseUrl: string
+  /** Legal-corpus reads. Null means no separate corpus target was configured,
+   * so the corpus is `databaseUrl`: the compatibility seam. */
+  corpusDatabaseUrl: string | null
   authSecret: string
   authBaseUrl: string
   webOrigin: string
@@ -154,28 +156,26 @@ function readDatabaseUrl(nodeEnv: ApiEnv['nodeEnv']) {
   return testDatabaseUrl
 }
 
-/** Legal-corpus resolution: unset means `DATABASE_URL`, so deploying the seam
- * changes nothing. Under NODE_ENV=test it must be the isolated test database,
- * because those suites seed and delete corpora rows. */
+/** Legal-corpus resolution: null means no separate corpus target, so the
+ * corpus is the application database. Test runs must stay on `*_test`. */
 function readCorpusDatabaseUrl(
   nodeEnv: ApiEnv['nodeEnv'],
   databaseUrl: string,
-): string {
+): string | null {
   const configured = process.env.CORPUS_DATABASE_URL
   const corpusDatabaseUrl = configured
     ? parseUrl('CORPUS_DATABASE_URL', configured)
-    : databaseUrl
-
+    : null
   if (nodeEnv !== 'test') return corpusDatabaseUrl
 
+  const { database } = readDatabaseIdentity(databaseUrl, 'TEST_DATABASE_URL')
+  if (!database.endsWith(testDatabaseSuffix)) {
+    throw new Error('TEST_DATABASE_URL must name a *_test database.')
+  }
+  if (corpusDatabaseUrl === null) return null
   if (corpusDatabaseUrl !== databaseUrl) {
     throw new Error('CORPUS_DATABASE_URL must match TEST_DATABASE_URL.')
   }
-  // `pathname` is `/dbname`, so the suffix test needs no parsing.
-  if (!new URL(corpusDatabaseUrl).pathname.endsWith(testDatabaseSuffix)) {
-    throw new Error('TEST_DATABASE_URL must name a *_test database.')
-  }
-
   return corpusDatabaseUrl
 }
 

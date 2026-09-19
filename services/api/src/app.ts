@@ -255,13 +255,17 @@ export function createApiApp(
     const health = {
       status: 'ok' as const,
       service: 'obiter-api' as const,
-      // Which database legal-corpus reads run against, and whether this process
-      // may write it. `colocated` true is the compatibility seam: one database,
-      // and corpus writes behave exactly as they did before it. It says nothing
-      // about whether a shared corpus exists; no shared corpus is deployed, and
-      // this reports only what this process is configured to do. Deliberately
-      // no host, port or database name: the boolean is enough to tell the two
-      // modes apart and discloses no connection detail.
+      // The corpus access mode: whether corpus reads share the application pool
+      // (`colocated`, the compatibility default) and whether this process may
+      // write the corpus. `colocated: true` means no separate corpus target was
+      // configured, so there is one database and corpus writes behave exactly
+      // as they did before the seam. The mode follows configuration, not URL
+      // equality: a configured target is read-only even when it names the same
+      // database. It says nothing about whether a shared corpus exists; no
+      // shared corpus is deployed, and this reports only what this process is
+      // configured to do. Deliberately no host, port or database name: the
+      // booleans are enough to tell the modes apart and disclose no connection
+      // detail.
       corpus: {
         colocated: corpusAccess.pool === pool,
         readOnly: corpusAccess.readOnly,

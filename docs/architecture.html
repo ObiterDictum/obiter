@@ -4002,9 +4002,13 @@
           </p>
           <p>
             <b>The default is unchanged, and nothing is split.</b>
-            <code>CORPUS_DATABASE_URL</code> unset means the corpus resolves to
-            <code>DATABASE_URL</code>: one database, one pool, and corpus writes
-            behave exactly as they did before the seam existed. This is a
+            <code>CORPUS_DATABASE_URL</code> unset means no separate corpus
+            target: the corpus pool is the application pool, one database, one
+            pool, and corpus writes behave exactly as they did before the seam
+            existed. Configuring it declares a separate corpus target and is
+            always served read-only, even when it names the same database
+            through another role or spelling; the mode follows configuration
+            provenance, not a comparison of connection strings. This is a
             dormant boundary, not a deployment. No shared corpus database, no
             reader role and no separate credential exist yet, and pointing the
             seam at a second database is what a later, separately authorised
@@ -4225,11 +4229,11 @@
                 <tr>
                   <td class="id">CORPUS_DATABASE_URL</td>
                   <td>
-                    Optional. Defaults to <code>DATABASE_URL</code>, which is
-                    the compatibility seam: the corpus is the application
-                    database and writes behave as before. A different database
-                    selects read-only corpus access. Under
-                    <code>NODE_ENV=test</code> it must resolve to
+                    Optional. Unset is the compatibility seam: the corpus is the
+                    application database and writes behave as before. Configured
+                    means a separate, read-only corpus target, even when it
+                    names the same database through another role or spelling.
+                    Under <code>NODE_ENV=test</code> it must resolve to
                     <code>TEST_DATABASE_URL</code>
                   </td>
                 </tr>

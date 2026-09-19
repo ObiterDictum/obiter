@@ -6,9 +6,7 @@ import type { ApiEnv } from './env'
  *
  * `pool` is where corpus reads run. `readOnly` is true when this process has no
  * corpus write path, so hydration answers the current request from the provider
- * and does not persist the result. There is no intermediate state: either the
- * corpus is the application database and writes behave as they always have, or
- * it is a different database that this process can only read.
+ * and does not persist the result.
  */
 export interface CorpusAccess {
   pool: Pool
@@ -25,46 +23,59 @@ export interface DatabasePools {
 }
 
 /**
- * Two `DATABASE_URL`s can name one database and differ as strings (a password
- * added, a parameter appended). Treating those as separate databases would put
- * the corpus into read-only mode by accident, so colocation is decided by the
- * host and database name, which are what identify a database.
- */
-function sameDatabase(left: string, right: string) {
-  const a = new URL(left)
-  const b = new URL(right)
-  return a.host === b.host && a.pathname === b.pathname
-}
-
-/**
  * The one owner of the process's database pools.
  *
- * When the corpus resolves to the application database — the default, and the
- * compatibility seam this change adds — there is a single pool and the corpus
- * access points at it. Closing twice cannot close a pool still in use, because
- * there is only ever one `end()` for it.
+ * The mode is decided by configuration provenance, not by comparing connection
+ * strings. With no `CORPUS_DATABASE_URL`, the corpus is the application
+ * database: one pool, writable, exactly as before the seam existed. A
+ * configured `CORPUS_DATABASE_URL` declares a separate corpus target and is
+ * always served read-only. That holds even when the URL names the same
+ * physical database as the application: a distinct corpus credential is a
+ * distinct access boundary, and inferring that the two are one writable owner
+ * from a host-and-database match would silently ignore the role the operator
+ * chose. An operator who needs corpus writes leaves the variable unset.
  */
 export function createDatabasePools(env: ApiEnv): DatabasePools {
   const application = new Pool({ connectionString: env.databaseUrl })
-  const colocated = sameDatabase(env.corpusDatabaseUrl, env.databaseUrl)
-  const corpusPool = colocated
-    ? application
-    : new Pool({ connectionString: env.corpusDatabaseUrl })
+  const corpusDatabaseUrl = env.corpusDatabaseUrl
+  const separateCorpus = corpusDatabaseUrl !== null
+  const corpusPool = separateCorpus
+    ? new Pool({ connectionString: corpusDatabaseUrl })
+    : application
 
-  let closed = false
+  let closePromise: Promise<void> | null = null
 
   return {
     application,
-    corpus: { pool: corpusPool, readOnly: !colocated },
-    async close() {
-      if (closed) {
-        return
-      }
-      closed = true
-      await application.end()
-      if (!colocated) {
-        await corpusPool.end()
-      }
+    corpus: { pool: corpusPool, readOnly: separateCorpus },
+    close() {
+      // `??=` runs synchronously, before the first await, so concurrent
+      // callers share one attempt. Each `end()` is bound once, so a repeated
+      // or concurrent close cannot close a pool twice.
+      closePromise ??= closePools(
+        separateCorpus
+          ? [application.end.bind(application), corpusPool.end.bind(corpusPool)]
+          : [application.end.bind(application)],
+      )
+      return closePromise
     },
   }
+}
+
+/**
+ * Close every pool, and report a failure rather than abandoning the pools
+ * after the first one. A pool whose `end()` rejects is not retried: the caller
+ * gets the failure, and the pool is not closed a second time.
+ */
+async function closePools(ends: Array<() => Promise<void>>): Promise<void> {
+  const results = await Promise.allSettled(ends.map((end) => end()))
+  const failures = results.filter(
+    (result): result is PromiseRejectedResult => result.status === 'rejected',
+  )
+  if (failures.length === 0) return
+  if (failures.length === 1) throw failures[0].reason
+  throw new AggregateError(
+    failures.map((failure) => failure.reason),
+    'Database pool shutdown failed.',
+  )
 }

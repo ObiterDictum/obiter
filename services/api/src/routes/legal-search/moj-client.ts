@@ -1,5 +1,9 @@
 import type { LegalAuthority } from '@obiter/legal-schema'
-import { getDocument, indexDocuments } from '@obiter/search-client'
+import {
+  deleteDocuments,
+  getDocument,
+  indexDocuments,
+} from '@obiter/search-client'
 import {
   atomEntryToAuthoritySummary,
   fetchMojAuthorityDetail,
@@ -33,6 +37,10 @@ export {
 } from '@obiter/legal-source-provider'
 
 const storedSearchTimeoutMs = 350
+
+/** The index client hydration needs: a document write and a document delete. */
+type HydrationIndexClient = Parameters<typeof indexDocuments>[0] &
+  Parameters<typeof deleteDocuments>[0]
 
 /**
  * Persist one provider summary. Returns null when the write did not happen, so
@@ -70,6 +78,24 @@ export async function upsertLegalAuthorityDocument(
   }
 }
 
+/** `unknown` keeps an unreadable store distinct from a confirmed live row. */
+type WithdrawalState = 'withdrawn' | 'live' | 'unknown'
+
+async function readWithdrawalState(
+  legalAuthorityStore: LegalAuthorityReadStore,
+  documentId: string,
+): Promise<WithdrawalState> {
+  try {
+    const stored = await withTimeout(
+      legalAuthorityStore.get(documentId),
+      storedSearchTimeoutMs,
+    )
+    return stored?.withdrawn ? 'withdrawn' : 'live'
+  } catch {
+    return 'unknown'
+  }
+}
+
 /**
  * True only when the store explicitly reports the row withdrawn. A miss,
  * timeout, or error returns false so transient store trouble cannot block
@@ -80,27 +106,21 @@ async function isWithdrawnInStore(
   legalAuthorityStore: LegalAuthorityReadStore,
   documentId: string,
 ): Promise<boolean> {
-  try {
-    const stored = await withTimeout(
-      legalAuthorityStore.get(documentId),
-      storedSearchTimeoutMs,
-    )
-    return Boolean(stored?.withdrawn)
-  } catch {
-    return false
-  }
+  return (
+    (await readWithdrawalState(legalAuthorityStore, documentId)) === 'withdrawn'
+  )
 }
 
-function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-): Promise<T | null> {
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
   let timeout: ReturnType<typeof setTimeout>
 
   return Promise.race([
     promise.finally(() => clearTimeout(timeout)),
-    new Promise<null>((resolve) => {
-      timeout = setTimeout(() => resolve(null), timeoutMs)
+    new Promise<never>((_, reject) => {
+      timeout = setTimeout(
+        () => reject(new Error('Stored record lookup timed out.')),
+        timeoutMs,
+      )
     }),
   ])
 }
@@ -120,7 +140,7 @@ export async function getStoredAuthorityDocument(
   }
 }
 
-export async function indexFetchedAuthorities(
+async function indexFetchedAuthorities(
   indexClient: Parameters<typeof indexDocuments>[0],
   indexName: string,
   documents: LegalAuthority[],
@@ -140,11 +160,57 @@ export async function indexFetchedAuthorities(
   }
 }
 
+/**
+ * Index freshly written authorities and reconcile the derived index against
+ * the record. The write's own `indexable` decision orders it against a
+ * withdrawal that serialised with the write, but two Meilisearch operations
+ * are not ordered against each other: a withdrawal whose index delete lands
+ * after the write but before this index call re-adds the document. The
+ * withdrawal marks the row before it deletes the index copy, so re-reading
+ * after the index write and deleting again when the flag is present closes
+ * that ordering. A failed re-read is reported, not treated as live.
+ */
+export async function indexFetchedAuthoritiesAfterWrite(
+  reads: LegalAuthorityReadStore,
+  indexClient: HydrationIndexClient,
+  indexName: string,
+  documents: LegalAuthority[],
+) {
+  await indexFetchedAuthorities(indexClient, indexName, documents)
+  await removeWithdrawnIndexCopies(reads, indexClient, indexName, documents)
+}
+
+async function removeWithdrawnIndexCopies(
+  reads: LegalAuthorityReadStore,
+  indexClient: HydrationIndexClient,
+  indexName: string,
+  documents: LegalAuthority[],
+) {
+  for (const document of documents) {
+    const state = await readWithdrawalState(reads, document.id)
+    if (state === 'live') continue
+    if (state === 'unknown') {
+      console.error(
+        'Could not confirm a stored withdrawal state after indexing a corpus document; the derived index may hold a withdrawn copy. Run the search parity check.',
+      )
+      continue
+    }
+    try {
+      await deleteDocuments(indexClient, indexName, [document.id])
+    } catch (error) {
+      console.error(
+        'Indexed a withdrawn corpus document and could not remove it from the derived index. Run the search parity check.',
+        { reason: error instanceof Error ? error.message : String(error) },
+      )
+    }
+  }
+}
+
 export async function hydrateMojAuthoritiesFromSearch(
   env: ApiEnv,
   reads: LegalAuthorityReadStore,
   writes: LegalAuthorityWriteStore,
-  indexClient: Parameters<typeof indexDocuments>[0],
+  indexClient: HydrationIndexClient,
   indexName: string,
   request: LegalFetchRequest,
   rateLimiter: MojRateLimiter,
@@ -188,7 +254,7 @@ export async function hydrateAndIndexMojAuthorities(
   env: ApiEnv,
   reads: LegalAuthorityReadStore,
   writes: LegalAuthorityWriteStore,
-  indexClient: Parameters<typeof indexDocuments>[0],
+  indexClient: HydrationIndexClient,
   indexName: string,
   entries: AtomEntry[],
   rateLimiter: MojRateLimiter,
@@ -219,7 +285,12 @@ export async function hydrateAndIndexMojAuthorities(
       documents.push(result.document)
     }
 
-    await indexFetchedAuthorities(indexClient, indexName, documents)
+    await indexFetchedAuthoritiesAfterWrite(
+      reads,
+      indexClient,
+      indexName,
+      documents,
+    )
   } catch {
     // Provider data has already been captured when possible; indexing is best-effort cache hydration.
   }
