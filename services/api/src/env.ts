@@ -35,9 +35,14 @@ const requiredProductionKeys = [
 ] as const
 
 const requiredTestKeys = ['TEST_DATABASE_URL'] as const
+// Corpus reads fall back to this database, so its name is what separates
+// throwaway test data from a populated database.
+const testDatabaseSuffix = '_test'
 
 export interface ApiEnv {
   databaseUrl: string
+  /** Legal-corpus reads. Unset means `databaseUrl`, the compatibility seam. */
+  corpusDatabaseUrl: string
   authSecret: string
   authBaseUrl: string
   webOrigin: string
@@ -147,6 +152,31 @@ function readDatabaseUrl(nodeEnv: ApiEnv['nodeEnv']) {
   }
 
   return testDatabaseUrl
+}
+
+/** Legal-corpus resolution: unset means `DATABASE_URL`, so deploying the seam
+ * changes nothing. Under NODE_ENV=test it must be the isolated test database,
+ * because those suites seed and delete corpora rows. */
+function readCorpusDatabaseUrl(
+  nodeEnv: ApiEnv['nodeEnv'],
+  databaseUrl: string,
+): string {
+  const configured = process.env.CORPUS_DATABASE_URL
+  const corpusDatabaseUrl = configured
+    ? parseUrl('CORPUS_DATABASE_URL', configured)
+    : databaseUrl
+
+  if (nodeEnv !== 'test') return corpusDatabaseUrl
+
+  if (corpusDatabaseUrl !== databaseUrl) {
+    throw new Error('CORPUS_DATABASE_URL must match TEST_DATABASE_URL.')
+  }
+  // `pathname` is `/dbname`, so the suffix test needs no parsing.
+  if (!new URL(corpusDatabaseUrl).pathname.endsWith(testDatabaseSuffix)) {
+    throw new Error('TEST_DATABASE_URL must name a *_test database.')
+  }
+
+  return corpusDatabaseUrl
 }
 
 function readOptionalUrl(key: string): string | null {
@@ -365,6 +395,7 @@ export function readApiEnv(): ApiEnv {
   requireProductionEnv(nodeEnv)
   requireTestEnv(nodeEnv)
   const resendApiKey = readOptionalSecret('OBITER_RESEND_API_KEY', nodeEnv)
+  const databaseUrl = readDatabaseUrl(nodeEnv)
 
   if (nodeEnv === 'production' && !resendApiKey) {
     throw new Error('OBITER_RESEND_API_KEY must be configured in production.')
@@ -377,7 +408,8 @@ export function readApiEnv(): ApiEnv {
   const rampart = readRampartDetectionConfig()
 
   return {
-    databaseUrl: readDatabaseUrl(nodeEnv),
+    databaseUrl,
+    corpusDatabaseUrl: readCorpusDatabaseUrl(nodeEnv, databaseUrl),
     authSecret: readAuthSecret(nodeEnv),
     authBaseUrl: readRequiredUrl(
       'BETTER_AUTH_URL',

@@ -78,17 +78,37 @@ export function selectAuthorityCarriers(
   return { kind: 'no_live', ids: withdrawn }
 }
 
-export interface LegalAuthoritySourceStore {
+/**
+ * What a completed corpus write means for the derived Meilisearch index.
+ * `indexable` is the post-merge withdrawal state, read by the statement that
+ * wrote the row, so a withdrawal that serialised with the write is respected in
+ * either order. Deciding it from an earlier read cannot tell those orders apart
+ * and would put a withdrawn judgment back in the index.
+ */
+export interface AuthorityWriteResult {
+  indexable: boolean
+}
+
+/** Corpus reads. Always available, including when writes are not. */
+export interface LegalAuthorityReadStore {
+  get(documentId: string): Promise<StoredLegalAuthorityRecord | null>
+}
+
+/** Corpus writes. Absent from a process with no corpus write path, so a
+ * read-only process cannot attempt one and cannot swallow a permission error. */
+export interface LegalAuthorityWriteStore {
   upsertSummary(
     summary: LegalAuthority,
     provider: ProviderSourceMetadata,
-  ): Promise<void>
+  ): Promise<AuthorityWriteResult>
   upsertDocument(
     document: LegalAuthority,
     provider: ProviderSourceMetadata,
-  ): Promise<void>
-  get(documentId: string): Promise<StoredLegalAuthorityRecord | null>
+  ): Promise<AuthorityWriteResult>
 }
+
+export interface LegalAuthoritySourceStore
+  extends LegalAuthorityReadStore, LegalAuthorityWriteStore {}
 
 const foregroundSourceRecordLimit = 100
 
@@ -113,6 +133,8 @@ export function createInMemoryLegalAuthoritySourceStore(): LegalAuthoritySourceS
         // flag, so dropping it here would silently resurrect withdrawals.
         withdrawn: existing?.withdrawn,
       })
+
+      return { indexable: !existing?.withdrawn }
     },
     async upsertDocument(
       document: LegalAuthority,
@@ -128,6 +150,8 @@ export function createInMemoryLegalAuthoritySourceStore(): LegalAuthoritySourceS
         },
         withdrawn: existing?.withdrawn,
       })
+
+      return { indexable: !existing?.withdrawn }
     },
     async get(documentId: string) {
       return records.get(documentId) ?? null
@@ -139,6 +163,10 @@ interface LegalAuthoritySourceRow extends QueryResultRow {
   summary_json: unknown
   document_json: unknown | null
   provider_json: ProviderSourceMetadata
+}
+
+interface LegalAuthorityWriteRow extends QueryResultRow {
+  indexable: boolean
 }
 
 /**
@@ -157,12 +185,39 @@ export class MalformedStoredRecordError extends Error {
   }
 }
 
-export function createPostgresLegalAuthoritySourceStore(
+/**
+ * Corpus reads against Postgres, which is the record. Constructed on its own so
+ * a process with no corpus write path never builds a writer at all.
+ */
+export function createPostgresLegalAuthorityReadStore(
   pool: Pick<Pool, 'query'>,
-): LegalAuthoritySourceStore {
+): LegalAuthorityReadStore {
+  return {
+    async get(documentId) {
+      const result = await pool.query<LegalAuthoritySourceRow>(
+        `
+          select summary_json, document_json, provider_json
+          from legal_source_documents
+          where document_id = $1
+        `,
+        [documentId],
+      )
+
+      return toStoredLegalAuthorityRecord(result.rows[0], documentId)
+    },
+  }
+}
+
+/**
+ * Corpus writes against Postgres. Every upsert merges `provider_json` rather
+ * than replacing it, and reports whether the merged row may be indexed.
+ */
+export function createPostgresLegalAuthorityWriteStore(
+  pool: Pick<Pool, 'query'>,
+): LegalAuthorityWriteStore {
   return {
     async upsertSummary(summary, provider) {
-      await pool.query(
+      const result = await pool.query<LegalAuthorityWriteRow>(
         `
           insert into legal_source_documents (
             document_id,
@@ -183,6 +238,7 @@ export function createPostgresLegalAuthoritySourceStore(
             xml_uri = excluded.xml_uri,
             pdf_uri = excluded.pdf_uri,
             updated_at = now()
+          returning legal_source_documents.provider_json->>'withdrawn' is null as indexable
         `,
         [
           summary.id,
@@ -194,10 +250,12 @@ export function createPostgresLegalAuthoritySourceStore(
           provider.pdfUri,
         ],
       )
+
+      return { indexable: result.rows[0]?.indexable ?? false }
     },
     async upsertDocument(document, provider) {
       const summary = toAuthoritySummary(document)
-      await pool.query(
+      const result = await pool.query<LegalAuthorityWriteRow>(
         `
           insert into legal_source_documents (
             document_id,
@@ -220,6 +278,7 @@ export function createPostgresLegalAuthoritySourceStore(
             xml_uri = excluded.xml_uri,
             pdf_uri = excluded.pdf_uri,
             updated_at = now()
+          returning legal_source_documents.provider_json->>'withdrawn' is null as indexable
         `,
         [
           document.id,
@@ -232,19 +291,19 @@ export function createPostgresLegalAuthoritySourceStore(
           provider.pdfUri,
         ],
       )
-    },
-    async get(documentId) {
-      const result = await pool.query<LegalAuthoritySourceRow>(
-        `
-          select summary_json, document_json, provider_json
-          from legal_source_documents
-          where document_id = $1
-        `,
-        [documentId],
-      )
 
-      return toStoredLegalAuthorityRecord(result.rows[0], documentId)
+      return { indexable: result.rows[0]?.indexable ?? false }
     },
+  }
+}
+
+/** Read and write access, for a process that owns the corpus. */
+export function createPostgresLegalAuthoritySourceStore(
+  pool: Pick<Pool, 'query'>,
+): LegalAuthoritySourceStore {
+  return {
+    ...createPostgresLegalAuthorityReadStore(pool),
+    ...createPostgresLegalAuthorityWriteStore(pool),
   }
 }
 

@@ -38,7 +38,8 @@ import {
   createInMemoryLegalAuthoritySourceStore,
   rememberForegroundSourceRecord,
   toAuthoritySummary,
-  type LegalAuthoritySourceStore,
+  type LegalAuthorityReadStore,
+  type LegalAuthorityWriteStore,
   type StoredLegalAuthorityRecord,
 } from './source-store'
 import { resolveLegislationActPage } from './legislation-act'
@@ -68,6 +69,13 @@ interface LegalSearchProxyRouteVariables {
 
 interface LegalSearchProxyRouteOptions {
   hydrationBudget?: LegalSearchHydrationBudget
+  /**
+   * Corpus writes. Omitted or null selects read-only: hydration answers this
+   * request from the provider and nothing is persisted or indexed. A caller
+   * that owns the corpus hands over the write half explicitly, so a read-only
+   * process is never given one to attempt.
+   */
+  corpusWrites?: LegalAuthorityWriteStore | null
   /**
    * Stage 1 legislation serving. Absent in tests that predate it, in which
    * case fetch stays judgment-only and no legislation group is served.
@@ -117,9 +125,16 @@ function settleSearchHalf<T>(
 
 export function createLegalSearchProxyRoutes(
   env: ApiEnv,
-  legalAuthorityStore: LegalAuthoritySourceStore = createInMemoryLegalAuthoritySourceStore(),
+  reads: LegalAuthorityReadStore = createInMemoryLegalAuthoritySourceStore(),
   options: LegalSearchProxyRouteOptions = {},
 ) {
+  // Writes are a separate binding that a read-only process never receives, and
+  // every write path below goes through this one variable. There is therefore
+  // no route that can attempt a corpus write while the process is configured
+  // not to persist, which is what would otherwise leave a permission error to
+  // be swallowed as control flow.
+  const corpusWrites = options.corpusWrites ?? null
+  const corpusReadOnly = corpusWrites === null
   const app = new Hono<{ Variables: LegalSearchProxyRouteVariables }>()
   const hydrationBudget =
     options.hydrationBudget ??
@@ -204,7 +219,7 @@ export function createLegalSearchProxyRoutes(
       !storedOnlyBrowse && exactLookup
         ? findExactStoredAuthority(
             searchClient,
-            legalAuthorityStore,
+            reads,
             env.legalAuthoritiesIndex,
             parsed.data.query,
             filters,
@@ -276,7 +291,7 @@ export function createLegalSearchProxyRoutes(
     // a withdrawn judgment never serves. Unknown (lookup miss/timeout)
     // stays visible — only an explicit withdrawn flag hides a hit.
     const visibleCachedHits = await excludeWithdrawnIndexHits(
-      legalAuthorityStore,
+      reads,
       cached.hits,
     )
 
@@ -379,13 +394,10 @@ export function createLegalSearchProxyRoutes(
         return c.json(searchIndexUnavailable(requestId), 503)
       }
       const visibleCitingHits = citingLookup
-        ? await excludeWithdrawnIndexHits(
-            legalAuthorityStore,
-            citingLookup.hits,
-          )
+        ? await excludeWithdrawnIndexHits(reads, citingLookup.hits)
         : []
       const citingSummaries = await citingStoredSummariesForCitation(
-        legalAuthorityStore,
+        reads,
         visibleCitingHits,
         parsed.data.query,
         recognisedCitation,
@@ -446,7 +458,11 @@ export function createLegalSearchProxyRoutes(
       )
     }
 
-    if (!parsed.data.foregroundLiveResults) {
+    // A read-only corpus has no write path, so there is no background job to
+    // queue and nothing for a client to poll for. Falling through to the live
+    // provider answers this request instead of promising a later one that
+    // cannot arrive.
+    if (!parsed.data.foregroundLiveResults && corpusWrites !== null) {
       const hydrationKey = canonicalHydrationQueryKey(parsed.data)
       const enqueue = hydrationBudget.tryBeginHydration(
         sessionUser.id,
@@ -466,7 +482,8 @@ export function createLegalSearchProxyRoutes(
       if (enqueue.status === 'queued') {
         void hydrateMojAuthoritiesFromSearch(
           env,
-          legalAuthorityStore,
+          reads,
+          corpusWrites,
           indexClient,
           env.legalAuthoritiesIndex,
           parsed.data,
@@ -540,23 +557,28 @@ export function createLegalSearchProxyRoutes(
       const provider = providerMetadataFromAtomEntry(entry)
       // Never re-index a withdrawn judgment from live hydration: the
       // checker owns the flag and only the manual runbook clears it.
-      const existing = await getLegalAuthoritySourceRecord(
-        legalAuthorityStore,
-        summary.id,
-      )
+      const existing = await getLegalAuthoritySourceRecord(reads, summary.id)
       if (existing?.withdrawn) continue
+      // The in-memory foreground record is what makes a live result usable for
+      // the rest of this request, whether or not it can be stored. It is not a
+      // substitute for the store and does not outlive the request.
       rememberForegroundSourceRecord(foregroundSourceRecords, summary, provider)
-      await upsertLegalAuthoritySummary(legalAuthorityStore, summary, provider)
+      if (corpusWrites) {
+        await upsertLegalAuthoritySummary(corpusWrites, summary, provider)
+      }
     }
 
-    void hydrateAndIndexMojAuthorities(
-      env,
-      legalAuthorityStore,
-      indexClient,
-      env.legalAuthoritiesIndex,
-      liveResult.entries,
-      mojRateLimiter,
-    )
+    if (corpusWrites) {
+      void hydrateAndIndexMojAuthorities(
+        env,
+        reads,
+        corpusWrites,
+        indexClient,
+        env.legalAuthoritiesIndex,
+        liveResult.entries,
+        mojRateLimiter,
+      )
+    }
 
     const rankedLiveDocuments = rankLegalSearchHitsByExactMatch(
       liveResult.documents,
@@ -590,7 +612,9 @@ export function createLegalSearchProxyRoutes(
         false,
         0,
         liveResult.skippedCount,
-        liveHasHits,
+        // Read-only corpus: the hits answered this request and nothing is
+        // being indexed behind it, so there is no pending job to poll for.
+        corpusReadOnly ? false : liveHasHits,
         {
           // A recognised citation live finds nothing for is not a silent
           // no-match; live hits without the exact judgment stay results
@@ -608,6 +632,7 @@ export function createLegalSearchProxyRoutes(
             storedIndexSearched: true,
             liveProviderSearched: true,
             storedOnlyBrowse,
+            liveResultsNotPersisted: corpusReadOnly,
             ...citationDiagnostics,
             ...legislationDiagnosticsFor(legislation),
           },
@@ -630,10 +655,7 @@ export function createLegalSearchProxyRoutes(
     // Fail closed: an unknown store state (timeout/error) must not fall
     // through to the derived index, which could serve a stale full text of
     // a withdrawn judgment. Only a confirmed store miss continues.
-    const storedLookup = await getDocumentRouteSourceRecord(
-      legalAuthorityStore,
-      parsed.data,
-    )
+    const storedLookup = await getDocumentRouteSourceRecord(reads, parsed.data)
     if (storedLookup.status === 'unavailable') {
       return c.json(
         apiError(
@@ -695,7 +717,7 @@ export function createLegalSearchProxyRoutes(
       // between the route-entry lookup and the live fetch. A withdrawn row
       // answers with the banner, never with fresh full text.
       const currentRecord = await getLegalAuthoritySourceRecord(
-        legalAuthorityStore,
+        reads,
         liveDocument.document.id,
       )
       if (currentRecord?.withdrawn) {
@@ -711,44 +733,61 @@ export function createLegalSearchProxyRoutes(
           },
         })
       }
-      try {
-        await upsertLegalAuthorityDocument(
-          legalAuthorityStore,
-          liveDocument.document,
-          liveDocument.provider,
-        )
+      if (!corpusWrites) {
+        // Read-only corpus. The fetched document answers this request from the
+        // in-memory foreground record; nothing is persisted and nothing is
+        // indexed, so a later lookup asks the provider again rather than
+        // finding a stored copy.
         rememberForegroundSourceRecord(
           foregroundSourceRecords,
           toAuthoritySummary(liveDocument.document),
           liveDocument.provider,
           liveDocument.document,
         )
-      } catch {
-        if (sourceRecordIsForegroundOnly) {
-          rememberForegroundSourceRecord(
-            foregroundSourceRecords,
-            toAuthoritySummary(liveDocument.document),
-            liveDocument.provider,
-            liveDocument.document,
-          )
-          void indexFetchedAuthorities(indexClient, env.legalAuthoritiesIndex, [
-            liveDocument.document,
-          ])
-          return c.json({ document: liveDocument.document })
-        }
-
-        return c.json(
-          apiError(
-            'storage_unavailable',
-            'Legal source storage is unavailable.',
-            requestId,
-          ),
-          503,
-        )
+        return c.json({ document: liveDocument.document })
       }
-      void indexFetchedAuthorities(indexClient, env.legalAuthoritiesIndex, [
+
+      const written = await upsertLegalAuthorityDocument(
+        corpusWrites,
         liveDocument.document,
-      ])
+        liveDocument.provider,
+      )
+      if (!written) {
+        // Not stored, so not indexed either: an index entry with no stored row
+        // is invisible to every Postgres-backed check until the next rebuild,
+        // and the rebuild is what drops it.
+        if (!sourceRecordIsForegroundOnly) {
+          return c.json(
+            apiError(
+              'storage_unavailable',
+              'Legal source storage is unavailable.',
+              requestId,
+            ),
+            503,
+          )
+        }
+        rememberForegroundSourceRecord(
+          foregroundSourceRecords,
+          toAuthoritySummary(liveDocument.document),
+          liveDocument.provider,
+          liveDocument.document,
+        )
+        return c.json({ document: liveDocument.document })
+      }
+
+      rememberForegroundSourceRecord(
+        foregroundSourceRecords,
+        toAuthoritySummary(liveDocument.document),
+        liveDocument.provider,
+        liveDocument.document,
+      )
+      // The write reported the merged row's withdrawal state, so a withdrawal
+      // that serialised with it keeps this document out of the index.
+      if (written.indexable) {
+        void indexFetchedAuthorities(indexClient, env.legalAuthoritiesIndex, [
+          liveDocument.document,
+        ])
+      }
       return c.json({ document: liveDocument.document })
     }
 
@@ -1067,7 +1106,7 @@ function classifyExactLookup(query: string): ExactLookup | null {
 
 async function findExactStoredAuthority(
   searchClient: Parameters<typeof search>[0],
-  legalAuthorityStore: LegalAuthoritySourceStore,
+  reads: LegalAuthorityReadStore,
   indexName: string,
   query: string,
   filters: LegalSearchFilters,
@@ -1089,7 +1128,7 @@ async function findExactStoredAuthority(
   // Same stale-index guard as the main search path: an exact Meili hit for
   // a withdrawn row is dropped here, and direct fetch owns the banner.
   const visibleIndexHits = await excludeWithdrawnIndexHits(
-    legalAuthorityStore,
+    reads,
     storedIndexResult.hits,
   )
   const storedIndexHit = visibleIndexHits.find((hit) =>
@@ -1102,7 +1141,7 @@ async function findExactStoredAuthority(
   // above: without it there is nothing exact to serve.
   if (lookup.kind === 'document_id') {
     const storedRecord = await getLegalAuthoritySourceRecord(
-      legalAuthorityStore,
+      reads,
       lookup.normalizedQuery,
     )
     // Withdrawn rows never surface in search, even on an exact id lookup:
@@ -1151,7 +1190,7 @@ function hasGoodStoredHits(
  * cases honestly serves nothing.
  */
 async function citingStoredSummariesForCitation(
-  legalAuthorityStore: LegalAuthoritySourceStore,
+  reads: LegalAuthorityReadStore,
   indexHits: LegalFetchSearchHit[],
   query: string,
   recognisedCitation: string | null,
@@ -1165,7 +1204,7 @@ async function citingStoredSummariesForCitation(
   const hydrated = await Promise.all(
     candidates.map(async (candidate) => ({
       ...candidate,
-      hit: await withCitingBodyText(legalAuthorityStore, candidate.hit),
+      hit: await withCitingBodyText(reads, candidate.hit),
     })),
   )
   const seen = new Set<string>()
@@ -1202,14 +1241,11 @@ async function citingStoredSummariesForCitation(
  * hydration so the served summary re-extracts excerpts from the full text.
  */
 async function withCitingBodyText(
-  legalAuthorityStore: LegalAuthoritySourceStore,
+  reads: LegalAuthorityReadStore,
   hit: LegalFetchSearchHit,
 ): Promise<LegalFetchSearchHit> {
   if ((hit.paragraphs ?? []).length > 0) return hit
-  const record = await getLegalAuthoritySourceRecord(
-    legalAuthorityStore,
-    hit.id,
-  )
+  const record = await getLegalAuthoritySourceRecord(reads, hit.id)
   if (!record || record.withdrawn) return hit
   const full = record.document ?? record.summary
   if (!full || (full.paragraphs ?? []).length === 0) return hit
@@ -1400,14 +1436,11 @@ async function searchStoredAuthorities(
 }
 
 async function getLegalAuthoritySourceRecord(
-  legalAuthorityStore: LegalAuthoritySourceStore,
+  reads: LegalAuthorityReadStore,
   documentId: string,
 ) {
   try {
-    return await withTimeout(
-      legalAuthorityStore.get(documentId),
-      storedSearchTimeoutMs,
-    )
+    return await withTimeout(reads.get(documentId), storedSearchTimeoutMs)
   } catch {
     return null
   }
@@ -1419,14 +1452,12 @@ async function getLegalAuthoritySourceRecord(
  * keeps it visible so a transient store wobble cannot blank search.
  */
 async function excludeWithdrawnIndexHits(
-  legalAuthorityStore: LegalAuthoritySourceStore,
+  reads: LegalAuthorityReadStore,
   hits: LegalSearchHit[],
 ): Promise<LegalSearchHit[]> {
   if (hits.length === 0) return hits
   const records = await Promise.all(
-    hits.map((hit) =>
-      getLegalAuthoritySourceRecord(legalAuthorityStore, hit.id),
-    ),
+    hits.map((hit) => getLegalAuthoritySourceRecord(reads, hit.id)),
   )
   return hits.filter((_, index) => !records[index]?.withdrawn)
 }
@@ -1439,7 +1470,7 @@ async function excludeWithdrawnIndexHits(
  * document route.
  */
 async function getDocumentRouteSourceRecord(
-  legalAuthorityStore: LegalAuthoritySourceStore,
+  reads: LegalAuthorityReadStore,
   documentId: string,
 ): Promise<
   | { status: 'ok'; record: StoredLegalAuthorityRecord | null }
@@ -1448,7 +1479,7 @@ async function getDocumentRouteSourceRecord(
   const timedOut = Symbol('store-timeout')
   try {
     const record = await Promise.race([
-      legalAuthorityStore.get(documentId),
+      reads.get(documentId),
       new Promise<typeof timedOut>((resolve) =>
         setTimeout(() => resolve(timedOut), storedSearchTimeoutMs),
       ),
@@ -1495,5 +1526,9 @@ function toSearchFilters(request: LegalFetchRequest): LegalSearchFilters {
 
 export { parseFindCaseLawAtom } from '@obiter/legal-source-provider'
 export { parseJudgmentParagraphs } from '@obiter/legal-source-provider'
-export { createPostgresLegalAuthoritySourceStore } from './source-store'
+export {
+  createPostgresLegalAuthorityReadStore,
+  createPostgresLegalAuthoritySourceStore,
+  createPostgresLegalAuthorityWriteStore,
+} from './source-store'
 export type { LegalFetchSearchHit } from './response-utils'

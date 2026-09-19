@@ -1,4 +1,5 @@
 import { Pool } from 'pg'
+import { createTestPool } from './test-database.test-support'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { checkQuoteFidelity, checkQuoteFidelities } from './quote-fidelity'
 import {
@@ -17,13 +18,7 @@ import {
  */
 
 describe('quote fidelity judgments against the stored record', () => {
-  const connectionString = process.env.TEST_DATABASE_URL
-  if (!connectionString) {
-    throw new Error(
-      'TEST_DATABASE_URL is required for quote-fidelity.db.test.ts',
-    )
-  }
-  const pool = new Pool({ connectionString })
+  const pool = createTestPool()
 
   beforeAll(async () => {
     await pool.query(

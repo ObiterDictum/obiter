@@ -11,7 +11,11 @@ import {
 } from '@obiter/legal-source-provider'
 import type { ApiEnv } from '../../env'
 import type { LegalFetchRequest } from '@obiter/legal-source-provider'
-import { type LegalAuthoritySourceStore } from './source-store'
+import {
+  type AuthorityWriteResult,
+  type LegalAuthorityReadStore,
+  type LegalAuthorityWriteStore,
+} from './source-store'
 
 /**
  * Storage and index hydration for provider results. Retrieval and parsing live
@@ -30,22 +34,40 @@ export {
 
 const storedSearchTimeoutMs = 350
 
+/**
+ * Persist one provider summary. Returns null when the write did not happen, so
+ * the caller never mistakes a failed write for a stored row. The failure is
+ * reported, not discarded: a background hydration that silently stopped
+ * persisting would look exactly like one that had nothing to do.
+ */
 export async function upsertLegalAuthoritySummary(
-  legalAuthorityStore: LegalAuthoritySourceStore,
+  writeStore: LegalAuthorityWriteStore,
   summary: LegalAuthority,
   provider: ProviderSourceMetadata,
-) {
+): Promise<AuthorityWriteResult | null> {
   try {
-    await legalAuthorityStore.upsertSummary(summary, provider)
-  } catch {}
+    return await writeStore.upsertSummary(summary, provider)
+  } catch (error) {
+    console.error('Corpus summary write failed; summary not stored', {
+      reason: error instanceof Error ? error.message : String(error),
+    })
+    return null
+  }
 }
 
 export async function upsertLegalAuthorityDocument(
-  legalAuthorityStore: LegalAuthoritySourceStore,
+  writeStore: LegalAuthorityWriteStore,
   document: LegalAuthority,
   provider: ProviderSourceMetadata,
-) {
-  await legalAuthorityStore.upsertDocument(document, provider)
+): Promise<AuthorityWriteResult | null> {
+  try {
+    return await writeStore.upsertDocument(document, provider)
+  } catch (error) {
+    console.error('Corpus document write failed; document not stored', {
+      reason: error instanceof Error ? error.message : String(error),
+    })
+    return null
+  }
 }
 
 /**
@@ -55,7 +77,7 @@ export async function upsertLegalAuthorityDocument(
  * the read-time guards in the proxy routes.
  */
 async function isWithdrawnInStore(
-  legalAuthorityStore: LegalAuthoritySourceStore,
+  legalAuthorityStore: LegalAuthorityReadStore,
   documentId: string,
 ): Promise<boolean> {
   try {
@@ -120,7 +142,8 @@ export async function indexFetchedAuthorities(
 
 export async function hydrateMojAuthoritiesFromSearch(
   env: ApiEnv,
-  legalAuthorityStore: LegalAuthoritySourceStore,
+  reads: LegalAuthorityReadStore,
+  writes: LegalAuthorityWriteStore,
   indexClient: Parameters<typeof indexDocuments>[0],
   indexName: string,
   request: LegalFetchRequest,
@@ -139,9 +162,9 @@ export async function hydrateMojAuthoritiesFromSearch(
       // checker marked. Unknown store state proceeds — the read-time
       // cross-check still hides withdrawn hits from search responses.
       const summary = atomEntryToAuthoritySummary(env, entry)
-      if (await isWithdrawnInStore(legalAuthorityStore, summary.id)) continue
+      if (await isWithdrawnInStore(reads, summary.id)) continue
       await upsertLegalAuthoritySummary(
-        legalAuthorityStore,
+        writes,
         summary,
         providerMetadataFromAtomEntry(entry),
       )
@@ -149,7 +172,8 @@ export async function hydrateMojAuthoritiesFromSearch(
 
     await hydrateAndIndexMojAuthorities(
       env,
-      legalAuthorityStore,
+      reads,
+      writes,
       indexClient,
       indexName,
       mojResult.entries,
@@ -162,7 +186,8 @@ export async function hydrateMojAuthoritiesFromSearch(
 
 export async function hydrateAndIndexMojAuthorities(
   env: ApiEnv,
-  legalAuthorityStore: LegalAuthoritySourceStore,
+  reads: LegalAuthorityReadStore,
+  writes: LegalAuthorityWriteStore,
   indexClient: Parameters<typeof indexDocuments>[0],
   indexName: string,
   entries: AtomEntry[],
@@ -178,17 +203,19 @@ export async function hydrateAndIndexMojAuthorities(
     const documents: LegalAuthority[] = []
     for (const result of detailResults) {
       if (result.status !== 'ok') continue
-      if (await isWithdrawnInStore(legalAuthorityStore, result.document.id))
-        continue
-      try {
-        await upsertLegalAuthorityDocument(
-          legalAuthorityStore,
-          result.document,
-          result.provider,
-        )
-      } catch {
-        continue
-      }
+      if (await isWithdrawnInStore(reads, result.document.id)) continue
+      // The write decides whether the row may be indexed, from the state it
+      // left behind. A serialized withdrawal is therefore respected: either
+      // the merge saw the flag and refuses the index write, or the withdrawal
+      // lands after and removes the indexed copy. Indexing on the strength of
+      // the read above would put a withdrawn judgment back in the shared
+      // index, where every lane would see it until the next rebuild.
+      const written = await upsertLegalAuthorityDocument(
+        writes,
+        result.document,
+        result.provider,
+      )
+      if (!written?.indexable) continue
       documents.push(result.document)
     }
 

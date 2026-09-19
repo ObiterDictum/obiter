@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { Hono } from 'hono'
 import { Pool, type PoolClient } from 'pg'
+import { createTestPool } from '../test-database.test-support'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import type { AuthzVariables } from '../authz'
 import { createTestApiEnv } from '../test-api-env'
@@ -114,15 +115,8 @@ async function cleanupMembership(pool: Pool, seed: MembershipDbSeed) {
 }
 
 describe('organisation member removal concurrency (Postgres)', () => {
-  const connectionString = process.env.TEST_DATABASE_URL
-  if (!connectionString) {
-    throw new Error(
-      'TEST_DATABASE_URL is required for organisation-membership.db.test.ts',
-    )
-  }
-
-  const pool = new Pool({ connectionString })
-  const gatePool = new Pool({ connectionString })
+  const pool = createTestPool()
+  const gatePool = createTestPool()
   let seed: MembershipDbSeed
   let gate: PoolClient | null = null
 

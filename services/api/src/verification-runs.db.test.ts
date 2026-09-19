@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { Pool } from 'pg'
+import { createTestPool } from './test-database.test-support'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   verificationFindingsResponseSchema,
@@ -46,14 +47,7 @@ function app(pool: Pool, userId: string, organisationId: string) {
 }
 
 describe('verification run persistence', () => {
-  const connectionString = process.env.TEST_DATABASE_URL
-  if (!connectionString) {
-    throw new Error(
-      'TEST_DATABASE_URL is required for verification-runs.db.test.ts',
-    )
-  }
-
-  const pool = new Pool({ connectionString })
+  const pool = createTestPool()
   let seed: OrganisationIsolationSeed
 
   beforeAll(async () => {
