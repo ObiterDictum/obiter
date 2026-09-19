@@ -12,7 +12,10 @@ import {
 } from '../../../legal-search-hydration-budget'
 import { createTestApiEnv } from '../../../test-api-env'
 import * as mojClient from '../moj-client'
-import { createInMemoryLegalAuthoritySourceStore } from '../source-store'
+import {
+  createInMemoryLegalAuthoritySourceStore,
+  type LegalAuthoritySourceStore,
+} from '../source-store'
 
 const searchClientMock = vi.hoisted(() => ({
   createClient: vi.fn(() => ({ id: 'meili-client' })),
@@ -47,12 +50,15 @@ vi.mock('../legislation-serve', async (importOriginal) => {
 const env: ApiEnv = createTestApiEnv()
 
 function createAuthenticatedProxyApp(
-  sourceStore?: Parameters<typeof createLegalSearchProxyRoutes>[1],
+  sourceStore: LegalAuthoritySourceStore = createInMemoryLegalAuthoritySourceStore(),
   options?: Parameters<typeof createLegalSearchProxyRoutes>[2],
   user: { id: string } | null = { id: 'usr_test' },
   routeEnv: ApiEnv = env,
 ) {
-  const proxy = createLegalSearchProxyRoutes(routeEnv, sourceStore, options)
+  const proxy = createLegalSearchProxyRoutes(routeEnv, sourceStore, {
+    corpusWrites: sourceStore,
+    ...options,
+  })
   const app = new Hono<{
     Variables: { requestId: string; user: { id: string } | null }
   }>()
@@ -1629,8 +1635,12 @@ describe('createLegalSearchProxyRoutes', () => {
       errors: [],
     })
     const sourceStore = {
-      async upsertSummary() {},
-      async upsertDocument() {},
+      async upsertSummary() {
+        return { indexable: true }
+      },
+      async upsertDocument() {
+        return { indexable: true }
+      },
       async get() {
         return null
       },
@@ -2323,8 +2333,12 @@ describe('createLegalSearchProxyRoutes', () => {
       processingTimeMs: 1,
     })
     const sourceStore = {
-      async upsertSummary() {},
-      async upsertDocument() {},
+      async upsertSummary() {
+        return { indexable: true }
+      },
+      async upsertDocument() {
+        return { indexable: true }
+      },
       async get() {
         return {
           summary: hit,
@@ -2956,7 +2970,7 @@ describe('createLegalSearchProxyRoutes', () => {
       processingTimeMs: 1,
     })
     const sourceStore = {
-      upsertSummary: vi.fn(async () => undefined),
+      upsertSummary: vi.fn(async () => ({ indexable: true })),
       upsertDocument: vi.fn(async () => {
         throw new Error('source write failed')
       }),
@@ -3396,7 +3410,9 @@ describe('createLegalSearchProxyRoutes', () => {
   it('returns a storage error and skips indexing when direct live document storage fails', async () => {
     searchClientMock.getDocument.mockRejectedValueOnce(new Error('not found'))
     const sourceStore = {
-      async upsertSummary() {},
+      async upsertSummary() {
+        return { indexable: true }
+      },
       upsertDocument: vi.fn(async () => {
         throw new Error('source write failed')
       }),
@@ -3469,7 +3485,9 @@ describe('createLegalSearchProxyRoutes', () => {
   it('returns rate-limit metadata when source-record live document fetch is provider limited', async () => {
     searchClientMock.getDocument.mockRejectedValueOnce(new Error('not found'))
     const sourceStore = {
-      async upsertSummary() {},
+      async upsertSummary() {
+        return { indexable: true }
+      },
       upsertDocument: vi.fn(),
       async get() {
         return {
@@ -3728,8 +3746,12 @@ describe('createLegalSearchProxyRoutes', () => {
       ],
     })
     const store = {
-      async upsertSummary() {},
-      async upsertDocument() {},
+      async upsertSummary() {
+        return { indexable: true }
+      },
+      async upsertDocument() {
+        return { indexable: true }
+      },
       get() {
         return new Promise<null>(() => undefined)
       },
@@ -3751,8 +3773,12 @@ describe('createLegalSearchProxyRoutes', () => {
   it('fails closed on the document route when the store errors', async () => {
     searchClientMock.getDocument.mockResolvedValueOnce({ ...hit })
     const store = {
-      async upsertSummary() {},
-      async upsertDocument() {},
+      async upsertSummary() {
+        return { indexable: true }
+      },
+      async upsertDocument() {
+        return { indexable: true }
+      },
       async get() {
         throw new Error('database unreachable')
       },
@@ -3791,8 +3817,8 @@ describe('createLegalSearchProxyRoutes', () => {
         ),
       )
     const store = {
-      upsertSummary: vi.fn(async () => undefined),
-      upsertDocument: vi.fn(async () => undefined),
+      upsertSummary: vi.fn(async () => ({ indexable: true })),
+      upsertDocument: vi.fn(async () => ({ indexable: true })),
       async get() {
         return {
           summary: { ...hit },
@@ -4260,5 +4286,160 @@ describe('search hydration guards', () => {
     expect(await response.json()).toMatchObject({
       error: { code: 'hydration_budget_exceeded' },
     })
+  })
+})
+
+describe('read-only corpus access', () => {
+  const documentId = 'd-2f4c1c1a-1c1e-4b1f-9c1a-7f3f0a4c9b21'
+  const feed = `<feed><entry><title>Potanina v Potanin</title><link href="https://caselaw.nationalarchives.gov.uk/uksc/2024/3" rel="alternate"/><published>2024-01-31T00:00:00Z</published><id>https://caselaw.nationalarchives.gov.uk/id/${documentId}</id><tna:uri>${documentId}</tna:uri><tna:identifier slug="uksc/2024/3" type="ukncn">[2024] UKSC 3</tna:identifier><tna:contenthash>abc123</tna:contenthash></entry></feed>`
+  const detail =
+    '<html><body><h1>Potanina v Potanin</h1><h2><span>Neutral Citation Number</span>[2024] UKSC 3</h2><article><div class="judgment-header__date">Date: 31/01/2024</div><p>This judgment paragraph is long enough to be indexed as a stored authority body.</p></article></body></html>'
+
+  function emptyStoredSearch() {
+    searchClientMock.search.mockResolvedValueOnce({
+      hits: [],
+      query: 'Potanina',
+      estimatedTotalHits: 0,
+      processingTimeMs: 1,
+    })
+  }
+
+  it('answers a live search without attempting or queueing a corpus write', async () => {
+    const sourceStore = createInMemoryLegalAuthoritySourceStore()
+    const upsertSummary = vi.spyOn(sourceStore, 'upsertSummary')
+    const upsertDocument = vi.spyOn(sourceStore, 'upsertDocument')
+    emptyStoredSearch()
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(feed))
+      .mockResolvedValue(new Response(detail))
+    const app = createAuthenticatedProxyApp(sourceStore, { corpusWrites: null })
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'Potanina',
+        court: 'uksc',
+        foregroundLiveResults: true,
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [expect.objectContaining({ id: documentId })],
+      diagnostics: { liveResultsNotPersisted: true },
+    })
+    // One provider call: the summary request that answered this response. The
+    // detail pass exists only to store and index, so it does not run.
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(upsertSummary).not.toHaveBeenCalled()
+    expect(upsertDocument).not.toHaveBeenCalled()
+    expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
+  })
+
+  it('serves a background-path live search from the provider instead of queueing hydration', async () => {
+    const sourceStore = createInMemoryLegalAuthoritySourceStore()
+    const upsertSummary = vi.spyOn(sourceStore, 'upsertSummary')
+    const upsertDocument = vi.spyOn(sourceStore, 'upsertDocument')
+    emptyStoredSearch()
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(feed))
+      .mockResolvedValue(new Response(detail))
+    const app = createAuthenticatedProxyApp(sourceStore, { corpusWrites: null })
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({ query: 'Potanina', court: 'uksc' }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    // Nothing is queued, so promising a later answer would leave the client
+    // polling for a job that never runs.
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hydrationQueued: false,
+      hits: [expect.objectContaining({ id: documentId })],
+      diagnostics: { liveResultsNotPersisted: true },
+    })
+    expect(upsertSummary).not.toHaveBeenCalled()
+    expect(upsertDocument).not.toHaveBeenCalled()
+    expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
+  })
+
+  it('serves a live document without storing or indexing it', async () => {
+    const sourceStore = createInMemoryLegalAuthoritySourceStore()
+    const upsertDocument = vi.spyOn(sourceStore, 'upsertDocument')
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(detail))
+    const app = createAuthenticatedProxyApp(sourceStore, { corpusWrites: null })
+
+    const response = await app.request('/api/search/documents/uksc-2024-3')
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      document: { neutralCitation: '[2024] UKSC 3', court: 'uksc' },
+    })
+    expect(upsertDocument).not.toHaveBeenCalled()
+    expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
+  })
+
+  it('persists and indexes live results in the default configuration', async () => {
+    const sourceStore = createInMemoryLegalAuthoritySourceStore()
+    const upsertSummary = vi.spyOn(sourceStore, 'upsertSummary')
+    const upsertDocument = vi.spyOn(sourceStore, 'upsertDocument')
+    emptyStoredSearch()
+    searchClientMock.indexDocuments.mockResolvedValue({
+      indexedCount: 1,
+      failedCount: 0,
+      errors: [],
+    })
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(feed))
+      .mockResolvedValue(new Response(detail))
+    const app = createAuthenticatedProxyApp(sourceStore)
+
+    const response = await app.request('/api/search/fetch', {
+      method: 'POST',
+      body: JSON.stringify({
+        query: 'Potanina',
+        court: 'uksc',
+        foregroundLiveResults: true,
+      }),
+      headers: { 'content-type': 'application/json' },
+    })
+
+    expect(response.status).toBe(200)
+    expect(await response.json()).toMatchObject({
+      hits: [expect.objectContaining({ id: documentId })],
+      diagnostics: { liveResultsNotPersisted: false },
+    })
+    expect(upsertSummary).toHaveBeenCalled()
+    await vi.waitFor(() =>
+      expect(searchClientMock.indexDocuments).toHaveBeenCalledWith(
+        { id: 'meili-client' },
+        'legal_authorities',
+        [expect.objectContaining({ id: documentId })],
+      ),
+    )
+    expect(upsertDocument).toHaveBeenCalled()
+  })
+
+  it('does not index a document whose write reports it is not indexable', async () => {
+    const sourceStore = {
+      upsertSummary: vi.fn(async () => ({ indexable: true })),
+      // What a write returns when a withdrawal serialised with it.
+      upsertDocument: vi.fn(async () => ({ indexable: false })),
+      async get() {
+        return null
+      },
+    }
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(detail))
+    const app = createAuthenticatedProxyApp(sourceStore)
+
+    const response = await app.request('/api/search/documents/uksc-2024-3')
+
+    expect(response.status).toBe(200)
+    expect(sourceStore.upsertDocument).toHaveBeenCalled()
+    expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
   })
 })

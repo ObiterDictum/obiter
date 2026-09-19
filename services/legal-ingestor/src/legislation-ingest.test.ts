@@ -154,6 +154,73 @@ describe('upsertLegislationDocument transaction', () => {
     expect(client.release).toHaveBeenCalled()
   })
 
+  it('retries the whole transaction after a deadlock, then commits once', async () => {
+    let connects = 0
+    let begins = 0
+    let rollbacks = 0
+    let commits = 0
+    const deadlock = Object.assign(new Error('deadlock detected'), {
+      code: '40P01',
+    })
+    const pool = {
+      query: async () => ({ rows: [] }),
+      connect: async () => {
+        connects += 1
+        const attempt = connects
+        return {
+          query: async (text: string) => {
+            if (text === 'BEGIN') begins += 1
+            if (text === 'ROLLBACK') rollbacks += 1
+            if (text === 'COMMIT') commits += 1
+            // The deadlock arrives from a statement inside the transaction,
+            // as it does in production, not from the connection.
+            if (
+              attempt === 1 &&
+              text.includes('insert into legislation_documents')
+            ) {
+              throw deadlock
+            }
+            return { rows: [] }
+          },
+          release: vi.fn(),
+        }
+      },
+    } as unknown as Db
+
+    await upsertLegislationDocument(pool, doc)
+
+    // A second transaction, not a resumed one: the first was rolled back, so
+    // the retry begins again from the document row.
+    expect(connects).toBe(2)
+    expect(begins).toBe(2)
+    expect(rollbacks).toBe(1)
+    expect(commits).toBe(1)
+  })
+
+  it('does not retry a transaction that failed for another reason', async () => {
+    let connects = 0
+    const pool = {
+      query: async () => ({ rows: [] }),
+      connect: async () => {
+        connects += 1
+        return {
+          query: async (text: string) => {
+            if (text.includes('insert into legislation_documents')) {
+              throw new Error('provision boom')
+            }
+            return { rows: [] }
+          },
+          release: vi.fn(),
+        }
+      },
+    } as unknown as Db
+
+    await expect(upsertLegislationDocument(pool, doc)).rejects.toThrow(
+      'provision boom',
+    )
+    expect(connects).toBe(1)
+  })
+
   it('persists the extraction-completeness note on the document row', async () => {
     // Declared 2 P1s, one addressable row and one textless addressable
     // P1: the stored note flags the unexplained row-less P1 so a

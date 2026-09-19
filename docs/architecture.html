@@ -3987,6 +3987,40 @@
             record: <code>legal_source_documents</code> holds every judgment,
             the index rebuilds from it, and retrieval by id reads from it.
           </div>
+          <h3>Corpus reads have their own seam</h3>
+          <p>
+            Legal-corpus reads and matter, auth and audit reads are two
+            different concerns that happened to share one connection. They now
+            have separate access paths:
+            <code>DatabasePools.corpus</code> carries corpus reads for
+            <code>source-store</code>, <code>legislation-store</code> and the
+            verification checks, while every matter, auth and audit statement
+            keeps using the application pool. The seam is what makes a corpus
+            held in a different database possible at all; PostgreSQL cannot join
+            across databases, so the boundary has to be drawn where no statement
+            crosses it.
+          </p>
+          <p>
+            <b>The default is unchanged, and nothing is split.</b>
+            <code>CORPUS_DATABASE_URL</code> unset means the corpus resolves to
+            <code>DATABASE_URL</code>: one database, one pool, and corpus writes
+            behave exactly as they did before the seam existed. This is a
+            dormant boundary, not a deployment. No shared corpus database, no
+            reader role and no separate credential exist yet, and pointing the
+            seam at a second database is what a later, separately authorised
+            change would do. <code>/api/health</code> reports
+            <code>corpus.colocated</code> and <code>corpus.readOnly</code> so
+            which mode a process is in can be read from the process rather than
+            inferred from its environment.
+          </p>
+          <p>
+            Under <code>NODE_ENV=test</code> the corpus is required to resolve
+            to the same isolated <code>*_test</code> database as everything
+            else, and a configured corpus URL that resolves anywhere else
+            refuses startup. Several suites seed and delete corpora rows, so a
+            suite that reached a populated database would be destructive rather
+            than merely wrong.
+          </p>
         </section>
 
         <section id="storage">
@@ -4187,6 +4221,17 @@
                 <tr>
                   <td class="id">DATABASE_URL · TEST_DATABASE_URL</td>
                   <td>PostgreSQL connection</td>
+                </tr>
+                <tr>
+                  <td class="id">CORPUS_DATABASE_URL</td>
+                  <td>
+                    Optional. Defaults to <code>DATABASE_URL</code>, which is
+                    the compatibility seam: the corpus is the application
+                    database and writes behave as before. A different database
+                    selects read-only corpus access. Under
+                    <code>NODE_ENV=test</code> it must resolve to
+                    <code>TEST_DATABASE_URL</code>
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">BETTER_AUTH_SECRET · BETTER_AUTH_URL</td>

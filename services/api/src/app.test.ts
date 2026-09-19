@@ -90,10 +90,86 @@ describe('createApiApp', () => {
       pool,
       { auth },
     ).request('/api/health')
+    // Still no paths or build metadata outside development. The corpus mode is
+    // a boolean derived from configuration, so it is safe in any environment
+    // and it is the only way to tell a misconfigured deployment from a working
+    // one without reading the process environment.
     expect(await productionHealth.json()).toEqual({
       status: 'ok',
       service: 'obiter-api',
+      corpus: { colocated: true, readOnly: false },
     })
+  })
+
+  it('reports a colocated, writable corpus in the default configuration', async () => {
+    const auth = {
+      api: { getSession: async () => null },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const pool = createPool(async () => ({ rows: [] }))
+
+    const response = await createApiApp(testEnv, pool, { auth }).request(
+      '/api/health',
+    )
+
+    expect(await response.json()).toMatchObject({
+      corpus: { colocated: true, readOnly: false },
+    })
+  })
+
+  it('reports a separate corpus database as read-only', async () => {
+    const auth = {
+      api: { getSession: async () => null },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const pool = createPool(async () => ({ rows: [] }))
+    const corpusPool = createPool(async () => ({ rows: [] }))
+
+    const response = await createApiApp(testEnv, pool, {
+      auth,
+      corpus: { pool: corpusPool, readOnly: true },
+    }).request('/api/health')
+
+    expect(await response.json()).toMatchObject({
+      corpus: { colocated: false, readOnly: true },
+    })
+  })
+
+  it('reports the corpus mode without disclosing connection details', async () => {
+    const auth = {
+      api: { getSession: async () => null },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const env = {
+      ...testEnv,
+      databaseUrl: 'postgres://obiter:secret@db.internal:5432/obiter',
+      corpusDatabaseUrl:
+        'postgres://obiter_corpus_reader:hunter2@db.internal:5432/obiter_corpus',
+    }
+
+    const response = await createApiApp(
+      env,
+      createPool(async () => ({ rows: [] })),
+      {
+        auth,
+        corpus: {
+          pool: createPool(async () => ({ rows: [] })),
+          readOnly: true,
+        },
+      },
+    ).request('/api/health')
+    const body = await response.text()
+
+    expect(body).toContain('"readOnly":true')
+    for (const secret of [
+      'secret',
+      'hunter2',
+      'db.internal',
+      'obiter_corpus',
+      'obiter_lane',
+    ]) {
+      expect(body).not.toContain(secret)
+    }
   })
 
   it('returns changelog entries from GitHub releases', async () => {

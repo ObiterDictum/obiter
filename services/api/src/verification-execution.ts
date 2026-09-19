@@ -102,6 +102,12 @@ function auditMetadata(
 
 export async function createAndExecuteVerificationRun(input: {
   pool: Pool
+  /**
+   * Where legal-corpus reads run. Separate from `pool` so a corpus that is not
+   * the application database is read through the corpus seam; the run, its
+   * findings and its audit rows are written to `pool` as before.
+   */
+  corpusPool: Pick<Pool, 'query'>
   storage: StorageService
   user: AuthenticatedOrgUser
   documentId: string
@@ -220,6 +226,7 @@ export async function createAndExecuteVerificationRun(input: {
 
   return executeVerificationRun({
     pool: input.pool,
+    corpusPool: input.corpusPool,
     storage: input.storage,
     user: input.user,
     runId,
@@ -231,6 +238,7 @@ export async function createAndExecuteVerificationRun(input: {
 
 async function executeVerificationRun(input: {
   pool: Pool
+  corpusPool: Pick<Pool, 'query'>
   storage: StorageService
   user: AuthenticatedOrgUser
   runId: string
@@ -264,7 +272,7 @@ async function executeVerificationRun(input: {
     await renew()
     const extracted = extractVerificationCandidates(model)
     findings = await collectVerificationFindings(
-      input.pool,
+      input.corpusPool,
       subject,
       extracted.citations,
       extracted.quotes,

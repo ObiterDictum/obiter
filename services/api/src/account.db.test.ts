@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { Pool } from 'pg'
+import { createTestPool } from './test-database.test-support'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createApiApp } from './app'
 import type { createAuth } from './auth'
@@ -25,14 +25,7 @@ interface AccountSeed {
 }
 
 describe('account and organisation settings (Postgres)', () => {
-  const connectionString = process.env.TEST_DATABASE_URL
-  if (!connectionString) {
-    throw new Error(
-      'TEST_DATABASE_URL is required for account.db.test.ts (see TESTING.md).',
-    )
-  }
-
-  const pool = new Pool({ connectionString })
+  const pool = createTestPool()
   const env = createTestApiEnv()
   let seed: AccountSeed
   let currentUserId = ''

@@ -9,7 +9,6 @@ import {
   type UserRole,
 } from '@obiter/contracts'
 import type { AuthenticatedOrgUser } from './authz'
-import type { ApiEnv } from './env'
 import { matterAccessPredicate } from './matter-access-boundary'
 
 export interface SessionUserRecord {
@@ -184,12 +183,6 @@ export interface InsertDocumentVersionInput {
   contentSha256: string
   syncState: SyncState
   createdBy: string
-}
-
-export function createPool(env: ApiEnv) {
-  return new Pool({
-    connectionString: env.databaseUrl,
-  })
 }
 
 type Queryable = Pick<Pool | PoolClient, 'query'>

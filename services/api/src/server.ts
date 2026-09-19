@@ -1,17 +1,17 @@
 import { serve } from '@hono/node-server'
 import { createClient, getIndexStatus } from '@obiter/search-client'
 import { createApiApp } from './app'
-import { createPool } from './database'
+import { createDatabasePools } from './database-pools'
 import { readApiEnv } from './env'
 import { runMigrations } from './migrate'
 import { warmRedactionDetector } from './redaction-detection'
 
 async function main() {
   const env = readApiEnv()
-  const pool = createPool(env)
+  const pools = createDatabasePools(env)
 
   try {
-    await runMigrations(pool)
+    await runMigrations(pools.application)
   } catch (error) {
     // Fail closed: handlers assume the latest schema (e.g. sign-up reads the
     // column added in 0016), so serving traffic on a half-migrated database
@@ -23,11 +23,11 @@ async function main() {
       'Refusing to start: pending migrations could not be applied.',
       error instanceof Error ? error.message : error,
     )
-    await pool.end()
+    await pools.close()
     process.exit(1)
   }
 
-  const app = createApiApp(env, pool)
+  const app = createApiApp(env, pools.application, { corpus: pools.corpus })
 
   // Loud at boot, never blocking: an unreachable or empty stored index must
   // be visible here, not discovered later as silent "no results". Serving
