@@ -16,6 +16,7 @@ import {
   parseEffectsFeed,
   unappliedEffectsForProvision,
 } from './legislation-effects'
+import { withConcurrencyRetry } from './db-retry'
 
 /**
  * Stage 1 legislation ingest: UK Public General Acts into Postgres
@@ -177,6 +178,20 @@ export async function upsertLegislationDocument(
   pool: Db,
   doc: IngestDocument,
   effects: EffectsWithheldMap = null,
+) {
+  // Retried as a whole transaction. A serialisation failure or a deadlock has
+  // already rolled this one back, so the only correct retry starts a new one;
+  // retrying single statements would resume a transaction Postgres discarded.
+  // Both writers here take the document row first and its provisions second, so
+  // a deadlock is unlikely rather than impossible, and "unlikely" is not a
+  // reason to lose an Act.
+  await withConcurrencyRetry(() => writeLegislationDocument(pool, doc, effects))
+}
+
+async function writeLegislationDocument(
+  pool: Db,
+  doc: IngestDocument,
+  effects: EffectsWithheldMap,
 ) {
   // One transaction: a crash between the document row and its provisions
   // must never leave a document with half its provisions (or none, after

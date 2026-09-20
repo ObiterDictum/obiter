@@ -215,26 +215,43 @@ function isLowSurrogate(code: number): boolean {
   return code >= 0xdc00 && code <= 0xdfff
 }
 
-export function arrowNeighbors(
-  ctx: {
-    model: DocumentModelWire
-    drafts?: Record<string, string>
-    inserts: LocalInsert[]
-    deletedParagraphIds: string[]
-    paragraphs: DocumentParagraphWire[]
-  },
+export type ParagraphNeighborResolver = (
   paragraphId: string,
   wrapWidthPx?: number,
-): { previous?: ArrowNeighbor; next?: ArrowNeighbor } {
+  /** The caller's current draft map, so a stable resolver still reads fresh
+   * text without being rebuilt on every keystroke. */
+  drafts?: Record<string, string>,
+) => { previous?: ArrowNeighbor; next?: ArrowNeighbor }
+
+/**
+ * A resolver over the story's flow order. The order and its index are built
+ * once, so resolving a paragraph's neighbours is a lookup rather than a walk
+ * of the whole document. The previous shape called `flowParagraphIds` per
+ * paragraph during rendering, which made a render O(n^2); this keeps that out
+ * of the render path while the wrap and face work still happens only for the
+ * paragraph that actually asks for a neighbour.
+ */
+export function paragraphNeighborResolver(ctx: {
+  model: DocumentModelWire
+  drafts?: Record<string, string>
+  inserts: LocalInsert[]
+  deletedParagraphIds: string[]
+  paragraphs: DocumentParagraphWire[]
+}): ParagraphNeighborResolver {
   const order = flowParagraphIds(
     ctx.model,
     ctx.inserts,
     ctx.deletedParagraphIds,
   )
-  const index = order.indexOf(paragraphId)
-  return {
-    previous: arrowNeighbor(order[index - 1], ctx, wrapWidthPx),
-    next: arrowNeighbor(order[index + 1], ctx, wrapWidthPx),
+  const index = new Map(order.map((id, at) => [id, at]))
+  return (paragraphId, wrapWidthPx, drafts) => {
+    const at = index.get(paragraphId)
+    if (at === undefined) return {}
+    const live = drafts ? { ...ctx, drafts } : ctx
+    return {
+      previous: arrowNeighbor(order[at - 1], live, wrapWidthPx),
+      next: arrowNeighbor(order[at + 1], live, wrapWidthPx),
+    }
   }
 }
 

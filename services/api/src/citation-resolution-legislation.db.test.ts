@@ -1,4 +1,5 @@
 import { Pool } from 'pg'
+import { createTestPool } from './test-database.test-support'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { VerificationSubject } from '@obiter/verification-core'
 import { resolveCitationCandidates } from './citation-resolution'
@@ -92,9 +93,13 @@ const actFixtures: ActFixture[] = [
     provisions: [],
   },
   {
-    identity: 'ukpga/1998/42',
-    year: 1998,
-    number: 42,
+    // The curated `HRA 1998` alias resolves by stored title, so this fixture
+    // keeps that title and takes a synthetic chapter. Using the real chapter
+    // identity put a delete on a real Act in this suite's cleanup, which only
+    // stayed harmless while the test database happened to be empty.
+    identity: 'ukpga/2066/10',
+    year: 2066,
+    number: 10,
     title: 'Human Rights Act 1998',
     provisions: [],
   },
@@ -104,13 +109,7 @@ const singleScheduleAct = 'ukpga/2066/4'
 const numberedSchedulesAct = 'ukpga/2066/5'
 
 describe('legislation resolution against the stored record', () => {
-  const connectionString = process.env.TEST_DATABASE_URL
-  if (!connectionString) {
-    throw new Error(
-      'TEST_DATABASE_URL is required for citation-resolution-legislation.db.test.ts',
-    )
-  }
-  const pool = new Pool({ connectionString })
+  const pool = createTestPool()
   const { resolveOne, resolveThenCheck } = createResolutionPipeline(
     pool,
     subject,
@@ -158,13 +157,7 @@ describe('legislation resolution against the stored record', () => {
       `delete from legislation_provisions where document_identity like 'ukpga/2066/%'`,
     )
     await pool.query(
-      `delete from legislation_provisions where document_identity = 'ukpga/1998/42'`,
-    )
-    await pool.query(
       `delete from legislation_documents where identity like 'ukpga/2066/%'`,
-    )
-    await pool.query(
-      `delete from legislation_documents where identity = 'ukpga/1998/42'`,
     )
     await pool.end()
   })
@@ -226,7 +219,7 @@ describe('legislation resolution against the stored record', () => {
       outcome: 'resolved',
       citation: {
         kind: 'legislation',
-        documentIdentity: 'ukpga/1998/42',
+        documentIdentity: 'ukpga/2066/10',
         labelPath: null,
       },
     })
