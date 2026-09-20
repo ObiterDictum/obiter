@@ -21,8 +21,10 @@ export function createTestApiEnv(overrides: Partial<ApiEnv> = {}): ApiEnv {
     databaseUrl,
     // Null is the compatibility seam: no separate corpus target is configured,
     // so the corpus is the application database and tests exercise the writable
-    // configuration unless they override it to cover read-only access.
+    // configuration unless they override it. A set read URL with a null write
+    // URL is the ordinary read-only lane: no corpus write path at all.
     corpusDatabaseUrl: null,
+    corpusWriteDatabaseUrl: null,
     authSecret: 'dev-only-better-auth-secret',
     authBaseUrl: 'http://localhost:8787',
     webOrigin: 'http://localhost:3000',

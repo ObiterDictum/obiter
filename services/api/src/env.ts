@@ -45,6 +45,12 @@ export interface ApiEnv {
   /** Legal-corpus reads. Null means no separate corpus target was configured,
    * so the corpus is `databaseUrl`: the compatibility seam. */
   corpusDatabaseUrl: string | null
+  /** Legal-corpus writes for provider fetch-through hydration. Null means no
+   * corpus write path: either the compatibility seam, where writes use
+   * `databaseUrl`, or an explicitly configured read-only corpus. Only a
+   * process given this variable can persist hydration, which is how the
+   * writer capability is scoped to `obiter-live` without a hostname check. */
+  corpusWriteDatabaseUrl: string | null
   authSecret: string
   authBaseUrl: string
   webOrigin: string
@@ -156,27 +162,60 @@ function readDatabaseUrl(nodeEnv: ApiEnv['nodeEnv']) {
   return testDatabaseUrl
 }
 
-/** Legal-corpus resolution: null means no separate corpus target, so the
- * corpus is the application database. Test runs must stay on `*_test`. */
-function readCorpusDatabaseUrl(
+/** An explicitly configured URL, or null when the variable is unset or empty.
+ * A blank or padded value is refused rather than read as absent, so a stray
+ * space cannot leave a writer disabled while the operator believes it is on. */
+function readConfiguredUrl(key: string): string | null {
+  const value = process.env[key]
+  if (value === undefined || value === '') return null
+
+  const trimmed = value.trim()
+  if (trimmed.length === 0 || trimmed !== value) {
+    throw new Error(`${key} must not be blank or padded with whitespace.`)
+  }
+
+  return parseUrl(key, trimmed)
+}
+
+/**
+ * Legal-corpus resolution. Both null means no separate corpus target, so the
+ * corpus is the application database. A writer with no explicit reader is
+ * refused: reads and writes must not silently target unrelated databases, and
+ * the writer is the only capability that lets a process persist hydration.
+ * Test runs must stay on `*_test` for both, because database-backed suites
+ * seed and delete corpus rows.
+ */
+function readCorpusDatabaseUrls(
   nodeEnv: ApiEnv['nodeEnv'],
   databaseUrl: string,
-): string | null {
-  const configured = process.env.CORPUS_DATABASE_URL
-  const corpusDatabaseUrl = configured
-    ? parseUrl('CORPUS_DATABASE_URL', configured)
-    : null
-  if (nodeEnv !== 'test') return corpusDatabaseUrl
+): Pick<ApiEnv, 'corpusDatabaseUrl' | 'corpusWriteDatabaseUrl'> {
+  const corpusDatabaseUrl = readConfiguredUrl('CORPUS_DATABASE_URL')
+  const corpusWriteDatabaseUrl = readConfiguredUrl('CORPUS_WRITE_DATABASE_URL')
+
+  if (corpusWriteDatabaseUrl !== null && corpusDatabaseUrl === null) {
+    throw new Error(
+      'CORPUS_WRITE_DATABASE_URL requires CORPUS_DATABASE_URL, or the process would read and write different databases.',
+    )
+  }
+
+  if (nodeEnv !== 'test') {
+    return { corpusDatabaseUrl, corpusWriteDatabaseUrl }
+  }
 
   const { database } = readDatabaseIdentity(databaseUrl, 'TEST_DATABASE_URL')
   if (!database.endsWith(testDatabaseSuffix)) {
     throw new Error('TEST_DATABASE_URL must name a *_test database.')
   }
-  if (corpusDatabaseUrl === null) return null
-  if (corpusDatabaseUrl !== databaseUrl) {
+  if (corpusDatabaseUrl !== null && corpusDatabaseUrl !== databaseUrl) {
     throw new Error('CORPUS_DATABASE_URL must match TEST_DATABASE_URL.')
   }
-  return corpusDatabaseUrl
+  if (
+    corpusWriteDatabaseUrl !== null &&
+    corpusWriteDatabaseUrl !== databaseUrl
+  ) {
+    throw new Error('CORPUS_WRITE_DATABASE_URL must match TEST_DATABASE_URL.')
+  }
+  return { corpusDatabaseUrl, corpusWriteDatabaseUrl }
 }
 
 function readOptionalUrl(key: string): string | null {
@@ -409,7 +448,7 @@ export function readApiEnv(): ApiEnv {
 
   return {
     databaseUrl,
-    corpusDatabaseUrl: readCorpusDatabaseUrl(nodeEnv, databaseUrl),
+    ...readCorpusDatabaseUrls(nodeEnv, databaseUrl),
     authSecret: readAuthSecret(nodeEnv),
     authBaseUrl: readRequiredUrl(
       'BETTER_AUTH_URL',

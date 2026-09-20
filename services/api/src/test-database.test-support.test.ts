@@ -11,7 +11,14 @@ const testDatabaseUrl =
   'postgres://obiter:obiter@localhost:5432/obiter_lane_search_test'
 
 function setEnv(values: Record<string, string | undefined>) {
-  for (const [key, value] of Object.entries(values)) {
+  // Both corpus variables are cleared by default: a value inherited from the
+  // shell must not make one of these assertions pass or fail by accident.
+  const cleared = {
+    CORPUS_DATABASE_URL: undefined,
+    CORPUS_WRITE_DATABASE_URL: undefined,
+    ...values,
+  }
+  for (const [key, value] of Object.entries(cleared)) {
     if (value === undefined) delete process.env[key]
     else process.env[key] = value
   }
@@ -145,5 +152,29 @@ describe('requireTestDatabaseUrl', () => {
     expect(() => requireTestDatabaseUrl()).toThrow(
       'must not point a database-backed suite at a shared corpus',
     )
+  })
+
+  it('refuses a corpus writer target that resolves elsewhere', () => {
+    setEnv({
+      TEST_DATABASE_URL: testDatabaseUrl,
+      CORPUS_DATABASE_URL: testDatabaseUrl,
+      CORPUS_WRITE_DATABASE_URL:
+        'postgres://obiter:obiter@localhost:5432/obiter_corpus',
+    })
+
+    expect(() => requireTestDatabaseUrl()).toThrow(
+      'CORPUS_WRITE_DATABASE_URL must not point a database-backed suite at a shared corpus',
+    )
+  })
+
+  it('accepts a corpus writer URL written differently for the same test database', () => {
+    setEnv({
+      TEST_DATABASE_URL: testDatabaseUrl,
+      CORPUS_DATABASE_URL: testDatabaseUrl,
+      CORPUS_WRITE_DATABASE_URL:
+        'postgres://obiter_writer@localhost:5432/obiter_lane_search_test',
+    })
+
+    expect(requireTestDatabaseUrl()).toBe(testDatabaseUrl)
   })
 })

@@ -10,25 +10,31 @@ afterEach(() => {
 
 const separateCorpusUrl =
   'postgres://obiter_corpus_reader@localhost:5432/obiter_corpus'
+const corpusWriterUrl =
+  'postgres://obiter_corpus_writer@localhost:5432/obiter_corpus'
 
-function envWithCorpus(corpusDatabaseUrl: string): ApiEnv {
-  return createTestApiEnv({ corpusDatabaseUrl })
+function envWithCorpus(
+  corpusDatabaseUrl: string,
+  corpusWriteDatabaseUrl: string | null = null,
+): ApiEnv {
+  return createTestApiEnv({ corpusDatabaseUrl, corpusWriteDatabaseUrl })
 }
 
 describe('createDatabasePools mode selection', () => {
   it('shares one writable pool when no corpus target is configured', async () => {
     const pools = createDatabasePools(createTestApiEnv())
 
-    expect(pools.corpus.pool).toBe(pools.application)
-    expect(pools.corpus.readOnly).toBe(false)
+    expect(pools.corpus.read).toBe(pools.application)
+    expect(pools.corpus.write).toBe(pools.application)
 
     await pools.close()
   })
 
-  // Every configured target is a separate, read-only corpus, whatever it names.
-  // The mode follows configuration provenance rather than URL equality, so a
-  // spelling that happens to name the application database cannot make the
-  // corpus share the application's write owner.
+  // Every configured reader is a separate, read-only corpus, whatever it names,
+  // and nothing falls back to the application pool for writes. The mode follows
+  // configuration provenance rather than URL equality, so a spelling that
+  // happens to name the application database cannot make the corpus share the
+  // application's write owner.
   it.each([
     ['the identical URL', 'postgres://obiter:obiter@localhost:5432/obiter'],
     ['a host alias', 'postgres://obiter:obiter@127.0.0.1:5432/obiter'],
@@ -39,16 +45,42 @@ describe('createDatabasePools mode selection', () => {
     ],
     ['a genuinely separate database', separateCorpusUrl],
   ])(
-    'marks %s as a separate read-only corpus',
+    'marks %s as a separate read-only corpus and disables writes',
     async (_label, corpusDatabaseUrl) => {
       const pools = createDatabasePools(envWithCorpus(corpusDatabaseUrl))
 
-      expect(pools.corpus.pool).not.toBe(pools.application)
-      expect(pools.corpus.readOnly).toBe(true)
+      expect(pools.corpus.read).not.toBe(pools.application)
+      // Absence of CORPUS_WRITE_DATABASE_URL is the whole capability model.
+      expect(pools.corpus.write).toBeNull()
 
       await pools.close()
     },
   )
+
+  it('wires a dedicated corpus writer when one is configured', async () => {
+    const pools = createDatabasePools(
+      envWithCorpus(separateCorpusUrl, corpusWriterUrl),
+    )
+
+    expect(pools.corpus.read).not.toBe(pools.application)
+    expect(pools.corpus.write).not.toBe(pools.application)
+    expect(pools.corpus.write).not.toBe(pools.corpus.read)
+
+    await pools.close()
+  })
+
+  it('keeps reader and writer as distinct pools when their URLs are identical', async () => {
+    // One host and one database under two roles are two access boundaries. A
+    // URL comparison cannot see the difference, so provenance has to decide.
+    const pools = createDatabasePools(
+      envWithCorpus(separateCorpusUrl, separateCorpusUrl),
+    )
+
+    expect(pools.corpus.read).not.toBe(pools.corpus.write)
+    expect(pools.corpus.read).not.toBe(pools.application)
+
+    await pools.close()
+  })
 })
 
 describe('createDatabasePools shutdown', () => {
@@ -72,6 +104,18 @@ describe('createDatabasePools shutdown', () => {
     await pools.close()
 
     expect(end).toHaveBeenCalledTimes(2)
+  })
+
+  it('closes the application, reader and writer pools exactly once each', async () => {
+    const end = vi.spyOn(Pool.prototype, 'end')
+    const pools = createDatabasePools(
+      envWithCorpus(separateCorpusUrl, corpusWriterUrl),
+    )
+
+    await pools.close()
+    await pools.close()
+
+    expect(end).toHaveBeenCalledTimes(3)
   })
 
   it('attempts the corpus close when the application close fails', async () => {
@@ -116,6 +160,24 @@ describe('createDatabasePools shutdown', () => {
     expect(rejection).toBeInstanceOf(AggregateError)
     expect((rejection as AggregateError).errors).toHaveLength(2)
     expect(end).toHaveBeenCalledTimes(2)
+  })
+
+  it('reports every failure when all three pools fail to close', async () => {
+    const pools = createDatabasePools(
+      envWithCorpus(separateCorpusUrl, corpusWriterUrl),
+    )
+    const end = vi
+      .spyOn(Pool.prototype, 'end')
+      .mockImplementation(() => Promise.reject(new Error('pool end failed')))
+
+    const rejection = await pools.close().then(
+      () => null,
+      (error: unknown) => error,
+    )
+
+    expect(rejection).toBeInstanceOf(AggregateError)
+    expect((rejection as AggregateError).errors).toHaveLength(3)
+    expect(end).toHaveBeenCalledTimes(3)
   })
 
   it('does not close a pool again after a failed close', async () => {

@@ -62,8 +62,9 @@ interface ApiAppOptions {
   /**
    * Legal-corpus access. Omitted in the default configuration, where the
    * corpus is the application database and reads and writes both use `pool`.
-   * A read-only corpus access is what a process pointed at a separate corpus
-   * has: reads run there, and no corpus write is reachable from this app.
+   * `corpus.write === null` is what a process pointed at a separate corpus
+   * without a writer credential has: reads run there, and no corpus write is
+   * reachable from this app.
    */
   corpus?: CorpusAccess
 }
@@ -139,7 +140,8 @@ export function createApiApp(
   const storage = options.storage ?? createLocalStorage()
   // The default is the compatibility seam: corpus reads and writes are the
   // application pool, exactly as they were before the seam existed.
-  const corpusAccess = options.corpus ?? { pool, readOnly: false }
+  const corpusAccess = options.corpus ?? { read: pool, write: pool }
+  const corpusReadOnly = corpusAccess.write === null
   // This is deliberately development-only: the public health route must not
   // expose filesystem paths or build metadata in production.
   const developmentProvenance =
@@ -259,16 +261,17 @@ export function createApiApp(
       // (`colocated`, the compatibility default) and whether this process may
       // write the corpus. `colocated: true` means no separate corpus target was
       // configured, so there is one database and corpus writes behave exactly
-      // as they did before the seam. The mode follows configuration, not URL
-      // equality: a configured target is read-only even when it names the same
-      // database. It says nothing about whether a shared corpus exists; no
-      // shared corpus is deployed, and this reports only what this process is
-      // configured to do. Deliberately no host, port or database name: the
-      // booleans are enough to tell the modes apart and disclose no connection
-      // detail.
+      // as they did before the seam. `readOnly: false` with `colocated: false`
+      // means a dedicated corpus writer was configured. The mode follows
+      // configuration provenance, not URL equality: a configured reader is
+      // separate even when it names the same database. It says nothing about
+      // whether a shared corpus exists; no shared corpus is deployed, and this
+      // reports only what this process is configured to do. Deliberately no
+      // host, port or database name: the booleans are enough to tell the modes
+      // apart and disclose no connection detail.
       corpus: {
-        colocated: corpusAccess.pool === pool,
-        readOnly: corpusAccess.readOnly,
+        colocated: corpusAccess.read === pool,
+        readOnly: corpusReadOnly,
       },
     }
 
@@ -293,22 +296,23 @@ export function createApiApp(
   app.route('/', createRedactRunCreationRoutes(pool, storage, requestLimits))
   app.route('/', createRedactReviewRoutes(pool, storage))
   app.route('/', createRedactLifecycleRoutes(pool, storage))
-  app.route('/', createVerificationRunRoutes(pool, storage, corpusAccess.pool))
+  app.route('/', createVerificationRunRoutes(pool, storage, corpusAccess.read))
   app.route('/', createLegalSearchRoutes(env))
   app.route(
     '/',
     createLegalSearchProxyRoutes(
       env,
-      createPostgresLegalAuthorityReadStore(corpusAccess.pool),
+      createPostgresLegalAuthorityReadStore(corpusAccess.read),
       {
-        // The write half is handed over only when the corpus is writable here.
-        // A read-only process is never given one, so no route can attempt a
-        // corpus write and then have to swallow the failure.
-        corpusWrites: corpusAccess.readOnly
-          ? null
-          : createPostgresLegalAuthorityWriteStore(corpusAccess.pool),
+        // The write half is handed over only when this process has a corpus
+        // writer. A read-only process is never given one, so no route can
+        // attempt a corpus write and then have to swallow the failure, and a
+        // writer request never falls back to the application pool.
+        corpusWrites: corpusAccess.write
+          ? createPostgresLegalAuthorityWriteStore(corpusAccess.write)
+          : null,
         legislation: {
-          pool: corpusAccess.pool,
+          pool: corpusAccess.read,
           indexName: env.legislationProvisionsIndex,
         },
       },

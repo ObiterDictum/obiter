@@ -37,20 +37,18 @@ export function requireTestDatabaseUrl(): string {
 
   // A corpus URL that resolves anywhere else is a production or shared
   // credential the suite inherited from its shell. Refusing is the only safe
-  // reading: the suite cannot know what it would be deleting. Comparing parsed
-  // identities rather than raw strings still accepts a different spelling of
-  // the same test database.
-  const corpusUrl = process.env.CORPUS_DATABASE_URL
-  if (
-    corpusUrl &&
-    !sameDatabaseIdentity(
-      readDatabaseIdentity(corpusUrl, 'CORPUS_DATABASE_URL'),
-      identity,
-    )
-  ) {
-    throw new Error(
-      'CORPUS_DATABASE_URL must not point a database-backed suite at a shared corpus; unset it, or set it to TEST_DATABASE_URL.',
-    )
+  // reading: the suite cannot know what it would be deleting. Both the reader
+  // and the writer variable are checked, so a suite cannot inherit a writer
+  // pointed at a shared corpus. Comparing parsed identities rather than raw
+  // strings still accepts a different spelling of the same test database.
+  for (const key of ['CORPUS_DATABASE_URL', 'CORPUS_WRITE_DATABASE_URL']) {
+    const corpusUrl = process.env[key]
+    if (!corpusUrl) continue
+    if (!sameDatabaseIdentity(readDatabaseIdentity(corpusUrl, key), identity)) {
+      throw new Error(
+        `${key} must not point a database-backed suite at a shared corpus; unset it, or set it to TEST_DATABASE_URL.`,
+      )
+    }
   }
 
   return url
