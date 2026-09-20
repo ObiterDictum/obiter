@@ -58,7 +58,7 @@ function createRequestId() {
 }
 
 async function main() {
-  const { env, pool, app } = await createApiRuntime('bun')
+  const { env, pools, app } = await createApiRuntime('bun')
 
   const server = bun.serve({
     port: env.port,
@@ -106,7 +106,7 @@ async function main() {
     // stop(false) stops accepting and settles once in-flight requests finish;
     // stop(true) would kill them, which is what the deadline exists for.
     stopAccepting: () => server.stop(false),
-    closeResources: () => pool.end(),
+    closeResources: () => pools.close(),
     pendingCount: () => server.pendingRequests,
   })
 }

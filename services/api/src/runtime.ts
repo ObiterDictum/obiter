@@ -1,14 +1,19 @@
 import { createClient, getIndexStatus } from '@obiter/search-client'
-import type { Pool } from 'pg'
 import { createApiApp, type ApiApp, type ApiRuntimeKind } from './app'
-import { createPool } from './database'
+import { createDatabasePools, type DatabasePools } from './database-pools'
 import { readApiEnv, type ApiEnv } from './env'
 import { runMigrations } from './migrate'
 import { warmRedactionDetector } from './redaction-detection'
 
 export interface ApiRuntime {
   env: ApiEnv
-  pool: Pool
+  /**
+   * The process's one owner of application and corpus pools. Entry points close
+   * it through `close()` so a separate corpus reader or writer pool is released
+   * exactly once, and a lane configured with a read-only corpus never gets a
+   * writer to close.
+   */
+  pools: DatabasePools
   app: ApiApp
 }
 
@@ -34,12 +39,12 @@ export async function createApiRuntime(
   runtime: ApiRuntimeKind,
 ): Promise<ApiRuntime> {
   const env = readApiEnv()
-  const pool = createPool(env)
+  const pools = createDatabasePools(env)
 
   try {
-    await runMigrations(pool)
+    await runMigrations(pools.application)
   } catch (error) {
-    await pool.end()
+    await pools.close()
     // Fail closed: handlers assume the latest schema (e.g. sign-up reads the
     // column added in 0016), so serving traffic on a half-migrated database
     // would corrupt per-request state instead of producing one loud boot
@@ -51,12 +56,19 @@ export async function createApiRuntime(
     )
   }
 
-  const app = createApiApp(env, pool, { runtime })
+  // The application pool and the corpus access the process was configured for
+  // reach the app through the same boundary. A lane with `CORPUS_DATABASE_URL`
+  // and no writer credential gets `corpus.write === null`, so no route can
+  // attempt a corpus write or fall back to the application pool.
+  const app = createApiApp(env, pools.application, {
+    runtime,
+    corpus: pools.corpus,
+  })
 
   reportIndexStatus(env)
   warmDetection(env)
 
-  return { env, pool, app }
+  return { env, pools, app }
 }
 
 // Loud at boot, never blocking: an unreachable or empty stored index must
