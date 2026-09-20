@@ -9,7 +9,7 @@ import { createApiRuntime } from './runtime'
  * change involved.
  */
 async function main() {
-  const { env, pool, app } = await createApiRuntime('node')
+  const { env, pools, app } = await createApiRuntime('node')
 
   const server = serve(
     {
@@ -43,7 +43,7 @@ async function main() {
         // type exposes this, and this adapter only ever serves HTTP/1.
         if ('closeIdleConnections' in server) server.closeIdleConnections()
       }),
-    closeResources: () => pool.end(),
+    closeResources: () => pools.close(),
     pendingCount: () =>
       new Promise<number | null>((resolve) =>
         server.getConnections((error, count) => resolve(error ? null : count)),

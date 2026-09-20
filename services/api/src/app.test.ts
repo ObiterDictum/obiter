@@ -18,6 +18,9 @@ import { createLocalStorage } from './storage'
 const searchClientMock = vi.hoisted(() => ({
   createClient: vi.fn(() => ({ id: 'meili-client' })),
   search: vi.fn(),
+  getDocument: vi.fn(),
+  indexDocuments: vi.fn(),
+  deleteDocuments: vi.fn(),
 }))
 const configureRedactionDetectorMock = vi.hoisted(() => vi.fn())
 const detectRedactionSpansMock = vi.hoisted(() =>
@@ -90,9 +93,14 @@ describe('createApiApp', () => {
       pool,
       { auth },
     ).request('/api/health')
+    // Still no paths or build metadata outside development. The corpus mode is
+    // a boolean derived from configuration, so it is safe in any environment
+    // and it is the only way to tell a misconfigured deployment from a working
+    // one without reading the process environment.
     expect(await productionHealth.json()).toEqual({
       status: 'ok',
       service: 'obiter-api',
+      corpus: { colocated: true, readOnly: false },
     })
   })
 
@@ -113,6 +121,7 @@ describe('createApiApp', () => {
       status: 'ok',
       service: 'obiter-api',
       runtime: 'bun',
+      corpus: { colocated: true, readOnly: false },
     })
 
     // No entry point declared one (a test building the app directly), so the
@@ -123,7 +132,148 @@ describe('createApiApp', () => {
     expect(await undeclared.json()).toEqual({
       status: 'ok',
       service: 'obiter-api',
+      corpus: { colocated: true, readOnly: false },
     })
+  })
+
+  it('reports a colocated, writable corpus in the default configuration', async () => {
+    const auth = {
+      api: { getSession: async () => null },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const pool = createPool(async () => ({ rows: [] }))
+
+    const response = await createApiApp(testEnv, pool, { auth }).request(
+      '/api/health',
+    )
+
+    expect(await response.json()).toMatchObject({
+      corpus: { colocated: true, readOnly: false },
+    })
+  })
+
+  it('reports a separate corpus database as read-only', async () => {
+    const auth = {
+      api: { getSession: async () => null },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const pool = createPool(async () => ({ rows: [] }))
+    const corpusPool = createPool(async () => ({ rows: [] }))
+
+    const response = await createApiApp(testEnv, pool, {
+      auth,
+      corpus: { read: corpusPool, write: null },
+    }).request('/api/health')
+
+    expect(await response.json()).toMatchObject({
+      corpus: { colocated: false, readOnly: true },
+    })
+  })
+
+  it('reports a separate corpus with a dedicated writer as writable', async () => {
+    const auth = {
+      api: { getSession: async () => null },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const pool = createPool(async () => ({ rows: [] }))
+
+    const response = await createApiApp(testEnv, pool, {
+      auth,
+      corpus: {
+        read: createPool(async () => ({ rows: [] })),
+        write: createPool(async () => ({ rows: [] })),
+      },
+    }).request('/api/health')
+
+    // `readOnly: false` with `colocated: false` is the only mode with a
+    // dedicated writer: the process can persist hydration and reads do not
+    // share the application database.
+    expect(await response.json()).toMatchObject({
+      corpus: { colocated: false, readOnly: false },
+    })
+  })
+
+  it('reports the corpus mode without disclosing connection details', async () => {
+    const auth = {
+      api: { getSession: async () => null },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const env = {
+      ...testEnv,
+      databaseUrl: 'postgres://obiter:secret@db.internal:5432/obiter',
+      corpusDatabaseUrl:
+        'postgres://obiter_corpus_reader:hunter2@db.internal:5432/obiter_corpus',
+    }
+
+    const response = await createApiApp(
+      env,
+      createPool(async () => ({ rows: [] })),
+      {
+        auth,
+        corpus: {
+          read: createPool(async () => ({ rows: [] })),
+          write: null,
+        },
+      },
+    ).request('/api/health')
+    const body = await response.text()
+
+    expect(body).toContain('"readOnly":true')
+    for (const secret of [
+      'secret',
+      'hunter2',
+      'db.internal',
+      'obiter_corpus',
+      'obiter_lane',
+    ]) {
+      expect(body).not.toContain(secret)
+    }
+  })
+
+  it('does not persist a live judgment when no corpus writer is configured', async () => {
+    const auth = {
+      api: { getSession: async () => null },
+      handler: async () => new Response(null, { status: 404 }),
+    } as unknown as Auth
+    const appQuery = vi.fn(async () => ({ rows: [] }))
+    const corpusQuery = vi.fn(async () => ({ rows: [] }))
+    const appPool = createPool(appQuery)
+    const corpusPool = createPool(corpusQuery)
+    searchClientMock.getDocument.mockResolvedValue(null)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(
+            '<html><body><h1>Potanina v Potanin</h1><h2><span>Neutral Citation Number</span>[2024] UKSC 3</h2><article><div class="judgment-header__date">Date: 31/01/2024</div><p>This judgment paragraph is long enough to be indexed as a stored authority body.</p></article></body></html>',
+          ),
+      ),
+    )
+
+    try {
+      const response = await createApiApp(testEnv, appPool, {
+        auth,
+        corpus: { read: corpusPool, write: null },
+      }).request('/api/search/documents/uksc-2024-3')
+
+      expect(response.status).toBe(200)
+      expect(await response.json()).toMatchObject({
+        document: { neutralCitation: '[2024] UKSC 3', court: 'uksc' },
+      })
+      // A null writer is the whole capability model: the fetched document
+      // answers this request only. Neither the application pool nor the
+      // read-only corpus pool is ever asked to store it, and nothing is
+      // indexed from an unpersisted row.
+      expect(appQuery).not.toHaveBeenCalled()
+      expect(corpusQuery).not.toHaveBeenCalledWith(
+        expect.stringContaining('insert into legal_source_documents'),
+        expect.anything(),
+      )
+      expect(searchClientMock.indexDocuments).not.toHaveBeenCalled()
+    } finally {
+      vi.unstubAllGlobals()
+      searchClientMock.getDocument.mockReset()
+    }
   })
 
   it('returns changelog entries from GitHub releases', async () => {

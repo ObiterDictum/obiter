@@ -1,4 +1,4 @@
-import { Pool } from 'pg'
+import { createTestPool } from '../../../test-database.test-support'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { createPostgresLegalAuthoritySourceStore } from '../source-store'
 
@@ -47,13 +47,7 @@ const withdrawn = {
 }
 
 describe('postgres legal authority source store withdrawals', () => {
-  const connectionString = process.env.TEST_DATABASE_URL
-  if (!connectionString) {
-    throw new Error(
-      'TEST_DATABASE_URL is required for source-store-withdrawal.db.test.ts',
-    )
-  }
-  const pool = new Pool({ connectionString })
+  const pool = createTestPool()
   const store = createPostgresLegalAuthoritySourceStore(pool)
 
   beforeAll(async () => {

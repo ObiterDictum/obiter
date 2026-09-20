@@ -1,4 +1,4 @@
-import { Pool } from 'pg'
+import { createTestPool } from '../../../test-database.test-support'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { resolveLegislationActPage } from '../legislation-act'
 
@@ -86,13 +86,7 @@ function insertProvisionRowQuery(
 }
 
 describe('legislation act-page transition gate', () => {
-  const connectionString = process.env.TEST_DATABASE_URL
-  if (!connectionString) {
-    throw new Error(
-      'TEST_DATABASE_URL is required for legislation-migration-gate.db.test.ts',
-    )
-  }
-  const pool = new Pool({ connectionString })
+  const pool = createTestPool()
 
   beforeAll(async () => {
     await pool.query(

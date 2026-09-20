@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   OOXML_INFLATE_CONCURRENCY,
   OOXML_MAX_COMPRESSION_RATIO,
@@ -27,6 +27,163 @@ function seedDevelopmentEnv() {
 
 afterEach(() => {
   process.env = { ...originalEnv }
+})
+
+// The corpus variables are cleared before every test so a value inherited from
+// the developer's shell cannot decide whether a writer is configured.
+beforeEach(() => {
+  delete process.env.CORPUS_DATABASE_URL
+  delete process.env.CORPUS_WRITE_DATABASE_URL
+})
+
+describe('corpus database resolution', () => {
+  function seedTestEnv() {
+    process.env.NODE_ENV = 'test'
+    process.env.BETTER_AUTH_SECRET = TEST_AUTH_SECRET
+    process.env.MEILISEARCH_SEARCH_API_KEY = 'test-search-key'
+    process.env.MEILISEARCH_ADMIN_API_KEY = 'test-admin-key'
+    delete process.env.DATABASE_URL
+    delete process.env.CORPUS_DATABASE_URL
+    delete process.env.CORPUS_WRITE_DATABASE_URL
+    process.env.TEST_DATABASE_URL =
+      'postgres://obiter:obiter@localhost:5432/obiter_test'
+  }
+
+  it('defaults corpus reads to the application database', () => {
+    seedDevelopmentEnv()
+    process.env.DATABASE_URL = 'postgres://obiter:obiter@localhost:5432/obiter'
+    delete process.env.CORPUS_DATABASE_URL
+    delete process.env.CORPUS_WRITE_DATABASE_URL
+
+    const env = readApiEnv()
+
+    // The compatibility seam: with no new variable set, there is no separate
+    // corpus target and the corpus is the application database.
+    expect(env.corpusDatabaseUrl).toBeNull()
+    expect(env.corpusWriteDatabaseUrl).toBeNull()
+  })
+
+  it('reads a dedicated corpus database when one is configured', () => {
+    seedDevelopmentEnv()
+    process.env.DATABASE_URL = 'postgres://obiter:obiter@localhost:5432/obiter'
+    process.env.CORPUS_DATABASE_URL =
+      'postgres://obiter_corpus_reader@localhost:5432/obiter_corpus'
+    delete process.env.CORPUS_WRITE_DATABASE_URL
+
+    const env = readApiEnv()
+
+    expect(env.corpusDatabaseUrl).toContain('/obiter_corpus')
+    expect(env.corpusDatabaseUrl).not.toBe(env.databaseUrl)
+    // A reader alone is the ordinary lane: no writer, so no write path.
+    expect(env.corpusWriteDatabaseUrl).toBeNull()
+  })
+
+  it('reads a dedicated corpus writer when both variables are configured', () => {
+    seedDevelopmentEnv()
+    process.env.DATABASE_URL = 'postgres://obiter:obiter@localhost:5432/obiter'
+    process.env.CORPUS_DATABASE_URL =
+      'postgres://obiter_corpus_reader@localhost:5432/obiter_corpus'
+    process.env.CORPUS_WRITE_DATABASE_URL =
+      'postgres://obiter_corpus_writer@localhost:5432/obiter_corpus'
+
+    const env = readApiEnv()
+
+    expect(env.corpusWriteDatabaseUrl).toContain('obiter_corpus_writer')
+    expect(env.corpusWriteDatabaseUrl).not.toBe(env.databaseUrl)
+  })
+
+  it('does not enable the writer from an empty value', () => {
+    seedDevelopmentEnv()
+    process.env.DATABASE_URL = 'postgres://obiter:obiter@localhost:5432/obiter'
+    process.env.CORPUS_DATABASE_URL =
+      'postgres://obiter_corpus_reader@localhost:5432/obiter_corpus'
+    process.env.CORPUS_WRITE_DATABASE_URL = ''
+
+    expect(readApiEnv().corpusWriteDatabaseUrl).toBeNull()
+  })
+
+  it('refuses a blank or padded corpus writer value', () => {
+    seedDevelopmentEnv()
+    process.env.DATABASE_URL = 'postgres://obiter:obiter@localhost:5432/obiter'
+    process.env.CORPUS_DATABASE_URL =
+      'postgres://obiter_corpus_reader@localhost:5432/obiter_corpus'
+    process.env.CORPUS_WRITE_DATABASE_URL = '   '
+
+    expect(() => readApiEnv()).toThrow(
+      'CORPUS_WRITE_DATABASE_URL must not be blank or padded with whitespace.',
+    )
+  })
+
+  it('refuses a corpus writer with no explicit corpus reader', () => {
+    seedDevelopmentEnv()
+    process.env.DATABASE_URL = 'postgres://obiter:obiter@localhost:5432/obiter'
+    delete process.env.CORPUS_DATABASE_URL
+    process.env.CORPUS_WRITE_DATABASE_URL =
+      'postgres://obiter_corpus_writer@localhost:5432/obiter_corpus'
+
+    expect(() => readApiEnv()).toThrow(
+      'CORPUS_WRITE_DATABASE_URL requires CORPUS_DATABASE_URL',
+    )
+  })
+
+  it('refuses a test database that is not a *_test database', () => {
+    seedTestEnv()
+    process.env.TEST_DATABASE_URL =
+      'postgres://obiter:obiter@localhost:5432/obiter_lane_security'
+
+    expect(() => readApiEnv()).toThrow(
+      'TEST_DATABASE_URL must name a *_test database.',
+    )
+  })
+
+  it('resolves corpus reads to the isolated test database', () => {
+    seedTestEnv()
+
+    const env = readApiEnv()
+
+    expect(env.corpusDatabaseUrl).toBeNull()
+    expect(env.databaseUrl).toContain('/obiter_test')
+  })
+
+  it('accepts a corpus URL that is the test database', () => {
+    seedTestEnv()
+    process.env.CORPUS_DATABASE_URL = process.env.TEST_DATABASE_URL
+
+    expect(readApiEnv().corpusDatabaseUrl).toBe(
+      'postgres://obiter:obiter@localhost:5432/obiter_test',
+    )
+  })
+
+  it('refuses a corpus URL that points a test run at another database', () => {
+    seedTestEnv()
+    process.env.CORPUS_DATABASE_URL =
+      'postgres://obiter:obiter@localhost:5432/obiter_corpus'
+
+    expect(() => readApiEnv()).toThrow(
+      'CORPUS_DATABASE_URL must match TEST_DATABASE_URL.',
+    )
+  })
+
+  it('refuses a corpus writer that points a test run at another database', () => {
+    seedTestEnv()
+    process.env.CORPUS_DATABASE_URL = process.env.TEST_DATABASE_URL
+    process.env.CORPUS_WRITE_DATABASE_URL =
+      'postgres://obiter:obiter@localhost:5432/obiter_corpus'
+
+    expect(() => readApiEnv()).toThrow(
+      'CORPUS_WRITE_DATABASE_URL must match TEST_DATABASE_URL.',
+    )
+  })
+
+  it('accepts a corpus writer that is the test database', () => {
+    seedTestEnv()
+    process.env.CORPUS_DATABASE_URL = process.env.TEST_DATABASE_URL
+    process.env.CORPUS_WRITE_DATABASE_URL = process.env.TEST_DATABASE_URL
+
+    expect(readApiEnv().corpusWriteDatabaseUrl).toBe(
+      'postgres://obiter:obiter@localhost:5432/obiter_test',
+    )
+  })
 })
 
 describe('readApiEnv', () => {
