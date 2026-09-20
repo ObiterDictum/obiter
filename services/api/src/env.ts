@@ -7,7 +7,7 @@ import {
   RAMPART_MODEL_REVISION,
 } from '@obiter/rampart-inference'
 import { defaultRampartCacheDir } from './rampart-cache'
-import { readDatabaseIdentity } from './database-identity'
+import { readDatabaseIdentity, sameDatabaseIdentity } from './database-identity'
 import type { RedactionDetectionConfig } from './redaction-detection'
 import {
   DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES,
@@ -139,6 +139,18 @@ function readRequiredUrl(key: string, fallback: string): string {
   return parseUrl(key, value)
 }
 
+/**
+ * A corpus connection string has to be a PostgreSQL URL naming one database,
+ * not merely a syntactically valid URL. `readDatabaseIdentity` enforces the
+ * scheme and the name; this also normalises the stored value. The variable and
+ * reason are named in the error, never its value or any credential.
+ */
+function readDatabaseUrlForCorpus(key: string, value: string): string {
+  readDatabaseIdentity(value, key)
+
+  return new URL(value).toString().replace(/\/$/, '')
+}
+
 function readDatabaseUrl(nodeEnv: ApiEnv['nodeEnv']) {
   if (nodeEnv !== 'test') {
     return readRequiredUrl(
@@ -174,7 +186,7 @@ function readConfiguredUrl(key: string): string | null {
     throw new Error(`${key} must not be blank or padded with whitespace.`)
   }
 
-  return parseUrl(key, trimmed)
+  return readDatabaseUrlForCorpus(key, trimmed)
 }
 
 /**
@@ -202,16 +214,30 @@ function readCorpusDatabaseUrls(
     return { corpusDatabaseUrl, corpusWriteDatabaseUrl }
   }
 
-  const { database } = readDatabaseIdentity(databaseUrl, 'TEST_DATABASE_URL')
-  if (!database.endsWith(testDatabaseSuffix)) {
+  const testIdentity = readDatabaseIdentity(databaseUrl, 'TEST_DATABASE_URL')
+  if (!testIdentity.database.endsWith(testDatabaseSuffix)) {
     throw new Error('TEST_DATABASE_URL must name a *_test database.')
   }
-  if (corpusDatabaseUrl !== null && corpusDatabaseUrl !== databaseUrl) {
+  // Parsed identity, not raw string equality, so a differently spelled URL for
+  // the same test database (another role, encoded name, implicit port) is
+  // accepted here exactly as `requireTestDatabaseUrl` accepts it. Both corpus
+  // variables are checked against the same identity, and a genuinely different
+  // host, port or database is still refused.
+  if (
+    corpusDatabaseUrl !== null &&
+    !sameDatabaseIdentity(
+      readDatabaseIdentity(corpusDatabaseUrl, 'CORPUS_DATABASE_URL'),
+      testIdentity,
+    )
+  ) {
     throw new Error('CORPUS_DATABASE_URL must match TEST_DATABASE_URL.')
   }
   if (
     corpusWriteDatabaseUrl !== null &&
-    corpusWriteDatabaseUrl !== databaseUrl
+    !sameDatabaseIdentity(
+      readDatabaseIdentity(corpusWriteDatabaseUrl, 'CORPUS_WRITE_DATABASE_URL'),
+      testIdentity,
+    )
   ) {
     throw new Error('CORPUS_WRITE_DATABASE_URL must match TEST_DATABASE_URL.')
   }

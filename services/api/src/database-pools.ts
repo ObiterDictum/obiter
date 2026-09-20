@@ -39,15 +39,27 @@ export interface DatabasePools {
  * owner from a host-and-database match would ignore the role the operator
  * chose. An explicitly configured reader and writer are therefore always
  * separate pools, even when their URLs are textually identical, and each
- * distinct pool is closed exactly once. `createDatabasePools` never sees a
- * writer without a reader: `readCorpusDatabaseUrls` refuses that combination.
+ * distinct pool is closed exactly once. A writer without an explicit reader is
+ * refused here as well as in `readCorpusDatabaseUrls`, so the forbidden
+ * read-application-write-corpus topology cannot be constructed by direct call.
  */
 export function createDatabasePools(env: ApiEnv): DatabasePools {
-  const application = new Pool({ connectionString: env.databaseUrl })
   const readerUrl = env.corpusDatabaseUrl
+  const writerUrl = env.corpusWriteDatabaseUrl
+  // `readCorpusDatabaseUrls` already refuses this, but the factory is the last
+  // boundary before pools exist and must not trust a hand-built environment.
+  // A writer with no explicit reader would read the corpus from the
+  // application pool and write it to a different database, which is exactly the
+  // silent split the configuration refuses. Checked before any pool is built.
+  if (writerUrl !== null && readerUrl === null) {
+    throw new Error(
+      'CORPUS_WRITE_DATABASE_URL requires CORPUS_DATABASE_URL, or the process would read and write different databases.',
+    )
+  }
+
+  const application = new Pool({ connectionString: env.databaseUrl })
   const readPool =
     readerUrl === null ? application : new Pool({ connectionString: readerUrl })
-  const writerUrl = env.corpusWriteDatabaseUrl
   const writePool =
     writerUrl !== null
       ? new Pool({ connectionString: writerUrl })

@@ -81,6 +81,22 @@ describe('createDatabasePools mode selection', () => {
 
     await pools.close()
   })
+
+  it('refuses a writer with no reader even when called with a hand-built env', () => {
+    // Bypasses readCorpusDatabaseUrls deliberately: the factory is the last
+    // boundary before pools exist and must not construct the forbidden
+    // read-application-write-corpus topology from an ApiEnv it is handed.
+    expect(() =>
+      createDatabasePools(
+        createTestApiEnv({
+          corpusDatabaseUrl: null,
+          corpusWriteDatabaseUrl: corpusWriterUrl,
+        }),
+      ),
+    ).toThrow(
+      'CORPUS_WRITE_DATABASE_URL requires CORPUS_DATABASE_URL, or the process would read and write different databases.',
+    )
+  })
 })
 
 describe('createDatabasePools shutdown', () => {
