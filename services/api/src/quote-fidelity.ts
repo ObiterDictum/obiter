@@ -12,7 +12,7 @@ import {
   type VerificationSubject,
 } from '@obiter/verification-core'
 import {
-  createPostgresLegalAuthoritySourceStore,
+  createPostgresLegalAuthorityReadStore,
   MalformedStoredRecordError,
 } from './routes/legal-search/source-store'
 import {
@@ -300,7 +300,7 @@ async function loadCaseLawSource(
   pool: Pick<Pool, 'query'>,
   citation: Extract<NormalizedCitation, { kind: 'case_law' }>,
 ): Promise<QuoteSourceOutcome> {
-  const store = createPostgresLegalAuthoritySourceStore(pool)
+  const store = createPostgresLegalAuthorityReadStore(pool)
   const record = await store.get(citation.sourceId)
   if (!record) return { outcome: 'unavailable', reason: 'source_not_held' }
   if (record.withdrawn) {

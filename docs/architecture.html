@@ -2556,7 +2556,7 @@
               </p>
               <dl class="kv">
                 <dt>Count</dt>
-                <dd>22 migrations, 0001 to 0023, 0008 withdrawn</dd>
+                <dd>24 migrations, 0001 to 0025, 0008 withdrawn</dd>
               </dl>
             </article>
 
@@ -3945,9 +3945,12 @@
                     record; the <code>legislation_provisions</code>
                     Meilisearch index rebuilds from these rows. Per-act ingest
                     progress makes re-runs resume. Secondary legislation is out
-                    of scope.
+                    of scope. 0025 restores the
+                    <code>legislation_documents_act_type_check</code> constraint
+                    on installations whose table pre-existed 0020, where
+                    <code>create table if not exists</code> never added it.
                   </td>
-                  <td class="id">0020, 0021, 0022</td>
+                  <td class="id">0020, 0021, 0022, 0025</td>
                 </tr>
                 <tr>
                   <td class="id">redaction_runs</td>
@@ -3987,6 +3990,68 @@
             record: <code>legal_source_documents</code> holds every judgment,
             the index rebuilds from it, and retrieval by id reads from it.
           </div>
+          <h3>Corpus reads have their own seam</h3>
+          <p>
+            Legal-corpus reads and matter, auth and audit reads are two
+            different concerns that happened to share one connection. They now
+            have separate access paths:
+            <code>DatabasePools.corpus</code> carries corpus reads, and the
+            corpus write path when the process has one, for
+            <code>source-store</code>, <code>legislation-store</code> and the
+            verification checks, while every matter, auth and audit statement
+            keeps using the application pool. The seam is what makes a corpus
+            held in a different database possible at all; PostgreSQL cannot join
+            across databases, so the boundary has to be drawn where no statement
+            crosses it.
+          </p>
+          <p>
+            <b>The default is unchanged, and nothing is split.</b>
+            <code>CORPUS_DATABASE_URL</code> unset means no separate corpus
+            target: the corpus pool is the application pool, one database, one
+            pool, and corpus writes behave exactly as they did before the seam
+            existed. Setting it declares a separate corpus target, served
+            read-only unless <code>CORPUS_WRITE_DATABASE_URL</code> also names a
+            writer, and the mode follows configuration provenance rather than a
+            comparison of connection strings: a reader and writer that spell the
+            same database differently are still two access boundaries, never one
+            writable owner inferred from a name match. A writer with no explicit
+            reader refuses startup, because reads and writes must not silently
+            target unrelated databases, and the two are expected to name the
+            same shared corpus because the writer reconciles withdrawals by
+            re-reading through the reader. <code>/api/health</code> reports
+            <code>corpus.colocated</code> and <code>corpus.readOnly</code>:
+            <code>colocated</code> with <code>readOnly: false</code> is the
+            compatibility seam, <code>colocated: false</code> with
+            <code>readOnly: true</code> is a read-only lane, and
+            <code>colocated: false</code> with <code>readOnly: false</code> is a
+            process with a dedicated corpus writer.
+          </p>
+          <p>
+            <b>The writer credential is a capability, not a hostname.</b> The
+            product cannot know which host is called <code>obiter-live</code>,
+            so possession of <code>CORPUS_WRITE_DATABASE_URL</code> is the write
+            capability, and deployment must give it only to the live server. A
+            process without it answers provider hydration for the current
+            request and reports <code>liveResultsNotPersisted</code>; it never
+            falls back to the application pool and never claims a write it did
+            not make. The variable must not sit in
+            <code>obiter-live/.env</code>, because lane setup copies that file
+            into every lane: it belongs in a service-private environment file or
+            systemd credential read only by the live service. That boundary is
+            deployment's, not the product's; the product proves only that
+            absence of the variable disables writes. This is a dormant boundary,
+            not a deployment. No shared corpus database, reader role, writer
+            role or credential exists yet, and pointing the seam at a second
+            database is a later, separately authorised change.
+          </p>
+          <p>
+            Under <code>NODE_ENV=test</code> the corpus is required to resolve
+            to the same isolated <code>*_test</code> database as everything
+            else, and a configured corpus URL that resolves anywhere else
+            refuses startup. Several suites seed and delete corpora rows, so a
+            suite that reached a populated database would be destructive rather
+            than merely wrong.
+          </p>
         </section>
 
         <section id="storage">
@@ -4187,6 +4252,34 @@
                 <tr>
                   <td class="id">DATABASE_URL · TEST_DATABASE_URL</td>
                   <td>PostgreSQL connection</td>
+                </tr>
+                <tr>
+                  <td class="id">CORPUS_DATABASE_URL</td>
+                  <td>
+                    Optional. Unset is the compatibility seam: the corpus is the
+                    application database and writes behave as before. Configured
+                    means a separate corpus target, served read-only unless
+                    <code>CORPUS_WRITE_DATABASE_URL</code> names a writer too,
+                    even when it names the same database through another role or
+                    spelling. Under <code>NODE_ENV=test</code> it must resolve
+                    to
+                    <code>TEST_DATABASE_URL</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td class="id">CORPUS_WRITE_DATABASE_URL</td>
+                  <td>
+                    Optional. A corpus writer for provider fetch-through
+                    hydration. It requires <code>CORPUS_DATABASE_URL</code>; a
+                    writer with no explicit reader refuses startup, because
+                    reads and writes must not silently target unrelated
+                    databases. Only the process that persists hydration should
+                    receive it, and the credential belongs in a service-private
+                    environment file or systemd credential, never in
+                    <code>.env</code> where lane setup copies it. Under
+                    <code>NODE_ENV=test</code> it must resolve to
+                    <code>TEST_DATABASE_URL</code>
+                  </td>
                 </tr>
                 <tr>
                   <td class="id">BETTER_AUTH_SECRET · BETTER_AUTH_URL</td>

@@ -1,4 +1,4 @@
-import { Pool } from 'pg'
+import { createTestPool } from './test-database.test-support'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { checkQuoteFidelity } from './quote-fidelity'
 import { acts, insertAct, request } from './quote-fidelity.test-support'
@@ -13,13 +13,7 @@ import { acts, insertAct, request } from './quote-fidelity.test-support'
 const identity = 'ukpga/2077/1'
 
 describe('quote fidelity legislation against the stored record', () => {
-  const connectionString = process.env.TEST_DATABASE_URL
-  if (!connectionString) {
-    throw new Error(
-      'TEST_DATABASE_URL is required for quote-fidelity-legislation.db.test.ts',
-    )
-  }
-  const pool = new Pool({ connectionString })
+  const pool = createTestPool()
 
   beforeAll(async () => {
     await pool.query(

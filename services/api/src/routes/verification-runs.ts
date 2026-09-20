@@ -41,6 +41,7 @@ function listQuery(c: { req: { query: (key: string) => string | undefined } }) {
 export function createVerificationRunRoutes(
   pool: Pool,
   storage: StorageService,
+  corpusPool: Pick<Pool, 'query'> = pool,
 ) {
   const routes = new Hono<{ Variables: AuthzVariables }>()
 
@@ -60,6 +61,7 @@ export function createVerificationRunRoutes(
     }
     const created = await createAndExecuteVerificationRun({
       pool,
+      corpusPool,
       storage,
       user,
       documentId: c.req.param('documentId'),

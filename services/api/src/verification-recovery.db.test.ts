@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { Pool } from 'pg'
+import { createTestPool } from './test-database.test-support'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import {
   verificationFindingsResponseSchema,
@@ -63,11 +64,7 @@ function app(
 }
 
 describe('verification run recovery and pagination', () => {
-  const connectionString = process.env.TEST_DATABASE_URL
-  if (!connectionString) {
-    throw new Error('TEST_DATABASE_URL is required for the recovery suite')
-  }
-  const pool = new Pool({ connectionString })
+  const pool = createTestPool()
   let seed: OrganisationIsolationSeed
 
   async function insertRunningRun(input: {

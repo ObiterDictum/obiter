@@ -7,6 +7,7 @@ import {
   RAMPART_MODEL_REVISION,
 } from '@obiter/rampart-inference'
 import { defaultRampartCacheDir } from './rampart-cache'
+import { readCorpusDatabaseUrls } from './env-corpus'
 import type { RedactionDetectionConfig } from './redaction-detection'
 import {
   DEFAULT_DOCUMENT_UPLOAD_MAX_BYTES,
@@ -38,6 +39,15 @@ const requiredTestKeys = ['TEST_DATABASE_URL'] as const
 
 export interface ApiEnv {
   databaseUrl: string
+  /** Legal-corpus reads. Null means no separate corpus target was configured,
+   * so the corpus is `databaseUrl`: the compatibility seam. */
+  corpusDatabaseUrl: string | null
+  /** Legal-corpus writes for provider fetch-through hydration. Null means no
+   * corpus write path: either the compatibility seam, where writes use
+   * `databaseUrl`, or an explicitly configured read-only corpus. Only a
+   * process given this variable can persist hydration, which is how the
+   * writer capability is scoped to `obiter-live` without a hostname check. */
+  corpusWriteDatabaseUrl: string | null
   authSecret: string
   authBaseUrl: string
   webOrigin: string
@@ -365,6 +375,7 @@ export function readApiEnv(): ApiEnv {
   requireProductionEnv(nodeEnv)
   requireTestEnv(nodeEnv)
   const resendApiKey = readOptionalSecret('OBITER_RESEND_API_KEY', nodeEnv)
+  const databaseUrl = readDatabaseUrl(nodeEnv)
 
   if (nodeEnv === 'production' && !resendApiKey) {
     throw new Error('OBITER_RESEND_API_KEY must be configured in production.')
@@ -377,7 +388,8 @@ export function readApiEnv(): ApiEnv {
   const rampart = readRampartDetectionConfig()
 
   return {
-    databaseUrl: readDatabaseUrl(nodeEnv),
+    databaseUrl,
+    ...readCorpusDatabaseUrls(nodeEnv, databaseUrl),
     authSecret: readAuthSecret(nodeEnv),
     authBaseUrl: readRequiredUrl(
       'BETTER_AUTH_URL',
