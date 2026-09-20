@@ -15,6 +15,12 @@ additionally requires `MEILISEARCH_HOST`, `MEILISEARCH_ADMIN_API_KEY` and
 `LEGAL_AUTHORITIES_INDEX`. The `dev-key` Meilisearch fallback applies only in
 development.
 
+This service's `DATABASE_URL` is its own corpus writer connection. In the
+shared-corpus deployment it points at the shared corpus with the writer
+credential, and it is deliberately separate from the API's read-only
+`CORPUS_DATABASE_URL` and from the API's `CORPUS_WRITE_DATABASE_URL`, which is
+scoped to `obiter-live` hydration. No lane receives a corpus writer credential.
+
 ## Legislation ingest (Stage 1)
 
 UK Public General Acts into Postgres `legislation_documents` /
