@@ -54,8 +54,11 @@ RUN corepack enable
 
 WORKDIR /repo
 
-# Copy the workspace manifests first for a dependency-cache layer.
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json tsconfig.json ./
+# Copy the workspace manifests first for a dependency-cache layer. The repo-root
+# .npmrc carries the install settings the lockfile install depends on (the
+# CPU-only ONNX Runtime skip); without it the image would fetch the optional
+# CUDA/TensorRT providers nothing here uses.
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc tsconfig.base.json tsconfig.json ./
 COPY packages/ ./packages/
 COPY apps/web/package.json ./apps/web/package.json
 
