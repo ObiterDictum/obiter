@@ -13,11 +13,7 @@ export function formattedModel(
   model: DocumentModelWire,
   format: FormatDrafts,
 ): DocumentModelWire {
-  const emphasisByRun = new Map(
-    format.emphasis.flatMap((item) =>
-      item.runId ? [[item.runId, item] as const] : [],
-    ),
-  )
+  const emphasisByRun = runEmphasisIndex(format)
   return {
     ...model,
     stories: model.stories.map((story) => ({
@@ -27,6 +23,28 @@ export function formattedModel(
       ),
     })),
   }
+}
+
+function runEmphasisIndex(format: FormatDrafts) {
+  return new Map(
+    format.emphasis.flatMap((item) =>
+      item.runId ? [[item.runId, item] as const] : [],
+    ),
+  )
+}
+
+/**
+ * One paragraph as `formattedModel` would hold it: the pending style,
+ * numbering and run-level emphasis applied. Control state formats only the
+ * paragraphs a selection addresses, so reading one selection never rebuilds
+ * the whole model, and the result is the same object `formattedModel` would
+ * produce for that paragraph.
+ */
+export function formattedParagraphDraft(
+  paragraph: DocumentParagraphWire,
+  format: FormatDrafts,
+): DocumentParagraphWire {
+  return formattedParagraph(paragraph, format, runEmphasisIndex(format))
 }
 
 /**

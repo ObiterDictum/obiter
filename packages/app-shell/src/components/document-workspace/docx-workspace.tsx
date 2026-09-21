@@ -251,6 +251,7 @@ export function DocxWorkspace({
                 formatTarget,
                 trackChanges,
                 drafts.drafts,
+                drafts.extraRuns,
               )
             : undefined
         }

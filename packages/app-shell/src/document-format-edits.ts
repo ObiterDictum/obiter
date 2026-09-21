@@ -103,12 +103,32 @@ export function mergeEmphasis(
   current: PendingEmphasis[],
   next: PendingEmphasis,
 ): PendingEmphasis[] {
-  if (next.paragraphId !== undefined) return [...current, next]
-  const previous = current.find((item) => item.runId === next.runId)
-  return [
-    ...current.filter((item) => item.runId !== next.runId),
-    { ...previous, ...next },
-  ]
+  const rest =
+    next.paragraphId === undefined
+      ? current.filter((item) => item.runId !== next.runId)
+      : current.filter(
+          (item) =>
+            !(
+              item.paragraphId === next.paragraphId &&
+              item.from === next.from &&
+              item.to === next.to
+            ),
+        )
+  const previous =
+    next.paragraphId === undefined
+      ? current.find((item) => item.runId === next.runId)
+      : current.find(
+          (item) =>
+            item.paragraphId === next.paragraphId &&
+            item.from === next.from &&
+            item.to === next.to,
+        )
+  // One entry per addressed run or range, and a restated address is the last
+  // entry: projection and save both apply entries in order, so the newest
+  // answer must sit behind the older one it replaces rather than in front of
+  // it. The save plan keys a range slot by its address, which assumes the
+  // same single entry.
+  return [...rest, { ...previous, ...next }]
 }
 
 export function emphasisAddress(
@@ -116,6 +136,14 @@ export function emphasisAddress(
   sliceFrom: number,
   selectionStart: number,
   selectionEnd: number,
+  /**
+   * The runs whole-run emphasis may address by id. A collapsed caret in a run
+   * outside this set (a join's appended run, which the save folds into another
+   * run) addresses that run's span in the paragraph instead: a range is the
+   * only address paint and save can both carry for text this run id does not
+   * name server-side.
+   */
+  wholeRunIds?: ReadonlySet<string>,
 ): { runId: string } | { paragraphId: string; from: number; to: number } {
   const from = sliceFrom + Math.min(selectionStart, selectionEnd)
   const to = sliceFrom + Math.max(selectionStart, selectionEnd)
@@ -129,10 +157,25 @@ export function emphasisAddress(
   let cursor = 0
   for (const run of paragraph.runs) {
     const end = cursor + run.text.length
-    if (from >= cursor && from < end) return { runId: run.id }
+    if (from >= cursor && from < end) {
+      if (!wholeRunIds || wholeRunIds.has(run.id)) return { runId: run.id }
+      return { paragraphId: paragraph.id, from: cursor, to: end }
+    }
     cursor = end
   }
   const last = paragraph.runs[paragraph.runs.length - 1]
+  if (
+    last &&
+    wholeRunIds &&
+    !wholeRunIds.has(last.id) &&
+    last.text.length > 0
+  ) {
+    return {
+      paragraphId: paragraph.id,
+      from: cursor - last.text.length,
+      to: cursor,
+    }
+  }
   return { runId: last?.id ?? '' }
 }
 export function toggleEmphasisOnRuns(

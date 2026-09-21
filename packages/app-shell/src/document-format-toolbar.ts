@@ -1,4 +1,7 @@
-import type { DocumentModelWire } from '@obiter/contracts'
+import type {
+  DocumentModelWire,
+  DocumentParagraphWire,
+} from '@obiter/contracts'
 import { toggleParagraphList, type ListKind } from './document-list-toggle'
 import {
   continueList,
@@ -14,6 +17,7 @@ import {
 } from './document-format-controls'
 import { effectiveParagraph } from './document-model-text'
 import type { FormatDrafts } from './document-format-types'
+import type { ExtraRuns } from './document-word-edits'
 
 export type ParagraphRange = {
   paragraphId: string
@@ -33,6 +37,20 @@ export type FormatTarget =
 
 const NOTHING_TO_FORMAT = 'Select text to format'
 
+/** Where one run starts and ends in the paragraph's own text. */
+function runSpan(
+  paragraph: DocumentParagraphWire,
+  runId: string,
+): { from: number; to: number } | undefined {
+  let cursor = 0
+  for (const run of paragraph.runs) {
+    const end = cursor + run.text.length
+    if (run.id === runId) return { from: cursor, to: end }
+    cursor = end
+  }
+  return undefined
+}
+
 export function documentFormatToolbar(
   model: DocumentModelWire,
   format: FormatDrafts,
@@ -46,6 +64,7 @@ export function documentFormatToolbar(
   },
   trackChanges = false,
   drafts?: Record<string, string>,
+  extraRuns: ExtraRuns = {},
 ) {
   const ranges: ReadonlyArray<ParagraphRange> =
     target.kind === 'selection'
@@ -61,6 +80,8 @@ export function documentFormatToolbar(
     paragraphId,
     ranges,
     emphasis,
+    drafts,
+    extraRuns,
   )
   const nothingSelected = target.kind === 'selection' && emphasis.length === 0
   // A tracked change records a single run, so partial formatting of a range is
@@ -74,17 +95,53 @@ export function documentFormatToolbar(
       for (const range of emphasis) {
         const stored = selectedParagraph(model, range.paragraphId)
         if (!stored) continue
-        next = toggleEmphasisAtAddress(
-          next,
-          emphasisAddress(
-            effectiveParagraph(stored, drafts),
-            0,
-            range.from,
-            range.to,
-          ),
-          flag,
-          value,
+        // The same effective paragraph the cover reads: stored runs plus a
+        // join's appended runs, with text drafts applied. A collapsed caret in
+        // an appended run addresses that run's span, because whole-run
+        // emphasis by id would name a run the save folds into another one and
+        // the paint never overlays.
+        const effective = effectiveParagraph(
+          stored,
+          drafts,
+          extraRuns[range.paragraphId] ?? [],
         )
+        const address = emphasisAddress(
+          effective,
+          0,
+          range.from,
+          range.to,
+          new Set(stored.runs.map((run) => run.id)),
+        )
+        next = toggleEmphasisAtAddress(next, address, flag, value)
+        if (!('runId' in address)) continue
+        // Whole-run emphasis lands in the base model, which every pending
+        // range paints over afterwards. Restate the same answer over the
+        // run's slice of each pending range, behind them, so a range that
+        // covers the caret cannot overwrite the click and leave the button
+        // stuck. A range partly covering the run is restated over the
+        // overlap only; entries carry whole addresses, so the untouched part
+        // keeps its own answer.
+        const span = runSpan(effective, address.runId)
+        if (!span) continue
+        const overlapping = next.emphasis.filter(
+          (item) =>
+            item.paragraphId === range.paragraphId &&
+            item.from !== undefined &&
+            item.to !== undefined &&
+            Math.max(item.from, span.from) < Math.min(item.to, span.to),
+        )
+        for (const item of overlapping) {
+          next = toggleEmphasisAtAddress(
+            next,
+            {
+              paragraphId: range.paragraphId,
+              from: Math.max(item.from ?? span.from, span.from),
+              to: Math.min(item.to ?? span.to, span.to),
+            },
+            flag,
+            value,
+          )
+        }
       }
       return next
     })

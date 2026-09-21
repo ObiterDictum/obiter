@@ -415,6 +415,94 @@ describe('formatControlState from the selection', () => {
       ]),
     ).toMatchObject({ bold: false })
   })
+  it('reads an unsaved suffix selection through the effective paragraph', () => {
+    const source = modelWithRuns([
+      { id: 'r1', text: 'Hello', preservedXmlFragments: plainXml },
+    ])
+    const drafts = { r1: 'Hello!' }
+    const format: FormatDrafts = {
+      emphasis: [{ paragraphId: 'p1', from: 5, to: 6, bold: true }],
+      paragraphStyles: {},
+      numbering: {},
+    }
+    // The stored paragraph ends at offset 5: without the drafts this cover is
+    // empty and every flag reads false while the screen paints bold.
+    expect(
+      formatControlState(source, emptyFormatDrafts, 'p1', [
+        { paragraphId: 'p1', from: 5, to: 6 },
+      ]),
+    ).toMatchObject({ bold: false })
+    expect(
+      formatControlState(
+        source,
+        format,
+        'p1',
+        [{ paragraphId: 'p1', from: 5, to: 6 }],
+        undefined,
+        drafts,
+      ),
+    ).toMatchObject({ bold: true })
+    expect(
+      formatControlState(
+        source,
+        format,
+        'p1',
+        [{ paragraphId: 'p1', from: 0, to: 6 }],
+        undefined,
+        drafts,
+      ),
+    ).toMatchObject({ bold: false })
+  })
+
+  it('restates the same addressed range instead of stacking entries', () => {
+    const on = mergeEmphasis([], {
+      paragraphId: 'p1',
+      from: 5,
+      to: 6,
+      bold: true,
+    })
+    expect(on).toEqual([{ paragraphId: 'p1', from: 5, to: 6, bold: true }])
+    const off = mergeEmphasis(on, {
+      paragraphId: 'p1',
+      from: 5,
+      to: 6,
+      bold: false,
+    })
+    expect(off).toEqual([{ paragraphId: 'p1', from: 5, to: 6, bold: false }])
+    // A different range stays its own entry, and a second flag merges in.
+    expect(
+      mergeEmphasis(off, { paragraphId: 'p1', from: 0, to: 2, italic: true }),
+    ).toHaveLength(2)
+    expect(
+      mergeEmphasis(off, { paragraphId: 'p1', from: 5, to: 6, italic: true }),
+    ).toEqual([
+      { paragraphId: 'p1', from: 5, to: 6, bold: false, italic: true },
+    ])
+  })
+
+  it('addresses a run outside the stored ids by its paragraph span', () => {
+    const paragraph = {
+      id: 'p1',
+      runs: [
+        { id: 'p1-r', text: 'Alpha', preservedXmlFragments: [] as string[] },
+        { id: 'p2-r', text: 'Bravo', preservedXmlFragments: [] as string[] },
+      ],
+      preservedXmlFragments: [] as string[],
+    }
+    const storedIds = new Set(['p1-r'])
+    expect(emphasisAddress(paragraph, 0, 7, 7, storedIds)).toEqual({
+      paragraphId: 'p1',
+      from: 5,
+      to: 10,
+    })
+    expect(emphasisAddress(paragraph, 0, 7, 7, storedIds)).not.toHaveProperty(
+      'runId',
+    )
+    expect(emphasisAddress(paragraph, 0, 2, 2, storedIds)).toEqual({
+      runId: 'p1-r',
+    })
+    expect(emphasisAddress(paragraph, 0, 7, 7)).toEqual({ runId: 'p2-r' })
+  })
 })
 
 describe('document-format-edits module size', () => {
@@ -431,6 +519,7 @@ describe('document-format-edits module size', () => {
       './document-range-edits.ts',
       './document-word-edits.ts',
       './components/document-workspace/model-view.tsx',
+      './components/document-workspace/toolbar-emphasis-state.test.tsx',
       './components/document-workspace/model-page-blocks.tsx',
       './components/document-workspace/model-paragraph.tsx',
       './components/document-workspace/model-run.tsx',
