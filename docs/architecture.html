@@ -4392,11 +4392,16 @@
             shipped consumes them: detection loads with
             <code>device: 'cpu'</code>, the browser path uses onnxruntime-web,
             and the desktop bundle excludes <code>node_modules</code>. A GPU
-            host opts in per install with
-            <code>ONNXRUNTIME_NODE_INSTALL_CUDA=v12 pnpm install</code>. Any
-            image build that runs <code>pnpm install</code> must copy the
-            repo-root <code>.npmrc</code> into its build context to inherit the
-            setting.
+            host opts in with
+            <code
+              >ONNXRUNTIME_NODE_INSTALL_CUDA=v12 pnpm rebuild
+              onnxruntime-node</code
+            >: another <code>pnpm install</code> replays the postinstall result
+            cached in the pnpm store and does not switch modes. Any image stage
+            that runs a dependency-materialising pnpm command
+            (<code>install</code>, <code>deploy</code>, <code>fetch</code>,
+            <code>add</code>, <code>rebuild</code>) must copy the repo-root
+            <code>.npmrc</code> into that stage first.
           </div>
           <div class="callout note">
             <b>The model is loaded at startup, not on first use.</b>
