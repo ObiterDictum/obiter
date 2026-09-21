@@ -12,6 +12,7 @@ import {
   formatControlState,
   selectedParagraph,
 } from './document-format-controls'
+import { effectiveParagraph } from './document-model-text'
 import type { FormatDrafts } from './document-format-types'
 
 export type ParagraphRange = {
@@ -44,6 +45,7 @@ export function documentFormatToolbar(
     to: 0,
   },
   trackChanges = false,
+  drafts?: Record<string, string>,
 ) {
   const ranges: ReadonlyArray<ParagraphRange> =
     target.kind === 'selection'
@@ -70,11 +72,16 @@ export function documentFormatToolbar(
     setFormat((current) => {
       let next = current
       for (const range of emphasis) {
-        const target = selectedParagraph(model, range.paragraphId)
-        if (!target) continue
+        const stored = selectedParagraph(model, range.paragraphId)
+        if (!stored) continue
         next = toggleEmphasisAtAddress(
           next,
-          emphasisAddress(target, 0, range.from, range.to),
+          emphasisAddress(
+            effectiveParagraph(stored, drafts),
+            0,
+            range.from,
+            range.to,
+          ),
           flag,
           value,
         )

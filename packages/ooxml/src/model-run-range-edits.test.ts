@@ -194,6 +194,49 @@ describe('a cross-paragraph join persists its tail formatting', () => {
       .join('')
     expect(italicText).toBe(appended)
   })
+
+  it('serialises a text replacement and a partial bold as one string', async () => {
+    const document = await parseDocx(
+      await buildOoxmlFixture('full-fidelity-with-w14-ids'),
+    )
+    const first = mainParagraphs(document)[0]
+    if (!first) throw new Error('Fixture paragraph is missing.')
+    applyDocumentEdits(document, [
+      {
+        type: 'insert_paragraph_after',
+        paragraphId: first.id,
+        runs: [{ text: 'Hello' }],
+      },
+    ])
+    const reloaded = await parseDocx(await serialiseDocx(document))
+    const inserted = mainParagraphs(reloaded)[1]
+    const run = inserted?.runs[0]
+    if (!inserted || !run) throw new Error('Inserted run is missing.')
+    applyDocumentEdits(reloaded, [
+      { type: 'replace_run_text', runId: run.id, text: 'Hello!' },
+      {
+        type: 'set_run_emphasis',
+        paragraphId: inserted.id,
+        from: 0,
+        to: 2,
+        bold: true,
+      },
+    ])
+    const reparsed = mainParagraphs(
+      await parseDocx(await serialiseDocx(reloaded)),
+    )[1]
+    const runs = reparsed?.runs ?? []
+    expect(runs.map((item) => item.text).join('')).toBe('Hello!')
+    expect(runs[0]?.text).toBe('He')
+    expect(runBold(runs[0])).toBe(true)
+    expect(
+      runs
+        .slice(1)
+        .map((item) => item.text)
+        .join(''),
+    ).toBe('llo!')
+    expect(runs.slice(1).some((item) => runBold(item))).toBe(false)
+  })
 })
 
 async function applyRange(

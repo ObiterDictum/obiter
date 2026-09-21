@@ -18,26 +18,32 @@ export function formattedModel(
       item.runId ? [[item.runId, item] as const] : [],
     ),
   )
-  const rangeEmphasis = format.emphasis.filter(
-    (item) =>
-      item.paragraphId && item.from !== undefined && item.to !== undefined,
-  )
   return {
     ...model,
     stories: model.stories.map((story) => ({
       ...story,
       paragraphs: story.paragraphs.map((paragraph) =>
-        formattedParagraph(
-          rangeEmphasis.reduce(
-            (current, item) => paintRangeEmphasis(current, item),
-            paragraph,
-          ),
-          format,
-          emphasisByRun,
-        ),
+        formattedParagraph(paragraph, format, emphasisByRun),
       ),
     })),
   }
+}
+
+/**
+ * Projects range emphasis onto one paragraph's current text. Offsets are in
+ * that string, so the caller passes the paragraph after text drafts are
+ * applied. Slicing first and then writing the draft onto the slice that kept
+ * the original run id repeats the draft in front of the leftover tail.
+ */
+export function projectRangeEmphasis(
+  paragraph: DocumentParagraphWire,
+  emphasis: readonly PendingEmphasis[],
+): DocumentParagraphWire {
+  let current = paragraph
+  for (const item of emphasis) {
+    current = paintRangeEmphasis(current, item)
+  }
+  return current
 }
 
 export function paragraphStyleOptions(model: DocumentModelWire) {
@@ -58,6 +64,7 @@ function paintRangeEmphasis(
   if (from === undefined || to === undefined) return paragraph
   const runs: DocumentParagraphWire['runs'] = []
   let cursor = 0
+  let changed = false
   for (const run of paragraph.runs) {
     const end = cursor + run.text.length
     const overlapFrom = Math.max(from, cursor)
@@ -65,38 +72,69 @@ function paintRangeEmphasis(
     if (overlapFrom >= overlapTo) {
       runs.push(run)
     } else {
-      const localFrom = overlapFrom - cursor
-      const localTo = overlapTo - cursor
-      const pieces: DocumentParagraphWire['runs'] = []
-      if (localFrom > 0) {
-        pieces.push({ ...run, text: run.text.slice(0, localFrom) })
+      const localFrom = snapRangeStart(run.text, overlapFrom - cursor)
+      const localTo = snapRangeEnd(run.text, overlapTo - cursor)
+      if (localFrom >= localTo) {
+        runs.push(run)
+      } else {
+        changed = true
+        const pieces: DocumentParagraphWire['runs'] = []
+        if (localFrom > 0) {
+          pieces.push({ ...run, text: run.text.slice(0, localFrom) })
+        }
+        pieces.push({
+          ...run,
+          text: run.text.slice(localFrom, localTo),
+          preservedXmlFragments: patchFragments(
+            run.preservedXmlFragments,
+            emphasisXml(run.preservedXmlFragments, item),
+            /<w:rPr\b/u,
+          ),
+        })
+        if (localTo < run.text.length) {
+          pieces.push({ ...run, text: run.text.slice(localTo) })
+        }
+        pieces.forEach((piece, index) => {
+          runs.push(
+            index === 0
+              ? piece
+              : {
+                  ...piece,
+                  id: `${run.id}:${String(localFrom)}:${String(localTo)}:${String(index)}`,
+                },
+          )
+        })
       }
-      pieces.push({
-        ...run,
-        text: run.text.slice(localFrom, localTo),
-        preservedXmlFragments: patchFragments(
-          run.preservedXmlFragments,
-          emphasisXml(run.preservedXmlFragments, item),
-          /<w:rPr\b/u,
-        ),
-      })
-      if (localTo < run.text.length) {
-        pieces.push({ ...run, text: run.text.slice(localTo) })
-      }
-      pieces.forEach((piece, index) => {
-        runs.push(
-          index === 0
-            ? piece
-            : {
-                ...piece,
-                id: `${run.id}:${String(localFrom)}:${String(localTo)}:${String(index)}`,
-              },
-        )
-      })
     }
     cursor = end
   }
+  if (!changed) return paragraph
   return { ...paragraph, runs }
+}
+
+/** Expands a range so neither edge falls inside a surrogate pair. */
+export function snapEmphasisRange(
+  text: string,
+  from: number,
+  to: number,
+): { from: number; to: number } {
+  const start = snapRangeStart(text, Math.min(from, to))
+  const end = snapRangeEnd(text, Math.max(from, to))
+  return { from: start, to: Math.max(start, end) }
+}
+
+function snapRangeStart(text: string, index: number): number {
+  return index > 0 && isLowSurrogate(text.charCodeAt(index)) ? index - 1 : index
+}
+
+function snapRangeEnd(text: string, index: number): number {
+  return isLowSurrogate(text.charCodeAt(index))
+    ? Math.min(text.length, index + 1)
+    : index
+}
+
+function isLowSurrogate(code: number): boolean {
+  return code >= 0xdc00 && code <= 0xdfff
 }
 
 function formattedParagraph(

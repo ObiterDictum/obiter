@@ -3,7 +3,8 @@ import type {
   DocumentModelWire,
   DocumentParagraphWire,
 } from '@obiter/contracts'
-import { documentStory } from './document-model-text'
+import { documentStory, paragraphPlainText } from './document-model-text'
+import { snapEmphasisRange } from './document-format-paint'
 import { paragraphNumPr } from './document-page-lists'
 import type { FormatDrafts, PendingEmphasis } from './document-format-types'
 
@@ -118,7 +119,13 @@ export function emphasisAddress(
 ): { runId: string } | { paragraphId: string; from: number; to: number } {
   const from = sliceFrom + Math.min(selectionStart, selectionEnd)
   const to = sliceFrom + Math.max(selectionStart, selectionEnd)
-  if (from !== to) return { paragraphId: paragraph.id, from, to }
+  if (from !== to) {
+    // The selection is in the paragraph text this function is given, which
+    // must already be the effective string. Snapping here is what save sends,
+    // so a range cannot ask the server to cut a surrogate the paint avoided.
+    const snapped = snapEmphasisRange(paragraphPlainText(paragraph), from, to)
+    return { paragraphId: paragraph.id, ...snapped }
+  }
   let cursor = 0
   for (const run of paragraph.runs) {
     const end = cursor + run.text.length

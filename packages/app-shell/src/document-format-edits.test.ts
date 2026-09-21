@@ -14,6 +14,7 @@ import {
   outdentList,
   type FormatDrafts,
 } from './document-format-edits'
+import { projectRangeEmphasis } from './document-format-paint'
 
 const model: DocumentModelWire = {
   version: 1,
@@ -454,14 +455,85 @@ describe('draft range paint run ids', () => {
     const source = modelWithRuns([
       { id: 'r1', text: 'The Claimant seeks', preservedXmlFragments: boldXml },
     ])
-    const painted = formattedModel(source, {
-      emphasis: [{ paragraphId: 'p1', from: 4, to: 13, bold: false }],
-      paragraphStyles: {},
-      numbering: {},
-    })
-    const ids =
-      painted.stories[0]?.paragraphs[0]?.runs.map((run) => run.id) ?? []
+    const paragraph = source.stories[0]?.paragraphs[0]
+    if (!paragraph) throw new Error('paragraph missing')
+    const projected = projectRangeEmphasis(paragraph, [
+      { paragraphId: 'p1', from: 4, to: 13, bold: false },
+    ])
+    const ids = projected.runs.map((run) => run.id)
     expect(ids).toHaveLength(3)
     expect(new Set(ids).size).toBe(3)
   })
+
+  it('does not split an astral character when the range ends inside it', () => {
+    const text = 'A\u{1f600}B'
+    const paragraph = {
+      id: 'p1',
+      runs: [{ id: 'r1', text, preservedXmlFragments: [] as string[] }],
+      preservedXmlFragments: [] as string[],
+    }
+    const projected = projectRangeEmphasis(paragraph, [
+      { paragraphId: 'p1', from: 0, to: 2, bold: true },
+    ])
+    expect(projected.runs.map((run) => run.text).join('')).toBe(text)
+    for (const run of projected.runs) {
+      expect(unpairedSurrogate(run.text)).toBe(false)
+    }
+  })
+
+  it('stores the snapped range so a save does not ask to cut the pair', () => {
+    const astralModel: DocumentModelWire = {
+      ...model,
+      stories: [
+        {
+          partName: 'word/document.xml',
+          kind: 'document',
+          paragraphs: [
+            {
+              id: 'p1',
+              runs: [
+                {
+                  id: 'r1',
+                  text: 'Hi\u{1f600}',
+                  preservedXmlFragments: [],
+                },
+              ],
+              preservedXmlFragments: [],
+            },
+          ],
+          preservedXmlFragments: [],
+        },
+      ],
+    }
+    let format: FormatDrafts = emptyFormatDrafts
+    const toolbar = documentFormatToolbar(
+      astralModel,
+      format,
+      'p1',
+      (update) => {
+        format = update(format)
+      },
+      { kind: 'selection', ranges: [{ paragraphId: 'p1', from: 0, to: 3 }] },
+      false,
+      { r1: 'Hi\u{1f600}!' },
+    )
+    toolbar.onToggleBold()
+    expect(format.emphasis).toEqual([
+      { paragraphId: 'p1', from: 0, to: 4, bold: true },
+    ])
+  })
 })
+
+function unpairedSurrogate(text: string): boolean {
+  for (let index = 0; index < text.length; index += 1) {
+    const code = text.charCodeAt(index)
+    if (code >= 0xd800 && code <= 0xdbff) {
+      const next = text.charCodeAt(index + 1)
+      if (next < 0xdc00 || next > 0xdfff) return true
+      index += 1
+      continue
+    }
+    if (code >= 0xdc00 && code <= 0xdfff) return true
+  }
+  return false
+}

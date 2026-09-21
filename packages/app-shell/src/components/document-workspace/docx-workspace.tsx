@@ -250,6 +250,7 @@ export function DocxWorkspace({
                 drafts.setFormat,
                 formatTarget,
                 trackChanges,
+                drafts.drafts,
               )
             : undefined
         }
@@ -351,6 +352,7 @@ export function DocxWorkspace({
                       onFocusParagraph={focusParagraph}
                       onMoveCaret={moveCaret}
                       drafts={drafts.drafts}
+                      emphasis={drafts.format.emphasis}
                       onRunTextChange={(runId, text) =>
                         drafts.setDrafts((current) => ({
                           ...current,

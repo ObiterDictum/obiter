@@ -213,4 +213,38 @@ describe('DocxWorkspace document derivations', () => {
     expect(world).toBeTruthy()
     expect(world.style.fontWeight).toBe('700')
   })
+
+  it('does not rebuild formatting for the whole document when typing after a partial bold', () => {
+    mountWorkspace({
+      models: {
+        doc_1: multiParagraphModel([
+          paragraph('p1', 'Hello'),
+          paragraph('p2', 'World'),
+          paragraph('p3', 'Untouched'),
+        ]),
+      },
+    })
+    selectBodyParagraph()
+    const editor = screen.getByLabelText('Paragraph text')
+    fireEvent.change(editor, { target: { value: 'Hello!' } })
+    if (!(editor instanceof HTMLTextAreaElement)) {
+      throw new Error('expected a paragraph editor')
+    }
+    editor.setSelectionRange(0, 2)
+    fireEvent.select(editor)
+    fireEvent.mouseUp(editor)
+    fireEvent.click(screen.getByRole('button', { name: 'Bold' }))
+    fireEvent.keyDown(editor, { key: 'Escape' })
+    reset()
+    fireEvent.change(editor, { target: { value: 'Hello!X' } })
+    expect(counts.formatted).toBe(0)
+    expect(counts.layout).toBe(1)
+    expect(counts.storyBlocks).toBe(0)
+    expect(counts.wrapped.filter((text) => text.includes('Untouched'))).toEqual(
+      [],
+    )
+    expect(counts.wrapped.some((text) => text.includes('Hello!llo'))).toBe(
+      false,
+    )
+  })
 })

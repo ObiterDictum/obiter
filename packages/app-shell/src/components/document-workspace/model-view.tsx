@@ -1,6 +1,10 @@
 import { useMemo } from 'react'
 import type { DocumentModelWire, DocumentPresence } from '@obiter/contracts'
 import type { LocalInsert } from '../../document-edits'
+import {
+  emptyFormatDrafts,
+  type PendingEmphasis,
+} from '../../document-format-types'
 import type { ExtraRuns } from '../../document-word-edits'
 import {
   documentPageBox,
@@ -46,6 +50,7 @@ export function DocumentModelPage({
   onSelectParagraph,
   onTextSelection,
   drafts,
+  emphasis = emptyFormatDrafts.emphasis,
   onRunTextChange,
   editing,
   presence,
@@ -81,6 +86,8 @@ export function DocumentModelPage({
     direction: 'forward' | 'backward',
   ) => void
   drafts?: Record<string, string>
+  /** Pending range emphasis, in the same offsets as the text drafts. */
+  emphasis?: readonly PendingEmphasis[]
   onRunTextChange?: (runId: string, text: string) => void
   editing?: boolean
   presence?: DocumentPresence[]
@@ -281,6 +288,7 @@ export function DocumentModelPage({
                   onSelectParagraph,
                   onTextSelection,
                   drafts,
+                  emphasis,
                   onRunTextChange,
                   editing,
                   presence,
@@ -319,6 +327,7 @@ export function DocumentModelPage({
           paragraphs={story.paragraphs}
           storyOf={storyOf}
           drafts={drafts}
+          emphasis={emphasis}
           imageUrls={imageUrls}
           selectionSegments={selectionSegments}
           selectionHandlers={selectionHandlers}

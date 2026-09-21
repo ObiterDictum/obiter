@@ -5,7 +5,11 @@ import type {
 import { documentStory } from './document-model-text'
 import { paragraphNumPr } from './document-page-lists'
 import { paragraphListKind, pickNumberingId } from './document-list-toggle'
-import { formattedModel, paragraphStyleOptions } from './document-format-paint'
+import {
+  formattedModel,
+  paragraphStyleOptions,
+  projectRangeEmphasis,
+} from './document-format-paint'
 import type { FormatDrafts, PendingEmphasis } from './document-format-types'
 
 export function selectedParagraph(
@@ -83,10 +87,15 @@ function flagOnCoveredRuns(
 function coveredRuns(
   view: DocumentModelWire,
   ranges: ReadonlyArray<{ paragraphId: string; from: number; to: number }>,
+  emphasis: readonly PendingEmphasis[],
 ): DocumentParagraphWire['runs'] {
-  return ranges.flatMap((range) =>
-    runsCoveringRange(selectedParagraph(view, range.paragraphId), range),
-  )
+  return ranges.flatMap((range) => {
+    const paragraph = selectedParagraph(view, range.paragraphId)
+    return runsCoveringRange(
+      paragraph ? projectRangeEmphasis(paragraph, emphasis) : undefined,
+      range,
+    )
+  })
 }
 
 /** Every distinct paragraph a selection covers, in the order given. */
@@ -115,7 +124,7 @@ export function formatControlState(
 ) {
   const view = formattedModel(model, format)
   const paragraph = selectedParagraph(view, paragraphId)
-  const covered = coveredRuns(view, emphasisRanges)
+  const covered = coveredRuns(view, emphasisRanges, format.emphasis)
   const numPr = paragraph
     ? (format.numbering[paragraph.id] ?? paragraphNumPr(paragraph, view.styles))
     : undefined
