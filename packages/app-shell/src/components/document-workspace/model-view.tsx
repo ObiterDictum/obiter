@@ -2,6 +2,11 @@ import { useMemo } from 'react'
 import type { DocumentModelWire, DocumentPresence } from '@obiter/contracts'
 import type { LocalInsert } from '../../document-edits'
 import {
+  emptyFormatDrafts,
+  type PendingEmphasis,
+} from '../../document-format-types'
+import type { ExtraRuns } from '../../document-word-edits'
+import {
   documentPageBox,
   marginStories,
   contentFrame,
@@ -37,6 +42,7 @@ import { PageMarginBand } from './page-margin-band'
  */
 const NO_INSERTS: LocalInsert[] = []
 const NO_DELETED_PARAGRAPH_IDS: string[] = []
+const NO_EXTRA_RUNS: ExtraRuns = {}
 
 export function DocumentModelPage({
   model,
@@ -44,12 +50,14 @@ export function DocumentModelPage({
   onSelectParagraph,
   onTextSelection,
   drafts,
+  emphasis = emptyFormatDrafts.emphasis,
   onRunTextChange,
   editing,
   presence,
   currentUserId,
   inserts = NO_INSERTS,
   deletedParagraphIds = NO_DELETED_PARAGRAPH_IDS,
+  extraRuns = NO_EXTRA_RUNS,
   onInsertTextChange,
   onInsertParagraph,
   onDeleteParagraph,
@@ -78,12 +86,16 @@ export function DocumentModelPage({
     direction: 'forward' | 'backward',
   ) => void
   drafts?: Record<string, string>
+  /** Pending range emphasis, in the same offsets as the text drafts. */
+  emphasis?: readonly PendingEmphasis[]
   onRunTextChange?: (runId: string, text: string) => void
   editing?: boolean
   presence?: DocumentPresence[]
   currentUserId?: string
   inserts?: LocalInsert[]
   deletedParagraphIds?: string[]
+  /** Text held outside the painted runs, which the layout merges back in. */
+  extraRuns?: ExtraRuns
   onInsertTextChange?: (clientId: string, text: string) => void
   onInsertParagraph?: (afterParagraphId: string) => void
   onDeleteParagraph?: (paragraphId: string) => void
@@ -147,6 +159,7 @@ export function DocumentModelPage({
     // and made a render O(n^2) on a long document.
     const neighbors = paragraphNeighborResolver({
       model,
+      extraRuns,
       inserts,
       deletedParagraphIds,
       paragraphs: story?.paragraphs ?? [],
@@ -163,7 +176,7 @@ export function DocumentModelPage({
       storyOf,
       neighbors,
     }
-  }, [model, inserts, deletedParagraphIds])
+  }, [model, extraRuns, inserts, deletedParagraphIds])
   const {
     story,
     headers,
@@ -206,7 +219,7 @@ export function DocumentModelPage({
         delete event.currentTarget.dataset.pointerDown
         if (down && down !== `${event.clientX},${event.clientY}`) return
         const endOffset = (id: string) =>
-          blockEndOffset(id, story.paragraphs, drafts, inserts)
+          blockEndOffset(id, story.paragraphs, drafts, inserts, extraRuns)
         const paragraphEl = event.target.closest('[data-paragraph-id]')
         if (paragraphEl instanceof HTMLElement) {
           const caret = paragraphClickCaret(
@@ -275,6 +288,7 @@ export function DocumentModelPage({
                   onSelectParagraph,
                   onTextSelection,
                   drafts,
+                  emphasis,
                   onRunTextChange,
                   editing,
                   presence,
@@ -313,6 +327,7 @@ export function DocumentModelPage({
           paragraphs={story.paragraphs}
           storyOf={storyOf}
           drafts={drafts}
+          emphasis={emphasis}
           imageUrls={imageUrls}
           selectionSegments={selectionSegments}
           selectionHandlers={selectionHandlers}

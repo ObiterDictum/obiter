@@ -3,7 +3,11 @@ import type {
   DocumentParagraphWire,
 } from '@obiter/contracts'
 import type { ExtraRuns } from './document-word-edits'
-import { documentStory, paragraphPlainText } from './document-model-text'
+import {
+  documentStory,
+  effectiveParagraph,
+  paragraphPlainText,
+} from './document-model-text'
 import { takeFragment } from './document-page-flow'
 import { drawingScene } from './document-page-drawings'
 import { paragraphMetrics, widowMaxY } from './document-page-keep'
@@ -83,12 +87,11 @@ export function layoutParagraph(
   column: () => ColumnFrame,
   advance: () => void,
 ): void {
-  const paragraph = {
-    ...item.paragraph,
-    runs: [...item.paragraph.runs, ...(extraRuns[item.paragraph.id] ?? [])].map(
-      (run) => ({ ...run, text: drafts?.[run.id] ?? run.text }),
-    ),
-  }
+  const paragraph = effectiveParagraph(
+    item.paragraph,
+    drafts,
+    extraRuns[item.paragraph.id] ?? [],
+  )
   const text = paragraphPlainText(paragraph)
   const face = paragraphFace(paragraph, model.styles)
   const linePx = paragraphLineHeightPx(face)

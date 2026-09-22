@@ -5,7 +5,7 @@ import {
   removeInsert,
   type LocalInsert,
 } from './document-edits'
-import { documentStory } from './document-model-text'
+import { documentStory, effectiveParagraph } from './document-model-text'
 import { canJoinParagraphRuns } from './document-run-fidelity'
 import { omitKey, replaceRunRange, splitRuns } from './document-run-range'
 import { storyBodyParagraphIds } from './document-story-flow'
@@ -45,10 +45,7 @@ export function blockRuns(
   )
   if (!paragraph) return []
   const extras = state.extraRuns[paragraphId] ?? []
-  return [...paragraph.runs, ...extras].map((run) => ({
-    ...run,
-    text: state.drafts[run.id] ?? run.text,
-  }))
+  return effectiveParagraph(paragraph, state.drafts, extras).runs
 }
 
 export function blockText(

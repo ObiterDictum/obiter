@@ -2,7 +2,7 @@ import type {
   DocumentModelWire,
   DocumentParagraphWire,
 } from '@obiter/contracts'
-import { paragraphPlainText } from './document-model-text'
+import { effectiveParagraph, paragraphPlainText } from './document-model-text'
 import type { ExtraRuns } from './document-word-edits'
 import { countLines } from './document-page-flow'
 import type { ColumnFrame, ContentFrame } from './document-page-layout'
@@ -95,15 +95,11 @@ export function paragraphMetrics(
   extraRuns: ExtraRuns,
   columnWidthPx: number,
 ) {
-  const resolved = {
-    ...paragraph,
-    runs: [...paragraph.runs, ...(extraRuns[paragraph.id] ?? [])].map(
-      (run) => ({
-        ...run,
-        text: drafts?.[run.id] ?? run.text,
-      }),
-    ),
-  }
+  const resolved = effectiveParagraph(
+    paragraph,
+    drafts,
+    extraRuns[paragraph.id] ?? [],
+  )
   const text = paragraphPlainText(resolved)
   const face = paragraphFace(resolved, model.styles)
   const linePx = paragraphLineHeightPx(face)

@@ -7,7 +7,11 @@ import {
   insertPlainText,
   type LocalInsert,
 } from '../../document-edits'
-import { paragraphPlainText } from '../../document-model-text'
+import {
+  effectiveParagraph,
+  paragraphPlainText,
+} from '../../document-model-text'
+import type { ExtraRuns } from '../../document-word-edits'
 import { wrapLines, type WrappedLine } from '../../document-page-flow'
 import { paragraphFace } from '../../document-page-style'
 
@@ -223,6 +227,16 @@ export type ParagraphNeighborResolver = (
   drafts?: Record<string, string>,
 ) => { previous?: ArrowNeighbor; next?: ArrowNeighbor }
 
+/** The painted model the layout placed, the edits held outside its runs, and
+ * the text drafts: the inputs a neighbour's text and metrics come from. */
+type NeighborSource = {
+  model: DocumentModelWire
+  drafts?: Record<string, string>
+  extraRuns?: ExtraRuns
+  inserts: LocalInsert[]
+  paragraphs: DocumentParagraphWire[]
+}
+
 /**
  * A resolver over the story's flow order. The order and its index are built
  * once, so resolving a paragraph's neighbours is a lookup rather than a walk
@@ -231,13 +245,9 @@ export type ParagraphNeighborResolver = (
  * of the render path while the wrap and face work still happens only for the
  * paragraph that actually asks for a neighbour.
  */
-export function paragraphNeighborResolver(ctx: {
-  model: DocumentModelWire
-  drafts?: Record<string, string>
-  inserts: LocalInsert[]
-  deletedParagraphIds: string[]
-  paragraphs: DocumentParagraphWire[]
-}): ParagraphNeighborResolver {
+export function paragraphNeighborResolver(
+  ctx: NeighborSource & { deletedParagraphIds: string[] },
+): ParagraphNeighborResolver {
   const order = flowParagraphIds(
     ctx.model,
     ctx.inserts,
@@ -257,21 +267,19 @@ export function paragraphNeighborResolver(ctx: {
 
 function arrowNeighbor(
   id: string | undefined,
-  ctx: {
-    model: DocumentModelWire
-    drafts?: Record<string, string>
-    inserts: LocalInsert[]
-    paragraphs: DocumentParagraphWire[]
-  },
+  ctx: NeighborSource,
   wrapWidthPx?: number,
 ): ArrowNeighbor | undefined {
   if (!id) return undefined
   const insert = ctx.inserts.find((item) => item.clientId === id)
-  const paragraph = ctx.paragraphs.find((item) => item.id === id)
+  const stored = ctx.paragraphs.find((item) => item.id === id)
+  const paragraph = stored
+    ? effectiveParagraph(stored, ctx.drafts, ctx.extraRuns?.[stored.id] ?? [])
+    : undefined
   const text = insert
     ? insertPlainText(insert)
     : paragraph
-      ? paragraphPlainText(paragraph, ctx.drafts)
+      ? paragraphPlainText(paragraph)
       : ''
   const face = paragraph
     ? paragraphFace(paragraph, ctx.model.styles)

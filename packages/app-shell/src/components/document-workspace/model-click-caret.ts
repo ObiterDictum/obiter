@@ -1,6 +1,10 @@
 import type { DocumentParagraphWire } from '@obiter/contracts'
 import { insertPlainText, type LocalInsert } from '../../document-edits'
-import { paragraphPlainText } from '../../document-model-text'
+import {
+  effectiveParagraph,
+  paragraphPlainText,
+} from '../../document-model-text'
+import type { ExtraRuns } from '../../document-word-edits'
 
 export function caretFromPoint(
   clientX: number,
@@ -77,9 +81,13 @@ export function blockEndOffset(
   paragraphs: DocumentParagraphWire[],
   drafts: Record<string, string> | undefined,
   inserts: LocalInsert[],
+  extraRuns: ExtraRuns = {},
 ): number {
   const insert = inserts.find((item) => item.clientId === paragraphId)
   if (insert) return insertPlainText(insert).length
   const paragraph = paragraphs.find((item) => item.id === paragraphId)
-  return paragraph ? paragraphPlainText(paragraph, drafts).length : 0
+  if (!paragraph) return 0
+  return paragraphPlainText(
+    effectiveParagraph(paragraph, drafts, extraRuns[paragraphId] ?? []),
+  ).length
 }

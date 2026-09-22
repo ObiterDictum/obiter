@@ -2,11 +2,16 @@ import type {
   DocumentModelWire,
   DocumentParagraphWire,
 } from '@obiter/contracts'
-import { documentStory } from './document-model-text'
+import { documentStory, effectiveParagraph } from './document-model-text'
 import { paragraphNumPr } from './document-page-lists'
 import { paragraphListKind, pickNumberingId } from './document-list-toggle'
-import { formattedModel, paragraphStyleOptions } from './document-format-paint'
-import type { FormatDrafts, PendingEmphasis } from './document-format-types'
+import {
+  formattedParagraphDraft,
+  paragraphStyleOptions,
+  projectRangeEmphasis,
+} from './document-format-paint'
+import type { FormatDrafts } from './document-format-types'
+import type { ExtraRuns } from './document-word-edits'
 
 export function selectedParagraph(
   model: DocumentModelWire,
@@ -17,13 +22,7 @@ export function selectedParagraph(
     (item) => item.id === paragraphId,
   )
 }
-export function runFlagOn(
-  xml: string,
-  pending: PendingEmphasis | undefined,
-  flag: 'bold' | 'italic' | 'underline',
-) {
-  if (pending?.[flag] === true) return true
-  if (pending?.[flag] === false || pending?.[flag] === null) return false
+export function runFlagOn(xml: string, flag: 'bold' | 'italic' | 'underline') {
   if (flag === 'underline') {
     return /<w:u\b(?![^>]*w:val="none")/i.test(xml)
   }
@@ -58,35 +57,55 @@ function runsCoveringRange(
 
 function flagOnCoveredRuns(
   runs: DocumentParagraphWire['runs'],
-  format: FormatDrafts,
   flag: 'bold' | 'italic' | 'underline',
 ) {
+  // The covered runs come from the projected effective paragraph, so their
+  // XML already carries every pending answer in application order: run-level
+  // drafts in the base, then the range drafts. Reading the XML is reading
+  // exactly what paint decides; a pending entry consulted out of order could
+  // disagree with the slice it is read for.
   return (
     runs.length > 0 &&
-    runs.every((run) =>
-      runFlagOn(
-        run.preservedXmlFragments.join(''),
-        format.emphasis.find((item) => item.runId === run.id),
-        flag,
-      ),
-    )
+    runs.every((run) => runFlagOn(run.preservedXmlFragments.join(''), flag))
   )
 }
 
 // e40-selection-format-state: pressed flags follow the covered runs, not runs[0]
 // e42-painted-format-control: cover painted splits, not the unsplit source paragraph
+// e70-effective-format-control: cover the effective text the paint path paints,
+// not the stored paragraph the drafts have not been applied to
 /**
  * The runs a selection covers, across every paragraph it spans. One range per
  * paragraph, in document order; a collapsed range (from === to) is the run the
  * caret sits in, which is how the caret case addresses its formatting.
+ *
+ * The paragraph is derived exactly as the editor paints it: format drafts
+ * applied, then the join's appended runs and text drafts, then pending range
+ * emphasis projected over that string. A selection carrying only unsaved
+ * characters covers no stored run, so reading the stored paragraph left the
+ * control reporting "off" while the screen and the save said "on".
  */
 function coveredRuns(
-  view: DocumentModelWire,
+  model: DocumentModelWire,
   ranges: ReadonlyArray<{ paragraphId: string; from: number; to: number }>,
+  format: FormatDrafts,
+  drafts: Record<string, string> | undefined,
+  extraRuns: ExtraRuns | undefined,
 ): DocumentParagraphWire['runs'] {
-  return ranges.flatMap((range) =>
-    runsCoveringRange(selectedParagraph(view, range.paragraphId), range),
-  )
+  return ranges.flatMap((range) => {
+    const stored = selectedParagraph(model, range.paragraphId)
+    if (!stored) return []
+    const painted = formattedParagraphDraft(stored, format)
+    const effective = effectiveParagraph(
+      painted,
+      drafts,
+      extraRuns?.[range.paragraphId] ?? [],
+    )
+    return runsCoveringRange(
+      projectRangeEmphasis(effective, format.emphasis),
+      range,
+    )
+  })
 }
 
 /** Every distinct paragraph a selection covers, in the order given. */
@@ -112,14 +131,21 @@ export function formatControlState(
     from: number
     to: number
   }> = ranges,
+  /**
+   * The text drafts and a join's appended runs. A selection carries offsets
+   * in that effective text, so the cover and the flags must read it too.
+   */
+  drafts?: Record<string, string>,
+  extraRuns?: ExtraRuns,
 ) {
-  const view = formattedModel(model, format)
-  const paragraph = selectedParagraph(view, paragraphId)
-  const covered = coveredRuns(view, emphasisRanges)
+  const stored = selectedParagraph(model, paragraphId)
+  const paragraph = stored ? formattedParagraphDraft(stored, format) : undefined
+  const covered = coveredRuns(model, emphasisRanges, format, drafts, extraRuns)
   const numPr = paragraph
-    ? (format.numbering[paragraph.id] ?? paragraphNumPr(paragraph, view.styles))
+    ? (format.numbering[paragraph.id] ??
+      paragraphNumPr(paragraph, model.styles))
     : undefined
-  const story = documentStory(view)
+  const story = documentStory(model)
   const index =
     story?.paragraphs.findIndex((item) => item.id === paragraphId) ?? -1
   const previous = index > 0 ? story?.paragraphs[index - 1] : undefined
@@ -143,9 +169,9 @@ export function formatControlState(
       paragraph?.styleId ??
       (paragraphId ? (format.paragraphStyles[paragraphId] ?? '') : ''),
     paragraphStyles: paragraphStyleOptions(model),
-    bold: flagOnCoveredRuns(covered, format, 'bold'),
-    italic: flagOnCoveredRuns(covered, format, 'italic'),
-    underline: flagOnCoveredRuns(covered, format, 'underline'),
+    bold: flagOnCoveredRuns(covered, 'bold'),
+    italic: flagOnCoveredRuns(covered, 'italic'),
+    underline: flagOnCoveredRuns(covered, 'underline'),
     canIndent,
     canOutdent: Boolean(numPr?.numId),
     canContinue: Boolean(previousNum?.numId),

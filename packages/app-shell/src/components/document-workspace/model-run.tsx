@@ -32,6 +32,10 @@ export type ParagraphSelectionRange = { from: number; to: number }
  * Paints one paragraph's runs, marking the part a document selection covers.
  * `start`/`end` are the block's slice of the paragraph, so a paragraph split
  * across pages highlights only the code units this block owns.
+ *
+ * `paragraph` already carries the effective text, including any range split.
+ * Slicing must not apply text drafts again: a draft is the whole original
+ * run, and the slice that kept that run id would repeat it.
  */
 export function ParagraphRunPaint({
   paragraph,
@@ -97,18 +101,13 @@ export function ParagraphRunPaint({
       >
         {line.text
           ? paint(
-              sliceParagraphRuns(
-                paragraph,
-                start + line.from,
-                start + line.to,
-                drafts,
-              ),
+              sliceParagraphRuns(paragraph, start + line.from, start + line.to),
             )
           : paint([])}
       </div>
     ))
   }
-  return paint(sliceParagraphRuns(paragraph, start, end, drafts))
+  return paint(sliceParagraphRuns(paragraph, start, end))
 }
 
 function ModelRun({

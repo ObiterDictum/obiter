@@ -5,6 +5,10 @@ import type {
 } from '@obiter/contracts'
 import type { LocalInsert } from '../../document-edits'
 import {
+  emptyFormatDrafts,
+  type PendingEmphasis,
+} from '../../document-format-types'
+import {
   cellWrapWidthPx,
   type DisplayTableCell,
 } from '../../document-page-tables'
@@ -44,6 +48,7 @@ export type BlockContext = {
     direction: 'forward' | 'backward',
   ) => void
   drafts?: Record<string, string>
+  emphasis?: readonly PendingEmphasis[]
   onRunTextChange?: (runId: string, text: string) => void
   editing?: boolean
   presence?: DocumentPresence[]
@@ -108,6 +113,7 @@ export function renderBlock(
                 selected={ctx.selectedParagraphId === paragraph.id}
                 onSelectParagraph={ctx.onSelectParagraph}
                 drafts={ctx.drafts}
+                emphasis={ctx.emphasis}
                 onRunTextChange={ctx.onRunTextChange}
                 onInsertParagraph={ctx.onInsertParagraph}
                 onDeleteParagraph={ctx.onDeleteParagraph}
@@ -167,6 +173,7 @@ export function renderBlock(
       selected={ctx.selectedParagraphId === paragraph.id}
       onSelectParagraph={ctx.onSelectParagraph}
       drafts={ctx.drafts}
+      emphasis={ctx.emphasis}
       onRunTextChange={ctx.onRunTextChange}
       onInsertParagraph={ctx.onInsertParagraph}
       onDeleteParagraph={ctx.onDeleteParagraph}
@@ -221,6 +228,7 @@ export function PageOverlays({
   paragraphs,
   storyOf,
   drafts,
+  emphasis = emptyFormatDrafts.emphasis,
   imageUrls,
   selectionSegments,
   selectionHandlers,
@@ -233,6 +241,7 @@ export function PageOverlays({
   paragraphs: DocumentParagraphWire[]
   storyOf: (paragraphId: string) => { kind: string; partName: string }
   drafts?: Record<string, string>
+  emphasis?: readonly PendingEmphasis[]
   imageUrls: Record<string, string>
   selectionSegments: ReadonlyMap<string, ParagraphSelectionRange>
   selectionHandlers?: ParagraphSelectionHandlers
@@ -291,6 +300,7 @@ export function PageOverlays({
                 selectionSegment={selectionSegments.get(paragraph.id) ?? null}
                 selectionHandlers={selectionHandlers}
                 drafts={drafts}
+                emphasis={emphasis}
                 editing={false}
                 storyPartName={storyPartName}
                 story={storyOf(paragraph.id)}

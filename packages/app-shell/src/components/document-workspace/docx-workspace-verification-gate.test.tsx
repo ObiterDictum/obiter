@@ -120,6 +120,25 @@ describe('V5 verification gate against the E45 save owner', () => {
     expect(screen.getByText(/Save before verification/)).toBeTruthy()
   })
 
+  it('keeps a partial-bold draft coherent when the save is rejected', async () => {
+    const editAsync = vi.fn().mockRejectedValue(validationFailed)
+    mountGate({ editAsync })
+    edit('Hello!')
+    const editor = bodyEditor()
+    editor.setSelectionRange(0, 2)
+    fireEvent.select(editor)
+    fireEvent.mouseUp(editor)
+    fireEvent.click(screen.getByRole('button', { name: 'Bold' }))
+    await waitFor(() => expect(verifyButton().disabled).toBe(true))
+
+    fireEvent.click(saveButton())
+    await waitFor(() => expect(saveState()).toBe('unsaved'))
+    expect(verifyButton().disabled).toBe(true)
+    expect(screen.getByText(/Save before verification/)).toBeTruthy()
+    expect(bodyEditor().value).toBe('Hello!')
+    expect(bodyEditor().value).not.toBe('Hello!llo')
+  })
+
   it('re-enables verification once the save owner reports the work clean', async () => {
     const editAsync = vi.fn().mockResolvedValue({
       documentId: 'doc_1',
