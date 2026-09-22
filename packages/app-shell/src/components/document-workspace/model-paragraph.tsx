@@ -7,8 +7,14 @@ import type {
   DocumentStyleWire,
 } from '@obiter/contracts'
 import { cn } from '@obiter/ui'
+import { projectRangeEmphasis } from '../../document-format-paint'
+import {
+  emptyFormatDrafts,
+  type PendingEmphasis,
+} from '../../document-format-types'
 import {
   deleteCharBeforeOffset,
+  effectiveParagraph,
   paragraphPlainText,
   sliceContainsOffset,
   textDiff,
@@ -51,6 +57,7 @@ export function ModelParagraph({
   selected,
   onSelectParagraph,
   drafts,
+  emphasis = emptyFormatDrafts.emphasis,
   onRunTextChange,
   onInsertParagraph,
   onDeleteParagraph,
@@ -88,6 +95,11 @@ export function ModelParagraph({
   selected: boolean
   onSelectParagraph: (paragraphId: string, offset?: number) => void
   drafts?: Record<string, string>
+  /**
+   * Pending range emphasis, in effective-text offsets. Applied after the
+   * text draft so a slice cannot be replaced by the whole draft.
+   */
+  emphasis?: readonly PendingEmphasis[]
   onRunTextChange?: (runId: string, text: string) => void
   onInsertParagraph?: (afterParagraphId: string) => void
   onDeleteParagraph?: (paragraphId: string) => void
@@ -141,7 +153,9 @@ export function ModelParagraph({
     () => paragraphFace(paragraph, styles),
     [paragraph.preservedXmlFragments, paragraph.styleId, styles],
   )
-  const fullText = paragraphPlainText(paragraph, drafts)
+  const effective = effectiveParagraph(paragraph, drafts)
+  const display = projectRangeEmphasis(effective, emphasis)
+  const fullText = paragraphPlainText(effective)
   const start = from ?? 0
   const end = to ?? fullText.length
   const sliceText = fullText.slice(start, end)
@@ -227,7 +241,7 @@ export function ModelParagraph({
       : undefined
   const runPaint = (
     <ParagraphRunPaint
-      paragraph={paragraph}
+      paragraph={display}
       drafts={drafts}
       changes={changes}
       styles={styles}
@@ -371,7 +385,7 @@ export function ModelParagraph({
                     })
                     return
                   }
-                  const first = paragraph.runs[0]
+                  const first = effective.runs[0]
                   if (first) {
                     onRunTextChange?.(
                       first.id,
@@ -391,8 +405,8 @@ export function ModelParagraph({
                   }
                   if (offset > 0) {
                     const next = deleteCharBeforeOffset(
-                      paragraph,
-                      drafts,
+                      effective,
+                      undefined,
                       offset,
                     )
                     if (next) onRunTextChange?.(next.runId, next.text)
@@ -413,8 +427,8 @@ export function ModelParagraph({
                   }
                   if (offset < fullText.length) {
                     const next = deleteCharBeforeOffset(
-                      paragraph,
-                      drafts,
+                      effective,
+                      undefined,
                       offset + 1,
                     )
                     if (next) onRunTextChange?.(next.runId, next.text)

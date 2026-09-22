@@ -250,6 +250,8 @@ export function DocxWorkspace({
                 drafts.setFormat,
                 formatTarget,
                 trackChanges,
+                drafts.drafts,
+                drafts.extraRuns,
               )
             : undefined
         }
@@ -332,7 +334,7 @@ export function DocxWorkspace({
                     fontFamily={documentDefaultFace(model.styles).fontFamily}
                   >
                     <DocumentModelPage
-                      model={model}
+                      model={painted ?? model}
                       pageNumber={index + 1}
                       pageBlocks={laid.blocks}
                       pageFloats={laid.floats}
@@ -351,6 +353,7 @@ export function DocxWorkspace({
                       onFocusParagraph={focusParagraph}
                       onMoveCaret={moveCaret}
                       drafts={drafts.drafts}
+                      emphasis={drafts.format.emphasis}
                       onRunTextChange={(runId, text) =>
                         drafts.setDrafts((current) => ({
                           ...current,
@@ -362,6 +365,7 @@ export function DocxWorkspace({
                       currentUserId={me?.user.id}
                       inserts={drafts.inserts}
                       deletedParagraphIds={drafts.deletedParagraphIds}
+                      extraRuns={drafts.extraRuns}
                       imageUrls={imageUrls}
                       onInsertTextChange={(clientId, text) =>
                         drafts.setInserts((current) =>

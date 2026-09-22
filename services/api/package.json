@@ -36,6 +36,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@types/pg": "^8.20.0"
+    "@types/pg": "^8.20.0",
+    "onnxruntime-node": "1.21.0"
   }
 }

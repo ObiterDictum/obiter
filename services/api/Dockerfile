@@ -54,14 +54,17 @@ WORKDIR /repo
 # dependency graph is installed: no root devDependencies (eslint, playwright,
 # vitest) and no workspace devDependencies (typescript, vitest) reach a runtime
 # path here, and tsx — the Node adapter's loader — is a production dependency of
-# @obiter/api. ONNXRUNTIME_NODE_INSTALL_CUDA=skip avoids the optional
-# CUDA/TensorRT provider download (~343 MB) nothing in Obiter uses.
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json tsconfig.json ./
+# @obiter/api. The repo-root .npmrc must be copied before this install: it
+# carries the CPU-only ONNX Runtime setting (onnxruntime-node-install-cuda=skip)
+# that onnxruntime-node's postinstall reads through npm_config; without it the
+# stage fetches the optional CUDA/TensorRT providers (~343 MB) nothing in Obiter
+# uses. services/api/src/rampart-install-config.test.ts fails any workspace
+# Dockerfile stage that materialises dependencies without the copy.
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml .npmrc tsconfig.base.json tsconfig.json ./
 COPY packages/ ./packages/
 COPY services/api/package.json ./services/api/package.json
 
-RUN ONNXRUNTIME_NODE_INSTALL_CUDA=skip \
-    pnpm install --frozen-lockfile --prod --filter @obiter/api...
+RUN pnpm install --frozen-lockfile --prod --filter @obiter/api...
 
 # The application source and the migration SQL the API applies at startup.
 COPY services/api ./services/api
