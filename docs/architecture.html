@@ -4417,7 +4417,8 @@
           </div>
           <div class="callout note">
             <b>The model is loaded at startup, not on first use.</b>
-            <code>server.ts</code> warms the detector once the port is bound, so
+            <code>createApiRuntime()</code> (<code>src/runtime.ts</code>) starts
+            warming the detector without blocking boot, under either adapter, so
             the one-off ~15 MB Hugging Face download happens where a failure is
             visible instead of inside a user's first redaction. A failed warm is
             logged with its cause and leaves the API serving; detection still

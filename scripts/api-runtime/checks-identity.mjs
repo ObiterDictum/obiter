@@ -37,6 +37,21 @@ export async function checkHealthAndAuth(ctx) {
     { runtime: health.body?.runtime ?? null },
   )
 
+  // This run sets no corpus variables, so the corpus is the application
+  // database: colocated and writable. The configured modes (separate
+  // read-only corpus, dedicated writer) are booted per adapter in
+  // checks-corpus.mjs. No connection detail may appear beside the booleans.
+  const corpus = health.body?.corpus ?? null
+  recorder.record(
+    'health reports the compatibility corpus mode',
+    health.status === 200 &&
+      corpus?.colocated === true &&
+      corpus?.readOnly === false &&
+      !JSON.stringify(health.body).includes('postgres://'),
+    `corpus=${JSON.stringify(corpus)}`,
+    { corpus },
+  )
+
   const meBearer = await getJson(`${origin}/api/me`, ids.sessionToken)
   recorder.record(
     'bearer session authenticates /api/me',
@@ -214,6 +229,43 @@ export async function checkRequestLimits(ctx) {
     'JSON body over 48 KiB is 413',
     oversizedJson.status === 413,
     `status=${oversizedJson.status}`,
+  )
+
+  // The size gate, from under it: a body below DOCUMENT_UPLOAD_MAX_BYTES must
+  // pass the 413 gate and reach content validation, or the cap boundary is not
+  // where the code says it is. The bytes are not a DOCX, so a non-413
+  // rejection from validation is the expected outcome, and its status is
+  // recorded for the cross-runtime parity comparison.
+  const underBoundary = `----obiterapi${Date.now()}under`
+  const underCap = multipartBody({
+    boundary: underBoundary,
+    fields: { filename: 'under-cap.docx', fileType: 'docx' },
+    file: {
+      filename: 'under-cap.docx',
+      contentType: DOCX_CONTENT_TYPE,
+      content: Buffer.alloc(24 * 1024 * 1024, 0x42),
+    },
+  })
+  const underCapUpload = await rawRequest({
+    port,
+    path: `/api/matters/${ids.matterId}/documents`,
+    method: 'POST',
+    headers: {
+      ...bearer(ids.sessionToken),
+      'Content-Type': `multipart/form-data; boundary=${underBoundary}`,
+      'Content-Length': String(underCap.byteLength),
+    },
+    body: underCap,
+    timeoutMs: 40_000,
+  })
+  const healthAfterUnderCap = await getJson(`${origin}/api/health`)
+  recorder.record(
+    'a multipart body under the 25 MiB cap passes the size gate',
+    underCapUpload.status !== 413 &&
+      underCapUpload.status !== 0 &&
+      healthAfterUnderCap.status === 200,
+    `status=${underCapUpload.status} bytes=${underCap.byteLength} healthAfter=${healthAfterUnderCap.status}; content validation answers separately`,
+    { underCapStatus: underCapUpload.status },
   )
 
   const boundary = `----obiterapi${Date.now()}`

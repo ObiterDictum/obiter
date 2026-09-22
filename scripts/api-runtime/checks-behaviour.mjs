@@ -370,11 +370,56 @@ async function checkInference(ctx) {
   )
 }
 
+async function checkSearchRoutes(ctx) {
+  const { origin, recorder } = ctx
+  recorder.group('search routes')
+
+  // Public by product policy (no session), bounded timeout, live probe of both
+  // product indexes. The response may report ready/empty/missing/unreachable;
+  // what must hold is the 200 envelope with no database or credential detail.
+  const readiness = await getJson(`${origin}/api/search/readiness`)
+  const readinessText = JSON.stringify(readiness.body ?? null)
+  recorder.record(
+    'readiness probes the index without leaking connection details',
+    readiness.status === 200 &&
+      typeof readiness.body?.index === 'string' &&
+      !readinessText.includes('postgres://') &&
+      !readinessText.includes('harness-meili'),
+    `status=${readiness.status} index=${readiness.body?.index ?? 'none'} statusValue=${readiness.body?.status ?? 'none'}`,
+    { readinessStatus: readiness.body?.status ?? null },
+  )
+
+  // Anonymous fetch is stored-only by product policy: it must not queue
+  // hydration or call the provider, so this can never write the corpus or the
+  // index. 200 with the fetch envelope when the index answers; the documented
+  // 503 search_unavailable when it does not (the harness runs with placeholder
+  // keys against whatever engine is local, and CI's Bun job has no engine).
+  // The observed status is recorded for the cross-runtime parity comparison.
+  const fetchSearch = await fetch(`${origin}/api/search/fetch`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: 'R (2021) UKSC 1' }),
+    signal: AbortSignal.timeout(20_000),
+  })
+  const fetchBody = await fetchSearch.json().catch(() => null)
+  const contract =
+    fetchSearch.status === 200 ||
+    (fetchSearch.status === 503 &&
+      fetchBody?.error?.code === 'search_unavailable')
+  recorder.record(
+    'an anonymous search fetch answers the contract',
+    contract,
+    `status=${fetchSearch.status} code=${fetchBody?.error?.code ?? 'none'}`,
+    { searchFetchStatus: fetchSearch.status },
+  )
+}
+
 export async function runBehaviourChecks(ctx) {
   await checkDatabaseTransactions(ctx)
   await checkUploadAndStreaming(ctx)
   await checkKeepAlive(ctx)
   await checkVerification(ctx)
+  await checkSearchRoutes(ctx)
   await checkInference(ctx)
   return ctx.recorder.results
 }

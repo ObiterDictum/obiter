@@ -110,6 +110,12 @@ export function childEnvironment({
     MEILISEARCH_ADMIN_API_KEY: MEILI_KEY,
     LEGAL_AUTHORITIES_INDEX: 'legal_authorities',
     OBITER_STORAGE_ROOT: storageRoot,
+    // Deterministic compatibility mode for the main run: an ambient
+    // CORPUS_* from the developer's shell must not silently change the mode
+    // under test (an empty value reads as unset at the environment boundary).
+    // The corpus-mode boots override these explicitly.
+    CORPUS_DATABASE_URL: '',
+    CORPUS_WRITE_DATABASE_URL: '',
     ...(rampartCacheDir ? { OBITER_RAMPART_CACHE_DIR: rampartCacheDir } : {}),
   }
 }

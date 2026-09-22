@@ -52,6 +52,9 @@ failure (bad database, no Bun, no database URL).
   write. `--allow-database` is the explicit override.
 - **Ports.** Each server gets an OS-allocated ephemeral port. The shared
   `3000`/`8787` and the lane ports `3001-3004`/`8788-8791` are refused.
+- **Corpus variables.** The corpus-mode boots point `CORPUS_DATABASE_URL` and
+  `CORPUS_WRITE_DATABASE_URL` at the same task-owned database, so a writer
+  capability, when asserted, can only land on this task's data.
 - **Fixtures.** Two synthetic tenants, one session each and one matter each,
   tagged with a per-run tag. Nothing is deleted: audit rows are history and the
   harness never removes them, and storage lives under a temporary directory
@@ -70,8 +73,9 @@ route, and that no session token reaches the logs.
 anonymous upload, upload into another tenant's matter, and proof the other
 tenant can still read its own matter.
 
-`request limits` — 48 KiB JSON cap and 25 MiB multipart cap answer 413, and
-malformed/truncated multipart do not take the server down.
+`request limits` — a 24 MiB multipart body passes the size gate (the cap
+boundary is where the code says it is), 48 KiB JSON and 27 MiB multipart answer
+413, and malformed/truncated multipart do not take the server down.
 
 `database` — six concurrent creates all commit and Postgres sees all six; a
 rejected write commits nothing; a failed upload leaves no document row.
@@ -83,6 +87,22 @@ body, and a mid-download disconnect does not kill the server.
 `keep-alive` — 12 authenticated requests reuse at most two sockets.
 
 `verification` — a run executes and its findings are readable.
+
+`search routes` — `/api/search/readiness` answers 200 with no database or
+credential detail, and an anonymous stored-only `POST /api/search/fetch`
+answers the contract: the fetch envelope, or the documented 503
+`search_unavailable` when the engine is unreachable (the harness holds no real
+search key, and CI's Bun job runs no engine). The observed status is compared
+across the two runtimes.
+
+`corpus modes` — the main run asserts the compatibility mode (no corpus
+variables: colocated, writable). Two extra boots per adapter assert an explicit
+read-only corpus (`colocated:false, readOnly:true`) and a dedicated writer
+(`colocated:false, readOnly:false`), each serving a proved session, and one
+boot asserts that a corpus writer without a reader refuses to start. The corpus
+URLs always name this task's own database, so no boot touches a shared corpus;
+pool routing and the no-fallback rules are proven by the unit suites
+(`database-pools`, `env-corpus`, `proxy-routes`).
 
 `native inference` — a redaction run reports `model+supplement`, so detection
 exercised the ONNX model rather than the heuristics fallback.

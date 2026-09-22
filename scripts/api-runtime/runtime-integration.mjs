@@ -55,6 +55,7 @@ import {
   waitForHealth,
   waitForLog,
 } from './lifecycle.mjs'
+import { runCorpusModeChecks } from './checks-corpus.mjs'
 import { createRecorder, printReport } from './report.mjs'
 import { runShutdownCheck } from './shutdown-check.mjs'
 
@@ -127,6 +128,20 @@ async function runRuntime({
       recorder,
       expectedBytes: fixture.bytes,
     })
+
+    // The main run proved the compatibility corpus mode; these boots prove the
+    // configured modes on this adapter. They start their own servers on fresh
+    // ports after the main server has drained, so nothing overlaps.
+    await runCorpusModeChecks({
+      runtime,
+      worktreeRoot: WORKTREE_ROOT,
+      bunBin: args.bunBin,
+      databaseUrl,
+      storageRoot,
+      rampartCacheDir,
+      ids,
+      recorder,
+    })
   } catch (error) {
     bootError = error
   }
@@ -161,28 +176,48 @@ async function runRuntime({
  */
 function parityFailures(results) {
   if (results.length < 2) return []
-  const observed = (checks) =>
-    checks.find((check) =>
-      check.name.startsWith('malformed and truncated multipart'),
-    )?.observed
-  const malformed = results.map((result) => ({
-    runtime: result.runtime,
-    value: observed(result.checks),
-  }))
-  const [first, second] = malformed
+  const [first, second] = results
+  const observedFor = (result, checkPrefix) =>
+    result.checks.find((check) => check.name.startsWith(checkPrefix))?.observed
+  const failures = []
+
+  // The malformed-multipart statuses are a pre-existing defect (board P1.41):
+  // agreement is the assertion, never a specific status.
+  const malformedA = observedFor(first, 'malformed and truncated multipart')
+  const malformedB = observedFor(second, 'malformed and truncated multipart')
   if (
-    first?.value &&
-    second?.value &&
-    (first.value.malformedBoundaryStatus !==
-      second.value.malformedBoundaryStatus ||
-      first.value.truncatedMultipartStatus !==
-        second.value.truncatedMultipartStatus)
+    malformedA &&
+    malformedB &&
+    (malformedA.malformedBoundaryStatus !==
+      malformedB.malformedBoundaryStatus ||
+      malformedA.truncatedMultipartStatus !==
+        malformedB.truncatedMultipartStatus)
   ) {
-    return [
-      `malformed multipart differs: ${JSON.stringify(first)} vs ${JSON.stringify(second)}`,
-    ]
+    failures.push(
+      `malformed multipart differs: ${JSON.stringify(malformedA)} vs ${JSON.stringify(malformedB)}`,
+    )
   }
-  return []
+
+  // One application behind two sockets: where a status is recorded for both
+  // runtimes it must be identical, whether or not the value itself is the one
+  // a given environment expects (search answers 503 without a reachable
+  // index; content validation rejects the under-cap non-DOCX body).
+  for (const key of ['searchFetchStatus', 'underCapStatus']) {
+    const valueOf = (result) => {
+      const observed = result.checks.find(
+        (check) => check.observed?.[key],
+      )?.observed
+      return observed ? observed[key] : undefined
+    }
+    const a = valueOf(first)
+    const b = valueOf(second)
+    if (a !== undefined && b !== undefined && a !== b) {
+      failures.push(
+        `${key} differs: ${first.runtime}=${a} ${second.runtime}=${b}`,
+      )
+    }
+  }
+  return failures
 }
 
 function assertBunRunnable(bunBin) {

@@ -46,6 +46,23 @@ Development requires `BETTER_AUTH_SECRET` in the environment (for example via a 
 
 Sign-up is public and self-serve (via `/sign-up/email` and the app's "Create account" mode). There are no seed scripts and no seeded accounts — every account, including the first one in a fresh environment, is created by registering through the app. Registration creates an org-less user; the user then explicitly creates an organisation via `POST /api/organisations` and becomes its `owner` at that point.
 
+## Runtime Entry Points
+
+One application, two adapters, selected by entry point (see
+`docs/specs/deployment.md` for the full runtime, limits and rollback section):
+
+- `src/server-bun.ts` — native `Bun.serve`; the default image target
+  (`services/api/Dockerfile`, Bun pinned in `.bun-version`).
+- `src/server.ts` — `@hono/node-server`; the tested rollback, selected with
+  `docker build --target runtime-node` or by running this file directly.
+
+Both call `createApiRuntime()` (`src/runtime.ts`), which owns the environment,
+fail-closed migrations, the database and corpus pools, and the non-blocking
+index and model warm-ups. `GET /api/health` reports which adapter answered as
+`runtime: 'bun' | 'node'`. The image installs ONNX Runtime CPU-only through the
+repo-root `.npmrc`. No automatic activation: switching the production runtime
+is a separate, authorised rollout decision.
+
 ## Deploying Only This API
 
 Deploy `@obiter/api` as its own service. Do not use the root `pnpm build` or a product web start command for the API service, because those target the whole monorepo.
