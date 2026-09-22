@@ -175,7 +175,10 @@ it does not tidy failing cases out of the set.
 
 `scripts/ci-local.sh` runs the same gates as `.github/workflows/ci.yml` in the
 same order (`install` → `typecheck` → `format:check` → `lint` → `test` →
-`benchmark:search`). It has been verified green on this machine.
+`benchmark:search` → `bun:api-runtime`). The last one starts the real API under
+native `Bun.serve` and the Node rollback entry point; it needs the Bun version
+`bun-version` pins (`BUN_BIN` overrides the PATH lookup). It has been verified
+green on this machine.
 
 Matching gates is not matching environments: the mirror failed closed without
 fontconfig and Liberation faces from 28 August while the pipeline installed

@@ -56,9 +56,17 @@ interface AppVariables {
   session: SessionRecord | null
 }
 
+/** The adapter serving the app, declared by the entry point that built it. */
+export type ApiRuntimeKind = 'node' | 'bun'
+
 interface ApiAppOptions {
   auth?: Auth
   storage?: StorageService
+  /**
+   * The adapter serving this app, declared by the entry point that built it.
+   * Omitted by tests that build the app directly, so health stays minimal.
+   */
+  runtime?: ApiRuntimeKind
   /**
    * Legal-corpus access. Omitted in the default configuration, where the
    * corpus is the application database and reads and writes both use `pool`.
@@ -257,6 +265,11 @@ export function createApiApp(
     const health = {
       status: 'ok' as const,
       service: 'obiter-api' as const,
+      // Reported only when an entry point declared it, so a test that builds
+      // the app directly keeps the minimal body. This is what lets a canary or
+      // an integration check confirm which adapter answered rather than
+      // inferring it from a process name.
+      ...(options.runtime ? { runtime: options.runtime } : {}),
       // The corpus access mode: whether corpus reads share the application pool
       // (`colocated`, the compatibility default) and whether this process may
       // write the corpus. `colocated: true` means no separate corpus target was
