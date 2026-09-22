@@ -50,3 +50,6 @@ temp/
 .oxlintrc.json
 .prettierrc.json
 .agents/
+
+# Local document storage must never enter a Docker build context.
+**/.obiter-storage

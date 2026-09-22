@@ -1,5 +1,11 @@
 name: CI
 
+# Minimal token permissions: nothing here writes to the repository. This also
+# answers the CodeQL "Workflow does not contain permissions" finding raised on
+# this pull request's workflow changes.
+permissions:
+  contents: read
+
 on:
   # Deliberately unfiltered by base branch. Stacked PRs target the branch below
   # them rather than dev, so a `branches:` filter here silently gives every
@@ -172,13 +178,90 @@ jobs:
           path: ${{ runner.temp }}/search-benchmark.json
           if-no-files-found: ignore
 
+  # Native Bun serving is a second runtime, not a substitute for the Node
+  # suite above: vitest under Node says nothing about the server that ships.
+  # This job starts the real Bun.serve entry point (and the Node rollback
+  # entry point) against its own Postgres and drives
+  # scripts/api-runtime/runtime-integration.mjs over HTTP. The Bun version is
+  # pinned by .bun-version, and jsdom-free because the harness is plain Node.
+  bun-api:
+    name: Bun API runtime integration
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: obiter
+          POSTGRES_PASSWORD: obiter
+          POSTGRES_DB: obiter_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U obiter -d obiter_test"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      # The pin lives in .bun-version so the image, CI and a developer machine
+      # cannot disagree about which Bun is reviewed and supported.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+
+      - name: Bun version
+        run: bun --version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The API applies its own migrations at startup behind an advisory lock,
+      # which is the production path and what this job should exercise. Applying
+      # them here with psql -f first would leave schema_migrations empty and make
+      # the API re-run migrations that are not idempotent. psql itself is still
+      # needed: the harness provisions fixtures through scripts/load/psql.mjs.
+      - name: Install harness prerequisites
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+          # The harness generates genuine python-docx fixtures through
+          # scripts/load/make-upload-fixtures.py. Ubuntu 24.04 marks the system
+          # Python externally managed, hence the explicit flag.
+          python3 -m pip install --break-system-packages python-docx
+
+      # Starts both entry points on their own ports against obiter_test and
+      # asserts auth, tenancy, body limits, transactions, streaming,
+      # verification, native CPU inference and bounded SIGTERM shutdown. The
+      # harness prefetches the detection model into a task-owned cache first.
+      - name: API runtime integration (Bun and Node rollback)
+        env:
+          TEST_DATABASE_URL: postgres://obiter:obiter@localhost:5432/obiter_test
+        run: |
+          node scripts/api-runtime/runtime-integration.mjs \
+            --runtime both \
+            --database-url "$TEST_DATABASE_URL" \
+            --json-out "$RUNNER_TEMP/api-runtime-integration.json"
+
+      - name: Upload runtime integration report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-runtime-integration
+          path: ${{ runner.temp }}/api-runtime-integration.json
+          if-no-files-found: ignore
+
   # Deployable images build only on pushes to main (the release branch).
   # dev is the integration branch; promote dev -> main to cut a deploy.
-  #
-  # Currently only the web app has a Dockerfile. The API image is deferred
-  # (docs/specs/deployment.md); add a docker-api job here when its Dockerfile
-  # lands. Marketing lives in its own repo; desktop ships as Electron
-  # installers, not server images.
+  # Both server images build here: apps/web, and services/api below (Bun
+  # default target plus the Node rollback target). Marketing lives in its own
+  # repo; desktop ships as Electron installers, not server images.
   docker-web:
     name: Build web image
     if: github.event_name == 'push'
@@ -201,3 +284,24 @@ jobs:
             --build-arg OBITER_BUILD_COMMIT="$GITHUB_SHA" \
             --build-arg OBITER_BUILD_DIRTY=0 \
             .
+
+  # Both API adapters are built from one Dockerfile. Bun is the default target
+  # (last stage); the Node rollback is the same application code behind
+  # --target runtime-node. The build stage is shared, so the second target
+  # reuses its layers. Push-only for the same cost reason as docker-web, but
+  # the Bun target is also build-verified locally before this PR is raised.
+  docker-api:
+    name: Build API images
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build Bun API image (default target)
+        run: docker build -f services/api/Dockerfile -t obiter-api-bun:ci .
+
+      - name: Build Node API image (rollback target)
+        run: |
+          docker build -f services/api/Dockerfile --target runtime-node -t obiter-api-node:ci .
