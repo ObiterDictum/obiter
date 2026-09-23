@@ -6108,11 +6108,17 @@
                 event loop: one medium document used to hold the loop for about
                 four seconds, which timed out in-flight searches and served
                 false <code>search_unavailable</code> responses. The pool runs
-                at most two workers and queues nothing; a caller waits for a
-                free slot, a failed worker is dropped and replaced, and both
-                entry points terminate the pool inside their existing drain.
-                Storage, database, authorisation and audit work stay on the
-                loop.</span
+                at most two workers; a caller whose workers are all busy parks
+                in a FIFO of waiting callers, capped at sixteen, each holding
+                only the payload its own in-flight request already read, and a
+                caller beyond the cap fails with the curated store error. Each
+                dispatched task has a ten-minute deadline, after which the
+                non-responding worker is terminated, its caller settles once and
+                later work proceeds; a failed worker is dropped and replaced, a
+                synchronous spawn failure is contained inside the pool rather
+                than the process, and both entry points terminate the pool
+                inside their existing drain. Storage, database, authorisation
+                and audit work stay on the loop.</span
               >
             </li>
             <li>
