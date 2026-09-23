@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { exitOnStartupFailure, installGracefulShutdown } from './lifecycle'
+import { closeDocumentModelWorkers } from './document-model-pool'
 import { createApiRuntime } from './runtime'
 
 /**
@@ -106,7 +107,11 @@ async function main() {
     // stop(false) stops accepting and settles once in-flight requests finish;
     // stop(true) would kill them, which is what the deadline exists for.
     stopAccepting: () => server.stop(false),
-    closeResources: () => pools.close(),
+    closeResources: async () => {
+      // The document-model workers are process-owned resources like the
+      // pools: a drain must not leave threads behind holding the process.
+      await Promise.all([pools.close(), closeDocumentModelWorkers()])
+    },
     pendingCount: () => server.pendingRequests,
   })
 }

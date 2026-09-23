@@ -1,18 +1,11 @@
-import type {
-  DocumentModelWire,
-  DocumentNumberingWire,
-} from '@obiter/contracts'
-import {
-  OoxmlError,
-  parseDocx,
-  parseModelJson,
-  serialiseModelJson,
-} from '@obiter/ooxml'
+import type { DocumentModelWire } from '@obiter/contracts'
 import {
   DocumentArtifactStoreError,
   validateAndDeriveDocumentObjectKey,
 } from './document-artifact-store'
 import type { DocumentVersionRecord } from './database'
+import { runDocumentModelTask } from './document-model-pool'
+import type { DocumentModelTaskResult } from './document-model-pool'
 import type { StorageService } from './storage'
 
 type DocumentModelSource = Pick<
@@ -54,6 +47,13 @@ export async function getDocumentModel(
   }
 }
 
+/**
+ * Storage reads and writes stay here, on the serving loop's async side; every
+ * synchronous parse and validation of the model runs on the bounded document
+ * model worker pool (`document-model-pool.ts`). A medium document used to
+ * hold this loop hostage for four seconds inflating and parsing its OOXML
+ * package, which is what timed out in-flight searches and served false 503s.
+ */
 async function readOrGenerateModel(
   storage: StorageService,
   sourceObjectKey: string,
@@ -67,56 +67,35 @@ async function readOrGenerateModel(
   }
 
   if (cachedJson !== null) {
+    let cached: DocumentModelTaskResult
     try {
-      if (cachedModelNeedsRegeneration(cachedJson)) {
-        throw new OoxmlError('invalid-model-json')
-      }
-      return parseModelJson(cachedJson)
-    } catch (error) {
-      if (
-        !(error instanceof OoxmlError) ||
-        error.code !== 'invalid-model-json'
-      ) {
-        throw new DocumentModelStoreError()
-      }
+      cached = await runDocumentModelTask({ kind: 'parse', json: cachedJson })
+    } catch {
+      // A worker that dies mid-task is a model-load failure to every caller,
+      // exactly like a parser failure inside the worker; it must not escape
+      // as a raw thread error past the curated store error.
+      throw new DocumentModelStoreError()
     }
+    if (cached.status === 'ok') return cached.model
+    if (cached.status === 'failed') throw new DocumentModelStoreError()
+    // 'invalid': the cached model is unusable or from an older layout, so the
+    // stored source regenerates it exactly as an absent cache would.
   }
 
   try {
     if (!storage.readBinary) throw new DocumentModelStoreError()
     const source = await storage.readBinary(sourceObjectKey)
-    const json = serialiseModelJson(await parseDocx(source))
-    await storage.writeText(modelObjectKey, json)
-    return parseModelJson(json)
+    const generated = await runDocumentModelTask({
+      kind: 'generate',
+      bytes: source,
+    })
+    if (generated.status !== 'ok' || generated.json === null) {
+      throw new DocumentModelStoreError()
+    }
+    await storage.writeText(modelObjectKey, generated.json)
+    return generated.model
   } catch {
     throw new DocumentModelStoreError()
-  }
-}
-
-interface CachedModelProbe {
-  changes?: unknown
-  numbering?: DocumentNumberingWire[]
-}
-
-function cachedModelNeedsRegeneration(json: string) {
-  try {
-    const value: unknown = JSON.parse(json)
-    if (typeof value !== 'object' || value === null) return false
-    if (!Object.hasOwn(value, 'changes')) return true
-    // SAFETY: storage JSON is DocumentModelWire from our own serialization; probe numbering via named CachedModelProbe interface, outside Zod schema, validated by subsequent array check
-    const probe = value as CachedModelProbe
-    const numbering = probe.numbering
-    if (!Array.isArray(numbering)) return false
-    return numbering.some(
-      (item) =>
-        typeof item === 'object' &&
-        item !== null &&
-        Object.hasOwn(item, 'numberingId') &&
-        !Object.hasOwn(item, 'levels'),
-    )
-  } catch {
-    // Defer malformed JSON to parseModelJson and its curated invalid-model path.
-    return false
   }
 }
 

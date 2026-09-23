@@ -6100,6 +6100,29 @@
             </li>
             <li>
               <span
+                ><b>Heavy document-model parsing runs on worker threads.</b> The
+                synchronous OOXML inflate, XML parse and model schema validation
+                inside <code>getDocumentModel</code> execute on the bounded
+                document-model worker pool
+                (<code>document-model-pool.ts</code>), never on the serving
+                event loop: one medium document used to hold the loop for about
+                four seconds, which timed out in-flight searches and served
+                false <code>search_unavailable</code> responses. The pool runs
+                at most two workers; a caller whose workers are all busy parks
+                in a FIFO of waiting callers, capped at sixteen, each holding
+                only the payload its own in-flight request already read, and a
+                caller beyond the cap fails with the curated store error. Each
+                dispatched task has a ten-minute deadline, after which the
+                non-responding worker is terminated, its caller settles once and
+                later work proceeds; a failed worker is dropped and replaced, a
+                synchronous spawn failure is contained inside the pool rather
+                than the process, and both entry points terminate the pool
+                inside their existing drain. Storage, database, authorisation
+                and audit work stay on the loop.</span
+              >
+            </li>
+            <li>
+              <span
                 ><b>Primitives import nothing internal.</b>
                 <code>contracts</code>, <code>legal-schema</code>,
                 <code>ui</code> and <code>database</code> are leaves. This is
@@ -6428,6 +6451,10 @@
                     in the API process, matching today's redaction pattern.
                     Queue payloads are not used. A later slice can move the same
                     tables onto a worker without changing the run contract.
+                    Model loading inside that request-scoped execution already
+                    runs on a bounded in-process worker pool
+                    (<code>document-model-pool.ts</code>) so the serving event
+                    loop stays free; the run contract did not change.
                   </td>
                   <td class="id">docs/specs/verify/implementation.md</td>
                 </tr>

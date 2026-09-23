@@ -1,5 +1,6 @@
 import { serve } from '@hono/node-server'
 import { exitOnStartupFailure, installGracefulShutdown } from './lifecycle'
+import { closeDocumentModelWorkers } from './document-model-pool'
 import { createApiRuntime } from './runtime'
 
 /**
@@ -43,7 +44,11 @@ async function main() {
         // type exposes this, and this adapter only ever serves HTTP/1.
         if ('closeIdleConnections' in server) server.closeIdleConnections()
       }),
-    closeResources: () => pools.close(),
+    closeResources: async () => {
+      // The document-model workers are process-owned resources like the
+      // pools: a drain must not leave threads behind holding the process.
+      await Promise.all([pools.close(), closeDocumentModelWorkers()])
+    },
     pendingCount: () =>
       new Promise<number | null>((resolve) =>
         server.getConnections((error, count) => resolve(error ? null : count)),
