@@ -25,6 +25,13 @@ persists `verification_runs` / `verification_findings`, and renders findings in
 the shared app shell. Execution is request-scoped in this slice (no BullMQ
 worker). Report export remains V6.
 
+Model loading (package inflate, XML parse, model schema validation) runs on a
+bounded in-process worker pool (`document-model-pool.ts`) rather than on the
+serving event loop, because one medium document held the loop for about four
+seconds and timed out concurrent stored searches into false 503s. The pool runs
+at most two workers, queues nothing, and is terminated inside both entry
+points' existing drain; every other part of the run stays request-scoped.
+
 ## Extraction coverage
 
 V5 traverses every in-scope legal drafting story: the main document, footnotes
