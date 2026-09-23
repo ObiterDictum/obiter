@@ -141,7 +141,11 @@ export class DocumentModelWorkerPool {
         this.dispatch(free, waiter)
         continue
       }
-      if (this.slots.length >= this.maxWorkers) return
+      // Spawn only for work that is actually waiting and unclaimed: a second
+      // worker exists because two loads contend, never just because one did.
+      if (this.waiting.length === 0 || this.slots.length >= this.maxWorkers) {
+        return
+      }
       this.attach(this.spawnWorker())
     }
   }
