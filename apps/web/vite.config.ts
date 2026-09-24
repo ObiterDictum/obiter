@@ -21,7 +21,7 @@ export default defineConfig(({ command, mode }) => {
   // NODE_ENV=development (a shell, a CI job, or a tool wrapping the build) would
   // therefore compile the development runtime into the bundle; refuse before
   // any output is written rather than producing a misleading artifact. The
-  // Docker build stage sets no NODE_ENV, and neither does `pnpm build`.
+  // Docker build stage sets no NODE_ENV, and neither does `bun run build`.
   if (
     isBuild &&
     process.env.NODE_ENV &&

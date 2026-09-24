@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import type { Span as RampartSpan } from '@obiter/rampart-inference'
 import { createRedactionDetector, detectionMode } from './redaction-detection'
 

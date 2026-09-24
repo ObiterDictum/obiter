@@ -4,13 +4,15 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/server.ts",
+    "dev": "bun --watch src/server-bun.ts",
     "dev:bun": "bun --watch src/server-bun.ts",
     "build": "tsc --noEmit -p tsconfig.json",
-    "start": "tsx src/server.ts",
+    "start": "bun src/server-bun.ts",
     "start:bun": "bun src/server-bun.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
+    "test": "bun test --isolate --preload ../../scripts/test/vitest-compat.ts",
+    "dev:node": "tsx watch src/server.ts",
+    "start:node": "tsx src/server.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.0.0",

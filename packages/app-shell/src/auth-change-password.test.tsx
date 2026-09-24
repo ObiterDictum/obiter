@@ -1,9 +1,9 @@
-// @vitest-environment jsdom
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import '@obiter/test-dom'
+import { beforeEach, describe, expect, it, mock as bunMock } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 import { act, renderHook } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
-import { useAuth } from './auth'
 
 /**
  * `useAuth().changePassword`. Split out of `auth.test.tsx` so the password
@@ -20,7 +20,7 @@ const mock = vi.hoisted(() => ({
   refetch: vi.fn(),
 }))
 
-vi.mock('better-auth/react', () => ({
+bunMock.module('better-auth/react', () => ({
   createAuthClient: () => ({
     useSession: mock.useSession,
     signIn: { email: mock.signInEmail },
@@ -31,11 +31,16 @@ vi.mock('better-auth/react', () => ({
   }),
 }))
 
-vi.mock('better-auth/client/plugins', () => ({
+bunMock.module('better-auth/client/plugins', () => ({
   magicLinkClient: () => ({}),
 }))
 
 const { changePasswordFn, useSession, refetch } = mock
+
+// auth.ts captures createAuthClient at module scope, so it must evaluate
+// after the registrations above (bun does not hoist mock.module the way
+// vi.mock was hoisted).
+const { useAuth } = await import('./auth')
 
 function createWrapper(client: QueryClient) {
   return function Wrapper({ children }: { children: ReactNode }) {

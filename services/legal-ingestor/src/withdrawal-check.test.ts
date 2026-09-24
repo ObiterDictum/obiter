@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 import {
   combineUriChecks,
   classifyUriResponse,
@@ -71,7 +72,7 @@ function fetchMap(entries: Record<string, Response | Error>) {
     if (result instanceof Error) throw result
     if (result) return result
     throw new Error(`unstubbed fetch ${String(url)}`)
-  }) as typeof fetch
+  }) as unknown as typeof fetch
 }
 
 const notFoundPage = new Response('Page not found - Find Case Law', {
@@ -218,7 +219,7 @@ describe('runWithdrawalCheck', () => {
         init?.signal?.addEventListener('abort', () =>
           reject(new DOMException('The operation timed out', 'TimeoutError')),
         )
-      })) as typeof fetch
+      })) as unknown as typeof fetch
     const { deps, queries } = setup([storedRow()], hanging)
 
     const report = await runWithdrawalCheck(deps)
@@ -449,7 +450,9 @@ describe('runWithdrawalCheck', () => {
   })
 
   it('never fetches off-origin absolute URIs and treats them as inconclusive', async () => {
-    const fetchImpl = vi.fn(async () => okPage.clone()) as typeof fetch
+    const fetchImpl = vi.fn(async () =>
+      okPage.clone(),
+    ) as unknown as typeof fetch
     const { deps, queries } = setup(
       [
         {
@@ -478,7 +481,7 @@ describe('runWithdrawalCheck', () => {
         status: 301,
         headers: { location: 'https://caselaw.nationalarchives.gov.uk/live' },
       })
-    }) as typeof fetch
+    }) as unknown as typeof fetch
     const { deps, queries } = setup([storedRow()], fetchImpl)
 
     const report = await runWithdrawalCheck(deps)

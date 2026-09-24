@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { createTestPool } from './test-database.test-support'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { createApiApp } from './app'
 import type { createAuth } from './auth'
 import { createTestApiEnv } from './test-api-env'

@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'bun:test'
+import { vi } from '../../../../../scripts/test/vitest-compat'
 import { resolveLegislationActPage } from './legislation-act'
 import type { LegislationServeDeps } from './legislation-serve'
 

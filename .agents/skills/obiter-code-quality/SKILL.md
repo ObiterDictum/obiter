@@ -156,7 +156,7 @@ would have caught the bug.
 **6. Gates.** Run them and keep the output:
 
 ```bash
-pnpm typecheck && pnpm test && pnpm format:check && pnpm lint
+bun run typecheck && bun run test && bun run format:check && bun run lint
 ```
 
 **7. Registry pass.** Check your change against

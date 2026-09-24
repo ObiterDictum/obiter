@@ -1,5 +1,5 @@
 import JSZip from 'jszip'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import type { DocumentEditOperation } from '@obiter/contracts'
 
 import { buildOoxmlFixture } from '../fixtures/builder'

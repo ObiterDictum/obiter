@@ -6,7 +6,7 @@ Status: planned (July 2026). PostgreSQL 16 already runs on the Hetzner VPS under
 
 - **Database**: running on the server (Dokploy). Local dev expects `postgres://obiter:obiter@localhost:5432/obiter` (default in `services/api/src/env.ts`).
 - **Web Dockerfile exists** at `apps/web/Dockerfile` (added in the app shell rebuild M3), with a dependency-free SSR host (`apps/web/serve.mjs`) and a repo-root `.dockerignore`. It has been `docker build`-verified locally: a build with `--build-arg OBITER_BUILD_COMMIT=<sha> --build-arg OBITER_BUILD_DIRTY=0` produces an image whose `apps/web/dist/.obiter-build.json` names that commit with `dirty: false`, and the image's `serve.mjs` serves the same marker at `/.well-known/obiter-build` (with `OBITER_BUILD_PROVENANCE=1`). See the Implementation section below.
-- **API Dockerfile** exists at `services/api/Dockerfile`, delivered with the Bun runtime work below. Migrations in `packages/database/migrations/*.sql` are applied by `pnpm db:migrate` (`services/api/src/migrate.ts`, tracked in `schema_migrations`) and at API startup; the server schema is no longer applied manually.
+- **API Dockerfile** exists at `services/api/Dockerfile`, delivered with the Bun runtime work below. Migrations in `packages/database/migrations/*.sql` are applied by `bun run db:migrate` (`services/api/src/migrate.ts`, tracked in `schema_migrations`) and at API startup; the server schema is no longer applied manually.
 - `apps/web` is a TanStack Start app — it has an SSR server component, so it deploys as a Node service, not a static bundle.
 - Auth is better-auth with cookie sessions, which constrains routing (below).
 
@@ -26,7 +26,7 @@ Three Dokploy applications on the existing VPS, plus the existing database:
 
 ### Migration runner — owned by the Redact track (first to need it)
 
-`services/api/src/migrate.ts`: applies `packages/database/migrations/*.sql` in filename order, tracked in a `schema_migrations` table (filename + applied_at), idempotent, each file in its own transaction, stops at the first failure naming the file. Wired as `pnpm db:migrate --database-url=<url>` (the URL must be passed explicitly — no default — so the wrong database is never migrated by accident). The API runs it at startup behind a Postgres advisory lock and refuses to start when migrations cannot be applied. Used identically for local dev, tests, and as the API container's pre-start step. The Redact agent needs this anyway to apply `0005_redaction.sql` repeatably.
+`services/api/src/migrate.ts`: applies `packages/database/migrations/*.sql` in filename order, tracked in a `schema_migrations` table (filename + applied_at), idempotent, each file in its own transaction, stops at the first failure naming the file. Wired as `bun run db:migrate --database-url=<url>` (the URL must be passed explicitly — no default — so the wrong database is never migrated by accident). The API runs it at startup behind a Postgres advisory lock and refuses to start when migrations cannot be applied. Used identically for local dev, tests, and as the API container's pre-start step. The Redact agent needs this anyway to apply `0005_redaction.sql` repeatably.
 
 ### API Dockerfile — delivered with the Bun runtime work
 
@@ -37,7 +37,7 @@ what remains true from the original plan:
 - `services/api/src/runtime.ts` runs migrations before the socket binds, so there
   is no separate pre-start step for the container.
 - The build stage copies the repo-root `.npmrc` before its
-  dependency-materialising pnpm command, so the CPU-only ONNX Runtime setting
+  dependency-materialising bun run command, so the CPU-only ONNX Runtime setting
   applies inside the image (the policy and the GPU opt-in are in the repo-root
   `.npmrc` note below; `services/api/src/rampart-install-config.test.ts` fails
   any workspace Dockerfile stage that materialises dependencies without it).
@@ -55,7 +55,7 @@ what remains true from the original plan:
   whole API down.
 - The model weights are baked into the image at `/opt/obiter/rampart-models`, so
   a fresh container needs no download. Mounting a volume over that path shadows
-  the baked weights; warm the volume with `pnpm prefetch:rampart` first.
+  the baked weights; warm the volume with `bun run prefetch:rampart` first.
 
 ### Web Dockerfile + Traefik routing — owned by the shell track (Milestone 3)
 
@@ -67,7 +67,7 @@ what remains true from the original plan:
 
 Artifacts shipped:
 
-- `apps/web/Dockerfile` — multi-stage Node 22 slim build. Corepack-enabled pnpm (pinned via the repo `packageManager` field) installs `@obiter/web` and its workspace deps with `--frozen-lockfile`, then `pnpm --filter @obiter/web build` produces `dist/client` (static assets) and `dist/server/server.js` (the SSR fetch handler). **Build invocation** from the **repo root** — the context must be the root because COPY paths span the workspace:
+- `apps/web/Dockerfile` — multi-stage build: a `FROM node` build stage (Node hosts third-party install scripts) with the pinned Bun copied in beside it runs `bun install --frozen-lockfile --filter @obiter/web`, then `bun --bun run --filter @obiter/web build` produces `dist/client` (static assets) and `dist/server/server.js` (the SSR fetch handler). The runtime stage is `oven/bun` and serves with `bun serve.mjs`. **Build invocation** from the **repo root** — the context must be the root because COPY paths span the workspace:
 
   ```sh
   docker build -f apps/web/Dockerfile -t obiter-web \
@@ -89,7 +89,7 @@ Artifacts shipped:
   - `BETTER_AUTH_URL` — consumed by the auth client (same-domain ⇒ site origin).
 - `apps/web/serve.test.mjs` — focused unit tests (Node's built-in `node:test` runner, no new dependency) for the pure helpers: `parsePort` (range/format), `resolveBaseUrl` (trusted-origin vs Host), and `applyResponseHeaders` (multiple Set-Cookie preservation, status line).
 - `apps/web/package.json` gains a `start` script (`node serve.mjs`) so the serve path is reproducible outside Docker too.
-- **Repo-root `.npmrc`** — install settings that the lockfile install depends on. It currently carries one: `onnxruntime-node-install-cuda=skip`, because `onnxruntime-node`'s postinstall would otherwise fetch the optional CUDA and TensorRT execution providers (onnxruntime-linux-x64-gpu, ~343 MB unpacked) on Linux x64. Every deployment runs detection on CPU, so the download is dead weight in every cold install, CI cache miss and image layer. **Any Dockerfile stage that runs a dependency-materialising pnpm command (`pnpm install`, `pnpm deploy`, `pnpm fetch`, `pnpm add`, `pnpm rebuild`) must copy the repo-root `.npmrc` into that stage before the command** (`apps/web/Dockerfile` and the API image, `services/api/Dockerfile`, both do); without it the setting is simply absent and the download returns. A GPU host overrides with `ONNXRUNTIME_NODE_INSTALL_CUDA=v12 pnpm rebuild onnxruntime-node`, not another `pnpm install`: pnpm replays the postinstall result the store already cached, so on a warm store the setting alone does nothing, and a store that cached the GPU form keeps placing the providers. Returning to CPU-only takes a fresh `node_modules` against a store with no GPU-cached postinstall (an isolated `--store-dir`); never edit the shared store. `pnpm-workspace.yaml` keeps `onnxruntime-node` in `onlyBuiltDependencies` either way: that allowlist entry is what lets the opt-in rebuild run at all, and it does not affect the CPU libraries, which ship inside the package tarball.
+- **Repo-root `.npmrc`** — install settings that the lockfile install depends on. It currently carries one: `onnxruntime-node-install-cuda=skip`, because `onnxruntime-node`'s postinstall would otherwise fetch the optional CUDA and TensorRT execution providers (onnxruntime-linux-x64-gpu, ~343 MB unpacked) on Linux x64. Every deployment runs detection on CPU, so the download is dead weight in every cold install, CI cache miss and image layer. **Any Dockerfile stage that runs a dependency-materialising bun run command (`bun install`, `bun run deploy`, `bun run fetch`, `bun run add`, `bun run rebuild`) must copy the repo-root `.npmrc` into that stage before the command** (`apps/web/Dockerfile` and the API image, `services/api/Dockerfile`, both do); without it the setting is simply absent and the download returns. A GPU host overrides with `ONNXRUNTIME_NODE_INSTALL_CUDA=v12 bun run rebuild onnxruntime-node`, not another `bun install`: bun run replays the postinstall result the store already cached, so on a warm store the setting alone does nothing, and a store that cached the GPU form keeps placing the providers. Returning to CPU-only takes a fresh `node_modules` against a store with no GPU-cached postinstall (an isolated `--store-dir`); never edit the shared store. `bun.lock` keeps `onnxruntime-node` in `onlyBuiltDependencies` either way: that allowlist entry is what lets the opt-in rebuild run at all, and it does not affect the CPU libraries, which ship inside the package tarball.
 - **Repo-root `.dockerignore`** — Docker consults only the `.dockerignore` at the build-context root, so all exclusions live here (including `**/.env*` so secrets are never baked into layers). `apps/web/.dockerignore` is a comment-only pointer, not protective, to avoid the trap of a nested file that looks effective but isn't.
 
 **Verification status:** `apps/web/serve.mjs` has been exercised against a local `vite build` output — it serves static assets (CSS/JS/PNG with correct content-types, large JS streamed through the Node core pipeline with backpressure) and SSR routes (`/search`, `/sign-in`) return 200; multiple `Set-Cookie` headers survive end-to-end as distinct lines; `PORT=abc` correctly falls back to 3000 with a warning. The `serve.test.mjs` suite (17 tests) is green. `docker build` has been run and verified: with the provenance build args the image marker names the built commit, without them it records `null` (served but not measurable), and a malformed commit fails the build.
@@ -136,7 +136,7 @@ point rather than an environment flag:
   the repo-root `.npmrc` note above). The Rampart model is prefetched into
   `/opt/obiter/rampart-models` at build time and `OBITER_RAMPART_CACHE_DIR`
   points there; mounting a volume over that path shadows the baked weights, so
-  warm the volume with `pnpm prefetch:rampart` first if you do.
+  warm the volume with `bun run prefetch:rampart` first if you do.
 
 **Startup, health and readiness.** `createApiRuntime()` validates the
 environment, applies migrations behind a Postgres advisory lock (and refuses to
@@ -197,4 +197,4 @@ The server database does **not** replace the local loop:
 
 - Agents develop against local Postgres (`infra/docker/compose.yaml`, shell track M1 task) — never against the server DB. An agent running migrations or seeds against the live database is the failure mode this rule exists to prevent.
 - Verification ladder: local run → typecheck/tests → **staging deploy on Dokploy** → milestone review. The Dokploy deploy is the integration proof (real domain, real cookies, real DB), not the development environment.
-- If a local environment cannot run Docker, the fallback is what the shell agent proposed: build, run typecheck/tests, and hand over exact `docker compose up` / `pnpm dev:api` / `pnpm dev:web` steps labelled unverified.
+- If a local environment cannot run Docker, the fallback is what the shell agent proposed: build, run typecheck/tests, and hand over exact `docker compose up` / `bun run dev:api` / `bun run dev:web` steps labelled unverified.

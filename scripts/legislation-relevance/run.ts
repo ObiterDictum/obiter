@@ -10,7 +10,7 @@
  * legislation corpus in Postgres. Run before and after any ranking change to
  * the legislation index, the provision serve path, or the relevance floor:
  *
- *   LEGISLATION_RELEVANCE_API_BASE=http://127.0.0.1:8789 pnpm benchmark:legislation-corpus
+ *   LEGISLATION_RELEVANCE_API_BASE=http://127.0.0.1:8789 bun run benchmark:legislation-corpus
  *
  * The suite reads the served path, not the raw index, so the citation
  * classification and the Postgres exact path are inside the measurement: a

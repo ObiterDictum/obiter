@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { Pool } from 'pg'
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'bun:test'
 import type { AuthzVariables } from '../authz'
 import type { StorageService } from '../storage'
 import type { RedactionRunRow } from '../redaction-database'

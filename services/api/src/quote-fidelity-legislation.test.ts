@@ -1,17 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
-import { checkQuoteFidelity, checkQuoteFidelities } from './quote-fidelity'
-import {
-  act,
-  caseLaw,
-  fakeQuotePool,
-  findings,
-  judgmentAuthority,
-  legislation,
-  outcomes,
-  rejections,
-  request,
-  type ActFixture,
-} from './quote-fidelity.test-support'
+import { describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 
 /**
  * The quote-fidelity store boundary for legislation, against an injected pool.
@@ -27,23 +15,60 @@ import {
  * boundary cannot produce one, so the branch is exercised here by making the
  * comparison raise it for one sentinel quotation.
  */
-vi.mock('@obiter/verification-core', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@obiter/verification-core')>()
-  return {
-    ...actual,
-    decideQuoteFidelity: (
-      input: Parameters<typeof actual.decideQuoteFidelity>[0],
-    ) => {
-      if (input.quote.rawText.includes('integrity sentinel')) {
-        throw new actual.QuoteSourceMismatchError(
-          'The fragment is not the provision the citation resolved to.',
-        )
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const obiterVerificationCoreModule = {
+  ...(await import('@obiter/verification-core')),
+}
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const obiterVerificationCoreModuleKeys = Object.fromEntries(
+  Object.keys(await import('@obiter/verification-core')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('@obiter/verification-core', () =>
+  Object.assign(
+    { ...obiterVerificationCoreModuleKeys },
+    (() => {
+      const actual = obiterVerificationCoreModule
+      return {
+        ...actual,
+        decideQuoteFidelity: (
+          input: Parameters<typeof actual.decideQuoteFidelity>[0],
+        ) => {
+          if (input.quote.rawText.includes('integrity sentinel')) {
+            throw new actual.QuoteSourceMismatchError(
+              'The fragment is not the provision the citation resolved to.',
+            )
+          }
+          return actual.decideQuoteFidelity(input)
+        },
       }
-      return actual.decideQuoteFidelity(input)
-    },
-  }
-})
+    })(),
+  ),
+)
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const { checkQuoteFidelity, checkQuoteFidelities } =
+  await import('./quote-fidelity')
+import type { ActFixture } from './quote-fidelity.test-support'
+const {
+  act,
+  caseLaw,
+  fakeQuotePool,
+  findings,
+  judgmentAuthority,
+  legislation,
+  outcomes,
+  rejections,
+  request,
+} = await import('./quote-fidelity.test-support')
 
 describe('quote fidelity legislation retrieval', () => {
   it('clears a provision quotation on the cited provision', async () => {

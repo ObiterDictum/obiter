@@ -130,7 +130,7 @@ async function main() {
   const manifest = flag('--benchmark-manifest')
   if (!input || !manifest)
     throw new Error(
-      'Usage: pnpm bench:guard --input=/external/private/documents.jsonl --benchmark-manifest=/external/benchmark/MANIFEST.json',
+      'Usage: bun run bench:guard --input=/external/private/documents.jsonl --benchmark-manifest=/external/benchmark/MANIFEST.json',
     )
   await assertNoBenchmarkOverlap(resolve(input), resolve(manifest))
 }

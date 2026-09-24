@@ -57,28 +57,44 @@ jobs:
           uname -a
           lscpu || cat /proc/cpuinfo
 
-      - uses: pnpm/action-setup@v4
+      # Bun is the toolchain: setup-bun provides the pinned runtime from
+      # .bun-version, and every gate below runs with `bun --bun run` so the
+      # scripts themselves execute on Bun. Node stays installed because
+      # third-party package lifecycle scripts run it (esbuild's postinstall)
+      # and because the toolchain still ships Node rollback paths.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
 
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: pnpm
+
+      # bun has no cache flag in setup-bun; cache its download store keyed on
+      # the lockfile so a warm run skips re-downloading the workspace graph.
+      - name: Cache bun install store
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       - name: Typecheck
-        run: pnpm typecheck
+        run: bun --bun run typecheck
 
       # Prettier formatting — rejects unformatted code. Keeps the tree free of
       # formatter churn (no agent's prettier run should ever produce a diff).
       - name: Format check
-        run: pnpm format:check
+        run: bun --bun run format:check
 
       # Two-stage lint: oxlint (fast correctness pass) then eslint (owns the
       # icon-pack no-restricted-imports ban and the hex-color-in-styles rule).
       - name: Lint
-        run: pnpm lint
+        run: bun --bun run lint
 
       # The web production build is a gate of its own: TanStack Start's
       # import-protection plugin only rejects a server-only import reaching
@@ -87,20 +103,20 @@ jobs:
       # merged green). Keep it in this job so it stays part of the required
       # check rather than a separate workflow someone has to remember.
       - name: Build web
-        run: pnpm --filter @obiter/web build
+        run: bun --bun run --filter @obiter/web build
 
       # Deterministic bundle budget over the build output the step above just
       # produced: the files the root route preloads on every page, and the lazy
       # chunks. Measured budgets with documented headroom; see
       # scripts/perf/bundle-budget.mjs for what is counted.
       - name: Bundle budget
-        run: pnpm perf:bundle-budget
+        run: bun --bun run perf:bundle-budget
 
       # The build wrote dist/.obiter-build.json. Verify it names this commit and
       # a production React build, so a marker that silently rots fails here
       # rather than at measurement time.
       - name: Build provenance
-        run: node apps/web/build-provenance.mjs verify --expect-commit "$GITHUB_SHA" --allow-dirty
+        run: bun apps/web/build-provenance.mjs verify --expect-commit "$GITHUB_SHA" --allow-dirty
 
       # Desktop had the same gap P1.32 had for web: electron-vite build ran only
       # on push to main, so a broken desktop entry point could merge green. The
@@ -108,7 +124,7 @@ jobs:
       # the Electron package the frozen-lockfile install already fetched, so it
       # adds no dependency install of its own.
       - name: Build desktop
-        run: pnpm --filter @obiter/desktop build
+        run: bun --bun run --filter @obiter/desktop build
 
       # Deterministic desktop size budget over that build: the initial renderer
       # graph, lazy chunks and largest lazy chunk, the PDF worker, product font
@@ -116,7 +132,7 @@ jobs:
       # Raw bytes, not gzip: the packaged renderer is read from the local asar
       # over obiter://, never downloaded. See scripts/perf/desktop-budget.mjs.
       - name: Desktop budget
-        run: pnpm perf:desktop-budget
+        run: bun --bun run perf:desktop-budget
 
       - name: Apply database migrations
         env:
@@ -161,14 +177,14 @@ jobs:
       - name: Test
         env:
           TEST_DATABASE_URL: postgres://obiter:obiter@localhost:5432/obiter_test
-        run: pnpm test
+        run: bun run test
 
       - name: Search correctness benchmark
         env:
           SEARCH_BENCHMARK_API_KEY: obiter-local-dev-key
           SEARCH_BENCHMARK_HOST: http://127.0.0.1:7700
           SEARCH_BENCHMARK_REPORT_PATH: ${{ runner.temp }}/search-benchmark.json
-        run: pnpm benchmark:search
+        run: bun run benchmark:search
 
       - name: Upload search benchmark report
         if: always()
@@ -178,12 +194,11 @@ jobs:
           path: ${{ runner.temp }}/search-benchmark.json
           if-no-files-found: ignore
 
-  # Native Bun serving is a second runtime, not a substitute for the Node
-  # suite above: vitest under Node says nothing about the server that ships.
-  # This job starts the real Bun.serve entry point (and the Node rollback
-  # entry point) against its own Postgres and drives
-  # scripts/api-runtime/runtime-integration.mjs over HTTP. The Bun version is
-  # pinned by .bun-version, and jsdom-free because the harness is plain Node.
+  # The unit suite runs on Bun (bun test); this job additionally drives the
+  # shipped server itself: it starts the real Bun.serve entry point (and the
+  # Node rollback entry point, spawned as real `node`) against its own Postgres
+  # and runs scripts/api-runtime/runtime-integration.mjs over HTTP. The Bun
+  # version is pinned by .bun-version.
   bun-api:
     name: Bun API runtime integration
     runs-on: ubuntu-latest
@@ -204,24 +219,30 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
-
+      # Node stays: the rollback adapter is spawned as a real `node` process by
+      # the harness. The pin lives in .bun-version so the image, CI and a
+      # developer machine cannot disagree about which Bun is reviewed.
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: pnpm
 
-      # The pin lives in .bun-version so the image, CI and a developer machine
-      # cannot disagree about which Bun is reviewed and supported.
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version-file: .bun-version
+
+      - name: Cache bun install store
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            bun-${{ runner.os }}-
 
       - name: Bun version
         run: bun --version
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       # The API applies its own migrations at startup behind an advisory lock,
       # which is the production path and what this job should exercise. Applying
@@ -244,7 +265,7 @@ jobs:
         env:
           TEST_DATABASE_URL: postgres://obiter:obiter@localhost:5432/obiter_test
         run: |
-          node scripts/api-runtime/runtime-integration.mjs \
+          bun scripts/api-runtime/runtime-integration.mjs \
             --runtime both \
             --database-url "$TEST_DATABASE_URL" \
             --json-out "$RUNNER_TEMP/api-runtime-integration.json"

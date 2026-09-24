@@ -38,7 +38,7 @@ benchmark run cannot narrow or widen what product search serves.
 The index is derived, never migrated. Rebuild it from Postgres with:
 
 ```sh
-pnpm rebuild:search-index
+bun run rebuild:search-index
 ```
 
 Flags (`--database-url=`, `--host=`, `--admin-key=`, `--index=`) override
@@ -71,7 +71,7 @@ done
 
 ### Seed data
 
-`pnpm seed` (shell-only: org, users, matters, documents) is M2 scope of the [App Shell Rebuild](../../docs/specs/app-shell/README.md). Not present yet.
+`bun run seed` (shell-only: org, users, matters, documents) is M2 scope of the [App Shell Rebuild](../../docs/specs/app-shell/README.md). Not present yet.
 
 ### Stop / reset
 

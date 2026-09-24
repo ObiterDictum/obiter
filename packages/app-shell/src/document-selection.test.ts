@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import type { DocumentModelWire } from '@obiter/contracts'
 import { wrapLines, type WrappedLine } from './document-page-flow'
 import { applyDeleteBackward, emptyEditorState } from './document-word-edits'

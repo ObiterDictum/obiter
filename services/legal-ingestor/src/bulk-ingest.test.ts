@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 import type { LegalAuthority } from '@obiter/legal-schema'
 import type {
   AtomEntry,
@@ -97,7 +98,7 @@ function deps(
     sleep,
     fetchImpl: (async () => {
       throw new Error('fetch must be stubbed per test')
-    }) as typeof fetch,
+    }) as unknown as typeof fetch,
     fetchDetail: async () =>
       ({ status: 'skipped', reason: 'unparsable' }) as ProviderDocumentResult,
     ...overrides,
@@ -349,7 +350,7 @@ describe('ingestScope', () => {
         requested.push(String(url))
         const body = pages.shift() ?? '<feed></feed>'
         return new Response(body, { status: 200 })
-      }) as typeof fetch,
+      }) as unknown as typeof fetch,
       fetchDetail: async (item) => ({
         status: 'ok',
         document: {
@@ -408,7 +409,7 @@ describe('ingestScope', () => {
       fetchImpl: (async (url: string | URL | Request) => {
         requested.push(String(url))
         return new Response('<feed></feed>', { status: 200 })
-      }) as typeof fetch,
+      }) as unknown as typeof fetch,
     })
     const report = await ingestScope(testDeps, { court: 'uksc' })
     expect(report.pagesCompleted).toBe(0)

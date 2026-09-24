@@ -1,8 +1,8 @@
-// @vitest-environment jsdom
+import '@obiter/test-dom'
 // Moving between findings, reaching the ones the document cannot show, the
 // keyboard path, the responsive fallback and the stored-version boundary.
 import { fireEvent, screen, waitFor, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import {
   finding,
   hardBreakFinding,

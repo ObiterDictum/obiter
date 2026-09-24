@@ -26,7 +26,7 @@
  * browser downloads them. The two must not be compared as if they measured the
  * same thing.
  *
- * Run `pnpm --filter @obiter/desktop build` first. A missing build, a missing or
+ * Run `bun run --filter @obiter/desktop build` first. A missing build, a missing or
  * malformed manifest, a manifest entry with no file on disk, or a zero-byte
  * file fails the check rather than measuring as a passing zero.
  *
@@ -43,7 +43,7 @@ import { classifyManifest } from './desktop-manifest.mjs'
 
 /*
  * Baselines measured on a production build at origin/dev 29034f3c on Linux x64
- * (`pnpm --filter @obiter/desktop build`). Ceilings carry roughly 10% headroom,
+ * (`bun run --filter @obiter/desktop build`). Ceilings carry roughly 10% headroom,
  * the same ratchet margin the web budget uses, so an ordinary addition passes
  * while a return to a larger shape fails. main and preload are contract-sized
  * entry bundles where a percentage is meaningless and are given absolute limits.
@@ -81,7 +81,7 @@ export async function readManifest(outDir) {
     source = await readFile(path, 'utf8')
   } catch {
     throw new Error(
-      `no renderer manifest at ${path}; run pnpm --filter @obiter/desktop build first`,
+      `no renderer manifest at ${path}; run bun run --filter @obiter/desktop build first`,
     )
   }
   try {
@@ -98,7 +98,7 @@ async function rendererAssetSizes(outDir) {
   const names = await readdir(assetsDir).catch(() => null)
   if (!names)
     throw new Error(
-      `no renderer assets at ${assetsDir}; run pnpm --filter @obiter/desktop build first`,
+      `no renderer assets at ${assetsDir}; run bun run --filter @obiter/desktop build first`,
     )
   const sizes = new Map()
   for (const name of names) {
@@ -145,7 +145,7 @@ async function directoryBytes(dir, label) {
   const files = await walkFiles(dir)
   if (!files || files.length === 0)
     throw new Error(
-      `${label} output is missing or empty at ${dir}; run pnpm --filter @obiter/desktop build first`,
+      `${label} output is missing or empty at ${dir}; run bun run --filter @obiter/desktop build first`,
     )
   let bytes = 0
   for (const file of files) bytes += (await stat(join(dir, file))).size

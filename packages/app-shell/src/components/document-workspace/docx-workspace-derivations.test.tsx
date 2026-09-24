@@ -1,6 +1,7 @@
-// @vitest-environment jsdom
+import '@obiter/test-dom'
 import { fireEvent, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../../../scripts/test/vitest-compat'
 import {
   mountWorkspace,
   multiParagraphModel,
@@ -34,53 +35,127 @@ const controlCalls = vi.hoisted(() => ({
   >,
 }))
 
-vi.mock('../../document-page-engine', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('../../document-page-engine')>()
-  return {
-    ...actual,
-    layoutDocument: (...args: Parameters<typeof actual.layoutDocument>) => {
-      counts.layout += 1
-      return actual.layoutDocument(...args)
-    },
-  }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const documentPageEngineModule = {
+  ...(await import('../../document-page-engine')),
+}
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const documentPageEngineModuleKeys = Object.fromEntries(
+  Object.keys(await import('../../document-page-engine')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('../../document-page-engine', () =>
+  Object.assign(
+    { ...documentPageEngineModuleKeys },
+    (() => {
+      const actual = documentPageEngineModule
+      return {
+        ...actual,
+        layoutDocument: (...args: Parameters<typeof actual.layoutDocument>) => {
+          counts.layout += 1
+          return actual.layoutDocument(...args)
+        },
+      }
+    })(),
+  ),
+)
 
-vi.mock('../../document-page-tables', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('../../document-page-tables')>()
-  return {
-    ...actual,
-    storyBlocks: (...args: Parameters<typeof actual.storyBlocks>) => {
-      counts.storyBlocks += 1
-      return actual.storyBlocks(...args)
-    },
-  }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const documentPageTablesModule = {
+  ...(await import('../../document-page-tables')),
+}
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const documentPageTablesModuleKeys = Object.fromEntries(
+  Object.keys(await import('../../document-page-tables')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('../../document-page-tables', () =>
+  Object.assign(
+    { ...documentPageTablesModuleKeys },
+    (() => {
+      const actual = documentPageTablesModule
+      return {
+        ...actual,
+        storyBlocks: (...args: Parameters<typeof actual.storyBlocks>) => {
+          counts.storyBlocks += 1
+          return actual.storyBlocks(...args)
+        },
+      }
+    })(),
+  ),
+)
 
-vi.mock('../../document-page-flow', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('../../document-page-flow')>()
-  return {
-    ...actual,
-    wrapLines: (...args: Parameters<typeof actual.wrapLines>) => {
-      counts.wrapped.push(args[0])
-      return actual.wrapLines(...args)
-    },
-  }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const documentPageFlowModule = { ...(await import('../../document-page-flow')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const documentPageFlowModuleKeys = Object.fromEntries(
+  Object.keys(await import('../../document-page-flow')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('../../document-page-flow', () =>
+  Object.assign(
+    { ...documentPageFlowModuleKeys },
+    (() => {
+      const actual = documentPageFlowModule
+      return {
+        ...actual,
+        wrapLines: (...args: Parameters<typeof actual.wrapLines>) => {
+          counts.wrapped.push(args[0])
+          return actual.wrapLines(...args)
+        },
+      }
+    })(),
+  ),
+)
 
-vi.mock('../../document-format-edits', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('../../document-format-edits')>()
-  return {
-    ...actual,
-    formattedModel: (...args: Parameters<typeof actual.formattedModel>) => {
-      counts.formatted += 1
-      return actual.formattedModel(...args)
-    },
-  }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const documentFormatEditsModule = {
+  ...(await import('../../document-format-edits')),
+}
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const documentFormatEditsModuleKeys = Object.fromEntries(
+  Object.keys(await import('../../document-format-edits')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('../../document-format-edits', () =>
+  Object.assign(
+    { ...documentFormatEditsModuleKeys },
+    (() => {
+      const actual = documentFormatEditsModule
+      return {
+        ...actual,
+        formattedModel: (...args: Parameters<typeof actual.formattedModel>) => {
+          counts.formatted += 1
+          return actual.formattedModel(...args)
+        },
+      }
+    })(),
+  ),
+)
 
 /*
  * The paint path reaches whole-document formatting through
@@ -90,45 +165,102 @@ vi.mock('../../document-format-edits', async (importOriginal) => {
  * ranges the formatting query is asked about, so a query that scanned every
  * paragraph would show it.
  */
-vi.mock('../../document-format-paint', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('../../document-format-paint')>()
-  return {
-    ...actual,
-    formattedModel: (...args: Parameters<typeof actual.formattedModel>) => {
-      counts.paintFormatted += 1
-      return actual.formattedModel(...args)
-    },
-  }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const documentFormatPaintModule = {
+  ...(await import('../../document-format-paint')),
+}
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const documentFormatPaintModuleKeys = Object.fromEntries(
+  Object.keys(await import('../../document-format-paint')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('../../document-format-paint', () =>
+  Object.assign(
+    { ...documentFormatPaintModuleKeys },
+    (() => {
+      const actual = documentFormatPaintModule
+      return {
+        ...actual,
+        formattedModel: (...args: Parameters<typeof actual.formattedModel>) => {
+          counts.paintFormatted += 1
+          return actual.formattedModel(...args)
+        },
+      }
+    })(),
+  ),
+)
 
-vi.mock('../../document-format-controls', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('../../document-format-controls')>()
-  return {
-    ...actual,
-    formatControlState: (
-      ...args: Parameters<typeof actual.formatControlState>
-    ) => {
-      if (args[3]) controlCalls.ranges.push(args[3])
-      return actual.formatControlState(...args)
-    },
-  }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const documentFormatControlsModule = {
+  ...(await import('../../document-format-controls')),
+}
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const documentFormatControlsModuleKeys = Object.fromEntries(
+  Object.keys(await import('../../document-format-controls')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('../../document-format-controls', () =>
+  Object.assign(
+    { ...documentFormatControlsModuleKeys },
+    (() => {
+      const actual = documentFormatControlsModule
+      return {
+        ...actual,
+        formatControlState: (
+          ...args: Parameters<typeof actual.formatControlState>
+        ) => {
+          if (args[3]) controlCalls.ranges.push(args[3])
+          return actual.formatControlState(...args)
+        },
+      }
+    })(),
+  ),
+)
 
-vi.mock('../../document-authorities', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('../../document-authorities')>()
-  return {
-    ...actual,
-    extractAuthorities: (
-      ...args: Parameters<typeof actual.extractAuthorities>
-    ) => {
-      counts.authorities += 1
-      return actual.extractAuthorities(...args)
-    },
-  }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const documentAuthoritiesModule = {
+  ...(await import('../../document-authorities')),
+}
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const documentAuthoritiesModuleKeys = Object.fromEntries(
+  Object.keys(await import('../../document-authorities')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('../../document-authorities', () =>
+  Object.assign(
+    { ...documentAuthoritiesModuleKeys },
+    (() => {
+      const actual = documentAuthoritiesModule
+      return {
+        ...actual,
+        extractAuthorities: (
+          ...args: Parameters<typeof actual.extractAuthorities>
+        ) => {
+          counts.authorities += 1
+          return actual.extractAuthorities(...args)
+        },
+      }
+    })(),
+  ),
+)
 
 function reset() {
   counts.layout = 0

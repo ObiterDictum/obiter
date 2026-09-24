@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import { Pool } from 'pg'
 import { createTestPool } from '../test-database.test-support'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import type { AuthzVariables } from '../authz'
 import { createTestApiEnv } from '../test-api-env'
 import { createCommentsRoutes } from './comments'

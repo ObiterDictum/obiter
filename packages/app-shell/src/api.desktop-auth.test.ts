@@ -1,5 +1,11 @@
-// @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import '@obiter/test-dom'
+import { afterEach, describe, expect, it } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
+import { clearDesktopAuthToken } from './lib/auth-token'
+
+// Generation bump replaces the old module-registry reset: the ?gen= query
+// gives each test a freshly evaluated ./api module.
+let moduleGen = 0
 
 const bridge = {
   platform: 'desktop' as const,
@@ -10,9 +16,13 @@ const bridge = {
   clearAuthToken: vi.fn<() => Promise<void>>(),
 }
 
-afterEach(() => {
+afterEach(async () => {
+  // Clear while the bridge is still present: clearDesktopAuthToken returns
+  // early without one, and bun has no module-registry reset for the token
+  // module's renderer-memory cache.
+  await clearDesktopAuthToken()
   vi.restoreAllMocks()
-  vi.resetModules()
+  moduleGen++
   vi.clearAllMocks()
   delete (window as Window & { obiterDesktop?: typeof bridge }).obiterDesktop
 })
@@ -33,7 +43,7 @@ describe('apiFetch desktop bearer authentication', () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(response({ user: { id: 'usr_1' } }))
-    const { apiFetch } = await import('./api')
+    const { apiFetch } = await import(`./api?gen=${moduleGen}`)
 
     await apiFetch('/api/me')
 
@@ -49,7 +59,7 @@ describe('apiFetch desktop bearer authentication', () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(response({}))
-    const { apiFetch } = await import('./api')
+    const { apiFetch } = await import(`./api?gen=${moduleGen}`)
 
     await apiFetch('/api/me')
 

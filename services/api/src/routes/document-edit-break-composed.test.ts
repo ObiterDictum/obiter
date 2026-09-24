@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises'
 import JSZip from 'jszip'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import { parseDocx } from '@obiter/ooxml'
 import {
   EditDatabase,

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import { scoreAdjudicatedDocuments } from './scoring'
 import type { QaEvidence } from './qa'
 import type { SyntheticDocument } from './types'

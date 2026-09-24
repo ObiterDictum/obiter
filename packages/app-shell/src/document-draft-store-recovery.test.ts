@@ -1,5 +1,5 @@
-// @vitest-environment jsdom
-import { describe, expect, it } from 'vitest'
+import '@obiter/test-dom'
+import { describe, expect, it } from 'bun:test'
 import {
   discardDocumentDrafts,
   listRecoverableDocumentDrafts,

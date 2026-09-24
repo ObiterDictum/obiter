@@ -9,8 +9,8 @@ while calling it cold.
 ## Web bundle budget
 
 ```bash
-pnpm --filter @obiter/web build
-pnpm perf:bundle-budget
+bun run --filter @obiter/web build
+bun run perf:bundle-budget
 ```
 
 Counts, from the build's own manifest (`__root__.preloads`, which includes the
@@ -28,8 +28,8 @@ roughly 10% headroom. They are a ratchet against regression, not a target.
 ## Desktop size budget
 
 ```bash
-pnpm --filter @obiter/desktop build
-pnpm perf:desktop-budget
+bun run --filter @obiter/desktop build
+bun run perf:desktop-budget
 ```
 
 Counts, from the renderer's Vite manifest

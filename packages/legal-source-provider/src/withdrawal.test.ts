@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import { readWithdrawalCandidate, readWithdrawnInfo } from './withdrawal'
 
 describe('withdrawal state readers', () => {

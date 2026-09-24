@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import type { DocumentModelWire, DocumentStoryKind } from '@obiter/contracts'
 import { extractVerificationCandidates } from './verification-extraction'
 

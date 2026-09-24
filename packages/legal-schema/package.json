@@ -7,7 +7,7 @@
     ".": "./src/index.ts"
   },
   "scripts": {
-    "test": "vitest run src/legal-schema.test.ts",
+    "test": "bun test --isolate --preload ../../scripts/test/vitest-compat.ts src/legal-schema.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {

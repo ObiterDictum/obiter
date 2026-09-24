@@ -1,6 +1,7 @@
 import { Pool } from 'pg'
 import { createTestPool } from './test-database.test-support'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 import { checkQuoteFidelity, checkQuoteFidelities } from './quote-fidelity'
 import {
   insertJudgment,

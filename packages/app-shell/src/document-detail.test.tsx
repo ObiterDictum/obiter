@@ -1,5 +1,6 @@
-// @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
+import '@obiter/test-dom'
+import { afterEach, describe, expect, it, beforeEach, mock } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import {
   createMemoryHistory,
@@ -8,7 +9,7 @@ import {
   createRouter,
   RouterProvider,
 } from '@tanstack/react-router'
-import { DocumentDetailLayoutView } from './views/document-detail'
+
 import type { DocumentDetailResponse } from './documents'
 
 const docs = vi.hoisted(() => ({
@@ -19,37 +20,121 @@ const currentUser = vi.hoisted(() => ({ useCurrentUser: vi.fn() }))
 const nav = vi.hoisted(() => ({ useNavigate: vi.fn() }))
 const toast = vi.hoisted(() => ({ useToast: vi.fn() }))
 
-vi.mock('./documents', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./documents')>()
-  return {
-    ...actual,
-    useDocument: docs.useDocument,
-    useDeleteDocument: docs.useDeleteDocument,
-  }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const documentsModule = { ...(await import('./documents')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const documentsModuleKeys = Object.fromEntries(
+  Object.keys(await import('./documents')).map((key) => [key, undefined]),
+)
+mock.module('./documents', () =>
+  Object.assign(
+    { ...documentsModuleKeys },
+    (() => {
+      const actual = documentsModule
+      return {
+        ...actual,
+        useDocument: docs.useDocument,
+        useDeleteDocument: docs.useDeleteDocument,
+      }
+    })(),
+  ),
+)
 
-vi.mock('./components/document-workspace/workspace', () => ({
-  DocumentWorkspace: () => null,
-}))
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const componentsDocumentWorkspaceWorkspaceModuleKeys = Object.fromEntries(
+  Object.keys(await import('./components/document-workspace/workspace')).map(
+    (key) => [key, undefined],
+  ),
+)
+mock.module('./components/document-workspace/workspace', () =>
+  Object.assign(
+    { ...componentsDocumentWorkspaceWorkspaceModuleKeys },
+    (() => ({
+      DocumentWorkspace: () => null,
+    }))(),
+  ),
+)
 
-vi.mock('./components/verification-run-panel', () => ({
-  VerificationRunPanel: () => <div>Verification panel</div>,
-}))
+// The former vi.mock('./components/verification-run-panel') is gone: that
+// module does not exist and nothing under src imports it, so vitest tolerated
+// a dead mock while bun resolves the specifier and fails the file. Removing it
+// changes no behaviour.
 
-vi.mock('./current-user', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./current-user')>()
-  return { ...actual, useCurrentUser: currentUser.useCurrentUser }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const currentUserModule = { ...(await import('./current-user')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const currentUserModuleKeys = Object.fromEntries(
+  Object.keys(await import('./current-user')).map((key) => [key, undefined]),
+)
+mock.module('./current-user', () =>
+  Object.assign(
+    { ...currentUserModuleKeys },
+    (() => {
+      const actual = currentUserModule
+      return { ...actual, useCurrentUser: currentUser.useCurrentUser }
+    })(),
+  ),
+)
 
-vi.mock('@tanstack/react-router', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@tanstack/react-router')>()
-  return { ...actual, useNavigate: nav.useNavigate }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const tanstackReactRouterModule = {
+  ...(await import('@tanstack/react-router')),
+}
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const tanstackReactRouterModuleKeys = Object.fromEntries(
+  Object.keys(await import('@tanstack/react-router')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('@tanstack/react-router', () =>
+  Object.assign(
+    { ...tanstackReactRouterModuleKeys },
+    (() => {
+      const actual = tanstackReactRouterModule
+      return { ...actual, useNavigate: nav.useNavigate }
+    })(),
+  ),
+)
 
-vi.mock('@obiter/ui', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@obiter/ui')>()
-  return { ...actual, useToast: toast.useToast }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const obiterUiModule = { ...(await import('@obiter/ui')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const obiterUiModuleKeys = Object.fromEntries(
+  Object.keys(await import('@obiter/ui')).map((key) => [key, undefined]),
+)
+mock.module('@obiter/ui', () =>
+  Object.assign(
+    { ...obiterUiModuleKeys },
+    (() => {
+      const actual = obiterUiModule
+      return { ...actual, useToast: toast.useToast }
+    })(),
+  ),
+)
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const { DocumentDetailLayoutView } = await import('./views/document-detail')
 
 function sampleDocumentDetail(matterId: string): DocumentDetailResponse {
   return {

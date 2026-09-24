@@ -40,7 +40,7 @@ Production may also provide:
 - `CORPUS_DATABASE_URL` to read the legal corpus from a database separate from the application database. Unset is the compatibility default: the corpus is the application database. A configured corpus is read-only unless a writer is also configured.
 - `CORPUS_WRITE_DATABASE_URL` to let a process persist provider fetch-through hydration into that separate corpus, then index it. It requires `CORPUS_DATABASE_URL`, and under `NODE_ENV=test` both must resolve to `TEST_DATABASE_URL`. Only the process that owns hydration persistence should receive it. The credential must be service-private and must not sit in a lane's `.env`, because lane setup copies shared configuration into every lane; the product treats possession of this variable as the write capability and never infers it from a hostname.
 
-Development requires `BETTER_AUTH_SECRET` in the environment (for example via a local `.env` file). There is no shipped fallback secret. Set `NODE_ENV=development`, or set `OBITER_LOCAL_DEVELOPMENT=1` when `NODE_ENV` is unset. `MEILISEARCH_SEARCH_API_KEY` and `MEILISEARCH_ADMIN_API_KEY` fall back to `dev-key` only in development; `test` and `production` must configure them. Other local defaults remain so the service can boot before hosted infrastructure is provisioned. With the web Vite proxy, the development default for `BETTER_AUTH_URL` is `http://localhost:3000`, matching `OBITER_WEB_ORIGIN`; override both deliberately when using another local origin. In development the API also trusts electron-vite renderer Origins on loopback http only (`http://localhost` and `http://127.0.0.1`, ports `5173`–`5199`) for both CORS and better-auth — the same `isDevDesktopRendererOrigin` gate, no port wildcards — so `pnpm dev:desktop` can sign in through the renderer `/api` proxy. Production still only trusts configured web/desktop/marketing origins. If `OBITER_RESEND_API_KEY` is not configured in development, the API logs the complete magic-link URL with a `[dev-only]` marker instead of sending an email. Never rely on that fallback in production.
+Development requires `BETTER_AUTH_SECRET` in the environment (for example via a local `.env` file). There is no shipped fallback secret. Set `NODE_ENV=development`, or set `OBITER_LOCAL_DEVELOPMENT=1` when `NODE_ENV` is unset. `MEILISEARCH_SEARCH_API_KEY` and `MEILISEARCH_ADMIN_API_KEY` fall back to `dev-key` only in development; `test` and `production` must configure them. Other local defaults remain so the service can boot before hosted infrastructure is provisioned. With the web Vite proxy, the development default for `BETTER_AUTH_URL` is `http://localhost:3000`, matching `OBITER_WEB_ORIGIN`; override both deliberately when using another local origin. In development the API also trusts electron-vite renderer Origins on loopback http only (`http://localhost` and `http://127.0.0.1`, ports `5173`–`5199`) for both CORS and better-auth — the same `isDevDesktopRendererOrigin` gate, no port wildcards — so `bun run dev:desktop` can sign in through the renderer `/api` proxy. Production still only trusts configured web/desktop/marketing origins. If `OBITER_RESEND_API_KEY` is not configured in development, the API logs the complete magic-link URL with a `[dev-only]` marker instead of sending an email. Never rely on that fallback in production.
 
 ## Accounts
 
@@ -65,14 +65,14 @@ is a separate, authorised rollout decision.
 
 ## Deploying Only This API
 
-Deploy `@obiter/api` as its own service. Do not use the root `pnpm build` or a product web start command for the API service, because those target the whole monorepo.
+Deploy `@obiter/api` as its own service. Do not use the root `bun run build` or a product web start command for the API service, because those target the whole monorepo.
 
 Recommended Dokploy service settings:
 
 ```bash
-pnpm install --frozen-lockfile
-pnpm --filter @obiter/api build
-pnpm --filter @obiter/api start
+bun install --frozen-lockfile
+bun run --filter @obiter/api build
+bun run --filter @obiter/api start
 ```
 
 Production deploys **must** set `NODE_ENV=production` (and `PORT` to the port Dokploy exposes to the container). Unknown or unset `NODE_ENV` without `OBITER_LOCAL_DEVELOPMENT=1` refuses startup instead of falling through to the development path, which would enable the loopback electron-vite Origin trust above. Point the service domain at a backend hostname such as `https://api.obiter.tech` or `https://search-api.obiter.tech`.

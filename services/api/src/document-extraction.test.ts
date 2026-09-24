@@ -1,27 +1,53 @@
 import { readFile } from 'node:fs/promises'
 import JSZip from 'jszip'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 import { supplementSpans } from '@obiter/redaction-policy'
 
 const unpdf = vi.hoisted(() => ({ getDocumentProxy: vi.fn() }))
 
-vi.mock('unpdf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('unpdf')>()),
-  getDocumentProxy: unpdf.getDocumentProxy,
-}))
+// The real unpdf namespace, snapshotted before mock.module patches it in
+// place below: the factory runs at registration time, so its spread already
+// captured the real exports; this keeps them for the tests that need the
+// real getDocumentProxy behind the mocked one.
+const unpdfActual = { ...(await import('unpdf')) }
 
-import {
+// The real module, snapshotted before mock.module registers: a factory that
+// awaited its own specifier re-entered the in-flight mock registration and
+// deadlocked under bun's module registry.
+const unpdfModule = { ...(await import('unpdf')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const unpdfKeys = Object.fromEntries(
+  Object.keys(await import('unpdf')).map((key) => [key, undefined]),
+)
+mock.module('unpdf', () =>
+  Object.assign(
+    { ...unpdfKeys },
+    {
+      ...unpdfModule,
+      getDocumentProxy: unpdf.getDocumentProxy,
+    },
+  ),
+)
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const {
   DocumentExtractionError,
   extractDocumentText,
   IMAGE_ONLY_DOCX_MESSAGE,
   prepareLaidChars,
   UNREADABLE_DOCX_MESSAGE,
-} from './document-extraction'
+} = await import('./document-extraction')
+
 import { layoutFromLaidChars, type LaidChar } from './document-layout'
 import { createRedactionDetector } from './redaction-detection'
 
 beforeEach(async () => {
-  const actual = await vi.importActual<typeof import('unpdf')>('unpdf')
+  const actual = unpdfActual
   unpdf.getDocumentProxy.mockReset()
   unpdf.getDocumentProxy.mockImplementation(actual.getDocumentProxy)
 })
@@ -361,7 +387,7 @@ describe('extractDocumentText', () => {
     const fixture = await readFile(
       '../../data/evals/redact/pdf-short-text-layer-fixture.pdf',
     )
-    const actual = await vi.importActual<typeof import('unpdf')>('unpdf')
+    const actual = unpdfActual
     const pdf = await actual.getDocumentProxy(new Uint8Array(fixture))
     vi.spyOn(pdf, 'destroy').mockRejectedValue(new Error('cleanup failed'))
     unpdf.getDocumentProxy.mockResolvedValue(pdf)
@@ -375,7 +401,7 @@ describe('extractDocumentText', () => {
     const fixture = await readFile(
       '../../data/evals/redact/pdf-scanned-like-fixture.pdf',
     )
-    const actual = await vi.importActual<typeof import('unpdf')>('unpdf')
+    const actual = unpdfActual
     const pdf = await actual.getDocumentProxy(new Uint8Array(fixture))
     vi.spyOn(pdf, 'destroy').mockRejectedValue(new Error('cleanup failed'))
     unpdf.getDocumentProxy.mockResolvedValue(pdf)

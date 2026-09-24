@@ -147,8 +147,10 @@ export async function readLimitedFormData(
     headers,
     body: bytes,
   })
+  // bun-types and @types/node disagree on the FormData identity; the value is
+  // the request's own form data either way.
   const form = await request.formData()
-  return { ok: true, form }
+  return { ok: true, form: form as unknown as FormData }
 }
 
 export async function readLimitedJsonBody(

@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { InferenceSession } from 'onnxruntime-node'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 
 /**
  * Proves the installed `onnxruntime-node` native runtime loads and runs a CPU

@@ -944,8 +944,8 @@
           <p class="lede">
             Obiter is legal infrastructure: source-grounded search over UK
             judgments, reviewable redaction of sensitive material, and the
-            matter workspaces those sit inside. A pnpm monorepo with four
-            running processes and twelve workspace packages.
+            matter workspaces those sit inside. A Bun monorepo with four running
+            processes and twelve workspace packages.
           </p>
           <p>
             Three product surfaces carry code: <b>Search</b> over Find Case Law
@@ -966,8 +966,8 @@
           <h2>The stack</h2>
           <p class="lede">
             Dashed nodes are workspaces that exist in
-            <code>pnpm-workspace.yaml</code> but contain only a README. They are
-            reserved names, not running code.
+            <code>bun.lock</code> but contain only a README. They are reserved
+            names, not running code.
           </p>
 
           <div class="map">
@@ -2056,7 +2056,7 @@
                 <dt>Auth</dt>
                 <dd>better-auth client, cookie sessions</dd>
                 <dt>Dev</dt>
-                <dd>pnpm dev:web, proxies to :8787</dd>
+                <dd>bun run dev:web, proxies to :8787</dd>
               </dl>
             </article>
 
@@ -2081,7 +2081,7 @@
                 <dt>Auth</dt>
                 <dd>better-auth bearer plugin, not cookies</dd>
                 <dt>Dev</dt>
-                <dd>pnpm dev:desktop:api</dd>
+                <dd>bun run dev:desktop:api</dd>
               </dl>
             </article>
           </div>
@@ -2618,7 +2618,7 @@
               <tbody>
                 <tr>
                   <td class="id">synthetic-v2/</td>
-                  <td class="id">pnpm synthetic-v2:*</td>
+                  <td class="id">bun run synthetic-v2:*</td>
                   <td>
                     The corpus pipeline: smoke, canary, tournament, assemble.
                     See <a href="#corpus">Synthetic corpus pipeline</a>.
@@ -2643,12 +2643,12 @@
                 </tr>
                 <tr>
                   <td class="id">bench-guard.ts</td>
-                  <td class="id">pnpm bench:guard</td>
+                  <td class="id">bun run bench:guard</td>
                   <td>Guards benchmark regressions</td>
                 </tr>
                 <tr>
                   <td class="id">search-corpus-relevance/</td>
-                  <td class="id">pnpm benchmark:search-corpus</td>
+                  <td class="id">bun run benchmark:search-corpus</td>
                   <td>
                     Local served-path relevance suite against
                     <code>POST /api/search/fetch</code> on the product corpus.
@@ -2657,7 +2657,7 @@
                 </tr>
                 <tr>
                   <td class="id">legislation-relevance/</td>
-                  <td class="id">pnpm benchmark:legislation-corpus</td>
+                  <td class="id">bun run benchmark:legislation-corpus</td>
                   <td>
                     Local served-path relevance suite for the
                     <code>legislation_provisions</code> corpus: held recall,
@@ -4395,25 +4395,25 @@
             rather than changing detection silently.
           </div>
           <div class="callout note">
-            <b>The ONNX Runtime install is CPU-only.</b> The repo-root
-            <code>.npmrc</code> sets
-            <code>onnxruntime-node-install-cuda=skip</code>, because
+            <b>The ONNX Runtime install is CPU-only.</b>
             <code>onnxruntime-node</code>'s postinstall would otherwise fetch
             the optional CUDA and TensorRT execution providers
             (onnxruntime-linux-x64-gpu, ~343 MB unpacked) on Linux x64. Nothing
             shipped consumes them: detection loads with
             <code>device: 'cpu'</code>, the browser path uses onnxruntime-web,
-            and the desktop bundle excludes <code>node_modules</code>. A GPU
-            host opts in with
+            and the desktop bundle excludes <code>node_modules</code>. Bun never
+            runs that postinstall: lifecycle scripts execute only for trusted
+            dependencies, the package is not in Bun's default-trusted set, and
+            the workspace does not trust it — no install setting and no
+            image-stage file are involved. A GPU host opts in with
             <code
-              >ONNXRUNTIME_NODE_INSTALL_CUDA=v12 pnpm rebuild
+              >ONNXRUNTIME_NODE_INSTALL_CUDA=v12 bun pm trust
               onnxruntime-node</code
-            >: another <code>pnpm install</code> replays the postinstall result
-            cached in the pnpm store and does not switch modes. Any image stage
-            that runs a dependency-materialising pnpm command
-            (<code>install</code>, <code>deploy</code>, <code>fetch</code>,
-            <code>add</code>, <code>rebuild</code>) must copy the repo-root
-            <code>.npmrc</code> into that stage first.
+            >, and returns to CPU-only by removing that
+            <code>trustedDependencies</code> entry and reinstalling fresh.
+            <code>services/api/src/rampart-install-config.test.ts</code> fails
+            any workspace Dockerfile that opts in or installs without the
+            lockfile beside it.
           </div>
           <div class="callout note">
             <b>The model is loaded at startup, not on first use.</b>
@@ -4423,12 +4423,12 @@
             visible instead of inside a user's first redaction. A failed warm is
             logged with its cause and leaves the API serving; detection still
             degrades per run to <code>heuristics+supplement</code>, which the
-            review UI labels. <code>pnpm prefetch:rampart</code> fills the same
-            cache without booting the API.
+            review UI labels. <code>bun run prefetch:rampart</code> fills the
+            same cache without booting the API.
           </div>
           <div class="callout note">
             <b>The web build fixes its own mode and records what it built.</b>
-            <code>pnpm --filter @obiter/web build</code> refuses to run while
+            <code>bun run --filter @obiter/web build</code> refuses to run while
             <code>NODE_ENV</code> is set to anything other than
             <code>production</code>: Vite selects React's production runtime
             from that variable, so an inherited
@@ -4446,8 +4446,8 @@
           </div>
           <div class="callout note">
             <b>The desktop build has a size budget of its own.</b>
-            <code>pnpm --filter @obiter/desktop build</code> emits a Vite chunk
-            manifest, and
+            <code>bun run --filter @obiter/desktop build</code> emits a Vite
+            chunk manifest, and
             <a
               href="https://github.com/ObiterDictum/obiter/blob/dev/scripts/perf/desktop-budget.mjs"
               ><code>scripts/perf/desktop-budget.mjs</code></a
@@ -5751,14 +5751,16 @@
           </p>
           <div class="callout risk">
             <b
-              >Run tests through the package scripts, not vitest from the
-              root.</b
+              >Run tests through the package scripts, not a bare
+              <code>bun test</code> from the root.</b
             >
-            A root-level <code>npx vitest run packages/redact-ui</code>
-            silently ignores that package's own config, so React tests fail with
-            <code>document is not defined</code> because the jsdom environment
-            was never applied. The failure looks like broken code and is not.
-            Use <code>pnpm --filter @obiter/redact-ui test</code>.
+            <code>bun run --filter @obiter/redact-ui test</code> carries that
+            package's working directory, its <code>--preload</code> and its file
+            list; a root-level <code>bun test packages/redact-ui</code>
+            runs without them, so React tests fail with
+            <code>document is not defined</code> because the jsdom setup import
+            never resolved. The failure looks like broken code and is not. Use
+            <code>bun run --filter @obiter/redact-ui test</code>.
           </div>
           <div class="scroll">
             <table>
@@ -5770,7 +5772,7 @@
               </thead>
               <tbody>
                 <tr>
-                  <td class="id">pnpm test</td>
+                  <td class="id">bun run test</td>
                   <td>
                     Every workspace's own test script, then the root script
                     suites (synthetic-v2, redact-acceptance,
@@ -5778,22 +5780,22 @@
                   </td>
                 </tr>
                 <tr>
-                  <td class="id">pnpm typecheck</td>
+                  <td class="id">bun run typecheck</td>
                   <td>
                     Every workspace, then each root script suite against its own
                     tsconfig
                   </td>
                 </tr>
                 <tr>
-                  <td class="id">pnpm lint</td>
+                  <td class="id">bun run lint</td>
                   <td>oxlint, then eslint</td>
                 </tr>
                 <tr>
-                  <td class="id">pnpm format:check</td>
+                  <td class="id">bun run format:check</td>
                   <td>Prettier across the repository</td>
                 </tr>
                 <tr>
-                  <td class="id">pnpm benchmark:search-corpus</td>
+                  <td class="id">bun run benchmark:search-corpus</td>
                   <td>
                     Local <code>POST /api/search/fetch</code> relevance suite
                     against the product corpus. Not run in CI or
@@ -5801,7 +5803,7 @@
                   </td>
                 </tr>
                 <tr>
-                  <td class="id">pnpm benchmark:legislation-corpus</td>
+                  <td class="id">bun run benchmark:legislation-corpus</td>
                   <td>
                     Local <code>POST /api/search/fetch</code> legislation
                     relevance suite against the product provision corpus. Not
@@ -5809,7 +5811,7 @@
                   </td>
                 </tr>
                 <tr>
-                  <td class="id">pnpm --filter &lt;pkg&gt; test</td>
+                  <td class="id">bun run --filter &lt;pkg&gt; test</td>
                   <td>A single workspace with its correct environment</td>
                 </tr>
               </tbody>

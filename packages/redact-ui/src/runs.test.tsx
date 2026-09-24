@@ -1,6 +1,7 @@
+import '@obiter/test-dom'
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
-import { RedactionRunsView } from './runs'
+import { describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 
 const hooks = vi.hoisted(() => ({
   useRedactionRuns: vi.fn(),
@@ -9,19 +10,62 @@ const hooks = vi.hoisted(() => ({
   useDeleteRedactionRun: vi.fn(),
 }))
 
-vi.mock('./hooks', () => hooks)
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const hooksModuleKeys = Object.fromEntries(
+  Object.keys(await import('./hooks')).map((key) => [key, undefined]),
+)
+mock.module('./hooks', () =>
+  Object.assign({ ...hooksModuleKeys }, (() => hooks)()),
+)
 
 const ui = vi.hoisted(() => ({ useToast: vi.fn() }))
-vi.mock('@obiter/ui', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@obiter/ui')>()
-  return { ...actual, useToast: ui.useToast }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const obiterUiModule = { ...(await import('@obiter/ui')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const obiterUiModuleKeys = Object.fromEntries(
+  Object.keys(await import('@obiter/ui')).map((key) => [key, undefined]),
+)
+mock.module('@obiter/ui', () =>
+  Object.assign(
+    { ...obiterUiModuleKeys },
+    (() => {
+      const actual = obiterUiModule
+      return { ...actual, useToast: ui.useToast }
+    })(),
+  ),
+)
 
 const shell = vi.hoisted(() => ({ useCurrentUser: vi.fn() }))
-vi.mock('@obiter/app-shell', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@obiter/app-shell')>()
-  return { ...actual, useCurrentUser: shell.useCurrentUser }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const obiterAppShellModule = { ...(await import('@obiter/app-shell')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const obiterAppShellModuleKeys = Object.fromEntries(
+  Object.keys(await import('@obiter/app-shell')).map((key) => [key, undefined]),
+)
+mock.module('@obiter/app-shell', () =>
+  Object.assign(
+    { ...obiterAppShellModuleKeys },
+    (() => {
+      const actual = obiterAppShellModule
+      return { ...actual, useCurrentUser: shell.useCurrentUser }
+    })(),
+  ),
+)
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const { RedactionRunsView } = await import('./runs')
 
 describe('RedactionRunsView', () => {
   it('keeps pasted text as the standalone default and accepts DOCX, PDF, and TXT uploads', () => {

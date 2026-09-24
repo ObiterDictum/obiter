@@ -1,5 +1,6 @@
 import { tmpdir } from 'node:os'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'bun:test'
+import { vi } from '../test/vitest-compat'
 import {
   assertRunnerProvenance,
   fetchLegislationSearch,

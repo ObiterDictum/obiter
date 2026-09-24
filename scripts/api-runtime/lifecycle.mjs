@@ -64,7 +64,10 @@ export function startServer({
   port,
   environment,
   bunBin,
-  nodeBin = process.execPath,
+  // Real `node`, not process.execPath: the harness runs under bun after the
+  // toolchain migration, and the rollback adapter must still be exercised on
+  // an actual Node runtime.
+  nodeBin = 'node',
   onOutput = () => {},
 }) {
   const entry = SERVER_ENTRY_POINTS[runtime]

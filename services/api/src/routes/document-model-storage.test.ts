@@ -1,6 +1,7 @@
 import { documentModelResponseSchema } from '@obiter/contracts'
 import { parseModelJson } from '@obiter/ooxml'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'bun:test'
+import { vi } from '../../../../scripts/test/vitest-compat'
 import {
   cachedModelJson,
   MemoryStorage,

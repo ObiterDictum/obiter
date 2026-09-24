@@ -2,7 +2,7 @@
 
 Bulk ingestion from Find Case Law into Postgres `legal_source_documents`
 only. The Meilisearch product index (`legal_authorities`) is derived and
-populated only by `pnpm rebuild:search-index`; this service never writes it.
+populated only by `bun run rebuild:search-index`; this service never writes it.
 The fixture seeder (`src/index.ts`) stays on `legal_authorities_fixtures`.
 
 ## Configuration
@@ -29,19 +29,19 @@ from `services/legal-ingestor`, not the repo root.
 
 ```bash
 # One Act (with the affected-changes effects pass)
-DATABASE_URL=postgres://obiter:obiter@localhost:5432/obiter pnpm legislation:ingest --act=ukpga/2023/29
+DATABASE_URL=postgres://obiter:obiter@localhost:5432/obiter bun run legislation:ingest --act=ukpga/2023/29
 
 # Whole years (default: 2020 through the current year)
-DATABASE_URL=... pnpm legislation:ingest --years=2020,2021
+DATABASE_URL=... bun run legislation:ingest --years=2020,2021
 
 # Verification slice without the effects pass
-DATABASE_URL=... pnpm legislation:ingest --years=2023 --max-acts=2 --skip-effects
+DATABASE_URL=... bun run legislation:ingest --years=2023 --max-acts=2 --skip-effects
 ```
 
 Flags: `--act=ukpga/YYYY/N`, `--years=Y1,Y2`, `--max-acts=N`,
 `--gap-ms=MS` (default 5000, never below the site's Crawl-delay),
 `--skip-effects` (bare or `=1`),
-`--force-reparse` (bare or `=1`). `pnpm legislation:ingest --help`
+`--force-reparse` (bare or `=1`). `bun run legislation:ingest --help`
 prints usage and exits without touching env, the database, or upstream.
 Unknown flags fail with usage instead of being ignored.
 
@@ -68,11 +68,11 @@ mismatch list.
 
 ```bash
 # Full measured scope (~38k docs, ~6h at the settled rate)
-DATABASE_URL=postgres://obiter:obiter@localhost:5432/obiter pnpm bulk:ingest
+DATABASE_URL=postgres://obiter:obiter@localhost:5432/obiter bun run bulk:ingest
 
 # Bounded slice (verification, trial runs)
-DATABASE_URL=... pnpm bulk:ingest --court=uksc --max-pages=2
-DATABASE_URL=... pnpm bulk:ingest --court=ewhc-kb --from-date=2024-01-01 --max-docs=200
+DATABASE_URL=... bun run bulk:ingest --court=uksc --max-pages=2
+DATABASE_URL=... bun run bulk:ingest --court=ewhc-kb --from-date=2024-01-01 --max-docs=200
 ```
 
 Flags: `--court` (repeatable comma list, slash or dash form),
@@ -113,7 +113,7 @@ are not re-fetched. Re-running the same command is the poller. Suggested
 schedule: weekly via cron or the existing job runner, e.g.
 
 ```cron
-0 2 * * 0  cd /srv/obiter/sargassum/services/legal-ingestor && NODE_ENV=production DATABASE_URL=... pnpm bulk:ingest
+0 2 * * 0  cd /srv/obiter/sargassum/services/legal-ingestor && NODE_ENV=production DATABASE_URL=... bun run bulk:ingest
 ```
 
 Name `NODE_ENV=production` in the job rather than inheriting it: a server
@@ -123,7 +123,7 @@ rule exists to stop. Production also requires `MEILISEARCH_HOST`,
 `MEILISEARCH_ADMIN_API_KEY` and `LEGAL_AUTHORITIES_INDEX` (from the worktree
 `.env` or the job environment).
 
-then `pnpm rebuild:search-index` from the repo root.
+then `bun run rebuild:search-index` from the repo root.
 
 ## Withdrawals (deferred)
 

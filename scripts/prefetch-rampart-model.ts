@@ -4,7 +4,7 @@
  * Without this, the first redaction on a machine pays for a ~15 MB Hugging Face
  * fetch inline, and a fetch that fails there produces a run in
  * `heuristics+supplement` mode rather than an obvious error. Running this after
- * `pnpm install` — or in a container build — turns that into a step that either
+ * `bun install` — or in a container build — turns that into a step that either
  * succeeds or fails where someone is looking.
  *
  * Reads the same `OBITER_RAMPART_*` configuration as the API, so a machine that

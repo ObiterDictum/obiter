@@ -12,7 +12,8 @@ import {
   extractText,
   getDocumentProxy,
 } from 'unpdf'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 import { extractDocumentContent, prepareLaidChars } from './document-extraction'
 import type { DocumentTextLayout } from './document-layout'
 import {

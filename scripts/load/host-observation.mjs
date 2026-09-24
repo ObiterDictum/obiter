@@ -63,7 +63,7 @@ export function busyFraction(before, after) {
 
 /**
  * Resolve the cgroup directory that owns the lane's API unit. Uses systemd
- * rather than the process tree: the unit starts `pnpm → tsx → node`, and the
+ * rather than the process tree: the unit starts a package-manager wrapper → loader → runtime, and the
  * cgroup is the one identity that covers every process in it.
  */
 export async function resolveUnitCgroup(unitName, { execFile } = {}) {

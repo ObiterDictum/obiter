@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import type { Pool } from 'pg'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import {
   apiErrorResponseSchema,
   verificationRunListResponseSchema,

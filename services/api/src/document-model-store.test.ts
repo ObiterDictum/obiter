@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import { parseDocx, parseModelJson, serialiseModelJson } from '@obiter/ooxml'
 import {
   DocumentModelStoreError,
@@ -89,7 +89,7 @@ describe('getDocumentModel through the worker pool', () => {
   }, 20_000)
 
   // Last in the file: it closes the shared pool, so nothing after it may load
-  // a model in this module registry (vitest isolates files, not test cases).
+  // a model in this module registry (the runner isolates files, not test cases).
   it('reports the curated store error once the pool has shut down', async () => {
     await closeDocumentModelWorkers()
 

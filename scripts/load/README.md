@@ -27,7 +27,7 @@ node scripts/load/upload-extraction-load.mjs \
   --out /tmp/q3-upload-extraction.json
 ```
 
-`pnpm load:upload-extraction` is the same entry point. `--out` is required and
+`bun run load:upload-extraction` is the same entry point. `--out` is required and
 must be outside the checkout: the JSON is a run dump, not source.
 
 Before measuring, check the machine is quiet:

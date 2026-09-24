@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import { collectVerificationFindings } from './verification-checks'
 import { fakePool } from './citation-resolution.test-support'
 import { queryDouble, queryResult } from './query-double.test-support'

@@ -1,22 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
-import {
-  checkQuoteFidelity,
-  checkQuoteFidelities,
-  maxQuoteFidelityBatchSize,
-  maxQuoteLength,
-  maxSourceFragments,
-  QuoteBatchTooLargeError,
-  QuoteRequestTooLargeError,
-} from './quote-fidelity'
-import {
-  caseLaw,
-  fakeQuotePool,
-  judgmentAuthority,
-  judgmentCitation,
-  outcomes,
-  rejections,
-  request,
-} from './quote-fidelity.test-support'
+import { describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 
 /**
  * The quote-fidelity store boundary for case law, against an injected pool. The
@@ -27,17 +10,58 @@ import {
 /** Counts source preparations, to prove a batch prepares each authority once. */
 const prepareCalls = vi.hoisted(() => ({ count: 0 }))
 
-vi.mock('@obiter/verification-core', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@obiter/verification-core')>()
-  return {
-    ...actual,
-    prepareQuoteSource: (texts: readonly string[]) => {
-      prepareCalls.count += 1
-      return actual.prepareQuoteSource(texts)
-    },
-  }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const obiterVerificationCoreModule = {
+  ...(await import('@obiter/verification-core')),
+}
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const obiterVerificationCoreModuleKeys = Object.fromEntries(
+  Object.keys(await import('@obiter/verification-core')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('@obiter/verification-core', () =>
+  Object.assign(
+    { ...obiterVerificationCoreModuleKeys },
+    (() => {
+      const actual = obiterVerificationCoreModule
+      return {
+        ...actual,
+        prepareQuoteSource: (texts: readonly string[]) => {
+          prepareCalls.count += 1
+          return actual.prepareQuoteSource(texts)
+        },
+      }
+    })(),
+  ),
+)
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const {
+  checkQuoteFidelity,
+  checkQuoteFidelities,
+  maxQuoteFidelityBatchSize,
+  maxQuoteLength,
+  maxSourceFragments,
+  QuoteBatchTooLargeError,
+  QuoteRequestTooLargeError,
+} = await import('./quote-fidelity')
+const {
+  caseLaw,
+  fakeQuotePool,
+  judgmentAuthority,
+  judgmentCitation,
+  outcomes,
+  rejections,
+  request,
+} = await import('./quote-fidelity.test-support')
 
 describe('quote fidelity judgment retrieval', () => {
   it('clears an exact judgment quotation with its paragraph evidence', async () => {

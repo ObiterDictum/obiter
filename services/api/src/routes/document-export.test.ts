@@ -1,5 +1,5 @@
 import { parseDocx } from '@obiter/ooxml'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import {
   DOCUMENT_EXPORT_CONTENT_TYPE,
   documentExportFilename,

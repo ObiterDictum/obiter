@@ -1,5 +1,5 @@
 import { Worker } from 'node:worker_threads'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'bun:test'
 import {
   DocumentModelWorkerPool,
   type DocumentModelTaskResult,

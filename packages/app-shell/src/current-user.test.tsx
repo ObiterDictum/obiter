@@ -1,14 +1,25 @@
-// @vitest-environment jsdom
-import { describe, expect, it, vi } from 'vitest'
+import '@obiter/test-dom'
+import { describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import type { MeResponse } from '@obiter/contracts'
-import { currentUserQueryOptions, useCreateOrganisation } from './current-user'
 
 const api = vi.hoisted(() => ({ apiFetch: vi.fn() }))
 
-vi.mock('./api', () => api)
+// The real module's export names, available as undefined, so bun's
+// static link check accepts imports the mock does not override.
+const apiKeys = Object.fromEntries(
+  Object.keys(await import('./api')).map((key) => [key, undefined]),
+)
+mock.module('./api', () => Object.assign({ ...apiKeys }, api))
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const { currentUserQueryOptions, useCreateOrganisation } =
+  await import('./current-user')
 
 const ORGLESS_ME: MeResponse = {
   user: { id: 'usr_1', email: 'lex@obiter.dev', name: 'Lex', role: null },

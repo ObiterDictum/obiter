@@ -25,17 +25,16 @@
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@obiter/test-dom": "workspace:*",
     "@tailwindcss/vite": "^4.3.2",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.3",
-    "jsdom": "^29.1.1",
-    "tailwindcss": "^4.3.2",
-    "vitest": "^3.2.4"
+    "tailwindcss": "^4.3.2"
   },
   "scripts": {
-    "test": "vitest run --config ../../vitest.shared.ts",
+    "test": "bun test --isolate --preload ../../scripts/test/vitest-compat.ts --preload ../../scripts/test/dom-preload.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   }
 }

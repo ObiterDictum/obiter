@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { expectRejection } from '../test/expect-rejection'
+import { afterEach, describe, expect, it } from 'bun:test'
 import {
   DeepSeekGenerator,
   OpenCodeGoJudge,
@@ -73,7 +74,10 @@ function parseRequestBody(
 function fakeFetch(
   handler: (body: Record<string, unknown>) => Response,
 ): typeof fetch {
-  return async (_input, init) => handler(parseRequestBody(init?.body))
+  // bun-types' fetch carries a `preconnect` property a test double has no
+  // reason to implement; the call sites only ever invoke it as a function.
+  return (async (_input: URL | RequestInfo, init?: RequestInit) =>
+    handler(parseRequestBody(init?.body))) as unknown as typeof fetch
 }
 
 const judgeReference = {
@@ -207,7 +211,8 @@ describe('OpenRouter schema and offline failure behaviour', () => {
           ),
       ),
     })
-    await expect(labeler.label([input])).rejects.toSatisfy(
+    await expectRejection(
+      labeler.label([input]),
       (error: unknown) =>
         error instanceof ProviderBatchError &&
         error.telemetry[0]?.returnedModel === 'fake/model' &&
@@ -382,7 +387,8 @@ describe('OpenRouter schema and offline failure behaviour', () => {
           ),
       ),
     })
-    await expect(labeler.label([input])).rejects.toSatisfy(
+    await expectRejection(
+      labeler.label([input]),
       (error: unknown) =>
         error instanceof ProviderBatchError &&
         error.telemetry[0]?.usage?.outputTokens === 3 &&
@@ -411,7 +417,8 @@ describe('OpenRouter schema and offline failure behaviour', () => {
           ),
       ),
     })
-    await expect(labeler.label([input])).rejects.toSatisfy(
+    await expectRejection(
+      labeler.label([input]),
       (error: unknown) =>
         error instanceof ProviderBatchError &&
         error.telemetry[0]?.errorCode === 'model_identity_mismatch' &&
@@ -429,13 +436,12 @@ describe('OpenRouter schema and offline failure behaviour', () => {
         return new Response('failure', { status: 500 })
       }),
     })
-    await expect(
+    await expectRejection(
       labeler.label([
         input,
         { ...input, spec: { ...input.spec, id: 'doc-2' } },
         { ...input, spec: { ...input.spec, id: 'doc-3' } },
       ]),
-    ).rejects.toSatisfy(
       (error: unknown) =>
         error instanceof ProviderBatchError &&
         error.telemetry.length === 2 &&
@@ -449,7 +455,8 @@ describe('OpenRouter schema and offline failure behaviour', () => {
       retries: 1,
       fetch: fakeFetch(() => new Response('failure', { status: 500 })),
     })
-    await expect(generator.generate([input.spec])).rejects.toSatisfy(
+    await expectRejection(
+      generator.generate([input.spec]),
       (error: unknown) => {
         if (!(error instanceof ProviderBatchError)) return false
         const [first, second] = error.telemetry
@@ -594,7 +601,8 @@ describe('OpenRouter schema and offline failure behaviour', () => {
           ),
       ),
     })
-    await expect(judge.judge([document])).rejects.toSatisfy(
+    await expectRejection(
+      judge.judge([document]),
       (error: unknown) =>
         error instanceof ProviderBatchError &&
         error.telemetry[0]?.returnedModel === 'qwen3.7-max' &&

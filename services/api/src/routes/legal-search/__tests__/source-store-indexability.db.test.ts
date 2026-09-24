@@ -1,5 +1,5 @@
 import { createTestPool } from '../../../test-database.test-support'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { createPostgresLegalAuthoritySourceStore } from '../source-store'
 
 /**

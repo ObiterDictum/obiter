@@ -1,14 +1,26 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 import type { ApiEnv } from './env'
 import { createTestApiEnv } from './test-api-env'
 
 const resendSendMock = vi.hoisted(() => vi.fn())
 
-vi.mock('resend', () => ({
-  Resend: vi.fn().mockImplementation(() => ({
-    emails: { send: resendSendMock },
-  })),
-}))
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const resendModuleKeys = Object.fromEntries(
+  Object.keys(await import('resend')).map((key) => [key, undefined]),
+)
+mock.module('resend', () =>
+  Object.assign(
+    { ...resendModuleKeys },
+    (() => ({
+      Resend: vi.fn().mockImplementation(() => ({
+        emails: { send: resendSendMock },
+      })),
+    }))(),
+  ),
+)
 
 const {
   sendMagicLink,

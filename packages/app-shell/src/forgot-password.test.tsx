@@ -1,5 +1,6 @@
-// @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
+import '@obiter/test-dom'
+import { afterEach, describe, expect, it, beforeEach, mock } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 import {
   cleanup,
   fireEvent,
@@ -20,9 +21,20 @@ const mocks = vi.hoisted(() => ({
   requestPasswordReset: vi.fn(),
 }))
 
-vi.mock('./auth', () => ({
-  useAuth: () => ({ requestPasswordReset: mocks.requestPasswordReset }),
-}))
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const authModuleKeys = Object.fromEntries(
+  Object.keys(await import('./auth')).map((key) => [key, undefined]),
+)
+mock.module('./auth', () =>
+  Object.assign(
+    { ...authModuleKeys },
+    (() => ({
+      useAuth: () => ({ requestPasswordReset: mocks.requestPasswordReset }),
+    }))(),
+  ),
+)
 
 function buildRouter() {
   const rootRoute = createRootRoute()

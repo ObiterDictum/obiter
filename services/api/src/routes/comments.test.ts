@@ -1,5 +1,5 @@
 import { parseModelJson, validateCommentAnchor } from '@obiter/ooxml'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 
 import {
   cachedCommentModelJson,

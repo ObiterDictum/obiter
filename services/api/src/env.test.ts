@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
 import {
   OOXML_INFLATE_CONCURRENCY,
   OOXML_MAX_COMPRESSION_RATIO,

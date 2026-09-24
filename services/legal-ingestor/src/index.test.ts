@@ -1,15 +1,36 @@
-import { describe, expect, it, vi } from 'vitest'
-import { runBoundedSampleIndexing } from './index'
+import { describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 
-vi.mock('@obiter/search-client', () => ({
-  createClient: vi.fn(() => ({ id: 'client' })),
-  createIndex: vi.fn(async () => ({ taskUid: 1 })),
-  indexDocuments: vi.fn(async (_client, _indexName, documents: unknown[]) => ({
-    indexedCount: documents.length,
-    failedCount: 0,
-    errors: [],
-  })),
-}))
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const obiterSearchClientModuleKeys = Object.fromEntries(
+  Object.keys(await import('@obiter/search-client')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('@obiter/search-client', () =>
+  Object.assign(
+    { ...obiterSearchClientModuleKeys },
+    (() => ({
+      createClient: vi.fn(() => ({ id: 'client' })),
+      createIndex: vi.fn(async () => ({ taskUid: 1 })),
+      indexDocuments: vi.fn(
+        async (_client, _indexName, documents: unknown[]) => ({
+          indexedCount: documents.length,
+          failedCount: 0,
+          errors: [],
+        }),
+      ),
+    }))(),
+  ),
+)
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const { runBoundedSampleIndexing } = await import('./index')
 
 describe('runBoundedSampleIndexing', () => {
   it('indexes only the local bounded fixture', async () => {

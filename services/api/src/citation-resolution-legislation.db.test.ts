@@ -1,6 +1,7 @@
 import { Pool } from 'pg'
 import { createTestPool } from './test-database.test-support'
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 import type { VerificationSubject } from '@obiter/verification-core'
 import { resolveCitationCandidates } from './citation-resolution'
 import { createResolutionPipeline } from './citation-resolution.test-support'
