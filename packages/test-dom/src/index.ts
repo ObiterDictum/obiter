@@ -2,6 +2,7 @@
 // importing file without publishing a types package.
 // oxlint-disable-next-line typescript/triple-slash-reference
 /// <reference path="./jsdom.d.ts" />
+import { expect } from 'bun:test'
 import { JSDOM } from 'jsdom'
 
 /**
@@ -124,3 +125,50 @@ async function install(): Promise<void> {
 }
 
 await install()
+
+/**
+ * A short description of a value for a failure message, bounded so formatting
+ * stays cheap. jsdom nodes never reach the impl graph; other values are
+ * inspected shallowly, since only `null` was expected anyway.
+ */
+function describeValue(value: unknown): string {
+  if (typeof Node !== 'undefined' && value instanceof Node) {
+    if (value.nodeType === 1) {
+      const element = value as Element
+      const id = element.id ? `#${element.id}` : ''
+      const role = element.getAttribute('role')
+      const text = (element.textContent ?? '').replace(/\s+/g, ' ').slice(0, 80)
+      const roleSuffix = role ? ` [role=${role}]` : ''
+      return `<${element.tagName.toLowerCase()}${id}${roleSuffix}> ${JSON.stringify(text)}`
+    }
+    return `#node(nodeType=${value.nodeType})`
+  }
+  try {
+    return Bun.inspect(value, { depth: 3, colors: false })
+  } catch {
+    return String(value)
+  }
+}
+
+/**
+ * `toBeNull` with bun's exact pass rule (`received === null`) and a bounded
+ * failure message. The built-in formats the received value eagerly, and for a
+ * jsdom node that walk follows `[Symbol(impl)]` into `_globalObject`, the whole
+ * Window: roughly 200ms for a detached element and seconds once the app is
+ * mounted. Every `waitFor` poll that fails before the condition holds pays it,
+ * so one negative-DOM wait could hold the file for seconds with no test
+ * sleeping anywhere. The summary keeps the element identifiable: tag, id,
+ * role, text, without traversing the graph.
+ */
+expect.extend({
+  toBeNull(received: unknown) {
+    const pass = received === null
+    return {
+      pass,
+      message: () =>
+        pass
+          ? 'expected value not to be null, received null'
+          : `expected null, received ${describeValue(received)}`,
+    }
+  },
+})
