@@ -2,8 +2,15 @@ import { test, expect } from '@playwright/test'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { resolveJourneyTargets } from '../journey-target.mjs'
 
-const API_ORIGIN = process.env.OBITER_API_ORIGIN ?? 'http://127.0.0.1:8787'
+// The sign-up origin, the Origin header and the psql database resolve together
+// from the same lane machinery the Playwright config uses, and resolution
+// throws at module load — before any test, hence before any account exists —
+// when the origin is absent, invalid or shared, or when the task database is
+// not explicitly selected. There is deliberately no fallback to the shared
+// dev API.
+const { apiOrigin, webOrigin, databaseName } = resolveJourneyTargets()
 // Reuse the synthetic fixture already in the repo — fictional names only.
 const FIXTURE_REL = '../../../data/evals/redact/demo-fixture.docx'
 
@@ -16,10 +23,11 @@ function verifyEmailInDb(email: string) {
   // Mark the better-auth user as verified so sign-in succeeds (requireEmailVerification=true).
   const safe = email.replace(/'/g, "''")
   const sql = `update users set "emailVerified"=true where email='${safe}'`
-  // The API's database is whatever DATABASE_URL points at; when the suite runs
-  // against the task-owned test database (OBITER_E2E_DATABASE_URL), this update
-  // has to follow it, or the user is verified in a database the API never reads.
-  const database = process.env.OBITER_E2E_DATABASE_NAME ?? 'obiter'
+  // The API's database is whatever DATABASE_URL points at, and the Playwright
+  // config starts the API from OBITER_E2E_DATABASE_URL. journey-target derives
+  // this name from that same variable (refusing the shared `obiter` database
+  // and a NAME/URL mismatch), so this update always names the database the API
+  // reads — sign-up, verification and sign-in land in one database.
   execFileSync(
     'docker',
     [
@@ -29,7 +37,7 @@ function verifyEmailInDb(email: string) {
       '-U',
       'obiter',
       '-d',
-      database,
+      databaseName,
       '-c',
       sql,
     ],
@@ -51,9 +59,9 @@ test('sign in → create organisation → create matter → upload DOCX → see 
   const matterName = `E2E Matter ${runId}`
 
   // Seed: create the user via the real sign-up endpoint, then verify directly in DB.
-  const signUp = await request.post(`${API_ORIGIN}/api/auth/sign-up/email`, {
+  const signUp = await request.post(`${apiOrigin}/api/auth/sign-up/email`, {
     data: { name: 'E2E User', email, password },
-    headers: { Origin: 'http://localhost:3000' },
+    headers: { Origin: webOrigin },
   })
   // better-auth returns 200 with { token:null } when verification is required; that's ok.
   expect(signUp.ok(), `sign-up failed: ${await signUp.text()}`).toBeTruthy()
@@ -73,41 +81,38 @@ test('sign in → create organisation → create matter → upload DOCX → see 
   await expect(page).toHaveURL('/')
   await page.waitForLoadState('networkidle')
 
-  // 2. Create organisation via Settings — the app auto-provisions a
-  // "Personal workspace" when an org-less user first hits Matters/Home,
-  // so we may already have an org by the time we reach Settings.
+  // 2. Create organisation via Settings. Settings opens on the Account
+  // section; since #210 the organisation form is mounted hidden behind its own
+  // nav item, so select it first and then work with the (now visible)
+  // Organisation name field. The app auto-provisions a "Personal workspace"
+  // when an org-less user first hits Matters/Home, so by now the account may
+  // already have an organisation.
   await page.goto('/settings', { waitUntil: 'networkidle' })
+  await page.getByRole('button', { name: 'Organisation', exact: true }).click()
   const orgInput = page.getByLabel('Organisation name')
-  let hasForm = false
-  try {
-    await expect(orgInput).toBeVisible({ timeout: 2_000 })
-    hasForm = true
-  } catch {
-    hasForm = false
-  }
-  if (hasForm) {
+  await expect(orgInput).toBeVisible({ timeout: 10_000 })
+
+  // The create form and the rename form share that label; only the create form
+  // has a "Create organisation" submit button.
+  const createOrgButton = page.getByRole('button', {
+    name: 'Create organisation',
+  })
+  // orgName embeds only [a-z0-9] run ids, so it is safe inside this regex.
+  const expectedOrgName = new RegExp(`^(?:${orgName}|Personal workspace)$`)
+  if (await createOrgButton.isVisible()) {
     await orgInput.click()
     await orgInput.pressSequentially(orgName, { delay: 10 })
-    await page.getByRole('button', { name: 'Create organisation' }).click()
-    // Success navigates to "/" but a concurrent auto-provision can 409 — handle both.
-    await page.waitForTimeout(1500)
-    if (page.url().endsWith('/settings')) {
-      // Still on settings — check if org now shows (either our name or auto-provisioned)
-      await expect(
-        page.getByText(orgName).or(page.getByText('Personal workspace')),
-      ).toBeVisible({ timeout: 10_000 })
-    } else {
-      await page.waitForURL('/', { timeout: 5_000 }).catch(() => {})
-      await page.goto('/settings', { waitUntil: 'networkidle' })
-      await expect(
-        page.getByText(orgName).or(page.getByText('Personal workspace')),
-      ).toBeVisible({ timeout: 10_000 })
-    }
+    await expect(orgInput).toHaveValue(orgName, { timeout: 5_000 })
+    await createOrgButton.click()
+    // Creating merges the organisation into the cached /api/me and the section
+    // re-renders as the rename form carrying the name the server stored. A
+    // concurrent auto-provision answers 409 and refetches its provisioned name
+    // instead — either way the account now has an organisation.
+    await expect(orgInput).toHaveValue(expectedOrgName, { timeout: 10_000 })
   } else {
-    // Already provisioned (e.g. "Personal workspace") — treat as created.
-    await expect(page.getByText('Personal workspace')).toBeVisible({
-      timeout: 10_000,
-    })
+    // Already provisioned — assert the field really carries an organisation
+    // name rather than only that some text appears on the page.
+    await expect(orgInput).toHaveValue(expectedOrgName, { timeout: 10_000 })
   }
 
   // 3. Create a matter
