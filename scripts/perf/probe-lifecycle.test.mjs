@@ -196,10 +196,13 @@ test('a registered resource is stopped with the owned servers', async () => {
 // CI-gated one; this is the end-to-end check that a browser context really
 // stops.
 const hasBrowser = existsSync(chromium.executablePath() ?? '')
-if (!hasBrowser)
+const browserTest = hasBrowser ? test : test.skip
+if (!hasBrowser) {
   console.error(
     'probe-lifecycle: Playwright browser not installed; skipping the real-browser proof',
-  )(hasBrowser ? test : test.skip)(
+  )
+}
+browserTest(
     'a timed-out probe leaves no browser context behind',
     async () => {
       const browser = await chromium.launch()
