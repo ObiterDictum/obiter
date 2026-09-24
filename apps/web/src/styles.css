@@ -2,11 +2,13 @@
  * Web app root styles.
  * - @obiter/ui/tailwind.css brings Tailwind v4 + the --obiter-* design tokens
  *   and the @theme inline mappings. This is the single Tailwind entry.
- * - @source points Tailwind at the workspace packages so utility classes
- *   authored inside @obiter/ui and @obiter/app-shell are detected.
+ * - @source is the closed set of trees this app compiles utilities from:
+ *   automatic detection is off in the shared entry, so every class-authoring
+ *   source must be listed here or its utilities compile away silently.
  */
 @import '@obiter/ui/tailwind.css';
 
+@source ".";
 @source "../../../packages/ui/src";
 @source "../../../packages/app-shell/src";
 @source "../../../packages/redact-ui/src";
