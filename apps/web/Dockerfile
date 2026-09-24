@@ -46,7 +46,9 @@ FROM node:${NODE_VERSION}-slim AS build
 # Bun drives the install and the build; node hosts third-party lifecycle
 # scripts such as esbuild's postinstall. The oven/bun image ships /usr/local/bin/bun
 # as a regular file, so a plain COPY lands a runnable binary here.
-COPY --from=oven/bun:${BUN_VERSION}-slim /usr/local/bin/bun /usr/local/bin/bun
+# The image reference in COPY --from is not expanded from an ARG, so the
+# pinned tag is repeated here; keep it in step with BUN_VERSION above.
+COPY --from=oven/bun:1.4.2-slim /usr/local/bin/bun /usr/local/bin/bun
 ENV CI=1
 # Build provenance for the emitted artifact. .git is excluded from the build
 # context, so the commit cannot be read here; the CI workflow passes it as

@@ -80,13 +80,16 @@ export function startServer({
   assertUsablePort(port)
 
   const command = runtime === 'bun' ? bunBin : nodeBin
+  // The Node adapter runs from services/api, the way the container does: tsx
+  // is a dependency of @obiter/api and resolves from that package, not the
+  // repository root (which no longer carries tsx after the Bun migration).
   const args =
     runtime === 'bun'
       ? [`${worktreeRoot}/${entry}`]
-      : ['--import', 'tsx', `${worktreeRoot}/${entry}`]
+      : ['--import', 'tsx', 'src/server.ts']
 
   const child = spawn(command, args, {
-    cwd: worktreeRoot,
+    cwd: runtime === 'bun' ? worktreeRoot : `${worktreeRoot}/services/api`,
     env: { ...process.env, ...environment },
     stdio: ['ignore', 'pipe', 'pipe'],
   })

@@ -55,7 +55,9 @@ ARG RAMPART_CACHE_DIR=/opt/obiter/rampart-models
 # in its default-trusted set). The pinned Bun binary is copied in beside it and
 # drives the install, the model prefetch and everything else first-party.
 FROM node:${NODE_VERSION}-slim AS build
-COPY --from=oven/bun:${BUN_VERSION}-slim /usr/local/bin/bun /usr/local/bin/bun
+# The image reference in COPY --from is not expanded from an ARG, so the
+# pinned tag is repeated here; keep it in step with BUN_VERSION above.
+COPY --from=oven/bun:1.4.2-slim /usr/local/bin/bun /usr/local/bin/bun
 ENV CI=1
 # A global ARG is not visible inside a stage; redeclare it or the prefetch
 # silently falls back to ~/.cache and the runtime COPY finds nothing.
