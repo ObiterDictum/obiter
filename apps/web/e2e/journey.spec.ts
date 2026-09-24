@@ -16,6 +16,10 @@ function verifyEmailInDb(email: string) {
   // Mark the better-auth user as verified so sign-in succeeds (requireEmailVerification=true).
   const safe = email.replace(/'/g, "''")
   const sql = `update users set "emailVerified"=true where email='${safe}'`
+  // The API's database is whatever DATABASE_URL points at; when the suite runs
+  // against the task-owned test database (OBITER_E2E_DATABASE_URL), this update
+  // has to follow it, or the user is verified in a database the API never reads.
+  const database = process.env.OBITER_E2E_DATABASE_NAME ?? 'obiter'
   execFileSync(
     'docker',
     [
@@ -25,7 +29,7 @@ function verifyEmailInDb(email: string) {
       '-U',
       'obiter',
       '-d',
-      'obiter',
+      database,
       '-c',
       sql,
     ],
