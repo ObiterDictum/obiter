@@ -464,7 +464,10 @@ describe('cut ordering and non-keydown input', () => {
 })
 
 describe('pasting over a document selection', () => {
-  it('refuses an empty clipboard instead of deleting the selection', () => {
+  // An empty clipboard and an image-only or format-only copy arrive as the
+  // same absent text/plain payload, and the editor collapses both to ''
+  // before its length check, so one input models both refusals.
+  it('refuses an empty or text-less clipboard instead of deleting the selection', () => {
     const { editAsync } = mount()
     selectAcrossBoundary()
     fireEvent.paste(bodyField(), { clipboardData: { getData: () => '' } })
@@ -472,15 +475,6 @@ describe('pasting over a document selection', () => {
     // The range is still live, painted, and untouched.
     expect(selectedText('p1')).toBe('pha')
     expect(selectedText('p2')).toBe('Br')
-    save()
-    expect(editAsync).not.toHaveBeenCalled()
-  })
-
-  it('refuses a clipboard with no text/plain payload', () => {
-    const { editAsync } = mount()
-    selectAcrossBoundary()
-    fireEvent.paste(bodyField(), { clipboardData: { getData: () => '' } })
-    expect(selectionStatus()).toMatch(/cannot replace a document selection/)
     save()
     expect(editAsync).not.toHaveBeenCalled()
   })
