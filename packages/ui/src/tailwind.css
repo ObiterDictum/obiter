@@ -13,8 +13,16 @@
  *   bg-info  text-success  text-warning-fg  ...
  *   bg-span-person-name  text-span-person-name-fg  ...
  *   rounded-md  shadow-md  font-sans  font-mono
+ *
+ * - source(none) turns automatic source detection off. Detection scans whatever
+ *   is on disk (honouring .gitignore only when one is present), so each build
+ *   pass compiled a different stylesheet: in the production image build, which
+ *   ships no .gitignore, the SSR pass rescanned the client pass's dist/ output,
+ *   hashed its stylesheet differently, and named a styles-*.css the client pass
+ *   never emitted. Every app must therefore declare its own source trees with
+ *   @source in its root CSS (see apps/web and the desktop renderer).
  */
-@import 'tailwindcss';
+@import 'tailwindcss' source(none);
 @import './tokens.css';
 @import './fonts.css';
 
