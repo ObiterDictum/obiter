@@ -1,6 +1,7 @@
+import '@obiter/test-dom'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 
 /**
  * Enforces the contrast guarantee from contract §2.3: every `-fg` token must

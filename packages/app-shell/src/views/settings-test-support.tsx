@@ -7,13 +7,13 @@ import {
   createRouter,
   RouterProvider,
 } from '@tanstack/react-router'
-import { vi } from 'vitest'
+import { vi } from '../../../../scripts/test/vitest-compat'
 import type { MeResponse } from '@obiter/contracts'
 import { SettingsRouteView } from './settings'
 
 /**
  * Fixtures and render helpers shared by the Settings suites. Not collected as a
- * test: vitest's default include matches `*.test.*`, and this file is
+ * test: runners discover `*.test.*`, and this file is
  * `settings-test-support.tsx`. The `vi.mock` registrations stay in each test
  * file, because a mock belongs to the module graph of the file that declares
  * it, not to a helper it imports.

@@ -20,7 +20,7 @@ The frozen surface this plan delivers is [contract.md](contract.md).
 ## Scope boundary for this pass (M1)
 
 - **In:** tokens + Tailwind v4; `@obiter/ui` primitive set; app frame (sidebar with live/planned split, top bar, `PageScaffold`, `Toaster`); real auth (`createAuthClient` + magic-link client plugin); `apiFetch`; `useCurrentUser` from real `/api/me`; document-detail layout route with `<Outlet/>`; Phosphor + ESLint one-icon-pack rule; `infra/docker/compose.yaml`.
-- **Out (M2):** matters/home/documents wired to real data; fixture layer deletion (`createPhaseZeroShellSnapshot`, `demo-shell.test.ts`); `pnpm seed`.
+- **Out (M2):** matters/home/documents wired to real data; fixture layer deletion (`createPhaseZeroShellSnapshot`, `demo-shell.test.ts`); `bun run seed`.
 - **Out (M3):** search restyle, desktop verification pass, final dead-CSS removal.
 - **Boundary note:** the existing Home/Matters views remain fixture-driven until M2. The **demo localStorage auth is removed in M1** because real sign-in is an M1 deliverable and the two cannot coexist honestly. The demo sign-in test is updated accordingly.
 
@@ -29,7 +29,7 @@ The frozen surface this plan delivers is [contract.md](contract.md).
 ### 0. Local verification foundation
 
 - [x] Add `infra/docker/compose.yaml`: Postgres 16, user/db/pass `obiter`/`obiter`/`obiter`, port `5432`, plus an `obiter_test` database (for `TEST_DATABASE_URL`). Volumes for persistence.
-- [x] Update `infra/docker/README.md`: verification path is `docker compose up -d`, run migrations, then `pnpm dev:api`.
+- [x] Update `infra/docker/README.md`: verification path is `docker compose up -d`, run migrations, then `bun run dev:api`.
 - [x] Confirm migrations apply against the compose DB; document the migration command if none is scripted.
 
 ### 1. Design tokens + Tailwind v4
@@ -77,15 +77,15 @@ The frozen surface this plan delivers is [contract.md](contract.md).
 
 Per [TESTING.md](../../../TESTING.md) and the project rule **"never claim verified without having run it."**
 
-- [x] `pnpm -r typecheck` — all 10 packages clean, including `@obiter/desktop` (the desktop-types risk is cleared).
-- [x] `pnpm --filter @obiter/ui --filter @obiter/app-shell test` — 47 tests, including the `tokens.css` WCAG-AA contrast test for every `-fg`/base pair in both themes (all ≥ 4.5; `--obiter-status-warning` tuned `#9a6b1c`→`#8a5e16` to clear 5.36).
-- [x] `pnpm --filter @obiter/web build` — clean, no CSS warnings; proves the Tailwind v4 cross-package pipeline compiles (`@theme inline` + `@source` generate semantic utilities; tokens + all 15 span `-bg/-fg` pairs emit).
-- [x] `pnpm lint` — clean; `no-restricted-imports` icon-pack rule enforced.
+- [x] `bun run --workspaces typecheck` — all 10 packages clean, including `@obiter/desktop` (the desktop-types risk is cleared).
+- [x] `bun run --filter @obiter/ui --filter @obiter/app-shell test` — 47 tests, including the `tokens.css` WCAG-AA contrast test for every `-fg`/base pair in both themes (all ≥ 4.5; `--obiter-status-warning` tuned `#9a6b1c`→`#8a5e16` to clear 5.36).
+- [x] `bun run --filter @obiter/web build` — clean, no CSS warnings; proves the Tailwind v4 cross-package pipeline compiles (`@theme inline` + `@source` generate semantic utilities; tokens + all 15 span `-bg/-fg` pairs emit).
+- [x] `bun run lint` — clean; `no-restricted-imports` icon-pack rule enforced.
 
 **Not runnable here (no Docker) — hand-over steps, unverified until run:**
 
-- `docker compose up -d` (infra/docker/compose.yaml) → migrate both DBs → `pnpm dev:api` → `pnpm dev:web`, then manually verify: real sign-in round-trip via better-auth; `/api/me` returns the real user; document-detail route (`/matters/:matterId/documents/:documentId`) renders its scaffold + `<Outlet/>`; light/dark toggle renders with no console errors; sign-out returns to `/sign-in`.
-- `pnpm -r test` is not a clean signal here: `@obiter/api` tests need `TEST_DATABASE_URL` (Postgres). M1 did not touch the API; that suite is out of scope for this pass.
+- `docker compose up -d` (infra/docker/compose.yaml) → migrate both DBs → `bun run dev:api` → `bun run dev:web`, then manually verify: real sign-in round-trip via better-auth; `/api/me` returns the real user; document-detail route (`/matters/:matterId/documents/:documentId`) renders its scaffold + `<Outlet/>`; light/dark toggle renders with no console errors; sign-out returns to `/sign-in`.
+- `bun run --workspaces test` is not a clean signal here: `@obiter/api` tests need `TEST_DATABASE_URL` (Postgres). M1 did not touch the API; that suite is out of scope for this pass.
 
 ## M2 carry-ins from the M1 review (plan owner, July 2026)
 

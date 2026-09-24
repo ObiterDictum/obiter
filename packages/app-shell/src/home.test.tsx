@@ -1,5 +1,6 @@
-// @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi, beforeEach } from 'vitest'
+import '@obiter/test-dom'
+import { afterEach, describe, expect, it, beforeEach, mock } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import {
@@ -22,34 +23,94 @@ const mocks = vi.hoisted(() => ({
   changelogQueryOptions: vi.fn(),
 }))
 
-vi.mock('./matters', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./matters')>()
-  return { ...actual, useMattersList: mocks.useMattersList }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const mattersModule = { ...(await import('./matters')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const mattersModuleKeys = Object.fromEntries(
+  Object.keys(await import('./matters')).map((key) => [key, undefined]),
+)
+mock.module('./matters', () =>
+  Object.assign(
+    { ...mattersModuleKeys },
+    (() => {
+      const actual = mattersModule
+      return { ...actual, useMattersList: mocks.useMattersList }
+    })(),
+  ),
+)
 
-vi.mock('./current-user', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./current-user')>()
-  return {
-    ...actual,
-    useCurrentUser: mocks.useCurrentUser,
-  }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const currentUserModule = { ...(await import('./current-user')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const currentUserModuleKeys = Object.fromEntries(
+  Object.keys(await import('./current-user')).map((key) => [key, undefined]),
+)
+mock.module('./current-user', () =>
+  Object.assign(
+    { ...currentUserModuleKeys },
+    (() => {
+      const actual = currentUserModule
+      return {
+        ...actual,
+        useCurrentUser: mocks.useCurrentUser,
+      }
+    })(),
+  ),
+)
 
-vi.mock('./redaction-runs', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./redaction-runs')>()
-  return {
-    ...actual,
-    useRedactionRunsList: mocks.useRedactionRunsList,
-  }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const redactionRunsModule = { ...(await import('./redaction-runs')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const redactionRunsModuleKeys = Object.fromEntries(
+  Object.keys(await import('./redaction-runs')).map((key) => [key, undefined]),
+)
+mock.module('./redaction-runs', () =>
+  Object.assign(
+    { ...redactionRunsModuleKeys },
+    (() => {
+      const actual = redactionRunsModule
+      return {
+        ...actual,
+        useRedactionRunsList: mocks.useRedactionRunsList,
+      }
+    })(),
+  ),
+)
 
-vi.mock('./changelog', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./changelog')>()
-  return {
-    ...actual,
-    changelogQueryOptions: mocks.changelogQueryOptions,
-  }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const changelogModule = { ...(await import('./changelog')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const changelogModuleKeys = Object.fromEntries(
+  Object.keys(await import('./changelog')).map((key) => [key, undefined]),
+)
+mock.module('./changelog', () =>
+  Object.assign(
+    { ...changelogModuleKeys },
+    (() => {
+      const actual = changelogModule
+      return {
+        ...actual,
+        changelogQueryOptions: mocks.changelogQueryOptions,
+      }
+    })(),
+  ),
+)
 
 const ME = {
   user: {

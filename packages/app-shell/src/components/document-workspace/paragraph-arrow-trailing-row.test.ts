@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import { takeLine, wrapLines, type WrappedLine } from '../../document-page-flow'
 import {
   createVerticalCaretColumn,

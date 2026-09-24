@@ -140,15 +140,15 @@ Make the smallest production change that addresses the validated issue and prese
 After implementation, run the relevant checks:
 
 ```bash
-pnpm --filter <package> typecheck
-pnpm --filter <package> test
+bun run --filter <package> typecheck
+bun run --filter <package> test
 ```
 
 For broader or cross-package changes, run the root checks if practical:
 
 ```bash
-pnpm typecheck
-pnpm test
+bun run typecheck
+bun run test
 ```
 
 ### 6. Commit And Push

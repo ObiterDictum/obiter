@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 import { ApiError, apiFetch, apiFetchBlobResult } from './api'
 
 function mockResponse(body: unknown, status = 200): Response {

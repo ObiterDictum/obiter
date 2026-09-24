@@ -1,25 +1,44 @@
-// @vitest-environment jsdom
+import '@obiter/test-dom'
 import { Suspense, type ReactNode } from 'react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../../scripts/test/vitest-compat'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
-import { LegislationProvisionView } from './LegislationProvisionView'
 
-vi.mock('@tanstack/react-router', () => ({
-  Link: ({
-    children,
-    to,
-    ...props
-  }: {
-    children: ReactNode
-    to: string
-    [key: string]: unknown
-  }) => (
-    <a href={to} {...props}>
-      {children}
-    </a>
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const tanstackReactRouterModuleKeys = Object.fromEntries(
+  Object.keys(await import('@tanstack/react-router')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('@tanstack/react-router', () =>
+  Object.assign(
+    { ...tanstackReactRouterModuleKeys },
+    (() => ({
+      Link: ({
+        children,
+        to,
+        ...props
+      }: {
+        children: ReactNode
+        to: string
+        [key: string]: unknown
+      }) => (
+        <a href={to} {...props}>
+          {children}
+        </a>
+      ),
+    }))(),
   ),
-}))
+)
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const { LegislationProvisionView } = await import('./LegislationProvisionView')
 
 const CURRENT_PAYLOAD = {
   provision: {

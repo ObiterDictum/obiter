@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import type { DocumentModelWire } from '@obiter/contracts'
 import { documentListMarkers } from './document-page-lists'
 

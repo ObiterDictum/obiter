@@ -12,7 +12,7 @@
     "preview": "electron-vite preview",
     "package": "electron-vite build && electron-builder",
     "package:win": "electron-vite build && electron-builder --win",
-    "test": "vitest run",
+    "test": "bun test --isolate --preload ../../scripts/test/vitest-compat.ts --preload ../../scripts/test/dom-preload.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
@@ -25,6 +25,7 @@
     "react-dom": "^19.2.0"
   },
   "devDependencies": {
+    "@obiter/test-dom": "workspace:*",
     "@tailwindcss/vite": "^4.3.2",
     "@vitejs/plugin-react": "^5.2.0",
     "electron": "^37.0.0",

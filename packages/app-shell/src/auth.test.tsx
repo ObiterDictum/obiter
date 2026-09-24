@@ -1,10 +1,10 @@
-// @vitest-environment jsdom
-import { describe, expect, it, vi, beforeEach } from 'vitest'
+import '@obiter/test-dom'
+import { describe, expect, it, beforeEach, mock as bunMock } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import type { MeResponse } from '@obiter/contracts'
 import type { ReactNode } from 'react'
-import { useAuth } from './auth'
 
 const mock = vi.hoisted(() => ({
   signInEmail: vi.fn(),
@@ -15,7 +15,7 @@ const mock = vi.hoisted(() => ({
   refetch: vi.fn(),
 }))
 
-vi.mock('better-auth/react', () => ({
+bunMock.module('better-auth/react', () => ({
   createAuthClient: () => ({
     useSession: mock.useSession,
     signIn: { email: mock.signInEmail },
@@ -25,9 +25,14 @@ vi.mock('better-auth/react', () => ({
   }),
 }))
 
-vi.mock('better-auth/client/plugins', () => ({
+bunMock.module('better-auth/client/plugins', () => ({
   magicLinkClient: () => ({}),
 }))
+
+// The SUT captures createAuthClient at module scope, so it must evaluate
+// after the registrations above (vitest's vi.mock was hoisted; this is the
+// bun equivalent).
+const { useAuth } = await import('./auth')
 
 const {
   signInEmail,
@@ -403,9 +408,11 @@ describe('useAuth — signOut clears the current-user cache', () => {
     })
 
     await expect(
-      act(async () => {
-        await result.current.signOut()
-      }),
+      Promise.resolve(
+        act(async () => {
+          await result.current.signOut()
+        }),
+      ),
     ).rejects.toThrow('network')
 
     expect(
@@ -427,9 +434,11 @@ describe('useAuth — signOut clears the current-user cache', () => {
     })
 
     await expect(
-      act(async () => {
-        await result.current.signOut()
-      }),
+      Promise.resolve(
+        act(async () => {
+          await result.current.signOut()
+        }),
+      ),
     ).rejects.toThrow('unavailable')
 
     expect(

@@ -583,8 +583,8 @@ Review UI components (M2). Follows existing app-shell patterns: shared between w
   - Re-run redaction on same document (new run, new spans)
   - Detection failure (Rampart model load error, run goes to `failed`)
   - Very long document (chunking, > 512 tokens)
-- [ ] Type-check everything: `pnpm --filter @obiter/redaction-policy typecheck`, `pnpm --filter @obiter/api typecheck`, `pnpm --filter @obiter/app-shell typecheck`
-- [ ] Run all tests: `pnpm --filter @obiter/redaction-policy test`, `pnpm --filter @obiter/api test`
+- [ ] Type-check everything: `bun run --filter @obiter/redaction-policy typecheck`, `bun run --filter @obiter/api typecheck`, `bun run --filter @obiter/app-shell typecheck`
+- [ ] Run all tests: `bun run --filter @obiter/redaction-policy test`, `bun run --filter @obiter/api test`
 - [ ] Update `docs/current-product-scope.md`: move Redaction from "Visible But Not Implemented" to implemented navigation
 - [ ] Update `docs/specs/redact/milestones.md` with completion notes
 

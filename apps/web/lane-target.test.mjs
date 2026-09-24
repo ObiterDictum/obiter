@@ -26,13 +26,13 @@ after(async () => {
 })
 
 /**
- * A worktree-shaped directory: a pnpm-workspace.yaml marker (which bounds the
+ * A worktree-shaped directory: a bun.lock marker (which bounds the
  * .env walk) and optionally the lane .env the setup script writes.
  */
 async function laneWorktree(env) {
   const root = await mkdtemp(join(tmpdir(), 'obiter-lane-'))
   tempDirs.push(root)
-  await writeFile(join(root, 'pnpm-workspace.yaml'), 'packages:\n  - apps/*\n')
+  await writeFile(join(root, 'bun.lock'), '// bun lockfile v1\n')
   if (env !== null) await writeFile(join(root, '.env'), env)
   return root
 }
@@ -44,7 +44,7 @@ test('defaults to the checkout that holds this suite', () => {
   // The default root is the worktree root, not apps/: resolving it one level
   // short makes every provenance check compare against the wrong directory.
   // Nothing here depends on a developer's .env, which CI does not have.
-  assert.ok(existsSync(join(WORKTREE_ROOT, 'pnpm-workspace.yaml')))
+  assert.ok(existsSync(join(WORKTREE_ROOT, 'bun.lock')))
   assert.ok(existsSync(join(WORKTREE_ROOT, 'apps', 'web', 'lane-target.mjs')))
 
   const targets = resolveLaneTargets({ processEnv: {} })

@@ -8,7 +8,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "vitest run"
+    "test": "bun test --isolate --preload ../../scripts/test/vitest-compat.ts"
   },
   "dependencies": {
     "zod": "^4.3.6"

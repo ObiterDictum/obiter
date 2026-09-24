@@ -1,6 +1,7 @@
-// @vitest-environment jsdom
+import '@obiter/test-dom'
 import { fireEvent, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'bun:test'
+import { vi } from '../../../../../scripts/test/vitest-compat'
 import {
   insertParagraphRuns,
   type DocumentEditOperation,
@@ -209,7 +210,10 @@ describe('editing across a cross-paragraph selection', () => {
       paragraph('p3', 'Charlie'),
     ])
     rerenderWorkspace(view, 'doc_1')
-    expect(screen.getByText('Alavo')).toBeTruthy()
+    // The reloaded paragraph is painted twice — the overlay span and the
+    // textarea both carry the text (jsdom exposes a textarea's value as its
+    // text content), so getByText is ambiguous by construction here.
+    expect(screen.getAllByText('Alavo').length).toBeGreaterThan(0)
     expect(screen.queryByText('Bravo')).toBeNull()
     expect(selectionStatus()).toBe('')
     expect(document.querySelectorAll('[data-selected-text]')).toHaveLength(0)

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import {
   MIN_PASSWORD_LENGTH,
   USER_NAME_MAX_LENGTH,

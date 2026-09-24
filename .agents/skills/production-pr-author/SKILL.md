@@ -184,8 +184,8 @@ Good:
 
 ```markdown
 - Commands run:
-  - `pnpm typecheck` - passed
-  - `pnpm test` - passed
+  - `bun run typecheck` - passed
+  - `bun run test` - passed
 - Manual checks:
   - Opened the desktop shell and verified sidebar keyboard focus/order.
 - Not tested:

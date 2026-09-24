@@ -1,18 +1,13 @@
-// @vitest-environment jsdom
+import '@obiter/test-dom'
 // The E45 recovery save owner and the V5 verification gate meet at one
 // boundary: `DocxWorkspace` publishes its unsaved state, `VerificationRunPanel`
 // reads it. These tests mount both inside the real provider, so a save owner
 // that reports clean while work is still off-server fails here rather than in
 // a user's verification run.
 import { act, fireEvent, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../../../scripts/test/vitest-compat'
 import type { DocumentEditOperation } from '@obiter/contracts'
-import {
-  bodyEditor,
-  mountSaveDocumentWorkspace,
-  saveState,
-  validationFailed,
-} from './docx-workspace-save-harness'
 
 const documentHook = vi.hoisted(() => ({ useDocument: vi.fn() }))
 const runsHook = vi.hoisted(() => ({
@@ -22,21 +17,59 @@ const runsHook = vi.hoisted(() => ({
   latestVerificationRun: vi.fn(),
 }))
 
-vi.mock('../../documents', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../documents')>()
-  return { ...actual, useDocument: documentHook.useDocument }
-})
-vi.mock('../../verification-runs', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('../../verification-runs')>()
-  return {
-    ...actual,
-    useDocumentVerificationRuns: runsHook.useDocumentVerificationRuns,
-    useCreateVerificationRun: runsHook.useCreateVerificationRun,
-    useVerificationFindings: runsHook.useVerificationFindings,
-    latestVerificationRun: runsHook.latestVerificationRun,
-  }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const documentsModule = { ...(await import('../../documents')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const documentsModuleKeys = Object.fromEntries(
+  Object.keys(await import('../../documents')).map((key) => [key, undefined]),
+)
+mock.module('../../documents', () =>
+  Object.assign(
+    { ...documentsModuleKeys },
+    (() => {
+      const actual = documentsModule
+      return { ...actual, useDocument: documentHook.useDocument }
+    })(),
+  ),
+)
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const verificationRunsModule = { ...(await import('../../verification-runs')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const verificationRunsModuleKeys = Object.fromEntries(
+  Object.keys(await import('../../verification-runs')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('../../verification-runs', () =>
+  Object.assign(
+    { ...verificationRunsModuleKeys },
+    (() => {
+      const actual = verificationRunsModule
+      return {
+        ...actual,
+        useDocumentVerificationRuns: runsHook.useDocumentVerificationRuns,
+        useCreateVerificationRun: runsHook.useCreateVerificationRun,
+        useVerificationFindings: runsHook.useVerificationFindings,
+        latestVerificationRun: runsHook.latestVerificationRun,
+      }
+    })(),
+  ),
+)
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const { bodyEditor, mountSaveDocumentWorkspace, saveState, validationFailed } =
+  await import('./docx-workspace-save-harness')
 
 /**
  * The whole document workspace, so the unsaved gate is exercised against the

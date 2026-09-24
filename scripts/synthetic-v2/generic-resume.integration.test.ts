@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { rm, writeFile } from 'node:fs/promises'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'bun:test'
 import { readDatasetManifest } from './artifacts'
 import { canonicalHash } from './governance'
 import { promoteBenchmark } from './promote'
@@ -64,7 +64,7 @@ function expectPreservedProvenance(
   expect(stateEntry(metadata.documentStates, pendingId).status).toBe('accepted')
 }
 
-describe.sequential('generic adjudication resume integration', () => {
+describe('generic adjudication resume integration', () => {
   it('restores complete provenance for every non-tournament stage and promotes a resumed benchmark', async () => {
     const fixtures = [
       genericFixture('training_seed'),

@@ -1,4 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
+import { expectRejection } from '../../../scripts/test/expect-rejection'
+import { describe, expect, it } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 import { isRedirect } from '@tanstack/react-router'
 import { QueryClient } from '@tanstack/react-query'
 import type { MeResponse } from '@obiter/contracts'
@@ -36,13 +38,11 @@ describe('guardAuth', () => {
         new ApiError('unauthenticated', 'Sign in is required.', 401, 'req_1'),
       )
 
-    await expect(guardAuth(noopQueryClient, run)).rejects.toSatisfy(
-      (error: unknown) => {
-        if (!isRedirect(error)) return false
-        const opts = (error as { options?: { to?: string } }).options
-        return opts?.to === '/sign-in'
-      },
-    )
+    await expectRejection(guardAuth(noopQueryClient, run), (error: unknown) => {
+      if (!isRedirect(error)) return false
+      const opts = (error as { options?: { to?: string } }).options
+      return opts?.to === '/sign-in'
+    })
   })
 
   it('does not report success or run further work after a 401', async () => {
@@ -53,12 +53,13 @@ describe('guardAuth', () => {
         new ApiError('unauthenticated', 'Sign in is required.', 401, 'req_9'),
       )
 
-    await expect(
+    await expectRejection(
       guardAuth(noopQueryClient, async () => {
         await failing()
         await after()
       }),
-    ).rejects.toSatisfy((error: unknown) => isRedirect(error))
+      (error: unknown) => isRedirect(error),
+    )
 
     expect(after).not.toHaveBeenCalled()
   })
@@ -75,8 +76,8 @@ describe('guardAuth', () => {
       )
 
     try {
-      await expect(guardAuth(noopQueryClient, run)).rejects.toSatisfy(
-        (error: unknown) => isRedirect(error),
+      await expectRejection(guardAuth(noopQueryClient, run), (error: unknown) =>
+        isRedirect(error),
       )
     } finally {
       vi.stubGlobal('window', originalWindow)
@@ -131,12 +132,10 @@ describe('prefetchHomeData', () => {
       new ApiError('unauthenticated', 'Sign in is required.', 401, 'req_6'),
     )
 
-    await expect(prefetchHomeData(queryClient)).rejects.toSatisfy(
-      (error: unknown) => {
-        if (!isRedirect(error)) return false
-        const opts = (error as { options?: { to?: string } }).options
-        return opts?.to === '/sign-in'
-      },
-    )
+    await expectRejection(prefetchHomeData(queryClient), (error: unknown) => {
+      if (!isRedirect(error)) return false
+      const opts = (error as { options?: { to?: string } }).options
+      return opts?.to === '/sign-in'
+    })
   })
 })

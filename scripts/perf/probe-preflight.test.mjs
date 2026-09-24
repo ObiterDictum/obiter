@@ -13,7 +13,7 @@
  */
 import assert from 'node:assert/strict'
 import { createServer } from 'node:http'
-import { afterAll, test } from 'vitest'
+import { afterAll, test } from 'bun:test'
 import {
   assertTargetsReachable,
   resolveProbeTargets,

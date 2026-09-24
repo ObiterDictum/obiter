@@ -1,5 +1,11 @@
-// @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import '@obiter/test-dom'
+import { afterEach, describe, expect, it } from 'bun:test'
+import { vi } from '../../../../scripts/test/vitest-compat'
+
+// bun:test has no module-registry reset: each generation bump makes the next
+// dynamic import re-evaluate the module (the ?gen= query busts bun's module
+// cache), which is what the old resetModules + import pair guaranteed.
+let moduleGen = 0
 
 const bridge = {
   platform: 'desktop' as const,
@@ -11,13 +17,13 @@ const bridge = {
 }
 
 afterEach(() => {
-  vi.resetModules()
+  moduleGen++
   vi.clearAllMocks()
   delete (window as Window & { obiterDesktop?: typeof bridge }).obiterDesktop
 })
 
 async function loadTokenModule() {
-  return import('./auth-token')
+  return import(`./auth-token?gen=${moduleGen}`)
 }
 
 describe('desktop auth token', () => {

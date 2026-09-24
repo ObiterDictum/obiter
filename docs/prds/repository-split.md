@@ -30,14 +30,14 @@ This PRD explicitly rejects splitting product code. Where a boundary is wanted i
 
 Verified 2026-07-27 against `dev`.
 
-| Area                               | Imports from product packages                | Verdict    |
-| ---------------------------------- | -------------------------------------------- | ---------- |
-| `scripts/synthetic-v2/` (50 files) | none: node builtins, vitest, typescript only | Clean lift |
-| `scripts/eval-redact.ts`           | none                                         | Clean lift |
-| `scripts/export-training-data.ts`  | none                                         | Clean lift |
-| `scripts/bench-guard.ts`           | none                                         | Clean lift |
-| `scripts/architecture-*.py`        | none                                         | Clean lift |
-| `data/evals/redact/*` fixtures     | loaded by three API test files               | **Pinned** |
+| Area                               | Imports from product packages                  | Verdict    |
+| ---------------------------------- | ---------------------------------------------- | ---------- |
+| `scripts/synthetic-v2/` (50 files) | none: node builtins, bun:test, typescript only | Clean lift |
+| `scripts/eval-redact.ts`           | none                                           | Clean lift |
+| `scripts/export-training-data.ts`  | none                                           | Clean lift |
+| `scripts/bench-guard.ts`           | none                                           | Clean lift |
+| `scripts/architecture-*.py`        | none                                           | Clean lift |
+| `data/evals/redact/*` fixtures     | loaded by three API test files                 | **Pinned** |
 
 The data-generation programme has zero build-time coupling to the product. That makes this a move rather than an untangling, and it is why this split is worth doing and the product split is not.
 
@@ -114,7 +114,7 @@ Generator and output move together. Separating them leaves a generated artifact 
 
 Each of these must be handled in the same change that moves the files.
 
-- **Root scripts.** Four `synthetic-v2:*` entries in `package.json` go. The `test` script loses its `vitest run scripts/synthetic-v2` tail and `typecheck` loses its synthetic-v2 tsconfig pass.
+- **Root scripts.** Four `synthetic-v2:*` entries in `package.json` go. The `test` script loses its `bun test scripts/synthetic-v2` tail and `typecheck` loses its synthetic-v2 tsconfig pass.
 - **CI.** The `checks` job currently covers synthetic-v2 through those root scripts. `obiter-corpus` needs its own equivalent workflow, or the programme ships untested.
 - **`AGENTS.md`.** The Synthetic Redaction Corpus section and the System Reference section both point at files that will have moved. Both need cross-repository pointers, following the precedent already set for `obiter-ops`.
 - **Documentation cross-references.** `docs/prds/bench.md`, `docs/specs/redact/demo.md`, `fine-tuning.md`, `milestones.md` and `synthetic-data-plan.md` all reference `data/evals` or `data/bench` paths.

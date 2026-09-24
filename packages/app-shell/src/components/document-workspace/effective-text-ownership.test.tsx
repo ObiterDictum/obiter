@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+import '@obiter/test-dom'
 /*
  * A text draft and a pending range emphasis must describe one string.
  * Range emphasis used to slice the stored run and leave the original run id
@@ -6,7 +6,8 @@
  * and the stored tail was appended: `Hello!` became `Hello!llo`.
  */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'bun:test'
+import { vi } from '../../../../../scripts/test/vitest-compat'
 import type { DocumentEditOperation } from '@obiter/contracts'
 import { formattedModel } from '../../document-format-edits'
 import {

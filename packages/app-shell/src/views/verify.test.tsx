@@ -1,26 +1,70 @@
-// @vitest-environment jsdom
+import '@obiter/test-dom'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../../scripts/test/vitest-compat'
 import type { ReactNode } from 'react'
 import type { VerificationRun } from '@obiter/contracts'
-import { VerifyRouteView } from './verify'
 
 const hooks = vi.hoisted(() => ({
   useCurrentUser: vi.fn(),
   useOrganisationVerificationRuns: vi.fn(),
 }))
 
-vi.mock('../current-user', () => ({
-  useCurrentUser: hooks.useCurrentUser,
-}))
-vi.mock('../verification-runs', () => ({
-  useOrganisationVerificationRuns: hooks.useOrganisationVerificationRuns,
-}))
-vi.mock('@tanstack/react-router', () => ({
-  Link: ({ children }: { children: ReactNode }) => (
-    <a href="#document">{children}</a>
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const currentUserModuleKeys = Object.fromEntries(
+  Object.keys(await import('../current-user')).map((key) => [key, undefined]),
+)
+mock.module('../current-user', () =>
+  Object.assign(
+    { ...currentUserModuleKeys },
+    (() => ({
+      useCurrentUser: hooks.useCurrentUser,
+    }))(),
   ),
-}))
+)
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const verificationRunsModuleKeys = Object.fromEntries(
+  Object.keys(await import('../verification-runs')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('../verification-runs', () =>
+  Object.assign(
+    { ...verificationRunsModuleKeys },
+    (() => ({
+      useOrganisationVerificationRuns: hooks.useOrganisationVerificationRuns,
+    }))(),
+  ),
+)
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const tanstackReactRouterModuleKeys = Object.fromEntries(
+  Object.keys(await import('@tanstack/react-router')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('@tanstack/react-router', () =>
+  Object.assign(
+    { ...tanstackReactRouterModuleKeys },
+    (() => ({
+      Link: ({ children }: { children: ReactNode }) => (
+        <a href="#document">{children}</a>
+      ),
+    }))(),
+  ),
+)
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const { VerifyRouteView } = await import('./verify')
 
 function run(overrides: Partial<VerificationRun> = {}): VerificationRun {
   return {

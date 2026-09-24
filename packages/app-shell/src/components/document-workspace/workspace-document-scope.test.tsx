@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+import '@obiter/test-dom'
 import { type PropsWithChildren } from 'react'
 import {
   cleanup,
@@ -8,13 +8,13 @@ import {
   waitFor,
 } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../../../scripts/test/vitest-compat'
 import type {
   DocumentModelWire,
   DocumentParagraphWire,
 } from '@obiter/contracts'
 import type { DocumentVersionRecord } from '../../documents'
-import { DocumentWorkspace } from './workspace'
 
 const hooks = vi.hoisted(() => ({
   useDocumentModel: vi.fn(),
@@ -31,29 +31,71 @@ const hooks = vi.hoisted(() => ({
   fetchDocumentExport: vi.fn(),
 }))
 
-vi.mock('../../document-workspace-api', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('../../document-workspace-api')>()
-  return {
-    ...actual,
-    useDocumentModel: hooks.useDocumentModel,
-    useDocumentComments: hooks.useDocumentComments,
-    useDocumentTrackedChanges: hooks.useDocumentTrackedChanges,
-    useDocumentCollaborationSync: hooks.useDocumentCollaborationSync,
-    useCreateDocumentComment: hooks.useCreateDocumentComment,
-    useResolveDocumentComment: hooks.useResolveDocumentComment,
-    useEditDocument: hooks.useEditDocument,
-    useCollaborationMerge: hooks.useCollaborationMerge,
-    useTrackedChangeDecision: hooks.useTrackedChangeDecision,
-    usePresenceUpdate: hooks.usePresenceUpdate,
-    fetchDocumentExport: hooks.fetchDocumentExport,
-  }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const documentWorkspaceApiModule = {
+  ...(await import('../../document-workspace-api')),
+}
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const documentWorkspaceApiModuleKeys = Object.fromEntries(
+  Object.keys(await import('../../document-workspace-api')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('../../document-workspace-api', () =>
+  Object.assign(
+    { ...documentWorkspaceApiModuleKeys },
+    (() => {
+      const actual = documentWorkspaceApiModule
+      return {
+        ...actual,
+        useDocumentModel: hooks.useDocumentModel,
+        useDocumentComments: hooks.useDocumentComments,
+        useDocumentTrackedChanges: hooks.useDocumentTrackedChanges,
+        useDocumentCollaborationSync: hooks.useDocumentCollaborationSync,
+        useCreateDocumentComment: hooks.useCreateDocumentComment,
+        useResolveDocumentComment: hooks.useResolveDocumentComment,
+        useEditDocument: hooks.useEditDocument,
+        useCollaborationMerge: hooks.useCollaborationMerge,
+        useTrackedChangeDecision: hooks.useTrackedChangeDecision,
+        usePresenceUpdate: hooks.usePresenceUpdate,
+        fetchDocumentExport: hooks.fetchDocumentExport,
+      }
+    })(),
+  ),
+)
 
-vi.mock('../../current-user', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../current-user')>()
-  return { ...actual, useCurrentUser: hooks.useCurrentUser }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const currentUserModule = { ...(await import('../../current-user')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const currentUserModuleKeys = Object.fromEntries(
+  Object.keys(await import('../../current-user')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('../../current-user', () =>
+  Object.assign(
+    { ...currentUserModuleKeys },
+    (() => {
+      const actual = currentUserModule
+      return { ...actual, useCurrentUser: hooks.useCurrentUser }
+    })(),
+  ),
+)
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const { DocumentWorkspace } = await import('./workspace')
 
 // The two documents deliberately share paragraph and run ids. The original
 // browser report had the previous document's draft rendered over the next

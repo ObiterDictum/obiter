@@ -1,6 +1,7 @@
-// @vitest-environment jsdom
+import '@obiter/test-dom'
 import { fireEvent, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'bun:test'
+import { vi } from '../../../../../scripts/test/vitest-compat'
 import {
   mountWorkspace,
   multiParagraphModel,

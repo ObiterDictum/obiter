@@ -1,50 +1,69 @@
-// @vitest-environment jsdom
+import '@obiter/test-dom'
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  LEGAL_SEARCH_DEBOUNCE_MS,
-  LEGAL_SEARCH_HYDRATION_MAX_POLLS,
-  LEGAL_SEARCH_HYDRATION_POLL_MS,
-  LegalSearchView,
-} from './LegalSearchView'
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../../scripts/test/vitest-compat'
 
 const routerMocks = vi.hoisted(() => ({
   navigate: vi.fn(),
 }))
 
-vi.mock('@tanstack/react-router', () => ({
-  useNavigate: () => routerMocks.navigate,
-  Link: ({
-    children,
-    className,
-    to,
-    params,
-    href,
-    ...props
-  }: {
-    children: ReactNode
-    className?: string
-    to?: string
-    params?: Record<string, string>
-    href?: string
-    [key: string]: unknown
-  }) => {
-    const resolvedHref =
-      href ??
-      (typeof to === 'string'
-        ? to.replace(
-            /\$([A-Za-z0-9_]+)/g,
-            (_, key: string) => params?.[key] ?? '',
-          )
-        : undefined)
-    return (
-      <a className={className} href={resolvedHref} {...props}>
-        {children}
-      </a>
-    )
-  },
-}))
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const tanstackReactRouterModuleKeys = Object.fromEntries(
+  Object.keys(await import('@tanstack/react-router')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('@tanstack/react-router', () =>
+  Object.assign(
+    { ...tanstackReactRouterModuleKeys },
+    (() => ({
+      useNavigate: () => routerMocks.navigate,
+      Link: ({
+        children,
+        className,
+        to,
+        params,
+        href,
+        ...props
+      }: {
+        children: ReactNode
+        className?: string
+        to?: string
+        params?: Record<string, string>
+        href?: string
+        [key: string]: unknown
+      }) => {
+        const resolvedHref =
+          href ??
+          (typeof to === 'string'
+            ? to.replace(
+                /\$([A-Za-z0-9_]+)/g,
+                (_, key: string) => params?.[key] ?? '',
+              )
+            : undefined)
+        return (
+          <a className={className} href={resolvedHref} {...props}>
+            {children}
+          </a>
+        )
+      },
+    }))(),
+  ),
+)
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const {
+  LEGAL_SEARCH_DEBOUNCE_MS,
+  LEGAL_SEARCH_HYDRATION_MAX_POLLS,
+  LEGAL_SEARCH_HYDRATION_POLL_MS,
+  LegalSearchView,
+} = await import('./LegalSearchView')
 
 interface DeferredResponse {
   promise: Promise<Response>

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 
 import {
   DOCUMENT_EDIT_FONT_NAME_MAX_LENGTH,

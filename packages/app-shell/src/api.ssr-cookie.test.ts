@@ -1,5 +1,6 @@
-// @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import '@obiter/test-dom'
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 import { apiFetch } from './api'
 import {
   clearServerRequestGetter,

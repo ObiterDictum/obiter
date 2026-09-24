@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import { buildOoxmlFixture } from '../fixtures/builder'
 import { fixedPngBytes } from '../fixtures/fixture-parts'
 import { isPackageImagePartName, readPackageImageParts } from './package-part'

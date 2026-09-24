@@ -1,15 +1,33 @@
+import '@obiter/test-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { useFinalizeRun, useRedetectRun } from './hooks'
+import { beforeEach, describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
+
 import type { FinalizeResponse, RedactionRun, RedetectResponse } from './types'
 
 const apiFetch = vi.hoisted(() => vi.fn())
 
-vi.mock('@obiter/app-shell', () => ({
-  apiFetch: (...args: unknown[]) => apiFetch(...args),
-}))
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const obiterAppShellModuleKeys = Object.fromEntries(
+  Object.keys(await import('@obiter/app-shell')).map((key) => [key, undefined]),
+)
+mock.module('@obiter/app-shell', () =>
+  Object.assign(
+    { ...obiterAppShellModuleKeys },
+    (() => ({
+      apiFetch: (...args: unknown[]) => apiFetch(...args),
+    }))(),
+  ),
+)
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const { useFinalizeRun, useRedetectRun } = await import('./hooks')
 
 const baseRun: RedactionRun = {
   id: 'red_1',

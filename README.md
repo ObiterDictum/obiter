@@ -77,18 +77,18 @@ Engineering workflow, commands, review expectations, and test guidance live in:
 
 Obiter has no seed script. To get an organisation, user, matters, and documents in any environment (including development), use the real self-serve flow:
 
-1. Start the API (`pnpm dev:api`) with the database migrated (`packages/database/migrations`).
+1. Start the API (`bun run dev:api`) with the database migrated (`packages/database/migrations`).
 2. Open the app and register an account through the sign-up screen. Registration provisions your organisation automatically.
 3. Verify the email (in development the one-time verification URL is logged to the API console when no Resend key is configured).
 4. Sign in, then create matters and upload document metadata through the UI.
 
 ### Redaction model
 
-Redaction detection runs a local ONNX model that is downloaded from Hugging Face on first use and cached in `~/.cache/obiter/rampart-models` (`%LOCALAPPDATA%\Obiter\rampart-models` on Windows). `pnpm dev:api` fetches it at startup and logs whether it is ready; `pnpm prefetch:rampart` does the same without booting the API, which is worth running after a clone or an install on a slow connection.
+Redaction detection runs a local ONNX model that is downloaded from Hugging Face on first use and cached in `~/.cache/obiter/rampart-models` (`%LOCALAPPDATA%\Obiter\rampart-models` on Windows). `bun run dev:api` fetches it at startup and logs whether it is ready; `bun run prefetch:rampart` does the same without booting the API, which is worth running after a clone or an install on a slow connection.
 
 Without the model, redaction still runs but only with the deterministic heuristics, and the review UI marks those runs as limited detection. If you see that, check the API startup log for the load failure.
 
-The ONNX Runtime install is CPU-only. `onnxruntime-node`'s postinstall would otherwise download the optional CUDA and TensorRT execution providers (~343 MB unpacked) on Linux x64, and no Obiter surface uses them: detection runs with `device: 'cpu'`, the browser path uses onnxruntime-web, and the desktop bundle excludes `node_modules`. The repo-root `.npmrc` skips that download. To run detection on a GPU, request the providers and re-run the package's lifecycle step: `ONNXRUNTIME_NODE_INSTALL_CUDA=v12 pnpm rebuild onnxruntime-node`. Repeating `pnpm install` is not a mode switch: pnpm replays the postinstall it has cached, so a store that cached the CPU-only form stays CPU-only, and one that cached the GPU form keeps placing the providers. Because that lifecycle script only ever adds provider files, returning to CPU-only needs a fresh `node_modules` against a store that has never cached the GPU form (an isolated `--store-dir` gives that); never edit the shared pnpm store.
+The ONNX Runtime install is CPU-only. `onnxruntime-node`'s postinstall would otherwise download the optional CUDA and TensorRT execution providers (~343 MB unpacked) on Linux x64, and no Obiter surface uses them: detection runs with `device: 'cpu'`, the browser path uses onnxruntime-web, and the desktop bundle excludes `node_modules`. Bun never runs that postinstall here: Bun executes a dependency's lifecycle scripts only for trusted dependencies, `onnxruntime-node` is not in Bun's default-trusted set, and the workspace does not trust it — `services/api/src/rampart-install-config.test.ts` pins all three. To run detection on a GPU, opt in explicitly with `ONNXRUNTIME_NODE_INSTALL_CUDA=v12 bun pm trust onnxruntime-node`, which adds the package to `trustedDependencies` and runs the script immediately. Returning to CPU-only is the inverse: delete the `onnxruntime-node` entry from `trustedDependencies` in `package.json`, then `rm -rf node_modules && bun install --frozen-lockfile` for a fresh tree with no provider payload.
 
 Useful product context:
 

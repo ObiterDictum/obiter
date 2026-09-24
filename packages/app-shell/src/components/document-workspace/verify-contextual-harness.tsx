@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+import '@obiter/test-dom'
 // Shared support for the contextual verification suites. It owns the workspace
 // hook mocks, the synthetic finding fixtures and the mount helper, so the two
 // suites can each read as the behaviour they cover instead of restating setup.
@@ -6,13 +6,14 @@
 import { createElement, type PropsWithChildren } from 'react'
 import { cleanup, render } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { afterEach, beforeEach, vi } from 'vitest'
+import { afterEach, beforeEach, mock } from 'bun:test'
+import { vi } from '../../../../../scripts/test/vitest-compat'
 import type {
   DocumentModelWire,
   VerificationFindingView,
   VerificationRun,
 } from '@obiter/contracts'
-import { DocumentWorkspace } from './workspace'
+
 import type { DocumentVersionRecord } from '../../documents'
 
 const modelHook = vi.hoisted(() => ({
@@ -28,36 +29,88 @@ const modelHook = vi.hoisted(() => ({
   usePresenceUpdate: vi.fn(),
   fetchDocumentExport: vi.fn(),
 }))
-vi.mock('../../document-workspace-api', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('../../document-workspace-api')>()
-  return {
-    ...actual,
-    useDocumentModel: modelHook.useDocumentModel,
-    useDocumentComments: modelHook.useDocumentComments,
-    useDocumentTrackedChanges: modelHook.useDocumentTrackedChanges,
-    useDocumentCollaborationSync: modelHook.useDocumentCollaborationSync,
-    useCreateDocumentComment: modelHook.useCreateDocumentComment,
-    useResolveDocumentComment: modelHook.useResolveDocumentComment,
-    useEditDocument: modelHook.useEditDocument,
-    useCollaborationMerge: modelHook.useCollaborationMerge,
-    useTrackedChangeDecision: modelHook.useTrackedChangeDecision,
-    usePresenceUpdate: modelHook.usePresenceUpdate,
-    fetchDocumentExport: modelHook.fetchDocumentExport,
-  }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const documentWorkspaceApiModule = {
+  ...(await import('../../document-workspace-api')),
+}
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const documentWorkspaceApiModuleKeys = Object.fromEntries(
+  Object.keys(await import('../../document-workspace-api')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('../../document-workspace-api', () =>
+  Object.assign(
+    { ...documentWorkspaceApiModuleKeys },
+    (() => {
+      const actual = documentWorkspaceApiModule
+      return {
+        ...actual,
+        useDocumentModel: modelHook.useDocumentModel,
+        useDocumentComments: modelHook.useDocumentComments,
+        useDocumentTrackedChanges: modelHook.useDocumentTrackedChanges,
+        useDocumentCollaborationSync: modelHook.useDocumentCollaborationSync,
+        useCreateDocumentComment: modelHook.useCreateDocumentComment,
+        useResolveDocumentComment: modelHook.useResolveDocumentComment,
+        useEditDocument: modelHook.useEditDocument,
+        useCollaborationMerge: modelHook.useCollaborationMerge,
+        useTrackedChangeDecision: modelHook.useTrackedChangeDecision,
+        usePresenceUpdate: modelHook.usePresenceUpdate,
+        fetchDocumentExport: modelHook.fetchDocumentExport,
+      }
+    })(),
+  ),
+)
 
 const userHook = vi.hoisted(() => ({ useCurrentUser: vi.fn() }))
-vi.mock('../../current-user', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../current-user')>()
-  return { ...actual, useCurrentUser: userHook.useCurrentUser }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const currentUserModule = { ...(await import('../../current-user')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const currentUserModuleKeys = Object.fromEntries(
+  Object.keys(await import('../../current-user')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('../../current-user', () =>
+  Object.assign(
+    { ...currentUserModuleKeys },
+    (() => {
+      const actual = currentUserModule
+      return { ...actual, useCurrentUser: userHook.useCurrentUser }
+    })(),
+  ),
+)
 
 const documentHook = vi.hoisted(() => ({ useDocument: vi.fn() }))
-vi.mock('../../documents', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../documents')>()
-  return { ...actual, useDocument: documentHook.useDocument }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const documentsModule = { ...(await import('../../documents')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const documentsModuleKeys = Object.fromEntries(
+  Object.keys(await import('../../documents')).map((key) => [key, undefined]),
+)
+mock.module('../../documents', () =>
+  Object.assign(
+    { ...documentsModuleKeys },
+    (() => {
+      const actual = documentsModule
+      return { ...actual, useDocument: documentHook.useDocument }
+    })(),
+  ),
+)
 
 const runsHook = vi.hoisted(() => ({
   useDocumentVerificationRuns: vi.fn(),
@@ -65,24 +118,68 @@ const runsHook = vi.hoisted(() => ({
   useVerificationFindings: vi.fn(),
   latestVerificationRun: vi.fn(),
 }))
-vi.mock('../../verification-runs', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('../../verification-runs')>()
-  return {
-    ...actual,
-    useDocumentVerificationRuns: runsHook.useDocumentVerificationRuns,
-    useCreateVerificationRun: runsHook.useCreateVerificationRun,
-    useVerificationFindings: runsHook.useVerificationFindings,
-    latestVerificationRun: runsHook.latestVerificationRun,
-  }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const verificationRunsModule = { ...(await import('../../verification-runs')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const verificationRunsModuleKeys = Object.fromEntries(
+  Object.keys(await import('../../verification-runs')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('../../verification-runs', () =>
+  Object.assign(
+    { ...verificationRunsModuleKeys },
+    (() => {
+      const actual = verificationRunsModule
+      return {
+        ...actual,
+        useDocumentVerificationRuns: runsHook.useDocumentVerificationRuns,
+        useCreateVerificationRun: runsHook.useCreateVerificationRun,
+        useVerificationFindings: runsHook.useVerificationFindings,
+        latestVerificationRun: runsHook.latestVerificationRun,
+      }
+    })(),
+  ),
+)
 
 const draftHook = vi.hoisted(() => ({ useDocumentDraftStatus: vi.fn() }))
-vi.mock('./document-draft-status', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('./document-draft-status')>()
-  return { ...actual, useDocumentDraftStatus: draftHook.useDocumentDraftStatus }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const documentDraftStatusModule = {
+  ...(await import('./document-draft-status')),
+}
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const documentDraftStatusModuleKeys = Object.fromEntries(
+  Object.keys(await import('./document-draft-status')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('./document-draft-status', () =>
+  Object.assign(
+    { ...documentDraftStatusModuleKeys },
+    (() => {
+      const actual = documentDraftStatusModule
+      return {
+        ...actual,
+        useDocumentDraftStatus: draftHook.useDocumentDraftStatus,
+      }
+    })(),
+  ),
+)
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const { DocumentWorkspace } = await import('./workspace')
 
 const CITATION_PARAGRAPH = 'See Anderson v Shetland [2012] UKSC 7 on fairness.'
 const QUOTE_PARAGRAPH =

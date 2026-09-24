@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+import '@obiter/test-dom'
 /*
  * The Bold, Italic and Underline controls must read the same effective text
  * and projected emphasis the editor paints and the save plan sends.
@@ -9,7 +9,8 @@
  * instead of releasing it, and one Undo could not restore a coherent state.
  */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'bun:test'
+import { vi } from '../../../../../scripts/test/vitest-compat'
 import type { DocumentEditOperation } from '@obiter/contracts'
 import {
   mountWorkspace,

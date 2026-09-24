@@ -2,7 +2,7 @@
  * Tests for the journey outcome rules the load runner gates samples on. A
  * wrong landing must fail the journey, and a declared redirect must not.
  */
-import { expect, test } from 'vitest'
+import { expect, test } from 'bun:test'
 import {
   clientNavProblem,
   evaluateJourney,

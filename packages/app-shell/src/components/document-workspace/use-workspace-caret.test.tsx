@@ -1,6 +1,6 @@
-// @vitest-environment jsdom
+import '@obiter/test-dom'
 import { act, renderHook } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import type { WrappedLine } from '../../document-page-flow'
 import { armVerticalDelivery, retainVerticalColumn } from './paragraph-arrow'
 import { useWorkspaceCaret } from './use-workspace-caret'

@@ -1,20 +1,53 @@
+import '@obiter/test-dom'
 import { render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
-import { RedactionRunsRegion } from './runs-region'
+import { describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 
 const query = vi.hoisted(() => ({ useQuery: vi.fn() }))
-vi.mock('@tanstack/react-query', () => ({ useQuery: query.useQuery }))
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const tanstackReactQueryKeys = Object.fromEntries(
+  Object.keys(await import('@tanstack/react-query')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('@tanstack/react-query', () =>
+  Object.assign({ ...tanstackReactQueryKeys }, { useQuery: query.useQuery }),
+)
 
 const shell = vi.hoisted(() => ({ useDocument: vi.fn() }))
-vi.mock('@obiter/app-shell', () => ({
-  apiFetch: vi.fn(),
-  useDocument: shell.useDocument,
-}))
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const obiterAppShellKeys = Object.fromEntries(
+  Object.keys(await import('@obiter/app-shell')).map((key) => [key, undefined]),
+)
+mock.module('@obiter/app-shell', () =>
+  Object.assign(
+    { ...obiterAppShellKeys },
+    {
+      apiFetch: vi.fn(),
+      useDocument: shell.useDocument,
+    },
+  ),
+)
 
 const hooks = vi.hoisted(() => ({
   useCreateDocumentRedactionRun: vi.fn(),
 }))
-vi.mock('./hooks', () => hooks)
+// The real module's export names, available as undefined, so bun's
+// static link check accepts imports the mock does not override.
+const hooksKeys = Object.fromEntries(
+  Object.keys(await import('./hooks')).map((key) => [key, undefined]),
+)
+mock.module('./hooks', () => Object.assign({ ...hooksKeys }, hooks))
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const { RedactionRunsRegion } = await import('./runs-region')
 
 describe('RedactionRunsRegion', () => {
   it('marks only degraded document runs', () => {

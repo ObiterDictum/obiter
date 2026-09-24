@@ -1,9 +1,9 @@
-// @vitest-environment jsdom
+import '@obiter/test-dom'
 // The rendered-range decision. Fail-first: before the repair, rangeForTarget
 // clamped a range at a page-fragment boundary and every non-attachment was
 // reported as the text having changed. These cases pin the truthful reason and
 // prove a finding is never attached to a clamped, shorter excerpt.
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'bun:test'
 import {
   rangeForTarget,
   renderedRangeFor,

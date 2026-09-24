@@ -1,9 +1,9 @@
-// @vitest-environment jsdom
+import '@obiter/test-dom'
 // Which findings are drawn in the document, where they are drawn, and what
 // happens when one is activated. Mapping and placement are the subject here;
 // navigation, keyboard and version truthfulness live in the sibling suite.
 import { fireEvent, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import { finding, mount, quoteFinding } from './verify-contextual-harness'
 
 describe('contextual verification evidence', () => {

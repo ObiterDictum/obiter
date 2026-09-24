@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'bun:test'
 import { parseLocalEnvFile, readNodeEnv, resolveLocalEnvFile } from './index'
 
 describe('resolveLocalEnvFile', () => {
@@ -16,10 +16,7 @@ describe('resolveLocalEnvFile', () => {
   // A worktree root, marked the way the real repository marks one.
   async function tempWorktree(base = tmpdir()) {
     const root = await tempDir('obiter-worktree-', base)
-    await writeFile(
-      join(root, 'pnpm-workspace.yaml'),
-      'packages:\n  - services/*\n',
-    )
+    await writeFile(join(root, 'bun.lock'), '// bun lockfile v1\n')
     return root
   }
 

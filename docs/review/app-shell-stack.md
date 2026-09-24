@@ -28,7 +28,7 @@ Do not review implementation code unless the docs make a claim that conflicts wi
 
 ### What Changed
 
-- Added the pnpm workspace root, package manager metadata, TypeScript base config, and package manifests for the app, packages, and API service.
+- Added the workspace root (`bun.lock`), package manager metadata, TypeScript base config, and package manifests for the app, packages, and API service.
 - Added workspace ignore rules and lockfile state.
 
 ### Why
@@ -67,8 +67,8 @@ Do not review implementation code unless the docs make a claim that conflicts wi
 
 ### Testing
 
-- `pnpm --filter @obiter/api typecheck`
-- `pnpm --filter @obiter/api test`
+- `bun run --filter @obiter/api typecheck`
+- `bun run --filter @obiter/api test`
 
 ### Risks / Follow-Ups
 
@@ -97,10 +97,10 @@ Do not review implementation code unless the docs make a claim that conflicts wi
 
 ### Testing
 
-- `pnpm --filter @obiter/app-shell typecheck`
-- `pnpm --filter @obiter/app-shell test`
-- `pnpm --filter @obiter/desktop typecheck`
-- `pnpm --filter @obiter/web build`
+- `bun run --filter @obiter/app-shell typecheck`
+- `bun run --filter @obiter/app-shell test`
+- `bun run --filter @obiter/desktop typecheck`
+- `bun run --filter @obiter/web build`
 - Manual browser/Electron checks were performed during sidebar iteration at `http://localhost:5173/#/workspace`.
 
 ### Risks / Follow-Ups

@@ -1,5 +1,7 @@
+import '@obiter/test-dom'
 import { act, fireEvent, render, screen } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'bun:test'
+import { vi } from '../../../../scripts/test/vitest-compat'
 import { Toaster, ToastProvider, useToast } from '../toast'
 
 function Probe({ timeout }: { timeout?: number }) {

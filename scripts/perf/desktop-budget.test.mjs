@@ -5,7 +5,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
-import { expect, test } from 'vitest'
+import { expect, test } from 'bun:test'
 import {
   BUDGETS,
   evaluateBudgets,

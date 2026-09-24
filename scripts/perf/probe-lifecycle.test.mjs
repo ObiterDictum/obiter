@@ -18,7 +18,7 @@ import { spawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { setTimeout as delay } from 'node:timers/promises'
 import { chromium } from '@playwright/test'
-import { test } from 'vitest'
+import { test } from 'bun:test'
 import { ownResource, stopOwned } from './owned-server.mjs'
 import { runSamples } from './probe-lifecycle.mjs'
 
@@ -196,12 +196,13 @@ test('a registered resource is stopped with the owned servers', async () => {
 // CI-gated one; this is the end-to-end check that a browser context really
 // stops.
 const hasBrowser = existsSync(chromium.executablePath() ?? '')
-if (!hasBrowser)
+const browserTest = hasBrowser ? test : test.skip
+if (!hasBrowser) {
   console.error(
     'probe-lifecycle: Playwright browser not installed; skipping the real-browser proof',
   )
-
-test.runIf(hasBrowser)(
+}
+browserTest(
   'a timed-out probe leaves no browser context behind',
   async () => {
     const browser = await chromium.launch()

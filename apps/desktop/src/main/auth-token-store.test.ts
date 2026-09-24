@@ -1,8 +1,19 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../../scripts/test/vitest-compat'
 import { DesktopAuthTokenStore } from './auth-token-store'
+
+// The real fs namespace, snapshotted before mock.module patches it in place:
+// cleanup must always delete real temp files even while a test has the module
+// mocked, and the mock factory below spreads this as its untouched base.
+const realFs = { ...(await import('node:fs/promises')) }
+
+// bun:test cannot unregister a mock or reset the module registry: afterEach
+// re-registers the real fs (the latest mock.module registration wins), and
+// each generation bump makes the next dynamic import re-evaluate the store.
+let moduleGen = 0
 
 const directories: string[] = []
 
@@ -13,14 +24,14 @@ async function tokenPath() {
 }
 
 afterEach(async () => {
-  // Undo any vi.doMock applied by mockFs() so it does not bleed into the next
-  // test's module graph, and reset the module registry.
-  vi.doUnmock('node:fs/promises')
-  vi.resetModules()
+  // Re-register the real node:fs/promises and advance the generation so the
+  // next test imports a freshly evaluated store against real fs.
+  mock.module('node:fs/promises', () => ({ ...realFs }))
+  moduleGen++
   await Promise.all(
     directories
       .splice(0)
-      .map((directory) => rm(directory, { recursive: true })),
+      .map((directory) => realFs.rm(directory, { recursive: true })),
   )
 })
 
@@ -195,10 +206,8 @@ describe('DesktopAuthTokenStore', () => {
 async function mockFs(
   override: (name: string) => ((...args: unknown[]) => void) | undefined,
 ) {
-  const real = await import('node:fs/promises')
-  vi.resetModules()
-  vi.doMock('node:fs/promises', () => {
-    const mocked: Record<string, unknown> = { ...real }
+  mock.module('node:fs/promises', () => {
+    const mocked: Record<string, unknown> = { ...realFs }
     for (const name of ['rm', 'rename', 'writeFile', 'readFile', 'mkdir']) {
       const fn = override(name)
       if (fn) {
@@ -207,6 +216,7 @@ async function mockFs(
     }
     return mocked
   })
-  const mod = await import('./auth-token-store')
+  moduleGen++
+  const mod = await import(`./auth-token-store?gen=${moduleGen}`)
   return { Store: mod.DesktopAuthTokenStore }
 }

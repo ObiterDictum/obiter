@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+import '@obiter/test-dom'
 /*
  * E61: the caret must read the paragraph the layout painted. Two inputs the
  * pagination path merges in are invisible to a stored-only reading: text an
@@ -7,7 +7,8 @@
  * vertical moves resolved columns against lines that were never painted.
  */
 import { fireEvent, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'bun:test'
+import { vi } from '../../../../../scripts/test/vitest-compat'
 import type { DocumentModelWire } from '@obiter/contracts'
 import { formattedModel } from '../../document-format-edits'
 import type { FormatDrafts } from '../../document-format-types'

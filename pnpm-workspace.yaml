@@ -1,8 +1,0 @@
-packages:
-  - apps/*
-  - packages/*
-  - services/*
-onlyBuiltDependencies:
-  - electron
-  - esbuild
-  - onnxruntime-node

@@ -13,7 +13,7 @@
  *
  * Sizes are gzip bytes of the files on disk, which is what a compressing
  * server sends and what the budgets are stated in. The numbers are stable
- * across repeated builds of the same source. Run `pnpm --filter @obiter/web
+ * across repeated builds of the same source. Run `bun run --filter @obiter/web
  * build` first.
  *
  *   node scripts/perf/bundle-budget.mjs [--dist apps/web/dist]

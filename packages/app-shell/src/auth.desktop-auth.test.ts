@@ -1,5 +1,11 @@
-// @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import '@obiter/test-dom'
+import { afterEach, describe, expect, it, mock as bunMock } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
+
+// Generation bump replaces the old module-registry reset (?gen= query busts
+// the cache); the better-auth registrations above persist for the file,
+// exactly as the old hoisted mocks did.
+let moduleGen = 0
 
 const mock = vi.hoisted(() => ({
   clientOptions: undefined as unknown,
@@ -7,7 +13,7 @@ const mock = vi.hoisted(() => ({
   useSession: vi.fn(),
 }))
 
-vi.mock('better-auth/react', () => ({
+bunMock.module('better-auth/react', () => ({
   createAuthClient: (options: unknown) => {
     mock.clientOptions = options
     return {
@@ -19,7 +25,7 @@ vi.mock('better-auth/react', () => ({
   },
 }))
 
-vi.mock('better-auth/client/plugins', () => ({
+bunMock.module('better-auth/client/plugins', () => ({
   magicLinkClient: () => ({}),
 }))
 
@@ -33,7 +39,7 @@ const bridge = {
 }
 
 afterEach(() => {
-  vi.resetModules()
+  moduleGen++
   vi.clearAllMocks()
   delete (window as Window & { obiterDesktop?: typeof bridge }).obiterDesktop
 })
@@ -45,7 +51,7 @@ describe('auth client desktop bearer support', () => {
     ;(window as Window & { obiterDesktop?: typeof bridge }).obiterDesktop =
       bridge
 
-    await import('./auth')
+    await import(`./auth?gen=${moduleGen}`)
 
     const fetchOptions = (
       mock.clientOptions as {

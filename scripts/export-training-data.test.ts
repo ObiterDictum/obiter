@@ -8,7 +8,7 @@ import {
 } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'bun:test'
 import { canonicalHash } from './synthetic-v2/governance'
 import { corpusStageSpecs } from './synthetic-v2/program'
 import {

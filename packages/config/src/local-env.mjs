@@ -18,10 +18,10 @@ import { dirname, join } from 'node:path'
 import { parseEnv } from 'node:util'
 import { collectEnvKeys, duplicateEnvKeyMessage } from './env-keys.mjs'
 
-// The workspace root is where pnpm-workspace.yaml lives. It is the boundary the
+// The workspace root is where bun.lock lives. It is the boundary the
 // .env search must not cross: one worktree's .env must never be resolved from
 // another's, which a fixed-depth walk cannot prevent.
-const WORKSPACE_ROOT_MARKER = 'pnpm-workspace.yaml'
+const WORKSPACE_ROOT_MARKER = 'bun.lock'
 
 // Backstop for the case where no marker is ever found: a built image, a copied
 // dist, a cwd under no workspace. Without it the walk would reach `/`, which is
@@ -35,7 +35,7 @@ let localEnvFile = null
 
 /**
  * Resolve the worktree's `.env` by walking up from `startDirectory` and
- * stopping at the workspace root. A directory carrying pnpm-workspace.yaml is
+ * stopping at the workspace root. A directory carrying bun.lock is
  * checked for a `.env` and then ends the search, so a lane worktree whose own
  * `.env` is missing resolves to nothing rather than silently inheriting the
  * checkout above it and connecting to another lane's database.
@@ -97,7 +97,11 @@ export function parseLocalEnvFile(envPath) {
  * reads a developer's .env; the result is memoized for the process lifetime.
  */
 export function loadLocalEnvFile(startDirectory = process.cwd()) {
-  if (localEnvLoaded || process.env.NODE_ENV === 'test' || process.env.VITEST) {
+  if (
+    localEnvLoaded ||
+    process.env.NODE_ENV === 'test' ||
+    process.env.OBITER_TEST_RUNNER
+  ) {
     return localEnvFile
   }
 

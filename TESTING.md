@@ -114,7 +114,7 @@ When summarizing work:
 
 ## Real-corpus search relevance
 
-`pnpm benchmark:search-corpus` measures `POST /api/search/fetch` against the
+`bun run benchmark:search-corpus` measures `POST /api/search/fetch` against the
 local product `legal_authorities` index. It is not a CI gate and is not part
 of `scripts/ci-local.sh`: CI has no copy of the 37k-document corpus, and the
 fixture benchmark in `packages/search-client` already covers the engine
@@ -134,7 +134,7 @@ does not tidy failing cases out of the set.
 
 ## Real-corpus legislation relevance
 
-`pnpm benchmark:legislation-corpus` measures the legislation group of
+`bun run benchmark:legislation-corpus` measures the legislation group of
 `POST /api/search/fetch` against the local product `legislation_provisions`
 index — held recall, held precision, absent precision, and MRR. It is the
 legislation counterpart of the judgment suite above, kept separate because a
@@ -192,7 +192,7 @@ One proven journey — deliberately small before any suite grows:
 `sign in → create an organisation → create a matter → upload a DOCX → see it listed`
 
 ```bash
-pnpm --filter @obiter/web test:e2e   # or pnpm test:e2e from the repo root
+bun run --filter @obiter/web test:e2e   # or bun run test:e2e from the repo root
 ```
 
 The config lives in `apps/web/playwright.config.ts` (chromium only). `webServer`

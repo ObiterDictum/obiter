@@ -40,7 +40,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: 'pnpm --filter @obiter/api dev',
+      command: 'bun run --filter @obiter/api dev',
       url: `${apiOrigin}/api/health`,
       reuseExistingServer,
       timeout: 60_000,
@@ -49,7 +49,12 @@ export default defineConfig({
         // API connects to the local docker postgres the way ci-local.sh
         // expects. Same for Meilisearch — pin to the local docker on
         // 7700/meili to avoid the Tailscale host in .env.
-        DATABASE_URL: 'postgresql://obiter:obiter@127.0.0.1:5432/obiter',
+        // OBITER_E2E_DATABASE_URL lets a run target a task-owned database
+        // (for example obiter_test) instead of the local dev `obiter` database;
+        // the default is unchanged for every existing lane.
+        DATABASE_URL:
+          process.env.OBITER_E2E_DATABASE_URL ??
+          'postgresql://obiter:obiter@127.0.0.1:5432/obiter',
         MEILISEARCH_HOST: 'http://127.0.0.1:7700',
         MEILISEARCH_SEARCH_API_KEY: 'obiter-local-dev-key',
         MEILISEARCH_ADMIN_API_KEY: 'obiter-local-dev-key',
@@ -62,7 +67,7 @@ export default defineConfig({
       },
     },
     {
-      command: 'pnpm --filter @obiter/web dev',
+      command: 'bun run --filter @obiter/web dev',
       url: webOrigin,
       reuseExistingServer,
       timeout: 60_000,

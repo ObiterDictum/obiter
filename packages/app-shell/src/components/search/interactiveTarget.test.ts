@@ -1,5 +1,5 @@
-// @vitest-environment jsdom
-import { afterEach, describe, expect, it } from 'vitest'
+import '@obiter/test-dom'
+import { afterEach, describe, expect, it } from 'bun:test'
 import { isInteractiveTarget } from './interactiveTarget'
 
 function mount(html: string): HTMLElement {
