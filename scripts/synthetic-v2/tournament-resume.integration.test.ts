@@ -1,6 +1,6 @@
 import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'bun:test'
 import {
   assertSelectionManifest,
   assertTournamentManifest,
@@ -38,7 +38,7 @@ afterEach(async () => {
   )
 })
 
-describe.sequential('tournament candidate resume integration', () => {
+describe('tournament candidate resume integration', () => {
   it('resumes a hash-bound candidate into a finalizable continuation without writing root/tournament', async () => {
     const root = await privateRoot(directories)
     const specs = corpusStageSpecs('tournament')

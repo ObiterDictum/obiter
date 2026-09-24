@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 import { type Auth, createPool, testEnv } from './app-test-support'
 import { createApiApp } from './app'
 

@@ -1,13 +1,8 @@
-// @vitest-environment jsdom
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import '@obiter/test-dom'
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../../scripts/test/vitest-compat'
 import { cleanup, fireEvent, screen, within } from '@testing-library/react'
 import type { MeResponse } from '@obiter/contracts'
-import {
-  OWNER_ME,
-  idleMutation,
-  openSection,
-  renderSettings,
-} from './settings-test-support'
 
 /**
  * Settings information architecture: the three sections, how they are reached,
@@ -24,46 +19,116 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
 }))
 
-vi.mock('../organisation-membership', () => ({
-  useOrganisationMembers: () => ({ data: [] }),
-  useOrganisationInvites: () => ({ data: [] }),
-  useCreateOrganisationInvite: () => ({
-    mutateAsync: vi.fn(),
-    isPending: false,
-  }),
-  useRevokeOrganisationInvite: () => ({
-    mutateAsync: vi.fn(),
-    isPending: false,
-  }),
-  useRemoveOrganisationMember: () => ({
-    mutateAsync: vi.fn(),
-    isPending: false,
-  }),
-}))
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const organisationMembershipModuleKeys = Object.fromEntries(
+  Object.keys(await import('../organisation-membership')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('../organisation-membership', () =>
+  Object.assign(
+    { ...organisationMembershipModuleKeys },
+    (() => ({
+      useOrganisationMembers: () => ({ data: [] }),
+      useOrganisationInvites: () => ({ data: [] }),
+      useCreateOrganisationInvite: () => ({
+        mutateAsync: vi.fn(),
+        isPending: false,
+      }),
+      useRevokeOrganisationInvite: () => ({
+        mutateAsync: vi.fn(),
+        isPending: false,
+      }),
+      useRemoveOrganisationMember: () => ({
+        mutateAsync: vi.fn(),
+        isPending: false,
+      }),
+    }))(),
+  ),
+)
 
-vi.mock('../current-user', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../current-user')>()
-  return {
-    ...actual,
-    useCurrentUser: mocks.useCurrentUser,
-    useCreateOrganisation: mocks.useCreateOrganisation,
-    useRenameOrganisation: mocks.useRenameOrganisation,
-    useUpdateProfile: mocks.useUpdateProfile,
-  }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const currentUserModule = { ...(await import('../current-user')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const currentUserModuleKeys = Object.fromEntries(
+  Object.keys(await import('../current-user')).map((key) => [key, undefined]),
+)
+mock.module('../current-user', () =>
+  Object.assign(
+    { ...currentUserModuleKeys },
+    (() => {
+      const actual = currentUserModule
+      return {
+        ...actual,
+        useCurrentUser: mocks.useCurrentUser,
+        useCreateOrganisation: mocks.useCreateOrganisation,
+        useRenameOrganisation: mocks.useRenameOrganisation,
+        useUpdateProfile: mocks.useUpdateProfile,
+      }
+    })(),
+  ),
+)
 
-vi.mock('../auth', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../auth')>()
-  return { ...actual, useAuth: mocks.useAuth }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const authModule = { ...(await import('../auth')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const authModuleKeys = Object.fromEntries(
+  Object.keys(await import('../auth')).map((key) => [key, undefined]),
+)
+mock.module('../auth', () =>
+  Object.assign(
+    { ...authModuleKeys },
+    (() => {
+      const actual = authModule
+      return { ...actual, useAuth: mocks.useAuth }
+    })(),
+  ),
+)
 
-vi.mock('@tanstack/react-router', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@tanstack/react-router')>()
-  return {
-    ...actual,
-    useNavigate: () => mocks.navigate,
-  }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const tanstackReactRouterModule = {
+  ...(await import('@tanstack/react-router')),
+}
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const tanstackReactRouterModuleKeys = Object.fromEntries(
+  Object.keys(await import('@tanstack/react-router')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('@tanstack/react-router', () =>
+  Object.assign(
+    { ...tanstackReactRouterModuleKeys },
+    (() => {
+      const actual = tanstackReactRouterModule
+      return {
+        ...actual,
+        useNavigate: () => mocks.navigate,
+      }
+    })(),
+  ),
+)
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const { OWNER_ME, idleMutation, openSection, renderSettings } =
+  await import('./settings-test-support')
 
 function signedIn(user: MeResponse = OWNER_ME) {
   mocks.useCurrentUser.mockReturnValue({ data: user })

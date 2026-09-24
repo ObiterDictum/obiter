@@ -1,5 +1,6 @@
 import type { Pool } from 'pg'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 import type { StorageService } from './storage'
 
 /**
@@ -20,21 +21,67 @@ const mocks = vi.hoisted(() => ({
   })),
 }))
 
-vi.mock('./verification-checks', () => ({
-  collectVerificationFindings: mocks.collectVerificationFindings,
-}))
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const verificationChecksKeys = Object.fromEntries(
+  Object.keys(await import('./verification-checks')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('./verification-checks', () =>
+  Object.assign(
+    { ...verificationChecksKeys },
+    {
+      collectVerificationFindings: mocks.collectVerificationFindings,
+    },
+  ),
+)
 
-vi.mock('./document-model-store', () => ({
-  getDocumentModel: mocks.getDocumentModel,
-  DocumentModelStoreError: class DocumentModelStoreError extends Error {},
-}))
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const documentModelStoreKeys = Object.fromEntries(
+  Object.keys(await import('./document-model-store')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('./document-model-store', () =>
+  Object.assign(
+    { ...documentModelStoreKeys },
+    {
+      getDocumentModel: mocks.getDocumentModel,
+      DocumentModelStoreError: class DocumentModelStoreError extends Error {},
+    },
+  ),
+)
 
-vi.mock('./verification-extraction', () => ({
-  extractVerificationCandidates: mocks.extractVerificationCandidates,
-  VerificationExtractionLimitError: class VerificationExtractionLimitError extends Error {},
-}))
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const verificationExtractionKeys = Object.fromEntries(
+  Object.keys(await import('./verification-extraction')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('./verification-extraction', () =>
+  Object.assign(
+    { ...verificationExtractionKeys },
+    {
+      extractVerificationCandidates: mocks.extractVerificationCandidates,
+      VerificationExtractionLimitError: class VerificationExtractionLimitError extends Error {},
+    },
+  ),
+)
 
-import { createAndExecuteVerificationRun } from './verification-execution'
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const { createAndExecuteVerificationRun } =
+  await import('./verification-execution')
 
 const storage = {} as unknown as StorageService
 

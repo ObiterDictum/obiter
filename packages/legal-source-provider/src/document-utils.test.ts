@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import { readAlternateLink, readRelLink, readTypedLink } from './document-utils'
 
 const pagedFeed = `<?xml version="1.0"?>

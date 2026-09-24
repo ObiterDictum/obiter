@@ -18,7 +18,7 @@ export function configuredClientOrigins(env: ApiEnv): string[] {
 }
 
 /**
- * Electron `pnpm dev:desktop` loads the renderer from electron-vite over plain
+ * Electron `bun run dev:desktop` loads the renderer from electron-vite over plain
  * http (default http://localhost:5173, next free port if taken). That Origin
  * reaches the API via the renderer /api proxy and must be trusted in
  * development. https is rejected: electron-vite does not serve TLS in dev, and

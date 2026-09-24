@@ -1,5 +1,6 @@
 import { Pool } from 'pg'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 import { createDatabasePools } from './database-pools'
 import { createTestApiEnv } from './test-api-env'
 import type { ApiEnv } from './env'

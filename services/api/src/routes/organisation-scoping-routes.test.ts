@@ -5,7 +5,7 @@
  */
 import { Hono } from 'hono'
 import type { Pool } from 'pg'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import type { AuthzVariables } from '../authz'
 import type { RedactionRunRow } from '../redaction-database'
 import { createDocumentAccessRoutes } from './document-access'

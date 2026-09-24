@@ -57,7 +57,7 @@ async function serverCookieHeader(): Promise<Record<string, string>> {
     if (cookie) return { Cookie: cookie }
   } catch (error) {
     // Only the "not in SSR / no request" case is expected and may be
-    // silently ignored (e.g., vitest, client-side). Any other failure
+    // silently ignored (e.g., under the test runner, client-side). Any other failure
     // (e.g., getRequest throwing unexpectedly inside SSR) must surface
     // so SSR does not silently degrade to an unauthenticated fetch and
     // redirect to /sign-in without diagnostics.

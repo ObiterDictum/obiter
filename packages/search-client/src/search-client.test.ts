@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 import {
   containsEveryQueryTerm,
   createIndex,
@@ -114,9 +115,12 @@ describe('Legal search client', () => {
       'sort',
     ])
     expect(index.updatePrefixSearch).toHaveBeenCalledWith('disabled')
-    expect(
-      index.updatePrefixSearch.mock.results[0]?.value.waitTask,
-    ).toHaveBeenCalledWith({ timeout: 600_000, interval: 100 })
+    const firstPrefixSearch = index.updatePrefixSearch.mock.results[0]
+      ?.value as { waitTask: unknown } | undefined
+    expect(firstPrefixSearch?.waitTask).toHaveBeenCalledWith({
+      timeout: 600_000,
+      interval: 100,
+    })
     expect(index.updateStopWords).toHaveBeenCalledWith([
       'a',
       'an',
@@ -199,9 +203,11 @@ describe('Legal search client', () => {
     it('continues when the caller opts in, and names what it could not apply', async () => {
       const index = indexWithout404PrefixSearch()
 
-      const result = await createIndex(clientFor(index), 'legal_authorities', {
-        allowUnsupportedSettings: true,
-      })
+      const result = await createIndex(
+        clientFor(index as unknown as Parameters<typeof clientFor>[0]),
+        'legal_authorities',
+        { allowUnsupportedSettings: true },
+      )
 
       expect(result.unsupportedSettings).toEqual(['prefixSearch'])
       // Everything after the unsupported setting still has to be applied.
@@ -235,9 +241,13 @@ describe('Legal search client', () => {
         getPrefixSearch: vi.fn(async () => 'disabled'),
       }
 
-      const result = await createIndex(clientFor(index), 'legal_authorities', {
-        allowUnsupportedSettings: true,
-      })
+      const result = await createIndex(
+        clientFor(index as unknown as Parameters<typeof clientFor>[0]),
+        'legal_authorities',
+        {
+          allowUnsupportedSettings: true,
+        },
+      )
 
       expect(result.unsupportedSettings).toEqual([])
     })
@@ -251,10 +261,12 @@ describe('Legal search client', () => {
       Object.assign(badRequest, {
         response: new Response(null, { status: 400 }),
       })
-      index.getPrefixSearch = vi.fn(async () => 'disabled')
+      index.getPrefixSearch = vi.fn(
+        async () => 'disabled',
+      ) as unknown as typeof index.getPrefixSearch
       index.updatePrefixSearch = vi.fn(() => {
         throw badRequest
-      })
+      }) as unknown as typeof index.updatePrefixSearch
 
       await expect(
         createIndex(clientFor(index), 'legal_authorities', {

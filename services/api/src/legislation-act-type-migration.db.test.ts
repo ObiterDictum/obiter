@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import type { PoolClient } from 'pg'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test'
 import { createTestPool } from './test-database.test-support'
 
 /**

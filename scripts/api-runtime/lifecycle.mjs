@@ -64,7 +64,10 @@ export function startServer({
   port,
   environment,
   bunBin,
-  nodeBin = process.execPath,
+  // Real `node`, not process.execPath: the harness runs under bun after the
+  // toolchain migration, and the rollback adapter must still be exercised on
+  // an actual Node runtime.
+  nodeBin = 'node',
   onOutput = () => {},
 }) {
   const entry = SERVER_ENTRY_POINTS[runtime]
@@ -77,13 +80,16 @@ export function startServer({
   assertUsablePort(port)
 
   const command = runtime === 'bun' ? bunBin : nodeBin
+  // The Node adapter runs from services/api, the way the container does: tsx
+  // is a dependency of @obiter/api and resolves from that package, not the
+  // repository root (which no longer carries tsx after the Bun migration).
   const args =
     runtime === 'bun'
       ? [`${worktreeRoot}/${entry}`]
-      : ['--import', 'tsx', `${worktreeRoot}/${entry}`]
+      : ['--import', 'tsx', 'src/server.ts']
 
   const child = spawn(command, args, {
-    cwd: worktreeRoot,
+    cwd: runtime === 'bun' ? worktreeRoot : `${worktreeRoot}/services/api`,
     env: { ...process.env, ...environment },
     stdio: ['ignore', 'pipe', 'pipe'],
   })

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'bun:test'
 import { requireTestDatabaseUrl } from './test-database.test-support'
 
 const originalEnv = { ...process.env }

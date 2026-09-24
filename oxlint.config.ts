@@ -33,7 +33,7 @@ export default defineConfig({
     'coverage/',
     '**/*.gen.ts',
     '**/*.gen.tsx',
-    'pnpm-lock.yaml',
+    'bun.lock',
     'packages/rampart-inference/',
     // Intentionally wider than the 9 patterns in the deleted .oxlintrc.json:
     // the 12 agent-tooling dirs (.agent/** … .windsurf/**) plus the vendored
@@ -60,7 +60,7 @@ export default defineConfig({
   ],
   overrides: [
     {
-      // The load harness is plain `.mjs`, so `pnpm typecheck` never sees it and
+      // The load harness is plain `.mjs`, so `bun run typecheck` never sees it and
       // the default rule set does not resolve identifiers. `no-undef` with the
       // Node environment is the static check that catches an unimported name:
       // #215 shipped `execFileSync` and `TargetRefusal` missing from

@@ -80,7 +80,7 @@ Weights vendored match what the CDN actually served: Satoshi 400/500/700 (there 
 electron-builder config lives in `apps/desktop/electron-builder.yml` (kept out of `package.json` for clarity). Windows NSIS is the primary target.
 
 ```
-pnpm --filter @obiter/desktop package:win
+bun run --filter @obiter/desktop package:win
 ```
 
 Produces `apps/desktop/release/Obiter Setup <version>.exe`. The desktop app has **no runtime npm dependencies** (the main/preload bundles import only `electron` and `node:` built-ins; the renderer is a fully bundled static asset set), so `node_modules` is excluded from the asar to keep the installer lean. The redaction model is **not** bundled — inference runs server-side in `services/api`, so no `onnxruntime` packaging.

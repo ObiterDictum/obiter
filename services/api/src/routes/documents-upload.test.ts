@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { deflateSync } from 'node:zlib'
 import { Hono } from 'hono'
 import type { Pool } from 'pg'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'bun:test'
 import { createDocumentsRoutes, MAX_DOCUMENT_UPLOAD_BYTES } from './documents'
 import { createLocalStorage } from '../storage'
 

@@ -1,21 +1,13 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, mock } from 'bun:test'
+import { vi, eachOf } from '../../../../../../scripts/test/vitest-compat'
 import { Hono } from 'hono'
-import {
-  createLegalSearchProxyRoutes,
-  parseFindCaseLawAtom,
-  parseJudgmentParagraphs,
-} from '../proxy-routes'
+
 import type { ApiEnv } from '../../../env'
 import {
   canonicalHydrationQueryKey,
   LegalSearchHydrationBudget,
 } from '../../../legal-search-hydration-budget'
 import { createTestApiEnv } from '../../../test-api-env'
-import * as mojClient from '../moj-client'
-import {
-  createInMemoryLegalAuthoritySourceStore,
-  type LegalAuthoritySourceStore,
-} from '../source-store'
 
 const searchClientMock = vi.hoisted(() => ({
   createClient: vi.fn(() => ({ id: 'meili-client' })),
@@ -33,19 +25,68 @@ const legislationServeMock = vi.hoisted(() => ({
     null as unknown as (typeof import('../legislation-serve'))['resolveLegislationFetch'],
 }))
 
-vi.mock('@obiter/search-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@obiter/search-client')>()),
-  ...searchClientMock,
-}))
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const obiterSearchClientModule = { ...(await import('@obiter/search-client')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const obiterSearchClientModuleKeys = Object.fromEntries(
+  Object.keys(await import('@obiter/search-client')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('@obiter/search-client', () =>
+  Object.assign(
+    { ...obiterSearchClientModuleKeys },
+    (() => ({
+      ...obiterSearchClientModule,
+      ...searchClientMock,
+    }))(),
+  ),
+)
 
-vi.mock('../legislation-serve', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../legislation-serve')>()
-  legislationServeMock.actual = actual.resolveLegislationFetch
-  return {
-    ...actual,
-    resolveLegislationFetch: legislationServeMock.resolveLegislationFetch,
-  }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const legislationServeModule = { ...(await import('../legislation-serve')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const legislationServeModuleKeys = Object.fromEntries(
+  Object.keys(await import('../legislation-serve')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('../legislation-serve', () =>
+  Object.assign(
+    { ...legislationServeModuleKeys },
+    (() => {
+      const actual = legislationServeModule
+      legislationServeMock.actual = actual.resolveLegislationFetch
+      return {
+        ...actual,
+        resolveLegislationFetch: legislationServeMock.resolveLegislationFetch,
+      }
+    })(),
+  ),
+)
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const {
+  createLegalSearchProxyRoutes,
+  parseFindCaseLawAtom,
+  parseJudgmentParagraphs,
+} = await import('../proxy-routes')
+const mojClient = await import('../moj-client')
+import type { LegalAuthoritySourceStore } from '../source-store'
+const { createInMemoryLegalAuthoritySourceStore } =
+  await import('../source-store')
 
 const env: ApiEnv = createTestApiEnv()
 
@@ -2152,10 +2193,10 @@ describe('createLegalSearchProxyRoutes', () => {
         ),
       )
       .mockImplementation(
-        async () =>
+        (async () =>
           new Response(
             '<html><body><h1>Natalia Nikolaevna Potanina v Vladimir Olegovich Potanin</h1><h2><span>Neutral Citation Number</span>[2026] EWFC 80</h2><article><div class="judgment-header__date">Date: 20/04/2026</div><p>This foreground search result can be opened even if the durable source store missed.</p></article></body></html>',
-          ),
+          )) as unknown as typeof fetch,
       )
     const app = createAuthenticatedProxyApp(sourceStore)
 
@@ -2717,7 +2758,7 @@ describe('createLegalSearchProxyRoutes', () => {
     )
   })
 
-  it.each(findCaseLawCourtCases)(
+  eachOf(findCaseLawCourtCases)(
     'queues hydration and indexes $requestCourt results from Find Case Law',
     async ({ requestCourt, apiCourt, storedCourt, citation }) => {
       searchClientMock.search.mockResolvedValueOnce({
@@ -3336,10 +3377,10 @@ describe('createLegalSearchProxyRoutes', () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
       .mockImplementation(
-        async () =>
+        (async () =>
           new Response(
             `<html><body><h1>Secretary of State for the Home Department v Miah</h1><h2><span>Neutral Citation Number</span>[2026] EWHC 1246 (Admin)</h2><article><div class="judgment-header__date">Date: 22/05/2026</div><p>The court considered the administrative law challenge and the evidence before the Secretary of State.</p></article></body></html>`,
-          ),
+          )) as unknown as typeof fetch,
       )
     const app = createAuthenticatedProxyApp()
 
@@ -3575,7 +3616,10 @@ describe('createLegalSearchProxyRoutes', () => {
           `<feed><entry><title>Craig Alfred v Information Commissioner</title><id>https://caselaw.nationalarchives.gov.uk/id/${documentId}</id><link href="https://caselaw.nationalarchives.gov.uk/ukftt/grc/2026/754" rel="alternate"/><link href="https://caselaw.nationalarchives.gov.uk/ukftt/grc/2026/754/data.xml" rel="alternate" type="application/xml"/><published>2026-05-21T00:00:00Z</published><tna:uri>${documentId}</tna:uri><tna:identifier slug="ukftt/grc/2026/754" type="ukncn">[2026] UKFTT 754 (GRC)</tna:identifier><tna:contenthash>stable-abc</tna:contenthash></entry></feed>`,
         ),
       )
-      .mockImplementationOnce(() => new Promise<Response>(() => undefined))
+      .mockImplementationOnce(
+        (() =>
+          new Promise<Response>(() => undefined)) as unknown as typeof fetch,
+      )
       .mockResolvedValueOnce(
         new Response(
           `<html><body><h1>Craig Alfred v Information Commissioner</h1><h2><span>Neutral Citation Number</span>[2026] UKFTT 754 (GRC)</h2><article><div class="judgment-header__date">Date: 21/05/2026</div><p>This tribunal judgment paragraph is long enough to render from the alternate URL.</p></article></body></html>`,
@@ -4081,7 +4125,7 @@ const describeLiveFindCaseLaw =
     : describe.skip
 
 describeLiveFindCaseLaw('Find Case Law live retrieval', () => {
-  it.each(liveFindCaseLawCourtCases)(
+  eachOf(liveFindCaseLawCourtCases)(
     'retrieves a live case from $court',
     async ({ court, storedCourt, citation }) => {
       searchClientMock.search.mockResolvedValueOnce({

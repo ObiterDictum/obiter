@@ -191,7 +191,7 @@ test('the Dockerfile passes both provenance args into the web build', async () =
     .find(
       (line) =>
         line.includes('RUN') &&
-        line.includes('pnpm --filter @obiter/web build'),
+        line.includes('bun --bun run --filter @obiter/web build'),
     )
   assert.ok(buildLine, 'the Dockerfile must run the web build')
   assert.match(buildLine, /OBITER_BUILD_COMMIT="\$OBITER_BUILD_COMMIT"/)

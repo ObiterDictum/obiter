@@ -1,16 +1,9 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
-import {
-  createConnectedPool,
-  createHybridPool,
-  createPool,
-  testEnv,
-  type Auth,
-  type ErrorBody,
-} from './app-test-support'
-import { createApiApp } from './app'
+import { describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
+
 import { SCANNED_PDF_MESSAGE } from './document-extraction'
 import type { RedactionRunRow } from './redaction-database'
 import { createLocalStorage } from './storage'
@@ -31,13 +24,49 @@ const detectRedactionSpansMock = vi.hoisted(() =>
   })),
 )
 
-vi.mock('@obiter/search-client', () => searchClientMock)
-vi.mock('./redaction-detection', () => ({
-  configureRedactionDetector: configureRedactionDetectorMock,
-  detectionMode: (degraded: boolean) =>
-    degraded ? 'heuristics+supplement' : 'model+supplement',
-  detectRedactionSpans: detectRedactionSpansMock,
-}))
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const obiterSearchClientModuleKeys = Object.fromEntries(
+  Object.keys(await import('@obiter/search-client')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('@obiter/search-client', () =>
+  Object.assign(
+    { ...obiterSearchClientModuleKeys },
+    (() => searchClientMock)(),
+  ),
+)
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const redactionDetectionModuleKeys = Object.fromEntries(
+  Object.keys(await import('./redaction-detection')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('./redaction-detection', () =>
+  Object.assign(
+    { ...redactionDetectionModuleKeys },
+    (() => ({
+      configureRedactionDetector: configureRedactionDetectorMock,
+      detectionMode: (degraded: boolean) =>
+        degraded ? 'heuristics+supplement' : 'model+supplement',
+      detectRedactionSpans: detectRedactionSpansMock,
+    }))(),
+  ),
+)
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+import type { Auth, ErrorBody } from './app-test-support'
+const { createConnectedPool, createHybridPool, createPool, testEnv } =
+  await import('./app-test-support')
+const { createApiApp } = await import('./app')
 
 describe('createApiApp', () => {
   it('configures redaction detection from ApiEnv while building the app', () => {
@@ -51,7 +80,8 @@ describe('createApiApp', () => {
       },
     )
 
-    expect(configureRedactionDetectorMock).toHaveBeenCalledExactlyOnceWith({
+    expect(configureRedactionDetectorMock).toHaveBeenCalledTimes(1)
+    expect(configureRedactionDetectorMock).toHaveBeenCalledWith({
       model: testEnv.rampartModel,
       revision: testEnv.rampartRevision,
       cacheDir: testEnv.rampartCacheDir,

@@ -1,5 +1,5 @@
-// @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from 'vitest'
+import '@obiter/test-dom'
+import { beforeEach, describe, expect, it } from 'bun:test'
 import {
   DOCUMENT_DRAFT_SCHEMA_VERSION,
   clearAllDocumentDrafts,

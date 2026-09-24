@@ -7,7 +7,7 @@
     "dev": "vite dev",
     "preview": "vite preview",
     "start": "node serve.mjs",
-    "test": "node --test serve.test.mjs http-policy.test.mjs env-file.test.mjs lane-target.test.mjs build-provenance.test.mjs",
+    "test": "bun test --isolate --preload ../../scripts/test/vitest-compat.ts serve.test.mjs http-policy.test.mjs env-file.test.mjs lane-target.test.mjs journey-target.test.mjs build-provenance.test.mjs",
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

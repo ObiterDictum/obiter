@@ -54,19 +54,19 @@ if ! pg_isready -h localhost -p 5432 -U obiter -d obiter_test >/dev/null 2>&1; t
 fi
 
 # The test database must have every migration in packages/database/migrations
-# recorded in schema_migrations (applied via `pnpm db:migrate`). Comparing the
+# recorded in schema_migrations (applied via `bun run db:migrate`). Comparing the
 # file list against the tracking table — rather than probing one hardcoded
 # table — keeps this check correct as migrations are added.
 if ! APPLIED=$(psql "$TEST_DATABASE_URL" -tAc "SELECT filename FROM public.schema_migrations ORDER BY filename" 2>/dev/null); then
   echo "Postgres database obiter_test has no schema_migrations table" >&2
-  echo "Apply migrations with: pnpm db:migrate --database-url=\"$TEST_DATABASE_URL\"" >&2
+  echo "Apply migrations with: bun run db:migrate --database-url=\"$TEST_DATABASE_URL\"" >&2
   exit 1
 fi
 MISSING=$(comm -23 <(for f in packages/database/migrations/*.sql; do basename "$f"; done | sort) <(printf '%s\n' "$APPLIED" | sort) || true)
 if [ -n "$MISSING" ]; then
   echo "Postgres database obiter_test is missing migrations:" >&2
   printf '%s\n' "$MISSING" | sed 's/^/  /' >&2
-  echo "Apply them with: pnpm db:migrate --database-url=\"$TEST_DATABASE_URL\"" >&2
+  echo "Apply them with: bun run db:migrate --database-url=\"$TEST_DATABASE_URL\"" >&2
   exit 1
 fi
 
@@ -94,26 +94,26 @@ if ! command -v fc-list >/dev/null 2>&1 || [ "${LIBERATION:-0}" -eq 0 ]; then
   exit 1
 fi
 
-echo "== install"      && pnpm install --frozen-lockfile
-echo "== typecheck"    && pnpm typecheck
-echo "== format:check" && pnpm format:check
-echo "== lint"         && pnpm lint
-echo "== build:web"    && pnpm --filter @obiter/web build
-echo "== bundle:budget" && pnpm perf:bundle-budget
-echo "== build:provenance" && node apps/web/build-provenance.mjs verify --allow-dirty
-echo "== build:desktop"  && pnpm --filter @obiter/desktop build
-echo "== desktop:budget" && pnpm perf:desktop-budget
-echo "== test"         && TEST_DATABASE_URL="$TEST_DATABASE_URL" pnpm test
+echo "== install"      && bun install --frozen-lockfile
+echo "== typecheck"    && bun --bun run typecheck
+echo "== format:check" && bun --bun run format:check
+echo "== lint"         && bun --bun run lint
+echo "== build:web"    && bun --bun run --filter @obiter/web build
+echo "== bundle:budget" && bun --bun run perf:bundle-budget
+echo "== build:provenance" && bun apps/web/build-provenance.mjs verify --allow-dirty
+echo "== build:desktop"  && bun --bun run --filter @obiter/desktop build
+echo "== desktop:budget" && bun --bun run perf:desktop-budget
+echo "== test"         && TEST_DATABASE_URL="$TEST_DATABASE_URL" bun run test
 
 echo "== benchmark:search"
 SEARCH_BENCHMARK_API_KEY="$MEILI_KEY" \
 SEARCH_BENCHMARK_HOST="$MEILI_HOST" \
 SEARCH_BENCHMARK_REPORT_PATH=/tmp/search-benchmark.json \
-  pnpm benchmark:search
+  bun run benchmark:search
 
-# Mirrors the bun-api CI job. The API ships on Bun, so a green vitest run under
-# Node does not prove the server that is deployed. Requires the pinned Bun; set
-# BUN_BIN to a non-PATH install (for example BUN_BIN="$HOME/.bun/bin/bun").
+# Mirrors the bun-api CI job: drive the real Bun.serve entry point and the Node
+# rollback entry point over HTTP. Requires the pinned Bun; set BUN_BIN to a
+# non-PATH install (for example BUN_BIN="$HOME/.bun/bin/bun").
 BUN_BIN=${BUN_BIN:-bun}
 PINNED_BUN=$(cat .bun-version)
 if ! command -v "$BUN_BIN" >/dev/null 2>&1; then
@@ -128,7 +128,7 @@ if [ "$RUNNING_BUN" != "$PINNED_BUN" ]; then
 fi
 
 echo "== bun:api-runtime"
-node scripts/api-runtime/runtime-integration.mjs \
+bun scripts/api-runtime/runtime-integration.mjs \
   --runtime both \
   --database-url "$TEST_DATABASE_URL" \
   --bun-bin "$BUN_BIN" \

@@ -25,7 +25,7 @@
     "rank": "1-based position of each expected document, or null if absent from the top 20"
   },
   "known_limitations": [
-    "Not a CI gate. CI has no product corpus; run pnpm benchmark:search-corpus locally against a ready legal_authorities index.",
+    "Not a CI gate. CI has no product corpus; run bun run benchmark:search-corpus locally against a ready legal_authorities index.",
     "UKSC, UKPC, EWCA Civ and EWCA Crim are complete and expectations drawn from them are stable. High Court is 2020-onward and will gain pre-2020 material; a document-count change requires re-verifying absent-citation cases before updating the baseline.",
     "The fixture benchmark in packages/search-client remains the CI engine-adapter gate. This suite exists because that fixture set cannot see fetch-layer drops on the real corpus.",
     "Failing cases stay in the set. The baseline records today's ranks including misses; ranking work ratchets the floors."

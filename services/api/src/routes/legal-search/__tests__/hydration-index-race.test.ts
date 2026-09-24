@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../../../../scripts/test/vitest-compat'
 import type { LegalAuthority } from '@obiter/legal-schema'
-import { indexFetchedAuthoritiesAfterWrite } from '../moj-client'
+
 import type {
   LegalAuthorityReadStore,
   StoredLegalAuthorityRecord,
@@ -11,11 +12,34 @@ const searchClientMock = vi.hoisted(() => ({
   deleteDocuments: vi.fn(),
 }))
 
-vi.mock('@obiter/search-client', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@obiter/search-client')>()),
-  indexDocuments: searchClientMock.indexDocuments,
-  deleteDocuments: searchClientMock.deleteDocuments,
-}))
+// The real module, snapshotted before mock.module registers: a factory that
+// awaited its own specifier re-entered the in-flight mock registration and
+// deadlocked under bun's module registry.
+const obiterSearchClientModule = { ...(await import('@obiter/search-client')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const obiterSearchClientKeys = Object.fromEntries(
+  Object.keys(await import('@obiter/search-client')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('@obiter/search-client', () =>
+  Object.assign(
+    { ...obiterSearchClientKeys },
+    {
+      ...obiterSearchClientModule,
+      indexDocuments: searchClientMock.indexDocuments,
+      deleteDocuments: searchClientMock.deleteDocuments,
+    },
+  ),
+)
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const { indexFetchedAuthoritiesAfterWrite } = await import('../moj-client')
 
 const indexName = 'legal_authorities'
 // Both index functions are mocked, so the client is never dereferenced; the

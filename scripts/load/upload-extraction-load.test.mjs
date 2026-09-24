@@ -1,7 +1,8 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, describe, expect, it } from 'bun:test'
+import { vi } from '../test/vitest-compat'
 import {
   UsageError,
   assertOutPathOutsideCheckout,

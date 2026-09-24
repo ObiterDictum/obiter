@@ -1,5 +1,5 @@
 import { readdir, readFile } from 'node:fs/promises'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 
 const protectedTables =
   /\b(?:from|join|update|into)\s+(?:[a-z_]\w*\.)?(?:matters|matter_shares|matter_documents|document_versions|redaction_runs|artifacts|audit_logs)\b/i

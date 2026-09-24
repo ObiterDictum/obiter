@@ -1,10 +1,10 @@
-// @vitest-environment jsdom
+import '@obiter/test-dom'
 import { readFileSync, readdirSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { QueryClient } from '@tanstack/react-query'
 import { LegalSearchView, VerifyRouteView } from '@obiter/app-shell'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import {
   createAppRouter,
   DESKTOP_SHARED_VIEW_PATHS,

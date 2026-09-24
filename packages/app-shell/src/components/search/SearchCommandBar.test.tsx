@@ -1,5 +1,6 @@
-// @vitest-environment jsdom
-import { describe, expect, it, vi } from 'vitest'
+import '@obiter/test-dom'
+import { describe, expect, it } from 'bun:test'
+import { vi } from '../../../../../scripts/test/vitest-compat'
 import { render, screen } from '@testing-library/react'
 import { SearchCommandBar } from './SearchCommandBar'
 

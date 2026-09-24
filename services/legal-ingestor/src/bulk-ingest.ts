@@ -19,7 +19,7 @@ import { readLegalIngestorEnv } from './env'
 
 /**
  * Bulk ingestion from Find Case Law into Postgres `legal_source_documents`
- * only. The Meilisearch product index stays derived: `pnpm
+ * only. The Meilisearch product index stays derived: `bun run
  * rebuild:search-index` reads these rows afterwards. This module never touches
  * Meilisearch, so there is exactly one writer to the derived index.
  *

@@ -16,21 +16,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: pnpm/action-setup@v4
+      # Bun installs and runs the workspace scripts; Node hosts electron's
+      # install script and electron-builder during packaging.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
 
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-          cache: pnpm
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: bun install --frozen-lockfile
 
       # Builds the desktop app (electron-vite) and packages the NSIS installer.
       # The model is not bundled (server-side inference); see
       # docs/specs/desktop-release.md. Unsigned for now.
       - name: Build Windows installer
-        run: pnpm --filter @obiter/desktop package:win
+        run: bun run --filter @obiter/desktop package:win
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4

@@ -1,5 +1,5 @@
 import { Hono } from 'hono'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import type { Pool } from 'pg'
 import type { MatterAccessLevel, UserRole } from '@obiter/contracts'
 import type { AuthzVariables } from '../authz'

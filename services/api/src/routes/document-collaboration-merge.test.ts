@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import { documentCollaborationMergeResponseSchema } from '@obiter/contracts'
 import { parseDocx } from '@obiter/ooxml'
 import { DocumentPresenceRegistry } from '../document-presence'

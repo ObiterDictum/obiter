@@ -41,8 +41,8 @@ Loaded `references/maps/obiter-system-map.md`, `review/obiter/architecture/data-
 
 ## Verification
 
-- `pnpm --filter @obiter/search-client test` - passed
-- `pnpm --filter @obiter/api test` - passed
+- `bun run --filter @obiter/search-client test` - passed
+- `bun run --filter @obiter/api test` - passed
 
 ## Gaps / Follow-Ups
 

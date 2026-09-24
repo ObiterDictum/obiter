@@ -1,16 +1,36 @@
 import { Hono } from 'hono'
 import type { Pool } from 'pg'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../../scripts/test/vitest-compat'
 import type { UserRole } from '@obiter/contracts'
 import { sendEmail } from '../auth'
 import type { AuthzVariables } from '../authz'
 import { createTestApiEnv } from '../test-api-env'
-import { createOrganisationsRoutes } from './organisations'
 
-vi.mock('../auth', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../auth')>()
-  return { ...actual, sendEmail: vi.fn(actual.sendEmail) }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const authModule = { ...(await import('../auth')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const authModuleKeys = Object.fromEntries(
+  Object.keys(await import('../auth')).map((key) => [key, undefined]),
+)
+mock.module('../auth', () =>
+  Object.assign(
+    { ...authModuleKeys },
+    (() => {
+      const actual = authModule
+      return { ...actual, sendEmail: vi.fn(actual.sendEmail) }
+    })(),
+  ),
+)
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const { createOrganisationsRoutes } = await import('./organisations')
 
 interface UserRow {
   id: string

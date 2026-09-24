@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import { DEFAULT_BOUNDS, evaluateBounds, resourceBreach } from './bounds.mjs'
 import { runLoad } from './runner.mjs'
 

@@ -737,7 +737,7 @@ export async function ingestYear(
   return report
 }
 
-export const legislationIngestUsage = `Usage: pnpm legislation:ingest [options] (from services/legal-ingestor)
+export const legislationIngestUsage = `Usage: bun run legislation:ingest [options] (from services/legal-ingestor)
 
 Stage 1 legislation ingest: UK Public General Acts (ukpga) into Postgres
 legislation_documents / legislation_provisions. Polite by construction:

@@ -121,7 +121,7 @@ function warmDetection(env: ApiEnv) {
     (error: unknown) => {
       console.error(
         'Rampart detection model failed to load — redaction runs will be limited to heuristics until it does. ' +
-          `Run "pnpm prefetch:rampart" to fetch it, or set OBITER_RAMPART_CACHE_DIR to a directory that already has it.`,
+          `Run "bun run prefetch:rampart" to fetch it, or set OBITER_RAMPART_CACHE_DIR to a directory that already has it.`,
         {
           model: env.rampartModel,
           revision: env.rampartRevision,

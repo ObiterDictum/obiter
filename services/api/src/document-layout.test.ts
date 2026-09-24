@@ -1,5 +1,5 @@
 import { coverRectsForSpan } from '@obiter/redaction-policy'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import {
   layoutFromLaidChars,
   type DocumentTextLayoutSegment,

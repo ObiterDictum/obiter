@@ -123,13 +123,13 @@ export function childEnvironment({
 /**
  * The API only loads the detection model from a warm cache; it does not fetch
  * it. Prefetch through the repository's own `prefetch:rampart` script — run via
- * pnpm, because that script imports a workspace package the root `node_modules`
+ * with `bun run`, because that script imports a workspace package the root `node_modules`
  * does not link — so the inference check exercises native CPU inference rather
  * than failing closed to heuristics.
  */
 export async function prefetchDetectionModel({ cacheDir, worktreeRoot }) {
   await new Promise((resolve, reject) => {
-    const child = spawn('pnpm', ['prefetch:rampart'], {
+    const child = spawn('bun', ['run', 'prefetch:rampart'], {
       cwd: worktreeRoot,
       env: { ...process.env, OBITER_RAMPART_CACHE_DIR: cacheDir },
       stdio: ['ignore', 'inherit', 'inherit'],
@@ -138,7 +138,7 @@ export async function prefetchDetectionModel({ cacheDir, worktreeRoot }) {
       reject(
         new LifecycleError(
           'model_prefetch_failed',
-          `Could not run "pnpm prefetch:rampart": ${error.message}. The inference check needs a warm model cache.`,
+          `Could not run "bun run prefetch:rampart": ${error.message}. The inference check needs a warm model cache.`,
         ),
       ),
     )
@@ -148,7 +148,7 @@ export async function prefetchDetectionModel({ cacheDir, worktreeRoot }) {
         : reject(
             new LifecycleError(
               'model_prefetch_failed',
-              `"pnpm prefetch:rampart" exited ${code}; the inference check needs a warm model cache.`,
+              `"bun run prefetch:rampart" exited ${code}; the inference check needs a warm model cache.`,
             ),
           ),
     )

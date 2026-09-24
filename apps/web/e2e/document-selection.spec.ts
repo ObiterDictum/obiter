@@ -11,8 +11,8 @@ import path from 'node:path'
  * is skipped unless those are supplied:
  *
  *   E52_E2E_EMAIL=... E52_E2E_PASSWORD=... E52_E2E_DOCX=/path/to.docx \
- *   E52_E2E_BASE_URL=http://localhost:3003 pnpm --filter @obiter/web exec \
- *   playwright test e2e/document-selection.spec.ts --config <lane config>
+ *   E52_E2E_BASE_URL=http://localhost:3003 bun run --filter @obiter/web \
+ *   test:e2e e2e/document-selection.spec.ts --config <lane config>
  *
  * The account must be a synthetic user created for the run: the spec signs in
  * with a password and never touches sign-up, verification, magic-link or

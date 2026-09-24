@@ -49,7 +49,7 @@ Target module layout:
 
 Tests should mirror the structure under `services/api/src/routes/legal-search/__tests__/`.
 
-The current API package runs tests with plain `vitest run`, so nested `__tests__` files should be discovered by default. If the refactor changes test placement, verify discovery by running `pnpm --filter @obiter/api test`. If discovery fails, either keep the tests co-located with the module files or update the package test script in the same refactor.
+The API package runs tests with `bun test`, which discovers nested `__tests__` files by default, If the refactor changes test placement, verify discovery by running `bun run --filter @obiter/api test`. If discovery fails, either keep the tests co-located with the module files or update the package test script in the same refactor.
 
 `legal-search-proxy.ts` may remain as a thin re-export during the transition, or be deleted if imports are updated in the same change.
 
@@ -535,11 +535,11 @@ Remaining next slice:
 Minimum automated checks:
 
 ```bash
-pnpm --filter @obiter/api test
-pnpm --filter @obiter/search-client test
-pnpm --filter @obiter/app-shell test
-pnpm --filter @obiter/app-shell typecheck
-pnpm --filter @obiter/web build
+bun run --filter @obiter/api test
+bun run --filter @obiter/search-client test
+bun run --filter @obiter/app-shell test
+bun run --filter @obiter/app-shell typecheck
+bun run --filter @obiter/web build
 ```
 
 Required focused coverage:

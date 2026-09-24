@@ -1,25 +1,44 @@
-// @vitest-environment jsdom
+import '@obiter/test-dom'
 import { act, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { SearchResults } from './SearchResults'
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
+
 import type { LegalSearchFetchResponse } from './searchTypes'
 
-vi.mock('@tanstack/react-router', () => ({
-  Link: ({
-    children,
-    className,
-    ...props
-  }: {
-    children: ReactNode
-    className?: string
-    [key: string]: unknown
-  }) => (
-    <a className={className} {...props}>
-      {children}
-    </a>
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const tanstackReactRouterModuleKeys = Object.fromEntries(
+  Object.keys(await import('@tanstack/react-router')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('@tanstack/react-router', () =>
+  Object.assign(
+    { ...tanstackReactRouterModuleKeys },
+    (() => ({
+      Link: ({
+        children,
+        className,
+        ...props
+      }: {
+        children: ReactNode
+        className?: string
+        [key: string]: unknown
+      }) => (
+        <a className={className} {...props}>
+          {children}
+        </a>
+      ),
+    }))(),
   ),
-}))
+)
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const { SearchResults } = await import('./SearchResults')
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean

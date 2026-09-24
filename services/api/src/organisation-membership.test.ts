@@ -1,5 +1,5 @@
 import type { PoolClient } from 'pg'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import {
   inviteUnavailability,
   moveUserAndDeleteEmptyOrganisation,

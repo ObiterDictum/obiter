@@ -4,13 +4,16 @@
  * Without this, the first redaction on a machine pays for a ~15 MB Hugging Face
  * fetch inline, and a fetch that fails there produces a run in
  * `heuristics+supplement` mode rather than an obvious error. Running this after
- * `pnpm install` — or in a container build — turns that into a step that either
+ * `bun install` — or in a container build — turns that into a step that either
  * succeeds or fails where someone is looking.
  *
  * Reads the same `OBITER_RAMPART_*` configuration as the API, so a machine that
  * overrides the model, revision or cache directory prefetches what it will use.
  */
-import { loadNerClassifier } from '@obiter/rampart-inference'
+// Relative, not a bare workspace name: scripts/ is not a workspace package, and
+// bun does not set NODE_PATH the way pnpm did for script execution, so a bare
+// '@obiter/*' specifier would not resolve from here.
+import { loadNerClassifier } from '../packages/rampart-inference/src/index'
 import { readRampartDetectionConfig } from '../services/api/src/env'
 
 async function main() {

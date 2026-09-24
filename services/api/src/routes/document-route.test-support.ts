@@ -1,7 +1,7 @@
 import { Hono } from 'hono'
 import type { Pool } from 'pg'
 import type { DocumentStatus } from '@obiter/contracts'
-import { expect } from 'vitest'
+import { expect } from 'bun:test'
 import type { AuthzUser, AuthzVariables } from '../authz'
 import { createDocumentObjectKey } from '../database'
 import { deriveDocumentSiblingObjectKey } from '../document-artifact-store'

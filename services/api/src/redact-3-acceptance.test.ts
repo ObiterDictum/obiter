@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import { applyRedacted, type Decisions } from '@obiter/redaction-policy'
 import type {
   Span as RampartSpan,

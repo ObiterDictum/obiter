@@ -5,7 +5,7 @@
  *   and the @theme inline mappings. This is the single Tailwind entry.
  * - @source MUST point at the workspace package *source trees* (and this
  *   renderer's own src). Tailwind v4 automatic source detection skips
- *   node_modules, and pnpm workspace packages are reached via node_modules
+ *   node_modules, and bun workspace packages are reached via node_modules
  *   symlinks — so without these directives, utilities used in @obiter/ui /
  *   @obiter/app-shell / @obiter/redact-ui are never generated and the
  *   renderer renders as unstyled HTML.

@@ -4,11 +4,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx src/index.ts",
-    "bulk:ingest": "tsx src/bulk-ingest.ts",
-    "legislation:ingest": "tsx src/legislation-ingest.ts",
-    "withdrawal:check": "tsx src/withdrawal-check.ts",
-    "test": "vitest run",
+    "dev": "bun src/index.ts",
+    "bulk:ingest": "bun src/bulk-ingest.ts",
+    "legislation:ingest": "bun src/legislation-ingest.ts",
+    "withdrawal:check": "bun src/withdrawal-check.ts",
+    "test": "bun test --isolate --preload ../../scripts/test/vitest-compat.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
@@ -20,7 +20,6 @@
     "pg": "^8.20.0"
   },
   "devDependencies": {
-    "@types/pg": "^8.20.0",
-    "tsx": "^4.23.0"
+    "@types/pg": "^8.20.0"
   }
 }

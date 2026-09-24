@@ -1,4 +1,4 @@
-// @vitest-environment jsdom
+import '@obiter/test-dom'
 import {
   act,
   cleanup,
@@ -8,8 +8,8 @@ import {
   waitFor,
 } from '@testing-library/react'
 import type { ReactNode } from 'react'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { SignInRouteView } from './sign-in'
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../../scripts/test/vitest-compat'
 
 const authMocks = vi.hoisted(() => ({
   signInWithEmail: vi.fn(),
@@ -23,47 +23,77 @@ const searchState = vi.hoisted(() => ({
   token: undefined as string | undefined,
 }))
 
-vi.mock('../auth', () => ({
-  useAuth: () => ({
-    session: null,
-    isPending: false,
-    signInWithEmail: authMocks.signInWithEmail,
-    signUpWithEmail: authMocks.signUpWithEmail,
-    requestMagicLink: authMocks.requestMagicLink,
-    requestPasswordReset: vi.fn(),
-    resetPassword: vi.fn(),
-    resendVerificationEmail: authMocks.resendVerificationEmail,
-    signOut: vi.fn(),
-  }),
-}))
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const authModuleKeys = Object.fromEntries(
+  Object.keys(await import('../auth')).map((key) => [key, undefined]),
+)
+mock.module('../auth', () =>
+  Object.assign(
+    { ...authModuleKeys },
+    (() => ({
+      useAuth: () => ({
+        session: null,
+        isPending: false,
+        signInWithEmail: authMocks.signInWithEmail,
+        signUpWithEmail: authMocks.signUpWithEmail,
+        requestMagicLink: authMocks.requestMagicLink,
+        requestPasswordReset: vi.fn(),
+        resetPassword: vi.fn(),
+        resendVerificationEmail: authMocks.resendVerificationEmail,
+        signOut: vi.fn(),
+      }),
+    }))(),
+  ),
+)
 
-vi.mock('@tanstack/react-router', () => ({
-  useNavigate: () => authMocks.navigate,
-  useSearch: () => (searchState.token ? { token: searchState.token } : {}),
-  Link: ({
-    children,
-    to,
-    search,
-    className,
-  }: {
-    children: ReactNode
-    to?: string
-    search?: { token?: string }
-    className?: string
-  }) => {
-    const href =
-      typeof to === 'string'
-        ? search?.token
-          ? `${to}?token=${search.token}`
-          : to
-        : '#'
-    return (
-      <a href={href} className={className}>
-        {children}
-      </a>
-    )
-  },
-}))
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const tanstackReactRouterModuleKeys = Object.fromEntries(
+  Object.keys(await import('@tanstack/react-router')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('@tanstack/react-router', () =>
+  Object.assign(
+    { ...tanstackReactRouterModuleKeys },
+    (() => ({
+      useNavigate: () => authMocks.navigate,
+      useSearch: () => (searchState.token ? { token: searchState.token } : {}),
+      Link: ({
+        children,
+        to,
+        search,
+        className,
+      }: {
+        children: ReactNode
+        to?: string
+        search?: { token?: string }
+        className?: string
+      }) => {
+        const href =
+          typeof to === 'string'
+            ? search?.token
+              ? `${to}?token=${search.token}`
+              : to
+            : '#'
+        return (
+          <a href={href} className={className}>
+            {children}
+          </a>
+        )
+      },
+    }))(),
+  ),
+)
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const { SignInRouteView } = await import('./sign-in')
 
 function fillPasswordForm(email: string, password: string) {
   const emailInput = screen.getByRole('textbox', { name: 'Email' })

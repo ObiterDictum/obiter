@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 import type { Pool } from 'pg'
-import { redetectRedactionRun } from './redaction-redetect'
 
 const database = vi.hoisted(() => ({
   getRedactionRun: vi.fn(),
@@ -15,14 +15,55 @@ const detector = vi.hoisted(() => ({
   detectRedactionSpans: vi.fn(),
 }))
 
-vi.mock('./redaction-database', () => database)
-vi.mock('./redaction-run-creation', () => creation)
-vi.mock('./redaction-detection', () => ({
-  configureRedactionDetector: detector.configureRedactionDetector,
-  detectionMode: (degraded: boolean) =>
-    degraded ? 'heuristics+supplement' : 'model+supplement',
-  detectRedactionSpans: detector.detectRedactionSpans,
-}))
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const redactionDatabaseModuleKeys = Object.fromEntries(
+  Object.keys(await import('./redaction-database')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('./redaction-database', () =>
+  Object.assign({ ...redactionDatabaseModuleKeys }, (() => database)()),
+)
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const redactionRunCreationModuleKeys = Object.fromEntries(
+  Object.keys(await import('./redaction-run-creation')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('./redaction-run-creation', () =>
+  Object.assign({ ...redactionRunCreationModuleKeys }, (() => creation)()),
+)
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const redactionDetectionModuleKeys = Object.fromEntries(
+  Object.keys(await import('./redaction-detection')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('./redaction-detection', () =>
+  Object.assign(
+    { ...redactionDetectionModuleKeys },
+    (() => ({
+      configureRedactionDetector: detector.configureRedactionDetector,
+      detectionMode: (degraded: boolean) =>
+        degraded ? 'heuristics+supplement' : 'model+supplement',
+      detectRedactionSpans: detector.detectRedactionSpans,
+    }))(),
+  ),
+)
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const { redetectRedactionRun } = await import('./redaction-redetect')
 
 const sourceRun = {
   id: 'red_1',

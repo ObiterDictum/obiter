@@ -1,17 +1,37 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 import { QueryClient } from '@tanstack/react-query'
-import {
-  organisationInvitesQueryOptions,
-  organisationMembersQueryOptions,
-  invitePreviewQueryOptions,
-} from './organisation-membership'
 
 const api = vi.hoisted(() => ({ apiFetch: vi.fn() }))
 
-vi.mock('./api', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('./api')>()
-  return { ...actual, apiFetch: api.apiFetch }
-})
+// The real module, snapshotted before mock.module registers: a factory
+// that awaited its own specifier re-entered the in-flight mock and
+// deadlocked under bun's module registry.
+const apiModule = { ...(await import('./api')) }
+// The real module's export names as undefined: bun links named imports
+// statically and rejects a mock that omits one, while vitest left an
+// unlisted export undefined. Overrides win.
+const apiModuleKeys = Object.fromEntries(
+  Object.keys(await import('./api')).map((key) => [key, undefined]),
+)
+mock.module('./api', () =>
+  Object.assign(
+    { ...apiModuleKeys },
+    (() => {
+      const actual = apiModule
+      return { ...actual, apiFetch: api.apiFetch }
+    })(),
+  ),
+)
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const {
+  organisationInvitesQueryOptions,
+  organisationMembersQueryOptions,
+  invitePreviewQueryOptions,
+} = await import('./organisation-membership')
 
 beforeEach(() => {
   vi.clearAllMocks()

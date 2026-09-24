@@ -2,7 +2,7 @@
 
 ## Correctness benchmark
 
-`pnpm benchmark:search` runs the fixed Gate 1 objective case set against a
+`bun run benchmark:search` runs the fixed Gate 1 objective case set against a
 Meilisearch 1.12 instance. The suite runs 54 synthetic queries against 66
 synthetic fixture documents, covering exact citations, malformed and ambiguous
 citations, titles, party names, provider ids, body phrases, no-answer behavior,
@@ -107,7 +107,7 @@ range as though they belonged in it.
 The fixture text is synthetic. Do not replace it with raw legal or client
 matter text.
 
-The fixture suite does not measure the served path. `pnpm benchmark:search-corpus`
+The fixture suite does not measure the served path. `bun run benchmark:search-corpus`
 hits `POST /api/search/fetch` on the local product corpus and records recall,
 precision, and the rank of each expected document. It is a local command, not
 a CI gate. See TESTING.md.

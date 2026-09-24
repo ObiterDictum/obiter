@@ -1,5 +1,6 @@
-// @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import '@obiter/test-dom'
+import { afterEach, describe, expect, it } from 'bun:test'
+import { vi } from '../../../../scripts/test/vitest-compat'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useCanonicalNameField } from './use-canonical-name-field'
 

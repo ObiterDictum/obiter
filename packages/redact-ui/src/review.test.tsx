@@ -1,6 +1,7 @@
+import '@obiter/test-dom'
 import { fireEvent, render, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { RedactionReviewView as RedactionReviewViewComponent } from './review'
+import { beforeEach, describe, expect, it, mock } from 'bun:test'
+import { vi } from '../../../scripts/test/vitest-compat'
 
 const hooks = vi.hoisted(() => ({
   useRedactionRun: vi.fn(),
@@ -24,8 +25,29 @@ const sourcePreviewHooks = vi.hoisted(() => ({
   })),
 }))
 
-vi.mock('./hooks', () => hooks)
-vi.mock('./source-preview-hooks', () => sourcePreviewHooks)
+// The real module's export names, available as undefined, so bun's
+// static link check accepts imports the mock does not override.
+const hooksKeys = Object.fromEntries(
+  Object.keys(await import('./hooks')).map((key) => [key, undefined]),
+)
+mock.module('./hooks', () => Object.assign({ ...hooksKeys }, hooks))
+// The real module's export names, available as undefined, so bun's
+// static link check accepts imports the mock does not override.
+const sourcepreviewhooksKeys = Object.fromEntries(
+  Object.keys(await import('./source-preview-hooks')).map((key) => [
+    key,
+    undefined,
+  ]),
+)
+mock.module('./source-preview-hooks', () =>
+  Object.assign({ ...sourcepreviewhooksKeys }, sourcePreviewHooks),
+)
+
+// Loaded after the registrations above: bun does not hoist mock.module the
+// way vi.mock was hoisted, and these modules capture mocked imports at
+// module scope, so they must evaluate once the mocks are in place.
+const { RedactionReviewView: RedactionReviewViewComponent } =
+  await import('./review')
 
 const onOpenRun = vi.fn()
 

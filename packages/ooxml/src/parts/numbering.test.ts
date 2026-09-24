@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it } from 'bun:test'
 import { documentNumberingWireSchema } from '@obiter/contracts'
 
 import { numberingXml } from '../../fixtures/fixture-parts'

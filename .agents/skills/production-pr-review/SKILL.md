@@ -214,9 +214,9 @@ Apply `references/scoring.md`. The score communicates merge readiness and residu
 Run the narrowest useful checks first, then broader checks if warranted:
 
 ```bash
-pnpm typecheck
-pnpm test
-pnpm build
+bun run typecheck
+bun run test
+bun run build
 ```
 
 Use package-specific scripts when available. For UI work, perform or request a manual pass for the changed flow. For legal-critical behavior, require happy path and failure path verification.

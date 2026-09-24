@@ -34,7 +34,6 @@ Thumbs.db
 # Logs and local caches.
 **/*.log
 npm-debug.log*
-pnpm-debug.log*
 **/coverage
 **/.cache
 tmp/

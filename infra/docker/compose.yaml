@@ -16,7 +16,7 @@
 # Usage:
 #   docker compose up -d
 #   # then run migrations against both databases (see infra/docker/README.md)
-#   pnpm dev:api
+#   bun run dev:api
 #
 # The init script creates the obiter_test database on first boot (empty volume).
 services:
