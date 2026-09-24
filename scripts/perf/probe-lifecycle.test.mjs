@@ -203,40 +203,40 @@ if (!hasBrowser) {
   )
 }
 browserTest(
-    'a timed-out probe leaves no browser context behind',
-    async () => {
-      const browser = await chromium.launch()
-      try {
-        const contexts = []
-        const result = await runSamples({
-          mode: 'typing',
-          samples: 2,
-          timeoutMs: 1500,
-          probe: async (ownership) => {
-            const context = await ownership.create(() => browser.newContext())
-            contexts.push(context)
-            const page = await context.newPage()
-            await page.goto('about:blank')
-            if (contexts.length === 1)
-              // The renderer's main thread is the work the bound has to stop, so
-              // this evaluate never resolves and the sample can only end on the
-              // bound.
-              await page.evaluate(() => {
-                for (;;) {}
-              })
-            return { contextsInSample: browser.contexts().length }
-          },
-          confirmIdle: () => browser.contexts().length === 0,
-        })
-        assert.match(result.failed[0].reason, /exceeded 1\.5s/)
-        assert.equal(result.rows.length, 1)
-        assert.equal(result.rows[0].index, 1)
-        assert.equal(contexts.length, 2)
-        assert.equal(browser.contexts().includes(contexts[0]), false)
-        assert.equal(browser.contexts().length, 0)
-      } finally {
-        await browser.close()
-      }
-    },
-    30_000,
-  )
+  'a timed-out probe leaves no browser context behind',
+  async () => {
+    const browser = await chromium.launch()
+    try {
+      const contexts = []
+      const result = await runSamples({
+        mode: 'typing',
+        samples: 2,
+        timeoutMs: 1500,
+        probe: async (ownership) => {
+          const context = await ownership.create(() => browser.newContext())
+          contexts.push(context)
+          const page = await context.newPage()
+          await page.goto('about:blank')
+          if (contexts.length === 1)
+            // The renderer's main thread is the work the bound has to stop, so
+            // this evaluate never resolves and the sample can only end on the
+            // bound.
+            await page.evaluate(() => {
+              for (;;) {}
+            })
+          return { contextsInSample: browser.contexts().length }
+        },
+        confirmIdle: () => browser.contexts().length === 0,
+      })
+      assert.match(result.failed[0].reason, /exceeded 1\.5s/)
+      assert.equal(result.rows.length, 1)
+      assert.equal(result.rows[0].index, 1)
+      assert.equal(contexts.length, 2)
+      assert.equal(browser.contexts().includes(contexts[0]), false)
+      assert.equal(browser.contexts().length, 0)
+    } finally {
+      await browser.close()
+    }
+  },
+  30_000,
+)
