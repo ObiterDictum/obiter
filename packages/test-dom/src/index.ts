@@ -21,6 +21,13 @@ import { JSDOM } from 'jsdom'
  * dispatched at a jsdom target is rejected as "not of type 'Event'". Node's
  * runtime essentials (timers, fetch, crypto, MessageChannel) are kept: jsdom
  * either lacks them or its versions are not what code under test uses.
+ *
+ * `@testing-library/dom` is deliberately not imported here. Its `screen`
+ * binds against `document.body` at its own module evaluation, and the preload
+ * guarantees this install finishes before the test module's imports run, so
+ * the first evaluation any Testing Library package makes already sees the
+ * live document. Pre-importing it here only moved that cost into setup for
+ * files that import it anyway, and paid it for files that never do.
  */
 const runtimeGlobals = new Set([
   'console',
@@ -106,20 +113,6 @@ async function install(): Promise<void> {
       // Already defined by the runtime with a compatible value.
     }
   }
-
-  // @testing-library/dom evaluates `screen` against `document.body` at its
-  // own module evaluation. Now that the document exists, rebind it: `screen`
-  // is a plain object (the package re-exports the same one), so assigning
-  // real queries over the stubs fixes the binding whatever the order.
-  const testingLibrary = await import('@testing-library/dom')
-  Object.assign(
-    testingLibrary.screen as unknown as Record<string, unknown>,
-    testingLibrary.getQueriesForElement(
-      (globalThis as unknown as { document: { body: HTMLElement } }).document
-        .body,
-      testingLibrary.queries,
-    ),
-  )
 
   ;(globalThis as Record<PropertyKey, unknown>)[installFlag] = true
 }

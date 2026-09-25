@@ -6,6 +6,9 @@
   "exports": {
     ".": "./src/index.ts"
   },
+  "scripts": {
+    "test": "bun test --isolate --preload ../../scripts/test/vitest-compat.ts --preload ../../scripts/test/dom-preload.ts"
+  },
   "devDependencies": {
     "@testing-library/dom": "^10.4.1",
     "jsdom": "^29.1.1"
