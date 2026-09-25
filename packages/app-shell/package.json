@@ -22,7 +22,7 @@
     "zod": "^4.3.6"
   },
   "scripts": {
-    "test": "bun test --isolate --preload ../../scripts/test/vitest-compat.ts --preload ../../scripts/test/dom-preload.ts",
+    "test": "bun test --isolate --parallel=2 --preload ../../scripts/test/vitest-compat.ts --preload ../../scripts/test/dom-preload.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "devDependencies": {
