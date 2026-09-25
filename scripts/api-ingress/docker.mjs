@@ -55,8 +55,17 @@ export function networkCreate(name) {
   docker(['network', 'create', name])
 }
 
+/**
+ * Remove the network. Throws when Docker refuses, so teardown can report the
+ * failure instead of treating an active-endpoint error as success.
+ */
 export function networkRemove(name) {
-  dockerQuiet(['network', 'rm', name], { timeoutMs: 60_000 })
+  docker(['network', 'rm', name], { timeoutMs: 60_000 })
+}
+
+/** True when a resource with this name exists, for teardown to skip. */
+export function networkExists(name) {
+  return dockerQuiet(['network', 'inspect', name]) !== null
 }
 
 export function startContainer({
@@ -104,18 +113,10 @@ export function containerRunning(name) {
   )
 }
 
-/** SIGTERM, then SIGKILL after `timeoutSec`; returns when the process is out. */
-export function stopContainer(name, timeoutSec = 30) {
-  docker(['stop', '-t', String(timeoutSec), name], {
-    timeoutMs: (timeoutSec + 30) * 1000,
-  })
-}
-
 /**
- * Send one signal without blocking. `stopContainer` is synchronous, so it
- * cannot be used while the caller must keep reading a response the container is
- * draining: the drain would never finish and the caller would deadlock against
- * its own stop.
+ * Send one signal without blocking. A synchronous stop would stall the caller,
+ * which must keep reading a response the container is draining, so the signal
+ * is delivered from a child process and awaited.
  */
 export function signalContainer(name, signal = 'SIGTERM') {
   return new Promise((resolveSignal) => {
@@ -135,8 +136,17 @@ export async function waitForContainerExit(name, timeoutMs = 40_000) {
   })
 }
 
+/**
+ * Remove the container and its anonymous volumes. Throws when Docker refuses,
+ * so teardown can report the failure instead of claiming a clean run.
+ */
 export function removeContainer(name) {
-  dockerQuiet(['rm', '-f', '-v', name], { timeoutMs: 60_000 })
+  docker(['rm', '-f', '-v', name], { timeoutMs: 60_000 })
+}
+
+/** True when a container with this name exists, for teardown to skip. */
+export function containerExists(name) {
+  return dockerQuiet(['inspect', name]) !== null
 }
 
 /** The `org.opencontainers.image.revision` label, or null when unlabelled. */

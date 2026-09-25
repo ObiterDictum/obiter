@@ -9,9 +9,11 @@
  *
  * Size and pacing arrive as query parameters so the harness declares them and
  * the origin reports what it actually saw, rather than the two agreeing by
- * assumption. It has no filesystem access and holds nothing.
+ * assumption. It has no filesystem access and holds nothing, and it is mounted
+ * into its container as a single file, so it depends on nothing else.
  */
 import { createServer } from 'node:http'
+import { pathToFileURL } from 'node:url'
 
 const port = Number(process.env.PORT ?? 8788)
 
@@ -44,7 +46,7 @@ function readBody(req) {
   })
 }
 
-const server = createServer(async (req, res) => {
+export const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://origin')
 
   if (url.pathname === '/health') {
@@ -75,10 +77,52 @@ const server = createServer(async (req, res) => {
   }
 
   if (url.pathname === '/stream') {
-    const chunks = Number(url.searchParams.get('chunks') ?? '20')
-    const chunkBytes = Number(url.searchParams.get('chunkBytes') ?? '32768')
-    const intervalMs = Number(url.searchParams.get('intervalMs') ?? '500')
-    const headerDelayMs = Number(url.searchParams.get('headerDelayMs') ?? '0')
+    // Bound every parameter before it reaches Buffer.alloc or a timer. The
+    // checks sit here, around the sinks, rather than in a helper, and an
+    // out-of-range value fails explicitly rather than being clamped: a
+    // mistyped probe is visible instead of silently changing what was
+    // measured. The upper bounds are what the checks need; none asks for more.
+    const param = (name, fallback) => {
+      const raw = url.searchParams.get(name)
+      if (raw === null) return fallback
+      return raw.trim() === '' ? Number.NaN : Number(raw)
+    }
+    const reject = (detail) =>
+      json(res, 400, { error: 'invalid_stream_params', detail })
+
+    const chunks = param('chunks', 20)
+    if (!Number.isInteger(chunks) || chunks < 1 || chunks > 256) {
+      reject('chunks must be an integer between 1 and 256')
+      return
+    }
+    const chunkBytes = param('chunkBytes', 32 * 1024)
+    if (
+      !Number.isInteger(chunkBytes) ||
+      chunkBytes < 1 ||
+      chunkBytes > 4 * 1024 * 1024
+    ) {
+      reject('chunkBytes must be an integer between 1 and 4194304')
+      return
+    }
+    const intervalMs = param('intervalMs', 500)
+    if (
+      !Number.isInteger(intervalMs) ||
+      intervalMs < 0 ||
+      intervalMs > 60_000
+    ) {
+      reject('intervalMs must be an integer between 0 and 60000')
+      return
+    }
+    const headerDelayMs = param('headerDelayMs', 0)
+    if (
+      !Number.isInteger(headerDelayMs) ||
+      headerDelayMs < 0 ||
+      headerDelayMs > 60_000
+    ) {
+      reject('headerDelayMs must be an integer between 0 and 60000')
+      return
+    }
+
     if (headerDelayMs > 0) await sleep(headerDelayMs)
     res.writeHead(200, {
       'content-type': 'application/octet-stream',
@@ -99,6 +143,13 @@ const server = createServer(async (req, res) => {
   json(res, 404, { error: 'not_found' })
 })
 
-server.listen(port, '0.0.0.0', () => {
-  console.log(`synthetic origin listening on ${port}`)
-})
+// Listen only when run as the container entry point, so the handler can be
+// imported by its tests without starting a server.
+if (
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  server.listen(port, '0.0.0.0', () => {
+    console.log(`synthetic origin listening on ${port}`)
+  })
+}

@@ -33,10 +33,13 @@ entryPoints:
         # under us. Bounds how long a keep-alive connection may sit idle.
         idleTimeout: 180s
     http:
-      # Request line + headers, plus Go's 4 KiB read buffer slop, so the
-      # effective rejection point is ~20 KiB. 16 KiB is the value Node's
-      # http.Server already imposed; Bun's own header cap is not configurable
-      # and must not be the only limit.
+      # Bounds the total request line plus headers, not just header values.
+      # Measured against traefik:v3.6.25 running this fragment: a 16,329 B
+      # header block reaches the origin and ~16,429 B is refused with 431, so
+      # the rejection point is the configured 16 KiB, not that value plus a
+      # read buffer. 16 KiB is the value Node's http.Server already imposed;
+      # Bun's own header cap is not configurable and must not be the only
+      # limit.
       maxHeaderBytes: 16384
   websecure:
     address: ':443'

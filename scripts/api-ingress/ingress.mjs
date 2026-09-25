@@ -35,7 +35,7 @@ import { randomBytes } from 'node:crypto'
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
+import { fileURLToPath, pathToFileURL } from 'node:url'
 
 import {
   assertOwnedDatabase,
@@ -48,6 +48,7 @@ import { runThroughProxyChecks, runTimeoutControlChecks } from './checks.mjs'
 import {
   DockerError,
   containerExec,
+  containerExists,
   containerExitCode,
   containerLogs,
   containerRunning,
@@ -55,6 +56,7 @@ import {
   imageExists,
   imageRevision,
   networkCreate,
+  networkExists,
   networkRemove,
   removeContainer,
   signalContainer,
@@ -160,6 +162,38 @@ function recorder() {
   }
 }
 
+/**
+ * Remove every resource this run created, in reverse creation order, then the
+ * scratch directory. A resource that was never created is skipped. Anything
+ * that still exists and cannot be removed is returned, so the caller can report
+ * it and exit non-zero rather than claim a clean teardown.
+ */
+export async function teardownResources({
+  resources,
+  scratch,
+  exists,
+  removeContainer: removeContainerFn,
+  networkRemove: networkRemoveFn,
+  removeScratch,
+}) {
+  const failures = []
+  for (const resource of [...resources].reverse()) {
+    if (!exists(resource)) continue
+    try {
+      if (resource.type === 'container') removeContainerFn(resource.name)
+      else networkRemoveFn(resource.name)
+    } catch (error) {
+      failures.push(`${resource.type} ${resource.name}: ${error.message}`)
+    }
+  }
+  try {
+    await removeScratch(scratch)
+  } catch (error) {
+    failures.push(`scratch ${scratch}: ${error.message}`)
+  }
+  return failures
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2))
   const report = recorder()
@@ -177,7 +211,14 @@ async function main() {
     node: `ingress-node-${tag}`,
   }
   const created = []
+  // Register before `docker run`: a container that is created but never starts
+  // (a bad port mapping, a failed start) still exists and must be removed.
+  const startTracked = (options) => {
+    created.push({ type: 'container', name: options.name })
+    return startContainer(options)
+  }
   let jsonReport = null
+  let teardownFailures = []
 
   try {
     await mkdir(dynamicDir, { recursive: true })
@@ -206,9 +247,10 @@ async function main() {
     )
     report.record(
       'the Traefik image matches the pinned digest',
-      traefikDigest === null ||
+      traefikDigest !== null &&
         traefikDigest.endsWith(TRAEFIK_DIGEST.replace('sha256:', '')),
-      traefikDigest ?? 'no local digest (image not pulled by this machine)',
+      traefikDigest ??
+        'no RepoDigests on the local image; the pin cannot be verified',
     )
 
     const entrypointsYaml = await readFile(ENTRYPOINTS_FILE, 'utf8')
@@ -221,7 +263,7 @@ async function main() {
     created.push({ type: 'network', name: network })
 
     const postgresPort = await proxy.freePort()
-    startContainer({
+    startTracked({
       name: names.postgres,
       image: POSTGRES_IMAGE,
       network,
@@ -233,7 +275,6 @@ async function main() {
       },
       ports: [`127.0.0.1:${postgresPort}:5432`],
     })
-    created.push({ type: 'container', name: names.postgres })
     await waitFor(
       () => {
         try {
@@ -271,7 +312,7 @@ async function main() {
         originPort: ORIGIN_PORT,
       }),
     )
-    startContainer({
+    startTracked({
       name: names.traefik,
       image: TRAEFIK_IMAGE,
       network,
@@ -282,9 +323,8 @@ async function main() {
       ],
       cmd: ['--configFile=/etc/traefik/traefik.yml'],
     })
-    created.push({ type: 'container', name: names.traefik })
 
-    startContainer({
+    startTracked({
       name: names.origin,
       image: ORIGIN_IMAGE,
       network,
@@ -295,7 +335,6 @@ async function main() {
       ],
       cmd: ['node', '/origin.mjs'],
     })
-    created.push({ type: 'container', name: names.origin })
 
     const apiEnvironment = {
       NODE_ENV: 'production',
@@ -310,14 +349,13 @@ async function main() {
       MEILISEARCH_ADMIN_API_KEY: 'obiter-api-ingress-meili-key-0123456789',
       LEGAL_AUTHORITIES_INDEX: 'legal_authorities',
     }
-    startContainer({
+    startTracked({
       name: names.bun,
       image: args.bunImage,
       network,
       aliases: ['api-bun'],
       env: apiEnvironment,
     })
-    created.push({ type: 'container', name: names.bun })
 
     const databaseUrl = `postgres://obiter:${DB_PASSWORD}@127.0.0.1:${postgresPort}/${DB_NAME}`
     const ids = fixtureIds(newRunTag())
@@ -334,14 +372,13 @@ async function main() {
       switchBackend: (service) =>
         writeFile(dynamicPath, proxy.dynamicConfig(service, proxyPorts)),
       startNode: () => {
-        startContainer({
+        startTracked({
           name: names.node,
           image: args.nodeImage,
           network,
           aliases: ['api-node'],
           env: apiEnvironment,
         })
-        created.push({ type: 'container', name: names.node })
       },
       signalBun: () => signalContainer(names.bun, 'SIGTERM'),
       bunRunning: () => containerRunning(names.bun),
@@ -376,7 +413,7 @@ async function main() {
       proxy.dynamicConfig('api-bun', proxyPorts),
     )
     const shortPort = await proxy.freePort()
-    startContainer({
+    startTracked({
       name: names.traefikShort,
       image: TRAEFIK_IMAGE,
       network,
@@ -387,7 +424,6 @@ async function main() {
       ],
       cmd: ['--configFile=/etc/traefik/traefik.yml'],
     })
-    created.push({ type: 'container', name: names.traefikShort })
     await waitFor(
       async () => {
         const probe = await proxy.readStream({
@@ -410,17 +446,36 @@ async function main() {
       summary: report.summary(),
     }
   } finally {
-    if (args.jsonOut && jsonReport) {
-      await writeFile(args.jsonOut, JSON.stringify(jsonReport, null, 2))
-    }
     if (args.keep) {
       console.log(`\n--keep: leaving ${created.length} resources in place`)
     } else {
-      for (const resource of created.reverse()) {
-        if (resource.type === 'container') removeContainer(resource.name)
-        else networkRemove(resource.name)
+      teardownFailures = await teardownResources({
+        resources: created,
+        scratch,
+        exists: (resource) =>
+          resource.type === 'container'
+            ? containerExists(resource.name)
+            : networkExists(resource.name),
+        removeContainer,
+        networkRemove,
+        removeScratch: (dir) => rm(dir, { recursive: true, force: true }),
+      })
+    }
+    if (teardownFailures.length) {
+      console.error(
+        `\nTEARDOWN INCOMPLETE: ${teardownFailures.length} resource(s) could not be removed:`,
+      )
+      for (const failure of teardownFailures) console.error(`  - ${failure}`)
+      process.exitCode = 1
+    }
+    if (args.jsonOut && jsonReport) {
+      jsonReport.teardownFailures = teardownFailures
+      try {
+        await writeFile(args.jsonOut, JSON.stringify(jsonReport, null, 2))
+      } catch (error) {
+        console.error(`Could not write JSON report: ${error.message}`)
+        process.exitCode = 1
       }
-      await rm(scratch, { recursive: true, force: true })
     }
   }
 
@@ -432,8 +487,13 @@ async function main() {
   if (summary.failed.length) process.exitCode = 1
 }
 
-main().catch((error) => {
-  console.error(`\nIngress harness error: ${error.message}`)
-  if (!(error instanceof DockerError)) console.error(error.stack)
-  process.exitCode = 2
-})
+if (
+  process.argv[1] !== undefined &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
+  main().catch((error) => {
+    console.error(`\nIngress harness error: ${error.message}`)
+    if (!(error instanceof DockerError)) console.error(error.stack)
+    process.exitCode = 2
+  })
+}

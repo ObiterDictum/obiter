@@ -185,8 +185,11 @@ a change here does **not** change Traefik.
   response that cannot finish inside a non-zero budget, on Node and Bun alike.
 - `maxHeaderBytes` is a Traefik v3.6 entrypoint option. It is absent from
   Dokploy's own configuration schema, so it is not discoverable from Dokploy's
-  UI or docs. Go rejects above `maxHeaderBytes` plus a 4 KiB read buffer, so the
-  effective point is ~20 KiB.
+  UI or docs. It bounds the total request line plus headers, not just header
+  values: measured against `traefik:v3.6.25` running the shipped fragment, a
+  16,329 B header block reaches the origin while ~16,429 B is refused with 431,
+  so the effective rejection point is the configured 16 KiB, not that value plus
+  a read buffer.
 
 **Validation.** `scripts/api-ingress/ingress.mjs` runs the fragment verbatim in
 a disposable Traefik (pinned to `traefik:v3.6.25`, the image Dokploy pulls, with
