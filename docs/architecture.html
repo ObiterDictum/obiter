@@ -4214,7 +4214,11 @@
             <code>services/legal-ingestor</code>, through
             <code>@obiter/config</code>. That package owns the bounded worktree
             <code>.env</code> search shared by both services; Vite's
-            <code>loadEnv</code> reads the same file for the web server.
+            <code>loadEnv</code> reads the same file for the web server. The web
+            dev server resolves one API origin through
+            <code>apps/web/dev-api-origin.mjs</code> and gives the same value to
+            its Vite proxy and its in-process SSR handler, so a lane cannot
+            serve its UI while authenticating against the shared API.
           </p>
           <div class="callout">
             <b>Startup is fail-closed.</b> <code>NODE_ENV</code> must be

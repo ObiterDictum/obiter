@@ -5,6 +5,7 @@ import react from '@vitejs/plugin-react'
 import { tanstackStart } from '@tanstack/react-start/plugin/vite'
 import tailwindcss from '@tailwindcss/vite'
 import { assertNoDuplicateEnvKeys } from '@obiter/config/env-keys'
+import { resolveDevApiOrigin } from './dev-api-origin.mjs'
 import { parsePort } from './serve.mjs'
 
 // The API and the ingestor read the repo-root .env through @obiter/config
@@ -55,19 +56,31 @@ export default defineConfig(({ command, mode }) => {
   if (isBuild) delete process.env.VITE_USER_NODE_ENV
   const read = (key: string) => process.env[key] ?? fileEnv[key]
 
-  return {
-    // See the note above: a build reads no env file, so a worktree .env cannot
-    // choose the build mode.
-    envDir: isBuild ? false : undefined,
-    resolve: {
-      tsconfigPaths: true,
-    },
-    server: {
+  // The dev server owns both halves of the API path: the proxy that carries
+  // browser requests and the in-process SSR handler that calls apiUrl(). Resolve
+  // one origin through the same process-env-then-.env precedence the rest of the
+  // config uses, give it to the proxy, and replace the SSR modules' process.env
+  // lookup with it at transform time. Replacing rather than assigning
+  // process.env keeps the resolver honest across a config restart: a value it
+  // wrote itself would otherwise win over an edited .env on the next evaluation.
+  // The define is scoped to the ssr environment so the browser bundle never
+  // receives it, and it is dev-only: a build reads no worktree .env and must not
+  // bake one in; the production server reads its own environment at runtime.
+  let devServer
+  let ssrDefine
+  if (!isBuild) {
+    const webPort = parsePort(read('OBITER_WEB_PORT'))
+    const apiOrigin = resolveDevApiOrigin({
+      processEnv: process.env,
+      fileEnv,
+      webPort,
+    })
+    devServer = {
       // Lane worktrees run their own web and API on distinct ports so they never
       // collide with the shared dev servers. Both must come from the lane's .env:
       // a lane that serves its own UI while proxying to the shared API renders a
       // page that looks correct and is measuring the wrong branch.
-      port: parsePort(read('OBITER_WEB_PORT')),
+      port: webPort,
       // Fail loudly when the port is taken. Vite's default is to move silently
       // to the next free port, which in a multi-lane setup means a misconfigured
       // lane binds a neighbouring lane's port and verifies against the wrong
@@ -77,11 +90,25 @@ export default defineConfig(({ command, mode }) => {
       strictPort: true,
       proxy: {
         '/api': {
-          target: read('OBITER_API_ORIGIN') ?? 'http://localhost:8787',
+          target: apiOrigin,
           changeOrigin: false,
         },
       },
+    }
+    ssrDefine = {
+      'process.env.OBITER_API_ORIGIN': JSON.stringify(apiOrigin),
+    }
+  }
+
+  return {
+    // See the note above: a build reads no env file, so a worktree .env cannot
+    // choose the build mode.
+    envDir: isBuild ? false : undefined,
+    resolve: {
+      tsconfigPaths: true,
     },
+    server: devServer,
+    environments: isBuild ? undefined : { ssr: { define: ssrDefine } },
     plugins: [tanstackStart(), tailwindcss(), react()],
   }
 })
