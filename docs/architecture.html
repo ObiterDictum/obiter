@@ -6361,8 +6361,15 @@
                       >requestTimeout</code
                     >
                     have no <code>Bun.serve</code> equivalent, and there is no
-                    configurable header-size limit. The deferred proxying must
-                    supply those bounds; see
+                    configurable header-size limit. The bounds are specified in
+                    <a
+                      href="https://github.com/ObiterDictum/obiter/blob/dev/infra/traefik/entrypoints.yml"
+                      >infra/traefik/entrypoints.yml</a
+                    >
+                    and validated locally by
+                    <code>scripts/api-ingress</code> against Traefik v3.6.25;
+                    applying them to the deployed Dokploy Traefik is still
+                    pending. See
                     <a
                       href="https://github.com/ObiterDictum/obiter/blob/dev/docs/specs/deployment.md"
                       >specs/deployment.md</a

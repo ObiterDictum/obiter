@@ -321,8 +321,11 @@ jobs:
       - uses: docker/setup-buildx-action@v3
 
       - name: Build Bun API image (default target)
-        run: docker build -f services/api/Dockerfile -t obiter-api-bun:ci .
+        run: |
+          docker build -f services/api/Dockerfile -t obiter-api-bun:ci \
+            --build-arg OBITER_BUILD_COMMIT="$GITHUB_SHA" .
 
       - name: Build Node API image (rollback target)
         run: |
-          docker build -f services/api/Dockerfile --target runtime-node -t obiter-api-node:ci .
+          docker build -f services/api/Dockerfile --target runtime-node -t obiter-api-node:ci \
+            --build-arg OBITER_BUILD_COMMIT="$GITHUB_SHA" .
