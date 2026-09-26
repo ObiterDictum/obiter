@@ -59,8 +59,9 @@ One application, two adapters, selected by entry point (see
 Both call `createApiRuntime()` (`src/runtime.ts`), which owns the environment,
 fail-closed migrations, the database and corpus pools, and the non-blocking
 index and model warm-ups. `GET /api/health` reports which adapter answered as
-`runtime: 'bun' | 'node'`. The image installs ONNX Runtime CPU-only through the
-repo-root `.npmrc`. No automatic activation: switching the production runtime
+`runtime: 'bun' | 'node'`. The image installs ONNX Runtime CPU-only through
+Bun's dependency trust policy and the frozen `bun.lock` (there is no repo-root
+`.npmrc`). No automatic activation: switching the production runtime
 is a separate, authorised rollout decision.
 
 ## Deploying Only This API
