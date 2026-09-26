@@ -1,0 +1,2 @@
+B GET /api/me
+A GET /api/me?probe=proxy
