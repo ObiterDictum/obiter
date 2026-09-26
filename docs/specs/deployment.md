@@ -90,7 +90,7 @@ Artifacts shipped:
   - `OBITER_WEB_ORIGIN` — trusted public origin used to build the request URL. **Set this in Dokploy** (to the site origin). When set it takes precedence over the forgeable client `Host` header, which matters if the container is reachable without Traefik. With same-domain routing this is just the site origin.
   - `BETTER_AUTH_URL` — consumed by the auth client (same-domain ⇒ site origin).
 - `apps/web/serve.test.mjs` — focused unit tests (Node's built-in `node:test` runner, no new dependency) for the pure helpers: `parsePort` (range/format), `resolveBaseUrl` (trusted-origin vs Host), and `applyResponseHeaders` (multiple Set-Cookie preservation, status line).
-- `apps/web/package.json` gains a `start` script (`node serve.mjs`) so the serve path is reproducible outside Docker too.
+- `apps/web/package.json` gains a `start` script (`bun serve.mjs`) so the serve path is reproducible outside Docker too.
 - **ONNX Runtime — CPU-only installs** — there is no repo-root `.npmrc`.
   `onnxruntime-node`'s postinstall is what fetches the optional CUDA and TensorRT
   execution providers (onnxruntime-linux-x64-gpu, ~343 MB unpacked) on Linux x64,

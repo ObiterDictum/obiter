@@ -3,10 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "vite build && node build-provenance.mjs write",
+    "build": "bun --bun vite build && bun build-provenance.mjs write",
     "dev": "bun --bun vite dev",
-    "preview": "vite preview",
-    "start": "node serve.mjs",
+    "preview": "bun --bun vite preview",
+    "start": "bun serve.mjs",
     "test": "bun test --isolate --preload ../../scripts/test/vitest-compat.ts serve.test.mjs http-policy.test.mjs env-file.test.mjs lane-target.test.mjs journey-target.test.mjs build-provenance.test.mjs stylesheet-contract.test.mjs",
     "test:e2e": "playwright test",
     "typecheck": "tsc --noEmit -p tsconfig.json"
