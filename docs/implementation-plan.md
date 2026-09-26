@@ -41,7 +41,7 @@ Before any new feature code, the existing stack must actually run.
 | **0** | **Install PostgreSQL 16 + create `obiter` DB** | —                                                      | `psql obiter` works                        |
 | **0** | **Create `.env`**                              | `.env`                                                 | DATABASE_URL, BETTER_AUTH_SECRET, dev URLs |
 | **0** | **Run migration 0001**                         | `packages/database/migrations/0001_phase_0_2_auth.sql` | Auth tables exist                          |
-| **0** | **Start API**                                  | `pnpm dev:api`                                         | `GET /api/health` → `{"status":"ok"}`      |
+| **0** | **Start API**                                  | `bun run dev:api`                                      | `GET /api/health` → `{"status":"ok"}`      |
 | **0** | **Test sign-in**                               | Dev magic link logs to console                         | Can sign in and see the shell              |
 | **0** | **Cloudflare Email Worker**                    | `infra/cloudflare/email-worker/src/index.ts`           | Worker deployed, magic links send          |
 
@@ -61,7 +61,7 @@ Before any new feature code, the existing stack must actually run.
 | Day    | Task                      | Files                                                   | Deliverable                                             |
 | ------ | ------------------------- | ------------------------------------------------------- | ------------------------------------------------------- |
 | **6**  | **Storage client**        | `services/api/src/storage.ts`                           | S3-compatible (Hetzner OBJ) with local fs fallback      |
-| **7**  | **Redis + BullMQ worker** | `services/worker/src/index.ts`, `pnpm-workspace.yaml`   | text-extraction + thumbnail + export jobs               |
+| **7**  | **Redis + BullMQ worker** | `services/worker/src/index.ts`, `package.json`          | text-extraction + thumbnail + export jobs               |
 | **8**  | **Artifact routes**       | `services/api/src/routes/artifacts.ts`                  | Download endpoints for processed artifacts              |
 | **9**  | **Desktop offline**       | `apps/desktop/src/cache.ts`, `apps/desktop/src/sync.ts` | SQLite local cache + reconnect sync                     |
 | **10** | **Verify M0.4**           | Full stack test                                         | Upload → job queued → processed → artifact downloadable |

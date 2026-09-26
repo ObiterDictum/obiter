@@ -36,11 +36,13 @@ what remains true from the original plan:
 
 - `services/api/src/runtime.ts` runs migrations before the socket binds, so there
   is no separate pre-start step for the container.
-- The build stage copies the repo-root `.npmrc` before its
-  dependency-materialising bun run command, so the CPU-only ONNX Runtime setting
-  applies inside the image (the policy and the GPU opt-in are in the repo-root
-  `.npmrc` note below; `services/api/src/rampart-install-config.test.ts` fails
-  any workspace Dockerfile stage that materialises dependencies without it).
+- The build stage materialises dependencies with `bun install --frozen-lockfile`
+  beside the repo-root `bun.lock`. There is no repo-root `.npmrc`: CPU-only ONNX
+  Runtime comes from Bun's dependency trust policy, not an install setting (the
+  policy and the GPU opt-in are in the ONNX Runtime note below;
+  `services/api/src/rampart-install-config.test.ts` fails any workspace
+  Dockerfile stage that installs without `bun.lock` or opts `onnxruntime-node`
+  into its install scripts).
 - Env (from `services/api/src/env.ts` + better-auth): `DATABASE_URL` (Dokploy
   internal network), better-auth secret/base-URL, CORS origin, and the optional
   detection settings `OBITER_RAMPART_MODEL`, `OBITER_RAMPART_REVISION`,
@@ -89,7 +91,20 @@ Artifacts shipped:
   - `BETTER_AUTH_URL` — consumed by the auth client (same-domain ⇒ site origin).
 - `apps/web/serve.test.mjs` — focused unit tests (Node's built-in `node:test` runner, no new dependency) for the pure helpers: `parsePort` (range/format), `resolveBaseUrl` (trusted-origin vs Host), and `applyResponseHeaders` (multiple Set-Cookie preservation, status line).
 - `apps/web/package.json` gains a `start` script (`node serve.mjs`) so the serve path is reproducible outside Docker too.
-- **Repo-root `.npmrc`** — install settings that the lockfile install depends on. It currently carries one: `onnxruntime-node-install-cuda=skip`, because `onnxruntime-node`'s postinstall would otherwise fetch the optional CUDA and TensorRT execution providers (onnxruntime-linux-x64-gpu, ~343 MB unpacked) on Linux x64. Every deployment runs detection on CPU, so the download is dead weight in every cold install, CI cache miss and image layer. **Any Dockerfile stage that runs a dependency-materialising bun run command (`bun install`, `bun run deploy`, `bun run fetch`, `bun run add`, `bun run rebuild`) must copy the repo-root `.npmrc` into that stage before the command** (`apps/web/Dockerfile` and the API image, `services/api/Dockerfile`, both do); without it the setting is simply absent and the download returns. A GPU host overrides with `ONNXRUNTIME_NODE_INSTALL_CUDA=v12 bun run rebuild onnxruntime-node`, not another `bun install`: bun run replays the postinstall result the store already cached, so on a warm store the setting alone does nothing, and a store that cached the GPU form keeps placing the providers. Returning to CPU-only takes a fresh `node_modules` against a store with no GPU-cached postinstall (an isolated `--store-dir`); never edit the shared store. `bun.lock` keeps `onnxruntime-node` in `onlyBuiltDependencies` either way: that allowlist entry is what lets the opt-in rebuild run at all, and it does not affect the CPU libraries, which ship inside the package tarball.
+- **ONNX Runtime — CPU-only installs** — there is no repo-root `.npmrc`.
+  `onnxruntime-node`'s postinstall is what fetches the optional CUDA and TensorRT
+  execution providers (onnxruntime-linux-x64-gpu, ~343 MB unpacked) on Linux x64,
+  and every deployment runs detection on CPU. Bun runs lifecycle scripts only for
+  trusted dependencies; `onnxruntime-node` is not in Bun's default-trusted set
+  and the workspace does not list it in `trustedDependencies`, so the postinstall
+  never runs and the provider payload is never fetched. `bun.lock` is the install
+  source of truth: **every dependency-materialising stage must copy the repo-root
+  `bun.lock` and install with `bun install --frozen-lockfile`**
+  (`apps/web/Dockerfile` and `services/api/Dockerfile` both do). A stage that
+  installs without the lockfile, or opts the package in with `bun pm trust
+onnxruntime-node` / `ONNXRUNTIME_NODE_INSTALL_CUDA`, fails
+  `services/api/src/rampart-install-config.test.ts`. A GPU builder opts in
+  explicitly on its own machine; images stay CPU.
 - **Repo-root `.dockerignore`** — Docker consults only the `.dockerignore` at the build-context root, so all exclusions live here (including `**/.env*` so secrets are never baked into layers). `apps/web/.dockerignore` is a comment-only pointer, not protective, to avoid the trap of a nested file that looks effective but isn't.
 
 **Verification status:** `apps/web/serve.mjs` has been exercised against a local `vite build` output — it serves static assets (CSS/JS/PNG with correct content-types, large JS streamed through the Node core pipeline with backpressure) and SSR routes (`/search`, `/sign-in`) return 200; multiple `Set-Cookie` headers survive end-to-end as distinct lines; `PORT=abc` correctly falls back to 3000 with a warning. The `serve.test.mjs` suite (17 tests) is green. `docker build` has been run and verified: with the provenance build args the image marker names the built commit, without them it records `null` (served but not measurable), and a malformed commit fails the build.
