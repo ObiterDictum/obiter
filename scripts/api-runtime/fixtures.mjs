@@ -17,6 +17,7 @@ const TAG_PATTERN = /^[a-z0-9]{4,32}$/
 const OWNED_DATABASES = [
   /^obiter_test$/,
   /^obiter_api_runtime(_test)?$/,
+  /^obiter_api_ingress(_test)?$/,
   /^obiter_lane_[a-z0-9_]+(_test)?$/,
 ]
 

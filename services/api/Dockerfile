@@ -5,10 +5,18 @@
 # BUILD INVOCATION — build from the REPO ROOT with the context set to it:
 #
 #     # Bun runtime (the new default; this is the last stage, so it is default)
-#     docker build -f services/api/Dockerfile -t obiter-api-bun .
+#     docker build -f services/api/Dockerfile -t obiter-api-bun \
+#       --build-arg OBITER_BUILD_COMMIT="$(git rev-parse HEAD)" .
 #
 #     # Node runtime (the rollback path; same application code)
-#     docker build -f services/api/Dockerfile --target runtime-node -t obiter-api-node .
+#     docker build -f services/api/Dockerfile --target runtime-node -t obiter-api-node \
+#       --build-arg OBITER_BUILD_COMMIT="$(git rev-parse HEAD)" .
+#
+# Both targets share the one build stage and the same application source, so a
+# rollback built from the same clean checkout is the same product commit. Each
+# image carries that commit as an org.opencontainers.image.revision label, which
+# is what lets an operator confirm it before switching traffic rather than trust
+# that they ran the command in the right directory.
 #
 # The context must be the repo root because the COPY paths span the monorepo
 # workspace, and the repo-root .dockerignore (with its .env* exclusions) only
@@ -94,6 +102,11 @@ RUN OBITER_RAMPART_CACHE_DIR=${RAMPART_CACHE_DIR} \
 
 # --- Node runtime (rollback) -------------------------------------------------
 FROM node:${NODE_VERSION}-slim AS runtime-node
+# Revision label for verifying which product commit an image was built from.
+# Empty when the builder does not pass the arg: a guessed revision would be
+# worse than an absent one, because a rollback decision rests on it.
+ARG OBITER_BUILD_COMMIT=""
+LABEL org.opencontainers.image.revision="${OBITER_BUILD_COMMIT}"
 ENV NODE_ENV=production
 ENV PORT=8787
 ARG RAMPART_CACHE_DIR
@@ -111,6 +124,9 @@ CMD ["node", "--import", "tsx", "src/server.ts"]
 
 # --- Bun runtime (default) ---------------------------------------------------
 FROM oven/bun:${BUN_VERSION}-slim AS runtime-bun
+# Same revision label as the Node target; see the rollback note above.
+ARG OBITER_BUILD_COMMIT=""
+LABEL org.opencontainers.image.revision="${OBITER_BUILD_COMMIT}"
 ENV NODE_ENV=production
 ENV PORT=8787
 ARG RAMPART_CACHE_DIR

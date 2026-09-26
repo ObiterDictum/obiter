@@ -117,9 +117,11 @@ point rather than an environment flag:
 | `services/api/src/server-bun.ts` | native `Bun.serve`  | default (`services/api/Dockerfile`) |
 | `services/api/src/server.ts`     | `@hono/node-server` | `--target runtime-node`             |
 
-- Bun is pinned to **1.4.2** in `.bun-version` and as the
-  `oven/bun:1.4.2-slim` image base. It was the current release when the pin was
-  set; a version bump must re-run the Bun-runtime CI job before it merges.
+- Bun is pinned to **1.4.2** in `.bun-version`, root `package.json`
+  `packageManager`, and the `ARG BUN_VERSION` plus the
+  `oven/bun:1.4.2-slim` base in both workspace Dockerfiles.
+  `services/api/src/runtime-pins.test.ts` fails a change that lets any of those
+  drift; a version bump must re-run the Bun-runtime CI job before it merges.
 - `Bun.serve` is configured explicitly: `hostname: '0.0.0.0'`,
   `maxRequestBodySize: 64 MiB` (a transport backstop; the app's 48 KiB JSON and
   25 MiB upload limits stay authoritative and produce the contract 413),
@@ -128,15 +130,28 @@ point rather than an environment flag:
 - `NODE_ENV=production` is set in the image. `readNodeEnv` (`@obiter/config`)
   already refuses an unset or unknown `NODE_ENV`, so a container without it
   stops at boot instead of serving in development mode.
-- The image is built from the repo root:
-  `docker build -f services/api/Dockerfile -t obiter-api .` (Bun) and
-  `docker build -f services/api/Dockerfile --target runtime-node -t obiter-api-node .`
-  (rollback). The build stage copies the repo-root `.npmrc` before installing
-  dependencies, so ONNX Runtime installs CPU-only in both targets (policy in
-  the repo-root `.npmrc` note above). The Rampart model is prefetched into
-  `/opt/obiter/rampart-models` at build time and `OBITER_RAMPART_CACHE_DIR`
-  points there; mounting a volume over that path shadows the baked weights, so
-  warm the volume with `bun run prefetch:rampart` first if you do.
+- The image is built from the repo root, one target at a time, with the commit
+  recorded on the image so a rollback can be shown to be the same product
+  commit:
+
+  ```sh
+  docker build -f services/api/Dockerfile -t obiter-api \
+    --build-arg OBITER_BUILD_COMMIT="$(git rev-parse HEAD)" .          # Bun (default)
+  docker build -f services/api/Dockerfile --target runtime-node -t obiter-api-node \
+    --build-arg OBITER_BUILD_COMMIT="$(git rev-parse HEAD)" .          # Node rollback
+  ```
+
+  Both targets share the one build stage, so they run identical application
+  code. `OBITER_BUILD_COMMIT` becomes the image's
+  `org.opencontainers.image.revision` label; unset, the label is empty rather
+  than a guessed revision. The build installs the production dependency graph
+  on Bun, which does not run `onnxruntime-node`'s postinstall, so ONNX Runtime
+  stays CPU-only; the policy and its guard are in
+  `services/api/src/rampart-install-config.test.ts`. The Rampart model is
+  prefetched into `/opt/obiter/rampart-models` at build time and
+  `OBITER_RAMPART_CACHE_DIR` points there; mounting a volume over that path
+  shadows the baked weights, so warm the volume with `bun run prefetch:rampart`
+  first if you do.
 
 **Startup, health and readiness.** `createApiRuntime()` validates the
 environment, applies migrations behind a Postgres advisory lock (and refuses to
@@ -145,21 +160,55 @@ blocking, and warms the detection model without blocking. `/api/health` is the
 liveness/readiness probe; it also reports `runtime: 'bun' | 'node'` so a canary
 or an operator can confirm which adapter answered.
 
-**Request limits and proxy prerequisites.** Bun exposes no request-header or
-whole-request deadline and no configurable header-size limit. What was measured
-and where it must be enforced:
+**Request limits and proxy prerequisites.** Bun exposes no request-header
+deadline, no whole-request deadline and no configurable header-size limit, so
+those bounds must be enforced at the reverse proxy. The values live in
+[`infra/traefik/entrypoints.yml`](../../infra/traefik/entrypoints.yml) and are
+applied to Dokploy's `/etc/dokploy/traefik/traefik.yml`. Dokploy generates that
+file at install and never rewrites it, so it is not in this repository: merging
+a change here does **not** change Traefik.
 
-| Concern                 | Node                         | Bun 1.4.2                             | Where enforced                |
-| ----------------------- | ---------------------------- | ------------------------------------- | ----------------------------- |
-| request-header deadline | 408 after `headersTimeout`   | connection closed ~12 s, no response  | reverse proxy                 |
-| whole-request deadline  | `requestTimeout` 300 s       | none                                  | reverse proxy (or middleware) |
-| request header size     | 16 KiB, connection destroyed | 431 at 64 KiB (threshold is internal) | reverse proxy                 |
-| keep-alive idle         | `keepAliveTimeout` 5 s       | `idleTimeout` 30 s                    | app (`idleTimeout`)           |
+| Concern             | Node                                   | Bun 1.4.2                         | Proxy value                   | Where enforced                               |
+| ------------------- | -------------------------------------- | --------------------------------- | ----------------------------- | -------------------------------------------- |
+| request deadline    | 408 after `headersTimeout`; 300 s body | closed ~12 s, no deadline         | `readTimeout: 300s`           | `entryPoints.*.transport.respondingTimeouts` |
+| request header size | 16 KiB, connection destroyed           | 431 at 64 KiB, threshold internal | `http.maxHeaderBytes: 16384`  | `entryPoints.*.http`                         |
+| long response       | 300 s would cut a long body            | `idleTimeout` 30 s only           | `writeTimeout: 0s` (disabled) | `entryPoints.*.transport.respondingTimeouts` |
+| keep-alive idle     | `keepAliveTimeout` 5 s                 | `idleTimeout` 30 s                | `idleTimeout: 180s`           | app (`idleTimeout`); proxy hold              |
 
-**These proxy settings are proposed, not deployed and not tested.** No Traefik,
-Dokploy or production configuration was changed, and no request was sent through
-Traefik. Verify them in staging against a slow upload and a long download before
-the runtime is switched for real traffic.
+- `readTimeout` is an absolute budget for the request line, headers and body,
+  not an inactivity timer. 300 s matches Node's `requestTimeout` and admits the
+  25 MiB upload cap at any sustained rate above ~85 KiB/s. A stalled connection
+  can hold a socket for up to 300 s; that is the cost of admitting slow uploads
+  and is accepted for now.
+- `writeTimeout` is disabled deliberately. The prior review (obiter-ops
+  `evaluations/2026-09-22-traefik-bun-local-review`) reproduced truncation of any
+  response that cannot finish inside a non-zero budget, on Node and Bun alike.
+- `maxHeaderBytes` is a Traefik v3.6 entrypoint option. It is absent from
+  Dokploy's own configuration schema, so it is not discoverable from Dokploy's
+  UI or docs. It bounds the total request line plus headers, not just header
+  values: measured against `traefik:v3.6.25` running the shipped fragment, a
+  16,329 B header block reaches the origin while ~16,429 B is refused with 431,
+  so the effective rejection point is the configured 16 KiB, not that value plus
+  a read buffer.
+
+**Validation.** `scripts/api-ingress/ingress.mjs` runs the fragment verbatim in
+a disposable Traefik (pinned to `traefik:v3.6.25`, the image Dokploy pulls, with
+its digest checked) and puts the real Bun and Node images behind it. It proves
+through the proxy: `/api/health` naming the adapter and an authenticated
+`/api/me`; a byte-identical DOCX download read slowly; a 25 MiB upload paced at
+~640 KiB/s completing in 40 s; a ~10 s download completing; a 64 KiB header
+refused with 431; a SIGTERM sent mid-upload that still completes, with the
+process draining at the signal and exiting 0; a
+Bun → Node → Bun route switch carrying the same session; and a 5 s-timeout
+control proxy cut at 5 s, so the shipped values are load-bearing rather than
+merely present.
+
+This is validated against the Traefik version Dokploy defaults to and the exact
+fragment above, on this host. It does **not** read the running production
+server: confirm the deployed `TRAEFIK_VERSION` (`docker image inspect
+dokploy-traefik --format '{{.Config.Image}}'`) before applying the fragment, and
+re-run the harness after any Traefik or fragment change. TLS, HTTP/2 and HTTP/3
+header limits are not covered.
 
 **Shutdown.** Both adapters use `installGracefulShutdown` in
 `services/api/src/lifecycle.ts`: SIGTERM/SIGINT stops accepting new work
@@ -169,11 +218,28 @@ Bun), lets in-flight requests finish, closes the Postgres pool, logs
 the drain does not finish; a second signal is ignored. The Bun-runtime CI job
 asserts this with a real in-flight download.
 
-**Rollback.** Redeploy the Node image (`--target runtime-node`) or point the
-process at `services/api/src/server.ts`. The application code is identical, so no
-schema or data migration is involved; migrations are additive and are applied at
-startup from either runtime. The Node entry point is exercised by the same CI
-job, so rollback is tested, not just documented.
+**Rollback (Dokploy).** Set the application's **Docker Build Stage** to
+`runtime-node` and redeploy; Dokploy passes it as `--target runtime-node`. Bun is
+the default target, so clearing the field (or `runtime-bun`) returns to Bun.
+Dokploy's "build stage" is its own application setting and is not in this
+repository. The application code, migrations and environment are identical, so
+no schema or data migration is involved.
+
+Prove the rollback is the same product commit before switching: both images must
+carry the same `org.opencontainers.image.revision` label.
+
+```sh
+docker image inspect <bun-image> --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
+docker image inspect <node-image> --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'
+```
+
+Dokploy does not know the commit it is building, so set `OBITER_BUILD_COMMIT` as
+an application build arg (the same external boundary the web image's provenance
+has above); without it the label is empty and the comparison proves nothing.
+After the switch, `/api/health` reports `runtime: 'node'`. The Node entry point
+is exercised by CI and by `scripts/api-ingress/ingress.mjs`, which switches the
+route Bun → Node → Bun behind one proxy, so rollback is tested rather than
+documented.
 
 **Staged rollout (proposed, not performed).** Canary the Bun image behind the
 same Traefik route while the Node image still exists; compare error rate, p95 and
