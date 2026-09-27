@@ -281,7 +281,9 @@ describe('toolbar state reads the effective paragraph', () => {
     nativeSelect(5, 6)
     fireEvent.click(control('Bold'))
     expect(pressed('Bold')).toBe('true')
-    expect(control('Redo (not available yet)').disabled).toBe(true)
+    // A formatting toggle records an undo step; it does not itself create a
+    // redo branch, which only an undo produces.
+    expect(control('Redo').disabled).toBe(true)
   })
 
   it('reads the projected state after a text edit follows the formatting', () => {

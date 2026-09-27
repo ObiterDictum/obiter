@@ -37,10 +37,12 @@ export function DocumentWorkspaceToolbar({
   onDownload,
   onSave,
   onUndo,
+  onRedo,
   onInsertParagraph,
   onDeleteParagraph,
   canEdit,
   canUndo,
+  canRedo,
   format,
   find,
 }: {
@@ -66,10 +68,12 @@ export function DocumentWorkspaceToolbar({
   onDownload?: () => void
   onSave: () => void
   onUndo?: () => void
+  onRedo?: () => void
   onInsertParagraph: () => void
   onDeleteParagraph: () => void
   canEdit: boolean
   canUndo?: boolean
+  canRedo?: boolean
   format?: DocumentFormatToolbar
   find?: DocumentFindToolbar
 }) {
@@ -144,8 +148,10 @@ export function DocumentWorkspaceToolbar({
           <HomeRibbon
             canEdit={canEdit}
             canUndo={canUndo}
+            canRedo={canRedo}
             format={format}
             onUndo={onUndo}
+            onRedo={onRedo}
             onInsertParagraph={onInsertParagraph}
             onDeleteParagraph={onDeleteParagraph}
           />

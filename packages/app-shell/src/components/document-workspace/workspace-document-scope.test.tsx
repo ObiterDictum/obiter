@@ -376,4 +376,26 @@ describe('document-scoped editor state', () => {
         ?.getAttribute('data-save-state'),
     ).toBe('unsaved')
   })
+
+  it('does not carry document A redo history into document B', () => {
+    const { view } = mount('doc_a')
+    editSharedParagraph('Alpha edited')
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }))
+    // A now holds a redo branch for the edit it just stepped back from.
+    expect(screen.getByRole('button', { name: 'Redo' })).toHaveProperty(
+      'disabled',
+      false,
+    )
+
+    switchTo(view, 'doc_b')
+
+    // B is its own document with no branch of A's, and redo must not apply
+    // A's undone edit under B.
+    expect(screen.getByText('Beta first')).toBeTruthy()
+    const redo = screen.getByRole('button', { name: 'Redo' })
+    expect(redo).toHaveProperty('disabled', true)
+    fireEvent.keyDown(redo, { key: 'z', ctrlKey: true, shiftKey: true })
+    expect(screen.queryByText('Alpha edited')).toBeNull()
+    expect(screen.getByText('Beta first')).toBeTruthy()
+  })
 })

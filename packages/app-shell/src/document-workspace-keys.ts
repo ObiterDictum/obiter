@@ -3,6 +3,7 @@ export type WorkspaceKeyEvent = {
   metaKey: boolean
   ctrlKey: boolean
   shiftKey: boolean
+  altKey: boolean
   preventDefault: () => void
   target?: EventTarget | null
 }
@@ -20,6 +21,7 @@ export function handleDocumentWorkspaceKeys(
   handlers: {
     save: () => void
     undo?: () => void
+    redo?: () => void
     focusFind?: () => void
   },
 ) {
@@ -37,6 +39,21 @@ export function handleDocumentWorkspaceKeys(
   if (!inForeignField && key === 'z' && handlers.undo && !event.shiftKey) {
     event.preventDefault()
     handlers.undo()
+    return
+  }
+  // Ctrl/Cmd+Shift+Z is redo everywhere; Ctrl/Cmd+Y is the Windows and Linux
+  // binding. As with save and find elsewhere here, either modifier routes the
+  // same shortcut, so the platform decides the habit rather than a detection.
+  // An Alt/AltGr combination is a character shortcut, not redo: AltGr reports
+  // as Ctrl+Alt on Windows, where Ctrl+Alt+Y must stay with the layout.
+  if (
+    !inForeignField &&
+    !event.altKey &&
+    handlers.redo &&
+    ((key === 'z' && event.shiftKey) || (key === 'y' && !event.shiftKey))
+  ) {
+    event.preventDefault()
+    handlers.redo()
     return
   }
   if (!inForeignField && key === 'f' && handlers.focusFind) {
