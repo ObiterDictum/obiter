@@ -15,11 +15,13 @@ import {
   touchDocumentDraftWriterClaim,
   writeDocumentDraft,
   type DraftScope,
-  type DraftStorage,
   type HeldChange,
   type RecoverableDraft,
 } from '../../document-draft-store'
 import { useWorkspaceDraftHistory } from '../../document-editor-history'
+import { holdSlotBundle, type DraftBundle } from './document-draft-holds'
+import { draftStorage, sessionDraftStorage } from './document-draft-storage'
+import { useSaveBaseline } from './use-save-baseline'
 import type { FormatDrafts } from '../../document-format-edits'
 import {
   applyInsertText,
@@ -39,7 +41,6 @@ import {
   emptyDraftState,
   hasDraftState,
   removeDraftSlots,
-  splitDraftSlots,
   type DraftSlot,
   type DraftState,
 } from '../../document-save-plan'
@@ -51,16 +52,13 @@ export type WorkspaceDraftScope = {
   documentId: string
   /** Stored version the workspace opened at; undefined until the model loads. */
   baseVersionId: string | undefined
+  /** The loaded model, which a successful save replaces with the saved one. */
+  model: DocumentModelWire | undefined
 }
 
 export type DraftPersistence = 'ok' | 'unavailable'
 
 export type WorkspaceDrafts = ReturnType<typeof useWorkspaceDrafts>
-
-type DraftBundle = {
-  state: DraftState
-  held: HeldChange[]
-}
 
 export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
   const [bundle, setBundle] = useState<DraftBundle>({
@@ -80,6 +78,12 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
   )
   const bundleRef = useRef(bundle)
   bundleRef.current = bundle
+  const baseline = useSaveBaseline({
+    history,
+    model: scope.model,
+    resolveState: (resolve) =>
+      setBundle((current) => ({ ...current, state: resolve(current.state) })),
+  })
   const storage = draftStorage()
   const session = sessionDraftStorage()
 
@@ -176,9 +180,27 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     history.record(bundle.state)
   }
 
+  /**
+   * Advances the history baseline after a successful save. The covered slots
+   * are cleared from live state exactly as before, and every history snapshot
+   * is re-expressed against the saved document: undo now reverses a saved edit
+   * instead of replaying it as fresh work. Structural reversals the reloaded
+   * model has not yet named are held as pending identities, which the planner
+   * neither sends nor blocks.
+   */
+  function commitSaveBoundary(
+    covered: readonly DraftSlot[],
+    sent: DraftState,
+    fromModel: DocumentModelWire,
+  ) {
+    clearSlots(covered, sent)
+    baseline.commit(covered, sent, fromModel)
+  }
+
   function resetDrafts() {
     setBundle({ state: emptyDraftState(), held: [] })
     history.clear()
+    baseline.clear()
     setRestored(false)
     setStaleDraft(null)
     setRecoverable([])
@@ -225,7 +247,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     label: string,
     reason: string,
     sent?: DraftState,
-  ): HeldChange | null {
+  ): HeldChange {
     const record: HeldChange = {
       id: crypto.randomUUID(),
       label,
@@ -233,20 +255,9 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
       createdAt: new Date().toISOString(),
       state: emptyDraftState(),
     }
-    setBundle((current) => {
-      const base = sent ?? current.state
-      const { removed } = splitDraftSlots(base, [slot])
-      if (!hasDraftState(removed)) return current
-      record.state = removed
-      if (sent && clearableSlots([slot], sent, current.state).length === 0) {
-        return { state: current.state, held: [...current.held, record] }
-      }
-      const { remaining } = splitDraftSlots(current.state, [slot])
-      return {
-        state: remaining,
-        held: [...current.held, record],
-      }
-    })
+    setBundle(
+      (current) => holdSlotBundle(current, slot, record, sent) ?? current,
+    )
     return record
   }
 
@@ -270,6 +281,10 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     if (!storage || !scope.baseVersionId) return
     const result = adoptDocumentDraft(storage, storedScope(), draftId)
     if (result.status !== 'restored') return
+    // The adopted draft was recorded against another version, so the history
+    // taken against this one cannot be replayed over it.
+    history.clear()
+    baseline.clear()
     setBundle({ state: result.state, held: result.held })
     setRestored(true)
     setRecoverable((current) =>
@@ -455,6 +470,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     setFormat,
     resetDrafts,
     clearSlots,
+    commitSaveBoundary,
     holdSlot,
     held: bundle.held,
     discardHeld,
@@ -467,7 +483,6 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     discardRecoverable,
     undoDraft,
     redoDraft,
-    discardRedo: history.discardRedo,
     handleWordEdit,
     replaceDocumentRange,
     splitDocumentRange,
@@ -477,23 +492,5 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     deleteParagraph,
     canUndo: history.canUndo,
     canRedo: history.canRedo,
-  }
-}
-
-function draftStorage(): DraftStorage | null {
-  if (typeof window === 'undefined') return null
-  try {
-    return window.localStorage
-  } catch {
-    return null
-  }
-}
-
-function sessionDraftStorage(): DraftStorage | null {
-  if (typeof window === 'undefined') return null
-  try {
-    return window.sessionStorage
-  } catch {
-    return null
   }
 }

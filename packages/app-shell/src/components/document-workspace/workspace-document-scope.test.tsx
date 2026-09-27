@@ -1,6 +1,7 @@
 import '@obiter/test-dom'
 import { type PropsWithChildren } from 'react'
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -182,7 +183,10 @@ function elementFor(documentId: string) {
   )
 }
 
-function mount(documentId: string) {
+function mount(
+  documentId: string,
+  options: { editAsync?: ReturnType<typeof vi.fn> } = {},
+) {
   hooks.useCurrentUser.mockReturnValue({
     data: {
       user: {
@@ -208,7 +212,7 @@ function mount(documentId: string) {
   hooks.useDocumentCollaborationSync.mockReturnValue({
     data: { changed: false, participants: [], currentVersionId: 'ver_doc_a' },
   })
-  const editAsync = vi.fn()
+  const editAsync = options.editAsync ?? vi.fn()
   const mergeAsync = vi.fn()
   hooks.useCreateDocumentComment.mockReturnValue(idleMutation())
   hooks.useResolveDocumentComment.mockReturnValue(idleMutation())
@@ -397,5 +401,43 @@ describe('document-scoped editor state', () => {
     fireEvent.keyDown(redo, { key: 'z', ctrlKey: true, shiftKey: true })
     expect(screen.queryByText('Alpha edited')).toBeNull()
     expect(screen.getByText('Beta first')).toBeTruthy()
+  })
+
+  it('does not let a save that resolves after a switch touch the new document', async () => {
+    let resolveSave: (value: unknown) => void = () => undefined
+    const editAsync = vi.fn(
+      () =>
+        new Promise((resolve) => {
+          resolveSave = resolve
+        }),
+    )
+    const { view } = mount('doc_a', { editAsync })
+    editSharedParagraph('Alpha edited')
+    openReviewTab()
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(1))
+
+    // A's save is still in flight when the workspace switches to B.
+    switchTo(view, 'doc_b')
+    await act(async () => {
+      resolveSave({
+        documentId: 'doc_a',
+        versionId: 'ver_doc_a_2',
+        versionNumber: 2,
+      })
+    })
+
+    // B's own document and history are untouched by A's commit.
+    expect(screen.getByText('Beta first')).toBeTruthy()
+    expect(screen.getByText('Beta tail')).toBeTruthy()
+    expect(screen.queryByText('Alpha edited')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Undo' })).toHaveProperty(
+      'disabled',
+      true,
+    )
+    expect(screen.getByRole('button', { name: 'Redo' })).toHaveProperty(
+      'disabled',
+      true,
+    )
   })
 })

@@ -50,6 +50,26 @@ export function useWorkspaceDraftHistory() {
   }
 
   /**
+   * Rewrites every snapshot with the save boundary's translation. A snapshot
+   * the boundary cannot express is dropped rather than left replayable. This is
+   * the history's only view of a baseline advance, so undo and redo always
+   * restore a state the saved document can actually hold.
+   */
+  function translate(
+    rewrite: (
+      snapshot: WorkspaceDraftSnapshot,
+    ) => WorkspaceDraftSnapshot | null,
+  ) {
+    const map = (stack: WorkspaceDraftSnapshot[]) =>
+      stack.flatMap((snapshot) => {
+        const next = rewrite(snapshot)
+        return next ? [next] : []
+      })
+    setPast(map)
+    setFuture(map)
+  }
+
+  /**
    * Ends the redo branch without touching undo history or the current state.
    * A successful save is a new baseline: every snapshot the branch holds was
    * taken while the saved slots were still pending, so replaying one would
@@ -79,6 +99,7 @@ export function useWorkspaceDraftHistory() {
   return {
     record,
     clear,
+    translate,
     discardRedo,
     stepBack,
     stepForward,

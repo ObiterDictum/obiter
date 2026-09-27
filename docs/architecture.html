@@ -6213,7 +6213,13 @@
                 in it is never logged, and a payload that fails validation or
                 names another scope is dropped rather than applied. See
                 <code>document-draft-store.ts</code> and
-                <code>document-save-plan.ts</code>.</span
+                <code>document-save-plan.ts</code>. A successful save is also
+                the undo/redo baseline:
+                <code>document-history-baseline.ts</code>
+                re-expresses every history snapshot against the saved document,
+                so a covered slot can never be replayed as fresh work, and
+                <code>use-save-baseline.ts</code> is the one owner of that
+                boundary.</span
               >
             </li>
             <li>

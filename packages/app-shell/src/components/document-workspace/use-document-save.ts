@@ -34,7 +34,12 @@ export type SaveState =
 
 export type DocumentSave = ReturnType<typeof useDocumentSave>
 
-const EMPTY_PLAN: SavePlan = { operations: [], covered: [], blocked: [] }
+const EMPTY_PLAN: SavePlan = {
+  operations: [],
+  covered: [],
+  blocked: [],
+  pending: 0,
+}
 
 /**
  * The save state machine for the DOCX workspace.
@@ -136,14 +141,10 @@ export function useDocumentSave({
     merged: boolean,
   ) {
     onSaved(versionId)
-    // Only the slots this request covered, and only if they still hold what it
-    // sent: anything blocked, held, or edited while the request was in flight
-    // stays unsaved and must keep saying so.
-    drafts.clearSlots(covered, sent)
-    // The save is a new baseline, so the redo branch it covered is obsolete:
-    // replaying a snapshot still holding a saved slot would resend it. Undo
-    // history and unsaved edits made during the request are untouched.
-    drafts.discardRedo()
+    // Advances the history baseline as well as clearing the covered slots: a
+    // snapshot taken while they were pending can never be replayed, and undo
+    // still reverses a saved edit against the document the save produced.
+    if (model) drafts.commitSaveBoundary(covered, sent, model)
     setFailure(null)
     setStale(false)
     if (merged) {
@@ -252,6 +253,7 @@ export function useDocumentSave({
       : failure
         ? { status: 'failed' }
         : dirty ||
+            plan.pending > 0 ||
             blocked.length > 0 ||
             held.length > 0 ||
             drafts.recoverable.length > 0 ||

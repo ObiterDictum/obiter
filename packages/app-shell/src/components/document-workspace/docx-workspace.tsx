@@ -72,11 +72,13 @@ export function DocxWorkspace({
   const createComment = useCreateDocumentComment(documentId)
   const resolveComment = useResolveDocumentComment(documentId)
   const decideChange = useTrackedChangeDecision(documentId, matterId)
+  const model = modelQuery.data?.model
   const drafts = useWorkspaceDrafts({
     organisationId: me?.organisation?.id ?? 'no-organisation',
     userId: me?.user.id ?? 'anonymous',
     documentId,
     baseVersionId: modelQuery.data?.versionId,
+    model,
   })
 
   const [zoom, setZoom] = useState(100)
@@ -87,7 +89,6 @@ export function DocxWorkspace({
   const [trackChanges, setTrackChanges] = useState(false)
   const [banner, setBanner] = useState<string | null>(null)
 
-  const model = modelQuery.data?.model
   const presence = syncQuery.data?.participants ?? []
   const remoteChange = syncQuery.data?.changed === true
   const save = useDocumentSave({

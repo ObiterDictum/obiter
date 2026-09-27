@@ -8,13 +8,28 @@ import type { FormatDrafts } from './document-format-edits'
 import { documentStory } from './document-model-text'
 import type { ExtraRuns } from './document-word-edits'
 
-/** The draft state that a save request is derived from. */
+/**
+ * The draft state that a save request is derived from.
+ */
 export type DraftState = {
   drafts: Record<string, string>
   inserts: LocalInsert[]
   deletedParagraphIds: string[]
   extraRuns: ExtraRuns
   format: FormatDrafts
+}
+
+/**
+ * A structural reversal a save boundary has not been able to address yet,
+ * because the reloaded model has not named the paragraph it created or removed.
+ * It is not user work: the planner never sends it and never reports it blocked,
+ * and the boundary resolves it to a real identity when the model arrives. See
+ * `document-history-baseline.ts`.
+ */
+export const PENDING_BASELINE_PREFIX = 'pending-baseline:'
+
+export function isPendingBaselineId(id: string) {
+  return id.startsWith(PENDING_BASELINE_PREFIX)
 }
 
 /**
@@ -62,6 +77,12 @@ export type SavePlan = {
   covered: DraftSlot[]
   /** Slots that cannot be addressed against this model, so they are not sent. */
   blocked: BlockedDraft[]
+  /**
+   * Pending-baseline reversals that no model names yet. They are not sent and
+   * not blocked, but they are unsaved work, so the workspace must not report
+   * itself saved while one exists.
+   */
+  pending: number
 }
 
 /**
@@ -94,8 +115,13 @@ export function planDocumentSave(
   const covered: DraftSlot[] = []
   const blocked: BlockedDraft[] = []
   const keep = emptyDraftState()
+  let pending = 0
 
   for (const [runId, text] of Object.entries(state.drafts)) {
+    if (isPendingBaselineId(runId)) {
+      pending += 1
+      continue
+    }
     if (!runIds.has(runId)) {
       if (text.trim().length === 0) continue
       blocked.push({
@@ -157,6 +183,10 @@ export function planDocumentSave(
   }
 
   for (const paragraphId of state.deletedParagraphIds) {
+    if (isPendingBaselineId(paragraphId)) {
+      pending += 1
+      continue
+    }
     if (!paragraphIds.has(paragraphId)) {
       blocked.push({
         slot: { kind: 'delete', key: `delete:${paragraphId}`, paragraphId },
@@ -265,6 +295,7 @@ export function planDocumentSave(
     ),
     covered,
     blocked,
+    pending,
   }
 }
 

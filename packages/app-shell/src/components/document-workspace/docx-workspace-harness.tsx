@@ -238,10 +238,22 @@ function withTable(model: DocumentModelWire): DocumentModelWire {
   }
 }
 
+/**
+ * A live document source, so a test can make a save reload the model the way
+ * the real `/model` route does (new version, re-parsed identities) instead of
+ * pinning one immutable fixture for the whole mount.
+ */
+export type WorkspaceModelSource = (id: string) => {
+  versionId: string
+  versionNumber: number
+  model: DocumentModelWire
+}
+
 export function mountWorkspace(
   options: {
     documentId?: string
     models?: Record<string, DocumentModelWire>
+    modelFor?: WorkspaceModelSource
     editAsync?: ReturnType<typeof vi.fn>
     mergeAsync?: ReturnType<typeof vi.fn>
   } = {},
@@ -254,22 +266,30 @@ export function mountWorkspace(
         email: 'lex@obiter.dev',
         role: 'owner',
       },
+      organisation: { id: 'org_1', name: 'Chambers', plan: 'private_beta' },
     },
   })
-  hooks.useDocumentModel.mockImplementation((id: string) => ({
-    isLoading: false,
-    isError: false,
-    data: {
-      documentId: id,
+  hooks.useDocumentModel.mockImplementation((id: string) => {
+    const current = options.modelFor?.(id) ?? {
       versionId: 'ver_1',
       versionNumber: 1,
       model: options.models?.[id] ?? model,
-    },
-  }))
+    }
+    return {
+      isLoading: false,
+      isError: false,
+      data: { documentId: id, ...current },
+    }
+  })
   hooks.useDocumentComments.mockReturnValue({ data: { comments: [] } })
   hooks.useDocumentTrackedChanges.mockReturnValue({ data: { changes: [] } })
   hooks.useDocumentCollaborationSync.mockReturnValue({
-    data: { changed: false, participants: [], currentVersionId: 'ver_1' },
+    data: {
+      changed: false,
+      participants: [],
+      currentVersionId:
+        options.modelFor?.(options.documentId ?? 'doc_1').versionId ?? 'ver_1',
+    },
   })
   hooks.useCreateDocumentComment.mockReturnValue(idleMutation())
   hooks.useResolveDocumentComment.mockReturnValue(idleMutation())
