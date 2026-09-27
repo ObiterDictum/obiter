@@ -164,7 +164,14 @@ export function useDocumentSave({
     // still reverses a saved edit against the document the save produced. The
     // server's lineage is the authoritative identity for that translation.
     if (model)
-      drafts.commitSaveBoundary(covered, sent, model, lineage, versionId)
+      drafts.commitSaveBoundary(
+        covered,
+        sent,
+        model,
+        lineage,
+        versionId,
+        trackChanges,
+      )
     setFailure(null)
     setStale(false)
     if (merged) {

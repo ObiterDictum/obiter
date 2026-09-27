@@ -9,7 +9,7 @@ import {
   runPropertiesFromFragments,
   type LocalInsert,
 } from './document-edits'
-import { mergeEmphasis } from './document-format-edits'
+import { mergeEmphasis, paragraphNumPr } from './document-format-edits'
 import type { PendingEmphasis } from './document-format-types'
 import { documentStory } from './document-model-text'
 import {
@@ -200,8 +200,23 @@ export function hasAuthoritativeLineage(baseline: SaveBaseline): boolean {
  */
 export function lineageCoversCoveredSlots(
   lineage: DocumentVersionLineage,
-  baseline: Pick<SaveBaseline, 'covered' | 'sent'>,
+  baseline: Pick<SaveBaseline, 'covered' | 'sent' | 'fromModel'>,
+  tracked: boolean,
 ): boolean {
+  const fromRunIds = new Set(
+    (documentStory(baseline.fromModel)?.paragraphs ?? []).flatMap((paragraph) =>
+      paragraph.runs.map((run) => run.id),
+    ),
+  )
+  const mappedRunIds = new Set(
+    lineage.paragraphs.flatMap((paragraph) =>
+      paragraph.runs.flatMap((run) =>
+        run.segments.flatMap((segment) =>
+          segment.fromRunId ? [segment.fromRunId] : [],
+        ),
+      ),
+    ),
+  )
   for (const slot of baseline.covered) {
     if (slot.kind === 'insert') {
       const mapped = lineage.paragraphs.some(
@@ -214,6 +229,17 @@ export function lineageCoversCoveredSlots(
         (entry) => entry.fromParagraphId === slot.paragraphId,
       )
       if (!mapped) return false
+    }
+    // A tracked edit's run is excluded from the parsed result model, so the
+    // lineage cannot address it. Refuse the tracked boundary rather than
+    // silently dropping the reversal; the caller surfaces a recoverable state.
+    if (
+      tracked &&
+      slot.kind === 'run-text' &&
+      fromRunIds.has(slot.runId) &&
+      !mappedRunIds.has(slot.runId)
+    ) {
+      return false
     }
   }
   return true
@@ -521,9 +547,40 @@ export function translateSnapshot(
         })
         break
       }
+      case 'numbering': {
+        // Reverse a saved numbering change by restating the pre-save numbering
+        // at the result paragraph, rather than merely dropping the slot.
+        Object.assign(next, removeDraftSlots(next, [slot]))
+        const paragraph = storyParagraph(baseline.fromModel, slot.paragraphId)
+        if (!paragraph) break
+        const targetParagraphId =
+          identities.paragraphIds.get(slot.paragraphId) ?? slot.paragraphId
+        next.format.numbering[targetParagraphId] = paragraphNumPr(
+          paragraph,
+          baseline.fromModel.styles,
+        ) ?? { numId: null }
+        break
+      }
+      case 'extra-runs': {
+        // A join folded the appended runs into the paragraph's last original
+        // run. Restoring that run's pre-save text removes the appended content,
+        // which is what undoing the join means.
+        const paragraph = storyParagraph(baseline.fromModel, slot.paragraphId)
+        const lastOriginal = paragraph?.runs.at(-1)
+        Object.assign(next, removeDraftSlots(next, [slot]))
+        if (!lastOriginal) break
+        const targetRunId =
+          identities.runIds.get(lastOriginal.id) ?? lastOriginal.id
+        const pre =
+          snapshot.drafts[lastOriginal.id] ??
+          runText(baseline.fromModel, lastOriginal.id)
+        if (pre !== undefined) next.drafts[targetRunId] = pre
+        break
+      }
       default: {
-        // Numbering and appended runs: a snapshot that still holds the slot
-        // loses it to the new baseline and never replays it.
+        // Any other slot (there is none the editor produces today): a snapshot
+        // that still holds it loses it to the new baseline and never replays
+        // it, and the reversal is not silently claimed as persisted.
         Object.assign(next, removeDraftSlots(next, [slot]))
       }
     }

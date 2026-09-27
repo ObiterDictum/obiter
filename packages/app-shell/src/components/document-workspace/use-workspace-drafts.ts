@@ -44,7 +44,6 @@ import {
   type DraftState,
 } from '../../document-save-plan'
 import type { ParagraphWordEdit } from './model-paragraph'
-
 export type WorkspaceDraftScope = {
   organisationId: string
   userId: string
@@ -54,7 +53,6 @@ export type WorkspaceDraftScope = {
   /** The loaded model, which a successful save replaces with the saved one. */
   model: DocumentModelWire | undefined
 }
-
 export type DraftPersistence = 'ok' | 'unavailable'
 export type WorkspaceDrafts = ReturnType<typeof useWorkspaceDrafts>
 
@@ -184,6 +182,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     fromModel: DocumentModelWire,
     lineage?: import('@obiter/contracts').DocumentVersionLineage,
     versionId?: string,
+    tracked = false,
   ) {
     clearSlots(covered, sent)
     const { resolved } = baseline.commit(
@@ -192,6 +191,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
       fromModel,
       lineage,
       versionId,
+      tracked,
     )
     setLineageUnresolved(!resolved)
   }

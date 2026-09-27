@@ -78,6 +78,7 @@ export function useSaveBaseline({
       fromModel: DocumentModelWire,
       lineage?: SaveBaseline['lineage'],
       versionId?: string,
+      tracked = false,
     ): { resolved: boolean } {
       // A successful save ends the redo branch whether or not its identity can
       // be reconciled.
@@ -96,7 +97,7 @@ export function useSaveBaseline({
       if (
         !lineage ||
         !versionId ||
-        !lineageCoversCoveredSlots(lineage, boundary)
+        !lineageCoversCoveredSlots(lineage, boundary, tracked)
       ) {
         pending.current = null
         setPendingVersion(null)

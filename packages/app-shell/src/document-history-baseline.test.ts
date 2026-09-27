@@ -11,6 +11,7 @@ import {
   type DraftState,
 } from './document-save-plan'
 import {
+  lineageCoversCoveredSlots,
   resolveBaselineIdentities,
   translateSnapshot,
   type SaveBaseline,
@@ -506,5 +507,142 @@ describe('lineage-driven identity', () => {
     })
     const clientId = translated?.inserts[0]?.clientId ?? ''
     expect(translated?.format.paragraphStyles[clientId]).toBe('Heading1')
+  })
+
+  it('reverses a saved numbering change at the result paragraph', () => {
+    const numbered = model([
+      { id: 'para-000001', run: 'text-000001', text: 'List item' },
+    ])
+    const paragraph = numbered.stories[0]?.paragraphs[0]
+    if (paragraph) {
+      paragraph.preservedXmlFragments = [
+        '<w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr>',
+      ]
+    }
+    const sent: DraftState = {
+      ...emptyDraftState(),
+      format: {
+        ...emptyDraftState().format,
+        numbering: { 'para-000001': { numId: '2', ilvl: 0 } },
+      },
+    }
+    const translated = translateSnapshot(emptyDraftState(), {
+      covered: [
+        {
+          kind: 'numbering',
+          key: 'number:para-000001',
+          paragraphId: 'para-000001',
+        },
+      ],
+      sent,
+      fromModel: numbered,
+      toModel: model([
+        { id: 'para-w14-00000001', run: 'text-000001', text: 'List item' },
+      ]),
+      lineage: {
+        version: 1,
+        baseVersionId: 'ver_1',
+        versionId: 'ver_2',
+        acceptedOperations: [0],
+        paragraphs: [
+          {
+            fromParagraphId: 'para-000001',
+            toParagraphId: 'para-w14-00000001',
+            runs: [
+              {
+                runIndex: 0,
+                segments: [
+                  { fromRunId: 'text-000001', fromOffset: 0, toOffset: 9 },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      versionId: 'ver_2',
+    })
+    expect(translated?.format.numbering).toEqual({
+      'para-w14-00000001': { numId: '1', ilvl: 0 },
+    })
+  })
+
+  it('reverses a saved join by restoring the last original run text', () => {
+    const from = model([
+      { id: 'para-000001', run: 'text-000001', text: 'Hello' },
+    ])
+    const sent: DraftState = {
+      ...emptyDraftState(),
+      extraRuns: {
+        'para-000001': [{ id: 'x', text: 'World', preservedXmlFragments: [] }],
+      },
+    }
+    const translated = translateSnapshot(emptyDraftState(), {
+      covered: [
+        {
+          kind: 'extra-runs',
+          key: 'extra:para-000001',
+          paragraphId: 'para-000001',
+        },
+      ],
+      sent,
+      fromModel: from,
+      toModel: model([
+        { id: 'para-w14-00000001', run: 'text-000001', text: 'HelloWorld' },
+      ]),
+      lineage: {
+        version: 1,
+        baseVersionId: 'ver_1',
+        versionId: 'ver_2',
+        acceptedOperations: [0],
+        paragraphs: [
+          {
+            fromParagraphId: 'para-000001',
+            toParagraphId: 'para-w14-00000001',
+            runs: [
+              {
+                runIndex: 0,
+                segments: [
+                  { fromRunId: 'text-000001', fromOffset: 0, toOffset: 5 },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+      versionId: 'ver_2',
+    })
+    expect(translated?.drafts).toEqual({ 'text-000001': 'Hello' })
+    expect(translated?.extraRuns).toEqual({})
+  })
+
+  it('refuses a tracked boundary whose lineage cannot address the run', () => {
+    const sent: DraftState = {
+      ...emptyDraftState(),
+      drafts: { 'text-000001': 'Hello world' },
+    }
+    const uncovered = {
+      version: 1 as const,
+      baseVersionId: 'ver_1',
+      versionId: 'ver_2',
+      acceptedOperations: [0],
+      paragraphs: [],
+    }
+    // A tracked edit's run is absent from the result model, so the lineage has
+    // no address for it and the boundary is refused rather than dropped.
+    expect(
+      lineageCoversCoveredSlots(
+        uncovered,
+        { covered: [runTextSlot('text-000001')], sent, fromModel: baseModel },
+        true,
+      ),
+    ).toBe(false)
+    // The untracked lineage that maps the run is accepted.
+    expect(
+      lineageCoversCoveredSlots(
+        lineage,
+        { covered: [runTextSlot('text-000001')], sent, fromModel: baseModel },
+        true,
+      ),
+    ).toBe(true)
   })
 })
