@@ -515,6 +515,7 @@ describe('document-format-edits module size', () => {
       './document-format-types.ts',
       './document-draft-store.ts',
       './document-draft-identity.ts',
+      './document-history-caret.ts',
       './document-selection.ts',
       './document-range-edits.ts',
       './document-word-edits.ts',

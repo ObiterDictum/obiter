@@ -154,6 +154,7 @@ export function DocxWorkspace({
     onReplaceAll,
     insertAuthority,
     undoDocument,
+    redoDocument,
   } = useWorkspaceCaret({ documentId, model, drafts })
 
   useDocumentPresenceHeartbeat(documentId, cursor, true)
@@ -221,6 +222,7 @@ export function DocxWorkspace({
         currentUserId={me?.user.id}
         canEdit
         canUndo={drafts.canUndo}
+        canRedo={drafts.canRedo}
         onToggleComments={() => setCommentsOpen((value) => !value)}
         onToggleChanges={() => setChangesOpen((value) => !value)}
         onToggleAuthorities={() => setAuthoritiesOpen((value) => !value)}
@@ -232,6 +234,7 @@ export function DocxWorkspace({
         }}
         onSave={save.save}
         onUndo={undoDocument}
+        onRedo={redoDocument}
         onInsertParagraph={() => {
           if (!selectedParagraphId) return
           selectParagraph(drafts.insertAfter(selectedParagraphId), 0)
@@ -308,6 +311,7 @@ export function DocxWorkspace({
         handleDocumentWorkspaceKeys(event, {
           save: save.save,
           undo: undoDocument,
+          redo: redoDocument,
           focusFind: () => document.getElementById('document-find')?.focus(),
         })
       }

@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import type { DocumentModelWire } from '@obiter/contracts'
 import { flowParagraphIds } from '../../document-edits'
+import { historyCaretPlacement } from '../../document-history-caret'
 import { cursorForSelection, documentStory } from '../../document-model-text'
 import {
   documentRangeRefusal,
@@ -394,37 +395,32 @@ export function useWorkspaceCaret({
     if (caret) selectParagraph(caret.paragraphId, caret.offset)
   }
 
-  function undoDocument() {
-    const beforeInserts = drafts.inserts
-    const restored = drafts.undoDraft()
+  /**
+   * Runs one history step and keeps the caret on a paragraph the restored
+   * state still renders. The placement itself is pure; this only applies it
+   * and clears the document selection the step invalidated.
+   */
+  function runHistoryStep(step: () => ReturnType<typeof drafts.undoDraft>) {
+    const before = {
+      inserts: drafts.inserts,
+      deletedParagraphIds: drafts.deletedParagraphIds,
+    }
+    const restored = step()
     if (!restored || !model) return
     setSelection(null)
     setSelectionRefusal(null)
-    // Undoing a split/insert removes the paragraph the caret was on. Move
-    // selection back to the paragraph the removed insert was anchored after
-    // so the user is not left with nothing selected.
-    const target = restoreCaret?.paragraphId ?? selectedParagraphId
-    if (!target) return
-    const removed = beforeInserts.find((item) => item.clientId === target)
-    // Only redirect when the insert the caret was on is actually gone after
-    // the undo. An insert that survived (e.g. undoing a text edit inside
-    // it) must keep the caret; the editor clamps the offset to its text.
-    if (!removed || restored.inserts.some((item) => item.clientId === target)) {
-      return
-    }
-    selectParagraph(
-      removed.afterParagraphId,
-      blockText(
-        model,
-        {
-          drafts: restored.drafts,
-          inserts: restored.inserts,
-          deletedParagraphIds: restored.deletedParagraphIds,
-          extraRuns: restored.extraRuns,
-        },
-        removed.afterParagraphId,
-      ).length,
-    )
+    const anchor = restoreCaret?.paragraphId ?? selectedParagraphId
+    if (!anchor) return
+    const placement = historyCaretPlacement({ model, before, restored, anchor })
+    if (placement) selectParagraph(placement.paragraphId, placement.offset)
+  }
+
+  function undoDocument() {
+    runHistoryStep(drafts.undoDraft)
+  }
+
+  function redoDocument() {
+    runHistoryStep(drafts.redoDraft)
   }
 
   const cursor =
@@ -475,6 +471,7 @@ export function useWorkspaceCaret({
     onReplaceAll: find.onReplaceAll,
     insertAuthority,
     undoDocument,
+    redoDocument,
   }
 }
 

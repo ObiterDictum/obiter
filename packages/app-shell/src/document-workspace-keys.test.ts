@@ -5,36 +5,49 @@ import { handleDocumentWorkspaceKeys } from './document-workspace-keys'
 
 function event(
   key: string,
-  extras: { shiftKey?: boolean; target?: EventTarget | null } = {},
+  extras: {
+    shiftKey?: boolean
+    altKey?: boolean
+    target?: EventTarget | null
+  } = {},
 ) {
   return {
     key,
     metaKey: false,
     ctrlKey: true,
     shiftKey: extras.shiftKey ?? false,
+    altKey: extras.altKey ?? false,
     preventDefault: vi.fn(),
     target: extras.target,
   }
 }
 
 describe('document workspace keys', () => {
-  it('routes save, undo, and find without treating redo as undo', () => {
+  it('routes save, undo, redo, and find to their own handlers', () => {
     const save = vi.fn()
     const undo = vi.fn()
+    const redo = vi.fn()
     const focusFind = vi.fn()
-    const handlers = { save, undo, focusFind }
+    const handlers = { save, undo, redo, focusFind }
 
     const saveEvent = event('s')
     handleDocumentWorkspaceKeys(saveEvent, handlers)
     expect(saveEvent.preventDefault).toHaveBeenCalled()
     expect(save).toHaveBeenCalledTimes(1)
 
-    const undoEvent = event('z')
-    handleDocumentWorkspaceKeys(undoEvent, handlers)
+    handleDocumentWorkspaceKeys(event('z'), handlers)
     expect(undo).toHaveBeenCalledTimes(1)
+    expect(redo).not.toHaveBeenCalled()
 
-    handleDocumentWorkspaceKeys(event('z', { shiftKey: true }), handlers)
+    const shiftZ = event('z', { shiftKey: true })
+    handleDocumentWorkspaceKeys(shiftZ, handlers)
     expect(undo).toHaveBeenCalledTimes(1)
+    expect(redo).toHaveBeenCalledTimes(1)
+    expect(shiftZ.preventDefault).toHaveBeenCalled()
+
+    handleDocumentWorkspaceKeys(event('y'), handlers)
+    expect(undo).toHaveBeenCalledTimes(1)
+    expect(redo).toHaveBeenCalledTimes(2)
 
     const findEvent = event('f')
     handleDocumentWorkspaceKeys(findEvent, handlers)
@@ -42,10 +55,40 @@ describe('document workspace keys', () => {
     expect(focusFind).toHaveBeenCalledTimes(1)
   })
 
-  it('does not intercept undo or find inside the find and comments fields', () => {
+  it('does not treat redo as undo when no redo handler is wired', () => {
     const undo = vi.fn()
+    handleDocumentWorkspaceKeys(event('z', { shiftKey: true }), {
+      save: vi.fn(),
+      undo,
+    })
+    handleDocumentWorkspaceKeys(event('y'), { save: vi.fn(), undo })
+    expect(undo).not.toHaveBeenCalled()
+  })
+
+  it('ignores Alt and AltGr combinations for redo', () => {
+    const redo = vi.fn()
+    const handlers = { save: vi.fn(), redo }
+
+    // AltGr reports as Ctrl+Alt on Windows, so an Alt-combined Y or Shift+Z
+    // is a character shortcut, not a redo request.
+    handleDocumentWorkspaceKeys(event('y', { altKey: true }), handlers)
+    handleDocumentWorkspaceKeys(
+      event('z', { altKey: true, shiftKey: true }),
+      handlers,
+    )
+    expect(redo).not.toHaveBeenCalled()
+
+    // The intended bindings still route.
+    handleDocumentWorkspaceKeys(event('y'), handlers)
+    handleDocumentWorkspaceKeys(event('z', { shiftKey: true }), handlers)
+    expect(redo).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not intercept undo, redo or find inside the find and comments fields', () => {
+    const undo = vi.fn()
+    const redo = vi.fn()
     const focusFind = vi.fn()
-    const handlers = { save: vi.fn(), undo, focusFind }
+    const handlers = { save: vi.fn(), undo, redo, focusFind }
 
     for (const field of [
       document.createElement('input'),
@@ -56,6 +99,11 @@ describe('document workspace keys', () => {
       handleDocumentWorkspaceKeys(undoEvent, handlers)
       expect(undo).not.toHaveBeenCalled()
       expect(undoEvent.preventDefault).not.toHaveBeenCalled()
+
+      const redoEvent = event('z', { target: field, shiftKey: true })
+      handleDocumentWorkspaceKeys(redoEvent, handlers)
+      expect(redo).not.toHaveBeenCalled()
+      expect(redoEvent.preventDefault).not.toHaveBeenCalled()
 
       const findEvent = event('f', { target: field })
       handleDocumentWorkspaceKeys(findEvent, handlers)

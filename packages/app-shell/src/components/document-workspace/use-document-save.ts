@@ -140,6 +140,10 @@ export function useDocumentSave({
     // sent: anything blocked, held, or edited while the request was in flight
     // stays unsaved and must keep saying so.
     drafts.clearSlots(covered, sent)
+    // The save is a new baseline, so the redo branch it covered is obsolete:
+    // replaying a snapshot still holding a saved slot would resend it. Undo
+    // history and unsaved edits made during the request are untouched.
+    drafts.discardRedo()
     setFailure(null)
     setStale(false)
     if (merged) {
