@@ -1,6 +1,10 @@
 import { useQueryClient } from '@tanstack/react-query'
 import { useRef, useState } from 'react'
-import type { DocumentModelWire, DocumentPresence } from '@obiter/contracts'
+import type {
+  DocumentModelWire,
+  DocumentPresence,
+  DocumentVersionLineage,
+} from '@obiter/contracts'
 import { ApiError } from '../../api'
 import {
   planDocumentSave,
@@ -111,7 +115,11 @@ export function useDocumentSave({
         operations,
         trackChanges,
       })
-      return { versionId: saved.versionId, merged: remoteChange }
+      return {
+        versionId: saved.versionId,
+        merged: remoteChange,
+        lineage: saved.lineage,
+      }
     }
     try {
       const saved = await editDocument.mutateAsync({
@@ -119,7 +127,11 @@ export function useDocumentSave({
         operations,
         trackChanges,
       })
-      return { versionId: saved.versionId, merged: false }
+      return {
+        versionId: saved.versionId,
+        merged: false,
+        lineage: saved.lineage,
+      }
     } catch (error) {
       if (!(error instanceof ApiError) || error.code !== 'conflict_detected') {
         throw error
@@ -130,7 +142,11 @@ export function useDocumentSave({
         operations,
         trackChanges,
       })
-      return { versionId: saved.versionId, merged: true }
+      return {
+        versionId: saved.versionId,
+        merged: true,
+        lineage: saved.lineage,
+      }
     }
   }
 
@@ -139,12 +155,15 @@ export function useDocumentSave({
     sent: DraftState,
     versionId: string,
     merged: boolean,
+    lineage?: DocumentVersionLineage,
   ) {
     onSaved(versionId)
     // Advances the history baseline as well as clearing the covered slots: a
     // snapshot taken while they were pending can never be replayed, and undo
-    // still reverses a saved edit against the document the save produced.
-    if (model) drafts.commitSaveBoundary(covered, sent, model)
+    // still reverses a saved edit against the document the save produced. The
+    // server's lineage is the authoritative identity for that translation.
+    if (model)
+      drafts.commitSaveBoundary(covered, sent, model, lineage, versionId)
     setFailure(null)
     setStale(false)
     if (merged) {
@@ -187,7 +206,13 @@ export function useDocumentSave({
           'The server rejected this change.',
           sent,
         )
-        commit(attempt.covered, without, result.versionId, result.merged)
+        commit(
+          attempt.covered,
+          without,
+          result.versionId,
+          result.merged,
+          result.lineage,
+        )
         return true
       } catch (error) {
         if (error instanceof ApiError && error.code === 'conflict_detected') {
@@ -219,7 +244,13 @@ export function useDocumentSave({
     setNotice(null)
     try {
       const result = await sendBatch(current.operations)
-      commit(current.covered, sent, result.versionId, result.merged)
+      commit(
+        current.covered,
+        sent,
+        result.versionId,
+        result.merged,
+        result.lineage,
+      )
     } catch (error) {
       if (error instanceof ApiError && error.code === 'conflict_detected') {
         setStale(true)

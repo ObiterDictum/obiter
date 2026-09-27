@@ -81,6 +81,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
   const baseline = useSaveBaseline({
     history,
     model: scope.model,
+    modelVersionId: scope.baseVersionId,
     resolveState: (resolve) =>
       setBundle((current) => ({ ...current, state: resolve(current.state) })),
   })
@@ -192,9 +193,11 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     covered: readonly DraftSlot[],
     sent: DraftState,
     fromModel: DocumentModelWire,
+    lineage?: import('@obiter/contracts').DocumentVersionLineage,
+    versionId?: string,
   ) {
     clearSlots(covered, sent)
-    baseline.commit(covered, sent, fromModel)
+    baseline.commit(covered, sent, fromModel, lineage, versionId)
   }
 
   function resetDrafts() {

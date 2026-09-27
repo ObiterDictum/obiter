@@ -1,4 +1,7 @@
-import type { DocumentModelWire } from '@obiter/contracts'
+import type {
+  DocumentModelWire,
+  DocumentVersionLineage,
+} from '@obiter/contracts'
 import {
   flowParagraphIds,
   insertPlainText,
@@ -37,6 +40,13 @@ export type SaveBaseline = {
   /** The model the snapshots were recorded against. */
   fromModel: DocumentModelWire
   /**
+   * The authoritative lineage the server returned for the accepted batch. When
+   * present, identity is read from it rather than inferred from a diff.
+   */
+  lineage?: DocumentVersionLineage
+  /** The result version the lineage describes. */
+  versionId?: string
+  /**
    * The saved model, once the workspace has it. Absent between the commit and
    * the reloaded `/model` response, when an identity can only be a placeholder.
    */
@@ -69,6 +79,10 @@ type SavedIdentities = {
   insertedRuns: Map<string, string>
   /** Covered deleted paragraphId -> the surviving paragraph it re-inserts after. */
   restoredAnchors: Map<string, string>
+  /** Base paragraph id -> result paragraph id (authoritative lineage only). */
+  paragraphIds: Map<string, string>
+  /** Base run id -> the result run that continues it. */
+  runIds: Map<string, string>
 }
 
 /**
@@ -83,7 +97,15 @@ function savedIdentities(baseline: SaveBaseline): SavedIdentities {
   const inserted = new Map<string, string>()
   const insertedRuns = new Map<string, string>()
   const restoredAnchors = new Map<string, string>()
+  const paragraphIds = new Map<string, string>()
+  const runIds = new Map<string, string>()
   const { toModel, fromModel } = baseline
+
+  // The server's lineage is authoritative and is the only identity source when
+  // it is present. The diff below survives only for a server that predates it.
+  if (baseline.lineage && toModel) {
+    return lineageIdentities(baseline.lineage, toModel, baseline)
+  }
 
   const fromOrder = flowParagraphIds(fromModel, [], [])
   // A restored paragraph re-inserts after its nearest neighbour the save did
@@ -105,7 +127,8 @@ function savedIdentities(baseline: SaveBaseline): SavedIdentities {
     if (anchor) restoredAnchors.set(slot.paragraphId, anchor)
   }
 
-  if (!toModel) return { inserted, insertedRuns, restoredAnchors }
+  if (!toModel)
+    return { inserted, insertedRuns, restoredAnchors, paragraphIds, runIds }
 
   const toOrder = flowParagraphIds(toModel, [], [])
   const fromSet = new Set(fromOrder)
@@ -125,7 +148,80 @@ function savedIdentities(baseline: SaveBaseline): SavedIdentities {
       if (run) insertedRuns.set(insert.clientId, run)
     })
   }
-  return { inserted, insertedRuns, restoredAnchors }
+  return { inserted, insertedRuns, restoredAnchors, paragraphIds, runIds }
+}
+
+/**
+ * Reads identity from the server's authoritative lineage. A base run may map
+ * to several result runs (a split) or a result run may compose several base
+ * runs (a merge); the first result run that continues a base run is its
+ * address for a reversal, and a paragraph maps directly.
+ */
+function lineageIdentities(
+  lineage: DocumentVersionLineage,
+  toModel: DocumentModelWire,
+  baseline: SaveBaseline,
+): SavedIdentities {
+  const inserted = new Map<string, string>()
+  const insertedRuns = new Map<string, string>()
+  const restoredAnchors = new Map<string, string>()
+  const paragraphIds = new Map<string, string>()
+  const runIds = new Map<string, string>()
+
+  for (const entry of lineage.paragraphs) {
+    if (entry.fromParagraphId && entry.toParagraphId) {
+      paragraphIds.set(entry.fromParagraphId, entry.toParagraphId)
+    }
+    if (!entry.toParagraphId) continue
+    const paragraph = storyParagraph(toModel, entry.toParagraphId)
+    for (const run of entry.runs) {
+      const resultRunId = paragraph?.runs[run.runIndex]?.id
+      if (!resultRunId) continue
+      for (const segment of run.segments) {
+        if (segment.fromRunId && !runIds.has(segment.fromRunId)) {
+          runIds.set(segment.fromRunId, resultRunId)
+        }
+      }
+    }
+  }
+
+  const insertSlots = baseline.sent.inserts.filter((insert) =>
+    baseline.covered.some(
+      (slot) => slot.kind === 'insert' && slot.clientId === insert.clientId,
+    ),
+  )
+  const insertedParagraphs = lineage.paragraphs.filter(
+    (entry) => entry.fromParagraphId === null,
+  )
+  if (insertSlots.length === insertedParagraphs.length) {
+    insertSlots.forEach((insert, index) => {
+      const entry = insertedParagraphs[index]
+      if (!entry?.toParagraphId) return
+      inserted.set(insert.clientId, entry.toParagraphId)
+      const run = storyParagraph(toModel, entry.toParagraphId)?.runs[0]
+      if (run) insertedRuns.set(insert.clientId, run.id)
+    })
+  }
+
+  const fromOrder = flowParagraphIds(baseline.fromModel, [], [])
+  const deleted = new Set(
+    baseline.covered.flatMap((slot) =>
+      slot.kind === 'delete' ? [slot.paragraphId] : [],
+    ),
+  )
+  const surviving = new Set(fromOrder.filter((id) => !deleted.has(id)))
+  for (const slot of baseline.covered) {
+    if (slot.kind !== 'delete') continue
+    const anchor = nearestSurvivingPreceding(
+      fromOrder,
+      surviving,
+      slot.paragraphId,
+    )
+    if (!anchor) continue
+    restoredAnchors.set(slot.paragraphId, paragraphIds.get(anchor) ?? anchor)
+  }
+
+  return { inserted, insertedRuns, restoredAnchors, paragraphIds, runIds }
 }
 
 function firstRunId(model: DocumentModelWire, paragraphId: string) {
@@ -178,6 +274,7 @@ export function translateSnapshot(
   for (const slot of baseline.covered) {
     switch (slot.kind) {
       case 'run-text': {
+        const targetRunId = identities.runIds.get(slot.runId) ?? slot.runId
         const pre =
           snapshot.drafts[slot.runId] ?? runText(baseline.fromModel, slot.runId)
         const post =
@@ -187,19 +284,20 @@ export function translateSnapshot(
           delete next.drafts[slot.runId]
           break
         }
-        // The saved model re-parses run ids; an override on an id it no longer
-        // holds would be blocked as stale work, so the reversal is dropped.
         if (
           baseline.toModel &&
-          runText(baseline.toModel, slot.runId) === undefined
+          runText(baseline.toModel, targetRunId) === undefined
         ) {
           delete next.drafts[slot.runId]
           break
         }
-        next.drafts[slot.runId] = pre
+        delete next.drafts[slot.runId]
+        next.drafts[targetRunId] = pre
         break
       }
       case 'paragraph-style': {
+        const targetParagraphId =
+          identities.paragraphIds.get(slot.paragraphId) ?? slot.paragraphId
         const pre =
           snapshot.format.paragraphStyles[slot.paragraphId] ??
           storyParagraph(baseline.fromModel, slot.paragraphId)?.styleId
@@ -212,12 +310,13 @@ export function translateSnapshot(
         }
         if (
           baseline.toModel &&
-          storyParagraph(baseline.toModel, slot.paragraphId) === undefined
+          storyParagraph(baseline.toModel, targetParagraphId) === undefined
         ) {
           delete next.format.paragraphStyles[slot.paragraphId]
           break
         }
-        next.format.paragraphStyles[slot.paragraphId] = pre
+        delete next.format.paragraphStyles[slot.paragraphId]
+        next.format.paragraphStyles[targetParagraphId] = pre
         break
       }
       case 'insert': {

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'bun:test'
-import type { DocumentModelWire } from '@obiter/contracts'
+import type {
+  DocumentModelWire,
+  DocumentVersionLineage,
+} from '@obiter/contracts'
 import {
   emptyDraftState,
   isPendingBaselineId,
@@ -235,5 +238,117 @@ describe('translateSnapshot', () => {
         (operation) => operation.type === 'insert_paragraph_after',
       ),
     ).toBe(false)
+  })
+})
+
+/**
+ * The authoritative lineage is the identity source. These cases are the
+ * reviewer's wrong-target reproduction in miniature: a mid-document insert
+ * whose result positions shift cannot be resolved by an id set-difference, but
+ * the server names the stored paragraph directly.
+ */
+describe('lineage-driven identity', () => {
+  const baseModel = model([
+    { id: 'para-000001', run: 'text-000001', text: 'Alpha' },
+    { id: 'para-000002', run: 'text-000002', text: 'Beta' },
+    { id: 'para-000003', run: 'text-000003', text: 'Gamma' },
+  ])
+  const resultModel = model([
+    { id: 'para-w14-00000001', run: 'text-000001', text: 'Alpha' },
+    { id: 'para-w14-00000002', run: 'text-000002', text: 'Inserted' },
+    { id: 'para-w14-00000003', run: 'text-000003', text: 'Beta' },
+    { id: 'para-w14-00000004', run: 'text-000004', text: 'Gamma' },
+  ])
+  const lineage: DocumentVersionLineage = {
+    version: 1,
+    baseVersionId: 'ver_1',
+    versionId: 'ver_2',
+    acceptedOperations: [0],
+    paragraphs: [
+      {
+        fromParagraphId: 'para-000001',
+        toParagraphId: 'para-w14-00000001',
+        runs: [
+          {
+            runIndex: 0,
+            segments: [
+              { fromRunId: 'text-000001', fromOffset: 0, toOffset: 5 },
+            ],
+          },
+        ],
+      },
+      {
+        fromParagraphId: null,
+        toParagraphId: 'para-w14-00000002',
+        insertedByOperation: 0,
+        runs: [
+          {
+            runIndex: 0,
+            segments: [{ fromRunId: null, fromOffset: 0, toOffset: 0 }],
+          },
+        ],
+      },
+      {
+        fromParagraphId: 'para-000002',
+        toParagraphId: 'para-w14-00000003',
+        runs: [
+          {
+            runIndex: 0,
+            segments: [
+              { fromRunId: 'text-000002', fromOffset: 0, toOffset: 4 },
+            ],
+          },
+        ],
+      },
+      {
+        fromParagraphId: 'para-000003',
+        toParagraphId: 'para-w14-00000004',
+        runs: [
+          {
+            runIndex: 0,
+            segments: [
+              { fromRunId: 'text-000003', fromOffset: 0, toOffset: 5 },
+            ],
+          },
+        ],
+      },
+    ],
+  }
+
+  it('deletes the paragraph the save inserted, not the tail', () => {
+    const sent: DraftState = {
+      ...emptyDraftState(),
+      inserts: [
+        { clientId: 'c1', afterParagraphId: 'para-000001', text: 'Inserted' },
+      ],
+    }
+    const translated = translateSnapshot(emptyDraftState(), {
+      covered: [insertSlot('c1')],
+      sent,
+      fromModel: baseModel,
+      toModel: resultModel,
+      lineage,
+      versionId: 'ver_2',
+    })
+    // The snapshot predates the insert, so its reversal deletes exactly the
+    // stored paragraph. Gamma (para-000003) must not be touched.
+    expect(translated?.deletedParagraphIds).toEqual(['para-w14-00000002'])
+    expect(translated?.deletedParagraphIds).not.toContain('para-w14-00000004')
+  })
+
+  it('retargets a covered run-text reversal to the result run id', () => {
+    const sent: DraftState = {
+      ...emptyDraftState(),
+      drafts: { 'text-000003': 'Gamma edited' },
+    }
+    const translated = translateSnapshot(emptyDraftState(), {
+      covered: [runTextSlot('text-000003')],
+      sent,
+      fromModel: baseModel,
+      toModel: resultModel,
+      lineage,
+      versionId: 'ver_2',
+    })
+    expect(translated?.drafts).toEqual({ 'text-000004': 'Gamma' })
   })
 })
