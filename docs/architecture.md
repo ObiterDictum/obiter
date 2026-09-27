@@ -730,7 +730,10 @@ restricted to image package paths. Responses are built only by
 and a non-executable Content-Security-Policy while preserving each part's
 `Content-Type` so the frontend can fetch blobs for `<img>` rendering. The route
 keeps an LRU cache of unzipped image parts for at most 16 immutable versions
-per API process and serves later image requests from that cache. The React page
+and 64 MiB of retained image bytes per API process, evicts the least recently
+used entry when either bound is crossed, and serves later image requests from
+that cache. A version whose image parts exceed the byte budget is served but
+not retained. The React page
 interprets preserved `w:tbl` fragments and drawing extents for display only:
 React tables and `<img>`, never HTML strings of OOXML. Binary media stays out
 of `model.json`. Page size, margins, fonts, run size, paragraph spacing, and
