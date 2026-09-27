@@ -76,9 +76,9 @@ async function server(initial: readonly string[]) {
       lineage,
     }
   }
-  let lastSave: Promise<unknown> = Promise.resolve()
+  let lastSave: Promise<void> = Promise.resolve()
   const editAsync = vi.fn((input: { operations?: DocumentEditOperation[] }) => {
-    lastSave = apply(input.operations ?? [])
+    lastSave = apply(input.operations ?? []).then(() => undefined)
     return lastSave
   })
   return {
@@ -124,7 +124,7 @@ function renderedParagraphCount() {
 type SaveTarget =
   | {
       editAsync: ReturnType<typeof vi.fn>
-      waitForSave: () => Promise<unknown>
+      waitForSave: () => Promise<void>
     }
   | ReturnType<typeof vi.fn>
 

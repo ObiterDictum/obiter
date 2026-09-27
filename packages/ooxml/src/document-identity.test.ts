@@ -7,7 +7,9 @@ import {
   serialiseDocx,
 } from './index'
 
-function documentParagraphs(model: Awaited<ReturnType<typeof parseDocx>>['model']) {
+function documentParagraphs(
+  model: Awaited<ReturnType<typeof parseDocx>>['model'],
+) {
   return (
     model.stories.find((story) => story.kind === 'document')?.paragraphs ?? []
   )

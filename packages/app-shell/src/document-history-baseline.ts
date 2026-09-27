@@ -337,11 +337,6 @@ function lineageIdentities(
   }
 }
 
-function firstRunId(model: DocumentModelWire, paragraphId: string) {
-  const paragraph = storyParagraph(model, paragraphId)
-  return paragraph?.runs[0]?.id
-}
-
 function nearestSurvivingPreceding(
   order: readonly string[],
   surviving: ReadonlySet<string>,
