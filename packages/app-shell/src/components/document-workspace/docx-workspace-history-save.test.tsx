@@ -78,8 +78,9 @@ async function server(initial: readonly string[]) {
   }
   let lastSave: Promise<void> = Promise.resolve()
   const editAsync = vi.fn((input: { operations?: DocumentEditOperation[] }) => {
-    lastSave = apply(input.operations ?? []).then(() => undefined)
-    return lastSave
+    const result = apply(input.operations ?? [])
+    lastSave = result.then(() => undefined)
+    return result
   })
   return {
     editAsync,
@@ -136,15 +137,17 @@ async function clickSaveAndSettle(target: SaveTarget, calls: number) {
   fireEvent.click(saveButton())
   const mock = saveMock(target)
   await waitFor(() => expect(mock).toHaveBeenCalledTimes(calls))
-  // The real pipeline is asynchronous: wait for the request to resolve and for
-  // React to apply the commit/reload before the caller inspects persisted state.
-  await act(async () => {
-    if (typeof target !== 'function' && 'waitForSave' in target) {
+  // The real pipeline is asynchronous: wait for the request to resolve before
+  // the caller inspects persisted state.
+  if (typeof target !== 'function' && 'waitForSave' in target) {
+    await act(async () => {
       await target.waitForSave()
-    } else {
+    })
+  } else {
+    await act(async () => {
       await Promise.resolve()
-    }
-  })
+    })
+  }
 }
 
 describe('undo across a successful save', () => {

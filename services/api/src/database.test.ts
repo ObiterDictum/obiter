@@ -177,6 +177,8 @@ describe('matter workspace database operations', () => {
       'a'.repeat(64),
       'synced',
       'usr_1',
+      // E50 lineage column: null for an initial upload.
+      null,
     ])
     expect(versionParams?.[7]).toBe(
       `org/org_1/matters/mtr_1/documents/doc_1/versions/${String(versionParams?.[0])}/source`,
