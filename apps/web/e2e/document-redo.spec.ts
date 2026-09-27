@@ -77,7 +77,7 @@ async function signIn(page: Page) {
 }
 
 /** Opens the synthetic fixture through the product's own navigation. */
-async function openFixtureDocument(page: Page) {
+async function openFixtureDocument(page: Page, matter = matterName) {
   await signIn(page)
 
   await page.getByRole('link', { name: 'Matters' }).first().click()
@@ -85,11 +85,11 @@ async function openFixtureDocument(page: Page) {
     page.getByRole('heading', { name: 'Matters', exact: true }),
   ).toBeVisible({ timeout: 20_000 })
 
-  const matterLink = page.getByRole('link', { name: matterName }).first()
+  const matterLink = page.getByRole('link', { name: matter }).first()
   if ((await matterLink.count()) === 0) {
     await page.getByRole('button', { name: 'Create matter' }).first().click()
     await check(page.getByRole('dialog')).toBeVisible({ timeout: 20_000 })
-    await page.getByLabel('Matter name').fill(matterName)
+    await page.getByLabel('Matter name').fill(matter)
     await page.getByLabel('Primary jurisdiction').fill('England & Wales')
     await page
       .getByRole('button', { name: 'Create matter', exact: true })
@@ -97,7 +97,7 @@ async function openFixtureDocument(page: Page) {
       .click()
     await page.keyboard.press('Escape')
   }
-  await page.getByRole('link', { name: matterName }).first().click()
+  await page.getByRole('link', { name: matter }).first().click()
   await check(page).toHaveURL(/\/matters\//, { timeout: 20_000 })
 
   const fixtureName = path.basename(fixture ?? '')
@@ -122,6 +122,15 @@ const undo = (page: Page) => page.getByRole('button', { name: 'Undo' })
 const save = (page: Page) => page.getByRole('button', { name: 'Save' })
 const paragraph = (page: Page, text: string) =>
   page.locator('[data-paragraph-id]', { hasText: text }).first()
+
+/** Distinct paragraphs rendered, counting a block split across pages once. */
+function uniqueParagraphCount(page: Page) {
+  return page.$$eval(
+    '[data-paragraph-id]',
+    (nodes) =>
+      new Set(nodes.map((node) => node.getAttribute('data-paragraph-id'))).size,
+  )
+}
 
 /** Clicks a paragraph until its editor holds the focus. */
 async function focusParagraph(page: Page, text: string) {
@@ -157,6 +166,42 @@ async function typeInParagraph(page: Page, text: string, marker: string) {
 async function clickControl(locator: ReturnType<Page['getByRole']>) {
   if (capturing && (await locator.isDisabled().catch(() => true))) return
   await locator.click()
+}
+
+/**
+ * Clicks when the control is enabled in either mode, so a stage that the
+ * repaired checkout correctly disables does not hang the run.
+ */
+async function clickIfEnabled(locator: ReturnType<Page['getByRole']>) {
+  if (await locator.isDisabled().catch(() => true)) return
+  await locator.click()
+}
+
+/** Waits for the rendered paragraph count to settle on a value. */
+async function waitForParagraphCount(
+  page: Page,
+  expected: number,
+  label: string,
+) {
+  if (capturing) {
+    check(await uniqueParagraphCount(page), label).toBe(expected)
+    return
+  }
+  await expect
+    .poll(() => uniqueParagraphCount(page), { message: label })
+    .toBe(expected)
+}
+
+/** The count once two consecutive reads agree, so a late render is not read mid-flight. */
+async function settledParagraphCount(page: Page) {
+  let previous = -1
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const current = await uniqueParagraphCount(page)
+    if (current > 0 && current === previous) return current
+    previous = current
+    await page.waitForTimeout(100)
+  }
+  return previous
 }
 
 test.describe('redo in a browser', () => {
@@ -309,5 +354,91 @@ test.describe('redo in a browser', () => {
     await page.keyboard.press('Control+Shift+Z')
     await check(editor(page)).toHaveValue(/NEVER-UNDONE$/)
     await shot(page, '15-redo-disabled-with-no-branch')
+  })
+
+  test('does not resave a paragraph a successful save already covered', async ({
+    page,
+    browser,
+  }) => {
+    // Its own matter so a previous run's saved insert cannot move the count.
+    const matter = `${matterName} duplicate ${String(Date.now())}`
+    await openFixtureDocument(page, matter)
+
+    await focusParagraph(page, 'Paragraph 1.')
+    const before = await settledParagraphCount(page)
+
+    // Insert a paragraph, then type so Undo has a text step while the insert
+    // itself stays in the draft state.
+    await page.getByRole('button', { name: 'Insert paragraph' }).click()
+    const pending = page.getByLabel('Pending paragraph text', { exact: true })
+    await check(pending).toBeVisible({ timeout: 10_000 })
+    await pending.pressSequentially('X')
+    await clickControl(undo(page))
+    await check(pending).toHaveValue(/^$/)
+
+    // Saving covers the insert, which ends the redo branch: a redo would
+    // restore the snapshot that still holds it and the next save would insert
+    // a second copy.
+    await clickControl(save(page))
+    await check(save(page)).toBeDisabled({ timeout: 30_000 })
+    await check(redo(page)).toBeDisabled({ timeout: 30_000 })
+    await shot(page, '16-save-covered-the-insert')
+    await clickIfEnabled(redo(page))
+    await clickIfEnabled(save(page))
+    await check(save(page)).toBeDisabled({ timeout: 30_000 })
+
+    // A fresh context reads the stored version back: exactly one paragraph was
+    // added, not two.
+    const fresh = await browser.newContext()
+    const reloaded = await fresh.newPage()
+    try {
+      await openFixtureDocument(reloaded, matter)
+      await waitForParagraphCount(
+        reloaded,
+        before + 1,
+        'no duplicate paragraph',
+      )
+      await shot(reloaded, '17-no-duplicate-after-save-redo-save')
+    } finally {
+      await fresh.close()
+    }
+  })
+
+  test('moves focus to a surviving paragraph when a redo removes the stored one', async ({
+    page,
+  }) => {
+    await openFixtureDocument(page)
+    await focusParagraph(page, 'Paragraph 1.')
+    const before = await settledParagraphCount(page)
+
+    // Join 'Paragraph 2.' into 'Paragraph 1.', then undo so the redo deletes
+    // the same stored paragraph again.
+    await focusParagraph(page, 'Paragraph 2.')
+    await page.keyboard.press('Control+Home')
+    await page.keyboard.press('Backspace')
+    await waitForParagraphCount(
+      page,
+      before - 1,
+      'paragraph removed by the join',
+    )
+    await clickControl(undo(page))
+    await waitForParagraphCount(page, before, 'paragraph restored by undo')
+
+    // Park the caret on the paragraph the redo is about to remove.
+    await focusParagraph(page, 'Paragraph 2.')
+    await clickControl(redo(page))
+    await waitForParagraphCount(
+      page,
+      before - 1,
+      'paragraph removed by the redo',
+    )
+
+    // Focus must land on the surviving paragraph, not the body, and the next
+    // typed character must go there.
+    const surviving = editor(page)
+    await check(surviving).toBeFocused()
+    await page.keyboard.type('Z')
+    await check(surviving).toHaveValue(/Z$/)
+    await shot(page, '18-focus-recovered-after-structural-redo')
   })
 })

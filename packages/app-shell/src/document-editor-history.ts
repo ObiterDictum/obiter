@@ -49,6 +49,17 @@ export function useWorkspaceDraftHistory() {
     setFuture([])
   }
 
+  /**
+   * Ends the redo branch without touching undo history or the current state.
+   * A successful save is a new baseline: every snapshot the branch holds was
+   * taken while the saved slots were still pending, so replaying one would
+   * reintroduce them as unsaved work and a later save would resend them. Undo
+   * history and anything typed but not yet saved are deliberately left alone.
+   */
+  function discardRedo() {
+    setFuture([])
+  }
+
   function stepBack(current: WorkspaceDraftSnapshot) {
     const popped = popWorkspaceDraft(past)
     if (!popped) return null
@@ -68,6 +79,7 @@ export function useWorkspaceDraftHistory() {
   return {
     record,
     clear,
+    discardRedo,
     stepBack,
     stepForward,
     canUndo: past.length > 0,

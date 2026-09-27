@@ -5,13 +5,18 @@ import { handleDocumentWorkspaceKeys } from './document-workspace-keys'
 
 function event(
   key: string,
-  extras: { shiftKey?: boolean; target?: EventTarget | null } = {},
+  extras: {
+    shiftKey?: boolean
+    altKey?: boolean
+    target?: EventTarget | null
+  } = {},
 ) {
   return {
     key,
     metaKey: false,
     ctrlKey: true,
     shiftKey: extras.shiftKey ?? false,
+    altKey: extras.altKey ?? false,
     preventDefault: vi.fn(),
     target: extras.target,
   }
@@ -58,6 +63,25 @@ describe('document workspace keys', () => {
     })
     handleDocumentWorkspaceKeys(event('y'), { save: vi.fn(), undo })
     expect(undo).not.toHaveBeenCalled()
+  })
+
+  it('ignores Alt and AltGr combinations for redo', () => {
+    const redo = vi.fn()
+    const handlers = { save: vi.fn(), redo }
+
+    // AltGr reports as Ctrl+Alt on Windows, so an Alt-combined Y or Shift+Z
+    // is a character shortcut, not a redo request.
+    handleDocumentWorkspaceKeys(event('y', { altKey: true }), handlers)
+    handleDocumentWorkspaceKeys(
+      event('z', { altKey: true, shiftKey: true }),
+      handlers,
+    )
+    expect(redo).not.toHaveBeenCalled()
+
+    // The intended bindings still route.
+    handleDocumentWorkspaceKeys(event('y'), handlers)
+    handleDocumentWorkspaceKeys(event('z', { shiftKey: true }), handlers)
+    expect(redo).toHaveBeenCalledTimes(2)
   })
 
   it('does not intercept undo, redo or find inside the find and comments fields', () => {

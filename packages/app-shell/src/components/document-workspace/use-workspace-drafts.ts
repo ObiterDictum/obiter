@@ -80,7 +80,6 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
   )
   const bundleRef = useRef(bundle)
   bundleRef.current = bundle
-
   const storage = draftStorage()
   const session = sessionDraftStorage()
 
@@ -468,6 +467,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     discardRecoverable,
     undoDraft,
     redoDraft,
+    discardRedo: history.discardRedo,
     handleWordEdit,
     replaceDocumentRange,
     splitDocumentRange,

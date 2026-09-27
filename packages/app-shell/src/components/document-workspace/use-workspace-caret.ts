@@ -1,6 +1,7 @@
 import { useMemo, useRef, useState } from 'react'
 import type { DocumentModelWire } from '@obiter/contracts'
 import { flowParagraphIds } from '../../document-edits'
+import { historyCaretPlacement } from '../../document-history-caret'
 import { cursorForSelection, documentStory } from '../../document-model-text'
 import {
   documentRangeRefusal,
@@ -396,32 +397,22 @@ export function useWorkspaceCaret({
 
   /**
    * Runs one history step and keeps the caret on a paragraph the restored
-   * state still renders: an insert the step removed falls back to the
-   * paragraph it was anchored after, and an insert the step restored takes the
-   * caret. A surviving insert keeps the caret and the editor clamps its offset.
+   * state still renders. The placement itself is pure; this only applies it
+   * and clears the document selection the step invalidated.
    */
   function runHistoryStep(step: () => ReturnType<typeof drafts.undoDraft>) {
-    const before = drafts.inserts
+    const before = {
+      inserts: drafts.inserts,
+      deletedParagraphIds: drafts.deletedParagraphIds,
+    }
     const restored = step()
     if (!restored || !model) return
     setSelection(null)
     setSelectionRefusal(null)
     const anchor = restoreCaret?.paragraphId ?? selectedParagraphId
     if (!anchor) return
-    const gone = before.find((item) => item.clientId === anchor)
-    if (gone && !restored.inserts.some((item) => item.clientId === anchor)) {
-      selectParagraph(
-        gone.afterParagraphId,
-        blockText(model, restored, gone.afterParagraphId).length,
-      )
-      return
-    }
-    const added = restored.inserts.find(
-      (item) =>
-        item.afterParagraphId === anchor &&
-        !before.some((prior) => prior.clientId === item.clientId),
-    )
-    if (added) selectParagraph(added.clientId, 0)
+    const placement = historyCaretPlacement({ model, before, restored, anchor })
+    if (placement) selectParagraph(placement.paragraphId, placement.offset)
   }
 
   function undoDocument() {
