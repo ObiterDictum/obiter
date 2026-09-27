@@ -1,66 +1,32 @@
 import { afterEach, describe, expect, it } from 'bun:test'
 import { vi } from '../../../../scripts/test/vitest-compat'
 import { createChangelogRoutes } from './changelog'
+import {
+  START,
+  clockFrom,
+  commit,
+  commitEntry,
+  githubFetch,
+  json,
+  release,
+  releaseEntry,
+} from './changelog-test-helpers'
 
 /**
  * The route is anonymous, so its upstream traffic bound has to hold under
  * repeated, concurrent and failing requests. Every test drives the real route
- * with a mocked GitHub boundary and a controllable clock; none of them touch
- * the network.
+ * with a mocked GitHub boundary and a controllable clock. None touch the
+ * network.
  *
  * The documented policy these tests hold to: 10-minute fresh interval,
- * 2-minute failure cooldown, stale data served for at most 24 hours, 5-second
- * upstream deadline. Tests use concrete windows rather than importing the
- * constants so a policy change has to be made deliberately, here as well.
+ * 2-minute failure cooldown, 60-second minimum throttle cooldown, provider
+ * delays honoured up to a 24-hour cap, a 24-hour inclusive stale window,
+ * 5-second upstream deadline, 30 upstream requests per rolling hour and a
+ * 64 KiB upstream body cap. Tests use concrete windows rather than importing
+ * the constants so a policy change has to be made deliberately, here as well.
+ * Throttle, budget, payload and link bounds live in
+ * changelog-upstream-bounds.test.ts.
  */
-
-const release = {
-  html_url: 'https://github.com/ObiterDictum/obiter/releases/tag/v1',
-  name: 'Initial search release',
-  published_at: '2026-05-22T10:00:00Z',
-  tag_name: 'v1',
-}
-const releaseEntry = {
-  date: '2026-05-22',
-  title: 'Initial search release',
-  url: 'https://github.com/ObiterDictum/obiter/releases/tag/v1',
-}
-
-const commit = {
-  html_url: 'https://github.com/ObiterDictum/obiter/commit/abc1234',
-  sha: 'abc1234567890',
-  commit: {
-    message: 'Cache the public changelog\n\nExplains why.',
-    author: { date: '2026-06-01T09:00:00Z' },
-  },
-}
-const commitEntry = {
-  date: '2026-06-01',
-  title: 'Cache the public changelog',
-  url: 'https://github.com/ObiterDictum/obiter/commit/abc1234',
-}
-
-const json = (body: unknown, init?: ResponseInit) =>
-  new Response(JSON.stringify(body), { status: 200, ...init })
-
-function clockFrom(start: number) {
-  let current = start
-  return {
-    now: () => current,
-    advance: (ms: number) => {
-      current += ms
-    },
-  }
-}
-
-function githubFetch(
-  releases: (init?: RequestInit) => Promise<Response>,
-  commits: (init?: RequestInit) => Promise<Response>,
-) {
-  return vi.fn(async (input: string | URL, init?: RequestInit) =>
-    String(input).includes('/releases') ? releases(init) : commits(init),
-  )
-}
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -68,7 +34,7 @@ afterEach(() => {
 
 describe('GET /api/changelog upstream bounds', () => {
   it('serves a fresh cache hit without another upstream request', async () => {
-    const clock = clockFrom(1_000_000)
+    const clock = clockFrom(START)
     const fetchMock = githubFetch(
       async () => json([release]),
       async () => json([commit]),
@@ -89,7 +55,7 @@ describe('GET /api/changelog upstream bounds', () => {
   })
 
   it('shares one refresh across concurrent cold callers', async () => {
-    const clock = clockFrom(1_000_000)
+    const clock = clockFrom(START)
     const fetchMock = githubFetch(
       async () => json([release]),
       async () => json([commit]),
@@ -108,7 +74,7 @@ describe('GET /api/changelog upstream bounds', () => {
   })
 
   it('shares one refresh across concurrent callers after expiry', async () => {
-    const clock = clockFrom(1_000_000)
+    const clock = clockFrom(START)
     const fetchMock = githubFetch(
       async () => json([release]),
       async () => json([commit]),
@@ -128,7 +94,7 @@ describe('GET /api/changelog upstream bounds', () => {
   })
 
   it('falls back to commits when releases is empty', async () => {
-    const clock = clockFrom(1_000_000)
+    const clock = clockFrom(START)
     const fetchMock = githubFetch(
       async () => json([]),
       async () => json([commit]),
@@ -146,7 +112,7 @@ describe('GET /api/changelog upstream bounds', () => {
   })
 
   it('does not call commits when releases is rate limited', async () => {
-    const clock = clockFrom(1_000_000)
+    const clock = clockFrom(START)
     const fetchMock = githubFetch(
       async () =>
         new Response('rate limited', {
@@ -167,21 +133,27 @@ describe('GET /api/changelog upstream bounds', () => {
     // One throttled releases attempt, and no fallback storm behind it.
     expect(fetchMock).toHaveBeenCalledTimes(1)
 
-    // The retry-after delay is honoured with a bounded wait, not immediately.
+    // The 30-second provider delay is shorter than the 60-second local floor,
+    // so it is ignored rather than allowed to retry sooner.
     clock.advance(31_000)
+    await app.request('/api/changelog')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    clock.advance(30_000)
     await app.request('/api/changelog')
     expect(fetchMock.mock.calls.length).toBeGreaterThan(1)
   })
 
   it('treats a 403 rate limit as throttling and respects the reset header', async () => {
-    const clock = clockFrom(1_000_000)
+    const clock = clockFrom(START)
     const fetchMock = githubFetch(
       async () =>
         new Response('rate limited', {
           status: 403,
           headers: {
             'x-ratelimit-remaining': '0',
-            'x-ratelimit-reset': '1020',
+            // START is epoch 1000 s, so 1120 is two minutes out.
+            'x-ratelimit-reset': '1120',
           },
         }),
       async () => json([commit]),
@@ -193,8 +165,8 @@ describe('GET /api/changelog upstream bounds', () => {
     expect(first.status).toBe(503)
     expect(fetchMock).toHaveBeenCalledTimes(1)
 
-    // The reset is 20 seconds away; a request before then must not retry.
-    clock.advance(19_000)
+    // The reset is two minutes away; a request before then must not retry.
+    clock.advance(119_000)
     await app.request('/api/changelog')
     expect(fetchMock).toHaveBeenCalledTimes(1)
 
@@ -204,7 +176,7 @@ describe('GET /api/changelog upstream bounds', () => {
   })
 
   it('falls through to commits on a plain permission failure', async () => {
-    const clock = clockFrom(1_000_000)
+    const clock = clockFrom(START)
     const fetchMock = githubFetch(
       async () => new Response('forbidden', { status: 403 }),
       async () => json([commit]),
@@ -221,8 +193,8 @@ describe('GET /api/changelog upstream bounds', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
   })
 
-  it('applies a failure cooldown so repeated failures do not amplify', async () => {
-    const clock = clockFrom(1_000_000)
+  it('uses both upstream requests on a plain failure and then cools down', async () => {
+    const clock = clockFrom(START)
     const fetchMock = githubFetch(
       async () => new Response('down', { status: 502 }),
       async () => new Response('down', { status: 502 }),
@@ -244,7 +216,7 @@ describe('GET /api/changelog upstream bounds', () => {
   })
 
   it('rejects a malformed releases body and falls back safely', async () => {
-    const clock = clockFrom(1_000_000)
+    const clock = clockFrom(START)
     const fetchMock = githubFetch(
       async () => json(null),
       async () => json([commit]),
@@ -265,7 +237,7 @@ describe('GET /api/changelog upstream bounds', () => {
   })
 
   it('rejects releases entries missing required fields', async () => {
-    const clock = clockFrom(1_000_000)
+    const clock = clockFrom(START)
     const fetchMock = githubFetch(
       async () => json([{ tag_name: 'v1' }]),
       async () => json([commit]),
@@ -282,7 +254,7 @@ describe('GET /api/changelog upstream bounds', () => {
   })
 
   it('rejects a malformed commits body without caching it', async () => {
-    const clock = clockFrom(1_000_000)
+    const clock = clockFrom(START)
     const fetchMock = githubFetch(
       async () => json([]),
       async () => json({ commits: 'nope' }),
@@ -304,7 +276,7 @@ describe('GET /api/changelog upstream bounds', () => {
   })
 
   it('serves an empty commits result as github_commits', async () => {
-    const clock = clockFrom(1_000_000)
+    const clock = clockFrom(START)
     const fetchMock = githubFetch(
       async () => json([]),
       async () => json([]),
@@ -322,7 +294,7 @@ describe('GET /api/changelog upstream bounds', () => {
   })
 
   it('serves stale data during a failure within the stale window', async () => {
-    const clock = clockFrom(1_000_000)
+    const clock = clockFrom(START)
     let failing = false
     const fetchMock = githubFetch(
       async () =>
@@ -345,8 +317,8 @@ describe('GET /api/changelog upstream bounds', () => {
     })
   })
 
-  it('returns github_unavailable once stale data is past the stale window', async () => {
-    const clock = clockFrom(1_000_000)
+  it('stops serving stale data exactly one millisecond past the 24-hour boundary', async () => {
+    const clock = clockFrom(START)
     let failing = false
     const fetchMock = githubFetch(
       async () =>
@@ -357,20 +329,29 @@ describe('GET /api/changelog upstream bounds', () => {
     const app = createChangelogRoutes({ now: clock.now })
 
     await app.request('/api/changelog')
-    // Past the 24-hour stale cap, so stale data is no longer served silently.
-    clock.advance(25 * 60 * 60_000)
     failing = true
 
-    const response = await app.request('/api/changelog')
-    expect(response.status).toBe(503)
-    expect(await response.json()).toEqual({
+    // The boundary is inclusive: exactly 24 hours still serves the cache.
+    clock.advance(24 * 60 * 60_000)
+    const atBoundary = await app.request('/api/changelog')
+    expect(atBoundary.status).toBe(200)
+    expect(await atBoundary.json()).toEqual({
+      entries: [releaseEntry],
+      source: 'github_releases',
+    })
+
+    // One millisecond later the cache is past the cap and the route is 503.
+    clock.advance(1)
+    const pastBoundary = await app.request('/api/changelog')
+    expect(pastBoundary.status).toBe(503)
+    expect(await pastBoundary.json()).toEqual({
       entries: [],
       source: 'github_unavailable',
     })
   })
 
   it('releases in-flight state after an upstream timeout', async () => {
-    const clock = clockFrom(1_000_000)
+    const clock = clockFrom(START)
     const fetchMock = vi.fn(
       (_input: string | URL, init?: RequestInit) =>
         new Promise<Response>((_resolve, reject) => {

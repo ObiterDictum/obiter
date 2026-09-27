@@ -1527,25 +1527,40 @@ change's fail-first tests.
 Decision: bound the route at the module that owns it. One application-owned
 cache slot holds the last validated body (the resource is fixed, so there is
 no key space to evict); concurrent cold or expired callers share one refresh;
-a failure sets a two-minute cooldown; a throttle sets a cooldown derived from
-`Retry-After` or `x-ratelimit-reset`, clamped to between one second and fifteen
-minutes so a missing, malformed or implausibly distant value can neither retry
-immediately nor park refreshes indefinitely; each upstream request is aborted
-after five seconds; and a successful result is served for at most twenty-four
-hours after a failure, after which the route answers `503` with
-`github_unavailable`. Fresh results are reused for ten minutes, so a healthy
-process makes at most twelve refreshes an hour. At most two upstream requests
-are made per refresh, releases then commits, and a throttled releases response
-ends the refresh rather than triggering the fallback. Upstream bodies are
-validated against the expected shape before caching, so a malformed response
-cannot replace a good one. The releases-first, commits-fallback order and both
-response shapes are unchanged; only the `source` values already in use are
-returned.
+a failure sets a two-minute cooldown; a throttle sets a cooldown of at least a
+minute, extended by any longer valid `Retry-After` or `x-ratelimit-reset`
+value and capped at a day so a malformed or hostile header can neither retry
+immediately, overflow the clock nor park refreshes indefinitely; and each
+upstream request is aborted after five seconds, which also aborts the response
+body. Independently of those intervals, one rolling per-process budget allows
+at most thirty upstream HTTP requests in any hour, spent before each request so
+successes, failures, the commits fallback and throttled refreshes all draw on
+it. A refresh costs one request when releases is non-empty and two when the
+commits fallback runs, and the initial cold refresh counts like any other. A
+single upstream body is rejected unparsed past a 64 KiB cap, entry arrays past
+five entries, and fields past their documented size, and `html_url` is accepted
+only as an `https://github.com` link because it is rendered as an anchor href.
+A successful result is served for at most twenty-four hours after a failure,
+inclusively: at exactly the cap the cached body is still returned, and one
+millisecond later the route answers `503` with `github_unavailable`. A stale
+body inside the window is byte-identical to a fresh one, including its
+`source`, so consumers cannot distinguish them; that is the policy, not an
+oversight. Upstream bodies are validated against the expected shape before
+caching, so a malformed response cannot replace a good one. The releases-first,
+commits-fallback order and both response shapes are unchanged; only the
+`source` values already in use are returned.
 
 Outcome: no dependency, credential, shared cache, background poller or
-deployment change. The bound is per API process, so N replicas multiply it N
-times; it is not a global quota, and without a credential each egress IP still
-shares GitHub's unauthenticated allowance. Deliberately not done here: the
-route is not rate-limited per caller, because the resource is fixed and the
-cache makes per-caller limiting unnecessary. No logging was added, so no
-request or upstream data can leak into a log line.
+deployment change. The ceiling is thirty requests per rolling hour per API
+process, half of GitHub's 60-requests-per-hour unauthenticated allowance, which
+leaves headroom for the initial burst and for other callers. It is per process,
+so N replicas multiply it N times, and it does not account for any other client
+sharing the same egress IP; together those can still exhaust the shared
+unauthenticated allowance. In the healthy paths the route makes about six
+requests an hour when releases succeeds and about twelve when the commits
+fallback is used; under sustained failure, throttle or fallback the budget
+still holds at thirty. Deliberately not done here: the route is not
+rate-limited per caller, because the resource is fixed and the cache makes
+per-caller limiting unnecessary, and no staleness marker is added because the
+response contract is unchanged. No logging was added, so no request or
+upstream data can leak into a log line.

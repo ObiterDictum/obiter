@@ -11,13 +11,16 @@ import { z } from 'zod'
  *
  * At most two upstream requests are made per refresh: releases, then commits
  * only when releases is empty or unusable. A throttled releases response ends
- * the refresh, so a rate limit cannot trigger the commits fallback.
+ * the refresh, so a rate limit cannot trigger the commits fallback. Regardless
+ * of regime, every one of those requests draws on the same rolling
+ * {@link CHANGELOG_REQUEST_BUDGET}, which is the route's hard ceiling.
  *
- * The bound is per API process, so N replicas multiply it N times; it is not a
- * global quota. No credential, shared cache or background polling is used.
+ * The bound is per API process, so N replicas multiply it N times, and any
+ * other client sharing the egress IP also draws on GitHub's unauthenticated
+ * allowance. No credential, shared cache or background polling is used.
  */
 
-/** Fresh results are reused for ten minutes: at most 12 refreshes an hour. */
+/** Fresh results are reused for ten minutes: about six refreshes an hour. */
 export const CHANGELOG_FRESH_TTL_MS = 10 * 60_000
 
 /** A failed refresh is not retried for two minutes: at most 30 an hour. */
@@ -29,32 +32,77 @@ export const CHANGELOG_STALE_MAX_MS = 24 * 60 * 60_000
 /** Each upstream request is aborted after five seconds. */
 export const CHANGELOG_UPSTREAM_TIMEOUT_MS = 5_000
 
-const THROTTLE_COOLDOWN_MIN_MS = 1_000
-const THROTTLE_COOLDOWN_MAX_MS = 15 * 60_000
+/**
+ * Hard per-process ceiling on upstream HTTP requests inside any rolling hour.
+ * GitHub's unauthenticated allowance is 60 requests/hour/IP, so 30 leaves 2x
+ * headroom for other replicas or clients sharing the egress IP. The budget is
+ * spent per request, not per refresh, so successes, failures, the commits
+ * fallback and throttled refreshes all draw on it.
+ */
+export const CHANGELOG_REQUEST_BUDGET = 30
+export const CHANGELOG_REQUEST_WINDOW_MS = 60 * 60_000
+
+/**
+ * A throttled refresh waits at least a minute, GitHub's secondary-rate-limit
+ * guidance. A valid provider delay can extend that; it can never shorten it.
+ */
+export const CHANGELOG_THROTTLE_MIN_COOLDOWN_MS = 60_000
+
+/**
+ * A provider delay beyond a day is treated as extreme and capped, so a
+ * malformed or hostile header cannot park refreshes indefinitely. An hour is
+ * far below this and is honoured as sent.
+ */
+export const CHANGELOG_COOLDOWN_MAX_MS = 24 * 60 * 60_000
+
+/** A single upstream body is rejected, unparsed, once it passes this size. */
+export const CHANGELOG_MAX_BODY_BYTES = 64 * 1024
+
+/** GitHub's own per_page cap; a larger array is treated as malformed. */
+export const CHANGELOG_MAX_ENTRIES = 5
 
 const RELEASES_URL =
   'https://api.github.com/repos/ObiterDictum/obiter/releases?per_page=5'
 const COMMITS_URL =
   'https://api.github.com/repos/ObiterDictum/obiter/commits?sha=dev&per_page=5'
 
+/**
+ * Release and commit bodies are untrusted, and `html_url` is rendered as an
+ * anchor href. Restrict it to the GitHub origin: `z.string().url()` would also
+ * accept `javascript:` and other unwanted schemes.
+ */
+function isGithubLink(value: string): boolean {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' && url.hostname === 'github.com'
+  } catch {
+    return false
+  }
+}
+
+const githubLinkSchema = z
+  .string()
+  .max(2048)
+  .refine(isGithubLink, 'must be an https://github.com link')
+
 const githubReleaseSchema = z.object({
-  html_url: z.string(),
-  name: z.string().nullable(),
-  published_at: z.string().nullable(),
-  tag_name: z.string(),
+  html_url: githubLinkSchema,
+  name: z.string().max(300).nullable(),
+  published_at: z.string().max(40).nullable(),
+  tag_name: z.string().max(300),
 })
 
 const githubCommitSchema = z.object({
-  html_url: z.string(),
-  sha: z.string(),
+  html_url: githubLinkSchema,
+  sha: z.string().max(64),
   commit: z.object({
-    message: z.string(),
-    author: z.object({ date: z.string().optional() }).nullish(),
+    message: z.string().max(4096),
+    author: z.object({ date: z.string().max(40).optional() }).nullish(),
   }),
 })
 
-const releasesSchema = z.array(githubReleaseSchema)
-const commitsSchema = z.array(githubCommitSchema)
+const releasesSchema = z.array(githubReleaseSchema).max(CHANGELOG_MAX_ENTRIES)
+const commitsSchema = z.array(githubCommitSchema).max(CHANGELOG_MAX_ENTRIES)
 
 type ChangelogEntry = { date: string | null; title: string; url: string }
 type ChangelogBody = {
@@ -68,7 +116,7 @@ type RefreshOutcome =
 
 type UpstreamOutcome<T> =
   | { kind: 'ok'; value: T }
-  | { kind: 'throttled'; retryDelayMs: number }
+  | { kind: 'throttled'; cooldownMs: number }
   | { kind: 'unavailable' }
 
 const UNAVAILABLE_BODY: ChangelogBody = {
@@ -105,44 +153,92 @@ function isRateLimited(response: Response): boolean {
   )
 }
 
-/** Clamp a header-derived delay, rejecting zeroes and non-finite values. */
-function boundedThrottleDelay(ms: number): number | null {
+/** A positive, finite, capped delay, or null when the value is unusable. */
+function boundedCooldown(ms: number): number | null {
   if (!Number.isFinite(ms) || ms <= 0) return null
-  return Math.min(
-    Math.max(ms, THROTTLE_COOLDOWN_MIN_MS),
-    THROTTLE_COOLDOWN_MAX_MS,
-  )
+  return Math.min(ms, CHANGELOG_COOLDOWN_MAX_MS)
 }
 
 /**
- * The wait a throttled response asks for, from whichever header GitHub sent,
- * bounded so an absent or malformed value cannot retry immediately.
+ * The cooldown a throttled response requires: the local throttle floor, or a
+ * longer valid provider delay when one is present. `Retry-After` (seconds or
+ * HTTP date) and `x-ratelimit-reset` (epoch seconds) are both considered, and
+ * the longer valid instruction wins. Malformed, past, zero, negative and
+ * non-finite values are ignored rather than allowed to shorten the floor,
+ * retry immediately or overflow the clock.
  */
-function throttleDelayMs(response: Response, now: number): number | null {
+function throttleCooldownMs(response: Response, now: number): number {
+  const requested: number[] = []
   const retryAfter = response.headers.get('retry-after')
   if (retryAfter !== null) {
     const seconds = Number(retryAfter)
     if (Number.isFinite(seconds)) {
-      const bounded = boundedThrottleDelay(seconds * 1000)
-      if (bounded !== null) return bounded
-    }
-    const at = Date.parse(retryAfter)
-    if (Number.isFinite(at)) {
-      const bounded = boundedThrottleDelay(at - now)
-      if (bounded !== null) return bounded
+      requested.push(seconds * 1000)
+    } else {
+      const at = Date.parse(retryAfter)
+      if (Number.isFinite(at)) requested.push(at - now)
     }
   }
-
   const reset = response.headers.get('x-ratelimit-reset')
   if (reset !== null) {
     const seconds = Number(reset)
-    if (Number.isFinite(seconds)) {
-      const bounded = boundedThrottleDelay(seconds * 1000 - now)
-      if (bounded !== null) return bounded
-    }
+    if (Number.isFinite(seconds)) requested.push(seconds * 1000 - now)
   }
 
-  return null
+  const valid = requested
+    .map(boundedCooldown)
+    .filter((ms): ms is number => ms !== null)
+  const provider = valid.length > 0 ? Math.max(...valid) : 0
+  return Math.max(CHANGELOG_THROTTLE_MIN_COOLDOWN_MS, provider)
+}
+
+/**
+ * Reads a response body up to a byte cap, then parses and validates it. The
+ * deadline passed to `fetch` still aborts this stream, so a stalled upstream
+ * cannot hold the request open past it, and the reader is cancelled once the
+ * cap is crossed. Returns null for an oversized, unreadable or invalid body.
+ */
+async function readBoundedBody<T>(
+  response: Response,
+  schema: z.ZodType<T>,
+  maxBytes: number,
+): Promise<T | null> {
+  const declared = Number(response.headers.get('content-length'))
+  if (Number.isFinite(declared) && declared > maxBytes) {
+    await response.body?.cancel()
+    return null
+  }
+  if (response.body === null) return null
+
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let text = ''
+  let bytes = 0
+  try {
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      bytes += value.byteLength
+      if (bytes > maxBytes) {
+        await reader.cancel()
+        return null
+      }
+      text += decoder.decode(value, { stream: true })
+    }
+    text += decoder.decode()
+  } catch {
+    // An aborted body (deadline) or socket error makes the body unusable.
+    return null
+  }
+
+  let body: unknown
+  try {
+    body = JSON.parse(text)
+  } catch {
+    return null
+  }
+  const parsed = schema.safeParse(body)
+  return parsed.success ? parsed.data : null
 }
 
 async function requestUpstream<T>(
@@ -150,7 +246,12 @@ async function requestUpstream<T>(
   schema: z.ZodType<T>,
   timeoutMs: number,
   now: () => number,
+  reserve: () => boolean,
 ): Promise<UpstreamOutcome<T>> {
+  // The budget is spent before the request is made, so an attempt that later
+  // fails, is throttled, or triggers the commits fallback still counts.
+  if (!reserve()) return { kind: 'unavailable' }
+
   let response: Response
   try {
     response = await fetch(url, {
@@ -170,41 +271,39 @@ async function requestUpstream<T>(
   if (isRateLimited(response)) {
     return {
       kind: 'throttled',
-      retryDelayMs:
-        throttleDelayMs(response, now()) ?? CHANGELOG_FAILURE_COOLDOWN_MS,
+      cooldownMs: throttleCooldownMs(response, now()),
     }
   }
   if (!response.ok) return { kind: 'unavailable' }
 
-  let body: unknown
-  try {
-    body = await response.json()
-  } catch {
-    return { kind: 'unavailable' }
-  }
-
-  // Validate before anything is cached: a malformed body must not replace a
-  // good cached result.
-  const parsed = schema.safeParse(body)
-  if (!parsed.success) return { kind: 'unavailable' }
-  return { kind: 'ok', value: parsed.data }
+  // Validate before anything is cached: a malformed or oversized body must not
+  // replace a good cached result.
+  const value = await readBoundedBody(
+    response,
+    schema,
+    CHANGELOG_MAX_BODY_BYTES,
+  )
+  if (value === null) return { kind: 'unavailable' }
+  return { kind: 'ok', value }
 }
 
 async function refresh(
   timeoutMs: number,
   now: () => number,
+  reserve: () => boolean,
 ): Promise<RefreshOutcome> {
   const releases = await requestUpstream(
     RELEASES_URL,
     releasesSchema,
     timeoutMs,
     now,
+    reserve,
   )
 
   // A throttled releases response ends the refresh: calling commits next is
   // the fallback storm this route is bounded against.
   if (releases.kind === 'throttled') {
-    return { kind: 'failed', cooldownMs: releases.retryDelayMs }
+    return { kind: 'failed', cooldownMs: releases.cooldownMs }
   }
   if (releases.kind === 'ok' && releases.value.length > 0) {
     return {
@@ -222,9 +321,10 @@ async function refresh(
     commitsSchema,
     timeoutMs,
     now,
+    reserve,
   )
   if (commits.kind === 'throttled') {
-    return { kind: 'failed', cooldownMs: commits.retryDelayMs }
+    return { kind: 'failed', cooldownMs: commits.cooldownMs }
   }
   if (commits.kind === 'ok') {
     return {
@@ -254,16 +354,41 @@ export function createChangelogRoutes(options: ChangelogRouteOptions = {}) {
   let cached: { body: ChangelogBody; fetchedAt: number } | null = null
   let inFlight: Promise<RefreshOutcome> | null = null
   let cooldownUntil = 0
+  // Upstream request timestamps inside the rolling budget window. The array is
+  // bounded by CHANGELOG_REQUEST_BUDGET entries, so it cannot grow without
+  // limit even under sustained failures or throttles.
+  const requestTimes: number[] = []
+
+  /**
+   * Spends one slot of the rolling upstream-request budget. Every fetch goes
+   * through here, so the ceiling holds across successes, failures, fallbacks
+   * and throttling rather than only through the fresh-cache TTL.
+   */
+  const reserveUpstreamRequest = (): boolean => {
+    const at = now()
+    const cutoff = at - CHANGELOG_REQUEST_WINDOW_MS
+    while (
+      requestTimes.length > 0 &&
+      (requestTimes[0] ?? Number.POSITIVE_INFINITY) <= cutoff
+    ) {
+      requestTimes.shift()
+    }
+    if (requestTimes.length >= CHANGELOG_REQUEST_BUDGET) return false
+    requestTimes.push(at)
+    return true
+  }
 
   const startRefresh = (): Promise<RefreshOutcome> => {
-    const running = refresh(timeoutMs, now).then((outcome) => {
-      if (outcome.kind === 'refreshed') {
-        cached = { body: outcome.body, fetchedAt: now() }
-      } else {
-        cooldownUntil = Math.max(cooldownUntil, now() + outcome.cooldownMs)
-      }
-      return outcome
-    })
+    const running = refresh(timeoutMs, now, reserveUpstreamRequest).then(
+      (outcome) => {
+        if (outcome.kind === 'refreshed') {
+          cached = { body: outcome.body, fetchedAt: now() }
+        } else {
+          cooldownUntil = Math.max(cooldownUntil, now() + outcome.cooldownMs)
+        }
+        return outcome
+      },
+    )
     inFlight = running
     // Only one refresh can run at a time, because a new one starts only when
     // inFlight is clear, so clearing it here cannot clear a newer refresh.
@@ -275,6 +400,11 @@ export function createChangelogRoutes(options: ChangelogRouteOptions = {}) {
   }
 
   const respondFromCache = (c: Context) => {
+    // Stale data inside the window is returned byte-identical to a fresh hit:
+    // `source` is unchanged, so consumers cannot tell the two apart. That is
+    // the documented policy, not a bug. The boundary is inclusive: at exactly
+    // CHANGELOG_STALE_MAX_MS the cached body is still served, and past it the
+    // route answers 503.
     if (cached && now() - cached.fetchedAt <= CHANGELOG_STALE_MAX_MS) {
       return c.json(cached.body)
     }
