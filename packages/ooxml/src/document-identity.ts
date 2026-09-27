@@ -139,7 +139,11 @@ function ensureWord2010Namespace(overlay: {
   if (!root) return
   const startTag = overlay.source.slice(root.start, root.startTagEnd)
   const declared = `xmlns:w14="${WORD_2010_NAMESPACE}"`
-  const value = startTag.replace(/(\s|>)/u, (match) => ` ${declared}${match}`)
+  // Insert after the element name, before the first whitespace or the closing
+  // bracket. An explicit index avoids a non-global replace.
+  const at = startTag.search(/[\s>]/u)
+  if (at < 0) return
+  const value = `${startTag.slice(0, at)} ${declared}${startTag.slice(at)}`
   setOverlayReplacement(overlay, 'lineage:w14-namespace', {
     start: root.start,
     end: root.startTagEnd,
