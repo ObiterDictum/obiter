@@ -190,7 +190,10 @@ test('re-resolves on a config restart without writing the process environment', 
   // Vite re-evaluates the config on restart. A value the resolver wrote into
   // process.env would shadow the edited .env and pin the first origin; the
   // resolver must not write one.
-  const second = { server: { port: 3002, proxy: {} }, environments: { ssr: {} } }
+  const second = {
+    server: { port: 3002, proxy: {} },
+    environments: { ssr: {} },
+  }
   applyDevServerApiOrigin(second, {
     processEnv,
     fileEnv: { OBITER_API_ORIGIN: 'http://localhost:9892' },
