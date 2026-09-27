@@ -4214,7 +4214,20 @@
             <code>services/legal-ingestor</code>, through
             <code>@obiter/config</code>. That package owns the bounded worktree
             <code>.env</code> search shared by both services; Vite's
-            <code>loadEnv</code> reads the same file for the web server.
+            <code>loadEnv</code> reads the same file for the web server. The web
+            dev server resolves one API origin through
+            <code>apps/web/dev-api-origin.mjs</code> and gives the same value to
+            its Vite proxy and its in-process SSR handler, so a lane cannot
+            serve its UI while authenticating against the shared API. The origin
+            reaches SSR as a scoped
+            <code>process.env.OBITER_API_ORIGIN</code> define, so in dev SSR
+            that key wins the <code>apiUrl()</code>/<code>authBaseURL()</code>
+            chain and <code>BETTER_AUTH_URL</code> stays the production session
+            callback origin and SSR fallback rather than a second way to choose
+            a dev backend. Shared-default eligibility is decided from the port
+            Vite actually binds (including a <code>--port</code> override), and
+            a supplied but invalid <code>OBITER_WEB_PORT</code> is refused
+            instead of falling back to the shared <code>3000</code>.
           </p>
           <div class="callout">
             <b>Startup is fail-closed.</b> <code>NODE_ENV</code> must be
