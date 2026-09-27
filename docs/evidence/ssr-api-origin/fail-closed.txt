@@ -1,0 +1,24 @@
+Fail-closed dev API-origin decisions for the two bypasses the review found.
+Produced with docs/evidence/ssr-api-origin/config-decision.mjs, which resolves
+the real apps/web/vite.config.ts through Vite's resolveConfig. No server starts
+and no API is contacted.
+
+BEFORE (54ff821b1639a8d265d84580a7dfd6ba1b10f02e)
+$ bun config-decision.mjs apps/web/vite.config.ts 3098
+{"effectivePort":3098,"proxyTarget":"http://localhost:8787","ssrDefine":"\"http://localhost:8787\""}
+$ bun config-decision.mjs apps/web/vite.config.ts 3000 OBITER_WEB_PORT=oops
+{"effectivePort":3000,"proxyTarget":"http://localhost:8787","ssrDefine":"\"http://localhost:8787\""}
+$ bun config-decision.mjs apps/web/vite.config.ts 3000 OBITER_WEB_PORT=0
+{"effectivePort":3000,"proxyTarget":"http://localhost:8787","ssrDefine":"\"http://localhost:8787\""}
+$ bun config-decision.mjs apps/web/vite.config.ts 3000
+{"effectivePort":3000,"proxyTarget":"http://localhost:8787","ssrDefine":"\"http://localhost:8787\""}
+
+AFTER (313a3d6a93ee3534e7e3104d3e7f80ff88ff52c9)
+$ bun config-decision.mjs apps/web/vite.config.ts 3098
+{"refused":"The web dev server is on port 3098, not the shared dev port 3000, but neither OBITER_API_ORIGIN nor PORT configures an API. A lane must not fall back to the shared dev API on 8787; set OBITER_API_ORIGIN in this worktree's .env."}
+$ bun config-decision.mjs apps/web/vite.config.ts 3000 OBITER_WEB_PORT=oops
+{"refused":"OBITER_WEB_PORT must be a decimal port between 1 and 65535; got \"oops\". Fix it in the run environment or in this worktree's .env."}
+$ bun config-decision.mjs apps/web/vite.config.ts 3000 OBITER_WEB_PORT=0
+{"refused":"OBITER_WEB_PORT must be a decimal port between 1 and 65535; got \"0\". Fix it in the run environment or in this worktree's .env."}
+$ bun config-decision.mjs apps/web/vite.config.ts 3000
+{"effectivePort":3000,"proxyTarget":"http://localhost:8787","ssrDefine":"\"http://localhost:8787\""}
