@@ -85,7 +85,8 @@ export function applyDocumentEdits(
   const rangeEmphasis = new Map<ParagraphAnchor, RunEmphasisRange[]>()
   for (const [operationIndex, operation] of planned.entries()) {
     const deletedLater = deletedIds.has(operation.paragraph.wire.id)
-    if (lineage) touchParagraph(lineage, operation.paragraph.wire, operationIndex)
+    if (lineage)
+      touchParagraph(lineage, operation.paragraph.wire, operationIndex)
     if (operation.type === 'replace_run_text') {
       if (deletedLater) continue
       if (lineage) seedRunOrigins(lineage, operation.run.wire)
@@ -142,7 +143,8 @@ export function applyDocumentEdits(
           throw new OoxmlError('invalid-document-edit')
         }
       }
-    } else if (operation.type === 'set_paragraph_numbering') {      if (!deletedLater) {
+    } else if (operation.type === 'set_paragraph_numbering') {
+      if (!deletedLater) {
         if (trackedWriter) {
           trackedWriter.setParagraphNumbering(operation.paragraph, operation)
         } else {

@@ -41,7 +41,9 @@ export type LineageRecorder = {
   touched: Set<DocumentParagraphWire>
 }
 
-export function createLineageRecorder(model: DocumentModelWire): LineageRecorder {
+export function createLineageRecorder(
+  model: DocumentModelWire,
+): LineageRecorder {
   const baseRunLengths = new Map<string, number>()
   for (const story of model.stories) {
     for (const paragraph of story.paragraphs) {
@@ -208,7 +210,9 @@ export function recordSplitRun(
   for (const part of parts) {
     recorder.runOrigins.set(
       part.run,
-      replaced ? origins.map((segment) => ({ ...segment })) : sliceRunOrigins(origins, part.from, part.to),
+      replaced
+        ? origins.map((segment) => ({ ...segment }))
+        : sliceRunOrigins(origins, part.from, part.to),
     )
     if (replaced) recorder.replacedRuns.add(part.run)
     seedRunOrigins(recorder, part.run)
@@ -233,14 +237,15 @@ export function buildVersionLineage(input: {
     for (const paragraph of story.paragraphs) {
       const origin = recorder.paragraphOrigin.get(paragraph)
       if (!origin) continue
-      const toParagraphId =
-        canonicalParagraphIds.get(paragraph) ?? paragraph.id
-      const runs: DocumentLineageRun[] = paragraph.runs.map((run, runIndex) => ({
-        runIndex,
-        segments: recorder.runOrigins.get(run) ?? [
-          { fromRunId: run.id, fromOffset: 0, toOffset: run.text.length },
-        ],
-      }))
+      const toParagraphId = canonicalParagraphIds.get(paragraph) ?? paragraph.id
+      const runs: DocumentLineageRun[] = paragraph.runs.map(
+        (run, runIndex) => ({
+          runIndex,
+          segments: recorder.runOrigins.get(run) ?? [
+            { fromRunId: run.id, fromOffset: 0, toOffset: run.text.length },
+          ],
+        }),
+      )
       paragraphs.push({
         fromParagraphId: origin.fromParagraphId,
         toParagraphId,

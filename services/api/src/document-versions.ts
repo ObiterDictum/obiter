@@ -88,14 +88,21 @@ export async function createEditedVersion(
   input: EditedVersionInput,
 ): Promise<CreateEditedVersionResult> {
   const { editedBytes, lineage } = await prepareEditedSource(storage, input)
-  return createPreparedVersion(pool, storage, input, editedBytes, {
-    action: 'document.edit',
-    metadata: (versionId) => ({
-      baseVersionId: input.baseVersionId,
-      newVersionId: versionId,
-      operationCount: input.operations.length,
-    }),
-  }, lineage)
+  return createPreparedVersion(
+    pool,
+    storage,
+    input,
+    editedBytes,
+    {
+      action: 'document.edit',
+      metadata: (versionId) => ({
+        baseVersionId: input.baseVersionId,
+        newVersionId: versionId,
+        operationCount: input.operations.length,
+      }),
+    },
+    lineage,
+  )
 }
 
 async function prepareEditedSource(

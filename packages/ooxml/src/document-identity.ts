@@ -126,10 +126,7 @@ function injectIntoOpeningTag(fragment: string, value: string) {
 
 function ensureWord2010Namespace(overlay: {
   source: string
-  replacements: Map<
-    string,
-    { start: number; end: number; value: string }
-  >
+  replacements: Map<string, { start: number; end: number; value: string }>
 }) {
   if (/xmlns:w14=/u.test(overlay.source.slice(0, 4096))) return
   const root = parseXmlElements(overlay.source).find(

@@ -105,12 +105,21 @@ export function createTrackedEditWriter(
     ) {
       const part = requireEditablePart(document, anchor.partName)
       const prefix = wordPrefix(part.overlay.source, anchor.paragraphRange, 'p')
-      insertParagraphAfter(document, story, anchor, runs, styleId, offset, {
-        prefix,
-        wrapRun: (run) =>
-          `<${prefix}:ins ${attributes(prefix)}>${run}</${prefix}:ins>`,
-        paragraphFormat,
-      }, lineage)
+      insertParagraphAfter(
+        document,
+        story,
+        anchor,
+        runs,
+        styleId,
+        offset,
+        {
+          prefix,
+          wrapRun: (run) =>
+            `<${prefix}:ins ${attributes(prefix)}>${run}</${prefix}:ins>`,
+          paragraphFormat,
+        },
+        lineage,
+      )
     },
 
     deleteParagraph(

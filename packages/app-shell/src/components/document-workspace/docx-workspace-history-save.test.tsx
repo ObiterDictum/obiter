@@ -224,6 +224,43 @@ describe('undo across a successful save', () => {
     expect(persistedText(document.paragraphs)).toEqual(['Hello'])
   })
 
+  it('reverses a saved mid-document insert without deleting its neighbour', async () => {
+    const document = server([
+      { runs: [{ text: 'Alpha' }] },
+      { runs: [{ text: 'Beta' }] },
+      { runs: [{ text: 'Gamma' }] },
+    ])
+    mountWorkspace({
+      editAsync: document.editAsync,
+      modelFor: document.modelFor,
+    })
+    fireEvent.click(screen.getByText('Alpha'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Insert paragraph' }))
+    fireEvent.change(screen.getByLabelText('Pending paragraph text'), {
+      target: { value: 'Inserted' },
+    })
+    await clickSaveAndSettle(document.editAsync, 1)
+    expect(persistedText(document.paragraphs)).toEqual([
+      'Alpha',
+      'Inserted',
+      'Beta',
+      'Gamma',
+    ])
+
+    // Undo the typing, then the insert. The saved insert is a real paragraph
+    // the server already stores, so the reversal deletes exactly that paragraph
+    // and leaves every original one alone.
+    fireEvent.click(undoButton())
+    fireEvent.click(undoButton())
+    await clickSaveAndSettle(document.editAsync, 2)
+    expect(persistedText(document.paragraphs)).toEqual([
+      'Alpha',
+      'Beta',
+      'Gamma',
+    ])
+  })
+
   it('reverses a saved split without replaying it', async () => {
     const document = server([{ runs: [{ text: 'Hello' }] }])
     mountWorkspace({

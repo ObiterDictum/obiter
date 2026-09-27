@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import {
-  applyDocumentEdits,
-  parseDocx,
-  serialiseDocx,
-} from './index'
+import { applyDocumentEdits, parseDocx, serialiseDocx } from './index'
 import { serialiseOverlay } from './parts/overlay'
 import { load, paragraphs } from './model-run-emphasis.test-support'
 
@@ -55,7 +51,10 @@ describe('E50 identity counterexamples (real parser)', () => {
     const after = await reload(before)
     console.log('SEQ-BEFORE-IDS', JSON.stringify(initial.map((x) => x.id)))
     console.log('SEQ-AFTER-IDS ', JSON.stringify(shape(after).map((x) => x.id)))
-    console.log('SEQ-AFTER-TEXT', JSON.stringify(shape(after).map((x) => x.text)))
+    console.log(
+      'SEQ-AFTER-TEXT',
+      JSON.stringify(shape(after).map((x) => x.text)),
+    )
     // The paragraph id sequence is identical to before, but para-000002 now
     // names Delta where it used to name Beta. Sequence comparison cannot see it.
     expect(shape(after).map((x) => x.id)).toEqual(initial.map((x) => x.id))

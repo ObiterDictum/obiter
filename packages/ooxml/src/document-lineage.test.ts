@@ -49,7 +49,13 @@ describe('version lineage resolves against the reparsed DOCX', () => {
     if (!anchor) throw new Error('anchor')
     applyDocumentEdits(
       document,
-      [{ type: 'insert_paragraph_after', paragraphId: anchor, text: 'Inserted' }],
+      [
+        {
+          type: 'insert_paragraph_after',
+          paragraphId: anchor,
+          text: 'Inserted',
+        },
+      ],
       undefined,
       recorder,
     )
@@ -120,7 +126,9 @@ describe('version lineage resolves against the reparsed DOCX', () => {
     const fromBase = segments.filter(
       (segment) => segment.fromRunId === baseRun.id,
     )
-    expect(fromBase.map((segment) => [segment.fromOffset, segment.toOffset])).toEqual([
+    expect(
+      fromBase.map((segment) => [segment.fromOffset, segment.toOffset]),
+    ).toEqual([
       [0, 5],
       [5, 10],
     ])
@@ -131,7 +139,8 @@ describe('version lineage resolves against the reparsed DOCX', () => {
     }
   })
 
-  it('keeps duplicate run text distinguishable by lineage', async () => {    const document = await load(
+  it('keeps duplicate run text distinguishable by lineage', async () => {
+    const document = await load(
       `<w:p><w:r><w:t>Same</w:t></w:r><w:r><w:t>Same</w:t></w:r></w:p>`,
     )
     const recorder = createLineageRecorder(document.model)

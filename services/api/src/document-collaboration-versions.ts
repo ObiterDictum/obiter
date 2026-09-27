@@ -142,7 +142,8 @@ export async function createCollaborationMergeVersion(
           : undefined,
         recorder,
       )
-      const canonicalParagraphIds = canonicaliseParagraphIdentities(currentDocument)
+      const canonicalParagraphIds =
+        canonicaliseParagraphIdentities(currentDocument)
       // A merge that actually reconciled against a newer current version moves
       // the base the client holds; its history cannot be translated from the
       // current-to-result edits alone, so no lineage is claimed and the client
@@ -210,7 +211,8 @@ export async function createCollaborationMergeVersion(
         versionNumber: committed.versionNumber,
         ...(built
           ? { lineage: { ...lineageInput, versionId: committed.versionId } }
-          : {}),      }
+          : {}),
+      }
     } catch (error) {
       if (error instanceof OoxmlError) throw new DocumentEditInvalidError()
       throw new DocumentEditStoreError()

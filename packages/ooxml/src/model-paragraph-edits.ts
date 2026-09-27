@@ -83,7 +83,11 @@ export function deleteParagraph(
   story.paragraphs.splice(story.paragraphs.indexOf(anchor.wire), 1)
   part.dirty = true
   if (lineage) {
-    recordDeletedParagraph(lineage.recorder, anchor.wire, lineage.operationIndex)
+    recordDeletedParagraph(
+      lineage.recorder,
+      anchor.wire,
+      lineage.operationIndex,
+    )
   }
 }
 
