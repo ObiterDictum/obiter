@@ -85,7 +85,6 @@ export function canonicaliseParagraphIdentities(
           anchor.paragraphRange.start,
           anchor.paragraphRange.startTagEnd,
         )
-        if (/w14:paraId=/u.test(startTag)) continue
         setOverlayReplacement(part.overlay, `${paragraph.id}:para-id`, {
           start: anchor.paragraphRange.start,
           end: anchor.paragraphRange.startTagEnd,
@@ -98,7 +97,7 @@ export function canonicaliseParagraphIdentities(
       // into the overlay replacement the insert writer produced.
       const key = `${paragraph.id}:insert`
       const replacement = part.overlay.replacements.get(key)
-      if (!replacement || /w14:paraId=/u.test(replacement.value)) continue
+      if (!replacement) continue
       setOverlayReplacement(part.overlay, key, {
         ...replacement,
         value: injectIntoOpeningTag(replacement.value, value),
@@ -149,6 +148,10 @@ function ensureWord2010Namespace(overlay: {
 }
 
 function injectAttribute(startTag: string, name: string, value: string) {
+  const existing = new RegExp(`${name}="[^"]*"`, 'u')
+  if (existing.test(startTag)) {
+    return startTag.replace(existing, `${name}="${value}"`)
+  }
   const closing = startTag.match(/\s*\/?>$/u)
   if (!closing) return `${startTag} ${name}="${value}">`
   const index = startTag.length - closing[0].length

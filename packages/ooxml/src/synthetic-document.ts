@@ -22,23 +22,36 @@ const DOCUMENT_RELS_XML = `<?xml version="1.0" encoding="UTF-8" standalone="yes"
 const WORD_NAMESPACE =
   'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 
+const WORD_2010_NAMESPACE =
+  'http://schemas.microsoft.com/office/word/2010/wordml'
+
+export type SyntheticParagraph = string | { text: string; paraId?: string }
+
 /**
- * Builds a minimal, valid DOCX whose document body is one paragraph per text,
- * deliberately without any `w14:paraId`. Tests that exercise the first-save
+ * Builds a minimal, valid DOCX whose document body is one paragraph per entry,
+ * with an optional `w14:paraId` on each. Tests that exercise the first-save
  * transition for a legacy document need real bytes with positional identities,
- * not a hand-built model whose ids never shift.
+ * and identity tests need to control the ids exactly.
  */
 export async function createSyntheticDocx(
-  paragraphs: readonly string[],
+  paragraphs: readonly SyntheticParagraph[],
 ): Promise<Uint8Array> {
+  const declaresW14 = paragraphs.some(
+    (entry) => typeof entry !== 'string' && entry.paraId !== undefined,
+  )
+  const namespace = declaresW14 ? ` xmlns:w14="${WORD_2010_NAMESPACE}"` : ''
   const body = paragraphs
-    .map(
-      (text) =>
-        `<w:p><w:r><w:t xml:space="preserve">${escapeXmlText(text)}</w:t></w:r></w:p>`,
-    )
+    .map((entry) => {
+      const text = typeof entry === 'string' ? entry : entry.text
+      const id =
+        typeof entry === 'string' || entry.paraId === undefined
+          ? ''
+          : ` w14:paraId="${entry.paraId}"`
+      return `<w:p${id}><w:r><w:t xml:space="preserve">${escapeXmlText(text)}</w:t></w:r></w:p>`
+    })
     .join('')
   const documentXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<w:document xmlns:w="${WORD_NAMESPACE}"><w:body>${body}<w:sectPr/></w:body></w:document>`
+<w:document xmlns:w="${WORD_NAMESPACE}"${namespace}><w:body>${body}<w:sectPr/></w:body></w:document>`
   const zip = new JSZip()
   zip.file('[Content_Types].xml', CONTENT_TYPES_XML, { date: FIXED_DATE })
   zip.file('_rels/.rels', ROOT_RELS_XML, { date: FIXED_DATE })
