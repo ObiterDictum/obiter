@@ -1,5 +1,6 @@
 import { Hono, type Context } from 'hono'
 import { z } from 'zod'
+import { readBoundedResponseText } from '../bounded-upstream-body'
 
 /**
  * Bounds the anonymous changelog route's GitHub traffic. The cache is a single
@@ -193,43 +194,15 @@ function throttleCooldownMs(response: Response, now: number): number {
 }
 
 /**
- * Reads a response body up to a byte cap, then parses and validates it. The
- * deadline passed to `fetch` still aborts this stream, so a stalled upstream
- * cannot hold the request open past it, and the reader is cancelled once the
- * cap is crossed. Returns null for an oversized, unreadable or invalid body.
+ * Reads a response body up to a byte cap, then parses and validates it.
+ * Returns null for an oversized, unreadable or invalid body.
  */
-async function readBoundedBody<T>(
+async function parseBoundedBody<T>(
   response: Response,
   schema: z.ZodType<T>,
-  maxBytes: number,
 ): Promise<T | null> {
-  const declared = Number(response.headers.get('content-length'))
-  if (Number.isFinite(declared) && declared > maxBytes) {
-    await response.body?.cancel()
-    return null
-  }
-  if (response.body === null) return null
-
-  const reader = response.body.getReader()
-  const decoder = new TextDecoder()
-  let text = ''
-  let bytes = 0
-  try {
-    for (;;) {
-      const { done, value } = await reader.read()
-      if (done) break
-      bytes += value.byteLength
-      if (bytes > maxBytes) {
-        await reader.cancel()
-        return null
-      }
-      text += decoder.decode(value, { stream: true })
-    }
-    text += decoder.decode()
-  } catch {
-    // An aborted body (deadline) or socket error makes the body unusable.
-    return null
-  }
+  const text = await readBoundedResponseText(response, CHANGELOG_MAX_BODY_BYTES)
+  if (text === null) return null
 
   let body: unknown
   try {
@@ -278,11 +251,7 @@ async function requestUpstream<T>(
 
   // Validate before anything is cached: a malformed or oversized body must not
   // replace a good cached result.
-  const value = await readBoundedBody(
-    response,
-    schema,
-    CHANGELOG_MAX_BODY_BYTES,
-  )
+  const value = await parseBoundedBody(response, schema)
   if (value === null) return { kind: 'unavailable' }
   return { kind: 'ok', value }
 }
