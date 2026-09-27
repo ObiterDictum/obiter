@@ -29,6 +29,7 @@ import {
   loadInvitePreview,
   moveUserAndDeleteEmptyOrganisation,
   organisationHasBlockingWork,
+  revokeMemberMatterShares,
 } from '../organisation-membership'
 
 interface RouteUser {
@@ -534,6 +535,17 @@ export function createOrganisationsRoutes(pool: Pool, env: ApiEnv) {
             403,
           )
         }
+        // A removed member may still be a grantee of shares in this
+        // organisation. The composite foreign key from 0027 rejects the
+        // organisationId change while any remain, so revoke them in the same
+        // transaction, auditing each exactly as the share-revocation route
+        // does.
+        await revokeMemberMatterShares(client, {
+          organisationId: caller.organisationId,
+          userId: targetUserId,
+          actorUserId: caller.id,
+          requestId: c.get('requestId'),
+        })
         await client.query(
           `
             update users
