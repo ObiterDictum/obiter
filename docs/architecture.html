@@ -2295,8 +2295,9 @@
               <dl class="kv">
                 <dt>Exports</dt>
                 <dd>
-                  mergeSpans · supplementSpans · mapRampartSpans · chunkText ·
-                  applyRedacted · applyPseudonymised · createTokenMap
+                  mergeSpans · supplementSpans · mapRampartSpans ·
+                  reconcileRampartSpans · chunkText · applyRedacted ·
+                  applyPseudonymised · createTokenMap
                 </dd>
                 <dt>Files</dt>
                 <dd>
@@ -6334,10 +6335,13 @@
                     Merge overlap is a union, not "Rampart wins" (archived F21)
                   </td>
                   <td>
-                    Overlapping model and supplement spans cover the combined
-                    range so a truncated model span cannot disclose the rest of
-                    a format-valid identifier. Suggestions already computed
-                    upstream are preserved.
+                    Overlapping spans cover their combined byte-union, both
+                    model-vs-supplement and within Rampart, so a truncated model
+                    span cannot disclose the rest of a format-valid identifier
+                    and a containment cannot drop a redact detection's exclusive
+                    bytes. A union containing any redact-required detection
+                    redacts, so a keep-category winner cannot disposition a
+                    redact loser's bytes.
                   </td>
                   <td class="id">architecture.md</td>
                 </tr>

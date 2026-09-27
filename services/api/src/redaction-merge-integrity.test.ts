@@ -2,13 +2,12 @@ import { describe, expect, it } from 'bun:test'
 import type { Pool } from 'pg'
 import {
   detectHeuristics,
-  mergeSpans as mergeRampartSpans,
   type Span as RampartSpan,
 } from '@obiter/rampart-inference'
 import {
-  mapRampartSpans,
   mergeSpans,
   normalizePersonDetections,
+  reconcileRampartSpans,
   supplementSpans,
   type Decisions,
   type RedactionSpan,
@@ -21,11 +20,11 @@ import { createTestApiEnv } from './test-api-env'
 type Auth = ReturnType<typeof createAuth>
 
 /**
- * P2.39 regression: upstream's `mergeSpans` emits a partial-overlap union whose
- * `text` still belongs to the winner while `start`/`end` cover both spans.
- * `mapRampartSpans` used to inherit that text, so finalize's
- * `text.slice(start, end) === text` check failed with a permanent 409. This
- * drives the real merge, mapper and policy merge, then the real finalize route.
+ * P2.39 regression: a partial-overlap union used to carry the winner's `text`
+ * while `start`/`end` covered both spans, so finalize's
+ * `text.slice(start, end) === text` check failed with a permanent 409. The
+ * product now derives union text at this boundary; this drives the real
+ * reconcile, policy merge and finalize route.
  */
 const text = 'Alice alice@example.com'
 const heuristic = detectHeuristics(text)
@@ -40,12 +39,10 @@ const modelSpan = {
 
 function detectionSpans(): RedactionSpan[] {
   return mergeSpans(
-    mapRampartSpans({
+    reconcileRampartSpans(
       text,
-      spans: mergeRampartSpans(
-        normalizePersonDetections(text, [...heuristic, modelSpan]),
-      ),
-    }),
+      normalizePersonDetections(text, [...heuristic, modelSpan]),
+    ),
     supplementSpans(text),
   )
 }
@@ -63,7 +60,7 @@ function accepted(spans: RedactionSpan[]): Decisions {
   )
 }
 
-function runRow(spans: RedactionSpan[]): RedactionRunRow {
+function runRow(spans: RedactionSpan[], decisions: Decisions): RedactionRunRow {
   return {
     id: 'red_1',
     organisation_id: 'org_1',
@@ -79,7 +76,7 @@ function runRow(spans: RedactionSpan[]): RedactionRunRow {
     status: 'ready_for_review',
     policy_mode: 'internal_ai_minimisation',
     spans_json: spans,
-    decisions_json: accepted(spans),
+    decisions_json: decisions,
     output_artifact_id: null,
     summary_json: { totalSpans: spans.length },
     detector_version: null,
@@ -106,8 +103,12 @@ function authWithRole(): Auth {
   } as unknown as Auth
 }
 
-function finalizeApp(spans: RedactionSpan[]) {
-  const readyRun = runRow(spans)
+function finalizeApp(
+  sourceText: string,
+  spans: RedactionSpan[],
+  decisions: Decisions,
+) {
+  const readyRun = runRow(spans, decisions)
   const finalized = { ...readyRun, status: 'finalized' as const }
   let written: string | null = null
   const pool = {
@@ -147,7 +148,7 @@ function finalizeApp(spans: RedactionSpan[]) {
   const app = createApiApp(createTestApiEnv(), pool, {
     auth: authWithRole(),
     storage: {
-      readText: async () => text,
+      readText: async () => sourceText,
       writeText: async (_key: string, value: string) => {
         written = value
       },
@@ -168,7 +169,7 @@ describe('redaction merge integrity (P2.39)', () => {
 
   it('finalizes a run whose detection produced a partial-overlap union', async () => {
     const spans = detectionSpans()
-    const { app, written } = finalizeApp(spans)
+    const { app, written } = finalizeApp(text, spans, accepted(spans))
 
     const response = await app.request('/api/redaction-runs/red_1/finalize', {
       method: 'POST',
@@ -187,14 +188,11 @@ describe('redaction merge integrity (P2.39)', () => {
  * discard bytes the losing contributor supplied, silently, because finalize
  * derives span text from the source instead of rejecting a mismatch (P2.39).
  * Production normalises each contributing detection before the union; these
- * drive the real normaliser, union and mapper.
+ * drive the real normaliser, reconciler and mapper.
  */
 describe('heuristics run per detection before the span union (P0.30)', () => {
   function detect(text: string, spans: RampartSpan[]): RedactionSpan[] {
-    return mapRampartSpans({
-      text,
-      spans: mergeRampartSpans(normalizePersonDetections(text, spans)),
-    })
+    return reconcileRampartSpans(text, normalizePersonDetections(text, spans))
   }
 
   it('covers bytes a losing detection contributed a title-shaped prefix to', () => {
@@ -276,5 +274,68 @@ describe('heuristics run per detection before the span union (P0.30)', () => {
         },
       ]),
     ).toEqual([])
+  })
+})
+
+/**
+ * P0.31: reconciliation must not let a keep-category winner disposition bytes a
+ * redact detection contributed. This drives the real reconciler, policy merge,
+ * suggestion-derived automatic decisions and the real finalize route, and
+ * asserts on the bytes written rather than an intermediate label.
+ */
+describe('overlap disposition (P0.31)', () => {
+  const source = 'alpha bravo charlie delta'
+  const contributors: RampartSpan[] = [
+    {
+      start: 6,
+      end: 17,
+      label: 'URL',
+      score: 0.99,
+      source: 'ner',
+      text: source.slice(6, 17),
+    },
+    {
+      start: 12,
+      end: 19,
+      label: 'GIVEN_NAME',
+      score: 0.5,
+      source: 'ner',
+      text: source.slice(12, 19),
+    },
+  ]
+
+  function fromSuggestions(spans: RedactionSpan[]): Decisions {
+    return Object.fromEntries(
+      spans.map((span) => [
+        span.id,
+        {
+          decision: span.suggestion === 'redact' ? 'accept' : 'reject',
+          decidedBy: 'usr_1',
+          decidedAt: '2026-01-01T00:00:00.000Z',
+        } as Decisions[string],
+      ]),
+    )
+  }
+
+  it('redacts a redact-required union through the finalize route', async () => {
+    const spans = mergeSpans(
+      reconcileRampartSpans(
+        source,
+        normalizePersonDetections(source, contributors),
+      ),
+      supplementSpans(source),
+    )
+    const { app, written } = finalizeApp(source, spans, fromSuggestions(spans))
+
+    const response = await app.request('/api/redaction-runs/red_1/finalize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ outputMode: 'redacted' }),
+    })
+
+    expect(response.status).toBe(200)
+    expect(written()).toBe('alpha [REDACTED] delta')
+    expect(written()).not.toContain('bravo')
+    expect(written()).not.toContain('charlie')
   })
 })

@@ -1,7 +1,6 @@
 import {
   detectHeuristics,
   detectNer,
-  mergeSpans as mergeRampartSpans,
   loadNerClassifier,
   NER_DEFAULT_CHUNK_TOKENS,
   premask,
@@ -12,9 +11,9 @@ import {
   type TokenClassifier,
 } from '@obiter/rampart-inference'
 import {
-  mapRampartSpans,
   mergeSpans,
   normalizePersonDetections,
+  reconcileRampartSpans,
   supplementSpans,
 } from '@obiter/redaction-policy'
 import type { DetectionMode } from '@obiter/contracts'
@@ -146,12 +145,10 @@ export function createRedactionDetector(
         const result = projectMaskedSpan(span, text, masked)
         return result ? [result] : []
       })
-      const rampart = mapRampartSpans({
+      const rampart = reconcileRampartSpans(
         text,
-        spans: mergeRampartSpans(
-          normalizePersonDetections(text, [...heuristic, ...projected]),
-        ),
-      })
+        normalizePersonDetections(text, [...heuristic, ...projected]),
+      )
       const spans = mergeSpans(rampart, supplement)
       log('redaction_detection_completed', {
         textLength: text.length,
@@ -174,10 +171,10 @@ export function createRedactionDetector(
         revision: configuration.revision,
         reason,
       })
-      const rampart = mapRampartSpans({
+      const rampart = reconcileRampartSpans(
         text,
-        spans: mergeRampartSpans(normalizePersonDetections(text, heuristic)),
-      })
+        normalizePersonDetections(text, heuristic),
+      )
       return {
         spans: mergeSpans(rampart, supplement),
         ...provenance(configuration.model, configuration.revision, true),

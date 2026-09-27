@@ -219,11 +219,13 @@ export function normalizePersonDetections<T extends RampartSpanInput>(
 }
 
 /**
- * Map a merged Rampart span to an Obiter category.
+ * Map a Rampart detection to an Obiter category. One detection in, one span
+ * out; {@link reconcileRampartSpans} is what decides between detections.
  *
  * Person spans must already have been through {@link normalizePersonDetections};
- * applying the person heuristics to a merged span is P0.30. The caller
- * normalises the contributing detections, unions them, then calls this.
+ * applying the person heuristics to a merged span is P0.30. Direct callers
+ * pass already-reconciled spans and normalise their contributing detections
+ * first.
  */
 export function mapRampartSpans(output: RampartOutput): RedactionSpan[] {
   return output.spans
@@ -253,4 +255,104 @@ export function mapRampartSpans(output: RampartOutput): RedactionSpan[] {
       }
     })
     .sort((left, right) => left.start - right.start || left.end - right.end)
+}
+
+/**
+ * Reconcile overlapping Rampart detections into the disjoint set the product
+ * stores.
+ *
+ * {@link normalizePersonDetections} fixes per-detection heuristics and
+ * {@link mapRampartSpans} maps one detection; this owns the decision *between*
+ * detections.
+ *
+ * Upstream's `policy.mergeSpans` is deliberately not used here. It inherits the
+ * preferred detection's label for the whole union, so a `keep`-category winner
+ * can disposition bytes a `redact` detection contributed (P0.31), and full
+ * containment collapses to the winner and can silently drop a redact loser's
+ * exclusive bytes. The vendored package is re-vendored wholesale, so the
+ * product owns its overlap policy at this boundary: every overlap emits the
+ * byte-union, and a union containing any `redact`-required detection is
+ * redacted. Category, source and confidence still come from one real
+ * contributing detection, chosen by the same preference order (score, then
+ * length, then a deterministic source), so a disposition disagreement can only
+ * change the outcome toward over-redaction.
+ *
+ * Category names the detection that won preference, matching the
+ * rampart/supplement union in `merge.ts`; it is not a claim that every byte in
+ * the union is of that category.
+ */
+export function reconcileRampartSpans(
+  text: string,
+  spans: readonly RampartSpanInput[],
+): RedactionSpan[] {
+  const ordered = spans
+    .filter((span) => span.start < span.end)
+    .sort((left, right) => left.start - right.start || left.end - right.end)
+  const mapped = mapRampartSpans({ text, spans: ordered })
+
+  const clusters: number[][] = []
+  let coveredTo = -1
+  ordered.forEach((span, position) => {
+    const current = clusters[clusters.length - 1]
+    if (current !== undefined && span.start < coveredTo) {
+      current.push(position)
+      coveredTo = Math.max(coveredTo, span.end)
+      return
+    }
+    clusters.push([position])
+    coveredTo = span.end
+  })
+
+  return clusters
+    .map((cluster, index) => {
+      const winner = cluster.reduce((best, position) =>
+        comparesAbove(position, best, mapped, ordered) > 0 ? position : best,
+      )
+      const start = Math.min(
+        ...cluster.map((position) => ordered[position]!.start),
+      )
+      const end = Math.max(...cluster.map((position) => ordered[position]!.end))
+      const base = mapped[winner]!
+      const redacts = cluster.some(
+        (position) => mapped[position]!.suggestion === 'redact',
+      )
+      return {
+        ...base,
+        id: `span_rampart_${start}_${index}`,
+        start,
+        end,
+        text: text.slice(start, end),
+        suggestion: redacts ? ('redact' as const) : base.suggestion,
+      }
+    })
+    .sort((left, right) => left.start - right.start || left.end - right.end)
+}
+
+/**
+ * Preference order for which contributing detection names the union: highest
+ * score, then longest, then a deterministic (validator-backed) source. The
+ * trailing comparisons only order detections that map to identical output, so
+ * the result does not depend on input order.
+ */
+function comparesAbove(
+  candidate: number,
+  incumbent: number,
+  mapped: readonly RedactionSpan[],
+  spans: readonly RampartSpanInput[],
+): number {
+  const candidateScore = spans[candidate]!.score ?? 0
+  const incumbentScore = spans[incumbent]!.score ?? 0
+  if (candidateScore !== incumbentScore) return candidateScore - incumbentScore
+  const left = mapped[candidate]!
+  const right = mapped[incumbent]!
+  const leftLength = left.end - left.start
+  const rightLength = right.end - right.start
+  if (leftLength !== rightLength) return leftLength - rightLength
+  if (left.source !== right.source)
+    return left.source === 'rampart_deterministic' ? 1 : -1
+  return left.category < right.category
+    ? -1
+    : left.category > right.category
+      ? 1
+      : 0
 }
