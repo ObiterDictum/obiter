@@ -3,6 +3,7 @@ import type { Pool } from 'pg'
 import {
   detectHeuristics,
   type Span as RampartSpan,
+  type TokenClassifier,
 } from '@obiter/rampart-inference'
 import {
   mergeSpans,
@@ -14,6 +15,7 @@ import {
 } from '@obiter/redaction-policy'
 import { createApiApp } from './app'
 import type { createAuth } from './auth'
+import { createRedactionDetector } from './redaction-detection'
 import type { RedactionRunRow } from './redaction-database'
 import { createTestApiEnv } from './test-api-env'
 
@@ -56,6 +58,20 @@ function accepted(spans: RedactionSpan[]): Decisions {
         decidedBy: 'usr_1',
         decidedAt: '2026-01-01T00:00:00.000Z',
       },
+    ]),
+  )
+}
+
+/** Automatic policy: accept redact suggestions, reject keep suggestions. */
+function fromSuggestions(spans: RedactionSpan[]): Decisions {
+  return Object.fromEntries(
+    spans.map((span) => [
+      span.id,
+      {
+        decision: span.suggestion === 'redact' ? 'accept' : 'reject',
+        decidedBy: 'usr_1',
+        decidedAt: '2026-01-01T00:00:00.000Z',
+      } as Decisions[string],
     ]),
   )
 }
@@ -304,19 +320,6 @@ describe('overlap disposition (P0.31)', () => {
     },
   ]
 
-  function fromSuggestions(spans: RedactionSpan[]): Decisions {
-    return Object.fromEntries(
-      spans.map((span) => [
-        span.id,
-        {
-          decision: span.suggestion === 'redact' ? 'accept' : 'reject',
-          decidedBy: 'usr_1',
-          decidedAt: '2026-01-01T00:00:00.000Z',
-        } as Decisions[string],
-      ]),
-    )
-  }
-
   it('redacts a redact-required union through the finalize route', async () => {
     const spans = mergeSpans(
       reconcileRampartSpans(
@@ -337,5 +340,129 @@ describe('overlap disposition (P0.31)', () => {
     expect(written()).toBe('alpha [REDACTED] delta')
     expect(written()).not.toContain('bravo')
     expect(written()).not.toContain('charlie')
+  })
+
+  it('honours explicit keep and redact overrides on the same union', async () => {
+    const spans = mergeSpans(
+      reconcileRampartSpans(
+        source,
+        normalizePersonDetections(source, contributors),
+      ),
+      supplementSpans(source),
+    )
+    const decidedAt = '2026-01-01T00:00:00.000Z'
+    const override = (
+      decision: 'override_keep' | 'override_redact',
+    ): Decisions =>
+      Object.fromEntries(
+        spans.map((span) => [
+          span.id,
+          { decision, decidedBy: 'usr_1', decidedAt },
+        ]),
+      )
+
+    const kept = finalizeApp(source, spans, override('override_keep'))
+    const keptResponse = await kept.app.request(
+      '/api/redaction-runs/red_1/finalize',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ outputMode: 'redacted' }),
+      },
+    )
+    expect(keptResponse.status).toBe(200)
+    expect(kept.written()).toBe(source)
+
+    const redacted = finalizeApp(source, spans, override('override_redact'))
+    const redactedResponse = await redacted.app.request(
+      '/api/redaction-runs/red_1/finalize',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ outputMode: 'redacted' }),
+      },
+    )
+    expect(redactedResponse.status).toBe(200)
+    expect(redacted.written()).toBe('alpha [REDACTED] delta')
+  })
+})
+
+/**
+ * P0.31 regression: `detectNer` used to union spans from overlapping token
+ * windows with the vendored `policy.mergeSpans` before the product saw them, so
+ * a keep-category model span at a seam could absorb a redact-category span and
+ * `reconcileRampartSpans` never saw the contributor. `detectNer` now returns
+ * the contributors and the product reconciles them. This drives the real
+ * `detectNer` through the product detector and the finalize route.
+ */
+describe('multi-window cross-window merge (P0.31 residual)', () => {
+  // Unique alphabetic filler: no heuristic match and no repeated word.
+  const text =
+    'alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima ' +
+    'mike november oscar papa quebec romeo sierra tango uniform victor whiskey ' +
+    'xray yankee zulu'
+
+  function seamClassifier(source: string): TokenClassifier {
+    let cursor = 0
+    let call = 0
+    const classifier: TokenClassifier = async (window) => {
+      const at = source.indexOf(window, cursor)
+      if (at < 0) throw new Error('classifier window not found in source')
+      cursor = at + 1
+      const index = call++
+      const emit = (
+        label: 'URL' | 'GIVEN_NAME',
+        score: number,
+        start: number,
+        end: number,
+      ) => ({
+        entity_group: label,
+        score,
+        start: start - at,
+        end: end - at,
+        word: label,
+      })
+      if (index === 0) return [emit('URL', 0.95, 50, 70)]
+      if (index === 1) return [emit('GIVEN_NAME', 0.5, 60, 80)]
+      return []
+    }
+    classifier.countTokens = (value) => value.length
+    return classifier
+  }
+
+  it('does not let a keep winner erase a seam redact contributor', async () => {
+    const detect = createRedactionDetector(
+      {
+        loadClassifier: async () => seamClassifier(text),
+        log: () => undefined,
+      },
+      {
+        model: 'example/rampart-test',
+        revision: 'revision-1',
+        cacheDir: '/tmp/rampart-cache',
+        minScore: 0.4,
+        chunkTokens: 100,
+      },
+    )
+    const detection = await detect(text)
+    expect(detection.degraded).toBe(false)
+    // URL and GIVEN_NAME were emitted from separate windows over the same
+    // bytes; the union must keep the redact requirement and, through the real
+    // finalize route, withhold the contributor's bytes from the output.
+    expect(detection.spans).toHaveLength(1)
+    expect(detection.spans[0]).toMatchObject({ suggestion: 'redact' })
+
+    const { app, written } = finalizeApp(
+      text,
+      detection.spans,
+      fromSuggestions(detection.spans),
+    )
+    const response = await app.request('/api/redaction-runs/red_1/finalize', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ outputMode: 'redacted' }),
+    })
+    expect(response.status).toBe(200)
+    expect(written()).not.toContain(text.slice(60, 80))
   })
 })

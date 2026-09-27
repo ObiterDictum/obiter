@@ -2319,7 +2319,9 @@
               <p>
                 ONNX token classification for personal data. Vendored from
                 <code>@nationaldesignstudio/rampart</code> under CC BY 4.0 and
-                kept byte-faithful, so it is excluded from Prettier and lint.
+                kept byte-faithful except one recorded P0.31 patch to
+                <code>detectNer</code> (see the package README), so it is
+                excluded from Prettier and lint.
               </p>
               <dl class="kv">
                 <dt>Exports</dt>
@@ -6342,6 +6344,23 @@
                     bytes. A union containing any redact-required detection
                     redacts, so a keep-category winner cannot disposition a
                     redact loser's bytes.
+                  </td>
+                  <td class="id">architecture.md</td>
+                </tr>
+                <tr>
+                  <td>
+                    Rampart <code>detectNer</code> cross-window merge is not
+                    byte-faithful (P0.31)
+                  </td>
+                  <td>
+                    The one deliberate departure from upstream. Overlapping
+                    detections from neighbouring token windows are returned as
+                    separate contributors instead of being collapsed under the
+                    preferred detection's label, so the product reconciler can
+                    keep a redact-required contributor. Exact duplicates are
+                    still dropped. Recorded with the upstream tarball and
+                    re-vendor instructions in
+                    <code>packages/rampart-inference/README.md</code>.
                   </td>
                   <td class="id">architecture.md</td>
                 </tr>

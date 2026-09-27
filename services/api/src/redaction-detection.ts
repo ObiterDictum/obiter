@@ -59,8 +59,17 @@ export function detectionMode(degraded: boolean): DetectionMode {
   return degraded ? 'heuristics+supplement' : 'model+supplement'
 }
 
+/**
+ * Detection provenance. `reconcile@1` names the product-owned overlap
+ * reconciliation introduced for P0.31: the same model over the same text can
+ * now produce a different span set than a run recorded before it, so old and
+ * new runs must not share a version. Stored `detector_version` values are
+ * historical records and are never rewritten; re-detecting a stored document
+ * creates a new run whose version carries this component (see
+ * `redaction-redetect.ts`).
+ */
 function version(model: string, revision: string, mode: DetectionMode) {
-  return `rampart-inference@${PACKAGE_VERSION};model=${model}@${revision};supplement@1;mode=${mode}`
+  return `rampart-inference@${PACKAGE_VERSION};model=${model}@${revision};supplement@1;reconcile@1;mode=${mode}`
 }
 
 function provenance(model: string, revision: string, degraded: boolean) {

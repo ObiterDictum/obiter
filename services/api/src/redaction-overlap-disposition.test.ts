@@ -287,6 +287,30 @@ describe('overlap disposition (P0.31)', () => {
     expect(output).toBe('[REDACTED]')
   })
 
+  it('redacts a degraded-mode heuristic overlap', async () => {
+    // EMAIL sits inside the URL match. The deterministic layer is the only
+    // source when the model cannot run, and the URL (a keep category) is the
+    // longer, preferred contributor; the email must still take the union.
+    const text = 'See https://example.com/a@b.com now'
+    const detect = createRedactionDetector({
+      loadClassifier: async () => {
+        throw new Error('model unavailable')
+      },
+      log: () => undefined,
+    })
+    const result = await detect(text)
+    expect(result.degraded).toBe(true)
+    expect(result.spans).toHaveLength(1)
+    expect(result.spans[0]).toMatchObject({ suggestion: 'redact' })
+    const output = applyRedacted(
+      text,
+      result.spans,
+      fromSuggestions(result.spans),
+    )
+    expect(output).not.toContain('a@b.com')
+    expect(output).not.toContain('https://example.com')
+  })
+
   it('preserves an explicit reviewer override of the automatic suggestion', async () => {
     const text = 'https://x.com Alice'
     const detect = createRedactionDetector({

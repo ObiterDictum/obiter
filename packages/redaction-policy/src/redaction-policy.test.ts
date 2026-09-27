@@ -538,6 +538,27 @@ describe('reconcileRampartSpans (P0.31)', () => {
     })
   })
 
+  it('resolves an equal-score tie deterministically and still redacts', () => {
+    // Equal score and equal length: only the source tie-break decides which
+    // detection names the union. The deterministic source (URL) wins, but the
+    // redact-required contributor still owns the disposition.
+    const redact = span('GIVEN_NAME', at('charlie'), 0.9)
+    const keep = span('URL', at('charlie'), 0.9)
+    const forward = reconcile(text, [keep, redact])
+    const reverse = reconcile(text, [redact, keep])
+    expect(forward).toEqual(reverse)
+    expect(forward).toEqual([
+      expect.objectContaining({
+        start: 12,
+        end: 19,
+        text: 'charlie',
+        category: 'url',
+        source: 'rampart_deterministic',
+        suggestion: 'redact',
+      }),
+    ])
+  })
+
   it('fails loudly for an unknown label and returns nothing for no spans', () => {
     expect(() => reconcile(text, [span('UNKNOWN', at('alpha'), 0.9)])).toThrow(
       'Unrecognised Rampart label',

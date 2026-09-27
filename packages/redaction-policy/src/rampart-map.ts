@@ -230,31 +230,44 @@ export function normalizePersonDetections<T extends RampartSpanInput>(
 export function mapRampartSpans(output: RampartOutput): RedactionSpan[] {
   return output.spans
     .filter((span) => span.start < span.end)
-    .map((span, index) => {
-      const label = span.label ?? span.entity
-      if (!label || !labelMap[label]) {
-        throw new Error(`Unrecognised Rampart label: ${label ?? '<missing>'}`)
-      }
-      const mapping = labelMap[label]
-      // Always slice the source rather than trusting `span.text`. Upstream's
-      // offset-changing merges (partial-overlap union in policy.mergeSpans)
-      // widen start/end but keep the winner's text, so a carried `text` can
-      // disagree with the offsets. `RedactionSpan.text` is a contract finalize
-      // and the .docx burner enforce with text.slice(start, end) === text; the
-      // source is authoritative here, so derive it instead of inheriting it.
-      const text = output.text.slice(span.start, span.end)
-      return {
-        id: `span_rampart_${span.start}_${index}`,
-        start: span.start,
-        end: span.end,
-        text,
-        category: mapping.category,
-        source: mapping.source,
-        confidence: confidence(span.score),
-        suggestion: suggestedAction(mapping.category, mapping.dateOfBirth),
-      }
-    })
+    .map((span, index) =>
+      mapRampartSpan(output.text, span, `span_rampart_${span.start}_${index}`),
+    )
     .sort((left, right) => left.start - right.start || left.end - right.end)
+}
+
+/**
+ * Map one Rampart detection to one Obiter span. The pair is kept together by
+ * {@link reconcileRampartSpans}, which never has to assume that two separately
+ * filtered and sorted arrays still line up index for index.
+ */
+function mapRampartSpan(
+  text: string,
+  span: RampartSpanInput,
+  id: string,
+): RedactionSpan {
+  const label = span.label ?? span.entity
+  if (!label || !labelMap[label]) {
+    throw new Error(`Unrecognised Rampart label: ${label ?? '<missing>'}`)
+  }
+  const mapping = labelMap[label]
+  // Always slice the source rather than trusting `span.text`. Upstream's
+  // offset-changing merges (partial-overlap union in policy.mergeSpans) widen
+  // start/end but keep the winner's text, so a carried `text` can disagree with
+  // the offsets. `RedactionSpan.text` is a contract finalize and the .docx
+  // burner enforce with text.slice(start, end) === text; the source is
+  // authoritative here, so derive it instead of inheriting it.
+  const sliced = text.slice(span.start, span.end)
+  return {
+    id,
+    start: span.start,
+    end: span.end,
+    text: sliced,
+    category: mapping.category,
+    source: mapping.source,
+    confidence: confidence(span.score),
+    suggestion: suggestedAction(mapping.category, mapping.dateOfBirth),
+  }
 }
 
 /**
@@ -285,47 +298,59 @@ export function reconcileRampartSpans(
   text: string,
   spans: readonly RampartSpanInput[],
 ): RedactionSpan[] {
-  const ordered = spans
+  // Map each detection to its span first, then sort the pairs. A contributor
+  // and its mapped output are one value, so no later step can read a mapping
+  // that belongs to a different detection (the previous shape relied on two
+  // arrays filtered and sorted by identical comparators staying aligned).
+  const contributors = spans
     .filter((span) => span.start < span.end)
-    .sort((left, right) => left.start - right.start || left.end - right.end)
-  const mapped = mapRampartSpans({ text, spans: ordered })
+    .map((span, index) => ({
+      span,
+      mapped: mapRampartSpan(text, span, `span_rampart_${span.start}_${index}`),
+    }))
+    .sort(
+      (left, right) =>
+        left.mapped.start - right.mapped.start ||
+        left.mapped.end - right.mapped.end,
+    )
 
-  const clusters: number[][] = []
+  const clusters: Contributor[][] = []
   let coveredTo = -1
-  ordered.forEach((span, position) => {
+  for (const contributor of contributors) {
     const current = clusters[clusters.length - 1]
-    if (current !== undefined && span.start < coveredTo) {
-      current.push(position)
-      coveredTo = Math.max(coveredTo, span.end)
-      return
+    if (current !== undefined && contributor.mapped.start < coveredTo) {
+      current.push(contributor)
+      coveredTo = Math.max(coveredTo, contributor.mapped.end)
+      continue
     }
-    clusters.push([position])
-    coveredTo = span.end
-  })
+    clusters.push([contributor])
+    coveredTo = contributor.mapped.end
+  }
 
   return clusters
     .map((cluster, index) => {
-      const winner = cluster.reduce((best, position) =>
-        comparesAbove(position, best, mapped, ordered) > 0 ? position : best,
+      const winner = cluster.reduce((best, candidate) =>
+        comparesAbove(candidate, best) > 0 ? candidate : best,
       )
-      const start = Math.min(
-        ...cluster.map((position) => ordered[position]!.start),
-      )
-      const end = Math.max(...cluster.map((position) => ordered[position]!.end))
-      const base = mapped[winner]!
-      const redacts = cluster.some(
-        (position) => mapped[position]!.suggestion === 'redact',
-      )
+      const start = Math.min(...cluster.map((c) => c.mapped.start))
+      const end = Math.max(...cluster.map((c) => c.mapped.end))
+      const redacts = cluster.some((c) => c.mapped.suggestion === 'redact')
       return {
-        ...base,
+        ...winner.mapped,
         id: `span_rampart_${start}_${index}`,
         start,
         end,
         text: text.slice(start, end),
-        suggestion: redacts ? ('redact' as const) : base.suggestion,
+        suggestion: redacts ? ('redact' as const) : winner.mapped.suggestion,
       }
     })
     .sort((left, right) => left.start - right.start || left.end - right.end)
+}
+
+/** A detection and the span it mapped to, carried together as one unit. */
+interface Contributor {
+  readonly span: RampartSpanInput
+  readonly mapped: RedactionSpan
 }
 
 /**
@@ -334,17 +359,12 @@ export function reconcileRampartSpans(
  * trailing comparisons only order detections that map to identical output, so
  * the result does not depend on input order.
  */
-function comparesAbove(
-  candidate: number,
-  incumbent: number,
-  mapped: readonly RedactionSpan[],
-  spans: readonly RampartSpanInput[],
-): number {
-  const candidateScore = spans[candidate]!.score ?? 0
-  const incumbentScore = spans[incumbent]!.score ?? 0
+function comparesAbove(candidate: Contributor, incumbent: Contributor): number {
+  const candidateScore = candidate.span.score ?? 0
+  const incumbentScore = incumbent.span.score ?? 0
   if (candidateScore !== incumbentScore) return candidateScore - incumbentScore
-  const left = mapped[candidate]!
-  const right = mapped[incumbent]!
+  const left = candidate.mapped
+  const right = incumbent.mapped
   const leftLength = left.end - left.start
   const rightLength = right.end - right.start
   if (leftLength !== rightLength) return leftLength - rightLength
