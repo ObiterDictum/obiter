@@ -118,6 +118,7 @@ export function useDocumentSave({
       })
       return {
         versionId: saved.versionId,
+        versionNumber: saved.versionNumber,
         merged: remoteChange,
         lineage: saved.lineage,
       }
@@ -130,6 +131,7 @@ export function useDocumentSave({
       })
       return {
         versionId: saved.versionId,
+        versionNumber: saved.versionNumber,
         merged: false,
         lineage: saved.lineage,
       }
@@ -145,6 +147,7 @@ export function useDocumentSave({
       })
       return {
         versionId: saved.versionId,
+        versionNumber: saved.versionNumber,
         merged: true,
         lineage: saved.lineage,
       }
@@ -155,6 +158,7 @@ export function useDocumentSave({
     covered: readonly DraftSlot[],
     sent: DraftState,
     versionId: string,
+    versionNumber: number | undefined,
     merged: boolean,
     lineage?: DocumentVersionLineage,
   ) {
@@ -170,7 +174,7 @@ export function useDocumentSave({
         model,
         lineage,
         versionId,
-        trackChanges,
+        versionNumber,
       )
     setFailure(null)
     setStale(false)
@@ -218,6 +222,7 @@ export function useDocumentSave({
           attempt.covered,
           without,
           result.versionId,
+          result.versionNumber,
           result.merged,
           result.lineage,
         )
@@ -264,6 +269,7 @@ export function useDocumentSave({
         current.covered,
         sent,
         result.versionId,
+        result.versionNumber,
         result.merged,
         result.lineage,
       )
@@ -328,8 +334,21 @@ export function useDocumentSave({
     reload: () => void reload(),
     discardBlocked: () => drafts.clearSlots(blocked.map((item) => item.slot)),
     discardHeld: (ids: readonly string[]) => drafts.discardHeld(ids),
-    blockedHistoryMessage:
-      'Your change was saved, but the edit history for it could not be reconciled. Reloading discards the in-memory history; the saved document is unchanged.',
+    blockedHistoryMessage: blockedHistoryMessage(drafts.blockedReason),
+  }
+}
+
+/** One sentence naming why a committed save's history cannot be reconciled. */
+function blockedHistoryMessage(
+  reason: import('./use-save-baseline').BaselineBlockReason | null,
+) {
+  switch (reason) {
+    case 'newer-version':
+      return 'Your change was saved, but the document moved to a newer version before the saved model could be loaded. Reloading is required to continue; it discards the in-memory undo history. Your saved change is not lost.'
+    case 'reload-failed':
+      return 'Your change was saved, but the saved document could not be reloaded, so the edit history cannot be reconciled. Retry the reload; the saved document is unchanged.'
+    default:
+      return 'Your change was saved, but the edit history for it could not be reconciled. Reloading discards the in-memory history; the saved document is unchanged.'
   }
 }
 

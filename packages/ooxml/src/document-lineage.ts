@@ -235,28 +235,42 @@ export function buildVersionLineage(input: {
   canonicalParagraphIds: ReadonlyMap<DocumentParagraphWire, string>
   baseVersionId: string
   versionId: string
+  /**
+   * Whether the result run addresses can be trusted. A tracked save reparses
+   * to a different run list than the in-memory model (wrapped in `w:ins` /
+   * `w:del`), and run model ids are reallocated by document position on every
+   * parse, so a tracked version omits every run address. The client then
+   * refuses a run-keyed reversal instead of retargeting a positional id.
+   */
+  runAddressesReliable?: boolean
 }): DocumentVersionLineage {
   const { recorder, canonicalParagraphIds } = input
+  const runAddressesReliable = input.runAddressesReliable ?? true
   const paragraphs: DocumentParagraphLineage[] = []
 
   for (const story of input.model.stories) {
+    // The main story is the editable one. Its paragraphs are all part of the
+    // map, untouched ones included, so a run that only shifted position when
+    // an earlier paragraph was inserted or split still has a result address.
+    const wholeStory = story.kind === 'document'
     for (const paragraph of story.paragraphs) {
       const origin = recorder.paragraphOrigin.get(paragraph)
       const toParagraphId = canonicalParagraphIds.get(paragraph) ?? paragraph.id
       // A paragraph the batch touched, or one whose persisted id changed when
       // the version was canonicalised, is part of the base-to-result map. The
       // canonicalised-but-untouched entries are what let a restore anchor on a
-      // legacy paragraph resolve to its renamed result id.
+      // legacy paragraph resolve to its renamed result id. Outside the main
+      // story only those are useful, so the rest are omitted.
       const renamed = toParagraphId !== paragraph.id
-      if (!origin && !renamed) continue
-      const runs: DocumentLineageRun[] = paragraph.runs.map(
-        (run, runIndex) => ({
-          runIndex,
-          segments: recorder.runOrigins.get(run) ?? [
-            { fromRunId: run.id, fromOffset: 0, toOffset: run.text.length },
-          ],
-        }),
-      )
+      if (!wholeStory && !origin && !renamed) continue
+      const runs: DocumentLineageRun[] = runAddressesReliable
+        ? paragraph.runs.map((run, runIndex) => ({
+            runIndex,
+            segments: recorder.runOrigins.get(run) ?? [
+              { fromRunId: run.id, fromOffset: 0, toOffset: run.text.length },
+            ],
+          }))
+        : []
       paragraphs.push({
         fromParagraphId: origin ? origin.fromParagraphId : paragraph.id,
         toParagraphId,

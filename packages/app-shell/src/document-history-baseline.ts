@@ -50,6 +50,8 @@ export type SaveBaseline = {
   lineage?: DocumentVersionLineage
   /** The result version the lineage describes. */
   versionId?: string
+  /** The monotonic number of that version, for provenance against a reload. */
+  versionNumber?: number
   /**
    * The saved model, once the workspace has it. Absent between the commit and
    * the reloaded `/model` response, when an identity can only be a placeholder.
@@ -76,6 +78,35 @@ function pendingDeletedParagraphId(paragraphId: string) {
   return `${PENDING_BASELINE_PREFIX}restore:${paragraphId}`
 }
 
+/**
+ * The result address of a base run: the persisted paragraph it continues and
+ * its index in that paragraph's run list. This is the lineage's own result
+ * address; the model run id (`text-NNNNNN`) is positional and only knowable
+ * once the reloaded model is in hand.
+ */
+type RunAddress = { paragraphId: string; runIndex: number }
+
+function pendingRunAddressId(address: RunAddress) {
+  return `${PENDING_BASELINE_PREFIX}run-address:${address.paragraphId}:${String(address.runIndex)}`
+}
+
+/** A covered run the lineage never names. It is never sent; it stays pending. */
+function pendingUnresolvedRunId(baseRunId: string) {
+  return `${PENDING_BASELINE_PREFIX}run-unresolved:${baseRunId}`
+}
+
+function parsePendingRunAddress(key: string): RunAddress | null {
+  const prefix = `${PENDING_BASELINE_PREFIX}run-address:`
+  if (!key.startsWith(prefix)) return null
+  const rest = key.slice(prefix.length)
+  const at = rest.lastIndexOf(':')
+  if (at <= 0) return null
+  const paragraphId = rest.slice(0, at)
+  const runIndex = Number(rest.slice(at + 1))
+  if (!Number.isInteger(runIndex) || runIndex < 0) return null
+  return { paragraphId, runIndex }
+}
+
 type SavedIdentities = {
   /** Covered insert clientId -> the stored paragraph it became. */
   inserted: Map<string, string>
@@ -91,7 +122,12 @@ type SavedIdentities = {
   restoredBeforeAnchors: Map<string, string>
   /** Base paragraph id -> result paragraph id (authoritative lineage only). */
   paragraphIds: Map<string, string>
-  /** Base run id -> the result run that continues it. */
+  /**
+   * Base run id -> its result address in the lineage. This is available as
+   * soon as the lineage is, before the reloaded model names the run.
+   */
+  runAddresses: Map<string, RunAddress>
+  /** Base run id -> the result run model id (only once the model is loaded). */
   runIds: Map<string, string>
 }
 
@@ -114,6 +150,7 @@ function emptyIdentities(): SavedIdentities {
     restoredAnchors: new Map(),
     restoredBeforeAnchors: new Map(),
     paragraphIds: new Map(),
+    runAddresses: new Map(),
     runIds: new Map(),
   }
 }
@@ -146,43 +183,80 @@ function remapRecordKeys<T>(
 }
 
 /**
- * Retargets the paragraph identifiers a live draft state still holds after a
- * save renamed them. Run identifiers are not canonicalised, so the text
- * overrides are left alone; the paragraph-keyed maps and inserted anchors are
- * rewritten to the result ids the reloaded model uses.
+ * Retargets every identifier a live draft state still holds after a save
+ * moved it: paragraph ids through the paragraph map, and run-keyed overrides
+ * and emphasis through the base-to-result run map. A base run the lineage does
+ * not name is surfaced as unresolved, never silently retargeted at whatever
+ * run inherited its positional id.
  */
-export function remapDraftStateParagraphs(
+export function remapLiveDraftState(
   state: DraftState,
-  lineage: DocumentVersionLineage,
-): DraftState {
-  const map = paragraphMapFromLineage(lineage)
-  if (map.size === 0) return state
-  const remap = (id: string) => map.get(id) ?? id
-  return {
+  baseline: SaveBaseline,
+): { state: DraftState; unresolved: boolean } {
+  const toModel = baseline.toModel
+  if (!toModel) return { state, unresolved: false }
+  const identities = savedIdentities(baseline)
+  const paragraphMap = baseline.lineage
+    ? paragraphMapFromLineage(baseline.lineage)
+    : new Map<string, string>()
+  const remapParagraph = (id: string) => paragraphMap.get(id) ?? id
+  const fromRunIds = new Set(
+    (documentStory(baseline.fromModel)?.paragraphs ?? []).flatMap((paragraph) =>
+      paragraph.runs.map((run) => run.id),
+    ),
+  )
+  let unresolved = false
+
+  const drafts: Record<string, string> = {}
+  for (const [key, value] of Object.entries(state.drafts)) {
+    if (isPendingBaselineId(key)) {
+      drafts[key] = value
+      continue
+    }
+    const mapped = identities.runIds.get(key)
+    if (mapped) {
+      drafts[mapped] = value
+      continue
+    }
+    if (fromRunIds.has(key)) unresolved = true
+    drafts[key] = value
+  }
+
+  const emphasis = state.format.emphasis.map((item) => {
+    const runId = item.runId ? identities.runIds.get(item.runId) : undefined
+    if (runId) return { ...item, runId }
+    if (item.runId && fromRunIds.has(item.runId)) unresolved = true
+    return item.paragraphId
+      ? { ...item, paragraphId: remapParagraph(item.paragraphId) }
+      : item
+  })
+
+  const remapped: DraftState = {
     ...state,
+    drafts,
     inserts: state.inserts.map((insert) => ({
       ...insert,
-      afterParagraphId:
-        map.get(insert.afterParagraphId) ?? insert.afterParagraphId,
+      afterParagraphId: remapParagraph(insert.afterParagraphId),
       ...(insert.beforeParagraphId
-        ? {
-            beforeParagraphId:
-              map.get(insert.beforeParagraphId) ?? insert.beforeParagraphId,
-          }
+        ? { beforeParagraphId: remapParagraph(insert.beforeParagraphId) }
         : {}),
     })),
-    deletedParagraphIds: state.deletedParagraphIds.map(remap),
-    extraRuns: remapRecordKeys(state.extraRuns, remap),
+    deletedParagraphIds: state.deletedParagraphIds.map(remapParagraph),
+    extraRuns: remapRecordKeys(state.extraRuns, remapParagraph),
     format: {
       ...state.format,
-      paragraphStyles: remapRecordKeys(state.format.paragraphStyles, remap),
-      numbering: remapRecordKeys(state.format.numbering, remap),
-      emphasis: state.format.emphasis.map((item) =>
-        item.paragraphId
-          ? { ...item, paragraphId: remap(item.paragraphId) }
-          : item,
+      paragraphStyles: remapRecordKeys(
+        state.format.paragraphStyles,
+        remapParagraph,
       ),
+      numbering: remapRecordKeys(state.format.numbering, remapParagraph),
+      emphasis,
     },
+  }
+  const resolved = resolveBaselineIdentities(remapped, baseline)
+  return {
+    state: resolved,
+    unresolved: unresolved || hasUnresolvedBaselineIdentities(resolved),
   }
 }
 
@@ -195,51 +269,103 @@ export function hasAuthoritativeLineage(baseline: SaveBaseline): boolean {
 }
 
 /**
- * Whether the lineage names every covered insertion and deletion. A response
- * that omits one is incomplete, so the caller must not translate it.
+ * The base runs a covered reversal has to be able to address. A missing
+ * address is what makes a translation unsafe: the result model run ids are
+ * positional, so falling back to the base id can name unrelated content.
+ */
+function coveredRunIds(
+  slot: DraftSlot,
+  baseline: Pick<SaveBaseline, 'sent' | 'fromModel'>,
+): string[] {
+  switch (slot.kind) {
+    case 'run-text':
+      return [slot.runId]
+    case 'extra-runs': {
+      const last = storyParagraph(
+        baseline.fromModel,
+        slot.paragraphId,
+      )?.runs.at(-1)
+      return last ? [last.id] : []
+    }
+    case 'emphasis': {
+      const sent = baseline.sent.format.emphasis.find(
+        (item) => emphasisSlotKey(item) === slot.key,
+      )
+      return sent?.runId ? [sent.runId] : []
+    }
+    default:
+      return []
+  }
+}
+
+/**
+ * Whether the lineage names every covered slot the translation needs. A
+ * response that omits one is incomplete, so the caller must not translate it:
+ * a positional fallback would retarget the reversal at unrelated content. A
+ * tracked version carries no run addresses at all (the reparsed run list
+ * differs), so any run-keyed covered slot is refused and surfaced as blocked.
  */
 export function lineageCoversCoveredSlots(
   lineage: DocumentVersionLineage,
   baseline: Pick<SaveBaseline, 'covered' | 'sent' | 'fromModel'>,
-  tracked: boolean,
 ): boolean {
-  const fromRunIds = new Set(
-    (documentStory(baseline.fromModel)?.paragraphs ?? []).flatMap((paragraph) =>
-      paragraph.runs.map((run) => run.id),
-    ),
-  )
-  const mappedRunIds = new Set(
-    lineage.paragraphs.flatMap((paragraph) =>
-      paragraph.runs.flatMap((run) =>
-        run.segments.flatMap((segment) =>
-          segment.fromRunId ? [segment.fromRunId] : [],
-        ),
-      ),
-    ),
-  )
+  const runAddresses = new Set<string>()
+  const paragraphIds = new Set<string>()
+  for (const entry of lineage.paragraphs) {
+    if (entry.fromParagraphId) paragraphIds.add(entry.fromParagraphId)
+    for (const run of entry.runs) {
+      for (const segment of run.segments) {
+        if (segment.fromRunId) runAddresses.add(segment.fromRunId)
+      }
+    }
+  }
   for (const slot of baseline.covered) {
     if (slot.kind === 'insert') {
-      const mapped = lineage.paragraphs.some(
-        (entry) => entry.insertedByIntent === slot.clientId,
-      )
-      if (!mapped) return false
+      if (
+        !lineage.paragraphs.some(
+          (entry) => entry.insertedByIntent === slot.clientId,
+        )
+      ) {
+        return false
+      }
+      continue
     }
     if (slot.kind === 'delete') {
-      const mapped = lineage.paragraphs.some(
-        (entry) => entry.fromParagraphId === slot.paragraphId,
-      )
-      if (!mapped) return false
+      if (
+        !lineage.paragraphs.some(
+          (entry) => entry.fromParagraphId === slot.paragraphId,
+        )
+      ) {
+        return false
+      }
+      continue
     }
-    // A tracked edit's run is excluded from the parsed result model, so the
-    // lineage cannot address it. Refuse the tracked boundary rather than
-    // silently dropping the reversal; the caller surfaces a recoverable state.
-    if (
-      tracked &&
-      slot.kind === 'run-text' &&
-      fromRunIds.has(slot.runId) &&
-      !mappedRunIds.has(slot.runId)
-    ) {
+    if (slot.kind === 'paragraph-style' || slot.kind === 'numbering') {
+      // A style on a paragraph the same batch inserted is addressed by the
+      // insert's intent id; every other paragraph must be in the map.
+      if (paragraphIds.has(slot.paragraphId)) continue
+      if (
+        lineage.paragraphs.some(
+          (entry) => entry.insertedByIntent === slot.paragraphId,
+        )
+      ) {
+        continue
+      }
       return false
+    }
+    if (slot.kind === 'emphasis') {
+      const sent = baseline.sent.format.emphasis.find(
+        (item) => emphasisSlotKey(item) === slot.key,
+      )
+      if (sent?.runId) {
+        if (!runAddresses.has(sent.runId)) return false
+      } else if (sent?.paragraphId && !paragraphIds.has(sent.paragraphId)) {
+        return false
+      }
+      continue
+    }
+    for (const runId of coveredRunIds(slot, baseline)) {
+      if (!runAddresses.has(runId)) return false
     }
   }
   return true
@@ -261,13 +387,25 @@ function lineageIdentities(
   const restoredAnchors = new Map<string, string>()
   const restoredBeforeAnchors = new Map<string, string>()
   const paragraphIds = new Map<string, string>()
+  const runAddresses = new Map<string, RunAddress>()
   const runIds = new Map<string, string>()
 
   for (const entry of lineage.paragraphs) {
     if (entry.fromParagraphId && entry.toParagraphId) {
       paragraphIds.set(entry.fromParagraphId, entry.toParagraphId)
     }
-    if (!entry.toParagraphId || !toModel) continue
+    if (!entry.toParagraphId) continue
+    for (const run of entry.runs) {
+      for (const segment of run.segments) {
+        if (segment.fromRunId && !runAddresses.has(segment.fromRunId)) {
+          runAddresses.set(segment.fromRunId, {
+            paragraphId: entry.toParagraphId,
+            runIndex: run.runIndex,
+          })
+        }
+      }
+    }
+    if (!toModel) continue
     const paragraph = storyParagraph(toModel, entry.toParagraphId)
     for (const run of entry.runs) {
       const resultRunId = paragraph?.runs[run.runIndex]?.id
@@ -333,6 +471,7 @@ function lineageIdentities(
     restoredAnchors,
     restoredBeforeAnchors,
     paragraphIds,
+    runAddresses,
     runIds,
   }
 }
@@ -396,20 +535,21 @@ export function translateSnapshot(
   for (const slot of baseline.covered) {
     switch (slot.kind) {
       case 'run-text': {
-        const targetRunId = identities.runIds.get(slot.runId) ?? slot.runId
+        // Never fall back to the base run id: it names unrelated content once
+        // a save shifts run positions. The lineage address is the only reason
+        // a reversal can be addressed before the model reloads.
+        const address = identities.runAddresses.get(slot.runId)
+        const targetRunId =
+          identities.runIds.get(slot.runId) ??
+          (address
+            ? pendingRunAddressId(address)
+            : pendingUnresolvedRunId(slot.runId))
         const pre =
           snapshot.drafts[slot.runId] ?? runText(baseline.fromModel, slot.runId)
         const post =
           baseline.sent.drafts[slot.runId] ??
           runText(baseline.fromModel, slot.runId)
         if (pre === undefined || pre === post) {
-          delete next.drafts[slot.runId]
-          break
-        }
-        if (
-          baseline.toModel &&
-          runText(baseline.toModel, targetRunId) === undefined
-        ) {
           delete next.drafts[slot.runId]
           break
         }
@@ -527,8 +667,17 @@ export function translateSnapshot(
               )
             : null
         if (!inverse) break
+        const sentRunAddress = sent.runId
+          ? identities.runAddresses.get(sent.runId)
+          : undefined
         const address: PendingEmphasis = sent.runId
-          ? { runId: identities.runIds.get(sent.runId) ?? sent.runId }
+          ? {
+              runId:
+                identities.runIds.get(sent.runId) ??
+                (sentRunAddress
+                  ? pendingRunAddressId(sentRunAddress)
+                  : pendingUnresolvedRunId(sent.runId)),
+            }
           : {
               paragraphId:
                 identities.paragraphIds.get(sent.paragraphId ?? '') ??
@@ -564,8 +713,12 @@ export function translateSnapshot(
         const lastOriginal = paragraph?.runs.at(-1)
         Object.assign(next, removeDraftSlots(next, [slot]))
         if (!lastOriginal) break
+        const lastAddress = identities.runAddresses.get(lastOriginal.id)
         const targetRunId =
-          identities.runIds.get(lastOriginal.id) ?? lastOriginal.id
+          identities.runIds.get(lastOriginal.id) ??
+          (lastAddress
+            ? pendingRunAddressId(lastAddress)
+            : pendingUnresolvedRunId(lastOriginal.id))
         const pre =
           snapshot.drafts[lastOriginal.id] ??
           runText(baseline.fromModel, lastOriginal.id)
@@ -648,13 +801,16 @@ function restoreInsert(
 
 /**
  * Resolves the placeholders a pre-reload translation left behind now that the
- * saved model names the paragraphs. An identity that still cannot be matched is
- * dropped: it was never replayable, and a stale id would only be blocked later.
+ * saved model names the result content. An identity the model still cannot
+ * name is kept, never dropped, so the caller can tell that the reversal cannot
+ * be represented and block instead of silently losing it.
  */
 export function resolveBaselineIdentities(
   state: DraftState,
   baseline: SaveBaseline,
 ): DraftState {
+  const toModel = baseline.toModel
+  if (!toModel) return state
   const identities = savedIdentities(baseline)
   const drafts: Record<string, string> = {}
   for (const [key, value] of Object.entries(state.drafts)) {
@@ -662,9 +818,23 @@ export function resolveBaselineIdentities(
       drafts[key] = value
       continue
     }
-    const clientId = key.slice(`${PENDING_BASELINE_PREFIX}run:`.length)
-    const runId = identities.insertedRuns.get(clientId)
-    if (runId) drafts[runId] = value
+    const address = parsePendingRunAddress(key)
+    const addressed = address
+      ? storyParagraph(toModel, address.paragraphId)?.runs[address.runIndex]?.id
+      : undefined
+    if (addressed) {
+      drafts[addressed] = value
+      continue
+    }
+    if (key.startsWith(`${PENDING_BASELINE_PREFIX}run:`)) {
+      const clientId = key.slice(`${PENDING_BASELINE_PREFIX}run:`.length)
+      const runId = identities.insertedRuns.get(clientId)
+      if (runId) {
+        drafts[runId] = value
+        continue
+      }
+    }
+    drafts[key] = value
   }
   const deletedParagraphIds: string[] = []
   for (const id of state.deletedParagraphIds) {
@@ -672,11 +842,44 @@ export function resolveBaselineIdentities(
       deletedParagraphIds.push(id)
       continue
     }
-    const clientId = id.slice(`${PENDING_BASELINE_PREFIX}delete:`.length)
-    const paragraphId = identities.inserted.get(clientId)
-    if (paragraphId) deletedParagraphIds.push(paragraphId)
+    if (id.startsWith(`${PENDING_BASELINE_PREFIX}delete:`)) {
+      const clientId = id.slice(`${PENDING_BASELINE_PREFIX}delete:`.length)
+      const paragraphId = identities.inserted.get(clientId)
+      if (paragraphId) {
+        deletedParagraphIds.push(paragraphId)
+        continue
+      }
+    }
+    deletedParagraphIds.push(id)
   }
-  return { ...state, drafts, deletedParagraphIds }
+  const emphasis = state.format.emphasis.map((item) => {
+    if (!item.runId || !isPendingBaselineId(item.runId)) return item
+    const address = parsePendingRunAddress(item.runId)
+    const runId = address
+      ? storyParagraph(toModel, address.paragraphId)?.runs[address.runIndex]?.id
+      : undefined
+    return runId ? { ...item, runId } : item
+  })
+  return {
+    ...state,
+    drafts,
+    deletedParagraphIds,
+    format: { ...state.format, emphasis },
+  }
+}
+
+/**
+ * Whether any identity the boundary introduced is still without a result
+ * address. The caller must treat that as a blocked boundary, not as saved work.
+ */
+export function hasUnresolvedBaselineIdentities(state: DraftState): boolean {
+  return (
+    Object.keys(state.drafts).some(isPendingBaselineId) ||
+    state.deletedParagraphIds.some(isPendingBaselineId) ||
+    state.format.emphasis.some(
+      (item) => item.runId !== undefined && isPendingBaselineId(item.runId),
+    )
+  )
 }
 
 /** Whether a boundary still holds an identity the saved model has not named. */

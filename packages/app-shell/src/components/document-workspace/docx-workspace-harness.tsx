@@ -256,6 +256,8 @@ export function mountWorkspace(
     modelFor?: WorkspaceModelSource
     editAsync?: ReturnType<typeof vi.fn>
     mergeAsync?: ReturnType<typeof vi.fn>
+    /** Simulates the reload query failing, so a pending baseline cannot resolve. */
+    modelError?: () => boolean
   } = {},
 ) {
   hooks.useCurrentUser.mockReturnValue({
@@ -277,7 +279,7 @@ export function mountWorkspace(
     }
     return {
       isLoading: false,
-      isError: false,
+      isError: options.modelError?.() ?? false,
       data: { documentId: id, ...current },
     }
   })

@@ -11,7 +11,9 @@ import {
   type DraftState,
 } from './document-save-plan'
 import {
+  hasUnresolvedBaselineIdentities,
   lineageCoversCoveredSlots,
+  remapLiveDraftState,
   resolveBaselineIdentities,
   translateSnapshot,
   type SaveBaseline,
@@ -185,6 +187,25 @@ describe('translateSnapshot', () => {
       covered: [runTextSlot('r1')],
       sent,
       fromModel,
+      lineage: {
+        version: 1,
+        baseVersionId: 'ver_1',
+        versionId: 'ver_2',
+        acceptedOperations: [0],
+        paragraphs: [
+          {
+            fromParagraphId: 'p1',
+            toParagraphId: 'p1',
+            runs: [
+              {
+                runIndex: 0,
+                segments: [{ fromRunId: 'r1', fromOffset: 0, toOffset: 5 }],
+              },
+            ],
+          },
+        ],
+      },
+      versionId: 'ver_2',
       toModel: model([
         { id: 'p1', run: 'r1', text: 'Hello world' },
         { id: 'p2', run: 'r2', text: 'tail' },
@@ -615,34 +636,115 @@ describe('lineage-driven identity', () => {
     expect(translated?.extraRuns).toEqual({})
   })
 
-  it('refuses a tracked boundary whose lineage cannot address the run', () => {
+  it('never keeps a source run id when the lineage cannot address it', () => {
     const sent: DraftState = {
       ...emptyDraftState(),
       drafts: { 'text-000001': 'Hello world' },
     }
-    const uncovered = {
-      version: 1 as const,
+    const noRunAddresses: DocumentVersionLineage = {
+      version: 1,
       baseVersionId: 'ver_1',
       versionId: 'ver_2',
       acceptedOperations: [0],
       paragraphs: [],
     }
-    // A tracked edit's run is absent from the result model, so the lineage has
-    // no address for it and the boundary is refused rather than dropped.
+    // The boundary is refused before any translation happens.
     expect(
-      lineageCoversCoveredSlots(
-        uncovered,
-        { covered: [runTextSlot('text-000001')], sent, fromModel: baseModel },
-        true,
-      ),
+      lineageCoversCoveredSlots(noRunAddresses, {
+        covered: [runTextSlot('text-000001')],
+        sent,
+        fromModel: baseModel,
+      }),
     ).toBe(false)
-    // The untracked lineage that maps the run is accepted.
+    // Defence in depth: even a direct translation must not produce a draft
+    // keyed by the source run id, which post-reload names unrelated content.
+    const translated = translateSnapshot(emptyDraftState(), {
+      covered: [runTextSlot('text-000001')],
+      sent,
+      fromModel: baseModel,
+      lineage: noRunAddresses,
+      versionId: 'ver_2',
+    })
+    expect(Object.keys(translated?.drafts ?? {})).not.toContain('text-000001')
     expect(
-      lineageCoversCoveredSlots(
-        lineage,
-        { covered: [runTextSlot('text-000001')], sent, fromModel: baseModel },
-        true,
-      ),
+      hasUnresolvedBaselineIdentities(translated ?? emptyDraftState()),
+    ).toBe(true)
+  })
+
+  it('surfaces an uncovered base run the lineage does not name', () => {
+    // A run the batch did not cover still names a base identity. If the
+    // lineage omits its result address, keeping the base id would retarget it.
+    const state: DraftState = {
+      ...emptyDraftState(),
+      drafts: { 'text-000002': 'typed late' },
+    }
+    const lineageWithoutBeta: DocumentVersionLineage = {
+      version: 1,
+      baseVersionId: 'ver_1',
+      versionId: 'ver_2',
+      acceptedOperations: [0],
+      paragraphs: [
+        {
+          fromParagraphId: 'para-000001',
+          toParagraphId: 'para-w14-00000001',
+          runs: [
+            {
+              runIndex: 0,
+              segments: [
+                { fromRunId: 'text-000001', fromOffset: 0, toOffset: 5 },
+              ],
+            },
+          ],
+        },
+      ],
+    }
+    const result = remapLiveDraftState(state, {
+      covered: [],
+      sent: emptyDraftState(),
+      fromModel: baseModel,
+      lineage: lineageWithoutBeta,
+      versionId: 'ver_2',
+      toModel: resultModel,
+    })
+    expect(result.unresolved).toBe(true)
+    // The base key is left explicit as unsaved work, never silently sent.
+    expect(Object.keys(result.state.drafts)).toContain('text-000002')
+  })
+
+  it('refuses a boundary whose lineage carries no address for the run', () => {
+    const sent: DraftState = {
+      ...emptyDraftState(),
+      drafts: { 'text-000001': 'Hello world' },
+    }
+    // A tracked version omits every run address, so a covered run-keyed
+    // reversal cannot be translated and the boundary is refused, not guessed.
+    const uncovered: DocumentVersionLineage = {
+      version: 1,
+      baseVersionId: 'ver_1',
+      versionId: 'ver_2',
+      acceptedOperations: [0],
+      paragraphs: [
+        {
+          fromParagraphId: 'para-000001',
+          toParagraphId: 'para-w14-00000001',
+          runs: [],
+        },
+      ],
+    }
+    expect(
+      lineageCoversCoveredSlots(uncovered, {
+        covered: [runTextSlot('text-000001')],
+        sent,
+        fromModel: baseModel,
+      }),
+    ).toBe(false)
+    // The lineage that maps the run is accepted.
+    expect(
+      lineageCoversCoveredSlots(lineage, {
+        covered: [runTextSlot('text-000001')],
+        sent,
+        fromModel: baseModel,
+      }),
     ).toBe(true)
   })
 })

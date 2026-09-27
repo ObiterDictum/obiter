@@ -141,6 +141,9 @@ async function prepareEditedSource(
     canonicalParagraphIds,
     baseVersionId: input.baseVersionId,
     versionId: '',
+    // Tracked wrappers reparse to a different run list, so no run address in a
+    // tracked version is trustworthy. The client blocks a run-keyed reversal.
+    runAddressesReliable: !input.trackChanges,
   })
   const { versionId: _versionId, ...lineage } = built
   return { editedBytes, lineage }

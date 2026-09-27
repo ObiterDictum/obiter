@@ -27,7 +27,11 @@ import {
 import { ApiError } from '../../api'
 import { emptyDraftState } from '../../document-save-plan'
 import { writeDocumentDraft } from '../../document-draft-store'
-import { mountWorkspace, selectBodyParagraph } from './docx-workspace-harness'
+import {
+  mountWorkspace,
+  openRibbonTab,
+  selectBodyParagraph,
+} from './docx-workspace-harness'
 import { clickParagraph, nativeSelect } from './paragraph-selection-harness'
 
 type PersistedParagraph = { runs: Array<{ text: string }> }
@@ -51,11 +55,21 @@ async function server(initial: readonly string[]) {
   let version = 1
   let paragraphs = toPersisted(parsed.model)
 
-  const apply = async (operations: readonly DocumentEditOperation[] = []) => {
+  const apply = async (
+    operations: readonly DocumentEditOperation[] = [],
+    trackChanges = false,
+  ) => {
     const baseVersionId = `ver_${String(version)}`
     const document = await parseDocx(bytes)
     const recorder = createLineageRecorder(document.model)
-    applyDocumentEdits(document, operations, undefined, recorder)
+    applyDocumentEdits(
+      document,
+      operations,
+      trackChanges
+        ? { author: 'Lex', date: '2026-09-27T12:00:00.000Z' }
+        : undefined,
+      recorder,
+    )
     const canonical = canonicaliseParagraphIdentities(document)
     const nextVersion = version + 1
     const lineage = buildVersionLineage({
@@ -64,6 +78,7 @@ async function server(initial: readonly string[]) {
       canonicalParagraphIds: canonical,
       baseVersionId,
       versionId: `ver_${String(nextVersion)}`,
+      runAddressesReliable: !trackChanges,
     })
     bytes = await serialiseDocx(document)
     version = nextVersion
@@ -77,11 +92,16 @@ async function server(initial: readonly string[]) {
     }
   }
   let lastSave: Promise<void> = Promise.resolve()
-  const editAsync = vi.fn((input: { operations?: DocumentEditOperation[] }) => {
-    const result = apply(input.operations ?? [])
-    lastSave = result.then(() => undefined)
-    return result
-  })
+  const editAsync = vi.fn(
+    (input: {
+      operations?: DocumentEditOperation[]
+      trackChanges?: boolean
+    }) => {
+      const result = apply(input.operations ?? [], input.trackChanges ?? false)
+      lastSave = result.then(() => undefined)
+      return result
+    },
+  )
   return {
     editAsync,
     apply,
@@ -108,6 +128,12 @@ function field(): HTMLTextAreaElement {
 const undoButton = () => screen.getByRole('button', { name: 'Undo' })
 const redoButton = () => screen.getByRole('button', { name: 'Redo' })
 const saveButton = () => screen.getByRole('button', { name: 'Save' })
+
+function saveState() {
+  return document
+    .querySelector('[data-save-state]')
+    ?.getAttribute('data-save-state')
+}
 
 function persistedText(paragraphs: readonly PersistedParagraph[]) {
   return paragraphs.map((item) => item.runs.map((run) => run.text).join(''))
@@ -508,6 +534,272 @@ describe('undo across a successful save', () => {
     // taken against this one must not be replayable over it.
     expect(redoButton()).toHaveProperty('disabled', true)
     expect(undoButton()).toHaveProperty('disabled', true)
+  })
+
+  it('reverses a saved insert and a run edit without retargeting a neighbour', async () => {
+    // `insert after Alpha` shifts every later run's positional id, and Gamma's
+    // edit rides on the same save. Undo must reverse Gamma at the run that
+    // continues Gamma, never at the run that inherited its old number.
+    const document = await server(['Alpha', 'Beta', 'Gamma'])
+    mountWorkspace({
+      editAsync: document.editAsync,
+      modelFor: document.modelFor,
+    })
+    clickParagraph('para-000003')
+    fireEvent.change(field(), { target: { value: 'GAMMA' } })
+    clickParagraph('para-000001')
+    fireEvent.click(screen.getByRole('button', { name: 'Insert paragraph' }))
+    fireEvent.change(screen.getByLabelText('Pending paragraph text'), {
+      target: { value: 'Inserted' },
+    })
+    await clickSaveAndSettle(document, 1)
+    expect(persistedText(document.paragraphs)).toEqual([
+      'Alpha',
+      'Inserted',
+      'Beta',
+      'GAMMA',
+    ])
+
+    // Three history steps: the typing, the insert, and Gamma's edit.
+    fireEvent.click(undoButton())
+    fireEvent.click(undoButton())
+    fireEvent.click(undoButton())
+    await clickSaveAndSettle(document, 2)
+    expect(persistedText(document.paragraphs)).toEqual([
+      'Alpha',
+      'Beta',
+      'Gamma',
+    ])
+  })
+
+  it('reverses a bold-range split and a run edit together', async () => {
+    // Formatting range over 'Al' splits Alpha's run, so Beta's run number
+    // moves. The saved Beta edit must still reverse at Beta.
+    const document = await server(['Alpha', 'Beta'])
+    mountWorkspace({
+      editAsync: document.editAsync,
+      modelFor: document.modelFor,
+    })
+    clickParagraph('para-000001')
+    nativeSelect(0, 2)
+    fireEvent.click(screen.getByRole('button', { name: 'Bold' }))
+    clickParagraph('para-000002')
+    fireEvent.change(field(), { target: { value: 'BETA' } })
+    await clickSaveAndSettle(document, 1)
+    expect(persistedText(document.paragraphs)).toEqual(['Alpha', 'BETA'])
+
+    fireEvent.click(undoButton())
+    fireEvent.click(undoButton())
+    await clickSaveAndSettle(document, 2)
+    expect(persistedText(document.paragraphs)).toEqual(['Alpha', 'Beta'])
+  })
+
+  it('keeps typing made during a run-shifting save on the right paragraph', async () => {
+    // A save that inserts before Beta renumbers every later run. Text typed
+    // while that save is in flight was not in it, so it must follow the run
+    // that continues Beta, not the run that inherited Beta's old number.
+    const document = await server(['Alpha', 'Beta'])
+    let resolveFirst: (value: unknown) => void = () => undefined
+    let applyPromise: Promise<unknown> = Promise.resolve()
+    const editAsync = vi
+      .fn()
+      .mockImplementationOnce(
+        (input: { operations?: DocumentEditOperation[] }) =>
+          new Promise((resolve) => {
+            resolveFirst = () => {
+              applyPromise = document.apply(input.operations ?? [])
+              resolve(applyPromise)
+            }
+          }),
+      )
+      .mockImplementation((input: { operations?: DocumentEditOperation[] }) =>
+        document.editAsync(input),
+      )
+    mountWorkspace({
+      editAsync,
+      modelFor: document.modelFor,
+    })
+    clickParagraph('para-000001')
+    fireEvent.click(screen.getByRole('button', { name: 'Insert paragraph' }))
+    fireEvent.change(screen.getByLabelText('Pending paragraph text'), {
+      target: { value: 'Inserted' },
+    })
+    fireEvent.click(saveButton())
+    await waitFor(() => expect(editAsync).toHaveBeenCalledTimes(1))
+
+    // Type into Beta while the insert is in flight. This edit was not sent.
+    clickParagraph('para-000002')
+    fireEvent.change(field(), { target: { value: 'BETA' } })
+    await act(async () => {
+      resolveFirst(undefined)
+      await applyPromise
+    })
+
+    await waitFor(() => expect(saveState()).toBe('unsaved'))
+    await clickSaveAndSettle(
+      { editAsync, waitForSave: document.waitForSave },
+      2,
+    )
+    // The in-flight text lands on Beta; the inserted paragraph is not doubled
+    // and no neighbour is overwritten.
+    expect(persistedText(document.paragraphs)).toEqual([
+      'Alpha',
+      'Inserted',
+      'BETA',
+    ])
+  })
+
+  it('blocks a tracked save rather than retargeting a run positionally', async () => {
+    const document = await server(['Hello', 'tail'])
+    mountWorkspace({
+      editAsync: document.editAsync,
+      modelFor: document.modelFor,
+    })
+    openRibbonTab('Review')
+    fireEvent.click(screen.getByRole('button', { name: 'Track changes off' }))
+    openRibbonTab('Home')
+    selectBodyParagraph()
+    fireEvent.change(field(), { target: { value: 'Hello world' } })
+    await clickSaveAndSettle(document, 1)
+
+    // The tracked run reparses to a different run list, so the lineage carries
+    // no address for it. The boundary is refused and surfaced, never reported
+    // saved and never resent to a positional id.
+    await waitFor(() => expect(saveState()).toBe('blocked'))
+    expect(
+      screen.getByText(/edit history for it could not be reconciled/i),
+    ).toBeTruthy()
+    expect(saveButton()).toHaveProperty('disabled', true)
+
+    fireEvent.click(saveButton())
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    expect(document.editAsync).toHaveBeenCalledTimes(1)
+    // The other paragraph is untouched by the blocked boundary.
+    expect(persistedText(document.paragraphs)[1]).toBe('tail')
+  })
+
+  it('blocks when a newer version replaces the expected reload', async () => {
+    const document = await server(['Hello'])
+    const base = document.modelFor
+    let newer = false
+    const editAsync = vi.fn(async (input: never) => {
+      const result = await document.editAsync(input)
+      newer = true
+      return result
+    })
+    const modelFor = (_id: string) => {
+      const current = base()
+      return newer
+        ? { ...current, versionId: 'ver_99', versionNumber: 99 }
+        : current
+    }
+    mountWorkspace({ editAsync, modelFor })
+    selectBodyParagraph()
+    fireEvent.change(field(), { target: { value: 'Hello world' } })
+    await clickSaveAndSettle(
+      { editAsync, waitForSave: document.waitForSave },
+      1,
+    )
+
+    // The committed version is no longer served, so its model can never
+    // resolve the reversal. The workspace must say so and stop, not wedge on
+    // "Saving…" with an enabled-but-inert Save.
+    await waitFor(() => expect(saveState()).toBe('blocked'))
+    expect(screen.getByText(/moved to a newer version/i)).toBeTruthy()
+    expect(saveButton()).toHaveProperty('disabled', true)
+    expect(document.editAsync).toHaveBeenCalledTimes(1)
+  })
+
+  it('ignores a stale reload and resolves on the exact version', async () => {
+    const document = await server(['Hello'])
+    const beforeModel = document.modelFor().model
+    let stale = false
+    const editAsync = vi.fn(async (input: never) => {
+      const result = await document.editAsync(input)
+      stale = true
+      return result
+    })
+    // A stale response is the pre-save model under an older version, not the
+    // saved model mislabelled: the editor still renders the base content.
+    const modelFor = (_id: string) =>
+      stale
+        ? { versionId: 'ver_0', versionNumber: 0, model: beforeModel }
+        : document.modelFor()
+    mountWorkspace({ editAsync, modelFor })
+    selectBodyParagraph()
+    fireEvent.change(field(), { target: { value: 'Hello world' } })
+    await clickSaveAndSettle(
+      { editAsync, waitForSave: document.waitForSave },
+      1,
+    )
+
+    // The stale response is ignored; a later render carrying the exact saved
+    // version resolves the boundary without corruption.
+    stale = false
+    fireEvent.change(field(), { target: { value: 'Hello world!' } })
+    await waitFor(() => expect(saveState()).toBe('unsaved'))
+    await clickSaveAndSettle(document, 2)
+    expect(persistedText(document.paragraphs)).toEqual(['Hello world!'])
+  })
+
+  it('surfaces a failed reload and recovers on retry without resending', async () => {
+    const document = await server(['Hello'])
+    const beforeModel = document.modelFor().model
+    let reloadFails = false
+    const editAsync = vi.fn(async (input: never) => {
+      const result = await document.editAsync(input)
+      reloadFails = true
+      return result
+    })
+    // A failed refetch leaves the last successful model in the cache: the
+    // pre-save version, with no route to the committed version's identities.
+    const modelFor = (_id: string) =>
+      reloadFails
+        ? { versionId: 'ver_1', versionNumber: 1, model: beforeModel }
+        : document.modelFor()
+    mountWorkspace({ editAsync, modelFor, modelError: () => reloadFails })
+    selectBodyParagraph()
+    fireEvent.change(field(), { target: { value: 'Hello world' } })
+    await clickSaveAndSettle(
+      { editAsync, waitForSave: document.waitForSave },
+      1,
+    )
+
+    await waitFor(() => expect(saveState()).toBe('blocked'))
+    expect(screen.getByText(/could not be reloaded/i)).toBeTruthy()
+    expect(saveButton()).toHaveProperty('disabled', true)
+    // Recovery never resends the committed save.
+    expect(document.editAsync).toHaveBeenCalledTimes(1)
+
+    reloadFails = false
+    fireEvent.change(field(), { target: { value: 'Hello world!' } })
+    await waitFor(() => expect(saveState()).not.toBe('blocked'))
+    await clickSaveAndSettle(document, 2)
+    expect(persistedText(document.paragraphs)).toEqual(['Hello world!'])
+  })
+
+  it('survives repeated save, undo and new-edit cycles', async () => {
+    const document = await server(['Hello'])
+    mountWorkspace({
+      editAsync: document.editAsync,
+      modelFor: document.modelFor,
+    })
+    selectBodyParagraph()
+
+    fireEvent.change(field(), { target: { value: 'Hello one' } })
+    await clickSaveAndSettle(document, 1)
+    fireEvent.click(undoButton())
+    expect(field().value).toBe('Hello')
+    fireEvent.change(field(), { target: { value: 'Hello two' } })
+    await clickSaveAndSettle(document, 2)
+    expect(persistedText(document.paragraphs)).toEqual(['Hello two'])
+
+    fireEvent.click(undoButton())
+    expect(field().value).toBe('Hello')
+    fireEvent.change(field(), { target: { value: 'Hello three' } })
+    await clickSaveAndSettle(document, 3)
+    expect(persistedText(document.paragraphs)).toEqual(['Hello three'])
+    expect(document.editAsync).toHaveBeenCalledTimes(3)
   })
 })
 

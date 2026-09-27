@@ -9,18 +9,20 @@ import {
   listRecoverableDocumentDrafts,
   readDocumentDraft,
   rememberDocumentDraftUser,
-  resolveDocumentDraftWriter,
   resumeDocumentDraftWrites,
   writeDocumentDraft,
-  type DraftScope,
   type HeldChange,
   type RecoverableDraft,
 } from '../../document-draft-store'
 import { useWorkspaceDraftHistory } from '../../document-editor-history'
 import { holdSlotBundle, type DraftBundle } from './document-draft-holds'
-import { draftStorage, sessionDraftStorage } from './document-draft-storage'
+import {
+  draftStorage,
+  resolveDraftScope,
+  sessionDraftStorage,
+} from './document-draft-storage'
 import { useDraftWriterClaim } from './use-draft-writer-claim'
-import { useSaveBaseline } from './use-save-baseline'
+import { useSaveBaseline, type BaselineBlockReason } from './use-save-baseline'
 import type { FormatDrafts } from '../../document-format-edits'
 import {
   applyInsertText,
@@ -44,16 +46,11 @@ import {
   type DraftState,
 } from '../../document-save-plan'
 import type { ParagraphWordEdit } from './model-paragraph'
-export type WorkspaceDraftScope = {
-  organisationId: string
-  userId: string
-  documentId: string
-  /** Stored version the workspace opened at; undefined until the model loads. */
-  baseVersionId: string | undefined
-  /** The loaded model, which a successful save replaces with the saved one. */
-  model: DocumentModelWire | undefined
-}
-export type DraftPersistence = 'ok' | 'unavailable'
+import type {
+  DraftPersistence,
+  WorkspaceDraftScope,
+} from './document-workspace-draft-scope'
+
 export type WorkspaceDrafts = ReturnType<typeof useWorkspaceDrafts>
 
 export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
@@ -64,7 +61,8 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
   const history = useWorkspaceDraftHistory()
   const [persistence, setPersistence] = useState<DraftPersistence>('ok')
   const [restored, setRestored] = useState(false)
-  const [lineageUnresolved, setLineageUnresolved] = useState(false)
+  const [blockedReason, setBlockedReason] =
+    useState<BaselineBlockReason | null>(null)
   const [staleDraft, setStaleDraft] = useState<string | null>(null)
   const [recoverable, setRecoverable] = useState<RecoverableDraft[]>([])
   const [hydrated, setHydrated] = useState(false)
@@ -79,19 +77,17 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     history,
     model: scope.model,
     modelVersionId: scope.baseVersionId,
-    resolveState: (resolve) =>
-      setBundle((current) => ({ ...current, state: resolve(current.state) })),
+    modelVersionNumber: scope.baseVersionNumber,
+    modelError: scope.modelError ?? false,
+    state: bundle.state,
+    resolveState: (next) =>
+      setBundle((current) => ({ ...current, state: next })),
+    onBlocked: setBlockedReason,
   })
   const storage = draftStorage()
   const session = sessionDraftStorage()
-
-  function storedScope(): DraftScope {
-    return {
-      ...scope,
-      tabId: resolveDocumentDraftWriter(session, storage, instanceId.current),
-    }
-  }
-
+  const storedScope = () =>
+    resolveDraftScope(scope, session, storage, instanceId.current)
   useEffect(() => {
     if (scope.userId && scope.userId !== 'anonymous') {
       resumeDocumentDraftWrites()
@@ -155,14 +151,12 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     })
     setPersistence(ok ? 'ok' : 'unavailable')
   }, [bundle, scope.baseVersionId, storage, hydrated])
-
   useDraftWriterClaim({
     storage,
     documentId: scope.documentId,
     writerId: () => storedScope().tabId,
     instanceId: instanceId.current,
   })
-
   function checkpoint() {
     // Recording ends the redo branch: a new edit supersedes anything undone.
     history.record(bundle.state)
@@ -182,7 +176,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     fromModel: DocumentModelWire,
     lineage?: import('@obiter/contracts').DocumentVersionLineage,
     versionId?: string,
-    tracked = false,
+    versionNumber?: number,
   ) {
     clearSlots(covered, sent)
     const { resolved } = baseline.commit(
@@ -191,9 +185,9 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
       fromModel,
       lineage,
       versionId,
-      tracked,
+      versionNumber,
     )
-    setLineageUnresolved(!resolved)
+    setBlockedReason(resolved ? null : 'lineage')
   }
 
   function resetDrafts() {
@@ -203,7 +197,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     setRestored(false)
     setStaleDraft(null)
     setRecoverable([])
-    setLineageUnresolved(false)
+    setBlockedReason(null)
   }
 
   function setState(update: (current: DraftState) => DraftState) {
@@ -285,6 +279,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     // taken against this one cannot be replayed over it.
     history.clear()
     baseline.clear()
+    setBlockedReason(null)
     setBundle({ state: result.state, held: result.held })
     setRestored(true)
     setRecoverable((current) =>
@@ -476,7 +471,8 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     discardHeld,
     persistence,
     restored,
-    lineageUnresolved,
+    lineageUnresolved: blockedReason !== null,
+    blockedReason,
     paragraphRemap: baseline.paragraphRemap,
     boundaryPending: baseline.pendingVersion !== null,
     staleDraft,
@@ -493,7 +489,7 @@ export function useWorkspaceDrafts(scope: WorkspaceDraftScope) {
     insertText,
     insertAfter,
     deleteParagraph,
-    canUndo: history.canUndo && !lineageUnresolved,
-    canRedo: history.canRedo && !lineageUnresolved,
+    canUndo: history.canUndo && blockedReason === null,
+    canRedo: history.canRedo && blockedReason === null,
   }
 }

@@ -15,13 +15,33 @@ import {
 } from './docx-workspace-harness'
 
 /** The authoritative lineage a text-only save returns: no structural slots. */
+/**
+ * A text-only save of `r1` in `p1`: the run keeps its result address, which
+ * the workspace resolves the reversal through.
+ */
 function textEditLineage(baseVersionId: string, versionId: string) {
   return {
     version: 1 as const,
     baseVersionId,
     versionId,
     acceptedOperations: [0],
-    paragraphs: [],
+    paragraphs: [
+      {
+        fromParagraphId: 'p1',
+        toParagraphId: 'p1',
+        runs: [
+          {
+            runIndex: 0,
+            // The two mounted fixtures address the same single run under
+            // different ids (`r1` and `p1-r`).
+            segments: [
+              { fromRunId: 'r1', fromOffset: 0, toOffset: 0 },
+              { fromRunId: 'p1-r', fromOffset: 0, toOffset: 0 },
+            ],
+          },
+        ],
+      },
+    ],
   }
 }
 

@@ -30,14 +30,28 @@ function field(): HTMLTextAreaElement {
   return editor
 }
 
-/** The authoritative lineage a text-only save returns: no structural slots. */
+/**
+ * The authoritative lineage a text-only save of `r1` in `p1` returns: no
+ * structural slots, but the run keeps its result address.
+ */
 function textEditLineage() {
   return {
     version: 1 as const,
     baseVersionId: 'ver_1',
     versionId: 'ver_2',
     acceptedOperations: [0],
-    paragraphs: [],
+    paragraphs: [
+      {
+        fromParagraphId: 'p1',
+        toParagraphId: 'p1',
+        runs: [
+          {
+            runIndex: 0,
+            segments: [{ fromRunId: 'r1', fromOffset: 0, toOffset: 0 }],
+          },
+        ],
+      },
+    ],
   }
 }
 

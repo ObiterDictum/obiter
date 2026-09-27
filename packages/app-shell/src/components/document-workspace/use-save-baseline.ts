@@ -3,8 +3,7 @@ import type { DocumentModelWire } from '@obiter/contracts'
 import {
   lineageCoversCoveredSlots,
   paragraphMapFromLineage,
-  remapDraftStateParagraphs,
-  resolveBaselineIdentities,
+  remapLiveDraftState,
   translateSnapshot,
   type SaveBaseline,
 } from '../../document-history-baseline'
@@ -14,22 +13,37 @@ import type { useWorkspaceDraftHistory } from '../../document-editor-history'
 type DraftHistory = ReturnType<typeof useWorkspaceDraftHistory>
 
 /**
+ * Why the save boundary cannot be reconciled, when it cannot. Each carries its
+ * own recovery: a missing or incomplete lineage, a document that moved past the
+ * committed version, or a reload that failed before the result model arrived.
+ */
+export type BaselineBlockReason = 'lineage' | 'newer-version' | 'reload-failed'
+
+/**
  * Owns the one record of where the history baseline has advanced to. A
  * successful save translates the history through `commit`; the effect resolves
- * the structural reversals the reloaded model has just named. The draft hook
- * keeps the live state; this hook keeps only the boundary between it and the
- * saved document.
+ * the run and paragraph addresses the reloaded model has just named. The draft
+ * hook keeps the live state; this hook keeps only the boundary between it and
+ * the saved document.
  */
 export function useSaveBaseline({
   history,
   model,
   modelVersionId,
+  modelVersionNumber,
+  modelError,
+  state,
   resolveState,
+  onBlocked,
 }: {
   history: DraftHistory
   model: DocumentModelWire | undefined
   modelVersionId: string | undefined
-  resolveState: (resolve: (state: DraftState) => DraftState) => void
+  modelVersionNumber: number | undefined
+  modelError: boolean
+  state: DraftState
+  resolveState: (state: DraftState) => void
+  onBlocked: (reason: BaselineBlockReason | null) => void
 }) {
   const pending = useRef<SaveBaseline | null>(null)
   // Exposed so the workspace can refuse a second save until the model for the
@@ -40,36 +54,61 @@ export function useSaveBaseline({
   const [paragraphRemap, setParagraphRemap] = useState<
     ReadonlyMap<string, string>
   >(new Map())
+  // The live draft state and the callbacks are read through refs: they are
+  // recreated per render, and depending on them would run this effect on every
+  // render rather than on the model change it exists for.
+  const stateRef = useRef(state)
+  stateRef.current = state
+  const resolveStateRef = useRef(resolveState)
+  resolveStateRef.current = resolveState
+  const onBlockedRef = useRef(onBlocked)
+  onBlockedRef.current = onBlocked
 
-  // The reloaded `/model` names the paragraphs a save created or removed. The
-  // boundary resolves against the exact result version the lineage describes;
-  // a stale or out-of-order model never resolves an unrelated boundary.
+  // The reloaded `/model` names the content a save created or moved. The
+  // boundary resolves only against the exact result version the lineage
+  // describes; a response that fails to load, or that carries a version this
+  // save did not produce, is surfaced rather than leaving a permanent
+  // "Saving…" with an enabled-but-inert Save button.
   useEffect(() => {
     const boundary = pending.current
-    if (!boundary || !model || !boundary.versionId) return
-    if (modelVersionId !== boundary.versionId) return
-    const resolved: SaveBaseline = { ...boundary, toModel: model }
-    history.translate((snapshot) =>
-      resolveBaselineIdentities(snapshot, resolved),
-    )
-    if (resolved.lineage) {
-      const lineage = resolved.lineage
-      resolveState((state) =>
-        remapDraftStateParagraphs(
-          resolveBaselineIdentities(state, resolved),
-          lineage,
-        ),
+    if (!boundary || !boundary.versionId) return
+    if (modelError) {
+      // Keep the boundary so a successful retry can still resolve it, but say
+      // plainly that the reload failed instead of waiting forever.
+      onBlockedRef.current('reload-failed')
+      return
+    }
+    if (!model) return
+    if (modelVersionId === boundary.versionId) {
+      const resolved: SaveBaseline = { ...boundary, toModel: model }
+      const live = remapLiveDraftState(stateRef.current, resolved)
+      history.translate(
+        (snapshot) => remapLiveDraftState(snapshot, resolved).state,
       )
-      setParagraphRemap(paragraphMapFromLineage(lineage))
-    } else {
-      resolveState((state) => resolveBaselineIdentities(state, resolved))
+      resolveStateRef.current(live.state)
+      if (resolved.lineage) {
+        setParagraphRemap(paragraphMapFromLineage(resolved.lineage))
+      }
+      pending.current = null
+      setPendingVersion(null)
+      onBlockedRef.current(live.unresolved ? 'lineage' : null)
+      return
+    }
+    // A version this save did not produce. An older one is a stale response
+    // from a query that raced the commit; ignore it and keep waiting. A newer
+    // one means another operation or collaborator committed, so the exact
+    // saved model is no longer served: block honestly rather than wedge.
+    if (
+      modelVersionNumber !== undefined &&
+      boundary.versionNumber !== undefined &&
+      modelVersionNumber < boundary.versionNumber
+    ) {
+      return
     }
     pending.current = null
     setPendingVersion(null)
-    // `history` and `resolveState` are recreated per render; depending on them
-    // would run this on every render rather than on the baseline change it
-    // exists for, so the model is the only dependency.
-  }, [model, modelVersionId])
+    onBlockedRef.current('newer-version')
+  }, [model, modelVersionId, modelVersionNumber, modelError])
 
   return {
     commit(
@@ -78,7 +117,7 @@ export function useSaveBaseline({
       fromModel: DocumentModelWire,
       lineage?: SaveBaseline['lineage'],
       versionId?: string,
-      tracked = false,
+      versionNumber?: number,
     ): { resolved: boolean } {
       // A successful save ends the redo branch whether or not its identity can
       // be reconciled.
@@ -90,6 +129,7 @@ export function useSaveBaseline({
         fromModel,
         lineage,
         versionId,
+        versionNumber,
       }
       // An unsupported or incomplete response is never guessed around: the
       // caller surfaces a recoverable blocked state instead of risking another
@@ -97,7 +137,7 @@ export function useSaveBaseline({
       if (
         !lineage ||
         !versionId ||
-        !lineageCoversCoveredSlots(lineage, boundary, tracked)
+        !lineageCoversCoveredSlots(lineage, boundary)
       ) {
         pending.current = null
         setPendingVersion(null)

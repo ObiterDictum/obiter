@@ -262,6 +262,12 @@ export function planDocumentSave(
   }
 
   state.format.emphasis.forEach((item) => {
+    // A run-keyed reversal the save boundary has not named yet is pending: it
+    // is neither sent nor blocked, and it keeps the document unsaved.
+    if (item.runId !== undefined && isPendingBaselineId(item.runId)) {
+      pending += 1
+      return
+    }
     const addressable =
       item.runId !== undefined
         ? runIds.has(item.runId)

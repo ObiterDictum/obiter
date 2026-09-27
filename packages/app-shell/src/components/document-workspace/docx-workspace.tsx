@@ -78,6 +78,8 @@ export function DocxWorkspace({
     userId: me?.user.id ?? 'anonymous',
     documentId,
     baseVersionId: modelQuery.data?.versionId,
+    baseVersionNumber: modelQuery.data?.versionNumber,
+    modelError: modelQuery.isError,
     model,
   })
 
@@ -212,6 +214,7 @@ export function DocxWorkspace({
         kind="docx"
         dirty={save.dirty}
         saving={save.saving}
+        blocked={save.saveState.status === 'blocked'}
         trackChanges={trackChanges}
         zoom={zoom}
         commentsOpen={commentsOpen}
@@ -319,7 +322,7 @@ export function DocxWorkspace({
     >
       {modelQuery.isLoading ? (
         <LoadingBlock label="Loading document model" />
-      ) : modelQuery.isError ? (
+      ) : modelQuery.isError && !model ? (
         <QueryError
           error={modelQuery.error}
           fallback="The document model could not be loaded."

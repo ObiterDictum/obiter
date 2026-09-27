@@ -274,6 +274,19 @@ export function configureSaveWorkspaceHooks(options: SaveWorkspaceOptions) {
       insertedByIntent?: string
       runs: unknown[]
     }> = []
+    // The harness model is the fixed `p1`/`r1` document, so the base story
+    // entry always maps back to itself. This is the run address a covered
+    // run-keyed reversal resolves through; without it the boundary is refused.
+    paragraphs.push({
+      fromParagraphId: 'p1',
+      toParagraphId: 'p1',
+      runs: [
+        {
+          runIndex: 0,
+          segments: [{ fromRunId: 'r1', fromOffset: 0, toOffset: 0 }],
+        },
+      ],
+    })
     for (const operation of request.operations ?? []) {
       if (operation.type === 'insert_paragraph_after') {
         paragraphs.push({

@@ -155,6 +155,8 @@ export async function createCollaborationMergeVersion(
             canonicalParagraphIds,
             baseVersionId: input.baseVersionId,
             versionId: '',
+            // Same tracked-run caveat as the direct edit path.
+            runAddressesReliable: !input.trackChanges,
           })
         : null
       const { versionId: _versionId, ...lineageInput } = built ?? {
