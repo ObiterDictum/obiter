@@ -67,7 +67,13 @@ export function resolveLaneTargets({
   }
 }
 
-function readPort(raw, key, fallback) {
+/**
+ * Strict port parser shared by the Playwright target resolver and the Vite dev
+ * config: an absent value takes the fallback, but a supplied value that is not
+ * a decimal 1..65535 is refused rather than silently replaced. Vite's own dev
+ * port must not fall back to the shared 3000 when a lane names a broken port.
+ */
+export function readPort(raw, key, fallback) {
   if (raw === undefined || raw === null || raw === '') return fallback
   const value = String(raw)
   const port = Number(value)

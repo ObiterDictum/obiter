@@ -13,14 +13,21 @@
  *
  *   process env -> .env, OBITER_API_ORIGIN before PORT
  *
- * The result is what `apps/web/vite.config.ts` gives the proxy and publishes to
- * `process.env` for SSR. A non-shared dev server (a lane) that names neither
+ * `webPort` is the port the dev server will actually bind, after Vite has
+ * merged its CLI options — see `applyDevServerApiOrigin`. The shared dev
+ * default `http://localhost:8787` is allowed only when that effective port is
+ * the shared web port 3000; a non-shared server that names neither
  * OBITER_API_ORIGIN nor PORT is a configuration mistake and is refused rather
- * than silently pointed at the shared API; only the shared dev server (web port
- * 3000) keeps `http://localhost:8787`, because that stack is intentionally
- * served from 8787.
+ * than silently pointed at the shared API.
+ *
+ * BETTER_AUTH_URL is deliberately not read here. In production it remains the
+ * API's session callback origin and the SSR `apiUrl()` fallback, but the dev
+ * server publishes the resolved origin as `process.env.OBITER_API_ORIGIN` to
+ * the SSR transform, and that key wins the `??` chain. Reading
+ * BETTER_AUTH_URL here would make it a second way to choose a dev backend,
+ * which is the split this module exists to remove.
  */
-import { SHARED_API_PORT, SHARED_WEB_PORT } from './lane-target.mjs'
+import { SHARED_API_PORT, SHARED_WEB_PORT, readPort } from './lane-target.mjs'
 
 export function resolveDevApiOrigin({ processEnv, fileEnv, webPort }) {
   const read = (key) => processEnv[key] ?? fileEnv?.[key]
@@ -32,7 +39,7 @@ export function resolveDevApiOrigin({ processEnv, fileEnv, webPort }) {
 
   const port = read('PORT')
   if (isConfigured(port)) {
-    return `http://localhost:${parsePort(port, 'PORT')}`
+    return `http://localhost:${readPort(port, 'PORT')}`
   }
 
   if (webPort === SHARED_WEB_PORT) {
@@ -47,6 +54,33 @@ export function resolveDevApiOrigin({ processEnv, fileEnv, webPort }) {
   )
 }
 
+/**
+ * Wire the resolved origin into a resolved Vite config: the `/api` proxy target
+ * and the SSR-only `process.env.OBITER_API_ORIGIN` define. Both come from one
+ * `resolveDevApiOrigin` call, so the browser and the in-process SSR handler can
+ * never be pointed at different backends.
+ *
+ * The port is `config.server.port`, which is the effective port only after
+ * Vite's `configResolved` hook has run and CLI options such as `--port` have
+ * been merged. The proxy object is mutated in place because Vite copies
+ * `server.proxy` into `preview.proxy` before `configResolved`; replacing it
+ * would leave `vite preview` without a proxy.
+ */
+export function applyDevServerApiOrigin(config, { processEnv, fileEnv }) {
+  const apiOrigin = resolveDevApiOrigin({
+    processEnv,
+    fileEnv,
+    webPort: config.server.port,
+  })
+
+  config.server.proxy ??= {}
+  config.server.proxy['/api'] = { target: apiOrigin, changeOrigin: false }
+  config.environments.ssr.define = {
+    ...config.environments.ssr.define,
+    'process.env.OBITER_API_ORIGIN': JSON.stringify(apiOrigin),
+  }
+}
+
 function isConfigured(value) {
   return value !== undefined && value !== null && String(value).trim() !== ''
 }
@@ -57,23 +91,18 @@ function parseOrigin(raw, key) {
     url = new URL(String(raw))
   } catch {
     throw new Error(
-      `${key} is not a valid URL: "${raw}". Set it to an http(s) origin such ` +
-        'as http://localhost:8789.',
+      `${key} is not a valid URL: "${redactCredentials(raw)}". Set it to an ` +
+        'http(s) origin such as http://localhost:8789.',
     )
   }
   if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new Error(`${key} must be an http(s) origin; got "${raw}".`)
+    // `url.origin` drops any userinfo, so a credentialed mistake is not echoed.
+    throw new Error(`${key} must be an http(s) origin; got "${url.origin}".`)
   }
   return url.origin
 }
 
-function parsePort(raw, key) {
-  const value = String(raw)
-  const port = Number(value)
-  if (!/^[0-9]+$/.test(value) || port <= 0 || port > 65535) {
-    throw new Error(
-      `${key} must be a decimal port between 1 and 65535; got "${value}".`,
-    )
-  }
-  return port
+/** Mask `user:password@` userinfo before a value is put into an error message. */
+function redactCredentials(value) {
+  return String(value).replace(/\/\/[^/@\s]*@/, '//<redacted>@')
 }
