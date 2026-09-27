@@ -13,7 +13,6 @@
  * too so the merge step can carry them through to the keep-set.
  */
 
-import { mergeSpans } from '../policy'
 import type { PiiLabel, Span } from '../types'
 
 /** Minimal shape of a transformers.js token-classification result row. */
@@ -215,11 +214,13 @@ export async function loadNerClassifier(
  * as configurable sliding windows (defaulting to {@link NER_DEFAULT_CHUNK_TOKENS}
  * tokens, measured by the classifier's own tokenizer) that overlap their neighbours
  * by {@link NER_TOKEN_OVERLAP} tokens. Each window's spans are shifted back into
- * whole-text coordinates; because
- * windows overlap, an entity on a seam is re-detected in both, so {@link mergeSpans}
- * collapses the duplicates into the canonical disjoint set. Input that fits one
- * window — or any classifier without a tokenizer, e.g. a bare test mock — takes a
- * single-window fast path identical to scanning the text directly.
+ * whole-text coordinates. Because windows overlap, an entity on a seam is
+ * re-detected in both; exact duplicates are collapsed, while genuinely
+ * overlapping detections are returned as separate contributors so the caller's
+ * overlap policy — not this shift-and-merge step — decides their disposition.
+ * Input that fits one window — or any classifier without a tokenizer, e.g. a
+ * bare test mock — takes a single-window fast path identical to scanning the
+ * text directly.
  *
  * Sizing by tokens rather than a char cap means a window holds exactly as much
  * text as the model can attend to, and nothing past a fixed char count is silently
@@ -264,7 +265,31 @@ export async function detectNer(
       })
     }
   }
-  return mergeSpans(spans)
+  return dedupeExactSpans(spans)
+}
+
+/**
+ * Remove exact duplicate detections, keeping every distinct contributor.
+ *
+ * Overlapping windows re-detect the same entity, so the same span can arrive
+ * twice; those duplicates carry no extra information and are dropped. Genuinely
+ * overlapping detections are NOT resolved here: upstream's `mergeSpans` would
+ * inherit one detection's label for the union, discarding a redact-required
+ * contributor before the product-level overlap policy can see it (P0.31).
+ * Returning the contributors lets the caller own that decision.
+ */
+function dedupeExactSpans(spans: readonly Span[]): Span[] {
+  const seen = new Set<string>()
+  const unique: Span[] = []
+  for (const span of spans) {
+    const key = `${span.start}:${span.end}:${span.label}:${span.source}:${span.score}`
+    if (seen.has(key)) continue
+    seen.add(key)
+    unique.push(span)
+  }
+  return unique.sort(
+    (left, right) => left.start - right.start || left.end - right.end,
+  )
 }
 
 /** A half-open char window `[start, end)` into the raw text. */

@@ -219,38 +219,167 @@ export function normalizePersonDetections<T extends RampartSpanInput>(
 }
 
 /**
- * Map a merged Rampart span to an Obiter category.
+ * Map a Rampart detection to an Obiter category. One detection in, one span
+ * out; {@link reconcileRampartSpans} is what decides between detections.
  *
  * Person spans must already have been through {@link normalizePersonDetections};
- * applying the person heuristics to a merged span is P0.30. The caller
- * normalises the contributing detections, unions them, then calls this.
+ * applying the person heuristics to a merged span is P0.30. Direct callers
+ * pass already-reconciled spans and normalise their contributing detections
+ * first.
  */
 export function mapRampartSpans(output: RampartOutput): RedactionSpan[] {
   return output.spans
     .filter((span) => span.start < span.end)
-    .map((span, index) => {
-      const label = span.label ?? span.entity
-      if (!label || !labelMap[label]) {
-        throw new Error(`Unrecognised Rampart label: ${label ?? '<missing>'}`)
-      }
-      const mapping = labelMap[label]
-      // Always slice the source rather than trusting `span.text`. Upstream's
-      // offset-changing merges (partial-overlap union in policy.mergeSpans)
-      // widen start/end but keep the winner's text, so a carried `text` can
-      // disagree with the offsets. `RedactionSpan.text` is a contract finalize
-      // and the .docx burner enforce with text.slice(start, end) === text; the
-      // source is authoritative here, so derive it instead of inheriting it.
-      const text = output.text.slice(span.start, span.end)
+    .map((span, index) =>
+      mapRampartSpan(output.text, span, `span_rampart_${span.start}_${index}`),
+    )
+    .sort((left, right) => left.start - right.start || left.end - right.end)
+}
+
+/**
+ * Map one Rampart detection to one Obiter span. The pair is kept together by
+ * {@link reconcileRampartSpans}, which never has to assume that two separately
+ * filtered and sorted arrays still line up index for index.
+ */
+function mapRampartSpan(
+  text: string,
+  span: RampartSpanInput,
+  id: string,
+): RedactionSpan {
+  const label = span.label ?? span.entity
+  if (!label || !labelMap[label]) {
+    throw new Error(`Unrecognised Rampart label: ${label ?? '<missing>'}`)
+  }
+  const mapping = labelMap[label]
+  // Always slice the source rather than trusting `span.text`. Upstream's
+  // offset-changing merges (partial-overlap union in policy.mergeSpans) widen
+  // start/end but keep the winner's text, so a carried `text` can disagree with
+  // the offsets. `RedactionSpan.text` is a contract finalize and the .docx
+  // burner enforce with text.slice(start, end) === text; the source is
+  // authoritative here, so derive it instead of inheriting it.
+  const sliced = text.slice(span.start, span.end)
+  return {
+    id,
+    start: span.start,
+    end: span.end,
+    text: sliced,
+    category: mapping.category,
+    source: mapping.source,
+    confidence: confidence(span.score),
+    suggestion: suggestedAction(mapping.category, mapping.dateOfBirth),
+  }
+}
+
+/**
+ * Reconcile overlapping Rampart detections into the disjoint set the product
+ * stores.
+ *
+ * {@link normalizePersonDetections} fixes per-detection heuristics and
+ * {@link mapRampartSpans} maps one detection; this owns the decision *between*
+ * detections.
+ *
+ * Upstream's `policy.mergeSpans` is deliberately not used here. It inherits the
+ * preferred detection's label for the whole union, so a `keep`-category winner
+ * can disposition bytes a `redact` detection contributed (P0.31), and full
+ * containment collapses to the winner and can silently drop a redact loser's
+ * exclusive bytes. The vendored package is re-vendored wholesale, so the
+ * product owns its overlap policy at this boundary: every overlap emits the
+ * byte-union, and a union containing any `redact`-required detection is
+ * redacted. Category, source and confidence still come from one real
+ * contributing detection, chosen by score, then length, then a deterministic
+ * source (upstream's heuristic tiebreak, made order-independent), so a
+ * disposition disagreement can only change the outcome toward over-redaction.
+ *
+ * Category names the detection that won preference, matching the
+ * rampart/supplement union in `merge.ts`; it is not a claim that every byte in
+ * the union is of that category.
+ */
+export function reconcileRampartSpans(
+  text: string,
+  spans: readonly RampartSpanInput[],
+): RedactionSpan[] {
+  // Map each detection to its span first, then sort the pairs. A contributor
+  // and its mapped output are one value, so no later step can read a mapping
+  // that belongs to a different detection (the previous shape relied on two
+  // arrays filtered and sorted by identical comparators staying aligned).
+  const contributors = spans
+    .filter((span) => span.start < span.end)
+    .map((span, index) => ({
+      span,
+      mapped: mapRampartSpan(text, span, `span_rampart_${span.start}_${index}`),
+    }))
+    .sort(
+      (left, right) =>
+        left.mapped.start - right.mapped.start ||
+        left.mapped.end - right.mapped.end,
+    )
+
+  const clusters: Contributor[][] = []
+  let coveredTo = -1
+  for (const contributor of contributors) {
+    const current = clusters[clusters.length - 1]
+    if (current !== undefined && contributor.mapped.start < coveredTo) {
+      current.push(contributor)
+      coveredTo = Math.max(coveredTo, contributor.mapped.end)
+      continue
+    }
+    clusters.push([contributor])
+    coveredTo = contributor.mapped.end
+  }
+
+  return clusters
+    .map((cluster, index) => {
+      const winner = cluster.reduce((best, candidate) =>
+        comparesAbove(candidate, best) > 0 ? candidate : best,
+      )
+      const start = Math.min(...cluster.map((c) => c.mapped.start))
+      const end = Math.max(...cluster.map((c) => c.mapped.end))
+      const redacts = cluster.some((c) => c.mapped.suggestion === 'redact')
       return {
-        id: `span_rampart_${span.start}_${index}`,
-        start: span.start,
-        end: span.end,
-        text,
-        category: mapping.category,
-        source: mapping.source,
-        confidence: confidence(span.score),
-        suggestion: suggestedAction(mapping.category, mapping.dateOfBirth),
+        ...winner.mapped,
+        id: `span_rampart_${start}_${index}`,
+        start,
+        end,
+        text: text.slice(start, end),
+        suggestion: redacts ? ('redact' as const) : winner.mapped.suggestion,
       }
     })
     .sort((left, right) => left.start - right.start || left.end - right.end)
+}
+
+/** A detection and the span it mapped to, carried together as one unit. */
+interface Contributor {
+  readonly span: RampartSpanInput
+  readonly mapped: RedactionSpan
+}
+
+/**
+ * Preference order for which contributing detection names the union: highest
+ * score, then longest, then a deterministic (validator-backed) source, then
+ * category. Upstream's heuristic tiebreak is reproduced without its
+ * input-order dependence, and a non-finite score is treated as 0 so the result
+ * is a total order. The trailing comparisons only order detections that map to
+ * identical output, so the result does not depend on input order.
+ */
+function comparesAbove(candidate: Contributor, incumbent: Contributor): number {
+  const candidateScore = normalizedScore(candidate.span.score)
+  const incumbentScore = normalizedScore(incumbent.span.score)
+  if (candidateScore !== incumbentScore) return candidateScore - incumbentScore
+  const left = candidate.mapped
+  const right = incumbent.mapped
+  const leftLength = left.end - left.start
+  const rightLength = right.end - right.start
+  if (leftLength !== rightLength) return leftLength - rightLength
+  if (left.source !== right.source)
+    return left.source === 'rampart_deterministic' ? 1 : -1
+  return left.category < right.category
+    ? -1
+    : left.category > right.category
+      ? 1
+      : 0
+}
+
+/** A missing or non-finite score ranks below any real detection. */
+function normalizedScore(score: number | undefined): number {
+  return typeof score === 'number' && Number.isFinite(score) ? score : 0
 }
