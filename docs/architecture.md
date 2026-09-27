@@ -969,12 +969,82 @@ title-shaped prefix and a break in exactly one contributor.
 Not changed: `policy.mergeSpans` still takes the winner's `category` and
 `confidence` for the whole union, so a `keep`-category winner can still
 disposition bytes a `redact` loser contributed. The pinned model emits no
-`keep` category except the premasked URL heuristic, so this is latent; it
-needs its own decision. `detectNer` also performs its own cross-window union
-inside `@obiter/rampart-inference` before the product boundary, so on a
-multi-window document an inner partial union still reaches this normaliser as
-a single span. The 50-document length probe produced no inner partial union,
-and the vendored package is kept byte-faithful, so that site is left alone.
+`keep` category except the premasked URL heuristic, so this is latent; it is
+resolved by the P0.31 decision below. `detectNer` also performs its own
+cross-window union inside `@obiter/rampart-inference` before the product
+boundary, so on a multi-window document an inner partial union still reaches
+this normaliser as a single span. The 50-document length probe produced no
+inner partial union; the P0.31 decision below stops that inner merge from
+discarding a redact contributor.
+
+### Overlap reconciliation owns coverage and disposition (P0.31)
+
+Context: the vendored `policy.mergeSpans` inherits the preferred detection's
+`label` for the whole union, so a `keep`-category winner can disposition bytes
+a `redact` detection contributed. Partial overlap widens coverage but keeps
+the winner's label; full containment collapses to the winner and can drop a
+redact loser's exclusive bytes. P0.30 fixed the per-detection heuristics but
+left this third instance of the same pattern — a property of one detection
+applied to a span that is several — because the category is decided _by_ the
+merge. It is latent on the pinned model: DATE/DOB are not emitted, and URL is
+the only keep label and is premasked. It is reachable through premask
+projection (a model span touching an `[URL]` sentinel projects over the URL's
+whole raw range) and through any later checkpoint that emits DATE.
+
+Decision: the product owns overlap reconciliation in
+`reconcileRampartSpans` (`packages/redaction-policy/src/rampart-map.ts`),
+which `redaction-detection.ts` calls instead of the vendored
+`policy.mergeSpans`. Every overlap emits the byte-union, and a union
+containing any `redact`-required detection redacts. Category, source and
+confidence still come from one real contributing detection, chosen by the
+same preference order as upstream (score, then length, then a deterministic
+source), so a disposition disagreement can only move the outcome toward
+over-redaction. The union's category names the detection that won preference,
+matching the rampart/supplement union in `merge.ts`; it is not a claim that
+every byte in the union is of that category.
+
+Trade-off: a union of a keep detection and a redact detection now redacts the
+keep detection's bytes too, and a containment that previously collapsed to a
+contained winner now covers the container's full range. Both are the safe
+direction; the cost is over-redaction of a URL's bytes when a redact detection
+overlaps them. Explicit reviewer decisions are unchanged: `override_keep`
+still keeps a redact-suggestion union, and `override_redact` now covers the
+whole union rather than the winner's bytes.
+
+Not changed: `premask`'s internal heuristic union still uses the vendored
+`policy.mergeSpans`. It only changes the masked string the model reads — the
+heuristic spans themselves reach the product boundary and are reconciled
+there — so it cannot affect a disposition.
+
+Vendored exception: `detectNer` used to resolve its own per-window overlaps
+with the same vendored `policy.mergeSpans`, one layer below the product
+boundary, where `reconcileRampartSpans` cannot recover the contributors. The
+reviewer drove the real `detectNer` with a mock tokenizer and classifier: a
+seam-overlapping URL (`keep`) unioned a `GIVEN_NAME` (`redact`) into one keep
+span and discarded the contributor before the product saw it. No supported
+upstream interface exposes unmerged window spans (`detectNerWindow` and
+`planTokenWindows` are private; `detectNer` is the only entry point), so this
+is the one deliberate departure from byte-faithful vendoring: `detectNer` now
+drops only exact duplicate detections and returns genuinely overlapping
+detections as separate contributors for the product to reconcile.
+`packages/rampart-inference/README.md` records the upstream tarball, the exact
+divergence and the rule a future re-vendor must preserve.
+
+Reachability: the multi-window loss is synthetically demonstrated through the
+real `detectNer`; the pinned checkpoint (`qarlus/rampart@c3221c5`) emits no
+DATE/DOB and premasks URL, so URL-as-model-label is vestigial, and neither the
+50-document length probe nor the 300-document corpus produced an inner
+partial union. The fix is preventive and safe-directional, not a response to
+an observed corpus miss. A future checkpoint that emits DATE or URL at a seam
+makes the disagreement ordinary rather than exotic.
+
+Forward only: stored `redaction_runs.spans_json` and `detector_version` are
+historical records and are never rewritten. The new `reconcile@1` component in
+`detector_version` distinguishes runs produced under this policy. Re-detection
+creates a new run (`redaction-redetect.ts`) rather than mutating the original,
+but the current redetect path only accepts runs that were not model-detected,
+so a pre-fix `model+supplement` run cannot be re-detected in place and remains
+as recorded; a targeted re-reconcile of those runs is a tracked follow-up.
 
 ### Rampart DATE/DOB labels are aspirational (2 September 2026)
 

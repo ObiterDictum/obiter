@@ -104,4 +104,47 @@ describe('detectNer', () => {
     expect(spans[0]?.text).toBe('Jones')
     expect(spans[0]?.end).toBe(5)
   })
+
+  it('keeps overlapping detections from separate windows as contributors', async () => {
+    // P0.31: the cross-window step must not collapse a redact contributor
+    // under a keep winner's label. Upstream's mergeSpans would return one URL
+    // span [50,80); this test fails if that merge is restored.
+    const text =
+      'alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo lima ' +
+      'mike november oscar papa quebec romeo sierra tango uniform victor whiskey ' +
+      'xray yankee zulu'
+    let cursor = 0
+    let call = 0
+    const classifier: TokenClassifier = async (window) => {
+      const at = text.indexOf(window, cursor)
+      if (at < 0) throw new Error('classifier window not found in source')
+      cursor = at + 1
+      const index = call++
+      const emit = (
+        entity_group: string,
+        score: number,
+        start: number,
+        end: number,
+      ) => ({
+        entity_group,
+        score,
+        start: start - at,
+        end: end - at,
+        word: entity_group,
+      })
+      if (index === 0) return [emit('URL', 0.95, 50, 70)]
+      if (index === 1) return [emit('GIVEN_NAME', 0.5, 60, 80)]
+      return []
+    }
+    classifier.countTokens = (value) => value.length
+
+    const spans = await detectNer(text, classifier, 0.4, 100)
+
+    expect(spans.map(({ start, end, label }) => ({ start, end, label }))).toEqual(
+      [
+        { start: 50, end: 70, label: 'URL' },
+        { start: 60, end: 80, label: 'GIVEN_NAME' },
+      ],
+    )
+  })
 })
