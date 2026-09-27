@@ -2892,15 +2892,21 @@
                     Typed edits, optionally recorded as tracked changes, saved
                     as a locked immutable version N+1.
                     <code>insert_paragraph_after</code> carries either flat
-                    <code>text</code> or bounded styled <code>runs</code>. Run
-                    character formatting is additive on
-                    <code>set_run_emphasis</code> and those runs.
+                    <code>text</code> or bounded styled <code>runs</code>;
+                    <code>insert_paragraph_before</code> restores a deleted
+                    first paragraph. An <code>intentId</code> on an insertion is
+                    echoed back in the response lineage for correlation; it is
+                    not a persisted identity. Run character formatting is
+                    additive on <code>set_run_emphasis</code> and those runs.
                     <code>set_run_emphasis</code> is addressed by
                     <code>runId</code> or by <code>paragraphId</code> plus
                     <code>from</code>/<code>to</code>, not both. A tracked range
                     split is skipped until an <code>rPrChange</code> writer
                     exists. Paragraph layout uses
-                    <code>set_paragraph_format</code>. Tables, images, notes,
+                    <code>set_paragraph_format</code>. The response carries the
+                    <code>lineage</code> for the accepted batch, including the
+                    mapping from the client's base ids to the persisted
+                    <code>w14:paraId</code> identities. Tables, images, notes,
                     headers, and breaks have no wire schema yet.
                   </td>
                 </tr>
@@ -3921,9 +3927,14 @@
                   <td class="id">document_versions</td>
                   <td>
                     Immutable versions, with source and extracted-text object
-                    keys
+                    keys. 0026 adds <code>lineage</code> jsonb: the
+                    authoritative mapping an accepted edit produced from its
+                    base version, written in the same transaction as the version
+                    so an idempotent replay returns the same mapping. Null for
+                    uploads and versions created before 0026; no historical
+                    rewrite or backfill.
                   </td>
-                  <td class="id">0002</td>
+                  <td class="id">0002, 0026</td>
                 </tr>
                 <tr>
                   <td class="id">document_comments</td>
@@ -6216,10 +6227,17 @@
                 <code>document-save-plan.ts</code>. A successful save is also
                 the undo/redo baseline:
                 <code>document-history-baseline.ts</code>
-                re-expresses every history snapshot against the saved document,
-                so a covered slot can never be replayed as fresh work, and
+                consumes the server's authoritative <code>lineage</code> — the
+                per-paragraph and per-run transformation an accepted batch
+                produced — to re-express every history snapshot against the
+                saved document, so a covered slot can never be replayed as fresh
+                work. Paragraph identity is persisted as
+                <code>w14:paraId</code> only in the newly saved version, so a
+                legacy document gains stable identity on its first save. A
+                response without a complete lineage is never guessed around:
                 <code>use-save-baseline.ts</code> is the one owner of that
-                boundary.</span
+                boundary and surfaces a recoverable blocked state instead of
+                reporting success.</span
               >
             </li>
             <li>
