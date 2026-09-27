@@ -24,7 +24,8 @@ node scripts/api-runtime/runtime-integration.mjs --runtime bun --database-url <u
 ```
 
 Flags: `--runtime node|bun|both`, `--database-url <url>`,
-`--allow-database <name>` (override the guard), `--bun-bin <path>`,
+`--allow-database <name>` (override the owned set, never the protection of a
+shared or development database), `--bun-bin <path>`,
 `--rampart-cache-dir <dir>`, `--json-out <file>`, `--keep`, `--verbose`.
 
 Exit codes: `0` every check passed on every requested runtime; `1` a check
@@ -46,10 +47,20 @@ failure (bad database, no Bun, no database URL).
 
 ## Safety
 
-- **Database guard.** Fixtures are written only to `obiter_test`,
-  `obiter_api_runtime` or `obiter_lane_*` databases on loopback. The shared
-  product database (`obiter`) matches none of those and is refused before any
-  write. `--allow-database` is the explicit override.
+- **Database guard.** The API applies migrations to whatever `DATABASE_URL`
+  names at boot, so the target is resolved and refused before any connection,
+  migration, port allocation or child process. Only `obiter_test`,
+  `obiter_api_runtime[_test]`, `obiter_api_ingress[_test]` and
+  `obiter_lane_<name>_test` are accepted on loopback; a lane's development
+  database (`obiter_lane_security`), the shared `obiter` and `obiter_corpus`,
+  the `postgres`/`template*` cluster databases, non-loopback hosts,
+  percent-encoded names and target-affecting query parameters (`host`, `port`,
+  `dbname`, `service`, credentials) are all refused. The validated URL is the
+  one handed to the API, the psql fixtures and the corpus boots, so there is no
+  separate check that the launch can drift away from. `--database-url` is
+  required; the harness never falls back to a lane `.env` or a default
+  database. `--allow-database` admits a deliberate non-owned database but cannot
+  override protection for a known shared, cluster or lane development one.
 - **Ports.** Each server gets an OS-allocated ephemeral port. The shared
   `3000`/`8787` and the lane ports `3001-3004`/`8788-8791` are refused.
 - **Corpus variables.** The corpus-mode boots point `CORPUS_DATABASE_URL` and
