@@ -1564,3 +1564,53 @@ rate-limited per caller, because the resource is fixed and the cache makes
 per-caller limiting unnecessary, and no staleness marker is added because the
 response contract is unchanged. No logging was added, so no request or
 upstream data can leak into a log line.
+
+### Matter-share grantees are organisation-scoped by the database (28 September 2026)
+
+Findings: 0013 scoped the matter side of `matter_shares` with a composite
+foreign key `(matter_id, organisation_id)` but tied `grantee_user_id` to
+`users(id)` alone. `grantMatterShare`
+(`services/api/src/routes/document-access.ts`) checks the grantee's organisation
+before inserting, so the invariant held on the route path, but the schema did
+not require it. That is defect pattern P3, a contract enforced on one path and
+not its sibling, and it is why the step-4 experiment on PR #137 was able to
+return organisation B's matter once an organisation predicate was dropped: the
+seeded share was honoured on access level alone.
+
+Decision: add `0027_matter_share_grantee_organisation.sql`. It adds the
+`users (id, "organisationId")` unique index a composite reference needs,
+replaces `matter_shares_grantee_fk` with
+`matter_shares_grantee_organisation_fk foreign key (grantee_user_id,
+organisation_id) references users (id, "organisationId") on delete cascade`,
+and keeps the application check as the first line of defence. Cascade is
+preserved, so deleting a user still removes their shares. `created_by` keeps its
+`users(id)` reference: it records who granted the share (historical
+authorship), not current membership, so the recipient's rule is deliberately not
+applied to it.
+
+The migration fails closed on pre-existing rows whose grantee is outside the
+share organisation. It raises a `foreign_key_violation`, names the offending
+shares and the audited revocation path, and rolls the whole file back rather
+than deleting or rewriting rows to make validation pass. The unique index is a
+plain `create unique index` and the constraint a plain `alter table`, so both
+run inside the migration runner's per-file transaction; that takes an `ACCESS
+EXCLUSIVE` lock on `users` and `matter_shares` and validates the new key with a
+full scan of `matter_shares`. That is acceptable at the current table size and
+is why `create index concurrently` is not used.
+
+Membership: a member removal (`DELETE
+/api/organisations/:organisationId/members/:userId`) now revokes the removed
+member's shares for that organisation in the same transaction, writing one
+`matter.share_revoke` audit row per share with the same metadata the
+share-revocation route writes, before the `organisationId` change the composite
+key would otherwise reject. Invite acceptance needs no revocation:
+`organisationHasBlockingWork` refuses to move a user out of an organisation
+that holds any matter row, so the vacated organisation cannot hold a share that
+names them. An organisation change is never cascaded into moving shares between
+organisations.
+
+Ordering: `0027` is independent of every other pending file. A fresh install
+applies it in filename order and an upgrade applies it whenever it becomes
+pending, so it is safe whichever of two concurrently proposed migrations lands
+first. The route-level sharing and access contracts are unchanged; the
+constraint is a backstop, not a replacement for the application checks.

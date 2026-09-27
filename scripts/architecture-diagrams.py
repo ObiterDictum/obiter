@@ -271,7 +271,7 @@ d5.node("legal", 700, 300, "legal_source_documents", "public corpus",
 
 d5.edge("matters", "orgs", sa="t", sb="l", label="organisation_id", lx=-30, ly=-4)
 d5.edge("shares", "matters", sa="l", sb="r", label="matter + org", ly=-5)
-d5.edge("shares", "users", sa="t", sb="b", label="grantee", lx=30)
+d5.edge("shares", "users", sa="t", sb="b", label="grantee + org", lx=30)
 d5.edge("docs", "matters", sa="t", sb="b", label="id, organisation_id", lx=78)
 d5.edge("versions", "docs", sa="t", sb="b", label="+ matter_id", lx=54)
 d5.edge("comments", "docs", sa="l", sb="r", label="doc + matter + org", ly=-8)
