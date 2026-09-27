@@ -30,7 +30,9 @@ every re-vendor**:
   product is the only caller of `detectNer` and already reconciles overlaps.
 - Re-vendor check: after applying the upstream tarball, confirm `detectNer`
   does not call `mergeSpans` and still returns overlapping contributors, then
-  run `packages/rampart-inference` tests and `services/api` tests
+  run `packages/rampart-inference` tests (including
+  `ner/classifier.test.ts > keeps overlapping detections from separate windows
+  as contributors`) and the `services/api` test
   `redaction-merge-integrity.test.ts` (which drives the real `detectNer` over
   two windows through the finalize route).
 

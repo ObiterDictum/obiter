@@ -286,9 +286,9 @@ function mapRampartSpan(
  * product owns its overlap policy at this boundary: every overlap emits the
  * byte-union, and a union containing any `redact`-required detection is
  * redacted. Category, source and confidence still come from one real
- * contributing detection, chosen by the same preference order (score, then
- * length, then a deterministic source), so a disposition disagreement can only
- * change the outcome toward over-redaction.
+ * contributing detection, chosen by score, then length, then a deterministic
+ * source (upstream's heuristic tiebreak, made order-independent), so a
+ * disposition disagreement can only change the outcome toward over-redaction.
  *
  * Category names the detection that won preference, matching the
  * rampart/supplement union in `merge.ts`; it is not a claim that every byte in
@@ -355,13 +355,15 @@ interface Contributor {
 
 /**
  * Preference order for which contributing detection names the union: highest
- * score, then longest, then a deterministic (validator-backed) source. The
- * trailing comparisons only order detections that map to identical output, so
- * the result does not depend on input order.
+ * score, then longest, then a deterministic (validator-backed) source, then
+ * category. Upstream's heuristic tiebreak is reproduced without its
+ * input-order dependence, and a non-finite score is treated as 0 so the result
+ * is a total order. The trailing comparisons only order detections that map to
+ * identical output, so the result does not depend on input order.
  */
 function comparesAbove(candidate: Contributor, incumbent: Contributor): number {
-  const candidateScore = candidate.span.score ?? 0
-  const incumbentScore = incumbent.span.score ?? 0
+  const candidateScore = normalizedScore(candidate.span.score)
+  const incumbentScore = normalizedScore(incumbent.span.score)
   if (candidateScore !== incumbentScore) return candidateScore - incumbentScore
   const left = candidate.mapped
   const right = incumbent.mapped
@@ -375,4 +377,9 @@ function comparesAbove(candidate: Contributor, incumbent: Contributor): number {
     : left.category > right.category
       ? 1
       : 0
+}
+
+/** A missing or non-finite score ranks below any real detection. */
+function normalizedScore(score: number | undefined): number {
+  return typeof score === 'number' && Number.isFinite(score) ? score : 0
 }

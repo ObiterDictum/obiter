@@ -1040,9 +1040,11 @@ makes the disagreement ordinary rather than exotic.
 
 Forward only: stored `redaction_runs.spans_json` and `detector_version` are
 historical records and are never rewritten. The new `reconcile@1` component in
-`detector_version` distinguishes runs produced under this policy; re-detecting
-a stored document creates a new run (`redaction-redetect.ts`) rather than
-mutating the original.
+`detector_version` distinguishes runs produced under this policy. Re-detection
+creates a new run (`redaction-redetect.ts`) rather than mutating the original,
+but the current redetect path only accepts runs that were not model-detected,
+so a pre-fix `model+supplement` run cannot be re-detected in place and remains
+as recorded; a targeted re-reconcile of those runs is a tracked follow-up.
 
 ### Rampart DATE/DOB labels are aspirational (2 September 2026)
 

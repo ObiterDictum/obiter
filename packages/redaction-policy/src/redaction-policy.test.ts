@@ -559,6 +559,27 @@ describe('reconcileRampartSpans (P0.31)', () => {
     ])
   })
 
+  it('is order-independent when contributors have no usable score', () => {
+    // `NaN !== NaN`, so an unnormalised comparison would skip the length,
+    // source and category tie-breaks and let input order name the union. A
+    // non-finite score is normalised to 0.
+    const email = span('EMAIL', at('charlie'), Number.NaN)
+    const city = span('CITY', at('charlie'), Number.NaN)
+    const forward = reconcile(text, [email, city])
+    const reverse = reconcile(text, [city, email])
+    expect(forward).toEqual(reverse)
+    expect(forward).toEqual([
+      expect.objectContaining({
+        start: 12,
+        end: 19,
+        text: 'charlie',
+        category: 'email',
+        source: 'rampart_deterministic',
+        suggestion: 'redact',
+      }),
+    ])
+  })
+
   it('fails loudly for an unknown label and returns nothing for no spans', () => {
     expect(() => reconcile(text, [span('UNKNOWN', at('alpha'), 0.9)])).toThrow(
       'Unrecognised Rampart label',

@@ -320,6 +320,28 @@ describe('overlap disposition (P0.31)', () => {
     },
   ]
 
+  // The contained detection is the higher-scoring keep winner; the container is
+  // a redact detection. The old vendored merge collapsed the union to the
+  // contained winner's range, so an override only covered that range.
+  const containment: RampartSpan[] = [
+    {
+      start: 6,
+      end: 19,
+      label: 'GIVEN_NAME',
+      score: 0.5,
+      source: 'ner',
+      text: source.slice(6, 19),
+    },
+    {
+      start: 12,
+      end: 19,
+      label: 'URL',
+      score: 0.99,
+      source: 'ner',
+      text: source.slice(12, 19),
+    },
+  ]
+
   it('redacts a redact-required union through the finalize route', async () => {
     const spans = mergeSpans(
       reconcileRampartSpans(
@@ -343,10 +365,13 @@ describe('overlap disposition (P0.31)', () => {
   })
 
   it('honours explicit keep and redact overrides on the same union', async () => {
+    // Containment, not partial overlap: this is the case whose covered range
+    // changed, so it proves the doc claim that override_redact now reaches the
+    // whole union rather than the contained winner's bytes.
     const spans = mergeSpans(
       reconcileRampartSpans(
         source,
-        normalizePersonDetections(source, contributors),
+        normalizePersonDetections(source, containment),
       ),
       supplementSpans(source),
     )
