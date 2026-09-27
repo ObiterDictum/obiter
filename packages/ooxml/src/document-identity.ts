@@ -58,9 +58,10 @@ export function canonicaliseParagraphIdentities(
         existing !== '00000000' &&
         !seenInDocument.has(existing.toUpperCase())
       const value = valid ? existing.toUpperCase() : nextId()
-      if (existing === undefined || !valid) {
-        paragraph.sourceParaId = value
-      }
+      // Always write the canonical value. A valid-but-lowercase id would
+      // otherwise keep its original bytes while the map used the uppercase
+      // form, so the reloaded model id and every lineage address disagreed.
+      paragraph.sourceParaId = value
       seenInDocument.add(value)
       canonical.set(paragraph, `para-w14-${value}`)
       namespaceParts.add(story.partName)

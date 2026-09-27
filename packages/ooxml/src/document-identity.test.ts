@@ -56,6 +56,15 @@ describe('paragraph identity canonicalisation', () => {
     expect(new Set(ids).size).toBe(3)
   })
 
+  it('canonicalises a valid lowercase id in the persisted attribute too', async () => {
+    const document = await parsed([{ text: 'Alpha', paraId: 'abcdef12' }])
+    canonicaliseParagraphIdentities(document)
+    const reloaded = await parseDocx(await serialiseDocx(document))
+    const paragraph = documentParagraphs(reloaded.model)[0]
+    expect(paragraph?.id).toBe('para-w14-ABCDEF12')
+    expect(paragraph?.sourceParaId).toBe('ABCDEF12')
+  })
+
   it('assigns no id to a paragraph that already had one and did not change', async () => {
     const document = await parsed([
       { text: 'Alpha', paraId: 'AAAA1111' },
